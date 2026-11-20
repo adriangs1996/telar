@@ -247,7 +247,7 @@ namespace telar::gui::qt {
     std::size_t output_length_ = 0;
     std::uint64_t execution_ = 0;
     // The process reports back to this worker.
-    tbc::view<CommandProcess<NativePluginWorkerHost, PluginWorkerCommand, PluginWorker>, tbc::lt::self> process_;
+    tbc::val_self<CommandProcess<NativePluginWorkerHost, PluginWorkerCommand, PluginWorker>> process_;
     QObject context_;
   };
 

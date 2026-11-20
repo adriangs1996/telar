@@ -7,11 +7,11 @@ import telar.base.memory.allocators;
 
 namespace telar::gui::features::prompt {
 
-  tbc::view<Editor::Recorded, tbc::lt::a> Editor::Recorded::clone() const {
+  tbc::val_a<Editor::Recorded> Editor::Recorded::clone() const {
     return {.key = key, .text = text.clone()};
   }
 
-  Editor::Editor(tbc::view<Memory&, tbc::lt::a> memory, Keymap keymap)
+  Editor::Editor(tbc::mut_a<Memory> memory, Keymap keymap)
       : text_(memory),
         keymap_(keymap),
         kill_ring_(memory),
@@ -58,7 +58,7 @@ namespace telar::gui::features::prompt {
     return count_ != 0 || operator_ != 0 || pending_ != Pending::none || register_pending_;
   }
 
-  void Editor::setClipboard(tbc::view<Clipboard, tbc::lt::a> clipboard) {
+  void Editor::setClipboard(tbc::val_a<Clipboard> clipboard) {
     clipboard_ = std::move(clipboard);
   }
 

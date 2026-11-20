@@ -343,11 +343,11 @@ namespace telar::git {
                                                                 : 0;
   }
 
-  TreeReader::TreeReader(tbc::view<std::string_view, tbc::lt::a> content, ObjectFormat format) noexcept
+  TreeReader::TreeReader(tbc::val_a<std::string_view> content, ObjectFormat format) noexcept
       : rest_(content),
         hash_size_(hashSize(format)) {}
 
-  bool TreeReader::next(tbc::view<TreeEntry&, tbc::lt::a> entry) noexcept {
+  bool TreeReader::next(tbc::mut_a<TreeEntry> entry) noexcept {
     if (rest_.empty() || failed_) {
       return false;
     }

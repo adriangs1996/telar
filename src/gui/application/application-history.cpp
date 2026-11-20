@@ -62,7 +62,7 @@ namespace telar::gui::application::history {
     // Narrows `request` to the focused pane, its directory or the active workspace's directory,
     // as `scope` asks; it stays global when the scope names nothing.
     // It views what it names in the session's panes and workspaces, and nothing else of it.
-    void resolveScope(const Session& session, tbc::view<QueryHistory&, tbc::lt::a> request, HistoryScope scope, tbc::view<const Panes&, tbc::lt::a> panes, tbc::view<const WorkspaceReplica<Memory>&, tbc::lt::a> workspace_list) {
+    void resolveScope(const Session& session, tbc::mut_a<QueryHistory> request, HistoryScope scope, tbc::ref_a<Panes> panes, tbc::ref_a<WorkspaceReplica<Memory>> workspace_list) {
       if (scope == HistoryScope::pane || scope == HistoryScope::cwd) {
         const auto* pane = focusedPane(panes, session.tabs, session.active_tab);
         if (pane == nullptr) {

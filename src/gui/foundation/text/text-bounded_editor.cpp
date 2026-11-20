@@ -197,12 +197,12 @@ namespace telar::gui::inline foundation::inline text {
     return three_byte_scalar;
   }
 
-  WrappedLines::WrappedLines(tbc::view<std::string_view, tbc::lt::a> text, std::uint16_t columns, bool words) noexcept
+  WrappedLines::WrappedLines(tbc::val_a<std::string_view> text, std::uint16_t columns, bool words) noexcept
       : text_(text),
         columns_(columns),
         words_(words) {}
 
-  tbc::view<ds::Option<std::string_view>, tbc::lt::a> WrappedLines::next() noexcept {
+  tbc::val_a<ds::Option<std::string_view>> WrappedLines::next() noexcept {
     if (finished_ || columns_ == 0) {
       return ds::none;
     }

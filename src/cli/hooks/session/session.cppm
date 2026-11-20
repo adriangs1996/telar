@@ -28,7 +28,7 @@ export {
       std::size_t countExcept(std::string_view finished) const noexcept;
 
     private:
-      static tbc::view<std::string_view, tbc::lt::a> value(tbc::view<std::string_view, tbc::lt::a> item, std::string_view key) noexcept;
+      static tbc::val_a<std::string_view> value(tbc::val_a<std::string_view> item, std::string_view key) noexcept;
 
       std::size_t find(std::string_view identifier) const noexcept;
 

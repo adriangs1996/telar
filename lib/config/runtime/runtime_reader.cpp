@@ -15,7 +15,7 @@ namespace telar::runtime::config {
   class AgentReader {
   public:
     // Fills the manifests and tells the notices about limits it reaches, region `a`.
-    inline explicit AgentReader(tbc::view<AgentManifests&, tbc::lt::a> manifests, tbc::view<LimitNotices&, tbc::lt::a> limits)
+    inline explicit AgentReader(tbc::mut_a<AgentManifests> manifests, tbc::mut_a<LimitNotices> limits)
         : manifests_(manifests),
           limits_(limits) {}
 
@@ -54,7 +54,7 @@ namespace telar::runtime::config {
     }
 
   private:
-    inline static tbc::view<std::string_view, tbc::lt::a> printable(const lua::Value& value) {
+    inline static tbc::val_a<std::string_view> printable(const lua::Value& value) {
       const auto text = value.string();
 
       validateUtf8(text);
@@ -68,7 +68,7 @@ namespace telar::runtime::config {
     }
 
     template <std::size_t Capacity, std::size_t TextCapacity>
-    inline void list(const lua::Value& value, ManifestTextList<Capacity, TextCapacity>& destination, tbc::view<LimitReach, tbc::lt::a> entries_limit, tbc::view<LimitReach, tbc::lt::a> bytes_limit) {
+    inline void list(const lua::Value& value, ManifestTextList<Capacity, TextCapacity>& destination, tbc::val_a<LimitReach> entries_limit, tbc::val_a<LimitReach> bytes_limit) {
       if (!value.present()) {
         return;
       }
@@ -199,8 +199,8 @@ namespace telar::runtime::config {
       attachments.fail("must be none, ordered, stable_number or pasted_path");
     }
 
-    tbc::view<AgentManifests&, tbc::lt::a> manifests_;
-    tbc::view<LimitNotices&, tbc::lt::a> limits_;
+    tbc::mut_a<AgentManifests> manifests_;
+    tbc::mut_a<LimitNotices> limits_;
   };
 
   template <Allocator Memory>

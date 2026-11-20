@@ -85,9 +85,9 @@ export {
     class PluginQuery {
     public:
       // A page is written into the output, region `a`.
-      [[nodiscard]] static tbc::view<PluginPage, tbc::lt::a> list(const PluginCatalog& catalog, const ClientCommand& request, tbc::view<std::span<char>, tbc::lt::a> output);
+      [[nodiscard]] static tbc::val_a<PluginPage> list(const PluginCatalog& catalog, const ClientCommand& request, tbc::val_a<std::span<char>> output);
 
-      [[nodiscard]] static tbc::view<PluginPage, tbc::lt::a> get(const PluginCatalog& catalog, const ClientCommand& request, tbc::view<std::span<char>, tbc::lt::a> output);
+      [[nodiscard]] static tbc::val_a<PluginPage> get(const PluginCatalog& catalog, const ClientCommand& request, tbc::val_a<std::span<char>> output);
 
     private:
       template <typename Entries>

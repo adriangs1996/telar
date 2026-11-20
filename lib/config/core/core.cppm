@@ -27,12 +27,12 @@ export {
     // The notices view the names of the limits they are told about, usually literals, in region `a`.
     class LimitNotices {
     public:
-      void add(tbc::view<const LimitReach&, tbc::lt::a> reach) noexcept;
+      void add(tbc::ref_a<LimitReach> reach) noexcept;
       std::span<const LimitReach> entries() const noexcept;
       void print() const noexcept;
 
     private:
-      tbc::view<ds::Array<LimitReach, 16>, tbc::lt::a> entries_{};
+      tbc::val_a<ds::Array<LimitReach, 16>> entries_{};
       std::size_t count_ = 0;
     };
 
@@ -88,7 +88,7 @@ export {
   namespace telar::runtime::config {
 
     void printableUiText(const lua::Value& source, std::string_view text, bool allow_tab = false);
-    tbc::view<std::string_view, tbc::lt::a> fittedUiText(tbc::view<std::string_view, tbc::lt::a> text, tbc::view<LimitReach, tbc::lt::b> reach, tbc::view<LimitNotices&, tbc::lt::b> limits);
+    tbc::val_a<std::string_view> fittedUiText(tbc::val_a<std::string_view> text, tbc::val_b<LimitReach> reach, tbc::mut_b<LimitNotices> limits);
     bool equalUiName(std::string_view left, std::string_view right) noexcept;
     void uiIcon(const lua::Value& value);
     void uiMark(const lua::Value& value);
@@ -137,7 +137,7 @@ export {
       static IntegrationProvider describe(AgentProvider provider);
 
       // The path lives in the memory it is written to, region `a`.
-      tbc::view<ds::String<Memory>, tbc::lt::a> root(tbc::view<Memory&, tbc::lt::a> memory, const EnvironmentSource& environment, bool legacy = false) const;
+      tbc::val_a<ds::String<Memory>> root(tbc::mut_a<Memory> memory, const EnvironmentSource& environment, bool legacy = false) const;
 
     private:
       static constexpr auto claude_events = ds::Array<std::string_view, 8>{"SessionStart", "UserPromptSubmit", "PreToolUse", "PostToolUse", "Stop", "Notification", "SessionEnd", "CwdChanged"};

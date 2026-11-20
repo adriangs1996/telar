@@ -308,12 +308,12 @@ namespace telar::ds {
   template <typename Value, Allocator Memory>
   class TBC_GENERIC Vec {
   public:
-    explicit Vec(tbc::view<Memory&, tbc::lt::a> memory) noexcept
+    explicit Vec(tbc::mut_a<Memory> memory) noexcept
         : memory_(&memory) {}
 
     // Copies the values, so the Vec borrows nothing of them. The storage holds exactly them, as Rust's
     // `to_vec` does: a copy is not expected to grow.
-    Vec(tbc::view<Memory&, tbc::lt::a> memory, std::span<const Value> values)
+    Vec(tbc::mut_a<Memory> memory, std::span<const Value> values)
       requires std::is_copy_constructible_v<Value>
         : memory_(&memory) {
       reserve(values.size());
@@ -362,7 +362,7 @@ namespace telar::ds {
 
     // The copy lives in the allocator's region, as its storage does, and borrows nothing else of this
     // Vec. Values that copy only explicitly, as a String, are cloned one by one.
-    [[nodiscard]] tbc::view<Vec, tbc::lt::a> clone() const
+    [[nodiscard]] tbc::val_a<Vec> clone() const
       requires std::is_copy_constructible_v<Value> || requires(const Value& value) {
         { value.clone() } -> std::same_as<Value>;
       }
@@ -446,7 +446,7 @@ namespace telar::ds {
       return items_ + size_;
     }
 
-    [[nodiscard]] tbc::view<Memory&, tbc::lt::a> memory() const noexcept {
+    [[nodiscard]] tbc::mut_a<Memory> memory() const noexcept {
       return *memory_;
     }
 
@@ -495,7 +495,7 @@ namespace telar::ds {
 
     // Removes the last value and hands it back, as Rust's `pop`.
     // The value leaves with what it borrows, region `a`, and none of this Vec's storage, as Rust's `-> T`.
-    [[nodiscard]] tbc::view<Option<Value>, tbc::lt::a> pop() noexcept(std::is_nothrow_move_constructible_v<Value>) {
+    [[nodiscard]] tbc::val_a<Option<Value>> pop() noexcept(std::is_nothrow_move_constructible_v<Value>) {
       if (size_ == 0) {
         return {};
       }
@@ -590,7 +590,7 @@ namespace telar::ds {
 
     // Removes the value at `index` and hands it back, moving the later ones down, as Rust's `remove`:
     // it leaves with what it borrows, region `a`, and none of this Vec's storage.
-    tbc::view<Value, tbc::lt::a> remove(std::size_t index) {
+    tbc::val_a<Value> remove(std::size_t index) {
       TELAR_ASSERT(index < size_);
       Value removed = std::move(items_[index]);
 
@@ -751,9 +751,9 @@ namespace telar::ds {
     // Small Vecs grow straight to a cache line's worth of values rather than through 1, 2 and 4.
     static constexpr std::size_t minimum_capacity = std::max<std::size_t>(1, 64 / sizeof(Value));
 
-    tbc::view<Memory*, tbc::lt::a> memory_;
+    tbc::val_a<Memory*> memory_;
     // The values live in storage from the allocator, region `a`, as a Rust `Vec<'a, T>` in an arena keeps them.
-    tbc::view<Value*, tbc::lt::a> items_ = nullptr;
+    tbc::val_a<Value*> items_ = nullptr;
     std::size_t size_ = 0;
     std::size_t capacity_ = 0;
   };
@@ -767,13 +767,13 @@ namespace telar::ds {
   public:
     using trivially_relocatable = String;
 
-    explicit String(tbc::view<Memory&, tbc::lt::a> memory) noexcept
+    explicit String(tbc::mut_a<Memory> memory) noexcept
         : memory_(&memory) {
       setInlineSize(0);
     }
 
     // Copies the text, so the String borrows nothing of it.
-    String(tbc::view<Memory&, tbc::lt::a> memory, std::string_view text)
+    String(tbc::mut_a<Memory> memory, std::string_view text)
         : memory_(&memory) {
       if (text.size() <= inline_capacity) [[likely]] {
         copyShort(representation_.bytes, text.data(), text.size());
@@ -821,7 +821,7 @@ namespace telar::ds {
 
     // The copy lives in the allocator's region, as its storage does, and borrows nothing else of this
     // String.
-    [[nodiscard]] tbc::view<String, tbc::lt::a> clone() const {
+    [[nodiscard]] tbc::val_a<String> clone() const {
       String copy{*memory_};
 
       copy.append(view());
@@ -833,7 +833,7 @@ namespace telar::ds {
     }
 
     // The allocator its storage comes from, which a String built beside it shares.
-    [[nodiscard]] tbc::view<Memory&, tbc::lt::a> memory() const noexcept {
+    [[nodiscard]] tbc::mut_a<Memory> memory() const noexcept {
       return *memory_;
     }
 
@@ -1173,7 +1173,7 @@ namespace telar::ds {
       }
     }
 
-    tbc::view<Memory*, tbc::lt::a> memory_;
+    tbc::val_a<Memory*> memory_;
     Representation representation_;
   };
 
@@ -1216,7 +1216,7 @@ namespace telar::ds {
 
   // The formatted arguments in a String from `memory`, as std::format returns a std::string.
   template <Allocator Memory, typename... Arguments>
-  [[nodiscard]] tbc::view<String<Memory>, tbc::lt::a> format(tbc::view<Memory&, tbc::lt::a> memory, std::format_string<Arguments...> format, Arguments&&... arguments) {
+  [[nodiscard]] tbc::val_a<String<Memory>> format(tbc::mut_a<Memory> memory, std::format_string<Arguments...> format, Arguments&&... arguments) {
     String<Memory> text{memory};
 
     formatTo(text, format, std::forward<Arguments>(arguments)...);
@@ -1313,11 +1313,11 @@ namespace telar::ds {
     // Rust's `Iter<'a>` yields `&'a` items.
     class Iterator {
     public:
-      [[nodiscard]] tbc::view<const Entry&, tbc::lt::a> operator*() const noexcept {
+      [[nodiscard]] tbc::ref_a<Entry> operator*() const noexcept {
         return *entry_;
       }
 
-      [[nodiscard]] tbc::view<const Entry*, tbc::lt::a> operator->() const noexcept {
+      [[nodiscard]] tbc::val_a<const Entry*> operator->() const noexcept {
         return entry_;
       }
 
@@ -1335,7 +1335,7 @@ namespace telar::ds {
     private:
       friend class Map;
 
-      Iterator(tbc::view<const std::int8_t*, tbc::lt::a> control, tbc::view<const Entry*, tbc::lt::a> entry) noexcept
+      Iterator(tbc::val_a<const std::int8_t*> control, tbc::val_a<const Entry*> entry) noexcept
           : control_(control),
             entry_(entry) {
         skip();
@@ -1351,11 +1351,11 @@ namespace telar::ds {
         }
       }
 
-      tbc::view<const std::int8_t*, tbc::lt::a> control_;
-      tbc::view<const Entry*, tbc::lt::a> entry_;
+      tbc::val_a<const std::int8_t*> control_;
+      tbc::val_a<const Entry*> entry_;
     };
 
-    explicit Map(tbc::view<Memory&, tbc::lt::a> memory) noexcept
+    explicit Map(tbc::mut_a<Memory> memory) noexcept
         : memory_(&memory) {}
 
     Map(const Map&) = delete;
@@ -1406,7 +1406,7 @@ namespace telar::ds {
 
     // The copy lives in the allocator's region, as its storage does, and borrows nothing else of this
     // Map.
-    [[nodiscard]] tbc::view<Map, tbc::lt::a> clone() const
+    [[nodiscard]] tbc::val_a<Map> clone() const
       requires(std::is_copy_constructible_v<Key> && std::is_copy_constructible_v<Value>)
     {
       Map copy{*memory_};
@@ -1498,7 +1498,7 @@ namespace telar::ds {
 
     // Removes the key's entry and hands its value back, as Rust's `remove`: it leaves with what it
     // borrows, region `a`, and none of this Map's storage.
-    tbc::view<Option<Value>, tbc::lt::a> remove(Lookup key) {
+    tbc::val_a<Option<Value>> remove(Lookup key) {
       const auto index = locate(key, hashOf(key));
       if (index == not_found) {
         return {};
@@ -1760,10 +1760,10 @@ namespace telar::ds {
       growth_left_ = 0;
     }
 
-    tbc::view<Memory*, tbc::lt::a> memory_;
+    tbc::val_a<Memory*> memory_;
     std::int8_t* control_ = emptyControl();
     // The entries live in storage from the allocator, region `a`, as a Vec's values do.
-    tbc::view<Entry*, tbc::lt::a> entries_ = nullptr;
+    tbc::val_a<Entry*> entries_ = nullptr;
     std::size_t mask_ = 0;
     std::size_t size_ = 0;
     std::size_t growth_left_ = 0;
@@ -1777,7 +1777,7 @@ namespace telar::ds {
     // What a Function's callable returns, region `a`; nothing to label for void.
     template <typename Result>
     struct FunctionResult {
-      using type = tbc::view<Result, tbc::lt::a>;
+      using type = tbc::val_a<Result>;
     };
 
     template <>
@@ -1800,7 +1800,7 @@ namespace telar::ds {
 
     // The result borrows what the callable at the storage holds, region `a`, never the arguments, region
     // `b`, as Rust's FnMut returns an Output that borrows none of them.
-    using Invoke = typename detail::FunctionResult<Result>::type (*)(tbc::view<void*, tbc::lt::a>, tbc::view<Pass<Arguments>, tbc::lt::b>...);
+    using Invoke = typename detail::FunctionResult<Result>::type (*)(tbc::val_a<void*>, tbc::val_b<Pass<Arguments>>...);
 
     // Moves the callable at `source` to `target` and destroys it, or only destroys it when `target`
     // is null.
@@ -1848,7 +1848,7 @@ namespace telar::ds {
 
     // The arguments are lent to this call alone, region `b` of no field, as Rust's `for<'b> FnMut(&'b T)`
     // takes them: the callable cannot keep them.
-    Result operator()(tbc::view<Arguments, tbc::lt::b>... arguments) {
+    Result operator()(tbc::val_b<Arguments>... arguments) {
       return invoke_(storage_, std::forward<Arguments>(arguments)...);
     }
 

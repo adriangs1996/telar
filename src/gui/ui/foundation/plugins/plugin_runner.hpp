@@ -61,7 +61,7 @@ namespace telar::gui::qt {
 
     Store& store_;
     ConfigurationSource& configuration_;
-    tbc::view<PluginWorker<PluginRunner>, tbc::lt::self> worker_;
+    tbc::val_self<PluginWorker<PluginRunner>> worker_;
     ds::Option<Owner> owner_;
     std::uint64_t next_execution_ = 1;
   };

@@ -221,7 +221,7 @@ export namespace telar::runtime {
 
     // Writes the scripts beneath `data_home` and returns their directory. It is named after
     // their content, so runtimes of different versions never overwrite each other's.
-    static tbc::view<ds::String<Memory>, tbc::lt::a> install(tbc::view<Memory&, tbc::lt::a> memory, std::string_view data_home);
+    static tbc::val_a<ds::String<Memory>> install(tbc::mut_a<Memory> memory, std::string_view data_home);
 
     // Points an integrable shell at the scripts and returns the token its marks are signed
     // with. Leaves every other command untouched, and a shell too if the scripts are gone and

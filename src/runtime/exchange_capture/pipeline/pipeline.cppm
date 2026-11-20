@@ -54,11 +54,11 @@ export {
       };
 
       // The joiner holds halves until their peers arrive, and the halves keep their quota: region `a`.
-      explicit CaptureJoiner(tbc::view<ConcurrentMemory&, tbc::lt::a> memory, std::chrono::milliseconds timeout) noexcept;
+      explicit CaptureJoiner(tbc::mut_a<ConcurrentMemory> memory, std::chrono::milliseconds timeout) noexcept;
 
-      tbc::view<Result, tbc::lt::a> push(std::int64_t now_ms, tbc::view<Half, tbc::lt::a> half) noexcept;
+      tbc::val_a<Result> push(std::int64_t now_ms, tbc::val_a<Half> half) noexcept;
 
-      tbc::view<ds::Option<CapturedExchange>, tbc::lt::a> expire(std::int64_t now_ms) noexcept;
+      tbc::val_a<ds::Option<CapturedExchange>> expire(std::int64_t now_ms) noexcept;
 
       static constexpr std::size_t capacity = 256;
 
@@ -70,9 +70,9 @@ export {
 
       ds::Option<std::size_t> find(CaptureKey key) const noexcept;
 
-      tbc::view<ConcurrentMemory&, tbc::lt::a> memory_;
+      tbc::mut_a<ConcurrentMemory> memory_;
       std::int64_t timeout_ms_;
-      tbc::view<ds::Array<ds::Option<Entry>, capacity>, tbc::lt::a> slots_;
+      tbc::val_a<ds::Array<ds::Option<Entry>, capacity>> slots_;
       SlotIndexes<capacity> occupied_;
     };
 

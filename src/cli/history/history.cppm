@@ -137,14 +137,14 @@ export {
       bool assume_yes = false;
       std::string_view query;
       HistoryScope scope = HistoryScope::global;
-      tbc::view<std::string_view, tbc::lt::a> scope_value;
+      tbc::val_a<std::string_view> scope_value;
       std::uint64_t pane_id = 0;
       bool failed_only = false;
       HistoryAuthorFilter author = HistoryAuthorFilter::all;
       std::uint16_t limit = default_limit;
       ds::Option<std::string_view> socket = ds::none;
 
-      void setScope(HistoryScope value, tbc::view<std::string_view, tbc::lt::a> path = {});
+      void setScope(HistoryScope value, tbc::val_a<std::string_view> path = {});
 
       static ImportKind importKind(std::string_view value);
 
@@ -161,7 +161,7 @@ export {
   namespace telar::runtime::cli::history {
 
     // The results view the session; region `b` keeps them apart from the options' own `a`.
-    tbc::view<HistoryResults, tbc::lt::b> query(tbc::view<ControlSession&, tbc::lt::b> session, const HistoryOptions& options, const HistoryScopeValue& scope);
+    tbc::val_b<HistoryResults> query(tbc::mut_b<ControlSession> session, const HistoryOptions& options, const HistoryScopeValue& scope);
 
     void prune(Memory& memory, const char* socket, ControlSession& session, const HistoryOptions& options, const HistoryScopeValue& scope);
 

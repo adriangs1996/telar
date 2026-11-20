@@ -84,18 +84,18 @@ export {
     // Walks a command's words, region `a`; the words it hands out view them.
     class Cursor {
     public:
-      explicit Cursor(tbc::view<Arguments, tbc::lt::a> words) noexcept;
+      explicit Cursor(tbc::val_a<Arguments> words) noexcept;
 
       [[nodiscard]] bool empty() const noexcept;
 
-      tbc::view<ds::Option<std::string_view>, tbc::lt::a> next() noexcept;
+      tbc::val_a<ds::Option<std::string_view>> next() noexcept;
 
-      tbc::view<std::string_view, tbc::lt::a> take(const char* missing);
+      tbc::val_a<std::string_view> take(const char* missing);
 
-      [[nodiscard]] tbc::view<Arguments, tbc::lt::a> rest() const noexcept;
+      [[nodiscard]] tbc::val_a<Arguments> rest() const noexcept;
 
     private:
-      tbc::view<Arguments, tbc::lt::a> words_;
+      tbc::val_a<Arguments> words_;
     };
 
   }
@@ -229,12 +229,12 @@ export {
 
 template <>
 struct std::formatter<telar::runtime::cli::EscapedField, char> {
-  constexpr tbc::view<std::format_parse_context::iterator, tbc::lt::a> parse(tbc::view<std::format_parse_context&, tbc::lt::a> context) {
+  constexpr tbc::val_a<std::format_parse_context::iterator> parse(tbc::mut_a<std::format_parse_context> context) {
     return context.begin();
   }
 
   template <typename Context>
-  TBC_GENERIC tbc::view<typename Context::iterator, tbc::lt::a> format(const telar::runtime::cli::EscapedField& field, tbc::view<Context&, tbc::lt::a> context) const {
+  TBC_GENERIC tbc::val_a<typename Context::iterator> format(const telar::runtime::cli::EscapedField& field, tbc::mut_a<Context> context) const {
     auto output = context.out();
 
     for (const unsigned char byte : field.text) {
@@ -263,24 +263,24 @@ struct std::formatter<telar::runtime::cli::EscapedField, char> {
 
 template <typename Number>
 struct std::formatter<telar::runtime::cli::NumberOrNull<Number>, char> {
-  constexpr tbc::view<std::format_parse_context::iterator, tbc::lt::a> parse(tbc::view<std::format_parse_context&, tbc::lt::a> context) {
+  constexpr tbc::val_a<std::format_parse_context::iterator> parse(tbc::mut_a<std::format_parse_context> context) {
     return context.begin();
   }
 
   template <typename Context>
-  TBC_GENERIC tbc::view<typename Context::iterator, tbc::lt::a> format(const telar::runtime::cli::NumberOrNull<Number>& number, tbc::view<Context&, tbc::lt::a> context) const {
+  TBC_GENERIC tbc::val_a<typename Context::iterator> format(const telar::runtime::cli::NumberOrNull<Number>& number, tbc::mut_a<Context> context) const {
     return number.value ? std::format_to(context.out(), "{}", *number.value) : std::format_to(context.out(), "null");
   }
 };
 
 template <>
 struct std::formatter<telar::runtime::cli::LimitDescription, char> {
-  constexpr tbc::view<std::format_parse_context::iterator, tbc::lt::a> parse(tbc::view<std::format_parse_context&, tbc::lt::a> context) {
+  constexpr tbc::val_a<std::format_parse_context::iterator> parse(tbc::mut_a<std::format_parse_context> context) {
     return context.begin();
   }
 
   template <typename Context>
-  TBC_GENERIC tbc::view<typename Context::iterator, tbc::lt::a> format(const telar::runtime::cli::LimitDescription& description, tbc::view<Context&, tbc::lt::a> context) const {
+  TBC_GENERIC tbc::val_a<typename Context::iterator> format(const telar::runtime::cli::LimitDescription& description, tbc::mut_a<Context> context) const {
     const auto& reach = description.reach;
     auto output = std::format_to(context.out(), "{}: ", reach.name);
     const std::string_view space = reach.noun.empty() ? "" : " ";

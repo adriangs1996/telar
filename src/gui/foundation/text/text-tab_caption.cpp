@@ -43,7 +43,7 @@ namespace telar::gui::inline foundation::inline text {
     return path;
   }
 
-  tbc::view<std::string_view, tbc::lt::a> TabCaption::resolve(tbc::view<Content, tbc::lt::a> content, tbc::view<Buffer&, tbc::lt::a> storage) noexcept {
+  tbc::val_a<std::string_view> TabCaption::resolve(tbc::val_a<Content> content, tbc::mut_a<Buffer> storage) noexcept {
     if (!content.manual.empty()) {
       return content.manual;
     }

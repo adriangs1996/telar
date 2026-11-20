@@ -61,7 +61,7 @@ namespace telar::gui::qt {
     [[nodiscard]] ds::Option<KeyChord> prefixedKeyForAction(const BindingAction& action) const noexcept;
     [[nodiscard]] std::uint64_t nowNanoseconds() const noexcept;
     [[nodiscard]] bool prefixPending() const noexcept;
-    [[nodiscard]] tbc::view<application::status_bar::ModeHints, tbc::lt::static_storage> modeHints() const noexcept;
+    [[nodiscard]] tbc::val_static<application::status_bar::ModeHints> modeHints() const noexcept;
     // Keys typed while a Lua binding runs on the Lua thread wait for its result, so a key
     // never reaches a pane the binding was about to leave.
     using Hold = std::uint64_t;
@@ -117,12 +117,12 @@ namespace telar::gui::qt {
     void expire();
     void drain();
 
-    tbc::view<WindowCommands&, tbc::lt::a> commands_;
-    tbc::view<Store&, tbc::lt::a> store_;
-    tbc::view<CopyController&, tbc::lt::a> copy_;
-    tbc::view<ComponentsController&, tbc::lt::a> components_;
-    tbc::view<AttachmentsController&, tbc::lt::a> attachments_;
-    tbc::view<TerminalController&, tbc::lt::a> terminals_;
+    tbc::mut_a<WindowCommands> commands_;
+    tbc::mut_a<Store> store_;
+    tbc::mut_a<CopyController> copy_;
+    tbc::mut_a<ComponentsController> components_;
+    tbc::mut_a<AttachmentsController> attachments_;
+    tbc::mut_a<TerminalController> terminals_;
     Router router_;
     QPointer<QQuickWindow> window_;
     QElapsedTimer clock_;

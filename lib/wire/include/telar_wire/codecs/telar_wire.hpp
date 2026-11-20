@@ -116,16 +116,16 @@ namespace telar {
   // owns decoded list elements and must not overlap the frame or be reused
   // while a decoded value still references it.
   // Decoded values view the input frame and the caller's decode storage, both in region `a`.
-  using DecodeInput = tbc::view<std::span<const Byte>&, tbc::lt::a>;
-  using DecodeFrame = tbc::view<std::span<const Byte>, tbc::lt::a>;
+  using DecodeInput = tbc::mut_a<std::span<const Byte>>;
+  using DecodeFrame = tbc::val_a<std::span<const Byte>>;
   template <typename Value>
-  using Decoded = tbc::view<Value, tbc::lt::a>;
+  using Decoded = tbc::val_a<Value>;
 
   struct DecodeStorage {
-    tbc::view<std::span<Byte>, tbc::lt::a> remaining{};
+    tbc::val_a<std::span<Byte>> remaining{};
 
     template <typename T>
-    tbc::view<std::span<T>, tbc::lt::a> allocate(std::size_t count) {
+    tbc::val_a<std::span<T>> allocate(std::size_t count) {
       static_assert(std::is_trivially_destructible_v<T>);
 
       if (count == 0) {

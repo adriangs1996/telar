@@ -53,7 +53,7 @@ export {
 
       template <Allocator Memory>
       // The row is one of the replica's, region `a`; the agent only names it.
-      [[nodiscard]] static tbc::view<const Worktree<Memory>*, tbc::lt::a> taskRow(tbc::view<const WorkspaceReplica<Memory>&, tbc::lt::a> workspaces, const Agent<Memory>& agent) noexcept;
+      [[nodiscard]] static tbc::val_a<const Worktree<Memory>*> taskRow(tbc::ref_a<WorkspaceReplica<Memory>> workspaces, const Agent<Memory>& agent) noexcept;
 
       template <Allocator Memory>
       [[nodiscard]] static Priority priority(const Agent<Memory>& agent) noexcept;
@@ -75,8 +75,8 @@ export {
       [[nodiscard]] static bool lessThan(std::span<const Agent<Memory>> agents, const WorkspaceReplica<Memory>& workspaces, const Entry& left, const Entry& right) noexcept;
     };
 
-    extern template tbc::view<const Worktree<Memory>*, tbc::lt::a> AgentOrder::taskRow<Memory>(tbc::view<const WorkspaceReplica<Memory>&, tbc::lt::a> workspaces, const Agent<Memory>& agent) noexcept;
-    extern template tbc::view<const Worktree<ConcurrentMemory>*, tbc::lt::a> AgentOrder::taskRow<ConcurrentMemory>(tbc::view<const WorkspaceReplica<ConcurrentMemory>&, tbc::lt::a> workspaces, const Agent<ConcurrentMemory>& agent) noexcept;
+    extern template tbc::val_a<const Worktree<Memory>*> AgentOrder::taskRow<Memory>(tbc::ref_a<WorkspaceReplica<Memory>> workspaces, const Agent<Memory>& agent) noexcept;
+    extern template tbc::val_a<const Worktree<ConcurrentMemory>*> AgentOrder::taskRow<ConcurrentMemory>(tbc::ref_a<WorkspaceReplica<ConcurrentMemory>> workspaces, const Agent<ConcurrentMemory>& agent) noexcept;
     extern template AgentOrder::Priority AgentOrder::priority<Memory>(const Agent<Memory>& agent) noexcept;
     extern template AgentOrder::Priority AgentOrder::priority<ConcurrentMemory>(const Agent<ConcurrentMemory>& agent) noexcept;
     extern template AgentOrder::Plan AgentOrder::arrange<Memory>(std::span<const Agent<Memory>> agents, const WorkspaceReplica<Memory>& workspaces) noexcept;

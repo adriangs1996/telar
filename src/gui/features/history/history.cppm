@@ -47,18 +47,18 @@ export namespace telar::gui::features::history {
   // A view of a history browser, region `a`: what it reads lies in the browser, not in the view.
   class TBC_HOT_PATH HistoryView {
   public:
-    inline explicit HistoryView(tbc::view<const HistoryBrowser<Memory>&, tbc::lt::a> browser) noexcept
+    inline explicit HistoryView(tbc::ref_a<HistoryBrowser<Memory>> browser) noexcept
         : browser_(&browser) {}
 
-    [[nodiscard]] inline tbc::view<const ds::Vec<HistoryRow<Memory>, Memory>&, tbc::lt::a> rows() const noexcept {
+    [[nodiscard]] inline tbc::ref_a<ds::Vec<HistoryRow<Memory>, Memory>> rows() const noexcept {
       return browser_->rows();
     }
 
-    [[nodiscard]] inline tbc::view<const HistoryViewState&, tbc::lt::a> state() const noexcept {
+    [[nodiscard]] inline tbc::ref_a<HistoryViewState> state() const noexcept {
       return browser_->state();
     }
 
-    [[nodiscard]] inline tbc::view<const HistoryRow<Memory>&, tbc::lt::a> entry(std::uint64_t id) const {
+    [[nodiscard]] inline tbc::ref_a<HistoryRow<Memory>> entry(std::uint64_t id) const {
       return browser_->entry(id);
     }
 
@@ -66,7 +66,7 @@ export namespace telar::gui::features::history {
       return browser_->entryIndex(id);
     }
 
-    [[nodiscard]] inline tbc::view<std::string_view, tbc::lt::a> command(std::uint64_t id) const {
+    [[nodiscard]] inline tbc::val_a<std::string_view> command(std::uint64_t id) const {
       return browser_->command(id);
     }
 
@@ -78,15 +78,15 @@ export namespace telar::gui::features::history {
       return browser_->canSubmit();
     }
 
-    [[nodiscard]] inline tbc::view<std::string_view, tbc::lt::a> selectedCommand() const {
+    [[nodiscard]] inline tbc::val_a<std::string_view> selectedCommand() const {
       return browser_->selectedCommand();
     }
 
-    [[nodiscard]] inline tbc::view<std::string_view, tbc::lt::a> output() const noexcept {
+    [[nodiscard]] inline tbc::val_a<std::string_view> output() const noexcept {
       return browser_->output();
     }
 
-    [[nodiscard]] inline tbc::view<std::string_view, tbc::lt::a> error() const noexcept {
+    [[nodiscard]] inline tbc::val_a<std::string_view> error() const noexcept {
       return browser_->error();
     }
 
@@ -131,7 +131,7 @@ export namespace telar::gui::features::history {
     }
 
   private:
-    tbc::view<const HistoryBrowser<Memory>*, tbc::lt::a> browser_;
+    tbc::val_a<const HistoryBrowser<Memory>*> browser_;
   };
 
   [[nodiscard]] TBC_HOT_PATH inline HistoryView view(const State& state) noexcept;
@@ -139,7 +139,7 @@ export namespace telar::gui::features::history {
   // A new search: `request` says what to look for, its query text read by HistorySearch (a
   // leading '!' asks for failures only). Returns the request to send; throws EncodingError when
   // too many requests are in flight, the panel showing why.
-  [[nodiscard]] tbc::view<QueryHistory, tbc::lt::a> search(tbc::view<State&, tbc::lt::a> state, QueryHistory request);
+  [[nodiscard]] tbc::val_a<QueryHistory> search(tbc::mut_a<State> state, QueryHistory request);
 
   // The next older or newer page of the search; none at its end or while a page loads.
   [[nodiscard]] ds::Option<QueryHistory> page(State& state, HistoryPage direction, std::uint64_t request_id);

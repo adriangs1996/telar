@@ -38,7 +38,7 @@ export {
     struct IpPayload {
       ds::Array<Byte, 16> source{};
       ds::Array<Byte, 16> destination{};
-      tbc::view<std::span<const Byte>, tbc::lt::a> bytes;
+      tbc::val_a<std::span<const Byte>> bytes;
       std::size_t original_bytes = 0;
       Byte protocol = 0;
       bool ipv6 = false;
@@ -82,7 +82,7 @@ export {
     public:
       static std::string_view name(DatagramTransport transport) noexcept;
 
-      static tbc::view<std::span<const Byte>, tbc::lt::a> encode(tbc::view<std::span<Byte>, tbc::lt::a> output, const DatagramEvent& event);
+      static tbc::val_a<std::span<const Byte>> encode(tbc::val_a<std::span<Byte>> output, const DatagramEvent& event);
 
       static DatagramEvent decode(std::span<const Byte> input);
 
@@ -269,7 +269,7 @@ export {
       static void initialize(Entry& entry, Event event, const Key& key) noexcept;
 
       // The reason a fragment is refused, a literal, or empty.
-      static tbc::view<std::string_view, tbc::lt::static_storage> append(Entry& entry, const Fragment& part);
+      static tbc::val_static<std::string_view> append(Entry& entry, const Fragment& part);
 
       static std::span<const Byte> assembled(Entry& entry);
 
@@ -322,7 +322,7 @@ export {
 
       static ds::Option<TcpPacket> decodeNetwork(std::span<const Byte> bytes) noexcept;
 
-      static tbc::view<ds::Option<TcpPacket>, tbc::lt::a> decodePayload(const IpPayload& ip) noexcept;
+      static tbc::val_a<ds::Option<TcpPacket>> decodePayload(const IpPayload& ip) noexcept;
     };
 
   }
@@ -528,7 +528,7 @@ export {
       // Reassembles one direction of a flow; the bytes buffered over every flow and the allocator are lent
       // apart from it.
       template <typename Emit>
-      TBC_GENERIC inline static bool consume(const Key& key, tbc::view<Flow&, tbc::lt::a> flow, Direction direction, std::size_t& total_buffered, tbc::view<Secure&, tbc::lt::a> memory, const TcpPacket& packet, const Event& event, Emit emit) {
+      TBC_GENERIC inline static bool consume(const Key& key, tbc::mut_a<Flow> flow, Direction direction, std::size_t& total_buffered, tbc::mut_a<Secure> memory, const TcpPacket& packet, const Event& event, Emit emit) {
         auto& side = direction == Direction::outbound ? flow.outbound : flow.inbound;
         auto sequence = packet.sequence + ((packet.flags & syn) ? 1u : 0u);
         auto bytes = packet.bytes;
@@ -657,7 +657,7 @@ export {
       static constexpr std::size_t per_flow_bytes = 64 * 1024;
       static constexpr std::size_t total_bytes = 8 * 1024 * 1024;
       Secure memory_;
-      tbc::view<Map, tbc::lt::self> flows_;
+      tbc::val_self<Map> flows_;
       std::size_t buffered_ = 0;
       std::uint64_t next_ = 0;
     };

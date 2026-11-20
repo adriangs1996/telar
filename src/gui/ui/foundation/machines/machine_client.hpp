@@ -56,10 +56,10 @@ namespace telar::gui::qt {
     application::machines::MachineClientKey key;
     // The connection allocates from the window's memory, and the effects reach the desktop it lends,
     // region `a`.
-    tbc::view<RuntimeConnection, tbc::lt::a> connection;
-    tbc::view<MachineEffects, tbc::lt::a> effects;
+    tbc::val_a<RuntimeConnection> connection;
+    tbc::val_a<MachineEffects> effects;
     // Talks through `connection` and reports to `effects`, its siblings, so the client stays put.
-    tbc::view<GuiSession, tbc::lt::self> session;
+    tbc::val_self<GuiSession> session;
     ds::Option<system::WindowLease> identity_lease;
     std::uint64_t identity = 0;
     std::uint64_t runtime_generation = 0;
@@ -68,7 +68,7 @@ namespace telar::gui::qt {
     bool named_launch = false;
     runtime::FixedText<application::machines::MachineLimits::program_bytes> admitted_program;
 
-    explicit MachineClient(tbc::view<ApplicationAllocator&, tbc::lt::a> memory, tbc::holds<const MachineEffects::Sinks&, tbc::lt::a> sinks, application::machines::MachineClientKey admission)
+    explicit MachineClient(tbc::mut_a<ApplicationAllocator> memory, tbc::holds<const MachineEffects::Sinks&, tbc::lt::a> sinks, application::machines::MachineClientKey admission)
         : key(admission),
           connection(memory),
           effects(sinks, admission),
@@ -89,7 +89,7 @@ namespace telar::gui::qt {
   };
 
   // The client the key names, or null once its slot holds another client or none.
-  [[nodiscard]] inline tbc::view<const MachineClient*, tbc::lt::a> findMachineClient(const application::machines::Machines& machines, tbc::view<const MachineClients&, tbc::lt::a> clients, application::machines::MachineClientKey key) noexcept {
+  [[nodiscard]] inline tbc::val_a<const MachineClient*> findMachineClient(const application::machines::Machines& machines, tbc::ref_a<MachineClients> clients, application::machines::MachineClientKey key) noexcept {
     if (!machines.contains(key.machine)) {
       return nullptr;
     }
@@ -99,7 +99,7 @@ namespace telar::gui::qt {
     return client && (*client)->key == key ? &client->get() : nullptr;
   }
 
-  [[nodiscard]] inline tbc::view<MachineClient*, tbc::lt::a> findMachineClientMut(const application::machines::Machines& machines, tbc::view<MachineClients&, tbc::lt::a> clients, application::machines::MachineClientKey key) noexcept {
+  [[nodiscard]] inline tbc::val_a<MachineClient*> findMachineClientMut(const application::machines::Machines& machines, tbc::mut_a<MachineClients> clients, application::machines::MachineClientKey key) noexcept {
     if (!machines.contains(key.machine)) {
       return nullptr;
     }

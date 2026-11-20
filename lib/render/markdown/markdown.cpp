@@ -67,7 +67,7 @@ namespace telar::render::markdown {
 
   // A copy of source with every invalid UTF-8 sequence replaced by U+FFFD, so
   // that every span of the document starts and ends on a character.
-  tbc::view<ds::String<Memory>, tbc::lt::a> repairUtf8(std::string_view source, tbc::view<Memory&, tbc::lt::a> memory) {
+  tbc::val_a<ds::String<Memory>> repairUtf8(std::string_view source, tbc::mut_a<Memory> memory) {
     ds::String<Memory> repaired{memory};
 
     repaired.reserve(source.size());

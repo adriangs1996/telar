@@ -37,7 +37,7 @@ namespace telar::gui::platform {
     using NativeSource = NativeReference<CGImageSourceRef>;
 
     // The source is a Core Foundation object it retains, depending on no argument.
-    tbc::view<NativeSource, tbc::lt::static_storage> sourceFromFile(const char* path, ClipboardImageError& failure) {
+    tbc::val_static<NativeSource> sourceFromFile(const char* path, ClipboardImageError& failure) {
       const runtime::FileDescriptor descriptor{telarGuiOpenClipboardImageFile(path)};
       if (!descriptor) {
         return NativeSource{nullptr};
@@ -191,7 +191,7 @@ namespace telar::gui::platform {
     };
 
     // The bytes are allocated from memory, region `a`.
-    tbc::view<SensitiveBytes<ApplicationAllocator>, tbc::lt::a> encode(tbc::view<ApplicationAllocator&, tbc::lt::a> memory, CGImageSourceRef source) {
+    tbc::val_a<SensitiveBytes<ApplicationAllocator>> encode(tbc::mut_a<ApplicationAllocator> memory, CGImageSourceRef source) {
       PngWriter writer{.bytes = SensitiveBytes{memory}, .failure = nullptr};
       const CGDataConsumerCallbacks callbacks{.putBytes = PngWriter::write, .releaseConsumer = nullptr};
       const NativeReference consumer{CGDataConsumerCreate(&writer, &callbacks)};

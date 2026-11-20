@@ -87,19 +87,19 @@ namespace telar::git {
   // Iterates the entries of a tree object, refusing malformed or unordered ones.
   class TreeReader {
   public:
-    TreeReader(tbc::view<std::string_view, tbc::lt::a> content, ObjectFormat format) noexcept;
+    TreeReader(tbc::val_a<std::string_view> content, ObjectFormat format) noexcept;
 
     // False at the end, or when `failed()` because the tree is malformed.
-    bool next(tbc::view<TreeEntry&, tbc::lt::a> entry) noexcept;
+    bool next(tbc::mut_a<TreeEntry> entry) noexcept;
 
     bool failed() const noexcept;
 
   private:
     bool fail() noexcept;
 
-    tbc::view<std::string_view, tbc::lt::a> rest_;
+    tbc::val_a<std::string_view> rest_;
     std::size_t hash_size_;
-    tbc::view<std::string_view, tbc::lt::a> previous_;
+    tbc::val_a<std::string_view> previous_;
     bool previous_directory_ = false;
     bool have_previous_ = false;
     bool failed_ = false;

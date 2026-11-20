@@ -82,14 +82,14 @@ export namespace telar::runtime {
   template <Allocator Memory>
   class TBC_GENERIC GhosttyAllocatorBridge {
   public:
-    explicit GhosttyAllocatorBridge(tbc::view<Memory&, tbc::lt::a> memory) noexcept
+    explicit GhosttyAllocatorBridge(tbc::mut_a<Memory> memory) noexcept
         : allocator_{.ctx = &memory, .vtable = &callbacks_} {}
 
     const GhosttyAllocator* get() const noexcept {
       return &allocator_;
     }
 
-    tbc::view<Memory&, tbc::lt::a> memory() const noexcept {
+    tbc::mut_a<Memory> memory() const noexcept {
       return *static_cast<Memory*>(allocator_.ctx);
     }
 
@@ -123,7 +123,7 @@ export namespace telar::runtime {
         .free = deallocate,
     };
 
-    tbc::view<GhosttyAllocator, tbc::lt::a> allocator_;
+    tbc::val_a<GhosttyAllocator> allocator_;
   };
 
   // A row of a terminal's grid that the terminal follows through reflow until the scrollback

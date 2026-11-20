@@ -93,12 +93,12 @@ namespace telar::gui::qt {
     void retire(application::machines::Machines::Slot slot, Retirement reason);
     void setup(application::machines::MachineToken target);
 
-    tbc::view<Store&, tbc::lt::a> store_;
-    tbc::view<MachinesCoordinator&, tbc::lt::a> machines_;
-    tbc::view<MachineProfilesSource&, tbc::lt::a> profiles_;
-    tbc::view<WindowDisplay&, tbc::lt::a> display_;
-    tbc::view<Dialogs&, tbc::lt::a> dialogs_;
-    tbc::view<NotificationsController&, tbc::lt::a> notifications_;
+    tbc::mut_a<Store> store_;
+    tbc::mut_a<MachinesCoordinator> machines_;
+    tbc::mut_a<MachineProfilesSource> profiles_;
+    tbc::mut_a<WindowDisplay> display_;
+    tbc::mut_a<Dialogs> dialogs_;
+    tbc::mut_a<NotificationsController> notifications_;
     QByteArray hostname_;
     ds::Option<RemoteLaunch> remote_launch_;
     QTimer retry_;

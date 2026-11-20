@@ -54,7 +54,7 @@ namespace {
   }
 
   // The bitmap is allocated from memory, region `a`.
-  tbc::view<telar::ds::Vec<std::uint8_t, SystemAllocator>, tbc::lt::a> coverage(const fonts::Face& face, tbc::view<SystemAllocator&, tbc::lt::a> memory) {
+  tbc::val_a<telar::ds::Vec<std::uint8_t, SystemAllocator>> coverage(const fonts::Face& face, tbc::mut_a<SystemAllocator> memory) {
     telar::ds::Vec<std::uint8_t, SystemAllocator> result{memory};
 
     result.resize(bitmap_bytes + outside_unicode.size());
@@ -73,7 +73,7 @@ namespace {
   }
 
   // The bytes are allocated from memory, region `a`.
-  tbc::view<telar::ds::Vec<std::uint8_t, SystemAllocator>, tbc::lt::a> fontBytes(std::string_view source, tbc::view<SystemAllocator&, tbc::lt::a> memory) {
+  tbc::val_a<telar::ds::Vec<std::uint8_t, SystemAllocator>> fontBytes(std::string_view source, tbc::mut_a<SystemAllocator> memory) {
     telar::ds::Vec<std::uint8_t, SystemAllocator> result{memory};
 
     result.resize(source.size());

@@ -149,6 +149,6 @@ export namespace telar::shell {
   // The words of the simple command at lexed.cursor. tokens must be the ones
   // lex() produced for line. words.size() >= line.size() and
   // text.size() >= 2 * line.size() guarantee no overflow.
-  [[nodiscard]] tbc::view<CommandAt, tbc::lt::a> commandAt(tbc::view<std::string_view, tbc::lt::a> line, Syntax syntax, std::span<const Token> tokens, const Lexed& lexed, std::span<Word> words, tbc::view<std::span<char>, tbc::lt::a> text) noexcept;
+  [[nodiscard]] tbc::val_a<CommandAt> commandAt(tbc::val_a<std::string_view> line, Syntax syntax, std::span<const Token> tokens, const Lexed& lexed, std::span<Word> words, tbc::val_a<std::span<char>> text) noexcept;
 
 }

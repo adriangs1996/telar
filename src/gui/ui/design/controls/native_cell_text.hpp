@@ -76,7 +76,7 @@ namespace telar::gui::qt {
     SystemAllocator memory_;
     MemoryAdapter<SystemAllocator> adapter_{memory_};
     fonts::CellTextLayout<ConcurrentMemory> layout_;
-    tbc::view<AncestorGeometry, tbc::lt::self> ancestors_;
+    tbc::val_self<AncestorGeometry> ancestors_;
     std::shared_ptr<const FontCollection> collection_;
     std::shared_ptr<ResidentFonts> fonts_;
     QPointer<WindowFontCatalog> catalog_;

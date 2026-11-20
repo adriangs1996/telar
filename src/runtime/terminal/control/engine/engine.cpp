@@ -12,7 +12,7 @@ import telar.base.text;
 
 namespace telar::runtime::control {
 
-  Engine::Engine(tbc::view<ConcurrentMemory&, tbc::lt::a> memory, tbc::view<PtyResponseQueue&, tbc::lt::a> responses, bool enabled, tbc::view<GraphicsQueryResources, tbc::lt::a> resources)
+  Engine::Engine(tbc::mut_a<ConcurrentMemory> memory, tbc::mut_a<PtyResponseQueue> responses, bool enabled, tbc::val_a<GraphicsQueryResources> resources)
       : parser_(memory),
         reply_(memory),
         checksum_(memory),
@@ -24,7 +24,7 @@ namespace telar::runtime::control {
         responses_(responses),
         enabled_(enabled) {}
 
-  void Engine::bind(tbc::view<GhosttyTerminal, tbc::lt::a> terminal, tbc::view<GhosttyRenderState, tbc::lt::a> render, bool separate_media) noexcept {
+  void Engine::bind(tbc::val_a<GhosttyTerminal> terminal, tbc::val_a<GhosttyRenderState> render, bool separate_media) noexcept {
     state_.bind(terminal, render, separate_media);
   }
 
@@ -289,7 +289,7 @@ namespace telar::runtime::control {
     return clipboard_;
   }
 
-  auto Engine::takeZone() noexcept -> tbc::view<ds::Option<Zone>, tbc::lt::a> {
+  auto Engine::takeZone() noexcept -> tbc::val_a<ds::Option<Zone>> {
     if (zones_.empty()) {
       return ds::none;
     }

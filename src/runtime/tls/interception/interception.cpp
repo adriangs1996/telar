@@ -387,7 +387,7 @@ namespace telar::runtime {
     return child_.get();
   }
 
-  TlsSession::TlsSession(tbc::view<const TlsContexts&, tbc::lt::a> contexts, tbc::view<std::shared_ptr<const CertificateAuthority>, tbc::lt::a> authority, TunnelSockets sockets, std::string_view hostname, tbc::view<ConcurrentMemory&, tbc::lt::a> memory, tbc::view<ds::Box<AlpnOffer, ConcurrentMemory>, tbc::lt::a> offer)
+  TlsSession::TlsSession(tbc::ref_a<TlsContexts> contexts, tbc::val_a<std::shared_ptr<const CertificateAuthority>> authority, TunnelSockets sockets, std::string_view hostname, tbc::mut_a<ConcurrentMemory> memory, tbc::val_a<ds::Box<AlpnOffer, ConcurrentMemory>> offer)
       : contexts_(contexts),
         authority_(std::move(authority)),
         sockets_(sockets),
@@ -630,26 +630,26 @@ namespace telar::runtime {
     return side == TlsSide::child ? child_.get() : origin_.get();
   }
 
-  TlsInterception::TlsInterception(tbc::view<const TlsContexts&, tbc::lt::a> contexts, tbc::view<std::shared_ptr<const CertificateAuthority>, tbc::lt::a> authority) noexcept
+  TlsInterception::TlsInterception(tbc::ref_a<TlsContexts> contexts, tbc::val_a<std::shared_ptr<const CertificateAuthority>> authority) noexcept
       : contexts_(contexts),
         replacement_(std::move(authority)) {}
 
-  tbc::view<ds::Box<TlsSession, ConcurrentMemory>, tbc::lt::a> TlsInterception::open(tbc::view<ConcurrentMemory&, tbc::lt::a> memory, TunnelSockets sockets, std::string_view hostname, tbc::view<ds::Box<AlpnOffer, ConcurrentMemory>, tbc::lt::a> offer) const {
+  tbc::val_a<ds::Box<TlsSession, ConcurrentMemory>> TlsInterception::open(tbc::mut_a<ConcurrentMemory> memory, TunnelSockets sockets, std::string_view hostname, tbc::val_a<ds::Box<AlpnOffer, ConcurrentMemory>> offer) const {
     requireTls(!suspended_.load(std::memory_order_acquire), "TLS authority synchronization is in progress");
     return ds::makeBox<TlsSession>(memory, contexts_, snapshot(), sockets, hostname, memory, std::move(offer));
   }
 
-  tbc::view<ds::Box<TlsSession, ConcurrentMemory>, tbc::lt::a> TlsInterception::open(tbc::view<ConcurrentMemory&, tbc::lt::a> memory, TunnelSockets sockets, std::string_view hostname) const {
+  tbc::val_a<ds::Box<TlsSession, ConcurrentMemory>> TlsInterception::open(tbc::mut_a<ConcurrentMemory> memory, TunnelSockets sockets, std::string_view hostname) const {
     return open(memory, sockets, hostname, ds::Box<AlpnOffer, ConcurrentMemory>{});
   }
 
-  tbc::view<std::shared_ptr<const CertificateAuthority>, tbc::lt::a> TlsInterception::snapshot() const noexcept {
+  tbc::val_a<std::shared_ptr<const CertificateAuthority>> TlsInterception::snapshot() const noexcept {
     std::lock_guard lock{mutex_};
 
     return replacement_;
   }
 
-  void TlsInterception::replace(tbc::view<std::shared_ptr<const CertificateAuthority>, tbc::lt::a> authority) noexcept {
+  void TlsInterception::replace(tbc::val_a<std::shared_ptr<const CertificateAuthority>> authority) noexcept {
     std::lock_guard lock{mutex_};
 
     replacement_.swap(authority);

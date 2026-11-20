@@ -28,10 +28,10 @@ export {
   namespace telar::runtime::cli::repository {
 
     // The origin as `host/path`, lowercase host, default port, `.git` and slashes dropped.
-    tbc::view<Text, tbc::lt::a> normalize(tbc::view<Memory&, tbc::lt::a> memory, std::string_view url);
+    tbc::val_a<Text> normalize(tbc::mut_a<Memory> memory, std::string_view url);
 
     // The origin without the credentials an authority may carry.
-    tbc::view<Text, tbc::lt::a> sanitized(tbc::view<Memory&, tbc::lt::a> memory, std::string_view origin);
+    tbc::val_a<Text> sanitized(tbc::mut_a<Memory> memory, std::string_view origin);
 
   }
 }
@@ -47,20 +47,20 @@ export {
     class Git {
     public:
       // What git prints is read into `memory`, region `a`.
-      Git(tbc::view<Memory&, tbc::lt::a> memory, std::string_view root);
+      Git(tbc::mut_a<Memory> memory, std::string_view root);
 
-      tbc::view<Text, tbc::lt::a> read(std::initializer_list<std::string_view> arguments);
+      tbc::val_a<Text> read(std::initializer_list<std::string_view> arguments);
 
-      tbc::view<Text, tbc::lt::a> read(std::span<const std::string_view> arguments);
+      tbc::val_a<Text> read(std::span<const std::string_view> arguments);
 
       // `revisions` are rev-list arguments: the ref, then any exclusions.
       void bundle(std::span<const std::string_view> revisions, int descriptor);
 
     private:
-      tbc::view<std::pair<int, Text>, tbc::lt::a> execute(Command<Memory>& command, bool bounded);
+      tbc::val_a<std::pair<int, Text>> execute(Command<Memory>& command, bool bounded);
 
-      tbc::view<Memory&, tbc::lt::a> memory_;
-      tbc::view<HardenedGit<Memory>, tbc::lt::a> git_;
+      tbc::mut_a<Memory> memory_;
+      tbc::val_a<HardenedGit<Memory>> git_;
     };
 
     void ready(Git& git, std::string_view commit);
@@ -96,7 +96,7 @@ export {
 
     void branch(std::string_view value);
 
-    void single(tbc::view<ds::Option<std::string_view>&, tbc::lt::a> field, tbc::view<std::string_view, tbc::lt::a> value, const char* error);
+    void single(tbc::mut_a<ds::Option<std::string_view>> field, tbc::val_a<std::string_view> value, const char* error);
 
     struct Target {
       ds::Option<std::uint64_t> id{};
@@ -151,7 +151,7 @@ export {
   namespace telar::runtime::cli::sessions {
 
     // The canonical path of a directory that exists.
-    tbc::view<Text, tbc::lt::a> realDirectory(tbc::view<Memory&, tbc::lt::a> memory, std::string_view path);
+    tbc::val_a<Text> realDirectory(tbc::mut_a<Memory> memory, std::string_view path);
 
     void wireTabLabel(std::string_view value, bool empty = false);
 
@@ -231,25 +231,25 @@ export {
     class WorktreeGit {
     public:
       // What it returns is in `memory`, and borrows nothing of it: a run keeps no state between runs.
-      explicit WorktreeGit(tbc::view<Memory&, tbc::lt::a> memory);
+      explicit WorktreeGit(tbc::mut_a<Memory> memory);
 
       // Mutations retain only the tail of diagnostics; diff streams both byte
       // streams. Every invocation uses literal argv and a bounded deadline.
-      tbc::view<Text, tbc::lt::a> run(std::span<const std::string_view> arguments, const char* failure = "NotARepository", bool stream = false, bool hardened = false, std::span<const std::pair<std::string_view, std::string_view>> environment = {}) const;
+      tbc::val_a<Text> run(std::span<const std::string_view> arguments, const char* failure = "NotARepository", bool stream = false, bool hardened = false, std::span<const std::pair<std::string_view, std::string_view>> environment = {}) const;
 
-      tbc::view<Text, tbc::lt::a> run(std::initializer_list<std::string_view> arguments, const char* failure = "NotARepository", bool stream = false, bool hardened = false) const;
+      tbc::val_a<Text> run(std::initializer_list<std::string_view> arguments, const char* failure = "NotARepository", bool stream = false, bool hardened = false) const;
 
-      tbc::view<Text, tbc::lt::a> line(std::initializer_list<std::string_view> arguments, bool hardened = false) const;
+      tbc::val_a<Text> line(std::initializer_list<std::string_view> arguments, bool hardened = false) const;
 
-      tbc::view<Text, tbc::lt::a> root(std::string_view directory) const;
+      tbc::val_a<Text> root(std::string_view directory) const;
 
-      tbc::view<Text, tbc::lt::a> currentBranch(std::string_view directory) const;
+      tbc::val_a<Text> currentBranch(std::string_view directory) const;
 
       bool succeeds(std::initializer_list<std::string_view> arguments, bool hardened = false) const;
 
       void add(std::string_view root, std::string_view directory, std::string_view branch, std::string_view base) const;
 
-      tbc::view<ds::Vec<GitWorktree, Memory>, tbc::lt::a> listed(std::string_view directory, const WorktreeFilter& keep) const;
+      tbc::val_a<ds::Vec<GitWorktree, Memory>> listed(std::string_view directory, const WorktreeFilter& keep) const;
 
       // The merge check runs through the untrusted Git: hooks, filters and lazy
       // fetches off. A clone that could still fetch lazily, on a Git too old to
@@ -257,7 +257,7 @@ export {
       bool merged(std::string_view root, std::string_view branch) const;
 
     private:
-      tbc::view<Memory&, tbc::lt::a> memory_;
+      tbc::mut_a<Memory> memory_;
     };
 
   }

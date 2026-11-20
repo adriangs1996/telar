@@ -232,7 +232,7 @@ namespace telar::runtime {
     sink.ingest({reinterpret_cast<const std::uint8_t*>(ending.data()), ending.size()});
   }
 
-  auto GraphicsFileInput::nextCommand(tbc::view<std::string_view, tbc::lt::a> text, std::size_t& search_from) noexcept -> tbc::view<ds::Option<Command>, tbc::lt::a> {
+  auto GraphicsFileInput::nextCommand(tbc::val_a<std::string_view> text, std::size_t& search_from) noexcept -> tbc::val_a<ds::Option<Command>> {
     for (;;) {
       const auto start = text.find(introducer, search_from);
       if (start == std::string_view::npos) {
@@ -303,7 +303,7 @@ namespace telar::runtime {
     return true;
   }
 
-  tbc::view<std::span<const std::uint8_t>, tbc::lt::a> GraphicsFileInput::encodeChunk(tbc::view<std::span<char>, tbc::lt::a> chunk, std::string_view control, std::span<const std::uint8_t> raw, bool more) {
+  tbc::val_a<std::span<const std::uint8_t>> GraphicsFileInput::encodeChunk(tbc::val_a<std::span<char>> chunk, std::string_view control, std::span<const std::uint8_t> raw, bool more) {
     auto* end = std::copy(introducer.begin(), introducer.end(), chunk.data());
 
     if (!control.empty()) {

@@ -127,7 +127,7 @@ namespace telar::gui::qt {
 
     private:
       fonts::IconGlyph glyph_;
-      tbc::view<QSGImageNode&, tbc::lt::self> image_;
+      tbc::mut_self<QSGImageNode> image_;
       AlphaMaskRef mask_;
     };
 
@@ -202,8 +202,8 @@ namespace telar::gui::qt {
       std::shared_ptr<const FontAsset> source_;
       std::shared_ptr<IconImages> images_;
       // The meshes and software glyphs are this node's children.
-      tbc::view<QList<IconMesh*>, tbc::lt::self> meshes_;
-      tbc::view<QList<SoftwareIcon*>, tbc::lt::self> software_glyphs_;
+      tbc::val_self<QList<IconMesh*>> meshes_;
+      tbc::val_self<QList<SoftwareIcon*>> software_glyphs_;
       std::uint64_t revision_ = 0;
     };
 

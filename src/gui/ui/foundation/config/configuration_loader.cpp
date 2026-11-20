@@ -87,7 +87,7 @@ namespace telar::gui::qt {
     return result;
   }
 
-  void ConfigurationLoader::load(tbc::view<ApplicationAllocator&, tbc::lt::a> memory, const ConfigurationReloadRequest& request, tbc::view<ConfigurationPreparation&, tbc::lt::a> result) {
+  void ConfigurationLoader::load(tbc::mut_a<ApplicationAllocator> memory, const ConfigurationReloadRequest& request, tbc::mut_a<ConfigurationPreparation> result) {
     result.configuration.themes.base = application::configuration::default_theme_values;
     result.configuration.theme = projectTheme(result.configuration.themes.base);
     if (!request.selection.trust_path.isEmpty()) {
@@ -150,7 +150,7 @@ namespace telar::gui::qt {
     }
   }
 
-  void ConfigurationLoader::snapshot(tbc::view<ApplicationAllocator&, tbc::lt::a> memory, const application::ConfigurationGeneration<ApplicationAllocator>& generation, tbc::view<ConfigurationSnapshot&, tbc::lt::a> result) {
+  void ConfigurationLoader::snapshot(tbc::mut_a<ApplicationAllocator> memory, const application::ConfigurationGeneration<ApplicationAllocator>& generation, tbc::mut_a<ConfigurationSnapshot> result) {
     result.commands = ds::makeBox<runtime::config::RetainedCommandTabRegistry>(memory, generation.commandTabs());
     const auto store = [&](int reference, const char* field) {
       QList<QByteArray> arguments;

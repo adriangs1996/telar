@@ -336,7 +336,7 @@ export {
       std::shared_ptr<PaneObserver> observer;
       std::shared_ptr<PaneMedia> media;
       // Reports its graphics queries to media.
-      tbc::view<Terminal, tbc::lt::self> terminal;
+      tbc::val_self<Terminal> terminal;
       ByteQueue<ConcurrentMemory> input;
       // Reads rows of `terminal`'s scrollback for clients that ask for them.
       ScrollbackRows scrollback_rows;
@@ -369,7 +369,7 @@ export {
       ds::Option<std::chrono::steady_clock::time_point> echo_sent;
       double link_average_ms = 0;
       // Its host and directory view `shell_zones`' fixed buffers, made once with the pane.
-      tbc::view<PaneShell, tbc::lt::self> shell_state{};
+      tbc::val_self<PaneShell> shell_state{};
       // The shell the pane started, which an `ssh` session it nests stands in for.
       IntegratedShell local_shell = IntegratedShell::none;
       // Zero until the pane has an integrated shell: other panes never send their state.
@@ -585,18 +585,18 @@ export {
 
     // The pane `identity` names while it has `generation`; none for another generation. No pane has
     // generation 0, so 0 finds none.
-    tbc::view<Pane*, tbc::lt::a> findPane(tbc::view<PaneStore&, tbc::lt::a> panes, std::uint64_t identity, std::uint64_t generation) noexcept;
+    tbc::val_a<Pane*> findPane(tbc::mut_a<PaneStore> panes, std::uint64_t identity, std::uint64_t generation) noexcept;
 
-    tbc::view<const Pane*, tbc::lt::a> findPane(tbc::view<const PaneStore&, tbc::lt::a> panes, std::uint64_t identity, std::uint64_t generation) noexcept;
+    tbc::val_a<const Pane*> findPane(tbc::ref_a<PaneStore> panes, std::uint64_t identity, std::uint64_t generation) noexcept;
 
     // The same pane while its process runs and nobody asked it to close.
-    tbc::view<Pane*, tbc::lt::a> livePane(tbc::view<PaneStore&, tbc::lt::a> panes, std::uint64_t identity, std::uint64_t generation) noexcept;
+    tbc::val_a<Pane*> livePane(tbc::mut_a<PaneStore> panes, std::uint64_t identity, std::uint64_t generation) noexcept;
 
-    tbc::view<const Pane*, tbc::lt::a> livePane(tbc::view<const PaneStore&, tbc::lt::a> panes, std::uint64_t identity, std::uint64_t generation) noexcept;
+    tbc::val_a<const Pane*> livePane(tbc::ref_a<PaneStore> panes, std::uint64_t identity, std::uint64_t generation) noexcept;
 
     // The pane an agent's report names, which must still run the generation it names and be the one
     // the runtime verified the reporting client inside.
-    tbc::view<Pane&, tbc::lt::a> requireReporterPane(tbc::view<PaneStore&, tbc::lt::a> panes, const ClientSession& client, std::uint64_t identity, std::uint64_t generation);
+    tbc::mut_a<Pane> requireReporterPane(tbc::mut_a<PaneStore> panes, const ClientSession& client, std::uint64_t identity, std::uint64_t generation);
 
     // The runtime's data apart from its clients, whose table is separate so that a call can borrow one
     // client and the model at once, as Rust borrows two fields of a struct.

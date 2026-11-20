@@ -130,7 +130,7 @@ namespace telar {
 
     static std::size_t encodedSize(const TextMetadata& value);
     static void encodeBody(const TextMetadata& value, std::span<Byte>& output);
-    static void decodeBody(DecodeInput input, tbc::view<TextMetadata&, tbc::lt::a> value, DecodeStorage& storage);
+    static void decodeBody(DecodeInput input, tbc::mut_a<TextMetadata> value, DecodeStorage& storage);
 
     template <typename Visitor>
     TBC_GENERIC static void

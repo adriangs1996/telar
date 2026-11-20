@@ -27,7 +27,7 @@ export {
       // The lines view the wrapped text, region `a`, but for a shortened last line, which the text owns.
       // Stays here: generic over the caller's measure, which the wrapping calls through a function pointer.
       template <LabelMeasure Measure>
-      TBC_GENERIC void wrap(tbc::view<std::string_view, tbc::lt::a> text, float width, Measure& measure) {
+      TBC_GENERIC void wrap(tbc::val_a<std::string_view> text, float width, Measure& measure) {
         auto call = [&measure](std::string_view part) -> float {
           return measure(part);
         };
@@ -50,15 +50,15 @@ export {
         float operator()(std::string_view text) const;
       };
 
-      void wrapMeasured(tbc::view<std::string_view, tbc::lt::a> text, float width, Measured measure);
+      void wrapMeasured(tbc::val_a<std::string_view> text, float width, Measured measure);
 
       [[nodiscard]] static std::string_view trimStart(std::string_view text) noexcept;
 
       [[nodiscard]] static std::size_t wrapEnd(std::string_view paragraph, float width, Measured& measure);
 
-      void fitTail(tbc::view<std::string_view, tbc::lt::a> paragraph, bool following_paragraph, float width, Measured& measure);
+      void fitTail(tbc::val_a<std::string_view> paragraph, bool following_paragraph, float width, Measured& measure);
 
-      tbc::view<ds::Array<std::string_view, maximum_lines>, tbc::lt::a> lines_{};
+      tbc::val_a<ds::Array<std::string_view, maximum_lines>> lines_{};
       runtime::FixedText<TextFit::maximum_bytes> tail_;
       std::size_t count_ = 0;
       bool owned_tail_ = false;

@@ -22,7 +22,7 @@ export {
       ds::Option<MachineProfile> saved;
     };
 
-    tbc::view<Target, tbc::lt::a> resolve(tbc::view<Memory&, tbc::lt::a> memory, const MachineProfiles& profiles, const MachineOptions& options);
+    tbc::val_a<Target> resolve(tbc::mut_a<Memory> memory, const MachineProfiles& profiles, const MachineOptions& options);
 
   }
 }

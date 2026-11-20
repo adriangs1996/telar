@@ -347,7 +347,7 @@ namespace telar {
   inline constexpr std::size_t max_notification_link_bytes = 1024;
   inline constexpr std::string_view notification_link_scheme = "https://";
 
-  tbc::view<std::string_view, tbc::lt::a> notificationLinkHost(tbc::view<std::string_view, tbc::lt::a> link) noexcept;
+  tbc::val_a<std::string_view> notificationLinkHost(tbc::val_a<std::string_view> link) noexcept;
 
   enum class NotificationLevel : Byte {
     info = 0,
@@ -709,7 +709,7 @@ namespace telar {
 
     static std::size_t encodedSize(const HistoryScopeValue& value, HistoryScope scope);
     static void encodeBody(const HistoryScopeValue& value, std::span<Byte>& output, HistoryScope scope);
-    static void decodeBody(DecodeInput input, tbc::view<HistoryScopeValue&, tbc::lt::a> value, DecodeStorage&, HistoryScope scope);
+    static void decodeBody(DecodeInput input, tbc::mut_a<HistoryScopeValue> value, DecodeStorage&, HistoryScope scope);
   };
 
   template <>

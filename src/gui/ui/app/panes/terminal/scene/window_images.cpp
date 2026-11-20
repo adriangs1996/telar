@@ -193,7 +193,7 @@ namespace telar::gui::qt {
     }
   }
 
-  tbc::view<ds::Option<LimitReach>, tbc::lt::static_storage> WindowImages::preparePlacements(std::span<const ImagePlacementSource> sources) {
+  tbc::val_static<ds::Option<LimitReach>> WindowImages::preparePlacements(std::span<const ImagePlacementSource> sources) {
     if (!placementSourcesChanged(sources)) {
       return ds::none;
     }

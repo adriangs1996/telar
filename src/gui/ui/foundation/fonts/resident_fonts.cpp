@@ -148,7 +148,7 @@ namespace telar::gui::qt {
     return source;
   }
 
-  tbc::view<std::shared_ptr<ResidentFonts>, tbc::lt::static_storage> ResidentFonts::shared(const std::shared_ptr<const FontAsset>& source) {
+  tbc::val_static<std::shared_ptr<ResidentFonts>> ResidentFonts::shared(const std::shared_ptr<const FontAsset>& source) {
     thread_local QHash<const FontAsset*, std::weak_ptr<ResidentFonts>> cached;
 
     forgetExpired(cached);
@@ -161,7 +161,7 @@ namespace telar::gui::qt {
     return fonts;
   }
 
-  tbc::view<std::shared_ptr<ResidentFonts>, tbc::lt::static_storage> ResidentFonts::shared(const std::shared_ptr<const FontCollection>& collection) {
+  tbc::val_static<std::shared_ptr<ResidentFonts>> ResidentFonts::shared(const std::shared_ptr<const FontCollection>& collection) {
     if (!collection || !collection->primary || collection->count > fonts::maximum_fallback_faces) {
       throw std::invalid_argument{"InvalidFontCollection"};
     }

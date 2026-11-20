@@ -19,7 +19,7 @@ export {
       using Facts = BoundedText<facts_bytes>;
 
       template <Allocator Memory>
-      [[nodiscard]] static tbc::view<std::string_view, tbc::lt::a> title(tbc::view<const Agent<Memory>&, tbc::lt::a> agent, tbc::view<const Worktree<Memory>*, tbc::lt::a> task) noexcept;
+      [[nodiscard]] static tbc::val_a<std::string_view> title(tbc::ref_a<Agent<Memory>> agent, tbc::val_a<const Worktree<Memory>*> task) noexcept;
 
       template <Allocator Memory>
       [[nodiscard]] static Facts facts(const Agent<Memory>& agent, const Worktree<Memory>* task);
@@ -29,8 +29,8 @@ export {
       static void decimal(Facts& storage, std::uint16_t value);
     };
 
-    extern template tbc::view<std::string_view, tbc::lt::a> PeekLabels::title<Memory>(tbc::view<const Agent<Memory>&, tbc::lt::a> agent, tbc::view<const Worktree<Memory>*, tbc::lt::a> task) noexcept;
-    extern template tbc::view<std::string_view, tbc::lt::a> PeekLabels::title<ConcurrentMemory>(tbc::view<const Agent<ConcurrentMemory>&, tbc::lt::a> agent, tbc::view<const Worktree<ConcurrentMemory>*, tbc::lt::a> task) noexcept;
+    extern template tbc::val_a<std::string_view> PeekLabels::title<Memory>(tbc::ref_a<Agent<Memory>> agent, tbc::val_a<const Worktree<Memory>*> task) noexcept;
+    extern template tbc::val_a<std::string_view> PeekLabels::title<ConcurrentMemory>(tbc::ref_a<Agent<ConcurrentMemory>> agent, tbc::val_a<const Worktree<ConcurrentMemory>*> task) noexcept;
     extern template PeekLabels::Facts PeekLabels::facts<Memory>(const Agent<Memory>& agent, const Worktree<Memory>* task);
     extern template PeekLabels::Facts PeekLabels::facts<ConcurrentMemory>(const Agent<ConcurrentMemory>& agent, const Worktree<ConcurrentMemory>* task);
 

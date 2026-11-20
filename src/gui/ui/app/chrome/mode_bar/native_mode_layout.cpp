@@ -46,7 +46,7 @@ namespace telar::gui::qt {
       return value.value(QStringLiteral("label")).toString().toUtf8();
     }
 
-    tbc::view<application::status_bar::ModeHint, tbc::lt::a> readHint(const QVariantMap& value, tbc::view<const QByteArray&, tbc::lt::a> label) {
+    tbc::val_a<application::status_bar::ModeHint> readHint(const QVariantMap& value, tbc::ref_a<QByteArray> label) {
       const auto kind = value.value(QStringLiteral("key")).toInt();
       if (kind < static_cast<int>(KeyChord::Key::character) || kind > static_cast<int>(KeyChord::Key::back_tab)) {
         throw std::invalid_argument{"InvalidModeHintKey"};

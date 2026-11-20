@@ -54,7 +54,7 @@ export {
       BoundedText<LinkText::maximum_uri_bytes> executable_;
       BoundedText<LinkText::maximum_uri_bytes> path_;
       BoundedText<LinkText::maximum_uri_bytes + position_bytes> position_;
-      tbc::view<ds::Array<std::string_view, maximum_arguments>, tbc::lt::self> arguments_;
+      tbc::val_self<ds::Array<std::string_view, maximum_arguments>> arguments_;
     };
 
   }

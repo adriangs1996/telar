@@ -64,7 +64,7 @@ namespace telar::gui::qt {
     SurfaceCommand(SurfaceCommand&&) = delete;
     SurfaceCommand& operator=(SurfaceCommand&&) = delete;
     // The command keeps the completion, and what it captures, region `a`, until it runs.
-    void start(const SurfaceCommandRequest& request, tbc::view<Completion, tbc::lt::a> complete);
+    void start(const SurfaceCommandRequest& request, tbc::val_a<Completion> complete);
     void cancel();
     [[nodiscard]] bool active() const noexcept;
 
@@ -80,7 +80,7 @@ namespace telar::gui::qt {
     QTimer grace_;
     SurfaceCommandRequest request_;
     SurfaceCommandResult result_;
-    tbc::view<Completion, tbc::lt::a> complete_;
+    tbc::val_a<Completion> complete_;
     QByteArray payload_;
     qint64 group_ = 0;
     bool running_ = false;

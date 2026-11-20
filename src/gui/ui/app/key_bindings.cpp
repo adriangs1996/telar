@@ -96,7 +96,7 @@ namespace telar::gui::qt {
     return router_.prefixPending();
   }
 
-  tbc::view<application::status_bar::ModeHints, tbc::lt::static_storage> KeyBindings::modeHints() const noexcept {
+  tbc::val_static<application::status_bar::ModeHints> KeyBindings::modeHints() const noexcept {
     return application::status_bar::ModeHints::resolve(router_);
   }
 

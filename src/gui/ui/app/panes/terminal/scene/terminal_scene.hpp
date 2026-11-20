@@ -191,7 +191,7 @@ namespace telar::gui::qt {
 
     void synchronize(QQuickWindow& window, const TerminalPresentation& frame);
     // The result reuses the previous node or is a new one the caller adopts.
-    static tbc::view<QSGNode*, tbc::lt::a> synchronizeNode(tbc::view<QSGNode*, tbc::lt::a> previous, QQuickWindow& window, const TerminalPresentation& frame);
+    static tbc::val_a<QSGNode*> synchronizeNode(tbc::val_a<QSGNode*> previous, QQuickWindow& window, const TerminalPresentation& frame);
 
   private:
     struct Row {
@@ -219,16 +219,16 @@ namespace telar::gui::qt {
 
     QQuickWindow& window_;
     // The layers are this node's children, and the images draw into them.
-    tbc::view<QSGSimpleRectNode&, tbc::lt::self> background_;
-    tbc::view<QSGTransformNode&, tbc::lt::self> below_background_;
-    tbc::view<QSGTransformNode&, tbc::lt::self> cell_backgrounds_;
+    tbc::mut_self<QSGSimpleRectNode> background_;
+    tbc::mut_self<QSGTransformNode> below_background_;
+    tbc::mut_self<QSGTransformNode> cell_backgrounds_;
     // Search matches, lit over the cells' backgrounds and under their text.
-    tbc::view<QSGTransformNode&, tbc::lt::self> matches_;
-    tbc::view<QSGTransformNode&, tbc::lt::self> below_text_;
-    tbc::view<QSGTransformNode&, tbc::lt::self> rows_;
-    tbc::view<QSGTransformNode&, tbc::lt::self> above_text_;
-    tbc::view<QSGTransformNode&, tbc::lt::self> overlay_;
-    tbc::view<GraphicsScene, tbc::lt::self> images_;
+    tbc::mut_self<QSGTransformNode> matches_;
+    tbc::mut_self<QSGTransformNode> below_text_;
+    tbc::mut_self<QSGTransformNode> rows_;
+    tbc::mut_self<QSGTransformNode> above_text_;
+    tbc::mut_self<QSGTransformNode> overlay_;
+    tbc::val_self<GraphicsScene> images_;
     CellGlyphs glyphs_;
     TextScene text_;
     TextScene overlay_text_;

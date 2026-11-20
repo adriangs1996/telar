@@ -49,7 +49,7 @@ export {
 export {
   namespace telar::runtime::cli::integration {
 
-    tbc::view<ds::Option<ds::String<Memory>>, tbc::lt::a> read(tbc::view<Memory&, tbc::lt::a> memory, const ds::String<Memory>& path, std::size_t maximum_bytes);
+    tbc::val_a<ds::Option<ds::String<Memory>>> read(tbc::mut_a<Memory> memory, const ds::String<Memory>& path, std::size_t maximum_bytes);
 
   }
 }
@@ -96,7 +96,7 @@ export {
       bool isOwnCommand(const JsonNode<Memory>& hook) const noexcept;
 
       template <typename Node>
-      tbc::view<Node*, tbc::lt::a> findHook(tbc::view<Node&, tbc::lt::a> entry) const noexcept;
+      tbc::val_a<Node*> findHook(tbc::mut_a<Node> entry) const noexcept;
 
       bool installEvents(JsonNode<Memory>& hooks, std::span<const std::string_view> events, std::string_view command, std::string_view timeout) const;
 

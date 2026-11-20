@@ -271,7 +271,7 @@ namespace telar::ds {
     // storing a Value{}; a scalar is assigned through the constructor that converts it.
     template <typename Other = Value>
       requires(std::same_as<Other, Value> && !std::is_scalar_v<Value>)
-    constexpr Option& operator=(tbc::view<Other, tbc::lt::a> value) {
+    constexpr Option& operator=(tbc::val_a<Other> value) {
       if (full_) {
         value_ = std::move(value);
       } else {
@@ -343,7 +343,7 @@ namespace telar::ds {
       return &get();
     }
 
-    [[nodiscard]] constexpr tbc::view<Value, tbc::lt::a> valueOr(tbc::view<Value, tbc::lt::a> fallback) const
+    [[nodiscard]] constexpr tbc::val_a<Value> valueOr(tbc::val_a<Value> fallback) const
       requires std::is_copy_constructible_v<Value>
     {
       return full_ ? value_ : std::move(fallback);
@@ -409,7 +409,7 @@ namespace telar::ds {
     // methods that store or return a Value label too.
     union {
       char empty_;
-      tbc::view<Value, tbc::lt::a> value_;
+      tbc::val_a<Value> value_;
     };
 
     bool full_ = false;

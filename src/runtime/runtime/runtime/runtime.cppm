@@ -127,7 +127,7 @@ export {
 
       bool reportProgress(RuntimeModel& model, ClientSession& client, const ReportAgentProgress& request);
 
-      tbc::view<Pane&, tbc::lt::a> validateCommand(tbc::view<RuntimeModel&, tbc::lt::a> model, ClientSession& client, const ReportAgentCommand& request);
+      tbc::mut_a<Pane> validateCommand(tbc::mut_a<RuntimeModel> model, ClientSession& client, const ReportAgentCommand& request);
 
       // Sends text to a pane, which its caller says no attached window focuses.
       void sendText(RuntimeModel& model, Panes& panes, ClientSession& client, const SendPaneText& request, bool focused);
@@ -174,7 +174,7 @@ export {
 
       static Pane& require(PaneStore& panes, std::uint64_t identity, std::uint64_t generation);
 
-      tbc::view<Pane&, tbc::lt::a> authorize(tbc::view<PaneStore&, tbc::lt::a> panes, const ClientSession& client, std::uint64_t pane_id, std::uint64_t generation, AgentProvider provider);
+      tbc::mut_a<Pane> authorize(tbc::mut_a<PaneStore> panes, const ClientSession& client, std::uint64_t pane_id, std::uint64_t generation, AgentProvider provider);
 
       // Queues an agent's sound, delivered once no client is borrowed.
       // Agent sounds queued while a client is borrowed, delivered to the subscribed clients afterwards.
@@ -219,10 +219,10 @@ export {
 
     // A copy of a directory in `storage`, for a launch's cwd: assigning it replaces what that field
     // viewed, as Rust's `launch.cwd = own(&mut storage, directory)` does.
-    tbc::view<std::string_view, tbc::lt::a> ownDirectory(tbc::view<LaunchDirectory&, tbc::lt::a> storage, std::string_view directory);
+    tbc::val_a<std::string_view> ownDirectory(tbc::mut_a<LaunchDirectory> storage, std::string_view directory);
 
     // The launch with the directory of the pane it names as its source, copied into `directory`.
-    tbc::view<Launch, tbc::lt::a> resolveLaunchDirectory(const RuntimeModel& model, const ClientSession& client, tbc::view<Launch, tbc::lt::a> launch, tbc::view<LaunchDirectory&, tbc::lt::a> directory, LaunchDirectoryScope scope = {});
+    tbc::val_a<Launch> resolveLaunchDirectory(const RuntimeModel& model, const ClientSession& client, tbc::val_a<Launch> launch, tbc::mut_a<LaunchDirectory> directory, LaunchDirectoryScope scope = {});
 
   }
 }
@@ -304,7 +304,7 @@ export {
       static Tab& requireTab(WorkspaceStore& workspaces, TabLocation location);
 
       // The colors of a workspace's geometry owner, which its new panes take.
-      static tbc::view<const ConfigureTerminalColors*, tbc::lt::a> ownerColors(const WorkspaceStore& workspaces, tbc::view<const ClientStore&, tbc::lt::a> clients, std::uint64_t workspace) noexcept;
+      static tbc::val_a<const ConfigureTerminalColors*> ownerColors(const WorkspaceStore& workspaces, tbc::ref_a<ClientStore> clients, std::uint64_t workspace) noexcept;
 
       // Whether a workspace's geometry owner draws telar's editor, so its new panes' shells print no prompt.
       static bool ownerBarePrompt(const WorkspaceStore& workspaces, const ClientStore& clients, std::uint64_t workspace) noexcept;
@@ -637,7 +637,7 @@ export {
       // What a completion asks for, from the PATH and shell of the pane's shell where its
       // integration reported them, this runtime's PATH otherwise.
       // The request shares the names the pane's shell reported, region `a`.
-      tbc::view<WordRequest, tbc::lt::a> makeWordRequest(const ClientSession& client, std::uint64_t request_id, CompletionProvider provider, std::string_view prefix, tbc::holds<const Pane&, tbc::lt::a> pane) const;
+      tbc::val_a<WordRequest> makeWordRequest(const ClientSession& client, std::uint64_t request_id, CompletionProvider provider, std::string_view prefix, tbc::holds<const Pane&, tbc::lt::a> pane) const;
 
       void handle(std::uint64_t identity, const FindPaths& message);
 

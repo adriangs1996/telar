@@ -19,7 +19,7 @@ namespace telar::runtime {
     // A block of the allocator, region `a`; once released it is the allocator's, as `Vec::leak` hands out.
     class CodecBuffer {
     public:
-      explicit CodecBuffer(tbc::view<const GhosttyAllocator*, tbc::lt::a> allocator, std::size_t length, std::size_t limit, BufferAlignment alignment = BufferAlignment::native) noexcept
+      explicit CodecBuffer(tbc::val_a<const GhosttyAllocator*> allocator, std::size_t length, std::size_t limit, BufferAlignment alignment = BufferAlignment::native) noexcept
           : allocator_(allocator),
             length_(length),
             alignment_(static_cast<std::uint8_t>(alignment)) {
@@ -49,18 +49,18 @@ namespace telar::runtime {
         return length_;
       }
 
-      tbc::view<Byte*, tbc::lt::a> release() noexcept {
+      tbc::val_a<Byte*> release() noexcept {
         return std::exchange(data_, nullptr);
       }
 
     private:
-      tbc::view<const GhosttyAllocator*, tbc::lt::a> allocator_;
-      tbc::view<Byte*, tbc::lt::a> data_ = nullptr;
+      tbc::val_a<const GhosttyAllocator*> allocator_;
+      tbc::val_a<Byte*> data_ = nullptr;
       std::size_t length_;
       std::uint8_t alignment_;
     };
 
-    bool decodePng(void* context, tbc::view<const GhosttyAllocator*, tbc::lt::a> allocator, const Byte* bytes, std::size_t length, tbc::view<GhosttySysImage*, tbc::lt::a> image) noexcept {
+    bool decodePng(void* context, tbc::val_a<const GhosttyAllocator*> allocator, const Byte* bytes, std::size_t length, tbc::val_a<GhosttySysImage*> image) noexcept {
       const auto limit = context == nullptr ? graphics_screen_bytes : *static_cast<const std::size_t*>(context);
 
       return decodePngImage(allocator, {bytes, length}, *image, limit);
@@ -70,7 +70,7 @@ namespace telar::runtime {
 
   // This is a generic image decoder, already linked in the pinned VT archive.
   // Protocol recognition, validation policy and replies remain in native C++.
-  bool decodePngImage(tbc::view<const GhosttyAllocator*, tbc::lt::a> allocator, std::span<const std::uint8_t> bytes, tbc::view<GhosttySysImage&, tbc::lt::a> image, std::size_t limit) noexcept {
+  bool decodePngImage(tbc::val_a<const GhosttyAllocator*> allocator, std::span<const std::uint8_t> bytes, tbc::mut_a<GhosttySysImage> image, std::size_t limit) noexcept {
     static_assert(alignof(wuffs_png__decoder) <= alignof(std::max_align_t));
     CodecBuffer decoder_storage{allocator, sizeof__wuffs_png__decoder(), limit};
     if (!decoder_storage) {

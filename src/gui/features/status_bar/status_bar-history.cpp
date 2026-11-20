@@ -11,7 +11,7 @@ namespace telar::gui::features::status_bar {
     count_ = count_ < capacity ? count_ + 1 : capacity;
   }
 
-  tbc::view<std::span<const std::uint8_t>, tbc::lt::a> CpuHistory::ordered(tbc::view<Samples&, tbc::lt::a> buffer) const noexcept {
+  tbc::val_a<std::span<const std::uint8_t>> CpuHistory::ordered(tbc::mut_a<Samples> buffer) const noexcept {
     const auto start = (next_ + capacity - count_) % capacity;
 
     for (std::size_t index = 0; index < count_; ++index) {

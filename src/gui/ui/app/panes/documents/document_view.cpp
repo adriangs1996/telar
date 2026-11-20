@@ -133,7 +133,7 @@ namespace telar::gui::qt {
     };
 
     // The document a view shows, with its state.
-    tbc::view<const Document*, tbc::lt::a> findDocument(tbc::view<const DocumentsController*, tbc::lt::a> controller, DocumentKey key, DocumentState& state) {
+    tbc::val_a<const Document*> findDocument(tbc::val_a<const DocumentsController*> controller, DocumentKey key, DocumentState& state) {
       const auto* pane = controller == nullptr ? nullptr : controller->pane(key.pane_id);
 
       state = {};

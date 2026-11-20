@@ -43,7 +43,7 @@ namespace telar::gui::qt {
   private:
     ds::Array<QByteArray, maximum_arguments> storage_;
     // Each view reads the bytes stored beside it.
-    tbc::view<ds::Array<std::string_view, maximum_arguments>, tbc::lt::self> views_{};
+    tbc::val_self<ds::Array<std::string_view, maximum_arguments>> views_{};
     std::size_t count_ = 0;
   };
 

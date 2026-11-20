@@ -97,7 +97,7 @@ namespace telar::runtime {
     return display_name.view().empty() ? name.view() : display_name.view();
   }
 
-  tbc::view<std::string_view, tbc::lt::a> AgentManifest::placeholderTitle(tbc::view<FixedText<96>&, tbc::lt::a> storage) const {
+  tbc::val_a<std::string_view> AgentManifest::placeholderTitle(tbc::mut_a<FixedText<96>> storage) const {
     if (!placeholder.view().empty()) {
       return placeholder.view();
     }
@@ -423,11 +423,11 @@ namespace telar::runtime {
   }
 
   template <Allocator Memory>
-  ProxyHostPolicy<Memory>::ProxyHostPolicy(tbc::view<Memory&, tbc::lt::a> memory)
+  ProxyHostPolicy<Memory>::ProxyHostPolicy(tbc::mut_a<Memory> memory)
       : patterns_(memory) {}
 
   template <Allocator Memory>
-  tbc::view<ProxyHostPolicy<Memory>, tbc::lt::a> ProxyHostPolicy<Memory>::clone() const {
+  tbc::val_a<ProxyHostPolicy<Memory>> ProxyHostPolicy<Memory>::clone() const {
     ProxyHostPolicy copy{patterns_.memory()};
 
     copy.patterns_ = patterns_.clone();
@@ -534,12 +534,12 @@ namespace telar::runtime {
   template class ProxyHostPolicy<SynchronizedAllocator<BudgetAllocator<SystemAllocator>>>;
 
   template <Allocator Memory>
-  ProxyOptions<Memory>::ProxyOptions(tbc::view<Memory&, tbc::lt::a> memory)
+  ProxyOptions<Memory>::ProxyOptions(tbc::mut_a<Memory> memory)
       : authority_directory(memory),
         intercept_hosts(memory) {}
 
   template <Allocator Memory>
-  tbc::view<ProxyOptions<Memory>, tbc::lt::a> ProxyOptions<Memory>::clone() const {
+  tbc::val_a<ProxyOptions<Memory>> ProxyOptions<Memory>::clone() const {
     ProxyOptions copy{authority_directory.memory()};
 
     copy.authority_directory = authority_directory.clone();
@@ -735,11 +735,11 @@ namespace telar::runtime::config {
   }
 
   template <Allocator Memory>
-  CommandValues<Memory>::CommandValues(tbc::view<Memory&, tbc::lt::a> memory)
+  CommandValues<Memory>::CommandValues(tbc::mut_a<Memory> memory)
       : arguments(memory) {}
 
   template <Allocator Memory>
-  tbc::view<CommandValues<Memory>, tbc::lt::a> CommandValues<Memory>::clone() const {
+  tbc::val_a<CommandValues<Memory>> CommandValues<Memory>::clone() const {
     CommandValues copy{arguments.memory()};
 
     copy.arguments = arguments.clone();
@@ -760,7 +760,7 @@ namespace telar::runtime::config {
   }
 
   template <Allocator Memory>
-  RuntimeValues<Memory>::RuntimeValues(tbc::view<Memory&, tbc::lt::a> memory)
+  RuntimeValues<Memory>::RuntimeValues(tbc::mut_a<Memory> memory)
       : history_path(memory),
         session_path(memory),
         engine(memory),
@@ -768,7 +768,7 @@ namespace telar::runtime::config {
         proxy(memory) {}
 
   template <Allocator Memory>
-  tbc::view<RuntimeValues<Memory>, tbc::lt::a> RuntimeValues<Memory>::clone() const {
+  tbc::val_a<RuntimeValues<Memory>> RuntimeValues<Memory>::clone() const {
     RuntimeValues copy{history_path.memory()};
 
     copy.history_path = history_path.clone();

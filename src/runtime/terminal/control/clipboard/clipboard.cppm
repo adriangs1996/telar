@@ -110,7 +110,7 @@ export namespace telar::runtime::control {
     static constexpr std::size_t maximum_aliases = 64;
 
     // Copies the metadata; it keeps only its allocator, region `a`.
-    explicit ClipboardWrite(tbc::view<ConcurrentMemory&, tbc::lt::a> memory, const ClipboardMetadata& metadata, std::size_t limit);
+    explicit ClipboardWrite(tbc::mut_a<ConcurrentMemory> memory, const ClipboardMetadata& metadata, std::size_t limit);
 
     // Its contents view its own spool and names, so it stays where it is built.
     ClipboardWrite(const ClipboardWrite&) = delete;
@@ -145,12 +145,12 @@ export namespace telar::runtime::control {
     void reserve(std::size_t count);
 
     static constexpr std::size_t initial_capacity = 4096;
-    tbc::view<ConcurrentMemory&, tbc::lt::a> memory_;
-    tbc::view<ds::Vec<std::uint8_t, ConcurrentMemory>, tbc::lt::a> spool_;
+    tbc::mut_a<ConcurrentMemory> memory_;
+    tbc::val_a<ds::Vec<std::uint8_t, ConcurrentMemory>> spool_;
     std::size_t limit_;
     ds::Array<Entry, maximum_mimes> entries_;
     ds::Array<Alias, maximum_aliases> aliases_;
-    tbc::view<ds::Array<ClipboardContentView, maximum_mimes + maximum_aliases>, tbc::lt::self> contents_;
+    tbc::val_self<ds::Array<ClipboardContentView, maximum_mimes + maximum_aliases>> contents_;
     std::size_t entry_count_ = 0;
     std::size_t alias_count_ = 0;
     std::size_t content_count_ = 0;
@@ -267,8 +267,8 @@ export namespace telar::runtime::control {
       Clock::time_point deadline = Clock::now() + request_timeout;
       std::uint64_t nonce = 0;
       ds::Array<FixedText<ClipboardMetadata::maximum_mime>, 4> mimes;
-      tbc::view<ds::Array<std::string_view, 4>, tbc::lt::self> mime_views;
-      tbc::view<ds::Array<ClipboardRepresentation, 128>, tbc::lt::self> content_views;
+      tbc::val_self<ds::Array<std::string_view, 4>> mime_views;
+      tbc::val_self<ds::Array<ClipboardRepresentation, 128>> content_views;
       std::size_t mime_count = 0;
       ds::Vec<std::uint8_t, ConcurrentMemory> text;
       ds::Box<ClipboardWrite, ConcurrentMemory> transaction;

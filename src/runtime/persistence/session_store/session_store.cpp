@@ -215,7 +215,7 @@ namespace telar::runtime::checkpoint {
     return record;
   }
 
-  Writer::Writer(tbc::view<std::span<Byte>, tbc::lt::a> buffer, Counters counters)
+  Writer::Writer(tbc::val_a<std::span<Byte>> buffer, Counters counters)
       : buffer_(buffer),
         remaining_(buffer.empty() ? buffer : buffer.first(buffer.size() - 1)) {
     constexpr std::size_t header_bytes = magic.size() + sizeof(current_version) + 4 * sizeof(std::uint64_t);
@@ -248,7 +248,7 @@ namespace telar::runtime::checkpoint {
     }
   }
 
-  tbc::view<std::span<const Byte>, tbc::lt::a> Writer::finish() {
+  tbc::val_a<std::span<const Byte>> Writer::finish() {
     const auto count = buffer_.size() - remaining_.size() - 1;
 
     buffer_[count] = static_cast<Byte>(Kind::end);

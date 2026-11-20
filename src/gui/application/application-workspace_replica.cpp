@@ -40,7 +40,7 @@ namespace telar::gui::application {
   }
 
   template <Allocator Memory>
-  tbc::view<PaneShell, tbc::lt::static_storage> Pane<Memory>::setShell(const PaneShell& message) {
+  tbc::val_static<PaneShell> Pane<Memory>::setShell(const PaneShell& message) {
     auto previous = shell;
     auto kept = message;
 
@@ -89,7 +89,7 @@ namespace telar::gui::application {
         parts(memory) {}
 
   template <Allocator Memory>
-  tbc::view<std::string_view, tbc::lt::a> tabApplicationName(tbc::view<const Tab<Memory>&, tbc::lt::a> tab, tbc::view<std::type_identity_t<const Pane<Memory>*>, tbc::lt::a> pane) noexcept {
+  tbc::val_a<std::string_view> tabApplicationName(tbc::ref_a<Tab<Memory>> tab, tbc::val_a<std::type_identity_t<const Pane<Memory>*>> pane) noexcept {
     constexpr std::string_view fallback = "shell";
 
     if (pane != nullptr) {

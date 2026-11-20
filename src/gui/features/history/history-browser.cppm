@@ -26,7 +26,7 @@ namespace telar::gui::features::history {
     static constexpr std::size_t command_preview_bytes = HistoryLimits::command_preview_bytes;
     static constexpr std::size_t command_cache_bytes = HistoryLimits::command_cache_bytes;
 
-    explicit HistoryPageStorage(tbc::view<Memory&, tbc::lt::a> memory, std::span<const HistoryEntry> entries = {});
+    explicit HistoryPageStorage(tbc::mut_a<Memory> memory, std::span<const HistoryEntry> entries = {});
 
     void exchangeWith(HistoryPageStorage& other);
 
@@ -37,10 +37,10 @@ namespace telar::gui::features::history {
   private:
     static std::size_t commandBytes(std::span<const HistoryEntry> entries);
 
-    void append(tbc::view<Memory&, tbc::lt::a> memory, const HistoryEntry& entry);
+    void append(tbc::mut_a<Memory> memory, const HistoryEntry& entry);
 
-    tbc::view<ds::Vec<HistoryRow<Memory>, Memory>, tbc::lt::a> rows_;
-    tbc::view<ds::String<Memory>, tbc::lt::a> commands_;
+    tbc::val_a<ds::Vec<HistoryRow<Memory>, Memory>> rows_;
+    tbc::val_a<ds::String<Memory>> commands_;
   };
 
   extern template class HistoryPageStorage<telar::Memory>;

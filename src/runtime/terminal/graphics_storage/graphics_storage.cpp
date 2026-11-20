@@ -326,7 +326,7 @@ namespace telar::runtime {
   }
 
   template <Allocator Memory>
-  tbc::view<ds::Option<GraphicsImageView>, tbc::lt::a> GraphicsStorage<Memory>::readImage(tbc::view<Memory&, tbc::lt::a> memory, GhosttyKittyGraphicsImage image) {
+  tbc::val_a<ds::Option<GraphicsImageView>> GraphicsStorage<Memory>::readImage(tbc::mut_a<Memory> memory, GhosttyKittyGraphicsImage image) {
     GraphicsImageView view{};
     GhosttyKittyImageFormat format{};
     const Byte* pixels = nullptr;

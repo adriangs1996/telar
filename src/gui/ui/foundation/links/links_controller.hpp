@@ -51,7 +51,7 @@ namespace telar::gui::qt {
 
   private:
     Store& store_;
-    tbc::view<ExternalLinkOpener<ApplicationLinkHost, LinksController, application::machines::MachineClientKey>, tbc::lt::self> opener_;
+    tbc::val_self<ExternalLinkOpener<ApplicationLinkHost, LinksController, application::machines::MachineClientKey>> opener_;
   };
 
 }

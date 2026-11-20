@@ -70,7 +70,7 @@ export {
 
       std::string_view name() const noexcept;
 
-      tbc::view<std::span<Byte>, tbc::lt::a> receive(tbc::view<std::span<Byte>, tbc::lt::a> bytes);
+      tbc::val_a<std::span<Byte>> receive(tbc::val_a<std::span<Byte>> bytes);
 
       void inject(std::span<Byte> frame);
 
@@ -112,7 +112,7 @@ export {
       static constexpr std::size_t header_bytes = sizeof(std::uint32_t) + sizeof(Byte) + sizeof(std::uint32_t);
       static constexpr std::size_t tail_bytes = sizeof(std::uint16_t);
 
-      static tbc::view<std::span<const Byte>, tbc::lt::a> encode(tbc::view<std::span<Byte>, tbc::lt::a> output, Kind kind, const Target& target);
+      static tbc::val_a<std::span<const Byte>> encode(tbc::val_a<std::span<Byte>> output, Kind kind, const Target& target);
 
       static void send(int channel, const Connection& connection);
     };

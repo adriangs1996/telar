@@ -59,7 +59,7 @@ static_assert(true);
 
 namespace telar::gui::qt {
 
-  TextScene::TextScene(tbc::view<QQuickWindow&, tbc::lt::a> window)
+  TextScene::TextScene(tbc::mut_a<QQuickWindow> window)
       : window_(window),
         layout_(adapter_),
         row_(adapter_) {}
@@ -278,7 +278,7 @@ namespace telar::gui::qt {
     }
   }
 
-  tbc::view<QSGNode*, tbc::lt::a> TextScene::append(tbc::view<QSGNode&, tbc::lt::a> parent, std::span<const CellValue> cells) {
+  tbc::val_a<QSGNode*> TextScene::append(tbc::mut_a<QSGNode> parent, std::span<const CellValue> cells) {
     flushCells(cells);
 
     while (next_chunk_ != nullptr) {

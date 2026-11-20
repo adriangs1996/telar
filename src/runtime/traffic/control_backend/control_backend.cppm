@@ -79,11 +79,11 @@ export {
         http_rule = 3,
       };
 
-      static auto rule(tbc::view<std::span<Byte>, tbc::lt::a> output, InterceptionRule rule) -> tbc::view<std::span<const Byte>, tbc::lt::a>;
+      static auto rule(tbc::val_a<std::span<Byte>> output, InterceptionRule rule) -> tbc::val_a<std::span<const Byte>>;
 
       static auto readRule(plugins::FrameReader& reader) -> InterceptionRule;
 
-      static auto decision(tbc::view<std::span<Byte>, tbc::lt::a> output, std::uint64_t ticket, Verdict verdict, std::span<const Byte> bytes = {}) -> tbc::view<std::span<const Byte>, tbc::lt::a>;
+      static auto decision(tbc::val_a<std::span<Byte>> output, std::uint64_t ticket, Verdict verdict, std::span<const Byte> bytes = {}) -> tbc::val_a<std::span<const Byte>>;
     };
 
     // Each chunk snapshots registration order. A new ticket authenticates every step of the chain.
@@ -367,7 +367,7 @@ export {
 
     public:
       // Frames it records come from its allocator, region `a`.
-      inline explicit Recordings(tbc::view<ConcurrentMemory&, tbc::lt::a> memory) noexcept
+      inline explicit Recordings(tbc::mut_a<ConcurrentMemory> memory) noexcept
           : memory_(memory) {
         randomBytes(&next_id_, sizeof(next_id_));
       }
@@ -377,7 +377,7 @@ export {
       }
 
       // The frame recorded: the one given, or one allocated here.
-      inline tbc::view<std::shared_ptr<EventFrame>, tbc::lt::a> record(const Event& event, tbc::view<std::shared_ptr<EventFrame>, tbc::lt::a> shared = {}) noexcept {
+      inline tbc::val_a<std::shared_ptr<EventFrame>> record(const Event& event, tbc::val_a<std::shared_ptr<EventFrame>> shared = {}) noexcept {
         if (!selected(Selection::all, event.kind) || interest_.load(std::memory_order_acquire) == 0) {
           return shared;
         }
@@ -456,7 +456,7 @@ export {
       }
 
       // The page written views the output, region `b`; the recordings keep none of it.
-      inline tbc::view<std::span<const Byte>, tbc::lt::b> handle(const Request& request, tbc::view<std::span<Byte>, tbc::lt::b> output, recording::Owner owner = {}) {
+      inline tbc::val_b<std::span<const Byte>> handle(const Request& request, tbc::val_b<std::span<Byte>> output, recording::Owner owner = {}) {
         if (output.size() < recording::Protocol::page_header_bytes) {
           throw EncodingError{"Recording output is too small"};
         }
@@ -628,7 +628,7 @@ export {
 
     private:
       // The session's counters, copied: the page views no rows yet, so it borrows nothing of the session.
-      inline static tbc::view<recording::Page, tbc::lt::static_storage> describe(Session& session, std::uint64_t contention_drops) noexcept {
+      inline static tbc::val_static<recording::Page> describe(Session& session, std::uint64_t contention_drops) noexcept {
         return {
             .id = session.id,
             .active = session.active,
@@ -681,8 +681,8 @@ export {
         interest_.store(mask, std::memory_order_release);
       }
 
-      tbc::view<ConcurrentMemory&, tbc::lt::a> memory_;
-      tbc::view<ds::Array<ds::Option<Session>, recording::Limits::sessions>, tbc::lt::a> sessions_;
+      tbc::mut_a<ConcurrentMemory> memory_;
+      tbc::val_a<ds::Array<ds::Option<Session>, recording::Limits::sessions>> sessions_;
       std::uint64_t next_id_;
       std::mutex mutex_;
       // Written through shared access, as Rust's AtomicU8 is.
@@ -760,7 +760,7 @@ export {
 
       bool listening() const noexcept;
 
-      tbc::view<std::span<const Byte>, tbc::lt::a> recording(const recording::Request& request, tbc::view<std::span<Byte>, tbc::lt::a> output, recording::Owner owner = {});
+      tbc::val_a<std::span<const Byte>> recording(const recording::Request& request, tbc::val_a<std::span<Byte>> output, recording::Owner owner = {});
 
       void packageControl(control::PackagePort* port) noexcept;
 
@@ -913,7 +913,7 @@ export {
 
     public:
       // What it keeps of its owner, and what its replies view of it, is region `a`.
-      inline explicit Backend(tbc::view<ConcurrentMemory&, tbc::lt::a> memory, tbc::view<Proxy&, tbc::lt::a> proxy, tbc::view<traffic::Service*, tbc::lt::a> capture, tbc::view<Configuration, tbc::lt::a> configuration)
+      inline explicit Backend(tbc::mut_a<ConcurrentMemory> memory, tbc::mut_a<Proxy> proxy, tbc::val_a<traffic::Service*> capture, tbc::val_a<Configuration> configuration)
           : memory_(memory),
             proxy_(proxy),
             capture_(capture),
@@ -953,7 +953,7 @@ export {
         }
       }
 
-      inline tbc::view<std::span<const Byte>, tbc::lt::a> handle(const Request& request, tbc::view<std::span<Byte>, tbc::lt::a> output, const std::atomic<bool>& cancelled, const plugins::ServiceSpec* package = nullptr) {
+      inline tbc::val_a<std::span<const Byte>> handle(const Request& request, tbc::val_a<std::span<Byte>> output, const std::atomic<bool>& cancelled, const plugins::ServiceSpec* package = nullptr) {
         Reply reply;
         ds::Option<SensitiveAllocation<ConcurrentMemory>> recording_output;
         ds::Array<char, 1025> error{};
@@ -1114,7 +1114,7 @@ export {
         return status;
       }
 
-      inline void authorization(const Request& request, tbc::view<Reply&, tbc::lt::a> reply, tbc::view<std::string_view, tbc::lt::a> action) const {
+      inline void authorization(const Request& request, tbc::mut_a<Reply> reply, tbc::val_a<std::string_view> action) const {
         reply.authorization.atMut(0) = "/usr/bin/sudo";
         reply.authorization.atMut(1) = "--";
         reply.authorization.atMut(2) = configuration_.executable;
@@ -1276,14 +1276,14 @@ export {
         }
       }
 
-      tbc::view<ConcurrentMemory&, tbc::lt::a> memory_;
-      tbc::view<Proxy&, tbc::lt::a> proxy_;
-      tbc::view<traffic::Service*, tbc::lt::a> capture_;
-      tbc::view<Configuration, tbc::lt::a> configuration_;
+      tbc::mut_a<ConcurrentMemory> memory_;
+      tbc::mut_a<Proxy> proxy_;
+      tbc::val_a<traffic::Service*> capture_;
+      tbc::val_a<Configuration> configuration_;
       static_assert(Limits::processes == redirect::SocketOwners::maximum_processes);
       static_assert(Limits::targets == redirect::Target::maximum_targets);
-      tbc::view<ds::Option<redirect::Selection<>>, tbc::lt::a> selection_;
-      tbc::view<ds::Array<FixedText<redirect::ProcessToken::maximum_bytes>, Limits::processes>, tbc::lt::a> process_arguments_;
+      tbc::val_a<ds::Option<redirect::Selection<>>> selection_;
+      tbc::val_a<ds::Array<FixedText<redirect::ProcessToken::maximum_bytes>, Limits::processes>> process_arguments_;
       pid_t capture_child_ = -1;
       pid_t redirect_child_ = -1;
       bool capture_cancelled_ = false;

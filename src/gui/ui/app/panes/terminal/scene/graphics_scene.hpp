@@ -61,7 +61,7 @@ namespace telar::gui::qt {
     std::uint64_t revision = 0;
 
     // A screen's own rows, as it shows them.
-    [[nodiscard]] static tbc::view<ImageRows, tbc::lt::a> of(tbc::view<const Screen<Memory>&, tbc::lt::a> screen) {
+    [[nodiscard]] static tbc::val_a<ImageRows> of(tbc::ref_a<Screen<Memory>> screen) {
       const auto& scroll = screen.scroll();
       const auto rows = static_cast<std::uint64_t>(screen.rows());
 

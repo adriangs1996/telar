@@ -662,7 +662,7 @@ export {
     public:
       bool rejected() const noexcept;
 
-      tbc::view<std::string_view, tbc::lt::static_storage> failureReason() const noexcept;
+      tbc::val_static<std::string_view> failureReason() const noexcept;
 
     private:
       friend class FlowState;
@@ -676,7 +676,7 @@ export {
       bool offered_ = false;
       bool replacing_ = false;
       bool rejected_ = false;
-      tbc::view<std::string_view, tbc::lt::static_storage> failure_;
+      tbc::val_static<std::string_view> failure_;
     };
 
     class FlowState;
@@ -726,23 +726,23 @@ export {
       ~FlowState();
 
       // The control the flow reports to is region `a`; the reasons it gives are literals.
-      void open(tbc::view<traffic::FlowControl*, tbc::lt::a> control, std::uint64_t id, int child, int origin, std::string_view host) noexcept;
+      void open(tbc::val_a<traffic::FlowControl*> control, std::uint64_t id, int child, int origin, std::string_view host) noexcept;
 
       void visibility(traffic::Visibility value) noexcept;
 
-      void reason(tbc::view<std::string_view, tbc::lt::static_storage> value) noexcept;
+      void reason(tbc::val_static<std::string_view> value) noexcept;
 
       // The flow's identity, which views the flow.
       traffic::FlowEvent context() const noexcept;
 
-      void error(tbc::view<std::string_view, tbc::lt::static_storage> value) noexcept;
+      void error(tbc::val_static<std::string_view> value) noexcept;
 
       bool rejected() const noexcept;
 
       ds::Option<traffic::FlowControl::Time> deadline() const noexcept;
 
       // A direction fails once; the reason is reported as the opposite direction's when it was reading.
-      void fail(traffic::Direction direction, tbc::view<std::string_view, tbc::lt::static_storage> reason, bool reading = false) noexcept;
+      void fail(traffic::Direction direction, tbc::val_static<std::string_view> reason, bool reading = false) noexcept;
 
       // The caller retains its input until the entire replacement has been sent, including partial TLS writes.
       template <ByteStream Stream>
@@ -823,11 +823,11 @@ export {
 
       static void endpoint(int socket, FixedText<traffic::FlowIdentity::endpoint_bytes>& result) noexcept;
 
-      tbc::view<traffic::FlowControl*, tbc::lt::a> control_ = nullptr;
+      tbc::val_a<traffic::FlowControl*> control_ = nullptr;
       traffic::FlowIdentity identity_;
-      tbc::view<std::string_view, tbc::lt::static_storage> reason_ = "closed";
-      tbc::view<FlowGate, tbc::lt::a> outbound_;
-      tbc::view<FlowGate, tbc::lt::a> inbound_;
+      tbc::val_static<std::string_view> reason_ = "closed";
+      tbc::val_a<FlowGate> outbound_;
+      tbc::val_a<FlowGate> inbound_;
     };
 
     template <ByteStream Stream>
@@ -1156,7 +1156,7 @@ export {
         Stream& operator=(const Stream&) = delete;
         std::int32_t child_id, origin_id = 0;
         // Each half names the stream that holds it, which stays where nghttp2 was told it is.
-        tbc::view<Half, tbc::lt::self> request, response;
+        tbc::val_self<Half> request, response;
         bool child_closed = false, origin_closed = false, rejected = false, original_head = false, origin_canceled_for_head = false;
       };
 
@@ -1214,7 +1214,7 @@ export {
         }
 
         // nghttp2 holds each stream by address and hands it back raw, as its callbacks re-enter the connection.
-        inline auto stream(std::int32_t id) const noexcept -> tbc::view<Stream*, tbc::lt::static_storage> {
+        inline auto stream(std::int32_t id) const noexcept -> tbc::val_static<Stream*> {
           return tbc::raw(static_cast<Stream*>(nghttp2_session_get_stream_user_data(session, id)));
         }
 
@@ -1368,7 +1368,7 @@ export {
     public:
       // The connection keeps the allocator, the capture and the control, region `a`, and copies the
       // flow's identity, so its events view the connection and not the flow.
-      inline explicit Http2EndpointConnection(tbc::view<Memory&, tbc::lt::a> memory, tbc::view<Capture, tbc::lt::a> capture, tbc::view<traffic::HttpControl*, tbc::lt::a> control, traffic::FlowEvent context)
+      inline explicit Http2EndpointConnection(tbc::mut_a<Memory> memory, tbc::val_a<Capture> capture, tbc::val_a<traffic::HttpControl*> control, traffic::FlowEvent context)
           : budget_(memory, connection_bytes),
             memory_(budget_),
             secure_(memory_),
@@ -1506,7 +1506,7 @@ export {
         return child ? child_ : origin_;
       }
 
-      inline static auto half(bool child, tbc::view<Stream&, tbc::lt::a> stream) noexcept -> tbc::view<Half&, tbc::lt::a> {
+      inline static auto half(bool child, tbc::mut_a<Stream> stream) noexcept -> tbc::mut_a<Half> {
         return child ? stream.request : stream.response;
       }
 
@@ -2103,15 +2103,15 @@ export {
       }
 
       static constexpr unsigned maximum_rounds = 8, maximum_informational = 8;
-      tbc::view<BudgetAllocator<Memory>, tbc::lt::a> budget_;
-      tbc::view<Local, tbc::lt::a> memory_;
-      tbc::view<Secure, tbc::lt::a> secure_;
-      tbc::view<Capture, tbc::lt::a> capture_;
-      tbc::view<traffic::HttpControl*, tbc::lt::a> control_;
+      tbc::val_a<BudgetAllocator<Memory>> budget_;
+      tbc::val_a<Local> memory_;
+      tbc::val_a<Secure> secure_;
+      tbc::val_a<Capture> capture_;
+      tbc::val_a<traffic::HttpControl*> control_;
       traffic::FlowIdentity identity_;
       // Each endpoint's session calls back into this connection, so it stays where it was built.
-      tbc::view<Endpoint, tbc::lt::a> child_, origin_;
-      tbc::view<ds::Array<ds::Box<Stream, Local>, maximum_streams>, tbc::lt::a> streams_;
+      tbc::val_a<Endpoint> child_, origin_;
+      tbc::val_a<ds::Array<ds::Box<Stream, Local>, maximum_streams>> streams_;
       std::int32_t highest_forwarded_ = 0;
       bool failed_ = false, closing_ = false, draining_ = false;
     };
@@ -2205,7 +2205,7 @@ export {
     public:
       // The relays it builds keep the allocator and the observation it was given, region `a`, which
       // outlives the relay. The relay copies the host, and is lent the flow on each advance.
-      explicit ApplicationRelay(tbc::view<ConcurrentMemory&, tbc::lt::a> memory, tbc::view<ConnectionObservation, tbc::lt::a> observation, std::string_view hostname);
+      explicit ApplicationRelay(tbc::mut_a<ConcurrentMemory> memory, tbc::val_a<ConnectionObservation> observation, std::string_view hostname);
 
       void select(HttpProtocol protocol, bool unnegotiated) noexcept;
 
@@ -2342,17 +2342,17 @@ export {
           return duplex_.advance(child, origin, readiness);
         }
 
-        tbc::view<ConcurrentMemory&, tbc::lt::a> memory_;
-        tbc::view<ConnectionObservation, tbc::lt::a> observation_;
+        tbc::mut_a<ConcurrentMemory> memory_;
+        tbc::val_a<ConnectionObservation> observation_;
         FixedText<ProxyHostname::maximum_bytes> hostname_;
-        tbc::view<ds::Box<Http1, ConcurrentMemory>, tbc::lt::a> http1_;
-        tbc::view<ds::Box<Http2, ConcurrentMemory>, tbc::lt::a> http2_;
-        tbc::view<ds::Box<Http2Endpoint, ConcurrentMemory>, tbc::lt::a> http2_endpoint_;
+        tbc::val_a<ds::Box<Http1, ConcurrentMemory>> http1_;
+        tbc::val_a<ds::Box<Http2, ConcurrentMemory>> http2_;
+        tbc::val_a<ds::Box<Http2Endpoint, ConcurrentMemory>> http2_endpoint_;
         DuplexRelay<> duplex_;
         bool failed_ = false;
       };
 
-      tbc::view<Relays, tbc::lt::a> relays_;
+      tbc::val_a<Relays> relays_;
       StreamPrefix prefix_;
       ds::Option<HttpProtocol> protocol_;
       traffic::FlowControl::Time sniff_until_;
@@ -2369,7 +2369,7 @@ export {
     class PlainTunnel {
     public:
       // The tunnel keeps the allocator and the observation, region `a`, and copies the host.
-      explicit PlainTunnel(tbc::view<ConcurrentMemory&, tbc::lt::a> memory, TunnelSockets sockets, std::string_view hostname, tbc::view<ConnectionObservation, tbc::lt::a> observation);
+      explicit PlainTunnel(tbc::mut_a<ConcurrentMemory> memory, TunnelSockets sockets, std::string_view hostname, tbc::val_a<ConnectionObservation> observation);
 
       // `flow` is the connection's flow, or null when no hook watches it.
       bool advance(TunnelReadiness readiness, FlowState* flow) noexcept;
@@ -2390,7 +2390,7 @@ export {
 
     private:
       TunnelSockets sockets_;
-      tbc::view<ApplicationRelay, tbc::lt::a> application_;
+      tbc::val_a<ApplicationRelay> application_;
     };
 
   }
@@ -2405,7 +2405,7 @@ export {
       // The tunnel keeps the allocator, the interception and the observation, region `a`, and its session
       // and relay copy the host.
       // `offer` is the child's ClientHello when the handshake already read it, or null.
-      explicit TlsTunnel(tbc::view<ConcurrentMemory&, tbc::lt::a> memory, tbc::view<const TlsInterception&, tbc::lt::a> interception, TunnelSockets sockets, std::string_view hostname, tbc::view<ds::Box<AlpnOffer, ConcurrentMemory>, tbc::lt::a> offer, tbc::view<ConnectionObservation, tbc::lt::a> observation);
+      explicit TlsTunnel(tbc::mut_a<ConcurrentMemory> memory, tbc::ref_a<TlsInterception> interception, TunnelSockets sockets, std::string_view hostname, tbc::val_a<ds::Box<AlpnOffer, ConcurrentMemory>> offer, tbc::val_a<ConnectionObservation> observation);
 
       // `flow` is the connection's flow, or null when no hook watches it.
       auto advance(TunnelReadiness readiness, FlowState* flow) noexcept -> bool;
@@ -2427,11 +2427,11 @@ export {
       [[nodiscard]] auto interest(TlsSide side) const noexcept -> SocketInterest;
 
     private:
-      tbc::view<std::string_view, tbc::lt::static_storage> recordFailure() noexcept;
+      tbc::val_static<std::string_view> recordFailure() noexcept;
 
-      tbc::view<ConnectionObservation, tbc::lt::a> observation_;
-      tbc::view<ds::Box<TlsSession, ConcurrentMemory>, tbc::lt::a> session_;
-      tbc::view<ApplicationRelay, tbc::lt::a> application_;
+      tbc::val_a<ConnectionObservation> observation_;
+      tbc::val_a<ds::Box<TlsSession, ConcurrentMemory>> session_;
+      tbc::val_a<ApplicationRelay> application_;
       bool failed_ = false;
     };
 
@@ -2445,11 +2445,11 @@ export {
     class ConnectionTransport {
     public:
       // The transport keeps the allocator, and the interception and observation it opens with, region `a`.
-      explicit ConnectionTransport(tbc::view<ConcurrentMemory&, tbc::lt::a> memory) noexcept;
+      explicit ConnectionTransport(tbc::mut_a<ConcurrentMemory> memory) noexcept;
 
       // Generic over the caller's resolver.
       template <HostnameResolver Resolver>
-      TBC_GENERIC void open(tbc::view<const TlsInterception&, tbc::lt::a> interception, tbc::view<ConnectHandshake<ConcurrentMemory, Resolver>&, tbc::lt::a> handshake, tbc::view<ConnectionObservation, tbc::lt::a> observation) {
+      TBC_GENERIC void open(tbc::ref_a<TlsInterception> interception, tbc::mut_a<ConnectHandshake<ConcurrentMemory, Resolver>> handshake, tbc::val_a<ConnectionObservation> observation) {
         if (observation.flows) {
           flow_ = ds::makeBox<FlowState>(memory_);
           flow_.getMut().open(observation.flows, observation.identity, handshake.childDescriptor(), handshake.originDescriptor(), handshake.hostname());
@@ -2485,15 +2485,15 @@ export {
 
       ds::Option<traffic::FlowControl::Time> deadline() const noexcept;
 
-      void reason(tbc::view<std::string_view, tbc::lt::static_storage> value) noexcept;
+      void reason(tbc::val_static<std::string_view> value) noexcept;
 
-      void error(tbc::view<std::string_view, tbc::lt::static_storage> value) noexcept;
+      void error(tbc::val_static<std::string_view> value) noexcept;
 
     private:
-      tbc::view<ConcurrentMemory&, tbc::lt::a> memory_;
-      tbc::view<ds::Box<FlowState, ConcurrentMemory>, tbc::lt::a> flow_;
-      tbc::view<ds::Box<PlainTunnel, ConcurrentMemory>, tbc::lt::a> plain_;
-      tbc::view<ds::Box<TlsTunnel, ConcurrentMemory>, tbc::lt::a> tls_;
+      tbc::mut_a<ConcurrentMemory> memory_;
+      tbc::val_a<ds::Box<FlowState, ConcurrentMemory>> flow_;
+      tbc::val_a<ds::Box<PlainTunnel, ConcurrentMemory>> plain_;
+      tbc::val_a<ds::Box<TlsTunnel, ConcurrentMemory>> tls_;
     };
 
   }
@@ -2535,20 +2535,20 @@ export {
 
       // A connection keeps the allocator, the options, the secret and the counters of the service that
       // accepted it, and the interception and observations it advances through: region `a`.
-      inline explicit ProxyConnection(tbc::view<ConcurrentMemory&, tbc::lt::a> memory, FileDescriptor child, tbc::view<const ProxyOptions<ConcurrentMemory>&, tbc::lt::a> options, tbc::view<const ProxySecret&, tbc::lt::a> secret, tbc::view<ProxyCounters&, tbc::lt::a> counters)
+      inline explicit ProxyConnection(tbc::mut_a<ConcurrentMemory> memory, FileDescriptor child, tbc::ref_a<ProxyOptions<ConcurrentMemory>> options, tbc::ref_a<ProxySecret> secret, tbc::mut_a<ProxyCounters> counters)
           : counters_(counters),
             handshake_(memory, std::move(child), options, secret, counters),
             transport_(memory),
             policy_(ProxyConnectionPolicy::Clock::now()) {}
 
-      inline explicit ProxyConnection(tbc::view<ConcurrentMemory&, tbc::lt::a> memory, redirect::Connection connection, tbc::view<const ProxyOptions<ConcurrentMemory>&, tbc::lt::a> options, tbc::view<const ProxySecret&, tbc::lt::a> secret, tbc::view<ProxyCounters&, tbc::lt::a> counters)
+      inline explicit ProxyConnection(tbc::mut_a<ConcurrentMemory> memory, redirect::Connection connection, tbc::ref_a<ProxyOptions<ConcurrentMemory>> options, tbc::ref_a<ProxySecret> secret, tbc::mut_a<ProxyCounters> counters)
           : counters_(counters),
             redirect_lifetime_(std::move(connection.lifetime)),
             handshake_(memory, std::move(connection), options, secret, counters),
             transport_(memory),
             policy_(ProxyConnectionPolicy::Clock::now()) {}
 
-      inline void advance(tbc::view<const TlsInterception&, tbc::lt::a> interception, tbc::view<ProxyObservations&, tbc::lt::a> observations, TunnelReadiness readiness, Time now) noexcept {
+      inline void advance(tbc::ref_a<TlsInterception> interception, tbc::mut_a<ProxyObservations> observations, TunnelReadiness readiness, Time now) noexcept {
         if (closed_) {
           return;
         }
@@ -2684,12 +2684,12 @@ export {
         }
       }
 
-      tbc::view<ProxyCounters&, tbc::lt::a> counters_;
+      tbc::mut_a<ProxyCounters> counters_;
       FileDescriptor redirect_lifetime_;
-      tbc::view<Handshake, tbc::lt::a> handshake_;
-      tbc::view<ConnectionTransport, tbc::lt::a> transport_;
+      tbc::val_a<Handshake> handshake_;
+      tbc::val_a<ConnectionTransport> transport_;
       ProxyConnectionPolicy policy_;
-      tbc::view<ds::Option<ConnectionObservation>, tbc::lt::a> observation_;
+      tbc::val_a<ds::Option<ConnectionObservation>> observation_;
       bool closed_ = false;
     };
 
@@ -2823,7 +2823,7 @@ export {
 
       void identify(std::string_view endpoint) noexcept;
 
-      tbc::view<ds::Option<Record>, tbc::lt::a> recall(std::string_view name, tbc::view<ds::Vec<unsigned char, Memory>&, tbc::lt::a> bytes) const noexcept;
+      tbc::val_a<ds::Option<Record>> recall(std::string_view name, tbc::mut_a<ds::Vec<unsigned char, Memory>> bytes) const noexcept;
 
       // Generic over the caller's visitor.
       template <typename Visitor>
@@ -3586,7 +3586,7 @@ export {
         return nullptr;
       }
 
-      inline static tbc::view<ds::String<ConcurrentMemory>, tbc::lt::a> directoryPath(tbc::view<ConcurrentMemory&, tbc::lt::a> memory, tbc::view<const ProxyOptions<ConcurrentMemory>&, tbc::lt::a> options) {
+      inline static tbc::val_a<ds::String<ConcurrentMemory>> directoryPath(tbc::mut_a<ConcurrentMemory> memory, tbc::ref_a<ProxyOptions<ConcurrentMemory>> options) {
         if (!options.authority_directory.empty()) {
           return options.authority_directory.clone();
         }

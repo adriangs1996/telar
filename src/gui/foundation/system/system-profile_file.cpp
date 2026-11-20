@@ -173,7 +173,7 @@ namespace telar::gui::inline foundation::inline system {
   }
 
   template <Allocator Memory>
-  tbc::view<ds::Option<ds::Vec<Byte, Memory>>, tbc::lt::a> readProfileSource(tbc::view<Memory&, tbc::lt::a> memory, int directory, std::string_view name) {
+  tbc::val_a<ds::Option<ds::Vec<Byte, Memory>>> readProfileSource(tbc::mut_a<Memory> memory, int directory, std::string_view name) {
     ds::Vec<Byte, Memory> bytes{memory};
 
     try {
@@ -192,21 +192,21 @@ namespace telar::gui::inline foundation::inline system {
   }
 
   template <Allocator Memory>
-  tbc::view<ds::Option<ds::Vec<Byte, Memory>>, tbc::lt::a> ProfileFileTransaction::read(tbc::view<Memory&, tbc::lt::a> memory) const {
+  tbc::val_a<ds::Option<ds::Vec<Byte, Memory>>> ProfileFileTransaction::read(tbc::mut_a<Memory> memory) const {
     return readProfileSource(memory, parent_.get(), name_.data());
   }
 
   template <Allocator Memory>
-  tbc::view<ds::Option<ds::Vec<Byte, Memory>>, tbc::lt::a> ProfileFile::read(tbc::view<Memory&, tbc::lt::a> memory) const {
+  tbc::val_a<ds::Option<ds::Vec<Byte, Memory>>> ProfileFile::read(tbc::mut_a<Memory> memory) const {
     return readProfileSource(memory, AT_FDCWD, path());
   }
 
-  template tbc::view<ds::Option<ds::Vec<Byte, telar::Memory>>, tbc::lt::a> readProfileSource<telar::Memory>(tbc::view<telar::Memory&, tbc::lt::a> memory, int directory, std::string_view name);
-  template tbc::view<ds::Option<ds::Vec<Byte, telar::ConcurrentMemory>>, tbc::lt::a> readProfileSource<telar::ConcurrentMemory>(tbc::view<telar::ConcurrentMemory&, tbc::lt::a> memory, int directory, std::string_view name);
-  template tbc::view<ds::Option<ds::Vec<Byte, telar::Memory>>, tbc::lt::a> ProfileFileTransaction::read<telar::Memory>(tbc::view<telar::Memory&, tbc::lt::a> memory) const;
-  template tbc::view<ds::Option<ds::Vec<Byte, telar::ConcurrentMemory>>, tbc::lt::a> ProfileFileTransaction::read<telar::ConcurrentMemory>(tbc::view<telar::ConcurrentMemory&, tbc::lt::a> memory) const;
-  template tbc::view<ds::Option<ds::Vec<Byte, telar::Memory>>, tbc::lt::a> ProfileFile::read<telar::Memory>(tbc::view<telar::Memory&, tbc::lt::a> memory) const;
-  template tbc::view<ds::Option<ds::Vec<Byte, telar::ConcurrentMemory>>, tbc::lt::a> ProfileFile::read<telar::ConcurrentMemory>(tbc::view<telar::ConcurrentMemory&, tbc::lt::a> memory) const;
+  template tbc::val_a<ds::Option<ds::Vec<Byte, telar::Memory>>> readProfileSource<telar::Memory>(tbc::mut_a<telar::Memory> memory, int directory, std::string_view name);
+  template tbc::val_a<ds::Option<ds::Vec<Byte, telar::ConcurrentMemory>>> readProfileSource<telar::ConcurrentMemory>(tbc::mut_a<telar::ConcurrentMemory> memory, int directory, std::string_view name);
+  template tbc::val_a<ds::Option<ds::Vec<Byte, telar::Memory>>> ProfileFileTransaction::read<telar::Memory>(tbc::mut_a<telar::Memory> memory) const;
+  template tbc::val_a<ds::Option<ds::Vec<Byte, telar::ConcurrentMemory>>> ProfileFileTransaction::read<telar::ConcurrentMemory>(tbc::mut_a<telar::ConcurrentMemory> memory) const;
+  template tbc::val_a<ds::Option<ds::Vec<Byte, telar::Memory>>> ProfileFile::read<telar::Memory>(tbc::mut_a<telar::Memory> memory) const;
+  template tbc::val_a<ds::Option<ds::Vec<Byte, telar::ConcurrentMemory>>> ProfileFile::read<telar::ConcurrentMemory>(tbc::mut_a<telar::ConcurrentMemory> memory) const;
 
   ProfileFile::ProfileFile(std::string_view path, std::stop_token stop)
       : stop_(std::move(stop)) {

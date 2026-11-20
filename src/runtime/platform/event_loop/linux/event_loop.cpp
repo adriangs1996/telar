@@ -126,7 +126,7 @@ namespace telar::runtime {
   }
 
   template <Allocator Memory>
-  tbc::view<std::span<const Event>, tbc::lt::a> Epoll<Memory>::wait(std::chrono::nanoseconds timeout, tbc::view<std::span<Event>, tbc::lt::a> events) {
+  tbc::val_a<std::span<const Event>> Epoll<Memory>::wait(std::chrono::nanoseconds timeout, tbc::val_a<std::span<Event>> events) {
     TELAR_ASSERT(events.size() >= event_capacity);
     timeout = std::max(timeout, std::chrono::nanoseconds::zero());
     const auto seconds = std::chrono::duration_cast<std::chrono::seconds>(timeout);

@@ -50,7 +50,7 @@ export {
     // allocates only when the table outgrows every earlier one.
     class ProcessTable {
     public:
-      explicit ProcessTable(tbc::view<ConcurrentMemory&, tbc::lt::a> memory) noexcept;
+      explicit ProcessTable(tbc::mut_a<ConcurrentMemory> memory) noexcept;
 
       // Replaces `records` with every process listed now; false when the table cannot be read.
       bool read(ds::Vec<ProcessRecord, ConcurrentMemory>& records);
@@ -68,7 +68,7 @@ export {
       static ProcessActionResult prioritize(pid_t process, std::uint64_t started_seconds, std::uint64_t started_microseconds, int nice) noexcept;
 
     private:
-      tbc::view<ds::Vec<std::byte, ConcurrentMemory>, tbc::lt::a> buffer_;
+      tbc::val_a<ds::Vec<std::byte, ConcurrentMemory>> buffer_;
     };
 
   }

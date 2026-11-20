@@ -8,7 +8,7 @@ import telar.base.ds;
 
 namespace telar::gui::features::notifications {
 
-  tbc::view<ds::Option<NotificationInput>, tbc::lt::a> AgentAlerts::input(const AgentStatusChange& change, std::string_view label, tbc::view<Message&, tbc::lt::a> message) {
+  tbc::val_a<ds::Option<NotificationInput>> AgentAlerts::input(const AgentStatusChange& change, std::string_view label, tbc::mut_a<Message> message) {
     if (!alertable(change)) {
       return ds::none;
     }
@@ -18,7 +18,7 @@ namespace telar::gui::features::notifications {
     return NotificationInput{.level = level(change.current), .target = {.kind = NotificationTarget::Kind::pane, .id = change.pane_id}, .title = title(change.current), .message = text, .link = {}, .duration_ns = duration(change.current)};
   }
 
-  tbc::view<std::string_view, tbc::lt::a> AgentAlerts::formatMessage(const AgentStatusChange& change, std::string_view label, tbc::view<Message&, tbc::lt::a> message) {
+  tbc::val_a<std::string_view> AgentAlerts::formatMessage(const AgentStatusChange& change, std::string_view label, tbc::mut_a<Message> message) {
     message.truncate(0);
     try {
       message.append(label);
@@ -49,7 +49,7 @@ namespace telar::gui::features::notifications {
     }
   }
 
-  tbc::view<ds::Option<NotificationInput>, tbc::lt::a> AgentAlerts::summary(tbc::view<Message&, tbc::lt::a> message) const {
+  tbc::val_a<ds::Option<NotificationInput>> AgentAlerts::summary(tbc::mut_a<Message> message) const {
     const auto total = blocked_ + done_ + failed_;
     if (total == 0) {
       return ds::none;

@@ -151,7 +151,7 @@ export {
     extern template class PfIdentity<ConcurrentMemory>;
 
     template <Allocator Memory>
-    tbc::view<ds::String<Memory>, tbc::lt::a> pfRules(tbc::view<Memory&, tbc::lt::a> memory, std::span<const Mapping> mappings, const PfScope& scope);
+    tbc::val_a<ds::String<Memory>> pfRules(tbc::mut_a<Memory> memory, std::span<const Mapping> mappings, const PfScope& scope);
     extern template ds::String<Memory> pfRules<Memory>(Memory& memory, std::span<const Mapping> mappings, const PfScope& scope);
     extern template ds::String<ConcurrentMemory> pfRules<ConcurrentMemory>(ConcurrentMemory& memory, std::span<const Mapping> mappings, const PfScope& scope);
 

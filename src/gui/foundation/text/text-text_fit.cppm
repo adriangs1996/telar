@@ -41,7 +41,7 @@ export {
 
       template <LabelMeasure Measure>
       // The fitted text is the text itself or the prefix written into the buffer, region `a`.
-      [[nodiscard]] TBC_GENERIC inline static tbc::view<std::string_view, tbc::lt::a> fit(tbc::view<std::string_view, tbc::lt::a> text, float width, Measure& measure, tbc::view<Buffer&, tbc::lt::a> buffer) {
+      [[nodiscard]] TBC_GENERIC inline static tbc::val_a<std::string_view> fit(tbc::val_a<std::string_view> text, float width, Measure& measure, tbc::mut_a<Buffer> buffer) {
         if (!std::isfinite(width)) {
           throw std::invalid_argument{"InvalidTextFitWidth"};
         }

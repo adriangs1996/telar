@@ -157,10 +157,10 @@ namespace telar::gui::qt {
     ApplicationAllocator& memory_;
     ComponentSurfaceState surfaces_;
     QTimer timer_;
-    tbc::view<SurfaceCommand, tbc::lt::self> command_;
+    tbc::val_self<SurfaceCommand> command_;
     ds::Option<ComponentCommandOwner> command_owner_;
     std::uint64_t next_revision_ = 0;
-    tbc::view<PickController<ComponentsController, ApplicationAllocator, ConfigurationSource>, tbc::lt::self> pick_;
+    tbc::val_self<PickController<ComponentsController, ApplicationAllocator, ConfigurationSource>> pick_;
     QPointer<QQuickWindow> window_;
     QPointer<QQuickItem> pick_return_focus_;
     QVariantMap element_bars_;

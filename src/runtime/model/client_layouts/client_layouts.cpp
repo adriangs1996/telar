@@ -577,31 +577,31 @@ namespace telar::runtime {
     return *client;
   }
 
-  tbc::view<Pane*, tbc::lt::a> findPane(tbc::view<PaneStore&, tbc::lt::a> panes, std::uint64_t identity, std::uint64_t generation) noexcept {
+  tbc::val_a<Pane*> findPane(tbc::mut_a<PaneStore> panes, std::uint64_t identity, std::uint64_t generation) noexcept {
     auto* pane = panes.find(identity);
 
     return pane != nullptr && pane->generation == generation ? pane : nullptr;
   }
 
-  tbc::view<const Pane*, tbc::lt::a> findPane(tbc::view<const PaneStore&, tbc::lt::a> panes, std::uint64_t identity, std::uint64_t generation) noexcept {
+  tbc::val_a<const Pane*> findPane(tbc::ref_a<PaneStore> panes, std::uint64_t identity, std::uint64_t generation) noexcept {
     const auto* pane = panes.find(identity);
 
     return pane != nullptr && pane->generation == generation ? pane : nullptr;
   }
 
-  tbc::view<Pane*, tbc::lt::a> livePane(tbc::view<PaneStore&, tbc::lt::a> panes, std::uint64_t identity, std::uint64_t generation) noexcept {
+  tbc::val_a<Pane*> livePane(tbc::mut_a<PaneStore> panes, std::uint64_t identity, std::uint64_t generation) noexcept {
     auto* pane = findPane(panes, identity, generation);
 
     return pane != nullptr && !pane->exit_status && !pane->close_requested ? pane : nullptr;
   }
 
-  tbc::view<const Pane*, tbc::lt::a> livePane(tbc::view<const PaneStore&, tbc::lt::a> panes, std::uint64_t identity, std::uint64_t generation) noexcept {
+  tbc::val_a<const Pane*> livePane(tbc::ref_a<PaneStore> panes, std::uint64_t identity, std::uint64_t generation) noexcept {
     const auto* pane = findPane(panes, identity, generation);
 
     return pane != nullptr && !pane->exit_status && !pane->close_requested ? pane : nullptr;
   }
 
-  tbc::view<Pane&, tbc::lt::a> requireReporterPane(tbc::view<PaneStore&, tbc::lt::a> panes, const ClientSession& client, std::uint64_t identity, std::uint64_t generation) {
+  tbc::mut_a<Pane> requireReporterPane(tbc::mut_a<PaneStore> panes, const ClientSession& client, std::uint64_t identity, std::uint64_t generation) {
     auto* pane = findPane(panes, identity, generation);
     if (pane == nullptr || pane->exit_status) {
       throw RequestError{FailureCode::pane_not_found, "Pane not found"};

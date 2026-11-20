@@ -125,7 +125,7 @@ export {
         std::string_view path;
       };
 
-      static tbc::view<ds::Option<Command>, tbc::lt::a> nextCommand(tbc::view<std::string_view, tbc::lt::a> text, std::size_t& search_from) noexcept;
+      static tbc::val_a<ds::Option<Command>> nextCommand(tbc::val_a<std::string_view> text, std::size_t& search_from) noexcept;
 
       struct Transmission {
         std::string_view control;
@@ -136,7 +136,7 @@ export {
 
       static bool forward(const Transmission& request, MediaInputSink& sink);
 
-      static tbc::view<std::span<const std::uint8_t>, tbc::lt::a> encodeChunk(tbc::view<std::span<char>, tbc::lt::a> chunk, std::string_view control, std::span<const std::uint8_t> raw, bool more);
+      static tbc::val_a<std::span<const std::uint8_t>> encodeChunk(tbc::val_a<std::span<char>> chunk, std::string_view control, std::span<const std::uint8_t> raw, bool more);
 
       static constexpr std::string_view introducer = "\x1b_G";
       static constexpr std::string_view terminator = "\x1b\\";

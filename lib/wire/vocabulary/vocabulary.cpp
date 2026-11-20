@@ -75,7 +75,7 @@ namespace telar {
     }
   }
 
-  tbc::view<std::string_view, tbc::lt::a> notificationLinkHost(tbc::view<std::string_view, tbc::lt::a> link) noexcept {
+  tbc::val_a<std::string_view> notificationLinkHost(tbc::val_a<std::string_view> link) noexcept {
     if (!link.starts_with(notification_link_scheme)) {
       return {};
     }
@@ -135,7 +135,7 @@ namespace telar {
     }
   }
 
-  void BodySchema<HistoryScopeValue>::decodeBody(DecodeInput input, tbc::view<HistoryScopeValue&, tbc::lt::a> value, DecodeStorage&, HistoryScope scope) {
+  void BodySchema<HistoryScopeValue>::decodeBody(DecodeInput input, tbc::mut_a<HistoryScopeValue> value, DecodeStorage&, HistoryScope scope) {
     EnumByte<HistoryScope, 3>::validate(scope);
     switch (scope) {
     case HistoryScope::global:
@@ -664,7 +664,7 @@ namespace telar {
     return size;
   }
 
-  tbc::view<std::span<Byte>, tbc::lt::a> CellRunCodec::encode(std::span<const Cell> cells, tbc::view<std::span<Byte>, tbc::lt::a> buffer) {
+  tbc::val_a<std::span<Byte>> CellRunCodec::encode(std::span<const Cell> cells, tbc::val_a<std::span<Byte>> buffer) {
     const auto size = encodedSize(cells);
     if (size > buffer.size()) {
       throw EncodingError{"Cell buffer too small"};
@@ -774,7 +774,7 @@ namespace telar {
     TailBytes<65536>::encode(value.uris, output);
   }
 
-  void BodySchema<TextMetadata>::decodeBody(DecodeInput input, tbc::view<TextMetadata&, tbc::lt::a> value, DecodeStorage& storage) {
+  void BodySchema<TextMetadata>::decodeBody(DecodeInput input, tbc::mut_a<TextMetadata> value, DecodeStorage& storage) {
     value.status = EnumByte<MetadataStatus, 2>::decode(input);
     const auto rows = u16::decode(input);
     const auto links = u16::decode(input);

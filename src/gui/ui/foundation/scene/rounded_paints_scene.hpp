@@ -28,7 +28,7 @@ namespace telar::gui::qt {
 
   // The node painted is the previous one again or a new one Qt takes: region `a`.
   template <std::size_t Capacity, typename Draw>
-  tbc::view<QSGNode*, tbc::lt::a> paintRoundedShapes(QQuickItem& item, tbc::view<QSGNode*, tbc::lt::a> previous, Draw draw) {
+  tbc::val_a<QSGNode*> paintRoundedShapes(QQuickItem& item, tbc::val_a<QSGNode*> previous, Draw draw) {
     auto& window = *item.window();
     const auto density = window.effectiveDevicePixelRatio();
     const auto anchor = item.mapToScene(QPointF{});

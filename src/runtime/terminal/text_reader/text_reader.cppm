@@ -36,9 +36,9 @@ export {
     // holds both, as `&'a self` and an argument of the same lifetime would.
     class TextMetadataCapture {
     public:
-      explicit TextMetadataCapture(tbc::view<ConcurrentMemory&, tbc::lt::a> memory);
+      explicit TextMetadataCapture(tbc::mut_a<ConcurrentMemory> memory);
 
-      tbc::view<TextMetadata, tbc::lt::a> view(tbc::view<std::span<const Byte>, tbc::lt::a> row_flags) const noexcept;
+      tbc::val_a<TextMetadata> view(tbc::val_a<std::span<const Byte>> row_flags) const noexcept;
 
       // Not inlined: Terminal::refresh runs on every frame and captures only when rows with links
       // changed; the link table in its frame would put every frame's calls on deeper stack pages.
@@ -61,22 +61,22 @@ export {
       // The links one capture has seen. Their texts view the terminal's hyperlinks, which stay put for
       // that capture only, so the table lives in it.
       struct LinkTable {
-        tbc::view<ds::Array<Identity, maximum_links>, tbc::lt::a> identities{};
+        tbc::val_a<ds::Array<Identity, maximum_links>> identities{};
         ds::Array<std::uint16_t, maximum_links * 2> slots{};
       };
 
       // The text is the terminal's, which the string only points at, as a raw pointer lends no borrow.
-      static tbc::view<std::string_view, tbc::lt::a> stringView(tbc::view<GhosttyString, tbc::lt::a> value) noexcept;
+      static tbc::val_a<std::string_view> stringView(tbc::val_a<GhosttyString> value) noexcept;
 
       static std::size_t hash(const Identity& identity) noexcept;
 
-      ds::Option<std::uint16_t> intern(tbc::view<LinkTable&, tbc::lt::a> table, tbc::view<Identity, tbc::lt::a> identity);
+      ds::Option<std::uint16_t> intern(tbc::mut_a<LinkTable> table, tbc::val_a<Identity> identity);
 
       void captureRow(LinkTable& table, GhosttyRenderStateRowIterator iterator, std::uint32_t row_start);
 
-      tbc::view<ds::Vec<MetadataLink, ConcurrentMemory>, tbc::lt::a> links_;
-      tbc::view<ds::Vec<MetadataRun, ConcurrentMemory>, tbc::lt::a> runs_;
-      tbc::view<ds::Vec<Byte, ConcurrentMemory>, tbc::lt::a> uris_;
+      tbc::val_a<ds::Vec<MetadataLink, ConcurrentMemory>> links_;
+      tbc::val_a<ds::Vec<MetadataRun, ConcurrentMemory>> runs_;
+      tbc::val_a<ds::Vec<Byte, ConcurrentMemory>> uris_;
       MetadataStatus status_ = MetadataStatus::complete;
     };
 
@@ -159,27 +159,27 @@ export {
     class TerminalEffects {
     public:
       // What the effects keep lives in `memory`, region `a`.
-      explicit TerminalEffects(tbc::view<ConcurrentMemory&, tbc::lt::a> memory);
+      explicit TerminalEffects(tbc::mut_a<ConcurrentMemory> memory);
 
       // A document that stands for rows of the scrollback, kept while the scrollback keeps them.
       struct InlineDocument {
         std::uint64_t id = 0;
-        tbc::view<ds::Vec<Byte, ConcurrentMemory>, tbc::lt::a> bytes;
+        tbc::val_a<ds::Vec<Byte, ConcurrentMemory>> bytes;
         // Rows of the terminal the effects belong to, valid while it lives.
-        tbc::view<TrackedRow, tbc::lt::a> first;
-        tbc::view<TrackedRow, tbc::lt::a> end;
+        tbc::val_a<TrackedRow> first;
+        tbc::val_a<TrackedRow> end;
         bool end_inclusive = false;
         // Where its rows were last seen, from the top of the scrollback; none before.
         std::uint32_t row = 0;
         std::uint32_t rows = 0;
         // What each of its rows held when the terminal first drew it, 0 before: a document stands
         // for that text, and goes once a row of it changes. A reflow learns them again.
-        tbc::view<ds::Vec<std::uint64_t, ConcurrentMemory>, tbc::lt::a> contents;
+        tbc::val_a<ds::Vec<std::uint64_t, ConcurrentMemory>> contents;
       };
 
       // Keeps the document of a zone a program closed. Past the pane's limits the oldest documents
       // go, and their rows show their text again.
-      void keepInline(tbc::view<ds::Vec<Byte, ConcurrentMemory>, tbc::lt::a> bytes, tbc::view<TrackedRow, tbc::lt::a> first, tbc::view<TrackedRow, tbc::lt::a> end, bool end_inclusive);
+      void keepInline(tbc::val_a<ds::Vec<Byte, ConcurrentMemory>> bytes, tbc::val_a<TrackedRow> first, tbc::val_a<TrackedRow> end, bool end_inclusive);
 
       // Follows the documents' rows through output and reflow, and lets go of those whose rows the
       // scrollback dropped. Only the primary screen holds them.
@@ -196,13 +196,13 @@ export {
 
       void setProgress(PaneProgressState state, ds::Option<Byte> percent) noexcept;
 
-      tbc::view<ds::Vec<Byte, ConcurrentMemory>, tbc::lt::a> clipboard;
+      tbc::val_a<ds::Vec<Byte, ConcurrentMemory>> clipboard;
       // The encoded document the pane's program shows over the pane, empty when none.
-      tbc::view<ds::Vec<Byte, ConcurrentMemory>, tbc::lt::a> document;
+      tbc::val_a<ds::Vec<Byte, ConcurrentMemory>> document;
       std::uint64_t document_revision = 0;
       // The documents that stand for rows of the scrollback, oldest first; the revision changes
       // whenever one comes, goes or moves.
-      tbc::view<ds::Vec<InlineDocument, ConcurrentMemory>, tbc::lt::a> inline_documents;
+      tbc::val_a<ds::Vec<InlineDocument, ConcurrentMemory>> inline_documents;
       std::uint64_t inline_revision = 0;
       std::uint64_t next_document_id = 1;
       std::size_t inline_bytes = 0;
@@ -244,7 +244,7 @@ export {
     // buffers come from an allocator, and its counters from the runtime, in region `a`.
     class FrameSync {
     public:
-      explicit FrameSync(tbc::view<ConcurrentMemory&, tbc::lt::a> memory, std::uint64_t pane_id);
+      explicit FrameSync(tbc::mut_a<ConcurrentMemory> memory, std::uint64_t pane_id);
 
       FrameSync(const FrameSync&) = delete;
       FrameSync& operator=(const FrameSync&) = delete;
@@ -286,13 +286,13 @@ export {
       mutable diagnostics::FrameCounters counters_;
 #endif
       std::uint64_t pane_id_;
-      tbc::view<ds::Vec<ScreenCell, ConcurrentMemory>, tbc::lt::a> baseline_;
-      tbc::view<ds::Vec<Byte, ConcurrentMemory>, tbc::lt::a> cell_bytes_;
-      tbc::view<ds::Vec<Byte, ConcurrentMemory>, tbc::lt::a> payload_;
+      tbc::val_a<ds::Vec<ScreenCell, ConcurrentMemory>> baseline_;
+      tbc::val_a<ds::Vec<Byte, ConcurrentMemory>> cell_bytes_;
+      tbc::val_a<ds::Vec<Byte, ConcurrentMemory>> payload_;
       // Views of cell_bytes_.
-      tbc::view<ds::Vec<FrameSpan, ConcurrentMemory>, tbc::lt::self> spans_;
-      tbc::view<ds::Vec<Byte, ConcurrentMemory>, tbc::lt::a> metadata_bytes_;
-      tbc::view<ds::Vec<Byte, ConcurrentMemory>, tbc::lt::a> previous_metadata_;
+      tbc::val_self<ds::Vec<FrameSpan, ConcurrentMemory>> spans_;
+      tbc::val_a<ds::Vec<Byte, ConcurrentMemory>> metadata_bytes_;
+      tbc::val_a<ds::Vec<Byte, ConcurrentMemory>> previous_metadata_;
       std::uint64_t metadata_revision_ = 0;
       FrameBody previous_header_{};
       std::uint64_t next_frame_id_ = 1;
@@ -337,10 +337,10 @@ export {
     class Terminal {
     public:
       // The terminal keeps the allocator, the query resources and the media it feeds: region `a`.
-      explicit Terminal(tbc::view<ConcurrentMemory&, tbc::lt::a> memory, TerminalSize size, TerminalPurpose purpose = TerminalPurpose::interactive, tbc::view<std::shared_ptr<PtyResponseQueue>, tbc::lt::a> responses = {}, tbc::view<GraphicsQueryResources, tbc::lt::a> resources = {});
+      explicit Terminal(tbc::mut_a<ConcurrentMemory> memory, TerminalSize size, TerminalPurpose purpose = TerminalPurpose::interactive, tbc::val_a<std::shared_ptr<PtyResponseQueue>> responses = {}, tbc::val_a<GraphicsQueryResources> resources = {});
 
       // The bytes view the destination, region `b`, apart from what the terminal keeps.
-      tbc::view<std::span<const Byte>, tbc::lt::b> encodeKey(GhosttyKey key, GhosttyMods modifiers, tbc::view<std::span<Byte>, tbc::lt::b> destination);
+      tbc::val_b<std::span<const Byte>> encodeKey(GhosttyKey key, GhosttyMods modifiers, tbc::val_b<std::span<Byte>> destination);
 
       // The documents' tracked rows belong to the terminal, which goes before the effects do.
       ~Terminal();
@@ -428,14 +428,14 @@ export {
       diagnostics::TerminalStorageSnapshot storageMetrics() const;
 #endif
 
-      tbc::view<Screen, tbc::lt::a> screen;
-      tbc::view<TerminalEffects, tbc::lt::a> effects;
-      tbc::view<GraphicsStorage<ConcurrentMemory>, tbc::lt::a> graphics;
+      tbc::val_a<Screen> screen;
+      tbc::val_a<TerminalEffects> effects;
+      tbc::val_a<GraphicsStorage<ConcurrentMemory>> graphics;
 
     private:
       // The media to feed, or none once abortControl let it go.
       // The media given, when it is the one attached.
-      tbc::view<TerminalMedia*, tbc::lt::b> attached(tbc::view<TerminalMedia&, tbc::lt::b> media) const noexcept;
+      tbc::val_b<TerminalMedia*> attached(tbc::mut_b<TerminalMedia> media) const noexcept;
 
       void feedWith(std::span<const Byte> bytes, TerminalMedia* media);
 
@@ -498,24 +498,24 @@ export {
           memory.deallocate(pointer, size, alignment);
         }
 
-        tbc::view<ConcurrentMemory&, tbc::lt::a> memory;
+        tbc::mut_a<ConcurrentMemory> memory;
         std::atomic<std::size_t> refusals = 0;
       };
 
-      tbc::view<GhosttyMemory, tbc::lt::a> ghostty_memory_;
-      tbc::view<GhosttyAllocatorBridge<GhosttyMemory>, tbc::lt::a> allocator_;
+      tbc::val_a<GhosttyMemory> ghostty_memory_;
+      tbc::val_a<GhosttyAllocatorBridge<GhosttyMemory>> allocator_;
       TerminalHandle terminal_;
       RenderStateHandle render_state_;
       RowIteratorHandle row_iterator_;
       RowCellsHandle row_cells_;
-      tbc::view<std::shared_ptr<PtyResponseQueue>, tbc::lt::a> responses_;
-      tbc::view<ResponseOutbox<ConcurrentMemory>, tbc::lt::a> response_outbox_;
+      tbc::val_a<std::shared_ptr<PtyResponseQueue>> responses_;
+      tbc::val_a<ResponseOutbox<ConcurrentMemory>> response_outbox_;
       // Which media the terminal feeds, never dereferenced: its owner passes it to every call.
       const TerminalMedia* media_ = nullptr;
       static constexpr std::size_t control_input_limit = 128 * 1024;
       // The engine keeps the queue responses_ owns, a shared type, so the terminal stays where it was built.
-      tbc::view<control::Engine, tbc::lt::a> control_;
-      tbc::view<ByteQueue<ConcurrentMemory>, tbc::lt::a> pending_control_input_;
+      tbc::val_a<control::Engine> control_;
+      tbc::val_a<ByteQueue<ConcurrentMemory>> pending_control_input_;
       TerminalPurpose purpose_;
       CellProjection projection_;
       TerminalSize size_{};
@@ -543,15 +543,15 @@ export {
     // next read or refresh.
     class ScrollbackRows {
     public:
-      explicit ScrollbackRows(tbc::view<ConcurrentMemory&, tbc::lt::a> memory);
+      explicit ScrollbackRows(tbc::mut_a<ConcurrentMemory> memory);
 
       // The rows from `request.from` the scrollback still has, at most a screen of them. The
       // terminal is scrolled to them to read them, and left at its bottom again.
-      tbc::view<PaneRows, tbc::lt::a> read(tbc::view<Terminal&, tbc::lt::a> terminal, const ReadPaneRows& request);
+      tbc::val_a<PaneRows> read(tbc::mut_a<Terminal> terminal, const ReadPaneRows& request);
 
     private:
-      tbc::view<ds::Vec<Byte, ConcurrentMemory>, tbc::lt::a> cells_;
-      tbc::view<ds::Vec<MetadataRun, ConcurrentMemory>, tbc::lt::a> runs_;
+      tbc::val_a<ds::Vec<Byte, ConcurrentMemory>> cells_;
+      tbc::val_a<ds::Vec<MetadataRun, ConcurrentMemory>> runs_;
     };
 
   }

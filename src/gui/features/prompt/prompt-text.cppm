@@ -20,7 +20,7 @@ namespace telar::gui::features::prompt {
 
     // The text and its undo history live in `memory`.
     // The text and its history live in `memory`, region `a`.
-    explicit Text(tbc::view<Memory&, tbc::lt::a> memory);
+    explicit Text(tbc::mut_a<Memory> memory);
 
     [[nodiscard]] std::string_view view() const noexcept;
 
@@ -98,7 +98,7 @@ namespace telar::gui::features::prompt {
     };
 
     struct Snapshot {
-      tbc::view<ds::String<Memory>, tbc::lt::a> bytes;
+      tbc::val_a<ds::String<Memory>> bytes;
       std::size_t cursor;
     };
 
@@ -110,9 +110,9 @@ namespace telar::gui::features::prompt {
     // keeps the current text in the other.
     bool travel(bool back);
 
-    tbc::view<ds::String<Memory>, tbc::lt::a> bytes_;
-    tbc::view<ds::Vec<Snapshot, Memory>, tbc::lt::a> undo_;
-    tbc::view<ds::Vec<Snapshot, Memory>, tbc::lt::a> redo_;
+    tbc::val_a<ds::String<Memory>> bytes_;
+    tbc::val_a<ds::Vec<Snapshot, Memory>> undo_;
+    tbc::val_a<ds::Vec<Snapshot, Memory>> redo_;
     std::size_t cursor_ = 0;
     std::size_t anchor_ = 0;
     std::uint64_t revision_ = 0;

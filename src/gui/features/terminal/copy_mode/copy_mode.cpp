@@ -47,7 +47,7 @@ namespace telar::gui::features::terminal::copy_mode {
     return true;
   }
 
-  tbc::view<CopyPlan, tbc::lt::static_storage> leave(const State& state, const CopyGrid& grid) noexcept {
+  tbc::val_static<CopyPlan> leave(const State& state, const CopyGrid& grid) noexcept {
     return Access::mode(state).leave(grid);
   }
 
@@ -65,7 +65,7 @@ namespace telar::gui::features::terminal::copy_mode {
     search.query.clear();
   }
 
-  tbc::view<ds::Option<CopyPlan>, tbc::lt::static_storage> type(State& state, std::string_view needle, const CopyGrid& grid) {
+  tbc::val_static<ds::Option<CopyPlan>> type(State& state, std::string_view needle, const CopyGrid& grid) {
     const auto& mode = Access::mode(state);
     auto& search = Access::search(state);
 
@@ -111,7 +111,7 @@ namespace telar::gui::features::terminal::copy_mode {
     return message.request_id == Access::search(state).request && current && !current->pointer && message.pane_id == current->pane_id;
   }
 
-  tbc::view<ds::Option<CopyPlan>, tbc::lt::a> receive(State& state, tbc::view<const PaneMatches&, tbc::lt::a> message, const CopyGrid& grid) {
+  tbc::val_a<ds::Option<CopyPlan>> receive(State& state, tbc::ref_a<PaneMatches> message, const CopyGrid& grid) {
     auto& search = Access::search(state);
     auto plan = Access::mode(state).search(message.matches, grid, search.origin);
 

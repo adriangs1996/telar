@@ -18,7 +18,7 @@ export namespace telar::runtime::control {
       explicit Storage(tbc::view<ds::Vec<std::uint8_t, Memory>&&, tbc::lt::a> bytes)
           : bytes(std::move(bytes)) {}
 
-      tbc::view<ds::Vec<std::uint8_t, Memory>, tbc::lt::a> bytes;
+      tbc::val_a<ds::Vec<std::uint8_t, Memory>> bytes;
     };
 
   public:

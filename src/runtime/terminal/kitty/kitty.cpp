@@ -547,7 +547,7 @@ namespace telar::runtime {
     return {};
   }
 
-  tbc::view<std::span<const std::uint8_t>, tbc::lt::a> MappedImages::resolve(tbc::view<std::span<const std::uint8_t>, tbc::lt::a> bytes) const noexcept {
+  tbc::val_a<std::span<const std::uint8_t>> MappedImages::resolve(tbc::val_a<std::span<const std::uint8_t>> bytes) const noexcept {
     if (count_.load(std::memory_order_acquire) == 0) {
       return bytes;
     }
@@ -617,7 +617,7 @@ namespace telar::runtime {
     }
   }
 
-  tbc::view<std::string_view, tbc::lt::static_storage> GraphicsTemporaryPath::authorize() noexcept {
+  tbc::val_static<std::string_view> GraphicsTemporaryPath::authorize() noexcept {
 #if !defined(__APPLE__) && !defined(__linux__)
     return "EINVAL: unsupported medium";
 #endif

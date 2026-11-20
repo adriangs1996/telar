@@ -133,7 +133,7 @@ namespace telar::runtime::traffic {
     return names[static_cast<std::size_t>(transport)];
   }
 
-  tbc::view<std::span<const Byte>, tbc::lt::a> DatagramCodec::encode(tbc::view<std::span<Byte>, tbc::lt::a> output, const DatagramEvent& event) {
+  tbc::val_a<std::span<const Byte>> DatagramCodec::encode(tbc::val_a<std::span<Byte>> output, const DatagramEvent& event) {
     validate(event);
     plugins::FrameWriter writer{output};
 
@@ -317,7 +317,7 @@ namespace telar::runtime::traffic {
     entry.created = Clock::now();
   }
 
-  tbc::view<std::string_view, tbc::lt::static_storage> IpFragments::append(Entry& entry, const Fragment& part) {
+  tbc::val_static<std::string_view> IpFragments::append(Entry& entry, const Fragment& part) {
     const auto end = part.offset + part.payload.size();
     if (entry.length && (end > *entry.length || (!part.more && end != *entry.length))) {
       return "ip_fragment_conflicting_length";
@@ -421,7 +421,7 @@ namespace telar::runtime::traffic {
     return ip ? decodePayload(*ip) : ds::none;
   }
 
-  tbc::view<ds::Option<TcpPacket>, tbc::lt::a> TcpPacketDecoder::decodePayload(const IpPayload& ip) noexcept {
+  tbc::val_a<ds::Option<TcpPacket>> TcpPacketDecoder::decodePayload(const IpPayload& ip) noexcept {
     if (ip.protocol != IPPROTO_TCP) {
       return {};
     }

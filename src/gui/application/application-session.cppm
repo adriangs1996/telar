@@ -88,13 +88,13 @@ export {
 
     // The tab at `active` among `tabs`, once its record arrived. It borrows the tabs alone, as
     // findPane borrows the panes.
-    [[nodiscard]] tbc::view<const Tab<Memory>*, tbc::lt::a> activeTab(tbc::view<const Tabs&, tbc::lt::a> tabs, ds::Option<TabLocation> active) noexcept;
+    [[nodiscard]] tbc::val_a<const Tab<Memory>*> activeTab(tbc::ref_a<Tabs> tabs, ds::Option<TabLocation> active) noexcept;
 
     // The same tab, to change it.
-    [[nodiscard]] tbc::view<Tab<Memory>*, tbc::lt::a> activeTabMut(tbc::view<Tabs&, tbc::lt::a> tabs, ds::Option<TabLocation> active) noexcept;
+    [[nodiscard]] tbc::val_a<Tab<Memory>*> activeTabMut(tbc::mut_a<Tabs> tabs, ds::Option<TabLocation> active) noexcept;
 
     // The pane the tab at `active` focuses, among `panes`, which it borrows alone.
-    [[nodiscard]] tbc::view<const Pane<Memory>*, tbc::lt::a> focusedPane(tbc::view<const Panes&, tbc::lt::a> panes, const Tabs& tabs, ds::Option<TabLocation> active) noexcept;
+    [[nodiscard]] tbc::val_a<const Pane<Memory>*> focusedPane(tbc::ref_a<Panes> panes, const Tabs& tabs, ds::Option<TabLocation> active) noexcept;
 
     // A command block of a pane: the pane's id and the block's index among its blocks.
     struct BlockAt {
@@ -133,10 +133,10 @@ export {
 
       // The session keeps the allocator and the transport, region `a`, which also holds what its replies and
       // requests view of the session's own panes, workspaces and responses.
-      Session(tbc::view<Memory&, tbc::lt::a> memory, tbc::view<RuntimeTransport&, tbc::lt::a> transport, tbc::view<MonotonicNow, tbc::lt::static_storage> now = &system::AwakeClock::nowNanoseconds);
+      Session(tbc::mut_a<Memory> memory, tbc::mut_a<RuntimeTransport> transport, tbc::val_static<MonotonicNow> now = &system::AwakeClock::nowNanoseconds);
 
       // The session also keeps `effects`, region `a`.
-      Session(tbc::view<Memory&, tbc::lt::a> memory, tbc::view<RuntimeTransport&, tbc::lt::a> transport, tbc::view<HostEffects&, tbc::lt::a> effects, tbc::view<MonotonicNow, tbc::lt::static_storage> now = &system::AwakeClock::nowNanoseconds);
+      Session(tbc::mut_a<Memory> memory, tbc::mut_a<RuntimeTransport> transport, tbc::mut_a<HostEffects> effects, tbc::val_static<MonotonicNow> now = &system::AwakeClock::nowNanoseconds);
 
       Session(const Session&) = delete;
       Session& operator=(const Session&) = delete;
@@ -148,7 +148,7 @@ export {
       // so it stays where it is made.
       class LaunchDefaults {
       public:
-        explicit LaunchDefaults(tbc::view<Memory&, tbc::lt::a> memory);
+        explicit LaunchDefaults(tbc::mut_a<Memory> memory);
 
         LaunchDefaults(const LaunchDefaults&) = delete;
         LaunchDefaults& operator=(const LaunchDefaults&) = delete;
@@ -168,11 +168,11 @@ export {
       private:
         void storeArguments(std::span<const std::string_view> arguments);
 
-        tbc::view<Memory*, tbc::lt::a> memory_;
-        tbc::view<ds::String<Memory>, tbc::lt::a> cwd_;
-        tbc::view<ds::Vec<ds::String<Memory>, Memory>, tbc::lt::a> storage_;
+        tbc::val_a<Memory*> memory_;
+        tbc::val_a<ds::String<Memory>> cwd_;
+        tbc::val_a<ds::Vec<ds::String<Memory>, Memory>> storage_;
         // The arguments view the strings stored beside them; the protocol allows at most 64.
-        tbc::view<ds::Array<std::string_view, maximum_launch_arguments>, tbc::lt::self> arguments_{};
+        tbc::val_self<ds::Array<std::string_view, maximum_launch_arguments>> arguments_{};
         std::size_t count_ = 0;
       };
 
@@ -387,7 +387,7 @@ export {
       // use case asks and sends while it holds a feature's state, as Rust borrows one field at a time.
       class Link {
       public:
-        explicit Link(tbc::view<RuntimeTransport&, tbc::lt::a> transport) noexcept;
+        explicit Link(tbc::mut_a<RuntimeTransport> transport) noexcept;
 
         [[nodiscard]] std::uint64_t nextRequest() noexcept;
 
@@ -442,7 +442,7 @@ export {
         void sendTabOperation(RequestKind kind, Request request);
 
         // Public beside a private counter, so that a use case borrows the transport alone.
-        tbc::view<RuntimeTransport&, tbc::lt::a> transport; // NOLINT(cppcoreguidelines-non-private-member-variables-in-classes,misc-non-private-member-variables-in-classes)
+        tbc::mut_a<RuntimeTransport> transport; // NOLINT(cppcoreguidelines-non-private-member-variables-in-classes,misc-non-private-member-variables-in-classes)
 
       private:
         std::uint64_t request_id_ = 0;
@@ -629,7 +629,7 @@ export {
 
       Change apply(const ClientCommand& message, ClientCommandHandler& handler);
 
-      Change executeCommand(const ClientCommand& message, tbc::view<CompleteClientCommand&, tbc::lt::a> reply, ClientCommandHandler& handler);
+      Change executeCommand(const ClientCommand& message, tbc::mut_a<CompleteClientCommand> reply, ClientCommandHandler& handler);
 
       // A command that changes nothing is `applied`,
       // one that starts a change is `admitted`, and the target stays the one the
@@ -739,9 +739,9 @@ export {
     public:
       // The features' states, which their use cases in application::<feature> reach directly, as Rust
       // borrows a struct's fields: an accessor would lend the whole session.
-      tbc::view<features::prompt::State, tbc::lt::a> prompt;
-      tbc::view<features::prompt::Lines, tbc::lt::a> prompt_lines;
-      tbc::view<features::terminal::copy_mode::State, tbc::lt::a> copy_mode;
+      tbc::val_a<features::prompt::State> prompt;
+      tbc::val_a<features::prompt::Lines> prompt_lines;
+      tbc::val_a<features::terminal::copy_mode::State> copy_mode;
       features::terminal::links::State links;
       features::status_bar::State status_bar;
 
@@ -750,15 +750,15 @@ export {
 
     public:
       // Where the session and its features allocate; a reference, so lending it lends no field.
-      tbc::view<Memory&, tbc::lt::a> memory;
+      tbc::mut_a<Memory> memory;
 
     private:
     public:
-      tbc::view<Link, tbc::lt::a> link;
+      tbc::val_a<Link> link;
 
     private:
-      tbc::view<HostEffects&, tbc::lt::a> effects_;
-      tbc::view<MonotonicNow, tbc::lt::static_storage> now_;
+      tbc::mut_a<HostEffects> effects_;
+      tbc::val_static<MonotonicNow> now_;
       // A session built without effects points `effects_` here.
       DiscardHostEffects discard_effects_;
 
@@ -774,21 +774,21 @@ export {
     private:
     public:
       // The panes and tabs the runtime reported, which the use cases search as fields of their own.
-      tbc::view<Panes, tbc::lt::a> panes;
-      tbc::view<Tabs, tbc::lt::a> tabs;
+      tbc::val_a<Panes> panes;
+      tbc::val_a<Tabs> tabs;
 
     private:
     public:
       // The workspaces and worktrees the runtime lists, a field the use cases walk while they send.
-      tbc::view<WorkspaceReplica<Memory>, tbc::lt::a> workspace_list;
+      tbc::val_a<WorkspaceReplica<Memory>> workspace_list;
 
     private:
     public:
       // The agents the runtime reports, a field the use cases read while they send.
-      tbc::view<AgentReplica<Memory>, tbc::lt::a> agent_list;
+      tbc::val_a<AgentReplica<Memory>> agent_list;
 
     private:
-      tbc::view<PaneListReplica<Memory>, tbc::lt::a> pane_list_;
+      tbc::val_a<PaneListReplica<Memory>> pane_list_;
       AgentAcknowledgement agent_acknowledgement_;
 
     public:
@@ -798,22 +798,22 @@ export {
       std::uint64_t chrome_revision_ = 0;
 
     public:
-      tbc::view<features::history::State, tbc::lt::a> history;
-      tbc::view<features::peek::State, tbc::lt::a> peek;
-      tbc::view<features::monitor::State, tbc::lt::a> monitor;
+      tbc::val_a<features::history::State> history;
+      tbc::val_a<features::peek::State> peek;
+      tbc::val_a<features::monitor::State> monitor;
       features::paths::State paths;
       features::palette::State palette;
 
     private:
-      tbc::view<ds::Vec<Byte, Memory>, tbc::lt::a> decode_;
-      tbc::view<ds::String<Memory>, tbc::lt::a> clipboard_;
-      tbc::view<ds::String<Memory>, tbc::lt::a> error_;
-      tbc::view<ds::String<Memory>, tbc::lt::a> command_response_;
+      tbc::val_a<ds::Vec<Byte, Memory>> decode_;
+      tbc::val_a<ds::String<Memory>> clipboard_;
+      tbc::val_a<ds::String<Memory>> error_;
+      tbc::val_a<ds::String<Memory>> command_response_;
 
     public:
       // What a pane launches with when its request names nothing else, a field the use cases read
       // while they send through the link.
-      tbc::view<LaunchDefaults, tbc::lt::a> launch_defaults;
+      tbc::val_a<LaunchDefaults> launch_defaults;
 
     private:
     public:

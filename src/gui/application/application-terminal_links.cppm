@@ -46,7 +46,7 @@ namespace telar::gui::application::terminal::links {
 
   // The cwd a relative `path` is anchored at, after checking that the file can be opened: none
   // for an absolute path.
-  [[nodiscard]] tbc::view<ds::Option<std::string_view>, tbc::lt::a> base(tbc::view<const Session&, tbc::lt::a> session, const FilePath& path, std::string_view executable, ds::Option<std::uint64_t> source_id);
+  [[nodiscard]] tbc::val_a<ds::Option<std::string_view>> base(tbc::ref_a<Session> session, const FilePath& path, std::string_view executable, ds::Option<std::uint64_t> source_id);
 
   // Opens `path` once `base` admitted it, with a relative path already `anchored`.
   void openAnchored(Session& session, const FilePath& path, std::string_view executable, std::string_view anchored, ds::Option<std::uint64_t> source_id);

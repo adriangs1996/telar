@@ -63,7 +63,7 @@ namespace telar::gui::qt {
     void itemChange(ItemChange change, const ItemChangeData& data) override;
 
   private:
-    tbc::view<AncestorGeometry, tbc::lt::self> ancestors_;
+    tbc::val_self<AncestorGeometry> ancestors_;
     AgentProvider provider_ = AgentProvider::unknown;
     bool telar_mark_ = false;
     QString symbol_;

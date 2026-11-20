@@ -39,7 +39,7 @@ namespace telar::gui::qt {
       ProviderNode()
           : image(appendSceneNode<QSGSimpleTextureNode>(*this)) {}
 
-      tbc::view<QSGSimpleTextureNode&, tbc::lt::self> image;
+      tbc::mut_self<QSGSimpleTextureNode> image;
       std::unique_ptr<QSGTexture> texture;
       int side = 0;
     };

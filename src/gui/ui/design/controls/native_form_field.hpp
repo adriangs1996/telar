@@ -138,7 +138,7 @@ namespace telar::gui::qt {
     bool discarding_composition_ = false;
     bool metrics_dirty_ = true;
     bool form_control_ = true;
-    [[no_unique_address]] tbc::view<ActiveCompositionEvents, tbc::lt::self> composition_events_;
+    [[no_unique_address]] tbc::val_self<ActiveCompositionEvents> composition_events_;
   };
 
 }

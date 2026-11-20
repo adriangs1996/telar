@@ -164,7 +164,7 @@ export {
 
       Line line_;
       // The worker writes the line above until its result is collected, so the session stays put.
-      tbc::view<ds::Option<ObservationWorker<LogWriter>>, tbc::lt::self> worker_;
+      tbc::val_self<ds::Option<ObservationWorker<LogWriter>>> worker_;
       bool pending_ = false;
       bool failed_ = false;
     };

@@ -28,7 +28,7 @@ export {
       [[nodiscard]] static std::string_view directoryName(std::string_view path) noexcept;
 
       // The caption is one of the content's texts or is written into the storage, region `a`.
-      [[nodiscard]] static tbc::view<std::string_view, tbc::lt::a> resolve(tbc::view<Content, tbc::lt::a> content, tbc::view<Buffer&, tbc::lt::a> storage) noexcept;
+      [[nodiscard]] static tbc::val_a<std::string_view> resolve(tbc::val_a<Content> content, tbc::mut_a<Buffer> storage) noexcept;
     };
 
   }

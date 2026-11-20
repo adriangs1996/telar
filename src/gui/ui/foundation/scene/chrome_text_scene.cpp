@@ -347,7 +347,7 @@ namespace telar::gui::qt {
 
     private:
       GlyphPlacement placed_;
-      tbc::view<QSGImageNode&, tbc::lt::self> image_;
+      tbc::mut_self<QSGImageNode> image_;
       AlphaMaskRef colored_;
     };
 
@@ -538,8 +538,8 @@ namespace telar::gui::qt {
       std::shared_ptr<FontSet> fonts_;
       std::shared_ptr<ChromeGlyphImages<FontSet, retain_meshes>> images_;
       // The meshes and software glyphs are this node's children.
-      tbc::view<QList<GlyphMesh*>, tbc::lt::self> meshes_;
-      tbc::view<QList<SoftwareGlyph<FontSet, retain_meshes>*>, tbc::lt::self> software_glyphs_;
+      tbc::val_self<QList<GlyphMesh*>> meshes_;
+      tbc::val_self<QList<SoftwareGlyph<FontSet, retain_meshes>*>> software_glyphs_;
       std::uint64_t revision_ = 0;
       [[no_unique_address]] std::conditional_t<retain_meshes, RetainedGlyphMeshes, TransientGlyphMeshes> retained_;
     };
@@ -550,7 +550,7 @@ namespace telar::gui::qt {
 
     // The node painted is the previous one again or a new one Qt takes: region `a`.
     template <bool retain_meshes>
-    tbc::view<QSGNode*, tbc::lt::a> paintText(tbc::view<QSGNode*, tbc::lt::a> previous, QQuickWindow& window, const ChromeTextPaint& paint, const std::shared_ptr<const FontCollection>& collection, fonts::GlyphRasterization rasterization) {
+    tbc::val_a<QSGNode*> paintText(tbc::val_a<QSGNode*> previous, QQuickWindow& window, const ChromeTextPaint& paint, const std::shared_ptr<const FontCollection>& collection, fonts::GlyphRasterization rasterization) {
       std::unique_ptr<QSGNode> owner{previous};
       auto fonts = ResidentFonts::shared(collection);
       auto* scene = dynamic_cast<ChromeScene<ResidentFonts, retain_meshes>*>(owner.get());

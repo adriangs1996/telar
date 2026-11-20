@@ -371,7 +371,7 @@ namespace telar::runtime::plugins {
     return static_cast<traffic::Selection>(mask);
   }
 
-  tbc::view<HttpMessageView, tbc::lt::a> LuaTrafficValue::message(const lua::Value& value) {
+  tbc::val_a<HttpMessageView> LuaTrafficValue::message(const lua::Value& value) {
     value.onlyFields({"protocol", "response", "response_to_head", "stream_id", "method", "target", "reason", "scheme", "authority", "status", "headers", "trailers", "body", "body_decoded"});
     HttpMessageView message;
     const auto protocol = value.field("protocol").string();
@@ -398,7 +398,7 @@ namespace telar::runtime::plugins {
     return message;
   }
 
-  std::size_t LuaTrafficValue::fields(const lua::Value& value, tbc::view<std::span<HttpMessageView::Field>, tbc::lt::a> fields) {
+  std::size_t LuaTrafficValue::fields(const lua::Value& value, tbc::val_a<std::span<HttpMessageView::Field>> fields) {
     const auto count = value.arraySize();
     if (count > fields.size()) {
       throw EncodingError{"Too many HTTP fields"};
@@ -719,7 +719,7 @@ namespace telar::runtime::plugins {
   }
 
   template <Allocator Memory>
-  tbc::view<std::span<const Byte>, tbc::lt::a> LuaTraffic<Memory>::finish(std::uint64_t event_id, tbc::view<std::span<Byte>, tbc::lt::a> output) {
+  tbc::val_a<std::span<const Byte>> LuaTraffic<Memory>::finish(std::uint64_t event_id, tbc::val_a<std::span<Byte>> output) {
     auto& reply = reply_.getMut();
 
     reply.event_id = event_id;
@@ -1045,7 +1045,7 @@ namespace telar::runtime::plugins {
     lua_settop(vm_.state(), 0);
   }
 
-  tbc::view<std::span<const Byte>, tbc::lt::a> Host::trafficSetup(tbc::view<std::span<Byte>, tbc::lt::a> output) {
+  tbc::val_a<std::span<const Byte>> Host::trafficSetup(tbc::val_a<std::span<Byte>> output) {
     if (!traffic_) {
       throw EncodingError{"Traffic worker is not configured"};
     }
@@ -1053,7 +1053,7 @@ namespace telar::runtime::plugins {
     return traffic_.getMut().finish(0, output);
   }
 
-  tbc::view<std::span<const Byte>, tbc::lt::a> Host::invokeTraffic(const TrafficEvent& event, tbc::view<std::span<Byte>, tbc::lt::a> output) {
+  tbc::val_a<std::span<const Byte>> Host::invokeTraffic(const TrafficEvent& event, tbc::val_a<std::span<Byte>> output) {
     if (!traffic_) {
       throw EncodingError{"Traffic worker is not configured"};
     }
@@ -1073,7 +1073,7 @@ namespace telar::runtime::plugins {
     return traffic_.getMut().finish(event.event_id, output);
   }
 
-  tbc::view<std::span<const Byte>, tbc::lt::a> Host::invoke(const ExchangeView& exchange, tbc::view<std::span<Byte>, tbc::lt::a> output) {
+  tbc::val_a<std::span<const Byte>> Host::invoke(const ExchangeView& exchange, tbc::val_a<std::span<Byte>> output) {
     TELAR_TRACE("plugins.invokeExchange");
     auto* state = vm_.state();
 
@@ -1096,7 +1096,7 @@ namespace telar::runtime::plugins {
     return output.first(invocation.encoded_bytes);
   }
 
-  tbc::view<void*, tbc::lt::static_storage> Host::callContext(lua_State* state) noexcept {
+  tbc::val_static<void*> Host::callContext(lua_State* state) noexcept {
     return lua_touserdata(state, 1);
   }
 
@@ -1115,7 +1115,7 @@ namespace telar::runtime::plugins {
     return luaL_error(state, "%s", error.data());
   }
 
-  auto Host::context(lua_State* state) noexcept -> tbc::view<Host&, tbc::lt::static_storage> {
+  auto Host::context(lua_State* state) noexcept -> tbc::mut_static<Host> {
     return *static_cast<Host*>(callContext(state));
   }
 

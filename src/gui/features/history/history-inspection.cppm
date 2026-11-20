@@ -141,7 +141,7 @@ export {
       PaletteRole exit_color = PaletteRole::text;
 
       // The facts view the entry's directory, region `a`.
-      [[nodiscard]] static tbc::view<HistoryInspectionFacts, tbc::lt::a> derive(tbc::view<HistoryInspectionEntry, tbc::lt::a> entry, CalendarSample sampled);
+      [[nodiscard]] static tbc::val_a<HistoryInspectionFacts> derive(tbc::val_a<HistoryInspectionEntry> entry, CalendarSample sampled);
 
       [[nodiscard]] ds::Array<HistoryInspectionLine, count> lines() const noexcept;
 

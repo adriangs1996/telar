@@ -23,7 +23,7 @@ namespace telar {
     static std::size_t encodedSize(std::span<const Cell> cells);
 
     // The encoded bytes are the front of the buffer, region `a`.
-    static tbc::view<std::span<Byte>, tbc::lt::a> encode(std::span<const Cell> cells, tbc::view<std::span<Byte>, tbc::lt::a> buffer);
+    static tbc::val_a<std::span<Byte>> encode(std::span<const Cell> cells, tbc::val_a<std::span<Byte>> buffer);
   };
 
 } // namespace telar

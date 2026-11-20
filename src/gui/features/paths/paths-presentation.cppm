@@ -42,7 +42,7 @@ export {
       [[nodiscard]] static AbsolutePath join(JoinParts parts);
 
       // The relative path is a suffix of the path, region `a`.
-      [[nodiscard]] static tbc::view<ds::Option<std::string_view>, tbc::lt::a> relativeTo(std::string_view anchor, tbc::view<std::string_view, tbc::lt::a> path) noexcept;
+      [[nodiscard]] static tbc::val_a<ds::Option<std::string_view>> relativeTo(std::string_view anchor, tbc::val_a<std::string_view> path) noexcept;
 
       [[nodiscard]] static ds::Option<Quoted> quote(std::string_view word);
 
@@ -80,9 +80,9 @@ export {
       static constexpr std::uint32_t ellipsis_columns = 1;
 
       // The runs view the laid out path, region `a`, until the next layout.
-      void layout(tbc::view<std::string_view, tbc::lt::a> path, std::span<const std::uint16_t> positions, std::uint16_t width);
+      void layout(tbc::val_a<std::string_view> path, std::span<const std::uint16_t> positions, std::uint16_t width);
 
-      [[nodiscard]] tbc::view<std::span<const PathLabelRun>, tbc::lt::a> runs() const noexcept;
+      [[nodiscard]] tbc::val_a<std::span<const PathLabelRun>> runs() const noexcept;
 
     private:
       struct Span {
@@ -101,11 +101,11 @@ export {
 
       [[nodiscard]] static PathLabelTone toneAt(const Span& span, std::size_t first, std::size_t last) noexcept;
 
-      void appendSpan(tbc::view<Span, tbc::lt::a> span);
+      void appendSpan(tbc::val_a<Span> span);
 
-      void push(tbc::view<PathLabelRun, tbc::lt::a> run) noexcept;
+      void push(tbc::val_a<PathLabelRun> run) noexcept;
 
-      tbc::view<ds::Array<PathLabelRun, maximum_runs>, tbc::lt::a> runs_{};
+      tbc::val_a<ds::Array<PathLabelRun, maximum_runs>> runs_{};
       std::size_t count_ = 0;
     };
 
@@ -167,7 +167,7 @@ export {
       // The footer places only its own literal hints; the status is measured, not kept.
       // Generic over the caller's measure, so it stays here.
       template <TextColumnMeasure MeasureColumns>
-      [[nodiscard]] TBC_GENERIC static tbc::view<PathPickerFooter, tbc::lt::static_storage> measure(CellRectangle row, std::string_view status, bool mac_style, MeasureColumns measure_columns) {
+      [[nodiscard]] TBC_GENERIC static tbc::val_static<PathPickerFooter> measure(CellRectangle row, std::string_view status, bool mac_style, MeasureColumns measure_columns) {
         PathPickerFooter result;
         const auto& labels = mac_style ? mac_hints : pc_hints;
         std::uint32_t used = measure_columns(status) + status_gap;

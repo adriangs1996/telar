@@ -337,7 +337,7 @@ namespace telar::runtime {
     return entry;
   }
 
-  tbc::view<HistoryEntry, tbc::lt::static_storage> HistoryRows::header(const Statement& row) {
+  tbc::val_static<HistoryEntry> HistoryRows::header(const Statement& row) {
     if (row.integer(0) <= 0 || row.integer(1) <= 0) {
       throw RequestError{FailureCode::internal, "Invalid stored history identity"};
     }

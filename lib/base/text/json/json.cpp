@@ -210,15 +210,15 @@ namespace telar::runtime {
 
   }
 
-  JsonValue::JsonValue(tbc::view<std::string_view, tbc::lt::b> bytes, unsigned maximum_depth)
+  JsonValue::JsonValue(tbc::val_b<std::string_view> bytes, unsigned maximum_depth)
       : bytes_(bytes),
         maximum_depth_(maximum_depth) {}
 
-  tbc::view<std::string_view, tbc::lt::b> JsonValue::encoded() const noexcept {
+  tbc::val_b<std::string_view> JsonValue::encoded() const noexcept {
     return bytes_;
   }
 
-  tbc::view<ds::Option<JsonValue>, tbc::lt::b> JsonValue::field(std::string_view name) const {
+  tbc::val_b<ds::Option<JsonValue>> JsonValue::field(std::string_view name) const {
     auto input = bytes_;
 
     whitespace(input);
@@ -262,7 +262,7 @@ namespace telar::runtime {
     return bytes_ == "true";
   }
 
-  tbc::view<JsonValue, tbc::lt::b> JsonValue::parse(tbc::view<std::string_view, tbc::lt::b> input, unsigned maximum_depth) {
+  tbc::val_b<JsonValue> JsonValue::parse(tbc::val_b<std::string_view> input, unsigned maximum_depth) {
     whitespace(input);
     const auto original = input;
 
@@ -310,7 +310,7 @@ namespace telar::runtime {
     skip(input, 0, maximum_depth);
   }
 
-  tbc::view<std::string_view, tbc::lt::b> JsonValue::stringContents() const {
+  tbc::val_b<std::string_view> JsonValue::stringContents() const {
     auto input = bytes_;
 
     return stringToken(input);
@@ -425,14 +425,14 @@ namespace telar::runtime {
   }
 
   template <Allocator Memory>
-  JsonNode<Memory>::JsonNode(tbc::view<Memory&, tbc::lt::a> memory, JsonKind kind)
+  JsonNode<Memory>::JsonNode(tbc::mut_a<Memory> memory, JsonKind kind)
       : name_(memory),
         text_(memory),
         children_(memory),
         kind_(kind) {}
 
   template <Allocator Memory>
-  auto JsonNode<Memory>::parse(tbc::view<Memory&, tbc::lt::a> memory, std::string_view source) -> tbc::view<JsonNode, tbc::lt::a> {
+  auto JsonNode<Memory>::parse(tbc::mut_a<Memory> memory, std::string_view source) -> tbc::val_a<JsonNode> {
     if (inspectUtf8(source) != Utf8Validation::valid) {
       throw JsonError{};
     }
@@ -545,7 +545,7 @@ namespace telar::runtime {
   }
 
   template <Allocator Memory>
-  auto JsonNode<Memory>::fromValue(tbc::view<Memory&, tbc::lt::a> memory, JsonValue value) -> tbc::view<JsonNode, tbc::lt::a> {
+  auto JsonNode<Memory>::fromValue(tbc::mut_a<Memory> memory, JsonValue value) -> tbc::val_a<JsonNode> {
     const auto encoded = value.encoded();
     const auto kind = encoded.starts_with('{') ? JsonKind::object : encoded.starts_with('[') ? JsonKind::array
                                                                 : encoded.starts_with('"')   ? JsonKind::string

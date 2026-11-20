@@ -32,7 +32,7 @@ export {
       SessionHost sessionHost(AgentProvider provider) const noexcept;
 
       // The arguments joined by spaces into `output`, cut where it ends.
-      tbc::view<std::string_view, tbc::lt::a> joined(tbc::view<std::span<char>, tbc::lt::a> output) const noexcept;
+      tbc::val_a<std::string_view> joined(tbc::val_a<std::span<char>> output) const noexcept;
 
     private:
       static ds::Option<std::string_view> next(std::string_view& remaining) noexcept;
@@ -123,11 +123,11 @@ export {
       IdentifiedProcess identifyGroup(pid_t group, AgentProvider preferred) const noexcept;
       ListeningPorts listeningPorts(pid_t group) const noexcept;
       // Of any user's process the system lets the runtime read; the text views `output`.
-      tbc::view<CommandLine, tbc::lt::a> commandLine(pid_t process, tbc::view<std::span<char>, tbc::lt::a> output) const noexcept;
+      tbc::val_a<CommandLine> commandLine(pid_t process, tbc::val_a<std::span<char>> output) const noexcept;
 
     private:
       // The arguments view the caller's buffer.
-      static tbc::view<ProcessArguments, tbc::lt::a> readArguments(pid_t process, tbc::view<std::span<char>, tbc::lt::a> buffer) noexcept;
+      static tbc::val_a<ProcessArguments> readArguments(pid_t process, tbc::val_a<std::span<char>> buffer) noexcept;
       static FixedText<4096> executable(pid_t process) noexcept;
       static std::size_t groupMembers(pid_t group, std::span<pid_t> members) noexcept;
       IdentifiedProcess identifyProcess(pid_t process) const noexcept;

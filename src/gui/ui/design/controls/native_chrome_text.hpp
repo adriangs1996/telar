@@ -116,7 +116,7 @@ namespace telar::gui::qt {
     fonts::TextLayout<ConcurrentMemory> glyphs_;
     FittedText fit_;
     // The ancestors are watched through this item, which stays where Qt made it.
-    tbc::view<AncestorGeometry, tbc::lt::self> ancestors_;
+    tbc::val_self<AncestorGeometry> ancestors_;
     std::shared_ptr<ResidentFonts> fonts_;
     std::shared_ptr<const FontCollection> collection_;
     QPointer<WindowFontCatalog> catalog_;

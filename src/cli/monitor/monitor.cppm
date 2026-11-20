@@ -60,7 +60,7 @@ export {
       ds::Option<std::uint64_t> count;
 
       // The words after the family, `list` and its options for `telar process list`.
-      static tbc::view<Options, tbc::lt::a> parse(Family family, tbc::view<Arguments, tbc::lt::a> words);
+      static tbc::val_a<Options> parse(Family family, tbc::val_a<Arguments> words);
     };
 
     int run(Memory& memory, const Options& options);

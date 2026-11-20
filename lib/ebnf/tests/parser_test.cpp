@@ -118,7 +118,7 @@ namespace {
   struct InvalidTokenizer {
     std::size_t count;
 
-    auto tokenizeSourceIntoBuffer(tbc::view<std::string_view, tbc::lt::a>, tbc::view<ebnf::parsing_ring_buffer&, tbc::lt::a> buffer, std::size_t) const -> std::size_t {
+    auto tokenizeSourceIntoBuffer(tbc::val_a<std::string_view>, tbc::mut_a<ebnf::parsing_ring_buffer> buffer, std::size_t) const -> std::size_t {
       buffer[0] = ebnf::token{
           .kind = ebnf::token_kind::Identifier,
           .text = {},

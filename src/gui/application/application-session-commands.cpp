@@ -44,7 +44,7 @@ namespace telar::gui::application {
     return change;
   }
 
-  Change Session::executeCommand(const ClientCommand& message, tbc::view<CompleteClientCommand&, tbc::lt::a> reply, ClientCommandHandler& handler) {
+  Change Session::executeCommand(const ClientCommand& message, tbc::mut_a<CompleteClientCommand> reply, ClientCommandHandler& handler) {
     switch (message.action) {
     case ClientAction::layout_get:
       reply.text = workbench::exportLayout(*this);

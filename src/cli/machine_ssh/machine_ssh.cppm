@@ -45,7 +45,7 @@ export {
     // A program and its arguments, each a NUL-terminated text, as exec takes them.
     using Argv = ds::Vec<Text, Memory>;
 
-    tbc::view<Argv, tbc::lt::a> words(tbc::view<Memory&, tbc::lt::a> memory, std::initializer_list<std::string_view> words);
+    tbc::val_a<Argv> words(tbc::mut_a<Memory> memory, std::initializer_list<std::string_view> words);
 
     // Replaces this process with the program.
     [[noreturn]] void replace(std::span<const Text> arguments);
@@ -67,10 +67,10 @@ export {
 
     // Runs a program with `input` on its standard input, keeping the tail of each output stream.
     // Input and output are polled together, so no size of either deadlocks against the child.
-    tbc::view<Output, tbc::lt::a> capture(tbc::view<Memory&, tbc::lt::a> memory, std::span<const Text> arguments, std::string_view input, std::chrono::seconds timeout);
+    tbc::val_a<Output> capture(tbc::mut_a<Memory> memory, std::span<const Text> arguments, std::string_view input, std::chrono::seconds timeout);
 
     // As `capture`, with the contents of an open regular file as the input, or none for -1.
-    tbc::view<Output, tbc::lt::a> captureFile(tbc::view<Memory&, tbc::lt::a> memory, std::span<const Text> arguments, int file, std::chrono::seconds timeout);
+    tbc::val_a<Output> captureFile(tbc::mut_a<Memory> memory, std::span<const Text> arguments, int file, std::chrono::seconds timeout);
 
     // The value as one single-quoted shell word.
     void appendQuoted(Text& output, std::string_view value);
@@ -156,19 +156,19 @@ export {
     inline constexpr auto install_timeout = std::chrono::seconds{900};
     using Discovery = machines::MachineDiscovery<PATH_MAX>;
 
-    tbc::view<Text, tbc::lt::a> decode(tbc::view<Memory&, tbc::lt::a> memory, std::string_view word);
+    tbc::val_a<Text> decode(tbc::mut_a<Memory> memory, std::string_view word);
 
     using launch::Argv;
 
     // The SSH argv that runs `command` there, with a terminal there only when `terminal`.
-    tbc::view<Argv, tbc::lt::a> ssh(tbc::view<Memory&, tbc::lt::a> memory, std::string_view destination, std::string_view command, bool terminal = false);
+    tbc::val_a<Argv> ssh(tbc::mut_a<Memory> memory, std::string_view destination, std::string_view command, bool terminal = false);
 
     // `GIT_SSH_COMMAND` for Git traffic to `destination` over the same options.
-    tbc::view<Text, tbc::lt::a> gitSshCommand(tbc::view<Memory&, tbc::lt::a> memory, std::string_view destination);
+    tbc::val_a<Text> gitSshCommand(tbc::mut_a<Memory> memory, std::string_view destination);
 
     // The shell command that runs `words` as one telar command there.
     template <typename Words>
-    tbc::view<Text, tbc::lt::a> remoteCommand(tbc::view<Memory&, tbc::lt::a> memory, const MachineProfile& profile, const Words& words);
+    tbc::val_a<Text> remoteCommand(tbc::mut_a<Memory> memory, const MachineProfile& profile, const Words& words);
     extern template Text remoteCommand<std::span<const std::string_view>>(Memory& memory, const MachineProfile& profile, const std::span<const std::string_view>& words);
 
     // Runs one telar command on the machine with this terminal's streams and
@@ -182,11 +182,11 @@ export {
     // Runs one telar command on the machine, reading `input` (or nothing), and
     // returns its stdout. Its stderr passes through; a failure throws `failure`.
     template <typename Words>
-    tbc::view<Text, tbc::lt::a> capture(tbc::view<Memory&, tbc::lt::a> memory, const MachineProfile& profile, const Words& words, const char* failure, int input = -1);
+    tbc::val_a<Text> capture(tbc::mut_a<Memory> memory, const MachineProfile& profile, const Words& words, const char* failure, int input = -1);
     extern template Text capture<std::span<const std::string_view>>(Memory& memory, const MachineProfile& profile, const std::span<const std::string_view>& words, const char* failure, int input);
 
     // The saved machine `label` names, or nullopt for this machine's own label.
-    tbc::view<ds::Option<MachineProfile>, tbc::lt::a> resolve(tbc::view<Memory&, tbc::lt::a> memory, std::string_view label);
+    tbc::val_a<ds::Option<MachineProfile>> resolve(tbc::mut_a<Memory> memory, std::string_view label);
 
     MachineError sshFailure(const launch::Output& output);
 
@@ -204,13 +204,13 @@ export {
     // The names of what a filter dropped, each once.
     using Notes = ds::Vec<Text, Memory>;
 
-    tbc::view<Text, tbc::lt::a> rewriteHome(tbc::view<Memory&, tbc::lt::a> memory, std::string_view bytes, std::string_view from, std::string_view to);
+    tbc::val_a<Text> rewriteHome(tbc::mut_a<Memory> memory, std::string_view bytes, std::string_view from, std::string_view to);
 
-    tbc::view<Text, tbc::lt::a> stripJsonc(tbc::view<Memory&, tbc::lt::a> memory, std::string_view bytes);
+    tbc::val_a<Text> stripJsonc(tbc::mut_a<Memory> memory, std::string_view bytes);
 
     void json(Memory& memory, const JsonValue& value, ds::String<Memory>& output, Notes& dropped);
 
-    tbc::view<Text, tbc::lt::a> toml(tbc::view<Memory&, tbc::lt::a> memory, std::string_view bytes, Notes& dropped);
+    tbc::val_a<Text> toml(tbc::mut_a<Memory> memory, std::string_view bytes, Notes& dropped);
 
     ds::Option<std::pair<std::size_t, std::string_view>> findSecret(std::string_view bytes);
 

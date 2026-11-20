@@ -29,8 +29,8 @@ namespace telar::gui::qt {
     ds::Vec<std::uint8_t, SystemAllocator> regular_bytes_;
     ds::Vec<std::uint8_t, SystemAllocator> emphasized_bytes_;
     // The faces read the bytes stored beside them.
-    tbc::view<fonts::Face, tbc::lt::self> regular_;
-    tbc::view<fonts::Face, tbc::lt::self> emphasized_;
+    tbc::val_self<fonts::Face> regular_;
+    tbc::val_self<fonts::Face> emphasized_;
   };
 
 }

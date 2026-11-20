@@ -210,14 +210,14 @@ namespace telar::runtime::cli {
   template AgentCommandPhase choice<AgentCommandPhase, 2>(std::string_view text, const char* error, const ds::Array<std::string_view, 2>& names);
   template AgentBlockedReason choice<AgentBlockedReason, 5>(std::string_view text, const char* error, const ds::Array<std::string_view, 5>& names);
 
-  Cursor::Cursor(tbc::view<Arguments, tbc::lt::a> words) noexcept
+  Cursor::Cursor(tbc::val_a<Arguments> words) noexcept
       : words_(words) {}
 
   bool Cursor::empty() const noexcept {
     return words_.empty();
   }
 
-  tbc::view<ds::Option<std::string_view>, tbc::lt::a> Cursor::next() noexcept {
+  tbc::val_a<ds::Option<std::string_view>> Cursor::next() noexcept {
     if (words_.empty()) {
       return ds::none;
     }
@@ -228,7 +228,7 @@ namespace telar::runtime::cli {
     return word;
   }
 
-  tbc::view<std::string_view, tbc::lt::a> Cursor::take(const char* missing) {
+  tbc::val_a<std::string_view> Cursor::take(const char* missing) {
     const auto word = next();
     if (!word) {
       usage(missing);
@@ -237,7 +237,7 @@ namespace telar::runtime::cli {
     return *word;
   }
 
-  tbc::view<Arguments, tbc::lt::a> Cursor::rest() const noexcept {
+  tbc::val_a<Arguments> Cursor::rest() const noexcept {
     return words_;
   }
 

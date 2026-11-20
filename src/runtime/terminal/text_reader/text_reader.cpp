@@ -14,7 +14,7 @@ import telar.base.ds;
 
 namespace telar::runtime {
 
-  TextMetadataCapture::TextMetadataCapture(tbc::view<ConcurrentMemory&, tbc::lt::a> memory)
+  TextMetadataCapture::TextMetadataCapture(tbc::mut_a<ConcurrentMemory> memory)
       : links_(memory),
         runs_(memory),
         uris_(memory) {
@@ -23,7 +23,7 @@ namespace telar::runtime {
     uris_.reserve(maximum_uri_bytes);
   }
 
-  tbc::view<TextMetadata, tbc::lt::a> TextMetadataCapture::view(tbc::view<std::span<const Byte>, tbc::lt::a> row_flags) const noexcept {
+  tbc::val_a<TextMetadata> TextMetadataCapture::view(tbc::val_a<std::span<const Byte>> row_flags) const noexcept {
     return TextMetadata{.status = status_, .row_flags = row_flags, .links = links_, .runs = runs_, .uris = uris_};
   }
 
@@ -46,7 +46,7 @@ namespace telar::runtime {
     }
   }
 
-  tbc::view<std::string_view, tbc::lt::a> TextMetadataCapture::stringView(tbc::view<GhosttyString, tbc::lt::a> value) noexcept {
+  tbc::val_a<std::string_view> TextMetadataCapture::stringView(tbc::val_a<GhosttyString> value) noexcept {
     return {reinterpret_cast<const char*>(value.ptr), value.len};
   }
 
@@ -62,7 +62,7 @@ namespace telar::runtime {
     return value;
   }
 
-  ds::Option<std::uint16_t> TextMetadataCapture::intern(tbc::view<LinkTable&, tbc::lt::a> table, tbc::view<Identity, tbc::lt::a> identity) {
+  ds::Option<std::uint16_t> TextMetadataCapture::intern(tbc::mut_a<LinkTable> table, tbc::val_a<Identity> identity) {
     auto slot = hash(identity) % table.slots.size();
 
     while (table.slots[slot] != 0) {
@@ -171,12 +171,12 @@ namespace telar::runtime {
     std::ranges::fill(row_revisions.viewMut(), revision);
   }
 
-  TerminalEffects::TerminalEffects(tbc::view<ConcurrentMemory&, tbc::lt::a> memory)
+  TerminalEffects::TerminalEffects(tbc::mut_a<ConcurrentMemory> memory)
       : clipboard(memory),
         document(memory),
         inline_documents(memory) {}
 
-  void TerminalEffects::keepInline(tbc::view<ds::Vec<Byte, ConcurrentMemory>, tbc::lt::a> bytes, tbc::view<TrackedRow, tbc::lt::a> first, tbc::view<TrackedRow, tbc::lt::a> end, bool end_inclusive) {
+  void TerminalEffects::keepInline(tbc::val_a<ds::Vec<Byte, ConcurrentMemory>> bytes, tbc::val_a<TrackedRow> first, tbc::val_a<TrackedRow> end, bool end_inclusive) {
     while (!inline_documents.empty() && (inline_documents.size() >= ::telar::render::max_pane_documents || inline_bytes + bytes.size() > ::telar::render::max_pane_document_bytes)) {
       inline_bytes -= inline_documents.front().bytes.size();
       static_cast<void>(inline_documents.remove(0));
@@ -370,7 +370,7 @@ namespace telar::runtime {
     }
   }
 
-  FrameSync::FrameSync(tbc::view<ConcurrentMemory&, tbc::lt::a> memory, std::uint64_t pane_id)
+  FrameSync::FrameSync(tbc::mut_a<ConcurrentMemory> memory, std::uint64_t pane_id)
       : pane_id_(pane_id),
         baseline_(memory),
         cell_bytes_(memory),
@@ -593,7 +593,7 @@ namespace telar::runtime {
   }
 #endif
 
-  Terminal::Terminal(tbc::view<ConcurrentMemory&, tbc::lt::a> memory, TerminalSize size, TerminalPurpose purpose, tbc::view<std::shared_ptr<PtyResponseQueue>, tbc::lt::a> responses, tbc::view<GraphicsQueryResources, tbc::lt::a> resources)
+  Terminal::Terminal(tbc::mut_a<ConcurrentMemory> memory, TerminalSize size, TerminalPurpose purpose, tbc::val_a<std::shared_ptr<PtyResponseQueue>> responses, tbc::val_a<GraphicsQueryResources> resources)
       : screen(memory),
         effects(memory),
         graphics(memory),
@@ -645,7 +645,7 @@ namespace telar::runtime {
     resize(size);
   }
 
-  tbc::view<std::span<const Byte>, tbc::lt::b> Terminal::encodeKey(GhosttyKey key, GhosttyMods modifiers, tbc::view<std::span<Byte>, tbc::lt::b> destination) {
+  tbc::val_b<std::span<const Byte>> Terminal::encodeKey(GhosttyKey key, GhosttyMods modifiers, tbc::val_b<std::span<Byte>> destination) {
     GhosttyHandle<GhosttyKeyEncoder, ghostty_key_encoder_free> encoder;
     GhosttyHandle<GhosttyKeyEvent, ghostty_key_event_free> event;
 
@@ -937,7 +937,7 @@ namespace telar::runtime {
   }
 #endif
 
-  tbc::view<TerminalMedia*, tbc::lt::b> Terminal::attached(tbc::view<TerminalMedia&, tbc::lt::b> media) const noexcept {
+  tbc::val_b<TerminalMedia*> Terminal::attached(tbc::mut_b<TerminalMedia> media) const noexcept {
     TELAR_ASSERT(media_ == nullptr || media_ == &media);
     return media_ != nullptr ? &media : nullptr;
   }
@@ -1329,11 +1329,11 @@ namespace telar::runtime {
     screen.scroll.offset = static_cast<std::uint32_t>(std::min<std::uint64_t>(scrollbar.offset, std::numeric_limits<std::uint32_t>::max()));
   }
 
-  ScrollbackRows::ScrollbackRows(tbc::view<ConcurrentMemory&, tbc::lt::a> memory)
+  ScrollbackRows::ScrollbackRows(tbc::mut_a<ConcurrentMemory> memory)
       : cells_(memory),
         runs_(memory) {}
 
-  tbc::view<PaneRows, tbc::lt::a> ScrollbackRows::read(tbc::view<Terminal&, tbc::lt::a> terminal, const ReadPaneRows& request) {
+  tbc::val_a<PaneRows> ScrollbackRows::read(tbc::mut_a<Terminal> terminal, const ReadPaneRows& request) {
     terminal.followScrollback();
     terminal.refresh();
     const auto trimmed = terminal.scrollbackTrimmed();

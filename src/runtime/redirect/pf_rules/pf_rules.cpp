@@ -364,7 +364,7 @@ namespace telar::runtime::redirect {
   }
 
   template <Allocator Memory>
-  tbc::view<ds::String<Memory>, tbc::lt::a> pfRules(tbc::view<Memory&, tbc::lt::a> memory, std::span<const Mapping> mappings, const PfScope& scope) {
+  tbc::val_a<ds::String<Memory>> pfRules(tbc::mut_a<Memory> memory, std::span<const Mapping> mappings, const PfScope& scope) {
     const auto uid = scope.uid;
     const auto label = scope.label;
     const auto interface = scope.discovery_interface;

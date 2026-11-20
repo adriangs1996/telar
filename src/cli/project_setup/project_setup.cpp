@@ -37,7 +37,7 @@ namespace telar::runtime::cli::pane_agents {
     });
   }
 
-  void socketOption(tbc::view<Options&, tbc::lt::a> options, Cursor& cursor) {
+  void socketOption(tbc::mut_a<Options> options, Cursor& cursor) {
     const auto value = cursor.take("MissingSocketPath");
 
     if (options.socket) {
@@ -472,7 +472,7 @@ namespace telar::runtime::cli::pane_agents {
   }
 
   template <Allocator Memory>
-  tbc::view<ds::Vec<PaneRecord, Memory>, tbc::lt::a> paneCatalog(tbc::view<Memory&, tbc::lt::a> memory, const char* socket, const Options& options) {
+  tbc::val_a<ds::Vec<PaneRecord, Memory>> paneCatalog(tbc::mut_a<Memory> memory, const char* socket, const Options& options) {
     ControlSession session{memory, socket};
 
     session.receiveTimeout(30);
@@ -550,7 +550,7 @@ namespace telar::runtime::cli::pane_agents {
     throw Failure{"no tracked worktree matches that branch or title", 2};
   }
 
-  tbc::view<AgentSnapshotEntry, tbc::lt::a> resolve(tbc::view<const AgentSnapshot&, tbc::lt::a> snapshot, std::string_view target, ds::Option<std::uint64_t> worktree) {
+  tbc::val_a<AgentSnapshotEntry> resolve(tbc::ref_a<AgentSnapshot> snapshot, std::string_view target, ds::Option<std::uint64_t> worktree) {
     const auto wanted = target == "--current" ? ds::Option{current("TELAR_PANE_ID")} : maybeUnsigned(target);
     ds::Option<AgentSnapshotEntry> found;
 
@@ -862,7 +862,7 @@ namespace telar::runtime::cli::execution {
     return reply.state == ExecutionState::exited || reply.state == ExecutionState::failed;
   }
 
-  tbc::view<ExecutionReply, tbc::lt::a> exchange(tbc::view<ControlSession&, tbc::lt::a> session, ExecutionRequest request) {
+  tbc::val_a<ExecutionReply> exchange(tbc::mut_a<ControlSession> session, ExecutionRequest request) {
     for (;;) {
       try {
         return session.template exchange<ExecutionReply>(request);
@@ -1449,7 +1449,7 @@ namespace telar::runtime::cli::project_setup {
   }
 
   template <Allocator Memory>
-  tbc::view<ds::Vec<ds::String<Memory>, Memory>, tbc::lt::a> recipeArguments(tbc::view<Memory&, tbc::lt::a> memory, std::string_view text) {
+  tbc::val_a<ds::Vec<ds::String<Memory>, Memory>> recipeArguments(tbc::mut_a<Memory> memory, std::string_view text) {
     auto recipe = [&] {
       try {
         return JsonNode<Memory>::parse(memory, text);
@@ -1509,7 +1509,7 @@ namespace telar::runtime::cli::project_setup {
   }
 
   template <Allocator Memory>
-  tbc::view<ds::Option<ds::Vec<ds::String<Memory>, Memory>>, tbc::lt::a> loadRecipe(tbc::view<Memory&, tbc::lt::a> memory, std::string_view cwd, bool authorized) {
+  tbc::val_a<ds::Option<ds::Vec<ds::String<Memory>, Memory>>> loadRecipe(tbc::mut_a<Memory> memory, std::string_view cwd, bool authorized) {
     const auto path = ds::format(memory, "{}/.telar/setup.json", cwd);
     FileDescriptor parent;
     FileDescriptor file;
@@ -1619,7 +1619,7 @@ namespace telar::runtime::cli::project_setup {
     return id;
   }
 
-  tbc::view<ds::Option<std::uint64_t>, tbc::lt::a> prepare(tbc::view<Memory&, tbc::lt::a> memory, ControlSession& session, std::string_view cwd, bool authorized, bool detach) {
+  tbc::val_a<ds::Option<std::uint64_t>> prepare(tbc::mut_a<Memory> memory, ControlSession& session, std::string_view cwd, bool authorized, bool detach) {
     const auto recipe = loadRecipe(memory, cwd, authorized);
     if (!recipe) {
       return ds::none;
@@ -1628,7 +1628,7 @@ namespace telar::runtime::cli::project_setup {
     return execute(session, cwd, recipe->view(), detach);
   }
 
-  tbc::view<ds::Option<std::uint64_t>, tbc::lt::a> prepare(tbc::view<Memory&, tbc::lt::a> memory, std::string_view cwd, bool authorized, bool detach, std::string_view socket) {
+  tbc::val_a<ds::Option<std::uint64_t>> prepare(tbc::mut_a<Memory> memory, std::string_view cwd, bool authorized, bool detach, std::string_view socket) {
     const auto recipe = loadRecipe(memory, cwd, authorized);
     if (!recipe) {
       return ds::none;

@@ -43,7 +43,7 @@ namespace telar::runtime::cli {
     client_.deinit();
   }
 
-  auto RuntimeConnection::receive(tbc::view<std::span<Byte>, tbc::lt::a> buffer) -> tbc::view<std::span<const Byte>, tbc::lt::a> {
+  auto RuntimeConnection::receive(tbc::val_a<std::span<Byte>> buffer) -> tbc::val_a<std::span<const Byte>> {
     return client_.receiveFrame(buffer);
   }
 

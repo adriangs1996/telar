@@ -369,7 +369,7 @@ namespace telar::runtime::cli::monitor {
     }
 
     // The system tool that shows `tool` of a process here, and its arguments.
-    tbc::view<ds::Array<std::string_view, 6>, tbc::lt::a> reviewCommand(ReviewTool tool, tbc::view<std::string_view, tbc::lt::a> pid, tbc::view<std::string_view, tbc::lt::a> predicate) noexcept {
+    tbc::val_a<ds::Array<std::string_view, 6>> reviewCommand(ReviewTool tool, tbc::val_a<std::string_view> pid, tbc::val_a<std::string_view> predicate) noexcept {
 #if defined(__APPLE__)
       switch (tool) {
       case ReviewTool::stack:

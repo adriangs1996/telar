@@ -35,20 +35,20 @@ export namespace telar::gui::features::prompt {
   struct Menu {
     static constexpr std::size_t capacity = 256;
 
-    explicit Menu(tbc::view<Memory&, tbc::lt::a> memory);
+    explicit Menu(tbc::mut_a<Memory> memory);
 
-    tbc::view<Choices, tbc::lt::a> choices;
+    tbc::val_a<Choices> choices;
     std::size_t selected = 0;
     std::size_t begin = 0;
     std::size_t end = 0;
     // Requests to the runtime whose answers join the choices.
-    tbc::view<ds::Vec<std::uint64_t, Memory>, tbc::lt::a> requests;
+    tbc::val_a<ds::Vec<std::uint64_t, Memory>> requests;
     shell::Dialect dialect = shell::Dialect::posix;
     // What the choices are, for the menu's heading: "commands", "branches · git".
-    tbc::view<ds::String<Memory>, tbc::lt::a> label;
+    tbc::val_a<ds::String<Memory>> label;
     // Every choice offered for the word, and the cursor it was offered at: typing narrows them
     // down; erasing past that cursor asks for them again.
-    tbc::view<Choices, tbc::lt::a> all;
+    tbc::val_a<Choices> all;
     std::size_t floor = 0;
     // Every choice for the word arrived: a cut list asks again as typing narrows it.
     bool whole = true;

@@ -420,7 +420,7 @@ namespace telar::runtime {
   }
 
   template <EventLoop Poller, typename Limits, HistoryEventSink History>
-  void MediaService<Poller, Limits, History>::enqueueRetired(tbc::view<RuntimeModel&, tbc::lt::a> model, tbc::view<typename Processor::Request&, tbc::lt::a> request) noexcept {
+  void MediaService<Poller, Limits, History>::enqueueRetired(tbc::mut_a<RuntimeModel> model, tbc::mut_a<typename Processor::Request> request) noexcept {
     auto* link = &model.retired_media;
 
     while (*link && request.count < request.entries.size()) {

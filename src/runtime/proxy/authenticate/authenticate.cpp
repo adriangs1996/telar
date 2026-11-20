@@ -50,7 +50,7 @@ namespace telar::runtime {
     return difference == 0;
   }
 
-  tbc::view<ds::Option<std::string_view>, tbc::lt::a> ProxySecret::formatHexadecimal(tbc::view<std::span<char>, tbc::lt::a> destination) const noexcept {
+  tbc::val_a<ds::Option<std::string_view>> ProxySecret::formatHexadecimal(tbc::val_a<std::span<char>> destination) const noexcept {
     if (destination.size() < hexadecimal_bytes) {
       return ds::none;
     }
@@ -63,7 +63,7 @@ namespace telar::runtime {
     return std::string_view{destination.data(), hexadecimal_bytes};
   }
 
-  tbc::view<ds::Option<std::string_view>, tbc::lt::a> ProxySecret::formatUrl(tbc::view<std::span<char>, tbc::lt::a> destination, std::uint16_t port) const noexcept {
+  tbc::val_a<ds::Option<std::string_view>> ProxySecret::formatUrl(tbc::val_a<std::span<char>> destination, std::uint16_t port) const noexcept {
     constexpr std::string_view prefix = "http://telar:";
     constexpr std::string_view address = "@127.0.0.1:";
     constexpr std::size_t port_digits = 5;
@@ -147,7 +147,7 @@ namespace telar::runtime {
     return ds::none;
   }
 
-  tbc::view<std::string_view, tbc::lt::static_storage> ProxyRejection::response() const noexcept {
+  tbc::val_static<std::string_view> ProxyRejection::response() const noexcept {
     if (reason == Reason::invalid_target) {
       return "HTTP/1.1 400 Bad Request\r\nContent-Length: 0\r\n\r\n";
     }
@@ -156,7 +156,7 @@ namespace telar::runtime {
   }
 
   template <Allocator Memory>
-  tbc::view<ProxyDecision, tbc::lt::a> authenticateProxy(const ProxySecret& secret, bool anonymous_tunnels, const ProxyHostPolicy<Memory>& policy, tbc::view<std::string_view, tbc::lt::a> head) noexcept {
+  tbc::val_a<ProxyDecision> authenticateProxy(const ProxySecret& secret, bool anonymous_tunnels, const ProxyHostPolicy<Memory>& policy, tbc::val_a<std::string_view> head) noexcept {
     if (anonymous_tunnels && !ProxyAuthorization::present(head)) {
       const auto target = ProxyTarget::parse(head);
       if (!target) {
@@ -227,8 +227,8 @@ namespace telar::runtime {
     return secret;
   }
 
-  template tbc::view<ProxyDecision, tbc::lt::a> authenticateProxy<Memory>(const ProxySecret& secret, bool anonymous_tunnels, const ProxyHostPolicy<Memory>& policy, tbc::view<std::string_view, tbc::lt::a> head) noexcept;
-  template tbc::view<ProxyDecision, tbc::lt::a> authenticateProxy<ConcurrentMemory>(const ProxySecret& secret, bool anonymous_tunnels, const ProxyHostPolicy<ConcurrentMemory>& policy, tbc::view<std::string_view, tbc::lt::a> head) noexcept;
+  template tbc::val_a<ProxyDecision> authenticateProxy<Memory>(const ProxySecret& secret, bool anonymous_tunnels, const ProxyHostPolicy<Memory>& policy, tbc::val_a<std::string_view> head) noexcept;
+  template tbc::val_a<ProxyDecision> authenticateProxy<ConcurrentMemory>(const ProxySecret& secret, bool anonymous_tunnels, const ProxyHostPolicy<ConcurrentMemory>& policy, tbc::val_a<std::string_view> head) noexcept;
   template ProxySecret ProxySecretFile::ensure<Memory>(Memory& memory, int directory);
   template ProxySecret ProxySecretFile::ensure<ConcurrentMemory>(ConcurrentMemory& memory, int directory);
 

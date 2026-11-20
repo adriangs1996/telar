@@ -111,7 +111,7 @@ export {
     template <Allocator Memory>
     class TBC_GENERIC SensitiveAllocation {
     public:
-      inline explicit SensitiveAllocation(tbc::view<Memory&, tbc::lt::a> memory, std::size_t size)
+      inline explicit SensitiveAllocation(tbc::mut_a<Memory> memory, std::size_t size)
           : memory_(&memory),
             size_(size) {
         if (size != 0) {
@@ -160,7 +160,7 @@ export {
         sensitive.deallocate(storage_, size_, alignof(std::uint8_t));
       }
 
-      tbc::view<Memory*, tbc::lt::a> memory_;
+      tbc::val_a<Memory*> memory_;
       std::uint8_t* storage_ = nullptr;
       std::size_t size_;
     };

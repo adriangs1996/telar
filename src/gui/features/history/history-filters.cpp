@@ -9,7 +9,7 @@ import telar.base.ds;
 
 namespace telar::gui::features::history {
 
-  tbc::view<HistoryEmpty, tbc::lt::static_storage> HistoryEmpty::derive(const HistoryEmptyOptions& options) {
+  tbc::val_static<HistoryEmpty> HistoryEmpty::derive(const HistoryEmptyOptions& options) {
     HistoryEmpty result;
 
     if (options.phase == HistoryPhase::loading && !options.has_page) {

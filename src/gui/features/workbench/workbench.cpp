@@ -14,7 +14,7 @@ namespace telar::gui::features::workbench {
 
     // The tabs of the workspace `active` shows, in the order it shows them, into `output`, which views
     // them for as long as `tabs` does, region `a`.
-    std::size_t ordered(tbc::view<Tabs, tbc::lt::a> tabs, ds::Option<TabLocation> active, tbc::view<ds::Array<const Tab<Memory>*, maximum_tabs>&, tbc::lt::a> output) noexcept {
+    std::size_t ordered(tbc::val_a<Tabs> tabs, ds::Option<TabLocation> active, tbc::mut_a<ds::Array<const Tab<Memory>*, maximum_tabs>> output) noexcept {
       std::size_t count = 0;
 
       if (!active) {

@@ -69,7 +69,7 @@ namespace telar::gui::qt {
   class TextScene {
   public:
     // The scene paints through the window, region `a`.
-    explicit TextScene(tbc::view<QQuickWindow&, tbc::lt::a> window);
+    explicit TextScene(tbc::mut_a<QQuickWindow> window);
     ~TextScene() = default;
     // The layouts allocate from memory_, so the scene keeps its address.
     TextScene(const TextScene&) = delete;
@@ -86,7 +86,7 @@ namespace telar::gui::qt {
     void appendInline(std::span<const CellValue> cells, std::unique_ptr<QSGNode> node);
     void add(const QString& text, const QFont& font, const QTextCharFormat& format, TextPlacement placement);
     // The result is the text's node, now a child of the parent.
-    tbc::view<QSGNode*, tbc::lt::a> append(tbc::view<QSGNode&, tbc::lt::a> parent, std::span<const CellValue> cells = {});
+    tbc::val_a<QSGNode*> append(tbc::mut_a<QSGNode> parent, std::span<const CellValue> cells = {});
 
   private:
     struct Batch {
@@ -110,7 +110,7 @@ namespace telar::gui::qt {
     void addFallbackCells(const Batch& batch, std::span<const CellValue> cells);
     void addQtText(const QString& text, const QFont& font, const QTextCharFormat& format, TextPlacement placement);
 
-    tbc::view<QQuickWindow&, tbc::lt::a> window_;
+    tbc::mut_a<QQuickWindow> window_;
     SystemAllocator memory_;
     MemoryAdapter<SystemAllocator> adapter_{memory_};
     fonts::TextLayout<ConcurrentMemory> layout_;
@@ -118,8 +118,8 @@ namespace telar::gui::qt {
     ds::Option<Batch> batch_;
     std::shared_ptr<const FontCollection> collection_;
     std::shared_ptr<ResidentFonts> fonts_;
-    tbc::view<std::shared_ptr<ChromeGlyphImages<ResidentFonts, false>>, tbc::lt::a> resident_glyphs_;
-    tbc::view<std::shared_ptr<ChromeGlyphImages<ResidentFonts, true>>, tbc::lt::a> optical_glyphs_;
+    tbc::val_a<std::shared_ptr<ChromeGlyphImages<ResidentFonts, false>>> resident_glyphs_;
+    tbc::val_a<std::shared_ptr<ChromeGlyphImages<ResidentFonts, true>>> optical_glyphs_;
     FontGrid grid_;
     fonts::GlyphRasterization rasterization_;
     QRectF bounds_;

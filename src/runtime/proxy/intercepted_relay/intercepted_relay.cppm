@@ -367,7 +367,7 @@ export {
       // goes on as it is.
       // The slot keeps an allocation of `memory`, region `a`, until the decision is released.
       template <typename Message>
-      TBC_GENERIC bool begin(tbc::view<Memory&, tbc::lt::a> memory, traffic::HttpControl& control, traffic::FlowEvent event, const Message& message) {
+      TBC_GENERIC bool begin(tbc::mut_a<Memory> memory, traffic::HttpControl& control, traffic::FlowEvent event, const Message& message) {
         decision_.emplace(memory, HttpMessageLimits::message_bytes);
         event.bytes = HttpMessageCodec::encodeMessage(decision_.getMut().bytesMut(), message);
         ticket_ = control.interceptHttp(event);
@@ -410,7 +410,7 @@ export {
       traffic::HttpPolicy policy_;
       Time collect_until_{};
       std::uint64_t ticket_ = 0;
-      tbc::view<ds::Option<SensitiveAllocation<Memory>>, tbc::lt::a> decision_;
+      tbc::val_a<ds::Option<SensitiveAllocation<Memory>>> decision_;
     };
 
     extern template class HttpInterceptionSlot<SynchronizedAllocator<BudgetAllocator<ConcurrentMemory>>>;

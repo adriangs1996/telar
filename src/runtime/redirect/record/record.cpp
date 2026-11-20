@@ -70,7 +70,7 @@ namespace telar::runtime::redirect {
   }
 
   template <Allocator Memory>
-  RecordFile<Memory>::RecordFile(tbc::view<Memory&, tbc::lt::a> memory, std::string_view name, RecordLock mode)
+  RecordFile<Memory>::RecordFile(tbc::mut_a<Memory> memory, std::string_view name, RecordLock mode)
       : memory_(memory),
         name_(memory, name) {
     if (name.empty() || name.size() > 64 || name.find_first_not_of("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_") != std::string_view::npos) {
@@ -226,7 +226,7 @@ namespace telar::runtime::redirect {
   }
 
   template <Allocator Memory>
-  Record<Memory>::Record(tbc::view<Memory&, tbc::lt::a> memory, const PfIdentity<Memory>& identity, std::string_view endpoint)
+  Record<Memory>::Record(tbc::mut_a<Memory> memory, const PfIdentity<Memory>& identity, std::string_view endpoint)
       : memory_(memory),
         endpoint_(memory, endpoint),
         file_(memory, identity.label) {}

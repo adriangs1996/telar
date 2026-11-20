@@ -213,7 +213,7 @@ export {
         writeAll(frame_buffer.data(), frame_prefix_size + payload.size());
       }
 
-      tbc::view<std::span<const Byte>, tbc::lt::a> receiveFrame(tbc::view<std::span<Byte>, tbc::lt::a> buffer) _throw(SocketError);
+      tbc::val_a<std::span<const Byte>> receiveFrame(tbc::val_a<std::span<Byte>> buffer) _throw(SocketError);
 
       int descriptor() const noexcept;
 

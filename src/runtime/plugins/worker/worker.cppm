@@ -49,7 +49,7 @@ export {
           : stream_(stream) {}
 
       template <Allocator Memory>
-      inline tbc::view<ds::Option<SensitiveAllocation<Memory>>, tbc::lt::a> receive(tbc::view<Memory&, tbc::lt::a> memory, std::size_t maximum_bytes) {
+      inline tbc::val_a<ds::Option<SensitiveAllocation<Memory>>> receive(tbc::mut_a<Memory> memory, std::size_t maximum_bytes) {
         ds::Array<Byte, Protocol::prefix_bytes> prefix;
         if (!readExact(prefix.viewMut())) {
           return ds::none;
@@ -137,7 +137,7 @@ export {
     // region `a`, and keeps where the effects lie in it; the batch is decoded from there when read.
     template <Allocator Memory>
     struct Result {
-      explicit Result(const ServiceSpec& specification, tbc::view<SensitiveAllocation<Memory>, tbc::lt::a> storage, std::size_t effects_offset, std::size_t effects_size, bool traffic = false);
+      explicit Result(const ServiceSpec& specification, tbc::val_a<SensitiveAllocation<Memory>> storage, std::size_t effects_offset, std::size_t effects_size, bool traffic = false);
 
       // The batch views the result's storage.
       EffectBatch batch() const;
@@ -150,7 +150,7 @@ export {
       std::uint64_t generation;
       std::uint64_t event_id = 0;
       std::size_t batch_count = 0;
-      tbc::view<SensitiveAllocation<Memory>, tbc::lt::a> storage;
+      tbc::val_a<SensitiveAllocation<Memory>> storage;
       bool traffic = false;
 
     private:
@@ -181,7 +181,7 @@ export {
       void activate();
 
       // The queue keeps the results, and what they keep of the allocator: region `a`.
-      void publish(tbc::view<OwnedResult<Memory>, tbc::lt::a> result) noexcept;
+      void publish(tbc::val_a<OwnedResult<Memory>> result) noexcept;
 
       // Generic over the caller's consumer.
       template <typename Consumer>
@@ -201,7 +201,7 @@ export {
       int descriptor() const noexcept;
 
     private:
-      tbc::view<DropChannel<OwnedResult<Memory>, Limits::queue_depth, ChannelPolicy::keep_oldest>, tbc::lt::a> results_;
+      tbc::val_a<DropChannel<OwnedResult<Memory>, Limits::queue_depth, ChannelPolicy::keep_oldest>> results_;
       ds::Option<CompletionSignal> ready_;
     };
 
@@ -262,7 +262,7 @@ export {
 
       // The worker's argv, `executable` first and null last; a trace only in Debug builds.
       // The words view `executable` and the strings `options` names, region `a`.
-      static tbc::view<ds::Array<char*, 7>, tbc::lt::a> arguments(tbc::view<const TapWorkerOptions&, tbc::lt::a> options, tbc::view<const char*, tbc::lt::a> executable) noexcept;
+      static tbc::val_a<ds::Array<char*, 7>> arguments(tbc::ref_a<TapWorkerOptions> options, tbc::val_a<const char*> executable) noexcept;
     };
 
     struct SessionOptions {
@@ -306,8 +306,8 @@ export {
       Memory& memory_;
       PipeProcess process_;
       // The stream reads the process above and the channel frames the stream, so the session stays put.
-      tbc::view<PipeStream<SessionIo>, tbc::lt::self> stream_;
-      tbc::view<FrameChannel<PipeStream<SessionIo>>, tbc::lt::self> channel_;
+      tbc::val_self<PipeStream<SessionIo>> stream_;
+      tbc::val_self<FrameChannel<PipeStream<SessionIo>>> channel_;
       std::chrono::milliseconds timeout_;
       [[maybe_unused]] bool tracing_;
     };
@@ -386,22 +386,22 @@ export {
 
     class TrafficProtocol {
     public:
-      static tbc::view<std::span<const Byte>, tbc::lt::a> setup(tbc::view<std::span<Byte>, tbc::lt::a> output, const ServiceSpec& specification);
+      static tbc::val_a<std::span<const Byte>> setup(tbc::val_a<std::span<Byte>> output, const ServiceSpec& specification);
 
       static ServiceSpec setup(std::span<const Byte> input);
 
-      static tbc::view<std::span<const Byte>, tbc::lt::a> event(tbc::view<std::span<Byte>, tbc::lt::a> output, std::uint64_t event_id, std::uint32_t registration, std::span<const Byte> frame, std::uint64_t dropped = 0);
+      static tbc::val_a<std::span<const Byte>> event(tbc::val_a<std::span<Byte>> output, std::uint64_t event_id, std::uint32_t registration, std::span<const Byte> frame, std::uint64_t dropped = 0);
 
       static TrafficEvent event(std::span<const Byte> input);
 
-      static tbc::view<std::span<const Byte>, tbc::lt::a> controlEvent(tbc::view<std::span<Byte>, tbc::lt::a> output, std::uint64_t event_id, std::uint32_t registration, std::span<const Byte> frame, std::string_view error = {});
+      static tbc::val_a<std::span<const Byte>> controlEvent(tbc::val_a<std::span<Byte>> output, std::uint64_t event_id, std::uint32_t registration, std::span<const Byte> frame, std::string_view error = {});
 
-      static tbc::view<std::span<const Byte>, tbc::lt::a> reply(tbc::view<std::span<Byte>, tbc::lt::a> output, const TrafficReply& reply, const TrafficOutcome& outcome);
+      static tbc::val_a<std::span<const Byte>> reply(tbc::val_a<std::span<Byte>> output, const TrafficReply& reply, const TrafficOutcome& outcome);
 
       static TrafficReply reply(std::span<const Byte> input);
 
       // The registrations land in the reply; the outcome views the input.
-      static tbc::view<TrafficOutcome, tbc::lt::a> readReply(tbc::view<std::span<const Byte>, tbc::lt::a> input, TrafficReply& reply);
+      static tbc::val_a<TrafficOutcome> readReply(tbc::val_a<std::span<const Byte>> input, TrafficReply& reply);
 
     private:
       static void write(FrameWriter& writer, const TrafficRegistration& registration);
@@ -420,16 +420,16 @@ export {
       using Secure = ErasingAllocator<ConcurrentMemory>;
 
       struct Connection {
-        explicit Connection(tbc::view<Secure&, tbc::lt::a> memory, TrafficRegistration registration, traffic::PackageChannel channel);
+        explicit Connection(tbc::mut_a<Secure> memory, TrafficRegistration registration, traffic::PackageChannel channel);
 
         TrafficRegistration registration;
         FileDescriptor socket;
         std::uint64_t owner;
-        tbc::view<ByteQueue<Secure>, tbc::lt::a> output;
+        tbc::val_a<ByteQueue<Secure>> output;
         ds::Array<Byte, traffic::Protocol::prefix_bytes> prefix;
         std::size_t prefix_bytes = 0;
         std::uint64_t dropped = 0;
-        tbc::view<ds::Option<SensitiveAllocation<ConcurrentMemory>>, tbc::lt::a> input;
+        tbc::val_a<ds::Option<SensitiveAllocation<ConcurrentMemory>>> input;
         std::size_t received = 0;
         bool registration_ack;
         bool ready = false;
@@ -441,7 +441,7 @@ export {
     public:
       // The bridge keeps the allocator and the port, region `a`, and its own copy of the specification. The
       // session it talks to is the worker's, lent to each call.
-      explicit TrafficBridge(tbc::view<ConcurrentMemory&, tbc::lt::a> memory, const ServiceSpec& specification, tbc::view<traffic::PackagePort&, tbc::lt::a> port);
+      explicit TrafficBridge(tbc::mut_a<ConcurrentMemory> memory, const ServiceSpec& specification, tbc::mut_a<traffic::PackagePort> port);
 
       void attach(Session<ConcurrentMemory>& session);
 
@@ -730,21 +730,21 @@ export {
       static Connection* find(std::span<ds::Option<Connection>> connections, std::uint32_t id) noexcept;
 
       // What the reply decided views the input, region `a`; its registrations land in the bridge.
-      tbc::view<TrafficOutcome, tbc::lt::a> apply(std::uint64_t event_id, tbc::view<std::span<const Byte>, tbc::lt::a> input);
+      tbc::val_a<TrafficOutcome> apply(std::uint64_t event_id, tbc::val_a<std::span<const Byte>> input);
 
       static void enqueue(Connection& connection, std::span<const Byte> frame);
 
       static void write(Connection& connection);
 
       // A complete frame leaves the connection; it borrows only the allocator.
-      static tbc::view<ds::Option<SensitiveAllocation<ConcurrentMemory>>, tbc::lt::a> read(tbc::view<ConcurrentMemory&, tbc::lt::a> memory, Connection& connection);
+      static tbc::val_a<ds::Option<SensitiveAllocation<ConcurrentMemory>>> read(tbc::mut_a<ConcurrentMemory> memory, Connection& connection);
 
-      tbc::view<ConcurrentMemory&, tbc::lt::a> memory_;
-      tbc::view<Secure, tbc::lt::a> secure_;
+      tbc::mut_a<ConcurrentMemory> memory_;
+      tbc::val_a<Secure> secure_;
       ServiceSpec specification_;
-      tbc::view<traffic::PackagePort&, tbc::lt::a> port_;
-      tbc::view<ds::Array<ds::Option<Connection>, TrafficLimits::registrations>, tbc::lt::a> connections_;
-      tbc::view<ds::Box<TrafficReply, ConcurrentMemory>, tbc::lt::a> reply_;
+      tbc::mut_a<traffic::PackagePort> port_;
+      tbc::val_a<ds::Array<ds::Option<Connection>, TrafficLimits::registrations>> connections_;
+      tbc::val_a<ds::Box<TrafficReply, ConcurrentMemory>> reply_;
       std::uint64_t next_event_ = 0;
       std::uint64_t errors_ = 0;
       std::uint64_t dropped_observations_ = 0;
@@ -800,7 +800,7 @@ export {
       bool revoked() const noexcept;
 
       // The worker queues the exchange, and what it keeps of the allocator: region `a`.
-      void submit(tbc::view<Shared, tbc::lt::a> exchange) noexcept;
+      void submit(tbc::val_a<Shared> exchange) noexcept;
 
       WorkerMetrics metrics() const noexcept;
       const ServiceSpec& specification() const noexcept;
@@ -831,7 +831,7 @@ export {
       ds::String<ConcurrentMemory> entry_;
       ds::String<ConcurrentMemory> trace_path_;
       [[maybe_unused]] std::uint64_t session_number_ = 0;
-      tbc::view<DropChannel<Shared, Limits::queue_depth, ChannelPolicy::keep_newest>, tbc::lt::a> requests_;
+      tbc::val_a<DropChannel<Shared, Limits::queue_depth, ChannelPolicy::keep_newest>> requests_;
       CancellationSignal cancellation_;
       ds::Option<Session<ConcurrentMemory>> session_;
       ds::Box<TrafficBridge, ConcurrentMemory> bridge_{};

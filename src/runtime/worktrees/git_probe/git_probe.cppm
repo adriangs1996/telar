@@ -127,7 +127,7 @@ export {
       std::atomic<bool> cancelled_{false};
       GitStatusReader status_;
       // Watches cancelled_.
-      tbc::view<GitBaseDistance, tbc::lt::self> distance_;
+      tbc::val_self<GitBaseDistance> distance_;
     };
 
   }

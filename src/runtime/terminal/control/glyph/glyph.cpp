@@ -15,7 +15,7 @@ namespace telar::runtime::control {
     return result ? ds::Option{*result} : ds::none;
   }
 
-  tbc::view<ds::Option<std::string_view>, tbc::lt::a> glyphOption(tbc::view<std::string_view, tbc::lt::a> options, std::string_view key) noexcept {
+  tbc::val_a<ds::Option<std::string_view>> glyphOption(tbc::val_a<std::string_view> options, std::string_view key) noexcept {
     ds::Option<std::string_view> result;
 
     while (!options.empty()) {

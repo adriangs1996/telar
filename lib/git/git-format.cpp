@@ -63,7 +63,7 @@ namespace telar::git {
     return {bytes.data(), size};
   }
 
-  tbc::view<std::string_view, tbc::lt::a> ObjectId::hex(tbc::view<std::span<char, 2 * maximum_hash_size>, tbc::lt::a> buffer, std::size_t digits) const noexcept {
+  tbc::val_a<std::string_view> ObjectId::hex(tbc::val_a<std::span<char, 2 * maximum_hash_size>> buffer, std::size_t digits) const noexcept {
     constexpr std::string_view alphabet = "0123456789abcdef";
 
     digits = std::min(digits, std::size_t{size} * 2);
@@ -230,7 +230,7 @@ namespace telar::git {
     return true;
   }
 
-  ReadStatus readSmall(int directory, const char* name, tbc::view<std::span<char>, tbc::lt::a> buffer, tbc::view<std::string_view&, tbc::lt::a> contents, Fingerprint* fingerprint) noexcept {
+  ReadStatus readSmall(int directory, const char* name, tbc::val_a<std::span<char>> buffer, tbc::mut_a<std::string_view> contents, Fingerprint* fingerprint) noexcept {
     FileDescriptor file;
     struct stat status{};
     if (const auto opened = openRegular(directory, name, file, status); opened != ReadStatus::ok) {

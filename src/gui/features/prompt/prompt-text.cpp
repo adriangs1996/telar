@@ -6,7 +6,7 @@ import telar.tbc;
 
 namespace telar::gui::features::prompt {
 
-  Text::Text(tbc::view<Memory&, tbc::lt::a> memory)
+  Text::Text(tbc::mut_a<Memory> memory)
       : bytes_(memory),
         undo_(memory),
         redo_(memory) {}

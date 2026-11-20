@@ -12,7 +12,7 @@ import telar.base.ds;
 namespace telar::gui::features::activity {
 
   template <Allocator Memory>
-  tbc::view<ProjectActivity, tbc::lt::a> ProjectActivity::derive(tbc::view<const WorkspaceReplica<Memory>&, tbc::lt::a> workspaces, std::span<const Agent<Memory>> agents, std::uint64_t project) noexcept {
+  tbc::val_a<ProjectActivity> ProjectActivity::derive(tbc::ref_a<WorkspaceReplica<Memory>> workspaces, std::span<const Agent<Memory>> agents, std::uint64_t project) noexcept {
     ProjectActivity result;
 
     result.worktrees = static_cast<std::size_t>(std::ranges::count(workspaces.worktrees(), project, &Worktree<Memory>::source));
@@ -43,7 +43,7 @@ namespace telar::gui::features::activity {
     return result;
   }
 
-  tbc::view<ds::Option<std::string_view>, tbc::lt::a> ProjectActivity::summary(tbc::view<Text&, tbc::lt::a> storage) const {
+  tbc::val_a<ds::Option<std::string_view>> ProjectActivity::summary(tbc::mut_a<Text> storage) const {
     storage.truncate(0);
     if (worktrees == 0 || !path) {
       return ds::none;
@@ -199,7 +199,7 @@ namespace telar::gui::features::activity {
   }
 
   template <Allocator Memory>
-  tbc::view<std::string_view, tbc::lt::static_storage> TaskCardLabels::commandState(const Worktree<Memory>& task, bool connected) noexcept {
+  tbc::val_static<std::string_view> TaskCardLabels::commandState(const Worktree<Memory>& task, bool connected) noexcept {
     if (!connected) {
       return "offline · last known";
     }
@@ -215,7 +215,7 @@ namespace telar::gui::features::activity {
   }
 
   template <Allocator Memory>
-  tbc::view<std::string_view, tbc::lt::a> TaskCardLabels::commandFacts(std::string_view machine, const Worktree<Memory>& task, bool connected, tbc::view<Text&, tbc::lt::a> storage) {
+  tbc::val_a<std::string_view> TaskCardLabels::commandFacts(std::string_view machine, const Worktree<Memory>& task, bool connected, tbc::mut_a<Text> storage) {
     const auto status = commandState(task, connected);
 
     storage.truncate(0);
@@ -247,17 +247,17 @@ namespace telar::gui::features::activity {
     append(storage, {digits.data(), static_cast<std::size_t>(result.ptr - digits.data())});
   }
 
-  template tbc::view<ProjectActivity, tbc::lt::a> ProjectActivity::derive<Memory>(tbc::view<const WorkspaceReplica<Memory>&, tbc::lt::a> workspaces, std::span<const Agent<Memory>> agents, std::uint64_t project) noexcept;
-  template tbc::view<ProjectActivity, tbc::lt::a> ProjectActivity::derive<ConcurrentMemory>(tbc::view<const WorkspaceReplica<ConcurrentMemory>&, tbc::lt::a> workspaces, std::span<const Agent<ConcurrentMemory>> agents, std::uint64_t project) noexcept;
+  template tbc::val_a<ProjectActivity> ProjectActivity::derive<Memory>(tbc::ref_a<WorkspaceReplica<Memory>> workspaces, std::span<const Agent<Memory>> agents, std::uint64_t project) noexcept;
+  template tbc::val_a<ProjectActivity> ProjectActivity::derive<ConcurrentMemory>(tbc::ref_a<WorkspaceReplica<ConcurrentMemory>> workspaces, std::span<const Agent<ConcurrentMemory>> agents, std::uint64_t project) noexcept;
   template TabActivity TabActivity::derive<Memory>(const Tab<Memory>& tab, PaneProgressState focused, std::span<const Agent<Memory>> agents, bool selected) noexcept;
   template TabActivity TabActivity::derive<ConcurrentMemory>(const Tab<ConcurrentMemory>& tab, PaneProgressState focused, std::span<const Agent<ConcurrentMemory>> agents, bool selected) noexcept;
   template TaskCardLabels::Facts TaskCardLabels::facts<Memory>(const Worktree<Memory>& task);
   template TaskCardLabels::Facts TaskCardLabels::facts<ConcurrentMemory>(const Worktree<ConcurrentMemory>& task);
   template TaskCardLabels::Activity TaskCardLabels::activity<Memory>(const Agent<Memory>& agent) noexcept;
   template TaskCardLabels::Activity TaskCardLabels::activity<ConcurrentMemory>(const Agent<ConcurrentMemory>& agent) noexcept;
-  template tbc::view<std::string_view, tbc::lt::static_storage> TaskCardLabels::commandState<Memory>(const Worktree<Memory>& task, bool connected) noexcept;
-  template tbc::view<std::string_view, tbc::lt::static_storage> TaskCardLabels::commandState<ConcurrentMemory>(const Worktree<ConcurrentMemory>& task, bool connected) noexcept;
-  template tbc::view<std::string_view, tbc::lt::a> TaskCardLabels::commandFacts<Memory>(std::string_view machine, const Worktree<Memory>& task, bool connected, tbc::view<TaskCardLabels::Text&, tbc::lt::a> storage);
-  template tbc::view<std::string_view, tbc::lt::a> TaskCardLabels::commandFacts<ConcurrentMemory>(std::string_view machine, const Worktree<ConcurrentMemory>& task, bool connected, tbc::view<TaskCardLabels::Text&, tbc::lt::a> storage);
+  template tbc::val_static<std::string_view> TaskCardLabels::commandState<Memory>(const Worktree<Memory>& task, bool connected) noexcept;
+  template tbc::val_static<std::string_view> TaskCardLabels::commandState<ConcurrentMemory>(const Worktree<ConcurrentMemory>& task, bool connected) noexcept;
+  template tbc::val_a<std::string_view> TaskCardLabels::commandFacts<Memory>(std::string_view machine, const Worktree<Memory>& task, bool connected, tbc::mut_a<TaskCardLabels::Text> storage);
+  template tbc::val_a<std::string_view> TaskCardLabels::commandFacts<ConcurrentMemory>(std::string_view machine, const Worktree<ConcurrentMemory>& task, bool connected, tbc::mut_a<TaskCardLabels::Text> storage);
 
 }

@@ -231,7 +231,7 @@ namespace telar::runtime {
   template class PathIndexStorage<SystemAllocator>;
   template class PathIndexStorage<ConcurrentMemory>;
 
-  PathIndexBuilder::PathIndexBuilder(tbc::view<ConcurrentMemory&, tbc::lt::a> memory, tbc::view<PathIndexStorage<ConcurrentMemory>&, tbc::lt::a> storage)
+  PathIndexBuilder::PathIndexBuilder(tbc::mut_a<ConcurrentMemory> memory, tbc::mut_a<PathIndexStorage<ConcurrentMemory>> storage)
       : memory_(memory),
         storage_(storage) {}
 
@@ -295,7 +295,7 @@ namespace telar::runtime {
     }
   }
 
-  bool PathIndexBuilder::appendTracked(std::string_view relative, tbc::view<Directories&, tbc::lt::a> directories) {
+  bool PathIndexBuilder::appendTracked(std::string_view relative, tbc::mut_a<Directories> directories) {
     if (!acceptable(relative)) {
       return true;
     }

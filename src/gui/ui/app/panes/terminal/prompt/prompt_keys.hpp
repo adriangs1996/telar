@@ -18,7 +18,7 @@ namespace telar::gui::qt {
   // A key for telar's command editor, from the same normalized key the terminal would encode.
   // `text` keeps the typed characters alive while the editor reads them. Keys the editor has no
   // use for, and every combination with Command (super), stay with the terminal and bindings.
-  inline tbc::view<ds::Option<application::prompt::KeyPress>, tbc::lt::a> promptKey(const QKeyEvent& event, tbc::view<QByteArray&, tbc::lt::a> text) {
+  inline tbc::val_a<ds::Option<application::prompt::KeyPress>> promptKey(const QKeyEvent& event, tbc::mut_a<QByteArray> text) {
     const auto key = NativeKeyAdapter::terminalKey(event);
     if (!key || key->has(KeyChord::Modifier::super)) {
       return ds::none;

@@ -70,7 +70,7 @@ namespace telar::gui::qt {
     SystemAllocator memory_;
     MemoryAdapter<SystemAllocator> adapter_{memory_};
     fonts::IconLayout<ConcurrentMemory> layout_;
-    tbc::view<AncestorGeometry, tbc::lt::self> ancestors_;
+    tbc::val_self<AncestorGeometry> ancestors_;
     std::shared_ptr<const FontAsset> source_;
     std::shared_ptr<ResidentFonts> fonts_;
     QString glyph_;

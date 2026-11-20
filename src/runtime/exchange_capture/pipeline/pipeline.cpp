@@ -9,11 +9,11 @@ namespace telar::runtime {
     return std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
   }
 
-  CaptureJoiner::CaptureJoiner(tbc::view<ConcurrentMemory&, tbc::lt::a> memory, std::chrono::milliseconds timeout) noexcept
+  CaptureJoiner::CaptureJoiner(tbc::mut_a<ConcurrentMemory> memory, std::chrono::milliseconds timeout) noexcept
       : memory_(memory),
         timeout_ms_(timeout.count()) {}
 
-  auto CaptureJoiner::push(std::int64_t now_ms, tbc::view<Half, tbc::lt::a> half) noexcept -> tbc::view<Result, tbc::lt::a> {
+  auto CaptureJoiner::push(std::int64_t now_ms, tbc::val_a<Half> half) noexcept -> tbc::val_a<Result> {
     Result result{State::pending, CapturedExchange{memory_}};
     const auto existing = find(half->key);
     if (existing) {
@@ -46,7 +46,7 @@ namespace telar::runtime {
     return result;
   }
 
-  tbc::view<ds::Option<CapturedExchange>, tbc::lt::a> CaptureJoiner::expire(std::int64_t now_ms) noexcept {
+  tbc::val_a<ds::Option<CapturedExchange>> CaptureJoiner::expire(std::int64_t now_ms) noexcept {
     ds::Option<std::size_t> expired;
 
     occupied_.forEach([&](std::size_t index) {

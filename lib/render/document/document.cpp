@@ -304,7 +304,7 @@ namespace telar::render {
       return DecodeError::none;
     }
 
-    tbc::view<std::string_view, tbc::lt::a> text(tbc::view<std::span<const std::uint8_t>, tbc::lt::a> input, const Counts& counts) noexcept {
+    tbc::val_a<std::string_view> text(tbc::val_a<std::span<const std::uint8_t>> input, const Counts& counts) noexcept {
       const auto bytes = input.last(counts.text);
 
       return {reinterpret_cast<const char*>(bytes.data()), bytes.size()};

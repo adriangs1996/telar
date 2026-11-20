@@ -7,7 +7,7 @@ import telar.base.ds;
 
 namespace telar::runtime::plugins {
 
-  tbc::view<std::span<const Byte>, tbc::lt::a> Protocol::encodeExchange(tbc::view<std::span<Byte>, tbc::lt::a> output, ExchangeIdentity identity, const CapturedExchange& exchange, std::size_t part_limit) {
+  tbc::val_a<std::span<const Byte>> Protocol::encodeExchange(tbc::val_a<std::span<Byte>> output, ExchangeIdentity identity, const CapturedExchange& exchange, std::size_t part_limit) {
     FrameWriter writer{output};
 
     writeExchange(writer, identity, exchange, part_limit);
@@ -42,7 +42,7 @@ namespace telar::runtime::plugins {
     return exchange;
   }
 
-  tbc::view<std::span<const Byte>, tbc::lt::a> Protocol::encodeEffects(tbc::view<std::span<Byte>, tbc::lt::a> output, std::uint64_t event_id, const EffectBatch& batch) {
+  tbc::val_a<std::span<const Byte>> Protocol::encodeEffects(tbc::val_a<std::span<Byte>> output, std::uint64_t event_id, const EffectBatch& batch) {
     if (batch.count > Limits::effects) {
       throw EncodingError{"Tap returned too many effects"};
     }
@@ -87,7 +87,7 @@ namespace telar::runtime::plugins {
     return result;
   }
 
-  tbc::view<std::span<const Byte>, tbc::lt::a> Protocol::encodeError(tbc::view<std::span<Byte>, tbc::lt::a> output, std::uint64_t event_id, std::string_view message) {
+  tbc::val_a<std::span<const Byte>> Protocol::encodeError(tbc::val_a<std::span<Byte>> output, std::uint64_t event_id, std::string_view message) {
     FrameWriter writer{output};
 
     writer.tag(FrameKind::error);
@@ -159,7 +159,7 @@ namespace telar::runtime::plugins {
     writer.timestamp(half->finished_at_ms);
   }
 
-  tbc::view<ds::Option<HalfView>, tbc::lt::a> Protocol::readHalf(FrameReader& reader) {
+  tbc::val_a<ds::Option<HalfView>> Protocol::readHalf(FrameReader& reader) {
     if (!reader.boolean()) {
       return ds::none;
     }

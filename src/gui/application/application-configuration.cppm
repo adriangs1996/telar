@@ -96,7 +96,7 @@ export {
     class ConfigurationGeneration {
     public:
       // The generation allocates from memory, region `a`, and copies its source.
-      explicit ConfigurationGeneration(tbc::view<Memory&, tbc::lt::a> memory, ConfigurationSourceText source);
+      explicit ConfigurationGeneration(tbc::mut_a<Memory> memory, ConfigurationSourceText source);
 
       [[nodiscard]] const Configuration& configuration() const noexcept;
 
@@ -118,7 +118,7 @@ export {
       // Instantiated for the bar's and the panel's capacities.
       template <features::components::Capacity Bounds>
       // The copy allocates from memory, region `b`.
-      [[nodiscard]] tbc::view<ds::Box<features::components::RenderedContent<Bounds, Memory>, Memory>, tbc::lt::b> copied(tbc::view<Memory&, tbc::lt::b> memory, const features::components::Content<Bounds>& content) const;
+      [[nodiscard]] tbc::val_b<ds::Box<features::components::RenderedContent<Bounds, Memory>, Memory>> copied(tbc::mut_b<Memory> memory, const features::components::Content<Bounds>& content) const;
 
       [[nodiscard]] features::components::ResolvedAction resolve(BindingAction action) const;
 
@@ -224,7 +224,7 @@ export {
       template <typename Consumer>
       auto withDefinitions(Consumer&& consume) const;
 
-      void readConfiguration(tbc::view<Memory&, tbc::lt::a> memory, const features::plugins::PluginOverrides* overrides);
+      void readConfiguration(tbc::mut_a<Memory> memory, const features::plugins::PluginOverrides* overrides);
 
       void removeDisabledPluginBindings(const features::plugins::PluginOverrides& overrides);
 
@@ -242,14 +242,14 @@ export {
 
       BindingEffects effects(const runtime::lua::Value& result, BindingActionReader& reader);
 
-      tbc::view<Memory&, tbc::lt::a> memory_;
-      tbc::view<runtime::lua::Vm<Memory>, tbc::lt::a> machine_;
-      tbc::view<ds::Box<runtime::config::RuntimeValues<Memory>, Memory>, tbc::lt::a> runtime_;
-      tbc::view<ds::Box<ComponentConfiguration, Memory>, tbc::lt::a> components_;
+      tbc::mut_a<Memory> memory_;
+      tbc::val_a<runtime::lua::Vm<Memory>> machine_;
+      tbc::val_a<ds::Box<runtime::config::RuntimeValues<Memory>, Memory>> runtime_;
+      tbc::val_a<ds::Box<ComponentConfiguration, Memory>> components_;
       ds::Option<runtime::config::LocalModules> modules_;
       runtime::config::LimitNotices notices_;
       runtime::config::RetainedClientValidationState client_state_;
-      tbc::view<ActionDescriptions<Memory>, tbc::lt::a> descriptions_;
+      tbc::val_a<ActionDescriptions<Memory>> descriptions_;
       runtime::FixedText<maximum_profile_bytes> profile_;
       Configuration configuration_;
       InputConfiguration input_;
@@ -258,16 +258,16 @@ export {
       int root_reference_ = LUA_NOREF;
       ds::Array<int, BindingEffects::maximum_effects> transient_references_{};
       std::size_t transient_count_ = 0;
-      tbc::view<ds::Vec<ElementHandlers, Memory>, tbc::lt::a> element_handlers_{memory_};
+      tbc::val_a<ds::Vec<ElementHandlers, Memory>> element_handlers_{memory_};
     };
 
     extern template class ConfigurationGeneration<telar::Memory>;
     extern template class ConfigurationGeneration<telar::ConcurrentMemory>;
 
-    extern template tbc::view<ds::Box<features::components::RenderedContent<features::components::BarContent::capacity, telar::Memory>, telar::Memory>, tbc::lt::b> ConfigurationGeneration<telar::Memory>::copied<features::components::BarContent::capacity>(tbc::view<telar::Memory&, tbc::lt::b> memory, const features::components::Content<features::components::BarContent::capacity>& content) const;
-    extern template tbc::view<ds::Box<features::components::RenderedContent<features::components::PanelContent::capacity, telar::Memory>, telar::Memory>, tbc::lt::b> ConfigurationGeneration<telar::Memory>::copied<features::components::PanelContent::capacity>(tbc::view<telar::Memory&, tbc::lt::b> memory, const features::components::Content<features::components::PanelContent::capacity>& content) const;
-    extern template tbc::view<ds::Box<features::components::RenderedContent<features::components::BarContent::capacity, telar::ConcurrentMemory>, telar::ConcurrentMemory>, tbc::lt::b> ConfigurationGeneration<telar::ConcurrentMemory>::copied<features::components::BarContent::capacity>(tbc::view<telar::ConcurrentMemory&, tbc::lt::b> memory, const features::components::Content<features::components::BarContent::capacity>& content) const;
-    extern template tbc::view<ds::Box<features::components::RenderedContent<features::components::PanelContent::capacity, telar::ConcurrentMemory>, telar::ConcurrentMemory>, tbc::lt::b> ConfigurationGeneration<telar::ConcurrentMemory>::copied<features::components::PanelContent::capacity>(tbc::view<telar::ConcurrentMemory&, tbc::lt::b> memory, const features::components::Content<features::components::PanelContent::capacity>& content) const;
+    extern template tbc::val_b<ds::Box<features::components::RenderedContent<features::components::BarContent::capacity, telar::Memory>, telar::Memory>> ConfigurationGeneration<telar::Memory>::copied<features::components::BarContent::capacity>(tbc::mut_b<telar::Memory> memory, const features::components::Content<features::components::BarContent::capacity>& content) const;
+    extern template tbc::val_b<ds::Box<features::components::RenderedContent<features::components::PanelContent::capacity, telar::Memory>, telar::Memory>> ConfigurationGeneration<telar::Memory>::copied<features::components::PanelContent::capacity>(tbc::mut_b<telar::Memory> memory, const features::components::Content<features::components::PanelContent::capacity>& content) const;
+    extern template tbc::val_b<ds::Box<features::components::RenderedContent<features::components::BarContent::capacity, telar::ConcurrentMemory>, telar::ConcurrentMemory>> ConfigurationGeneration<telar::ConcurrentMemory>::copied<features::components::BarContent::capacity>(tbc::mut_b<telar::ConcurrentMemory> memory, const features::components::Content<features::components::BarContent::capacity>& content) const;
+    extern template tbc::val_b<ds::Box<features::components::RenderedContent<features::components::PanelContent::capacity, telar::ConcurrentMemory>, telar::ConcurrentMemory>> ConfigurationGeneration<telar::ConcurrentMemory>::copied<features::components::PanelContent::capacity>(tbc::mut_b<telar::ConcurrentMemory> memory, const features::components::Content<features::components::PanelContent::capacity>& content) const;
 
   }
 }
@@ -288,7 +288,7 @@ export {
     class ClientQuery {
     public:
       // Each query is written into the output, region `a`.
-      [[nodiscard]] static tbc::view<std::string_view, tbc::lt::a> write(const Configuration& configuration, const ClientQueryContext& context, tbc::view<std::span<char>, tbc::lt::a> output);
+      [[nodiscard]] static tbc::val_a<std::string_view> write(const Configuration& configuration, const ClientQueryContext& context, tbc::val_a<std::span<char>> output);
 
     private:
       static void writeOptionalBytes(JsonWriter& writer, ds::Option<std::string_view> text);
@@ -327,15 +327,15 @@ export namespace telar::gui::application::configuration {
   // the client's state in `context`, into the output, region `a`. `commands` holds the command
   // tabs the generation's bindings name.
   template <Allocator Memory>
-  [[nodiscard]] tbc::view<std::string_view, tbc::lt::a> query(
+  [[nodiscard]] tbc::val_a<std::string_view> query(
       const ConfigurationGeneration<Memory>& generation,
       const runtime::config::RetainedCommandTabRegistry& commands,
       ConfigurationQuery query,
       const ClientQueryContext& context,
-      tbc::view<std::span<char>, tbc::lt::a> output
+      tbc::val_a<std::span<char>> output
   );
 
-  extern template tbc::view<std::string_view, tbc::lt::a> query<telar::Memory>(const ConfigurationGeneration<telar::Memory>& generation, const runtime::config::RetainedCommandTabRegistry& commands, ConfigurationQuery query, const ClientQueryContext& context, tbc::view<std::span<char>, tbc::lt::a> output);
-  extern template tbc::view<std::string_view, tbc::lt::a> query<telar::ConcurrentMemory>(const ConfigurationGeneration<telar::ConcurrentMemory>& generation, const runtime::config::RetainedCommandTabRegistry& commands, ConfigurationQuery query, const ClientQueryContext& context, tbc::view<std::span<char>, tbc::lt::a> output);
+  extern template tbc::val_a<std::string_view> query<telar::Memory>(const ConfigurationGeneration<telar::Memory>& generation, const runtime::config::RetainedCommandTabRegistry& commands, ConfigurationQuery query, const ClientQueryContext& context, tbc::val_a<std::span<char>> output);
+  extern template tbc::val_a<std::string_view> query<telar::ConcurrentMemory>(const ConfigurationGeneration<telar::ConcurrentMemory>& generation, const runtime::config::RetainedCommandTabRegistry& commands, ConfigurationQuery query, const ClientQueryContext& context, tbc::val_a<std::span<char>> output);
 
 }

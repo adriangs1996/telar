@@ -125,7 +125,7 @@ export {
       Rect meta;
 
       // The text of a shown line of the command the card was measured over.
-      [[nodiscard]] static tbc::view<std::string_view, tbc::lt::a> line(tbc::view<std::string_view, tbc::lt::a> command, HistoryCardLine line) noexcept;
+      [[nodiscard]] static tbc::val_a<std::string_view> line(tbc::val_a<std::string_view> command, HistoryCardLine line) noexcept;
 
       // The card keeps where its lines lie in the command, so it views nothing the caller may replace.
       [[nodiscard]] static HistoryCard measure(const HistoryRowGeometry& row, ChromeMetrics chrome, HistoryCardMetrics metrics, std::string_view command) noexcept;

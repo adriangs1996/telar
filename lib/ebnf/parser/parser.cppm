@@ -123,11 +123,11 @@ export {
       Tokenizer tokenizer_;
 
       // The tokens and the tree view the source being parsed, region `a`.
-      tbc::view<parsing_ring_buffer, tbc::lt::a> tokens_;
+      tbc::val_a<parsing_ring_buffer> tokens_;
       std::size_t token_count_{0};
       std::size_t cursor_{0};
       std::size_t depth_{0};
-      tbc::view<syntax_tree, tbc::lt::a> tree_{};
+      tbc::val_a<syntax_tree> tree_{};
 
       inline auto advance() -> token {
         const auto next_token = peek();
@@ -157,7 +157,7 @@ export {
       inline parser(Tokenizer& tokenizer)
           : tokenizer_(tokenizer) {}
 
-      inline auto parse(tbc::view<std::string_view, tbc::lt::a> source) -> tbc::view<syntax_tree, tbc::lt::a> {
+      inline auto parse(tbc::val_a<std::string_view> source) -> tbc::val_a<syntax_tree> {
         cursor_ = 0;
         depth_ = 0;
         token_count_ = 0;
@@ -195,7 +195,7 @@ export {
 
     private:
       // grammar = ( S , rule , S ) * ;
-      inline auto parseGrammar() -> tbc::view<syntax_tree, tbc::lt::a> {
+      inline auto parseGrammar() -> tbc::val_a<syntax_tree> {
         auto root = flat_node{.kind_ = node_kind::Root};
         const auto root_handle = tree_.addNode(root);
         auto previous_rule_handle = none_handle;

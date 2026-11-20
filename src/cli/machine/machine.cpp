@@ -36,7 +36,7 @@ namespace telar::runtime::cli::machine {
   // Rewrites the profiles at `path` under an exclusive lock: `edit` changes what
   // was loaded, and the result replaces the file.
   // `path` from the working directory when it is relative.
-  tbc::view<Text, tbc::lt::a> absolutePath(tbc::view<Memory&, tbc::lt::a> memory, std::string_view path) {
+  tbc::val_a<Text> absolutePath(tbc::mut_a<Memory> memory, std::string_view path) {
     if (path.starts_with('/')) {
       return Text{memory, path};
     }
@@ -114,7 +114,7 @@ namespace telar::runtime::cli::machine {
       return target.view().substr(0, slash == 0 ? 1 : slash);
     }
 
-    static tbc::view<Platform, tbc::lt::a> parse(tbc::view<Memory&, tbc::lt::a> memory, std::string_view output) {
+    static tbc::val_a<Platform> parse(tbc::mut_a<Memory> memory, std::string_view output) {
       constexpr std::size_t max_output = 8 * 1024;
       if (output.size() > max_output) {
         throw CommandError{"MachineProbeUnreadable"};
@@ -216,12 +216,12 @@ namespace telar::runtime::cli::machine {
       return result;
     }
 
-    tbc::view<Text, tbc::lt::a> assetName(tbc::view<Memory&, tbc::lt::a> memory) const {
+    tbc::val_a<Text> assetName(tbc::mut_a<Memory> memory) const {
       return ds::format(memory, "telar-{}-{}{}", os, arch, os == "linux" ? "-headless.tar.gz" : ".tar.gz");
     }
   };
 
-  tbc::view<launch::Output, tbc::lt::a> runScript(tbc::view<Memory&, tbc::lt::a> memory, std::string_view destination, std::string_view script, std::chrono::seconds timeout = probe_timeout) {
+  tbc::val_a<launch::Output> runScript(tbc::mut_a<Memory> memory, std::string_view destination, std::string_view script, std::chrono::seconds timeout = probe_timeout) {
     return launch::capture(memory, ssh(memory, destination, "exec /bin/sh -s").view(), script, timeout);
   }
 
@@ -513,7 +513,7 @@ fetch() {
   constexpr unsigned config_json_depth = 256;
 
   struct SyncEntry {
-    tbc::view<std::string_view, tbc::lt::static_storage> name;
+    tbc::val_static<std::string_view> name;
     enum class Format {
       text,
       json,
@@ -570,7 +570,7 @@ fetch() {
     return ".cursor";
   }
 
-  tbc::view<Text, tbc::lt::a> localRoot(tbc::view<Memory&, tbc::lt::a> memory, std::string_view agent, std::string_view home) {
+  tbc::val_a<Text> localRoot(tbc::mut_a<Memory> memory, std::string_view agent, std::string_view home) {
     const auto* variable = agent == "claude" ? "CLAUDE_CONFIG_DIR" : agent == "codex"  ? "CODEX_HOME"
                                                                  : agent == "pi"       ? "PI_CODING_AGENT_DIR"
                                                                  : agent == "opencode" ? "XDG_CONFIG_HOME"
@@ -604,7 +604,7 @@ fetch() {
     }
   }
 
-  tbc::view<ds::Option<Text>, tbc::lt::a> homePath(tbc::view<Memory&, tbc::lt::a> memory, std::string_view token, std::string_view home) {
+  tbc::val_a<ds::Option<Text>> homePath(tbc::mut_a<Memory> memory, std::string_view token, std::string_view home) {
     for (const auto prefix : {"~/", "$HOME/", "${HOME}/"}) {
       if (token.starts_with(prefix)) {
         return ds::format(memory, "{}/{}", home, token.substr(std::string_view{prefix}.size()));
@@ -644,7 +644,7 @@ fetch() {
   class SortedTexts {
   public:
     // Copies what it keeps into `memory`.
-    explicit SortedTexts(tbc::view<Memory&, tbc::lt::a> memory)
+    explicit SortedTexts(tbc::mut_a<Memory> memory)
         : texts_(memory) {}
 
     void insert(std::string_view text) {
@@ -661,7 +661,7 @@ fetch() {
     }
 
   private:
-    tbc::view<ds::Vec<Text, Memory>, tbc::lt::a> texts_;
+    tbc::val_a<ds::Vec<Text, Memory>> texts_;
   };
 
   class ConfigSync {
@@ -681,14 +681,14 @@ fetch() {
     };
 
     // Everything below lives in memory_'s region.
-    tbc::view<Memory&, tbc::lt::a> memory_;
-    tbc::view<Text, tbc::lt::a> home_;
-    tbc::view<Text, tbc::lt::a> remote_home_;
-    tbc::view<ds::Vec<Root, Memory>, tbc::lt::a> roots_;
+    tbc::mut_a<Memory> memory_;
+    tbc::val_a<Text> home_;
+    tbc::val_a<Text> remote_home_;
+    tbc::val_a<ds::Vec<Root, Memory>> roots_;
     // Each wanted agent's local root, in the agents' alphabetical order.
-    tbc::view<ds::Vec<std::pair<std::string_view, Text>, Memory>, tbc::lt::a> local_roots_;
-    tbc::view<ds::Vec<File, Memory>, tbc::lt::a> files_;
-    tbc::view<ds::Vec<Text, Memory>, tbc::lt::a> left_;
+    tbc::val_a<ds::Vec<std::pair<std::string_view, Text>, Memory>> local_roots_;
+    tbc::val_a<ds::Vec<File, Memory>> files_;
+    tbc::val_a<ds::Vec<Text, Memory>> left_;
     std::size_t total_ = 0;
 
     template <typename... Arguments>
@@ -701,7 +701,7 @@ fetch() {
     }
 
     // The canonical path of `path`, when it resolves.
-    tbc::view<ds::Option<Text>, tbc::lt::a> canonical(std::string_view path) const {
+    tbc::val_a<ds::Option<Text>> canonical(std::string_view path) const {
       const Text given{memory_, path};
       ds::Array<char, PATH_MAX> resolved{};
       if (::realpath(given.data(), resolved.dataMut()) == nullptr) {
@@ -1203,7 +1203,7 @@ fetch() {
     }
 
   public:
-    ConfigSync(tbc::view<Memory&, tbc::lt::a> memory, std::string_view home, std::string_view remote_home)
+    ConfigSync(tbc::mut_a<Memory> memory, std::string_view home, std::string_view remote_home)
         : memory_(memory),
           home_(memory, home),
           remote_home_(memory, remote_home),
@@ -1371,7 +1371,7 @@ fetch() {
     std::string_view instructions;
   };
 
-  tbc::view<ds::Option<LoginPlan>, tbc::lt::static_storage> planFor(std::string_view agent, ds::Option<std::string_view> provider) {
+  tbc::val_static<ds::Option<LoginPlan>> planFor(std::string_view agent, ds::Option<std::string_view> provider) {
     static constexpr ds::Array<std::string_view, 2> auth_login{"auth", "login"};
     static constexpr ds::Array<std::string_view, 2> device_login{"login", "--device-auth"};
     static constexpr ds::Array<std::string_view, 1> login{"login"};
@@ -1415,7 +1415,7 @@ fetch() {
     ds::Option<Text> code;
   };
 
-  tbc::view<ds::Option<LoginLink>, tbc::lt::a> findLoginLink(tbc::view<Memory&, tbc::lt::a> memory, std::string_view text, const LoginPlan& plan) {
+  tbc::val_a<ds::Option<LoginLink>> findLoginLink(tbc::mut_a<Memory> memory, std::string_view text, const LoginPlan& plan) {
     std::string_view url;
 
     for (std::size_t start = 0;;) {
@@ -1499,7 +1499,7 @@ fetch() {
     static constexpr auto status_interval = std::chrono::seconds{3};
     static constexpr std::string_view records = "$HOME/.local/state/telar/setup-logins";
 
-    static tbc::view<JsonValue, tbc::lt::a> required(tbc::view<JsonValue, tbc::lt::a> value, std::string_view name) {
+    static tbc::val_a<JsonValue> required(tbc::val_a<JsonValue> value, std::string_view name) {
       const auto field = value.field(name);
       if (!field) {
         throw CommandError{"LoginPaneUnreadable"};
@@ -2123,7 +2123,7 @@ fetch() {
     }
   };
 
-  tbc::view<Target, tbc::lt::a> resolve(tbc::view<Memory&, tbc::lt::a> memory, const MachineProfiles& profiles, const MachineOptions& options) {
+  tbc::val_a<Target> resolve(tbc::mut_a<Memory> memory, const MachineProfiles& profiles, const MachineOptions& options) {
     for (const auto& profile : profiles.rows()) {
       if (profile.label() == options.label || profile.destination() == options.label) {
         return {.label = Text{memory, profile.label()}, .destination = Text{memory, profile.destination()}, .saved = profile};
@@ -2219,7 +2219,7 @@ fetch() {
     return slash == std::string_view::npos ? std::string_view{"."} : path.substr(0, slash == 0 ? 1 : slash);
   }
 
-  tbc::view<ds::Option<Platform>, tbc::lt::a> reach(tbc::view<Memory&, tbc::lt::a> memory, SetupReport& report, const Target& target, std::string_view directory) {
+  tbc::val_a<ds::Option<Platform>> reach(tbc::mut_a<Memory> memory, SetupReport& report, const Target& target, std::string_view directory) {
     launch::Output probe{memory};
     bool confirmed = false;
     const auto run = [&] {
@@ -2421,7 +2421,7 @@ cat > "$temporary" && [ "$(hash "$temporary")" = "$expected" ] && chmod 755 "$te
     return changed;
   }
 
-  tbc::view<bool, tbc::lt::a> install(tbc::view<Memory&, tbc::lt::a> memory, SetupReport& report, const Target& target, const Platform& platform, const Install& build) {
+  tbc::val_a<bool> install(tbc::mut_a<Memory> memory, SetupReport& report, const Target& target, const Platform& platform, const Install& build) {
     try {
       MachineFieldRules::program(platform.target);
     } catch (const MachineFailure&) {

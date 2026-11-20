@@ -7,7 +7,7 @@ import telar.wire.vocabulary;
 
 namespace telar::gui::inline foundation::inline agents {
 
-  tbc::view<std::string_view, tbc::lt::a> AgentCardLabels::title(tbc::view<std::string_view, tbc::lt::a> session, tbc::view<std::string_view, tbc::lt::a> display_name) noexcept {
+  tbc::val_a<std::string_view> AgentCardLabels::title(tbc::val_a<std::string_view> session, tbc::val_a<std::string_view> display_name) noexcept {
     if (!session.empty()) {
       return session;
     }
@@ -36,7 +36,7 @@ namespace telar::gui::inline foundation::inline agents {
     }
   }
 
-  tbc::view<std::string_view, tbc::lt::a> AgentCardLabels::project(tbc::view<std::string_view, tbc::lt::a> workspace, tbc::view<std::string_view, tbc::lt::a> machine, bool coordinator, tbc::view<Project&, tbc::lt::a> storage) {
+  tbc::val_a<std::string_view> AgentCardLabels::project(tbc::val_a<std::string_view> workspace, tbc::val_a<std::string_view> machine, bool coordinator, tbc::mut_a<Project> storage) {
     storage.truncate(0);
     try {
       if (!machine.empty()) {

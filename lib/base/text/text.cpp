@@ -21,11 +21,11 @@ namespace telar::runtime {
     return difference == 0;
   }
 
-  TextFields::TextFields(tbc::view<std::string_view, tbc::lt::a> text, tbc::view<std::string_view, tbc::lt::b> delimiter) noexcept
+  TextFields::TextFields(tbc::val_a<std::string_view> text, tbc::val_b<std::string_view> delimiter) noexcept
       : remaining_(text),
         delimiter_(delimiter) {}
 
-  tbc::view<ds::Option<std::string_view>, tbc::lt::a> TextFields::next() noexcept {
+  tbc::val_a<ds::Option<std::string_view>> TextFields::next() noexcept {
     if (finished_) {
       return ds::none;
     }
@@ -42,7 +42,7 @@ namespace telar::runtime {
     return field;
   }
 
-  tbc::view<std::string_view, tbc::lt::a> trimText(tbc::view<std::string_view, tbc::lt::a> text, std::string_view characters) noexcept {
+  tbc::val_a<std::string_view> trimText(tbc::val_a<std::string_view> text, std::string_view characters) noexcept {
     const auto start = text.find_first_not_of(characters);
     if (start == std::string_view::npos) {
       return {};

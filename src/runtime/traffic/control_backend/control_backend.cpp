@@ -26,7 +26,7 @@ namespace telar::runtime::traffic::control {
 
 namespace telar::runtime::traffic {
 
-  auto InterceptionCodec::rule(tbc::view<std::span<Byte>, tbc::lt::a> output, InterceptionRule rule) -> tbc::view<std::span<const Byte>, tbc::lt::a> {
+  auto InterceptionCodec::rule(tbc::val_a<std::span<Byte>> output, InterceptionRule rule) -> tbc::val_a<std::span<const Byte>> {
     plugins::FrameWriter writer{output};
 
     writer.tag(rule.http ? Command::http_rule : Command::rule);
@@ -50,7 +50,7 @@ namespace telar::runtime::traffic {
     return rule;
   }
 
-  auto InterceptionCodec::decision(tbc::view<std::span<Byte>, tbc::lt::a> output, std::uint64_t ticket, Verdict verdict, std::span<const Byte> bytes) -> tbc::view<std::span<const Byte>, tbc::lt::a> {
+  auto InterceptionCodec::decision(tbc::val_a<std::span<Byte>> output, std::uint64_t ticket, Verdict verdict, std::span<const Byte> bytes) -> tbc::val_a<std::span<const Byte>> {
     plugins::FrameWriter writer{output};
 
     writer.tag(Command::decision);
@@ -514,7 +514,7 @@ namespace telar::runtime::traffic {
     return exchange_subscribers_.load(std::memory_order_acquire) != 0 || recordings_.selects(Selection::exchanges);
   }
 
-  tbc::view<std::span<const Byte>, tbc::lt::a> Service::recording(const recording::Request& request, tbc::view<std::span<Byte>, tbc::lt::a> output, recording::Owner owner) {
+  tbc::val_a<std::span<const Byte>> Service::recording(const recording::Request& request, tbc::val_a<std::span<Byte>> output, recording::Owner owner) {
     return recordings_.handle(request, output, std::move(owner));
   }
 

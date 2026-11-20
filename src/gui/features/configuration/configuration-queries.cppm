@@ -56,7 +56,7 @@ export {
 
     class GuiQuery {
     public:
-      [[nodiscard]] static tbc::view<std::string_view, tbc::lt::a> write(const Configuration& configuration, tbc::view<std::span<char>, tbc::lt::a> output, bool default_titlebar);
+      [[nodiscard]] static tbc::val_a<std::string_view> write(const Configuration& configuration, tbc::val_a<std::span<char>> output, bool default_titlebar);
 
     private:
       static void writeFont(JsonWriter& writer, const FontConfiguration& font);
@@ -75,7 +75,7 @@ export {
 
     class ThemeQuery {
     public:
-      [[nodiscard]] static tbc::view<std::string_view, tbc::lt::a> write(const ThemeSelection& selection, tbc::view<std::span<char>, tbc::lt::a> output);
+      [[nodiscard]] static tbc::val_a<std::string_view> write(const ThemeSelection& selection, tbc::val_a<std::span<char>> output);
 
     private:
       static void byteValue(JsonWriter& writer, ThemeRgb bytes);
@@ -150,7 +150,7 @@ export {
     class InputQuery {
     public:
       // Each query is written into the output, region `a`.
-      [[nodiscard]] static tbc::view<std::string_view, tbc::lt::a> write(const InputConfiguration& input, tbc::view<std::span<char>, tbc::lt::a> output);
+      [[nodiscard]] static tbc::val_a<std::string_view> write(const InputConfiguration& input, tbc::val_a<std::span<char>> output);
 
       static void writeKey(JsonWriter& writer, KeyChord key);
 
@@ -171,14 +171,14 @@ export {
     class BindingQuery {
     public:
       template <Allocator Memory>
-      [[nodiscard]] static tbc::view<std::string_view, tbc::lt::a> write(const InputConfiguration& input, std::size_t index, const ActionDescriptions<Memory>& descriptions, const runtime::config::RetainedCommandTabRegistry& commands, tbc::view<std::span<char>, tbc::lt::a> output);
+      [[nodiscard]] static tbc::val_a<std::string_view> write(const InputConfiguration& input, std::size_t index, const ActionDescriptions<Memory>& descriptions, const runtime::config::RetainedCommandTabRegistry& commands, tbc::val_a<std::span<char>> output);
 
     private:
       static void writeKeys(JsonWriter& writer, std::span<const KeyChord> keys);
     };
 
-    extern template tbc::view<std::string_view, tbc::lt::a> BindingQuery::write<telar::Memory>(const InputConfiguration& input, std::size_t index, const ActionDescriptions<telar::Memory>& descriptions, const runtime::config::RetainedCommandTabRegistry& commands, tbc::view<std::span<char>, tbc::lt::a> output);
-    extern template tbc::view<std::string_view, tbc::lt::a> BindingQuery::write<telar::ConcurrentMemory>(const InputConfiguration& input, std::size_t index, const ActionDescriptions<telar::ConcurrentMemory>& descriptions, const runtime::config::RetainedCommandTabRegistry& commands, tbc::view<std::span<char>, tbc::lt::a> output);
+    extern template tbc::val_a<std::string_view> BindingQuery::write<telar::Memory>(const InputConfiguration& input, std::size_t index, const ActionDescriptions<telar::Memory>& descriptions, const runtime::config::RetainedCommandTabRegistry& commands, tbc::val_a<std::span<char>> output);
+    extern template tbc::val_a<std::string_view> BindingQuery::write<telar::ConcurrentMemory>(const InputConfiguration& input, std::size_t index, const ActionDescriptions<telar::ConcurrentMemory>& descriptions, const runtime::config::RetainedCommandTabRegistry& commands, tbc::val_a<std::span<char>> output);
 
   }
 }
@@ -191,7 +191,7 @@ export {
     public:
       template <Allocator Memory>
       // The query is written into the output, region `a`.
-      [[nodiscard]] static tbc::view<std::string_view, tbc::lt::a> write(const runtime::config::RuntimeValues<Memory>& values, tbc::view<std::span<char>, tbc::lt::a> output);
+      [[nodiscard]] static tbc::val_a<std::string_view> write(const runtime::config::RuntimeValues<Memory>& values, tbc::val_a<std::span<char>> output);
 
     private:
       static ds::Option<std::string_view> nullablePath(std::string_view path) noexcept;
@@ -200,8 +200,8 @@ export {
       static void writeProxy(JsonWriter& writer, const runtime::ProxyOptions<Memory>& proxy);
     };
 
-    extern template tbc::view<std::string_view, tbc::lt::a> RuntimeQuery::write<telar::Memory>(const runtime::config::RuntimeValues<telar::Memory>& values, tbc::view<std::span<char>, tbc::lt::a> output);
-    extern template tbc::view<std::string_view, tbc::lt::a> RuntimeQuery::write<telar::ConcurrentMemory>(const runtime::config::RuntimeValues<telar::ConcurrentMemory>& values, tbc::view<std::span<char>, tbc::lt::a> output);
+    extern template tbc::val_a<std::string_view> RuntimeQuery::write<telar::Memory>(const runtime::config::RuntimeValues<telar::Memory>& values, tbc::val_a<std::span<char>> output);
+    extern template tbc::val_a<std::string_view> RuntimeQuery::write<telar::ConcurrentMemory>(const runtime::config::RuntimeValues<telar::ConcurrentMemory>& values, tbc::val_a<std::span<char>> output);
 
   }
 }

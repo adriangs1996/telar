@@ -14,7 +14,7 @@ namespace telar::runtime {
     return value == nullptr ? std::string_view{} : std::string_view{value};
   }
 
-  tbc::view<std::string_view, tbc::lt::static_storage> processHome() noexcept {
+  tbc::val_static<std::string_view> processHome() noexcept {
     // Copied once into storage of its own, which outlives every caller, as the environment it came
     // from may not once something replaces it.
     static SystemAllocator memory;
@@ -154,7 +154,7 @@ namespace telar::runtime::cli {
     return key == "TELAR_SOCKET" || key == "TELAR_SOCKET_PATH" ? std::string_view{} : source_.lookup(name);
   }
 
-  tbc::view<XdgDirectory, tbc::lt::a> findXdgDirectory(tbc::view<const EnvironmentSource&, tbc::lt::a> environment, const char* variable, tbc::view<std::string_view, tbc::lt::a> fallback) {
+  tbc::val_a<XdgDirectory> findXdgDirectory(tbc::ref_a<EnvironmentSource> environment, const char* variable, tbc::val_a<std::string_view> fallback) {
     if (const auto base = environment.lookup(variable); base.starts_with('/')) {
       return {.base = base, .suffix = {}};
     }
@@ -167,7 +167,7 @@ namespace telar::runtime::cli {
   }
 
   template <Allocator Memory>
-  tbc::view<ds::String<Memory>, tbc::lt::a> xdgDirectory(tbc::view<Memory&, tbc::lt::a> memory, const EnvironmentSource& environment, const char* variable, std::string_view fallback) {
+  tbc::val_a<ds::String<Memory>> xdgDirectory(tbc::mut_a<Memory> memory, const EnvironmentSource& environment, const char* variable, std::string_view fallback) {
     const auto found = findXdgDirectory(environment, variable, fallback);
     ds::String<Memory> path{memory, found.base};
 
@@ -250,7 +250,7 @@ namespace telar::runtime::cli {
   }
 
   template <Allocator Memory>
-  RuntimePaths<Memory>::RuntimePaths(tbc::view<Memory&, tbc::lt::a> memory, const ServerOptions& options, const EnvironmentSource& environment)
+  RuntimePaths<Memory>::RuntimePaths(tbc::mut_a<Memory> memory, const ServerOptions& options, const EnvironmentSource& environment)
       : socket(memory),
         history(memory),
         session(memory),
@@ -302,7 +302,7 @@ namespace telar::runtime::cli {
   }
 
   template <Allocator Memory>
-  tbc::view<ds::String<Memory>, tbc::lt::a> RuntimePaths<Memory>::configHome(tbc::view<Memory&, tbc::lt::a> memory, const EnvironmentSource& environment) {
+  tbc::val_a<ds::String<Memory>> RuntimePaths<Memory>::configHome(tbc::mut_a<Memory> memory, const EnvironmentSource& environment) {
     auto path = xdgDirectory(memory, environment, "XDG_CONFIG_HOME", "/.config");
     if (!path.empty()) {
       path.append("/telar");
@@ -312,7 +312,7 @@ namespace telar::runtime::cli {
   }
 
   template <Allocator Memory>
-  tbc::view<ds::String<Memory>, tbc::lt::a> RuntimePaths<Memory>::configFile(tbc::view<Memory&, tbc::lt::a> memory, const EnvironmentSource& environment) {
+  tbc::val_a<ds::String<Memory>> RuntimePaths<Memory>::configFile(tbc::mut_a<Memory> memory, const EnvironmentSource& environment) {
     if (const auto development = environment.lookup("TELAR_DEVELOPMENT_CONFIG"); !development.empty()) {
       return ds::String<Memory>{memory, development};
     }

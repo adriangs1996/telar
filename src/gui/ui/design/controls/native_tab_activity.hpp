@@ -92,7 +92,7 @@ namespace telar::gui::qt {
     bool compact_ = true;
     bool animation_notification_pending_ = false;
     QPointer<WindowAnimationClock> clock_;
-    tbc::view<AncestorGeometry, tbc::lt::self> ancestors_;
+    tbc::val_self<AncestorGeometry> ancestors_;
   };
 
 }

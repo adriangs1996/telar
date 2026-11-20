@@ -49,10 +49,10 @@ export namespace telar::gui::features::peek {
   [[nodiscard]] bool reading(const State& state) noexcept;
 
   // The agent `target` names among `agents`, while that agent's session lives.
-  [[nodiscard]] tbc::view<const Agent<Memory>*, tbc::lt::a> find(tbc::view<std::span<const Agent<Memory>>, tbc::lt::a> agents, const PeekTarget& target) noexcept;
+  [[nodiscard]] tbc::val_a<const Agent<Memory>*> find(tbc::val_a<std::span<const Agent<Memory>>> agents, const PeekTarget& target) noexcept;
 
   // The peeked agent among `agents`; none once it is gone or nothing is open.
-  [[nodiscard]] tbc::view<const Agent<Memory>*, tbc::lt::a> agent(const State& state, tbc::view<std::span<const Agent<Memory>>, tbc::lt::a> agents) noexcept;
+  [[nodiscard]] tbc::val_a<const Agent<Memory>*> agent(const State& state, tbc::val_a<std::span<const Agent<Memory>>> agents) noexcept;
 
   // Opens a peek at `target`, forgetting what the last one read.
   void open(State& state, PeekTarget target) noexcept;

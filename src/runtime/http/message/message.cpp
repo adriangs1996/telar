@@ -35,31 +35,31 @@ namespace telar::runtime {
   }
 
   template <Allocator Memory>
-  HttpContentCodec<Memory>::HttpContentCodec(tbc::view<Memory&, tbc::lt::a> memory) noexcept
+  HttpContentCodec<Memory>::HttpContentCodec(tbc::mut_a<Memory> memory) noexcept
       : memory_(memory) {}
 
   template <Allocator Memory>
-  auto HttpContentCodec<Memory>::decode(std::span<const std::uint8_t> input, std::string_view encoding, std::size_t limit) -> tbc::view<DecodedBody<Memory>, tbc::lt::a> {
+  auto HttpContentCodec<Memory>::decode(std::span<const std::uint8_t> input, std::string_view encoding, std::size_t limit) -> tbc::val_a<DecodedBody<Memory>> {
     return materialize(transform(input, encoding, limit, false), false);
   }
 
   template <Allocator Memory>
-  auto HttpContentCodec<Memory>::encode(std::span<const std::uint8_t> input, std::string_view encoding, std::size_t limit) -> tbc::view<DecodedBody<Memory>, tbc::lt::a> {
+  auto HttpContentCodec<Memory>::encode(std::span<const std::uint8_t> input, std::string_view encoding, std::size_t limit) -> tbc::val_a<DecodedBody<Memory>> {
     return materialize(transform(input, encoding, limit, true), true);
   }
 
   template <Allocator Memory>
-  auto HttpContentCodec<Memory>::decodeView(tbc::view<std::span<const std::uint8_t>, tbc::lt::a> input, std::string_view encoding, std::size_t limit) -> tbc::view<Coded, tbc::lt::a> {
+  auto HttpContentCodec<Memory>::decodeView(tbc::val_a<std::span<const std::uint8_t>> input, std::string_view encoding, std::size_t limit) -> tbc::val_a<Coded> {
     return transform(input, encoding, limit, false);
   }
 
   template <Allocator Memory>
-  auto HttpContentCodec<Memory>::encodeView(tbc::view<std::span<const std::uint8_t>, tbc::lt::a> input, std::string_view encoding, std::size_t limit) -> tbc::view<Coded, tbc::lt::a> {
+  auto HttpContentCodec<Memory>::encodeView(tbc::val_a<std::span<const std::uint8_t>> input, std::string_view encoding, std::size_t limit) -> tbc::val_a<Coded> {
     return transform(input, encoding, limit, true);
   }
 
   template <Allocator Memory>
-  auto HttpContentCodec<Memory>::materialize(Coded coded, bool encode) -> tbc::view<DecodedBody<Memory>, tbc::lt::a> {
+  auto HttpContentCodec<Memory>::materialize(Coded coded, bool encode) -> tbc::val_a<DecodedBody<Memory>> {
     if (coded.storage) {
       return std::move(coded.storage.getMut());
     }
@@ -73,7 +73,7 @@ namespace telar::runtime {
   }
 
   template <Allocator Memory>
-  auto HttpContentCodec<Memory>::transform(tbc::view<std::span<const std::uint8_t>, tbc::lt::a> entity, std::string_view encoding, std::size_t limit, bool encode) -> tbc::view<Coded, tbc::lt::a> {
+  auto HttpContentCodec<Memory>::transform(tbc::val_a<std::span<const std::uint8_t>> entity, std::string_view encoding, std::size_t limit, bool encode) -> tbc::val_a<Coded> {
     if (limit == 0 || limit > maximum_bytes || entity.size() > maximum_bytes) {
       throw std::length_error{"Invalid HTTP content limit"};
     }
@@ -120,7 +120,7 @@ namespace telar::runtime {
   }
 
   template <Allocator Memory>
-  auto HttpContentCodec<Memory>::one(std::span<const std::uint8_t> input, ContentCoding selected, std::size_t limit, bool encode) -> tbc::view<DecodedBody<Memory>, tbc::lt::a> {
+  auto HttpContentCodec<Memory>::one(std::span<const std::uint8_t> input, ContentCoding selected, std::size_t limit, bool encode) -> tbc::val_a<DecodedBody<Memory>> {
     DecodedBody<Memory> result{memory_, limit + 1};
     auto output = result.storage.bytesMut();
 
@@ -287,7 +287,7 @@ namespace telar::runtime {
   }
 
   template <Allocator Memory>
-  HttpFields<Memory>::Field::Field(tbc::view<Memory&, tbc::lt::a> memory, std::string_view name, std::string_view value)
+  HttpFields<Memory>::Field::Field(tbc::mut_a<Memory> memory, std::string_view name, std::string_view value)
       : storage_(memory, name.size() + value.size()),
         name_bytes_(name.size()) {
     auto bytes = storage_.bytesMut();
@@ -430,7 +430,7 @@ namespace telar::runtime {
     }
   }
 
-  auto HttpMessageCodec::encode(tbc::view<std::span<Byte>, tbc::lt::a> output, const HttpMessageView& message) -> tbc::view<std::span<const Byte>, tbc::lt::a> {
+  auto HttpMessageCodec::encode(tbc::val_a<std::span<Byte>> output, const HttpMessageView& message) -> tbc::val_a<std::span<const Byte>> {
     validate(message);
     plugins::FrameWriter writer{output};
 

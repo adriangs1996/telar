@@ -42,7 +42,7 @@ import telar.runtime.redirect.pf_rules;
 
 namespace telar::runtime::cli {
 
-  tbc::view<ds::String<Memory>, tbc::lt::a> pluginCallbackSource(tbc::view<Memory&, tbc::lt::a> memory, std::string_view source, std::string_view action) {
+  tbc::val_a<ds::String<Memory>> pluginCallbackSource(tbc::mut_a<Memory> memory, std::string_view source, std::string_view action) {
     constexpr std::string_view prefix = "local telar = require(\"telar\")\nlocal plugin = (function()\n";
     constexpr std::string_view middle = "\nend)()\nif type(plugin) ~= \"table\" or type(plugin.actions) ~= \"table\" then error(\"plugin must return a table with an actions table\") end\nlocal callback = plugin.actions[\"";
     constexpr std::string_view suffix = "\"]\nif type(callback) ~= \"function\" then error(\"plugin action is not a function\") end\nreturn {telar.bind_global({\"escape\"}, callback)}";

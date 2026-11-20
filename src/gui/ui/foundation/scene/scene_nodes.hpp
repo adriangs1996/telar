@@ -29,7 +29,7 @@ namespace telar::gui::qt {
   // The parent owns the node it adopts, so the node lives as long as the parent, region `a`. Qt holds it
   // by address from then on, so the node is reached raw, as Qt does.
   template <std::derived_from<QSGNode> Node>
-  tbc::view<Node&, tbc::lt::a> adoptSceneNode(tbc::view<QSGNode&, tbc::lt::a> parent, std::unique_ptr<Node> node, SceneOrder order = SceneOrder::last) {
+  tbc::mut_a<Node> adoptSceneNode(tbc::mut_a<QSGNode> parent, std::unique_ptr<Node> node, SceneOrder order = SceneOrder::last) {
     auto& result = *tbc::raw(node.get());
 
     if (order == SceneOrder::first) {
@@ -42,7 +42,7 @@ namespace telar::gui::qt {
   }
 
   template <std::derived_from<QSGNode> Node, typename... Arguments>
-  tbc::view<Node&, tbc::lt::a> appendSceneNode(tbc::view<QSGNode&, tbc::lt::a> parent, Arguments&&... arguments) {
+  tbc::mut_a<Node> appendSceneNode(tbc::mut_a<QSGNode> parent, Arguments&&... arguments) {
     return adoptSceneNode(parent, std::make_unique<Node>(std::forward<Arguments>(arguments)...));
   }
 

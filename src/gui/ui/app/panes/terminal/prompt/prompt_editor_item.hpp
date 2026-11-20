@@ -228,7 +228,7 @@ namespace telar::gui::qt {
     SystemAllocator memory_;
     MemoryAdapter<SystemAllocator> adapter_{memory_};
     // Glyphs snap to the scene's pixels, so moving any ancestor repaints them.
-    tbc::view<AncestorGeometry, tbc::lt::self> ancestors_;
+    tbc::val_self<AncestorGeometry> ancestors_;
     QPointer<PromptController> controller_;
     CellTextGrid resolved_;
     ds::Vec<NativeCellText*, Memory> runs_{adapter_};

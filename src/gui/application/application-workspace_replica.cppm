@@ -64,7 +64,7 @@ export {
 
       // Keeps `message` with its host and directory copied into the pane, and returns the shell it
       // replaces without them, since the pane's strings now hold the new ones.
-      tbc::view<PaneShell, tbc::lt::static_storage> setShell(const PaneShell& message);
+      tbc::val_static<PaneShell> setShell(const PaneShell& message);
 
       // Keeps `commands` with their lines copied into the pane.
       void setBlocks(std::span<const CommandBlock> commands);
@@ -98,7 +98,7 @@ export {
       PaneProgressState progress_state = PaneProgressState::remove;
       ds::Option<Byte> progress_percent;
       // The integrated shell's phase and the terminal's line discipline, for the command editor.
-      tbc::view<PaneShell, tbc::lt::self> shell{};
+      tbc::val_self<PaneShell> shell{};
       // The document the pane's program shows natively (`telar render`) while `document_shown`;
       // `document_version` changes whenever either does. `document_parts` gathers the parts of
       // revision `document_revision` until it is whole.
@@ -130,14 +130,14 @@ export {
       ds::Vec<InlineDocument, Memory> inline_documents;
       std::uint64_t inline_version = 0;
       // The repository the integrated shell works in; `branch` owns the text the message viewed.
-      tbc::view<PaneGit, tbc::lt::self> git{};
+      tbc::val_self<PaneGit> git{};
       ds::String<Memory> git_branch;
       // The host a remote shell runs on and where it works there, which `shell.host` and
       // `shell.directory` view.
       ds::String<Memory> shell_host;
       ds::String<Memory> shell_directory;
       // The commands the integrated shell ran, oldest first; `blocks_text` owns their lines.
-      tbc::view<ds::Vec<CommandBlock, Memory>, tbc::lt::self> blocks;
+      tbc::val_self<ds::Vec<CommandBlock, Memory>> blocks;
       ds::String<Memory> blocks_text;
       // The commands folded, by the stable number of their first row, and the rows their output
       // hides from the view.
@@ -157,7 +157,7 @@ export {
     // The application a tab shows: the pane's foreground, else the one the tab remembers for its
     // foreground pane. The name views either the tab or the pane, region `a`.
     template <Allocator Memory>
-    [[nodiscard]] tbc::view<std::string_view, tbc::lt::a> tabApplicationName(tbc::view<const Tab<Memory>&, tbc::lt::a> tab, tbc::view<std::type_identity_t<const Pane<Memory>*>, tbc::lt::a> pane) noexcept;
+    [[nodiscard]] tbc::val_a<std::string_view> tabApplicationName(tbc::ref_a<Tab<Memory>> tab, tbc::val_a<std::type_identity_t<const Pane<Memory>*>> pane) noexcept;
 
     extern template struct Pane<Memory>;
     extern template std::string_view tabApplicationName<Memory>(const Tab<Memory>& tab, const Pane<Memory>* pane) noexcept;

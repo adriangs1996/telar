@@ -126,7 +126,7 @@ namespace telar::gui::qt {
   private:
     application::machines::Machines machines_;
     // Each client reports back to the application that owns this store.
-    tbc::view<Clients, tbc::lt::self> clients_;
+    tbc::val_self<Clients> clients_;
     std::uint64_t next_client_generation_ = 1;
     std::uint64_t machine_view_ = 0;
     DialogState dialog_;

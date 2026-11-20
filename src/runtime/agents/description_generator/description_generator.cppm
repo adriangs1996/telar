@@ -124,7 +124,7 @@ export {
       DescriptionOptions options_;
       std::atomic<bool> stopping_{false};
       // Watches stopping_.
-      tbc::view<CommandOutput<Memory>, tbc::lt::self> output_;
+      tbc::val_self<CommandOutput<Memory>> output_;
     };
 
     extern template class DescriptionGenerator<Memory>;

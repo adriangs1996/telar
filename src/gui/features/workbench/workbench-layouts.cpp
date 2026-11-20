@@ -12,7 +12,7 @@ import telar.base.ds;
 namespace telar::gui::features::workbench {
 
   template <Allocator Memory>
-  tbc::view<std::string_view, tbc::lt::a> LayoutToken::write(const ClientLayoutSnapshot& snapshot, tbc::view<ds::String<Memory>&, tbc::lt::a> output) {
+  tbc::val_a<std::string_view> LayoutToken::write(const ClientLayoutSnapshot& snapshot, tbc::mut_a<ds::String<Memory>> output) {
     ds::Array<Byte, binary_capacity> binary{};
     const auto encoded = Codec::encode(snapshot, binary.viewMut());
 
@@ -49,7 +49,7 @@ namespace telar::gui::features::workbench {
     return preset;
   }
 
-  tbc::view<std::span<const Byte>, tbc::lt::a> LayoutToken::decodeHexadecimal(std::string_view text, tbc::view<std::span<Byte>, tbc::lt::a> output) {
+  tbc::val_a<std::span<const Byte>> LayoutToken::decodeHexadecimal(std::string_view text, tbc::val_a<std::span<Byte>> output) {
     // Hexadecimal decoding error names, checked in this order.
     if (text.empty() || text.size() % digits_per_byte != 0) {
       throw EncodingError{"InvalidLength"};
@@ -241,7 +241,7 @@ namespace telar::gui::features::workbench {
     }
   }
 
-  template tbc::view<std::string_view, tbc::lt::a> LayoutToken::write<Memory>(const ClientLayoutSnapshot& snapshot, tbc::view<ds::String<Memory>&, tbc::lt::a> output);
-  template tbc::view<std::string_view, tbc::lt::a> LayoutToken::write<ConcurrentMemory>(const ClientLayoutSnapshot& snapshot, tbc::view<ds::String<ConcurrentMemory>&, tbc::lt::a> output);
+  template tbc::val_a<std::string_view> LayoutToken::write<Memory>(const ClientLayoutSnapshot& snapshot, tbc::mut_a<ds::String<Memory>> output);
+  template tbc::val_a<std::string_view> LayoutToken::write<ConcurrentMemory>(const ClientLayoutSnapshot& snapshot, tbc::mut_a<ds::String<ConcurrentMemory>> output);
 
 }

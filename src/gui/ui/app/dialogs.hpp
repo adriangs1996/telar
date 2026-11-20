@@ -80,15 +80,15 @@ namespace telar::gui::qt {
     void changed();
 
   private:
-    tbc::view<Store&, tbc::lt::a> store_;
-    tbc::view<PeekController&, tbc::lt::a> peek_;
-    tbc::view<MachinePromptController&, tbc::lt::a> machine_prompt_;
-    tbc::view<PaletteController&, tbc::lt::a> palette_;
-    tbc::view<PathPickerController&, tbc::lt::a> paths_;
-    tbc::view<HistoryController&, tbc::lt::a> history_;
-    tbc::view<WorkspaceFormController&, tbc::lt::a> workspace_form_;
-    tbc::view<KeyBindings&, tbc::lt::a> keys_;
-    tbc::view<PointerDispatcher&, tbc::lt::a> pointers_;
+    tbc::mut_a<Store> store_;
+    tbc::mut_a<PeekController> peek_;
+    tbc::mut_a<MachinePromptController> machine_prompt_;
+    tbc::mut_a<PaletteController> palette_;
+    tbc::mut_a<PathPickerController> paths_;
+    tbc::mut_a<HistoryController> history_;
+    tbc::mut_a<WorkspaceFormController> workspace_form_;
+    tbc::mut_a<KeyBindings> keys_;
+    tbc::mut_a<PointerDispatcher> pointers_;
   };
 
 }

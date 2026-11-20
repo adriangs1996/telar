@@ -34,7 +34,7 @@ namespace telar::gui::inline foundation::inline fonts {
     };
 
     // FreeType frees the master through the library it came from, region `a`.
-    tbc::view<std::unique_ptr<FT_MM_Var, VariationDeleter>, tbc::lt::a> variationMaster(tbc::view<FT_Library, tbc::lt::a> library, FT_Face face) {
+    tbc::val_a<std::unique_ptr<FT_MM_Var, VariationDeleter>> variationMaster(tbc::val_a<FT_Library> library, FT_Face face) {
       FT_MM_Var* master = nullptr;
       if (FT_Get_MM_Var(face, &master) != 0) {
         throw std::runtime_error{"FontVariationUnavailable"};

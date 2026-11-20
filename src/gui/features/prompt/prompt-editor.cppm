@@ -34,7 +34,7 @@ namespace telar::gui::features::prompt {
   class Editor {
   public:
     // The text, its registers and its recorded keys live in `memory`, region `a`.
-    explicit Editor(tbc::view<Memory&, tbc::lt::a> memory, Keymap keymap = Keymap::emacs);
+    explicit Editor(tbc::mut_a<Memory> memory, Keymap keymap = Keymap::emacs);
 
     Text& textMut() noexcept;
 
@@ -50,7 +50,7 @@ namespace telar::gui::features::prompt {
     [[nodiscard]] bool pending() const noexcept;
 
     // The editor keeps the clipboard, which may borrow what lives in region `a`.
-    void setClipboard(tbc::view<Clipboard, tbc::lt::a> clipboard);
+    void setClipboard(tbc::val_a<Clipboard> clipboard);
 
     // Starts a new line, back in insert mode.
     void clear() noexcept;
@@ -82,11 +82,11 @@ namespace telar::gui::features::prompt {
     };
 
     struct Recorded {
-      tbc::view<KeyPress, tbc::lt::a> key;
-      tbc::view<ds::String<Memory>, tbc::lt::a> text;
+      tbc::val_a<KeyPress> key;
+      tbc::val_a<ds::String<Memory>> text;
 
       // The copy lives in the text's memory, region `a`, with the key it was recorded for.
-      [[nodiscard]] tbc::view<Recorded, tbc::lt::a> clone() const;
+      [[nodiscard]] tbc::val_a<Recorded> clone() const;
     };
 
     // The allocator the editor's texts come from.
@@ -228,7 +228,7 @@ namespace telar::gui::features::prompt {
     void store(std::string_view text, bool linewise);
 
     struct Register {
-      tbc::view<ds::String<Memory>, tbc::lt::a> text;
+      tbc::val_a<ds::String<Memory>> text;
       bool linewise = false;
     };
 
@@ -283,17 +283,17 @@ namespace telar::gui::features::prompt {
 
     static std::size_t encode(char32_t value, ds::Array<char, 4>& output) noexcept;
 
-    tbc::view<Text, tbc::lt::a> text_;
+    tbc::val_a<Text> text_;
     Keymap keymap_;
     Mode mode_ = Mode::insert;
-    tbc::view<Clipboard, tbc::lt::a> clipboard_;
-    tbc::view<ds::String<Memory>, tbc::lt::a> kill_ring_;
-    tbc::view<ds::String<Memory>, tbc::lt::a> pasted_;
-    tbc::view<Register, tbc::lt::a> unnamed_;
+    tbc::val_a<Clipboard> clipboard_;
+    tbc::val_a<ds::String<Memory>> kill_ring_;
+    tbc::val_a<ds::String<Memory>> pasted_;
+    tbc::val_a<Register> unnamed_;
     // vim's named registers, a to z.
-    tbc::view<ds::Vec<Register, Memory>, tbc::lt::a> registers_;
-    tbc::view<ds::Vec<Recorded, Memory>, tbc::lt::a> recorded_;
-    tbc::view<ds::Vec<Recorded, Memory>, tbc::lt::a> last_change_;
+    tbc::val_a<ds::Vec<Register, Memory>> registers_;
+    tbc::val_a<ds::Vec<Recorded, Memory>> recorded_;
+    tbc::val_a<ds::Vec<Recorded, Memory>> last_change_;
     ds::Option<std::size_t> goal_column_;
     Find last_find_;
     std::size_t count_ = 0;

@@ -217,13 +217,13 @@ namespace telar::runtime::cli {
     Database* database_ = nullptr;
     Statement* statement_ = nullptr;
     // Functions of the library library_ holds open.
-    tbc::view<Open, tbc::lt::self> open_{};
-    tbc::view<Close, tbc::lt::self> close_{};
-    tbc::view<Prepare, tbc::lt::self> prepare_{};
-    tbc::view<Finalize, tbc::lt::self> finalize_{};
-    tbc::view<Step, tbc::lt::self> step_{};
-    tbc::view<Text, tbc::lt::self> text_{};
-    tbc::view<Length, tbc::lt::self> length_{};
+    tbc::val_self<Open> open_{};
+    tbc::val_self<Close> close_{};
+    tbc::val_self<Prepare> prepare_{};
+    tbc::val_self<Finalize> finalize_{};
+    tbc::val_self<Step> step_{};
+    tbc::val_self<Text> text_{};
+    tbc::val_self<Length> length_{};
   };
 
   void historyPaths(const char* database, HistoryPathVisitor& visit) {

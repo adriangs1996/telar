@@ -124,7 +124,7 @@ export {
     class PathIndexBuilder {
     public:
       // Builds into the storage it is given; the directories it tracks view it, region `a`.
-      explicit PathIndexBuilder(tbc::view<ConcurrentMemory&, tbc::lt::a> memory, tbc::view<PathIndexStorage<ConcurrentMemory>&, tbc::lt::a> storage);
+      explicit PathIndexBuilder(tbc::mut_a<ConcurrentMemory> memory, tbc::mut_a<PathIndexStorage<ConcurrentMemory>> storage);
 
       void build(const char* root) noexcept;
 
@@ -136,7 +136,7 @@ export {
 
       static bool insideGit(std::string_view path) noexcept;
 
-      bool appendTracked(std::string_view relative, tbc::view<Directories&, tbc::lt::a> directories);
+      bool appendTracked(std::string_view relative, tbc::mut_a<Directories> directories);
 
       void tracked(const char* root);
 
@@ -146,8 +146,8 @@ export {
 
       void list(int directory, std::string_view prefix);
 
-      tbc::view<ConcurrentMemory&, tbc::lt::a> memory_;
-      tbc::view<PathIndexStorage<ConcurrentMemory>&, tbc::lt::a> storage_;
+      tbc::mut_a<ConcurrentMemory> memory_;
+      tbc::mut_a<PathIndexStorage<ConcurrentMemory>> storage_;
     };
 
   }
@@ -269,7 +269,7 @@ export {
       ds::String<ConcurrentMemory> root_;
       PathIndexStorage<ConcurrentMemory> storage_;
       // Builds into storage_.
-      tbc::view<PathIndexBuilder, tbc::lt::self> builder_;
+      tbc::val_self<PathIndexBuilder> builder_;
       FuzzyMatch<ConcurrentMemory> matcher_;
     };
 

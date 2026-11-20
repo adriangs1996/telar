@@ -94,7 +94,7 @@ namespace telar::runtime {
   }
 
   template <Allocator Memory>
-  tbc::view<ds::String<Memory>, tbc::lt::a> ShellIntegration<Memory>::install(tbc::view<Memory&, tbc::lt::a> memory, std::string_view data_home) {
+  tbc::val_a<ds::String<Memory>> ShellIntegration<Memory>::install(tbc::mut_a<Memory> memory, std::string_view data_home) {
     ds::String<Memory> directory{memory, data_home};
 
     directory.append("/telar/shell-integration/");

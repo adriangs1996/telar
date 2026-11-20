@@ -14,7 +14,7 @@ import telar.base.text;
 
 namespace telar::runtime::cli::repository {
 
-  tbc::view<Text, tbc::lt::a> normalize(tbc::view<Memory&, tbc::lt::a> memory, std::string_view url) {
+  tbc::val_a<Text> normalize(tbc::mut_a<Memory> memory, std::string_view url) {
     url = trimText(url, " \t\r\n");
     std::string_view scheme = "ssh";
     std::string_view authority;
@@ -87,7 +87,7 @@ namespace telar::runtime::cli::repository {
     return ds::format(memory, "{}/{}", AsciiLower{host}, path);
   }
 
-  tbc::view<Text, tbc::lt::a> sanitized(tbc::view<Memory&, tbc::lt::a> memory, std::string_view origin) {
+  tbc::val_a<Text> sanitized(tbc::mut_a<Memory> memory, std::string_view origin) {
     if (origin.find_first_of("?#\r\n\t ") != origin.npos) {
       throw std::runtime_error{"UnsupportedOrigin"};
     }
@@ -209,7 +209,7 @@ namespace telar::runtime::cli::sessions {
     }
   }
 
-  void single(tbc::view<ds::Option<std::string_view>&, tbc::lt::a> field, tbc::view<std::string_view, tbc::lt::a> value, const char* error) {
+  void single(tbc::mut_a<ds::Option<std::string_view>> field, tbc::val_a<std::string_view> value, const char* error) {
     if (field) {
       usage(error);
     }
@@ -217,7 +217,7 @@ namespace telar::runtime::cli::sessions {
     field = value;
   }
 
-  tbc::view<Text, tbc::lt::a> realDirectory(tbc::view<Memory&, tbc::lt::a> memory, std::string_view path) {
+  tbc::val_a<Text> realDirectory(tbc::mut_a<Memory> memory, std::string_view path) {
     const Text given{memory, path};
     ds::Array<char, PATH_MAX> resolved{};
     if (::realpath(given.data(), resolved.dataMut()) == nullptr) {
@@ -448,7 +448,7 @@ namespace telar::runtime::cli::sessions {
 
 namespace telar::runtime::cli::repository {
 
-  Git::Git(tbc::view<Memory&, tbc::lt::a> memory, std::string_view root)
+  Git::Git(tbc::mut_a<Memory> memory, std::string_view root)
       : memory_(memory),
         git_(memory, root) {
     git_.inspect([&](Command<Memory>& command) {
@@ -459,11 +459,11 @@ namespace telar::runtime::cli::repository {
         });
   }
 
-  tbc::view<Text, tbc::lt::a> Git::read(std::initializer_list<std::string_view> arguments) {
+  tbc::val_a<Text> Git::read(std::initializer_list<std::string_view> arguments) {
     return read(std::span{arguments.begin(), arguments.size()});
   }
 
-  tbc::view<Text, tbc::lt::a> Git::read(std::span<const std::string_view> arguments) {
+  tbc::val_a<Text> Git::read(std::span<const std::string_view> arguments) {
     auto [status, output] = git_.with(arguments, [&](Command<Memory>& command) {
       return execute(command, true);
     });
@@ -498,7 +498,7 @@ namespace telar::runtime::cli::repository {
     }
   }
 
-  tbc::view<std::pair<int, Text>, tbc::lt::a> Git::execute(Command<Memory>& command, bool bounded) {
+  tbc::val_a<std::pair<int, Text>> Git::execute(Command<Memory>& command, bool bounded) {
     constexpr std::size_t max_configuration_bytes = 64 * 1024;
     CommandOutput output{memory_, bounded ? max_git_output : max_configuration_bytes};
     const auto status = output.run(command, std::chrono::steady_clock::now() + git_timeout, true);
@@ -790,10 +790,10 @@ namespace telar::runtime::cli::sessions {
     }
   }
 
-  WorktreeGit::WorktreeGit(tbc::view<Memory&, tbc::lt::a> memory)
+  WorktreeGit::WorktreeGit(tbc::mut_a<Memory> memory)
       : memory_(memory) {}
 
-  tbc::view<Text, tbc::lt::a> WorktreeGit::run(std::span<const std::string_view> arguments, const char* failure, bool stream, bool hardened, std::span<const std::pair<std::string_view, std::string_view>> environment) const {
+  tbc::val_a<Text> WorktreeGit::run(std::span<const std::string_view> arguments, const char* failure, bool stream, bool hardened, std::span<const std::pair<std::string_view, std::string_view>> environment) const {
     Command command{memory_, Launch{.arguments = arguments}, CommandPurpose::configured_helper};
 
     for (const auto& [name, value] : environment) {
@@ -850,11 +850,11 @@ namespace telar::runtime::cli::sessions {
     return kept;
   }
 
-  tbc::view<Text, tbc::lt::a> WorktreeGit::run(std::initializer_list<std::string_view> arguments, const char* failure, bool stream, bool hardened) const {
+  tbc::val_a<Text> WorktreeGit::run(std::initializer_list<std::string_view> arguments, const char* failure, bool stream, bool hardened) const {
     return run(std::span{arguments.begin(), arguments.size()}, failure, stream, hardened);
   }
 
-  tbc::view<Text, tbc::lt::a> WorktreeGit::line(std::initializer_list<std::string_view> arguments, bool hardened) const {
+  tbc::val_a<Text> WorktreeGit::line(std::initializer_list<std::string_view> arguments, bool hardened) const {
     const auto value = run(arguments, "NotARepository", false, hardened);
     const auto trimmed = trimText(value.view(), " \r\n");
     if (trimmed.empty()) {
@@ -864,7 +864,7 @@ namespace telar::runtime::cli::sessions {
     return Text{memory_, trimmed};
   }
 
-  tbc::view<Text, tbc::lt::a> WorktreeGit::root(std::string_view directory) const {
+  tbc::val_a<Text> WorktreeGit::root(std::string_view directory) const {
     auto common = line({"git", "-C", directory, "rev-parse", "--path-format=absolute", "--git-common-dir"});
 
     while (common.view().ends_with('/')) {
@@ -880,7 +880,7 @@ namespace telar::runtime::cli::sessions {
     return common;
   }
 
-  tbc::view<Text, tbc::lt::a> WorktreeGit::currentBranch(std::string_view directory) const {
+  tbc::val_a<Text> WorktreeGit::currentBranch(std::string_view directory) const {
     return line({"git", "-C", directory, "rev-parse", "--abbrev-ref", "HEAD"});
   }
 
@@ -1074,7 +1074,7 @@ namespace telar::runtime::cli::sessions {
     return self;
   }
 
-  tbc::view<ds::Vec<GitWorktree, Memory>, tbc::lt::a> WorktreeGit::listed(std::string_view directory, const WorktreeFilter& keep) const {
+  tbc::val_a<ds::Vec<GitWorktree, Memory>> WorktreeGit::listed(std::string_view directory, const WorktreeFilter& keep) const {
     const auto main = root(directory);
     const auto bytes = run({"git", "-C", main, "worktree", "list", "--porcelain"});
     ds::Vec<GitWorktree, Memory> result{memory_};

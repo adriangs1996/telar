@@ -89,7 +89,7 @@ export {
       using Result = Request;
 
       // The result carries the request's media on.
-      tbc::view<Result, tbc::lt::a> observe(tbc::view<const Request&, tbc::lt::a> request) noexcept;
+      tbc::val_a<Result> observe(tbc::ref_a<Request> request) noexcept;
 
       void stop() noexcept;
     };
@@ -110,7 +110,7 @@ export {
       };
 
       // The credit budget, the pane's media and the runtime's counters are region `a`.
-      explicit GraphicsSynchronizer(tbc::view<GraphicsCreditBudget&, tbc::lt::a> budget, std::uint64_t pane, tbc::view<std::shared_ptr<PaneMedia>, tbc::lt::a> media);
+      explicit GraphicsSynchronizer(tbc::mut_a<GraphicsCreditBudget> budget, std::uint64_t pane, tbc::val_a<std::shared_ptr<PaneMedia>> media);
 
       ~GraphicsSynchronizer();
 
@@ -195,11 +195,11 @@ export {
       static constexpr std::size_t maximum_chunk_bytes = 1024 * 1024;
       static constexpr std::size_t maximum_queue_bytes = 2 * 1024 * 1024;
       // Frozen transfers borrow this pane's allocator until their destruction.
-      tbc::view<std::shared_ptr<PaneMedia>, tbc::lt::a> media_;
-      tbc::view<GraphicsCreditLedger, tbc::lt::a> credit_;
+      tbc::val_a<std::shared_ptr<PaneMedia>> media_;
+      tbc::val_a<GraphicsCreditLedger> credit_;
       std::uint64_t pane_;
       // Keeps the media media_ owns.
-      tbc::view<ds::Option<Transfer>, tbc::lt::self> transfer_;
+      tbc::val_self<ds::Option<Transfer>> transfer_;
       ds::Array<ImageKey, graphics_image_count * 2> known_images_{};
       ds::Array<GraphicsPlacement, graphics_placement_count * 2> known_placements_{};
       std::uint64_t observed_revision_ = 0;

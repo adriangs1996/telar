@@ -24,7 +24,7 @@ namespace telar::gui::features::paths {
     return path;
   }
 
-  tbc::view<ds::Option<std::string_view>, tbc::lt::a> PathInsertion::relativeTo(std::string_view anchor, tbc::view<std::string_view, tbc::lt::a> path) noexcept {
+  tbc::val_a<ds::Option<std::string_view>> PathInsertion::relativeTo(std::string_view anchor, tbc::val_a<std::string_view> path) noexcept {
     if (anchor.size() == 1) {
       if (path.size() <= 1) {
         return ds::none;
@@ -112,7 +112,7 @@ namespace telar::gui::features::paths {
     });
   }
 
-  void PathLabel::layout(tbc::view<std::string_view, tbc::lt::a> path, std::span<const std::uint16_t> positions, std::uint16_t width) {
+  void PathLabel::layout(tbc::val_a<std::string_view> path, std::span<const std::uint16_t> positions, std::uint16_t width) {
     count_ = 0;
     const auto name_start = nameStart(path);
 
@@ -131,7 +131,7 @@ namespace telar::gui::features::paths {
     appendSpan({.path = path, .positions = positions, .start = name_start, .end = path.size(), .name_start = name_start});
   }
 
-  tbc::view<std::span<const PathLabelRun>, tbc::lt::a> PathLabel::runs() const noexcept {
+  tbc::val_a<std::span<const PathLabelRun>> PathLabel::runs() const noexcept {
     return std::span{runs_}.first(count_);
   }
 
@@ -179,7 +179,7 @@ namespace telar::gui::features::paths {
     return first >= span.name_start ? PathLabelTone::name : PathLabelTone::directory;
   }
 
-  void PathLabel::appendSpan(tbc::view<Span, tbc::lt::a> span) {
+  void PathLabel::appendSpan(tbc::val_a<Span> span) {
     if (span.start == span.end) {
       return;
     }
@@ -203,7 +203,7 @@ namespace telar::gui::features::paths {
     push({.text = span.path.substr(run_start, span.end - run_start), .tone = tone});
   }
 
-  void PathLabel::push(tbc::view<PathLabelRun, tbc::lt::a> run) noexcept {
+  void PathLabel::push(tbc::val_a<PathLabelRun> run) noexcept {
     if (count_ < runs_.size()) {
       runs_.atMut(count_++) = run;
     }

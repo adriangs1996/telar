@@ -18,7 +18,7 @@ namespace telar::gui::inline foundation::inline system {
     }
 
     // The filename is written into the output, region `a`.
-    tbc::view<std::string_view, tbc::lt::a> lockFilename(tbc::view<std::span<char>, tbc::lt::a> output, std::string_view basename, unsigned slot) {
+    tbc::val_a<std::string_view> lockFilename(tbc::val_a<std::span<char>> output, std::string_view basename, unsigned slot) {
       constexpr std::string_view prefix = ".gui-";
       constexpr std::string_view suffix = ".lock";
       if (basename.size() + prefix.size() + suffix.size() >= output.size()) {

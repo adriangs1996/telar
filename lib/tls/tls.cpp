@@ -280,7 +280,7 @@ namespace telar::runtime {
     return memory_ == nullptr ? nullptr : CAllocationBlocks{*memory_}.resize(pointer, size);
   }
 
-  tbc::view<CertificateAuthority, tbc::lt::a> CertificateAuthority::loadOrCreate(tbc::view<ConcurrentMemory&, tbc::lt::a> memory, const TlsLibrary& library, int directory, AuthorityKind kind) {
+  tbc::val_a<CertificateAuthority> CertificateAuthority::loadOrCreate(tbc::mut_a<ConcurrentMemory> memory, const TlsLibrary& library, int directory, AuthorityKind kind) {
     if (auto existing = loadExisting(memory, library, directory, kind)) {
       return std::move(existing.getMut());
     }
@@ -288,7 +288,7 @@ namespace telar::runtime {
     return create(memory, library, directory, AuthorityFiles::forKind(kind), kind);
   }
 
-  tbc::view<ds::Option<CertificateAuthority>, tbc::lt::a> CertificateAuthority::loadExisting(tbc::view<ConcurrentMemory&, tbc::lt::a> memory, const TlsLibrary& library, int directory, AuthorityKind kind) {
+  tbc::val_a<ds::Option<CertificateAuthority>> CertificateAuthority::loadExisting(tbc::mut_a<ConcurrentMemory> memory, const TlsLibrary& library, int directory, AuthorityKind kind) {
     TELAR_TRACE("tls.loadAuthority");
     requireTls(library.uses(memory), "TLS authority allocator does not match its library");
     const auto files = AuthorityFiles::forKind(kind);
@@ -310,7 +310,7 @@ namespace telar::runtime {
     return CertificateAuthority{memory, std::move(pair)};
   }
 
-  tbc::view<CertificateAuthority, tbc::lt::a> CertificateAuthority::create(tbc::view<ConcurrentMemory&, tbc::lt::a> memory, const TlsLibrary& library, int directory, AuthorityFiles files, AuthorityKind kind) {
+  tbc::val_a<CertificateAuthority> CertificateAuthority::create(tbc::mut_a<ConcurrentMemory> memory, const TlsLibrary& library, int directory, AuthorityFiles files, AuthorityKind kind) {
     requireTls(library.uses(memory), "TLS authority allocator does not match its library");
     const auto lifetime = kind == AuthorityKind::system_trust ? CertificatePair::system_lifetime : CertificatePair::private_lifetime;
     auto pair = CertificatePair::authority(common_name, lifetime);
@@ -390,11 +390,11 @@ namespace telar::runtime {
     }
   }
 
-  CertificateAuthority::CertificateAuthority(tbc::view<ConcurrentMemory&, tbc::lt::a> memory, CertificatePair pair) noexcept
+  CertificateAuthority::CertificateAuthority(tbc::mut_a<ConcurrentMemory> memory, CertificatePair pair) noexcept
       : memory_(memory),
         pair_(std::move(pair)) {}
 
-  tbc::view<ds::String<ConcurrentMemory>, tbc::lt::a> proxyAuthorityDirectoryFrom(tbc::view<ConcurrentMemory&, tbc::lt::a> memory, const EnvironmentSource& environment) {
+  tbc::val_a<ds::String<ConcurrentMemory>> proxyAuthorityDirectoryFrom(tbc::mut_a<ConcurrentMemory> memory, const EnvironmentSource& environment) {
     ds::String<ConcurrentMemory> path{memory, environment.lookup("XDG_DATA_HOME")};
     if (path.empty() || path.view().front() != '/') {
       path.assign(environment.lookup("HOME"));
@@ -496,7 +496,7 @@ namespace telar::runtime::proxy_trust {
     std::unreachable();
   }
 
-  tbc::view<Record, tbc::lt::a> Record::parse(tbc::view<ConcurrentMemory&, tbc::lt::a> memory, std::string_view source) {
+  tbc::val_a<Record> Record::parse(tbc::mut_a<ConcurrentMemory> memory, std::string_view source) {
     validateUtf8(source);
     constexpr auto names = ds::Array<std::string_view, 4>{"version", "backend", "fingerprint", "store_path"};
     JsonFields fields{memory, JsonValue::parse(source), names};
@@ -541,7 +541,7 @@ namespace telar::runtime::proxy_trust {
     return record;
   }
 
-  tbc::view<ds::Option<Record>, tbc::lt::a> Record::read(tbc::view<ConcurrentMemory&, tbc::lt::a> memory, int directory) {
+  tbc::val_a<ds::Option<Record>> Record::read(tbc::mut_a<ConcurrentMemory> memory, int directory) {
     ds::Vec<unsigned char, ConcurrentMemory> source{memory};
     if (!readPrivateFile(directory, filename, source, maximum_bytes - 1)) {
       return ds::none;
@@ -627,7 +627,7 @@ namespace telar::runtime::proxy_trust {
     }
   }
 
-  tbc::view<ds::String<ConcurrentMemory>, tbc::lt::a> Paths::keychainFrom(tbc::view<ConcurrentMemory&, tbc::lt::a> memory, const EnvironmentSource& environment) {
+  tbc::val_a<ds::String<ConcurrentMemory>> Paths::keychainFrom(tbc::mut_a<ConcurrentMemory> memory, const EnvironmentSource& environment) {
     const auto home = environment.lookup("HOME");
     ds::String<ConcurrentMemory> result{memory, home};
 

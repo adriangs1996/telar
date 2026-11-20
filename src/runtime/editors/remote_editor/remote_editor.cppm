@@ -26,13 +26,13 @@ export {
       // the request's context. The editor keeps only the buffers every request reuses.
       struct Session {
         const OpenEditor& request;
-        tbc::view<const RequestContext&, tbc::lt::a> context;
+        tbc::ref_a<RequestContext> context;
         EditorKind kind;
         Clock::time_point deadline;
         unsigned entries_left = 128;
         unsigned endpoints_left = 32;
         unsigned commands_left = 128;
-        tbc::view<const EditorCandidate*, tbc::lt::a> opened = nullptr;
+        tbc::val_a<const EditorCandidate*> opened = nullptr;
       };
 
     public:
@@ -49,7 +49,7 @@ export {
       void discoverNeovim(Session& session);
       void discoverVim(Session& session);
       // A candidate of the session's context, region `a`.
-      tbc::view<const EditorCandidate*, tbc::lt::a> candidate(const Session& session, pid_t pid) const noexcept;
+      tbc::val_a<const EditorCandidate*> candidate(const Session& session, pid_t pid) const noexcept;
       void quote(std::string_view value, bool lisp);
       void number(std::uint32_t value);
       void vimEndpoint(Session& session, std::string_view endpoint);

@@ -100,7 +100,7 @@ namespace telar::gui::qt {
   private:
     Observer& observer_;
     // The process reports back to this player.
-    tbc::view<CommandProcess<Host, system::SoundAttempt, SoundPlayer>, tbc::lt::self> process_;
+    tbc::val_self<CommandProcess<Host, system::SoundAttempt, SoundPlayer>> process_;
     system::SoundAttempt attempt_;
   };
 

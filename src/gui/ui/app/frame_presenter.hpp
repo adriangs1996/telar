@@ -135,14 +135,14 @@ namespace telar::gui::qt {
     void present(const PresentedFrame& frame);
     [[nodiscard]] std::size_t collectPacingPanes(std::span<application::window::FramePacer::Pane, PaneLayout::maximum_panes> panes) const;
 
-    tbc::view<ApplicationAllocator&, tbc::lt::a> memory_;
-    tbc::view<Store&, tbc::lt::a> store_;
-    tbc::view<WindowDisplay&, tbc::lt::a> display_;
-    tbc::view<TabsController&, tbc::lt::a> tabs_;
-    tbc::view<HistoryController&, tbc::lt::a> history_;
-    tbc::view<TerminalController&, tbc::lt::a> terminals_;
-    tbc::view<PointerDispatcher&, tbc::lt::a> pointers_;
-    tbc::view<WindowStatus&, tbc::lt::a> status_;
+    tbc::mut_a<ApplicationAllocator> memory_;
+    tbc::mut_a<Store> store_;
+    tbc::mut_a<WindowDisplay> display_;
+    tbc::mut_a<TabsController> tabs_;
+    tbc::mut_a<HistoryController> history_;
+    tbc::mut_a<TerminalController> terminals_;
+    tbc::mut_a<PointerDispatcher> pointers_;
+    tbc::mut_a<WindowStatus> status_;
     QPointer<QQuickWindow> window_;
     std::uint64_t window_generation_ = 0;
     ds::Option<WindowFramePacer<>> frame_pacer_;

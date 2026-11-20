@@ -65,7 +65,7 @@ namespace telar::runtime {
     return true;
   }
 
-  tbc::view<std::span<const std::string_view>, tbc::lt::a> resumeArguments(tbc::view<const AgentResume&, tbc::lt::a> resume, tbc::view<ds::Array<std::string_view, 4>&, tbc::lt::a> arguments) noexcept {
+  tbc::val_a<std::span<const std::string_view>> resumeArguments(tbc::ref_a<AgentResume> resume, tbc::mut_a<ds::Array<std::string_view, 4>> arguments) noexcept {
     if (!validResumeSession(resume.provider, resume.session.view())) {
       return {};
     }

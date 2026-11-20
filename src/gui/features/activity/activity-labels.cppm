@@ -30,15 +30,15 @@ export {
 
       template <Allocator Memory>
       // The activity names the project's path in the replica, region `a`.
-      [[nodiscard]] static tbc::view<ProjectActivity, tbc::lt::a> derive(tbc::view<const WorkspaceReplica<Memory>&, tbc::lt::a> workspaces, std::span<const Agent<Memory>> agents, std::uint64_t project) noexcept;
+      [[nodiscard]] static tbc::val_a<ProjectActivity> derive(tbc::ref_a<WorkspaceReplica<Memory>> workspaces, std::span<const Agent<Memory>> agents, std::uint64_t project) noexcept;
 
-      [[nodiscard]] tbc::view<ds::Option<std::string_view>, tbc::lt::a> summary(tbc::view<Text&, tbc::lt::a> storage) const;
+      [[nodiscard]] tbc::val_a<ds::Option<std::string_view>> summary(tbc::mut_a<Text> storage) const;
 
       [[nodiscard]] Attention attentionLabel() const;
     };
 
-    extern template tbc::view<ProjectActivity, tbc::lt::a> ProjectActivity::derive<Memory>(tbc::view<const WorkspaceReplica<Memory>&, tbc::lt::a> workspaces, std::span<const Agent<Memory>> agents, std::uint64_t project) noexcept;
-    extern template tbc::view<ProjectActivity, tbc::lt::a> ProjectActivity::derive<ConcurrentMemory>(tbc::view<const WorkspaceReplica<ConcurrentMemory>&, tbc::lt::a> workspaces, std::span<const Agent<ConcurrentMemory>> agents, std::uint64_t project) noexcept;
+    extern template tbc::val_a<ProjectActivity> ProjectActivity::derive<Memory>(tbc::ref_a<WorkspaceReplica<Memory>> workspaces, std::span<const Agent<Memory>> agents, std::uint64_t project) noexcept;
+    extern template tbc::val_a<ProjectActivity> ProjectActivity::derive<ConcurrentMemory>(tbc::ref_a<WorkspaceReplica<ConcurrentMemory>> workspaces, std::span<const Agent<ConcurrentMemory>> agents, std::uint64_t project) noexcept;
 
   }
 }
@@ -117,11 +117,11 @@ export {
       [[nodiscard]] static float contextShare(AgentStatus state, bool signal) noexcept;
 
       template <Allocator Memory>
-      [[nodiscard]] static tbc::view<std::string_view, tbc::lt::static_storage> commandState(const Worktree<Memory>& task, bool connected) noexcept;
+      [[nodiscard]] static tbc::val_static<std::string_view> commandState(const Worktree<Memory>& task, bool connected) noexcept;
 
       template <Allocator Memory>
       // The facts are written into the storage, or are the state alone when they do not fit: region `a`.
-      [[nodiscard]] static tbc::view<std::string_view, tbc::lt::a> commandFacts(std::string_view machine, const Worktree<Memory>& task, bool connected, tbc::view<Text&, tbc::lt::a> storage);
+      [[nodiscard]] static tbc::val_a<std::string_view> commandFacts(std::string_view machine, const Worktree<Memory>& task, bool connected, tbc::mut_a<Text> storage);
 
     private:
       static void append(Text& storage, std::string_view text);
@@ -133,10 +133,10 @@ export {
     extern template TaskCardLabels::Facts TaskCardLabels::facts<ConcurrentMemory>(const Worktree<ConcurrentMemory>& task);
     extern template TaskCardLabels::Activity TaskCardLabels::activity<Memory>(const Agent<Memory>& agent) noexcept;
     extern template TaskCardLabels::Activity TaskCardLabels::activity<ConcurrentMemory>(const Agent<ConcurrentMemory>& agent) noexcept;
-    extern template tbc::view<std::string_view, tbc::lt::static_storage> TaskCardLabels::commandState<Memory>(const Worktree<Memory>& task, bool connected) noexcept;
-    extern template tbc::view<std::string_view, tbc::lt::static_storage> TaskCardLabels::commandState<ConcurrentMemory>(const Worktree<ConcurrentMemory>& task, bool connected) noexcept;
-    extern template tbc::view<std::string_view, tbc::lt::a> TaskCardLabels::commandFacts<Memory>(std::string_view machine, const Worktree<Memory>& task, bool connected, tbc::view<TaskCardLabels::Text&, tbc::lt::a> storage);
-    extern template tbc::view<std::string_view, tbc::lt::a> TaskCardLabels::commandFacts<ConcurrentMemory>(std::string_view machine, const Worktree<ConcurrentMemory>& task, bool connected, tbc::view<TaskCardLabels::Text&, tbc::lt::a> storage);
+    extern template tbc::val_static<std::string_view> TaskCardLabels::commandState<Memory>(const Worktree<Memory>& task, bool connected) noexcept;
+    extern template tbc::val_static<std::string_view> TaskCardLabels::commandState<ConcurrentMemory>(const Worktree<ConcurrentMemory>& task, bool connected) noexcept;
+    extern template tbc::val_a<std::string_view> TaskCardLabels::commandFacts<Memory>(std::string_view machine, const Worktree<Memory>& task, bool connected, tbc::mut_a<TaskCardLabels::Text> storage);
+    extern template tbc::val_a<std::string_view> TaskCardLabels::commandFacts<ConcurrentMemory>(std::string_view machine, const Worktree<ConcurrentMemory>& task, bool connected, tbc::mut_a<TaskCardLabels::Text> storage);
 
   }
 }

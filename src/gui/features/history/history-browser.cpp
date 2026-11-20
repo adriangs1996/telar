@@ -19,7 +19,7 @@ namespace telar::gui::features::history {
         provider(memory) {}
 
   template <Allocator Memory>
-  HistoryPageStorage<Memory>::HistoryPageStorage(tbc::view<Memory&, tbc::lt::a> memory, std::span<const HistoryEntry> entries)
+  HistoryPageStorage<Memory>::HistoryPageStorage(tbc::mut_a<Memory> memory, std::span<const HistoryEntry> entries)
       : rows_(memory),
         commands_(memory) {
     entries = entries.first(std::min(entries.size(), maximum_entries));
@@ -74,7 +74,7 @@ namespace telar::gui::features::history {
   }
 
   template <Allocator Memory>
-  void HistoryPageStorage<Memory>::append(tbc::view<Memory&, tbc::lt::a> memory, const HistoryEntry& entry) {
+  void HistoryPageStorage<Memory>::append(tbc::mut_a<Memory> memory, const HistoryEntry& entry) {
     auto& row = rows_.emplace(memory);
 
     row.id = entry.id;

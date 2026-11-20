@@ -192,7 +192,7 @@ export {
     class Value {
     public:
       // A value views a slot of the state; its label is its own copy.
-      explicit Value(tbc::view<lua_State*, tbc::lt::a> state, int index, std::string_view label);
+      explicit Value(tbc::val_a<lua_State*> state, int index, std::string_view label);
       ~Value();
 
       Value(const Value&) = delete;
@@ -201,16 +201,16 @@ export {
       // The same value under another name: a profile's tables are reported as
       // the configuration's, as diagnostics name them.
       // Another value of the same state, in region `a`; it does not view this one.
-      tbc::view<Value, tbc::lt::a> as(std::string_view label) const;
-      tbc::view<Value, tbc::lt::a> field(const char* name) const;
-      tbc::view<Value, tbc::lt::a> element(lua_Integer position) const;
-      tbc::view<Value, tbc::lt::a> entry(std::string_view key) const;
+      tbc::val_a<Value> as(std::string_view label) const;
+      tbc::val_a<Value> field(const char* name) const;
+      tbc::val_a<Value> element(lua_Integer position) const;
+      tbc::val_a<Value> entry(std::string_view key) const;
       bool present() const noexcept;
       bool is(int type) const noexcept;
       void pushCopy() const;
 
       // The state's string, which outlives this slot while the table that holds it does.
-      tbc::view<std::string_view, tbc::lt::a> string() const;
+      tbc::val_a<std::string_view> string() const;
 
       bool boolean(bool fallback) const;
       lua_Integer integer() const;
@@ -249,7 +249,7 @@ export {
       void visitFields(void* target, void (*consume)(void*, std::string_view, const Value&)) const;
       void require(int type, const char* message) const;
 
-      tbc::view<lua_State*, tbc::lt::a> state_;
+      tbc::val_a<lua_State*> state_;
       int index_;
       int restored_top_;
       // The value's path, for errors only: a deep path is cut rather than allocated.

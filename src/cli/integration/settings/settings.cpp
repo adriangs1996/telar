@@ -28,7 +28,7 @@ namespace telar::runtime::cli::integration {
   }
 
   template <Allocator Memory>
-  tbc::view<ds::String<Memory>, tbc::lt::a> joinPath(tbc::view<Memory&, tbc::lt::a> memory, std::string_view directory, std::string_view name) {
+  tbc::val_a<ds::String<Memory>> joinPath(tbc::mut_a<Memory> memory, std::string_view directory, std::string_view name) {
     ds::String<Memory> path{memory, directory};
 
     path.push('/');
@@ -40,7 +40,7 @@ namespace telar::runtime::cli::integration {
     return path;
   }
 
-  tbc::view<ds::Option<ds::String<Memory>>, tbc::lt::a> read(tbc::view<Memory&, tbc::lt::a> memory, const ds::String<Memory>& path, std::size_t maximum_bytes) {
+  tbc::val_a<ds::Option<ds::String<Memory>>> read(tbc::mut_a<Memory> memory, const ds::String<Memory>& path, std::size_t maximum_bytes) {
     FileDescriptor file{::open(path.data(), O_RDONLY | O_CLOEXEC | O_NONBLOCK | O_NOCTTY)};
     if (!file) {
       if (sys::lastError() == ENOENT) {
@@ -158,7 +158,7 @@ description: Delegate tasks to agents in their own Git worktrees and steer them 
   }};
 
   template <Allocator Memory>
-  tbc::view<ds::String<Memory>, tbc::lt::a> skillPath(tbc::view<Memory&, tbc::lt::a> memory, std::string_view root, const Skill& skill) {
+  tbc::val_a<ds::String<Memory>> skillPath(tbc::mut_a<Memory> memory, std::string_view root, const Skill& skill) {
     auto path = joinPath(memory, root, "skills");
 
     path = joinPath(memory, path, skill.name);
@@ -245,7 +245,7 @@ description: Delegate tasks to agents in their own Git worktrees and steer them 
 
     // The text lives in the memory it is written to, region `a`.
     template <Allocator Memory>
-    tbc::view<ds::String<Memory>, tbc::lt::a> render(tbc::view<Memory&, tbc::lt::a> memory, std::string_view executable) const {
+    tbc::val_a<ds::String<Memory>> render(tbc::mut_a<Memory> memory, std::string_view executable) const {
       constexpr std::string_view placeholder = "\"__TELAR_EXECUTABLE__\"";
       const auto offset = source.find(placeholder);
       if (offset == std::string_view::npos) {
@@ -323,7 +323,7 @@ description: Delegate tasks to agents in their own Git worktrees and steer them 
   constexpr std::size_t maximum_settings_bytes = 4 * 1024 * 1024;
 
   template <Allocator Memory, EnvironmentLookup Environment>
-  tbc::view<ds::Option<ds::String<Memory>>, tbc::lt::a> legacySettings(tbc::view<Memory&, tbc::lt::a> memory, Provider provider, const Environment& environment) {
+  tbc::val_a<ds::Option<ds::String<Memory>>> legacySettings(tbc::mut_a<Memory> memory, Provider provider, const Environment& environment) {
     if (provider.environment == nullptr || environment.lookup(provider.environment).empty() || environment.lookup("HOME").empty()) {
       return ds::none;
     }
@@ -455,7 +455,7 @@ description: Delegate tasks to agents in their own Git worktrees and steer them 
 
   // $XDG_DATA_HOME/$NVIM_APPNAME/site, as Neovim's stdpath("data") .. "/site" names it.
   template <EnvironmentLookup Environment>
-  tbc::view<ds::String<Memory>, tbc::lt::a> neovimSite(tbc::view<Memory&, tbc::lt::a> memory, const Environment& environment) {
+  tbc::val_a<ds::String<Memory>> neovimSite(tbc::mut_a<Memory> memory, const Environment& environment) {
     const auto application = environment.lookup("NVIM_APPNAME");
     if (application.starts_with('/') || application.contains("..")) {
       throw std::invalid_argument{"InvalidNvimAppName"};
@@ -700,7 +700,7 @@ namespace telar::runtime::cli::integration {
   }
 
   template <typename Node>
-  tbc::view<Node*, tbc::lt::a> HookSettings::findHook(tbc::view<Node&, tbc::lt::a> entry) const noexcept {
+  tbc::val_a<Node*> HookSettings::findHook(tbc::mut_a<Node> entry) const noexcept {
     if (provider_.flat_hooks) {
       return isOwnCommand(entry) ? &entry : nullptr;
     }

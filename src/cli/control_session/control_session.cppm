@@ -50,7 +50,7 @@ export {
         client_.send(message, buffer);
       }
 
-      tbc::view<std::span<const Byte>, tbc::lt::a> receive(tbc::view<std::span<Byte>, tbc::lt::a> buffer);
+      tbc::val_a<std::span<const Byte>> receive(tbc::val_a<std::span<Byte>> buffer);
 
       void receiveTimeout(unsigned seconds);
 

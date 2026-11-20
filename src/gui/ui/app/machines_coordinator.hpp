@@ -140,15 +140,15 @@ namespace telar::gui::qt {
     void connectMachine(application::machines::Machines::Slot slot);
     void release(MachineClient& client);
 
-    tbc::view<ApplicationAllocator&, tbc::lt::a> memory_;
-    tbc::view<Store&, tbc::lt::a> store_;
-    tbc::view<ConfigurationSource&, tbc::lt::a> configuration_source_;
-    tbc::view<application::HostEffects&, tbc::lt::a> desktop_;
-    tbc::view<FramePresenter&, tbc::lt::a> frames_;
-    tbc::view<WindowDisplay&, tbc::lt::a> display_;
-    tbc::view<WindowStatus&, tbc::lt::a> status_;
-    tbc::view<Dialogs&, tbc::lt::a> dialogs_;
-    tbc::view<MachinesHost&, tbc::lt::a> host_;
+    tbc::mut_a<ApplicationAllocator> memory_;
+    tbc::mut_a<Store> store_;
+    tbc::mut_a<ConfigurationSource> configuration_source_;
+    tbc::mut_a<application::HostEffects> desktop_;
+    tbc::mut_a<FramePresenter> frames_;
+    tbc::mut_a<WindowDisplay> display_;
+    tbc::mut_a<WindowStatus> status_;
+    tbc::mut_a<Dialogs> dialogs_;
+    tbc::mut_a<MachinesHost> host_;
     QByteArray hostname_;
     // The client whose agent the desktop's one sound plays for.
     ds::Cell<ds::Option<application::machines::MachineClientKey>> sound_owner_;

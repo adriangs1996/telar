@@ -188,7 +188,7 @@ namespace telar::gui::features::history {
     text.appendDecimal(value);
   }
 
-  tbc::view<HistoryInspectionFacts, tbc::lt::a> HistoryInspectionFacts::derive(tbc::view<HistoryInspectionEntry, tbc::lt::a> entry, CalendarSample sampled) {
+  tbc::val_a<HistoryInspectionFacts> HistoryInspectionFacts::derive(tbc::val_a<HistoryInspectionEntry> entry, CalendarSample sampled) {
     HistoryInspectionFacts result;
 
     result.directory = entry.directory;

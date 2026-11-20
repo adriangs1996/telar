@@ -88,7 +88,7 @@ namespace telar::gui::qt {
     using Done = ds::Function<void(LuaOutcome<Value>), done_capture_pointers * sizeof(void*)>;
 
     // The source keeps the application's allocator, and what is prepared with it, region `a`.
-    explicit ConfigurationSource(tbc::view<ApplicationAllocator&, tbc::lt::a> memory, QObject* parent = nullptr);
+    explicit ConfigurationSource(tbc::mut_a<ApplicationAllocator> memory, QObject* parent = nullptr);
     ~ConfigurationSource() override;
     ConfigurationSource(const ConfigurationSource&) = delete;
     ConfigurationSource& operator=(const ConfigurationSource&) = delete;
@@ -105,7 +105,7 @@ namespace telar::gui::qt {
     void invoke(BindingAction action, BindingContext context, Done<Effects> done);
     void expression(BindingAction action, BindingContext context, Done<InputExpression> done);
     // A command tab comes from the configured rows or from the actions a render resolved.
-    [[nodiscard]] tbc::view<ds::Option<runtime::config::CommandTabView>, tbc::lt::a> commandTab(BindingAction action, tbc::view<const Actions*, tbc::lt::a> resolved = nullptr) const;
+    [[nodiscard]] tbc::val_a<ds::Option<runtime::config::CommandTabView>> commandTab(BindingAction action, tbc::val_a<const Actions*> resolved = nullptr) const;
     [[nodiscard]] ds::Option<NotificationActionDescription> notificationAction(BindingAction action, const Actions* resolved = nullptr) const;
     [[nodiscard]] ds::Option<DefinitionActionDescription> definitionAction(BindingAction action, const Actions* resolved = nullptr) const;
     [[nodiscard]] ds::Option<NamedActionDescription> namedAction(BindingAction action, const Actions* resolved = nullptr) const;
@@ -147,13 +147,13 @@ namespace telar::gui::qt {
     [[nodiscard]] ConfigurationReloadRequest request(bool force);
     void schedule(bool force);
     void complete();
-    void adopt(tbc::view<PreparedConfiguration, tbc::lt::a> result);
+    void adopt(tbc::val_a<PreparedConfiguration> result);
     void fail(const std::exception& error);
     void updateAppearance(Appearance appearance);
     void reload();
 
-    tbc::view<ApplicationAllocator&, tbc::lt::a> memory_;
-    tbc::view<FontCache<ApplicationAllocator>, tbc::lt::a> fonts_;
+    tbc::mut_a<ApplicationAllocator> memory_;
+    tbc::val_a<FontCache<ApplicationAllocator>> fonts_;
     QTimer poll_;
     QTimer debounce_;
     ConfigurationWatch watch_;
@@ -162,12 +162,12 @@ namespace telar::gui::qt {
     ds::Option<ThemeValues> locked_theme_;
     InputConfiguration default_input_;
     // The default keymap is compiled from the input beside it, so the source stays where Qt made it.
-    tbc::view<BindingMap<BindingAction>, tbc::lt::self> default_keymap_;
-    tbc::view<ds::Box<Generation, ApplicationAllocator>, tbc::lt::a> generation_;
-    tbc::view<ds::Box<runtime::config::RetainedCommandTabRegistry, ApplicationAllocator>, tbc::lt::a> commands_;
-    tbc::view<ds::Array<ds::Option<BarRender>, application::components::Definitions::positions>, tbc::lt::a> fixed_bars_{};
+    tbc::val_self<BindingMap<BindingAction>> default_keymap_;
+    tbc::val_a<ds::Box<Generation, ApplicationAllocator>> generation_;
+    tbc::val_a<ds::Box<runtime::config::RetainedCommandTabRegistry, ApplicationAllocator>> commands_;
+    tbc::val_a<ds::Array<ds::Option<BarRender>, application::components::Definitions::positions>> fixed_bars_{};
     ConfigurationSnapshot::CommandArguments arguments_;
-    tbc::view<ds::Option<PluginPackages>, tbc::lt::a> plugins_;
+    tbc::val_a<ds::Option<PluginPackages>> plugins_;
     application::plugins::PluginOverrides plugin_overrides_;
     runtime::plugins::TrustStore trust_;
     std::uint64_t next_generation_ = 1;

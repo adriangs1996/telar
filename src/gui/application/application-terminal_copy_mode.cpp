@@ -66,7 +66,7 @@ namespace telar::gui::application::terminal::copy_mode {
     }
 
     // What a drag or a wheel turn over `pane` makes copy mode do.
-    tbc::view<ds::Option<feature::CopyPlan>, tbc::lt::static_storage> move(const feature::State& state, const CopyPointerDecision& decision, bool released, const Pane<Memory>& pane) {
+    tbc::val_static<ds::Option<feature::CopyPlan>> move(const feature::State& state, const CopyPointerDecision& decision, bool released, const Pane<Memory>& pane) {
       const auto grid = copyGrid(pane.screen);
       ds::Option<feature::CopyPlan> plan;
 
@@ -240,7 +240,7 @@ namespace telar::gui::application::terminal::copy_mode {
     return feature::takeSearchRequest(session.copy_mode);
   }
 
-  tbc::view<Pane<Memory>*, tbc::lt::a> pane(feature::State& state, tbc::view<Panes&, tbc::lt::a> panes) noexcept {
+  tbc::val_a<Pane<Memory>*> pane(feature::State& state, tbc::mut_a<Panes> panes) noexcept {
     const auto copy = feature::view(state).state();
     if (!copy) {
       return nullptr;

@@ -91,7 +91,7 @@ namespace telar::runtime {
     }
 
     // Reads a regular file of at most `limit` bytes; empty when it is missing or larger.
-    tbc::view<Text, tbc::lt::a> readSmall(tbc::view<ConcurrentMemory&, tbc::lt::a> memory, int directory, const char* name, std::size_t limit = WordReader::maximum_file) {
+    tbc::val_a<Text> readSmall(tbc::mut_a<ConcurrentMemory> memory, int directory, const char* name, std::size_t limit = WordReader::maximum_file) {
       Text bytes{memory};
       FileDescriptor file{::openat(directory, name, O_RDONLY | O_CLOEXEC | O_NONBLOCK)};
       struct stat state{};
@@ -131,7 +131,7 @@ namespace telar::runtime {
 
     // The first of `names` that `directory` or one of its parents holds, read whole; as the
     // tools find their files. Empty when there is none.
-    tbc::view<Text, tbc::lt::a> nearest(tbc::view<ConcurrentMemory&, tbc::lt::a> memory, std::string_view directory, std::span<const std::string_view> names) {
+    tbc::val_a<Text> nearest(tbc::mut_a<ConcurrentMemory> memory, std::string_view directory, std::span<const std::string_view> names) {
       Text current{memory, directory};
       Text file{memory};
 
@@ -161,7 +161,7 @@ namespace telar::runtime {
     // What the alias `name` stands for, as the shell reported it (name=words, %-encoded),
     // followed through aliases of aliases; empty when it is no alias of plain words. An alias
     // that starts with its own name (ls='ls -G') stands for that command.
-    tbc::view<Text, tbc::lt::a> expand(tbc::view<ConcurrentMemory&, tbc::lt::a> memory, std::string_view names, std::string_view name) {
+    tbc::val_a<Text> expand(tbc::mut_a<ConcurrentMemory> memory, std::string_view names, std::string_view name) {
       Text words{memory, name};
       Text decoded{memory};
       bool expanded = false;
@@ -605,13 +605,13 @@ namespace telar::runtime {
 
   }
 
-  WordResult::WordResult(tbc::view<ConcurrentMemory&, tbc::lt::a> memory)
+  WordResult::WordResult(tbc::mut_a<ConcurrentMemory> memory)
       : words(memory),
         command(memory),
         source(memory),
         expansion(memory) {}
 
-  WordReader::WordReader(tbc::view<ConcurrentMemory&, tbc::lt::a> memory, std::string_view configuration_directory)
+  WordReader::WordReader(tbc::mut_a<ConcurrentMemory> memory, std::string_view configuration_directory)
       : memory_(memory),
         completions_(memory),
         git_(memory),
@@ -622,7 +622,7 @@ namespace telar::runtime {
     }
   }
 
-  tbc::view<WordReader::Result, tbc::lt::a> WordReader::observe(const Request& request) noexcept {
+  tbc::val_a<WordReader::Result> WordReader::observe(const Request& request) noexcept {
     Result result{memory_};
 
     result.client = request.client;
@@ -733,7 +733,7 @@ namespace telar::runtime {
 
   void WordReader::stop() noexcept {}
 
-  void WordReader::spec(const Request& request, tbc::view<Result&, tbc::lt::a> result) {
+  void WordReader::spec(const Request& request, tbc::mut_a<Result> result) {
     auto name = request.prefix.view();
     if (!specName(name)) {
       return;
@@ -780,7 +780,7 @@ namespace telar::runtime {
     return shipped::specs.view();
   }
 
-  tbc::view<ds::String<ConcurrentMemory>, tbc::lt::a> WordReader::userSpec(std::string_view name) {
+  tbc::val_a<ds::String<ConcurrentMemory>> WordReader::userSpec(std::string_view name) {
     Text source{memory_};
 
     if (completions_.empty()) {
@@ -826,7 +826,7 @@ namespace telar::runtime {
     return source;
   }
 
-  WordService::WordService(tbc::view<ConcurrentMemory&, tbc::lt::a> memory, std::string_view configuration_directory)
+  WordService::WordService(tbc::mut_a<ConcurrentMemory> memory, std::string_view configuration_directory)
       : worker_(std::in_place, memory, configuration_directory),
         queue_(memory) {}
 

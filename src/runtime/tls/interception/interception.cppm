@@ -213,7 +213,7 @@ export {
       // `offer` is the child's ClientHello when the caller already read it complete; without one the
       // session reads its own, from an offer allocated in `memory`. Either is released once the origin
       // has the protocols.
-      explicit TlsSession(tbc::view<const TlsContexts&, tbc::lt::a> contexts, tbc::view<std::shared_ptr<const CertificateAuthority>, tbc::lt::a> authority, TunnelSockets sockets, std::string_view hostname, tbc::view<ConcurrentMemory&, tbc::lt::a> memory, tbc::view<ds::Box<AlpnOffer, ConcurrentMemory>, tbc::lt::a> offer);
+      explicit TlsSession(tbc::ref_a<TlsContexts> contexts, tbc::val_a<std::shared_ptr<const CertificateAuthority>> authority, TunnelSockets sockets, std::string_view hostname, tbc::mut_a<ConcurrentMemory> memory, tbc::val_a<ds::Box<AlpnOffer, ConcurrentMemory>> offer);
 
       ~TlsSession();
 
@@ -268,12 +268,12 @@ export {
       StreamReadBuffer<read_capacity> child_input_;
       StreamReadBuffer<read_capacity> origin_input_;
 
-      tbc::view<const TlsContexts&, tbc::lt::a> contexts_;
-      tbc::view<std::shared_ptr<const CertificateAuthority>, tbc::lt::a> authority_;
+      tbc::ref_a<TlsContexts> contexts_;
+      tbc::val_a<std::shared_ptr<const CertificateAuthority>> authority_;
       TunnelSockets sockets_;
       FixedText<ProxyHostname::maximum_bytes> hostname_;
       bool offered_;
-      tbc::view<ds::Box<AlpnOffer, ConcurrentMemory>, tbc::lt::a> offer_;
+      tbc::val_a<ds::Box<AlpnOffer, ConcurrentMemory>> offer_;
       AlpnSelection selection_;
       TlsConnection origin_;
       TlsConnection child_;
@@ -293,25 +293,25 @@ export {
     class TlsInterception {
     public:
       // A session it opens keeps the contexts and the allocator it is built in, region `a`.
-      explicit TlsInterception(tbc::view<const TlsContexts&, tbc::lt::a> contexts, tbc::view<std::shared_ptr<const CertificateAuthority>, tbc::lt::a> authority) noexcept;
+      explicit TlsInterception(tbc::ref_a<TlsContexts> contexts, tbc::val_a<std::shared_ptr<const CertificateAuthority>> authority) noexcept;
 
       // `offer` is the child's ClientHello when the caller already read it complete, or null.
-      tbc::view<ds::Box<TlsSession, ConcurrentMemory>, tbc::lt::a> open(tbc::view<ConcurrentMemory&, tbc::lt::a> memory, TunnelSockets sockets, std::string_view hostname, tbc::view<ds::Box<AlpnOffer, ConcurrentMemory>, tbc::lt::a> offer) const;
+      tbc::val_a<ds::Box<TlsSession, ConcurrentMemory>> open(tbc::mut_a<ConcurrentMemory> memory, TunnelSockets sockets, std::string_view hostname, tbc::val_a<ds::Box<AlpnOffer, ConcurrentMemory>> offer) const;
 
-      tbc::view<ds::Box<TlsSession, ConcurrentMemory>, tbc::lt::a> open(tbc::view<ConcurrentMemory&, tbc::lt::a> memory, TunnelSockets sockets, std::string_view hostname) const;
+      tbc::val_a<ds::Box<TlsSession, ConcurrentMemory>> open(tbc::mut_a<ConcurrentMemory> memory, TunnelSockets sockets, std::string_view hostname) const;
 
-      tbc::view<std::shared_ptr<const CertificateAuthority>, tbc::lt::a> snapshot() const noexcept;
+      tbc::val_a<std::shared_ptr<const CertificateAuthority>> snapshot() const noexcept;
 
-      void replace(tbc::view<std::shared_ptr<const CertificateAuthority>, tbc::lt::a> authority) noexcept;
+      void replace(tbc::val_a<std::shared_ptr<const CertificateAuthority>> authority) noexcept;
 
       void suspend(bool value) noexcept;
 
       bool suspended() const noexcept;
 
     private:
-      tbc::view<const TlsContexts&, tbc::lt::a> contexts_;
+      tbc::ref_a<TlsContexts> contexts_;
       mutable std::mutex mutex_;
-      tbc::view<std::shared_ptr<const CertificateAuthority>, tbc::lt::a> replacement_;
+      tbc::val_a<std::shared_ptr<const CertificateAuthority>> replacement_;
       std::atomic<bool> suspended_{false};
     };
 

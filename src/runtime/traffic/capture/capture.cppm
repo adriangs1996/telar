@@ -117,7 +117,7 @@ export {
       void close(std::size_t slot);
 
       ErasingAllocator<Memory> memory_;
-      tbc::view<Channel, tbc::lt::self> channel_;
+      tbc::val_self<Channel> channel_;
       ds::Array<ds::Option<Device>, Limits::interfaces> devices_;
     };
 

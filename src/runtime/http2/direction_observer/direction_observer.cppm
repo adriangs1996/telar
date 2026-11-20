@@ -156,12 +156,12 @@ export {
     public:
       void reset() noexcept;
 
-      tbc::view<ds::Option<std::span<const std::uint8_t>>, tbc::lt::a> body(tbc::view<const Http2FrameEvent&, tbc::lt::a> event) noexcept;
+      tbc::val_a<ds::Option<std::span<const std::uint8_t>>> body(tbc::ref_a<Http2FrameEvent> event) noexcept;
 
-      tbc::view<ds::Option<std::span<const std::uint8_t>>, tbc::lt::a> headers(tbc::view<const Http2FrameEvent&, tbc::lt::a> event) noexcept;
+      tbc::val_a<ds::Option<std::span<const std::uint8_t>>> headers(tbc::ref_a<Http2FrameEvent> event) noexcept;
 
     private:
-      tbc::view<ds::Option<std::span<const std::uint8_t>>, tbc::lt::a> extract(tbc::view<const Http2FrameEvent&, tbc::lt::a> event, std::size_t prefix) noexcept;
+      tbc::val_a<ds::Option<std::span<const std::uint8_t>>> extract(tbc::ref_a<Http2FrameEvent> event, std::size_t prefix) noexcept;
 
       static constexpr std::size_t priority_bytes = 5;
       static constexpr std::size_t promised_stream_bytes = 4;

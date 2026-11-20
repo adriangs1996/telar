@@ -20,9 +20,9 @@ export {
 
     class GitFiles {
     public:
-      static tbc::view<ds::Option<std::string_view>, tbc::lt::a> join(std::string_view directory, std::string_view suffix, tbc::view<std::span<char>, tbc::lt::a> buffer) noexcept;
-      static tbc::view<ds::Option<std::string_view>, tbc::lt::a> resolve(std::string_view directory, std::string_view path, tbc::view<std::span<char>, tbc::lt::a> buffer) noexcept;
-      static tbc::view<ds::Option<std::string_view>, tbc::lt::a> directory(std::string_view root, tbc::view<std::span<char>, tbc::lt::a> buffer) noexcept;
+      static tbc::val_a<ds::Option<std::string_view>> join(std::string_view directory, std::string_view suffix, tbc::val_a<std::span<char>> buffer) noexcept;
+      static tbc::val_a<ds::Option<std::string_view>> resolve(std::string_view directory, std::string_view path, tbc::val_a<std::span<char>> buffer) noexcept;
+      static tbc::val_a<ds::Option<std::string_view>> directory(std::string_view root, tbc::val_a<std::span<char>> buffer) noexcept;
     };
 
   }
@@ -122,7 +122,7 @@ export {
     class HardenedGit {
     public:
       // The repository's root and the overrides are copied into `memory`, region `a`.
-      HardenedGit(tbc::view<Memory&, tbc::lt::a> memory, std::string_view root);
+      HardenedGit(tbc::mut_a<Memory> memory, std::string_view root);
       HardenedGit(const HardenedGit&) = delete;
       HardenedGit& operator=(const HardenedGit&) = delete;
 
@@ -150,7 +150,7 @@ export {
       // in the repository; a command keeps its address, so it lives for this call. The result borrows
       // only what `use` holds, region `a`, never `use` itself, as a Rust closure's result does.
       template <typename Use>
-      TBC_GENERIC tbc::view<std::invoke_result_t<Use&, Command<Memory>&>, tbc::lt::a> with(std::span<const std::string_view> arguments, tbc::holds<Use&&, tbc::lt::a> use) const {
+      TBC_GENERIC tbc::val_a<std::invoke_result_t<Use&, Command<Memory>&>> with(std::span<const std::string_view> arguments, tbc::holds<Use&&, tbc::lt::a> use) const {
         // Stays generic over the caller's use of the command; its command line is built in the implementation unit.
         auto command = commandFor(arguments);
 
@@ -159,7 +159,7 @@ export {
       }
 
       template <typename Use>
-      TBC_GENERIC tbc::view<std::invoke_result_t<Use&, Command<Memory>&>, tbc::lt::a> with(std::initializer_list<std::string_view> arguments, tbc::holds<Use&&, tbc::lt::a> use) const {
+      TBC_GENERIC tbc::val_a<std::invoke_result_t<Use&, Command<Memory>&>> with(std::initializer_list<std::string_view> arguments, tbc::holds<Use&&, tbc::lt::a> use) const {
         // Stays generic over the caller's use of the command.
         return with(std::span{arguments.begin(), arguments.size()}, std::forward<Use>(use));
       }
@@ -179,9 +179,9 @@ export {
       // `git`, the hardening options and overrides, then `arguments`, run in the repository.
       Command<Memory> commandFor(std::span<const std::string_view> arguments) const;
 
-      tbc::view<Memory&, tbc::lt::a> memory_;
-      tbc::view<ds::String<Memory>, tbc::lt::a> root_;
-      tbc::view<ds::Vec<ds::String<Memory>, Memory>, tbc::lt::a> overrides_;
+      tbc::mut_a<Memory> memory_;
+      tbc::val_a<ds::String<Memory>> root_;
+      tbc::val_a<ds::Vec<ds::String<Memory>, Memory>> overrides_;
     };
 
     extern template class HardenedGit<Memory>;

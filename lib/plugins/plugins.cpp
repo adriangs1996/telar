@@ -642,7 +642,7 @@ namespace telar::runtime::plugins {
     return path;
   }
 
-  tbc::view<ds::String<Memory>, tbc::lt::a> Paths::installationDirectory(tbc::view<ds::String<Memory>, tbc::lt::a> data, const Package& package) {
+  tbc::val_a<ds::String<Memory>> Paths::installationDirectory(tbc::val_a<ds::String<Memory>> data, const Package& package) {
     auto path = required(std::move(data));
 
     path.append("/telar/plugins/");
@@ -756,7 +756,7 @@ namespace telar::runtime::plugins {
     return false;
   }
 
-  tbc::view<ds::String<Memory>, tbc::lt::a> TrustStore::json(tbc::view<Memory&, tbc::lt::a> memory) const {
+  tbc::val_a<ds::String<Memory>> TrustStore::json(tbc::mut_a<Memory> memory) const {
     ds::String<Memory> output{memory, "{\"version\":1,\"grants\":["};
 
     for (std::size_t index = 0; index < count_; ++index) {

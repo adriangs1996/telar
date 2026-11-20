@@ -10,7 +10,7 @@ export namespace telar::runtime::control {
 
   ds::Option<std::uint32_t> glyphCodepoint(std::string_view value) noexcept;
 
-  tbc::view<ds::Option<std::string_view>, tbc::lt::a> glyphOption(tbc::view<std::string_view, tbc::lt::a> options, std::string_view key) noexcept;
+  tbc::val_a<ds::Option<std::string_view>> glyphOption(tbc::val_a<std::string_view> options, std::string_view key) noexcept;
 
   // The current C++ clients have no session-glyph renderer. Advertise an empty
   // format set and reject registrations, rather than claiming invisible glyphs.

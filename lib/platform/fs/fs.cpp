@@ -151,7 +151,7 @@ namespace telar::runtime {
     }
   }
 
-  tbc::view<ds::Option<std::string_view>, tbc::lt::a> readRegularFile(std::string_view path, tbc::view<std::span<char>, tbc::lt::a> buffer) noexcept {
+  tbc::val_a<ds::Option<std::string_view>> readRegularFile(std::string_view path, tbc::val_a<std::span<char>> buffer) noexcept {
     ds::Array<char, PATH_MAX> terminated;
     if (path.size() >= terminated.size() || path.contains('\0')) {
       return ds::none;
@@ -315,7 +315,7 @@ namespace telar::runtime {
   }
 
   template <Allocator Memory>
-  tbc::view<ds::String<Memory>, tbc::lt::a> readFile(tbc::view<Memory&, tbc::lt::a> memory, const char* path, std::size_t maximum_bytes) {
+  tbc::val_a<ds::String<Memory>> readFile(tbc::mut_a<Memory> memory, const char* path, std::size_t maximum_bytes) {
     const auto file = openSourceFile(path);
 
     return readFileContents(memory, file.get(), maximum_bytes);

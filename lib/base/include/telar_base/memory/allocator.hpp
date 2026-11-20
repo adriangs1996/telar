@@ -230,7 +230,7 @@ namespace telar {
   public:
     // constexpr, so that a unit declaring an adapter instantiates the constructor, and with it the
     // overrides, rather than only the unit that emits the vtable.
-    explicit constexpr MemoryAdapter(tbc::view<Upstream&, tbc::lt::a> upstream) noexcept
+    explicit constexpr MemoryAdapter(tbc::mut_a<Upstream> upstream) noexcept
         : upstream_(upstream) {}
 
     void* allocate(std::size_t size, std::size_t alignment) noexcept override {
@@ -252,7 +252,7 @@ namespace telar {
 #endif
 
   private:
-    tbc::view<Upstream&, tbc::lt::a> upstream_;
+    tbc::mut_a<Upstream> upstream_;
   };
 
   template <Allocator Upstream>
@@ -266,7 +266,7 @@ namespace telar {
     using is_always_equal = std::false_type;
 
     // A handle to the allocator, whose region the containers that use it carry.
-    explicit AllocatorRef(tbc::view<Memory&, tbc::lt::a> memory) noexcept
+    explicit AllocatorRef(tbc::mut_a<Memory> memory) noexcept
         : memory_(&memory) {}
 
     template <typename Other>
@@ -290,7 +290,7 @@ namespace telar {
       memory_->deallocate(pointer, count * sizeof(Value), alignof(Value));
     }
 
-    tbc::view<Memory&, tbc::lt::a> memory() const noexcept {
+    tbc::mut_a<Memory> memory() const noexcept {
       return *memory_;
     }
 
@@ -300,7 +300,7 @@ namespace telar {
     }
 
   private:
-    tbc::view<Memory*, tbc::lt::a> memory_;
+    tbc::val_a<Memory*> memory_;
   };
 
   static_assert(Allocator<SystemAllocator>);

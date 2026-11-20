@@ -107,14 +107,14 @@ namespace telar::gui::qt {
   class ConfigurationLoader {
   public:
     // The preparation is allocated from memory.
-    [[nodiscard]] static tbc::view<PreparedConfiguration, tbc::lt::a> prepare(tbc::view<ApplicationAllocator&, tbc::lt::a> memory, const ConfigurationReloadRequest& request);
+    [[nodiscard]] static tbc::val_a<PreparedConfiguration> prepare(tbc::mut_a<ApplicationAllocator> memory, const ConfigurationReloadRequest& request);
     static void trackModules(const application::ConfigurationGeneration<ApplicationAllocator>& generation, const QString& root, ConfigurationWatch::Modules& modules);
     static void trackModuleNames(const QStringList& names, const QString& root, ConfigurationWatch::Modules& modules);
 
   private:
     // The preparation keeps what it allocates from memory, region `a`.
-    static void load(tbc::view<ApplicationAllocator&, tbc::lt::a> memory, const ConfigurationReloadRequest& request, tbc::view<ConfigurationPreparation&, tbc::lt::a> result);
-    static void snapshot(tbc::view<ApplicationAllocator&, tbc::lt::a> memory, const application::ConfigurationGeneration<ApplicationAllocator>& generation, tbc::view<ConfigurationSnapshot&, tbc::lt::a> result);
+    static void load(tbc::mut_a<ApplicationAllocator> memory, const ConfigurationReloadRequest& request, tbc::mut_a<ConfigurationPreparation> result);
+    static void snapshot(tbc::mut_a<ApplicationAllocator> memory, const application::ConfigurationGeneration<ApplicationAllocator>& generation, tbc::mut_a<ConfigurationSnapshot> result);
   };
 
 }

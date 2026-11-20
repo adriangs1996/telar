@@ -185,7 +185,7 @@ export {
     template <Allocator Memory>
     class ByteStorage {
     public:
-      explicit ByteStorage(tbc::view<Memory&, tbc::lt::a> memory, std::size_t size);
+      explicit ByteStorage(tbc::mut_a<Memory> memory, std::size_t size);
       ~ByteStorage();
 
       ByteStorage(const ByteStorage&) = delete;
@@ -195,7 +195,7 @@ export {
       std::span<const std::uint8_t> bytes() const noexcept;
 
     private:
-      tbc::view<Memory&, tbc::lt::a> memory_;
+      tbc::mut_a<Memory> memory_;
       std::uint8_t* storage_ = nullptr;
       std::size_t size_;
     };
@@ -432,7 +432,7 @@ export {
 
       void append(std::span<const Byte> bytes) noexcept;
       // The bytes copied into the caller's destination, not a view of the stream.
-      tbc::view<std::span<const Byte>, tbc::lt::a> read(std::uint64_t offset, tbc::view<std::span<Byte>, tbc::lt::a> destination) const noexcept;
+      tbc::val_a<std::span<const Byte>> read(std::uint64_t offset, tbc::val_a<std::span<Byte>> destination) const noexcept;
       std::uint64_t total() const noexcept;
       std::uint64_t retainedOffset() const noexcept;
 

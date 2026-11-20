@@ -197,11 +197,11 @@ namespace telar::gui::qt {
     void cancelPane(std::uint64_t pane_id);
     static void deliver(TerminalItem& terminal, const QMouseEvent& event, Qt::MouseButtons buttons);
 
-    tbc::view<Store&, tbc::lt::a> store_;
-    tbc::view<CopyController&, tbc::lt::a> copy_;
-    tbc::view<PromptController&, tbc::lt::a> prompt_;
-    tbc::view<TerminalHost&, tbc::lt::a> host_;
-    tbc::view<ApplicationAllocator&, tbc::lt::a> memory_;
+    tbc::mut_a<Store> store_;
+    tbc::mut_a<CopyController> copy_;
+    tbc::mut_a<PromptController> prompt_;
+    tbc::mut_a<TerminalHost> host_;
+    tbc::mut_a<ApplicationAllocator> memory_;
     QPointer<QQuickWindow> window_;
     QMetaObject::Connection placements_connection_;
     qreal chrome_ratio_ = 1;

@@ -89,10 +89,10 @@ export {
       static traffic::Selection selection(const lua::Value& events, traffic::Selection fallback);
 
       // The message views strings of the Lua state, region `a`, which the caller's tables keep alive.
-      static tbc::view<HttpMessageView, tbc::lt::a> message(const lua::Value& value);
+      static tbc::val_a<HttpMessageView> message(const lua::Value& value);
 
     private:
-      static std::size_t fields(const lua::Value& value, tbc::view<std::span<HttpMessageView::Field>, tbc::lt::a> fields);
+      static std::size_t fields(const lua::Value& value, tbc::val_a<std::span<HttpMessageView::Field>> fields);
 
       static void pushFields(lua_State* state, std::span<const HttpMessageView::Field> fields);
 
@@ -158,7 +158,7 @@ export {
 
       void invoke(lua_State* state, const TrafficEvent& event);
 
-      tbc::view<std::span<const Byte>, tbc::lt::a> finish(std::uint64_t event_id, tbc::view<std::span<Byte>, tbc::lt::a> output);
+      tbc::val_a<std::span<const Byte>> finish(std::uint64_t event_id, tbc::val_a<std::span<Byte>> output);
 
     private:
       static int call(lua_State* state);
@@ -211,11 +211,11 @@ export {
       Host(const Host&) = delete;
       Host& operator=(const Host&) = delete;
 
-      tbc::view<std::span<const Byte>, tbc::lt::a> trafficSetup(tbc::view<std::span<Byte>, tbc::lt::a> output);
+      tbc::val_a<std::span<const Byte>> trafficSetup(tbc::val_a<std::span<Byte>> output);
 
-      tbc::view<std::span<const Byte>, tbc::lt::a> invokeTraffic(const TrafficEvent& event, tbc::view<std::span<Byte>, tbc::lt::a> output);
+      tbc::val_a<std::span<const Byte>> invokeTraffic(const TrafficEvent& event, tbc::val_a<std::span<Byte>> output);
 
-      tbc::view<std::span<const Byte>, tbc::lt::a> invoke(const ExchangeView& exchange, tbc::view<std::span<Byte>, tbc::lt::a> output);
+      tbc::val_a<std::span<const Byte>> invoke(const ExchangeView& exchange, tbc::val_a<std::span<Byte>> output);
 
     private:
       struct Entrypoint {
@@ -229,7 +229,7 @@ export {
       };
 
       // What a protected call was handed, which outlives the call; Lua only carries its address.
-      static tbc::view<void*, tbc::lt::static_storage> callContext(lua_State* state) noexcept;
+      static tbc::val_static<void*> callContext(lua_State* state) noexcept;
 
       static int invokeTrafficCallback(lua_State* state);
 
@@ -241,7 +241,7 @@ export {
         bool encoding_failed = false;
       };
 
-      static tbc::view<Host&, tbc::lt::static_storage> context(lua_State* state) noexcept;
+      static tbc::mut_static<Host> context(lua_State* state) noexcept;
 
       static std::string_view errorMessage(lua_State* state);
 

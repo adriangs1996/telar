@@ -156,7 +156,7 @@ namespace telar::gui::features::plugins {
     });
   }
 
-  tbc::view<PluginPage, tbc::lt::a> PluginQuery::list(const PluginCatalog& catalog, const ClientCommand& request, tbc::view<std::span<char>, tbc::lt::a> output) {
+  tbc::val_a<PluginPage> PluginQuery::list(const PluginCatalog& catalog, const ClientCommand& request, tbc::val_a<std::span<char>> output) {
     catalog.validateGeneration(request.target_id);
     const auto index = page(request.value, catalog.size());
     JsonWriter writer{output};
@@ -172,7 +172,7 @@ namespace telar::gui::features::plugins {
     return {.text = writer.view(), .next = index + 1 < catalog.size() ? static_cast<std::int64_t>(index + 1) : -1};
   }
 
-  tbc::view<PluginPage, tbc::lt::a> PluginQuery::get(const PluginCatalog& catalog, const ClientCommand& request, tbc::view<std::span<char>, tbc::lt::a> output) {
+  tbc::val_a<PluginPage> PluginQuery::get(const PluginCatalog& catalog, const ClientCommand& request, tbc::val_a<std::span<char>> output) {
     catalog.validateGeneration(request.target_id);
     const auto index = catalog.find(request.text);
     const auto* package = catalog.package(index);

@@ -12,7 +12,7 @@ import telar.base.ds;
 
 namespace telar::gui::features::terminal::links {
 
-  tbc::view<std::string_view, tbc::lt::a> TextRange::view(tbc::view<std::string_view, tbc::lt::a> text) const {
+  tbc::val_a<std::string_view> TextRange::view(tbc::val_a<std::string_view> text) const {
     return text.substr(start, end - start);
   }
 
@@ -225,7 +225,7 @@ namespace telar::gui::features::terminal::links {
     return !value || (negative && *value != 0) ? ds::none : value;
   }
 
-  bool UriView::authority(tbc::view<std::string_view, tbc::lt::a> text, bool empty_authority_has_path) {
+  bool UriView::authority(tbc::val_a<std::string_view> text, bool empty_authority_has_path) {
     if (text.empty()) {
       return empty_authority_has_path;
     }

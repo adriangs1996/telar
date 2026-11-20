@@ -28,7 +28,7 @@ namespace telar::runtime {
     }
 
     // The value of `key` among `;`-separated options, or nothing.
-    tbc::view<std::string_view, tbc::lt::a> option(tbc::view<std::string_view, tbc::lt::a> options, std::string_view key) noexcept {
+    tbc::val_a<std::string_view> option(tbc::val_a<std::string_view> options, std::string_view key) noexcept {
       while (!options.empty()) {
         const auto end = options.find(';');
         const auto entry = options.substr(0, end);
@@ -554,7 +554,7 @@ namespace telar::runtime {
     length_ += bytes.size();
   }
 
-  tbc::view<std::span<const std::uint8_t>, tbc::lt::a> CommandOutputWindow::bytes(tbc::view<std::span<const std::uint8_t>, tbc::lt::a> storage) const noexcept {
+  tbc::val_a<std::span<const std::uint8_t>> CommandOutputWindow::bytes(tbc::val_a<std::span<const std::uint8_t>> storage) const noexcept {
     return storage.first(length_);
   }
 
@@ -569,7 +569,7 @@ namespace telar::runtime {
 
   // CommandTextWriter
 
-  CommandTextWriter::CommandTextWriter(tbc::view<std::span<Byte>, tbc::lt::a> destination) noexcept
+  CommandTextWriter::CommandTextWriter(tbc::val_a<std::span<Byte>> destination) noexcept
       : destination_(destination) {}
 
   GhosttyWriter CommandTextWriter::ghostty() noexcept {
@@ -741,7 +741,7 @@ namespace telar::runtime {
     findRightPrompt(screen);
   }
 
-  tbc::view<ds::Option<GhosttySelection>, tbc::lt::a> CommandSelection::select(tbc::view<CommandScreen, tbc::lt::a> screen) const {
+  tbc::val_a<ds::Option<GhosttySelection>> CommandSelection::select(tbc::val_a<CommandScreen> screen) const {
     const auto anchor = snapshot(anchor_);
     if (!primary(screen) || !anchor || erased_ || blank(*anchor, 0, screen.columns)) {
       return ds::none;
@@ -838,7 +838,7 @@ namespace telar::runtime {
     }
   }
 
-  CommandBlockRing::CommandBlockRing(tbc::view<GhosttyTerminal, tbc::lt::a> terminal)
+  CommandBlockRing::CommandBlockRing(tbc::val_a<GhosttyTerminal> terminal)
       : selection_(terminal) {}
 
   void CommandBlockRing::mark(char action, std::chrono::steady_clock::time_point now) {
@@ -942,7 +942,7 @@ namespace telar::runtime {
     return revision_;
   }
 
-  tbc::view<PaneBlocks, tbc::lt::b> CommandBlockRing::message(std::uint64_t pane_id, tbc::view<ds::Array<CommandBlock, capacity>&, tbc::lt::b> storage) const {
+  tbc::val_b<PaneBlocks> CommandBlockRing::message(std::uint64_t pane_id, tbc::mut_b<ds::Array<CommandBlock, capacity>> storage) const {
     for (std::size_t index = 0; index < count_; ++index) {
       const auto& current = entry(index);
 
@@ -956,7 +956,7 @@ namespace telar::runtime {
     return entries_.atMut((first_ + index) % capacity);
   }
 
-  tbc::view<const CommandBlockRing::Entry&, tbc::lt::b> CommandBlockRing::entry(std::size_t index) const noexcept {
+  tbc::ref_b<CommandBlockRing::Entry> CommandBlockRing::entry(std::size_t index) const noexcept {
     return entries_[(first_ + index) % capacity];
   }
 
@@ -1086,7 +1086,7 @@ namespace telar::runtime {
   // Hears the completions the shell's marks report, for the command that runs.
   class CommandTrackerCore::CompletionRelay final : public CommandZoneSink {
   public:
-    CompletionRelay(tbc::view<CommandTrackerCore&, tbc::lt::a> tracker, tbc::view<CapturedCommandEmitter&, tbc::lt::a> emitter) noexcept
+    CompletionRelay(tbc::mut_a<CommandTrackerCore> tracker, tbc::mut_a<CapturedCommandEmitter> emitter) noexcept
         : tracker_(tracker),
           emitter_(emitter) {}
 
@@ -1100,8 +1100,8 @@ namespace telar::runtime {
     void mark(CommandMark) override {}
 
   private:
-    tbc::view<CommandTrackerCore&, tbc::lt::a> tracker_;
-    tbc::view<CapturedCommandEmitter&, tbc::lt::a> emitter_;
+    tbc::mut_a<CommandTrackerCore> tracker_;
+    tbc::mut_a<CapturedCommandEmitter> emitter_;
   };
 
   CommandTrackerCore::CommandTrackerCore(ConcurrentMemory& memory, GhosttyTerminal terminal, std::string_view directory, ds::Option<ShellToken> shell_token)

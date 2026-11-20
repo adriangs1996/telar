@@ -33,7 +33,7 @@ export namespace telar::gui::features::terminal::links {
 
   // Opens `request`'s editor in its source pane, the runtime answering under its id: the message
   // to send, which views `request`. Throws while another request is pending.
-  [[nodiscard]] tbc::view<OpenEditor, tbc::lt::a> open(State& state, tbc::view<const EditorRequest&, tbc::lt::a> request);
+  [[nodiscard]] tbc::val_a<OpenEditor> open(State& state, tbc::ref_a<EditorRequest> request);
 
   // The runtime answered `request_id`, or it failed: the request it answered, none when it is
   // not the one pending.

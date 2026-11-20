@@ -71,7 +71,7 @@ namespace telar::gui::qt {
     void beginCatalogSnapshot() noexcept;
     void observeCatalog(const application::terminal::graphics::GraphicsStore<Memory>& store) noexcept;
     // The reach names the selection's declared limit.
-    [[nodiscard]] tbc::view<ds::Option<LimitReach>, tbc::lt::static_storage> preparePlacements(std::span<const ImagePlacementSource> sources);
+    [[nodiscard]] tbc::val_static<ds::Option<LimitReach>> preparePlacements(std::span<const ImagePlacementSource> sources);
     [[nodiscard]] const application::terminal::graphics::ImagePlacementSelection& placements() const noexcept;
     [[nodiscard]] ds::Option<WindowImage> resolve(GraphicsScene& scene, const application::terminal::graphics::GraphicsStore<Memory>& store, ImageKey key);
     void append(GraphicsScene& scene, QSGNode& parent, application::terminal::graphics::ImageTextureHandle handle, const application::terminal::graphics::ImageGeometry& geometry);
@@ -134,7 +134,7 @@ namespace telar::gui::qt {
     QQuickWindow& window_;
     QTimer timer_;
     Resources resources_;
-    tbc::view<Residency, tbc::lt::self> residency_{resources_};
+    tbc::val_self<Residency> residency_{resources_};
     application::terminal::graphics::ImagePlacementSelection placements_;
     ds::Array<PlacementSourceStamp, cached_source_capacity> placement_sources_{};
     std::size_t placement_source_count_ = 0;

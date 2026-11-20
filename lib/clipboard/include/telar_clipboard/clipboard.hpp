@@ -59,7 +59,7 @@ namespace telar::clipboard {
   inline constexpr std::size_t default_maximum_bytes = std::size_t{32} * 1024 * 1024;
 
   // Every MIME type is a string literal, so the result outlives the backend that produced it.
-  tbc::view<std::expected<content, read_error>, tbc::lt::static_storage> read(std::size_t maximum_bytes = default_maximum_bytes);
+  tbc::val_static<std::expected<content, read_error>> read(std::size_t maximum_bytes = default_maximum_bytes);
 } // namespace telar::clipboard
 
 #endif // TELAR_CLIPBOARD_CLIPBOARD_HPP

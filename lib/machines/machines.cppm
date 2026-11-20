@@ -341,7 +341,7 @@ export {
       [[nodiscard]] static bool integerSyntax(std::string_view text) noexcept;
 
       template <std::unsigned_integral Number, Allocator Memory>
-      [[nodiscard]] static tbc::view<Number, tbc::lt::a> parse(tbc::view<Memory&, tbc::lt::a> memory, std::string_view text, bool allow_float = true);
+      [[nodiscard]] static tbc::val_a<Number> parse(tbc::mut_a<Memory> memory, std::string_view text, bool allow_float = true);
 
     private:
       [[noreturn]] static void invalid();
@@ -468,10 +468,10 @@ export {
 
     struct MachineProfileCodec {
       template <Allocator Memory>
-      [[nodiscard]] static tbc::view<MachineProfiles, tbc::lt::a> parse(tbc::view<Memory&, tbc::lt::a> memory, std::string_view source);
+      [[nodiscard]] static tbc::val_a<MachineProfiles> parse(tbc::mut_a<Memory> memory, std::string_view source);
 
       template <Allocator Memory>
-      [[nodiscard]] static tbc::view<ds::String<Memory>, tbc::lt::a> format(tbc::view<Memory&, tbc::lt::a> memory, const MachineProfiles& profiles);
+      [[nodiscard]] static tbc::val_a<ds::String<Memory>> format(tbc::mut_a<Memory> memory, const MachineProfiles& profiles);
 
     private:
       static constexpr auto file_fields = ds::Array<std::string_view, 3>{"version", "local_label", "machines"};
@@ -492,7 +492,7 @@ export {
       static void validateProfile(Memory& memory, const runtime::JsonValue& value, ds::String<Memory>& scratch);
 
       template <Allocator Memory>
-      static tbc::view<ds::String<Memory>, tbc::lt::a> readString(tbc::view<Memory&, tbc::lt::a> memory, const runtime::JsonValue& value);
+      static tbc::val_a<ds::String<Memory>> readString(tbc::mut_a<Memory> memory, const runtime::JsonValue& value);
 
       template <Allocator Memory>
       static MachineProfile readProfile(Memory& memory, const runtime::JsonValue& value);

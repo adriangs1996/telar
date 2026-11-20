@@ -500,7 +500,7 @@ namespace telar::gui::qt {
     }
   }
 
-  void WindowCommands::HostCommands::operator()(const ClientCommand& message, tbc::view<CompleteClientCommand&, tbc::lt::a> reply) {
+  void WindowCommands::HostCommands::operator()(const ClientCommand& message, tbc::mut_a<CompleteClientCommand> reply) {
     if (!active) {
       application::UnsupportedClientCommand{}(message, reply);
     } else if (!answerConfiguration(commands, message, reply)) {
@@ -514,7 +514,7 @@ namespace telar::gui::qt {
     });
   }
 
-  bool WindowCommands::answerConfiguration(tbc::view<WindowCommands&, tbc::lt::a> commands, const ClientCommand& message, tbc::view<CompleteClientCommand&, tbc::lt::a> reply) {
+  bool WindowCommands::answerConfiguration(tbc::mut_a<WindowCommands> commands, const ClientCommand& message, tbc::mut_a<CompleteClientCommand> reply) {
     switch (message.action) {
     case ClientAction::config_show: {
       // The query rewrites the source's buffer, so the state views a copy of the title, not the session.

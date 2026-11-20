@@ -24,7 +24,7 @@ export {
 
       // The command views the executable and the texts the arguments view, region `a`.
       template <std::size_t Count>
-      [[nodiscard]] static constexpr tbc::view<CommandLine, tbc::lt::a> withArguments(tbc::view<std::string_view, tbc::lt::a> executable, tbc::view<ds::Array<std::string_view, Count>, tbc::lt::a> arguments) noexcept {
+      [[nodiscard]] static constexpr tbc::val_a<CommandLine> withArguments(tbc::val_a<std::string_view> executable, tbc::val_a<ds::Array<std::string_view, Count>> arguments) noexcept {
         static_assert(Count <= maximum_arguments);
         CommandLine command{.executable = executable, .count = Count};
 

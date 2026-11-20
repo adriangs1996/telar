@@ -168,7 +168,7 @@ export {
 
     struct MachineOpening {
       // The destination is one of the profiles', region `a`.
-      [[nodiscard]] static tbc::view<ds::Option<std::string_view>, tbc::lt::a> saved(tbc::view<const MachineProfiles&, tbc::lt::a> profiles, std::string_view label, std::string_view hostname);
+      [[nodiscard]] static tbc::val_a<ds::Option<std::string_view>> saved(tbc::ref_a<MachineProfiles> profiles, std::string_view label, std::string_view hostname);
 
       [[nodiscard]] static ds::Option<Machines::Slot> admitted(const Machines& machines, std::string_view name) noexcept;
     };

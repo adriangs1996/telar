@@ -81,7 +81,7 @@ namespace telar::gui::qt {
       return std::tie(left.source, left.pane->pane_id) < std::tie(right.source, right.pane->pane_id);
     }
 
-    tbc::view<std::string_view, tbc::lt::a> workspaceName(tbc::view<const GuiSession&, tbc::lt::a> session, const ListedPane& pane) {
+    tbc::val_a<std::string_view> workspaceName(tbc::ref_a<GuiSession> session, const ListedPane& pane) {
       if (pane.location.workspace.kind != WorkspaceLocation::Kind::workspace) {
         return {};
       }
@@ -122,7 +122,7 @@ namespace telar::gui::qt {
 
     // The active machine's panes that no agent holds; the other machines are summarized by their
     // sidebar row.
-    void listProcesses(tbc::view<const Store&, tbc::lt::a> store, std::span<const Order::Source> sources, application::machines::Machines::Slot active, tbc::holds<ds::Vec<ListedProcess, ApplicationAllocator>&, tbc::lt::a> processes) {
+    void listProcesses(tbc::ref_a<Store> store, std::span<const Order::Source> sources, application::machines::Machines::Slot active, tbc::holds<ds::Vec<ListedProcess, ApplicationAllocator>&, tbc::lt::a> processes) {
       for (std::size_t index = 0; index < sources.size(); ++index) {
         if (sources[index].slot != active) {
           continue;

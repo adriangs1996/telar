@@ -49,7 +49,7 @@ namespace telar::runtime {
   }
 
   template <Allocator Memory>
-  Command<Memory>::Command(tbc::view<Memory&, tbc::lt::a> memory, const Launch& launch, CommandPurpose purpose)
+  Command<Memory>::Command(tbc::mut_a<Memory> memory, const Launch& launch, CommandPurpose purpose)
       : executable_(memory),
         cwd_(memory, launch.cwd),
         arguments_(memory),

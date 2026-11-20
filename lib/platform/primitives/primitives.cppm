@@ -61,8 +61,8 @@ export namespace telar::runtime {
   // The name a graphics client gives a shared memory object, terminated in the caller's
   // destination: copied from its decoded bytes, or decoded from base64. None when it is empty,
   // holds a NUL or does not fit.
-  tbc::view<const char*, tbc::lt::a> copyGraphicsName(std::span<const std::uint8_t> decoded, tbc::view<std::span<std::uint8_t>, tbc::lt::a> destination) noexcept;
-  tbc::view<const char*, tbc::lt::a> decodeGraphicsName(std::string_view encoded, tbc::view<std::span<std::uint8_t>, tbc::lt::a> destination) noexcept;
+  tbc::val_a<const char*> copyGraphicsName(std::span<const std::uint8_t> decoded, tbc::val_a<std::span<std::uint8_t>> destination) noexcept;
+  tbc::val_a<const char*> decodeGraphicsName(std::string_view encoded, tbc::val_a<std::span<std::uint8_t>> destination) noexcept;
 
   // The POSIX shared memory a graphics client names in a kitty transmission, opened read-only.
   class GraphicsChildSharedMemory {

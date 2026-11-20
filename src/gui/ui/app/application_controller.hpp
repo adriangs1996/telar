@@ -336,60 +336,60 @@ namespace telar::gui::qt {
 
     ApplicationAllocator& memory_;
     Store store_;
-    tbc::view<HistoryController, tbc::lt::self> history_;
+    tbc::val_self<HistoryController> history_;
 
     ConfigurationSource configuration_source_;
-    tbc::view<WindowDisplay, tbc::lt::self> display_;
+    tbc::val_self<WindowDisplay> display_;
     // The theme and font QML reads, built on first read after each configurationChanged.
     mutable ds::Option<QVariantMap> colors_;
     mutable ds::Option<QVariantMap> font_;
-    tbc::view<ElementSlots, tbc::lt::self> element_slots_{configuration_source_, [this] {
-                                                            return components_.context();
-                                                          },
+    tbc::val_self<ElementSlots> element_slots_{configuration_source_, [this] {
+                                                 return components_.context();
+                                               },
         this};
     MachineProfilesSource machine_profiles_;
-    tbc::view<AttachmentsController, tbc::lt::self> attachments_;
-    tbc::view<SoundPlayer<ApplicationSoundHost, ApplicationController>, tbc::lt::self> sound_player_;
+    tbc::val_self<AttachmentsController> attachments_;
+    tbc::val_self<SoundPlayer<ApplicationSoundHost, ApplicationController>> sound_player_;
     SystemNotifier<ApplicationNotificationHost, ApplicationAllocator> system_notifier_;
     // What every client's MachineEffects reaches on the desktop.
-    tbc::view<ApplicationEffects, tbc::lt::self> effects_;
-    tbc::view<WorkspacesController, tbc::lt::self> workspaces_;
-    tbc::view<TabsController, tbc::lt::self> tabs_;
-    tbc::view<PanesController, tbc::lt::self> panes_;
-    tbc::view<ActivityController, tbc::lt::self> activity_;
-    tbc::view<SidebarController, tbc::lt::self> sidebar_;
-    tbc::view<PaletteController, tbc::lt::self> palette_;
-    tbc::view<PathPickerController, tbc::lt::self> paths_;
-    tbc::view<MachinePromptController, tbc::lt::self> machine_prompt_;
-    tbc::view<MachineChromeController, tbc::lt::self> machine_chrome_;
-    tbc::view<PeekController, tbc::lt::self> peek_;
-    tbc::view<MonitorController, tbc::lt::self> monitor_;
-    tbc::view<PromptController, tbc::lt::self> prompt_;
-    tbc::view<DocumentsController, tbc::lt::self> documents_;
-    tbc::view<LinkStatusController, tbc::lt::self> link_status_;
-    tbc::view<LinksController, tbc::lt::self> links_;
-    tbc::view<CopyController, tbc::lt::self> copy_;
+    tbc::val_self<ApplicationEffects> effects_;
+    tbc::val_self<WorkspacesController> workspaces_;
+    tbc::val_self<TabsController> tabs_;
+    tbc::val_self<PanesController> panes_;
+    tbc::val_self<ActivityController> activity_;
+    tbc::val_self<SidebarController> sidebar_;
+    tbc::val_self<PaletteController> palette_;
+    tbc::val_self<PathPickerController> paths_;
+    tbc::val_self<MachinePromptController> machine_prompt_;
+    tbc::val_self<MachineChromeController> machine_chrome_;
+    tbc::val_self<PeekController> peek_;
+    tbc::val_self<MonitorController> monitor_;
+    tbc::val_self<PromptController> prompt_;
+    tbc::val_self<DocumentsController> documents_;
+    tbc::val_self<LinkStatusController> link_status_;
+    tbc::val_self<LinksController> links_;
+    tbc::val_self<CopyController> copy_;
     // After the copy mode and the prompt, which the terminals read.
-    tbc::view<TerminalController, tbc::lt::self> terminals_;
-    tbc::view<NotificationsController, tbc::lt::self> notifications_;
-    tbc::view<ComponentsController, tbc::lt::self> components_;
-    tbc::view<PluginRunner, tbc::lt::self> plugins_;
-    tbc::view<WorkspaceFormController, tbc::lt::self> workspace_form_;
+    tbc::val_self<TerminalController> terminals_;
+    tbc::val_self<NotificationsController> notifications_;
+    tbc::val_self<ComponentsController> components_;
+    tbc::val_self<PluginRunner> plugins_;
+    tbc::val_self<WorkspaceFormController> workspace_form_;
     // The routers come after every recipient they hold, so they never outlive one. The keys also
     // hold the commands, built last: no key is routed once the window is being destroyed.
-    tbc::view<KeyBindings, tbc::lt::self> key_bindings_;
-    tbc::view<PointerDispatcher, tbc::lt::self> pointer_dispatcher_;
+    tbc::val_self<KeyBindings> key_bindings_;
+    tbc::val_self<PointerDispatcher> pointer_dispatcher_;
     // After the copy mode and the keys, whose mode it reports.
-    tbc::view<WindowStatus, tbc::lt::self> status_;
+    tbc::val_self<WindowStatus> status_;
     // After every recipient of a frame.
-    tbc::view<FramePresenter, tbc::lt::self> frames_;
+    tbc::val_self<FramePresenter> frames_;
     // After every controller a dialog opens over, and the routers it interrupts.
-    tbc::view<Dialogs, tbc::lt::self> dialogs_;
-    tbc::view<MachinesCoordinator, tbc::lt::self> machines_;
-    tbc::view<MachineRoster, tbc::lt::self> roster_;
-    tbc::view<ActivitySelection, tbc::lt::self> activity_selection_;
+    tbc::val_self<Dialogs> dialogs_;
+    tbc::val_self<MachinesCoordinator> machines_;
+    tbc::val_self<MachineRoster> roster_;
+    tbc::val_self<ActivitySelection> activity_selection_;
     // After everything a command acts on; the key bindings hold it before it is built.
-    tbc::view<WindowCommands, tbc::lt::self> commands_;
+    tbc::val_self<WindowCommands> commands_;
     QTimer refresh_timer_;
     QTimer graphics_resume_timer_;
 

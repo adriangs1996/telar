@@ -28,7 +28,7 @@ namespace telar::runtime {
     return rejected_;
   }
 
-  tbc::view<std::string_view, tbc::lt::static_storage> FlowGate::failureReason() const noexcept {
+  tbc::val_static<std::string_view> FlowGate::failureReason() const noexcept {
     return failure_;
   }
 
@@ -49,7 +49,7 @@ namespace telar::runtime {
     }
   }
 
-  void FlowState::open(tbc::view<traffic::FlowControl*, tbc::lt::a> control, std::uint64_t id, int child, int origin, std::string_view host) noexcept {
+  void FlowState::open(tbc::val_a<traffic::FlowControl*> control, std::uint64_t id, int child, int origin, std::string_view host) noexcept {
     control_ = control;
     identity_.id = id;
     endpoint(child, identity_.client);
@@ -64,7 +64,7 @@ namespace telar::runtime {
     identity_.visibility = value;
   }
 
-  void FlowState::reason(tbc::view<std::string_view, tbc::lt::static_storage> value) noexcept {
+  void FlowState::reason(tbc::val_static<std::string_view> value) noexcept {
     reason_ = value;
   }
 
@@ -72,7 +72,7 @@ namespace telar::runtime {
     return event(traffic::Direction::outbound);
   }
 
-  void FlowState::error(tbc::view<std::string_view, tbc::lt::static_storage> value) noexcept {
+  void FlowState::error(tbc::val_static<std::string_view> value) noexcept {
     reason_ = value;
     if (control_) {
       auto failed = event(traffic::Direction::outbound);
@@ -98,7 +98,7 @@ namespace telar::runtime {
     return soonest;
   }
 
-  void FlowState::fail(traffic::Direction direction, tbc::view<std::string_view, tbc::lt::static_storage> reason, bool reading) noexcept {
+  void FlowState::fail(traffic::Direction direction, tbc::val_static<std::string_view> reason, bool reading) noexcept {
     auto& gate = this->gate(direction);
     if (gate.rejected_) {
       return;
@@ -161,7 +161,7 @@ namespace telar::runtime {
     offset_ += count;
   }
 
-  ApplicationRelay::ApplicationRelay(tbc::view<ConcurrentMemory&, tbc::lt::a> memory, tbc::view<ConnectionObservation, tbc::lt::a> observation, std::string_view hostname)
+  ApplicationRelay::ApplicationRelay(tbc::mut_a<ConcurrentMemory> memory, tbc::val_a<ConnectionObservation> observation, std::string_view hostname)
       : relays_{.memory_ = memory, .observation_ = observation, .http1_ = {}, .http2_ = {}, .http2_endpoint_ = {}} {
     relays_.hostname_.assign(hostname.substr(0, ProxyHostname::maximum_bytes));
   }
@@ -317,7 +317,7 @@ namespace telar::runtime {
     };
   }
 
-  PlainTunnel::PlainTunnel(tbc::view<ConcurrentMemory&, tbc::lt::a> memory, TunnelSockets sockets, std::string_view hostname, tbc::view<ConnectionObservation, tbc::lt::a> observation)
+  PlainTunnel::PlainTunnel(tbc::mut_a<ConcurrentMemory> memory, TunnelSockets sockets, std::string_view hostname, tbc::val_a<ConnectionObservation> observation)
       : sockets_(sockets),
         application_(memory, observation, hostname) {}
 
@@ -355,7 +355,7 @@ namespace telar::runtime {
     return application_.interest(side);
   }
 
-  TlsTunnel::TlsTunnel(tbc::view<ConcurrentMemory&, tbc::lt::a> memory, tbc::view<const TlsInterception&, tbc::lt::a> interception, TunnelSockets sockets, std::string_view hostname, tbc::view<ds::Box<AlpnOffer, ConcurrentMemory>, tbc::lt::a> offer, tbc::view<ConnectionObservation, tbc::lt::a> observation)
+  TlsTunnel::TlsTunnel(tbc::mut_a<ConcurrentMemory> memory, tbc::ref_a<TlsInterception> interception, TunnelSockets sockets, std::string_view hostname, tbc::val_a<ds::Box<AlpnOffer, ConcurrentMemory>> offer, tbc::val_a<ConnectionObservation> observation)
       : observation_(observation),
         session_(interception.open(memory, sockets, hostname, std::move(offer))),
         application_(memory, observation, hostname) {}
@@ -443,7 +443,7 @@ namespace telar::runtime {
     return interest;
   }
 
-  tbc::view<std::string_view, tbc::lt::static_storage> TlsTunnel::recordFailure() noexcept {
+  tbc::val_static<std::string_view> TlsTunnel::recordFailure() noexcept {
     using Failure = TlsSession::Failure;
 
     switch (session_->failure()) {
@@ -469,7 +469,7 @@ namespace telar::runtime {
     return "tls_handshake_failed";
   }
 
-  ConnectionTransport::ConnectionTransport(tbc::view<ConcurrentMemory&, tbc::lt::a> memory) noexcept
+  ConnectionTransport::ConnectionTransport(tbc::mut_a<ConcurrentMemory> memory) noexcept
       : memory_(memory),
         flow_(),
         plain_(),
@@ -527,13 +527,13 @@ namespace telar::runtime {
     return earliest(flow, tls);
   }
 
-  void ConnectionTransport::reason(tbc::view<std::string_view, tbc::lt::static_storage> value) noexcept {
+  void ConnectionTransport::reason(tbc::val_static<std::string_view> value) noexcept {
     if (flow_) {
       flow_.getMut().reason(value);
     }
   }
 
-  void ConnectionTransport::error(tbc::view<std::string_view, tbc::lt::static_storage> value) noexcept {
+  void ConnectionTransport::error(tbc::val_static<std::string_view> value) noexcept {
     if (flow_) {
       flow_.getMut().error(value);
     }
@@ -823,7 +823,7 @@ namespace telar::runtime {
   }
 
   template <Allocator Memory>
-  auto ProxyPortMemory<Memory>::recall(std::string_view name, tbc::view<ds::Vec<unsigned char, Memory>&, tbc::lt::a> bytes) const noexcept -> tbc::view<ds::Option<Record>, tbc::lt::a> {
+  auto ProxyPortMemory<Memory>::recall(std::string_view name, tbc::mut_a<ds::Vec<unsigned char, Memory>> bytes) const noexcept -> tbc::val_a<ds::Option<Record>> {
     try {
       if (!readPrivateFile(directory_, name, bytes, maximum_record_bytes)) {
         return ds::none;

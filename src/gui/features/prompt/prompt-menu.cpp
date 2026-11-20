@@ -5,7 +5,7 @@ import telar.base.memory.allocators;
 
 namespace telar::gui::features::prompt {
 
-  Menu::Menu(tbc::view<Memory&, tbc::lt::a> memory)
+  Menu::Menu(tbc::mut_a<Memory> memory)
       : choices(memory),
         requests(memory),
         label(memory),

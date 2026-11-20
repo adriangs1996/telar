@@ -35,7 +35,7 @@ export {
     // Reads fields from a frame, region `a`; the bytes and text it hands out view that frame.
     class FrameReader {
     public:
-      explicit FrameReader(tbc::view<std::span<const Byte>, tbc::lt::a> input) noexcept;
+      explicit FrameReader(tbc::val_a<std::span<const Byte>> input) noexcept;
 
       // Generic over the caller's integer and enumeration types, so these stay here.
       template <std::unsigned_integral Integer>
@@ -66,14 +66,14 @@ export {
         }
       }
 
-      tbc::view<std::span<const Byte>, tbc::lt::a> bytes();
+      tbc::val_a<std::span<const Byte>> bytes();
 
-      tbc::view<std::string_view, tbc::lt::a> text();
+      tbc::val_a<std::string_view> text();
 
       void finish() const;
 
     private:
-      tbc::view<std::span<const Byte>, tbc::lt::a> remaining_;
+      tbc::val_a<std::span<const Byte>> remaining_;
     };
 
   }
@@ -125,7 +125,7 @@ export {
     // Writes fields into a caller's buffer, region `a`, and hands back the part written.
     class FrameWriter {
     public:
-      explicit FrameWriter(tbc::view<std::span<Byte>, tbc::lt::a> output) noexcept;
+      explicit FrameWriter(tbc::val_a<std::span<Byte>> output) noexcept;
 
       // Generic over the caller's integer and enumeration types, so these stay here.
       template <std::unsigned_integral Integer>
@@ -149,11 +149,11 @@ export {
 
       void append(std::span<const Byte> value);
 
-      tbc::view<std::span<const Byte>, tbc::lt::a> finish() const noexcept;
+      tbc::val_a<std::span<const Byte>> finish() const noexcept;
 
     private:
-      tbc::view<std::span<Byte>, tbc::lt::a> output_;
-      tbc::view<std::span<Byte>, tbc::lt::a> remaining_;
+      tbc::val_a<std::span<Byte>> output_;
+      tbc::val_a<std::span<Byte>> remaining_;
     };
 
   }

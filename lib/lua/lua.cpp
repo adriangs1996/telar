@@ -644,7 +644,7 @@ namespace telar::runtime::lua {
     lua_remove(state, -2);
   }
 
-  Value::Value(tbc::view<lua_State*, tbc::lt::a> state, int index, std::string_view label)
+  Value::Value(tbc::val_a<lua_State*> state, int index, std::string_view label)
       : state_(state),
         index_(lua_absindex(state, index)),
         restored_top_(lua_gettop(state)),
@@ -654,21 +654,21 @@ namespace telar::runtime::lua {
     lua_settop(state_, restored_top_);
   }
 
-  tbc::view<Value, tbc::lt::a> Value::as(std::string_view label) const {
+  tbc::val_a<Value> Value::as(std::string_view label) const {
     return Value{state_, index_, label};
   }
 
-  tbc::view<Value, tbc::lt::a> Value::field(const char* name) const {
+  tbc::val_a<Value> Value::field(const char* name) const {
     require(LUA_TTABLE, "must be a table");
     return Value{*this, name};
   }
 
-  tbc::view<Value, tbc::lt::a> Value::element(lua_Integer position) const {
+  tbc::val_a<Value> Value::element(lua_Integer position) const {
     require(LUA_TTABLE, "must be an array");
     return Value{*this, position};
   }
 
-  tbc::view<Value, tbc::lt::a> Value::entry(std::string_view key) const {
+  tbc::val_a<Value> Value::entry(std::string_view key) const {
     require(LUA_TTABLE, "must be a table");
     return Value{*this, key};
   }
@@ -685,7 +685,7 @@ namespace telar::runtime::lua {
     lua_pushvalue(state_, index_);
   }
 
-  tbc::view<std::string_view, tbc::lt::a> Value::string() const {
+  tbc::val_a<std::string_view> Value::string() const {
     require(LUA_TSTRING, "must be a string");
     std::size_t size = 0;
     const auto* text = lua_tolstring(state_, index_, &size);

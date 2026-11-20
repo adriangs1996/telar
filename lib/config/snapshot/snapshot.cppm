@@ -96,7 +96,7 @@ export {
       // Hands each `client.prompt` binding to `binding` in order.
       template <typename Binding>
       // The settings view the strings the Lua state holds, region `a`.
-      [[nodiscard]] TBC_GENERIC inline static tbc::view<ClientLayerSettings, tbc::lt::a> read(const lua::Value& configuration, Binding&& binding) {
+      [[nodiscard]] TBC_GENERIC inline static tbc::val_a<ClientLayerSettings> read(const lua::Value& configuration, Binding&& binding) {
         return {
             .themes = ThemeReader::selection(configuration),
             .client = ClientReader::read(configuration.field("client"), std::forward<Binding>(binding)),

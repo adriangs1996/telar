@@ -162,9 +162,9 @@ export {
       std::uint64_t client_id = 0;
       std::uint64_t target_id = 0;
       std::int64_t value = 0;
-      tbc::view<std::string_view, tbc::lt::a> text{};
+      tbc::val_a<std::string_view> text{};
       bool json = false;
-      tbc::view<const char*, tbc::lt::a> socket = nullptr;
+      tbc::val_a<const char*> socket = nullptr;
 
       // `words` starts at the family. Not a routed command: nullopt, so the
       // family's own parser reads it.

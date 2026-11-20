@@ -264,7 +264,7 @@ namespace telar::gui::qt {
     };
 
     // The result is the first of the root's children left unpainted.
-    tbc::view<QSGNode*, tbc::lt::a> paintSoftwareBatch(QQuickWindow& window, tbc::view<QSGNode&, tbc::lt::a> root, std::span<const RoundedRectanglePaint> paints, qreal density) {
+    tbc::val_a<QSGNode*> paintSoftwareBatch(QQuickWindow& window, tbc::mut_a<QSGNode> root, std::span<const RoundedRectanglePaint> paints, qreal density) {
       auto* next = root.firstChild();
 
       for (const auto& paint : paints) {

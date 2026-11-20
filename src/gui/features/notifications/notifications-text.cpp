@@ -12,7 +12,7 @@ namespace telar::gui::features::notifications {
     return call(target, text);
   }
 
-  void NotificationText::wrapMeasured(tbc::view<std::string_view, tbc::lt::a> text, float width, Measured measure) {
+  void NotificationText::wrapMeasured(tbc::val_a<std::string_view> text, float width, Measured measure) {
     *this = {};
     auto remaining = trimStart(text);
     const auto last = remaining.find_last_not_of(whitespace);
@@ -61,7 +61,7 @@ namespace telar::gui::features::notifications {
     return word_end > 0 ? word_end : end;
   }
 
-  void NotificationText::fitTail(tbc::view<std::string_view, tbc::lt::a> paragraph, bool following_paragraph, float width, Measured& measure) {
+  void NotificationText::fitTail(tbc::val_a<std::string_view> paragraph, bool following_paragraph, float width, Measured& measure) {
     BoundedText<TextFit::maximum_bytes> continuation;
     auto label = paragraph;
 

@@ -65,7 +65,7 @@ namespace telar::runtime {
     return available_;
   }
 
-  auto MediaProcessor::observe(tbc::view<const Request&, tbc::lt::a> request) noexcept -> tbc::view<Result, tbc::lt::a> {
+  auto MediaProcessor::observe(tbc::ref_a<Request> request) noexcept -> tbc::val_a<Result> {
     TELAR_TRACE("media.worker");
     auto result = request;
 
@@ -79,7 +79,7 @@ namespace telar::runtime {
 
   void MediaProcessor::stop() noexcept {}
 
-  GraphicsSynchronizer::GraphicsSynchronizer(tbc::view<GraphicsCreditBudget&, tbc::lt::a> budget, std::uint64_t pane, tbc::view<std::shared_ptr<PaneMedia>, tbc::lt::a> media)
+  GraphicsSynchronizer::GraphicsSynchronizer(tbc::mut_a<GraphicsCreditBudget> budget, std::uint64_t pane, tbc::val_a<std::shared_ptr<PaneMedia>> media)
       : media_(std::move(media)),
         credit_(budget),
         pane_(pane) {}

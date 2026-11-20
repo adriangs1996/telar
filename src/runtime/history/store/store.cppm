@@ -51,7 +51,7 @@ export {
     class Statement {
     public:
       // A prepared statement must be finalized before its database closes.
-      explicit Statement(tbc::view<Database&, tbc::lt::a> database, std::string_view sql);
+      explicit Statement(tbc::mut_a<Database> database, std::string_view sql);
       ~Statement();
       Statement(const Statement&) = delete;
       Statement& operator=(const Statement&) = delete;
@@ -68,7 +68,7 @@ export {
       bool isNull(int column) const noexcept;
 
     private:
-      tbc::view<sqlite3_stmt*, tbc::lt::a> statement_ = nullptr;
+      tbc::val_a<sqlite3_stmt*> statement_ = nullptr;
     };
 
     class Transaction {
@@ -253,13 +253,13 @@ export {
     private:
       static HistoryEntry view(const Statement& row);
       // The row's scalar columns; the entry's texts stay empty.
-      static tbc::view<HistoryEntry, tbc::lt::static_storage> header(const Statement& row);
+      static tbc::val_static<HistoryEntry> header(const Statement& row);
 
       static constexpr std::size_t maximum_entries = 1000;
       static constexpr std::size_t result_header_bytes = sizeof(Byte) + sizeof(std::uint64_t) * 2 + sizeof(std::uint16_t) + sizeof(Byte);
       // Reserved whole and bounded before each copy, so the texts the entries view never move.
       mutable ByteQueue<ConcurrentMemory> text_;
-      tbc::view<ds::Vec<HistoryEntry, ConcurrentMemory>, tbc::lt::self> entries_;
+      tbc::val_self<ds::Vec<HistoryEntry, ConcurrentMemory>> entries_;
       std::size_t encoded_bytes_ = result_header_bytes;
     };
 

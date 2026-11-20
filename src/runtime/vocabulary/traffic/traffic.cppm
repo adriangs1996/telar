@@ -97,17 +97,17 @@ export {
 
     class Protocol {
     public:
-      static tbc::view<std::span<const Byte>, tbc::lt::a> encodeExchange(tbc::view<std::span<Byte>, tbc::lt::a> output, ExchangeIdentity identity, const CapturedExchange& exchange, std::size_t part_limit = std::numeric_limits<std::size_t>::max());
+      static tbc::val_a<std::span<const Byte>> encodeExchange(tbc::val_a<std::span<Byte>> output, ExchangeIdentity identity, const CapturedExchange& exchange, std::size_t part_limit = std::numeric_limits<std::size_t>::max());
 
       static std::size_t exchangeBytes(const CapturedExchange& exchange);
 
       static ExchangeView decodeExchange(std::span<const Byte> input);
 
-      static tbc::view<std::span<const Byte>, tbc::lt::a> encodeEffects(tbc::view<std::span<Byte>, tbc::lt::a> output, std::uint64_t event_id, const EffectBatch& batch);
+      static tbc::val_a<std::span<const Byte>> encodeEffects(tbc::val_a<std::span<Byte>> output, std::uint64_t event_id, const EffectBatch& batch);
 
       static EffectReply decodeEffects(std::span<const Byte> input);
 
-      static tbc::view<std::span<const Byte>, tbc::lt::a> encodeError(tbc::view<std::span<Byte>, tbc::lt::a> output, std::uint64_t event_id, std::string_view message);
+      static tbc::val_a<std::span<const Byte>> encodeError(tbc::val_a<std::span<Byte>> output, std::uint64_t event_id, std::string_view message);
 
       static ErrorReply decodeError(std::span<const Byte> input);
 
@@ -122,7 +122,7 @@ export {
       template <FrameOutput Output>
       static void writeHalf(Output& writer, const CaptureHalf* half, std::size_t part_limit);
 
-      static tbc::view<ds::Option<HalfView>, tbc::lt::a> readHalf(FrameReader& reader);
+      static tbc::val_a<ds::Option<HalfView>> readHalf(FrameReader& reader);
     };
 
   }

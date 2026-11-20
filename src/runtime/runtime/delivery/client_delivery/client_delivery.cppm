@@ -40,7 +40,7 @@ export {
 
       static bool advance(ClientStore& clients, Pane& pane, std::chrono::steady_clock::time_point now);
 
-      static tbc::view<Pane*, tbc::lt::a> complete(tbc::view<PaneStore&, tbc::lt::a> panes, ClientSession& sender, const CompleteClipboardDesktop& completion);
+      static tbc::val_a<Pane*> complete(tbc::mut_a<PaneStore> panes, ClientSession& sender, const CompleteClipboardDesktop& completion);
 
     private:
       static bool precedes(const ClientSession& candidate, const ClientSession& current, std::uint64_t pane) noexcept;

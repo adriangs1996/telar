@@ -31,7 +31,7 @@ export namespace telar::runtime::control {
   class VtState {
   public:
     // Keeps the terminal's handles, region `a`.
-    void bind(tbc::view<GhosttyTerminal, tbc::lt::a> terminal, tbc::view<GhosttyRenderState, tbc::lt::a> render, bool separate_media) noexcept;
+    void bind(tbc::val_a<GhosttyTerminal> terminal, tbc::val_a<GhosttyRenderState> render, bool separate_media) noexcept;
 
     void write(std::span<const std::uint8_t> bytes);
 
@@ -71,7 +71,7 @@ export namespace telar::runtime::control {
 
     // Follows the cursor's row through reflow.
     // A row of the bound terminal, region `a`, which follows it while it lives.
-    tbc::view<TrackedRow, tbc::lt::a> trackCursorRow() const;
+    tbc::val_a<TrackedRow> trackCursorRow() const;
 
     Position cursor() const;
 
@@ -161,8 +161,8 @@ export namespace telar::runtime::control {
     mutable ds::Array<ModeCache, 64> modes_;
     ds::Array<ds::Option<GhosttyColorRgb>, 3> colors_;
     ds::Array<bool, 3> color_valid_{};
-    tbc::view<GhosttyTerminal, tbc::lt::a> terminal_ = nullptr;
-    tbc::view<GhosttyRenderState, tbc::lt::a> render_ = nullptr;
+    tbc::val_a<GhosttyTerminal> terminal_ = nullptr;
+    tbc::val_a<GhosttyRenderState> render_ = nullptr;
     GraphicsCursor graphics_cursor_;
     TerminalSize size_{};
     ds::Array<GhosttyColorRgb, 256> palette_;

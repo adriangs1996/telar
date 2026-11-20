@@ -43,7 +43,7 @@ export {
     template <EnvironmentLookup Environment>
     class TBC_GENERIC EnvironmentOf final : public EnvironmentSource {
     public:
-      explicit EnvironmentOf(tbc::view<const Environment&, tbc::lt::a> environment) noexcept
+      explicit EnvironmentOf(tbc::ref_a<Environment> environment) noexcept
           : environment_(environment) {}
 
       std::string_view lookup(const char* name) const override {
@@ -51,7 +51,7 @@ export {
       }
 
     private:
-      tbc::view<const Environment&, tbc::lt::a> environment_;
+      tbc::ref_a<Environment> environment_;
     };
 
   }
@@ -62,7 +62,7 @@ export {
   namespace telar::runtime {
 
     // HOME as this process started with it, read once: nothing in telar changes it.
-    tbc::view<std::string_view, tbc::lt::static_storage> processHome() noexcept;
+    tbc::val_static<std::string_view> processHome() noexcept;
 
   }
 }
@@ -140,16 +140,16 @@ export {
     // relative path in either is invalid.
     // The pieces of an XDG base directory, which borrow the environment and the fallback.
     struct XdgDirectory {
-      tbc::view<std::string_view, tbc::lt::a> base;
-      tbc::view<std::string_view, tbc::lt::a> suffix;
+      tbc::val_a<std::string_view> base;
+      tbc::val_a<std::string_view> suffix;
     };
 
-    tbc::view<XdgDirectory, tbc::lt::a> findXdgDirectory(tbc::view<const EnvironmentSource&, tbc::lt::a> environment, const char* variable, tbc::view<std::string_view, tbc::lt::a> fallback);
+    tbc::val_a<XdgDirectory> findXdgDirectory(tbc::ref_a<EnvironmentSource> environment, const char* variable, tbc::val_a<std::string_view> fallback);
 
     // Joins the pieces into a string of the caller's allocator; built in paths.cpp for the
     // allocators of telar.base.memory.allocators.
     template <Allocator Memory>
-    tbc::view<ds::String<Memory>, tbc::lt::a> xdgDirectory(tbc::view<Memory&, tbc::lt::a> memory, const EnvironmentSource& environment, const char* variable, std::string_view fallback);
+    tbc::val_a<ds::String<Memory>> xdgDirectory(tbc::mut_a<Memory> memory, const EnvironmentSource& environment, const char* variable, std::string_view fallback);
 
     extern template ds::String<Memory> xdgDirectory<Memory>(Memory& memory, const EnvironmentSource& environment, const char* variable, std::string_view fallback);
     extern template ds::String<ConcurrentMemory> xdgDirectory<ConcurrentMemory>(ConcurrentMemory& memory, const EnvironmentSource& environment, const char* variable, std::string_view fallback);
@@ -184,26 +184,26 @@ export {
     class RuntimePaths {
     public:
       // Keeps nothing of the options or the environment: its paths are copies in `memory`.
-      explicit RuntimePaths(tbc::view<Memory&, tbc::lt::a> memory, const ServerOptions& options, const EnvironmentSource& environment);
+      explicit RuntimePaths(tbc::mut_a<Memory> memory, const ServerOptions& options, const EnvironmentSource& environment);
 
       void resolveStorage(const ServerOptions& options, const EnvironmentSource& environment);
       void prepareSocket() const;
       bool isDefaultSocket(const EnvironmentSource& environment) const;
 
       // telar's configuration directory: XDG_CONFIG_HOME/telar, else ~/.config/telar; empty without either.
-      [[nodiscard]] static tbc::view<ds::String<Memory>, tbc::lt::a> configHome(tbc::view<Memory&, tbc::lt::a> memory, const EnvironmentSource& environment);
+      [[nodiscard]] static tbc::val_a<ds::String<Memory>> configHome(tbc::mut_a<Memory> memory, const EnvironmentSource& environment);
 
       // The configuration a process started without --config reads: TELAR_DEVELOPMENT_CONFIG, else
       // config.lua in the configuration directory; empty without either.
-      [[nodiscard]] static tbc::view<ds::String<Memory>, tbc::lt::a> configFile(tbc::view<Memory&, tbc::lt::a> memory, const EnvironmentSource& environment);
+      [[nodiscard]] static tbc::val_a<ds::String<Memory>> configFile(tbc::mut_a<Memory> memory, const EnvironmentSource& environment);
 
       void prepareStorage() const;
 
-      tbc::view<ds::String<Memory>, tbc::lt::a> socket;
-      tbc::view<ds::String<Memory>, tbc::lt::a> history;
-      tbc::view<ds::String<Memory>, tbc::lt::a> session;
+      tbc::val_a<ds::String<Memory>> socket;
+      tbc::val_a<ds::String<Memory>> history;
+      tbc::val_a<ds::String<Memory>> session;
       // XDG_DATA_HOME, or ~/.local/share; empty without either.
-      tbc::view<ds::String<Memory>, tbc::lt::a> data_home;
+      tbc::val_a<ds::String<Memory>> data_home;
       bool socket_managed = false;
       bool history_managed = false;
 

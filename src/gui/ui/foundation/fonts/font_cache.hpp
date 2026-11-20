@@ -32,7 +32,7 @@ namespace telar::gui::qt {
     static constexpr std::size_t scale_capacity = 8;
 
     // The cache allocates its generations from memory, region `a`.
-    explicit FontCache(tbc::view<Memory&, tbc::lt::a> memory) noexcept
+    explicit FontCache(tbc::mut_a<Memory> memory) noexcept
         : memory_(memory),
           generation_() {}
 
@@ -54,11 +54,11 @@ namespace telar::gui::qt {
   private:
     struct Generation {
       FontConfiguration configuration;
-      tbc::view<FontSource<Memory>, tbc::lt::a> source;
+      tbc::val_a<FontSource<Memory>> source;
       // The face reads the bytes its source holds.
-      tbc::view<fonts::Face, tbc::lt::self> face;
+      tbc::val_self<fonts::Face> face;
 
-      explicit Generation(tbc::view<Memory&, tbc::lt::a> memory, const FontConfiguration& font)
+      explicit Generation(tbc::mut_a<Memory> memory, const FontConfiguration& font)
           : configuration(font),
             source(memory, font),
             face(source.bytes(), source.match()) {}
@@ -97,8 +97,8 @@ namespace telar::gui::qt {
       return stored;
     }
 
-    tbc::view<Memory&, tbc::lt::a> memory_;
-    tbc::view<ds::Box<Generation, Memory>, tbc::lt::a> generation_;
+    tbc::mut_a<Memory> memory_;
+    tbc::val_a<ds::Box<Generation, Memory>> generation_;
     ds::Array<Entry, scale_capacity> entries_{};
     std::size_t next_slot_ = 0;
   };

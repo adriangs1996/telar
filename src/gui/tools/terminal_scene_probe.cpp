@@ -380,17 +380,17 @@ namespace {
     unsigned rows_;
     ApplicationMemory application_memory_;
     // The probe's allocator, and what allocates from it or counts against its budget, live beside it.
-    tbc::view<ApplicationAllocator&, tbc::lt::self> memory_ = application_memory_.memory();
+    tbc::mut_self<ApplicationAllocator> memory_ = application_memory_.memory();
     Configuration configuration_;
-    tbc::view<Screen<Memory>, tbc::lt::self> screen_;
+    tbc::val_self<Screen<Memory>> screen_;
     application::terminal::graphics::GraphicsBudget graphics_budget_;
-    tbc::view<application::terminal::graphics::GraphicsStore<Memory>, tbc::lt::self> graphics_;
+    tbc::val_self<application::terminal::graphics::GraphicsStore<Memory>> graphics_;
     std::shared_ptr<const FontCollection> collection_;
     std::shared_ptr<ResidentFonts> fonts_;
     ResolvedFont resolved_;
     std::vector<Byte> characters_;
     // The cells view the characters stored beside them.
-    tbc::view<std::vector<Cell>, tbc::lt::self> cells_;
+    tbc::val_self<std::vector<Cell>> cells_;
     std::vector<Byte> encoded_;
     std::vector<Byte> row_flags_;
     QString preedit_;

@@ -124,7 +124,7 @@ export {
       static constexpr std::size_t maximum_sizes = 8;
 
       // FreeType reads the bytes for as long as the face exists; the match is copied.
-      explicit Face(tbc::view<std::span<const std::uint8_t>, tbc::lt::a> bytes, const FontMatch& match = {});
+      explicit Face(tbc::val_a<std::span<const std::uint8_t>> bytes, const FontMatch& match = {});
       ~Face();
       Face(const Face&) = delete;
       Face& operator=(const Face&) = delete;
@@ -170,19 +170,19 @@ export {
         OwnedSize handle;
       };
 
-      void selectFace(tbc::view<std::span<const std::uint8_t>, tbc::lt::a> bytes, const FontMatch& match);
+      void selectFace(tbc::val_a<std::span<const std::uint8_t>> bytes, const FontMatch& match);
       void applyVariation(const FontVariation& variation);
       void initializeShaping();
       [[nodiscard]] OwnedSize createSize(std::uint16_t pixel_height);
       void selectSize(std::uint16_t pixel_height);
 
       std::unique_ptr<std::remove_pointer_t<FT_Library>, LibraryDeleter> library_;
-      tbc::view<std::unique_ptr<std::remove_pointer_t<FT_Face>, FaceDeleter>, tbc::lt::a> face_;
+      tbc::val_a<std::unique_ptr<std::remove_pointer_t<FT_Face>, FaceDeleter>> face_;
       std::unique_ptr<hb_font_t, ShapingFontDeleter> shaping_font_;
       std::unique_ptr<hb_buffer_t, ShapingBufferDeleter> shaping_buffer_;
       ds::Option<LigatureCoverage> ligatures_;
       // The sizes are FreeType children of this face.
-      tbc::view<ds::Array<SizeEntry, maximum_sizes>, tbc::lt::self> sizes_{};
+      tbc::val_self<ds::Array<SizeEntry, maximum_sizes>> sizes_{};
       std::size_t next_size_slot_ = 0;
       std::uint16_t active_height_ = 0;
       // The widest printable ASCII advance in font units, 0 when the face has none.

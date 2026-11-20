@@ -310,7 +310,7 @@ export {
       static bool wanted(const ClientStore& clients, std::uint64_t pane, ImageKey key, bool shared) noexcept;
 
       // The request shares the model's retired media, and so what that media keeps: region `a`.
-      static void enqueueRetired(tbc::view<RuntimeModel&, tbc::lt::a> model, tbc::view<typename Processor::Request&, tbc::lt::a> request) noexcept;
+      static void enqueueRetired(tbc::mut_a<RuntimeModel> model, tbc::mut_a<typename Processor::Request> request) noexcept;
 
       void apply(RuntimeModel& model, ClientStore& clients, Panes& service, const typename Processor::Result& result);
 
@@ -454,8 +454,8 @@ export {
         bool answered_partial = false;
         bool abandoned = false;
         Index index;
-        tbc::view<ObservationWorker<PathBuildTask<Index>>, tbc::lt::self> build_worker;
-        tbc::view<ObservationWorker<PathQueryTask<Memory, Index>>, tbc::lt::self> query_worker;
+        tbc::val_self<ObservationWorker<PathBuildTask<Index>>> build_worker;
+        tbc::val_self<ObservationWorker<PathQueryTask<Memory, Index>>> query_worker;
       };
 
       inline Slot* findMut(std::uint64_t client) noexcept {

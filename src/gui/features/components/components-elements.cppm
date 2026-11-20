@@ -121,12 +121,12 @@ export {
 
     // The built-in icons, whose names and glyphs are literals.
     struct Icon {
-      tbc::view<std::string_view, tbc::lt::static_storage> name;
-      tbc::view<std::string_view, tbc::lt::static_storage> glyph;
+      tbc::val_static<std::string_view> name;
+      tbc::val_static<std::string_view> glyph;
       AgentProvider provider = AgentProvider::unknown;
       bool telar = false;
 
-      [[nodiscard]] static tbc::view<Icon, tbc::lt::static_storage> find(std::string_view name) noexcept;
+      [[nodiscard]] static tbc::val_static<Icon> find(std::string_view name) noexcept;
 
     private:
       static const ds::Array<Icon, 32> values;

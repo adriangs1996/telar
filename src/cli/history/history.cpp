@@ -219,7 +219,7 @@ namespace telar::runtime::cli::diagnostics {
     std::uint32_t pid;
   };
 
-  tbc::view<ds::Option<Log>, tbc::lt::a> parseLog(tbc::view<Memory&, tbc::lt::a> memory, std::string_view name, std::string_view base) {
+  tbc::val_a<ds::Option<Log>> parseLog(tbc::mut_a<Memory> memory, std::string_view name, std::string_view base) {
     if (!name.starts_with(base) || !name.ends_with(".log")) {
       return ds::none;
     }
@@ -262,7 +262,7 @@ namespace telar::runtime::cli::diagnostics {
     return bytes;
   }
 
-  tbc::view<ds::Vec<Log, Memory>, tbc::lt::a> findLogs(tbc::view<Memory&, tbc::lt::a> memory, DIR* directory, std::string_view base, const DiagnosticsOptions& options) {
+  tbc::val_a<ds::Vec<Log, Memory>> findLogs(tbc::mut_a<Memory> memory, DIR* directory, std::string_view base, const DiagnosticsOptions& options) {
     ds::Vec<Log, Memory> logs{memory};
     std::size_t visited = 0;
     std::size_t skipped = 0;
@@ -662,7 +662,7 @@ namespace telar::runtime::cli::history {
     bool active_ = false;
   };
 
-  tbc::view<std::pair<HistoryOptions::ImportKind, Text>, tbc::lt::a> resolveImport(tbc::view<Memory&, tbc::lt::a> memory, const HistoryOptions& options) {
+  tbc::val_a<std::pair<HistoryOptions::ImportKind, Text>> resolveImport(tbc::mut_a<Memory> memory, const HistoryOptions& options) {
     using Kind = HistoryOptions::ImportKind;
 
     if (options.import_file) {
@@ -699,7 +699,7 @@ namespace telar::runtime::cli::history {
     throw std::runtime_error{"HistfileNotFound"};
   }
 
-  tbc::view<std::pair<Text, bool>, tbc::lt::a> newestLines(tbc::view<Memory&, tbc::lt::a> memory, const Text& path) {
+  tbc::val_a<std::pair<Text, bool>> newestLines(tbc::mut_a<Memory> memory, const Text& path) {
     FileDescriptor file{::open(path.data(), O_RDONLY | O_CLOEXEC)};
     struct stat inode{};
     if (!file || ::fstat(file.get(), &inode) != 0) {
@@ -747,7 +747,7 @@ namespace telar::runtime::cli::history {
     bool truncated;
   };
 
-  tbc::view<ImportSource, tbc::lt::a> loadImport(tbc::view<Memory&, tbc::lt::a> memory, const HistoryOptions& options) {
+  tbc::val_a<ImportSource> loadImport(tbc::mut_a<Memory> memory, const HistoryOptions& options) {
     auto [kind, path] = resolveImport(memory, options);
     auto [text, truncated] = newestLines(memory, path);
 
@@ -849,7 +849,7 @@ namespace telar::runtime::cli::history {
     writeText(output);
   }
 
-  tbc::view<HistoryScopeValue, tbc::lt::a> scopeValue(tbc::view<const HistoryOptions&, tbc::lt::a> options, tbc::view<std::string_view, tbc::lt::a> cwd) {
+  tbc::val_a<HistoryScopeValue> scopeValue(tbc::ref_a<HistoryOptions> options, tbc::val_a<std::string_view> cwd) {
     switch (options.scope) {
     case HistoryScope::cwd:
       return cwd;
@@ -864,7 +864,7 @@ namespace telar::runtime::cli::history {
     throw std::runtime_error{"InvalidHistoryScope"};
   }
 
-  tbc::view<HistoryResults, tbc::lt::b> query(tbc::view<ControlSession&, tbc::lt::b> session, const HistoryOptions& options, const HistoryScopeValue& scope) {
+  tbc::val_b<HistoryResults> query(tbc::mut_b<ControlSession> session, const HistoryOptions& options, const HistoryScopeValue& scope) {
     return session.template exchange<HistoryResults>(QueryHistory{
         .query = options.query,
         .scope = options.scope,
@@ -1093,7 +1093,7 @@ namespace telar::runtime::cli {
     return self;
   }
 
-  void HistoryOptions::setScope(HistoryScope value, tbc::view<std::string_view, tbc::lt::a> path) {
+  void HistoryOptions::setScope(HistoryScope value, tbc::val_a<std::string_view> path) {
     if (scope != HistoryScope::global) {
       throw std::invalid_argument{"ConflictingHistoryScopes"};
     }

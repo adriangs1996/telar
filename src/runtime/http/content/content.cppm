@@ -139,8 +139,8 @@ export {
 
       ErasingAllocator<Memory> memory_;
       // nghttp2 allocates through the blocks, which allocate from the sibling allocator.
-      tbc::view<Blocks, tbc::lt::self> blocks_;
-      tbc::view<nghttp2_mem, tbc::lt::self> callbacks_;
+      tbc::val_self<Blocks> blocks_;
+      tbc::val_self<nghttp2_mem> callbacks_;
     };
 
     extern template class Http2Memory<SynchronizedAllocator<BudgetAllocator<ConcurrentMemory>>>;

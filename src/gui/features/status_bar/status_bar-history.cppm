@@ -20,7 +20,7 @@ export {
       void push(std::uint8_t percent) noexcept;
 
       // The samples are copied into the buffer, region `a`, in the order they were taken.
-      [[nodiscard]] tbc::view<std::span<const std::uint8_t>, tbc::lt::a> ordered(tbc::view<Samples&, tbc::lt::a> buffer) const noexcept;
+      [[nodiscard]] tbc::val_a<std::span<const std::uint8_t>> ordered(tbc::mut_a<Samples> buffer) const noexcept;
 
     private:
       Samples samples_{};

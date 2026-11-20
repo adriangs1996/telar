@@ -317,17 +317,17 @@ export {
     // The fields of `text`, region `a`, between the occurrences of `delimiter`, region `b`.
     class TextFields {
     public:
-      explicit TextFields(tbc::view<std::string_view, tbc::lt::a> text, tbc::view<std::string_view, tbc::lt::b> delimiter) noexcept;
+      explicit TextFields(tbc::val_a<std::string_view> text, tbc::val_b<std::string_view> delimiter) noexcept;
 
-      tbc::view<ds::Option<std::string_view>, tbc::lt::a> next() noexcept;
+      tbc::val_a<ds::Option<std::string_view>> next() noexcept;
 
     private:
-      tbc::view<std::string_view, tbc::lt::a> remaining_;
-      tbc::view<std::string_view, tbc::lt::b> delimiter_;
+      tbc::val_a<std::string_view> remaining_;
+      tbc::val_b<std::string_view> delimiter_;
       bool finished_ = false;
     };
 
-    tbc::view<std::string_view, tbc::lt::a> trimText(tbc::view<std::string_view, tbc::lt::a> text, std::string_view characters) noexcept;
+    tbc::val_a<std::string_view> trimText(tbc::val_a<std::string_view> text, std::string_view characters) noexcept;
 
   }
 }
@@ -338,7 +338,7 @@ export {
 
     // Writes `bytes` as lowercase hexadecimal into the first 2 * bytes.size() characters of
     // `output`, which must hold them, and returns what it wrote.
-    constexpr tbc::view<std::string_view, tbc::lt::a> encodeLowerHex(std::span<const std::uint8_t> bytes, tbc::view<std::span<char>, tbc::lt::a> output) noexcept {
+    constexpr tbc::val_a<std::string_view> encodeLowerHex(std::span<const std::uint8_t> bytes, tbc::val_a<std::span<char>> output) noexcept {
       constexpr std::string_view digits = "0123456789abcdef";
 
       TELAR_ASSERT(output.size() >= 2 * bytes.size());
@@ -373,12 +373,12 @@ export {
 
 template <>
 struct std::formatter<telar::runtime::AsciiLower, char> {
-  constexpr tbc::view<std::format_parse_context::iterator, tbc::lt::a> parse(tbc::view<std::format_parse_context&, tbc::lt::a> context) {
+  constexpr tbc::val_a<std::format_parse_context::iterator> parse(tbc::mut_a<std::format_parse_context> context) {
     return context.begin();
   }
 
   template <typename Context>
-  TBC_GENERIC tbc::view<typename Context::iterator, tbc::lt::a> format(const telar::runtime::AsciiLower& lower, tbc::view<Context&, tbc::lt::a> context) const {
+  TBC_GENERIC tbc::val_a<typename Context::iterator> format(const telar::runtime::AsciiLower& lower, tbc::mut_a<Context> context) const {
     auto output = context.out();
 
     for (const char character : lower.text) {
@@ -391,12 +391,12 @@ struct std::formatter<telar::runtime::AsciiLower, char> {
 
 template <>
 struct std::formatter<telar::runtime::LowerHex, char> {
-  constexpr tbc::view<std::format_parse_context::iterator, tbc::lt::a> parse(tbc::view<std::format_parse_context&, tbc::lt::a> context) {
+  constexpr tbc::val_a<std::format_parse_context::iterator> parse(tbc::mut_a<std::format_parse_context> context) {
     return context.begin();
   }
 
   template <typename Context>
-  TBC_GENERIC tbc::view<typename Context::iterator, tbc::lt::a> format(const telar::runtime::LowerHex& hex, tbc::view<Context&, tbc::lt::a> context) const {
+  TBC_GENERIC tbc::val_a<typename Context::iterator> format(const telar::runtime::LowerHex& hex, tbc::mut_a<Context> context) const {
     constexpr std::string_view digits = "0123456789abcdef";
     auto output = context.out();
 

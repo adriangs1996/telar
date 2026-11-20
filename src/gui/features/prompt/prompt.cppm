@@ -120,11 +120,11 @@ export namespace telar::gui::features::prompt {
   // until a use case changes them. Inline, as a line's view reads it whenever it draws.
   class LineView {
   public:
-    TBC_HOT_PATH inline LineView(tbc::view<const Line&, tbc::lt::a> line, tbc::view<History, tbc::lt::a> history) noexcept
+    TBC_HOT_PATH inline LineView(tbc::ref_a<Line> line, tbc::val_a<History> history) noexcept
         : line_(&line),
           history_(history) {}
 
-    [[nodiscard]] TBC_HOT_PATH inline tbc::view<std::string_view, tbc::lt::a> text() const noexcept {
+    [[nodiscard]] TBC_HOT_PATH inline tbc::val_a<std::string_view> text() const noexcept {
       return line_->editor().text().view();
     }
 
@@ -165,7 +165,7 @@ export namespace telar::gui::features::prompt {
       return line_->secretKeys();
     }
 
-    [[nodiscard]] TBC_HOT_PATH inline tbc::view<const ds::Option<Menu>&, tbc::lt::a> menu() const noexcept {
+    [[nodiscard]] TBC_HOT_PATH inline tbc::ref_a<ds::Option<Menu>> menu() const noexcept {
       return line_->menu();
     }
 
@@ -175,7 +175,7 @@ export namespace telar::gui::features::prompt {
     }
 
     // The commands sent from this line, oldest first.
-    [[nodiscard]] TBC_HOT_PATH inline tbc::view<History, tbc::lt::a> recent() const noexcept {
+    [[nodiscard]] TBC_HOT_PATH inline tbc::val_a<History> recent() const noexcept {
       return line_->recent();
     }
 
@@ -186,7 +186,7 @@ export namespace telar::gui::features::prompt {
 
     // The rest of a command this one starts: from what this line sent, then from the history.
     // Only while typing at the end of a line of two characters or more.
-    [[nodiscard]] TBC_HOT_PATH inline tbc::view<std::string_view, tbc::lt::a> suggestion() const noexcept {
+    [[nodiscard]] TBC_HOT_PATH inline tbc::val_a<std::string_view> suggestion() const noexcept {
       return line_->suggestion(history_);
     }
 
@@ -197,8 +197,8 @@ export namespace telar::gui::features::prompt {
     }
 
   private:
-    tbc::view<const Line*, tbc::lt::a> line_;
-    tbc::view<History, tbc::lt::a> history_;
+    tbc::val_a<const Line*> line_;
+    tbc::val_a<History> history_;
   };
 
   // The questions Tab asks the runtime, and the choices known at once. Opaque: application asks
@@ -254,23 +254,23 @@ export namespace telar::gui::features::prompt {
     static constexpr std::uint16_t history_limit = 1000;
 
     // Every line and what it asks for live in `memory`.
-    explicit State(tbc::view<Memory&, tbc::lt::a> memory);
+    explicit State(tbc::mut_a<Memory> memory);
 
     // Everything below lives in memory's region.
-    tbc::view<Memory&, tbc::lt::a> memory;
-    tbc::view<Specs, tbc::lt::a> specs;
+    tbc::mut_a<Memory> memory;
+    tbc::val_a<Specs> specs;
     // Apart from the specs, so a spec read from them is matched with it.
-    tbc::view<MatchScratch, tbc::lt::a> scratch;
-    tbc::view<ds::Vec<Name, Memory>, tbc::lt::a> history;
+    tbc::val_a<MatchScratch> scratch;
+    tbc::val_a<ds::Vec<Name, Memory>> history;
     std::uint64_t history_request = 0;
-    tbc::view<ds::Map<std::uint64_t, PathCompletion, Memory>, tbc::lt::a> completions;
-    tbc::view<ds::Map<std::uint64_t, CommandRequest, Memory>, tbc::lt::a> command_requests;
-    tbc::view<ds::Map<std::uint64_t, CommandChecks, Memory>, tbc::lt::a> command_checks;
-    tbc::view<ds::Map<std::uint64_t, CommandRequest, Memory>, tbc::lt::a> spec_requests;
+    tbc::val_a<ds::Map<std::uint64_t, PathCompletion, Memory>> completions;
+    tbc::val_a<ds::Map<std::uint64_t, CommandRequest, Memory>> command_requests;
+    tbc::val_a<ds::Map<std::uint64_t, CommandChecks, Memory>> command_checks;
+    tbc::val_a<ds::Map<std::uint64_t, CommandRequest, Memory>> spec_requests;
     // Tab pressed while a pane waited for a spec: the line it completes, by pane.
-    tbc::view<ds::Map<std::uint64_t, Name, Memory>, tbc::lt::a> spec_completions;
+    tbc::val_a<ds::Map<std::uint64_t, Name, Memory>> spec_completions;
     // The directory a question about a command named by its path reads, while it is sent.
-    tbc::view<Name, tbc::lt::a> command_root;
+    tbc::val_a<Name> command_root;
     std::uint64_t written = 0;
   };
 
@@ -282,13 +282,13 @@ export namespace telar::gui::features::prompt {
   // ---- lines ------------------------------------------------------------------------------------
 
   // Pane `pane_id`'s line, made on first use, in `keymap`.
-  [[nodiscard]] tbc::view<Opened, tbc::lt::a> open(State& state, tbc::view<Lines&, tbc::lt::a> lines, std::uint64_t pane_id, Keymap keymap);
+  [[nodiscard]] tbc::val_a<Opened> open(State& state, tbc::mut_a<Lines> lines, std::uint64_t pane_id, Keymap keymap);
 
   [[nodiscard]] TBC_HOT_PATH inline PaneLine* find(Lines& lines, std::uint64_t pane_id) noexcept;
 
-  [[nodiscard]] TBC_HOT_PATH inline tbc::view<ds::Option<LineView>, tbc::lt::a> line(tbc::view<const State&, tbc::lt::a> state, tbc::view<const Lines&, tbc::lt::a> lines, std::uint64_t pane_id) noexcept;
+  [[nodiscard]] TBC_HOT_PATH inline tbc::val_a<ds::Option<LineView>> line(tbc::ref_a<State> state, tbc::ref_a<Lines> lines, std::uint64_t pane_id) noexcept;
 
-  [[nodiscard]] TBC_HOT_PATH inline tbc::view<LineView, tbc::lt::a> view(tbc::view<const State&, tbc::lt::a> state, tbc::view<const PaneLine&, tbc::lt::a> line) noexcept;
+  [[nodiscard]] TBC_HOT_PATH inline tbc::val_a<LineView> view(tbc::ref_a<State> state, tbc::ref_a<PaneLine> line) noexcept;
 
   // The commands people typed, most recent first and each once, which the suggestions read.
   [[nodiscard]] TBC_HOT_PATH inline History history(const State& state) noexcept;
@@ -360,7 +360,7 @@ export namespace telar::gui::features::prompt {
   [[nodiscard]] ds::Option<Outcome> follow(PaneLine& line, const PaneShell& previous, const PaneShell& current);
 
   // The system clipboard behind vim's "+ and "* registers.
-  void useClipboard(tbc::view<PaneLine&, tbc::lt::a> line, tbc::view<Clipboard, tbc::lt::a> clipboard);
+  void useClipboard(tbc::mut_a<PaneLine> line, tbc::val_a<Clipboard> clipboard);
 
   // ---- the commands the shell runs --------------------------------------------------------------
 
@@ -374,7 +374,7 @@ export namespace telar::gui::features::prompt {
   // command named by its path, the files in its directory. None when the path names nothing to
   // look for. It views `word`, and for a path the directory it writes in `root`, the state's
   // command_root.
-  [[nodiscard]] tbc::view<ds::Option<CommandQuery>, tbc::lt::b> ask(tbc::view<Name&, tbc::lt::b> root, const Commands& commands, tbc::view<std::string_view, tbc::lt::b> word, std::uint64_t request_id);
+  [[nodiscard]] tbc::val_b<ds::Option<CommandQuery>> ask(tbc::mut_b<Name> root, const Commands& commands, tbc::val_b<std::string_view> word, std::uint64_t request_id);
 
   // The question `request_id` about `word` went out, `sent`, and `word` waits for its answer; or
   // it could not, and `word` stays unknown.
@@ -385,9 +385,9 @@ export namespace telar::gui::features::prompt {
   void learn(State& state, std::uint64_t pane_id, std::string_view command, shell::Dialect dialect);
 
   // What an answer to a question about a command found; none when the answer is not one.
-  [[nodiscard]] tbc::view<ds::Option<Settled>, tbc::lt::a> settles(State& state, const CompletionWords& message);
+  [[nodiscard]] tbc::val_a<ds::Option<Settled>> settles(State& state, const CompletionWords& message);
 
-  [[nodiscard]] tbc::view<ds::Option<Settled>, tbc::lt::a> settles(State& state, const PathResults& message);
+  [[nodiscard]] tbc::val_a<ds::Option<Settled>> settles(State& state, const PathResults& message);
 
   // The word `settled` names is marked; true when its pane's line shows the change.
   bool settle(State& state, const Settled& settled);
@@ -400,7 +400,7 @@ export namespace telar::gui::features::prompt {
 
   // The question for `command`'s spec under `request_id`, with the digest of the spec held
   // already. It views `command` and the state until the next use case.
-  [[nodiscard]] tbc::view<RequestCommandSpec, tbc::lt::b> askSpec(const State& state, std::uint64_t pane_id, tbc::view<std::string_view, tbc::lt::b> command, std::uint64_t request_id) noexcept;
+  [[nodiscard]] tbc::val_b<RequestCommandSpec> askSpec(const State& state, std::uint64_t pane_id, tbc::val_b<std::string_view> command, std::uint64_t request_id) noexcept;
 
   // The question `request_id` for `command`'s spec went out, `sent`, and waits; or it could not,
   // and no spec is to be had.
@@ -418,7 +418,7 @@ export namespace telar::gui::features::prompt {
 
   // Tab in the line: the word under the caret and the command it belongs to, as the `dialect`'s
   // shell reads them; none where nothing completes.
-  [[nodiscard]] tbc::view<ds::Option<CompletionContext>, tbc::lt::a> completing(State& state, const PaneLine& line, shell::Dialect dialect);
+  [[nodiscard]] tbc::val_a<ds::Option<CompletionContext>> completing(State& state, const PaneLine& line, shell::Dialect dialect);
 
   // Tab waits for the spec of the line's command, and completes once it arrives (resume).
   void awaitSpec(State& state, const PaneLine& line);
@@ -434,7 +434,7 @@ export namespace telar::gui::features::prompt {
   };
 
   // The choices for `context` in `line`, from `sources`.
-  [[nodiscard]] tbc::view<CompletionPlan, tbc::lt::a> plan(State& state, const PaneLine& line, tbc::view<CompletionContext, tbc::lt::a> context, const CompletionSources& sources);
+  [[nodiscard]] tbc::val_a<CompletionPlan> plan(State& state, const PaneLine& line, tbc::val_a<CompletionContext> context, const CompletionSources& sources);
 
   [[nodiscard]] std::size_t questions(const CompletionPlan& plan) noexcept;
 
@@ -452,13 +452,13 @@ export namespace telar::gui::features::prompt {
   void sent(CompletionPlan& plan, std::size_t index, std::uint64_t request_id) noexcept;
 
   // The line offers the plan's choices: one is written at once, more open the menu.
-  void offer(tbc::view<State&, tbc::lt::a> state, PaneLine& line, tbc::view<CompletionPlan, tbc::lt::a> plan);
+  void offer(tbc::mut_a<State> state, PaneLine& line, tbc::val_a<CompletionPlan> plan);
 
   // An answer to a question Tab asked: the pane whose menu changed, 0 when none did, and none
   // when the answer is not one.
-  [[nodiscard]] ds::Option<std::uint64_t> receive(tbc::view<State&, tbc::lt::a> state, tbc::view<Lines&, tbc::lt::a> lines, const CompletionWords& message);
+  [[nodiscard]] ds::Option<std::uint64_t> receive(tbc::mut_a<State> state, tbc::mut_a<Lines> lines, const CompletionWords& message);
 
-  [[nodiscard]] ds::Option<std::uint64_t> receive(tbc::view<State&, tbc::lt::a> state, tbc::view<Lines&, tbc::lt::a> lines, const PathResults& message);
+  [[nodiscard]] ds::Option<std::uint64_t> receive(tbc::mut_a<State> state, tbc::mut_a<Lines> lines, const PathResults& message);
 
   // ---- requests that fail -----------------------------------------------------------------------
 
@@ -466,7 +466,7 @@ export namespace telar::gui::features::prompt {
   // found nothing. Its word stops waiting, its spec is unavailable and its menu stops expecting
   // it; none of them is an error the user should read. The pane whose line changed, 0 when none
   // did, and none when the request is not the line's.
-  [[nodiscard]] ds::Option<std::uint64_t> fail(tbc::view<State&, tbc::lt::a> state, tbc::view<Lines&, tbc::lt::a> lines, std::uint64_t request_id);
+  [[nodiscard]] ds::Option<std::uint64_t> fail(tbc::mut_a<State> state, tbc::mut_a<Lines> lines, std::uint64_t request_id);
 
   // Every question in flight fails.
   void failAll(State& state, Lines& lines) noexcept;
@@ -520,11 +520,11 @@ namespace telar::gui::features::prompt {
     return found == nullptr ? nullptr : &found->getMut();
   }
 
-  inline tbc::view<LineView, tbc::lt::a> view(tbc::view<const State&, tbc::lt::a> state, tbc::view<const PaneLine&, tbc::lt::a> line) noexcept {
+  inline tbc::val_a<LineView> view(tbc::ref_a<State> state, tbc::ref_a<PaneLine> line) noexcept {
     return LineView{line.line, state.history.view()};
   }
 
-  inline tbc::view<ds::Option<LineView>, tbc::lt::a> line(tbc::view<const State&, tbc::lt::a> state, tbc::view<const Lines&, tbc::lt::a> lines, std::uint64_t pane_id) noexcept {
+  inline tbc::val_a<ds::Option<LineView>> line(tbc::ref_a<State> state, tbc::ref_a<Lines> lines, std::uint64_t pane_id) noexcept {
     const auto* found = lines.find(pane_id);
     if (found == nullptr) {
       return ds::none;

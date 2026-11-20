@@ -30,7 +30,7 @@ export {
       std::size_t start = 0;
       std::size_t end = 0;
 
-      [[nodiscard]] tbc::view<std::string_view, tbc::lt::a> view(tbc::view<std::string_view, tbc::lt::a> text) const;
+      [[nodiscard]] tbc::val_a<std::string_view> view(tbc::val_a<std::string_view> text) const;
 
       bool operator==(const TextRange&) const = default;
     };
@@ -111,21 +111,21 @@ export {
 
     // Every part views the parsed text, region `a`.
     struct UriView {
-      tbc::view<std::string_view, tbc::lt::a> scheme;
-      tbc::view<std::string_view, tbc::lt::a> path;
-      tbc::view<ds::Option<std::string_view>, tbc::lt::a> host = ds::none;
-      tbc::view<ds::Option<std::string_view>, tbc::lt::a> user = ds::none;
-      tbc::view<ds::Option<std::string_view>, tbc::lt::a> password = ds::none;
+      tbc::val_a<std::string_view> scheme;
+      tbc::val_a<std::string_view> path;
+      tbc::val_a<ds::Option<std::string_view>> host = ds::none;
+      tbc::val_a<ds::Option<std::string_view>> user = ds::none;
+      tbc::val_a<ds::Option<std::string_view>> password = ds::none;
       ds::Option<std::uint16_t> port = ds::none;
-      tbc::view<ds::Option<std::string_view>, tbc::lt::a> query = ds::none;
-      tbc::view<ds::Option<std::string_view>, tbc::lt::a> fragment = ds::none;
+      tbc::val_a<ds::Option<std::string_view>> query = ds::none;
+      tbc::val_a<ds::Option<std::string_view>> fragment = ds::none;
 
       [[nodiscard]] static ds::Option<UriView> parse(std::string_view text);
 
     private:
       [[nodiscard]] static ds::Option<std::uint16_t> parsePort(std::string_view text) noexcept;
 
-      bool authority(tbc::view<std::string_view, tbc::lt::a> text, bool empty_authority_has_path);
+      bool authority(tbc::val_a<std::string_view> text, bool empty_authority_has_path);
     };
 
   }

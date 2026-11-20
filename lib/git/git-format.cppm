@@ -77,7 +77,7 @@ export namespace telar::git {
     std::span<const std::uint8_t> view() const noexcept;
 
     // The first `digits` hexadecimal digits, written into `buffer`.
-    tbc::view<std::string_view, tbc::lt::a> hex(tbc::view<std::span<char, 2 * maximum_hash_size>, tbc::lt::a> buffer, std::size_t digits = 2 * maximum_hash_size) const noexcept;
+    tbc::val_a<std::string_view> hex(tbc::val_a<std::span<char, 2 * maximum_hash_size>> buffer, std::size_t digits = 2 * maximum_hash_size) const noexcept;
 
     static ds::Option<ObjectId> fromHex(std::string_view text, ObjectFormat format) noexcept;
 
@@ -153,7 +153,7 @@ namespace telar::git {
   bool readAt(int descriptor, void* destination, std::size_t size, std::uint64_t offset) noexcept;
 
   // Reads a small file into a caller buffer; files that do not fit are invalid.
-  ReadStatus readSmall(int directory, const char* name, tbc::view<std::span<char>, tbc::lt::a> buffer, tbc::view<std::string_view&, tbc::lt::a> contents, Fingerprint* fingerprint = nullptr) noexcept;
+  ReadStatus readSmall(int directory, const char* name, tbc::val_a<std::span<char>> buffer, tbc::mut_a<std::string_view> contents, Fingerprint* fingerprint = nullptr) noexcept;
 
   // Reads a whole file of at most `limit` bytes into `bytes`, which keeps its capacity.
   ReadStatus readWhole(int directory, const char* name, ds::String<Memory>& bytes, std::size_t limit, Fingerprint* fingerprint = nullptr);

@@ -98,7 +98,7 @@ export {
     class TBC_SHARED PaneObserver {
     public:
       // What the observer keeps lives in `memory`, region `a`; the directory is copied.
-      explicit PaneObserver(tbc::view<ConcurrentMemory&, tbc::lt::a> memory, TerminalSize size, std::string_view directory = {}, bool capture_output = false, ds::Option<ShellToken> shell_token = ds::none);
+      explicit PaneObserver(tbc::mut_a<ConcurrentMemory> memory, TerminalSize size, std::string_view directory = {}, bool capture_output = false, ds::Option<ShellToken> shell_token = ds::none);
 
       void configureHistory(const HistorySession& session, bool capture_output = false);
 
@@ -239,12 +239,12 @@ export {
       unsigned active_ = 0;
       ds::Option<unsigned> sealed_;
       ds::Option<LimitReach> drop_;
-      tbc::view<Terminal, tbc::lt::a> terminal_;
+      tbc::val_a<Terminal> terminal_;
       // Reads terminal_.
-      tbc::view<CommandTracker, tbc::lt::self> tracker_;
-      tbc::view<HistorySession, tbc::lt::self> session_;
-      tbc::view<ds::String<ConcurrentMemory>, tbc::lt::a> workspace_path_;
-      tbc::view<ds::String<ConcurrentMemory>, tbc::lt::a> shell_;
+      tbc::val_self<CommandTracker> tracker_;
+      tbc::val_self<HistorySession> session_;
+      tbc::val_a<ds::String<ConcurrentMemory>> workspace_path_;
+      tbc::val_a<ds::String<ConcurrentMemory>> shell_;
       TerminalSize initial_size_;
       AgentScreenInference inference_;
       bool reset_needed_ = false;
@@ -306,7 +306,7 @@ export {
             history_(history) {}
 
       // The result carries the request's observers on.
-      inline tbc::view<Result, tbc::lt::a> observe(tbc::view<const Request&, tbc::lt::a> request) noexcept {
+      inline tbc::val_a<Result> observe(tbc::ref_a<Request> request) noexcept {
         Result result;
         typename Probe::Request process_request;
 

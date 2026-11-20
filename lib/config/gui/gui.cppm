@@ -102,7 +102,7 @@ export {
     class GuiReader {
     public:
       // The settings view the strings the Lua state holds, region `a`.
-      [[nodiscard]] static tbc::view<GuiSettings, tbc::lt::a> read(const lua::Value& gui);
+      [[nodiscard]] static tbc::val_a<GuiSettings> read(const lua::Value& gui);
 
     private:
       static void font(const lua::Value& table, GuiSettings::Font& font);
@@ -169,8 +169,8 @@ export {
     class ThemeReader {
     public:
       // The settings view the strings the Lua state holds, region `a`.
-      [[nodiscard]] static tbc::view<ThemeSelectionSettings, tbc::lt::a> selection(const lua::Value& configuration);
-      [[nodiscard]] static tbc::view<ds::Option<ThemeSettings>, tbc::lt::a> read(const lua::Value& theme);
+      [[nodiscard]] static tbc::val_a<ThemeSelectionSettings> selection(const lua::Value& configuration);
+      [[nodiscard]] static tbc::val_a<ds::Option<ThemeSettings>> read(const lua::Value& theme);
 
     private:
       // Each name a theme may give, with the preset it selects.
@@ -196,13 +196,13 @@ export {
           {"zenburn", "zenburn"},
       }};
 
-      static tbc::view<ds::Option<std::string_view>, tbc::lt::a> preset(const lua::Value& value);
+      static tbc::val_a<ds::Option<std::string_view>> preset(const lua::Value& value);
       static ThemeColor color(const lua::Value& value, bool allow_default);
       static ds::Option<ThemeRgb> rgb(const lua::Value& value);
       static void colors(const lua::Value& table, ds::Array<ds::Option<ThemeColor>, theme_color_names.size()>& colors);
       static void terminal(const lua::Value& table, ThemeSettings::Terminal& terminal);
       static void syntax(const lua::Value& table, ds::Array<ds::Option<ThemeSettings::Syntax>, theme_syntax_names.size()>& syntax);
-      static void appearance(const lua::Value& table, tbc::view<ThemeSelectionSettings&, tbc::lt::a> selection);
+      static void appearance(const lua::Value& table, tbc::mut_a<ThemeSelectionSettings> selection);
     };
 
   }

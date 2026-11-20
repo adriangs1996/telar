@@ -39,7 +39,7 @@ namespace telar::gui::qt {
 
   public:
     // The captures allocate from memory, region `a`.
-    explicit ClipboardImages(tbc::view<ApplicationAllocator&, tbc::lt::a> memory, QObject* parent = nullptr);
+    explicit ClipboardImages(tbc::mut_a<ApplicationAllocator> memory, QObject* parent = nullptr);
     ~ClipboardImages() override;
     ClipboardImages(const ClipboardImages&) = delete;
     ClipboardImages& operator=(const ClipboardImages&) = delete;
@@ -47,7 +47,7 @@ namespace telar::gui::qt {
     ClipboardImages& operator=(ClipboardImages&&) = delete;
 
     void capture(ClipboardImageJob job);
-    [[nodiscard]] tbc::view<ds::Option<ClipboardImageResult>, tbc::lt::a> takeResult();
+    [[nodiscard]] tbc::val_a<ds::Option<ClipboardImageResult>> takeResult();
     [[nodiscard]] bool busy() const noexcept;
 
   signals:
@@ -56,19 +56,19 @@ namespace telar::gui::qt {
 
   private:
     // The prepared images are allocated from memory.
-    [[nodiscard]] static tbc::view<ClipboardImageResult, tbc::lt::a> prepare(tbc::view<ApplicationAllocator&, tbc::lt::a> memory, ClipboardImageJob job, platform::ClipboardImageSource source);
+    [[nodiscard]] static tbc::val_a<ClipboardImageResult> prepare(tbc::mut_a<ApplicationAllocator> memory, ClipboardImageJob job, platform::ClipboardImageSource source);
     void start(ClipboardImageJob job);
     void complete();
     void drain();
     void startQueued();
 
-    tbc::view<ApplicationAllocator&, tbc::lt::a> memory_;
-    tbc::view<platform::ClipboardImageMonitor, tbc::lt::a> clipboard_;
+    tbc::mut_a<ApplicationAllocator> memory_;
+    tbc::val_a<platform::ClipboardImageMonitor> clipboard_;
     QThreadPool worker_pool_;
     QFutureWatcher<ClipboardImageResult> task_;
     ds::Option<ClipboardImageJob> running_;
     ds::Option<ClipboardImageJob> queued_;
-    tbc::view<ds::Option<ClipboardImageResult>, tbc::lt::a> result_;
+    tbc::val_a<ds::Option<ClipboardImageResult>> result_;
     bool busy_ = false;
   };
 

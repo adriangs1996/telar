@@ -189,9 +189,9 @@ export {
       static constexpr std::string_view common_name = "telar local CA";
 
       // An authority allocates from its allocator in region `a`; the library only checks that it is configured.
-      static tbc::view<CertificateAuthority, tbc::lt::a> loadOrCreate(tbc::view<ConcurrentMemory&, tbc::lt::a> memory, const TlsLibrary& library, int directory, AuthorityKind kind);
-      static tbc::view<ds::Option<CertificateAuthority>, tbc::lt::a> loadExisting(tbc::view<ConcurrentMemory&, tbc::lt::a> memory, const TlsLibrary& library, int directory, AuthorityKind kind);
-      static tbc::view<CertificateAuthority, tbc::lt::a> create(tbc::view<ConcurrentMemory&, tbc::lt::a> memory, const TlsLibrary& library, int directory, AuthorityFiles files, AuthorityKind kind);
+      static tbc::val_a<CertificateAuthority> loadOrCreate(tbc::mut_a<ConcurrentMemory> memory, const TlsLibrary& library, int directory, AuthorityKind kind);
+      static tbc::val_a<ds::Option<CertificateAuthority>> loadExisting(tbc::mut_a<ConcurrentMemory> memory, const TlsLibrary& library, int directory, AuthorityKind kind);
+      static tbc::val_a<CertificateAuthority> create(tbc::mut_a<ConcurrentMemory> memory, const TlsLibrary& library, int directory, AuthorityFiles files, AuthorityKind kind);
 
       CertificatePair mint(std::string_view hostname) const;
       X509* certificate() const noexcept;
@@ -207,9 +207,9 @@ export {
       void writeBundle(int directory, std::span<const std::uint8_t> roots) const;
 
     private:
-      explicit CertificateAuthority(tbc::view<ConcurrentMemory&, tbc::lt::a> memory, CertificatePair pair) noexcept;
+      explicit CertificateAuthority(tbc::mut_a<ConcurrentMemory> memory, CertificatePair pair) noexcept;
 
-      tbc::view<ConcurrentMemory&, tbc::lt::a> memory_;
+      tbc::mut_a<ConcurrentMemory> memory_;
       CertificatePair pair_;
     };
 
@@ -221,11 +221,11 @@ export {
   namespace telar::runtime {
 
     // The directory without the caller's environment type.
-    tbc::view<ds::String<ConcurrentMemory>, tbc::lt::a> proxyAuthorityDirectoryFrom(tbc::view<ConcurrentMemory&, tbc::lt::a> memory, const EnvironmentSource& environment);
+    tbc::val_a<ds::String<ConcurrentMemory>> proxyAuthorityDirectoryFrom(tbc::mut_a<ConcurrentMemory> memory, const EnvironmentSource& environment);
 
     // Generic over the caller's environment, so it stays here and hands it to proxyAuthorityDirectoryFrom.
     template <Allocator Memory, EnvironmentLookup Environment>
-    TBC_GENERIC tbc::view<ds::String<Memory>, tbc::lt::a> proxyAuthorityDirectory(tbc::view<Memory&, tbc::lt::a> memory, const Environment& environment) {
+    TBC_GENERIC tbc::val_a<ds::String<Memory>> proxyAuthorityDirectory(tbc::mut_a<Memory> memory, const Environment& environment) {
       return proxyAuthorityDirectoryFrom(memory, EnvironmentOf{environment});
     }
 
@@ -282,9 +282,9 @@ export {
       ds::Array<char, 40> fingerprint;
       FixedText<PATH_MAX> store;
 
-      static tbc::view<Record, tbc::lt::a> parse(tbc::view<ConcurrentMemory&, tbc::lt::a> memory, std::string_view source);
+      static tbc::val_a<Record> parse(tbc::mut_a<ConcurrentMemory> memory, std::string_view source);
 
-      static tbc::view<ds::Option<Record>, tbc::lt::a> read(tbc::view<ConcurrentMemory&, tbc::lt::a> memory, int directory);
+      static tbc::val_a<ds::Option<Record>> read(tbc::mut_a<ConcurrentMemory> memory, int directory);
 
       void write(ConcurrentMemory& memory, int directory) const;
     };
@@ -343,7 +343,7 @@ export {
       }
 
     private:
-      static tbc::view<ds::String<ConcurrentMemory>, tbc::lt::a> keychainFrom(tbc::view<ConcurrentMemory&, tbc::lt::a> memory, const EnvironmentSource& environment);
+      static tbc::val_a<ds::String<ConcurrentMemory>> keychainFrom(tbc::mut_a<ConcurrentMemory> memory, const EnvironmentSource& environment);
       Destination nativeDestinationFrom(ConcurrentMemory& memory, ds::Option<Backend> selected, const EnvironmentSource& environment) const;
 
       ds::String<ConcurrentMemory> directory_;

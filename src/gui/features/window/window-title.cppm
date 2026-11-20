@@ -29,7 +29,7 @@ export {
     private:
       std::size_t expand(std::string_view pattern, Tokens values);
       // A token's value is one of the values, region `a`.
-      static tbc::view<ds::Option<std::string_view>, tbc::lt::a> token(std::string_view name, tbc::view<Tokens, tbc::lt::a> values) noexcept;
+      static tbc::val_a<ds::Option<std::string_view>> token(std::string_view name, tbc::val_a<Tokens> values) noexcept;
       void append(std::string_view value) noexcept;
       void filter();
 

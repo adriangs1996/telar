@@ -42,7 +42,7 @@ export {
     using parsing_ring_buffer = std::array<token, max_tokens_in_ring_buffer>;
 
     template <typename T>
-    using bounded = tbc::view<T, tbc::lt::a>;
+    using bounded = tbc::val_a<T>;
 
     // Implementations must put source and buffer in one tbc region, like Lexer, so a call replaces the buffer's views.
     template <typename tokenizer>

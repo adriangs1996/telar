@@ -15,12 +15,12 @@ import telar.base.memory.allocators;
 export namespace telar::gui::features::prompt {
 
   struct Choice {
-    tbc::view<ds::String<Memory>, tbc::lt::a> text;
-    tbc::view<ds::String<Memory>, tbc::lt::a> description;
+    tbc::val_a<ds::String<Memory>> text;
+    tbc::val_a<ds::String<Memory>> description;
     bool directory = false;
 
     // The copy lives in the strings' memory, region `a`, and borrows nothing else of this choice.
-    [[nodiscard]] tbc::view<Choice, tbc::lt::a> clone() const;
+    [[nodiscard]] tbc::val_a<Choice> clone() const;
   };
 
   using Choices = ds::Vec<Choice, Memory>;
@@ -42,7 +42,7 @@ export namespace telar::gui::features::prompt {
     bool command_position = false;
   };
 
-  tbc::view<ds::Option<CompletionContext>, tbc::lt::a> completionContext(tbc::view<Memory&, tbc::lt::a> memory, std::string_view text, std::size_t cursor, shell::Syntax syntax);
+  tbc::val_a<ds::Option<CompletionContext>> completionContext(tbc::mut_a<Memory> memory, std::string_view text, std::size_t cursor, shell::Syntax syntax);
 
   struct Completion {
     explicit Completion(Memory& memory);
@@ -57,9 +57,9 @@ export namespace telar::gui::features::prompt {
   // The literal choices and the providers for `context`, from the command's `spec` when the
   // runtime has one for it. At a command's position, the commands in `history` whose names start
   // with the partial word; the runtime adds the ones the shell runs.
-  tbc::view<Completion, tbc::lt::a> complete(tbc::view<Memory&, tbc::lt::a> memory, const CompletionContext& context, const ebnf::command_spec* spec, ebnf::match_scratch& scratch, History history);
+  tbc::val_a<Completion> complete(tbc::mut_a<Memory> memory, const CompletionContext& context, const ebnf::command_spec* spec, ebnf::match_scratch& scratch, History history);
 
   // Writes `text` as one shell word: characters the shell would read specially are escaped.
-  tbc::view<ds::String<Memory>, tbc::lt::a> quoteWord(tbc::view<Memory&, tbc::lt::a> memory, std::string_view text, shell::Dialect dialect);
+  tbc::val_a<ds::String<Memory>> quoteWord(tbc::mut_a<Memory> memory, std::string_view text, shell::Dialect dialect);
 
 }

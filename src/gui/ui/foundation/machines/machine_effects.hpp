@@ -52,7 +52,7 @@ namespace telar::gui::qt {
     void notePaneInput(application::window::FramePacer::Pane pane) noexcept override;
 
   private:
-    tbc::view<Sinks, tbc::lt::a> sinks_;
+    tbc::val_a<Sinks> sinks_;
     application::machines::MachineClientKey source_;
     bool presented_ = false;
   };

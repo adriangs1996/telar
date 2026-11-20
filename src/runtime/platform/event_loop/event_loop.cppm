@@ -53,7 +53,7 @@ export {
       static constexpr std::size_t event_capacity = 128;
       // Fills the caller's buffer, which holds event_capacity events, so registering descriptors while
       // the events are handled leaves them valid.
-      tbc::view<std::span<const Event>, tbc::lt::a> wait(std::chrono::nanoseconds timeout, tbc::view<std::span<Event>, tbc::lt::a> events);
+      tbc::val_a<std::span<const Event>> wait(std::chrono::nanoseconds timeout, tbc::val_a<std::span<Event>> events);
 
     private:
       void change(const struct kevent& event);
@@ -138,7 +138,7 @@ export {
 
       // Fills the caller's buffer, which holds event_capacity events, so registering descriptors while
       // the events are handled leaves them valid.
-      tbc::view<std::span<const Event>, tbc::lt::a> wait(std::chrono::nanoseconds timeout, tbc::view<std::span<Event>, tbc::lt::a> events);
+      tbc::val_a<std::span<const Event>> wait(std::chrono::nanoseconds timeout, tbc::val_a<std::span<Event>> events);
 
     private:
       void change(int descriptor, std::uint64_t token, std::uint32_t kind, bool enabled);

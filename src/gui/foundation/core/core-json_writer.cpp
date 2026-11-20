@@ -9,10 +9,10 @@ import telar.base.ds;
 
 namespace telar::gui::inline foundation::inline core {
 
-  JsonWriter::JsonWriter(tbc::view<std::span<char>, tbc::lt::a> buffer) noexcept
+  JsonWriter::JsonWriter(tbc::val_a<std::span<char>> buffer) noexcept
       : buffer_(buffer) {}
 
-  tbc::view<std::string_view, tbc::lt::a> JsonWriter::view() const noexcept {
+  tbc::val_a<std::string_view> JsonWriter::view() const noexcept {
     return {buffer_.data(), length_};
   }
 

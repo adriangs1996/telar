@@ -53,7 +53,7 @@ namespace telar::runtime::cli::hooks {
     return count_ - (find(finished) != count_);
   }
 
-  tbc::view<std::string_view, tbc::lt::a> CodexSubagents::value(tbc::view<std::string_view, tbc::lt::a> item, std::string_view key) noexcept {
+  tbc::val_a<std::string_view> CodexSubagents::value(tbc::val_a<std::string_view> item, std::string_view key) noexcept {
     const auto offset = item.find(key);
     if (offset == std::string_view::npos) {
       return {};

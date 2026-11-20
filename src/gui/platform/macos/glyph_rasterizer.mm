@@ -63,7 +63,7 @@ namespace {
 
   // The font with the variation applied, or none; the font itself is consumed. The result is a new
   // reference the caller owns, borrowing none of the arguments.
-  tbc::view<CTFontRef, tbc::lt::static_storage> vary(CF_CONSUMED CTFontRef consumed, const telar_font_variation* variation) {
+  tbc::val_static<CTFontRef> vary(CF_CONSUMED CTFontRef consumed, const telar_font_variation* variation) {
     NativeReference font{consumed};
     if (!font || variation == nullptr || variation->count == 0) {
       return tbc::raw(font.release());

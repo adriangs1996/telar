@@ -7,7 +7,7 @@ import telar.base.ds;
 
 namespace telar::gui::features::activity {
 
-  tbc::view<const Agent<Memory>*, tbc::lt::a> find(tbc::view<std::span<const Agent<Memory>>, tbc::lt::a> agents, std::uint64_t pane_id, ds::Option<std::uint64_t> generation) noexcept {
+  tbc::val_a<const Agent<Memory>*> find(tbc::val_a<std::span<const Agent<Memory>>> agents, std::uint64_t pane_id, ds::Option<std::uint64_t> generation) noexcept {
     const auto agent = std::ranges::find_if(agents, [&](const auto& entry) {
       return entry.pane_id == pane_id && (!generation || entry.pane_generation == *generation);
     });
@@ -15,7 +15,7 @@ namespace telar::gui::features::activity {
     return agent == agents.end() ? nullptr : &*agent;
   }
 
-  tbc::view<const Agent<Memory>*, tbc::lt::a> focused(tbc::view<std::span<const Agent<Memory>>, tbc::lt::a> agents, const Tab<Memory>& tab) noexcept {
+  tbc::val_a<const Agent<Memory>*> focused(tbc::val_a<std::span<const Agent<Memory>>> agents, const Tab<Memory>& tab) noexcept {
     const auto agent = std::ranges::find_if(agents, [&](const auto& candidate) {
       return candidate.pane_id == tab.focused_pane && sameTab(candidate.location, tab.location);
     });

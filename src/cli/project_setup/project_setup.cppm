@@ -30,7 +30,7 @@ export {
       std::string_view text{};
       ds::Option<std::string_view> workspace{};
       ds::Option<std::string_view> tab{};
-      tbc::view<const char*, tbc::lt::a> socket = nullptr;
+      tbc::val_a<const char*> socket = nullptr;
       bool json = false;
       bool stdin_text = false;
       bool enter = false;
@@ -61,7 +61,7 @@ export {
 
     void writeText(Output& out, const PaneText& reply, bool json, bool agent);
 
-    tbc::view<AgentSnapshotEntry, tbc::lt::a> resolve(tbc::view<const AgentSnapshot&, tbc::lt::a> snapshot, std::string_view target, ds::Option<std::uint64_t> worktree = ds::none);
+    tbc::val_a<AgentSnapshotEntry> resolve(tbc::ref_a<AgentSnapshot> snapshot, std::string_view target, ds::Option<std::uint64_t> worktree = ds::none);
 
   }
 }
@@ -115,7 +115,7 @@ export {
 
     bool finished(const ExecutionReply& reply);
 
-    tbc::view<ExecutionReply, tbc::lt::a> exchange(tbc::view<ControlSession&, tbc::lt::a> session, ExecutionRequest request);
+    tbc::val_a<ExecutionReply> exchange(tbc::mut_a<ControlSession> session, ExecutionRequest request);
 
     void list(ControlSession& session);
 
@@ -147,10 +147,10 @@ export {
     };
 
     // `project setup` and `worktree create --setup` share the authorization gate and execution semantics.
-    tbc::view<ds::Option<std::uint64_t>, tbc::lt::a> prepare(tbc::view<Memory&, tbc::lt::a> memory, ControlSession& session, std::string_view cwd, bool authorized, bool detach = false);
+    tbc::val_a<ds::Option<std::uint64_t>> prepare(tbc::mut_a<Memory> memory, ControlSession& session, std::string_view cwd, bool authorized, bool detach = false);
 
     // Starts the runtime only when the checkout declares a recipe.
-    tbc::view<ds::Option<std::uint64_t>, tbc::lt::a> prepare(tbc::view<Memory&, tbc::lt::a> memory, std::string_view cwd, bool authorized, bool detach, std::string_view socket);
+    tbc::val_a<ds::Option<std::uint64_t>> prepare(tbc::mut_a<Memory> memory, std::string_view cwd, bool authorized, bool detach, std::string_view socket);
 
     int run(Memory& memory, const Options& options);
 

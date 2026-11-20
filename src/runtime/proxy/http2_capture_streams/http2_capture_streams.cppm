@@ -508,7 +508,7 @@ export {
         }
       }
 
-      inline void respond(tbc::view<std::string_view, tbc::lt::static_storage> response) noexcept {
+      inline void respond(tbc::val_static<std::string_view> response) noexcept {
         response_ = StaticReply{response};
         state_ = State::replying;
       }

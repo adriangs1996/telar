@@ -9,7 +9,7 @@ import telar.base.text;
 
 namespace telar::runtime::config {
 
-  void LimitNotices::add(tbc::view<const LimitReach&, tbc::lt::a> reach) noexcept {
+  void LimitNotices::add(tbc::ref_a<LimitReach> reach) noexcept {
     for (auto& entry : entries_.viewMut().first(count_)) {
       if (entry.name == reach.name) {
         if (reach.requested) {
@@ -112,7 +112,7 @@ namespace telar::runtime::config {
     }
   }
 
-  tbc::view<std::string_view, tbc::lt::a> fittedUiText(tbc::view<std::string_view, tbc::lt::a> text, tbc::view<LimitReach, tbc::lt::b> reach, tbc::view<LimitNotices&, tbc::lt::b> limits) {
+  tbc::val_a<std::string_view> fittedUiText(tbc::val_a<std::string_view> text, tbc::val_b<LimitReach> reach, tbc::mut_b<LimitNotices> limits) {
     if (text.size() > reach.value) {
       reach.requested = text.size();
       limits.add(reach);
@@ -217,7 +217,7 @@ namespace telar::runtime::config {
     }
   }
 
-  tbc::view<ds::String<Memory>, tbc::lt::a> IntegrationProvider::root(tbc::view<Memory&, tbc::lt::a> memory, const EnvironmentSource& environment, bool legacy) const {
+  tbc::val_a<ds::String<Memory>> IntegrationProvider::root(tbc::mut_a<Memory> memory, const EnvironmentSource& environment, bool legacy) const {
     ds::String<Memory> result{memory};
 
     if (this->environment != nullptr && !legacy) {

@@ -139,7 +139,7 @@ namespace telar::runtime {
     return oversized_;
   }
 
-  CaptureHalf::CaptureHalf(tbc::view<ConcurrentMemory&, tbc::lt::a> memory, tbc::view<CaptureQuota&, tbc::lt::a> quota, const ProxyCaptureLimits& limits, CaptureStart start)
+  CaptureHalf::CaptureHalf(tbc::mut_a<ConcurrentMemory> memory, tbc::mut_a<CaptureQuota> quota, const ProxyCaptureLimits& limits, CaptureStart start)
       : key(start.key),
         side(start.side),
         protocol(start.protocol),
@@ -292,11 +292,11 @@ namespace telar::runtime {
     return nullptr;
   }
 
-  CapturedExchange::CapturedExchange(tbc::view<ConcurrentMemory&, tbc::lt::a>) noexcept
+  CapturedExchange::CapturedExchange(tbc::mut_a<ConcurrentMemory>) noexcept
       : request(),
         response() {}
 
-  void CapturedExchange::include(tbc::view<Half, tbc::lt::a> half) noexcept {
+  void CapturedExchange::include(tbc::val_a<Half> half) noexcept {
     (half->side == CaptureSide::request ? request : response) = std::move(half);
   }
 

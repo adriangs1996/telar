@@ -308,7 +308,7 @@ namespace telar::runtime::control {
 
   }
 
-  void VtState::bind(tbc::view<GhosttyTerminal, tbc::lt::a> terminal, tbc::view<GhosttyRenderState, tbc::lt::a> render, bool separate_media) noexcept {
+  void VtState::bind(tbc::val_a<GhosttyTerminal> terminal, tbc::val_a<GhosttyRenderState> render, bool separate_media) noexcept {
     terminal_ = terminal;
     render_ = render;
     separate_media_ = separate_media;
@@ -419,7 +419,7 @@ namespace telar::runtime::control {
     invalidate();
   }
 
-  tbc::view<TrackedRow, tbc::lt::a> VtState::trackCursorRow() const {
+  tbc::val_a<TrackedRow> VtState::trackCursorRow() const {
     return TrackedRow::active(terminal_, cursor().row);
   }
 

@@ -74,7 +74,7 @@ namespace telar::gui::platform {
     ClipboardImageSource& operator=(ClipboardImageSource&& other) noexcept;
 
     // The capture is allocated from memory.
-    [[nodiscard]] tbc::view<AttachmentCapture<ApplicationAllocator>, tbc::lt::a> read(tbc::view<ApplicationAllocator&, tbc::lt::a> memory, ClipboardCaptureRequest request) const;
+    [[nodiscard]] tbc::val_a<AttachmentCapture<ApplicationAllocator>> read(tbc::mut_a<ApplicationAllocator> memory, ClipboardCaptureRequest request) const;
 
   private:
     friend class ClipboardImageMonitor;

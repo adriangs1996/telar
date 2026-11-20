@@ -213,7 +213,7 @@ export {
     class TBC_GENERIC PaneService {
     public:
       // The panes it launches keep the allocator, and the service keeps what it is given, all in region `a`.
-      inline explicit PaneService(tbc::view<ConcurrentMemory&, tbc::lt::a> memory, tbc::view<Poller&, tbc::lt::a> poller, tbc::view<LimitService&, tbc::lt::a> limits, tbc::view<PaneLaunchOptions, tbc::lt::a> options, tbc::view<History&, tbc::lt::a> history = discarded_history)
+      inline explicit PaneService(tbc::mut_a<ConcurrentMemory> memory, tbc::mut_a<Poller> poller, tbc::mut_a<LimitService> limits, tbc::val_a<PaneLaunchOptions> options, tbc::mut_a<History> history = discarded_history)
           : memory_(memory),
             poller_(poller),
             limits_(limits),
@@ -246,7 +246,7 @@ export {
 
       // A new pane in a tab, in the colors of the workspace's geometry owner when there is one.
       // `bare_prompt`: the client it is for draws telar's editor, so its shell prints no prompt.
-      inline tbc::view<Pane&, tbc::lt::a> launch(tbc::view<RuntimeModel&, tbc::lt::a> model, const ConfigureTerminalColors* owner_colors, bool bare_prompt, const Launch& launch, TabLocation location, TerminalSize size) {
+      inline tbc::mut_a<Pane> launch(tbc::mut_a<RuntimeModel> model, const ConfigureTerminalColors* owner_colors, bool bare_prompt, const Launch& launch, TabLocation location, TerminalSize size) {
         const auto identity = allocateIdentity(model);
 
         if (launch.environment_mode != EnvironmentMode::inherit_runtime || !launch.environment.empty()) {
@@ -258,11 +258,11 @@ export {
         return launchPrepared(model, owner_colors, bare_prompt, command, location, size, identity);
       }
 
-      inline tbc::view<Pane&, tbc::lt::a> launch(tbc::view<RuntimeModel&, tbc::lt::a> model, const ConfigureTerminalColors* owner_colors, bool bare_prompt, Command<ConcurrentMemory>& command, TabLocation location, TerminalSize size, std::uint64_t restored_identity = 0) {
+      inline tbc::mut_a<Pane> launch(tbc::mut_a<RuntimeModel> model, const ConfigureTerminalColors* owner_colors, bool bare_prompt, Command<ConcurrentMemory>& command, TabLocation location, TerminalSize size, std::uint64_t restored_identity = 0) {
         return launchPrepared(model, owner_colors, bare_prompt, command, location, size, allocateIdentity(model, restored_identity));
       }
 
-      inline tbc::view<Attachment&, tbc::lt::a> attach(RuntimeModel& model, tbc::view<ClientSession&, tbc::lt::a> client, std::uint64_t pane_id, TerminalSize size) {
+      inline tbc::mut_a<Attachment> attach(RuntimeModel& model, tbc::mut_a<ClientSession> client, std::uint64_t pane_id, TerminalSize size) {
         auto* workspace = model.workspaces.find(require(model.panes, pane_id).location.workspace.id);
         if (workspace == nullptr) {
           throw RequestError{FailureCode::workspace_not_found, "Workspace does not exist"};
@@ -829,7 +829,7 @@ export {
         return {identity, model.next_pane_generation++};
       }
 
-      inline tbc::view<Pane&, tbc::lt::a> launchPrepared(tbc::view<RuntimeModel&, tbc::lt::a> model, const ConfigureTerminalColors* owner_colors, bool bare_prompt, Command<ConcurrentMemory>& command, TabLocation location, TerminalSize size, Identity identity) {
+      inline tbc::mut_a<Pane> launchPrepared(tbc::mut_a<RuntimeModel> model, const ConfigureTerminalColors* owner_colors, bool bare_prompt, Command<ConcurrentMemory>& command, TabLocation location, TerminalSize size, Identity identity) {
         const auto setIdentity = [&](std::string_view name, std::uint64_t value) {
           ds::Array<char, 32> text{};
           const auto converted = std::to_chars(text.dataMut(), text.dataMut() + text.size(), value);
@@ -905,14 +905,14 @@ export {
 
       static constexpr std::size_t pane_capacity = 256;
 
-      tbc::view<ConcurrentMemory&, tbc::lt::a> memory_;
-      tbc::view<Poller&, tbc::lt::a> poller_;
-      tbc::view<LimitService&, tbc::lt::a> limits_;
-      tbc::view<History&, tbc::lt::a> history_;
-      tbc::view<std::string_view, tbc::lt::a> socket_path_;
+      tbc::mut_a<ConcurrentMemory> memory_;
+      tbc::mut_a<Poller> poller_;
+      tbc::mut_a<LimitService> limits_;
+      tbc::mut_a<History> history_;
+      tbc::val_a<std::string_view> socket_path_;
       ProxyClientConfiguration proxy_;
       control::Policy control_policy_;
-      tbc::view<ShellIntegration<ConcurrentMemory>, tbc::lt::a> shell_integration_;
+      tbc::val_a<ShellIntegration<ConcurrentMemory>> shell_integration_;
     };
 
   }

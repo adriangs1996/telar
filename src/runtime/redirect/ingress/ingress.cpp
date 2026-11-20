@@ -102,7 +102,7 @@ namespace telar::runtime::redirect {
     return tunnel_.name();
   }
 
-  tbc::view<std::span<Byte>, tbc::lt::a> Discovery::receive(tbc::view<std::span<Byte>, tbc::lt::a> bytes) {
+  tbc::val_a<std::span<Byte>> Discovery::receive(tbc::val_a<std::span<Byte>> bytes) {
     const auto size = ::read(tunnel_.descriptor(), bytes.data(), bytes.size());
     if (size < 0 && socketWouldBlock(sys::lastError())) {
       return {};
@@ -132,7 +132,7 @@ namespace telar::runtime::redirect {
     }
   }
 
-  tbc::view<std::span<const Byte>, tbc::lt::a> Protocol::encode(tbc::view<std::span<Byte>, tbc::lt::a> output, Kind kind, const Target& target) {
+  tbc::val_a<std::span<const Byte>> Protocol::encode(tbc::val_a<std::span<Byte>> output, Kind kind, const Target& target) {
     plugins::FrameWriter writer{output};
 
     writer.integer(magic);

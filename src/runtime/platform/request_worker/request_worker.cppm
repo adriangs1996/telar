@@ -81,7 +81,7 @@ export {
       ObservationWorker& operator=(const ObservationWorker&) = delete;
 
       // The worker keeps the request, region `a`, until its result is collected.
-      inline bool submit(tbc::view<Request, tbc::lt::a> request) {
+      inline bool submit(tbc::val_a<Request> request) {
         const std::lock_guard lock{mutex_};
 
         if (busy_ || stopping_) {
@@ -191,12 +191,12 @@ export {
       std::mutex mutex_;
       std::condition_variable ready_;
       std::condition_variable completed_;
-      tbc::view<ds::Option<Request>, tbc::lt::a> request_;
+      tbc::val_a<ds::Option<Request>> request_;
       // Only the worker's thread touches the request it is answering.
-      tbc::view<ds::Option<Request>, tbc::lt::a> processing_;
+      tbc::val_a<ds::Option<Request>> processing_;
       // May view the request processing_ holds, which is replaced only once the result is collected;
       // the worker never moves, as its mutex and thread do not.
-      tbc::view<ds::Option<Result>, tbc::lt::self> result_;
+      tbc::val_self<ds::Option<Result>> result_;
       bool busy_ = false;
       std::atomic<bool> result_ready_{false};
       bool stopping_ = false;

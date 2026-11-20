@@ -39,7 +39,7 @@ export {
 
       // Generic over the caller's measure, so it stays here.
       template <LabelMeasure Measure>
-      [[nodiscard]] TBC_GENERIC static tbc::view<std::string_view, tbc::lt::a> fitHost(tbc::view<std::string_view, tbc::lt::a> host, float width, Measure& measure, tbc::view<Buffer&, tbc::lt::a> buffer) {
+      [[nodiscard]] TBC_GENERIC static tbc::val_a<std::string_view> fitHost(tbc::val_a<std::string_view> host, float width, Measure& measure, tbc::mut_a<Buffer> buffer) {
         if (!std::isfinite(width) || width < 0) {
           throw std::invalid_argument{"InvalidNotificationActionWidth"};
         }

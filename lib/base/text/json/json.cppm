@@ -27,9 +27,9 @@ export {
     // A JSON value inside its text, region `b`; the values and texts it hands out view that text.
     class JsonValue {
     public:
-      explicit JsonValue(tbc::view<std::string_view, tbc::lt::b> bytes, unsigned maximum_depth = 32);
+      explicit JsonValue(tbc::val_b<std::string_view> bytes, unsigned maximum_depth = 32);
 
-      tbc::view<std::string_view, tbc::lt::b> encoded() const noexcept;
+      tbc::val_b<std::string_view> encoded() const noexcept;
 
       template <typename Consumer>
       TBC_GENERIC void eachElement(Consumer&& consume) const {
@@ -57,14 +57,14 @@ export {
         }
       }
 
-      tbc::view<ds::Option<JsonValue>, tbc::lt::b> field(std::string_view name) const;
+      tbc::val_b<ds::Option<JsonValue>> field(std::string_view name) const;
       bool equals(std::string_view expected) const;
       bool boolean() const noexcept;
 
       template <Allocator Memory>
       void string(ds::String<Memory>& output) const;
 
-      static tbc::view<JsonValue, tbc::lt::b> parse(tbc::view<std::string_view, tbc::lt::b> input, unsigned maximum_depth = 32);
+      static tbc::val_b<JsonValue> parse(tbc::val_b<std::string_view> input, unsigned maximum_depth = 32);
 
     private:
       // The steps of eachElement and eachMember. `enter` consumes the opening bracket and tells
@@ -77,13 +77,13 @@ export {
       static void skipValue(std::string_view& input, unsigned maximum_depth);
 
       // The escaped text between the quotes of this string value.
-      tbc::view<std::string_view, tbc::lt::b> stringContents() const;
+      tbc::val_b<std::string_view> stringContents() const;
 
       // Writes the unescaped `encoded` to `output`, which holds at least encoded.size() bytes,
       // and returns how many it wrote: an escape never takes fewer bytes than what it spells.
       static std::size_t unescape(std::string_view encoded, char* output);
 
-      tbc::view<std::string_view, tbc::lt::b> bytes_;
+      tbc::val_b<std::string_view> bytes_;
       unsigned maximum_depth_;
     };
 
@@ -184,12 +184,12 @@ export {
 
 template <>
 struct std::formatter<telar::runtime::JsonQuoted, char> {
-  constexpr tbc::view<std::format_parse_context::iterator, tbc::lt::a> parse(tbc::view<std::format_parse_context&, tbc::lt::a> context) {
+  constexpr tbc::val_a<std::format_parse_context::iterator> parse(tbc::mut_a<std::format_parse_context> context) {
     return context.begin();
   }
 
   template <typename Context>
-  TBC_GENERIC tbc::view<typename Context::iterator, tbc::lt::a> format(const telar::runtime::JsonQuoted& quoted, tbc::view<Context&, tbc::lt::a> context) const {
+  TBC_GENERIC tbc::val_a<typename Context::iterator> format(const telar::runtime::JsonQuoted& quoted, tbc::mut_a<Context> context) const {
     auto output = context.out();
 
     *output++ = '"';
@@ -219,7 +219,7 @@ export {
     class TBC_GENERIC JsonFields {
     public:
       // The fields view the object's text and the names, and allocate scratch text, all in region `a`.
-      inline explicit JsonFields(tbc::view<Memory&, tbc::lt::a> memory, tbc::view<const JsonValue&, tbc::lt::a> object, tbc::view<const ds::Array<std::string_view, Count>&, tbc::lt::a> names)
+      inline explicit JsonFields(tbc::mut_a<Memory> memory, tbc::ref_a<JsonValue> object, tbc::ref_a<ds::Array<std::string_view, Count>> names)
           : names_(names),
             text_(memory) {
         object.eachMember([&](const JsonValue& key, const JsonValue& value) {
@@ -242,9 +242,9 @@ export {
       }
 
     private:
-      tbc::view<ds::Array<std::string_view, Count>, tbc::lt::a> names_;
-      tbc::view<ds::Array<ds::Option<JsonValue>, Count>, tbc::lt::a> values_;
-      tbc::view<ds::String<Memory>, tbc::lt::a> text_;
+      tbc::val_a<ds::Array<std::string_view, Count>> names_;
+      tbc::val_a<ds::Array<ds::Option<JsonValue>, Count>> values_;
+      tbc::val_a<ds::String<Memory>> text_;
     };
 
     template <Allocator Memory, std::size_t Count>
@@ -268,9 +268,9 @@ export {
     class JsonNode {
     public:
       // A node allocates its text and children from the allocator in region `a`.
-      explicit JsonNode(tbc::view<Memory&, tbc::lt::a> memory, JsonKind kind = JsonKind::object);
+      explicit JsonNode(tbc::mut_a<Memory> memory, JsonKind kind = JsonKind::object);
 
-      static tbc::view<JsonNode, tbc::lt::a> parse(tbc::view<Memory&, tbc::lt::a> memory, std::string_view source);
+      static tbc::val_a<JsonNode> parse(tbc::mut_a<Memory> memory, std::string_view source);
 
       JsonKind kind() const noexcept;
       std::string_view text() const noexcept;
@@ -290,12 +290,12 @@ export {
       static constexpr unsigned maximum_depth = 256;
       static constexpr unsigned indentation = 2;
 
-      static tbc::view<JsonNode, tbc::lt::a> fromValue(tbc::view<Memory&, tbc::lt::a> memory, JsonValue value);
+      static tbc::val_a<JsonNode> fromValue(tbc::mut_a<Memory> memory, JsonValue value);
       void appendFormatted(ds::String<Memory>& output, unsigned depth) const;
 
-      tbc::view<ds::String<Memory>, tbc::lt::a> name_;
-      tbc::view<ds::String<Memory>, tbc::lt::a> text_;
-      tbc::view<ds::Vec<JsonNode, Memory>, tbc::lt::a> children_;
+      tbc::val_a<ds::String<Memory>> name_;
+      tbc::val_a<ds::String<Memory>> text_;
+      tbc::val_a<ds::Vec<JsonNode, Memory>> children_;
       JsonKind kind_;
     };
 

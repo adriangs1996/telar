@@ -321,8 +321,8 @@ namespace telar::gui::qt {
     bool loading_ = false;
     bool pending_ = false;
     // The commands report back to this controller.
-    tbc::view<SurfaceCommand, tbc::lt::self> listing_;
-    tbc::view<SurfaceCommand, tbc::lt::self> selection_;
+    tbc::val_self<SurfaceCommand> listing_;
+    tbc::val_self<SurfaceCommand> selection_;
   };
 
 }

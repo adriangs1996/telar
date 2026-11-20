@@ -271,7 +271,7 @@ namespace telar {
     }
   }
 
-  tbc::view<std::span<const Byte>, tbc::lt::a> Client::receiveFrame(tbc::view<std::span<Byte>, tbc::lt::a> buffer) {
+  tbc::val_a<std::span<const Byte>> Client::receiveFrame(tbc::val_a<std::span<Byte>> buffer) {
     ds::Array<Byte, frame_prefix_size> prefix{};
 
     readAll(prefix.dataMut(), prefix.size());

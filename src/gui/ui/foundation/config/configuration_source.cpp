@@ -67,7 +67,7 @@ namespace telar::gui::qt {
 
   static_assert(ConcurrentAllocator<ApplicationAllocator>);
 
-  ConfigurationSource::ConfigurationSource(tbc::view<ApplicationAllocator&, tbc::lt::a> memory, QObject* parent)
+  ConfigurationSource::ConfigurationSource(tbc::mut_a<ApplicationAllocator> memory, QObject* parent)
       : QObject(parent),
         memory_(memory),
         fonts_(memory),
@@ -636,7 +636,7 @@ namespace telar::gui::qt {
     }
   }
 
-  void ConfigurationSource::adopt(tbc::view<PreparedConfiguration, tbc::lt::a> result) {
+  void ConfigurationSource::adopt(tbc::val_a<PreparedConfiguration> result) {
     if (!result || result->revision != revision_) {
       return;
     }

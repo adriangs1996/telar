@@ -110,7 +110,7 @@ namespace telar::gui::qt {
     };
 
     // The children reach their items raw, so the list borrows nothing.
-    tbc::view<QList<Child>, tbc::lt::static_storage> measure(const QList<QQuickItem*>& items, const LayoutPass& pass) {
+    tbc::val_static<QList<Child>> measure(const QList<QQuickItem*>& items, const LayoutPass& pass) {
       QList<Child> children;
 
       for (auto* item : items) {

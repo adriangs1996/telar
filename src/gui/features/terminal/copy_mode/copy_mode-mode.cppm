@@ -92,7 +92,7 @@ namespace telar::gui::features::terminal::copy_mode {
 
     bool beginPointer(CopyPress press, const CopyGrid& grid) noexcept;
 
-    [[nodiscard]] tbc::view<ds::Option<CopyPlan>, tbc::lt::static_storage> pointer(CopyPoint local, const CopyGrid& grid, bool released) const noexcept;
+    [[nodiscard]] tbc::val_static<ds::Option<CopyPlan>> pointer(CopyPoint local, const CopyGrid& grid, bool released) const noexcept;
 
     bool clearPointer() noexcept;
 
@@ -106,11 +106,11 @@ namespace telar::gui::features::terminal::copy_mode {
     // one is given: a command block's text, picked from telar's editor.
     bool enterAt(std::uint64_t pane_id, const CopyGrid& grid, CopyPoint cursor, ds::Option<CopyPoint> anchor, bool linewise) noexcept;
 
-    [[nodiscard]] tbc::view<ds::Option<CopyPlan>, tbc::lt::static_storage> key(const TerminalKey& key, const CopyGrid& grid) const noexcept;
+    [[nodiscard]] tbc::val_static<ds::Option<CopyPlan>> key(const TerminalKey& key, const CopyGrid& grid) const noexcept;
 
-    [[nodiscard]] tbc::view<ds::Option<CopyPlan>, tbc::lt::static_storage> vertical(std::int32_t rows, const CopyGrid& grid) const noexcept;
+    [[nodiscard]] tbc::val_static<ds::Option<CopyPlan>> vertical(std::int32_t rows, const CopyGrid& grid) const noexcept;
 
-    [[nodiscard]] tbc::view<CopyPlan, tbc::lt::static_storage> leave(const CopyGrid& grid) const noexcept;
+    [[nodiscard]] tbc::val_static<CopyPlan> leave(const CopyGrid& grid) const noexcept;
 
     [[nodiscard]] bool current(const CopyPlan& plan) const noexcept;
 
@@ -119,7 +119,7 @@ namespace telar::gui::features::terminal::copy_mode {
     // The plan's replacement matches view the results, region `a`, until it is applied. From
     // `origin`, a search typed a letter at a time starts where it began, and comes back there
     // when nothing matches.
-    [[nodiscard]] tbc::view<ds::Option<CopyPlan>, tbc::lt::a> search(tbc::view<std::span<const PaneMatch>, tbc::lt::a> results, const CopyGrid& grid, ds::Option<CopyPoint> origin = ds::none) const;
+    [[nodiscard]] tbc::val_a<ds::Option<CopyPlan>> search(tbc::val_a<std::span<const PaneMatch>> results, const CopyGrid& grid, ds::Option<CopyPoint> origin = ds::none) const;
 
     void onFrame(std::uint32_t previous_offset, const CopyGrid& grid) noexcept;
 
@@ -128,7 +128,7 @@ namespace telar::gui::features::terminal::copy_mode {
   private:
     [[nodiscard]] ds::Option<SetPaneViewport> viewport(std::uint32_t offset, const CopyGrid& grid) const noexcept;
 
-    [[nodiscard]] tbc::view<CopyPlan, tbc::lt::static_storage> plan(CopyState next, const CopyGrid& grid, CopyEffect effect = {}) const noexcept;
+    [[nodiscard]] tbc::val_static<CopyPlan> plan(CopyState next, const CopyGrid& grid, CopyEffect effect = {}) const noexcept;
 
     ds::Option<CopyState> state_;
     ds::Array<PaneMatch, maximum_matches> matches_{};

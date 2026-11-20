@@ -51,7 +51,7 @@ export {
       // Stays here: generic over the caller's router.
       template <PrefixHintRouter Router>
       // The labels of the hints a router binds are literals.
-      [[nodiscard]] TBC_GENERIC static tbc::view<ModeHints, tbc::lt::static_storage> resolve(const Router& router) noexcept {
+      [[nodiscard]] TBC_GENERIC static tbc::val_static<ModeHints> resolve(const Router& router) noexcept {
         ModeHints result;
 
         for (const auto& [action, label] : actions) {
@@ -64,12 +64,12 @@ export {
       }
 
       // The hints view their labels, region `a`.
-      void append(tbc::view<ModeHint, tbc::lt::a> hint) noexcept;
+      void append(tbc::val_a<ModeHint> hint) noexcept;
 
-      [[nodiscard]] tbc::view<std::span<const ModeHint>, tbc::lt::a> items() const noexcept;
+      [[nodiscard]] tbc::val_a<std::span<const ModeHint>> items() const noexcept;
 
     private:
-      tbc::view<ds::Array<ModeHint, capacity>, tbc::lt::a> hints_{};
+      tbc::val_a<ds::Array<ModeHint, capacity>> hints_{};
       std::size_t count_ = 0;
     };
 

@@ -120,13 +120,13 @@ namespace telar::gui::qt {
     // Answers the commands of the active machine's client. A configuration reply views the
     // commands' buffers, region `a`, until the client encodes it.
     struct HostCommands final : application::ClientCommandHandler {
-      HostCommands(tbc::view<WindowCommands&, tbc::lt::a> owner, bool is_active) noexcept
+      HostCommands(tbc::mut_a<WindowCommands> owner, bool is_active) noexcept
           : commands(owner),
             active(is_active) {}
 
-      void operator()(const ClientCommand& message, tbc::view<CompleteClientCommand&, tbc::lt::a> reply) override;
+      void operator()(const ClientCommand& message, tbc::mut_a<CompleteClientCommand> reply) override;
 
-      tbc::view<WindowCommands&, tbc::lt::a> commands;
+      tbc::mut_a<WindowCommands> commands;
       bool active = false;
     };
 
@@ -184,31 +184,31 @@ namespace telar::gui::qt {
     void executeWindowAction(window_actions::Action action);
     bool executeMachineAction(window_actions::Action action);
     void cancelCurrentInteraction();
-    [[nodiscard]] static bool answerConfiguration(tbc::view<WindowCommands&, tbc::lt::a> commands, const ClientCommand& message, tbc::view<CompleteClientCommand&, tbc::lt::a> reply);
+    [[nodiscard]] static bool answerConfiguration(tbc::mut_a<WindowCommands> commands, const ClientCommand& message, tbc::mut_a<CompleteClientCommand> reply);
     void executeHostCommand(const ClientCommand& message, CompleteClientCommand& reply);
 
-    tbc::view<Store&, tbc::lt::a> store_;
-    tbc::view<ConfigurationSource&, tbc::lt::a> configuration_source_;
-    tbc::view<KeyBindings&, tbc::lt::a> key_bindings_;
-    tbc::view<Dialogs&, tbc::lt::a> dialogs_;
-    tbc::view<MachinesCoordinator&, tbc::lt::a> machines_;
-    tbc::view<MachineProfilesSource&, tbc::lt::a> machine_profiles_;
-    tbc::view<ActivitySelection&, tbc::lt::a> activity_selection_;
-    tbc::view<WindowDisplay&, tbc::lt::a> display_;
-    tbc::view<WindowStatus&, tbc::lt::a> status_;
-    tbc::view<PaletteController&, tbc::lt::a> palette_;
-    tbc::view<HistoryController&, tbc::lt::a> history_;
-    tbc::view<WorkspaceFormController&, tbc::lt::a> workspace_form_;
-    tbc::view<CopyController&, tbc::lt::a> copy_;
-    tbc::view<PromptController&, tbc::lt::a> prompt_;
-    tbc::view<TerminalController&, tbc::lt::a> terminals_;
-    tbc::view<ComponentsController&, tbc::lt::a> components_;
-    tbc::view<AttachmentsController&, tbc::lt::a> attachments_;
-    tbc::view<PluginRunner&, tbc::lt::a> plugins_;
-    tbc::view<NotificationsController&, tbc::lt::a> notifications_;
-    tbc::view<LinksController&, tbc::lt::a> links_;
-    tbc::view<ElementSlots&, tbc::lt::a> element_slots_;
-    tbc::view<CommandsHost&, tbc::lt::a> host_;
+    tbc::mut_a<Store> store_;
+    tbc::mut_a<ConfigurationSource> configuration_source_;
+    tbc::mut_a<KeyBindings> key_bindings_;
+    tbc::mut_a<Dialogs> dialogs_;
+    tbc::mut_a<MachinesCoordinator> machines_;
+    tbc::mut_a<MachineProfilesSource> machine_profiles_;
+    tbc::mut_a<ActivitySelection> activity_selection_;
+    tbc::mut_a<WindowDisplay> display_;
+    tbc::mut_a<WindowStatus> status_;
+    tbc::mut_a<PaletteController> palette_;
+    tbc::mut_a<HistoryController> history_;
+    tbc::mut_a<WorkspaceFormController> workspace_form_;
+    tbc::mut_a<CopyController> copy_;
+    tbc::mut_a<PromptController> prompt_;
+    tbc::mut_a<TerminalController> terminals_;
+    tbc::mut_a<ComponentsController> components_;
+    tbc::mut_a<AttachmentsController> attachments_;
+    tbc::mut_a<PluginRunner> plugins_;
+    tbc::mut_a<NotificationsController> notifications_;
+    tbc::mut_a<LinksController> links_;
+    tbc::mut_a<ElementSlots> element_slots_;
+    tbc::mut_a<CommandsHost> host_;
     // Where the pressed component action that is running was pressed, for a panel it opens.
     ds::Option<QPointF> component_action_anchor_;
   };

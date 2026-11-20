@@ -843,7 +843,7 @@ namespace telar::gui::qt {
     // The rows a view scrolled by pixels or folded draws, from the screen and from the rows kept
     // apart from it.
     template <typename ViewRows>
-    void collectDrawnRows(tbc::holds<ds::Vec<TerminalRow, Memory>&, tbc::lt::a> drawn, const ViewRows& view_rows, tbc::view<const application::Pane<Memory>&, tbc::lt::a> pane) {
+    void collectDrawnRows(tbc::holds<ds::Vec<TerminalRow, Memory>&, tbc::lt::a> drawn, const ViewRows& view_rows, tbc::ref_a<application::Pane<Memory>> pane) {
       const auto& screen = pane.screen;
 
       drawn.reserve(view_rows.size());

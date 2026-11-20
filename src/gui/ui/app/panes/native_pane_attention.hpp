@@ -87,7 +87,7 @@ namespace telar::gui::qt {
     bool notification_pending_ = false;
     ds::Option<std::uint64_t> deadline_ns_;
     QPointer<WindowAnimationClock> clock_;
-    tbc::view<AncestorGeometry, tbc::lt::self> ancestors_;
+    tbc::val_self<AncestorGeometry> ancestors_;
   };
 
   // The attention rings of one window share their fades and are sampled only while the

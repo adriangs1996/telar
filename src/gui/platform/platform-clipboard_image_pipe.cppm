@@ -20,7 +20,7 @@ export {
       static constexpr std::chrono::milliseconds timeout{5000};
 
       template <Allocator Memory>
-      [[nodiscard]] static tbc::view<SensitiveBytes<Memory>, tbc::lt::a> read(tbc::view<Memory&, tbc::lt::a> memory, int descriptor, ClipboardImagePipeLimits limits = {});
+      [[nodiscard]] static tbc::val_a<SensitiveBytes<Memory>> read(tbc::mut_a<Memory> memory, int descriptor, ClipboardImagePipeLimits limits = {});
 
     private:
       static constexpr std::size_t chunk_bytes = std::size_t{16} * 1024;

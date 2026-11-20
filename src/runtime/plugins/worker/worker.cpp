@@ -11,7 +11,7 @@ import telar.base.ds;
 namespace telar::runtime::plugins {
 
   template <Allocator Memory>
-  Result<Memory>::Result(const ServiceSpec& specification, tbc::view<SensitiveAllocation<Memory>, tbc::lt::a> storage, std::size_t effects_offset, std::size_t effects_size, bool traffic)
+  Result<Memory>::Result(const ServiceSpec& specification, tbc::val_a<SensitiveAllocation<Memory>> storage, std::size_t effects_offset, std::size_t effects_size, bool traffic)
       : package_index(specification.package_index),
         plugin_id(specification.plugin_id),
         digest(specification.digest),
@@ -49,7 +49,7 @@ namespace telar::runtime::plugins {
   }
 
   template <Allocator Memory>
-  void ResultQueue<Memory>::publish(tbc::view<OwnedResult<Memory>, tbc::lt::a> result) noexcept {
+  void ResultQueue<Memory>::publish(tbc::val_a<OwnedResult<Memory>> result) noexcept {
     if (results_.publish(std::move(result))) {
       ready_.getMut().notify();
     }
@@ -190,7 +190,7 @@ namespace telar::runtime::plugins {
     return options;
   }
 
-  tbc::view<ds::Array<char*, 7>, tbc::lt::a> TapWorkerOptions::arguments(tbc::view<const TapWorkerOptions&, tbc::lt::a> options, tbc::view<const char*, tbc::lt::a> executable) noexcept {
+  tbc::val_a<ds::Array<char*, 7>> TapWorkerOptions::arguments(tbc::ref_a<TapWorkerOptions> options, tbc::val_a<const char*> executable) noexcept {
     ds::Array<char*, 7> words{const_cast<char*>(executable), const_cast<char*>(command.data()), const_cast<char*>(options.entry)};
     std::size_t count = 3;
 
@@ -327,7 +327,7 @@ namespace telar::runtime::plugins {
     return {host.view(), directions, visibility, timeout_ms, fail_closed, stage == TrafficStage::http};
   }
 
-  tbc::view<std::span<const Byte>, tbc::lt::a> TrafficProtocol::setup(tbc::view<std::span<Byte>, tbc::lt::a> output, const ServiceSpec& specification) {
+  tbc::val_a<std::span<const Byte>> TrafficProtocol::setup(tbc::val_a<std::span<Byte>> output, const ServiceSpec& specification) {
     FrameWriter writer{output};
 
     writer.tag(FrameKind::traffic_setup);
@@ -372,7 +372,7 @@ namespace telar::runtime::plugins {
     return specification;
   }
 
-  tbc::view<std::span<const Byte>, tbc::lt::a> TrafficProtocol::event(tbc::view<std::span<Byte>, tbc::lt::a> output, std::uint64_t event_id, std::uint32_t registration, std::span<const Byte> frame, std::uint64_t dropped) {
+  tbc::val_a<std::span<const Byte>> TrafficProtocol::event(tbc::val_a<std::span<Byte>> output, std::uint64_t event_id, std::uint32_t registration, std::span<const Byte> frame, std::uint64_t dropped) {
     traffic::Protocol::decode(frame);
     FrameWriter writer{output};
 
@@ -412,7 +412,7 @@ namespace telar::runtime::plugins {
     return event;
   }
 
-  tbc::view<std::span<const Byte>, tbc::lt::a> TrafficProtocol::controlEvent(tbc::view<std::span<Byte>, tbc::lt::a> output, std::uint64_t event_id, std::uint32_t registration, std::span<const Byte> frame, std::string_view error) {
+  tbc::val_a<std::span<const Byte>> TrafficProtocol::controlEvent(tbc::val_a<std::span<Byte>> output, std::uint64_t event_id, std::uint32_t registration, std::span<const Byte> frame, std::string_view error) {
     FrameWriter writer{output};
 
     writer.tag(FrameKind::traffic_control_event);
@@ -423,7 +423,7 @@ namespace telar::runtime::plugins {
     return writer.finish();
   }
 
-  tbc::view<std::span<const Byte>, tbc::lt::a> TrafficProtocol::reply(tbc::view<std::span<Byte>, tbc::lt::a> output, const TrafficReply& reply, const TrafficOutcome& outcome) {
+  tbc::val_a<std::span<const Byte>> TrafficProtocol::reply(tbc::val_a<std::span<Byte>> output, const TrafficReply& reply, const TrafficOutcome& outcome) {
     if (reply.registration_count > reply.registrations.size() || outcome.decision_count > outcome.decisions.size() || (!reply.changed && reply.registration_count != 0)) {
       throw EncodingError{"Invalid traffic worker reply"};
     }
@@ -455,7 +455,7 @@ namespace telar::runtime::plugins {
     return reply;
   }
 
-  tbc::view<TrafficOutcome, tbc::lt::a> TrafficProtocol::readReply(tbc::view<std::span<const Byte>, tbc::lt::a> input, TrafficReply& reply) {
+  tbc::val_a<TrafficOutcome> TrafficProtocol::readReply(tbc::val_a<std::span<const Byte>> input, TrafficReply& reply) {
     if (input.size() > TrafficLimits::reply_bytes) {
       throw EncodingError{"Traffic worker reply exceeds its bound"};
     }
@@ -534,14 +534,14 @@ namespace telar::runtime::plugins {
     return registration;
   }
 
-  TrafficBridge::Connection::Connection(tbc::view<Secure&, tbc::lt::a> memory, TrafficRegistration registration, traffic::PackageChannel channel)
+  TrafficBridge::Connection::Connection(tbc::mut_a<Secure> memory, TrafficRegistration registration, traffic::PackageChannel channel)
       : registration(std::move(registration)),
         socket(std::move(channel.socket)),
         owner(channel.owner),
         output(memory, 2 * traffic::Limits::http_frame_bytes),
         registration_ack(this->registration.stage == TrafficStage::stream || this->registration.stage == TrafficStage::http) {}
 
-  TrafficBridge::TrafficBridge(tbc::view<ConcurrentMemory&, tbc::lt::a> memory, const ServiceSpec& specification, tbc::view<traffic::PackagePort&, tbc::lt::a> port)
+  TrafficBridge::TrafficBridge(tbc::mut_a<ConcurrentMemory> memory, const ServiceSpec& specification, tbc::mut_a<traffic::PackagePort> port)
       : memory_(memory),
         secure_(memory),
         specification_(specification),
@@ -596,7 +596,7 @@ namespace telar::runtime::plugins {
     return nullptr;
   }
 
-  tbc::view<TrafficOutcome, tbc::lt::a> TrafficBridge::apply(std::uint64_t event_id, tbc::view<std::span<const Byte>, tbc::lt::a> input) {
+  tbc::val_a<TrafficOutcome> TrafficBridge::apply(std::uint64_t event_id, tbc::val_a<std::span<const Byte>> input) {
     const auto outcome = TrafficProtocol::readReply(input, reply_.getMut());
 
     if (reply_->event_id != event_id) {
@@ -724,7 +724,7 @@ namespace telar::runtime::plugins {
     connection.output.consume(static_cast<std::size_t>(count));
   }
 
-  tbc::view<ds::Option<SensitiveAllocation<ConcurrentMemory>>, tbc::lt::a> TrafficBridge::read(tbc::view<ConcurrentMemory&, tbc::lt::a> memory, Connection& connection) {
+  tbc::val_a<ds::Option<SensitiveAllocation<ConcurrentMemory>>> TrafficBridge::read(tbc::mut_a<ConcurrentMemory> memory, Connection& connection) {
     if (!connection.input) {
       const auto prefix_bytes = connection.registration.stage == TrafficStage::control ? traffic::control::Protocol::prefix_bytes : traffic::Protocol::prefix_bytes;
       const auto count = ::recv(connection.socket.get(), connection.prefix.dataMut() + connection.prefix_bytes, prefix_bytes - connection.prefix_bytes, 0);
@@ -831,7 +831,7 @@ namespace telar::runtime::plugins {
   }
 
   template <WorkerClock Clock>
-  void Worker<Clock>::submit(tbc::view<Shared, tbc::lt::a> exchange) noexcept {
+  void Worker<Clock>::submit(tbc::val_a<Shared> exchange) noexcept {
     if (specification_.allows(Capability::proxy_tap) && !disabled_.load(std::memory_order_relaxed)) {
       requests_.publish(std::move(exchange));
       wake_.notify();

@@ -96,11 +96,11 @@ export {
       };
 
       BoundedText<title_capacity> title;
-      tbc::view<std::string_view, tbc::lt::static_storage> subtitle;
+      tbc::val_static<std::string_view> subtitle;
       Action action = Action::none;
       bool emphasized = false;
 
-      [[nodiscard]] static tbc::view<HistoryEmpty, tbc::lt::static_storage> derive(const HistoryEmptyOptions& options);
+      [[nodiscard]] static tbc::val_static<HistoryEmpty> derive(const HistoryEmptyOptions& options);
     };
 
   }

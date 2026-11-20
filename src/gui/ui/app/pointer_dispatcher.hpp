@@ -77,15 +77,15 @@ namespace telar::gui::qt {
     bool move(QMouseEvent& event);
     bool release(QMouseEvent& event);
 
-    tbc::view<WindowDisplay&, tbc::lt::a> display_;
-    tbc::view<Store&, tbc::lt::a> store_;
-    tbc::view<TabsController&, tbc::lt::a> tabs_;
-    tbc::view<HistoryController&, tbc::lt::a> history_;
-    tbc::view<ActivityController&, tbc::lt::a> activity_;
-    tbc::view<AttachmentsController&, tbc::lt::a> attachments_;
-    tbc::view<TerminalController&, tbc::lt::a> terminals_;
+    tbc::mut_a<WindowDisplay> display_;
+    tbc::mut_a<Store> store_;
+    tbc::mut_a<TabsController> tabs_;
+    tbc::mut_a<HistoryController> history_;
+    tbc::mut_a<ActivityController> activity_;
+    tbc::mut_a<AttachmentsController> attachments_;
+    tbc::mut_a<TerminalController> terminals_;
     NativePointerEvents native_events_;
-    tbc::view<ActiveHistoryScrollEvents<PointerDispatcher>, tbc::lt::self> history_scroll_events_;
+    tbc::val_self<ActiveHistoryScrollEvents<PointerDispatcher>> history_scroll_events_;
     QPointer<QQuickWindow> window_;
     ds::Array<application::history::HistoryActionCapture, static_cast<std::size_t>(application::terminal::input::MouseButton::none)> captures_;
     bool delivering_ = false;

@@ -224,7 +224,7 @@ namespace telar::gui::features::machines {
     return require(slot);
   }
 
-  tbc::view<ds::Option<std::string_view>, tbc::lt::a> MachineOpening::saved(tbc::view<const MachineProfiles&, tbc::lt::a> profiles, std::string_view label, std::string_view hostname) {
+  tbc::val_a<ds::Option<std::string_view>> MachineOpening::saved(tbc::ref_a<MachineProfiles> profiles, std::string_view label, std::string_view hostname) {
     if (const auto index = profiles.find(label)) {
       return profiles.rows()[*index].destination();
     }

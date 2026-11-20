@@ -29,9 +29,9 @@ export {
 
       bool matches(const ProxySecret& other) const noexcept;
 
-      tbc::view<ds::Option<std::string_view>, tbc::lt::a> formatHexadecimal(tbc::view<std::span<char>, tbc::lt::a> destination) const noexcept;
+      tbc::val_a<ds::Option<std::string_view>> formatHexadecimal(tbc::val_a<std::span<char>> destination) const noexcept;
 
-      tbc::view<ds::Option<std::string_view>, tbc::lt::a> formatUrl(tbc::view<std::span<char>, tbc::lt::a> destination, std::uint16_t port) const noexcept;
+      tbc::val_a<ds::Option<std::string_view>> formatUrl(tbc::val_a<std::span<char>> destination, std::uint16_t port) const noexcept;
 
     private:
       ProxySecret() noexcept;
@@ -83,16 +83,16 @@ export {
 
       Reason reason;
 
-      tbc::view<std::string_view, tbc::lt::static_storage> response() const noexcept;
+      tbc::val_static<std::string_view> response() const noexcept;
     };
 
     using ProxyDecision = std::variant<ProxyAdmission, ProxyRejection>;
 
     // The admitted target views the request head.
     template <Allocator Memory>
-    tbc::view<ProxyDecision, tbc::lt::a> authenticateProxy(const ProxySecret& secret, bool anonymous_tunnels, const ProxyHostPolicy<Memory>& policy, tbc::view<std::string_view, tbc::lt::a> head) noexcept;
-    extern template tbc::view<ProxyDecision, tbc::lt::a> authenticateProxy<Memory>(const ProxySecret& secret, bool anonymous_tunnels, const ProxyHostPolicy<Memory>& policy, tbc::view<std::string_view, tbc::lt::a> head) noexcept;
-    extern template tbc::view<ProxyDecision, tbc::lt::a> authenticateProxy<ConcurrentMemory>(const ProxySecret& secret, bool anonymous_tunnels, const ProxyHostPolicy<ConcurrentMemory>& policy, tbc::view<std::string_view, tbc::lt::a> head) noexcept;
+    tbc::val_a<ProxyDecision> authenticateProxy(const ProxySecret& secret, bool anonymous_tunnels, const ProxyHostPolicy<Memory>& policy, tbc::val_a<std::string_view> head) noexcept;
+    extern template tbc::val_a<ProxyDecision> authenticateProxy<Memory>(const ProxySecret& secret, bool anonymous_tunnels, const ProxyHostPolicy<Memory>& policy, tbc::val_a<std::string_view> head) noexcept;
+    extern template tbc::val_a<ProxyDecision> authenticateProxy<ConcurrentMemory>(const ProxySecret& secret, bool anonymous_tunnels, const ProxyHostPolicy<ConcurrentMemory>& policy, tbc::val_a<std::string_view> head) noexcept;
 
   }
 }

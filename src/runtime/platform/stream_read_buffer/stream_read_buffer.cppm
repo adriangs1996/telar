@@ -19,7 +19,7 @@ export {
     public:
       constexpr StaticReply() noexcept = default;
 
-      constexpr explicit StaticReply(tbc::view<std::string_view, tbc::lt::static_storage> text) noexcept
+      constexpr explicit StaticReply(tbc::val_static<std::string_view> text) noexcept
           : text_(text) {}
 
       // Whether there is no message to write at all.
@@ -49,7 +49,7 @@ export {
       }
 
     private:
-      tbc::view<std::string_view, tbc::lt::static_storage> text_;
+      tbc::val_static<std::string_view> text_;
       std::size_t offset_ = 0;
     };
 

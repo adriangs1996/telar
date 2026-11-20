@@ -35,7 +35,7 @@ namespace telar::gui::features::activity {
   }
 
   template <Allocator Memory>
-  tbc::view<const Worktree<Memory>*, tbc::lt::a> AgentOrder::taskRow(tbc::view<const WorkspaceReplica<Memory>&, tbc::lt::a> workspaces, const Agent<Memory>& agent) noexcept {
+  tbc::val_a<const Worktree<Memory>*> AgentOrder::taskRow(tbc::ref_a<WorkspaceReplica<Memory>> workspaces, const Agent<Memory>& agent) noexcept {
     if (const auto* row = workspaces.worktree(agent.work_tree)) {
       return row;
     }
@@ -423,8 +423,8 @@ namespace telar::gui::features::activity {
     }
   }
 
-  template tbc::view<const Worktree<Memory>*, tbc::lt::a> AgentOrder::taskRow<Memory>(tbc::view<const WorkspaceReplica<Memory>&, tbc::lt::a> workspaces, const Agent<Memory>& agent) noexcept;
-  template tbc::view<const Worktree<ConcurrentMemory>*, tbc::lt::a> AgentOrder::taskRow<ConcurrentMemory>(tbc::view<const WorkspaceReplica<ConcurrentMemory>&, tbc::lt::a> workspaces, const Agent<ConcurrentMemory>& agent) noexcept;
+  template tbc::val_a<const Worktree<Memory>*> AgentOrder::taskRow<Memory>(tbc::ref_a<WorkspaceReplica<Memory>> workspaces, const Agent<Memory>& agent) noexcept;
+  template tbc::val_a<const Worktree<ConcurrentMemory>*> AgentOrder::taskRow<ConcurrentMemory>(tbc::ref_a<WorkspaceReplica<ConcurrentMemory>> workspaces, const Agent<ConcurrentMemory>& agent) noexcept;
   template AgentOrder::Priority AgentOrder::priority<Memory>(const Agent<Memory>& agent) noexcept;
   template AgentOrder::Priority AgentOrder::priority<ConcurrentMemory>(const Agent<ConcurrentMemory>& agent) noexcept;
   template AgentOrder::Plan AgentOrder::arrange<Memory>(std::span<const Agent<Memory>> agents, const WorkspaceReplica<Memory>& workspaces) noexcept;

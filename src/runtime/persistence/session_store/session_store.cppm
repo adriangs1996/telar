@@ -273,7 +273,7 @@ export {
     class TBC_GENERIC Restore {
     public:
       // The panes it launches keep the allocator, so everything the restore reaches lives in region `a`.
-      inline explicit Restore(tbc::view<ConcurrentMemory&, tbc::lt::a> memory, tbc::view<RuntimeModel&, tbc::lt::a> model, tbc::view<Panes&, tbc::lt::a> panes, tbc::view<ClientLayouts&, tbc::lt::a> layouts, bool resume_agents)
+      inline explicit Restore(tbc::mut_a<ConcurrentMemory> memory, tbc::mut_a<RuntimeModel> model, tbc::mut_a<Panes> panes, tbc::mut_a<ClientLayouts> layouts, bool resume_agents)
           : memory_(memory),
             model_(model),
             panes_(panes),
@@ -482,10 +482,10 @@ export {
         }
       }
 
-      tbc::view<ConcurrentMemory&, tbc::lt::a> memory_;
-      tbc::view<RuntimeModel&, tbc::lt::a> model_;
-      tbc::view<Panes&, tbc::lt::a> panes_;
-      tbc::view<ClientLayouts&, tbc::lt::a> layouts_;
+      tbc::mut_a<ConcurrentMemory> memory_;
+      tbc::mut_a<RuntimeModel> model_;
+      tbc::mut_a<Panes> panes_;
+      tbc::mut_a<ClientLayouts> layouts_;
       bool resume_agents_;
     };
 
@@ -499,12 +499,12 @@ export {
     // Writes a checkpoint into the caller's buffer, region `a`, which the finished bytes view.
     class Writer {
     public:
-      explicit Writer(tbc::view<std::span<Byte>, tbc::lt::a> buffer, Counters counters);
+      explicit Writer(tbc::val_a<std::span<Byte>> buffer, Counters counters);
 
       template <typename Record>
       void append(const Record& record);
 
-      tbc::view<std::span<const Byte>, tbc::lt::a> finish();
+      tbc::val_a<std::span<const Byte>> finish();
 
       std::size_t dropped = 0;
 
@@ -534,8 +534,8 @@ export {
 
       void write(const LayoutRecord& record);
 
-      tbc::view<std::span<Byte>, tbc::lt::a> buffer_;
-      tbc::view<std::span<Byte>, tbc::lt::a> remaining_;
+      tbc::val_a<std::span<Byte>> buffer_;
+      tbc::val_a<std::span<Byte>> remaining_;
     };
 
     extern template void Writer::append<WorkspaceRecord>(const WorkspaceRecord& record);
@@ -564,7 +564,7 @@ export {
     class TBC_GENERIC Snapshot {
     public:
       // The bytes view the buffer.
-      inline static tbc::view<std::span<const Byte>, tbc::lt::a> encode(const RuntimeModel& model, const ClientLayouts& layouts, const Agents& agents, tbc::view<std::span<Byte>, tbc::lt::a> buffer, std::size_t& dropped) {
+      inline static tbc::val_a<std::span<const Byte>> encode(const RuntimeModel& model, const ClientLayouts& layouts, const Agents& agents, tbc::val_a<std::span<Byte>> buffer, std::size_t& dropped) {
         Writer writer{buffer, Counters{model.workspaces.nextCounter(), model.next_tab_id, model.panes.nextCounter(), model.next_pane_generation}};
 
         for (const auto* workspace : model.workspaces.items()) {
@@ -807,7 +807,7 @@ export {
       Snapshot<Agents> snapshot_;
       ds::Vec<Byte, ConcurrentMemory> buffer_;
       // The worker stores the encoded buffer above until its result is collected, so the store stays put.
-      tbc::view<ds::Option<ObservationWorker<FileStore<ConcurrentMemory>>>, tbc::lt::self> worker_;
+      tbc::val_self<ds::Option<ObservationWorker<FileStore<ConcurrentMemory>>>> worker_;
       Clock::time_point due_{};
       bool dirty_ = false;
       bool pending_ = false;

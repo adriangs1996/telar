@@ -93,7 +93,7 @@ namespace telar::shell {
     public:
       Unquoter() noexcept = default;
 
-      explicit Unquoter(tbc::view<std::span<char>, tbc::lt::a> out) noexcept
+      explicit Unquoter(tbc::val_a<std::span<char>> out) noexcept
           : out_(out) {}
 
       [[nodiscard]] std::size_t size() const noexcept {
@@ -104,7 +104,7 @@ namespace telar::shell {
         return overflow_;
       }
 
-      [[nodiscard]] tbc::view<std::string_view, tbc::lt::a> text(std::size_t from) const noexcept {
+      [[nodiscard]] tbc::val_a<std::string_view> text(std::size_t from) const noexcept {
         return {out_.data() + from, size_ - from};
       }
 
@@ -355,7 +355,7 @@ namespace telar::shell {
         return true;
       }
 
-      tbc::view<std::span<char>, tbc::lt::a> out_;
+      tbc::val_a<std::span<char>> out_;
       std::size_t size_ = 0;
       bool overflow_ = false;
     };
@@ -2107,7 +2107,7 @@ namespace telar::shell {
       u32 capture_command_ = no_command;
       std::size_t capture_gap_ = 0;
       // Writes into the heredoc beside it.
-      tbc::view<Unquoter, tbc::lt::self> capture_;
+      tbc::val_self<Unquoter> capture_;
     };
 
   }
@@ -2147,7 +2147,7 @@ namespace telar::shell {
     return count;
   }
 
-  tbc::view<CommandAt, tbc::lt::a> commandAt(tbc::view<std::string_view, tbc::lt::a> line, Syntax syntax, std::span<const Token> tokens, const Lexed& lexed, std::span<Word> words, tbc::view<std::span<char>, tbc::lt::a> text) noexcept {
+  tbc::val_a<CommandAt> commandAt(tbc::val_a<std::string_view> line, Syntax syntax, std::span<const Token> tokens, const Lexed& lexed, std::span<Word> words, tbc::val_a<std::span<char>> text) noexcept {
     CommandAt at;
 
     if (!lexed.cursor_completable || lexed.cursor > line.size()) {

@@ -31,7 +31,7 @@ export namespace telar::runtime {
     // The shell whose builtins and keywords count as commands, and the aliases and functions
     // it reported; without them a missing command cannot be told from an unreported one.
     IntegratedShell shell = IntegratedShell::none;
-    tbc::view<std::shared_ptr<const ds::String<ConcurrentMemory>>, tbc::lt::a> names;
+    tbc::val_a<std::shared_ptr<const ds::String<ConcurrentMemory>>> names;
     // Asks for the completion spec of the command `prefix` names instead of words, and the
     // digest of the spec the client already holds.
     bool spec = false;
@@ -39,8 +39,8 @@ export namespace telar::runtime {
   };
 
   struct Word {
-    tbc::view<ds::String<ConcurrentMemory>, tbc::lt::a> text;
-    tbc::view<ds::String<ConcurrentMemory>, tbc::lt::a> description;
+    tbc::val_a<ds::String<ConcurrentMemory>> text;
+    tbc::val_a<ds::String<ConcurrentMemory>> description;
 
     bool operator==(const Word&) const = default;
     auto operator<=>(const Word&) const = default;
@@ -49,21 +49,21 @@ export namespace telar::runtime {
   // Built on the worker's thread and dropped on the runtime's, so its text lives in memory both
   // can reach, region `a`.
   struct WordResult {
-    explicit WordResult(tbc::view<ConcurrentMemory&, tbc::lt::a> memory);
+    explicit WordResult(tbc::mut_a<ConcurrentMemory> memory);
 
     std::uint64_t client = 0;
     std::uint64_t request = 0;
-    tbc::view<ds::Vec<Word, ConcurrentMemory>, tbc::lt::a> words;
+    tbc::val_a<ds::Vec<Word, ConcurrentMemory>> words;
     bool truncated = false;
     // For a spec request: the command, whether a spec describes it where the shell runs, and
     // the spec when the client does not hold it already.
     bool spec = false;
-    tbc::view<ds::String<ConcurrentMemory>, tbc::lt::a> command;
+    tbc::val_a<ds::String<ConcurrentMemory>> command;
     CommandSpecState spec_state = CommandSpecState::unavailable;
     std::uint64_t digest = 0;
-    tbc::view<ds::String<ConcurrentMemory>, tbc::lt::a> source;
+    tbc::val_a<ds::String<ConcurrentMemory>> source;
     // The words an alias stands for, when the command is one.
-    tbc::view<ds::String<ConcurrentMemory>, tbc::lt::a> expansion;
+    tbc::val_a<ds::String<ConcurrentMemory>> expansion;
   };
 
   // The completion specs telar ships, by the command they describe.
@@ -80,32 +80,32 @@ export namespace telar::runtime {
 
     // User specs come from `completions` in the configuration directory the runtime resolved.
     // What it reads and returns lives in `memory`, which must outlive the reader and its results.
-    explicit WordReader(tbc::view<ConcurrentMemory&, tbc::lt::a> memory, std::string_view configuration_directory = {});
+    explicit WordReader(tbc::mut_a<ConcurrentMemory> memory, std::string_view configuration_directory = {});
 
-    tbc::view<Result, tbc::lt::a> observe(const Request& request) noexcept;
+    tbc::val_a<Result> observe(const Request& request) noexcept;
 
     void stop() noexcept;
 
   private:
     // The spec of the command the request names, when the shell runs it: the user's own from
     // the completions directory when it compiles, else the one telar ships.
-    void spec(const Request& request, tbc::view<Result&, tbc::lt::a> result);
+    void spec(const Request& request, tbc::mut_a<Result> result);
 
     // The user's spec for `name`, from the completions directory beside the configuration;
     // empty when there is none or it does not compile.
-    tbc::view<ds::String<ConcurrentMemory>, tbc::lt::a> userSpec(std::string_view name);
+    tbc::val_a<ds::String<ConcurrentMemory>> userSpec(std::string_view name);
 
-    tbc::view<ConcurrentMemory&, tbc::lt::a> memory_;
-    tbc::view<ds::String<ConcurrentMemory>, tbc::lt::a> completions_;
-    tbc::view<git::StatusReader, tbc::lt::a> git_;
+    tbc::mut_a<ConcurrentMemory> memory_;
+    tbc::val_a<ds::String<ConcurrentMemory>> completions_;
+    tbc::val_a<git::StatusReader> git_;
     // Whether each user spec, by digest, compiled: a spec is compiled once, not per request.
-    tbc::view<ds::Map<std::uint64_t, bool, ConcurrentMemory>, tbc::lt::a> compiled_;
+    tbc::val_a<ds::Map<std::uint64_t, bool, ConcurrentMemory>> compiled_;
   };
 
   // One query at a time; later ones wait in order, at most a few per client.
   class WordService {
   public:
-    explicit WordService(tbc::view<ConcurrentMemory&, tbc::lt::a> memory, std::string_view configuration_directory = {});
+    explicit WordService(tbc::mut_a<ConcurrentMemory> memory, std::string_view configuration_directory = {});
 
     // The service keeps the request, and the names it shares, until its turn comes.
     void request(tbc::holds<const WordRequest&, tbc::lt::a> request);
@@ -119,8 +119,8 @@ export namespace telar::runtime {
     int descriptor() const noexcept;
 
   private:
-    tbc::view<ObservationWorker<WordReader>, tbc::lt::a> worker_;
-    tbc::view<SerialQueue<WordRequest>, tbc::lt::a> queue_;
+    tbc::val_a<ObservationWorker<WordReader>> worker_;
+    tbc::val_a<SerialQueue<WordRequest>> queue_;
   };
 
 }

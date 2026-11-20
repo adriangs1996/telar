@@ -30,16 +30,16 @@ export {
 
       template <Allocator Memory>
       // The token is written into the output, region `a`.
-      static tbc::view<std::string_view, tbc::lt::a> write(const ClientLayoutSnapshot& snapshot, tbc::view<ds::String<Memory>&, tbc::lt::a> output);
+      static tbc::val_a<std::string_view> write(const ClientLayoutSnapshot& snapshot, tbc::mut_a<ds::String<Memory>> output);
 
       static TabLayoutPreset read(std::string_view text);
 
     private:
-      static tbc::view<std::span<const Byte>, tbc::lt::a> decodeHexadecimal(std::string_view text, tbc::view<std::span<Byte>, tbc::lt::a> output);
+      static tbc::val_a<std::span<const Byte>> decodeHexadecimal(std::string_view text, tbc::val_a<std::span<Byte>> output);
     };
 
-    extern template tbc::view<std::string_view, tbc::lt::a> LayoutToken::write<Memory>(const ClientLayoutSnapshot& snapshot, tbc::view<ds::String<Memory>&, tbc::lt::a> output);
-    extern template tbc::view<std::string_view, tbc::lt::a> LayoutToken::write<ConcurrentMemory>(const ClientLayoutSnapshot& snapshot, tbc::view<ds::String<ConcurrentMemory>&, tbc::lt::a> output);
+    extern template tbc::val_a<std::string_view> LayoutToken::write<Memory>(const ClientLayoutSnapshot& snapshot, tbc::mut_a<ds::String<Memory>> output);
+    extern template tbc::val_a<std::string_view> LayoutToken::write<ConcurrentMemory>(const ClientLayoutSnapshot& snapshot, tbc::mut_a<ds::String<ConcurrentMemory>> output);
 
   }
 }

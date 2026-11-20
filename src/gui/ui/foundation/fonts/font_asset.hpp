@@ -39,7 +39,7 @@ namespace telar::gui::qt {
   private:
     SystemAllocator memory_;
     // Allocated from memory_, which the asset owns.
-    tbc::view<ds::Vec<std::uint8_t, SystemAllocator>, tbc::lt::self> bytes_;
+    tbc::val_self<ds::Vec<std::uint8_t, SystemAllocator>> bytes_;
     fonts::FontMatch match_;
   };
 

@@ -6,7 +6,7 @@ import telar.base.ds;
 
 namespace telar::runtime::traffic {
 
-  auto Protocol::greeting(tbc::view<std::span<Byte>, tbc::lt::a> output, Role role, std::string_view filter, Selection selection) -> tbc::view<std::span<const Byte>, tbc::lt::a> {
+  auto Protocol::greeting(tbc::val_a<std::span<Byte>> output, Role role, std::string_view filter, Selection selection) -> tbc::val_a<std::span<const Byte>> {
     if (filter.size() > Limits::filter_bytes || filter.contains('\0') || (role != Role::subscribe && !filter.empty())) {
       throw EncodingError{"Invalid traffic subscription"};
     }
@@ -27,7 +27,7 @@ namespace telar::runtime::traffic {
     return fixed_bytes + event.interface.size() + event.bytes.size();
   }
 
-  auto Protocol::encode(tbc::view<std::span<Byte>, tbc::lt::a> output, const Event& event) -> tbc::view<std::span<const Byte>, tbc::lt::a> {
+  auto Protocol::encode(tbc::val_a<std::span<Byte>> output, const Event& event) -> tbc::val_a<std::span<const Byte>> {
     validate(event);
     plugins::FrameWriter writer{output};
 
@@ -116,7 +116,7 @@ namespace telar::runtime::traffic::recording {
     writer.text(request.host);
   }
 
-  tbc::view<Request, tbc::lt::a> Protocol::read(plugins::FrameReader& reader) {
+  tbc::val_a<Request> Protocol::read(plugins::FrameReader& reader) {
     Request request;
 
     request.operation = reader.tag(Operation::list);
@@ -220,7 +220,7 @@ namespace telar::runtime::traffic::control {
     return output;
   }
 
-  tbc::view<std::span<const Byte>, tbc::lt::a> Protocol::encode(tbc::view<std::span<Byte>, tbc::lt::a> output, const Request& request) {
+  tbc::val_a<std::span<const Byte>> Protocol::encode(tbc::val_a<std::span<Byte>> output, const Request& request) {
     validate(request);
     plugins::FrameWriter writer{output.first(std::min(output.size(), Limits::request_bytes))};
 
@@ -298,7 +298,7 @@ namespace telar::runtime::traffic::control {
     return request;
   }
 
-  tbc::view<std::span<const Byte>, tbc::lt::a> Protocol::encode(tbc::view<std::span<Byte>, tbc::lt::a> output, const Reply& reply) {
+  tbc::val_a<std::span<const Byte>> Protocol::encode(tbc::val_a<std::span<Byte>> output, const Reply& reply) {
     validate(reply);
     plugins::FrameWriter writer{output.first(std::min(output.size(), Limits::reply_bytes))};
 
@@ -506,7 +506,7 @@ namespace telar::runtime::traffic {
     return {.id = id, .direction = direction, .visibility = visibility, .source = source, .client = client.view(), .server = server.view(), .host = host.view()};
   }
 
-  auto FlowCodec::encode(tbc::view<std::span<Byte>, tbc::lt::a> output, const FlowEvent& event) -> tbc::view<std::span<const Byte>, tbc::lt::a> {
+  auto FlowCodec::encode(tbc::val_a<std::span<Byte>> output, const FlowEvent& event) -> tbc::val_a<std::span<const Byte>> {
     plugins::FrameWriter writer{output};
 
     writer.integer(event.id);

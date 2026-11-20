@@ -33,7 +33,7 @@ import telar.base.ds;
 
 namespace telar::gui::application {
 
-  Session::Link::Link(tbc::view<RuntimeTransport&, tbc::lt::a> transport) noexcept
+  Session::Link::Link(tbc::mut_a<RuntimeTransport> transport) noexcept
       : transport(transport) {}
 
   template <typename Message>
@@ -50,10 +50,10 @@ namespace telar::gui::application {
     return transport.report(encode(report));
   }
 
-  Session::Session(tbc::view<Memory&, tbc::lt::a> memory, tbc::view<RuntimeTransport&, tbc::lt::a> transport, tbc::view<MonotonicNow, tbc::lt::static_storage> now)
+  Session::Session(tbc::mut_a<Memory> memory, tbc::mut_a<RuntimeTransport> transport, tbc::val_static<MonotonicNow> now)
       : Session(memory, transport, discard_effects_, now) {}
 
-  Session::Session(tbc::view<Memory&, tbc::lt::a> memory, tbc::view<RuntimeTransport&, tbc::lt::a> transport, tbc::view<HostEffects&, tbc::lt::a> effects, tbc::view<MonotonicNow, tbc::lt::static_storage> now)
+  Session::Session(tbc::mut_a<Memory> memory, tbc::mut_a<RuntimeTransport> transport, tbc::mut_a<HostEffects> effects, tbc::val_static<MonotonicNow> now)
       : prompt(memory),
         prompt_lines(memory),
         copy_mode(memory),
@@ -77,7 +77,7 @@ namespace telar::gui::application {
     decode_.resize(decode_capacity);
   }
 
-  Session::LaunchDefaults::LaunchDefaults(tbc::view<Memory&, tbc::lt::a> memory)
+  Session::LaunchDefaults::LaunchDefaults(tbc::mut_a<Memory> memory)
       : memory_(&memory),
         cwd_(memory),
         storage_(memory) {}
@@ -369,11 +369,11 @@ namespace telar::gui::application {
     return application::findPaneMut(panes, pane_id);
   }
 
-  tbc::view<const Tab<Memory>*, tbc::lt::a> activeTab(tbc::view<const Tabs&, tbc::lt::a> tabs, ds::Option<TabLocation> active) noexcept {
+  tbc::val_a<const Tab<Memory>*> activeTab(tbc::ref_a<Tabs> tabs, ds::Option<TabLocation> active) noexcept {
     return active ? features::workbench::find(tabs.view(), *active) : nullptr;
   }
 
-  tbc::view<Tab<Memory>*, tbc::lt::a> activeTabMut(tbc::view<Tabs&, tbc::lt::a> tabs, ds::Option<TabLocation> active) noexcept {
+  tbc::val_a<Tab<Memory>*> activeTabMut(tbc::mut_a<Tabs> tabs, ds::Option<TabLocation> active) noexcept {
     return active ? features::workbench::findMut(tabs.viewMut(), *active) : nullptr;
   }
 
@@ -385,7 +385,7 @@ namespace telar::gui::application {
     return application::activeTabMut(tabs, active_tab);
   }
 
-  tbc::view<const Pane<Memory>*, tbc::lt::a> focusedPane(tbc::view<const Panes&, tbc::lt::a> panes, const Tabs& tabs, ds::Option<TabLocation> active) noexcept {
+  tbc::val_a<const Pane<Memory>*> focusedPane(tbc::ref_a<Panes> panes, const Tabs& tabs, ds::Option<TabLocation> active) noexcept {
     const auto* tab = application::activeTab(tabs, active);
 
     return tab == nullptr ? nullptr : application::findPane(panes, tab->focused_pane);

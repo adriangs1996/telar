@@ -67,7 +67,7 @@ namespace telar::gui::qt {
     qreal radius_ = 0;
     qreal border_width_ = 0;
     float border_alpha_ = 1;
-    tbc::view<AncestorGeometry, tbc::lt::self> ancestors_;
+    tbc::val_self<AncestorGeometry> ancestors_;
     ds::Option<QRectF> paint_clip_;
   };
 

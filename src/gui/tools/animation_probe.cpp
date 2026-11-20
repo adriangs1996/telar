@@ -101,7 +101,7 @@ namespace {
     window.setPosition(screen.availableGeometry().center() - QPoint{window_width / 2, window_height / 2});
   }
 
-  tbc::view<std::unique_ptr<ApplicationController>, tbc::lt::a> pacedClient(tbc::view<ApplicationAllocator&, tbc::lt::a> memory, const QCommandLineParser& parser, QQuickWindow& window) {
+  tbc::val_a<std::unique_ptr<ApplicationController>> pacedClient(tbc::mut_a<ApplicationAllocator> memory, const QCommandLineParser& parser, QQuickWindow& window) {
     auto client = std::make_unique<ApplicationController>(memory);
 
     if (parser.isSet(QStringLiteral("config"))) {

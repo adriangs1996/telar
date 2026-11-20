@@ -238,7 +238,7 @@ namespace telar::runtime::control {
     return result;
   }
 
-  ClipboardWrite::ClipboardWrite(tbc::view<ConcurrentMemory&, tbc::lt::a> memory, const ClipboardMetadata& metadata, std::size_t limit)
+  ClipboardWrite::ClipboardWrite(tbc::mut_a<ConcurrentMemory> memory, const ClipboardMetadata& metadata, std::size_t limit)
       : metadata(metadata),
         memory_(memory),
         spool_(memory),

@@ -29,10 +29,10 @@ export namespace telar::ghostty::wuffs {
   std::uint32_t pixelWidth(const wuffs_base__pixel_config* config) noexcept;
   std::uint32_t pixelHeight(const wuffs_base__pixel_config* config) noexcept;
   void setPixelConfig(wuffs_base__pixel_config* config, std::uint32_t format, std::uint32_t subsampling, std::uint32_t width, std::uint32_t height) noexcept;
-  tbc::view<wuffs_base__status, tbc::lt::static_storage> setPixelBuffer(wuffs_base__pixel_buffer* buffer, const wuffs_base__pixel_config* config, wuffs_base__slice_u8 memory) noexcept;
+  tbc::val_static<wuffs_base__status> setPixelBuffer(wuffs_base__pixel_buffer* buffer, const wuffs_base__pixel_config* config, wuffs_base__slice_u8 memory) noexcept;
   // The decoder's statuses name static strings.
-  tbc::view<wuffs_base__status, tbc::lt::static_storage> decodeImageConfig(wuffs_png__decoder* decoder, wuffs_base__image_config* config, wuffs_base__io_buffer* source) noexcept;
-  tbc::view<wuffs_base__status, tbc::lt::static_storage> decodeFrame(wuffs_png__decoder* decoder, wuffs_base__pixel_buffer* destination, wuffs_base__io_buffer* source, std::uint32_t blend, wuffs_base__slice_u8 workspace) noexcept;
+  tbc::val_static<wuffs_base__status> decodeImageConfig(wuffs_png__decoder* decoder, wuffs_base__image_config* config, wuffs_base__io_buffer* source) noexcept;
+  tbc::val_static<wuffs_base__status> decodeFrame(wuffs_png__decoder* decoder, wuffs_base__pixel_buffer* destination, wuffs_base__io_buffer* source, std::uint32_t blend, wuffs_base__slice_u8 workspace) noexcept;
 }
 
 // Macros do not cross an import. Each constant the tree reads is captured while the header still

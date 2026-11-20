@@ -27,15 +27,15 @@ namespace telar::ghostty::wuffs {
     wuffs_base__pixel_config__set(config, format, subsampling, width, height);
   }
 
-  tbc::view<wuffs_base__status, tbc::lt::static_storage> setPixelBuffer(wuffs_base__pixel_buffer* buffer, const wuffs_base__pixel_config* config, wuffs_base__slice_u8 memory) noexcept {
+  tbc::val_static<wuffs_base__status> setPixelBuffer(wuffs_base__pixel_buffer* buffer, const wuffs_base__pixel_config* config, wuffs_base__slice_u8 memory) noexcept {
     return wuffs_base__pixel_buffer__set_from_slice(buffer, config, memory);
   }
 
-  tbc::view<wuffs_base__status, tbc::lt::static_storage> decodeImageConfig(wuffs_png__decoder* decoder, wuffs_base__image_config* config, wuffs_base__io_buffer* source) noexcept {
+  tbc::val_static<wuffs_base__status> decodeImageConfig(wuffs_png__decoder* decoder, wuffs_base__image_config* config, wuffs_base__io_buffer* source) noexcept {
     return wuffs_png__decoder__decode_image_config(decoder, config, source);
   }
 
-  tbc::view<wuffs_base__status, tbc::lt::static_storage> decodeFrame(wuffs_png__decoder* decoder, wuffs_base__pixel_buffer* destination, wuffs_base__io_buffer* source, std::uint32_t blend, wuffs_base__slice_u8 workspace) noexcept {
+  tbc::val_static<wuffs_base__status> decodeFrame(wuffs_png__decoder* decoder, wuffs_base__pixel_buffer* destination, wuffs_base__io_buffer* source, std::uint32_t blend, wuffs_base__slice_u8 workspace) noexcept {
     return wuffs_png__decoder__decode_frame(decoder, destination, source, static_cast<wuffs_base__pixel_blend>(blend), workspace, nullptr);
   }
 

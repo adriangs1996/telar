@@ -51,7 +51,7 @@ namespace telar::gui::features::configuration {
     throw std::invalid_argument{"UnknownConfigurationSection"};
   }
 
-  tbc::view<std::string_view, tbc::lt::a> GuiQuery::write(const Configuration& configuration, tbc::view<std::span<char>, tbc::lt::a> output, bool default_titlebar) {
+  tbc::val_a<std::string_view> GuiQuery::write(const Configuration& configuration, tbc::val_a<std::span<char>> output, bool default_titlebar) {
     JsonWriter writer{output};
 
     writer.object([&](JsonWriter& object) {
@@ -130,7 +130,7 @@ namespace telar::gui::features::configuration {
     return runtime::config::cursor_style_names.at(std::to_underlying(cursor) - 1);
   }
 
-  tbc::view<std::string_view, tbc::lt::a> ThemeQuery::write(const ThemeSelection& selection, tbc::view<std::span<char>, tbc::lt::a> output) {
+  tbc::val_a<std::string_view> ThemeQuery::write(const ThemeSelection& selection, tbc::val_a<std::span<char>> output) {
     JsonWriter writer{output};
 
     writer.object([&](JsonWriter& object) {
@@ -516,7 +516,7 @@ namespace telar::gui::features::configuration {
     });
   }
 
-  tbc::view<std::string_view, tbc::lt::a> InputQuery::write(const InputConfiguration& input, tbc::view<std::span<char>, tbc::lt::a> output) {
+  tbc::val_a<std::string_view> InputQuery::write(const InputConfiguration& input, tbc::val_a<std::span<char>> output) {
     JsonWriter writer{output};
 
     writer.object([&](JsonWriter& object) {
@@ -597,7 +597,7 @@ namespace telar::gui::features::configuration {
   }
 
   template <Allocator Memory>
-  tbc::view<std::string_view, tbc::lt::a> BindingQuery::write(const InputConfiguration& input, std::size_t index, const ActionDescriptions<Memory>& descriptions, const runtime::config::RetainedCommandTabRegistry& commands, tbc::view<std::span<char>, tbc::lt::a> output) {
+  tbc::val_a<std::string_view> BindingQuery::write(const InputConfiguration& input, std::size_t index, const ActionDescriptions<Memory>& descriptions, const runtime::config::RetainedCommandTabRegistry& commands, tbc::val_a<std::span<char>> output) {
     if (index >= input.length) {
       throw std::runtime_error{"BindingNotFound"};
     }
@@ -620,9 +620,9 @@ namespace telar::gui::features::configuration {
     return writer.view();
   }
 
-  template tbc::view<std::string_view, tbc::lt::a> BindingQuery::write<telar::Memory>(const InputConfiguration& input, std::size_t index, const ActionDescriptions<telar::Memory>& descriptions, const runtime::config::RetainedCommandTabRegistry& commands, tbc::view<std::span<char>, tbc::lt::a> output);
+  template tbc::val_a<std::string_view> BindingQuery::write<telar::Memory>(const InputConfiguration& input, std::size_t index, const ActionDescriptions<telar::Memory>& descriptions, const runtime::config::RetainedCommandTabRegistry& commands, tbc::val_a<std::span<char>> output);
 
-  template tbc::view<std::string_view, tbc::lt::a> BindingQuery::write<telar::ConcurrentMemory>(const InputConfiguration& input, std::size_t index, const ActionDescriptions<telar::ConcurrentMemory>& descriptions, const runtime::config::RetainedCommandTabRegistry& commands, tbc::view<std::span<char>, tbc::lt::a> output);
+  template tbc::val_a<std::string_view> BindingQuery::write<telar::ConcurrentMemory>(const InputConfiguration& input, std::size_t index, const ActionDescriptions<telar::ConcurrentMemory>& descriptions, const runtime::config::RetainedCommandTabRegistry& commands, tbc::val_a<std::span<char>> output);
 
   void BindingQuery::writeKeys(JsonWriter& writer, std::span<const KeyChord> keys) {
     writer.array([&](JsonWriter& array) {
@@ -635,7 +635,7 @@ namespace telar::gui::features::configuration {
   }
 
   template <Allocator Memory>
-  tbc::view<std::string_view, tbc::lt::a> RuntimeQuery::write(const runtime::config::RuntimeValues<Memory>& values, tbc::view<std::span<char>, tbc::lt::a> output) {
+  tbc::val_a<std::string_view> RuntimeQuery::write(const runtime::config::RuntimeValues<Memory>& values, tbc::val_a<std::span<char>> output) {
     JsonWriter writer{output};
 
     writer.object([&](JsonWriter& object) {
@@ -678,8 +678,8 @@ namespace telar::gui::features::configuration {
     writer.member("proxy_capture_join_timeout_ms", proxy.capture.join_timeout.count());
   }
 
-  template tbc::view<std::string_view, tbc::lt::a> RuntimeQuery::write<telar::Memory>(const runtime::config::RuntimeValues<telar::Memory>& values, tbc::view<std::span<char>, tbc::lt::a> output);
+  template tbc::val_a<std::string_view> RuntimeQuery::write<telar::Memory>(const runtime::config::RuntimeValues<telar::Memory>& values, tbc::val_a<std::span<char>> output);
 
-  template tbc::view<std::string_view, tbc::lt::a> RuntimeQuery::write<telar::ConcurrentMemory>(const runtime::config::RuntimeValues<telar::ConcurrentMemory>& values, tbc::view<std::span<char>, tbc::lt::a> output);
+  template tbc::val_a<std::string_view> RuntimeQuery::write<telar::ConcurrentMemory>(const runtime::config::RuntimeValues<telar::ConcurrentMemory>& values, tbc::val_a<std::span<char>> output);
 
 }

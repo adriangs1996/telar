@@ -97,7 +97,7 @@ namespace telar::runtime {
     return false;
   }
 
-  tbc::view<Pane*, tbc::lt::a> ClipboardService::complete(tbc::view<PaneStore&, tbc::lt::a> panes, ClientSession& sender, const CompleteClipboardDesktop& completion) {
+  tbc::val_a<Pane*> ClipboardService::complete(tbc::mut_a<PaneStore> panes, ClientSession& sender, const CompleteClipboardDesktop& completion) {
     auto* pane = findPane(panes, completion.ticket.pane_id, completion.ticket.pane_generation);
     if (pane == nullptr || sender.generation != completion.ticket.client_generation || !eligible(sender, *pane)) {
       return nullptr;

@@ -76,7 +76,7 @@ export namespace telar::gui::features::monitor {
   };
 
   struct State {
-    explicit State(tbc::view<Memory&, tbc::lt::a> memory);
+    explicit State(tbc::mut_a<Memory> memory);
 
     View view{};
     // The query in flight, 0 when none; the window asks again only once it is answered.
@@ -89,7 +89,7 @@ export namespace telar::gui::features::monitor {
     FixedText<error_bytes> error;
 
     std::uint16_t cpu_permille = 0;
-    tbc::view<ds::Vec<std::uint16_t, Memory>, tbc::lt::a> cores;
+    tbc::val_a<ds::Vec<std::uint16_t, Memory>> cores;
     std::uint64_t memory_total_bytes = 0;
     std::uint64_t memory_used_bytes = 0;
     std::uint64_t memory_available_bytes = 0;
@@ -100,10 +100,10 @@ export namespace telar::gui::features::monitor {
     std::uint32_t thread_count = 0;
     std::uint64_t disk_read_per_second = 0;
     std::uint64_t disk_written_per_second = 0;
-    tbc::view<ds::Vec<DiskRow, Memory>, tbc::lt::a> disks;
-    tbc::view<ds::Vec<InterfaceRow, Memory>, tbc::lt::a> interfaces;
+    tbc::val_a<ds::Vec<DiskRow, Memory>> disks;
+    tbc::val_a<ds::Vec<InterfaceRow, Memory>> interfaces;
     std::uint32_t matched = 0;
-    tbc::view<ds::Vec<ProcessRow, Memory>, tbc::lt::a> processes;
+    tbc::val_a<ds::Vec<ProcessRow, Memory>> processes;
     ds::Option<ProcessDetail> detail;
   };
 

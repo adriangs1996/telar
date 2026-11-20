@@ -8,13 +8,13 @@ import telar.gui.foundation.keys;
 
 namespace telar::gui::features::status_bar {
 
-  void ModeHints::append(tbc::view<ModeHint, tbc::lt::a> hint) noexcept {
+  void ModeHints::append(tbc::val_a<ModeHint> hint) noexcept {
     if (count_ < hints_.size()) {
       hints_.atMut(count_++) = hint;
     }
   }
 
-  tbc::view<std::span<const ModeHint>, tbc::lt::a> ModeHints::items() const noexcept {
+  tbc::val_a<std::span<const ModeHint>> ModeHints::items() const noexcept {
     return std::span{hints_}.first(count_);
   }
 

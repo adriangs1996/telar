@@ -166,7 +166,7 @@ namespace {
     ~TextCase() = default;
 
     // The case paints through the window, region `a`, whose glyph cache it keeps warm.
-    TextCase(tbc::view<QQuickWindow&, tbc::lt::a> window, const std::shared_ptr<const FontCollection>& collection, unsigned length)
+    TextCase(tbc::mut_a<QQuickWindow> window, const std::shared_ptr<const FontCollection>& collection, unsigned length)
         : window_(window),
           collection_(collection),
           fonts_(ResidentFonts::shared(collection)),
@@ -205,18 +205,18 @@ namespace {
       return collection_;
     }
 
-    [[nodiscard]] tbc::view<QQuickWindow&, tbc::lt::a> window() const noexcept {
+    [[nodiscard]] tbc::mut_a<QQuickWindow> window() const noexcept {
       return window_;
     }
 
   private:
-    tbc::view<QQuickWindow&, tbc::lt::a> window_;
+    tbc::mut_a<QQuickWindow> window_;
     std::shared_ptr<const FontCollection> collection_;
     std::shared_ptr<ResidentFonts> fonts_;
-    tbc::view<std::shared_ptr<ChromeGlyphImages<ResidentFonts>>, tbc::lt::a> images_;
+    tbc::val_a<std::shared_ptr<ChromeGlyphImages<ResidentFonts>>> images_;
     std::vector<fonts::ShapedGlyph> glyphs_;
     // The paint views the glyphs stored beside it.
-    tbc::view<ChromeTextPaint, tbc::lt::self> paint_;
+    tbc::val_self<ChromeTextPaint> paint_;
   };
 
   class SceneRun {

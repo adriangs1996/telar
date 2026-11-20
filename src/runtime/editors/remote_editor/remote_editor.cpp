@@ -219,7 +219,7 @@ namespace telar::runtime {
     }
   }
 
-  tbc::view<const EditorCandidate*, tbc::lt::a> RemoteEditor::candidate(const Session& session, pid_t pid) const noexcept {
+  tbc::val_a<const EditorCandidate*> RemoteEditor::candidate(const Session& session, pid_t pid) const noexcept {
     const auto current = inspector_.identity(pid);
     if (!current) {
       return nullptr;

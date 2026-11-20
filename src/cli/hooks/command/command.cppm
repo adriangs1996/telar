@@ -78,7 +78,7 @@ export {
       void indexMembers();
       // Each string member is decoded once, as the object is built, so reading one reads nothing new.
       void decodeStrings();
-      tbc::view<std::string_view, tbc::lt::a> decoded(tbc::view<const Member&, tbc::lt::a> member) const;
+      tbc::val_a<std::string_view> decoded(tbc::ref_a<Member> member) const;
       void checkUnique(const Member& member) const;
 
       Memory& memory_;
@@ -125,7 +125,7 @@ export {
       Memory& memory;
       AgentProvider provider;
       Object fields;
-      tbc::view<Object, tbc::lt::self> tools;
+      tbc::val_self<Object> tools;
       std::size_t running_subagents = 0;
 
     private:

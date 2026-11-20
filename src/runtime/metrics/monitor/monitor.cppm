@@ -76,7 +76,7 @@ export {
       using Clock = std::chrono::steady_clock;
       static constexpr std::size_t maximum_answers = maximum_monitor_answers;
 
-      MonitorSampler(tbc::view<ConcurrentMemory&, tbc::lt::a> memory, tbc::view<const ProcessInspector&, tbc::lt::a> inspector);
+      MonitorSampler(tbc::mut_a<ConcurrentMemory> memory, tbc::ref_a<ProcessInspector> inspector);
       MonitorSampler(const MonitorSampler&) = delete;
       MonitorSampler& operator=(const MonitorSampler&) = delete;
 
@@ -117,21 +117,21 @@ export {
       void select(const MonitorView& view);
       void selectTree(const MonitorView& view);
 
-      tbc::view<ConcurrentMemory&, tbc::lt::a> memory_;
-      tbc::view<ProcessInspector, tbc::lt::a> inspector_;
+      tbc::mut_a<ConcurrentMemory> memory_;
+      tbc::val_a<ProcessInspector> inspector_;
       // Sorted by pid.
-      tbc::view<ds::Vec<MonitorEntry, ConcurrentMemory>, tbc::lt::a> entries_;
-      tbc::view<ds::Vec<MonitorEntry, ConcurrentMemory>, tbc::lt::a> previous_;
-      tbc::view<ds::Vec<UserName, ConcurrentMemory>, tbc::lt::a> users_;
+      tbc::val_a<ds::Vec<MonitorEntry, ConcurrentMemory>> entries_;
+      tbc::val_a<ds::Vec<MonitorEntry, ConcurrentMemory>> previous_;
+      tbc::val_a<ds::Vec<UserName, ConcurrentMemory>> users_;
       // Scratch: the selection of one query, with the depth of each row in a tree.
-      tbc::view<ds::Vec<std::uint32_t, ConcurrentMemory>, tbc::lt::a> selected_;
-      tbc::view<ds::Vec<std::uint8_t, ConcurrentMemory>, tbc::lt::a> depths_;
-      tbc::view<ds::Vec<std::uint32_t, ConcurrentMemory>, tbc::lt::a> ordered_;
-      tbc::view<ds::Vec<std::uint8_t, ConcurrentMemory>, tbc::lt::a> flags_;
-      tbc::view<ds::Vec<std::pair<std::uint32_t, std::uint8_t>, ConcurrentMemory>, tbc::lt::a> stack_;
+      tbc::val_a<ds::Vec<std::uint32_t, ConcurrentMemory>> selected_;
+      tbc::val_a<ds::Vec<std::uint8_t, ConcurrentMemory>> depths_;
+      tbc::val_a<ds::Vec<std::uint32_t, ConcurrentMemory>> ordered_;
+      tbc::val_a<ds::Vec<std::uint8_t, ConcurrentMemory>> flags_;
+      tbc::val_a<ds::Vec<std::pair<std::uint32_t, std::uint8_t>, ConcurrentMemory>> stack_;
       // What the answers of a round view.
-      tbc::view<ds::Vec<MonitorProcess, ConcurrentMemory>, tbc::lt::self> rows_;
-      tbc::view<ds::Vec<DetailText, ConcurrentMemory>, tbc::lt::a> details_;
+      tbc::val_self<ds::Vec<MonitorProcess, ConcurrentMemory>> rows_;
+      tbc::val_a<ds::Vec<DetailText, ConcurrentMemory>> details_;
       ds::Option<Clock::time_point> sampled_;
       std::uint32_t readings_ = 0;
 
@@ -141,8 +141,8 @@ export {
       std::uint64_t disk_read_per_second_ = 0;
       std::uint64_t disk_written_per_second_ = 0;
       // They view host_.
-      tbc::view<ds::Array<MonitorInterface, HostDetail::maximum_interfaces>, tbc::lt::self> interfaces_{};
-      tbc::view<ds::Array<MonitorDisk, HostDetail::maximum_mounts>, tbc::lt::self> disks_{};
+      tbc::val_self<ds::Array<MonitorInterface, HostDetail::maximum_interfaces>> interfaces_{};
+      tbc::val_self<ds::Array<MonitorDisk, HostDetail::maximum_mounts>> disks_{};
       std::uint32_t thread_count_ = 0;
     };
 

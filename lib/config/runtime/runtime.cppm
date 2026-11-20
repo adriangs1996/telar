@@ -98,12 +98,12 @@ export {
       std::string_view displayName() const noexcept;
 
       // The manifest's own placeholder, or one built in the caller's storage.
-      tbc::view<std::string_view, tbc::lt::a> placeholderTitle(tbc::view<FixedText<96>&, tbc::lt::a> storage) const;
+      tbc::val_a<std::string_view> placeholderTitle(tbc::mut_a<FixedText<96>> storage) const;
 
       AgentProvider provider = AgentProvider::unknown;
-      tbc::view<FixedText<32>, tbc::lt::a> name;
-      tbc::view<FixedText<32>, tbc::lt::a> display_name;
-      tbc::view<FixedText<96>, tbc::lt::a> placeholder;
+      tbc::val_a<FixedText<32>> name;
+      tbc::val_a<FixedText<32>> display_name;
+      tbc::val_a<FixedText<96>> placeholder;
       FixedText<8> icon;
       AgentAttachmentMarkers attachments = AgentAttachmentMarkers::none;
       AgentInterruptKey interrupt = AgentInterruptKey::none;
@@ -235,9 +235,9 @@ export {
       static constexpr std::size_t maximum_hostname_bytes = ProxyHostname::maximum_bytes;
 
       // A policy allocates its patterns from the allocator in region `a`.
-      explicit ProxyHostPolicy(tbc::view<Memory&, tbc::lt::a> memory);
+      explicit ProxyHostPolicy(tbc::mut_a<Memory> memory);
       // Copying allocates, so it is explicit; the copy shares this policy's allocator.
-      [[nodiscard]] tbc::view<ProxyHostPolicy, tbc::lt::a> clone() const;
+      [[nodiscard]] tbc::val_a<ProxyHostPolicy> clone() const;
       static bool validPattern(std::string_view pattern) noexcept;
       bool append(std::string_view pattern);
       void finish();
@@ -249,7 +249,7 @@ export {
       bool find(std::string_view pattern) const noexcept;
 
       static constexpr std::string_view wildcard_prefix = "*.";
-      tbc::view<ds::Vec<ds::String<Memory>, Memory>, tbc::lt::a> patterns_;
+      tbc::val_a<ds::Vec<ds::String<Memory>, Memory>> patterns_;
     };
 
   }
@@ -261,12 +261,12 @@ export {
 
     template <Allocator Memory>
     struct ProxyOptions {
-      explicit ProxyOptions(tbc::view<Memory&, tbc::lt::a> memory);
+      explicit ProxyOptions(tbc::mut_a<Memory> memory);
       // Copying allocates, so it is explicit; the copy shares these options' allocator.
-      [[nodiscard]] tbc::view<ProxyOptions, tbc::lt::a> clone() const;
+      [[nodiscard]] tbc::val_a<ProxyOptions> clone() const;
 
-      tbc::view<ds::String<Memory>, tbc::lt::a> authority_directory;
-      tbc::view<ProxyHostPolicy<Memory>, tbc::lt::a> intercept_hosts;
+      tbc::val_a<ds::String<Memory>> authority_directory;
+      tbc::val_a<ProxyHostPolicy<Memory>> intercept_hosts;
       ProxyCaptureLimits capture;
       bool enabled = false;
       bool anonymous_tunnels = false;
@@ -316,32 +316,32 @@ export {
         [[nodiscard]] std::span<const std::string_view> span() const noexcept;
       };
 
-      explicit CommandValues(tbc::view<Memory&, tbc::lt::a> memory);
+      explicit CommandValues(tbc::mut_a<Memory> memory);
       // Copying allocates, so it is explicit; the copy shares these values' allocator.
-      [[nodiscard]] tbc::view<CommandValues, tbc::lt::a> clone() const;
+      [[nodiscard]] tbc::val_a<CommandValues> clone() const;
       [[nodiscard]] Views views() const noexcept;
 
-      tbc::view<ds::Vec<ds::String<Memory>, Memory>, tbc::lt::a> arguments;
+      tbc::val_a<ds::Vec<ds::String<Memory>, Memory>> arguments;
       std::chrono::milliseconds timeout{15'000};
       std::chrono::milliseconds idle_timeout{300'000};
     };
 
     template <Allocator Memory>
     struct RuntimeValues {
-      explicit RuntimeValues(tbc::view<Memory&, tbc::lt::a> memory);
+      explicit RuntimeValues(tbc::mut_a<Memory> memory);
       // Copying allocates, so it is explicit; the copy shares these values' allocator.
-      [[nodiscard]] tbc::view<RuntimeValues, tbc::lt::a> clone() const;
+      [[nodiscard]] tbc::val_a<RuntimeValues> clone() const;
 
-      tbc::view<ds::String<Memory>, tbc::lt::a> history_path;
-      tbc::view<ds::String<Memory>, tbc::lt::a> session_path;
+      tbc::val_a<ds::String<Memory>> history_path;
+      tbc::val_a<ds::String<Memory>> session_path;
       HistoryFilters history_filters;
-      tbc::view<CommandValues<Memory>, tbc::lt::a> engine;
-      tbc::view<CommandValues<Memory>, tbc::lt::a> descriptions;
-      tbc::view<ProxyOptions<Memory>, tbc::lt::a> proxy;
+      tbc::val_a<CommandValues<Memory>> engine;
+      tbc::val_a<CommandValues<Memory>> descriptions;
+      tbc::val_a<ProxyOptions<Memory>> proxy;
       plugins::Specifications plugins;
       FixedText<PATH_MAX> configuration_directory;
       AgentManifests manifests = builtin_manifests;
-      tbc::view<LimitNotices, tbc::lt::a> limits;
+      tbc::val_a<LimitNotices> limits;
       GraphicsLimits graphics;
       control::Policy control_policy{};
       bool capture_output = false;

@@ -7,7 +7,7 @@ import telar.base.memory.allocators;
 namespace telar::runtime {
 
   template <Allocator Memory>
-  ByteStorage<Memory>::ByteStorage(tbc::view<Memory&, tbc::lt::a> memory, std::size_t size)
+  ByteStorage<Memory>::ByteStorage(tbc::mut_a<Memory> memory, std::size_t size)
       : memory_(memory),
         size_(size) {
     if (size != 0) {
@@ -67,7 +67,7 @@ namespace telar::runtime {
   }
 
   template <Allocator Memory>
-  auto RetainedStream<Memory>::read(std::uint64_t offset, tbc::view<std::span<Byte>, tbc::lt::a> destination) const noexcept -> tbc::view<std::span<const Byte>, tbc::lt::a> {
+  auto RetainedStream<Memory>::read(std::uint64_t offset, tbc::val_a<std::span<Byte>> destination) const noexcept -> tbc::val_a<std::span<const Byte>> {
     if (offset < retainedOffset() || offset >= total_) {
       return {};
     }

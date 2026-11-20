@@ -16,7 +16,7 @@ export {
     // Writes JSON into the caller's buffer, region `a`, which the written text views.
     class JsonWriter {
     public:
-      explicit JsonWriter(tbc::view<std::span<char>, tbc::lt::a> buffer) noexcept;
+      explicit JsonWriter(tbc::val_a<std::span<char>> buffer) noexcept;
 
       template <typename Consumer>
       TBC_GENERIC void object(Consumer&& consume) {
@@ -42,7 +42,7 @@ export {
         write(value);
       }
 
-      [[nodiscard]] tbc::view<std::string_view, tbc::lt::a> view() const noexcept;
+      [[nodiscard]] tbc::val_a<std::string_view> view() const noexcept;
 
       template <typename Value>
       TBC_GENERIC void value(const Value& value) {
@@ -119,7 +119,7 @@ export {
         std::invoke(std::forward<Consumer>(consume), *this);
       }
 
-      tbc::view<std::span<char>, tbc::lt::a> buffer_;
+      tbc::val_a<std::span<char>> buffer_;
       std::size_t length_ = 0;
       bool first_ = true;
     };

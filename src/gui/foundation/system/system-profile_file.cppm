@@ -30,7 +30,7 @@ export {
 
     template <Allocator Memory>
     // The source bytes are allocated from memory, region `a`.
-    [[nodiscard]] tbc::view<ds::Option<ds::Vec<Byte, Memory>>, tbc::lt::a> readProfileSource(tbc::view<Memory&, tbc::lt::a> memory, int directory, std::string_view name);
+    [[nodiscard]] tbc::val_a<ds::Option<ds::Vec<Byte, Memory>>> readProfileSource(tbc::mut_a<Memory> memory, int directory, std::string_view name);
 
     class ProfileFileTransaction {
       friend class ProfileFile;
@@ -43,7 +43,7 @@ export {
       ~ProfileFileTransaction() = default;
 
       template <Allocator Memory>
-      [[nodiscard]] tbc::view<ds::Option<ds::Vec<Byte, Memory>>, tbc::lt::a> read(tbc::view<Memory&, tbc::lt::a> memory) const;
+      [[nodiscard]] tbc::val_a<ds::Option<ds::Vec<Byte, Memory>>> read(tbc::mut_a<Memory> memory) const;
 
       void replace(std::string_view source) const;
 
@@ -60,7 +60,7 @@ export {
       explicit ProfileFile(std::string_view path, std::stop_token stop = {});
 
       template <Allocator Memory>
-      [[nodiscard]] tbc::view<ds::Option<ds::Vec<Byte, Memory>>, tbc::lt::a> read(tbc::view<Memory&, tbc::lt::a> memory) const;
+      [[nodiscard]] tbc::val_a<ds::Option<ds::Vec<Byte, Memory>>> read(tbc::mut_a<Memory> memory) const;
 
       [[nodiscard]] std::string_view path() const noexcept;
       [[nodiscard]] ProfileFileTransaction lock() const;
@@ -72,12 +72,12 @@ export {
       std::stop_token stop_;
     };
 
-    extern template tbc::view<ds::Option<ds::Vec<Byte, telar::Memory>>, tbc::lt::a> readProfileSource<telar::Memory>(tbc::view<telar::Memory&, tbc::lt::a> memory, int directory, std::string_view name);
-    extern template tbc::view<ds::Option<ds::Vec<Byte, telar::ConcurrentMemory>>, tbc::lt::a> readProfileSource<telar::ConcurrentMemory>(tbc::view<telar::ConcurrentMemory&, tbc::lt::a> memory, int directory, std::string_view name);
-    extern template tbc::view<ds::Option<ds::Vec<Byte, telar::Memory>>, tbc::lt::a> ProfileFileTransaction::read<telar::Memory>(tbc::view<telar::Memory&, tbc::lt::a> memory) const;
-    extern template tbc::view<ds::Option<ds::Vec<Byte, telar::ConcurrentMemory>>, tbc::lt::a> ProfileFileTransaction::read<telar::ConcurrentMemory>(tbc::view<telar::ConcurrentMemory&, tbc::lt::a> memory) const;
-    extern template tbc::view<ds::Option<ds::Vec<Byte, telar::Memory>>, tbc::lt::a> ProfileFile::read<telar::Memory>(tbc::view<telar::Memory&, tbc::lt::a> memory) const;
-    extern template tbc::view<ds::Option<ds::Vec<Byte, telar::ConcurrentMemory>>, tbc::lt::a> ProfileFile::read<telar::ConcurrentMemory>(tbc::view<telar::ConcurrentMemory&, tbc::lt::a> memory) const;
+    extern template tbc::val_a<ds::Option<ds::Vec<Byte, telar::Memory>>> readProfileSource<telar::Memory>(tbc::mut_a<telar::Memory> memory, int directory, std::string_view name);
+    extern template tbc::val_a<ds::Option<ds::Vec<Byte, telar::ConcurrentMemory>>> readProfileSource<telar::ConcurrentMemory>(tbc::mut_a<telar::ConcurrentMemory> memory, int directory, std::string_view name);
+    extern template tbc::val_a<ds::Option<ds::Vec<Byte, telar::Memory>>> ProfileFileTransaction::read<telar::Memory>(tbc::mut_a<telar::Memory> memory) const;
+    extern template tbc::val_a<ds::Option<ds::Vec<Byte, telar::ConcurrentMemory>>> ProfileFileTransaction::read<telar::ConcurrentMemory>(tbc::mut_a<telar::ConcurrentMemory> memory) const;
+    extern template tbc::val_a<ds::Option<ds::Vec<Byte, telar::Memory>>> ProfileFile::read<telar::Memory>(tbc::mut_a<telar::Memory> memory) const;
+    extern template tbc::val_a<ds::Option<ds::Vec<Byte, telar::ConcurrentMemory>>> ProfileFile::read<telar::ConcurrentMemory>(tbc::mut_a<telar::ConcurrentMemory> memory) const;
 
   }
 }

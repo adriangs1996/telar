@@ -43,7 +43,7 @@ export namespace telar::runtime {
   template <CapturedCommandSink Sink>
   class TBC_GENERIC CapturedCommandRelay final : public CapturedCommandEmitter {
   public:
-    inline explicit CapturedCommandRelay(tbc::view<Sink&, tbc::lt::a> sink) noexcept
+    inline explicit CapturedCommandRelay(tbc::mut_a<Sink> sink) noexcept
         : sink_(sink) {}
 
     inline void emit(const CapturedCommand& command) override {
@@ -51,7 +51,7 @@ export namespace telar::runtime {
     }
 
   private:
-    tbc::view<Sink&, tbc::lt::a> sink_;
+    tbc::mut_a<Sink> sink_;
   };
 
   struct CommandByteObservation {
@@ -129,7 +129,7 @@ export namespace telar::runtime {
   template <CommandCompletionSink Sink>
   class TBC_GENERIC CommandZoneRelay final : public CommandZoneSink {
   public:
-    inline explicit CommandZoneRelay(tbc::view<Sink&, tbc::lt::a> sink) noexcept
+    inline explicit CommandZoneRelay(tbc::mut_a<Sink> sink) noexcept
         : sink_(sink) {}
 
     inline void complete(CommandCompletion completion) override {
@@ -143,7 +143,7 @@ export namespace telar::runtime {
     }
 
   private:
-    tbc::view<Sink&, tbc::lt::a> sink_;
+    tbc::mut_a<Sink> sink_;
   };
 
   class CommandZones {
@@ -268,7 +268,7 @@ export namespace telar::runtime {
     static constexpr std::size_t capacity = 64 * 1024;
 
     void append(std::span<std::uint8_t> storage, std::span<const std::uint8_t> bytes) noexcept;
-    tbc::view<std::span<const std::uint8_t>, tbc::lt::a> bytes(tbc::view<std::span<const std::uint8_t>, tbc::lt::a> storage) const noexcept;
+    tbc::val_a<std::span<const std::uint8_t>> bytes(tbc::val_a<std::span<const std::uint8_t>> storage) const noexcept;
     std::uint64_t observed() const noexcept;
     void clear() noexcept;
 
@@ -308,7 +308,7 @@ export namespace telar::runtime {
   // Receives a formatted selection into a buffer, keeping what fits.
   class CommandTextWriter {
   public:
-    explicit CommandTextWriter(tbc::view<std::span<Byte>, tbc::lt::a> destination) noexcept;
+    explicit CommandTextWriter(tbc::val_a<std::span<Byte>> destination) noexcept;
 
     GhosttyWriter ghostty() noexcept;
 
@@ -320,7 +320,7 @@ export namespace telar::runtime {
   private:
     static bool receive(void* context, const Byte* bytes, std::size_t count) noexcept;
 
-    tbc::view<std::span<Byte>, tbc::lt::a> destination_;
+    tbc::val_a<std::span<Byte>> destination_;
     std::size_t length_ = 0;
     bool overflow_ = false;
   };
@@ -342,7 +342,7 @@ export namespace telar::runtime {
     // What to read from the anchor to the cursor, or nothing when there is no text to read.
     // Ghostty's own references into its grid, which it keeps valid until the screen changes: a raw
     // value, as Rust keeps an FFI library's handles.
-    TBC_RAW tbc::view<ds::Option<GhosttySelection>, tbc::lt::a> select(tbc::view<CommandScreen, tbc::lt::a> screen) const;
+    TBC_RAW tbc::val_a<ds::Option<GhosttySelection>> select(tbc::val_a<CommandScreen> screen) const;
 
   private:
     using TrackedReference = GhosttyHandle<GhosttyTrackedGridRef, ghostty_tracked_grid_ref_free>;
@@ -350,7 +350,7 @@ export namespace telar::runtime {
     void findRightPrompt(CommandScreen screen);
     GhosttyPointCoordinate selectionFinish(CommandScreen screen, GhosttyPointCoordinate start, GhosttyPointCoordinate fallback) const;
 
-    tbc::view<TrackedReference, tbc::lt::a> anchor_;
+    tbc::val_a<TrackedReference> anchor_;
     TrackedReference right_prompt_;
     std::uint64_t right_prompt_hash_ = 0;
     bool right_prompt_active_ = false;
@@ -386,10 +386,10 @@ export namespace telar::runtime {
 
     std::uint64_t revision() const noexcept;
     // The blocks view their commands in the ring, region `b`, through `storage`.
-    tbc::view<PaneBlocks, tbc::lt::b> message(std::uint64_t pane_id, tbc::view<ds::Array<CommandBlock, capacity>&, tbc::lt::b> storage) const;
+    tbc::val_b<PaneBlocks> message(std::uint64_t pane_id, tbc::mut_b<ds::Array<CommandBlock, capacity>> storage) const;
 
   protected:
-    explicit CommandBlockRing(tbc::view<GhosttyTerminal, tbc::lt::a> terminal);
+    explicit CommandBlockRing(tbc::val_a<GhosttyTerminal> terminal);
     ~CommandBlockRing() = default;
 
   private:
@@ -432,7 +432,7 @@ export namespace telar::runtime {
     virtual std::span<const Byte> captured() const noexcept = 0;
 
     Entry& entryMut(std::size_t index) noexcept;
-    tbc::view<const Entry&, tbc::lt::b> entry(std::size_t index) const noexcept;
+    tbc::ref_b<Entry> entry(std::size_t index) const noexcept;
     // A tracked reference ghostty keeps into its grid, which the block owns: a raw handle.
     TBC_RAW ds::Option<TrackedReference> track();
     ds::Option<std::uint32_t> row(const TrackedReference& tracked) const;
@@ -442,9 +442,9 @@ export namespace telar::runtime {
     void end(Entry& block, CommandBlockState state, std::int32_t status, std::chrono::steady_clock::time_point now);
 
     // The terminal the selection reads, region `a`.
-    tbc::view<CommandSelection, tbc::lt::a> selection_;
+    tbc::val_a<CommandSelection> selection_;
     ds::Option<TrackedReference> prompt_;
-    tbc::view<ds::Array<Entry, capacity>, tbc::lt::b> entries_{};
+    tbc::val_b<ds::Array<Entry, capacity>> entries_{};
     std::size_t first_ = 0;
     std::size_t count_ = 0;
     std::uint64_t revision_ = 0;

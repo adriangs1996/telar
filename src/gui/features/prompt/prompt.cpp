@@ -36,7 +36,7 @@ namespace telar::gui::features::prompt {
     constexpr std::uint16_t path_matches = 50;
 
     // The pane's checks, made empty in `memory` the first time. Valid until the next pane's are made.
-    tbc::view<CommandChecks&, tbc::lt::a> checksOf(tbc::view<Checks&, tbc::lt::a> all, tbc::view<Memory&, tbc::lt::a> memory, std::uint64_t pane_id) {
+    tbc::mut_a<CommandChecks> checksOf(tbc::mut_a<Checks> all, tbc::mut_a<Memory> memory, std::uint64_t pane_id) {
       if (auto* found = all.findMut(pane_id)) {
         return *found;
       }
@@ -47,7 +47,7 @@ namespace telar::gui::features::prompt {
 
     // What the pane learned of its shell's commands, forgotten after each command and change of
     // directory: either may change which commands run.
-    tbc::view<CommandChecks&, tbc::lt::a> commandChecks(tbc::view<Checks&, tbc::lt::a> all, tbc::view<Memory&, tbc::lt::a> memory, const Commands& commands) {
+    tbc::mut_a<CommandChecks> commandChecks(tbc::mut_a<Checks> all, tbc::mut_a<Memory> memory, const Commands& commands) {
       auto& checks = checksOf(all, memory, commands.pane_id);
       if (checks.commands != commands.commands || checks.directory.view() != commands.directory || checks.words.size() > checked_words_limit || checks.listed.size() > listed_prefixes_limit) {
         checks.commands = commands.commands;
@@ -93,7 +93,7 @@ namespace telar::gui::features::prompt {
     }
 
     // The question `request_id` about a command, answered: it no longer waits.
-    tbc::view<Settled, tbc::lt::a> take(ds::Map<std::uint64_t, CommandRequest, Memory>& requests, std::uint64_t request_id, CommandPresence presence) {
+    tbc::val_a<Settled> take(ds::Map<std::uint64_t, CommandRequest, Memory>& requests, std::uint64_t request_id, CommandPresence presence) {
       auto request = requests.remove(request_id);
       auto& [pane_id, word] = request.getMut();
 
@@ -127,7 +127,7 @@ namespace telar::gui::features::prompt {
         label(memory),
         questions(memory) {}
 
-  State::State(tbc::view<Memory&, tbc::lt::a> memory)
+  State::State(tbc::mut_a<Memory> memory)
       : memory(memory),
         specs(memory),
         scratch(memory),
@@ -141,7 +141,7 @@ namespace telar::gui::features::prompt {
 
   // ---- lines ------------------------------------------------------------------------------------
 
-  tbc::view<Opened, tbc::lt::a> open(State& state, tbc::view<Lines&, tbc::lt::a> lines, std::uint64_t pane_id, Keymap keymap) {
+  tbc::val_a<Opened> open(State& state, tbc::mut_a<Lines> lines, std::uint64_t pane_id, Keymap keymap) {
     const bool wants_history = state.history.empty();
     auto* found = lines.findMut(pane_id);
     const bool inserted = found == nullptr;
@@ -310,7 +310,7 @@ namespace telar::gui::features::prompt {
     return typed.promptReturned(current.commands != previous.commands && current.status == 0);
   }
 
-  void useClipboard(tbc::view<PaneLine&, tbc::lt::a> line, tbc::view<Clipboard, tbc::lt::a> clipboard) {
+  void useClipboard(tbc::mut_a<PaneLine> line, tbc::val_a<Clipboard> clipboard) {
     line.line.editorMut().setClipboard(std::move(clipboard));
   }
 
@@ -352,7 +352,7 @@ namespace telar::gui::features::prompt {
     return ds::none;
   }
 
-  tbc::view<ds::Option<CommandQuery>, tbc::lt::b> ask(tbc::view<Name&, tbc::lt::b> root, const Commands& commands, tbc::view<std::string_view, tbc::lt::b> word, std::uint64_t request_id) {
+  tbc::val_b<ds::Option<CommandQuery>> ask(tbc::mut_b<Name> root, const Commands& commands, tbc::val_b<std::string_view> word, std::uint64_t request_id) {
     const auto slash = word.rfind('/');
     if (slash == std::string_view::npos) {
       return CompleteWords{.request_id = request_id, .pane_id = commands.pane_id, .provider = CompletionProvider::command, .prefix = word};
@@ -425,7 +425,7 @@ namespace telar::gui::features::prompt {
     }
   }
 
-  tbc::view<ds::Option<Settled>, tbc::lt::a> settles(State& state, const CompletionWords& message) {
+  tbc::val_a<ds::Option<Settled>> settles(State& state, const CompletionWords& message) {
     const auto* checked = state.command_requests.find(message.request_id);
     if (checked == nullptr) {
       return ds::none;
@@ -444,7 +444,7 @@ namespace telar::gui::features::prompt {
     return take(state.command_requests, message.request_id, found ? CommandPresence::found : unnamed);
   }
 
-  tbc::view<ds::Option<Settled>, tbc::lt::a> settles(State& state, const PathResults& message) {
+  tbc::val_a<ds::Option<Settled>> settles(State& state, const PathResults& message) {
     const auto* checked = state.command_requests.find(message.request_id);
     if (checked == nullptr) {
       return ds::none;
@@ -500,7 +500,7 @@ namespace telar::gui::features::prompt {
     return ds::none;
   }
 
-  tbc::view<RequestCommandSpec, tbc::lt::b> askSpec(const State& state, std::uint64_t pane_id, tbc::view<std::string_view, tbc::lt::b> command, std::uint64_t request_id) noexcept {
+  tbc::val_b<RequestCommandSpec> askSpec(const State& state, std::uint64_t pane_id, tbc::val_b<std::string_view> command, std::uint64_t request_id) noexcept {
     // An alias's spec is its command's: the digest of the one held for what it last stood for.
     const auto* checks = state.command_checks.find(pane_id);
     auto named = command;
@@ -581,7 +581,7 @@ namespace telar::gui::features::prompt {
 
   // ---- completion -------------------------------------------------------------------------------
 
-  tbc::view<ds::Option<CompletionContext>, tbc::lt::a> completing(State& state, const PaneLine& line, shell::Dialect dialect) {
+  tbc::val_a<ds::Option<CompletionContext>> completing(State& state, const PaneLine& line, shell::Dialect dialect) {
     const auto& text = line.line.editor().text();
 
     return completionContext(state.memory, text.view(), text.cursor(), shell::Syntax{.dialect = dialect});
@@ -595,7 +595,7 @@ namespace telar::gui::features::prompt {
 
     // An alias completes as the words it stands for: `gst -` as `git status -`. The spec of the
     // command it names, or null.
-    tbc::view<const ebnf::command_spec*, tbc::lt::b> aliasSpec(tbc::view<const Specs&, tbc::lt::b> specs, tbc::view<Memory&, tbc::lt::a> memory, std::string_view alias, tbc::view<CompletionContext&, tbc::lt::a> context) {
+    tbc::val_b<const ebnf::command_spec*> aliasSpec(tbc::ref_b<Specs> specs, tbc::mut_a<Memory> memory, std::string_view alias, tbc::mut_a<CompletionContext> context) {
       ds::Vec<Name, Memory> words{memory};
 
       for (auto rest = alias; !rest.empty();) {
@@ -631,7 +631,7 @@ namespace telar::gui::features::prompt {
 
     // Files, or only directories, under the directory `partial` types, which a relative one reads
     // from `directory`.
-    void askPaths(tbc::view<CompletionPlan&, tbc::lt::a> result, std::string_view directory, tbc::view<Memory&, tbc::lt::a> memory, std::string_view partial) {
+    void askPaths(tbc::mut_a<CompletionPlan> result, std::string_view directory, tbc::mut_a<Memory> memory, std::string_view partial) {
       const auto& completion = result.completion;
       const auto slash = partial.rfind('/');
       const auto typed = slash == std::string_view::npos ? std::string_view{} : partial.substr(0, slash + 1);
@@ -660,7 +660,7 @@ namespace telar::gui::features::prompt {
 
     // Commands on the shell's PATH, branches, SSH hosts and make targets come from the runtime.
     // A spec's @ref is a branch name as far as the editor completes it.
-    void askProviders(tbc::view<CompletionPlan&, tbc::lt::a> result, tbc::view<Memory&, tbc::lt::a> memory, bool command_position, std::string_view partial) {
+    void askProviders(tbc::mut_a<CompletionPlan> result, tbc::mut_a<Memory> memory, bool command_position, std::string_view partial) {
       static constexpr ds::Array<std::pair<std::string_view, CompletionProvider>, 10> providers{{{"command", CompletionProvider::command}, {"branch", CompletionProvider::branch}, {"ssh_host", CompletionProvider::ssh_host}, {"make_target", CompletionProvider::make_target}, {"remote", CompletionProvider::remote}, {"stash", CompletionProvider::stash}, {"process", CompletionProvider::process}, {"just_recipe", CompletionProvider::just_recipe}, {"package_script", CompletionProvider::package_script}, {"compose_service", CompletionProvider::compose_service}}};
 
       const auto& completion = result.completion;
@@ -681,7 +681,7 @@ namespace telar::gui::features::prompt {
     }
 
     // The heading names where the choices come from.
-    tbc::view<std::string_view, tbc::lt::b> sourceLabel(tbc::view<const CompletionContext&, tbc::lt::b> context, const Completion& completion) {
+    tbc::val_b<std::string_view> sourceLabel(tbc::ref_b<CompletionContext> context, const Completion& completion) {
       static constexpr ds::Array<std::pair<std::string_view, std::string_view>, 12> sources{{{"branch", "branches · git"}, {"ref", "branches · git"}, {"remote", "remotes · git"}, {"stash", "stashes · git"}, {"ssh_host", "hosts · ssh"}, {"make_target", "targets · make"}, {"just_recipe", "recipes · just"}, {"package_script", "scripts · package.json"}, {"compose_service", "services · compose"}, {"process", "processes"}, {"file", "files"}, {"directory", "directories"}}};
 
       if (context.command_position) {
@@ -699,7 +699,7 @@ namespace telar::gui::features::prompt {
 
   }
 
-  tbc::view<CompletionPlan, tbc::lt::a> plan(State& state, const PaneLine& line, tbc::view<CompletionContext, tbc::lt::a> context, const CompletionSources& sources) {
+  tbc::val_a<CompletionPlan> plan(State& state, const PaneLine& line, tbc::val_a<CompletionContext> context, const CompletionSources& sources) {
     const auto& [specified, asks, directory, dialect] = sources;
     auto& memory = state.memory;
     const auto& specs = state.specs;
@@ -755,7 +755,7 @@ namespace telar::gui::features::prompt {
     plan.questions.atMut(index).request_id = request_id;
   }
 
-  void offer(tbc::view<State&, tbc::lt::a> state, PaneLine& line, tbc::view<CompletionPlan, tbc::lt::a> plan) {
+  void offer(tbc::mut_a<State> state, PaneLine& line, tbc::val_a<CompletionPlan> plan) {
     const auto pane_id = line.pane_id;
     auto& completions = state.completions;
     ds::Vec<std::uint64_t, Memory> requests{state.memory};
@@ -772,7 +772,7 @@ namespace telar::gui::features::prompt {
     line.line.offer(std::move(plan.completion.choices), {.begin = context.replace_begin, .end = context.replace_end}, std::move(requests), plan.dialect, plan.label.view());
   }
 
-  ds::Option<std::uint64_t> receive(tbc::view<State&, tbc::lt::a> state, tbc::view<Lines&, tbc::lt::a> lines, const CompletionWords& message) {
+  ds::Option<std::uint64_t> receive(tbc::mut_a<State> state, tbc::mut_a<Lines> lines, const CompletionWords& message) {
     const auto pending = state.completions.remove(message.request_id);
     if (!pending) {
       return ds::none;
@@ -799,7 +799,7 @@ namespace telar::gui::features::prompt {
     return pane_id;
   }
 
-  ds::Option<std::uint64_t> receive(tbc::view<State&, tbc::lt::a> state, tbc::view<Lines&, tbc::lt::a> lines, const PathResults& message) {
+  ds::Option<std::uint64_t> receive(tbc::mut_a<State> state, tbc::mut_a<Lines> lines, const PathResults& message) {
     const auto pending = state.completions.remove(message.request_id);
     if (!pending) {
       return ds::none;
@@ -834,7 +834,7 @@ namespace telar::gui::features::prompt {
 
   // ---- requests that fail -----------------------------------------------------------------------
 
-  ds::Option<std::uint64_t> fail(tbc::view<State&, tbc::lt::a> state, tbc::view<Lines&, tbc::lt::a> lines, std::uint64_t request_id) {
+  ds::Option<std::uint64_t> fail(tbc::mut_a<State> state, tbc::mut_a<Lines> lines, std::uint64_t request_id) {
     if (state.command_requests.contains(request_id)) {
       const auto settled = take(state.command_requests, request_id, CommandPresence::unknown);
 

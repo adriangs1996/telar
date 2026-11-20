@@ -103,7 +103,7 @@ namespace telar::gui::qt {
   class ChromeGlyphImages {
   public:
     // The images upload their textures through the window, region `a`.
-    ChromeGlyphImages(tbc::view<QQuickWindow&, tbc::lt::a> window, tbc::view<std::shared_ptr<FontSet>, tbc::lt::a> fonts, [[maybe_unused]] fonts::GlyphRasterization rasterization = {})
+    ChromeGlyphImages(tbc::mut_a<QQuickWindow> window, tbc::val_a<std::shared_ptr<FontSet>> fonts, [[maybe_unused]] fonts::GlyphRasterization rasterization = {})
         : window_(window),
           fonts_(std::move(fonts)),
           software_(window.rendererInterface()->graphicsApi() == QSGRendererInterface::Software) {
@@ -212,7 +212,7 @@ namespace telar::gui::qt {
       return mask;
     }
 
-    [[nodiscard]] static tbc::view<std::shared_ptr<ChromeGlyphImages>, tbc::lt::a> shared(tbc::view<QQuickWindow&, tbc::lt::a> window, tbc::view<std::shared_ptr<FontSet>, tbc::lt::a> fonts, fonts::GlyphRasterization rasterization = {}) {
+    [[nodiscard]] static tbc::val_a<std::shared_ptr<ChromeGlyphImages>> shared(tbc::mut_a<QQuickWindow> window, tbc::val_a<std::shared_ptr<FontSet>> fonts, fonts::GlyphRasterization rasterization = {}) {
       using Source = QPair<QQuickWindow*, const FontSet*>;
       using Key = std::conditional_t<optical, std::pair<Source, std::uint32_t>, Source>;
       thread_local QHash<Key, std::weak_ptr<ChromeGlyphImages>> caches;
@@ -300,13 +300,13 @@ namespace telar::gui::qt {
     static constexpr std::uint32_t maximum_side = 2048;
     static constexpr std::size_t maximum_mask_bytes = static_cast<std::size_t>(maximum_side) * maximum_side;
 
-    tbc::view<QQuickWindow&, tbc::lt::a> window_;
-    tbc::view<std::shared_ptr<FontSet>, tbc::lt::a> fonts_;
+    tbc::mut_a<QQuickWindow> window_;
+    tbc::val_a<std::shared_ptr<FontSet>> fonts_;
     QHash<quint64, CachedGlyph> images_;
     std::size_t mask_bytes_ = 0;
     bool software_ = false;
     // Its rasterizers view its pixels, sized once before the first is made.
-    [[no_unique_address]] tbc::view<std::conditional_t<optical, OpticalGlyphRasterizers, StandardGlyphRasterizers>, tbc::lt::self> rasterization_;
+    [[no_unique_address]] tbc::val_self<std::conditional_t<optical, OpticalGlyphRasterizers, StandardGlyphRasterizers>> rasterization_;
   };
 
 }

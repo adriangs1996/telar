@@ -73,11 +73,11 @@ namespace telar::gui::qt {
 
     void openPeek(const application::machines::MachineActivityTarget& target, const QString& identity, std::uint64_t pointer_revision);
 
-    tbc::view<Store&, tbc::lt::a> store_;
-    tbc::view<ActivityController&, tbc::lt::a> activity_;
-    tbc::view<PeekController&, tbc::lt::a> peek_;
-    tbc::view<Dialogs&, tbc::lt::a> dialogs_;
-    tbc::view<MachinesCoordinator&, tbc::lt::a> machines_;
+    tbc::mut_a<Store> store_;
+    tbc::mut_a<ActivityController> activity_;
+    tbc::mut_a<PeekController> peek_;
+    tbc::mut_a<Dialogs> dialogs_;
+    tbc::mut_a<MachinesCoordinator> machines_;
     ds::Option<Pending> pending_;
     std::uint64_t window_generation_ = 0;
   };

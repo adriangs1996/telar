@@ -91,7 +91,7 @@ namespace telar::gui::qt {
 
       application::notifications::NotificationId id{};
       runtime::FixedText<max_notification_message_bytes> message;
-      tbc::view<application::notifications::NotificationText, tbc::lt::self> body;
+      tbc::val_self<application::notifications::NotificationText> body;
       QVariantMap record;
       float width = 0;
       float height = 0;
@@ -123,7 +123,7 @@ namespace telar::gui::qt {
     QMetaObject::Connection font_connection_;
     ListModel cards_;
     application::notifications::NotificationStack stack_;
-    tbc::view<ds::Array<Content, application::notifications::NotificationCenter::capacity>, tbc::lt::self> contents_;
+    tbc::val_self<ds::Array<Content, application::notifications::NotificationCenter::capacity>> contents_;
     std::shared_ptr<const FontCollection> collection_;
     std::shared_ptr<ResidentFonts> fonts_;
     ChromeMetrics chrome_;

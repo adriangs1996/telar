@@ -10,7 +10,7 @@ import telar.base.ds;
 
 namespace telar::runtime {
 
-  tbc::view<ds::Option<std::string_view>, tbc::lt::a> GitFiles::join(std::string_view directory, std::string_view suffix, tbc::view<std::span<char>, tbc::lt::a> buffer) noexcept {
+  tbc::val_a<ds::Option<std::string_view>> GitFiles::join(std::string_view directory, std::string_view suffix, tbc::val_a<std::span<char>> buffer) noexcept {
     while (directory.ends_with('/')) {
       directory.remove_suffix(1);
     }
@@ -27,7 +27,7 @@ namespace telar::runtime {
     return std::string_view{buffer.data(), length};
   }
 
-  tbc::view<ds::Option<std::string_view>, tbc::lt::a> GitFiles::resolve(std::string_view directory, std::string_view path, tbc::view<std::span<char>, tbc::lt::a> buffer) noexcept {
+  tbc::val_a<ds::Option<std::string_view>> GitFiles::resolve(std::string_view directory, std::string_view path, tbc::val_a<std::span<char>> buffer) noexcept {
     if (path.empty() || path.contains('\0')) {
       return ds::none;
     }
@@ -45,7 +45,7 @@ namespace telar::runtime {
     return std::string_view{buffer.data(), path.size()};
   }
 
-  tbc::view<ds::Option<std::string_view>, tbc::lt::a> GitFiles::directory(std::string_view root, tbc::view<std::span<char>, tbc::lt::a> buffer) noexcept {
+  tbc::val_a<ds::Option<std::string_view>> GitFiles::directory(std::string_view root, tbc::val_a<std::span<char>> buffer) noexcept {
     ds::Array<char, PATH_MAX> path;
     const auto dot_git = join(root, ".git", path.viewMut());
     ds::Array<char, PATH_MAX + 16> bytes;
@@ -164,7 +164,7 @@ namespace telar::runtime {
   }
 
   template <Allocator Memory>
-  HardenedGit<Memory>::HardenedGit(tbc::view<Memory&, tbc::lt::a> memory, std::string_view root)
+  HardenedGit<Memory>::HardenedGit(tbc::mut_a<Memory> memory, std::string_view root)
       : memory_(memory),
         root_(memory, root),
         overrides_(memory) {}

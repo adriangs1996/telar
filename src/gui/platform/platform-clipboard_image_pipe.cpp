@@ -8,7 +8,7 @@ import telar.sys.posix;
 namespace telar::gui::platform {
 
   template <Allocator Memory>
-  tbc::view<SensitiveBytes<Memory>, tbc::lt::a> ClipboardImagePipe::read(tbc::view<Memory&, tbc::lt::a> memory, int descriptor, ClipboardImagePipeLimits limits) {
+  tbc::val_a<SensitiveBytes<Memory>> ClipboardImagePipe::read(tbc::mut_a<Memory> memory, int descriptor, ClipboardImagePipeLimits limits) {
     if (descriptor < 0) {
       throw ClipboardImageFailure{ClipboardImageError::read_failed};
     }

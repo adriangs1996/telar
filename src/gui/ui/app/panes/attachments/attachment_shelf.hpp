@@ -121,7 +121,7 @@ namespace telar::gui::qt {
     ds::Option<AttachmentSource> source_;
     Delivery delivery_;
     // The catalog delivers through the delivery stored beside it.
-    tbc::view<application::terminal::attachments::AttachmentCatalog<ApplicationAllocator, Delivery>, tbc::lt::self> catalog_;
+    tbc::val_self<application::terminal::attachments::AttachmentCatalog<ApplicationAllocator, Delivery>> catalog_;
     ClipboardImages worker_;
   };
 

@@ -60,7 +60,7 @@ export {
     private:
       runtime::FixedText<PATH_MAX> shell_;
       // The shell, then its flags, which are literals; the shell's view borrows shell_.
-      tbc::view<ds::Array<std::string_view, 3>, tbc::lt::self> arguments_;
+      tbc::val_self<ds::Array<std::string_view, 3>> arguments_;
       std::size_t count_ = 0;
     };
   }

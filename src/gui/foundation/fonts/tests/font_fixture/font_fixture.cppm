@@ -28,7 +28,7 @@ export {
     class FontFixture {
     public:
       // The fixture reads its fonts into memory, region `a`.
-      FontFixture(tbc::view<Memory&, tbc::lt::a> memory, const std::filesystem::path& directory, const char* primary_filename = "JetBrainsMono-Regular.ttf")
+      FontFixture(tbc::mut_a<Memory> memory, const std::filesystem::path& directory, const char* primary_filename = "JetBrainsMono-Regular.ttf")
           : regular_bytes_(read(memory, directory / "IBMPlexSans-Regular.ttf")),
             emphasized_bytes_(read(memory, directory / "IBMPlexSans-SemiBold.ttf")),
             primary_bytes_(read(memory, directory / primary_filename)),
@@ -63,23 +63,23 @@ export {
 
     private:
       // The bytes are storage of the allocator, region `a`.
-      static tbc::view<ds::Vec<std::uint8_t, Memory>, tbc::lt::a> read(tbc::view<Memory&, tbc::lt::a> memory, const std::filesystem::path& path) {
+      static tbc::val_a<ds::Vec<std::uint8_t, Memory>> read(tbc::mut_a<Memory> memory, const std::filesystem::path& path) {
         const auto data = runtime::readFile(memory, path.c_str(), telar_font_max_bytes);
 
         return ds::Vec<std::uint8_t, Memory>{memory, telar::byteView({data.data(), data.size()})};
       }
 
-      tbc::view<ds::Vec<std::uint8_t, Memory>, tbc::lt::a> regular_bytes_;
-      tbc::view<ds::Vec<std::uint8_t, Memory>, tbc::lt::a> emphasized_bytes_;
-      tbc::view<ds::Vec<std::uint8_t, Memory>, tbc::lt::a> primary_bytes_;
-      tbc::view<ds::Vec<std::uint8_t, Memory>, tbc::lt::a> text_bytes_;
-      tbc::view<ds::Vec<std::uint8_t, Memory>, tbc::lt::a> symbols_bytes_;
+      tbc::val_a<ds::Vec<std::uint8_t, Memory>> regular_bytes_;
+      tbc::val_a<ds::Vec<std::uint8_t, Memory>> emphasized_bytes_;
+      tbc::val_a<ds::Vec<std::uint8_t, Memory>> primary_bytes_;
+      tbc::val_a<ds::Vec<std::uint8_t, Memory>> text_bytes_;
+      tbc::val_a<ds::Vec<std::uint8_t, Memory>> symbols_bytes_;
       // The faces read the bytes stored beside them.
-      tbc::view<fonts::Face, tbc::lt::self> regular_;
-      tbc::view<fonts::Face, tbc::lt::self> emphasized_;
-      tbc::view<fonts::Face, tbc::lt::self> primary_;
-      tbc::view<fonts::Face, tbc::lt::self> text_;
-      tbc::view<fonts::Face, tbc::lt::self> symbols_;
+      tbc::val_self<fonts::Face> regular_;
+      tbc::val_self<fonts::Face> emphasized_;
+      tbc::val_self<fonts::Face> primary_;
+      tbc::val_self<fonts::Face> text_;
+      tbc::val_self<fonts::Face> symbols_;
     };
 
   }

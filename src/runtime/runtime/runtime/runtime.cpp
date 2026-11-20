@@ -283,7 +283,7 @@ namespace telar::runtime {
   }
 
   template <EventLoop Poller, HistoryEventSink History>
-  tbc::view<Pane&, tbc::lt::a> AgentService<Poller, History>::validateCommand(tbc::view<RuntimeModel&, tbc::lt::a> model, ClientSession& client, const ReportAgentCommand& request) {
+  tbc::mut_a<Pane> AgentService<Poller, History>::validateCommand(tbc::mut_a<RuntimeModel> model, ClientSession& client, const ReportAgentCommand& request) {
     return authorize(model.panes, client, request.pane_id, request.pane_generation, model.manifests.named(request.provider));
   }
 
@@ -656,7 +656,7 @@ namespace telar::runtime {
   }
 
   template <EventLoop Poller, HistoryEventSink History>
-  tbc::view<Pane&, tbc::lt::a> AgentService<Poller, History>::authorize(tbc::view<PaneStore&, tbc::lt::a> panes, const ClientSession& client, std::uint64_t pane_id, std::uint64_t generation, AgentProvider provider) {
+  tbc::mut_a<Pane> AgentService<Poller, History>::authorize(tbc::mut_a<PaneStore> panes, const ClientSession& client, std::uint64_t pane_id, std::uint64_t generation, AgentProvider provider) {
     TELAR_TRACE("agents.authorize");
     auto& pane = require(panes, pane_id, generation);
 
@@ -699,7 +699,7 @@ namespace telar::runtime {
   template class AgentService<NativeEventLoop<ConcurrentMemory>, RuntimeBackground>;
   template class AgentService<NativeEventLoop<ConcurrentMemory>, DiscardedHistory>;
 
-  tbc::view<std::string_view, tbc::lt::a> ownDirectory(tbc::view<LaunchDirectory&, tbc::lt::a> storage, std::string_view directory) {
+  tbc::val_a<std::string_view> ownDirectory(tbc::mut_a<LaunchDirectory> storage, std::string_view directory) {
     if (directory.size() > 4096) {
       throw RequestError{FailureCode::invalid_request, "working directory is too long"};
     }
@@ -708,7 +708,7 @@ namespace telar::runtime {
     return storage.view();
   }
 
-  tbc::view<Launch, tbc::lt::a> resolveLaunchDirectory(const RuntimeModel& model, const ClientSession& client, tbc::view<Launch, tbc::lt::a> launch, tbc::view<LaunchDirectory&, tbc::lt::a> directory, LaunchDirectoryScope scope) {
+  tbc::val_a<Launch> resolveLaunchDirectory(const RuntimeModel& model, const ClientSession& client, tbc::val_a<Launch> launch, tbc::mut_a<LaunchDirectory> directory, LaunchDirectoryScope scope) {
     if (launch.cwd_source == 0) {
       return launch;
     }
@@ -793,7 +793,7 @@ namespace telar::runtime {
   }
 
   template <EventLoop Poller, HistoryEventSink History>
-  tbc::view<const ConfigureTerminalColors*, tbc::lt::a> WorkspaceService<Poller, History>::ownerColors(const WorkspaceStore& workspaces, tbc::view<const ClientStore&, tbc::lt::a> clients, std::uint64_t workspace) noexcept {
+  tbc::val_a<const ConfigureTerminalColors*> WorkspaceService<Poller, History>::ownerColors(const WorkspaceStore& workspaces, tbc::ref_a<ClientStore> clients, std::uint64_t workspace) noexcept {
     const auto* found = workspaces.find(workspace);
     const auto* owner = found != nullptr && found->geometry_client ? clients.find(*found->geometry_client) : nullptr;
 
@@ -2219,7 +2219,7 @@ namespace telar::runtime {
 
   template <EventLoop Poller, typename Background>
     requires BackgroundExecutor<Background, ConcurrentMemory>
-  tbc::view<WordRequest, tbc::lt::a> Runtime<Poller, Background>::makeWordRequest(const ClientSession& client, std::uint64_t request_id, CompletionProvider provider, std::string_view prefix, tbc::holds<const Pane&, tbc::lt::a> pane) const {
+  tbc::val_a<WordRequest> Runtime<Poller, Background>::makeWordRequest(const ClientSession& client, std::uint64_t request_id, CompletionProvider provider, std::string_view prefix, tbc::holds<const Pane&, tbc::lt::a> pane) const {
     WordRequest request{.client = client.id, .request = request_id, .provider = provider, .prefix = {}, .directory = {}, .home = {}, .path = {}};
 
     request.prefix.assign(prefix);

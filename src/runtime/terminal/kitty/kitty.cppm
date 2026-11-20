@@ -239,7 +239,7 @@ export namespace telar::runtime {
     MappedRegion take(const void* placeholder) noexcept;
 
     // The pixels standing in for a placeholder, which live as long as it does, or the bytes themselves.
-    tbc::view<std::span<const std::uint8_t>, tbc::lt::a> resolve(tbc::view<std::span<const std::uint8_t>, tbc::lt::a> bytes) const noexcept;
+    tbc::val_a<std::span<const std::uint8_t>> resolve(tbc::val_a<std::span<const std::uint8_t>> bytes) const noexcept;
 
   private:
     struct Entry {
@@ -248,7 +248,7 @@ export namespace telar::runtime {
     };
 
     static constexpr std::size_t capacity = 64;
-    tbc::view<ds::Array<Entry, capacity>, tbc::lt::a> entries_;
+    tbc::val_a<ds::Array<Entry, capacity>> entries_;
     mutable std::mutex mutex_;
     std::atomic<std::size_t> count_{0};
   };
@@ -341,7 +341,7 @@ export namespace telar::runtime {
       return mappings_.adopt(placeholder, pixels);
     }
 
-    tbc::view<std::span<const std::uint8_t>, tbc::lt::a> imagePixels(tbc::view<std::span<const std::uint8_t>, tbc::lt::a> bytes) const noexcept {
+    tbc::val_a<std::span<const std::uint8_t>> imagePixels(tbc::val_a<std::span<const std::uint8_t>> bytes) const noexcept {
       return mappings_.resolve(bytes);
     }
 
@@ -351,7 +351,7 @@ export namespace telar::runtime {
     std::size_t limit_;
     MediaUsage local_usage_;
     MediaUsage& usage_;
-    tbc::view<MappedImages, tbc::lt::a> mappings_;
+    tbc::val_a<MappedImages> mappings_;
   };
 
   struct GraphicsQueryResources {
@@ -387,7 +387,7 @@ export namespace telar::runtime {
     ~GraphicsTemporaryPath();
 
     // The refusal, if any, is a literal.
-    tbc::view<std::string_view, tbc::lt::static_storage> authorize() noexcept;
+    tbc::val_static<std::string_view> authorize() noexcept;
 
   private:
     const GraphicsChildFile& file_;
@@ -400,7 +400,7 @@ export namespace telar::runtime {
   extern "C++" {
   void installPngDecoder();
   // The decoded pixels are a block of the allocator, region `a`, that the image keeps.
-  bool decodePngImage(tbc::view<const GhosttyAllocator*, tbc::lt::a> allocator, std::span<const std::uint8_t> bytes, tbc::view<GhosttySysImage&, tbc::lt::a> image, std::size_t limit = 128 * 1024 * 1024) noexcept;
+  bool decodePngImage(tbc::val_a<const GhosttyAllocator*> allocator, std::span<const std::uint8_t> bytes, tbc::mut_a<GhosttySysImage> image, std::size_t limit = 128 * 1024 * 1024) noexcept;
   }
 
 }

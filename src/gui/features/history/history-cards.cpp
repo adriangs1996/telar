@@ -93,7 +93,7 @@ namespace telar::gui::features::history {
     }
   }
 
-  tbc::view<std::string_view, tbc::lt::a> HistoryCard::line(tbc::view<std::string_view, tbc::lt::a> command, HistoryCardLine line) noexcept {
+  tbc::val_a<std::string_view> HistoryCard::line(tbc::val_a<std::string_view> command, HistoryCardLine line) noexcept {
     command.remove_prefix(std::min<std::size_t>(line.offset, command.size()));
     command.remove_suffix(command.size() - std::min<std::size_t>(line.length, command.size()));
 

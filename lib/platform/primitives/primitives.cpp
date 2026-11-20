@@ -100,7 +100,7 @@ namespace telar::runtime {
     }
   }
 
-  tbc::view<const char*, tbc::lt::a> copyGraphicsName(std::span<const std::uint8_t> decoded, tbc::view<std::span<std::uint8_t>, tbc::lt::a> destination) noexcept {
+  tbc::val_a<const char*> copyGraphicsName(std::span<const std::uint8_t> decoded, tbc::val_a<std::span<std::uint8_t>> destination) noexcept {
     if (decoded.empty() || decoded.size() >= destination.size() || std::find(decoded.begin(), decoded.end(), 0) != decoded.end()) {
       return nullptr;
     }
@@ -110,7 +110,7 @@ namespace telar::runtime {
     return reinterpret_cast<const char*>(destination.data());
   }
 
-  tbc::view<const char*, tbc::lt::a> decodeGraphicsName(std::string_view encoded, tbc::view<std::span<std::uint8_t>, tbc::lt::a> destination) noexcept {
+  tbc::val_a<const char*> decodeGraphicsName(std::string_view encoded, tbc::val_a<std::span<std::uint8_t>> destination) noexcept {
     if (destination.empty()) {
       return nullptr;
     }

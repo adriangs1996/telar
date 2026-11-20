@@ -270,7 +270,7 @@ namespace telar {
 
     // The encoded bytes, written into the caller's buffer.
     template <typename Message>
-    static tbc::view<std::span<Byte>, tbc::lt::a> encode(const Message& message, tbc::view<std::span<Byte>, tbc::lt::a> buffer) {
+    static tbc::val_a<std::span<Byte>> encode(const Message& message, tbc::val_a<std::span<Byte>> buffer) {
       const auto size = encodedSize(message);
       if (buffer.size() < size) {
         throw EncodingError{"Output buffer too small"};

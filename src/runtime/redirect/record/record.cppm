@@ -132,7 +132,7 @@ export {
     template <Allocator Memory>
     class RecordFile {
     public:
-      explicit RecordFile(tbc::view<Memory&, tbc::lt::a> memory, std::string_view name, RecordLock mode = RecordLock::owner);
+      explicit RecordFile(tbc::mut_a<Memory> memory, std::string_view name, RecordLock mode = RecordLock::owner);
 
       ds::Option<ds::String<Memory>> load();
 
@@ -143,8 +143,8 @@ export {
     private:
       static void validate(int descriptor);
 
-      tbc::view<Memory&, tbc::lt::a> memory_;
-      tbc::view<ds::String<Memory>, tbc::lt::a> name_;
+      tbc::mut_a<Memory> memory_;
+      tbc::val_a<ds::String<Memory>> name_;
       FileDescriptor directory_;
       FileDescriptor lock_;
     };
@@ -412,7 +412,7 @@ export {
     class Record {
     public:
       // What the record keeps lives in `memory`, region `a`; the endpoint and the label are copied.
-      explicit Record(tbc::view<Memory&, tbc::lt::a> memory, const PfIdentity<Memory>& identity, std::string_view endpoint);
+      explicit Record(tbc::mut_a<Memory> memory, const PfIdentity<Memory>& identity, std::string_view endpoint);
 
       ds::Option<std::uint64_t> load();
 
@@ -423,9 +423,9 @@ export {
       void clear();
 
     private:
-      tbc::view<Memory&, tbc::lt::a> memory_;
-      tbc::view<ds::String<Memory>, tbc::lt::a> endpoint_;
-      tbc::view<RecordFile<Memory>, tbc::lt::a> file_;
+      tbc::mut_a<Memory> memory_;
+      tbc::val_a<ds::String<Memory>> endpoint_;
+      tbc::val_a<RecordFile<Memory>> file_;
       ds::Option<unsigned> log_index_;
       ds::Option<std::uint64_t> last_token_;
     };

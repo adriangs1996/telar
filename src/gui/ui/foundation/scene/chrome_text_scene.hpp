@@ -56,7 +56,7 @@ namespace telar::gui::qt {
   };
 
   // Each result reuses the previous node or is a new one the caller adopts.
-  tbc::view<QSGNode*, tbc::lt::a> paintChromeText(tbc::view<QSGNode*, tbc::lt::a> previous, QQuickWindow& window, const ChromeTextPaint& paint, const std::shared_ptr<const FontCollection>& collection);
-  tbc::view<QSGNode*, tbc::lt::a> paintTerminalText(tbc::view<QSGNode*, tbc::lt::a> previous, QQuickWindow& window, const ChromeTextPaint& paint, const std::shared_ptr<const FontCollection>& collection, fonts::GlyphRasterization rasterization);
+  tbc::val_a<QSGNode*> paintChromeText(tbc::val_a<QSGNode*> previous, QQuickWindow& window, const ChromeTextPaint& paint, const std::shared_ptr<const FontCollection>& collection);
+  tbc::val_a<QSGNode*> paintTerminalText(tbc::val_a<QSGNode*> previous, QQuickWindow& window, const ChromeTextPaint& paint, const std::shared_ptr<const FontCollection>& collection, fonts::GlyphRasterization rasterization);
 
 }

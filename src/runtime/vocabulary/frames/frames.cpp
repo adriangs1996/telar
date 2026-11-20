@@ -2,7 +2,7 @@ module telar.runtime.vocabulary.frames;
 
 namespace telar::runtime::plugins {
 
-  FrameReader::FrameReader(tbc::view<std::span<const Byte>, tbc::lt::a> input) noexcept
+  FrameReader::FrameReader(tbc::val_a<std::span<const Byte>> input) noexcept
       : remaining_(input) {}
 
   std::int64_t FrameReader::timestamp() {
@@ -13,7 +13,7 @@ namespace telar::runtime::plugins {
     return BoolByte::decode(remaining_);
   }
 
-  tbc::view<std::span<const Byte>, tbc::lt::a> FrameReader::bytes() {
+  tbc::val_a<std::span<const Byte>> FrameReader::bytes() {
     const auto length = integer<std::uint32_t>();
     if (length > remaining_.size()) {
       throw EncodingError{"Truncated tap field"};
@@ -25,7 +25,7 @@ namespace telar::runtime::plugins {
     return value;
   }
 
-  tbc::view<std::string_view, tbc::lt::a> FrameReader::text() {
+  tbc::val_a<std::string_view> FrameReader::text() {
     const auto value = bytes();
 
     return {reinterpret_cast<const char*>(value.data()), value.size()};
@@ -66,7 +66,7 @@ namespace telar::runtime::plugins {
     size_ = checkedWireSize(size_, count);
   }
 
-  FrameWriter::FrameWriter(tbc::view<std::span<Byte>, tbc::lt::a> output) noexcept
+  FrameWriter::FrameWriter(tbc::val_a<std::span<Byte>> output) noexcept
       : output_(output),
         remaining_(output) {}
 
@@ -107,7 +107,7 @@ namespace telar::runtime::plugins {
     remaining_ = remaining_.subspan(value.size());
   }
 
-  tbc::view<std::span<const Byte>, tbc::lt::a> FrameWriter::finish() const noexcept {
+  tbc::val_a<std::span<const Byte>> FrameWriter::finish() const noexcept {
     return output_.first(output_.size() - remaining_.size());
   }
 

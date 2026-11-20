@@ -44,31 +44,31 @@ export {
       // An entity in the coding asked for: storage of the allocator when a coding changed it, else the
       // input itself, which the caller keeps alive while it reads the result.
       struct Coded {
-        tbc::view<ds::Option<DecodedBody<Memory>>, tbc::lt::a> storage;
+        tbc::val_a<ds::Option<DecodedBody<Memory>>> storage;
         std::span<const std::uint8_t> input;
 
         std::span<const std::uint8_t> bytes() const noexcept;
       };
 
       // A body it produces is storage of the allocator, region `a`, not of the codec.
-      explicit HttpContentCodec(tbc::view<Memory&, tbc::lt::a> memory) noexcept;
+      explicit HttpContentCodec(tbc::mut_a<Memory> memory) noexcept;
 
-      auto decode(std::span<const std::uint8_t> input, std::string_view encoding, std::size_t limit) -> tbc::view<DecodedBody<Memory>, tbc::lt::a>;
+      auto decode(std::span<const std::uint8_t> input, std::string_view encoding, std::size_t limit) -> tbc::val_a<DecodedBody<Memory>>;
 
-      auto encode(std::span<const std::uint8_t> input, std::string_view encoding, std::size_t limit) -> tbc::view<DecodedBody<Memory>, tbc::lt::a>;
+      auto encode(std::span<const std::uint8_t> input, std::string_view encoding, std::size_t limit) -> tbc::val_a<DecodedBody<Memory>>;
 
       // As decode and encode, without copying an entity that only identity codings describe; the result
       // views `input` or the codec's allocator, region `a`.
-      auto decodeView(tbc::view<std::span<const std::uint8_t>, tbc::lt::a> input, std::string_view encoding, std::size_t limit) -> tbc::view<Coded, tbc::lt::a>;
+      auto decodeView(tbc::val_a<std::span<const std::uint8_t>> input, std::string_view encoding, std::size_t limit) -> tbc::val_a<Coded>;
 
-      auto encodeView(tbc::view<std::span<const std::uint8_t>, tbc::lt::a> input, std::string_view encoding, std::size_t limit) -> tbc::view<Coded, tbc::lt::a>;
+      auto encodeView(tbc::val_a<std::span<const std::uint8_t>> input, std::string_view encoding, std::size_t limit) -> tbc::val_a<Coded>;
 
     private:
-      auto materialize(Coded coded, bool encode) -> tbc::view<DecodedBody<Memory>, tbc::lt::a>;
+      auto materialize(Coded coded, bool encode) -> tbc::val_a<DecodedBody<Memory>>;
 
-      auto transform(tbc::view<std::span<const std::uint8_t>, tbc::lt::a> entity, std::string_view encoding, std::size_t limit, bool encode) -> tbc::view<Coded, tbc::lt::a>;
+      auto transform(tbc::val_a<std::span<const std::uint8_t>> entity, std::string_view encoding, std::size_t limit, bool encode) -> tbc::val_a<Coded>;
 
-      auto one(std::span<const std::uint8_t> input, ContentCoding selected, std::size_t limit, bool encode) -> tbc::view<DecodedBody<Memory>, tbc::lt::a>;
+      auto one(std::span<const std::uint8_t> input, ContentCoding selected, std::size_t limit, bool encode) -> tbc::val_a<DecodedBody<Memory>>;
 
       auto flate(std::span<const std::uint8_t> input, std::span<std::uint8_t> output, bool gzip, bool encode) -> std::size_t;
 
@@ -81,7 +81,7 @@ export {
       static constexpr int gzip_window_offset = 16;
       static constexpr int maximum_window_log = 23;
       static constexpr unsigned brotli_quality = 4;
-      tbc::view<Memory&, tbc::lt::a> memory_;
+      tbc::mut_a<Memory> memory_;
     };
 
     extern template class HttpContentCodec<SynchronizedAllocator<BudgetAllocator<ConcurrentMemory>>>;
@@ -104,7 +104,7 @@ export {
       class Field {
       public:
         // The field copies its name and value into storage of the allocator, region `a`.
-        Field(tbc::view<Memory&, tbc::lt::a> memory, std::string_view name, std::string_view value);
+        Field(tbc::mut_a<Memory> memory, std::string_view name, std::string_view value);
 
         auto name() const noexcept -> std::string_view;
 
@@ -113,7 +113,7 @@ export {
       private:
         auto text() const noexcept -> std::string_view;
 
-        tbc::view<SensitiveAllocation<Memory>, tbc::lt::a> storage_;
+        tbc::val_a<SensitiveAllocation<Memory>> storage_;
         std::size_t name_bytes_;
       };
 
@@ -194,13 +194,13 @@ export {
 
     class HttpMessageCodec {
     public:
-      static auto encode(tbc::view<std::span<Byte>, tbc::lt::a> output, const HttpMessageView& message) -> tbc::view<std::span<const Byte>, tbc::lt::a>;
+      static auto encode(tbc::val_a<std::span<Byte>> output, const HttpMessageView& message) -> tbc::val_a<std::span<const Byte>>;
 
       static auto decode(std::span<const Byte> input) -> HttpMessageView;
 
       // Generic over the caller's message type.
       template <typename Message>
-      TBC_GENERIC static auto encodeMessage(tbc::view<std::span<Byte>, tbc::lt::a> output, const Message& message) -> tbc::view<std::span<const Byte>, tbc::lt::a> {
+      TBC_GENERIC static auto encodeMessage(tbc::val_a<std::span<Byte>> output, const Message& message) -> tbc::val_a<std::span<const Byte>> {
         HttpMessageView view{.version = message.version, .response = message.response, .response_to_head = message.response_to_head, .stream = message.stream, .method = message.method, .target = message.target, .reason = message.reason, .scheme = message.scheme, .authority = message.authority, .status = message.status, .body = message.body};
 
         for (const auto& field : message.headers.fields()) {

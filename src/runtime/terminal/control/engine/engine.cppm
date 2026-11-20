@@ -20,9 +20,9 @@ export namespace telar::runtime::control {
   class Engine {
   public:
     // What the engine keeps of its terminal, its allocator, response queue and resources included, is region `a`.
-    explicit Engine(tbc::view<ConcurrentMemory&, tbc::lt::a> memory, tbc::view<PtyResponseQueue&, tbc::lt::a> responses, bool enabled, tbc::view<GraphicsQueryResources, tbc::lt::a> resources = {});
+    explicit Engine(tbc::mut_a<ConcurrentMemory> memory, tbc::mut_a<PtyResponseQueue> responses, bool enabled, tbc::val_a<GraphicsQueryResources> resources = {});
 
-    void bind(tbc::view<GhosttyTerminal, tbc::lt::a> terminal, tbc::view<GhosttyRenderState, tbc::lt::a> render, bool separate_media) noexcept;
+    void bind(tbc::val_a<GhosttyTerminal> terminal, tbc::val_a<GhosttyRenderState> render, bool separate_media) noexcept;
 
     void failWrite() noexcept;
 
@@ -76,15 +76,15 @@ export namespace telar::runtime::control {
     // ended it, on the primary screen; `end` is the row after them, or their last row when the
     // cursor stopped within it.
     struct Zone {
-      tbc::view<ds::Vec<std::uint8_t, ConcurrentMemory>, tbc::lt::a> bytes;
-      tbc::view<TrackedRow, tbc::lt::a> first;
-      tbc::view<TrackedRow, tbc::lt::a> end;
+      tbc::val_a<ds::Vec<std::uint8_t, ConcurrentMemory>> bytes;
+      tbc::val_a<TrackedRow> first;
+      tbc::val_a<TrackedRow> end;
       bool end_inclusive = false;
     };
 
     // The oldest zone a program closed since the last call, if any: it leaves with its bytes, in
     // the memory of region `a`, and nothing of the engine.
-    tbc::view<ds::Option<Zone>, tbc::lt::a> takeZone() noexcept;
+    tbc::val_a<ds::Option<Zone>> takeZone() noexcept;
 
     // Moves the document a program wrote since the last call into into.
     bool takeDocument(ds::Vec<std::uint8_t, ConcurrentMemory>& into) noexcept;
@@ -177,19 +177,19 @@ export namespace telar::runtime::control {
     static constexpr unsigned screen_request = 19;
     static constexpr unsigned title_request = 21;
 
-    tbc::view<Parser<ConcurrentMemory>, tbc::lt::a> parser_;
-    tbc::view<Reply<ConcurrentMemory>, tbc::lt::a> reply_;
-    tbc::view<VtState, tbc::lt::a> state_;
-    tbc::view<Checksum, tbc::lt::a> checksum_;
-    tbc::view<Clipboard, tbc::lt::a> clipboard_;
-    tbc::view<GraphicsQueries<ConcurrentMemory>, tbc::lt::a> graphics_queries_;
-    tbc::view<Reports<ConcurrentMemory>, tbc::lt::a> reports_;
+    tbc::val_a<Parser<ConcurrentMemory>> parser_;
+    tbc::val_a<Reply<ConcurrentMemory>> reply_;
+    tbc::val_a<VtState> state_;
+    tbc::val_a<Checksum> checksum_;
+    tbc::val_a<Clipboard> clipboard_;
+    tbc::val_a<GraphicsQueries<ConcurrentMemory>> graphics_queries_;
+    tbc::val_a<Reports<ConcurrentMemory>> reports_;
     ColorQueries<ConcurrentMemory> colors_;
-    tbc::view<ds::Vec<std::uint8_t, ConcurrentMemory>, tbc::lt::a> document_;
-    tbc::view<ds::Option<Zone>, tbc::lt::a> open_zone_;
-    tbc::view<ds::Vec<Zone, ConcurrentMemory>, tbc::lt::a> zones_;
+    tbc::val_a<ds::Vec<std::uint8_t, ConcurrentMemory>> document_;
+    tbc::val_a<ds::Option<Zone>> open_zone_;
+    tbc::val_a<ds::Vec<Zone, ConcurrentMemory>> zones_;
     ClientFacts facts_;
-    tbc::view<PtyResponseQueue::Producer, tbc::lt::a> responses_;
+    tbc::val_a<PtyResponseQueue::Producer> responses_;
     bool enabled_;
     bool closed_ = false;
     bool media_boundaries_ = false;

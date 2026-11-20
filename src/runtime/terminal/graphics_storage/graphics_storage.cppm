@@ -109,7 +109,7 @@ export {
 
     private:
       // The pixels are the terminal's, which the allocator maps: the view borrows the allocator, region `a`.
-      static tbc::view<ds::Option<GraphicsImageView>, tbc::lt::a> readImage(tbc::view<Memory&, tbc::lt::a> memory, GhosttyKittyGraphicsImage image);
+      static tbc::val_a<ds::Option<GraphicsImageView>> readImage(tbc::mut_a<Memory> memory, GhosttyKittyGraphicsImage image);
 
       ds::Option<GraphicsPlacement> readPlacement(GhosttyKittyGraphicsPlacementIterator iterator, GhosttyKittyGraphics storage, GhosttyTerminal terminal);
 

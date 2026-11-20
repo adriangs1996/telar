@@ -246,7 +246,7 @@ namespace telar::runtime {
     }
   }
 
-  tbc::view<ds::String<ConcurrentMemory>, tbc::lt::a> suggestionPrompt(tbc::view<ConcurrentMemory&, tbc::lt::a> memory, std::string_view cwd, std::string_view screen, std::string_view request) {
+  tbc::val_a<ds::String<ConcurrentMemory>> suggestionPrompt(tbc::mut_a<ConcurrentMemory> memory, std::string_view cwd, std::string_view screen, std::string_view request) {
     ds::String<ConcurrentMemory> prompt{memory};
 
     prompt.reserve(9 * 1024);

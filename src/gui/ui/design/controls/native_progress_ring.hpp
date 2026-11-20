@@ -53,7 +53,7 @@ namespace telar::gui::qt {
     qreal turns_ = 0;
     qreal stroke_width_ = 0;
     QColor track_color_;
-    tbc::view<AncestorGeometry, tbc::lt::self> ancestors_;
+    tbc::val_self<AncestorGeometry> ancestors_;
   };
 
 }

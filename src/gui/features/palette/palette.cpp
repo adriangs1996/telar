@@ -90,7 +90,7 @@ namespace telar::gui::features::palette {
     Access::suggestion(state).invalidate();
   }
 
-  tbc::view<Submission, tbc::lt::a> submit(tbc::view<const State&, tbc::lt::a> state, tbc::view<std::string_view, tbc::lt::a> task) noexcept {
+  tbc::val_a<Submission> submit(tbc::ref_a<State> state, tbc::val_a<std::string_view> task) noexcept {
     const auto& current = Access::suggestion(state);
     if (current.phase() == SuggestionPhase::ready) {
       return {.kind = Submission::Kind::insert, .text = current.text()};

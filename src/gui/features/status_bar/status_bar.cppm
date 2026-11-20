@@ -38,17 +38,17 @@ export namespace telar::gui::features::status_bar {
   // Inline, as the bar reads it whenever it draws.
   class TBC_HOT_PATH HostMetrics {
   public:
-    inline explicit HostMetrics(tbc::view<const State&, tbc::lt::a> state) noexcept
+    inline explicit HostMetrics(tbc::ref_a<State> state) noexcept
         : state_(&state) {}
 
-    [[nodiscard]] inline tbc::view<const SystemMetrics&, tbc::lt::a> sample() const noexcept;
+    [[nodiscard]] inline tbc::ref_a<SystemMetrics> sample() const noexcept;
 
-    [[nodiscard]] inline tbc::view<const CpuHistory&, tbc::lt::a> history() const noexcept;
+    [[nodiscard]] inline tbc::ref_a<CpuHistory> history() const noexcept;
 
     [[nodiscard]] inline MetricSeverity severity(BarMetric metric) const noexcept;
 
   private:
-    tbc::view<const State*, tbc::lt::a> state_;
+    tbc::val_a<const State*> state_;
   };
 
   // A sample from the runtime: false when it is not newer than the one the bar shows.
@@ -88,11 +88,11 @@ namespace telar::gui::features::status_bar {
     }
   };
 
-  inline tbc::view<const SystemMetrics&, tbc::lt::a> HostMetrics::sample() const noexcept {
+  inline tbc::ref_a<SystemMetrics> HostMetrics::sample() const noexcept {
     return Access::sample(*state_);
   }
 
-  inline tbc::view<const CpuHistory&, tbc::lt::a> HostMetrics::history() const noexcept {
+  inline tbc::ref_a<CpuHistory> HostMetrics::history() const noexcept {
     return Access::history(*state_);
   }
 

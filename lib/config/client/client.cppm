@@ -24,7 +24,7 @@ namespace telar::runtime::config {
     // returns how many it kept, if the table is present. Stays in the interface because it is a
     // template over the caller's callable.
     template <typename Validator>
-    TBC_GENERIC static ds::Option<std::size_t> validate(const lua::Value& table, tbc::view<LimitReach, tbc::lt::b> reach, tbc::view<LimitNotices&, tbc::lt::b> limits, Validator&& validate_definition) {
+    TBC_GENERIC static ds::Option<std::size_t> validate(const lua::Value& table, tbc::val_b<LimitReach> reach, tbc::mut_b<LimitNotices> limits, Validator&& validate_definition) {
       if (!table.present()) {
         return ds::none;
       }
@@ -42,12 +42,12 @@ namespace telar::runtime::config {
     }
 
     // The definition's title, or its name, cut to the title limit.
-    static tbc::view<std::string_view, tbc::lt::a> heading(tbc::view<std::string_view, tbc::lt::a> name, const lua::Value& definition, LimitNotices& limits);
+    static tbc::val_a<std::string_view> heading(tbc::val_a<std::string_view> name, const lua::Value& definition, LimitNotices& limits);
 
   private:
     // Keeps the first names of the table in name order and returns how many it kept, telling the
     // notices about the ones it leaves out.
-    static std::size_t sortedNames(const lua::Value& table, tbc::view<LimitReach, tbc::lt::b> reach, tbc::view<LimitNotices&, tbc::lt::b> limits, std::span<std::string_view, maximum_definitions> names);
+    static std::size_t sortedNames(const lua::Value& table, tbc::val_b<LimitReach> reach, tbc::mut_b<LimitNotices> limits, std::span<std::string_view, maximum_definitions> names);
 
     static constexpr std::size_t maximum_name_bytes = 32;
     static constexpr std::size_t maximum_title_bytes = 128;
@@ -243,10 +243,10 @@ export {
     public:
       // The definition is the one `definitions` holds now: a profile may replace it.
       // The setting views the strings the Lua state holds, region `a`.
-      [[nodiscard]] static tbc::view<ExtendedActionSetting, tbc::lt::a> read(const lua::Value& action, const ClientDefinitions& definitions);
+      [[nodiscard]] static tbc::val_a<ExtendedActionSetting> read(const lua::Value& action, const ClientDefinitions& definitions);
 
     private:
-      static tbc::view<NotificationActionSetting, tbc::lt::a> notification(const lua::Value& action);
+      static tbc::val_a<NotificationActionSetting> notification(const lua::Value& action);
 
       static constexpr ds::Array<std::string_view, 4> notification_level_names{"info", "success", "warning", "failure"};
     };
@@ -261,19 +261,19 @@ export {
     template <CommandTabStore Commands>
     class BasicActionValidator {
     public:
-      explicit BasicActionValidator(tbc::view<const ClientDefinitions&, tbc::lt::b> definitions, tbc::view<LimitNotices&, tbc::lt::b> limits, tbc::view<Commands&, tbc::lt::b> commands);
+      explicit BasicActionValidator(tbc::ref_b<ClientDefinitions> definitions, tbc::mut_b<LimitNotices> limits, tbc::mut_b<Commands> commands);
       bool validate(const lua::Value& action, bool expression = false);
       bool component(const lua::Value& action);
 
       // Validates the action and reads it; nothing when a limit drops it.
-      [[nodiscard]] tbc::view<ds::Option<ActionSetting>, tbc::lt::a> read(const lua::Value& action, bool expression = false);
+      [[nodiscard]] tbc::val_a<ds::Option<ActionSetting>> read(const lua::Value& action, bool expression = false);
 
     private:
-      static void command(const lua::Value& action, tbc::view<CommandTabView&, tbc::lt::a> command);
+      static void command(const lua::Value& action, tbc::mut_a<CommandTabView> command);
 
       // A directional action names its stem and its direction: {kind = "split-pane", direction =
       // "horizontal"} is "split-horizontal".
-      static tbc::view<std::string_view, tbc::lt::a> builtinName(const lua::Value& action, tbc::view<std::string_view, tbc::lt::a> kind);
+      static tbc::val_a<std::string_view> builtinName(const lua::Value& action, tbc::val_a<std::string_view> kind);
 
       static constexpr ds::Array<std::string_view, 57> builtin_names{"next-machine", "previous-machine", "machine-picker", "add-machine", "monitor", "process-picker", "process-terminate", "process-kill", "process-stop", "process-continue", "process-lower-priority", "process-copy-command", "process-focus-pane", "process-review-stack", "process-review-files", "process-review-logs", "scroll-pane-up", "scroll-pane-down", "split-horizontal", "split-vertical", "focus-left", "focus-right", "focus-up", "focus-down", "navigate-left", "navigate-right", "navigate-up", "navigate-down", "resize-left", "resize-right", "resize-up", "resize-down", "toggle-pane-fullscreen", "toggle-sidebar", "resize-sidebar-left", "resize-sidebar-right", "toggle-workspace-list", "leave-worktree", "forget-gone-worktrees", "new-workspace", "rename-workspace", "close-pane", "new-tab", "next-tab", "previous-tab", "rename-tab", "close-tab", "move-tab-previous", "move-tab-next", "detach", "copy-mode", "goto-picker", "history-palette", "path-picker", "suggest-command", "close-panel", "refresh-panel"};
 
@@ -284,11 +284,11 @@ export {
       void reference(const lua::Value& action, const char* field, const char* section) const;
       bool commandTab(const lua::Value& action);
       void notification(const lua::Value& action);
-      tbc::view<std::string_view, tbc::lt::a> fitted(tbc::view<std::string_view, tbc::lt::a> text, tbc::view<LimitReach, tbc::lt::b> limit);
+      tbc::val_a<std::string_view> fitted(tbc::val_a<std::string_view> text, tbc::val_b<LimitReach> limit);
 
-      tbc::view<const ClientDefinitions&, tbc::lt::b> definitions_;
-      tbc::view<LimitNotices&, tbc::lt::b> limits_;
-      tbc::view<Commands&, tbc::lt::b> commands_;
+      tbc::ref_b<ClientDefinitions> definitions_;
+      tbc::mut_b<LimitNotices> limits_;
+      tbc::mut_b<Commands> commands_;
     };
 
     using RetainedActionValidator = BasicActionValidator<RetainedCommandTabRegistry>;
@@ -400,13 +400,13 @@ export {
     class ComponentShapeReader {
     public:
       // A shape views the value's strings, which belong to the state in the value's region `a`.
-      static tbc::view<ComponentShape, tbc::lt::a> read(const lua::Value& value, unsigned inherited_priority, LimitNotices& limits);
+      static tbc::val_a<ComponentShape> read(const lua::Value& value, unsigned inherited_priority, LimitNotices& limits);
       static ComponentShape segment(const lua::Value& value, unsigned priority);
 
     private:
       static ComponentKind kind(const lua::Value& value);
       static void fields(const lua::Value& value, ComponentKind kind);
-      static tbc::view<std::string_view, tbc::lt::a> text(const lua::Value& value, const char* name, tbc::view<std::string_view, tbc::lt::a> fallback = {});
+      static tbc::val_a<std::string_view> text(const lua::Value& value, const char* name, tbc::val_a<std::string_view> fallback = {});
       static void optionalIcon(const lua::Value& value);
       static void finiteNumber(const lua::Value& value);
       static std::size_t samples(const lua::Value& value, LimitNotices& limits);
@@ -478,7 +478,7 @@ export {
       // Stays in the interface, as do the other templates of this class, because it is a template
       // over the client's colors.
       template <UiColors Colors>
-      [[nodiscard]] TBC_GENERIC static tbc::view<ComponentValues<typename Colors::Color>, tbc::lt::a> read(const lua::Value& value, const ComponentShape& shape, const Colors& colors) {
+      [[nodiscard]] TBC_GENERIC static tbc::val_a<ComponentValues<typename Colors::Color>> read(const lua::Value& value, const ComponentShape& shape, const Colors& colors) {
         ComponentValues<typename Colors::Color> result;
 
         if (shape.form == ComponentForm::text) {
@@ -578,7 +578,7 @@ export {
         return parsed;
       }
 
-      static tbc::view<ds::Option<std::string_view>, tbc::lt::a> icon(const lua::Value& value);
+      static tbc::val_a<ds::Option<std::string_view>> icon(const lua::Value& value);
       static ds::Option<UiMark> mark(const lua::Value& value);
       static ComponentMetric metric(const lua::Value& value);
       static ds::Option<double> number(const lua::Value& value);
@@ -970,7 +970,7 @@ export {
 
       static constexpr ds::Array<std::string_view, 27> layout_fields{"ui", "id", "width", "height", "min_width", "max_width", "min_height", "max_height", "grow", "align_self", "x", "y", "rotation", "scale", "opacity", "z", "background", "border", "radius", "padding", "shadow", "clip", "on_click", "url", "tooltip", "hover", "transition"};
 
-      inline void fields(tbc::view<const Value&, tbc::lt::a> value, tbc::view<Element&, tbc::lt::a> element) {
+      inline void fields(tbc::ref_a<Value> value, tbc::mut_a<Element> element) {
         switch (element.kind) {
         case Kind::row:
         case Kind::column:
@@ -1044,7 +1044,7 @@ export {
         box(value, element);
       }
 
-      inline void box(tbc::view<const Value&, tbc::lt::a> value, tbc::view<Element&, tbc::lt::a> element) {
+      inline void box(tbc::ref_a<Value> value, tbc::mut_a<Element> element) {
         if (const auto id = value.field("id"); id.present()) {
           element.key = text(id);
         }
@@ -1325,7 +1325,7 @@ export {
       };
 
       // The fields name what the base and the extra names view, region `a`.
-      inline static tbc::view<Fields, tbc::lt::a> combined(tbc::view<std::span<const std::string_view>, tbc::lt::a> base, tbc::view<std::initializer_list<std::string_view>, tbc::lt::a> extra) {
+      inline static tbc::val_a<Fields> combined(tbc::val_a<std::span<const std::string_view>> base, tbc::val_a<std::initializer_list<std::string_view>> extra) {
         Fields result;
 
         for (const auto name : base) {
@@ -1340,7 +1340,7 @@ export {
       }
 
       // The texts view the strings the Lua state holds, region `a`, as Value::string does.
-      inline tbc::view<std::string_view, tbc::lt::a> text(const Value& value) {
+      inline tbc::val_a<std::string_view> text(const Value& value) {
         if (!value.present()) {
           return {};
         }
@@ -1348,7 +1348,7 @@ export {
         return store(value.string(), value);
       }
 
-      inline tbc::view<std::string_view, tbc::lt::a> store(tbc::view<std::string_view, tbc::lt::a> text, const Value& value) {
+      inline tbc::val_a<std::string_view> store(tbc::val_a<std::string_view> text, const Value& value) {
         validateUtf8(text);
         constexpr unsigned char first_printable = 0x20;
         constexpr unsigned char delete_control = 0x7f;
@@ -1940,8 +1940,8 @@ export {
 
     private:
       // A setting views the name and the definition's strings, region `a`.
-      static tbc::view<PanelSetting, tbc::lt::a> panelSetting(tbc::view<std::string_view, tbc::lt::a> name, const lua::Value& definition, LimitNotices& limits);
-      static tbc::view<PickSetting, tbc::lt::a> pickSetting(tbc::view<std::string_view, tbc::lt::a> name, const lua::Value& definition, LimitNotices& limits);
+      static tbc::val_a<PanelSetting> panelSetting(tbc::val_a<std::string_view> name, const lua::Value& definition, LimitNotices& limits);
+      static tbc::val_a<PickSetting> pickSetting(tbc::val_a<std::string_view> name, const lua::Value& definition, LimitNotices& limits);
     };
 
   }
@@ -2056,7 +2056,7 @@ export {
       // Hands each binding to `binding` in order. Stays in the interface because it is a template
       // over the caller's callable.
       template <typename Binding>
-      [[nodiscard]] TBC_GENERIC static tbc::view<PromptSettings, tbc::lt::a> read(const lua::Value& table, Binding&& binding) {
+      [[nodiscard]] TBC_GENERIC static tbc::val_a<PromptSettings> read(const lua::Value& table, Binding&& binding) {
         PromptSettings settings;
 
         if (!table.present()) {
@@ -2076,7 +2076,7 @@ export {
 
     private:
       // Checks the table's fields and reads its mode; returns its bindings.
-      static tbc::view<lua::Value, tbc::lt::a> begin(const lua::Value& table, PromptSettings& settings);
+      static tbc::val_a<lua::Value> begin(const lua::Value& table, PromptSettings& settings);
       static std::size_t countBindings(const lua::Value& bindings, PromptSettings& settings);
       static PromptBindingSetting readBinding(const lua::Value& entry);
       static void finish(const lua::Value& table, PromptSettings& settings);
@@ -2170,7 +2170,7 @@ export {
       // the other templates of this class, because it is a template over the caller's callable; the
       // rest of the table is read out of line.
       template <typename Binding>
-      [[nodiscard]] TBC_GENERIC static tbc::view<ClientSettings, tbc::lt::a> read(const lua::Value& client, Binding&& binding) {
+      [[nodiscard]] TBC_GENERIC static tbc::val_a<ClientSettings> read(const lua::Value& client, Binding&& binding) {
         auto settings = readSettings(client);
 
         if (client.present()) {
@@ -2210,10 +2210,10 @@ export {
 
     private:
       // The settings of the table but its prompt.
-      static tbc::view<ClientSettings, tbc::lt::a> readSettings(const lua::Value& client);
+      static tbc::val_a<ClientSettings> readSettings(const lua::Value& client);
       // The index of the slot `name` names in component_slots.
       static std::size_t slot(std::string_view name, const lua::Value& entry);
-      static tbc::view<ds::Option<std::string_view>, tbc::lt::a> printableText(const lua::Value& value, std::size_t maximum, bool allow_empty);
+      static tbc::val_a<ds::Option<std::string_view>> printableText(const lua::Value& value, std::size_t maximum, bool allow_empty);
       static void sidebar(const lua::Value& table, ClientSettings& settings);
       static void sound(const lua::Value& table, ClientSettings::Sound& sound);
       static void notifications(const lua::Value& table, ClientSettings& settings);

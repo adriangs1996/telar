@@ -10,7 +10,7 @@ import telar.base.memory.allocators;
 
 namespace telar::gui::features::prompt {
 
-  tbc::view<Choice, tbc::lt::a> Choice::clone() const {
+  tbc::val_a<Choice> Choice::clone() const {
     return {.text = text.clone(), .description = description.clone(), .directory = directory};
   }
 
@@ -24,7 +24,7 @@ namespace telar::gui::features::prompt {
         providers(memory),
         provider_prefix(memory) {}
 
-  tbc::view<ds::Option<CompletionContext>, tbc::lt::a> completionContext(tbc::view<Memory&, tbc::lt::a> memory, std::string_view text, std::size_t cursor, shell::Syntax syntax) {
+  tbc::val_a<ds::Option<CompletionContext>> completionContext(tbc::mut_a<Memory> memory, std::string_view text, std::size_t cursor, shell::Syntax syntax) {
     ds::Vec<shell::Token, Memory> tokens{memory};
 
     tokens.resize(text.size() + 1);
@@ -61,7 +61,7 @@ namespace telar::gui::features::prompt {
     return std::move(context);
   }
 
-  tbc::view<Completion, tbc::lt::a> complete(tbc::view<Memory&, tbc::lt::a> memory, const CompletionContext& context, const ebnf::command_spec* spec, ebnf::match_scratch& scratch, History history) {
+  tbc::val_a<Completion> complete(tbc::mut_a<Memory> memory, const CompletionContext& context, const ebnf::command_spec* spec, ebnf::match_scratch& scratch, History history) {
     Completion result{memory};
     const auto add = [&](std::string_view text, std::string_view description) {
       if (text.starts_with(context.partial.view()) && std::ranges::none_of(result.choices, [&](const Choice& choice) {
@@ -118,7 +118,7 @@ namespace telar::gui::features::prompt {
     return result;
   }
 
-  tbc::view<ds::String<Memory>, tbc::lt::a> quoteWord(tbc::view<Memory&, tbc::lt::a> memory, std::string_view text, shell::Dialect dialect) {
+  tbc::val_a<ds::String<Memory>> quoteWord(tbc::mut_a<Memory> memory, std::string_view text, shell::Dialect dialect) {
     constexpr std::string_view special = " \t\n'\"\\$`;&|<>()[]{}*?!#";
     ds::String<Memory> result{memory};
 

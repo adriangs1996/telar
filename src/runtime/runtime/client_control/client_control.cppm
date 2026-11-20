@@ -624,7 +624,7 @@ export {
       using Request = MonitorWork;
       using Result = MonitorOutcome;
 
-      inline MonitorReader(tbc::view<ConcurrentMemory&, tbc::lt::a> memory, tbc::view<const ProcessInspector&, tbc::lt::a> inspector, Processes processes, Host host)
+      inline MonitorReader(tbc::mut_a<ConcurrentMemory> memory, tbc::ref_a<ProcessInspector> inspector, Processes processes, Host host)
           : inspector_(inspector),
             processes_(std::move(processes)),
             host_(std::move(host)),
@@ -729,11 +729,11 @@ export {
         return {.failure = FailureCode::internal, .message = "The system refused the request"};
       }
 
-      tbc::view<ProcessInspector, tbc::lt::a> inspector_;
+      tbc::val_a<ProcessInspector> inspector_;
       Processes processes_;
       Host host_;
-      tbc::view<MonitorSampler, tbc::lt::a> sampler_;
-      tbc::view<ds::Vec<ProcessRecord, ConcurrentMemory>, tbc::lt::a> records_;
+      tbc::val_a<MonitorSampler> sampler_;
+      tbc::val_a<ds::Vec<ProcessRecord, ConcurrentMemory>> records_;
       HostDetail detail_{};
     };
 
@@ -749,7 +749,7 @@ export {
       static constexpr auto warm_interval = std::chrono::seconds{1};
       static constexpr auto idle_after = std::chrono::seconds{10};
 
-      inline MonitorService(tbc::view<ConcurrentMemory&, tbc::lt::a> memory, tbc::view<const ProcessInspector&, tbc::lt::a> inspector, Processes processes, Host host)
+      inline MonitorService(tbc::mut_a<ConcurrentMemory> memory, tbc::ref_a<ProcessInspector> inspector, Processes processes, Host host)
           : worker_(std::in_place, memory, inspector, std::move(processes), std::move(host)) {}
 
       inline void query(std::uint64_t client, const QueryMonitor& message, Clock::time_point now) {
@@ -1090,7 +1090,7 @@ export {
       }
 
       // The request shares the observers of region `a`.
-      inline static void enqueueRetired(tbc::view<RuntimeModel&, tbc::lt::a> model, tbc::view<typename Processor::Request&, tbc::lt::a> request) noexcept {
+      inline static void enqueueRetired(tbc::mut_a<RuntimeModel> model, tbc::mut_a<typename Processor::Request> request) noexcept {
         auto* link = &model.retired_observers;
 
         while (*link && request.count < request.entries.size()) {
@@ -1113,7 +1113,7 @@ export {
 
       // A sole pane discovers its foreground group on the worker; others read it here. A program's
       // listening ports are read again every `ports_interval`, output or not.
-      inline void enqueue(tbc::view<typename Processor::Request&, tbc::lt::a> request, const Agents& agents, tbc::view<Pane&, tbc::lt::a> pane, bool sole, std::chrono::steady_clock::time_point now) {
+      inline void enqueue(tbc::mut_a<typename Processor::Request> request, const Agents& agents, tbc::mut_a<Pane> pane, bool sole, std::chrono::steady_clock::time_point now) {
         if (auto drop = pane.observer->takeDrop()) {
           limits_.report(*drop);
         }

@@ -36,6 +36,6 @@ namespace telar::gui::qt {
   };
 
   // The result reuses the previous node or is a new one the caller adopts.
-  tbc::view<QSGNode*, tbc::lt::a> paintChromeIcon(tbc::view<QSGNode*, tbc::lt::a> previous, QQuickWindow& window, const ChromeIconPaint& paint);
+  tbc::val_a<QSGNode*> paintChromeIcon(tbc::val_a<QSGNode*> previous, QQuickWindow& window, const ChromeIconPaint& paint);
 
 }

@@ -132,7 +132,7 @@ namespace telar::runtime::cli::hooks {
     }
   }
 
-  tbc::view<std::string_view, tbc::lt::a> Object::decoded(tbc::view<const Member&, tbc::lt::a> member) const {
+  tbc::val_a<std::string_view> Object::decoded(tbc::ref_a<Member> member) const {
     checkUnique(member);
     if (!member.text) {
       // Not a string: reading it as one fails as it always did.

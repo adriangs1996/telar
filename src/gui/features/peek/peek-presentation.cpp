@@ -13,7 +13,7 @@ import telar.base.ds;
 namespace telar::gui::features::peek {
 
   template <Allocator Memory>
-  tbc::view<std::string_view, tbc::lt::a> PeekLabels::title(tbc::view<const Agent<Memory>&, tbc::lt::a> agent, tbc::view<const Worktree<Memory>*, tbc::lt::a> task) noexcept {
+  tbc::val_a<std::string_view> PeekLabels::title(tbc::ref_a<Agent<Memory>> agent, tbc::val_a<const Worktree<Memory>*> task) noexcept {
     if (task == nullptr) {
       return AgentCardLabels::title({}, agent.display_name);
     }
@@ -63,8 +63,8 @@ namespace telar::gui::features::peek {
     append(storage, {digits.data(), static_cast<std::size_t>(result.ptr - digits.data())});
   }
 
-  template tbc::view<std::string_view, tbc::lt::a> PeekLabels::title<Memory>(tbc::view<const Agent<Memory>&, tbc::lt::a> agent, tbc::view<const Worktree<Memory>*, tbc::lt::a> task) noexcept;
-  template tbc::view<std::string_view, tbc::lt::a> PeekLabels::title<ConcurrentMemory>(tbc::view<const Agent<ConcurrentMemory>&, tbc::lt::a> agent, tbc::view<const Worktree<ConcurrentMemory>*, tbc::lt::a> task) noexcept;
+  template tbc::val_a<std::string_view> PeekLabels::title<Memory>(tbc::ref_a<Agent<Memory>> agent, tbc::val_a<const Worktree<Memory>*> task) noexcept;
+  template tbc::val_a<std::string_view> PeekLabels::title<ConcurrentMemory>(tbc::ref_a<Agent<ConcurrentMemory>> agent, tbc::val_a<const Worktree<ConcurrentMemory>*> task) noexcept;
   template PeekLabels::Facts PeekLabels::facts<Memory>(const Agent<Memory>& agent, const Worktree<Memory>* task);
   template PeekLabels::Facts PeekLabels::facts<ConcurrentMemory>(const Agent<ConcurrentMemory>& agent, const Worktree<ConcurrentMemory>* task);
 

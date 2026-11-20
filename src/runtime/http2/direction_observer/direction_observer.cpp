@@ -63,11 +63,11 @@ namespace telar::runtime {
     padding_ = 0;
   }
 
-  tbc::view<ds::Option<std::span<const std::uint8_t>>, tbc::lt::a> Http2PayloadFragment::body(tbc::view<const Http2FrameEvent&, tbc::lt::a> event) noexcept {
+  tbc::val_a<ds::Option<std::span<const std::uint8_t>>> Http2PayloadFragment::body(tbc::ref_a<Http2FrameEvent> event) noexcept {
     return extract(event, 0);
   }
 
-  tbc::view<ds::Option<std::span<const std::uint8_t>>, tbc::lt::a> Http2PayloadFragment::headers(tbc::view<const Http2FrameEvent&, tbc::lt::a> event) noexcept {
+  tbc::val_a<ds::Option<std::span<const std::uint8_t>>> Http2PayloadFragment::headers(tbc::ref_a<Http2FrameEvent> event) noexcept {
     std::size_t prefix = 0;
 
     if (event.frame.kind == Http2FrameKind::headers && event.frame.has(Http2Flag::priority)) {
@@ -79,7 +79,7 @@ namespace telar::runtime {
     return extract(event, prefix);
   }
 
-  tbc::view<ds::Option<std::span<const std::uint8_t>>, tbc::lt::a> Http2PayloadFragment::extract(tbc::view<const Http2FrameEvent&, tbc::lt::a> event, std::size_t prefix) noexcept {
+  tbc::val_a<ds::Option<std::span<const std::uint8_t>>> Http2PayloadFragment::extract(tbc::ref_a<Http2FrameEvent> event, std::size_t prefix) noexcept {
     if (event.frame.has(Http2Flag::padded)) {
       ++prefix;
       if (event.offset == 0 && !event.bytes.empty()) {

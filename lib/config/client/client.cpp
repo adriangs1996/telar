@@ -8,7 +8,7 @@ import telar.base.ds;
 
 namespace telar::runtime::config {
 
-  std::size_t NamedDefinitionsValidator::sortedNames(const lua::Value& table, tbc::view<LimitReach, tbc::lt::b> reach, tbc::view<LimitNotices&, tbc::lt::b> limits, std::span<std::string_view, maximum_definitions> names) {
+  std::size_t NamedDefinitionsValidator::sortedNames(const lua::Value& table, tbc::val_b<LimitReach> reach, tbc::mut_b<LimitNotices> limits, std::span<std::string_view, maximum_definitions> names) {
     std::size_t kept = 0;
     std::size_t total = 0;
 
@@ -35,7 +35,7 @@ namespace telar::runtime::config {
     return kept;
   }
 
-  tbc::view<std::string_view, tbc::lt::a> NamedDefinitionsValidator::heading(tbc::view<std::string_view, tbc::lt::a> name, const lua::Value& definition, LimitNotices& limits) {
+  tbc::val_a<std::string_view> NamedDefinitionsValidator::heading(tbc::val_a<std::string_view> name, const lua::Value& definition, LimitNotices& limits) {
     if (name.empty() || name.size() > maximum_name_bytes || !std::ranges::all_of(name, [](unsigned char byte) {
           return (byte >= 'a' && byte <= 'z') || (byte >= 'A' && byte <= 'Z') || (byte >= '0' && byte <= '9') || byte == '_' || byte == '-';
         })) {
@@ -304,7 +304,7 @@ namespace telar::runtime::config {
     }
   }
 
-  tbc::view<ExtendedActionSetting, tbc::lt::a> ExtendedActionReader::read(const lua::Value& action, const ClientDefinitions& definitions) {
+  tbc::val_a<ExtendedActionSetting> ExtendedActionReader::read(const lua::Value& action, const ClientDefinitions& definitions) {
     const auto kind = action.field("kind").string();
     if (kind == "notification") {
       return notification(action);
@@ -324,7 +324,7 @@ namespace telar::runtime::config {
     return DefinitionActionSetting{.panel = panel, .index = *index};
   }
 
-  tbc::view<NotificationActionSetting, tbc::lt::a> ExtendedActionReader::notification(const lua::Value& action) {
+  tbc::val_a<NotificationActionSetting> ExtendedActionReader::notification(const lua::Value& action) {
     NotificationActionSetting result;
 
     result.title = utf8Prefix(action.field("title").string(), max_notification_title_bytes);
@@ -348,7 +348,7 @@ namespace telar::runtime::config {
   }
 
   template <CommandTabStore Commands>
-  BasicActionValidator<Commands>::BasicActionValidator(tbc::view<const ClientDefinitions&, tbc::lt::b> definitions, tbc::view<LimitNotices&, tbc::lt::b> limits, tbc::view<Commands&, tbc::lt::b> commands)
+  BasicActionValidator<Commands>::BasicActionValidator(tbc::ref_b<ClientDefinitions> definitions, tbc::mut_b<LimitNotices> limits, tbc::mut_b<Commands> commands)
       : definitions_(definitions),
         limits_(limits),
         commands_(commands) {}
@@ -416,7 +416,7 @@ namespace telar::runtime::config {
   }
 
   template <CommandTabStore Commands>
-  tbc::view<ds::Option<ActionSetting>, tbc::lt::a> BasicActionValidator<Commands>::read(const lua::Value& action, bool expression) {
+  tbc::val_a<ds::Option<ActionSetting>> BasicActionValidator<Commands>::read(const lua::Value& action, bool expression) {
     if (!validate(action, expression)) {
       return ds::none;
     }
@@ -459,7 +459,7 @@ namespace telar::runtime::config {
   }
 
   template <CommandTabStore Commands>
-  void BasicActionValidator<Commands>::command(const lua::Value& action, tbc::view<CommandTabView&, tbc::lt::a> command) {
+  void BasicActionValidator<Commands>::command(const lua::Value& action, tbc::mut_a<CommandTabView> command) {
     const auto arguments = action.field("command");
 
     command.count = arguments.listLength();
@@ -473,7 +473,7 @@ namespace telar::runtime::config {
   }
 
   template <CommandTabStore Commands>
-  tbc::view<std::string_view, tbc::lt::a> BasicActionValidator<Commands>::builtinName(const lua::Value& action, tbc::view<std::string_view, tbc::lt::a> kind) {
+  tbc::val_a<std::string_view> BasicActionValidator<Commands>::builtinName(const lua::Value& action, tbc::val_a<std::string_view> kind) {
     constexpr auto stems = ds::Array<std::pair<std::string_view, std::string_view>, 7>{{
         {"scroll-pane", "scroll-pane-"},
         {"split-pane", "split-"},
@@ -634,7 +634,7 @@ namespace telar::runtime::config {
   }
 
   template <CommandTabStore Commands>
-  tbc::view<std::string_view, tbc::lt::a> BasicActionValidator<Commands>::fitted(tbc::view<std::string_view, tbc::lt::a> text, tbc::view<LimitReach, tbc::lt::b> limit) {
+  tbc::val_a<std::string_view> BasicActionValidator<Commands>::fitted(tbc::val_a<std::string_view> text, tbc::val_b<LimitReach> limit) {
     if (text.size() > limit.value) {
       limit.requested = text.size();
       limits_.add(limit);
@@ -789,7 +789,7 @@ namespace telar::runtime::config {
     }
   };
 
-  tbc::view<ComponentShape, tbc::lt::a> ComponentShapeReader::read(const lua::Value& value, unsigned inherited_priority, LimitNotices& limits) {
+  tbc::val_a<ComponentShape> ComponentShapeReader::read(const lua::Value& value, unsigned inherited_priority, LimitNotices& limits) {
     ComponentShape shape;
 
     shape.kind = kind(value.field("ui"));
@@ -959,7 +959,7 @@ namespace telar::runtime::config {
     }
   }
 
-  tbc::view<std::string_view, tbc::lt::a> ComponentShapeReader::text(const lua::Value& value, const char* name, tbc::view<std::string_view, tbc::lt::a> fallback) {
+  tbc::val_a<std::string_view> ComponentShapeReader::text(const lua::Value& value, const char* name, tbc::val_a<std::string_view> fallback) {
     const auto field = value.field(name);
 
     return field.present() ? field.string() : fallback;
@@ -1009,7 +1009,7 @@ namespace telar::runtime::config {
     return static_cast<ComponentTone>(found - component_tone_names.begin());
   }
 
-  tbc::view<ds::Option<std::string_view>, tbc::lt::a> ComponentValuesReader::icon(const lua::Value& value) {
+  tbc::val_a<ds::Option<std::string_view>> ComponentValuesReader::icon(const lua::Value& value) {
     if (!value.present()) {
       return ds::none;
     }
@@ -2006,7 +2006,7 @@ namespace telar::runtime::config {
     bool text_full_ = false;
   };
 
-  tbc::view<PanelSetting, tbc::lt::a> ClientDefinitionsReader::panelSetting(tbc::view<std::string_view, tbc::lt::a> name, const lua::Value& definition, LimitNotices& limits) {
+  tbc::val_a<PanelSetting> ClientDefinitionsReader::panelSetting(tbc::val_a<std::string_view> name, const lua::Value& definition, LimitNotices& limits) {
     definition.onlyFields({"panel_kind", "title", "mark", "icon", "width", "source", "refresh"});
     PanelSetting setting;
 
@@ -2028,7 +2028,7 @@ namespace telar::runtime::config {
     return setting;
   }
 
-  tbc::view<PickSetting, tbc::lt::a> ClientDefinitionsReader::pickSetting(tbc::view<std::string_view, tbc::lt::a> name, const lua::Value& definition, LimitNotices& limits) {
+  tbc::val_a<PickSetting> ClientDefinitionsReader::pickSetting(tbc::val_a<std::string_view> name, const lua::Value& definition, LimitNotices& limits) {
     definition.onlyFields({"pick_kind", "title", "command", "items", "on_select", "timeout_ms", "refresh"});
     PickSetting setting;
 
@@ -2062,7 +2062,7 @@ namespace telar::runtime::config {
     return setting;
   }
 
-  tbc::view<lua::Value, tbc::lt::a> PromptReader::begin(const lua::Value& table, PromptSettings& settings) {
+  tbc::val_a<lua::Value> PromptReader::begin(const lua::Value& table, PromptSettings& settings) {
     table.onlyFields({"mode", "skin", "motion", "ghost", "keymap", "max_lines", "bindings"});
     settings.mode = optionalChoice<PromptMode>(table.field("mode"), prompt_mode_names);
     return table.field("bindings");
@@ -2106,7 +2106,7 @@ namespace telar::runtime::config {
     }
   }
 
-  tbc::view<ClientSettings, tbc::lt::a> ClientReader::readSettings(const lua::Value& client) {
+  tbc::val_a<ClientSettings> ClientReader::readSettings(const lua::Value& client) {
     ClientSettings settings;
 
     if (!client.present()) {
@@ -2168,7 +2168,7 @@ namespace telar::runtime::config {
     return settings;
   }
 
-  tbc::view<ds::Option<std::string_view>, tbc::lt::a> ClientReader::printableText(const lua::Value& value, std::size_t maximum, bool allow_empty) {
+  tbc::val_a<ds::Option<std::string_view>> ClientReader::printableText(const lua::Value& value, std::size_t maximum, bool allow_empty) {
     if (!value.present()) {
       return ds::none;
     }

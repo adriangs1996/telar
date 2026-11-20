@@ -168,7 +168,7 @@ export {
     class CaptureHalf {
     public:
       // The half keeps the allocator and the quota, region `a`, and copies what it starts from.
-      explicit CaptureHalf(tbc::view<ConcurrentMemory&, tbc::lt::a> memory, tbc::view<CaptureQuota&, tbc::lt::a> quota, const ProxyCaptureLimits& limits, CaptureStart start);
+      explicit CaptureHalf(tbc::mut_a<ConcurrentMemory> memory, tbc::mut_a<CaptureQuota> quota, const ProxyCaptureLimits& limits, CaptureStart start);
 
       bool append(CapturePart part, std::span<const std::uint8_t> input) noexcept;
 
@@ -215,8 +215,8 @@ export {
       std::uint16_t status_code = 0;
       bool body_decoded = false;
       CaptureTruncation truncation;
-      tbc::view<CaptureBuffer, tbc::lt::a> head;
-      tbc::view<CaptureBuffer, tbc::lt::a> body;
+      tbc::val_a<CaptureBuffer> head;
+      tbc::val_a<CaptureBuffer> body;
 
     private:
       template <std::size_t Capacity>
@@ -242,12 +242,12 @@ export {
       using Half = ds::Box<CaptureHalf, ConcurrentMemory>;
 
       // The halves keep the quota they were captured under, region `a`.
-      explicit CapturedExchange(tbc::view<ConcurrentMemory&, tbc::lt::a> memory) noexcept;
+      explicit CapturedExchange(tbc::mut_a<ConcurrentMemory> memory) noexcept;
 
-      void include(tbc::view<Half, tbc::lt::a> half) noexcept;
+      void include(tbc::val_a<Half> half) noexcept;
 
-      tbc::view<Half, tbc::lt::a> request;
-      tbc::view<Half, tbc::lt::a> response;
+      tbc::val_a<Half> request;
+      tbc::val_a<Half> response;
     };
 
   }

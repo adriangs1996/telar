@@ -96,11 +96,11 @@ export {
       static constexpr std::size_t prefix_bytes = sizeof(std::uint32_t) + sizeof(std::uint64_t);
       static constexpr std::size_t greeting_bytes = sizeof(std::uint32_t) + (2 * sizeof(Byte)) + sizeof(std::uint32_t);
 
-      static auto greeting(tbc::view<std::span<Byte>, tbc::lt::a> output, Role role, std::string_view filter = {}, Selection selection = Selection::packets) -> tbc::view<std::span<const Byte>, tbc::lt::a>;
+      static auto greeting(tbc::val_a<std::span<Byte>> output, Role role, std::string_view filter = {}, Selection selection = Selection::packets) -> tbc::val_a<std::span<const Byte>>;
 
       static std::size_t encodedSize(const Event& event);
 
-      static auto encode(tbc::view<std::span<Byte>, tbc::lt::a> output, const Event& event) -> tbc::view<std::span<const Byte>, tbc::lt::a>;
+      static auto encode(tbc::val_a<std::span<Byte>> output, const Event& event) -> tbc::val_a<std::span<const Byte>>;
 
       static auto decode(std::span<const Byte> input) -> Event;
 
@@ -179,7 +179,7 @@ export {
       static void write(plugins::FrameWriter& writer, const Request& request);
 
       // The request views the reader's frame.
-      static tbc::view<Request, tbc::lt::a> read(plugins::FrameReader& reader);
+      static tbc::val_a<Request> read(plugins::FrameReader& reader);
 
       static void header(plugins::FrameWriter& writer, const Page& page);
 
@@ -298,11 +298,11 @@ export {
 
       static ds::Array<Byte, prefix_bytes> prefix(std::size_t size);
 
-      static tbc::view<std::span<const Byte>, tbc::lt::a> encode(tbc::view<std::span<Byte>, tbc::lt::a> output, const Request& request);
+      static tbc::val_a<std::span<const Byte>> encode(tbc::val_a<std::span<Byte>> output, const Request& request);
 
       static Request request(std::span<const Byte> bytes);
 
-      static tbc::view<std::span<const Byte>, tbc::lt::a> encode(tbc::view<std::span<Byte>, tbc::lt::a> output, const Reply& reply);
+      static tbc::val_a<std::span<const Byte>> encode(tbc::val_a<std::span<Byte>> output, const Reply& reply);
 
       static Reply reply(std::span<const Byte> bytes);
 
@@ -414,7 +414,7 @@ export {
 
     class FlowCodec {
     public:
-      static auto encode(tbc::view<std::span<Byte>, tbc::lt::a> output, const FlowEvent& event) -> tbc::view<std::span<const Byte>, tbc::lt::a>;
+      static auto encode(tbc::val_a<std::span<Byte>> output, const FlowEvent& event) -> tbc::val_a<std::span<const Byte>>;
 
       static FlowEvent decode(std::span<const Byte> input);
     };

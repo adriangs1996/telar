@@ -621,7 +621,7 @@ namespace telar::runtime::machines {
   }
 
   template <std::unsigned_integral Number, Allocator Memory>
-  tbc::view<Number, tbc::lt::a> JsonUnsignedInteger::parse(tbc::view<Memory&, tbc::lt::a> memory, std::string_view text, bool allow_float) {
+  tbc::val_a<Number> JsonUnsignedInteger::parse(tbc::mut_a<Memory> memory, std::string_view text, bool allow_float) {
     static_assert(std::numeric_limits<Number>::digits <= std::numeric_limits<std::uint16_t>::digits);
 
     const bool floating = !integerSyntax(text);
@@ -877,7 +877,7 @@ namespace telar::runtime::machines {
   }
 
   template <Allocator Memory>
-  tbc::view<MachineProfiles, tbc::lt::a> MachineProfileCodec::parse(tbc::view<Memory&, tbc::lt::a> memory, std::string_view source) {
+  tbc::val_a<MachineProfiles> MachineProfileCodec::parse(tbc::mut_a<Memory> memory, std::string_view source) {
     try {
       validateUtf8(source);
       const runtime::JsonFields fields{memory, runtime::JsonValue::parse(source), file_fields};
@@ -922,7 +922,7 @@ namespace telar::runtime::machines {
   }
 
   template <Allocator Memory>
-  tbc::view<ds::String<Memory>, tbc::lt::a> MachineProfileCodec::format(tbc::view<Memory&, tbc::lt::a> memory, const MachineProfiles& profiles) {
+  tbc::val_a<ds::String<Memory>> MachineProfileCodec::format(tbc::mut_a<Memory> memory, const MachineProfiles& profiles) {
     ds::String<Memory> output{memory};
 
     output.append(profiles.version() == MachineProfiles::plain_format_version ? "{\"version\":1" : "{\"version\":2");
@@ -1018,7 +1018,7 @@ namespace telar::runtime::machines {
   }
 
   template <Allocator Memory>
-  tbc::view<ds::String<Memory>, tbc::lt::a> MachineProfileCodec::readString(tbc::view<Memory&, tbc::lt::a> memory, const runtime::JsonValue& value) {
+  tbc::val_a<ds::String<Memory>> MachineProfileCodec::readString(tbc::mut_a<Memory> memory, const runtime::JsonValue& value) {
     ds::String<Memory> text{memory};
 
     value.string(text);

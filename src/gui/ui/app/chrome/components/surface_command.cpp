@@ -105,7 +105,7 @@ namespace telar::gui::qt {
     return running_;
   }
 
-  void SurfaceCommand::start(const SurfaceCommandRequest& request, tbc::view<Completion, tbc::lt::a> complete) {
+  void SurfaceCommand::start(const SurfaceCommandRequest& request, tbc::val_a<Completion> complete) {
     if (running_) {
       throw std::logic_error{"A surface command is already running"};
     }

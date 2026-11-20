@@ -86,7 +86,7 @@ namespace telar::gui::features::window {
     return close + 1;
   }
 
-  tbc::view<ds::Option<std::string_view>, tbc::lt::a> WindowTitle::token(std::string_view name, tbc::view<Tokens, tbc::lt::a> values) noexcept {
+  tbc::val_a<ds::Option<std::string_view>> WindowTitle::token(std::string_view name, tbc::val_a<Tokens> values) noexcept {
     if (name == "workspace") {
       return values.workspace;
     }

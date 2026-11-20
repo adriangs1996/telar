@@ -96,7 +96,7 @@ export {
     class Command {
     public:
       // Copies the launch; it keeps only its allocator, region `a`.
-      explicit Command(tbc::view<Memory&, tbc::lt::a> memory, const Launch& launch, CommandPurpose purpose = CommandPurpose::terminal);
+      explicit Command(tbc::mut_a<Memory> memory, const Launch& launch, CommandPurpose purpose = CommandPurpose::terminal);
 
       Command(const Command&) = delete;
       Command& operator=(const Command&) = delete;
@@ -121,17 +121,17 @@ export {
       void resolveExecutable();
 
       using SensitiveMemory = ErasingAllocator<Memory>;
-      tbc::view<ds::String<Memory>, tbc::lt::a> executable_;
-      tbc::view<ds::String<Memory>, tbc::lt::a> cwd_;
-      tbc::view<ds::Vec<ds::String<Memory>, Memory>, tbc::lt::a> arguments_;
-      tbc::view<ds::Vec<ds::String<Memory>, Memory>, tbc::lt::a> spawn_arguments_;
-      tbc::view<SensitiveMemory, tbc::lt::a> environment_memory_;
+      tbc::val_a<ds::String<Memory>> executable_;
+      tbc::val_a<ds::String<Memory>> cwd_;
+      tbc::val_a<ds::Vec<ds::String<Memory>, Memory>> arguments_;
+      tbc::val_a<ds::Vec<ds::String<Memory>, Memory>> spawn_arguments_;
+      tbc::val_a<SensitiveMemory> environment_memory_;
       // The environment allocates from the sibling allocator, and the spawn arrays point into the
       // command's own strings, so a command keeps its address.
-      tbc::view<ds::Vec<ds::String<SensitiveMemory>, SensitiveMemory>, tbc::lt::self> environment_;
-      tbc::view<ds::Vec<const char*, Memory>, tbc::lt::self> argument_pointers_;
-      tbc::view<ds::Vec<const char*, Memory>, tbc::lt::self> environment_pointers_;
-      tbc::view<Memory&, tbc::lt::a> memory_;
+      tbc::val_self<ds::Vec<ds::String<SensitiveMemory>, SensitiveMemory>> environment_;
+      tbc::val_self<ds::Vec<const char*, Memory>> argument_pointers_;
+      tbc::val_self<ds::Vec<const char*, Memory>> environment_pointers_;
+      tbc::mut_a<Memory> memory_;
       bool restorable_;
     };
 
