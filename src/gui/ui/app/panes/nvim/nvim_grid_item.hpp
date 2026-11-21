@@ -89,6 +89,8 @@ namespace telar::gui::qt {
     // The grid's `moved` when the item last looked: its change is a scroll to slide.
     ds::Option<std::int64_t> moved_seen_;
     QMetaObject::Connection frames_;
+    // Whether the window's frames are counted for a slide.
+    bool counting_ = false;
     QList<TerminalRow> drawn_rows_;
     qreal shift_ = 0;
     // The revision of each row when its fonts were last asked for.

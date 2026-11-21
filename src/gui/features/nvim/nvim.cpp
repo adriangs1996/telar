@@ -99,6 +99,7 @@ namespace telar::gui::features::nvim {
       }
 
       const bool above = scroll.rows > 0;
+
       if (departed.columns != columns || departed.capacity != rows) {
         departed.cells.clear();
         departed.cells.resize(static_cast<std::size_t>(rows) * columns);

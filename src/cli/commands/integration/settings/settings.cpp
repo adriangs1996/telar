@@ -650,7 +650,8 @@ description: Delegate tasks to agents in their own Git worktrees and steer them 
     constexpr ds::Array<const char*, 3> actions{"install", "uninstall", "status"};
     // `sh -c SCRIPT sh ACTION`. Each word is a literal, which ends in the NUL execv reads to;
     // execv takes them as if it would change them, and does not.
-    ds::Array<char*, 6> words{
+    constexpr std::size_t word_count = 6;
+    ds::Array<char*, word_count> words{
         const_cast<char*>("sh"),                                        // NOLINT(cppcoreguidelines-pro-type-const-cast): see above
         const_cast<char*>("-c"),                                        // NOLINT(cppcoreguidelines-pro-type-const-cast): see above
         const_cast<char*>(assets::editor_installer.data()),             // NOLINT(cppcoreguidelines-pro-type-const-cast): see above

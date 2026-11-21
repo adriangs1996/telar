@@ -10,10 +10,23 @@ on its screen crosses the connection.
 
 Open one from the palette with **New editor** or **New editor tab**, or with the prefix and
 `e` or `E`. In a configuration the actions are `telar.action.new_editor()` and
-`telar.action.new_editor_tab()`. The editor starts in the directory of the focused pane.
+`telar.action.new_editor_tab()`. The editor starts in the directory of the focused pane. The
+pane's header says the file it shows and the mode it is in.
 
-The runtime's machine needs Neovim 0.11 or later on the `PATH` the runtime was started with.
-Neovim reads its usual configuration.
+## Open a file in it
+
+```sh
+telar edit src/main.cpp:42
+```
+
+`telar edit FILE[:LINE]` shows the file in the editor pane of a tab and gives that pane the
+focus. The tab is the one of the pane the command runs in; a tab without an editor pane gets
+one beside it. From outside a pane, `--client ID` names the window, and without it the window
+last typed in takes the request.
+
+A file path clicked in a terminal opens the same way when the tab has an editor pane. When it
+has none, an editor pane is made for the file if your editor is Neovim, and the link opens as
+before otherwise: in the editor `editor` or `$EDITOR` names.
 
 ## What the window draws itself
 
@@ -23,7 +36,7 @@ Neovim leaves these to its UI, and the window draws each as one of its own surfa
 
   ![The command line with its completion menu](images/telar-editor-cmdline.png)
 
-- The completion menu while typing.
+- The completion menu while typing. A click on an entry takes it.
 - Messages, as notices that go away by themselves. An error stays longer, and none waits for
   a key.
 - Tab pages, as a strip over the editor once there is more than one.
@@ -35,25 +48,98 @@ Neovim leaves these to its UI, and the window draws each as one of its own surfa
 
   ![A selection asked through vim.ui.select](images/telar-editor-select.png)
 
-A floating window keeps its own cells and gets the surface and the shadow of a dialog. A window
-shows how far down its buffer it is while its text moves.
+A floating window keeps its own cells and gets the surface and the shadow of a dialog. When
+its window has a border, the window draws the frame in place of the border's characters and
+writes the float's title and footer on it. A window shows how far down its buffer it is while
+its text moves, and a line of the window's own stands between two windows side by side; drag
+it to resize them.
 
 ![A floating window and two notices](images/telar-editor-float.png)
 
-Keys reach Neovim as what was pressed: Command and Option are told apart from Control, and
-every combination with Shift arrives, which a terminal cannot always tell Neovim. Colors that
-a highlight leaves unset are the pane's own, so the editor's text and background follow telar's
-theme.
+A scroll slides the rows to their places with the motion a terminal's rows have, and follows
+the same `scroll.smooth` setting. Keys reach Neovim as what was pressed: Command and Option
+are told apart from Control, and every combination with Shift arrives, which a terminal cannot
+always tell Neovim.
 
 ![Two windows side by side](images/telar-editor-split.png)
+
+## The picker
+
+`:Telar files`, `:Telar grep` and `:Telar buffers` open a picker over the editor. The query,
+the list and the keys are the window's; the runtime searches under the editor's directory and
+answers with what it found, so the whole list never crosses the connection. Text is searched
+with ripgrep when the machine has it, and with git in a repository when it does not.
+
+![The picker with a file previewed](images/telar-editor-picker.png)
+
+The entry under the selection is shown beside the list in a float of Neovim itself: the
+preview is the real buffer, with its highlighting. `Enter` opens the entry, `Control+Enter` or
+`Command+Enter` in a split, and `Option+Enter` in a tab page. `Tab` marks entries, and `Enter` then sends the
+marked ones to the quickfix list. `Shift+Tab` changes what is listed.
+
+## telar's theme
+
+The editor's colorscheme is the theme of the window that shows it: the same colors color the
+syntax, the interface of Neovim and the surfaces above. Changing the theme in telar changes it
+in the editor at once, and a `:colorscheme` set by the configuration or by a plugin is replaced
+by it again. `vim.g.telar_tint` takes the options of the theme's engine, such as
+`{ transparent = false }`.
+
+## The clipboard, the focus and the directory
+
+- The registers `+` and `*` are the clipboard of the machine you type on, wherever Neovim
+  runs: what is yanked to them is copied there, unless the runtime's `clipboard_write` policy
+  is `deny`. Pasting the clipboard with the window's own shortcut reaches Neovim as one change.
+  `"+p` puts back the last text yanked in the editor; it does not read the clipboard.
+- Moving the focus to a side with `navigate_pane` asks the editor first for a window on that
+  side, and moves to the pane there when it has none. No plugin is needed for it.
+- The pane's directory is the one of Neovim's current window, `:lcd` and `:tcd` included.
+
+Nothing is installed in Neovim for any of this: the runtime teaches it when it starts, before
+the configuration loads. A configuration that sets `g:clipboard` keeps its own.
+
+## Which Neovim, and which configuration
+
+The runtime starts, in this order: the program `TELAR_NVIM` names in the runtime's
+environment; the Neovim telar provisioned; the `nvim` on the runtime's `PATH`. It needs
+Neovim 0.11 or later: an older one is refused and its pane closes.
+
+```sh
+telar integration install editor
+```
+
+fetches the Neovim release this telar was built for, checks the archive against the SHA-256
+the build carries, and unpacks it under `~/.local/share/telar/nvim/VERSION`. `telar machine
+setup` runs it on the machine it sets up, unless `--skip editor`. On a machine without a
+network, `TELAR_NVIM_ARCHIVE=/path/to/archive` takes an archive that is already there; it is
+checked the same.
+
+Neovim reads its usual configuration. A machine without `~/.config/nvim` gets telar's own
+instead: lazy.nvim with a lockfile, the language servers found on its `PATH`, git signs and
+completion, with `<leader>f`, `<leader>/` and `<leader>b` on the picker. Its plugins are
+fetched the first time through the pane's proxy and need git; without a network the editor
+starts all the same with the parsers Neovim ships. They are kept under the name `telar-nvim`,
+so nothing of a Neovim of your own is touched, and a configuration you make later takes its
+place. A runtime started with `NVIM_APPNAME` uses the configuration that names.
+
+## Over a slow connection
+
+In insert mode, when a key's round trip takes longer than a screen refresh, the letter is
+drawn at once where it will be, underlined as a guess, until the frame that carries it
+arrives. A frame that says otherwise wins. A pane whose guesses fail stops guessing, and a
+local runtime answers too fast for any to be made.
 
 ## What an editor pane is not
 
 It is a pane like any other in the layout: it splits, moves, takes the focus and closes as a
 terminal does, and a session that is restored starts it again on the files it was opened with.
-What only a terminal has does not apply to it: `telar pane read`, the prompt line, the command
-history and the commands' separators. A request of that kind for an editor pane fails with
-`unsupported_pane_kind`.
+`telar pane read` gives the text its screen shows. What only a terminal has does not apply to
+it: the prompt line, the command history, the commands' separators and searching its
+scrollback. A request of that kind for an editor pane fails with `unsupported_pane_kind`.
+
+An agent in an editor pane cannot be sent a prompt or interrupted through the pane, as one in
+a terminal can. Images a plugin draws with the terminal's graphics protocol are not shown:
+there is no terminal to draw them.
 
 ## Measure it
 

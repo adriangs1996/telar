@@ -4,6 +4,7 @@ static_assert(true);
 #endif
 
 #include "nvim_grid_item.hpp"
+#include "tbc/annotations.hpp"
 #include "ui/kit/cell_scene/terminal_scene.hpp"
 #include "ui/kit/scene/window_animation_clock.hpp"
 #include <QQuickWindow>
@@ -88,8 +89,9 @@ namespace telar::gui::qt {
     }
 
     setClip(true);
-    if (!frames_) {
+    if (!counting_) {
       frames_ = connect(window(), &QQuickWindow::afterAnimating, this, &NvimGridItem::advance);
+      counting_ = true;
     }
 
     composeRows();
@@ -111,6 +113,7 @@ namespace telar::gui::qt {
     motion_.stop();
     disconnect(frames_);
     frames_ = {};
+    counting_ = false;
     if (!drawn_rows_.isEmpty() || clip()) {
       drawn_rows_.clear();
       shift_ = 0;
@@ -119,61 +122,63 @@ namespace telar::gui::qt {
     }
   }
 
+  namespace {
+
+    // How far a grid's rows are from their places, in pixels, and the height of one.
+    struct Slide {
+      double offset = 0;
+      double row_height = 0;
+    };
+
+    // The rows a slide draws, top first: the grid's own and the ones that left it, which come
+    // back into view ahead of them. Returns how far above their places they are drawn, or
+    // nothing drawn when the grid's own rows stand in their places.
+    double slideRows(tbc::holds<QList<TerminalRow>&, tbc::lt::a> drawn, tbc::ref_a<application::nvim::Grid> grid, Slide slide) {
+      const auto& screen = grid.screen;
+      const auto& departed = grid.departed;
+      // Rows that came up slide over the ones that left above them, and the other way around: a
+      // slide the other way has no rows to show.
+      constexpr double in_place = 0.01;
+      const auto distance = std::min(std::abs(slide.offset), static_cast<double>(departed.count) * slide.row_height);
+
+      if (distance < in_place || slide.row_height <= 0 || (slide.offset > 0) != departed.above) {
+        return 0;
+      }
+
+      constexpr std::uint64_t departed_source = std::uint64_t{1} << 63U;
+      const auto rows = static_cast<std::size_t>(screen.rows());
+      const auto whole = static_cast<std::size_t>(std::ceil(distance / slide.row_height));
+      const auto first = static_cast<std::size_t>(std::floor(distance / slide.row_height));
+
+      drawn.reserve(static_cast<qsizetype>(rows) + 1);
+      if (departed.above) {
+        for (auto index = whole; index-- > 0;) {
+          drawn.append({.cells = departed.row(index), .revision = departed.stamp(index), .source = departed_source});
+        }
+      }
+
+      for (auto row = departed.above ? 0 : first; row < (departed.above ? std::min(rows, rows - whole + 1) : rows); ++row) {
+        drawn.append({.cells = screen.row(row), .revision = screen.rowRevision(row), .source = row, .screen_row = static_cast<std::int32_t>(row)});
+      }
+
+      if (!departed.above) {
+        for (std::size_t index = 0; index < whole; ++index) {
+          drawn.append({.cells = departed.row(index), .revision = departed.stamp(index), .source = departed_source});
+        }
+      }
+
+      return departed.above ? (static_cast<double>(whole) * slide.row_height) - distance : distance - (static_cast<double>(first) * slide.row_height);
+    }
+
+  }
+
   void NvimGridItem::composeRows() {
     const auto* current = grid();
 
     drawn_rows_.clear();
     shift_ = 0;
-    if (current == nullptr || editor_ == nullptr || !motion_.moving()) {
-      return;
-    }
-
-    const auto& screen = current->screen;
-    const auto& departed = current->departed;
-    const auto height = editor_->cellHeight();
-    const auto offset = motion_.position() - reach_;
-    // Rows that came up slide over the ones that left above them, and the other way around: a
-    // slide the other way has no rows to show, and the grid's own stand in their places.
-    constexpr double in_place = 0.01;
-    const auto distance = std::min(std::abs(offset), static_cast<double>(departed.count) * height);
-
-    if (distance < in_place || height <= 0 || (offset > 0) != departed.above) {
-      return;
-    }
-
-    constexpr std::uint64_t departed_source = std::uint64_t{1} << 63U;
-    const auto rows = static_cast<std::size_t>(screen.rows());
-    const auto whole = static_cast<std::size_t>(std::ceil(distance / height));
-    const auto own = [&](std::size_t row) {
-      drawn_rows_.append({.cells = screen.row(row), .revision = screen.rowRevision(row), .source = row, .screen_row = static_cast<std::int32_t>(row)});
-    };
-    const auto gone = [&](std::size_t index) {
-      drawn_rows_.append({.cells = departed.row(index), .revision = departed.stamp(index), .source = departed_source});
-    };
-
-    drawn_rows_.reserve(static_cast<qsizetype>(rows + 1));
-    if (departed.above) {
-      shift_ = (static_cast<double>(whole) * height) - distance;
-      for (auto index = whole; index-- > 0;) {
-        gone(index);
-      }
-
-      for (std::size_t row = 0; row < std::min(rows, rows - whole + 1); ++row) {
-        own(row);
-      }
-
-      return;
-    }
-
-    const auto first = static_cast<std::size_t>(std::floor(distance / height));
-
-    shift_ = distance - (static_cast<double>(first) * height);
-    for (auto row = first; row < rows; ++row) {
-      own(row);
-    }
-
-    for (std::size_t index = 0; index < whole; ++index) {
-      gone(index);
+    if (current != nullptr && editor_ != nullptr && motion_.moving()) {
+      shift_ = slideRows(drawn_rows_, *current, {.offset = motion_.position() - reach_, .row_height = editor_->cellHeight()});
     }
   }
 
@@ -196,6 +201,7 @@ namespace telar::gui::qt {
         composeRows();
       }
     }
+
     const ds::Option<Drawn> next = current == nullptr || editor_ == nullptr ? ds::Option<Drawn>{} : Drawn{.revision = current->screen.revision(), .appearance = editor_->appearance(), .cursor_on = editor_->cursorOn(), .keyboard = editor_->hasActiveFocus()};
 
     // Most frames change one grid: the others keep what they drew.

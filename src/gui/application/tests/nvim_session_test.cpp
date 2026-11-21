@@ -201,7 +201,7 @@ namespace {
 
     application::nvim::preview(client, editor_pane, std::size_t{0}, {.row = 2, .column = 40, .columns = 60, .rows = 20});
     check(transport.last<NvimPreview>().path == "/srv/app/src/main.cpp" && transport.last<NvimPreview>().columns == 60, "the entry is previewed in a float over the cells the picker leaves");
-    application::nvim::accept(client, editor_pane, 1, NvimOpenIn::vertical_split);
+    application::nvim::accept(client, editor_pane, {.index = 1, .where = NvimOpenIn::vertical_split});
     check(transport.last<NvimOpen>().path == "/srv/app/docs/main.md" && transport.last<NvimOpen>().in == NvimOpenIn::vertical_split, "what is chosen opens where asked, under the picker's directory");
     check(!editor->picker.open && transport.last<NvimPreview>().columns == 0, "and the picker closes with its preview");
 

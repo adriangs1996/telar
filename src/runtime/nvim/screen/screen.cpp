@@ -585,16 +585,19 @@ namespace telar::runtime {
 
   bool NvimScreen::decorate(std::uint64_t window, std::uint8_t border, std::string_view title, std::string_view footer) {
     for (std::size_t index = 0; index < grids_.size(); ++index) {
-      auto& grid = grids_.atMut(index).getMut();
-      if (grid.window != window || grid.placement != NvimPlacement::floating) {
+      const auto& shown = *grids_[index];
+      if (shown.window != window || shown.placement != NvimPlacement::floating) {
         continue;
       }
 
-      if (grid.border == border && grid.title.view() == title && grid.footer.view() == footer) {
+      if (shown.border == border && shown.title.view() == title && shown.footer.view() == footer) {
         return false;
       }
 
+      // The screen is marked changed before the grid is lent to change.
       touch();
+      auto& grid = grids_.atMut(index).getMut();
+
       grid.border = border;
       grid.title.assign(title);
       grid.footer.assign(footer);
@@ -825,6 +828,7 @@ namespace telar::runtime {
           }
 
           auto place = count++;
+
           while (place > 0 && over(*grids[place - 1], *grid)) {
             grids.atMut(place) = grids[place - 1];
             --place;
