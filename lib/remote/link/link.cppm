@@ -145,7 +145,7 @@ export {
       // unreachable a moment ago. The caller holds the lock.
       void watchMachine(std::size_t machine) noexcept;
       void watch(std::size_t machine) noexcept;
-      void observe(Channel& channel, std::size_t machine, const Endpoint& endpoint);
+      [[nodiscard]] bool observe(Channel& channel, std::size_t machine, const Endpoint& endpoint);
       void releaseForward(std::size_t index, unsigned generation, bool closed_there) noexcept;
       void wake() const noexcept;
 

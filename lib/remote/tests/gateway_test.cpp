@@ -398,6 +398,37 @@ namespace {
     }
   }
 
+  // The watch that told one forward its port closed ends with it; the forward opened right
+  // after is told just as soon, by a watch started for it.
+  void aForwardOpenedRightAfterAnotherEndedIsToldItsPortClosedToo() {
+    const Pair pair;
+    const LocalLink local{pair};
+
+    for (int round = 0; round < 3; ++round) {
+      auto listener = listenTcp("127.0.0.1", 0);
+      const auto port = listener.port;
+      EchoServer echo{std::move(listener.socket)};
+      int reply[2];
+      std::promise<int> ended;
+      auto status = ended.get_future();
+
+      check(::pipe(reply) == 0);
+      std::thread holder{[&] {
+        ended.set_value(LinkClient::forward(local.paths(), pair.destination, port, "test origin", reply[1]));
+      }};
+
+      check(std::stoul(readSome(reply[0], 16)) != 0);
+      echo.stop();
+      const bool told = status.wait_for(std::chrono::seconds{3}) == std::future_status::ready;
+
+      holder.join();
+      check(told && status.get() == 0, "each forward is told its port closed there within the time one watch takes");
+      for (const int descriptor : {reply[0], reply[1]}) {
+        ::close(descriptor);
+      }
+    }
+  }
+
   // The forwards of a machine, as the link lists them.
   std::string forwardsOf(const LocalLink& local, std::string_view destination) {
     int listing[2];
@@ -532,6 +563,7 @@ namespace {
   const telar::testing::Case case_the_link_offers_a_machines_runtime_on_a_local_socket{"gateway.the_link_offers_a_machines_runtime_on_a_local_socket", theLinkOffersAMachinesRuntimeOnALocalSocket};
   const telar::testing::Case case_the_link_forwards_a_port_until_it_closes_there{"gateway.the_link_forwards_a_port_until_it_closes_there", theLinkForwardsAPortUntilItClosesThere};
   const telar::testing::Case case_a_port_a_machine_shares_is_forwarded_to_whoever_holds_it{"gateway.a_port_a_machine_shares_is_forwarded_to_whoever_holds_it", aPortAMachineSharesIsForwardedToWhoeverHoldsIt};
+  const telar::testing::Case case_a_forward_opened_right_after_another_ended_is_told_its_port_closed_too{"gateway.a_forward_opened_right_after_another_ended_is_told_its_port_closed_too", aForwardOpenedRightAfterAnotherEndedIsToldItsPortClosedToo};
   const telar::testing::Case case_commands_through_the_link_run_on_a_connection_kept_ready{"gateway.commands_through_the_link_run_on_a_connection_kept_ready", commandsThroughTheLinkRunOnAConnectionKeptReady};
   const telar::testing::Case case_the_link_refuses_a_port_nothing_listens_on{"gateway.the_link_refuses_a_port_nothing_listens_on", theLinkRefusesAPortNothingListensOn};
 

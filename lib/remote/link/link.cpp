@@ -21,6 +21,8 @@ namespace telar::remote {
     constexpr auto hold_interval = std::chrono::milliseconds{250};
     constexpr auto watch_interval = std::chrono::milliseconds{250};
     constexpr auto watch_retry = std::chrono::seconds{5};
+    // How long a port of this machine is given to answer before a forward listens on it.
+    constexpr auto taken_probe = std::chrono::milliseconds{200};
     // How often an idle link looks at whether it is still wanted.
     constexpr auto idle_check = std::chrono::seconds{30};
     constexpr auto poll_interval = std::chrono::milliseconds{5};
@@ -95,6 +97,9 @@ namespace telar::remote {
         static_cast<void>(::setsockopt(socket.get(), IPPROTO_IPV6, IPV6_V6ONLY, &only, sizeof(only)));
       }
 
+      // A port a forward just left is taken again at once, not after its last connections
+      // have been forgotten.
+      static_cast<void>(::setsockopt(socket.get(), SOL_SOCKET, SO_REUSEADDR, &only, sizeof(only)));
       if (::bind(socket.get(), address.address(), address.length) != 0 || ::listen(socket.get(), listen_backlog) != 0) {
         return FileDescriptor{};
       }
@@ -125,7 +130,12 @@ namespace telar::remote {
       LocalPort local;
       const in_addr loopback{.s_addr = htonl(INADDR_LOOPBACK)};
 
-      local.four = listenOn(runtime::NetworkAddress::ipv4(loopback, wanted));
+      // A port something answers on here is taken, also by a program that listens on every
+      // address, beside which some systems would let this one listen.
+      if (!connectLoopback(wanted, Clock::now() + taken_probe)) {
+        local.four = listenOn(runtime::NetworkAddress::ipv4(loopback, wanted));
+      }
+
       if (!local.four) {
         local.four = listenOn(runtime::NetworkAddress::ipv4(loopback, 0));
       }
@@ -520,11 +530,14 @@ namespace telar::remote {
       endpoint = machines_[machine].endpoint;
     }
 
+    // Whether the watch ended because nothing needed it, and not because the gateway was lost.
+    bool unneeded = false;
+
     try {
       auto channel = Channel::dial(contexts_, endpoint, Service::ports, Clock::now() + dial_timeout);
 
       if (receiveReply(channel) == Reply::accepted) {
-        observe(channel, machine, endpoint);
+        unneeded = observe(channel, machine, endpoint);
       }
     } catch (const std::exception&) { // NOLINT(bugprone-empty-catch): a gateway that cannot be heard is asked again later
     }
@@ -541,15 +554,17 @@ namespace telar::remote {
         }
       }
 
+      // A gateway that was lost is asked again after a while; a watch nothing needed starts
+      // again with the next forward or holder, at once.
       machines_.atMut(machine).watched = false;
-      machines_.atMut(machine).retry_at = Clock::now() + watch_retry;
+      machines_.atMut(machine).retry_at = unneeded ? Clock::time_point{} : Clock::now() + watch_retry;
       wake();
     }
 
     threads_.fetch_sub(1);
   }
 
-  void Link::observe(Channel& channel, std::size_t machine, const Endpoint& endpoint) {
+  bool Link::observe(Channel& channel, std::size_t machine, const Endpoint& endpoint) {
     // The ports of the machine this link asked the gateway to watch.
     ds::Array<std::uint16_t, maximum_forwards> asked{};
     std::size_t asked_count = 0;
@@ -598,7 +613,7 @@ namespace telar::remote {
       }
 
       if (!needed) {
-        return;
+        return true;
       }
 
       for (const auto port : std::span{asking}.first(asking_count)) {
@@ -608,6 +623,8 @@ namespace telar::remote {
 
       static_cast<void>(waitReady(channel.descriptor(), POLLIN, Clock::now() + watch_interval));
     }
+
+    return false;
   }
 
   void Link::makeReady(std::size_t machine) noexcept {
@@ -952,6 +969,11 @@ namespace telar::remote {
         const std::scoped_lock lock{mutex_};
 
         open = forwards_[*index].used && forwards_[*index].generation == generation && forwards_[*index].holders != 0;
+        // A watch that ended, with the forward before this one or with a gateway that was lost
+        // for a while, starts again: it is what tells this forward its port closed there.
+        if (const auto machine = open ? machineSlot(forwards_[*index].endpoint) : ds::none) {
+          watchMachine(*machine);
+        }
       }
 
       if (!open) {
