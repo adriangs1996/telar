@@ -866,6 +866,48 @@ return {api_version = 2, client = {
       view->send(QStringLiteral(":tabnew<CR>"));
       QTRY_COMPARE_WITH_TIMEOUT(view->tabline().value(QStringLiteral("tabs")).toList().size(), 2, runtime_wait_ms);
       shoot(QStringLiteral("editor-tabs"));
+
+      // With TELAR_EDITOR_METRICS set to a file, how long a key takes from the view to the frame
+      // that shows it, applied in this window: the runtime, Neovim and the way back.
+      if (const auto metrics = qEnvironmentVariable("TELAR_EDITOR_METRICS"); !metrics.isEmpty()) {
+        constexpr int samples = 400;
+        QList<qint64> elapsed;
+
+        view->send(QStringLiteral("<Cmd>enew!<CR>i"));
+        QTRY_COMPARE_WITH_TIMEOUT(view->mode(), QStringLiteral("insert"), runtime_wait_ms);
+        elapsed.reserve(samples);
+        for (int index = 0; index < samples; ++index) {
+          const auto before = view->editorState()->frame;
+          const QChar letter{QLatin1Char(static_cast<char>('a' + (index % 26)))};
+          QElapsedTimer timer;
+
+          timer.start();
+          press(letter.toUpper().unicode(), QString{letter});
+          while (view->editorState()->frame == before && timer.elapsed() < runtime_wait_ms) {
+            QCoreApplication::processEvents();
+          }
+
+          elapsed.append(timer.nsecsElapsed());
+          // Every sixty keys a new line, so no row grows past the view.
+          if (index % 60 == 59) {
+            press(Qt::Key_Return, QStringLiteral("\r"));
+            QTest::qWait(20);
+          }
+        }
+
+        std::ranges::sort(elapsed);
+        QFile report{metrics};
+
+        QVERIFY(report.open(QIODevice::WriteOnly));
+        report.write(QStringLiteral("{\"measure\":\"key to frame applied in the window\",\"samples\":%1,\"p50_us\":%2,\"p90_us\":%3,\"p99_us\":%4,\"max_us\":%5}\n")
+                .arg(samples)
+                .arg(elapsed[samples / 2] / 1000)
+                .arg(elapsed[samples * 9 / 10] / 1000)
+                .arg(elapsed[samples * 99 / 100] / 1000)
+                .arg(elapsed.back() / 1000)
+                .toUtf8());
+        press(Qt::Key_Escape, QString{});
+      }
       QCOMPARE(client_->status()->error(), QString{});
       QCOMPARE(errors_, QString{});
     }

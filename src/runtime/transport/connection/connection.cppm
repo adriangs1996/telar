@@ -170,7 +170,10 @@ export {
 #pragma clang diagnostic push
 #pragma clang diagnostic error "-Wswitch"
 
-    constexpr DeliveryLane deliveryLane(ServerTag tag) {
+    // An editor's grids, its surfaces and the frame that ends them leave by the lane of a
+    // terminal's cells, in the order they were made; what a pane is leaves ahead of the reply
+    // that first names it, by the lane of that reply.
+    constexpr DeliveryLane deliveryLane(ServerTag tag) { // NOLINT(readability-function-size): one case for each message the wire names, in one switch so that a message without a lane does not compile
       switch (tag) {
       case ServerTag::runtime_stopping:
         return DeliveryLane::stopping;
@@ -183,7 +186,6 @@ export {
       case ServerTag::proxy_status:
         return DeliveryLane::proxy;
       case ServerTag::pane_frame:
-      // An editor's grids and the frame that ends them leave together, in the order they were made.
       case ServerTag::nvim_grid:
       case ServerTag::nvim_frame:
       case ServerTag::nvim_cmdline:
@@ -231,7 +233,6 @@ export {
       case ServerTag::graphics_shared_image:
         return DeliveryLane::graphics;
       case ServerTag::pane_opened:
-      // Ahead of the reply that first names the pane, in the lane the reply leaves by.
       case ServerTag::pane_kind_notice:
       case ServerTag::request_failed:
       case ServerTag::tab_snapshot:

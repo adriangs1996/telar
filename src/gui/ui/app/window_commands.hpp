@@ -178,6 +178,7 @@ namespace telar::gui::qt {
     void executeBinding(BindingAction action, const ConfigurationSource::Actions* resolved = nullptr);
     // A binding that is neither a window action nor a navigation.
     void executeWindowBinding(BindingAction action, const ConfigurationSource::Actions* resolved);
+    void executeExtendedBinding(BindingAction action, const ConfigurationSource::Actions* resolved);
     void luaBindingFinished(KeyBindings::Hold hold, bool stale, const QString& error, ds::Function<void()> apply);
     void applyEffects(const application::components::ResolvedEffects<ApplicationAllocator>& effects);
     void executeNamedAction(const NamedActionDescription& named);
