@@ -276,6 +276,8 @@ for _, name in ipairs({
 	"rename-workspace",
 	"close-pane",
 	"new-tab",
+	"new-editor",
+	"new-editor-tab",
 	"rename-tab",
 	"close-tab",
 	"detach",

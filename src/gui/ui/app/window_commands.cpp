@@ -90,6 +90,8 @@ namespace telar::gui::qt {
         return PaneDirection::up;
       case window_actions::Action::none:
       case window_actions::Action::new_tab:
+      case window_actions::Action::new_editor:
+      case window_actions::Action::new_editor_tab:
       case window_actions::Action::select_tab:
       case window_actions::Action::select_tab_index:
       case window_actions::Action::next_tab:
@@ -158,6 +160,8 @@ namespace telar::gui::qt {
         return Dialog::rename_workspace;
       case window_actions::Action::none:
       case window_actions::Action::new_tab:
+      case window_actions::Action::new_editor:
+      case window_actions::Action::new_editor_tab:
       case window_actions::Action::select_tab:
       case window_actions::Action::select_tab_index:
       case window_actions::Action::next_tab:
@@ -217,9 +221,11 @@ namespace telar::gui::qt {
     ds::Option<window_actions::Action> nativeAction(BindingActionKind kind) noexcept {
       using Native = window_actions::Action;
       using Binding = BindingActionKind;
-      constexpr auto actions = ds::Array<std::pair<Binding, Native>, 48>{
+      constexpr auto actions = ds::Array<std::pair<Binding, Native>, 50>{
           {
               {Binding::new_tab, Native::new_tab},
+              {Binding::new_editor, Native::new_editor},
+              {Binding::new_editor_tab, Native::new_editor_tab},
               {Binding::next_tab, Native::next_tab},
               {Binding::previous_tab, Native::previous_tab},
               {Binding::move_tab_next, Native::move_tab_next},
@@ -569,6 +575,8 @@ namespace telar::gui::qt {
     case BindingActionKind::rename_workspace:
     case BindingActionKind::close_pane:
     case BindingActionKind::new_tab:
+    case BindingActionKind::new_editor:
+    case BindingActionKind::new_editor_tab:
     case BindingActionKind::next_tab:
     case BindingActionKind::previous_tab:
     case BindingActionKind::rename_tab:
@@ -881,6 +889,10 @@ namespace telar::gui::qt {
 
     if (action == window_actions::Action::new_tab) {
       application::workbench::createTab(store_.sessionMut());
+    } else if (action == window_actions::Action::new_editor) {
+      static_cast<void>(application::workbench::splitEditor(store_.sessionMut(), ClientLayoutAxis::horizontal));
+    } else if (action == window_actions::Action::new_editor_tab) {
+      static_cast<void>(application::workbench::createEditorTab(store_.sessionMut()));
     } else if (action == window_actions::Action::select_tab) {
       if (const auto* active = store_.session().activeTab()) {
         // The tab is read before the session lends itself to change.
@@ -1021,6 +1033,8 @@ namespace telar::gui::qt {
       return true;
     case window_actions::Action::none:
     case window_actions::Action::new_tab:
+    case window_actions::Action::new_editor:
+    case window_actions::Action::new_editor_tab:
     case window_actions::Action::select_tab:
     case window_actions::Action::select_tab_index:
     case window_actions::Action::next_tab:

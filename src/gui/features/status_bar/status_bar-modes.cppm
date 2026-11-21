@@ -36,10 +36,11 @@ export {
     class ModeHints {
     public:
       using ActionHint = std::pair<BindingActionKind, std::string_view>;
-      static constexpr auto actions = ds::Array<ActionHint, 8>{
+      static constexpr auto actions = ds::Array<ActionHint, 9>{
           ActionHint{BindingActionKind::split_horizontal, "split right"},
           ActionHint{BindingActionKind::split_vertical, "split down"},
           ActionHint{BindingActionKind::new_tab, "new tab"},
+          ActionHint{BindingActionKind::new_editor, "new editor"},
           ActionHint{BindingActionKind::new_workspace, "new workspace"},
           ActionHint{BindingActionKind::rename_tab, "rename tab"},
           ActionHint{BindingActionKind::rename_workspace, "rename workspace"},

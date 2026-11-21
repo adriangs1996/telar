@@ -517,6 +517,11 @@ namespace telar::runtime {
         return false;
       }
 
+      // Neovim names grid zero while it has no grid for messages: there is nothing to place.
+      if (id == 0) {
+        return true;
+      }
+
       auto* grid = context.screen.place(id, NvimPlacement::message);
       if (grid == nullptr) {
         return false;

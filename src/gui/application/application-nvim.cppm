@@ -9,6 +9,7 @@ import :session;
 import telar.gui.features.nvim;
 import telar.wire.nvim;
 import telar.wire.pane_io;
+import telar.wire.vocabulary;
 
 export namespace telar::gui::application::nvim {
 
@@ -16,6 +17,8 @@ export namespace telar::gui::application::nvim {
   using features::nvim::Editor;
   using features::nvim::EditorCursor;
   using features::nvim::Grid;
+  using features::nvim::Key;
+  using features::nvim::KeyText;
   using features::nvim::MenuItem;
   using features::nvim::Message;
   using features::nvim::Messages;
@@ -31,6 +34,14 @@ export namespace telar::gui::application::nvim {
   using telar::NvimMouseButton;
   using telar::NvimPlacement;
   using telar::NvimPromptKind;
+
+  using features::nvim::notation;
+
+  // The modifier keys held with a mouse event, as the bits of NvimMouse::modifiers.
+  inline constexpr Byte mouse_shift = telar::nvim_mouse_shift;
+  inline constexpr Byte mouse_control = telar::nvim_mouse_control;
+  inline constexpr Byte mouse_alt = telar::nvim_mouse_alt;
+  inline constexpr Byte mouse_command = telar::nvim_mouse_command;
 
   // Whether the runtime of this session runs editor panes.
   [[nodiscard]] bool available(const Session& session) noexcept;

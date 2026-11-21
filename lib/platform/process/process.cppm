@@ -98,8 +98,8 @@ export {
       std::string_view cwd;
     };
 
-    // Where exec finds the program `search` names: the first `directory/program` this process may
-    // execute, written to `found` with its terminator. A candidate longer than PATH_MAX is passed
+    // Where exec finds the program `search` names: the first `directory/program` that is a file
+    // this process may execute, written to `found` with its terminator. A candidate longer than PATH_MAX is passed
     // over.
     bool findExecutable(ExecutableSearch search, std::span<char, PATH_MAX> found) noexcept;
 

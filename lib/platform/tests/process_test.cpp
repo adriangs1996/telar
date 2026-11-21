@@ -156,6 +156,10 @@ namespace {
     check(executable("/nonexistent:" + absolute, "/") == base + "/bin/telar-launch-path-tool");
     check(executable("bin", base) == base + "/bin/telar-launch-path-tool");
 
+    // A directory named as the program is not the program: the search goes on past it.
+    std::filesystem::create_directories(base + "/shadow/telar-launch-path-tool");
+    check(executable(base + "/shadow:" + absolute, "/") == base + "/bin/telar-launch-path-tool");
+
     int failure = 0;
 
     try {
