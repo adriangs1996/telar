@@ -42,7 +42,8 @@ if [ -x "$target/bin/nvim" ]; then
 fi
 
 # The releases of Neovim for Linux are built for glibc: on a musl host they do not run.
-if [ -f /etc/alpine-release ] || { command -v ldd >/dev/null 2>&1 && ldd --version 2>&1 | grep -qi musl; }; then
+# TELAR_NVIM_ANY_LIBC is for who builds a package on such a host for the others.
+if [ -z "${TELAR_NVIM_ANY_LIBC:-}" ] && { [ -f /etc/alpine-release ] || { command -v ldd >/dev/null 2>&1 && ldd --version 2>&1 | grep -qi musl; }; }; then
     echo "telar integration: telar has no Neovim for a musl host; install Neovim $version or later there" >&2
     exit 1
 fi

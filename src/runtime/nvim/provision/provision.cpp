@@ -39,6 +39,18 @@ namespace telar::runtime {
       return ::stat(path.data(), &status) == 0 && S_ISREG(status.st_mode) && ::access(path.data(), X_OK) == 0;
     }
 
+    // Whether this host runs the Neovim telar brings: its releases for Linux are built for
+    // glibc, and a host without glibc's loader, as one of musl, cannot start them.
+    bool runsReleases() noexcept {
+#if defined(__linux__) && defined(__x86_64__)
+      return ::access("/lib64/ld-linux-x86-64.so.2", F_OK) == 0;
+#elif defined(__linux__) && defined(__aarch64__)
+      return ::access("/lib/ld-linux-aarch64.so.1", F_OK) == 0;
+#else
+      return true;
+#endif
+    }
+
     bool directory(const ds::String<ConcurrentMemory>& path) noexcept {
       struct stat status{};
 
@@ -84,9 +96,11 @@ namespace telar::runtime {
       program_.append("/telar/nvim/");
       program_.append(pinned_version);
       program_.append("/bin/nvim");
-      if (host.data_home.empty() || !executable(program_)) {
+      const bool brought = runsReleases();
+
+      if (!brought || host.data_home.empty() || !executable(program_)) {
         program_.assign(host.shipped);
-        if (!host.shipped.starts_with('/') || !executable(program_)) {
+        if (!brought || !host.shipped.starts_with('/') || !executable(program_)) {
           program_.assign("nvim");
         }
       }

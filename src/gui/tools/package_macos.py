@@ -129,6 +129,11 @@ def main():
                          (base / 'licenses', 'gui')):
         if source.is_dir():
             shutil.copytree(source, resources / 'licenses' / name)
+    # The Neovim of the editor panes, where the runtime looks for one its package brought:
+    # under share/, beside the directory of its programs.
+    editor = prefix / 'share/telar/nvim'
+    if editor.is_dir():
+        shutil.copytree(editor, resources / 'share/telar/nvim', symlinks=True)
     shutil.copytree(qt_licenses, resources / 'licenses/qt')
     shutil.copy2(root / 'assets/JetBrainsMono-OFL.txt', resources / 'licenses/JetBrainsMono-OFL.txt')
     shutil.copy2(root / 'assets/TelarForma-OFL.txt', resources / 'licenses/TelarForma-OFL.txt')

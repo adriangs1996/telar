@@ -115,9 +115,10 @@ the configuration loads. A configuration that sets `g:clipboard` keeps its own.
 ## Which Neovim, and which configuration
 
 The runtime starts, in this order: the program `TELAR_NVIM` names in the runtime's
-environment; the Neovim telar provisioned; one a package of telar ships under
+environment; the Neovim telar provisioned; the one telar's own package ships under
 `share/telar/nvim/VERSION`, beside the directory of its programs; the `nvim` on the
-runtime's `PATH`. It needs
+runtime's `PATH`. On a Linux host without glibc, where the releases of Neovim do not run,
+only the first and the last are tried. It needs
 Neovim 0.11 or later: an older one is refused and its pane closes.
 
 ```sh
