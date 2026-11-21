@@ -807,7 +807,13 @@ return {api_version = 2, client = {
       QVERIFY(!view->cursorRect().isEmpty());
       shoot(QStringLiteral("editor-typed"));
 
-      // A run that takes pictures shows a real file, with whatever highlights it.
+      // A run that takes pictures works in a directory anyone has, which the pane's header then
+      // shows, and on a real file, with whatever highlights it.
+      if (!shots.isEmpty()) {
+        view->send(QStringLiteral(":silent cd /tmp<CR>"));
+        QTRY_VERIFY_WITH_TIMEOUT(toQString(firstPane()->cwd).endsWith(QStringLiteral("/tmp")), runtime_wait_ms);
+      }
+
       if (const auto file = qEnvironmentVariable("TELAR_EDITOR_SHOT_FILE"); !shots.isEmpty() && !file.isEmpty()) {
         view->send(QStringLiteral(":edit! %1<CR>").arg(file));
         QTRY_VERIFY_WITH_TIMEOUT(!shown().contains(QStringLiteral("TELAR <EDITOR> OK")), runtime_wait_ms);
