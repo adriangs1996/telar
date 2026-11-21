@@ -184,3 +184,60 @@ jobs:
         if: matrix.configuration == 'Debug'
         continue-on-error: ${{ runner.os == 'Linux' }}
         run: tools/cpp exec -- cmake -DCHECK=lint -DBUILD_DIRECTORY=out/ci -DJOBS=3 -P cmake/scripts/check.cmake
+
+  # The window with a runtime beside it and a real Neovim: the editor pane's case, the path
+  # search and the links, which no other job opens a window for. The link tests need a build
+  # with a link host of its own, so this one has the recording host of the tests.
+  window:
+    runs-on: macos-26
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - id: cpp
+        uses: ./.github/actions/cpp-toolchain
+        with:
+          variant: Debug
+
+      - name: Identify the Qt build toolchain
+        id: toolchain
+        shell: bash
+        run: |
+          { "$CXX" --version; cmake --version; uname -m; xcrun --show-sdk-path; } > "$RUNNER_TEMP/qt-toolchain"
+          echo "key=$(python3 -c 'import hashlib,sys; print(hashlib.sha256(open(sys.argv[1],"rb").read()).hexdigest())' "$RUNNER_TEMP/qt-toolchain")" >> "$GITHUB_OUTPUT"
+
+      # The Qt the Debug job of the matrix built and saved: restored, never saved from here.
+      - uses: actions/cache/restore@caa296126883cff596d87d8935842f9db880ef25 # v5
+        with:
+          path: |
+            .qt-cache/*/install
+            .qt-cache/*/complete
+          key: qt-${{ runner.os }}-${{ runner.arch }}-Debug-${{ steps.toolchain.outputs.key }}-${{ hashFiles('tools/toolchain/manifest.json', 'tools/bootstrap-cpp.py', 'cmake/TelarToolchain.cmake', 'cmake/managed_toolchain.cmake', 'src/gui/cmake/qt.cmake', 'src/gui/cmake/qt/**') }}
+
+      - name: Install Zig and build libghostty-vt
+        run: |
+          echo "GHOSTTY_VT_ROOT=$(tools/cpp vt | tail -n 1)" >> "$GITHUB_ENV"
+
+      - name: Configure the window, the runtime and the recording link host
+        run: |
+          tools/cpp configure ci -- -DCMAKE_BUILD_TYPE=Debug -DTELAR_BUILD_AUTH=OFF -DTELAR_GUI_QT_JOBS=3 \
+            -DTELAR_GUI_LINK_HOST_HEADER="$PWD/src/gui/tests/fixtures/recording_link_host.hpp"
+
+      - name: Build the window test and the runtime
+        run: tools/cpp build ci -- --parallel 3 --target gui-quick-test telar telar-runtime
+
+      # The Neovim this telar is built for, fetched and checked by telar's own installer.
+      - name: Provision Neovim
+        run: |
+          out/ci/src/runtime/telar integration install editor
+          dirname "$(find "$HOME/.local/share/telar/nvim" -path '*/bin/nvim' | head -n 1)" >> "$GITHUB_PATH"
+
+      - name: Test the editor pane, the path search and the links in a window
+        working-directory: out/ci/src/gui
+        run: |
+          TELAR_GUI_TEST_RUNTIME="$PWD/../runtime/telar" PATH="$PWD/../runtime:$PATH" \
+            QT_QUICK_BACKEND=software QT_QPA_PLATFORM=offscreen ./gui-quick-test \
+            editorPaneDrawsNeovim pathPickerBrowsesAndInsertsWithoutExecuting pathPickerQueryLimitPreservesCompleteUtf8 \
+            detectedLinkHoverAndCopy pointerLinkOpening pointerLinkRevalidation textualAndRoutedLinks
