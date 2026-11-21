@@ -2,6 +2,7 @@ module telar.gui.application;
 
 import std;
 
+import telar.base.editors;
 import telar.gui.features.terminal.links;
 import telar.wire.editor;
 import telar.wire.vocabulary;
@@ -69,6 +70,17 @@ namespace telar::gui::application::terminal::links {
     }
 
     const auto* source = findPane(session.panes, *source_id);
+    // The tab's own editor pane shows the file. Where it has none and the person's editor is
+    // Neovim, one is made beside the pane instead of a terminal that would run it.
+    const auto shown = nvim::beside(session, source->id);
+    if (shown != 0 || (nvim::available(session) && runtime::identifyEditor(executable) == runtime::EditorKind::neovim)) {
+      const std::uint64_t pane_id = source->id;
+
+      if (nvim::edit(session, pane_id, {.path = path.text().starts_with('/') ? path.text() : anchored, .line = path.line(), .column = path.column()})) {
+        return;
+      }
+    }
+
     const features::terminal::links::EditorRequest request{
         .request_id = source->generation == 0 ? 0 : session.link.nextRequest(),
         .source = {.pane_id = source->id, .pane_generation = source->generation, .attachment_generation = source->attachment_generation, .location = source->location},

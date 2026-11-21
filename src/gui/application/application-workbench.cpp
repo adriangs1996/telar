@@ -39,6 +39,9 @@ namespace telar::gui::application::workbench {
       ds::Option<std::span<const std::string_view>> arguments = ds::none;
       bool editor = false;
       std::span<const std::string_view> files;
+      // Where an editor's cursor starts in its first file, counted from one.
+      std::uint32_t line = 0;
+      std::uint32_t column = 0;
     };
 
     // Splits pane `pane_id` along `axis`, the new pane being `added`.
@@ -72,7 +75,7 @@ namespace telar::gui::application::workbench {
         session.link.send(PaneResize{.pane_id = pane_id, .size = sizes->existing});
         if (added.editor) {
           // The editor starts where the pane it splits works.
-          session.link.send(CreateNvimPane{.request_id = request_id, .location = tab->location, .size = sizes->added, .cwd = pane->cwd, .files = added.files});
+          session.link.send(CreateNvimPane{.request_id = request_id, .location = tab->location, .size = sizes->added, .cwd = pane->cwd, .files = added.files, .line = added.line, .column = added.column});
         } else {
           session.link.send(CreatePane{.request_id = request_id, .location = tab->location, .size = sizes->added, .launch = launch});
         }
@@ -397,7 +400,7 @@ namespace telar::gui::application::workbench {
     return requestSplit(session, focused, axis, {});
   }
 
-  bool splitEditor(Session& session, ClientLayoutAxis axis, std::span<const std::string_view> files) {
+  bool splitEditor(Session& session, ClientLayoutAxis axis, std::span<const std::string_view> files, EditorStart start) {
     const auto* tab = activeTab(session.tabs, session.active_tab);
     if (tab == nullptr || !session.speaks(ClientTag::create_nvim_pane) || files.size() > max_nvim_files) {
       return false;
@@ -406,7 +409,7 @@ namespace telar::gui::application::workbench {
     // Read before the session lends itself to the request.
     const auto focused = tab->focused_pane;
 
-    return requestSplit(session, focused, axis, {.editor = true, .files = files});
+    return requestSplit(session, focused, axis, {.editor = true, .files = files, .line = start.line, .column = start.column});
   }
 
   TabCreationOutcome createEditorTab(Session& session, std::span<const std::string_view> files) {

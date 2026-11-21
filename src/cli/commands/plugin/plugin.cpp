@@ -371,6 +371,17 @@ namespace telar::runtime::cli {
   }
 
   ds::Option<RoutedOptions> RoutedOptions::parse(Arguments words) {
+    // `telar edit FILE[:LINE]` has no verb: the family is the action, and without --client the
+    // window last typed in performs it.
+    if (!words.empty() && std::string_view{words[0]} == "edit") {
+      RoutedOptions self{.action = ClientAction::editor_open};
+      Cursor cursor{words.subspan(1)};
+
+      self.positionals(cursor);
+      self.options(cursor);
+      return self;
+    }
+
     if (words.size() < 2) {
       return ds::none;
     }
@@ -450,6 +461,30 @@ namespace telar::runtime::cli {
     case plugin_get:
       text = cursor.take("MissingPlugin");
       break;
+    case editor_open: {
+      text = cursor.take("MissingFile");
+      // An option where the file goes means there is none: `./--name` opens a file so named.
+      if (text.starts_with("--")) {
+        usage("MissingFile");
+      }
+
+      // `FILE:LINE` names a line, when what follows the last colon is a number.
+      const auto colon = text.rfind(':');
+      std::uint32_t line = 0;
+
+      if (colon != std::string_view::npos && colon > 0 && colon + 1 < text.size()) {
+        const auto digits = text.substr(colon + 1);
+        const auto* end = digits.data() + digits.size();
+        const auto parsed = std::from_chars(digits.data(), end, line);
+
+        if (parsed.ec == std::errc{} && parsed.ptr == end) {
+          value = line;
+          text = text.substr(0, colon);
+        }
+      }
+
+      break;
+    }
     case layout_apply:
       text = cursor.take("MissingLayoutToken");
       break;

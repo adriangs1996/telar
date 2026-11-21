@@ -96,6 +96,22 @@ namespace telar::gui::application {
       }
 
       return Change::notification;
+    case ClientAction::editor_open: {
+      // The tab of the pane the command came from, when this window shows it, is where its
+      // editor is looked for; otherwise the focused pane's.
+      const auto* named = message.target_id == 0 ? nullptr : findPane(message.target_id);
+      const auto* source = named != nullptr && active_tab && sameTab(named->location, *active_tab) ? named : application::focusedPane(panes, tabs, active_tab);
+      const auto line = static_cast<std::uint32_t>(std::clamp<std::int64_t>(message.value, 0, std::numeric_limits<std::uint32_t>::max()));
+
+      if (source == nullptr || !nvim::edit(*this, source->id, {.path = message.text, .line = line})) {
+        throw EncodingError{"EditorUnavailable"};
+      }
+
+      reply.status = ClientCommandStatus::admitted;
+      reply.text = {};
+
+      return Change::model;
+    }
     case ClientAction::client_open_goto:
     case ClientAction::client_open_history:
     case ClientAction::client_copy_mode:
@@ -207,6 +223,7 @@ namespace telar::gui::application {
     case ClientAction::plugin_enable:
     case ClientAction::plugin_disable:
     case ClientAction::plugin_run:
+    case ClientAction::editor_open:
       throw EncodingError{"Invalid navigation command"};
     }
   }
@@ -305,6 +322,7 @@ namespace telar::gui::application {
     case ClientAction::plugin_enable:
     case ClientAction::plugin_disable:
     case ClientAction::plugin_run:
+    case ClientAction::editor_open:
       throw EncodingError{"Invalid pane command"};
     }
   }

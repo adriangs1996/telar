@@ -110,7 +110,7 @@ export {
   namespace telar::runtime::cli {
 
     // Each `ClientAction`'s wire name, in the enum's order.
-    inline constexpr ds::Array<std::string_view, 34> client_action_names{
+    inline constexpr ds::Array<std::string_view, 35> client_action_names{
         "workspace_select",
         "tab_create",
         "tab_select",
@@ -145,6 +145,7 @@ export {
         "plugin_enable",
         "plugin_disable",
         "plugin_run",
+        "editor_open",
     };
 
     inline constexpr ds::Array<std::string_view, 4> pane_directions{"left", "right", "up", "down"};

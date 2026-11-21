@@ -776,6 +776,9 @@ namespace telar {
     plugin_enable = 31,
     plugin_disable = 32,
     plugin_run = 33,
+    // Shows the file `text` names in the editor pane of a tab, at line `value` when it is not
+    // zero; `target_id` is the pane the command came from, when it came from one.
+    editor_open = 34,
   };
 
   enum class ClientCommandStatus : Byte {
@@ -1329,7 +1332,7 @@ namespace telar {
 
   template <>
   struct BodySchema<ClientCommand>
-      : Serializer<Field<&ClientCommand::request_id, NonzeroU64, "request_id">, Field<&ClientCommand::route, ValueCodec<ClientRoute>, "route">, Field<&ClientCommand::action, EnumByte<ClientAction, std::to_underlying(ClientAction::plugin_run)>, "action">, Field<&ClientCommand::status, EnumByte<ClientCommandStatus, 3>, "status">, Field<&ClientCommand::target_id, u64, "target_id">, Field<&ClientCommand::value, i64, "value">, Field<&ClientCommand::text, Utf8Text16<max_client_command_text_bytes>, "text">> {};
+      : Serializer<Field<&ClientCommand::request_id, NonzeroU64, "request_id">, Field<&ClientCommand::route, ValueCodec<ClientRoute>, "route">, Field<&ClientCommand::action, EnumByte<ClientAction, std::to_underlying(ClientAction::editor_open)>, "action">, Field<&ClientCommand::status, EnumByte<ClientCommandStatus, 3>, "status">, Field<&ClientCommand::target_id, u64, "target_id">, Field<&ClientCommand::value, i64, "value">, Field<&ClientCommand::text, Utf8Text16<max_client_command_text_bytes>, "text">> {};
 
   template <>
   struct BodySchema<ClientLayoutPane>

@@ -17,6 +17,7 @@ import telar.testing;
 import telar.gui.application.tests.session_fixture;
 import telar.gui.application;
 import telar.gui.foundation.terminal;
+import telar.wire.clients;
 import telar.wire.layout;
 import telar.wire.nvim;
 import telar.wire.pane_io;
@@ -118,6 +119,59 @@ namespace {
     check(transport.count(ClientTag::nvim_input) == inputs, "keys for an editor never reach a terminal");
   }
 
+  // A file a person points at, from a link or from `telar edit`, is shown in the editor of the
+  // tab, which takes the focus; a tab without one gets an editor on the file beside the pane.
+  void filesOpenInTheTabsEditor() {
+    SystemAllocator memory;
+    Transport transport;
+    TestSession client{memory, transport};
+
+    openFirstPane(client, transport);
+    check(application::nvim::beside(client, 1) == 0, "a tab of terminals has no editor");
+    check(application::nvim::edit(client, 1, {.path = "/srv/app/main.cpp", .line = 42, .column = 3}), "one is made for the file");
+
+    const auto made = transport.last<CreateNvimPane>();
+
+    check(made.files.size() == 1 && made.files[0] == "/srv/app/main.cpp" && made.line == 42 && made.column == 3 && !made.new_tab, "beside the pane, with the cursor where the link said");
+    deliver(client, PaneKindNotice{.pane_id = editor_pane, .kind = PaneKind::nvim});
+    deliver(client, PaneOpened{.request_id = made.request_id, .pane_id = editor_pane, .location = made.location, .created = true});
+    check(application::nvim::beside(client, 1) == editor_pane, "the tab's editor is found from any of its panes");
+
+    const auto created = transport.count(ClientTag::create_nvim_pane);
+
+    application::workbench::focusPane(client, 1);
+    check(application::nvim::edit(client, 1, {.path = "/srv/app/other.cpp", .line = 7}));
+    check(transport.count(ClientTag::create_nvim_pane) == created && transport.last<NvimOpen>().path == "/srv/app/other.cpp" && transport.last<NvimOpen>().line == 7 && transport.last<NvimOpen>().pane_id == editor_pane, "the next file goes to the editor the tab has");
+    check(client.focusedPane()->id == editor_pane, "which takes the focus");
+    check(!application::nvim::edit(client, 1, {}), "a place without a file is not one");
+
+    // The same from another program, through the runtime: `telar edit FILE:LINE`.
+    application::workbench::focusPane(client, 1);
+    deliver(client, ClientCommand{.request_id = 9, .route = {.id = 1, .generation = 1}, .action = ClientAction::editor_open, .target_id = 1, .value = 12, .text = "/srv/app/third.cpp"});
+    check(transport.last<NvimOpen>().path == "/srv/app/third.cpp" && transport.last<NvimOpen>().line == 12 && transport.last<CompleteClientCommand>().status == ClientCommandStatus::admitted, "a routed command opens the file and is admitted");
+  }
+
+  // The focus leaves an editor by its side when it has no window there, which the runtime says.
+  void navigationAsksTheEditorFirst() {
+    SystemAllocator memory;
+    Transport transport;
+    TestSession client{memory, transport};
+
+    openEditor(client, transport);
+    application::workbench::focusPane(client, editor_pane);
+
+    const auto inputs = transport.count(ClientTag::pane_input);
+
+    application::workbench::navigate(client, PaneDirection::left);
+    check(transport.last<NvimNavigate>().pane_id == editor_pane && transport.last<NvimNavigate>().direction == PaneDirection::left && transport.count(ClientTag::pane_input) == inputs, "the editor is asked for the window on that side");
+    check(client.focusedPane()->id == editor_pane, "and keeps the focus until it answers");
+    check(deliver(client, NvimNavigated{.pane_id = editor_pane, .direction = PaneDirection::left}) == application::Change::model);
+    check(client.focusedPane()->id == 1, "without one there, the pane on that side takes it");
+    check(deliver(client, NvimNavigated{.pane_id = editor_pane, .direction = PaneDirection::right}) == application::Change::none, "an answer for a pane that lost the focus moves nothing");
+    application::nvim::choose(client, editor_pane, 4, true);
+    check(transport.last<NvimMenuSelect>().item == 4 && transport.last<NvimMenuSelect>().accept, "a click on the completion menu takes its item");
+  }
+
   void lostFrameAsksForTheScreenOnce() {
     SystemAllocator memory;
     Transport transport;
@@ -169,6 +223,8 @@ namespace {
 
   const telar::testing::Case case_opens{"nvim_session.editor_opens_beside_and_is_drawn", editorOpensBesideAndIsDrawn};
   const telar::testing::Case case_input{"nvim_session.what_a_person_does_reaches_neovim", whatAPersonDoesReachesNeovim};
+  const telar::testing::Case case_files{"nvim_session.files_open_in_the_tabs_editor", filesOpenInTheTabsEditor};
+  const telar::testing::Case case_navigation{"nvim_session.navigation_asks_the_editor_first", navigationAsksTheEditorFirst};
   const telar::testing::Case case_lost{"nvim_session.lost_frame_asks_for_the_screen_once", lostFrameAsksForTheScreenOnce};
   const telar::testing::Case case_prompt{"nvim_session.prompt_is_answered_through_the_session", promptIsAnsweredThroughTheSession};
   const telar::testing::Case case_tab{"nvim_session.editor_tab_is_a_tab_like_any_other", editorTabIsATabLikeAnyOther};

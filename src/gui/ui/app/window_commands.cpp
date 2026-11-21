@@ -744,6 +744,7 @@ namespace telar::gui::qt {
     case ClientAction::plugin_enable:
     case ClientAction::plugin_disable:
     case ClientAction::plugin_run:
+    case ClientAction::editor_open:
       return false;
     }
 
