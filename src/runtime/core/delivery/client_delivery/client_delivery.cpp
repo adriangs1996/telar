@@ -699,12 +699,20 @@ namespace telar::runtime {
   }
 
   EditorService::EditorService(ConcurrentMemory& memory)
-      : editor_(memory) {}
+      : editor_(memory),
+        search_(memory) {}
 
   void EditorService::process(std::span<const Byte> payload, EncodedReply<ConcurrentMemory>& reply, const RequestContext& context) {
     constexpr std::size_t decode_scratch_bytes = 1024;
     ds::Array<Byte, decode_scratch_bytes> scratch{};
     DecodeStorage storage{scratch.viewMut()};
+
+    if (!payload.empty() && static_cast<ClientTag>(payload.front()) == ClientTag::find_text) {
+      static const std::atomic<bool> never{false};
+
+      search_.find(Codec::decode<FindText>(payload, storage), context.cancelled == nullptr ? never : *context.cancelled, reply);
+      return;
+    }
 
     editor_.open(Codec::decode<OpenEditor>(payload, storage), context, reply);
   }

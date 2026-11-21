@@ -58,10 +58,10 @@ namespace telar::gui::features::nvim {
              grid.z_index == message.z_index && grid.composition_index == message.composition_index && grid.window == message.window && grid.top_line == message.top_line &&
              grid.bottom_line == message.bottom_line && grid.cursor_line == message.cursor_line && grid.line_count == message.line_count && grid.scrolled_lines == message.scrolled_lines &&
              grid.margin_top == message.margin_top && grid.margin_bottom == message.margin_bottom && grid.margin_left == message.margin_left && grid.margin_right == message.margin_right &&
-             grid.mouse_enabled == message.mouse_enabled;
+             grid.mouse_enabled == message.mouse_enabled && grid.border == message.border && grid.title.view() == message.title && grid.footer.view() == message.footer;
     }
 
-    void place(Grid& grid, const NvimGrid& message) noexcept {
+    void place(Grid& grid, const NvimGrid& message) {
       grid.placement = message.placement;
       grid.mouse_enabled = message.mouse_enabled;
       grid.row = message.row;
@@ -80,6 +80,9 @@ namespace telar::gui::features::nvim {
       grid.margin_bottom = message.margin_bottom;
       grid.margin_left = message.margin_left;
       grid.margin_right = message.margin_right;
+      grid.border = message.border;
+      grid.title.assign(message.title);
+      grid.footer.assign(message.footer);
     }
 
     // Keeps the rows a scroll of the whole grid is about to take off it. A scroll of part of the
@@ -255,7 +258,9 @@ namespace telar::gui::features::nvim {
   Grid::Grid(Memory& memory, std::uint32_t identity)
       : id(identity),
         screen(memory),
-        departed(memory) {}
+        departed(memory),
+        title(memory),
+        footer(memory) {}
 
   Cmdline::Cmdline(Memory& memory)
       : prompt(memory),

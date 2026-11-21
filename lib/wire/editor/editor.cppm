@@ -68,6 +68,52 @@ export extern "C++" {
     struct MessageSchema<FindPaths>
         : Schema<Direction::client, ClientTag::find_paths, Field<&FindPaths::request_id, NonzeroU64, "request_id">, Field<&FindPaths::root, Text16<FindPaths::maximum_root_bytes, false>, "root">, Field<&FindPaths::query, SizedText<u16, FindPaths::maximum_query_bytes, true, TextRule::utf8_no_nul>, "query">, Field<&FindPaths::kind, EnumByte<PathKindFilter, 2>, "kind">, Field<&FindPaths::limit, BoundedInteger<u16, 1, FindPaths::maximum_limit>, "limit">, Field<&FindPaths::refresh, BoolByte, "refresh">> {};
 
+    // Searches the text of the files under `root` for `query`, taken as it is written: the
+    // files of its repository when it is one, every file otherwise. A new search by the same
+    // client ends the one before it.
+    struct FindText {
+      static constexpr std::size_t maximum_query_bytes = 256;
+      static constexpr std::uint16_t maximum_limit = 200;
+
+      std::uint64_t request_id{};
+      std::string_view root;
+      std::string_view query;
+      std::uint16_t limit{};
+    };
+
+    template <>
+    struct MessageSchema<FindText>
+        : Schema<Direction::client, ClientTag::find_text, Field<&FindText::request_id, NonzeroU64, "request_id">, Field<&FindText::root, Text16<FindPaths::maximum_root_bytes, false>, "root">, Field<&FindText::query, SizedText<u16, FindText::maximum_query_bytes, false, TextRule::utf8_no_nul>, "query">, Field<&FindText::limit, BoundedInteger<u16, 1, FindText::maximum_limit>, "limit">> {};
+
+    // A line of a file that matches: its path under the root, the line and the column the match
+    // starts at, both counted from one, and the line's text, cut to what a list shows.
+    struct TextMatch {
+      static constexpr std::size_t maximum_path_bytes = 1024;
+      static constexpr std::size_t maximum_text_bytes = 512;
+
+      std::string_view path;
+      std::uint32_t line{};
+      std::uint32_t column{};
+      std::string_view text;
+    };
+
+    template <>
+    struct BodySchema<TextMatch>
+        : Serializer<Field<&TextMatch::path, SizedText<u16, TextMatch::maximum_path_bytes, false, TextRule::opaque>, "path">, Field<&TextMatch::line, u32, "line">, Field<&TextMatch::column, u32, "column">, Field<&TextMatch::text, SizedText<u16, TextMatch::maximum_text_bytes, true, TextRule::opaque>, "text">> {};
+
+    // What FindText found, in the order the search met it. `truncated` says there was more than
+    // the limit asked for.
+    struct TextResults {
+      std::uint64_t request_id{};
+      std::string_view root;
+      bool truncated{};
+      std::span<const TextMatch> matches;
+    };
+
+    template <>
+    struct MessageSchema<TextResults>
+        : Schema<Direction::server, ServerTag::text_results, Field<&TextResults::request_id, NonzeroU64, "request_id">, Field<&TextResults::root, Text16<FindPaths::maximum_root_bytes, false>, "root">, Field<&TextResults::truncated, BoolByte, "truncated">, Field<&TextResults::matches, CountedSpan<u16, ValueCodec<TextMatch>, FindText::maximum_limit>, "matches">> {};
+
     struct CommandSuggestion {
       static constexpr std::size_t maximum_text_bytes = 1024;
 

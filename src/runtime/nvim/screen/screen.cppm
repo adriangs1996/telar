@@ -188,7 +188,21 @@ export {
       std::int64_t scrolled_lines = 0;
       NvimMargins margins;
       std::uint64_t viewport_at = 0;
+      // A float's frame as its window's own configuration gives it: the sides Neovim draws a
+      // border on, as top 1, right 2, bottom 4 and left 8, its title and its footer.
+      std::uint8_t border = 0;
+      ds::String<ConcurrentMemory> title;
+      ds::String<ConcurrentMemory> footer;
+      // The `placed_at` its frame was last asked for.
+      std::uint64_t framed_for = 0;
     };
+
+    class NvimScreen;
+
+    // The text a screen shows, its windows and floats laid over the default grid: at most `rows`
+    // rows from the top, each without the blanks it ends with, appended to `text` up to `limit`
+    // bytes. False when it did not all fit.
+    bool composeText(const NvimScreen& screen, std::uint16_t rows, ds::String<ConcurrentMemory>& text, std::size_t limit);
 
     enum class NvimCursorShape : std::uint8_t {
       block,
@@ -352,6 +366,12 @@ export {
       void hide(std::uint32_t grid) noexcept;
       void viewport(std::uint32_t grid, const NvimViewport& viewport, std::int64_t scroll_delta) noexcept;
       void margins(std::uint32_t grid, NvimMargins margins) noexcept;
+      // The frame of the float that shows `window`. False when no float shows it, or it has
+      // that frame already.
+      bool decorate(std::uint64_t window, std::uint8_t border, std::string_view title, std::string_view footer);
+      // A float placed since its frame was last asked for: its window, which then counts as
+      // asked, or zero when there is none.
+      [[nodiscard]] std::uint64_t nextUnframed() noexcept;
 
       bool mode(std::size_t index, NvimMode mode);
       void truncateModes(std::size_t count) noexcept;

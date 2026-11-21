@@ -321,7 +321,12 @@ namespace telar::runtime {
 
     workspace.geometry_client = client.id;
     for (auto* stored : panes.items()) {
-      // The colors are a terminal's palette; a pane of another kind is drawn with its own.
+      // An editor takes the theme as its colorscheme; what it queues is written with its next input.
+      if (auto* editor = asNvim(stored); editor != nullptr && editor->location.workspace.id == workspace.id && !editor->close_requested) {
+        editor->editor.theme(client.colors);
+        continue;
+      }
+
       auto* pane = asTerminal(stored);
       if (pane != nullptr && pane->location.workspace.id == workspace.id) {
         if (!pane->desktop_theme) {

@@ -10,6 +10,7 @@ import telar.tbc;
 import telar.runtime.core.model.client_layouts;
 
 import telar.runtime.workspaces.editors.remote_editor;
+import telar.runtime.paths.text_search;
 import telar.wire.vocabulary;
 import telar.wire.clipboard;
 import telar.wire.content;
@@ -167,13 +168,23 @@ export {
           return;
         }
 
+        constexpr std::size_t maximum_text_bytes = 262144;
+
+        // An editor's text is what its screen shows: its windows and floats over its grid.
+        if (const auto* editor = pane->as<NvimPane>()) {
+          ds::String<ConcurrentMemory> text{memory_};
+          const bool whole = composeText(editor->editor.screen(), request.rows, text, maximum_text_bytes);
+
+          send(PaneText{.request_id = request.request_id, .pane_id = editor->id, .truncated = !whole, .text = text.view()});
+          return;
+        }
+
         auto* terminal = pane->asMut<TerminalPane>();
         if (terminal == nullptr) {
           send(RequestFailed{.request_id = request.request_id, .code = FailureCode::unsupported_pane_kind, .message = "This pane is not a terminal"});
           return;
         }
 
-        constexpr std::size_t maximum_text_bytes = 262144;
         // Read before the reader borrows the pane's terminal for as long as its text is sent.
         const auto pane_id = terminal->id;
         const auto exit_code = terminal->exitCode();
@@ -487,6 +498,7 @@ export {
 
     private:
       RemoteEditor editor_;
+      FileTextSearch search_;
     };
 
   }

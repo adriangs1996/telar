@@ -7,7 +7,9 @@ import telar.platform.process;
 import telar.testing;
 import telar.runtime.core.tests.protocol_peer;
 import telar.runtime.core.tests.runtime_host;
+import telar.wire.clipboard;
 import telar.wire.content;
+import telar.wire.editor;
 import telar.wire.layout;
 import telar.wire.nvim;
 import telar.wire.pane_io;
@@ -100,6 +102,26 @@ namespace {
           return;
         }
 
+        // What telar's side of the conversation in Neovim would say.
+        if (keys == "<F6>") {
+          tell("telar_clipboard", 1, [](msgpack::Writer& writer) {
+            writer.string("yanked");
+          });
+          return;
+        }
+
+        if (keys == "<F7>") {
+          tell("telar_pick", 1, [](msgpack::Writer& writer) {
+            writer.string("files");
+          });
+          return;
+        }
+
+        if (keys == "<F8>") {
+          draw("themes " + std::to_string(themes_), false);
+          return;
+        }
+
         typed_ += keys;
         draw("typed", false);
       } else if (method == "nvim_exec_lua") {
@@ -109,7 +131,26 @@ namespace {
         draw("pasted", false);
       } else if (method == "nvim_input_mouse") {
         draw("clicked", false);
+      } else if (method == "nvim_select_popupmenu_item") {
+        std::uint64_t item = 0;
+
+        static_cast<void>(reader.unsignedInteger(item));
+        draw("picked " + std::to_string(item), false);
       }
+    }
+
+    // A notification, as what runs in Neovim sends the runtime.
+    template <typename Parameters>
+    static void tell(std::string_view name, std::uint32_t count, Parameters parameters) {
+      ds::Array<std::uint8_t, 256> bytes{};
+      msgpack::Writer writer{bytes.viewMut()};
+
+      writer.array(3);
+      writer.unsignedInteger(2);
+      writer.string(name);
+      writer.array(count);
+      parameters(writer);
+      write(writer.written());
     }
 
     // Asks the user to choose, as vim.ui.select does once the runtime took it over.
@@ -144,6 +185,26 @@ namespace {
 
         static_cast<void>(reader.unsignedInteger(id) && reader.boolean(accepted) && reader.unsignedInteger(index));
         draw(accepted ? "chose " + std::to_string(index) : std::string{"dismissed"}, false);
+      } else if (source.starts_with("__telar_theme")) {
+        ++themes_;
+      } else if (source.starts_with("__telar_navigate")) {
+        // The stand-in has one window: there is none on any side.
+        const auto side = std::string{reader.string().valueOr("")};
+
+        tell("telar_navigate", 1, [&](msgpack::Writer& writer) {
+          writer.string(side);
+        });
+      } else if (source.starts_with("__telar_buffers")) {
+        std::uint64_t token = 0;
+
+        static_cast<void>(reader.unsignedInteger(token));
+        tell("telar_buffers", 2, [&](msgpack::Writer& writer) {
+          writer.unsignedInteger(token);
+          writer.array(3);
+          writer.string("docs/editor.md");
+          writer.string("src/main.cpp");
+          writer.string("README.md");
+        });
       } else if (source.contains("vim.cmd.drop")) {
         std::uint64_t line = 0;
         const auto path = std::string{reader.string().valueOr("")};
@@ -240,6 +301,7 @@ namespace {
 
     std::uint64_t columns_ = 0;
     std::uint64_t rows_ = 0;
+    std::uint64_t themes_ = 0;
     std::string typed_;
   };
 
@@ -484,7 +546,7 @@ namespace {
     editor.until(peer, "ready");
     peer.deadline(std::chrono::seconds{10});
     check(refused(peer, [&] {
-      peer.exchange<PaneText>(ReadPane{.request_id = 10, .pane_id = editor.pane, .rows = 10});
+      peer.exchange<PaneMatches>(SearchPane{.request_id = 10, .pane_id = editor.pane, .needle = "x"});
     }) == FailureCode::unsupported_pane_kind,
         "a terminal's request of an editor says the pane is of another kind");
 
@@ -497,6 +559,86 @@ namespace {
     // The editor still answers after both refusals.
     peer.send(NvimInput{.pane_id = editor.pane, .keys = bytes("ok")});
     editor.until(peer, "typed");
+  }
+
+  // What an agent reads of an editor pane is what its screen shows.
+  void testEditorTextIsRead() {
+    EditorHost editor_host;
+    ProtocolPeer peer{editor_host.host->socket()};
+    const auto terminal = openTerminal(peer);
+    auto editor = openEditor(peer, terminal);
+
+    editor.until(peer, "ready");
+    peer.send(NvimInput{.pane_id = editor.pane, .keys = bytes("hola")});
+    editor.until(peer, "typed");
+
+    const auto text = peer.exchange<PaneText>(ReadPane{.request_id = 10, .pane_id = editor.pane, .rows = 2});
+
+    check(text.pane_id == editor.pane && !text.truncated && text.text == "typed\nhola\n", "the rows asked for, as the screen shows them");
+  }
+
+  // What runs in Neovim tells the client that drives the editor: a yank is its clipboard, the
+  // way out of the last window is its focus to move, and `:Telar` asks for its picker.
+  void testEditorTellsItsClient() {
+    EditorHost editor_host;
+    ProtocolPeer peer{editor_host.host->socket()};
+    const auto terminal = openTerminal(peer);
+    auto editor = openEditor(peer, terminal);
+
+    editor.until(peer, "ready");
+    peer.deadline(std::chrono::seconds{10});
+    peer.send(NvimInput{.pane_id = editor.pane, .keys = bytes("<F6>")});
+
+    const auto copied = peer.receive<PaneClipboard>();
+
+    check(copied.pane_id == editor.pane && textView(copied.bytes) == "yanked", "what was yanked reaches the client's clipboard");
+    peer.send(NvimNavigate{.pane_id = editor.pane, .direction = PaneDirection::left});
+
+    const auto left = peer.receive<NvimNavigated>();
+
+    check(left.pane_id == editor.pane && left.direction == PaneDirection::left, "an editor without a window on that side says so");
+    peer.send(NvimInput{.pane_id = editor.pane, .keys = bytes("<F7>")});
+
+    const auto pick = peer.receive<NvimPick>();
+
+    check(pick.pane_id == editor.pane && pick.source == NvimPickSource::files);
+
+    const auto buffers = peer.exchange<PathResults>(NvimBuffers{.request_id = 20, .pane_id = editor.pane, .query = "main", .limit = 10});
+
+    check(buffers.request_id == 20 && buffers.complete && buffers.matches.size() == 1 && buffers.matches[0].path == "src/main.cpp" && !buffers.matches[0].positions.empty(), "the buffers its query matches, with where");
+
+    const auto all = peer.exchange<PathResults>(NvimBuffers{.request_id = 21, .pane_id = editor.pane, .query = "", .limit = 2});
+
+    check(all.matches.size() == 2 && all.truncated && all.matches[0].path == "docs/editor.md", "without a query, the most recently used first, up to the limit");
+    peer.send(NvimMenuSelect{.pane_id = editor.pane, .item = 2, .accept = true});
+    editor.until(peer, "picked 2");
+  }
+
+  // The editor's colorscheme is the theme of the client that owns its workspace, when it
+  // attaches and whenever that client changes it.
+  void testEditorTakesTheWindowsTheme() {
+    EditorHost editor_host;
+    ProtocolPeer peer{editor_host.host->socket()};
+    ConfigureTerminalColors colors;
+
+    colors.foreground.emplace().fill(Byte{0xd0});
+    colors.background.emplace().fill(Byte{0x20});
+    colors.palette.emplace().fill(Byte{0x40});
+    colors.syntax.emplace().fill(Byte{0x90});
+    colors.chrome.emplace().fill(Byte{0x60});
+    peer.send(colors);
+
+    const auto terminal = openTerminal(peer);
+    auto editor = openEditor(peer, terminal);
+
+    editor.until(peer, "ready");
+    peer.send(NvimInput{.pane_id = editor.pane, .keys = bytes("<F8>")});
+    editor.until(peer, "themes 1");
+    // The syntax colors alone change nothing a terminal shows, and are an editor's all the same.
+    colors.syntax.emplace().fill(Byte{0x99});
+    peer.send(colors);
+    peer.send(NvimInput{.pane_id = editor.pane, .keys = bytes("<F8>")});
+    editor.until(peer, "themes 2");
   }
 
   void testPromptIsShownAndAnswered() {
@@ -599,6 +741,9 @@ namespace {
   const telar::testing::Case case_second{"nvim_pane_wire.second_client_is_sent_the_screen_whole", testSecondClientIsSentTheScreenWhole};
   const telar::testing::Case case_refused{"nvim_pane_wire.requests_of_another_kind_are_refused", testRequestsOfAnotherKindAreRefused};
   const telar::testing::Case case_prompt{"nvim_pane_wire.prompt_is_shown_and_answered", testPromptIsShownAndAnswered};
+  const telar::testing::Case case_text{"nvim_pane_wire.editor_text_is_read", testEditorTextIsRead};
+  const telar::testing::Case case_tells{"nvim_pane_wire.editor_tells_its_client", testEditorTellsItsClient};
+  const telar::testing::Case case_theme{"nvim_pane_wire.editor_takes_the_windows_theme", testEditorTakesTheWindowsTheme};
   const telar::testing::Case case_session{"nvim_pane_wire.editor_returns_with_the_session", testEditorReturnsWithTheSession};
   const telar::testing::Case case_close{"nvim_pane_wire.closing_ends_the_editor", testClosingEndsTheEditor};
   const telar::testing::Case case_missing{"nvim_pane_wire.missing_neovim_fails_the_request", testMissingNeovimFailsTheRequest};

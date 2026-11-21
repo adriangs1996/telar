@@ -322,6 +322,11 @@ export {
 
           poller_.watch(inserted.process->output(), token);
           poller_.watch(inserted.process->error(), token);
+          // The editor's colorscheme is its owner's theme, as a terminal's palette is.
+          if (placement.owner_colors != nullptr) {
+            inserted.editor.theme(*placement.owner_colors);
+          }
+
           flushEditor(inserted);
         } catch (...) {
           if (auto* failed = asNvim(model.panes.find(identity.id))) {
@@ -364,6 +369,7 @@ export {
           return;
         }
 
+        pane.driver = client.id;
         try {
           if (!std::forward<Request>(request)(pane.editor)) {
             return;
@@ -732,10 +738,24 @@ export {
 
       // A change of only the editor colors leaves the terminals alone: applying colors repaints a
       // pane whole.
+      // What the runtime lets a pane's program do with the clipboard, among other things.
+      [[nodiscard]] inline const control::Policy& controlPolicy() const noexcept {
+        return control_policy_;
+      }
+
       inline void configureColors(RuntimeModel& model, ClientSession& client, const ConfigureTerminalColors& request) {
         const bool repaint = !client.colors.sameTerminalColors(request);
 
         client.colors = request;
+        // An editor shows the syntax and chrome colors too, which a terminal does not.
+        for (auto* stored : model.panes.items()) {
+          auto* editor = asNvim(stored);
+          const auto* workspace = editor == nullptr ? nullptr : model.workspaces.find(editor->location.workspace.id);
+          if (workspace != nullptr && workspace->geometry_client == client.id && !editor->close_requested && editor->editor.theme(request)) {
+            flushEditor(*editor);
+          }
+        }
+
         if (!repaint) {
           return;
         }

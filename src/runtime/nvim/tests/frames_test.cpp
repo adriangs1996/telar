@@ -26,6 +26,9 @@ namespace {
         std::uint16_t columns = 0;
         std::uint16_t rows = 0;
         NvimPlacement placement = NvimPlacement::hidden;
+        Byte border = 0;
+        std::string title;
+        std::string footer;
         std::vector<std::string> text;
         std::vector<CellStyle> style;
       };
@@ -51,6 +54,9 @@ namespace {
         grid.columns = message.columns;
         grid.rows = message.rows;
         grid.placement = message.placement;
+        grid.border = message.border;
+        grid.title = std::string{message.title};
+        grid.footer = std::string{message.footer};
 
         for (const auto& scroll : message.scrolls) {
           this->scroll(grid, scroll);
@@ -331,6 +337,75 @@ namespace {
       check(client.grids[2].placement == NvimPlacement::window, "the client learns where it is shown");
     }
 
+    // A float's frame comes from its window's configuration, after the float is placed: it is
+    // asked for once for each place, and sent when it changes.
+    void floatFrameIsSentWhenItChanges() {
+      testing::TestMemory adapter;
+      ConcurrentMemory& memory = adapter;
+      NvimScreen screen{memory};
+      NvimFrames frames{memory};
+      Client client;
+      constexpr std::uint64_t window = 1004;
+
+      redraw(screen, memory, 3, [](msgpack::Writer& writer) {
+        event(writer, "grid_resize", {1, 8, 4});
+        event(writer, "grid_resize", {4, 6, 3});
+        writer.array(2);
+        writer.string("win_float_pos");
+        writer.array(11);
+        writer.unsignedInteger(4);
+        writer.unsignedInteger(window);
+        writer.string("NW");
+        writer.unsignedInteger(1);
+        writer.floating(1);
+        writer.floating(1);
+        writer.boolean(true);
+        writer.unsignedInteger(50);
+        writer.unsignedInteger(1);
+        writer.integer(1);
+        writer.integer(1);
+      });
+      deliver(frames, screen, client);
+      check(client.grids[4].placement == NvimPlacement::floating && client.grids[4].border == 0 && client.grids[4].title.empty(), "a float starts without a frame");
+      check(screen.nextUnframed() == window && screen.nextUnframed() == 0, "its frame is asked for once");
+      check(!screen.decorate(77, max_nvim_border, "Other", ""), "a frame for a window no float shows changes nothing");
+      check(screen.settled() && screen.decorate(window, max_nvim_border, "Keys", "esc close"), "the frame of the float is taken");
+      check(!screen.settled(), "and waits for a flush as any change does");
+      screen.flush();
+
+      const auto sent = deliver(frames, screen, client);
+
+      check(sent.messages == 1 && sent.cells == 0, "the frame alone is sent without cells");
+      check(client.grids[4].border == max_nvim_border && client.grids[4].title == "Keys" && client.grids[4].footer == "esc close", "the client learns the frame");
+      check(!screen.decorate(window, max_nvim_border, "Keys", "esc close") && screen.nextUnframed() == 0, "the same frame again changes nothing and is not asked for again");
+    }
+
+    // What an agent reads of an editor pane is what its screen shows: windows and floats over
+    // the default grid, each row without the blanks it ends with.
+    void screenTextIsComposed() {
+      testing::TestMemory adapter;
+      ConcurrentMemory& memory = adapter;
+      NvimScreen screen{memory};
+
+      redraw(screen, memory, 7, [](msgpack::Writer& writer) {
+        event(writer, "grid_resize", {1, 8, 3});
+        fill(writer, 1, 0, "b", 8);
+        fill(writer, 1, 2, "s", 8);
+        event(writer, "grid_resize", {2, 4, 2});
+        event(writer, "win_pos", {2, 1000, 0, 2, 4, 2});
+        fill(writer, 2, 0, "w", 4);
+        fill(writer, 2, 1, "x", 2);
+      });
+
+      ds::String<ConcurrentMemory> text{memory};
+
+      check(composeText(screen, 3, text, 4096) && text.view() == "bbwwwwbb\n  xx\nssssssss\n", "a window's cells stand over the grid under it");
+      text.clear();
+      check(composeText(screen, 1, text, 4096) && text.view() == "bbwwwwbb\n", "only the rows asked for");
+      text.clear();
+      check(!composeText(screen, 3, text, 8), "what does not fit says so");
+    }
+
     void scrollIsReplayed() {
       testing::TestMemory adapter;
       ConcurrentMemory& memory = adapter;
@@ -563,6 +638,8 @@ namespace {
   const telar::testing::Case case_unsized{"nvim_frames.unsized_grids_are_not_sent", unsizedGridsAreNotSent};
   const telar::testing::Case case_placement{"nvim_frames.placement_alone_sends_no_cells", placementAloneSendsNoCells};
   const telar::testing::Case case_scroll{"nvim_frames.scroll_is_replayed", scrollIsReplayed};
+  const telar::testing::Case case_frame{"nvim_frames.float_frame_is_sent_when_it_changes", floatFrameIsSentWhenItChanges};
+  const telar::testing::Case case_text{"nvim_frames.screen_text_is_composed", screenTextIsComposed};
   const telar::testing::Case case_removed{"nvim_frames.removed_grids_are_forgotten", removedGridsAreForgotten};
   const telar::testing::Case case_large{"nvim_frames.large_grid_crosses_in_several_messages", largeGridCrossesInSeveralMessages};
   const telar::testing::Case case_cursor{"nvim_frames.cursor_and_mode", cursorAndMode};

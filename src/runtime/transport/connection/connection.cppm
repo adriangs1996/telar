@@ -261,6 +261,9 @@ export {
       case ServerTag::client_command_result:
       case ServerTag::editor_opened:
       case ServerTag::path_results:
+      case ServerTag::text_results:
+      case ServerTag::nvim_navigated:
+      case ServerTag::nvim_pick:
       case ServerTag::completion_words:
       case ServerTag::command_spec:
       case ServerTag::worktree_registered:

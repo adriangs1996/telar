@@ -88,6 +88,11 @@ export namespace telar::gui::features::nvim {
     std::uint16_t margin_bottom = 0;
     std::uint16_t margin_left = 0;
     std::uint16_t margin_right = 0;
+    // A float's frame as its window's configuration gives it: the sides Neovim draws a border
+    // on, as top 1, right 2, bottom 4 and left 8, its title and its footer.
+    Byte border = 0;
+    ds::String<Memory> title;
+    ds::String<Memory> footer;
     // The frame that last named it: a frame that stands alone drops the grids it does not name.
     std::uint64_t frame = 0;
   };

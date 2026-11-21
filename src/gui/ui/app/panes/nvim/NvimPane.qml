@@ -79,20 +79,63 @@ FocusScope {
                     color: Qt.rgba(base.r, base.g, base.b, 1)
                 }
 
+                // The sides of a float Neovim borders with characters: the window frames it
+                // itself, and writes its title and its footer where those rows were.
+                readonly property int border: floating ? (record.border ?? 0) : 0
+                readonly property real cutTop: (border & 1) ? view.cellHeight : 0
+                readonly property real cutRight: (border & 2) ? view.cellWidth : 0
+                readonly property real cutBottom: (border & 4) ? view.cellHeight : 0
+                readonly property real cutLeft: (border & 8) ? view.cellWidth : 0
+                // A float without a border of its own gets room around its cells.
+                readonly property real inset: border === 0 ? root.floatInset : 0
+
                 NvimSurface {
                     visible: cell.floating
-                    x: -root.floatInset
-                    y: -root.floatInset
-                    width: cell.width + 2 * root.floatInset
-                    height: cell.height + 2 * root.floatInset
+                    x: -cell.inset
+                    y: -cell.inset
+                    width: cell.width + 2 * cell.inset
+                    height: cell.height + 2 * cell.inset
                     colors: root.colors
                     ratio: root.ratio
                 }
 
-                NvimGrid {
-                    anchors.fill: parent
-                    editor: view
-                    gridId: cell.record.gridId
+                Item {
+                    x: cell.cutLeft
+                    y: cell.cutTop
+                    width: cell.width - cell.cutLeft - cell.cutRight
+                    height: cell.height - cell.cutTop - cell.cutBottom
+                    clip: cell.border !== 0
+
+                    NvimGrid {
+                        x: -cell.cutLeft
+                        y: -cell.cutTop
+                        width: cell.width
+                        height: cell.height
+                        editor: view
+                        gridId: cell.record.gridId
+                    }
+                }
+
+                ChromeText {
+                    visible: cell.cutTop > 0 && text.length > 0
+                    x: cell.cutLeft + 4 * root.ratio
+                    width: cell.width - 2 * x
+                    height: cell.cutTop
+                    text: cell.record.title ?? ""
+                    pixelSize: root.typography.small
+                    emphasized: true
+                    color: root.colors.text
+                }
+
+                ChromeText {
+                    visible: cell.cutBottom > 0 && text.length > 0
+                    x: cell.cutLeft + 4 * root.ratio
+                    y: cell.height - cell.cutBottom
+                    width: cell.width - 2 * x
+                    height: cell.cutBottom
+                    text: cell.record.footer ?? ""
+                    pixelSize: root.typography.small
+                    color: Qt.alpha(root.colors.text, 0.6)
                 }
 
                 // How far down its buffer a window is, from what Neovim says of its viewport:
@@ -267,6 +310,10 @@ FocusScope {
             colors: root.colors
             typography: root.typography
             ratio: root.ratio
+            onPicked: index => {
+                view.chooseMenu((view.popupMenu.first ?? 0) + index);
+                view.forceActiveFocus();
+            }
         }
 
         NvimPrompt {

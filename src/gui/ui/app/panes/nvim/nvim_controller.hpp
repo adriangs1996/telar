@@ -66,6 +66,7 @@ namespace telar::gui::qt {
     void focus(std::uint64_t pane_id, bool focused);
     void resize(std::uint64_t pane_id, TerminalSize size);
     void answer(std::uint64_t pane_id, bool accepted, std::uint32_t index, const QString& text);
+    void choose(std::uint64_t pane_id, std::uint32_t item, bool accept);
 
   signals:
     // The pane's editor shows another frame, or asks something else.

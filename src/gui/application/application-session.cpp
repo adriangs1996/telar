@@ -362,6 +362,7 @@ namespace telar::gui::application {
         std::type_identity<NvimMessageList>{},
         std::type_identity<NvimTabLine>{},
         std::type_identity<NvimPrompt>{},
+        std::type_identity<NvimNavigated>{},
         std::type_identity<ProxyStatus>{},
         std::type_identity<RequestFailed>{},
         std::type_identity<RequestCompleted>{},
@@ -388,6 +389,8 @@ namespace telar::gui::application {
         ServerTag::runtime_clipboard_chunk,
         ServerTag::pane_theme,
         ServerTag::history_workspaces,
+        ServerTag::text_results,
+        ServerTag::nvim_pick,
     };
 
     static_assert([] {
@@ -674,6 +677,10 @@ namespace telar::gui::application {
     return nvim::receive(*this, message);
   }
 
+  Change Session::apply(const NvimNavigated& message) {
+    return nvim::receive(*this, message);
+  }
+
   bool Session::monitors() const noexcept {
     return speaks(ClientTag::query_monitor);
   }
@@ -827,6 +834,8 @@ namespace telar::gui::application {
   template void Session::Link::send<NvimFocus>(const NvimFocus& message);
   template void Session::Link::send<NvimInput>(const NvimInput& message);
   template void Session::Link::send<NvimMouse>(const NvimMouse& message);
+  template void Session::Link::send<NvimMenuSelect>(const NvimMenuSelect& message);
+  template void Session::Link::send<NvimNavigate>(const NvimNavigate& message);
   template void Session::Link::send<NvimOpen>(const NvimOpen& message);
   template void Session::Link::send<NvimPaste>(const NvimPaste& message);
   template void Session::Link::send<NvimPromptReply>(const NvimPromptReply& message);

@@ -100,10 +100,48 @@ namespace telar::gui::application::nvim {
     }
   }
 
-  void show(Session& session, std::uint64_t pane_id, std::string_view path, std::uint32_t line, std::uint32_t column) {
-    if (!path.empty() && path.size() <= max_nvim_path_bytes && reaches(session, pane_id)) {
-      session.link.send(NvimOpen{.pane_id = pane_id, .path = path, .line = line, .column = column});
+  void show(Session& session, std::uint64_t pane_id, const Place& place) {
+    if (!place.path.empty() && place.path.size() <= max_nvim_path_bytes && reaches(session, pane_id)) {
+      session.link.send(NvimOpen{.pane_id = pane_id, .path = place.path, .line = place.line, .column = place.column, .in = place.in});
     }
+  }
+
+  std::uint64_t beside(const Session& session, std::uint64_t pane_id) noexcept {
+    const auto* source = findPane(session.panes, pane_id);
+    if (source == nullptr) {
+      return 0;
+    }
+
+    for (const auto& pane : session.panes) {
+      if (pane->location.tab_id == source->location.tab_id && pane->location.workspace.id == source->location.workspace.id && reaches(session, pane->id)) {
+        return pane->id;
+      }
+    }
+
+    return 0;
+  }
+
+  void navigate(Session& session, std::uint64_t pane_id, PaneDirection direction) {
+    if (reaches(session, pane_id) && session.speaks(ClientTag::nvim_navigate)) {
+      session.link.send(NvimNavigate{.pane_id = pane_id, .direction = direction});
+    }
+  }
+
+  void choose(Session& session, std::uint64_t pane_id, std::uint32_t item, bool accept) {
+    if (reaches(session, pane_id) && session.speaks(ClientTag::nvim_menu_select)) {
+      session.link.send(NvimMenuSelect{.pane_id = pane_id, .item = item, .accept = accept});
+    }
+  }
+
+  Change receive(Session& session, const NvimNavigated& message) {
+    const auto* focused = focusedPane(session.panes, session.tabs, session.active_tab);
+    if (focused == nullptr || focused->id != message.pane_id) {
+      return Change::none;
+    }
+
+    // The editor had no window on that side: the pane there takes the focus.
+    workbench::focusToward(session, message.direction);
+    return Change::model;
   }
 
   Change receive(Session& session, const PaneKindNotice& message) {

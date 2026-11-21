@@ -4,9 +4,13 @@ import std;
 import telar.tbc;
 import telar.msgpack;
 import telar.base.ds;
+import telar.base.text.utf8;
 import telar.base.memory.allocators;
 import telar.base.memory.containers;
+import telar.wire.editor;
 import telar.wire.nvim;
+import telar.wire.pane_io;
+import telar.wire.vocabulary;
 import telar.runtime.nvim.redraw;
 import telar.runtime.nvim.rpc;
 import telar.runtime.nvim.screen;
@@ -66,78 +70,99 @@ namespace telar::runtime {
       });
     }
 
-    // Run before Neovim reads the user's configuration: vim.ui.select and vim.ui.input ask the
-    // runtime, which shows them natively, and nothing loaded later can put its own in their
-    // place. The answer comes back through __telar_prompt_answer.
-    constexpr std::string_view prompt_bootstrap = R"lua(
-local channel = ...
-local pending, last = {}, 0
-local function ask(kind, title, initial, choices, done)
-  last = last + 1
-  pending[last] = done
-  vim.rpcnotify(channel, 'telar_prompt', last, kind, tostring(title or ''), tostring(initial or ''), choices)
-end
-local function select(items, opts, on_choice)
-  opts = opts or {}
-  local format = opts.format_item or tostring
-  local choices = {}
-  for index, item in ipairs(items) do
-    choices[index] = tostring(format(item))
-  end
-  ask('select', opts.prompt, '', choices, function(accepted, index)
-    if accepted and items[index] ~= nil then
-      on_choice(items[index], index)
-    else
-      on_choice(nil, nil)
-    end
-  end)
-end
-local function input(opts, on_confirm)
-  opts = opts or {}
-  ask('input', opts.prompt, opts.default, {}, function(accepted, _, text)
-    on_confirm(accepted and text or nil)
-  end)
-end
-function _G.__telar_prompt_answer(id, accepted, index, text)
-  local done = pending[id]
-  pending[id] = nil
-  if done then
-    vim.schedule(function()
-      done(accepted, index, text)
-    end)
-  end
-end
-local ui = vim.ui
-local guarded = setmetatable({}, {
-  __index = function(_, key)
-    if key == 'select' then
-      return select
-    end
-    if key == 'input' then
-      return input
-    end
-    return ui[key]
-  end,
-  __newindex = function(_, key, value)
-    if key ~= 'select' and key ~= 'input' then
-      ui[key] = value
-    end
-  end,
-})
-package.loaded['vim.ui'] = guarded
-vim.ui = guarded
-)lua";
+    // What an embedded Neovim is taught: `bootstrap`, run before it reads the user's
+    // configuration, and telar's modules, which it loads from the runtime instead of from disk.
+#include "nvim_scripts.inc"
+
+    // The modules, by the name Lua requires each with.
+    constexpr ds::Array<std::pair<std::string_view, std::string_view>, 4> modules{{
+        {"telar", module_telar},
+        {"telar.theme", module_theme},
+        {"telar.tint", module_tint},
+        {"telar.navigate", module_navigate},
+    }};
 
     constexpr std::string_view answer_script = "__telar_prompt_answer(...)";
 
-    // Shows the file where it already is, or in the current window, then moves the cursor.
+    // Shows a file where it is asked to, then moves the cursor.
     constexpr std::string_view open_script = R"lua(
-local path, line, column = ...
-vim.cmd.drop(vim.fn.fnameescape(path))
+local path, line, column, where = ...
+local name = vim.fn.fnameescape(path)
+if where == 1 then
+  vim.cmd.split(name)
+elseif where == 2 then
+  vim.cmd.vsplit(name)
+elseif where == 3 then
+  vim.cmd.tabedit(name)
+else
+  vim.cmd.drop(name)
+end
 if line > 0 then
   pcall(vim.api.nvim_win_set_cursor, 0, { line, math.max(column - 1, 0) })
 end
 )lua";
+
+    constexpr std::string_view sideName(PaneDirection direction) noexcept {
+      switch (direction) {
+      case PaneDirection::left:
+        return "left";
+      case PaneDirection::right:
+        return "right";
+      case PaneDirection::up:
+        return "up";
+      case PaneDirection::down:
+        return "down";
+      }
+
+      return "left";
+    }
+
+    constexpr ds::Option<PaneDirection> sideOf(std::string_view name) noexcept {
+      for (const auto direction : {PaneDirection::left, PaneDirection::right, PaneDirection::up, PaneDirection::down}) {
+        if (sideName(direction) == name) {
+          return direction;
+        }
+      }
+
+      return ds::none;
+    }
+
+    // Text a client lists as it is: UTF-8 without a control character.
+    bool displayable(std::string_view text) noexcept {
+      constexpr unsigned char first_printable = 0x20;
+      constexpr unsigned char delete_character = 0x7f;
+
+      return inspectUtf8(text) == Utf8Validation::valid && std::ranges::none_of(text, [](char character) {
+        const auto byte = static_cast<unsigned char>(character);
+
+        return byte < first_printable || byte == delete_character;
+      });
+    }
+
+    // A color as Neovim writes one: `#rrggbb`.
+    struct HexColor {
+      static constexpr std::size_t size = 7;
+
+      explicit constexpr HexColor(std::span<const Byte> rgb) noexcept {
+        constexpr std::string_view digits = "0123456789abcdef";
+        constexpr unsigned nibble = 4;
+        constexpr unsigned low = 0xf;
+
+        text.atMut(0) = '#';
+        for (std::size_t index = 0; index < 3; ++index) {
+          const unsigned channel = rgb[index];
+
+          text.atMut(1 + (index * 2)) = digits[channel >> nibble];
+          text.atMut(2 + (index * 2)) = digits[channel & low];
+        }
+      }
+
+      [[nodiscard]] constexpr std::string_view view() const noexcept {
+        return std::string_view{text.view()};
+      }
+
+      ds::Array<char, size> text{};
+    };
 
     // The start of `text` that fits `limit` bytes.
     constexpr std::string_view clipped(std::string_view text, std::size_t limit) {
@@ -238,6 +263,10 @@ end
 
   }
 
+  NvimBufferList::NvimBufferList(ConcurrentMemory& memory)
+      : text(memory),
+        names(memory) {}
+
   NvimPromptRequest::NvimPromptRequest(ConcurrentMemory& memory)
       : title(memory),
         initial(memory),
@@ -251,7 +280,9 @@ end
         output_(memory, output_limit),
         size_(size),
         surfaces_(surfaces),
-        prompt_(memory) {
+        prompt_(memory),
+        clipboard_(memory),
+        buffers_(memory) {
     request(output_, {.id = identify_request_, .method = "nvim_get_api_info"}, [](msgpack::Writer&) {});
   }
 
@@ -325,6 +356,7 @@ end
     }
 
     if (*method != "redraw") {
+      told(*method, message.subspan(reader.offset()));
       return true;
     }
 
@@ -335,7 +367,135 @@ end
 
     pulse_.flushed = pulse_.flushed || outcome.flushes != 0;
     pulse_.bell = pulse_.bell || outcome.bell;
+    if (outcome.flushes != 0) {
+      frameFloats();
+    }
+
     return true;
+  }
+
+  // Anything in Neovim can send these, so what does not read as what it names is passed over,
+  // and what does is cut to what a client is sent.
+  void NvimEditor::told(std::string_view method, std::span<const std::uint8_t> parameters) {
+    msgpack::Reader reader{parameters};
+
+    if (method == "telar_clipboard") {
+      copied(reader);
+    } else if (method == "telar_directory") {
+      moved(reader);
+    } else if (method == "telar_float") {
+      framed(reader);
+    } else if (method == "telar_buffers") {
+      listed(reader);
+    } else if (method == "telar_navigate") {
+      if (const auto side = reader.tuple(1) ? reader.string() : ds::none) {
+        pulse_.navigated = sideOf(*side);
+      }
+    } else if (method == "telar_pick") {
+      const auto source = reader.tuple(1) ? reader.string() : ds::none;
+
+      if (source && *source == "files") {
+        pulse_.pick = NvimPickSource::files;
+      } else if (source && *source == "grep") {
+        pulse_.pick = NvimPickSource::text;
+      } else if (source && *source == "buffers") {
+        pulse_.pick = NvimPickSource::buffers;
+      }
+    }
+  }
+
+  // `[text]`: what was yanked to a clipboard register.
+  void NvimEditor::copied(msgpack::Reader& reader) {
+    const auto text = reader.tuple(1) ? reader.string() : ds::none;
+    if (!text || text->size() > max_nvim_paste_bytes) {
+      return;
+    }
+
+    clipboard_.assign(*text);
+    pulse_.copied = true;
+  }
+
+  // `[path]`: the directory of the current window.
+  void NvimEditor::moved(msgpack::Reader& reader) {
+    const auto path = reader.tuple(1) ? reader.string() : ds::none;
+    if (!path || *path == screen_.directory()) {
+      return;
+    }
+
+    const bool settled = screen_.settled();
+
+    screen_.directory(*path);
+    publish(settled);
+  }
+
+  // `[window, sides, title, footer]`: a float's frame.
+  void NvimEditor::framed(msgpack::Reader& reader) {
+    constexpr std::uint32_t fields = 4;
+    std::uint64_t window = 0;
+    std::uint64_t sides = 0;
+
+    if (!reader.tuple(fields) || !reader.unsignedInteger(window) || !reader.unsignedInteger(sides) || sides > max_nvim_border) {
+      return;
+    }
+
+    const auto title = reader.string();
+    const auto footer = reader.string();
+    if (!title || !footer) {
+      return;
+    }
+
+    const bool settled = screen_.settled();
+
+    if (screen_.decorate(window, static_cast<std::uint8_t>(sides), clipped(*title, max_nvim_label_bytes), clipped(*footer, max_nvim_label_bytes))) {
+      publish(settled);
+    }
+  }
+
+  // `[token, [name...]]`: the listed buffers.
+  void NvimEditor::listed(msgpack::Reader& reader) {
+    std::uint64_t token = 0;
+    std::uint32_t count = 0;
+
+    if (!reader.tuple(2) || !reader.unsignedInteger(token) || !reader.array(count)) {
+      return;
+    }
+
+    buffers_.token = token;
+    buffers_.text.clear();
+    buffers_.names.clear();
+    for (std::uint32_t index = 0; index < count; ++index) {
+      const auto name = reader.string();
+      if (!name) {
+        break;
+      }
+
+      if (buffers_.names.size() < max_nvim_choices && !name->empty() && name->size() <= TextMatch::maximum_path_bytes && displayable(*name)) {
+        buffers_.names.push({.offset = static_cast<std::uint32_t>(buffers_.text.size()), .size = static_cast<std::uint32_t>(name->size())});
+        buffers_.text.extend(std::span<const char>{*name});
+      }
+    }
+
+    pulse_.listed = true;
+  }
+
+  void NvimEditor::publish(bool was_settled) noexcept {
+    if (was_settled) {
+      screen_.flush();
+      pulse_.flushed = true;
+    }
+  }
+
+  void NvimEditor::frameFloats() {
+    constexpr std::string_view script = "__telar_float(...)";
+    constexpr std::size_t room = 64;
+
+    for (auto window = screen_.nextUnframed(); window != 0; window = screen_.nextUnframed()) {
+      request(output_, {.id = next_request_++, .method = "nvim_exec_lua", .parameters = 2, .room = room}, [&](msgpack::Writer& writer) {
+        writer.string(script);
+        writer.array(1);
+        writer.unsignedInteger(window);
+      });
+    }
   }
 
   bool NvimEditor::answered(msgpack::Reader& reader, std::span<const std::uint8_t> message) {
@@ -348,6 +508,11 @@ end
     const auto error = reader.value();
     if (!error) {
       return fail("Neovim wrote a response without a result");
+    }
+
+    // Without telar's side of the conversation the editor would attach half taught.
+    if (id == bootstrap_request_ && error->kind != msgpack::Kind::nil) {
+      return fail("Neovim could not run what the runtime teaches it");
     }
 
     if (id != identify_request_ || state_ != NvimState::identifying) {
@@ -441,7 +606,7 @@ end
 
   bool NvimEditor::open(const NvimPlace& place) {
     constexpr std::uint32_t parameter_count = 2;
-    constexpr std::uint32_t argument_count = 3;
+    constexpr std::uint32_t argument_count = 4;
     constexpr std::size_t room = 64;
 
     if (state_ == NvimState::failed || place.path.empty() || place.path.size() > max_nvim_path_bytes) {
@@ -454,7 +619,174 @@ end
       writer.string(place.path);
       writer.unsignedInteger(place.line);
       writer.unsignedInteger(place.column);
+      writer.unsignedInteger(std::to_underlying(place.in));
     });
+  }
+
+  bool NvimEditor::theme(const TerminalTheme& colors) {
+    if (state_ == NvimState::failed || !colors.foreground || !colors.background || !colors.palette || !colors.syntax || !colors.chrome || (theme_ && *theme_ == colors)) {
+      return false;
+    }
+
+    theme_ = colors;
+    // A Neovim that has not attached yet is told as it does.
+    return state_ == NvimState::attached && sendTheme();
+  }
+
+  bool NvimEditor::sendTheme() {
+    constexpr std::string_view script = "__telar_theme(...)";
+    constexpr std::size_t room = 4096;
+    constexpr std::uint32_t ansi_colors = 16;
+    constexpr std::uint32_t style_fields = 3;
+    const auto& colors = *theme_;
+
+    return request(output_, {.id = next_request_++, .method = "nvim_exec_lua", .parameters = 2, .room = room}, [&](msgpack::Writer& writer) {
+      const auto hex = [&](std::span<const Byte> bytes, std::size_t index) {
+        writer.string(HexColor{bytes.subspan(index * 3, 3)}.view());
+      };
+
+      writer.string(script);
+      writer.array(1);
+      writer.map(colors.cursor ? 6 : 5);
+      writer.string("foreground");
+      hex(colors.foreground->view(), 0);
+      writer.string("background");
+      hex(colors.background->view(), 0);
+      if (colors.cursor) {
+        writer.string("cursor");
+        hex(colors.cursor->view(), 0);
+      }
+
+      writer.string("ansi");
+      writer.array(ansi_colors);
+      for (std::uint32_t index = 0; index < ansi_colors; ++index) {
+        hex(colors.palette->view(), index);
+      }
+
+      writer.string("syntax");
+      writer.map(TerminalTheme::syntax_roles);
+      for (std::size_t role = 0; role < TerminalTheme::syntax_roles; ++role) {
+        writer.string(TerminalTheme::syntax_names[role]);
+        writer.map(style_fields);
+        writer.string("color");
+        hex(colors.syntax->view(), role);
+        writer.string("italic");
+        writer.boolean((colors.syntax_italic & (1U << role)) != 0);
+        writer.string("bold");
+        writer.boolean((colors.syntax_bold & (1U << role)) != 0);
+      }
+
+      writer.string("chrome");
+      writer.map(TerminalTheme::chrome_roles);
+      for (std::size_t role = 0; role < TerminalTheme::chrome_roles; ++role) {
+        writer.string(TerminalTheme::chrome_names[role]);
+        hex(colors.chrome->view(), role);
+      }
+    });
+  }
+
+  bool NvimEditor::navigate(PaneDirection direction) {
+    constexpr std::string_view script = "__telar_navigate(...)";
+    constexpr std::size_t room = 64;
+
+    if (state_ != NvimState::attached) {
+      return false;
+    }
+
+    return request(output_, {.id = next_request_++, .method = "nvim_exec_lua", .parameters = 2, .room = room}, [&](msgpack::Writer& writer) {
+      writer.string(script);
+      writer.array(1);
+      writer.string(sideName(direction));
+    });
+  }
+
+  bool NvimEditor::selectMenu(std::uint32_t item, bool accept) {
+    constexpr std::uint32_t parameter_count = 4;
+    constexpr std::size_t room = 32;
+
+    if (state_ != NvimState::attached) {
+      return false;
+    }
+
+    return request(output_, {.id = next_request_++, .method = "nvim_select_popupmenu_item", .parameters = parameter_count, .room = room}, [&](msgpack::Writer& writer) {
+      writer.unsignedInteger(item);
+      // The item's text goes in the buffer, as a key that selects it would put it.
+      writer.boolean(true);
+      writer.boolean(accept);
+      writer.map(0);
+    });
+  }
+
+  bool NvimEditor::listBuffers(std::uint64_t token) {
+    constexpr std::string_view script = "__telar_buffers(...)";
+    constexpr std::size_t room = 64;
+
+    if (state_ != NvimState::attached) {
+      return false;
+    }
+
+    return request(output_, {.id = next_request_++, .method = "nvim_exec_lua", .parameters = 2, .room = room}, [&](msgpack::Writer& writer) {
+      writer.string(script);
+      writer.array(1);
+      writer.unsignedInteger(token);
+    });
+  }
+
+  bool NvimEditor::preview(const NvimPlace& place, NvimArea area) {
+    constexpr std::string_view script = "__telar_preview(...)";
+    constexpr std::uint32_t argument_count = 6;
+    constexpr std::size_t room = 96;
+
+    if (state_ != NvimState::attached || place.path.size() > max_nvim_path_bytes) {
+      return false;
+    }
+
+    return request(output_, {.id = next_request_++, .method = "nvim_exec_lua", .parameters = 2, .room = room + place.path.size()}, [&](msgpack::Writer& writer) {
+      writer.string(script);
+      writer.array(argument_count);
+      writer.string(place.path);
+      writer.unsignedInteger(place.line);
+      writer.unsignedInteger(area.row);
+      writer.unsignedInteger(area.column);
+      writer.unsignedInteger(area.columns);
+      writer.unsignedInteger(area.rows);
+    });
+  }
+
+  bool NvimEditor::list(std::span<const TextMatch> places) {
+    constexpr std::string_view script = "__telar_list(...)";
+    constexpr std::uint32_t place_fields = 4;
+    constexpr std::size_t place_room = 32;
+    std::size_t room = place_room;
+
+    if (state_ != NvimState::attached || places.empty()) {
+      return false;
+    }
+
+    for (const auto& place : places) {
+      room += place_room + place.path.size() + place.text.size();
+    }
+
+    return request(output_, {.id = next_request_++, .method = "nvim_exec_lua", .parameters = 2, .room = room}, [&](msgpack::Writer& writer) {
+      writer.string(script);
+      writer.array(1);
+      writer.array(static_cast<std::uint32_t>(places.size()));
+      for (const auto& place : places) {
+        writer.array(place_fields);
+        writer.string(place.path);
+        writer.unsignedInteger(place.line);
+        writer.unsignedInteger(place.column);
+        writer.string(place.text);
+      }
+    });
+  }
+
+  std::string_view NvimEditor::clipboard() const noexcept {
+    return clipboard_.view();
+  }
+
+  const NvimBufferList& NvimEditor::buffers() const noexcept {
+    return buffers_;
   }
 
   const NvimPromptRequest& NvimEditor::prompt() const noexcept {
@@ -496,11 +828,28 @@ end
       writer.unsignedInteger(channel_);
     });
 
-    request(output_, {.id = next_request_++, .method = "nvim_exec_lua", .parameters = 2, .room = variable_room + prompt_bootstrap.size()}, [&](msgpack::Writer& writer) {
-      writer.string(prompt_bootstrap);
-      writer.array(1);
+    std::size_t scripts = bootstrap.size();
+
+    for (const auto& [name, source] : modules) {
+      scripts += name.size() + source.size() + variable_room;
+    }
+
+    bootstrap_request_ = next_request_++;
+    request(output_, {.id = bootstrap_request_, .method = "nvim_exec_lua", .parameters = 2, .room = variable_room + scripts}, [&](msgpack::Writer& writer) {
+      writer.string(bootstrap);
+      writer.array(2);
       writer.unsignedInteger(channel_);
+      writer.map(static_cast<std::uint32_t>(modules.size()));
+      for (const auto& [name, source] : modules) {
+        writer.string(name);
+        writer.string(source);
+      }
     });
+
+    // The colorscheme is the window's before the configuration loads, and after whatever it sets.
+    if (theme_) {
+      sendTheme();
+    }
 
     request(output_, {.id = next_request_++, .method = "nvim_ui_attach", .parameters = 3, .room = attach_room}, [&](msgpack::Writer& writer) {
       writer.unsignedInteger(size_.columns);

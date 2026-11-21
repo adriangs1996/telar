@@ -25,6 +25,10 @@ import telar.vocabulary;
 import telar.runtime.nvim.editor;
 import telar.runtime.nvim.screen;
 import telar.wire.nvim;
+import telar.wire.pane_io;
+import telar.wire.vocabulary;
+import telar.wire.pane_io;
+import telar.wire.vocabulary;
 
 namespace {
 
@@ -143,6 +147,10 @@ namespace {
 
         const auto pulse = editor_.takePulse();
 
+        told_.copied = told_.copied || pulse.copied;
+        told_.listed = told_.listed || pulse.listed;
+        told_.navigated = pulse.navigated ? pulse.navigated : told_.navigated;
+        told_.pick = pulse.pick ? pulse.pick : told_.pick;
         if (pulse.flushed) {
           ++flushes_;
           last_flush_ = Clock::now();
@@ -156,6 +164,13 @@ namespace {
     bool settle(std::chrono::milliseconds limit = std::chrono::seconds{10}, std::chrono::milliseconds quiet = std::chrono::milliseconds{250}) {
       return pump(limit, [&] {
         return flushes_ > 0 && editor_.pending().empty() && Clock::now() - last_flush_ > quiet;
+      });
+    }
+
+    // Runs the pipes for a while, for what Neovim answers without drawing anything.
+    void run(std::chrono::milliseconds time) {
+      pump(time, [] {
+        return false;
       });
     }
 
@@ -180,6 +195,11 @@ namespace {
       }
 
       return last_flush_ - started;
+    }
+
+    // What Neovim told the runtime, besides what it drew, since this was last asked.
+    NvimPulse takeTold() {
+      return std::exchange(told_, {});
     }
 
     NvimEditor& editor() {
@@ -217,6 +237,7 @@ namespace {
     std::size_t received_ = 0;
     std::size_t error_bytes_ = 0;
     bool closed_ = false;
+    NvimPulse told_;
   };
 
   std::size_t placed(const NvimScreen& screen, NvimPlacement placement) {
@@ -353,6 +374,62 @@ namespace {
     std::println("vim.ui.input -> prompt id={} title={:?} initial={:?}", prompt.id, prompt.title.view(), prompt.initial.view());
     session.editor().answer({.id = prompt.id, .accepted = true, .text = "ana maria"});
     session.settle(std::chrono::seconds{3}, std::chrono::milliseconds{300});
+
+    // telar's side of the conversation in Neovim: the theme, the clipboard, the way out of the
+    // last window, a float's frame, the buffers, the preview and the picker's command.
+    {
+      constexpr auto answer_time = std::chrono::milliseconds{400};
+      TerminalTheme theme;
+
+      theme.foreground.emplace().fill(Byte{0xd0});
+      theme.background.emplace().fill(Byte{0x20});
+      theme.palette.emplace().fill(Byte{0x40});
+      theme.syntax.emplace().fill(Byte{0x90});
+      theme.chrome.emplace().fill(Byte{0x60});
+      std::println("theme sent={}", session.editor().theme(theme));
+      session.editor().command("lua io.stderr:write('probe-colors=' .. tostring(vim.g.colors_name) .. ' keyword=' .. string.format('%06x', vim.api.nvim_get_hl(0, {name = 'Keyword', link = false}).fg or 0) .. '\\n')");
+      session.editor().command("colorscheme habamax");
+      session.editor().command("lua io.stderr:write('probe-after-colorscheme=' .. tostring(vim.g.colors_name) .. '\\n')");
+      session.run(answer_time);
+
+      static_cast<void>(session.takeTold());
+      session.editor().command("call setreg('+', 'copied by the probe')");
+      session.editor().navigate(PaneDirection::right);
+      session.editor().command("Telar grep");
+      session.run(answer_time);
+
+      auto pulse = session.takeTold();
+
+      std::println("clipboard copied={} text={:?}", pulse.copied, session.editor().clipboard());
+      std::println("navigate right with one window -> left the editor={}", pulse.navigated && *pulse.navigated == PaneDirection::right);
+      std::println(":Telar grep -> picker asked={}", pulse.pick && *pulse.pick == NvimPickSource::text);
+
+      session.editor().command("lua vim.api.nvim_open_win(vim.api.nvim_create_buf(false, true), false, {relative = 'editor', row = 2, col = 4, width = 20, height = 3, border = 'rounded', title = 'Keys', footer = 'esc close'})");
+      session.run(answer_time);
+      for (const auto& grid : screen.grids()) {
+        if (grid->placement == NvimPlacement::floating) {
+          std::println("float border={} title={:?} footer={:?}", grid->border, grid->title.view(), grid->footer.view());
+        }
+      }
+
+      session.editor().listBuffers(7);
+      session.editor().preview({.path = "/etc/hosts", .line = 1}, {.row = 8, .column = 2, .columns = 30, .rows = 4});
+      session.run(answer_time);
+      pulse = session.takeTold();
+      std::println("buffers listed={} token={} names={}; floats with the preview={}", pulse.listed, session.editor().buffers().token, session.editor().buffers().names.size(), placed(screen, NvimPlacement::floating));
+      session.editor().preview({}, {});
+      session.run(answer_time);
+      std::println("floats after the preview closed={}", placed(screen, NvimPlacement::floating));
+
+      ds::String<ConcurrentMemory> text{memory};
+
+      composeText(screen, 4, text, 4096);
+      std::println("screen text: {:?}", text.view());
+      session.editor().command("cd /");
+      session.editor().command("lcd /tmp");
+      session.run(answer_time);
+      std::println("directory after :lcd /tmp, told by telar -> {:?}", screen.directory());
+    }
 
     // A plugin writing to standard output, where the protocol travels.
     session.editor().command("lua io.stdout:write('telar-probe-pollution')");

@@ -122,6 +122,12 @@ export {
         case ClientTag::nvim_focus:
         case ClientTag::nvim_prompt_reply:
         case ClientTag::nvim_open:
+        case ClientTag::nvim_navigate:
+        case ClientTag::nvim_menu_select:
+        case ClientTag::find_text:
+        case ClientTag::nvim_buffers:
+        case ClientTag::nvim_preview:
+        case ClientTag::nvim_list:
           return Dialect::cqp00008;
         default:
           return Dialect::schema87;
