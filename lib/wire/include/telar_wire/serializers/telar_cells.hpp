@@ -51,6 +51,10 @@ namespace telar {
 
   // Every cell of a frame is validated and coded on its own; the codecs are in vocabulary.cpp.
   struct CellStyle {
+    // The flag that says the cell is of a link, above the attributes and the underline's
+    // style: an editor sets it on the cells whose highlight names a URL.
+    static constexpr std::uint16_t link = 1U << 11U;
+
     std::uint16_t flags = 0;
     CellColor foreground{};
     CellColor background{};

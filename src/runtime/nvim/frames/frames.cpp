@@ -83,6 +83,16 @@ namespace telar::runtime {
         }
       }
 
+      // A link says so, and is underlined when its highlight draws no line of its own.
+      if (highlight.link != 0) {
+        constexpr unsigned underline_mask = 7U << underline_shift;
+
+        style.flags |= CellStyle::link;
+        if ((style.flags & underline_mask) == 0) {
+          style.flags |= static_cast<std::uint16_t>(static_cast<unsigned>(UnderlineStyle::single) << underline_shift);
+        }
+      }
+
       return style;
     }
 

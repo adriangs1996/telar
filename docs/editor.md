@@ -100,7 +100,8 @@ by it again. `vim.g.telar_tint` takes the options of the theme's engine, such as
 - A link of the web or of mail opens on the machine you type on, wherever Neovim runs: `gx`,
   Command and a click, and anything a plugin opens with `vim.ui.open`. One link opens for each
   thing you do, so nothing in the editor opens links by itself. A file opens on the host, as
-  `vim.ui.open` always did.
+  `vim.ui.open` always did. Text whose highlight names a URL, as a link of a Markdown file
+  does, is underlined, and the pointer over it is the one of a link.
 - Moving the focus to a side with `navigate_pane` asks the editor first for a window on that
   side, and moves to the pane there when it has none. No plugin is needed for it.
 - The pane's directory is the one of Neovim's current window, `:lcd` and `:tcd` included.

@@ -242,7 +242,7 @@ namespace {
 
       redraw(screen, memory, 6, [](msgpack::Writer& writer) {
         event(writer, "default_colors_set", {0xdcdccc, -1, -1, 0, 0});
-        writer.array(2);
+        writer.array(3);
         writer.string("hl_attr_define");
         writer.array(4);
         writer.unsignedInteger(7);
@@ -255,10 +255,17 @@ namespace {
         writer.boolean(true);
         writer.map(0);
         writer.array(0);
+        writer.array(4);
+        writer.unsignedInteger(8);
+        writer.map(1);
+        writer.string("url");
+        writer.string("https://example.com/docs");
+        writer.map(0);
+        writer.array(0);
         event(writer, "grid_resize", {1, 8, 3});
         fill(writer, 1, 0, "a", 8);
         fill(writer, 1, 1, "b", 8, 7);
-        fill(writer, 1, 2, "c", 8);
+        fill(writer, 1, 2, "c", 8, 8);
       });
 
       check(NvimFrames::pending(screen, client.frame), "a client without a frame lacks the screen");
@@ -274,6 +281,11 @@ namespace {
       check(highlighted.foreground == accent && highlighted.background == CellColor{}, "a highlight's color, and the client's own for the one Neovim leaves unset");
       check((highlighted.flags & std::to_underlying(CellAttribute::bold)) != 0 && (highlighted.flags >> 8U) == std::to_underlying(UnderlineStyle::curly), "its attributes and its underline");
       check(client.grids[1].style[0].foreground == CellColor{} && client.grids[1].style[0].background == CellColor{}, "a cell without a highlight is drawn in the client's own colors, whatever Neovim's defaults are");
+
+      const auto& linked = client.grids[1].style[16];
+
+      check((linked.flags & CellStyle::link) != 0 && ((linked.flags >> 8U) & 7U) == std::to_underlying(UnderlineStyle::single), "a cell whose highlight names a URL says it is a link, and is underlined");
+      check((highlighted.flags & CellStyle::link) == 0, "and no other cell does");
 
       redraw(screen, memory, 1, [](msgpack::Writer& writer) {
         fill(writer, 1, 2, "z", 8);

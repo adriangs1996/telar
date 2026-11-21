@@ -601,6 +601,12 @@ namespace telar::gui::qt {
     }
 
     if (grid->id != 1) {
+      // A link the editor has on the cell is pointed at, as in a terminal.
+      const bool on_cell = where->row < grid->screen.rows() && where->column < grid->screen.columns();
+      if (on_cell && (grid->screen.row(where->row)[where->column].style.flags & CellStyle::link) != 0) {
+        return Qt::PointingHandCursor;
+      }
+
       return grid->placement == nvim::NvimPlacement::window ? Qt::IBeamCursor : Qt::ArrowCursor;
     }
 

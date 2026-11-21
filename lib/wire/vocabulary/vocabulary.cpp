@@ -592,10 +592,11 @@ namespace telar {
   }
 
   void CellStyle::validate() const {
-    // The attribute bits, then three bits of underline style; the bits above them stay clear.
+    // The attribute bits, three bits of underline style, and the link's; the bits above them
+    // stay clear.
     constexpr unsigned underline_shift = 8;
     constexpr unsigned underline_mask = 0x7;
-    constexpr unsigned reserved_flags = 0xf800;
+    constexpr unsigned reserved_flags = 0xf000;
 
     const unsigned bits = flags;
     if ((bits & reserved_flags) != 0 || ((bits >> underline_shift) & underline_mask) > std::to_underlying(UnderlineStyle::dashed)) {
