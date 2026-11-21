@@ -6,6 +6,7 @@ import telar.platform.error;
 import telar.platform.fs;
 import telar.platform.primitives;
 import telar.base.ds;
+import telar.wire.vocabulary;
 import telar.base.memory.allocators;
 
 namespace telar::runtime {
@@ -60,7 +61,7 @@ namespace telar::runtime {
         return;
       }
 
-      if (const int failure = writePrivateFile(opened.get(), name, std::span<const std::uint8_t>{reinterpret_cast<const std::uint8_t*>(content.data()), content.size()}, PrivateFileMode::replace); failure != 0) {
+      if (const int failure = writePrivateFile(opened.get(), name, byteView(content), PrivateFileMode::replace); failure != 0) {
         throw SystemError{"Write the editor's configuration", failure};
       }
     }

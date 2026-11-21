@@ -284,6 +284,16 @@ export extern "C++" {
     struct MessageSchema<NvimPick>
         : Schema<Direction::server, ServerTag::nvim_pick, Field<&NvimPick::pane_id, NonzeroU64, "pane_id">, Field<&NvimPick::source, EnumByte<NvimPickSource, std::to_underlying(NvimPickSource::buffers)>, "source">> {};
 
+    // Something in the editor opened a link, as `gx` does: it opens where the person is, not
+    // on the machine Neovim runs on.
+    struct NvimLink {
+      std::uint64_t pane_id{};
+      std::string_view uri;
+    };
+
+    template <>
+    struct MessageSchema<NvimLink> : Schema<Direction::server, ServerTag::nvim_link, Field<&NvimLink::pane_id, NonzeroU64, "pane_id">, Field<&NvimLink::uri, Text16<max_nvim_path_bytes, false>, "uri">> {};
+
     // How a grid is shown: not at all, as a window in the editor's layout, floating over it, in
     // a window of its own, or as the rows messages scroll in.
     enum class NvimPlacement : Byte {

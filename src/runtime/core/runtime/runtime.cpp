@@ -2678,6 +2678,10 @@ namespace telar::runtime {
     if (pulse.pick) {
       driver->connection.send(NvimPick{.pane_id = pane.id, .source = *pulse.pick});
     }
+
+    if (pulse.opened) {
+      driver->connection.send(NvimLink{.pane_id = pane.id, .uri = pane.editor.link()});
+    }
   }
 
   template <EventLoop Poller, typename Background>

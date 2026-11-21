@@ -322,6 +322,8 @@ FocusScope {
 
         NvimMessages {
             z: 950
+            // A picker has the pane: notices wait behind it, out of sight.
+            visible: !(view.picker.open ?? false)
             messages: view.messages
             colors: root.colors
             typography: root.typography

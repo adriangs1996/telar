@@ -279,7 +279,7 @@ namespace telar::runtime::cli::window {
 
     // A file as `telar edit` names it, from the directory the command was run in: the window
     // that opens it works somewhere else. The path is kept in `absolute` when it is made here.
-    tbc::val_a<std::string_view> fromHere(tbc::holds<Text&, tbc::lt::a> absolute, tbc::val_a<std::string_view> file) {
+    tbc::val_a<std::string_view> fromHere(tbc::mut_a<Text> absolute, tbc::val_a<std::string_view> file) {
       if (file.starts_with('/')) {
         return file;
       }
@@ -293,20 +293,9 @@ namespace telar::runtime::cli::window {
     // The pane the command was run in, whose tab is where its editor is looked for; zero
     // outside a pane.
     std::uint64_t callingPane() noexcept {
-      constexpr std::uint64_t base = 10;
-      constexpr std::uint64_t most = std::numeric_limits<std::uint64_t>::max() / base;
       const char* named = std::getenv("TELAR_PANE_ID"); // NOLINT(concurrency-mt-unsafe): the CLI reads its environment on its one thread
-      std::uint64_t pane = 0;
 
-      for (const auto digit : named == nullptr ? std::string_view{} : std::string_view{named}) {
-        if (digit < '0' || digit > '9' || pane >= most) {
-          return 0;
-        }
-
-        pane = (pane * base) + static_cast<std::uint64_t>(digit - '0');
-      }
-
-      return pane;
+      return named == nullptr ? 0 : parseExact<std::uint64_t>(named).valueOr(0);
     }
 
     int routed(Session& session, const RoutedOptions& options, Text& output) {

@@ -92,6 +92,9 @@ namespace telar::gui::qt {
       case window_actions::Action::new_tab:
       case window_actions::Action::new_editor:
       case window_actions::Action::new_editor_tab:
+      case window_actions::Action::editor_files:
+      case window_actions::Action::editor_grep:
+      case window_actions::Action::editor_buffers:
       case window_actions::Action::select_tab:
       case window_actions::Action::select_tab_index:
       case window_actions::Action::next_tab:
@@ -162,6 +165,9 @@ namespace telar::gui::qt {
       case window_actions::Action::new_tab:
       case window_actions::Action::new_editor:
       case window_actions::Action::new_editor_tab:
+      case window_actions::Action::editor_files:
+      case window_actions::Action::editor_grep:
+      case window_actions::Action::editor_buffers:
       case window_actions::Action::select_tab:
       case window_actions::Action::select_tab_index:
       case window_actions::Action::next_tab:
@@ -221,11 +227,14 @@ namespace telar::gui::qt {
     ds::Option<window_actions::Action> nativeAction(BindingActionKind kind) noexcept {
       using Native = window_actions::Action;
       using Binding = BindingActionKind;
-      constexpr auto actions = ds::Array<std::pair<Binding, Native>, 50>{
+      constexpr auto actions = ds::Array<std::pair<Binding, Native>, 53>{
           {
               {Binding::new_tab, Native::new_tab},
               {Binding::new_editor, Native::new_editor},
               {Binding::new_editor_tab, Native::new_editor_tab},
+              {Binding::editor_files, Native::editor_files},
+              {Binding::editor_grep, Native::editor_grep},
+              {Binding::editor_buffers, Native::editor_buffers},
               {Binding::next_tab, Native::next_tab},
               {Binding::previous_tab, Native::previous_tab},
               {Binding::move_tab_next, Native::move_tab_next},
@@ -581,6 +590,9 @@ namespace telar::gui::qt {
     case BindingActionKind::new_tab:
     case BindingActionKind::new_editor:
     case BindingActionKind::new_editor_tab:
+    case BindingActionKind::editor_files:
+    case BindingActionKind::editor_grep:
+    case BindingActionKind::editor_buffers:
     case BindingActionKind::next_tab:
     case BindingActionKind::previous_tab:
     case BindingActionKind::rename_tab:
@@ -838,6 +850,7 @@ namespace telar::gui::qt {
     case ClientAction::config_show:
     case ClientAction::plugin_list:
     case ClientAction::plugin_get:
+    case ClientAction::editor_open:
       application::UnsupportedClientCommand{}(message, reply);
       return;
     }
@@ -889,7 +902,26 @@ namespace telar::gui::qt {
     }
   }
 
-  // An editor beside the focused pane, or in a tab of its own.
+  namespace {
+
+    // What an action opens the editor's picker on; nothing for the other actions.
+    ds::Option<application::nvim::NvimPickSource> pickerSource(window_actions::Action action) noexcept {
+      using Source = application::nvim::NvimPickSource;
+
+      if (action == window_actions::Action::editor_files) {
+        return Source::files;
+      }
+
+      if (action == window_actions::Action::editor_grep) {
+        return Source::text;
+      }
+
+      return action == window_actions::Action::editor_buffers ? ds::Option<Source>{Source::buffers} : ds::none;
+    }
+
+  }
+
+  // An editor beside the focused pane, or in a tab of its own; or the picker of the tab's.
   bool WindowCommands::executeEditor(window_actions::Action action) {
     if (action == window_actions::Action::new_editor) {
       static_cast<void>(application::workbench::splitEditor(store_.sessionMut(), ClientLayoutAxis::horizontal));
@@ -898,6 +930,15 @@ namespace telar::gui::qt {
 
     if (action == window_actions::Action::new_editor_tab) {
       static_cast<void>(application::workbench::createEditorTab(store_.sessionMut()));
+      return true;
+    }
+
+    // The picker of the tab's editor pane, which takes the focus.
+    if (const auto source = pickerSource(action)) {
+      if (!application::nvim::find(store_.sessionMut(), *source)) {
+        status_.report(QStringLiteral("This tab has no editor pane"));
+      }
+
       return true;
     }
 
@@ -1055,6 +1096,9 @@ namespace telar::gui::qt {
     case window_actions::Action::new_tab:
     case window_actions::Action::new_editor:
     case window_actions::Action::new_editor_tab:
+    case window_actions::Action::editor_files:
+    case window_actions::Action::editor_grep:
+    case window_actions::Action::editor_buffers:
     case window_actions::Action::select_tab:
     case window_actions::Action::select_tab_index:
     case window_actions::Action::next_tab:

@@ -184,6 +184,7 @@ namespace telar {
     nvim_navigated = 0xcf,
     text_results = 0xd0,
     nvim_pick = 0xd1,
+    nvim_link = 0xd2,
   };
 
   struct RequestRuntimeState {
@@ -660,6 +661,8 @@ namespace telar {
       return "text_results";
     case ServerTag::nvim_pick:
       return "nvim_pick";
+    case ServerTag::nvim_link:
+      return "nvim_link";
     case ServerTag::pane_theme:
       return "pane_theme";
     }

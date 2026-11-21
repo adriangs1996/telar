@@ -728,6 +728,11 @@ namespace telar::gui::qt {
       monitor_.synchronize();
       break;
     case application::Change::editor:
+      // A link the editor opened is opened here, where the person is.
+      if (const auto link = application::nvim::takeLink(sessionMut(), session().changedPane())) {
+        static_cast<void>(links_.open(*link, session().changedPane()));
+      }
+
       emit editors_.editorChanged(session().changedPane());
       break;
     case application::Change::peek:

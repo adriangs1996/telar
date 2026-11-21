@@ -9,6 +9,7 @@ import telar.platform.fs;
 import telar.platform.primitives;
 import telar.platform.process;
 import telar.base.ds;
+import telar.base.text;
 
 namespace telar::runtime::cli {
 
@@ -450,32 +451,15 @@ namespace telar::runtime::cli {
 
   namespace {
 
-    // The number `digits` writes, when it is one a line of a file can be.
-    ds::Option<std::uint32_t> lineNumber(std::string_view digits) noexcept {
-      constexpr std::uint32_t base = 10;
-      constexpr std::uint32_t most = std::numeric_limits<std::uint32_t>::max() / base;
-      std::uint32_t number = 0;
-
-      for (const auto digit : digits) {
-        if (digit < '0' || digit > '9' || number >= most) {
-          return ds::none;
-        }
-
-        number = (number * base) + static_cast<std::uint32_t>(digit - '0');
-      }
-
-      return digits.empty() ? ds::none : ds::Option<std::uint32_t>{number};
-    }
-
     // `FILE:LINE` names a line, when what follows the last colon is a number: the file is left
     // in `text` and the line goes to `line`.
-    void placed(tbc::val_a<std::string_view>& text, std::int64_t& line) noexcept {
+    void placed(tbc::val_a<std::string_view>& text, std::int64_t& line) {
       const auto colon = text.rfind(':');
       if (colon == std::string_view::npos || colon == 0) {
         return;
       }
 
-      if (const auto number = lineNumber(text.substr(colon + 1))) {
+      if (const auto number = parseExact<std::uint32_t>(text.substr(colon + 1))) {
         line = *number;
         text = text.substr(0, colon);
       }

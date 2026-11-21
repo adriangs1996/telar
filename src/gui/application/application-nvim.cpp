@@ -4,6 +4,7 @@ import std;
 
 import :access;
 import telar.gui.features.nvim;
+import telar.gui.features.terminal.links;
 import telar.wire.editor;
 import telar.wire.nvim;
 import telar.wire.pane_io;
@@ -168,6 +169,24 @@ namespace telar::gui::application::nvim {
 
   }
 
+  bool find(Session& session, NvimPickSource source) {
+    const auto* focused = focusedPane(session.panes, session.tabs, session.active_tab);
+    if (focused == nullptr) {
+      return false;
+    }
+
+    // The focused pane when it is an editor: a tab may have more than one.
+    const auto focused_id = focused->id;
+    const auto editor = reaches(session, focused_id) ? focused_id : beside(session, focused_id);
+    if (editor == 0) {
+      return false;
+    }
+
+    workbench::focusPane(session, editor);
+    pick(session, editor, source);
+    return true;
+  }
+
   void pick(Session& session, std::uint64_t pane_id, NvimPickSource source) {
     const auto* pane = findPane(session.panes, pane_id);
     if (pane == nullptr || !reaches(session, pane_id) || !session.speaks(ClientTag::find_text) || !std::string_view{pane->cwd}.starts_with('/')) {
@@ -257,14 +276,15 @@ namespace telar::gui::application::nvim {
 
     const auto& picker = editor->picker;
     const std::string_view text{picker.text.data(), picker.text.size()};
-    ds::Vec<ds::String<Memory>, Memory> paths{editor->memory};
-    ds::Vec<TextMatch, Memory> places{editor->memory};
+    // The session's own memory: the editor is only read while these grow.
+    ds::Vec<ds::String<Memory>, Memory> paths{session.memory};
+    ds::Vec<TextMatch, Memory> places{session.memory};
 
     // Every path is made before any place views one: the places are views of them.
     paths.reserve(indices.size());
     for (const auto index : indices) {
       if (index < picker.matches.size()) {
-        locate(paths.emplace(editor->memory), picker, picker.matches[index]);
+        locate(paths.emplace(session.memory), picker, picker.matches[index]);
       }
     }
 
@@ -293,6 +313,22 @@ namespace telar::gui::application::nvim {
         session.link.send(NvimPreview{.pane_id = pane_id});
       }
     }
+  }
+
+  Change receive(Session& session, const NvimLink& message) {
+    return feature::link(session.nvim, message.pane_id, message.uri) ? shown(session, message.pane_id) : Change::none;
+  }
+
+  ds::Option<features::terminal::links::LinkTarget> takeLink(Session& session, std::uint64_t pane_id) {
+    const auto* editor = feature::find(session.nvim, pane_id);
+    if (editor == nullptr || editor->link.empty()) {
+      return ds::none;
+    }
+
+    const auto target = features::terminal::links::LinkTarget::fromUri(editor->link.view());
+
+    static_cast<void>(feature::link(session.nvim, pane_id, {}));
+    return target;
   }
 
   Change receive(Session& session, const NvimPick& message) {

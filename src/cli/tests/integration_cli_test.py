@@ -181,6 +181,25 @@ def editor(home):
     home.run('integration', 'install', 'editor', '--settings', '/tmp/x', status=1)
     assert b'editor: absent' in home.run('integration', 'uninstall', 'editor').stdout
     del home.env['TELAR_NVIM_ARCHIVE']
+    # What telar's own configuration needs is said of a host that has none of its own, and
+    # only of what the host lacks.
+    path = home.env['PATH']
+    empty = home.root / 'no-tools'
+    empty.mkdir()
+    home.env['PATH'] = str(empty)
+    lacking = home.run('integration', 'status', 'editor').stdout
+    assert b'editor: needs git' in lacking and b'editor: needs a C compiler' in lacking, lacking
+    for tool in ('git', 'cc'):
+        (empty / tool).write_text('#!/bin/sh\n')
+        (empty / tool).chmod(0o755)
+    assert b'needs' not in home.run('integration', 'status', 'editor').stdout
+    (empty / 'git').unlink()
+    own = Path(home.env.get('XDG_CONFIG_HOME', home.home / '.config')) / 'nvim'
+    assert b'editor: needs git' in home.run('integration', 'status', 'editor').stdout
+    own.mkdir(parents=True)
+    assert b'needs' not in home.run('integration', 'status', 'editor').stdout
+    own.rmdir()
+    home.env['PATH'] = path
 
 
 def linked_settings(home):

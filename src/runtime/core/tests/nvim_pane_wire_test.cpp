@@ -113,6 +113,13 @@ namespace {
           return;
         }
 
+        if (keys == "<F4>") {
+          tell("telar_open", 1, [](msgpack::Writer& writer) {
+            writer.string("https://example.com/docs");
+          });
+          return;
+        }
+
         if (keys == "<F7>") {
           tell("telar_pick", 1, [](msgpack::Writer& writer) {
             writer.string("files");
@@ -624,6 +631,11 @@ namespace {
     const auto pick = peer.receive<NvimPick>();
 
     check(pick.pane_id == editor.pane && pick.source == NvimPickSource::files);
+    peer.send(NvimInput{.pane_id = editor.pane, .keys = bytes("<F4>")});
+
+    const auto link = peer.receive<NvimLink>();
+
+    check(link.pane_id == editor.pane && link.uri == "https://example.com/docs", "a link opened in the editor reaches who is typing in it");
 
     const auto buffers = peer.exchange<PathResults>(NvimBuffers{.request_id = 20, .pane_id = editor.pane, .query = "main", .limit = 10});
 

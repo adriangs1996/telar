@@ -307,7 +307,8 @@ namespace telar::gui::features::nvim {
         messages(made_in),
         tabs(made_in),
         prompt(made_in),
-        picker(made_in) {}
+        picker(made_in),
+        link(made_in) {}
 
   const Grid* Editor::grid(std::uint32_t id) const noexcept {
     for (const auto& grid : grids) {
@@ -636,6 +637,16 @@ namespace telar::gui::features::nvim {
     }
 
     ++editor->picker_revision;
+    return true;
+  }
+
+  bool link(State& state, std::uint64_t pane_id, std::string_view uri) {
+    auto* editor = Access::find(state, pane_id);
+    if (editor == nullptr) {
+      return false;
+    }
+
+    editor->link.assign(uri);
     return true;
   }
 

@@ -75,12 +75,13 @@ namespace telar::runtime {
 #include "nvim_scripts.inc"
 
     // The modules, by the name Lua requires each with.
-    constexpr ds::Array<std::pair<std::string_view, std::string_view>, 4> modules{{
-        {"telar", module_telar},
-        {"telar.theme", module_theme},
-        {"telar.tint", module_tint},
-        {"telar.navigate", module_navigate},
-    }};
+    using Module = std::pair<std::string_view, std::string_view>;
+    constexpr ds::Array<Module, 4> modules{
+        Module{"telar", module_telar},
+        Module{"telar.theme", module_theme},
+        Module{"telar.tint", module_tint},
+        Module{"telar.navigate", module_navigate},
+    };
 
     constexpr std::string_view answer_script = "__telar_prompt_answer(...)";
 
@@ -282,6 +283,7 @@ end
         surfaces_(surfaces),
         prompt_(memory),
         clipboard_(memory),
+        link_(memory),
         buffers_(memory) {
     request(output_, {.id = identify_request_, .method = "nvim_get_api_info"}, [](msgpack::Writer&) {});
   }
@@ -381,6 +383,8 @@ end
 
     if (method == "telar_clipboard") {
       copied(reader);
+    } else if (method == "telar_open") {
+      opened(reader);
     } else if (method == "telar_directory") {
       moved(reader);
     } else if (method == "telar_float") {
@@ -415,6 +419,19 @@ end
     pulse_.copied = true;
   }
 
+  // `[uri]`: a link of the web or of mail to open where the person is.
+  void NvimEditor::opened(msgpack::Reader& reader) {
+    const auto uri = reader.tuple(1) ? reader.string() : ds::none;
+    const bool known = uri && (uri->starts_with("https://") || uri->starts_with("http://") || uri->starts_with("mailto:"));
+
+    if (!known || uri->size() > max_nvim_path_bytes || !std::exchange(asked_, false)) {
+      return;
+    }
+
+    link_.assign(*uri);
+    pulse_.opened = true;
+  }
+
   // `[path]`: the directory of the current window.
   void NvimEditor::moved(msgpack::Reader& reader) {
     const auto path = reader.tuple(1) ? reader.string() : ds::none;
@@ -446,7 +463,7 @@ end
 
     const bool settled = screen_.settled();
 
-    if (screen_.decorate(window, static_cast<std::uint8_t>(sides), clipped(*title, max_nvim_label_bytes), clipped(*footer, max_nvim_label_bytes))) {
+    if (screen_.decorate(window, {.border = static_cast<std::uint8_t>(sides), .title = clipped(*title, max_nvim_label_bytes), .footer = clipped(*footer, max_nvim_label_bytes)})) {
       publish(settled);
     }
   }
@@ -647,7 +664,11 @@ end
 
       writer.string(script);
       writer.array(1);
-      writer.map(colors.cursor ? 6 : 5);
+      // The foreground, the background, the selection's two and the palette; the cursor's when
+      // the theme names one.
+      constexpr std::size_t always = 5;
+
+      writer.map(always + (colors.cursor ? 1 : 0));
       writer.string("foreground");
       hex(colors.foreground->view(), 0);
       writer.string("background");
@@ -785,6 +806,10 @@ end
     return clipboard_.view();
   }
 
+  std::string_view NvimEditor::link() const noexcept {
+    return link_.view();
+  }
+
   const NvimBufferList& NvimEditor::buffers() const noexcept {
     return buffers_;
   }
@@ -906,6 +931,7 @@ end
       return false;
     }
 
+    asked_ = true;
     return request(output_, {.id = next_request_++, .method = "nvim_input", .parameters = 1, .room = keys.size()}, [&](msgpack::Writer& writer) {
       writer.string(keys);
     });
@@ -955,6 +981,8 @@ end
     if (state_ != NvimState::attached) {
       return false;
     }
+
+    asked_ = true;
 
     ds::Array<char, 4> modifiers{};
     std::size_t count = 0;

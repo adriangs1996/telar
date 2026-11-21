@@ -175,6 +175,40 @@ namespace {
 
   // The picker of an editor asks the runtime for what its query finds, shows only the answer
   // to its last question, and opens what is chosen where it is in the editor's directory.
+  // The palette's and the keys' way to the picker: the editor of the focused tab, wherever
+  // in the tab the focus is.
+  void actionOpensTheTabsPicker() {
+    SystemAllocator memory;
+    Transport transport;
+    TestSession client{memory, transport};
+
+    openFirstPane(client, transport);
+    check(!application::nvim::find(client, NvimPickSource::files), "a tab without an editor has no picker to open");
+    check(application::workbench::splitEditor(client, ClientLayoutAxis::horizontal));
+
+    const auto request = transport.last<CreateNvimPane>();
+
+    deliver(client, PaneKindNotice{.pane_id = editor_pane, .kind = PaneKind::nvim});
+    deliver(client, PaneOpened{.request_id = request.request_id, .pane_id = editor_pane, .location = request.location, .created = true});
+    deliver(client, PaneCwd{.pane_id = editor_pane, .cwd = "/srv/app"});
+    application::workbench::focusPane(client, 1);
+    check(application::nvim::find(client, NvimPickSource::text), "from the terminal beside it, the tab's editor is found");
+
+    const auto* editor = application::nvim::editor(client, editor_pane);
+    const auto* tab = client.findPane(editor_pane);
+
+    check(editor->picker.open && editor->picker.source == NvimPickSource::text, "its picker opens on what was asked for");
+    // A link the editor opened is the window's to open, once.
+    check(deliver(client, NvimLink{.pane_id = 1, .uri = "https://example.com"}) == application::Change::none, "a link of a pane that is no editor is dropped");
+    check(deliver(client, NvimLink{.pane_id = editor_pane, .uri = "https://example.com/docs"}) == application::Change::editor);
+
+    const auto link = application::nvim::takeLink(client, editor_pane);
+
+    check(link && link->text() == "https://example.com/docs" && !application::nvim::takeLink(client, editor_pane), "it is taken once");
+    check(deliver(client, NvimLink{.pane_id = editor_pane, .uri = "javascript:alert(1)"}) == application::Change::editor && !application::nvim::takeLink(client, editor_pane), "what the window does not open as a link is not opened");
+    check(tab != nullptr && focusedPane(client.panes, client.tabs, client.active_tab)->id == editor_pane, "and the editor takes the focus");
+  }
+
   void pickerSearchesThroughTheRuntime() {
     SystemAllocator memory;
     Transport transport;
@@ -283,6 +317,7 @@ namespace {
   const telar::testing::Case case_opens{"nvim_session.editor_opens_beside_and_is_drawn", editorOpensBesideAndIsDrawn};
   const telar::testing::Case case_input{"nvim_session.what_a_person_does_reaches_neovim", whatAPersonDoesReachesNeovim};
   const telar::testing::Case case_picker{"nvim_session.picker_searches_through_the_runtime", pickerSearchesThroughTheRuntime};
+  const telar::testing::Case case_action{"nvim_session.action_opens_the_tabs_picker", actionOpensTheTabsPicker};
   const telar::testing::Case case_files{"nvim_session.files_open_in_the_tabs_editor", filesOpenInTheTabsEditor};
   const telar::testing::Case case_navigation{"nvim_session.navigation_asks_the_editor_first", navigationAsksTheEditorFirst};
   const telar::testing::Case case_lost{"nvim_session.lost_frame_asks_for_the_screen_once", lostFrameAsksForTheScreenOnce};
