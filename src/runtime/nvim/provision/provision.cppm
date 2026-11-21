@@ -18,11 +18,14 @@ export namespace telar::runtime {
     std::string_view config_home;
     // A Neovim the user named, $TELAR_NVIM; empty for none.
     std::string_view configured;
+    // A Neovim that came in telar's own package, beside its programs; empty for none.
+    std::string_view shipped;
   };
 
   // The Neovim an editor pane starts on a host, and the configuration it starts it with. The
-  // program is the one the user named, else the one telar provisioned, else whatever `nvim`
-  // the runtime's PATH has, which the editor then asks for its version. The configuration is
+  // program is the one the user named, else the one telar provisioned, else the one its
+  // package brought, else whatever `nvim` the runtime's PATH has, which the editor then asks
+  // for its version. The configuration is
   // the user's when the host has one; otherwise telar's own, written under the data directory.
   class NvimProvision {
   public:

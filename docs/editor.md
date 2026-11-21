@@ -24,6 +24,9 @@ focus. The tab is the one of the pane the command runs in; a tab without an edit
 one beside it. From outside a pane, `--client ID` names the window, and without it the window
 last typed in takes the request.
 
+In a worktree, `telar worktree exec BRANCH -- telar edit FILE` opens the file in an editor
+pane of a new tab of that worktree.
+
 A file path clicked in a terminal opens the same way when the tab has an editor pane. A tab
 without one opens the link as before: in the editor `editor` or `$EDITOR` names.
 
@@ -112,7 +115,9 @@ the configuration loads. A configuration that sets `g:clipboard` keeps its own.
 ## Which Neovim, and which configuration
 
 The runtime starts, in this order: the program `TELAR_NVIM` names in the runtime's
-environment; the Neovim telar provisioned; the `nvim` on the runtime's `PATH`. It needs
+environment; the Neovim telar provisioned; one a package of telar ships under
+`share/telar/nvim/VERSION`, beside the directory of its programs; the `nvim` on the
+runtime's `PATH`. It needs
 Neovim 0.11 or later: an older one is refused and its pane closes.
 
 ```sh
@@ -129,8 +134,9 @@ Neovim reads its usual configuration. A machine without `~/.config/nvim` gets te
 instead: lazy.nvim with a lockfile, the language servers found on its `PATH`, git signs and
 completion, with `<leader>f`, `<leader>/` and `<leader>b` on the picker. Its plugins are
 fetched the first time through the pane's proxy and need git; without a network the editor
-starts all the same with the parsers Neovim ships. `telar integration status editor` and
-`telar machine setup` say when the host lacks git or a C compiler for them. They are kept under the name `telar-nvim`,
+starts all the same with the parsers Neovim ships. `telar integration status editor`,
+`telar machine setup` and `telar machine check` say when the host lacks git or a C compiler
+for them. They are kept under the name `telar-nvim`,
 so nothing of a Neovim of your own is touched, and a configuration you make later takes its
 place. A runtime started with `NVIM_APPNAME` uses the configuration that names.
 
@@ -166,3 +172,12 @@ out/dev/src/runtime/nvim-embed-probe --clean     # the same against the Neovim o
 `TELAR_EDITOR_METRICS=FILE` makes the window test's `editorPaneDrawsNeovim` case write how long
 a key takes from the view to the frame that shows it, and `TELAR_EDITOR_SHOTS=DIR` makes it
 save the window at each step.
+
+## Its reference pictures
+
+`src/gui/tests/references/editor` keeps a picture of each surface of the editor pane, with
+the Zenburn preset and with Vesper. `just gui-references` runs the same case with each preset
+and fails when a surface is apart from its picture in more than 2 % of its pixels;
+`just gui-references update` takes them again, and the change shows in the diff of the
+pictures. They are of macOS's fonts, drawn offscreen, so the comparison is run when asked
+for and not with the suite.

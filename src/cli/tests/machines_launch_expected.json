@@ -644,6 +644,20 @@
     "files_sha256": "10bc6f3c48d2e51c201914d70d3c877405f118aa265686afba389b81700a3b9f"
   },
   {
+    "name": "check-editor",
+    "status": 0,
+    "stdout": "box\thost\treachable\n  home\t@ROOT@/home\n  shell\t/bin/sh\n  socket\t@ROOT@/remote.sock\n  schema\t@SCHEMA@ (matches this telar)\n  editor\tabsent\n  editor\tneeds git, to fetch the plugins\n",
+    "stderr": "",
+    "files_sha256": "10bc6f3c48d2e51c201914d70d3c877405f118aa265686afba389b81700a3b9f"
+  },
+  {
+    "name": "check-json-editor",
+    "status": 0,
+    "stdout": "{\"label\":\"box\",\"reachable\":true,\"schema\":\"@SCHEMA@\",\"local_schema\":\"@SCHEMA@\",\"compatible\":true,\"home\":\"@ROOT@/home\",\"shell\":\"/bin/sh\",\"socket\":\"@ROOT@/remote.sock\",\"editor\":[\"absent\",\"needs git, to fetch the plugins\"]}\n",
+    "stderr": "",
+    "files_sha256": "10bc6f3c48d2e51c201914d70d3c877405f118aa265686afba389b81700a3b9f"
+  },
+  {
     "name": "check-incompatible",
     "status": 1,
     "stdout": "box\thost\treachable\n  home\t@ROOT@/home\n  shell\t/bin/sh\n  socket\t@ROOT@/remote.sock\n  schema\tdeadbeef (does not match this telar @SCHEMA@; update telar on one side)\n",

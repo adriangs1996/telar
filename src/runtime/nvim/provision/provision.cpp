@@ -85,7 +85,10 @@ namespace telar::runtime {
       program_.append(pinned_version);
       program_.append("/bin/nvim");
       if (host.data_home.empty() || !executable(program_)) {
-        program_.assign("nvim");
+        program_.assign(host.shipped);
+        if (!host.shipped.starts_with('/') || !executable(program_)) {
+          program_.assign("nvim");
+        }
       }
     }
 

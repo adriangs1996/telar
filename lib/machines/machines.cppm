@@ -521,6 +521,7 @@ export {
       static constexpr std::string_view discovery_suffix = " server endpoint'";
       static constexpr std::string_view bridge_prefix = "exec ";
       static constexpr std::string_view bridge_suffix = " server bridge";
+      static constexpr std::string_view editor_suffix = " integration status editor";
 
     public:
       static constexpr std::size_t max_bytes = discovery_prefix.size() + MachineLimits::program_bytes + discovery_suffix.size();
@@ -528,6 +529,9 @@ export {
 
       [[nodiscard]] static Text discovery(ds::Option<std::string_view> program = ds::none);
       [[nodiscard]] static Text bridge(ds::Option<std::string_view> program = ds::none);
+      // What says whether the machine has the Neovim of the editor panes, and what telar's
+      // own configuration lacks there.
+      [[nodiscard]] static Text editor(ds::Option<std::string_view> program = ds::none);
 
     private:
       static Text format(std::string_view prefix, ds::Option<std::string_view> program, std::string_view suffix);

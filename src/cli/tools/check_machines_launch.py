@@ -177,6 +177,8 @@ def outcomes(binary):
         schema = 'cqp00008' if b'cqp00008' in binary.read_bytes() else '886b480d'
         fixtures = [
             ('reachable', f'printf "%s\\n" "$HOME" /bin/sh "{root}/remote.sock" {schema}\n'),
+            # A machine whose telar says what its editor panes have and lack.
+            ('editor', f'case "$*" in *"integration status editor") printf "editor: absent\\neditor: needs git, to fetch the plugins\\n";; *) printf "%s\\n" "$HOME" /bin/sh "{root}/remote.sock" {schema};; esac\n'),
             ('incompatible', f'printf "%s\\n" "$HOME" /bin/sh "{root}/remote.sock" deadbeef\n'),
             ('unreadable', 'printf "startup banner\\n"\n'),
             ('missing', 'echo "sh: telar: command not found" >&2\nexit 127\n'),

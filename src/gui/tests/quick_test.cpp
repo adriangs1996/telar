@@ -712,13 +712,80 @@ return {api_version = 2, client = {
         }
       });
       const auto shots = qEnvironmentVariable("TELAR_EDITOR_SHOTS");
-      const auto shoot = [&](const QString& name) {
-        if (!shots.isEmpty()) {
-          // What comes in or goes out has settled before the picture is taken.
-          QTest::qWait(320);
-          QVERIFY(test::waitForSynchronizedFrame(*window_, runtime_wait_ms));
-          QVERIFY(window_->grabWindow().save(QDir{shots}.filePath(name + QStringLiteral(".png"))));
+      // With TELAR_EDITOR_REFERENCES set to the directory of the reference pictures, each
+      // surface is compared with the picture kept of it for the preset the case runs with,
+      // TELAR_EDITOR_PRESET; TELAR_EDITOR_REFERENCES_UPDATE takes the pictures again instead.
+      // The pictures are of one platform's fonts, so the comparison is asked for, not assumed.
+      const auto references = qEnvironmentVariable("TELAR_EDITOR_REFERENCES");
+      const auto preset = qEnvironmentVariable("TELAR_EDITOR_PRESET", QStringLiteral("zenburn"));
+      const QTemporaryDir preset_directory;
+      const auto preset_restored = qScopeGuard([&] {
+        if (qEnvironmentVariableIsSet("TELAR_EDITOR_PRESET")) {
+          client_->loadConfiguration({}, {}, {});
         }
+      });
+
+      if (qEnvironmentVariableIsSet("TELAR_EDITOR_PRESET")) {
+        const auto path = preset_directory.filePath(QStringLiteral("config.lua"));
+
+        writeTestFile(path, qPrintable(QStringLiteral("return {api_version=2,theme='%1'}").arg(preset)));
+        client_->loadConfiguration(path, {}, {});
+        QCOMPARE(client_->status()->error(), QString{});
+      }
+
+      const auto shoot = [&](const QString& name) {
+        if (shots.isEmpty() && references.isEmpty()) {
+          return;
+        }
+
+        // What comes in or goes out has settled before the picture is taken.
+        QTest::qWait(320);
+        QVERIFY(test::waitForSynchronizedFrame(*window_, runtime_wait_ms));
+        const auto image = window_->grabWindow();
+
+        if (!shots.isEmpty()) {
+          QVERIFY(image.save(QDir{shots}.filePath(name + QStringLiteral(".png"))));
+        }
+
+        // A slide is a moment of a motion: its picture is for a person to look at.
+        const auto views = test::visualItems(*window_->contentItem(), QStringLiteral("paneEditor"));
+        if (references.isEmpty() || views.empty() || name == QStringLiteral("editor-scrolling")) {
+          return;
+        }
+
+        // The editor's own area: what is around it has names and times that change.
+        const auto seen = image.copy(views.front()->mapRectToScene(views.front()->boundingRect()).toAlignedRect()).convertToFormat(QImage::Format_RGB32);
+        const QDir directory{QDir{references}.filePath(preset)};
+        const auto path = directory.filePath(name + QStringLiteral(".png"));
+
+        if (qEnvironmentVariableIsSet("TELAR_EDITOR_REFERENCES_UPDATE")) {
+          QVERIFY(directory.mkpath(QStringLiteral(".")));
+          QVERIFY(seen.save(path));
+          return;
+        }
+
+        const auto reference = QImage{path}.convertToFormat(QImage::Format_RGB32);
+
+        QVERIFY2(!reference.isNull(), qPrintable(QStringLiteral("no reference picture at %1").arg(path)));
+        QVERIFY2(reference.size() == seen.size(), qPrintable(QStringLiteral("%1 is not the size of its reference").arg(name)));
+        // A pixel is apart when a channel differs by more than antialiasing does; a surface
+        // is its reference while few are.
+        constexpr int channel_tolerance = 24;
+        constexpr double share_tolerance = 0.02;
+        qsizetype apart = 0;
+
+        for (int y = 0; y < seen.height(); ++y) {
+          for (int x = 0; x < seen.width(); ++x) {
+            const QColor one{seen.pixel(x, y)};
+            const QColor other{reference.pixel(x, y)};
+
+            apart += std::max({std::abs(one.red() - other.red()), std::abs(one.green() - other.green()), std::abs(one.blue() - other.blue())}) > channel_tolerance ? 1 : 0;
+          }
+        }
+
+        const auto share = static_cast<double>(apart) / static_cast<double>(std::max<qsizetype>(qsizetype{seen.width()} * seen.height(), 1));
+
+        QVERIFY2(share <= share_tolerance, qPrintable(QStringLiteral("%1 with %2 is apart from its reference in %3 % of its pixels").arg(name, preset).arg(share * 100, 0, 'f', 2)));
       };
       const auto editorView = [&] {
         const auto views = test::visualItems(*window_->contentItem(), QStringLiteral("paneEditor"));
@@ -811,7 +878,7 @@ return {api_version = 2, client = {
 
       // A run that takes pictures works in a directory anyone has, which the pane's header then
       // shows, and on a real file, with whatever highlights it.
-      if (!shots.isEmpty()) {
+      if (!shots.isEmpty() || !references.isEmpty()) {
         view->send(QStringLiteral(":silent cd /tmp<CR>"));
         QTRY_VERIFY_WITH_TIMEOUT(toQString(firstPane()->cwd).endsWith(QStringLiteral("/tmp")), runtime_wait_ms);
       }
@@ -1042,9 +1109,10 @@ return {api_version = 2, client = {
         const QTemporaryDir directory;
         const auto path = directory.filePath(QStringLiteral("config.lua"));
 
-        writeTestFile(path, "return {api_version=2,theme='vesper'}");
-        const auto restored = qScopeGuard([this] {
-          client_->loadConfiguration({}, {}, {});
+        // The other preset: the one the case does not run with.
+        writeTestFile(path, preset == QStringLiteral("vesper") ? "return {api_version=2,theme='zenburn'}" : "return {api_version=2,theme='vesper'}");
+        const auto restored = qScopeGuard([&] {
+          client_->loadConfiguration(qEnvironmentVariableIsSet("TELAR_EDITOR_PRESET") ? preset_directory.filePath(QStringLiteral("config.lua")) : QString{}, {}, {});
         });
 
         client_->loadConfiguration(path, {}, {});

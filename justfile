@@ -86,6 +86,13 @@ gui-case *args: dev-bin
     "{{ cpp }}" build dev -- --target gui-quick-test
     cd "{{ build_dir }}/dev/src/gui" && TELAR_GUI_TEST_RUNTIME="{{ dev_telar }}" PATH="{{ build_dir }}/dev/src/runtime:$PATH" QT_QUICK_BACKEND=software QT_QPA_PLATFORM=offscreen ./gui-quick-test {{ args }}
 
+# Compare the editor pane's surfaces with their reference pictures, with both presets:
+# `just gui-references`. `just gui-references update` takes the pictures again, to review
+# in the diff. They are pictures of this platform's fonts.
+gui-references mode="compare": dev-bin
+    "{{ cpp }}" build dev -- --target gui-quick-test
+    cd "{{ build_dir }}/dev/src/gui" && for preset in zenburn vesper; do rm -rf /tmp/telar-picker; {{ if mode == "update" { "TELAR_EDITOR_REFERENCES_UPDATE=1" } else { "" } }} TELAR_EDITOR_REFERENCES="{{ justfile_directory() }}/src/gui/tests/references/editor" TELAR_EDITOR_PRESET=$preset TELAR_GUI_TEST_RUNTIME="{{ dev_telar }}" PATH="{{ build_dir }}/dev/src/runtime:$PATH" QT_QUICK_BACKEND=software QT_QPA_PLATFORM=offscreen ./gui-quick-test editorPaneDrawsNeovim || exit 1; done
+
 # Refresh the compilation database and generated headers that clangd reads in out/dev.
 editor: (configure "dev")
     "{{ cpp }}" build dev -- --target cell-layout gui-editor --parallel 2

@@ -42,6 +42,8 @@ namespace {
     std::filesystem::create_directories(config + "/nvim");
     provision.resolve({.data_home = data, .config_home = config});
     check(provision.program() == "nvim", "without one of telar's, the PATH's Neovim");
+    provision.resolve({.data_home = data, .config_home = config, .shipped = named});
+    check(provision.program() == "nvim", "a package that brought none changes nothing");
     program(provisioned);
     provision.resolve({.data_home = data, .config_home = config});
     check(provision.program() == provisioned, "the Neovim telar provisioned is preferred to the PATH's");
@@ -55,6 +57,11 @@ namespace {
     check(::chmod(provisioned.c_str(), 0644) == 0);
     provision.resolve({.data_home = data, .config_home = config});
     check(provision.program() == "nvim", "a file that cannot be run is not a Neovim");
+    provision.resolve({.data_home = data, .config_home = config, .shipped = named});
+    check(provision.program() == named, "the Neovim telar's package brought comes before the PATH's");
+    check(::chmod(provisioned.c_str(), 0755) == 0);
+    provision.resolve({.data_home = data, .config_home = config, .shipped = named});
+    check(provision.program() == provisioned, "and after the one telar provisioned");
   }
 
   // The configuration is the user's when the host has one, and telar's own otherwise.

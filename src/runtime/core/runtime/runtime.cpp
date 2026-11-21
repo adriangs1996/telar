@@ -9,6 +9,7 @@ import telar.runtime.nvim.provision;
 import telar.runtime.paths.query_task;
 import telar.ghostty.vt;
 import telar.sys.process;
+import telar.platform.process;
 import telar.platform.error;
 import telar.platform.paths;
 import telar.plugins;
@@ -2539,7 +2540,16 @@ namespace telar::runtime {
       config_home.clear();
     }
 
-    editor_provision_.resolve({.data_home = data_home_.view(), .config_home = config_home.view(), .configured = configured.view()});
+    // A Neovim that came in telar's own package: under share/, beside the directory of its
+    // programs.
+    ds::String<ConcurrentMemory> packaged{memory_, "../share/telar/nvim/"};
+
+    packaged.append(pinnedNeovim());
+    packaged.append("/bin/nvim");
+
+    const auto shipped = ExecutablePath::sibling({packaged.view()});
+
+    editor_provision_.resolve({.data_home = data_home_.view(), .config_home = config_home.view(), .configured = configured.view(), .shipped = shipped ? shipped->view() : std::string_view{}});
     workspaces_.createEditor(model_, panes_, clients_, {.client_id = identity, .request = message}, editor_provision_);
   }
 
