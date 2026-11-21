@@ -173,6 +173,7 @@ esac
 case $(uname -s) in
     Darwin)
         os=macos
+        [ "$arch" = aarch64 ] || fail "telar's macOS release runs on Apple silicon only"
         major=$(sw_vers -productVersion | cut -d. -f1)
         [ "$major" -ge 26 ] || fail "telar needs macOS 26 or later"
         variant=gui

@@ -1,15 +1,13 @@
 cask "telar-app" do
-  arch arm: "aarch64", intel: "x86_64"
-
   version "@VERSION@"
-  sha256 arm:   "@SHA256_DMG_AARCH64@",
-         intel: "@SHA256_DMG_X86_64@"
+  sha256 "@SHA256_DMG_AARCH64@"
 
-  url "https://github.com/adriangs1996/telar/releases/download/v#{version}/Telar-macos-#{arch}.dmg"
+  url "https://github.com/adriangs1996/telar/releases/download/v#{version}/Telar-macos-aarch64.dmg"
   name "Telar"
   desc "Terminal multiplexer and runtime aware of coding agents"
   homepage "https://github.com/adriangs1996/telar"
 
+  depends_on arch: :arm64
   depends_on macos: :tahoe
 
   app "Telar.app"

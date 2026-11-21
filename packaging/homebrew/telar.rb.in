@@ -4,17 +4,13 @@ class Telar < Formula
   version "@VERSION@"
   license "MIT"
 
+  # The macOS release is built for Apple silicon only.
   on_macos do
+    depends_on arch: :arm64
     depends_on macos: :tahoe
 
-    on_arm do
-      url "https://github.com/adriangs1996/telar/releases/download/v#{version}/telar-macos-aarch64.tar.gz"
-      sha256 "@SHA256_MACOS_AARCH64@"
-    end
-    on_intel do
-      url "https://github.com/adriangs1996/telar/releases/download/v#{version}/telar-macos-x86_64.tar.gz"
-      sha256 "@SHA256_MACOS_X86_64@"
-    end
+    url "https://github.com/adriangs1996/telar/releases/download/v#{version}/telar-macos-aarch64.tar.gz"
+    sha256 "@SHA256_MACOS_AARCH64@"
   end
 
   # Linux gets the headless build: Homebrew on Linux mostly runs on servers

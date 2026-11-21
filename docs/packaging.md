@@ -194,8 +194,8 @@ points at the newest one.
 
 | Asset | Contents |
 | --- | --- |
-| `telar-macos-aarch64.tar.gz`, `telar-macos-x86_64.tar.gz` | `bin/telar`, `bin/telar-runtime`, `bin/telar-config-check`, `bin/telar-diagram-renderer`, notices |
-| `Telar-macos-aarch64.dmg`, `Telar-macos-x86_64.dmg` | `Telar.app` (the C++ client with its Qt, runtime and CLI) and a link to `/Applications` |
+| `telar-macos-aarch64.tar.gz` | `bin/telar`, `bin/telar-runtime`, `bin/telar-config-check`, `bin/telar-diagram-renderer`, notices |
+| `Telar-macos-aarch64.dmg` | `Telar.app` (the C++ client with its Qt, runtime and CLI) and a link to `/Applications` |
 | `telar-linux-x86_64.tar.gz`, `telar-linux-aarch64.tar.gz` | the headless tools plus the C++ client, its Qt, the desktop entry and icon, notices ([layout](#linux)) |
 | `telar-linux-x86_64-headless.tar.gz`, `telar-linux-aarch64-headless.tar.gz` | the C++ `bin/telar`, `bin/telar-runtime`, `bin/telar-config-check`, `bin/telar-diagram-renderer`, notices |
 | `install.sh` | the installer from the tagged commit |
@@ -209,7 +209,6 @@ Sigstore. `gh attestation verify FILE --repo adriangs1996/telar` checks one.
 | Build | Runner | Target | Links |
 | --- | --- | --- | --- |
 | macOS arm64 | `macos-26` | macOS 26.0 deployment target | `/usr/lib` and `/System/Library` only; Qt inside the bundle |
-| macOS x86_64 | `macos-26-intel` | same | same |
 | Linux desktop | `ubuntu-24.04`, `ubuntu-24.04-arm` | host glibc, GCC 14 | glibc 2.38 and libstdc++ `GLIBCXX_3.4.32` or newer, GLVND (EGL, GLX, OpenGL), Wayland, X11 and its xcb extensions, xkbcommon, Fontconfig, D-Bus; Qt inside the tree |
 | Linux headless | same, in `alpine:3.22` | musl, Alpine's GCC | nothing: static musl, any Linux |
 

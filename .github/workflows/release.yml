@@ -61,6 +61,42 @@ jobs:
         with:
           persist-credentials: false
 
+      # musl has no official LLVM, so the toolchain is built from source, which takes hours: only its
+      # installation is cached, keyed by what reaches that build, and saved as soon as it is built.
+      - name: Restore the Alpine toolchain
+        id: alpine-toolchain
+        uses: actions/cache/restore@caa296126883cff596d87d8935842f9db880ef25 # v5
+        with:
+          path: |
+            .toolchain/source-*/bin
+            .toolchain/source-*/include
+            .toolchain/source-*/lib
+            .toolchain/source-*/libexec
+            .toolchain/source-*/share
+            .toolchain/source-*/.complete
+          key: alpine-toolchain-${{ runner.arch }}-${{ hashFiles('tools/toolchain/manifest.json', 'tools/toolchain/source.py', 'cmake/openssl/manifest.cmake', 'cmake/openssl/CMakeLists.txt', 'packaging/release/install-alpine-deps.sh') }}
+
+      - name: Build the Alpine toolchain
+        if: steps.alpine-toolchain.outputs.cache-hit != 'true'
+        run: |
+          docker run --rm -v "$PWD:/src" -w /src -e RUST_TOOLCHAIN alpine:3.22@sha256:bfe7ceb9f09ec0566c48fb93356e45a47a00be5a1dd14fa5b909e7709c66b034 sh -euc '
+            packaging/release/install-alpine-deps.sh
+            python3 tools/bootstrap-cpp.py
+            chown -R "$(stat -c %u:%g /src)" .toolchain'
+
+      - name: Save the Alpine toolchain
+        if: steps.alpine-toolchain.outputs.cache-hit != 'true'
+        uses: actions/cache/save@caa296126883cff596d87d8935842f9db880ef25 # v5
+        with:
+          path: |
+            .toolchain/source-*/bin
+            .toolchain/source-*/include
+            .toolchain/source-*/lib
+            .toolchain/source-*/libexec
+            .toolchain/source-*/share
+            .toolchain/source-*/.complete
+          key: ${{ steps.alpine-toolchain.outputs.cache-primary-key }}
+
       - name: Build and check linkage on Alpine
         run: |
           docker run --rm -v "$PWD:/src" -w /src -e RUST_TOOLCHAIN alpine:3.22@sha256:bfe7ceb9f09ec0566c48fb93356e45a47a00be5a1dd14fa5b909e7709c66b034 sh -euc '
@@ -134,8 +170,6 @@ jobs:
         include:
           - runner: macos-26
             arch: aarch64
-          - runner: macos-26-intel
-            arch: x86_64
     runs-on: ${{ matrix.runner }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -190,8 +224,6 @@ jobs:
         include:
           - runner: macos-26
             arch: aarch64
-          - runner: macos-26-intel
-            arch: x86_64
     runs-on: ${{ matrix.runner }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1

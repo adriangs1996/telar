@@ -28,7 +28,6 @@ sum() {
 mkdir -p "$tap/Formula"
 sed -e "s/@VERSION@/$version/" \
     -e "s/@SHA256_MACOS_AARCH64@/$(sum telar-macos-aarch64.tar.gz)/" \
-    -e "s/@SHA256_MACOS_X86_64@/$(sum telar-macos-x86_64.tar.gz)/" \
     -e "s/@SHA256_LINUX_AARCH64_HEADLESS@/$(sum telar-linux-aarch64-headless.tar.gz)/" \
     -e "s/@SHA256_LINUX_X86_64_HEADLESS@/$(sum telar-linux-x86_64-headless.tar.gz)/" \
     "$here/telar.rb.in" >"$tap/Formula/telar.rb"
@@ -37,6 +36,5 @@ if [ "$cask" = --cask ]; then
     mkdir -p "$tap/Casks"
     sed -e "s/@VERSION@/$version/" \
         -e "s/@SHA256_DMG_AARCH64@/$(sum Telar-macos-aarch64.dmg)/" \
-        -e "s/@SHA256_DMG_X86_64@/$(sum Telar-macos-x86_64.dmg)/" \
         "$here/telar-app.rb.in" >"$tap/Casks/telar-app.rb"
 fi
