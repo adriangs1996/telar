@@ -8,8 +8,8 @@ static_assert(true);
 #include "platform/scroll_event.hpp"
 #include "telar_wire/serializers/telar_frame.hpp"
 #include "terminal_item.hpp"
-#include "ui/app/panes/terminal/scroll_motion.hpp"
 #include "ui/kit/cell_scene/terminal_scene.hpp"
+#include "ui/kit/motion/scroll_motion.hpp"
 #include "ui/kit/scene/window_animation_clock.hpp"
 #include <QQuickWindow>
 #include <QWheelEvent>

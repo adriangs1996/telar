@@ -82,6 +82,49 @@ namespace telar::gui::features::nvim {
       grid.margin_right = message.margin_right;
     }
 
+    // Keeps the rows a scroll of the whole grid is about to take off it. A scroll of part of the
+    // grid keeps none: the rows around it stay where they are, and a view does not slide them.
+    void keepDeparted(Grid& grid, const NvimScroll& scroll) {
+      auto& departed = grid.departed;
+      const auto rows = grid.screen.rows();
+      const auto columns = grid.screen.columns();
+      const auto leaving = static_cast<std::size_t>(std::abs(static_cast<std::int64_t>(scroll.rows)));
+
+      if (scroll.top != 0 || scroll.bottom != rows || scroll.left != 0 || scroll.right != columns || leaving == 0 || leaving >= rows) {
+        departed.count = 0;
+        return;
+      }
+
+      const bool above = scroll.rows > 0;
+      if (departed.columns != columns || departed.capacity != rows) {
+        departed.cells.clear();
+        departed.cells.resize(static_cast<std::size_t>(rows) * columns);
+        departed.stamps.clear();
+        departed.stamps.resize(rows);
+        departed.columns = columns;
+        departed.capacity = rows;
+        departed.count = 0;
+        departed.head = 0;
+      }
+
+      if (departed.above != above) {
+        departed.count = 0;
+      }
+
+      departed.above = above;
+      // The row that ends nearest the grid is kept last, so it is the first found.
+      for (std::size_t index = 0; index < leaving; ++index) {
+        const auto source = grid.screen.row(above ? index : rows - 1 - index);
+
+        departed.head = static_cast<std::uint16_t>((departed.head + departed.capacity - 1) % departed.capacity);
+        std::ranges::copy(source, departed.cells.viewMut().subspan(static_cast<std::size_t>(departed.head) * columns, columns).begin());
+        departed.stamps.atMut(departed.head) = ++departed.last_stamp;
+        departed.count = static_cast<std::uint16_t>(std::min<std::size_t>(departed.count + 1U, departed.capacity));
+      }
+
+      departed.moved += scroll.rows;
+    }
+
     // What a grid's message did to the grid it names.
     enum class Drawn : std::uint8_t {
       // Its cells do not fit the grid as it is.
@@ -95,7 +138,12 @@ namespace telar::gui::features::nvim {
     // Applies a grid's message to the grid it names: the rows a scroll moves, the cells that
     // changed, and where the grid goes.
     Drawn draw(Grid& grid, const NvimGrid& message) {
+      if (message.full) {
+        grid.departed.count = 0;
+      }
+
       for (const auto& scroll : message.scrolls) {
+        keepDeparted(grid, scroll);
         if (!grid.screen.moveRows({.top = scroll.top, .bottom = scroll.bottom, .left = scroll.left, .right = scroll.right, .rows = scroll.rows})) {
           return Drawn::lost;
         }
@@ -188,9 +236,26 @@ namespace telar::gui::features::nvim {
     return text;
   }
 
+  DepartedRows::DepartedRows(Memory& memory)
+      : cells(memory),
+        stamps(memory) {}
+
+  std::span<const CellValue> DepartedRows::row(std::size_t index) const noexcept {
+    if (index >= count) {
+      return {};
+    }
+
+    return std::span<const CellValue>{cells}.subspan(((head + index) % capacity) * columns, columns);
+  }
+
+  std::uint64_t DepartedRows::stamp(std::size_t index) const noexcept {
+    return index < count ? stamps[(head + index) % capacity] : 0;
+  }
+
   Grid::Grid(Memory& memory, std::uint32_t identity)
       : id(identity),
-        screen(memory) {}
+        screen(memory),
+        departed(memory) {}
 
   Cmdline::Cmdline(Memory& memory)
       : prompt(memory),

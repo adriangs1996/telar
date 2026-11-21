@@ -60,15 +60,19 @@ namespace {
     FrameSpan span;
   };
 
-  std::string rowText(const Grid& grid, std::size_t row) {
+  std::string textOf(std::span<const CellValue> cells) {
     std::string text;
 
-    for (const auto& cell : grid.screen.row(row)) {
+    for (const auto& cell : cells) {
       text += cell.utf8();
     }
 
     text.erase(text.find_last_not_of(' ') + 1);
     return text;
+  }
+
+  std::string rowText(const Grid& grid, std::size_t row) {
+    return textOf(grid.screen.row(row));
   }
 
   // A grid of four columns and three rows sent whole in frame 1, which then ends.
@@ -133,12 +137,21 @@ namespace {
 
     check(rowText(grid, 0) == "dos" && rowText(grid, 1) == "tres" && rowText(grid, 2) == "four", "the rows move up and the new one arrives");
     check(grid.scrolled_lines == 1, "and the grid says how far its text moved");
+    check(grid.departed.count == 1 && grid.departed.above && grid.departed.moved == 1 && textOf(grid.departed.row(0)) == "uno", "the row that left is kept for a view to slide out");
 
     const Rows first{4, 0, {"zero"}};
     const NvimScroll down{.top = 0, .bottom = 3, .left = 0, .right = 4, .rows = -2};
 
     check(receive(state, NvimGrid{.pane_id = pane_id, .frame_id = 3, .grid = 1, .columns = 4, .rows = 3, .placement = NvimPlacement::window, .scrolls = {&down, 1}, .spans = {&first.span, 1}}) == Received::staged);
     check(rowText(grid, 0) == "zero" && rowText(grid, 2) == "dos", "a scroll down moves them the other way");
+    check(grid.departed.count == 2 && !grid.departed.above && grid.departed.moved == -1, "the rows that left at the other end replace the ones kept");
+    check(textOf(grid.departed.row(0)) == "tres" && textOf(grid.departed.row(1)) == "four", "nearest the grid first");
+    check(grid.departed.stamp(0) != grid.departed.stamp(1), "and each named apart");
+
+    const NvimScroll part{.top = 1, .bottom = 3, .left = 0, .right = 4, .rows = 1};
+
+    check(receive(state, NvimGrid{.pane_id = pane_id, .frame_id = 3, .grid = 1, .columns = 4, .rows = 3, .placement = NvimPlacement::window, .scrolls = {&part, 1}}) == Received::staged);
+    check(grid.departed.count == 0 && grid.departed.moved == -1, "a scroll of part of the grid keeps none, and slides nothing");
   }
 
   void whatDoesNotFollowAsksForTheScreen() {
