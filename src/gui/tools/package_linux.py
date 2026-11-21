@@ -24,7 +24,7 @@ PLUGIN_GROUPS = (
 )
 # A desktop session runs on X11 or Wayland; offscreen lets install.sh load Qt without a display.
 PLATFORM_PREFIXES = ('libqxcb', 'libqwayland', 'libqoffscreen')
-HEADLESS_TOOLS = ('telar', 'telar-runtime', 'telar-config-check', 'telar-diagram-renderer')
+HEADLESS_TOOLS = ('telar', 'telar-runtime', 'telar-config-check', 'telar-gateway', 'telar-diagram-renderer')
 ELF_MAGIC = b'\x7fELF'
 
 

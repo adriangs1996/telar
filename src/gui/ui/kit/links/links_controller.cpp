@@ -7,11 +7,18 @@ static_assert(true);
 #include "ui/kit/machines/machine_client.hpp"
 #include "ui/kit/models/projection.hpp"
 #include "ui/kit/process/environment.hpp"
+#include <QStringList>
+#include <QTimer>
+#include <algorithm>
+#include <chrono>
 #include <exception>
+#include <memory>
 #include <string_view>
 
 import telar.gui.application;
+import telar.gui.foundation.system;
 import telar.base.ds;
+import telar.base.text;
 
 namespace telar::gui::qt {
 
@@ -29,7 +36,7 @@ namespace telar::gui::qt {
         const auto executable = configured.view().empty() ? environment("EDITOR").valueOr(std::string_view{}) : configured.view();
 
         application::terminal::links::openFile(store_.sessionMut(), application::terminal::links::FilePath::parse(target), executable, environment, source_id);
-      } else {
+      } else if (!openForwarded(target)) {
         opener_.request(target, store_.client(store_.machines().active()).key);
       }
     } catch (const std::exception& error) {
@@ -39,6 +46,136 @@ namespace telar::gui::qt {
     }
 
     return true;
+  }
+
+  bool LinksController::openForwarded(const application::terminal::links::LinkTarget& target) {
+    const auto slot = store_.machines().active();
+    const auto link = application::terminal::links::LocalPortLink::parse(target);
+    const auto destination = store_.machines().row(slot).destination.view();
+
+    // A link on this machine names a port of this machine: the browser reaches it as it is.
+    if (slot == application::machines::Machines::local_slot || destination.empty() || !link) {
+      return false;
+    }
+
+    const auto key = store_.client(slot).key;
+    std::unique_ptr<Forward>* vacant = nullptr;
+
+    for (auto& forward : forwards_.viewMut()) {
+      if (!forward) {
+        vacant = vacant == nullptr ? &forward : vacant;
+        continue;
+      }
+
+      if (forward->remote != link->port() || std::string_view{forward->destination.constData(), static_cast<std::size_t>(forward->destination.size())} != destination) {
+        continue;
+      }
+
+      // The port is already forwarded, or about to be: the link opens through it.
+      if (forward->local == 0) {
+        forward->pending = target;
+        forward->source = key;
+      } else if (const auto rewritten = link->through(forward->local)) {
+        opener_.request(*rewritten, key);
+      }
+
+      return true;
+    }
+
+    if (vacant == nullptr) {
+      emit openingFailed(QStringLiteral("Could not open link: this window already forwards as many ports as it keeps"));
+      return true;
+    }
+
+    startForward(*vacant, target, link->port(), destination);
+    return true;
+  }
+
+  void LinksController::startForward(std::unique_ptr<Forward>& slot, const application::terminal::links::LinkTarget& target, std::uint16_t port, std::string_view destination) {
+    const auto program = system::runtime_endpoint::gatewayProgram();
+
+    slot = std::make_unique<Forward>();
+    auto* forward = slot.get();
+
+    forward->destination = QByteArray{destination.data(), static_cast<qsizetype>(destination.size())};
+    forward->remote = port;
+    forward->pending = target;
+    forward->source = store_.client(store_.machines().active()).key;
+    forward->process.setProcessChannelMode(QProcess::SeparateChannels);
+    forward->process.setStandardInputFile(QProcess::nullDevice());
+    connect(&forward->process, &QProcess::readyReadStandardOutput, this, [this, forward] {
+      forwardAnswered(*forward);
+    });
+
+    connect(&forward->process, &QProcess::readyReadStandardError, this, [forward] {
+      constexpr qsizetype error_limit = 512;
+
+      forward->errors.append(forward->process.readAllStandardError());
+      forward->errors.truncate(error_limit);
+    });
+
+    connect(&forward->process, &QProcess::finished, this, [this, forward] {
+      forwardEnded(forward);
+    });
+
+    connect(&forward->process, &QProcess::errorOccurred, this, [this, forward](QProcess::ProcessError error) {
+      if (error == QProcess::FailedToStart) {
+        forwardEnded(forward);
+      }
+    });
+
+    forward->process.start(
+        QString::fromUtf8(program.view().data(), static_cast<qsizetype>(program.view().size())),
+        {QStringLiteral("forward"), QString::fromUtf8(forward->destination), QString::number(port), QStringLiteral("a link opened in a window")},
+        QIODevice::ReadOnly
+    );
+  }
+
+  void LinksController::forwardAnswered(Forward& forward) {
+    constexpr qsizetype answer_limit = 64;
+
+    forward.output.append(forward.process.readAllStandardOutput());
+    forward.output.truncate(answer_limit);
+    const auto end = forward.output.indexOf('\n');
+    if (forward.local != 0 || end < 0) {
+      return;
+    }
+
+    // The gateway program prints the port here on a line of its own once it listens.
+    const auto port = runtime::unsignedDecimal<std::uint16_t>(std::string_view{forward.output.constData(), static_cast<std::size_t>(end)});
+    if (!port || *port == 0) {
+      return;
+    }
+
+    forward.local = *port;
+    if (const auto pending = forward.pending.take()) {
+      const auto link = application::terminal::links::LocalPortLink::parse(*pending);
+      const auto rewritten = link ? link->through(forward.local) : ds::none;
+
+      if (rewritten) {
+        opener_.request(*rewritten, forward.source);
+      }
+    }
+  }
+
+  void LinksController::forwardEnded(Forward* ended) {
+    // A forward that never listened here could not be made: the person is told why. One that
+    // did has only seen its port close there, which needs no word.
+    if (ended->local == 0 && ended->pending) {
+      const auto said = QString::fromUtf8(ended->errors).trimmed();
+
+      ended->pending.reset();
+      emit openingFailed(QStringLiteral("Could not open link: ") + (said.isEmpty() ? QStringLiteral("the port could not be forwarded from that machine") : said));
+    }
+
+    // The process is let go once its own signal has returned.
+    QTimer::singleShot(std::chrono::milliseconds{0}, this, [this, ended] {
+      for (auto& forward : forwards_.viewMut()) {
+        if (forward.get() == ended) {
+          forward.reset();
+        }
+      }
+    });
   }
 
   void LinksController::openAt(std::uint64_t pane_id, CellPosition point) {

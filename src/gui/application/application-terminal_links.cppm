@@ -23,6 +23,7 @@ export namespace telar::gui::application::terminal::links {
   using features::terminal::links::LinkGrid;
   using features::terminal::links::LinkHit;
   using features::terminal::links::LinkHover;
+  using features::terminal::links::LocalPortLink;
   using features::terminal::links::LinkMatch;
   using features::terminal::links::LinkModifiers;
   using features::terminal::links::LinkOpening;

@@ -411,6 +411,77 @@ namespace telar::gui::features::terminal::links {
     return scheme ? ds::Option{LinkTarget{*scheme, text}} : ds::none;
   }
 
+  ds::Option<LocalPortLink> LocalPortLink::parse(const LinkTarget& target) {
+    constexpr std::uint16_t http_port = 80;
+    constexpr std::uint16_t https_port = 443;
+    constexpr std::string_view separator = "://";
+    const auto text = target.text();
+    const auto scheme_end = text.find(separator);
+
+    if ((target.scheme() != LinkScheme::http && target.scheme() != LinkScheme::https) || scheme_end == std::string_view::npos) {
+      return ds::none;
+    }
+
+    const auto host_begin = scheme_end + separator.size();
+    const auto authority_end = std::min(text.find_first_of("/?#", host_begin), text.size());
+    const auto authority = text.substr(host_begin, authority_end - host_begin);
+
+    // An address in brackets holds colons of its own; the port's colon comes after it.
+    const auto bracket = authority.rfind(']');
+    const auto colon = authority.find(':', bracket == std::string_view::npos ? 0 : bracket);
+    const auto host = authority.substr(0, colon);
+    const bool local = runtime::asciiEqualIgnoreCase(host, "localhost") || host == "127.0.0.1" || host == "[::1]" || host == "0.0.0.0";
+
+    if (!local || authority.contains('@')) {
+      return ds::none;
+    }
+
+    auto port = target.scheme() == LinkScheme::https ? https_port : http_port;
+
+    if (colon != std::string_view::npos) {
+      const auto written = runtime::unsignedDecimal<std::uint16_t>(authority.substr(colon + 1));
+      if (!written || *written == 0 || authority.substr(colon + 1).contains('_')) {
+        return ds::none;
+      }
+
+      port = *written;
+    }
+
+    return LocalPortLink{target, port, host_begin, authority_end};
+  }
+
+  std::uint16_t LocalPortLink::port() const noexcept {
+    return port_;
+  }
+
+  ds::Option<LinkTarget> LocalPortLink::through(std::uint16_t local) const {
+    constexpr std::size_t port_digits = 5;
+    const auto text = target_.text();
+    const auto authority = text.substr(host_begin_, authority_end_ - host_begin_);
+    const auto bracket = authority.rfind(']');
+    const auto colon = authority.find(':', bracket == std::string_view::npos ? 0 : bracket);
+    const auto host = authority.substr(0, colon);
+    BoundedText<LinkText::maximum_uri_bytes + port_digits + 1> rewritten;
+
+    try {
+      rewritten.append(text.substr(0, host_begin_));
+      rewritten.append(host == "0.0.0.0" ? std::string_view{"localhost"} : host);
+      rewritten.append(":");
+      rewritten.appendDecimal(local);
+      rewritten.append(text.substr(authority_end_));
+    } catch (const std::length_error&) {
+      return ds::none;
+    }
+
+    return LinkTarget::fromUri(rewritten.view());
+  }
+
+  LocalPortLink::LocalPortLink(const LinkTarget& target, std::uint16_t port, std::size_t host_begin, std::size_t authority_end) noexcept
+      : target_(target),
+        port_(port),
+        host_begin_(host_begin),
+        authority_end_(authority_end) {}
+
   ds::Option<LinkTarget> LinkTarget::fromPath(std::string_view text) {
     if (text.empty() || text.size() > LinkText::maximum_uri_bytes || !LinkText::validUtf8(text) || std::ranges::any_of(text, LinkText::control)) {
       return {};
