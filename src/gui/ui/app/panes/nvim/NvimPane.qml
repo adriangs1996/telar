@@ -209,6 +209,42 @@ FocusScope {
             }
         }
 
+        // Letters typed in insert mode over a slow link, shown where they will be before the
+        // frame that carries them arrives. The frame replaces them, right or wrong.
+        Item {
+            id: ahead
+
+            readonly property string letters: view.prediction
+            visible: letters.length > 0
+            x: view.predictionOrigin.x
+            y: view.predictionOrigin.y
+            z: 850
+            width: letters.length * view.cellWidth
+            height: view.cellHeight
+
+            Rectangle {
+                readonly property color base: root.colors.terminalBackground
+
+                anchors.fill: parent
+                color: Qt.rgba(base.r, base.g, base.b, 1)
+            }
+
+            CellText {
+                anchors.fill: parent
+                text: ahead.letters
+                grid: root.typography.grid
+                color: Qt.alpha(root.colors.text, 0.72)
+            }
+
+            // The mark of a guess: a line under the letters, gone when they are the editor's.
+            Rectangle {
+                y: parent.height - height
+                width: parent.width
+                height: Math.max(1, Math.round(root.ratio))
+                color: Qt.alpha(root.colors.accent, 0.55)
+            }
+        }
+
         // The cursor's own layer: a mark that travels from where the cursor was to where it
         // is and fades as it arrives. The cursor itself is already there, drawn with the cells,
         // so nothing waits for the motion.
