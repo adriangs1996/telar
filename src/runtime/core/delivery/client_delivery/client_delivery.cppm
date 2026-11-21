@@ -15,6 +15,8 @@ import telar.wire.clipboard;
 import telar.wire.content;
 import telar.wire.editor;
 import telar.wire.layout;
+import telar.wire.nvim;
+import telar.wire.pane_io;
 import telar.wire.runtime;
 import telar.platform.primitives;
 import telar.runtime.terminal.control.clipboard;
@@ -23,6 +25,7 @@ import telar.base.diagnostics;
 import telar.base.memory.allocators;
 import telar.runtime.diagnostics.runtime_counters;
 import telar.runtime.core.model.slot_store;
+import telar.runtime.nvim.frames;
 import telar.runtime.workers.background_executor;
 import telar.runtime.transport.connection;
 import telar.base.ds;
@@ -76,11 +79,18 @@ export {
         ds::Option<std::uint64_t>& completing_exit;
         std::chrono::nanoseconds frame_interval{};
         [[maybe_unused]] diagnostics::RuntimeCounters& metrics;
+        NvimFrames& editor_frames;
         Clock::time_point now;
         std::chrono::nanoseconds& timeout;
       };
 
       bool prepare(Output& output, Attachment& attachment, TerminalPane& pane, DeliveryLane lane);
+
+      // An editor's lanes: its frames, and what every pane says of its program.
+      bool prepare(Output& output, Attachment& attachment, NvimPane& pane, DeliveryLane lane);
+
+      // What the client lacks of an editor's screen, as the grids of one frame and its end.
+      bool editorFrame(Output& output, Attachment& attachment, const NvimPane& pane);
 
       template <typename Message>
       static bool metadata(Connection<ConcurrentMemory>& connection, std::uint64_t& observed, std::uint64_t revision, const Message& message);
@@ -101,7 +111,11 @@ export {
 
       bool cells(Output& output, Attachment& attachment, TerminalPane& pane, Clock::time_point now, std::chrono::nanoseconds& timeout);
 
-      bool exit(Output& output, Attachment& attachment, const TerminalPane& pane);
+      // What something in the editor asks the user, or that it stopped asking, told once.
+      static bool editorPrompt(Connection<ConcurrentMemory>& connection, Attachment& attachment, const NvimPane& pane);
+
+      // Tells the client its pane ended, once it was `delivered` all the pane had to show.
+      bool exit(Output& output, Attachment& attachment, const Pane& pane, bool delivered);
 
       static bool graphics(Output& output, Attachment& attachment, TerminalPane& pane, std::chrono::nanoseconds& timeout);
 
@@ -155,7 +169,7 @@ export {
 
         auto* terminal = pane->asMut<TerminalPane>();
         if (terminal == nullptr) {
-          send(RequestFailed{.request_id = request.request_id, .code = FailureCode::invalid_request, .message = "This pane is not a terminal"});
+          send(RequestFailed{.request_id = request.request_id, .code = FailureCode::unsupported_pane_kind, .message = "This pane is not a terminal"});
           return;
         }
 
@@ -177,6 +191,13 @@ export {
         for (const auto* pane : model_.panes.items()) {
           if (pane != nullptr && matchesSnapshot(*pane, request.location)) {
             descriptors.atMut(count++) = PaneDescriptor{.pane_id = pane->id, .lifecycle = PaneLifecycle::running, .pane_generation = pane->generation};
+          }
+        }
+
+        // A pane that is not a terminal says so before the snapshot names it.
+        for (const auto* pane : model_.panes.items()) {
+          if (pane != nullptr && pane->kind != PaneKind::terminal && matchesSnapshot(*pane, request.location)) {
+            send(PaneKindNotice{.pane_id = pane->id, .kind = pane->kind});
           }
         }
 

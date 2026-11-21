@@ -14,6 +14,7 @@ export import :configuration;
 export import :session;
 export import :peek;
 export import :monitor;
+export import :nvim;
 export import :palette;
 export import :paths;
 export import :history;

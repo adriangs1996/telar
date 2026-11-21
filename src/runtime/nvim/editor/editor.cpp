@@ -6,6 +6,7 @@ import telar.msgpack;
 import telar.base.ds;
 import telar.base.memory.allocators;
 import telar.base.memory.containers;
+import telar.wire.nvim;
 import telar.runtime.nvim.redraw;
 import telar.runtime.nvim.rpc;
 import telar.runtime.nvim.screen;
@@ -63,6 +64,84 @@ namespace telar::runtime {
         writer.array(call.parameters);
         write(writer);
       });
+    }
+
+    // Run before Neovim reads the user's configuration: vim.ui.select and vim.ui.input ask the
+    // runtime, which shows them natively, and nothing loaded later can put its own in their
+    // place. The answer comes back through __telar_prompt_answer.
+    constexpr std::string_view prompt_bootstrap = R"lua(
+local channel = ...
+local pending, last = {}, 0
+local function ask(kind, title, initial, choices, done)
+  last = last + 1
+  pending[last] = done
+  vim.rpcnotify(channel, 'telar_prompt', last, kind, tostring(title or ''), tostring(initial or ''), choices)
+end
+local function select(items, opts, on_choice)
+  opts = opts or {}
+  local format = opts.format_item or tostring
+  local choices = {}
+  for index, item in ipairs(items) do
+    choices[index] = tostring(format(item))
+  end
+  ask('select', opts.prompt, '', choices, function(accepted, index)
+    if accepted and items[index] ~= nil then
+      on_choice(items[index], index)
+    else
+      on_choice(nil, nil)
+    end
+  end)
+end
+local function input(opts, on_confirm)
+  opts = opts or {}
+  ask('input', opts.prompt, opts.default, {}, function(accepted, _, text)
+    on_confirm(accepted and text or nil)
+  end)
+end
+function _G.__telar_prompt_answer(id, accepted, index, text)
+  local done = pending[id]
+  pending[id] = nil
+  if done then
+    vim.schedule(function()
+      done(accepted, index, text)
+    end)
+  end
+end
+local ui = vim.ui
+local guarded = setmetatable({}, {
+  __index = function(_, key)
+    if key == 'select' then
+      return select
+    end
+    if key == 'input' then
+      return input
+    end
+    return ui[key]
+  end,
+  __newindex = function(_, key, value)
+    if key ~= 'select' and key ~= 'input' then
+      ui[key] = value
+    end
+  end,
+})
+package.loaded['vim.ui'] = guarded
+vim.ui = guarded
+)lua";
+
+    constexpr std::string_view answer_script = "__telar_prompt_answer(...)";
+
+    // Shows the file where it already is, or in the current window, then moves the cursor.
+    constexpr std::string_view open_script = R"lua(
+local path, line, column = ...
+vim.cmd.drop(vim.fn.fnameescape(path))
+if line > 0 then
+  pcall(vim.api.nvim_win_set_cursor, 0, { line, math.max(column - 1, 0) })
+end
+)lua";
+
+    // The start of `text` that fits `limit` bytes.
+    constexpr std::string_view clipped(std::string_view text, std::size_t limit) noexcept {
+      return text.substr(0, std::min(text.size(), limit));
     }
 
     constexpr std::string_view buttonName(NvimMouseButton button) noexcept {
@@ -159,13 +238,20 @@ namespace telar::runtime {
 
   }
 
+  NvimPromptRequest::NvimPromptRequest(ConcurrentMemory& memory)
+      : title(memory),
+        initial(memory),
+        text(memory),
+        choices(memory) {}
+
   NvimEditor::NvimEditor(ConcurrentMemory& memory, NvimSize size, NvimSurfaces surfaces)
       : memory_(memory),
         inbox_(memory),
         screen_(memory),
         output_(memory, output_limit),
         size_(size),
-        surfaces_(surfaces) {
+        surfaces_(surfaces),
+        prompt_(memory) {
     request(output_, {.id = identify_request_, .method = "nvim_get_api_info"}, [](msgpack::Writer&) {});
   }
 
@@ -234,6 +320,10 @@ namespace telar::runtime {
       return fail("Neovim wrote a notification without a name");
     }
 
+    if (*method == "telar_prompt") {
+      return prompted(message.subspan(reader.offset()));
+    }
+
     if (*method != "redraw") {
       return true;
     }
@@ -271,6 +361,110 @@ namespace telar::runtime {
     return identified(message.subspan(reader.offset()));
   }
 
+  // What vim.ui asks: `[id, kind, title, initial, [choice...]]`. Anything in Neovim can send
+  // one, so what does not read as a prompt is passed over, and what does is cut to what a
+  // client is sent.
+  bool NvimEditor::prompted(std::span<const std::uint8_t> parameters) {
+    constexpr std::uint32_t fields = 5;
+    msgpack::Reader reader{parameters};
+    std::uint64_t id = 0;
+    std::uint32_t count = 0;
+
+    if (!reader.tuple(fields) || !reader.unsignedInteger(id) || id == 0) {
+      return true;
+    }
+
+    const auto kind = reader.string();
+    const auto title = reader.string();
+    const auto initial = reader.string();
+    if (!kind || !title || !initial || !reader.array(count) || (*kind != "select" && *kind != "input")) {
+      return true;
+    }
+
+    // One prompt is open at a time: whatever asked before is told nothing was chosen.
+    dismissPrompt();
+    prompt_.id = id;
+    prompt_.kind = *kind == "select" ? NvimPromptKind::select : NvimPromptKind::input;
+    prompt_.title.assign(clipped(*title, max_nvim_label_bytes));
+    prompt_.initial.assign(clipped(*initial, max_nvim_line_bytes));
+
+    for (std::uint32_t index = 0; index < count; ++index) {
+      const auto choice = reader.string();
+      if (!choice) {
+        break;
+      }
+
+      if (prompt_.choices.size() < max_nvim_choices) {
+        const auto kept = clipped(*choice, max_nvim_label_bytes);
+
+        prompt_.choices.push({.offset = static_cast<std::uint32_t>(prompt_.text.size()), .size = static_cast<std::uint32_t>(kept.size())});
+        prompt_.text.extend(std::span<const char>{kept});
+      }
+    }
+
+    ++prompt_serial_;
+    return true;
+  }
+
+  void NvimEditor::dismissPrompt() {
+    if (prompt_.id != 0) {
+      static_cast<void>(answer({.id = prompt_.id}));
+    }
+  }
+
+  bool NvimEditor::answer(const NvimAnswer& answer) {
+    constexpr std::uint32_t parameter_count = 2;
+    constexpr std::uint32_t argument_count = 4;
+    constexpr std::size_t room = 64;
+
+    if (answer.id == 0 || answer.id != prompt_.id || answer.text.size() > max_nvim_line_bytes) {
+      return false;
+    }
+
+    prompt_.id = 0;
+    prompt_.kind = NvimPromptKind::none;
+    prompt_.title.clear();
+    prompt_.initial.clear();
+    prompt_.text.clear();
+    prompt_.choices.clear();
+    ++prompt_serial_;
+    return request(output_, {.id = next_request_++, .method = "nvim_exec_lua", .parameters = parameter_count, .room = room + answer_script.size() + answer.text.size()}, [&](msgpack::Writer& writer) {
+      writer.string(answer_script);
+      writer.array(argument_count);
+      writer.unsignedInteger(answer.id);
+      writer.boolean(answer.accepted);
+      // Lua counts from one.
+      writer.unsignedInteger(std::uint64_t{answer.index} + 1);
+      writer.string(answer.text);
+    });
+  }
+
+  bool NvimEditor::open(const NvimPlace& place) {
+    constexpr std::uint32_t parameter_count = 2;
+    constexpr std::uint32_t argument_count = 3;
+    constexpr std::size_t room = 64;
+
+    if (state_ == NvimState::failed || place.path.empty() || place.path.size() > max_nvim_path_bytes) {
+      return false;
+    }
+
+    return request(output_, {.id = next_request_++, .method = "nvim_exec_lua", .parameters = parameter_count, .room = room + open_script.size() + place.path.size()}, [&](msgpack::Writer& writer) {
+      writer.string(open_script);
+      writer.array(argument_count);
+      writer.string(place.path);
+      writer.unsignedInteger(place.line);
+      writer.unsignedInteger(place.column);
+    });
+  }
+
+  const NvimPromptRequest& NvimEditor::prompt() const noexcept {
+    return prompt_;
+  }
+
+  std::uint64_t NvimEditor::promptSerial() const noexcept {
+    return prompt_serial_;
+  }
+
   // The result of nvim_get_api_info: `[channel, {version: {major, minor, ...}, ...}]`.
   bool NvimEditor::identified(std::span<const std::uint8_t> result) {
     msgpack::Reader reader{result};
@@ -299,6 +493,12 @@ namespace telar::runtime {
     // Before the user's configuration loads, it learns the channel to call the runtime on.
     request(output_, {.id = next_request_++, .method = "nvim_set_var", .parameters = 2, .room = variable_room}, [&](msgpack::Writer& writer) {
       writer.string("telar_channel");
+      writer.unsignedInteger(channel_);
+    });
+
+    request(output_, {.id = next_request_++, .method = "nvim_exec_lua", .parameters = 2, .room = variable_room + prompt_bootstrap.size()}, [&](msgpack::Writer& writer) {
+      writer.string(prompt_bootstrap);
+      writer.array(1);
       writer.unsignedInteger(channel_);
     });
 
@@ -352,7 +552,8 @@ namespace telar::runtime {
   }
 
   bool NvimEditor::input(std::string_view keys) {
-    if (state_ != NvimState::attached || keys.empty() || keys.size() > input_limit) {
+    // Keys typed before Neovim attached wait in its input, as typeahead does.
+    if (state_ == NvimState::failed || keys.empty() || keys.size() > input_limit) {
       return false;
     }
 
@@ -398,7 +599,7 @@ namespace telar::runtime {
     return true;
   }
 
-  bool NvimEditor::mouse(const NvimMouse& mouse) {
+  bool NvimEditor::mouse(const NvimMouse& event) {
     constexpr std::uint32_t parameter_count = 6;
     constexpr std::size_t room = 64;
 
@@ -409,19 +610,19 @@ namespace telar::runtime {
     ds::Array<char, 4> modifiers{};
     std::size_t count = 0;
 
-    for (const auto [held, letter] : {std::pair{mouse.shift, 'S'}, std::pair{mouse.control, 'C'}, std::pair{mouse.alt, 'A'}, std::pair{mouse.command, 'D'}}) {
-      if (held) {
+    for (const auto [bit, letter] : {std::pair{nvim_mouse_shift, 'S'}, std::pair{nvim_mouse_control, 'C'}, std::pair{nvim_mouse_alt, 'A'}, std::pair{nvim_mouse_command, 'D'}}) {
+      if ((event.modifiers & bit) != 0) {
         modifiers.atMut(count++) = letter;
       }
     }
 
     return request(output_, {.id = next_request_++, .method = "nvim_input_mouse", .parameters = parameter_count, .room = room}, [&](msgpack::Writer& writer) {
-      writer.string(buttonName(mouse.button));
-      writer.string(actionName(mouse.action));
+      writer.string(buttonName(event.button));
+      writer.string(actionName(event.action));
       writer.string(std::string_view{modifiers.view()}.substr(0, count));
-      writer.unsignedInteger(mouse.grid);
-      writer.unsignedInteger(mouse.row);
-      writer.unsignedInteger(mouse.column);
+      writer.unsignedInteger(event.grid);
+      writer.unsignedInteger(event.row);
+      writer.unsignedInteger(event.column);
     });
   }
 

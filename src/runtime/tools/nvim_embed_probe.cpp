@@ -24,6 +24,7 @@ import telar.platform.process;
 import telar.vocabulary;
 import telar.runtime.nvim.editor;
 import telar.runtime.nvim.screen;
+import telar.wire.nvim;
 
 namespace {
 
@@ -115,6 +116,11 @@ namespace {
 
           if (count > 0) {
             error_bytes_ += static_cast<std::size_t>(count);
+            // What the probe itself made Neovim say is shown; the rest is only counted.
+            const std::string_view said{reinterpret_cast<const char*>(buffer_.data()), static_cast<std::size_t>(count)};
+            if (said.contains("probe-")) {
+              std::print("stderr: {}", said);
+            }
           }
         }
 
@@ -325,6 +331,28 @@ namespace {
       session.key("<Esc>");
       session.settle(std::chrono::seconds{3}, std::chrono::milliseconds{150});
     }
+
+    // vim.ui.select and vim.ui.input, which the runtime takes over before the configuration
+    // loads: does a later assignment, as a plugin would make, leave them the runtime's?
+    session.editor().command("lua vim.ui.select = function() vim.g.telar_probe = 'replaced' end");
+    session.editor().command("lua vim.ui.select({'uno', 'dos', 'tres'}, {prompt = 'Elige'}, function(choice, index) io.stderr:write('probe-select=' .. tostring(choice) .. '@' .. tostring(index) .. '\\n') end)");
+    session.pump(std::chrono::seconds{3}, [&] {
+      return session.editor().prompt().id != 0;
+    });
+
+    const auto& prompt = session.editor().prompt();
+
+    std::println("vim.ui.select -> prompt id={} title={:?} choices={}", prompt.id, prompt.title.view(), prompt.choices.size());
+    session.editor().answer({.id = prompt.id, .accepted = true, .index = 1});
+    session.settle(std::chrono::seconds{3}, std::chrono::milliseconds{200});
+    session.editor().command("lua io.stderr:write('probe-replaced=' .. tostring(vim.g.telar_probe) .. '\\n')");
+    session.editor().command("lua vim.ui.input({prompt = 'Nombre', default = 'ana'}, function(text) io.stderr:write('probe-input=' .. tostring(text) .. '\\n') end)");
+    session.pump(std::chrono::seconds{3}, [&] {
+      return session.editor().prompt().id != 0;
+    });
+    std::println("vim.ui.input -> prompt id={} title={:?} initial={:?}", prompt.id, prompt.title.view(), prompt.initial.view());
+    session.editor().answer({.id = prompt.id, .accepted = true, .text = "ana maria"});
+    session.settle(std::chrono::seconds{3}, std::chrono::milliseconds{300});
 
     // A plugin writing to standard output, where the protocol travels.
     session.editor().command("lua io.stdout:write('telar-probe-pollution')");

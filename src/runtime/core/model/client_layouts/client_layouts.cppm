@@ -15,6 +15,8 @@ import telar.runtime.terminal.osc_scanner;
 import telar.runtime.terminal.text_reader;
 import telar.runtime.transport.connection;
 import telar.runtime.core.model.slot_store;
+import telar.runtime.nvim.editor;
+import telar.runtime.nvim.frames;
 
 import telar.runtime.agents.screen_inference;
 import telar.runtime.diagnostics.runtime_counters;
@@ -112,9 +114,12 @@ export {
     };
 
     struct Attachment {
+      // `media` is the pane's, null for a pane that shows no images.
       explicit Attachment(ConcurrentMemory& memory, GraphicsCreditBudget& budget, std::uint64_t pane, std::shared_ptr<PaneMedia> media);
 
       std::uint64_t pane_id;
+      // What the pane is, which says whose frames an acknowledgment answers.
+      PaneKind kind = PaneKind::terminal;
       std::size_t slot = 0;
       FrameSync frames;
       GraphicsSynchronizer graphics;
@@ -139,6 +144,13 @@ export {
       std::uint64_t scrollback_generation = 0;
       std::uint64_t scrollback_trimmed = 0;
       FramePacer pacer;
+      // An editor pane's frames: the one this client applied, and the one it was last sent,
+      // which it has yet to acknowledge while the two differ. Zero is a client that has none
+      // and is sent the screen whole.
+      std::uint64_t editor_seen = 0;
+      std::uint64_t editor_sent = 0;
+      // The count of the editor's prompt this client was last told.
+      std::uint64_t editor_prompt = 0;
     };
 
     // client_layouts.cpp instantiates the constructor for ConcurrentMemory. It is not declared
@@ -485,19 +497,65 @@ export {
 #endif
     };
 
+    // A pane that shows a Neovim the runtime started with --embed and is the only UI of. What
+    // Neovim draws is kept in `editor` and reaches clients grid by grid, drawn natively.
+    class NvimPane final : public Pane {
+    public:
+      static constexpr PaneKind pane_kind = PaneKind::nvim;
+      // The bytes one read takes from Neovim, and the reads one event takes before other panes
+      // have their turn.
+      static constexpr std::size_t read_buffer_size = std::size_t{64} * 1024;
+      static constexpr unsigned read_burst = 8;
+
+      explicit NvimPane(ConcurrentMemory& memory, std::uint64_t identity, TabLocation tab, Command<ConcurrentMemory>& command, TerminalSize size);
+
+      // Reads what Neovim wrote and applies it to the editor's screen. False once Neovim closed
+      // its output, or wrote what the editor refuses: the pane is then to be closed.
+      bool read();
+
+      // Reads and drops what Neovim wrote to its standard error; false once that closed.
+      bool readErrors() noexcept;
+
+      // Writes the requests the editor queued to Neovim's input, as many as it takes now.
+      void write();
+
+      [[nodiscard]] bool hasInput() const noexcept;
+
+      void requestClose() noexcept;
+
+      void resize(TerminalSize size);
+
+      NvimEditor editor;
+      ds::Option<PipeProcess> process;
+      // The flush that set the directory the pane last took from Neovim.
+      std::uint64_t directory_at = 0;
+      // Whether the poller wakes the runtime when Neovim's input takes more.
+      bool write_interest = false;
+    };
+
     // Calls `visitor` with the pane as the kind it is. A kind the visitor has no overload for
     // does not compile, so a new kind is decided at every visit.
     template <typename Visitor>
     TBC_GENERIC inline void visitPane(Pane& pane, Visitor&& visitor) {
-      if (auto* terminal = pane.asMut<TerminalPane>()) {
-        std::forward<Visitor>(visitor)(*terminal);
+      switch (pane.kind) {
+      case PaneKind::terminal:
+        std::forward<Visitor>(visitor)(*pane.asMut<TerminalPane>());
+        return;
+      case PaneKind::nvim:
+        std::forward<Visitor>(visitor)(*pane.asMut<NvimPane>());
+        return;
       }
     }
 
     template <typename Visitor>
     TBC_GENERIC inline void visitPane(const Pane& pane, Visitor&& visitor) {
-      if (const auto* terminal = pane.as<TerminalPane>()) {
-        std::forward<Visitor>(visitor)(*terminal);
+      switch (pane.kind) {
+      case PaneKind::terminal:
+        std::forward<Visitor>(visitor)(*pane.as<TerminalPane>());
+        return;
+      case PaneKind::nvim:
+        std::forward<Visitor>(visitor)(*pane.as<NvimPane>());
+        return;
       }
     }
 
@@ -508,6 +566,15 @@ export {
 
     TBC_HOT_PATH [[nodiscard]] inline tbc::val_a<const TerminalPane*> asTerminal(tbc::val_a<const Pane*> pane) noexcept {
       return pane == nullptr ? nullptr : pane->as<TerminalPane>();
+    }
+
+    // The editor a pane is; null for no pane and for a pane of another kind.
+    TBC_HOT_PATH [[nodiscard]] inline tbc::val_a<NvimPane*> asNvim(tbc::val_a<Pane*> pane) noexcept {
+      return pane == nullptr ? nullptr : pane->asMut<NvimPane>();
+    }
+
+    TBC_HOT_PATH [[nodiscard]] inline tbc::val_a<const NvimPane*> asNvim(tbc::val_a<const Pane*> pane) noexcept {
+      return pane == nullptr ? nullptr : pane->as<NvimPane>();
     }
 
     // Asks a pane's program to end, as closing the pane does, whatever its kind.
@@ -727,6 +794,9 @@ export {
     // The terminal `pane` is, as a request that only a terminal answers needs it.
     tbc::mut_a<TerminalPane> requireTerminal(tbc::mut_a<Pane> pane);
 
+    // The editor a request names by id, refused as requireTerminal refuses.
+    tbc::mut_a<NvimPane> requireNvim(tbc::mut_a<PaneStore> panes, std::uint64_t identity);
+
     // The pane an agent's report names, which must still run the generation it names and be the one
     // the runtime verified the reporting client inside.
     tbc::mut_a<Pane> requireReporterPane(tbc::mut_a<PaneStore> panes, const ClientSession& client, PaneKey key);
@@ -738,6 +808,8 @@ export {
 
       GraphicsLimits graphics_limits;
       RuntimeLimits limits;
+      // The buffers an editor pane's frames are written in, one set for every pane and client.
+      NvimFrames editor_frames;
       [[no_unique_address]] diagnostics::RuntimeCounters metrics;
       MediaBudget media_budget;
       AgentManifests manifests = builtinManifests();

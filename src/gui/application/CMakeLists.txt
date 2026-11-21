@@ -5,6 +5,7 @@ telar_add_domain(gui application
     application-configuration_readers.cpp
     application-history.cpp
     application-monitor.cpp
+    application-nvim.cpp
     application-host_effects.cpp
     application-notifications.cpp
     application-palette.cpp
@@ -31,7 +32,7 @@ telar_add_domain(gui application
     application-workbench.cpp
     application-workspace_replica.cpp
   DEPS foundation/core foundation/system foundation/text foundation/terminal foundation/actions
-       foundation/keys foundation/model foundation/agents features/peek features/monitor features/palette features/paths features/history
+       foundation/keys foundation/model foundation/agents features/peek features/monitor features/nvim features/palette features/paths features/history
        features/prompt features/terminal/input features/terminal/links features/terminal/copy_mode
        features/terminal/graphics features/terminal/attachments features/window features/status_bar features/notifications features/machines features/activity
        features/workbench features/bindings features/components features/configuration features/plugins)

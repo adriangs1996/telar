@@ -81,6 +81,19 @@ namespace {
               {"AgentSnapshot", 0x0d98295029aede63},
           }},
       },
+      // Adds the editor pane's messages and the failure for a pane of another kind; the layouts
+      // of the others are unchanged.
+      SchemaLayouts{
+          .schema = {'c', 'q', 'p', '0', '0', '0', '0', '8'},
+          .layouts = {{
+              {"RequestRuntimeState", 0x24faea53dd5382bf},
+              {"OpenPane", 0x54bf92fa37104bc7},
+              {"PaneFrame", 0x51181939628bf754},
+              {"ClientCommand", 0xa4f02dedcea9f648},
+              {"RequestFailed", 0x7369409b7caafd98},
+              {"AgentSnapshot", 0x0d98295029aede63},
+          }},
+      },
   };
 
   std::uint64_t fnv1a(std::span<const Byte> bytes) {

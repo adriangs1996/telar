@@ -10,6 +10,7 @@ import telar.sys.process;
 
 import telar.runtime.terminal.control;
 import telar.render.document;
+import telar.wire.nvim;
 import telar.wire.pane_io;
 import telar.runtime.diagnostics.line;
 import telar.base.ds;
@@ -159,21 +160,114 @@ namespace telar::runtime {
 
       candidates &= candidates - 1;
       auto& attachment = client.attachments.atMut(slots_[slot].index).getMut();
-      // An attachment's lanes are a terminal's: its cells, its scrollback and its graphics.
-      auto* found = asTerminal(model.panes.find(attachment.pane_id));
+      auto* found = model.panes.find(attachment.pane_id);
       if (found == nullptr) {
         continue;
       }
 
-      auto& pane = *found;
-      Output output{.connection = client.connection, .completing_exit = client.completing_exit, .frame_interval = client.frame_interval, .metrics = model.metrics, .now = now, .timeout = timeout};
-      if (prepare(output, attachment, pane, lane)) {
+      Output output{.connection = client.connection, .completing_exit = client.completing_exit, .frame_interval = client.frame_interval, .metrics = model.metrics, .editor_frames = model.editor_frames, .now = now, .timeout = timeout};
+      bool prepared = false;
+
+      // Each kind of pane fills the lanes it has something for.
+      visitPane(*found, [&](auto& pane) {
+        prepared = prepare(output, attachment, pane, lane);
+      });
+
+      if (prepared) {
         client.next_attachment = (slot + 1) % ClientSession::attachment_capacity;
         return true;
       }
     }
 
     return false;
+  }
+
+  bool AttachmentDelivery::prepare(Output& output, Attachment& attachment, NvimPane& pane, DeliveryLane lane) {
+    switch (lane) {
+    case DeliveryLane::cells:
+      return editorFrame(output, attachment, pane);
+    case DeliveryLane::cwd:
+      return metadata(output.connection, attachment.cwd_revision, pane.cwd_revision + 1, PaneCwd{.pane_id = pane.id, .cwd = pane.cwd});
+    case DeliveryLane::foreground:
+      return metadata(output.connection, attachment.foreground_revision, pane.foreground_revision, PaneForeground{.pane_id = pane.id, .name = pane.foreground.view()});
+    case DeliveryLane::title: {
+      const auto title = programTitle(pane);
+
+      // An attachment starts at revision one, and a screen that was told no title at zero.
+      return metadata(output.connection, attachment.title_revision, title.revision + 1, PaneTitle{.pane_id = pane.id, .title = title.text});
+    }
+    case DeliveryLane::exit:
+      return exit(output, attachment, pane, attachment.editor_sent == attachment.editor_seen);
+    case DeliveryLane::scrollback:
+    case DeliveryLane::progress:
+    case DeliveryLane::shell:
+    case DeliveryLane::git:
+    case DeliveryLane::blocks:
+    case DeliveryLane::graphics:
+    case DeliveryLane::document:
+    case DeliveryLane::stopping:
+    case DeliveryLane::management:
+    case DeliveryLane::resync:
+    case DeliveryLane::clipboard:
+    case DeliveryLane::layout:
+    case DeliveryLane::proxy:
+    case DeliveryLane::agents:
+    case DeliveryLane::metrics:
+    case DeliveryLane::workspaces:
+    case DeliveryLane::panes:
+    case DeliveryLane::observation:
+    case DeliveryLane::count:
+      return false;
+    }
+
+    return false;
+  }
+
+  bool AttachmentDelivery::editorFrame(Output& output, Attachment& attachment, const NvimPane& pane) {
+    const auto& screen = pane.editor.screen();
+
+    // One frame is out at a time: the client says when it applied it. A screen in the middle of
+    // a redraw shows a state Neovim never meant to be seen, so it waits for the flush.
+    if (attachment.editor_sent != attachment.editor_seen || !screen.settled()) {
+      return false;
+    }
+
+    if (!NvimFrames::pending(screen, attachment.editor_seen)) {
+      slots_.atMut(attachment.slot).cells_current = true;
+      return editorPrompt(output.connection, attachment, pane);
+    }
+
+    TELAR_TRACE("runtime.publishEditorFrame");
+    auto& frames = output.editor_frames;
+
+    frames.begin(screen, pane.id, attachment.editor_seen);
+    while (const auto grid = frames.next(screen)) {
+      output.connection.send(*grid);
+    }
+
+    // Each native surface that changed, to take effect with the grids.
+    if (const auto cmdline = frames.cmdline(screen)) {
+      output.connection.send(*cmdline);
+    }
+
+    if (const auto menu = frames.popupMenu(screen)) {
+      output.connection.send(*menu);
+    }
+
+    if (const auto messages = frames.messageList(screen)) {
+      output.connection.send(*messages);
+    }
+
+    if (const auto tabs = frames.tabLine(screen)) {
+      output.connection.send(*tabs);
+    }
+
+    const auto frame = frames.end(screen);
+
+    output.connection.send(frame);
+    attachment.editor_sent = frame.frame_id;
+    slots_.atMut(attachment.slot).cells_current = true;
+    return true;
   }
 
   bool AttachmentDelivery::prepare(Output& output, Attachment& attachment, TerminalPane& pane, DeliveryLane lane) {
@@ -199,7 +293,7 @@ namespace telar::runtime {
     case DeliveryLane::blocks:
       return blocks(output.connection, attachment, pane);
     case DeliveryLane::exit:
-      return exit(output, attachment, pane);
+      return exit(output, attachment, pane, pane.media->idle() && !attachment.frames.waitingForAck());
     case DeliveryLane::graphics:
       return graphics(output, attachment, pane, output.timeout);
     case DeliveryLane::document:
@@ -413,8 +507,36 @@ namespace telar::runtime {
     return true;
   }
 
-  bool AttachmentDelivery::exit(Output& output, Attachment& attachment, const TerminalPane& pane) {
-    if (!pane.output_closed || !pane.exit_status || !pane.media->idle() || attachment.frames.waitingForAck() || !slots_[attachment.slot].cells_current) {
+  bool AttachmentDelivery::editorPrompt(Connection<ConcurrentMemory>& connection, Attachment& attachment, const NvimPane& pane) {
+    const auto serial = pane.editor.promptSerial();
+    if (attachment.editor_prompt == serial) {
+      return false;
+    }
+
+    const auto& prompt = pane.editor.prompt();
+    const std::string_view text{prompt.text.data(), prompt.text.size()};
+    ds::Array<std::string_view, max_nvim_choices> choices;
+    std::size_t count = 0;
+
+    for (const auto& choice : prompt.choices) {
+      choices.atMut(count++) = choice.of(text);
+    }
+
+    connection.send(NvimPrompt{
+        .pane_id = pane.id,
+        .serial = serial,
+        .prompt_id = prompt.id,
+        .kind = prompt.kind,
+        .title = prompt.title,
+        .initial = prompt.initial,
+        .choices = choices.view().first(count),
+    });
+    attachment.editor_prompt = serial;
+    return true;
+  }
+
+  bool AttachmentDelivery::exit(Output& output, Attachment& attachment, const Pane& pane, bool delivered) {
+    if (!pane.output_closed || !pane.exit_status || !delivered || !slots_[attachment.slot].cells_current) {
       return false;
     }
 

@@ -6,6 +6,7 @@ import telar.base.ds;
 import telar.base.memory.allocators;
 import telar.runtime.nvim.redraw;
 import telar.runtime.nvim.screen;
+import telar.wire.nvim;
 
 namespace {
 
@@ -283,7 +284,7 @@ namespace {
       check(floating->z_index == 50 && floating->composition_index == 2 && floating->start_row == 5 && floating->start_column == 12 && !floating->mouse_enabled, "a float's order and place");
 
       check(Batch{}.integers("win_hide", {2}).event("flush").apply(screen, memory).accepted);
-      check(screen.grid(2)->placement == NvimPlacement::none && screen.grid(2)->placed_at == 2, "a hidden window keeps its grid");
+      check(screen.grid(2)->placement == NvimPlacement::hidden && screen.grid(2)->placed_at == 2, "a hidden window keeps its grid");
     }
 
     void surfaces() {
@@ -439,7 +440,7 @@ namespace {
 
       check(Batch{}.integers("grid_resize", {1, 4, 2}).integers("grid_resize", {5, 4, 2}).event("flush").apply(screen, memory).accepted);
       check(Batch{}.integers("grid_destroy", {5}).event("flush").apply(screen, memory).accepted);
-      check(screen.grid(5) == nullptr && screen.grids().size() == 1 && screen.gridsRemovedAt() == 2, "the grid is gone, and clients older than its flush hear of it");
+      check(screen.grid(5) == nullptr && screen.grids().size() == 1 && screen.removed().size() == 1 && screen.removed()[0].grid == 5 && screen.removed()[0].at == 2, "the grid is gone, and clients older than its flush hear of it");
       check(Batch{}.integers("grid_resize", {5, 2, 2}).line(5, 1, 1, {{.text = "z"}}).event("flush").apply(screen, memory).accepted, "its id can be sized again");
     }
 

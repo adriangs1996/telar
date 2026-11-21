@@ -183,6 +183,14 @@ export {
       case ServerTag::proxy_status:
         return DeliveryLane::proxy;
       case ServerTag::pane_frame:
+      // An editor's grids and the frame that ends them leave together, in the order they were made.
+      case ServerTag::nvim_grid:
+      case ServerTag::nvim_frame:
+      case ServerTag::nvim_cmdline:
+      case ServerTag::nvim_popup_menu:
+      case ServerTag::nvim_message_list:
+      case ServerTag::nvim_tab_line:
+      case ServerTag::nvim_prompt:
         return DeliveryLane::cells;
       case ServerTag::agent_snapshot:
         return DeliveryLane::agents;
@@ -223,6 +231,8 @@ export {
       case ServerTag::graphics_shared_image:
         return DeliveryLane::graphics;
       case ServerTag::pane_opened:
+      // Ahead of the reply that first names the pane, in the lane the reply leaves by.
+      case ServerTag::pane_kind_notice:
       case ServerTag::request_failed:
       case ServerTag::tab_snapshot:
       case ServerTag::workspace_snapshot:

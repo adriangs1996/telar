@@ -4,6 +4,7 @@ module;
 
 module telar.runtime.core.runtime;
 
+import telar.runtime.nvim.editor;
 import telar.ghostty.vt;
 import telar.sys.process;
 import telar.platform.error;
@@ -931,7 +932,7 @@ namespace telar::runtime {
   }
 
   template <EventLoop Poller, HistoryEventSink History>
-  void WorkspaceService<Poller, History>::createTab(RuntimeModel& model, Panes& panes, ClientStore& clients, std::uint64_t client_id, const CreateTab& request) {
+  void WorkspaceService<Poller, History>::createTab(RuntimeModel& model, Panes& panes, ClientStore& clients, std::uint64_t client_id, const CreateTab& request, PaneKind kind) {
     if (!acquireGeometry(model.panes, model.metrics, requireClient(clients, client_id), require(model.workspaces, request.workspace))) {
       throw RequestError{FailureCode::resource_limit, "workspace geometry is leased by another client"};
     }
@@ -948,12 +949,13 @@ namespace telar::runtime {
     workspace.tabs.emplace(memory_, tab_id, request.label);
 
     try {
-      const auto pane = createAt(model, panes, clients, {.client_id = client_id, .location = TabLocation{.workspace = request.workspace, .tab_id = tab_id}, .launch = launch, .size = request.size});
+      const auto pane = createAt(model, panes, clients, {.client_id = client_id, .location = TabLocation{.workspace = request.workspace, .tab_id = tab_id}, .launch = launch, .size = request.size, .kind = kind});
 
       ++model.next_tab_id;
       const auto& opened = Panes::require(model.panes, pane);
       const auto& tabs = require(model.workspaces, request.workspace).tabs;
 
+      announceKind(requireClient(clients, client_id), opened);
       requireClient(clients, client_id).connection.send(TabCreated{
           .request_id = request.request_id,
           .location = opened.location,
@@ -1018,16 +1020,42 @@ namespace telar::runtime {
   }
 
   template <EventLoop Poller, HistoryEventSink History>
-  void WorkspaceService<Poller, History>::createPane(RuntimeModel& model, Panes& panes, ClientStore& clients, std::uint64_t client_id, const CreatePane& request) {
+  void WorkspaceService<Poller, History>::createPane(RuntimeModel& model, Panes& panes, ClientStore& clients, std::uint64_t client_id, const CreatePane& request, PaneKind kind) {
     const auto* workspace = model.workspaces.find(request.location.workspace.id);
     const auto* tab = workspace == nullptr ? nullptr : workspace->tab(request.location.tab_id);
     if (request.location.workspace.kind != WorkspaceLocation::Kind::workspace || tab == nullptr || (!firstPane(model.panes, *tab) && !tabHeld(clients, request.location))) {
       throw RequestError{FailureCode::pane_not_found, "tab not found"};
     }
 
-    const auto pane = createAt(model, panes, clients, {.client_id = client_id, .location = request.location, .launch = request.launch, .size = request.size});
+    const auto pane = createAt(model, panes, clients, {.client_id = client_id, .location = request.location, .launch = request.launch, .size = request.size, .kind = kind});
 
     sendOpened(requireClient(clients, client_id), request.request_id, Panes::require(model.panes, pane), true, GenerationField::omitted);
+  }
+
+  template <EventLoop Poller, HistoryEventSink History>
+  void WorkspaceService<Poller, History>::createEditor(RuntimeModel& model, Panes& panes, ClientStore& clients, std::uint64_t client_id, const CreateNvimPane& request) {
+    // The program, the flag that makes it speak its UI protocol on its pipes, then the files.
+    ds::Array<std::string_view, max_nvim_files + 2> arguments;
+    std::size_t count = 0;
+
+    arguments.atMut(count++) = "nvim";
+    arguments.atMut(count++) = "--embed";
+    for (const auto file : request.files) {
+      // A name that starts as an option would be read as one.
+      if (file.starts_with('-') || file.starts_with('+')) {
+        throw RequestError{FailureCode::invalid_request, "A file to edit cannot start with - or +"};
+      }
+
+      arguments.atMut(count++) = file;
+    }
+
+    const Launch launch{.cwd = request.cwd, .arguments = arguments.view().first(count)};
+
+    if (request.new_tab) {
+      createTab(model, panes, clients, client_id, CreateTab{.request_id = request.request_id, .workspace = request.location.workspace, .size = request.size, .launch = launch}, PaneKind::nvim);
+    } else {
+      createPane(model, panes, clients, client_id, CreatePane{.request_id = request.request_id, .location = request.location, .size = request.size, .launch = launch}, PaneKind::nvim);
+    }
   }
 
   template <EventLoop Poller, HistoryEventSink History>
@@ -1445,7 +1473,7 @@ namespace telar::runtime {
 
   template <EventLoop Poller, HistoryEventSink History>
   std::uint64_t WorkspaceService<Poller, History>::createAt(RuntimeModel& model, Panes& panes, ClientStore& clients, const TabOpening& opening) {
-    const auto& [client_id, location, requested, size] = opening;
+    const auto& [client_id, location, requested, size, kind] = opening;
     auto launch = requested;
 
     requireTab(model.workspaces, location);
@@ -1468,7 +1496,8 @@ namespace telar::runtime {
       launch.cwd = ownDirectory(fallback, require(model.workspaces, location.workspace).path);
     }
 
-    const auto pane = panes.launch(model, {.owner_colors = &client.colors, .bare_prompt = client.bare_prompt, .location = location, .size = size}, launch).id;
+    const PanePlacement placement{.owner_colors = &client.colors, .bare_prompt = client.bare_prompt, .location = location, .size = size};
+    const auto pane = kind == PaneKind::nvim ? panes.launchEditor(model, placement, launch).id : panes.launch(model, placement, launch).id;
 
     try {
       panes.attach(model, requireClient(clients, client_id), pane, size);
@@ -1527,7 +1556,15 @@ namespace telar::runtime {
   }
 
   template <EventLoop Poller, HistoryEventSink History>
+  void WorkspaceService<Poller, History>::announceKind(ClientSession& client, const Pane& pane) {
+    if (pane.kind != PaneKind::terminal) {
+      client.connection.send(PaneKindNotice{.pane_id = pane.id, .kind = pane.kind});
+    }
+  }
+
+  template <EventLoop Poller, HistoryEventSink History>
   void WorkspaceService<Poller, History>::sendOpened(ClientSession& client, std::uint64_t request, const Pane& pane, bool created, GenerationField generation) {
+    announceKind(client, pane);
     client.connection.send(PaneOpened{
         .request_id = request,
         .pane_id = pane.id,
@@ -2019,6 +2056,30 @@ namespace telar::runtime {
 
   template <EventLoop Poller, typename Background>
     requires BackgroundExecutor<Background, ConcurrentMemory>
+  void Runtime<Poller, Background>::paneEvent(NvimPane& pane, const Event& event) {
+    try {
+      if (event.descriptor == pane.process->output()) {
+        if (!pane.read()) {
+          panes_.closeEditorOutput(pane);
+        }
+      } else if (event.descriptor == pane.process->error()) {
+        if (!pane.readErrors()) {
+          panes_.closeEditorErrors(pane);
+        }
+      } else if (event.descriptor != pane.process->input()) {
+        TELAR_DIAGNOSTIC(diagnostics::accumulate(model_.metrics.stale_pane_events));
+        return;
+      }
+
+      // What Neovim said may have queued an answer, and its input may take what was left.
+      panes_.flushEditor(pane);
+    } catch (const std::exception&) {
+      panes_.failEditor(pane);
+    }
+  }
+
+  template <EventLoop Poller, typename Background>
+    requires BackgroundExecutor<Background, ConcurrentMemory>
   void Runtime<Poller, Background>::receive(std::uint64_t identity) {
     Frames frames{memory_};
 
@@ -2412,6 +2473,61 @@ namespace telar::runtime {
 
   template <EventLoop Poller, typename Background>
     requires BackgroundExecutor<Background, ConcurrentMemory>
+  void Runtime<Poller, Background>::handle(std::uint64_t identity, const CreateNvimPane& message) {
+    workspaces_.createEditor(model_, panes_, clients_, identity, message);
+  }
+
+  template <EventLoop Poller, typename Background>
+    requires BackgroundExecutor<Background, ConcurrentMemory>
+  void Runtime<Poller, Background>::handle(std::uint64_t identity, const NvimInput& message) {
+    panes_.editorRequest(model_, requireClient(clients_, identity), message.pane_id, [&](NvimEditor& editor) {
+      return editor.input(textView(message.keys));
+    });
+  }
+
+  template <EventLoop Poller, typename Background>
+    requires BackgroundExecutor<Background, ConcurrentMemory>
+  void Runtime<Poller, Background>::handle(std::uint64_t identity, const NvimPaste& message) {
+    panes_.editorRequest(model_, requireClient(clients_, identity), message.pane_id, [&](NvimEditor& editor) {
+      return editor.paste(textView(message.text));
+    });
+  }
+
+  template <EventLoop Poller, typename Background>
+    requires BackgroundExecutor<Background, ConcurrentMemory>
+  void Runtime<Poller, Background>::handle(std::uint64_t identity, const NvimMouse& message) {
+    panes_.editorRequest(model_, requireClient(clients_, identity), message.pane_id, [&](NvimEditor& editor) {
+      return editor.mouse(message);
+    });
+  }
+
+  template <EventLoop Poller, typename Background>
+    requires BackgroundExecutor<Background, ConcurrentMemory>
+  void Runtime<Poller, Background>::handle(std::uint64_t identity, const NvimFocus& message) {
+    panes_.editorRequest(model_, requireClient(clients_, identity), message.pane_id, [&](NvimEditor& editor) {
+      editor.focus(message.focused);
+      return true;
+    });
+  }
+
+  template <EventLoop Poller, typename Background>
+    requires BackgroundExecutor<Background, ConcurrentMemory>
+  void Runtime<Poller, Background>::handle(std::uint64_t identity, const NvimPromptReply& message) {
+    panes_.editorRequest(model_, requireClient(clients_, identity), message.pane_id, [&](NvimEditor& editor) {
+      return editor.answer({.id = message.prompt_id, .accepted = message.accepted, .index = message.index, .text = message.text});
+    });
+  }
+
+  template <EventLoop Poller, typename Background>
+    requires BackgroundExecutor<Background, ConcurrentMemory>
+  void Runtime<Poller, Background>::handle(std::uint64_t identity, const NvimOpen& message) {
+    panes_.editorRequest(model_, requireClient(clients_, identity), message.pane_id, [&](NvimEditor& editor) {
+      return editor.open({.path = message.path, .line = message.line, .column = message.column});
+    });
+  }
+
+  template <EventLoop Poller, typename Background>
+    requires BackgroundExecutor<Background, ConcurrentMemory>
   void Runtime<Poller, Background>::handle(std::uint64_t identity, const ClosePane& message) {
     Workspaces::closePane(model_, requireClient(clients_, identity), message);
   }
@@ -2590,6 +2706,15 @@ namespace telar::runtime {
     requires BackgroundExecutor<Background, ConcurrentMemory>
   void Runtime<Poller, Background>::handle(std::uint64_t identity, const FrameAck& message) {
     if (auto* attachment = requireClient(clients_, identity).attachmentMut(message.pane_id)) {
+      if (attachment->kind == PaneKind::nvim) {
+        // An editor's client applied the frame it was last sent; an older one names nothing new.
+        if (message.frame_id == attachment->editor_sent) {
+          attachment->editor_seen = message.frame_id;
+        }
+
+        return;
+      }
+
       attachment->frames.acknowledge(message.frame_id);
       TELAR_DIAGNOSTIC(model_.metrics.frames.merge(attachment->frames.takeCounters()));
     }
@@ -2599,6 +2724,9 @@ namespace telar::runtime {
     requires BackgroundExecutor<Background, ConcurrentMemory>
   void Runtime<Poller, Background>::handle(std::uint64_t identity, const RequestSnapshot& message) {
     if (auto* attachment = requireClient(clients_, identity).attachmentMut(message.pane_id)) {
+      // An editor's client that starts over has no frame: the next one stands alone.
+      attachment->editor_seen = 0;
+      attachment->editor_sent = 0;
       attachment->frames.requestSnapshot();
     }
   }
@@ -2982,6 +3110,26 @@ namespace telar::runtime {
     if (pane.exit_status && pane.output_closed && !pane.exit_observed) {
       pane.observer->shellExit(*pane.exitCode());
       pane.exit_observed = true;
+    }
+  }
+
+  template <EventLoop Poller, typename Background>
+    requires BackgroundExecutor<Background, ConcurrentMemory>
+  void Runtime<Poller, Background>::refreshPane(NvimPane& pane, Clock::time_point /*now*/, bool /*poll_panes*/) {
+    const auto& screen = pane.editor.screen();
+
+    // The pane's directory is the one Neovim last said it works in.
+    if (pane.directory_at != screen.directoryAt()) {
+      pane.directory_at = screen.directoryAt();
+      if (!screen.directory().empty() && pane.cwd.view() != screen.directory()) {
+        pane.cwd.assign(screen.directory());
+        ++pane.cwd_revision;
+      }
+    }
+
+    // A Neovim the editor could not attach to has nothing to show: its pane ends.
+    if (pane.editor.state() == NvimState::failed && !pane.close_requested) {
+      panes_.failEditor(pane);
     }
   }
 

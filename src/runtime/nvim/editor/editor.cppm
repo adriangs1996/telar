@@ -3,8 +3,10 @@ export module telar.runtime.nvim.editor;
 import std;
 import telar.tbc;
 import telar.msgpack;
+import telar.base.ds;
 import telar.base.memory.allocators;
 import telar.base.memory.containers;
+import telar.wire.nvim;
 import telar.runtime.nvim.rpc;
 import telar.runtime.nvim.screen;
 
@@ -30,36 +32,6 @@ export {
       bool tabs = false;
     };
 
-    enum class NvimMouseButton : std::uint8_t {
-      left,
-      right,
-      middle,
-      wheel,
-      move,
-    };
-
-    enum class NvimMouseAction : std::uint8_t {
-      press,
-      drag,
-      release,
-      up,
-      down,
-      left,
-      right,
-    };
-
-    struct NvimMouse {
-      NvimMouseButton button = NvimMouseButton::left;
-      NvimMouseAction action = NvimMouseAction::press;
-      bool shift = false;
-      bool control = false;
-      bool alt = false;
-      bool command = false;
-      std::uint32_t grid = 0;
-      std::uint16_t row = 0;
-      std::uint16_t column = 0;
-    };
-
     enum class NvimState : std::uint8_t {
       // Asked what Neovim it is; the answer decides whether to attach.
       identifying,
@@ -74,6 +46,35 @@ export {
       // A flush ended: the screen has something new to show.
       bool flushed = false;
       bool bell = false;
+    };
+
+    // What something in Neovim asks the user through vim.ui.select or vim.ui.input, until it is
+    // answered. `id` is zero when nothing is asked.
+    struct NvimPromptRequest {
+      explicit NvimPromptRequest(ConcurrentMemory& memory);
+
+      std::uint64_t id = 0;
+      NvimPromptKind kind = NvimPromptKind::none;
+      ds::String<ConcurrentMemory> title;
+      ds::String<ConcurrentMemory> initial;
+      // The choices of a selection, in order, as views of `text`.
+      ds::Vec<char, ConcurrentMemory> text;
+      ds::Vec<NvimSlice, ConcurrentMemory> choices;
+    };
+
+    // The user's answer to a prompt: the choice at `index`, counted from zero, or the `text`.
+    struct NvimAnswer {
+      std::uint64_t id = 0;
+      bool accepted = false;
+      std::uint32_t index = 0;
+      std::string_view text;
+    };
+
+    // A place in a file, its line and column counted from one, zero for wherever the cursor is.
+    struct NvimPlace {
+      std::string_view path;
+      std::uint32_t line = 0;
+      std::uint32_t column = 0;
     };
 
     // One Neovim started with --embed, as the conversation over its pipes: what to write to its
@@ -100,10 +101,15 @@ export {
       // Keys in Neovim's notation, as nvim_input() takes them. False when they do not fit.
       bool input(std::string_view keys);
       bool paste(std::string_view text);
-      bool mouse(const NvimMouse& mouse);
+      // A mouse event on a cell of a grid, as a client sent it.
+      bool mouse(const NvimMouse& event);
       void resize(NvimSize size);
       void focus(bool focused);
       bool command(std::string_view command);
+      // Shows a file, in the window that already shows it or in the current one.
+      bool open(const NvimPlace& place);
+      // Hands the user's answer to whatever asked. False for a prompt that is no longer open.
+      bool answer(const NvimAnswer& answer);
 
       [[nodiscard]] NvimState state() const noexcept;
       [[nodiscard]] const NvimScreen& screen() const noexcept;
@@ -113,12 +119,17 @@ export {
       // Why it failed, for the pane's log.
       [[nodiscard]] tbc::val_static<std::string_view> failure() const noexcept;
       [[nodiscard]] NvimPulse takePulse() noexcept;
+      // What is asked of the user now, and a count that grows each time that changes.
+      [[nodiscard]] const NvimPromptRequest& prompt() const noexcept;
+      [[nodiscard]] std::uint64_t promptSerial() const noexcept;
 
     private:
       bool handle(std::span<const std::uint8_t> message);
       bool notified(msgpack::Reader& reader, std::span<const std::uint8_t> message);
       bool answered(msgpack::Reader& reader, std::span<const std::uint8_t> message);
       bool identified(std::span<const std::uint8_t> result);
+      bool prompted(std::span<const std::uint8_t> parameters);
+      void dismissPrompt();
       void attach();
       void refuse(std::uint64_t id);
       bool fail(tbc::val_static<std::string_view> reason) noexcept;
@@ -130,6 +141,8 @@ export {
       NvimSize size_;
       NvimSurfaces surfaces_;
       NvimPulse pulse_;
+      NvimPromptRequest prompt_;
+      std::uint64_t prompt_serial_ = 0;
       std::uint64_t channel_ = 0;
       // The first request asks what Neovim this is.
       std::uint32_t identify_request_ = 1;
