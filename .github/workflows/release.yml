@@ -2,10 +2,10 @@ name: Release
 
 # Pushing a tag vX.Y.Z whose version matches VERSION builds every
 # platform, publishes the GitHub release with SHA256SUMS and provenance
-# attestations, and updates the Homebrew tap. docs/packaging.md lists the
-# secrets; without them the release still publishes, unsigned. Running it by
-# hand builds and signs every platform from VERSION and keeps the archives as
-# the run's artifacts, without publishing a release or touching the tap.
+# attestations; curl and install.sh install from it. docs/packaging.md lists
+# the secrets; without them the release still publishes, unsigned. Running it
+# by hand builds and signs every platform from VERSION and keeps the archives
+# as the run's artifacts, without publishing a release.
 on:
   push:
     tags: ['v[0-9]+.[0-9]+.[0-9]+']
@@ -438,39 +438,3 @@ jobs:
             --title "telar $VERSION" \
             --generate-notes \
             --notes "$(cat notes.md)"
-
-  homebrew:
-    needs: [version, publish]
-    runs-on: ubuntu-24.04
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-
-      - name: Update adriangs1996/homebrew-tap
-        env:
-          HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
-          GH_TOKEN: ${{ github.token }}
-          VERSION: ${{ needs.version.outputs.version }}
-          NOTARIZED: ${{ needs.publish.outputs.notarized }}
-        run: |
-          if [ -z "$HOMEBREW_TAP_TOKEN" ]; then
-            echo "No HOMEBREW_TAP_TOKEN; the tap keeps its version"
-            exit 0
-          fi
-
-          gh release download "v$VERSION" --repo "$GITHUB_REPOSITORY" --pattern SHA256SUMS --dir "$RUNNER_TEMP"
-          git clone --depth 1 "https://x-access-token:$HOMEBREW_TAP_TOKEN@github.com/adriangs1996/homebrew-tap.git" "$RUNNER_TEMP/tap"
-          cask=
-          if [ "$NOTARIZED" = yes ]; then cask=--cask; fi
-          packaging/homebrew/render.sh "$VERSION" "$RUNNER_TEMP/SHA256SUMS" "$RUNNER_TEMP/tap" $cask
-          cd "$RUNNER_TEMP/tap"
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add -A
-          if git diff --cached --quiet; then
-            echo "The tap already has telar $VERSION"
-            exit 0
-          fi
-          git commit -m "telar $VERSION"
-          git push origin HEAD

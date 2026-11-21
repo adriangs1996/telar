@@ -24,7 +24,7 @@ jobs:
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y -qq shellcheck
-          shellcheck install.sh packaging/release/*.sh packaging/homebrew/*.sh
+          shellcheck install.sh packaging/release/*.sh
 
   # The layers of src/gui/ui (tools/ui-graph.py): no cycle, and no folder using one it may not.
   ui-layers:

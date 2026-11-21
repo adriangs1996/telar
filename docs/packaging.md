@@ -14,7 +14,7 @@ including development, CI, standalone libraries and release packaging.
 
 ## Install a local build
 
-No releases are published yet. The release, installer and Homebrew sections
+No releases are published yet. The release and installer sections
 below describe packaging infrastructure; use a local build today.
 Start with the [build dependencies](development.md#build-requirements).
 
@@ -308,7 +308,6 @@ ID Certification Authority and Apple Root CA.
 | `NOTARY_KEY_P8` | text of an App Store Connect API key, `AuthKey_XXXX.p8` |
 | `NOTARY_KEY_ID` | that key's ID |
 | `NOTARY_ISSUER_ID` | the issuer ID shown above the list of keys |
-| `HOMEBREW_TAP_TOKEN` | fine-grained token with Contents read and write on `adriangs1996/homebrew-tap` only |
 
 To create them with an Apple Developer Program membership:
 
@@ -342,7 +341,7 @@ temporary keychain with a random password and deletes it when the job ends.
 ### Gatekeeper
 
 Gatekeeper assesses files that carry the `com.apple.quarantine` attribute.
-Browsers and Homebrew casks set it; `curl` does not. On macOS 26.6.2 the ad
+Browsers set it; `curl` does not. On macOS 26.6.2 the ad
 hoc signed `shellcheck` 0.11.0 from GitHub, downloaded with `curl`, had no
 quarantine attribute and ran, even though `spctl --assess` rejected it. A
 copy with the attribute added did not start. An ad hoc signed `Telar.app`
@@ -434,24 +433,3 @@ Ctrl-C, SIGTERM and SIGHUP stop it after removing its temporary directory.
 
 The checksums come from the same release as the archive. They catch a
 corrupt download, not a tampered release; the attestation covers that.
-
-### Homebrew
-
-`packaging/homebrew` holds templates for a tap at `adriangs1996/homebrew-tap`:
-
-- `telar.rb.in`, the `telar` formula: the macOS command line archive, or the
-  headless build on Linux.
-- `telar-app.rb.in`, the `telar-app` cask: `Telar.app` plus the `telar`
-  command. Both put `telar` in Homebrew's `bin`, so install one of them.
-
-After publishing, the workflow renders them with `render.sh` and pushes
-them to the tap when `HOMEBREW_TAP_TOKEN` exists. It writes the cask only
-for notarized disk images: Homebrew quarantines cask downloads, deprecated
-`--no-quarantine` in 5.0.0, and disables casks in its own repository that
-fail Gatekeeper since September 2026
-([Homebrew 5.0.0](https://brew.sh/2025/11/12/homebrew-5.0.0/)).
-
-```sh
-brew install adriangs1996/tap/telar
-brew install --cask adriangs1996/tap/telar-app
-```
