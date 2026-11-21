@@ -65,7 +65,8 @@ namespace telar::runtime {
           break;
         }
 
-        std::string_view text{buffer.data(), kept + static_cast<std::size_t>(read)};
+        const auto filled = kept + static_cast<std::size_t>(read);
+        std::string_view text{buffer.data(), filled};
 
         for (auto newline = text.find('\n'); newline != std::string_view::npos && count < sockets.size(); newline = text.find('\n')) {
           if (!header) {
@@ -83,8 +84,9 @@ namespace telar::runtime {
           break;
         }
 
+        // What is left is the start of a row: it moves to the start of the buffer.
         kept = text.size();
-        std::memmove(buffer.dataMut(), text.data(), kept);
+        std::ranges::shift_left(buffer.viewMut().first(filled), static_cast<std::ptrdiff_t>(filled - kept));
       }
 
       return count;

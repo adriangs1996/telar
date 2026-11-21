@@ -44,8 +44,17 @@ namespace telar::remote {
     constexpr int quick_reaps = 64;
     constexpr int slow_reap_wait_ms = 20;
 
+    // A process closes its streams a moment before its status can be read. The status is asked
+    // for again at once that many times, which outlasts that moment, before any wait: the
+    // shortest wait is a timer tick, a millisecond or several.
+    constexpr int eager_reaps = 64;
+
     constexpr int reapWait(int reaps) noexcept {
-      return reaps < quick_reaps ? 1 : slow_reap_wait_ms;
+      if (reaps < eager_reaps) {
+        return 0;
+      }
+
+      return reaps < eager_reaps + quick_reaps ? 1 : slow_reap_wait_ms;
     }
 
     void putU16(std::span<std::uint8_t> output, std::uint16_t value) noexcept {
@@ -152,6 +161,10 @@ namespace telar::remote {
           if (waiting) {
             queueExit();
             waiting = !exit_queued_;
+          }
+
+          if (waiting && reaps < eager_reaps) {
+            std::this_thread::yield();
           }
 
           step(waiting ? reapWait(reaps) : -1);

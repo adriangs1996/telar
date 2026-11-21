@@ -9,6 +9,7 @@ import telar.base.memory.allocators;
 import telar.base.text;
 import telar.platform.daemon;
 import telar.platform.error;
+import telar.platform.fs;
 import telar.platform.paths;
 import telar.platform.primitives;
 import telar.platform.process;
@@ -278,6 +279,9 @@ namespace telar::remote {
         return;
       }
 
+      // The link keeps its sockets in this directory: where it cannot be made, no link will
+      // answer, and that is known now and not after the time a link is given to start.
+      runtime::createPrivateDirectory(paths.directory.view());
       const runtime::ExecutablePath self;
       ds::Array<char, PATH_MAX + log_name_bytes> log{};
       auto command = ds::toArray("link");
