@@ -656,6 +656,9 @@ namespace telar::gui::qt {
     const auto command = configuration_source_.commandTab(action, resolved);
     if (!command) {
       emit notified(QStringLiteral("That command tab expired"));
+    } else if (application::nvim::editCommand(store_.sessionMut(), command->argv())) {
+      // `telar.action.edit`: the window opened the file itself, without a tab for the command.
+      return;
     } else if (application::workbench::createCommandTab(store_.sessionMut(), *command) == application::TabCreationOutcome::busy) {
       emit notified(QStringLiteral("tabs.one_operation_in_flight: limit 1 tab operation reached"));
     }

@@ -77,7 +77,9 @@ with ripgrep when the machine has it, and with git in a repository when it does 
 The palette opens the same picker on the editor of the focused tab with **Find file in
 editor**, **Search text in editor** and **Switch editor buffer**; in a configuration they are
 `telar.action.editor_files()`, `telar.action.editor_grep()` and `telar.action.editor_buffers()`,
-to bind to a key or to call from a mod.
+to bind to a key or to call from a mod. `telar.action.edit("docs/notes.md")`, or
+`telar.action.edit({ file = "src/main.cpp", line = 42 })`, opens a file by its name, taken
+from the focused pane's directory.
 
 The entry under the selection is shown beside the list in a float of Neovim itself: the
 preview is the real buffer, with its highlighting. `Enter` opens the entry, `Control+Enter` or

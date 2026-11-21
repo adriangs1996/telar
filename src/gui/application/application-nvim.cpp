@@ -5,6 +5,7 @@ import std;
 import :access;
 import telar.gui.features.nvim;
 import telar.gui.features.terminal.links;
+import telar.base.text;
 import telar.wire.editor;
 import telar.wire.nvim;
 import telar.wire.pane_io;
@@ -167,6 +168,36 @@ namespace telar::gui::application::nvim {
       return Change::editor;
     }
 
+  }
+
+  bool editCommand(Session& session, std::span<const std::string_view> arguments) {
+    const auto* focused = focusedPane(session.panes, session.tabs, session.active_tab);
+    if (focused == nullptr || arguments.size() != 3 || arguments[0] != "telar" || arguments[1] != "edit" || arguments[2].empty()) {
+      return false;
+    }
+
+    // `FILE:LINE` names a line, when what follows the last colon is a number.
+    auto file = arguments[2];
+    std::uint32_t line = 0;
+
+    if (const auto colon = file.rfind(':'); colon != std::string_view::npos && colon > 0) {
+      if (const auto number = runtime::parseExact<std::uint32_t>(file.substr(colon + 1))) {
+        line = *number;
+        file = file.substr(0, colon);
+      }
+    }
+
+    // Kept before the session changes: the pane's directory is the session's.
+    const auto pane_id = focused->id;
+    ds::String<Memory> path{session.memory};
+
+    if (!file.starts_with('/')) {
+      path.append(std::string_view{focused->cwd});
+      path.append("/");
+    }
+
+    path.append(file);
+    return path.view().starts_with('/') && edit(session, pane_id, {.path = path.view(), .line = line});
   }
 
   bool find(Session& session, NvimPickSource source) {

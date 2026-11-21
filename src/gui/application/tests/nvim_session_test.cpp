@@ -146,6 +146,17 @@ namespace {
     check(client.focusedPane()->id == editor_pane, "which takes the focus");
     check(!application::nvim::edit(client, 1, {}), "a place without a file is not one");
 
+    // The same from a key or a mod, as `telar.action.edit` gives it: the window runs
+    // `telar edit` itself, from the focused pane's directory, and leaves any other command to a tab.
+    application::workbench::focusPane(client, 1);
+    deliver(client, PaneCwd{.pane_id = 1, .cwd = "/srv/app"});
+
+    const ds::Array<std::string_view, 3> named{"telar", "edit", "docs/notes.md:5"};
+    const ds::Array<std::string_view, 3> other{"telar", "status", "now"};
+
+    check(application::nvim::editCommand(client, named.view()) && transport.last<NvimOpen>().path == "/srv/app/docs/notes.md" && transport.last<NvimOpen>().line == 5, "a file named from the pane's directory, at its line");
+    check(!application::nvim::editCommand(client, other.view()) && !application::nvim::editCommand(client, named.view().first(2)), "any other command is not the editor's");
+
     // The same from another program, through the runtime: `telar edit FILE:LINE`.
     application::workbench::focusPane(client, 1);
     deliver(client, ClientCommand{.request_id = 9, .route = {.id = 1, .generation = 1}, .action = ClientAction::editor_open, .target_id = 1, .value = 12, .text = "/srv/app/third.cpp"});

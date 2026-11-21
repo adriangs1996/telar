@@ -96,6 +96,12 @@ export namespace telar::gui::application::nvim {
   // does not open.
   [[nodiscard]] ds::Option<features::terminal::links::LinkTarget> takeLink(Session& session, std::uint64_t pane_id);
 
+  // Runs `telar edit FILE[:LINE]` itself when that is what `arguments` are, as
+  // `telar.action.edit` gives them: the file opens in the editor of the focused tab, taken
+  // from the focused pane's directory when it names none. False for any other command, and
+  // where the window could not open it: a tab then runs the command, which says why.
+  bool editCommand(Session& session, std::span<const std::string_view> arguments);
+
   // Opens the picker of the focused tab's editor pane, which takes the focus. False when the
   // tab has no editor pane.
   bool find(Session& session, NvimPickSource source);
