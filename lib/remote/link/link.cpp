@@ -971,8 +971,12 @@ namespace telar::remote {
         open = forwards_[*index].used && forwards_[*index].generation == generation && forwards_[*index].holders != 0;
         // A watch that ended, with the forward before this one or with a gateway that was lost
         // for a while, starts again: it is what tells this forward its port closed there.
-        if (const auto machine = open ? machineSlot(forwards_[*index].endpoint) : ds::none) {
-          watchMachine(*machine);
+        if (open) {
+          const Endpoint endpoint = forwards_[*index].endpoint;
+
+          if (const auto machine = machineSlot(endpoint)) {
+            watchMachine(*machine);
+          }
         }
       }
 
