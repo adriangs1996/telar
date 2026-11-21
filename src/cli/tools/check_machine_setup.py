@@ -10,7 +10,7 @@ import shutil
 import subprocess
 import tempfile
 import types
-from check_machines_launch import environment, normalize, snapshot
+from check_machines_launch import VERSION, environment, normalize, snapshot
 
 SHIM = r'''#!/usr/bin/env python3
 import os,sys,subprocess,json,shlex,base64
@@ -110,7 +110,7 @@ else:
  elif script.startswith('while IFS= read -r path;'):
   for path in script.split("TELAR_PATHS'\n",1)[-1].splitlines():
    if os.path.exists(path):print(path)
-'''
+'''.replace('0.0.0', VERSION)
 
 
 def run(binary, provider, seed, login=False, prepare=None):
@@ -377,7 +377,7 @@ def codex_hooks(binary):
         status, output = fixture.run('machine', 'setup', 'fixture', *SKIP_ALL_BUT_CONFIG, '--json')
         assert status == 0, output
         synced = (fixture.remote / '.codex/hooks.json').read_text()
-        program = str(fixture.remote / '.local/share/telar/versions/0.0.0/telar')
+        program = str(fixture.remote / '.local/share/telar/versions' / VERSION / 'telar')
         assert 'echo mine' in synced and json.dumps(program)[1:-1] in synced and str(binary) not in synced, synced
 
 

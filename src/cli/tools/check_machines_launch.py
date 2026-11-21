@@ -12,6 +12,9 @@ import subprocess
 import socket
 import tempfile
 
+# The version this checkout builds, which a fixture's remote reports as installed.
+VERSION = (Path(__file__).resolve().parents[3] / 'VERSION').read_text().split()[0]
+
 
 def environment(root):
     result = {k: v for k, v in os.environ.items()
@@ -34,6 +37,7 @@ def normalize(value, root, binary):
         value = re.sub(r'm-[0-9a-f]{12}', 'm-@ID@', value)
         value = value.replace(socket.gethostname(), '@HOSTNAME@')
         value = value.replace('886b480d', '@SCHEMA@').replace('cqp00007', '@SCHEMA@')
+        value = value.replace(f'telar {VERSION}', 'telar @VERSION@').replace(f'versions/{VERSION}', 'versions/@VERSION@')
         return value
     return value
 
@@ -195,7 +199,7 @@ def outcomes(binary):
         shim = "#!/usr/bin/env python3\nimport os,sys,shlex\ncommand=sys.argv[-1]\n"
         shim += "schema=" + repr(schema) + "\n"
         shim += "if command.endswith(\"server endpoint'\"):\n print(os.environ['HOME']);print('/bin/sh');print(os.environ['HOME']+'/remote.sock');print(schema)\n"
-        shim += "else:\n script=sys.stdin.read()\n if script.startswith('dir='):\n  directory=shlex.split(script.splitlines()[0].split('=',1)[1])[0]\n  print('os=Darwin\\narch=arm64\\nlibc=gnu\\nhome='+os.environ['HOME'])\n  print('target='+os.environ['HOME']+'/.local/share/telar/versions/'+directory+'/telar')\n  print('installed=telar 0.0.0')\n elif 'link=$HOME/.local/bin/telar' in script:print('linked')\n"
+        shim += "else:\n script=sys.stdin.read()\n if script.startswith('dir='):\n  directory=shlex.split(script.splitlines()[0].split('=',1)[1])[0]\n  print('os=Darwin\\narch=arm64\\nlibc=gnu\\nhome='+os.environ['HOME'])\n  print('target='+os.environ['HOME']+'/.local/share/telar/versions/'+directory+'/telar')\n  print('installed=telar " + VERSION + "')\n elif 'link=$HOME/.local/bin/telar' in script:print('linked')\n"
         (bindir/'ssh').write_text(shim)
         for words in [['setup','box','--json'], ['setup','box','--json'], ['setup','box','--skip','agents,config,login','--json'],
                       ['setup','new-destination','--label','new-machine','--json']]:
@@ -246,7 +250,7 @@ if script.startswith('dir='):
  print('installed=telar 0.0.0')
 elif 'link=$HOME/.local/bin/telar' in script:print('linked')
 else:sys.exit(subprocess.run(['/bin/sh','-s'],input=script,text=True,env=dict(os.environ,HOME=home)).returncode)
-'''
+'''.replace('0.0.0', VERSION)
 
 
 def incompatible_runtime_kept(binary):
