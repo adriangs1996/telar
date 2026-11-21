@@ -46,6 +46,7 @@ namespace {
     const int guard = std::atoi(argv[3]);
     bool session = false;
     bool resume = false;
+    bool data = false;
     std::string_view engine;
 
     for (int index = 4; index < argc; ++index) {
@@ -53,6 +54,7 @@ namespace {
 
       session |= flag == "--session";
       resume |= flag == "--resume";
+      data |= flag == "--data";
       if (flag == "--suggest" && index + 1 < argc) {
         engine = argv[++index];
       }
@@ -60,6 +62,7 @@ namespace {
 
     const auto socket = directory + "/runtime.sock";
     const auto session_path = session ? directory + "/session.ckpt" : std::string{};
+    const auto data_home = data ? directory + "/data" : std::string{};
 
     ::fcntl(guard, F_SETFD, FD_CLOEXEC);
     std::thread{[guard] {
@@ -94,6 +97,7 @@ namespace {
         .socket = socket,
         .cli_executable = cli.view(),
         .session = {.path = session_path, .resume_agents = resume},
+        .data_home = data_home,
     };
 
     Runtime runtime{memory, poller, background, options};
@@ -116,6 +120,8 @@ export {
     bool resume_agents = false;
     // A shell script that speaks the suggestion engine's protocol; none leaves suggestions unavailable.
     std::string suggestion_engine;
+    // Gives the runtime a data directory of its own, `data` under the host's, as a server has.
+    bool data_home = false;
   };
 
   class RuntimeHost {
@@ -168,6 +174,10 @@ export {
 
       if (options_.session) {
         arguments.push_back("--session");
+      }
+
+      if (options_.data_home) {
+        arguments.push_back("--data");
       }
 
       if (options_.resume_agents) {

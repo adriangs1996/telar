@@ -3,6 +3,7 @@
 
 import std;
 import telar.msgpack;
+import telar.platform.fs;
 import telar.platform.process;
 import telar.testing;
 import telar.runtime.core.tests.protocol_peer;
@@ -57,6 +58,8 @@ namespace {
         }
       }
     }
+
+    std::string configuration;
 
   private:
     void request(std::span<const std::uint8_t> message) {
@@ -119,6 +122,16 @@ namespace {
 
         if (keys == "<F8>") {
           draw("themes " + std::to_string(themes_), false);
+          return;
+        }
+
+        // What it was started with: its configuration, and the name it keeps its files under.
+        if (keys == "<F9>") {
+          const char* name = std::getenv("NVIM_APPNAME");
+          std::ifstream file{configuration};
+          const std::string text{std::istreambuf_iterator<char>{file}, std::istreambuf_iterator<char>{}};
+
+          draw(std::string{text.contains("lazy-lock.json") ? "telar's" : "own"} + " as " + (name == nullptr ? "nvim" : name), false);
           return;
         }
 
@@ -305,8 +318,17 @@ namespace {
     std::string typed_;
   };
 
-  int fakeNvim(int /*argc*/, char** /*argv*/) {
-    return FakeNvim{}.run();
+  int fakeNvim(int argc, char** argv) {
+    FakeNvim neovim;
+
+    // The configuration it was started on, as `-u FILE` names it.
+    for (int index = 1; index + 1 < argc; ++index) {
+      if (std::string_view{argv[index]} == "-u") {
+        neovim.configuration = argv[index + 1];
+      }
+    }
+
+    return neovim.run();
   }
 
   const telar::testing::Mode embed_mode{"--embed", fakeNvim};
@@ -641,6 +663,39 @@ namespace {
     editor.until(peer, "themes 2");
   }
 
+  // A host without a configuration of Neovim gets telar's own, kept under a name of its own;
+  // one that has a configuration keeps it.
+  void testHostWithoutConfigurationGetsTelars() {
+    runtime::TemporaryDirectory home{"/tmp/telar-nvim-home-XXXXXX"};
+    const std::string root{home.path()};
+
+    ::setenv("HOME", root.c_str(), 1);
+    ::unsetenv("XDG_CONFIG_HOME");
+    ::unsetenv("NVIM_APPNAME");
+    ::unsetenv("TELAR_NVIM");
+    {
+      EditorHost editor_host{true, {.data_home = true}};
+      ProtocolPeer peer{editor_host.host->socket()};
+      const auto terminal = openTerminal(peer);
+      auto editor = openEditor(peer, terminal);
+
+      editor.until(peer, "ready");
+      peer.send(NvimInput{.pane_id = editor.pane, .keys = bytes("<F9>")});
+      editor.until(peer, "telar's as telar-nvim");
+    }
+
+    std::filesystem::create_directories(root + "/.config/nvim");
+
+    EditorHost editor_host{true, {.data_home = true}};
+    ProtocolPeer peer{editor_host.host->socket()};
+    const auto terminal = openTerminal(peer);
+    auto editor = openEditor(peer, terminal);
+
+    editor.until(peer, "ready");
+    peer.send(NvimInput{.pane_id = editor.pane, .keys = bytes("<F9>")});
+    editor.until(peer, "own as nvim");
+  }
+
   void testPromptIsShownAndAnswered() {
     EditorHost editor_host;
     ProtocolPeer peer{editor_host.host->socket()};
@@ -742,6 +797,7 @@ namespace {
   const telar::testing::Case case_refused{"nvim_pane_wire.requests_of_another_kind_are_refused", testRequestsOfAnotherKindAreRefused};
   const telar::testing::Case case_prompt{"nvim_pane_wire.prompt_is_shown_and_answered", testPromptIsShownAndAnswered};
   const telar::testing::Case case_text{"nvim_pane_wire.editor_text_is_read", testEditorTextIsRead};
+  const telar::testing::Case case_configuration{"nvim_pane_wire.host_without_configuration_gets_telars", testHostWithoutConfigurationGetsTelars};
   const telar::testing::Case case_tells{"nvim_pane_wire.editor_tells_its_client", testEditorTellsItsClient};
   const telar::testing::Case case_theme{"nvim_pane_wire.editor_takes_the_windows_theme", testEditorTakesTheWindowsTheme};
   const telar::testing::Case case_session{"nvim_pane_wire.editor_returns_with_the_session", testEditorReturnsWithTheSession};

@@ -15,6 +15,7 @@ import telar.runtime.core.model.client_layouts;
 import telar.runtime.host.process_probe;
 import telar.runtime.core.media_service;
 import telar.runtime.core.execution_service;
+import telar.runtime.nvim.provision;
 
 import telar.runtime.agents.description_generator;
 import telar.runtime.core.persistence.session_store;
@@ -254,6 +255,8 @@ export {
       GraphicsLimits graphics;
       control::Policy control_policy{};
       std::string_view shell_integration;
+      // Where telar keeps its own files, among them the Neovim and the configuration it provisions.
+      std::string_view data_home;
       bool ssh_integration = false;
       // Where the user's completion specs live: the configuration's own directory.
       std::string_view configuration_directory;
@@ -327,6 +330,12 @@ export {
 
       // Who asks for a pane, and what the pane is to be: a terminal that runs the request's
       // launch, or an editor on it.
+      // A client's request for an editor pane.
+      struct EditorRequest {
+        std::uint64_t client_id = 0;
+        const CreateNvimPane& request;
+      };
+
       struct Asked {
         std::uint64_t client_id = 0;
         PaneKind kind = PaneKind::terminal;
@@ -344,7 +353,7 @@ export {
       void createPane(RuntimeModel& model, Panes& panes, ClientStore& clients, Asked asked, const CreatePane& request);
 
       // An editor pane on the request's files, in a tab of its own or beside a tab's panes.
-      void createEditor(RuntimeModel& model, Panes& panes, ClientStore& clients, std::uint64_t client_id, const CreateNvimPane& request);
+      void createEditor(RuntimeModel& model, Panes& panes, ClientStore& clients, EditorRequest asked, const NvimProvision& provision);
 
       void renameWorkspace(RuntimeModel& model, ClientSession& client, const RenameWorkspace& request);
 
@@ -901,6 +910,10 @@ export {
       MonitorService<ProcessTable, NativeHostDetail> monitor_;
       WorkspaceGitService<WorkspaceGitProbe> workspace_git_;
       ShellGitService shell_git_;
+      // Where telar keeps its own files, and the Neovim and configuration found there for the
+      // editor pane being made.
+      ds::String<ConcurrentMemory> data_home_;
+      NvimProvision editor_provision_;
       WordService words_;
       // This runtime's PATH, read once: nothing in the runtime changes it.
       std::string_view runtime_path_ = runtimePath();

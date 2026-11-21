@@ -10,6 +10,13 @@ read_integration_asset(TELAR_OPENCODE_INTEGRATION opencode.ts)
 read_integration_asset(TELAR_AGENT_SKILL telar.md)
 read_integration_asset(TELAR_COORDINATOR_SKILL coordinator.md)
 
+# What `telar integration install editor` runs, with the release and the checksums it trusts
+# written into it.
+file(REAL_PATH "${CMAKE_CURRENT_SOURCE_DIR}/../../cmake/nvim/manifest.cmake" telar_nvim_manifest)
+include("${telar_nvim_manifest}")
+read_integration_asset(TELAR_EDITOR_INSTALLER editor.sh)
+string(CONFIGURE "${TELAR_EDITOR_INSTALLER}" TELAR_EDITOR_INSTALLER @ONLY)
+
 # The Lua files of integrations/nvim that `telar integration install neovim` writes under
 # Neovim's site directory, by their path there.
 set(neovim_directory "${CMAKE_CURRENT_SOURCE_DIR}/../../integrations/nvim")

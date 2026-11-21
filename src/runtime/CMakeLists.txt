@@ -75,6 +75,17 @@ foreach(script IN ITEMS "BOOTSTRAP=${CMAKE_CURRENT_SOURCE_DIR}/nvim/editor/boots
   set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${script_file}")
 endforeach()
 configure_file(nvim/editor/scripts.inc.in "${CMAKE_CURRENT_BINARY_DIR}/generated/nvim_scripts.inc" @ONLY)
+# The Neovim telar provisions, and the configuration it starts it with where a host has none.
+file(REAL_PATH "${CMAKE_CURRENT_SOURCE_DIR}/../../cmake/nvim/manifest.cmake" telar_nvim_manifest)
+include("${telar_nvim_manifest}")
+foreach(script IN ITEMS "INIT=init.lua" "LOCK=lazy-lock.json")
+  string(REPLACE "=" ";" script "${script}")
+  list(GET script 0 script_name)
+  list(GET script 1 script_file)
+  file(READ "${CMAKE_CURRENT_SOURCE_DIR}/nvim/config/${script_file}" TELAR_NVIM_CONFIG_${script_name})
+  set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/nvim/config/${script_file}")
+endforeach()
+configure_file(nvim/provision/provision.inc.in "${CMAKE_CURRENT_BINARY_DIR}/generated/nvim_provision.inc" @ONLY)
 add_custom_command(
   OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/generated/cell_layout.inc"
   COMMAND Python3::Interpreter "${CMAKE_CURRENT_SOURCE_DIR}/tools/generate_cell_layout.py"

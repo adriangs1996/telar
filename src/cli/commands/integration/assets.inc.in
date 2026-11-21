@@ -4,6 +4,8 @@ constexpr std::string_view pi_extension = R"TelarAsset(@TELAR_PI_INTEGRATION@)Te
 constexpr std::string_view opencode_extension = R"TelarAsset(@TELAR_OPENCODE_INTEGRATION@)TelarAsset";
 constexpr std::string_view telar_skill = R"TelarAsset(@TELAR_AGENT_SKILL@)TelarAsset";
 constexpr std::string_view coordinator_skill = R"TelarAsset(@TELAR_COORDINATOR_SKILL@)TelarAsset";
+// What installs, removes or reports the Neovim telar provisions: a shell script, its action first.
+constexpr std::string_view editor_installer = R"TelarAsset(@TELAR_EDITOR_INSTALLER@)TelarAsset";
 
 // A file of telar's Neovim integration, by its path under Neovim's site directory.
 struct NeovimFile {

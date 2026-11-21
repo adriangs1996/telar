@@ -1,5 +1,6 @@
 module telar.cli.commands.integration.settings;
 import telar.sys.posix;
+import telar.sys.process;
 import telar.tbc;
 import telar.cli.console.command_error;
 import telar.platform.error;
@@ -644,6 +645,25 @@ description: Delegate tasks to agents in their own Git worktrees and steer them 
     return foreign ? 1 : 0;
   }
 
+  int runEditor(const IntegrationOptions& options) {
+    // In the order of IntegrationAction.
+    constexpr ds::Array<const char*, 3> actions{"install", "uninstall", "status"};
+    // `sh -c SCRIPT sh ACTION`. Each word is a literal, which ends in the NUL execv reads to;
+    // execv takes them as if it would change them, and does not.
+    ds::Array<char*, 6> words{
+        const_cast<char*>("sh"),                                        // NOLINT(cppcoreguidelines-pro-type-const-cast): see above
+        const_cast<char*>("-c"),                                        // NOLINT(cppcoreguidelines-pro-type-const-cast): see above
+        const_cast<char*>(assets::editor_installer.data()),             // NOLINT(cppcoreguidelines-pro-type-const-cast): see above
+        const_cast<char*>("sh"),                                        // NOLINT(cppcoreguidelines-pro-type-const-cast): see above
+        const_cast<char*>(actions[std::to_underlying(options.action)]), // NOLINT(cppcoreguidelines-pro-type-const-cast): see above
+        nullptr,
+    };
+
+    ::execv("/bin/sh", words.dataMut());
+    std::println(stderr, "telar integration: /bin/sh could not be started");
+    return 1;
+  }
+
   template int runExtension<ProcessEnvironment>(Memory& memory, const IntegrationOptions& options, const ProcessEnvironment& environment, std::string_view executable);
   template int runNeovim<ProcessEnvironment>(Memory& memory, const IntegrationOptions& options, const ProcessEnvironment& environment);
   template int runSettings<ProcessEnvironment>(Memory& memory, const IntegrationOptions& options, const ProcessEnvironment& environment, std::string_view executable);
@@ -668,6 +688,15 @@ namespace telar::runtime::cli {
     }
 
     options.neovim = std::string_view{arguments[1]} == "neovim";
+    options.editor = std::string_view{arguments[1]} == "editor";
+    if (options.editor) {
+      if (arguments.size() > 2) {
+        throw std::invalid_argument{"UnknownIntegrationOption"};
+      }
+
+      return options;
+    }
+
     options.provider = options.neovim ? AgentProvider::unknown : providerNamed(arguments[1]);
     if (!options.neovim && options.provider == AgentProvider::unknown) {
       throw std::invalid_argument{"UnknownHookAgent"};
