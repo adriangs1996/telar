@@ -588,12 +588,14 @@ export extern "C++" {
     struct NvimTab {
       std::uint64_t handle{};
       std::string_view name;
-      // Whether what it shows has changes that were not written.
+      // Whether what it shows has changes that were not written, and how many warnings and
+      // errors its diagnostics have.
       bool modified{};
+      std::uint16_t diagnostics{};
     };
 
     template <>
-    struct BodySchema<NvimTab> : Serializer<Field<&NvimTab::handle, u64, "handle">, Field<&NvimTab::name, NvimText<max_nvim_label_bytes>, "name">, Field<&NvimTab::modified, BoolByte, "modified">> {};
+    struct BodySchema<NvimTab> : Serializer<Field<&NvimTab::handle, u64, "handle">, Field<&NvimTab::name, NvimText<max_nvim_label_bytes>, "name">, Field<&NvimTab::modified, BoolByte, "modified">, Field<&NvimTab::diagnostics, u16, "diagnostics">> {};
 
     // Neovim's tab pages and listed buffers, and which of each is current.
     struct NvimTabLine {

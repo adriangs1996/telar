@@ -857,6 +857,59 @@ return {api_version = 2, client = {
       // The view is on the window, not only in the session: every item up to the window shows.
       QVERIFY(view->isVisible());
       QVERIFY(view->width() > 0 && view->height() > 0);
+      // With TELAR_EDITOR_METRICS set to a file, how long a key takes from the view to the frame
+      // that shows it, applied in this window: the runtime, Neovim and the way back. It is
+      // taken before the steps that look at pictures, so that it can be taken in a window of
+      // the desktop too, which those steps are not written for.
+      if (const auto metrics = qEnvironmentVariable("TELAR_EDITOR_METRICS"); !metrics.isEmpty()) {
+        // TELAR_EDITOR_METRICS_KEYS types more of them: past two thousand the window scrolls
+        // at each new line, and the keys typed while it slides are timed with the rest.
+        constexpr int usual_samples = 400;
+        const int asked = qEnvironmentVariableIntValue("TELAR_EDITOR_METRICS_KEYS");
+        const int samples = asked > 0 ? asked : usual_samples;
+        QList<qint64> elapsed;
+
+        view->send(QStringLiteral("<Cmd>enew!<CR>i"));
+        QTRY_COMPARE_WITH_TIMEOUT(view->mode(), QStringLiteral("insert"), runtime_wait_ms);
+        elapsed.reserve(samples);
+        for (int index = 0; index < samples; ++index) {
+          const auto before = view->editorState()->frame;
+          const QChar letter{QLatin1Char(static_cast<char>('a' + (index % 26)))};
+          QElapsedTimer timer;
+
+          timer.start();
+          press(letter.toUpper().unicode(), QString{letter});
+          while (view->editorState()->frame == before && timer.elapsed() < runtime_wait_ms) {
+            QCoreApplication::processEvents();
+          }
+
+          elapsed.append(timer.nsecsElapsed());
+          // Every sixty keys a new line, so no row grows past the view.
+          if (index % 60 == 59) {
+            press(Qt::Key_Return, QStringLiteral("\r"));
+            QTest::qWait(20);
+          }
+        }
+
+        std::ranges::sort(elapsed);
+        QFile report{metrics};
+
+        QVERIFY(report.open(QIODevice::WriteOnly));
+        report.write(QStringLiteral("{\"measure\":\"key to frame applied in the window\",\"samples\":%1,\"min_us\":%6,\"p10_us\":%7,\"p50_us\":%2,\"p90_us\":%3,\"p99_us\":%4,\"max_us\":%5}\n")
+                .arg(samples)
+                .arg(elapsed[samples / 2] / 1000)
+                .arg(elapsed[samples * 9 / 10] / 1000)
+                .arg(elapsed[samples * 99 / 100] / 1000)
+                .arg(elapsed.back() / 1000)
+                .arg(elapsed.front() / 1000)
+                .arg(elapsed[samples / 10] / 1000)
+                .toUtf8());
+        press(Qt::Key_Escape, QString{});
+        view->send(QStringLiteral("<Cmd>bwipeout!<CR>"));
+        QTRY_VERIFY2_WITH_TIMEOUT(shown().contains(QStringLiteral("TELAR <EDITOR> OK")), qPrintable(shown()), runtime_wait_ms);
+        QTRY_COMPARE_WITH_TIMEOUT(view->mode(), QStringLiteral("normal"), runtime_wait_ms);
+      }
+
       // What Neovim drew is on the picture of the window: the editor's text is not the pane's bare background.
       {
         const auto image = window_->grabWindow();
@@ -960,6 +1013,7 @@ return {api_version = 2, client = {
 
       // Neovim's tab pages are a strip of the window's own once there is more than one.
       // The buffer of the first has changes whatever the run showed in it.
+      view->send(QStringLiteral("<Cmd>lua vim.diagnostic.set(vim.api.nvim_create_namespace('telar-test'), 0, {{lnum = 0, col = 0, message = 'a warning', severity = vim.diagnostic.severity.WARN}}, {virtual_text = false, signs = false, underline = false})<CR>"));
       view->send(QStringLiteral("<Cmd>setlocal modified | tabnew<CR>"));
       QTRY_COMPARE_WITH_TIMEOUT(view->tabline().value(QStringLiteral("tabs")).toList().size(), 2, runtime_wait_ms);
       // The first shows changes that were never written, and says so; the new one has nothing to write.
@@ -968,6 +1022,12 @@ return {api_version = 2, client = {
       };
 
       QTRY_VERIFY_WITH_TIMEOUT(unwritten(0) && !unwritten(1), runtime_wait_ms);
+      // And how many warnings and errors each has.
+      const auto diagnosed = [&](int tab) {
+        return view->tabline().value(QStringLiteral("tabs")).toList().value(tab).toMap().value(QStringLiteral("diagnostics")).toInt();
+      };
+
+      QTRY_VERIFY_WITH_TIMEOUT(diagnosed(0) == 1 && diagnosed(1) == 0, runtime_wait_ms);
       shoot(QStringLiteral("editor-tabs"));
 
       // The picker lists what the runtime finds under the editor's directory, and opens what is
@@ -1065,7 +1125,8 @@ return {api_version = 2, client = {
 
         view->send(QStringLiteral("<Cmd>call setline(1, map(range(1, 300), 'printf(\"row %d\", v:val)'))<CR>"));
         QTRY_VERIFY_WITH_TIMEOUT(shown().contains(QStringLiteral("row 12")), runtime_wait_ms);
-        QVERIFY(!sliding() && !shown().contains(QStringLiteral("row 40")));
+        // Whatever the window's size, the buffer is longer than it.
+        QVERIFY(!sliding() && !shown().contains(QStringLiteral("row 300")));
         const auto moves = [&] {
           QString text;
 
@@ -1151,49 +1212,6 @@ return {api_version = 2, client = {
         view->send(QStringLiteral("<Cmd>bwipeout!<CR>"));
       }
 
-      // With TELAR_EDITOR_METRICS set to a file, how long a key takes from the view to the frame
-      // that shows it, applied in this window: the runtime, Neovim and the way back.
-      if (const auto metrics = qEnvironmentVariable("TELAR_EDITOR_METRICS"); !metrics.isEmpty()) {
-        constexpr int samples = 400;
-        QList<qint64> elapsed;
-
-        view->send(QStringLiteral("<Cmd>enew!<CR>i"));
-        QTRY_COMPARE_WITH_TIMEOUT(view->mode(), QStringLiteral("insert"), runtime_wait_ms);
-        elapsed.reserve(samples);
-        for (int index = 0; index < samples; ++index) {
-          const auto before = view->editorState()->frame;
-          const QChar letter{QLatin1Char(static_cast<char>('a' + (index % 26)))};
-          QElapsedTimer timer;
-
-          timer.start();
-          press(letter.toUpper().unicode(), QString{letter});
-          while (view->editorState()->frame == before && timer.elapsed() < runtime_wait_ms) {
-            QCoreApplication::processEvents();
-          }
-
-          elapsed.append(timer.nsecsElapsed());
-          // Every sixty keys a new line, so no row grows past the view.
-          if (index % 60 == 59) {
-            press(Qt::Key_Return, QStringLiteral("\r"));
-            QTest::qWait(20);
-          }
-        }
-
-        std::ranges::sort(elapsed);
-        QFile report{metrics};
-
-        QVERIFY(report.open(QIODevice::WriteOnly));
-        report.write(QStringLiteral("{\"measure\":\"key to frame applied in the window\",\"samples\":%1,\"min_us\":%6,\"p10_us\":%7,\"p50_us\":%2,\"p90_us\":%3,\"p99_us\":%4,\"max_us\":%5}\n")
-                .arg(samples)
-                .arg(elapsed[samples / 2] / 1000)
-                .arg(elapsed[samples * 9 / 10] / 1000)
-                .arg(elapsed[samples * 99 / 100] / 1000)
-                .arg(elapsed.back() / 1000)
-                .arg(elapsed.front() / 1000)
-                .arg(elapsed[samples / 10] / 1000)
-                .toUtf8());
-        press(Qt::Key_Escape, QString{});
-      }
       QCOMPARE(client_->status()->error(), QString{});
       QCOMPARE(errors_, QString{});
     }

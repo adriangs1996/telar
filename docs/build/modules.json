@@ -756,6 +756,7 @@
     "src/gui/features/terminal/attachments/types.hpp": "Objective-C++ ABI",
     "src/gui/foundation/core/memory.hpp": "Objective-C++ ABI",
     "src/gui/tests/qt_case.hpp": "Qt adapter dependency",
+    "src/gui/tests/fixtures/recording_link_host.hpp": "The compiler includes it before every source of the window, in a build of its link tests",
     "src/gui/ui/app/panes/nvim/predictive_echo.hpp": "Only the editor's Qt adapter and its test use it; no module unit does",
     "src/gui/ui/kit/motion/scroll_motion.hpp": "Only Qt adapters and their tests use it; no module unit does",
     "src/gui/foundation/core/wheel_accumulator.hpp": "Objective-C++ ABI",

@@ -211,7 +211,7 @@ namespace {
     showFirstFrame(state);
     const ds::Array items{NvimMenuItem{.word = "write", .kind = "cmd"}, NvimMenuItem{.word = "wall", .menu = "all"}};
     const ds::Array shown{NvimMessageItem{.id = 1, .kind = NvimMessageKind::error, .text = "E492"}};
-    const ds::Array tabs{NvimTab{.handle = 1, .name = "main.cpp"}, NvimTab{.handle = 2, .name = "notes", .modified = true}};
+    const ds::Array tabs{NvimTab{.handle = 1, .name = "main.cpp"}, NvimTab{.handle = 2, .name = "notes", .modified = true, .diagnostics = 3}};
 
     check(receive(state, NvimCmdline{.pane_id = pane_id, .frame_id = 2, .visible = true, .level = 1, .first = ':', .position = 2, .text = "wr"}) == Received::staged);
     check(receive(state, NvimPopupMenu{.pane_id = pane_id, .frame_id = 2, .visible = true, .selected = 1, .grid = -1, .total = 2, .items = items, .info = "writes every buffer"}) == Received::staged);
@@ -227,7 +227,7 @@ namespace {
     check(editor.menu.visible && editor.menu.selected == 1 && editor.menu.items.size() == 2 && editor.menu.items[1].word.of(menu_text) == "wall" && editor.menu.items[1].menu.of(menu_text) == "all" && editor.menu.items[0].kind.of(menu_text) == "cmd", "the completion menu");
     check(editor.menu.info.view() == "writes every buffer", "with what its selected item says of itself");
     check(editor.messages.mode.view() == "-- INSERT --" && editor.messages.items.size() == 1 && editor.messages.items[0].kind == NvimMessageKind::error && editor.messages.items[0].text.of(message_text) == "E492", "the messages");
-    check(editor.tabs.current_tab == 2 && editor.tabs.tabs.size() == 2 && editor.tabs.tabs[1].name.of(tab_text) == "notes" && editor.tabs.tabs[1].modified && !editor.tabs.tabs[0].modified, "the tabs, and which has changes not written");
+    check(editor.tabs.current_tab == 2 && editor.tabs.tabs.size() == 2 && editor.tabs.tabs[1].name.of(tab_text) == "notes" && editor.tabs.tabs[1].modified && !editor.tabs.tabs[0].modified && editor.tabs.tabs[1].diagnostics == 3, "the tabs, which has changes not written and how many diagnostics");
 
     // The selection moves: the items the editor has stay.
     check(receive(state, NvimPopupMenu{.pane_id = pane_id, .frame_id = 2, .visible = true, .keeps_items = true, .selected = 0, .grid = -1, .total = 2}) == Received::staged);

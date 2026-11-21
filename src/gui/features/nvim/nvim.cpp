@@ -520,7 +520,7 @@ namespace telar::gui::features::nvim {
     for (const auto& tab : message.tabs) {
       const auto name = append(tabs.text, tab.name);
 
-      tabs.tabs.push({.handle = tab.handle, .name = name, .modified = tab.modified});
+      tabs.tabs.push({.handle = tab.handle, .name = name, .modified = tab.modified, .diagnostics = tab.diagnostics});
     }
 
     for (const auto& buffer : message.buffers) {

@@ -168,7 +168,7 @@ namespace telar::runtime {
       : text(memory),
         tabs(memory),
         buffers(memory),
-        modified(memory) {}
+        marks(memory) {}
 
   NvimScreen::NvimScreen(ConcurrentMemory& memory)
       : memory_(memory),
@@ -584,15 +584,15 @@ namespace telar::runtime {
     grid->viewport_at = stamp();
   }
 
-  bool NvimScreen::modifiedTabs(std::span<const std::uint64_t> tabs) {
-    const auto kept = tabs.first(std::min(tabs.size(), max_nvim_tabs));
-    if (std::ranges::equal(tabs_.modified, kept)) {
+  bool NvimScreen::markTabs(std::span<const NvimTabs::Mark> marks) {
+    const auto kept = marks.first(std::min(marks.size(), max_nvim_tabs));
+    if (std::ranges::equal(tabs_.marks, kept)) {
       return false;
     }
 
     touch();
-    tabs_.modified.clear();
-    tabs_.modified.extend(kept);
+    tabs_.marks.clear();
+    tabs_.marks.extend(kept);
     tabs_.changed_at = stamp();
     return true;
   }

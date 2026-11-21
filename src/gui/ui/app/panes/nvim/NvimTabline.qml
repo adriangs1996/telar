@@ -41,7 +41,10 @@ Item {
                 readonly property bool current: modelData.handle === root.tabline.currentTab
 
                 // The room of the mark that closes it is kept, so the names do not move.
-                width: Math.min(label.implicitWidth + 42 * root.ratio, 240 * root.ratio)
+                readonly property int diagnostics: modelData.diagnostics ?? 0
+                readonly property real noted: diagnostics > 0 ? count.implicitWidth + 8 * root.ratio : 0
+
+                width: Math.min(label.implicitWidth + noted + 42 * root.ratio, 260 * root.ratio)
                 height: parent.height
 
                 HoverHandler {
@@ -65,12 +68,24 @@ Item {
                     x: 12 * root.ratio
                     height: parent.height
                     verticalAlignment: Text.AlignVCenter
-                    width: Math.min(implicitWidth, parent.width - 38 * root.ratio)
+                    width: Math.min(implicitWidth, parent.width - tab.noted - 38 * root.ratio)
                     text: tab.modelData.name.length > 0 ? tab.modelData.name : "[No Name]"
                     color: tab.current ? root.colors.text : Qt.alpha(root.colors.text, 0.6)
                     font.pixelSize: root.typography.small
                     textFormat: Text.PlainText
                     elide: Text.ElideMiddle
+                }
+
+                // The warnings and the errors of what it shows, after its name.
+                Text {
+                    id: count
+                    x: label.x + label.width + 8 * root.ratio
+                    height: parent.height
+                    verticalAlignment: Text.AlignVCenter
+                    text: "\u25b2" + tab.diagnostics
+                    color: root.colors.yellow
+                    font.pixelSize: root.typography.small
+                    visible: tab.diagnostics > 0
                 }
 
                 // Changes that were not written, where the mark that closes it would be.

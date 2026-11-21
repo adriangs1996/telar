@@ -161,6 +161,7 @@ export namespace telar::gui::features::nvim {
     std::uint64_t handle = 0;
     Slice name;
     bool modified = false;
+    std::uint16_t diagnostics = 0;
   };
 
   struct TabLine {

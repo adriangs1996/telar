@@ -154,7 +154,7 @@ namespace telar::gui::qt {
 
       records.reserve(static_cast<qsizetype>(entries.size()));
       for (const auto& entry : entries) {
-        records.append(QVariantMap{{QStringLiteral("handle"), static_cast<qulonglong>(entry.handle)}, {QStringLiteral("name"), shown(entry.name.of(text))}, {QStringLiteral("modified"), entry.modified}});
+        records.append(QVariantMap{{QStringLiteral("handle"), static_cast<qulonglong>(entry.handle)}, {QStringLiteral("name"), shown(entry.name.of(text))}, {QStringLiteral("modified"), entry.modified}, {QStringLiteral("diagnostics"), static_cast<int>(entry.diagnostics)}});
       }
 
       return records;

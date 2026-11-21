@@ -389,7 +389,7 @@ end
       moved(reader);
     } else if (method == "telar_float") {
       framed(reader);
-    } else if (method == "telar_modified") {
+    } else if (method == "telar_tabs") {
       changed(reader);
     } else if (method == "telar_buffers") {
       listed(reader);
@@ -448,9 +448,10 @@ end
   }
 
   // `[window, sides, title, footer]`: a float's frame.
-  // `[tabs]`: the tab pages that show a buffer with changes not written.
+  // `[[tab, modified, diagnostics]...]`: what is marked on each tab page that has something.
   void NvimEditor::changed(msgpack::Reader& reader) {
-    ds::Array<std::uint64_t, max_nvim_tabs> tabs{};
+    constexpr std::uint32_t fields = 3;
+    ds::Array<NvimTabs::Mark, max_nvim_tabs> marks{};
     std::uint32_t count = 0;
 
     if (!reader.tuple(1) || !reader.array(count) || count > max_nvim_tabs) {
@@ -458,14 +459,19 @@ end
     }
 
     for (std::uint32_t index = 0; index < count; ++index) {
-      if (!reader.unsignedInteger(tabs.atMut(index))) {
+      auto& mark = marks.atMut(index);
+      std::uint64_t diagnostics = 0;
+
+      if (!reader.tuple(fields) || !reader.unsignedInteger(mark.handle) || !reader.boolean(mark.modified) || !reader.unsignedInteger(diagnostics)) {
         return;
       }
+
+      mark.diagnostics = static_cast<std::uint16_t>(std::min<std::uint64_t>(diagnostics, std::numeric_limits<std::uint16_t>::max()));
     }
 
     const bool settled = screen_.settled();
 
-    if (screen_.modifiedTabs(tabs.view().first(count))) {
+    if (screen_.markTabs(marks.view().first(count))) {
       publish(settled);
     }
   }

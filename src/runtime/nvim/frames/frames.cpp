@@ -501,10 +501,14 @@ namespace telar::runtime {
     const auto buffer_count = std::min(tabs.buffers.size(), max_nvim_tabs);
 
     for (std::size_t index = 0; index < page_count; ++index) {
+      const auto* const mark = std::ranges::find(tabs.marks, tabs.tabs[index].handle, &NvimTabs::Mark::handle);
+      const bool marked = mark != tabs.marks.end();
+
       pages.atMut(index) = {
           .handle = tabs.tabs[index].handle,
           .name = clipped(tabs.tabs[index].name.of(text), max_nvim_label_bytes),
-          .modified = std::ranges::contains(tabs.modified, tabs.tabs[index].handle),
+          .modified = marked && mark->modified,
+          .diagnostics = marked ? mark->diagnostics : std::uint16_t{0},
       };
     }
 

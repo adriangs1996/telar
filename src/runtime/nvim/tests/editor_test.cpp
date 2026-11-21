@@ -4,6 +4,7 @@ import telar.testing;
 import telar.testing.test_memory;
 import telar.base.memory.allocators;
 import telar.runtime.nvim.editor;
+import telar.runtime.nvim.screen;
 import telar.wire.editor;
 import telar.wire.nvim;
 import telar.wire.pane_io;
@@ -315,19 +316,24 @@ namespace {
 
       check(!after.navigated && !after.copied && editor.state() == NvimState::attached, "what is not what it names changes nothing");
 
-      // The tab pages with changes not written, which the tab line's own event does not say.
-      check(tell(editor, "telar_modified", 1, [](msgpack::Writer& writer) {
+      // What is marked on the tab pages, which the tab line's own event does not say.
+      const auto marks = [](msgpack::Writer& writer) {
         writer.array(2);
+        writer.array(3);
         writer.unsignedInteger(1);
+        writer.boolean(true);
+        writer.unsignedInteger(0);
+        writer.array(3);
         writer.unsignedInteger(3);
-      }));
-      check(editor.takePulse().flushed && std::ranges::equal(editor.screen().tabs().modified, std::array<std::uint64_t, 2>{1, 3}), "are kept for the tab strip, and shown at once");
-      check(tell(editor, "telar_modified", 1, [](msgpack::Writer& writer) {
-        writer.array(2);
-        writer.unsignedInteger(1);
-        writer.unsignedInteger(3);
-      }));
-      check(!editor.takePulse().flushed, "the same ones again change nothing");
+        writer.boolean(false);
+        writer.unsignedInteger(2);
+      };
+      const std::array<NvimTabs::Mark, 2> told{NvimTabs::Mark{.handle = 1, .modified = true}, NvimTabs::Mark{.handle = 3, .diagnostics = 2}};
+
+      check(tell(editor, "telar_tabs", 1, marks));
+      check(editor.takePulse().flushed && std::ranges::equal(editor.screen().tabs().marks, told), "is kept for the tab strip, and shown at once");
+      check(tell(editor, "telar_tabs", 1, marks));
+      check(!editor.takePulse().flushed, "the same again changes nothing");
 
       // A link opens for something the person did, once, and only one of the web or of mail.
       const auto open = [&](std::string_view uri) {

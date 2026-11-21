@@ -142,29 +142,35 @@ vim.api.nvim_create_autocmd({ "DirChanged", "WinEnter", "TabEnter", "VimEnter" }
 -- Command and a click follows the link under the pointer, as it does in a terminal of telar.
 vim.keymap.set("n", "<D-LeftMouse>", "<LeftMouse>gx", { remap = true, silent = true, desc = "Open the link under the pointer" })
 
--- The tab pages whose window in use shows changes not written: Neovim's own tab line says
--- their names, not this.
-local unwritten = nil
-local function tell_unwritten()
-  local tabs = {}
+-- What Neovim's own tab line does not say of a tab page: whether the buffer of its window in
+-- use has changes not written, and how many warnings and errors its diagnostics have.
+local marked = nil
+local function tell_tabs()
+  local tabs, key = {}, {}
   for _, tab in ipairs(vim.api.nvim_list_tabpages()) do
     local found, window = pcall(vim.api.nvim_tabpage_get_win, tab)
-    if found and vim.bo[vim.api.nvim_win_get_buf(window)].modified then
-      tabs[#tabs + 1] = tab
+    if found then
+      local buffer = vim.api.nvim_win_get_buf(window)
+      local modified = vim.bo[buffer].modified
+      local diagnostics = #vim.diagnostic.get(buffer, { severity = { min = vim.diagnostic.severity.WARN } })
+      if modified or diagnostics > 0 then
+        tabs[#tabs + 1] = { tab, modified, diagnostics }
+        key[#key + 1] = tab .. (modified and "+" or "-") .. diagnostics
+      end
     end
   end
 
-  local now = table.concat(tabs, ",")
-  if now ~= unwritten then
-    unwritten = now
-    vim.rpcnotify(channel, "telar_modified", tabs)
+  local now = table.concat(key, ",")
+  if now ~= marked then
+    marked = now
+    vim.rpcnotify(channel, "telar_tabs", tabs)
   end
 end
 
-vim.api.nvim_create_autocmd({ "BufModifiedSet", "BufEnter", "BufWritePost", "WinEnter", "TabEnter", "TabClosed" }, {
+vim.api.nvim_create_autocmd({ "BufModifiedSet", "BufEnter", "BufWritePost", "WinEnter", "TabEnter", "TabClosed", "DiagnosticChanged" }, {
   group = group,
   callback = function()
-    vim.schedule(tell_unwritten)
+    vim.schedule(tell_tabs)
   end,
 })
 
