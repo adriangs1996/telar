@@ -14,8 +14,9 @@
 # desktop archive ships; a desktop binary may link any of them.
 set -eu
 
-# glibc and the GCC runtime that the Rust helper unwinds with.
-linux_base='libc.so.6 libm.so.6 libpthread.so.0 libdl.so.2 librt.so.1 libutil.so.1 libgcc_s.so.1 ld-linux-x86-64.so.2 ld-linux-aarch64.so.1'
+# glibc, whose resolver Qt Network links, and the GCC runtime that the Rust
+# helper unwinds with.
+linux_base='libc.so.6 libm.so.6 libpthread.so.0 libdl.so.2 librt.so.1 libutil.so.1 libresolv.so.2 libgcc_s.so.1 ld-linux-x86-64.so.2 ld-linux-aarch64.so.1'
 # What the Qt client's X11 and Wayland platform plugins need beyond its own
 # Qt libraries, all present on a desktop session: GLVND, Wayland, X11 and
 # its xcb extensions, xkbcommon, Fontconfig, D-Bus and the C++ library.
