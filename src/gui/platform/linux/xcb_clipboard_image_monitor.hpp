@@ -2,8 +2,8 @@
 
 #include "foundation/core/application_memory.hpp"
 #include "foundation/core/memory.hpp"
-#include "telar_base/ds/containers.hpp"
 #include "platform/clipboard_image_source.hpp"
+#include "telar_base/ds/containers.hpp"
 
 namespace telar::gui::platform {
 
