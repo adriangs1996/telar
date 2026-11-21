@@ -99,17 +99,13 @@ namespace telar::runtime::cli {
   }
 
   void ServerOptions::applyFlagOption(std::string_view argument, bool& action_selected) {
-    if (argument == "stop" || argument == "endpoint" || argument == "bridge") {
+    if (argument == "stop" || argument == "endpoint") {
       if (action_selected) {
         throw std::invalid_argument{"Duplicate server action"};
       }
 
       action_selected = true;
-      if (argument == "stop") {
-        action = ServerAction::stop;
-      } else {
-        action = argument == "endpoint" ? ServerAction::endpoint : ServerAction::bridge;
-      }
+      action = argument == "stop" ? ServerAction::stop : ServerAction::endpoint;
     } else if (argument == "--help") {
       action = ServerAction::help;
     } else if (argument == "--no-session") {

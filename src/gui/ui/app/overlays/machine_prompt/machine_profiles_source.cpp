@@ -177,7 +177,24 @@ namespace telar::gui::qt {
 
       if (request.edit) {
         system::SecureRandom random;
-        const ds::Array edits{request.edit->view()};
+        auto edit = request.edit->view();
+        system::runtime_endpoint::Path paired;
+
+        // A machine is added by the address its gateway pairs with: the pairing code is
+        // presented once, here on the worker, and the address it leaves is what is saved.
+        if (edit.kind == application::machines::MachineEditKind::add) {
+          const auto address = edit.value;
+          if (!address.starts_with("telar://") || !address.contains('#')) {
+            throw application::machines::MachineFailure{application::machines::MachineError::invalid_destination};
+          }
+
+          if (address.substr(address.find('#')).contains('.')) {
+            paired = system::runtime_endpoint::pairMachine(address, textView(request.local_label));
+            edit.value = paired.view();
+          }
+        }
+
+        const ds::Array edits{edit};
 
         result.profiles = store.change(edits, random, textView(request.local_label));
       } else {

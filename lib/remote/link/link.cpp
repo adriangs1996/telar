@@ -870,6 +870,37 @@ namespace telar::remote {
     }
   }
 
+  int attachRemote(const State& state, std::string_view destination, int socket) noexcept {
+    try {
+      const auto endpoint = Endpoint::parse(destination);
+      const auto identity = Identity::loadOrCreate(state.directory());
+      const Contexts contexts{identity};
+      auto channel = Channel::dial(contexts, endpoint, Service::attach, Clock::now() + dial_timeout);
+
+      if (const auto reply = receiveReply(channel); reply != Reply::accepted) {
+        Text<LinkClient::line_bytes> message;
+
+        message.append("telar gateway: ");
+        message.append(reply == Reply::refused ? describe(reply) : "the runtime there could not be reached or started");
+        message.append("\n");
+        static_cast<void>(writeAll(STDERR_FILENO, message.view()));
+        return reply == Reply::refused ? connection_lost_status : 1;
+      }
+
+      runtime::configureProxySocket(socket);
+      relay(channel, socket);
+      return 0;
+    } catch (const std::exception& failure) {
+      Text<LinkClient::line_bytes> message;
+
+      message.append("telar gateway: ");
+      message.append(failure.what());
+      message.append("\n");
+      static_cast<void>(writeAll(STDERR_FILENO, message.view()));
+      return connection_lost_status;
+    }
+  }
+
   Endpoint::Text enroll(const State& state, std::string_view address, std::string_view name) {
     const auto endpoint = Endpoint::parse(address);
     if (!endpoint.secret) {

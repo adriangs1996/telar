@@ -174,6 +174,12 @@ export {
     // A connection that fails says so on the error stream and returns 255, as ssh does.
     [[nodiscard]] int runRemote(const State& state, const RemoteCommand& remote) noexcept;
 
+    // Carries the runtime of the account at `destination` on `socket`, a stream socket of this
+    // process such as the one a window hands it as its standard streams, until either side ends.
+    // Returns 0 for a connection that was made, and 255 or 1, saying why on the error stream,
+    // for a gateway that cannot be reached or a runtime that cannot be started.
+    [[nodiscard]] int attachRemote(const State& state, std::string_view destination, int socket) noexcept;
+
     // Presents a pairing address to its gateway under `name`, and returns the address to save.
     // Throws ChannelFailure when the gateway refuses, and std::invalid_argument for an address
     // without a pairing code.

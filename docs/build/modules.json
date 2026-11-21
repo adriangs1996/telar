@@ -70,8 +70,7 @@
       "platform",
       "sys",
       "tbc",
-      "tls",
-      "vocabulary"
+      "tls"
     ],
     "plugins": [
       "base",
@@ -918,7 +917,6 @@
     "src/gui/ui/app/chrome/components/components_controller.hpp": "Qt moc/QML integration",
     "src/gui/ui/kit/plugins/plugin_runner.hpp": "Qt moc/QML integration",
     "src/gui/ui/kit/store/store.hpp": "Qt moc/QML integration",
-    "src/gui/ui/kit/machines/ssh_options.hpp": "Qt moc/QML integration",
     "src/gui/ui/app/chrome/components/surface_command.hpp": "Qt moc/QML integration",
     "src/gui/ui/app/overlays/notifications/system_notifier.hpp": "Qt moc/QML integration",
     "src/gui/ui/app/chrome/tabs/tab_strip_layout.hpp": "Qt moc/QML integration",
@@ -1173,7 +1171,9 @@
     ],
     "lib/remote": [
       "telar.remote.channel",
-      "telar.remote.identity"
+      "telar.remote.identity",
+      "telar.remote.link",
+      "telar.remote.serve"
     ],
     "lib/render": [
       "telar.render.document",

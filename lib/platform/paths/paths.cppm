@@ -80,7 +80,6 @@ export {
       run,
       stop,
       endpoint,
-      bridge,
       help,
     };
     enum class ServerMode : std::uint8_t {

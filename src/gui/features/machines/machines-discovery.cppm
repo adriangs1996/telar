@@ -23,13 +23,14 @@ export namespace telar::gui::features::machines {
 export {
   namespace telar::gui::features::machines {
 
-    struct MachineSshResult {
+    // How the gateway program ended a discovery or a connection, and what it said.
+    struct MachineReachResult {
       ds::Option<std::uint8_t> exit_status;
       std::string_view standard_error;
     };
 
     struct MachineConnectionPolicy {
-      [[nodiscard]] static MachineError failure(MachineSshResult result) noexcept;
+      [[nodiscard]] static MachineError failure(MachineReachResult result) noexcept;
 
       [[nodiscard]] static bool permanent(MachineError error) noexcept;
 

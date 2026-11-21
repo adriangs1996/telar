@@ -47,7 +47,7 @@ namespace {
     const QCommandLineOption theme_option{QStringLiteral("theme"), QStringLiteral("Override the configured color theme"), QStringLiteral("name")};
     const QCommandLineOption directory_option{QStringLiteral("cwd"), QStringLiteral("Set the initial pane working directory"), QStringLiteral("path")};
     const QCommandLineOption fresh_option{QStringLiteral("fresh"), QStringLiteral("Open without restoring this window's saved layout")};
-    const QCommandLineOption remote_option{QStringLiteral("remote"), QStringLiteral("Show an SSH destination first and run the command there"), QStringLiteral("destination")};
+    const QCommandLineOption remote_option{QStringLiteral("remote"), QStringLiteral("Show the machine at a gateway address first and run the command there"), QStringLiteral("destination")};
     const QCommandLineOption machine_option{QStringLiteral("machine"), QStringLiteral("Show a saved machine or the local label first"), QStringLiteral("label")};
 
     parser.addOptions({

@@ -519,15 +519,12 @@ export {
     class MachineRemoteCommand {
       static constexpr std::string_view discovery_prefix = R"(/bin/sh -c 'printf "%s\n" "$HOME" "${SHELL:-/bin/sh}"; exec )";
       static constexpr std::string_view discovery_suffix = " server endpoint'";
-      static constexpr std::string_view bridge_prefix = "exec ";
-      static constexpr std::string_view bridge_suffix = " server bridge";
 
     public:
       static constexpr std::size_t max_bytes = discovery_prefix.size() + MachineLimits::program_bytes + discovery_suffix.size();
       using Text = BoundedText<max_bytes>;
 
       [[nodiscard]] static Text discovery(ds::Option<std::string_view> program = ds::none);
-      [[nodiscard]] static Text bridge(ds::Option<std::string_view> program = ds::none);
 
     private:
       static Text format(std::string_view prefix, ds::Option<std::string_view> program, std::string_view suffix);

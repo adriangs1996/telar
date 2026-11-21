@@ -41,6 +41,14 @@ namespace telar::gui::inline foundation::inline system {
       return program;
     }
 
+    runtime_endpoint::Path gatewayProgramPath() {
+      const auto found = telar::runtime::ExecutablePath::sibling({"../Resources/bin/telar-gateway", "telar-gateway"});
+      runtime_endpoint::Path program;
+
+      program.assign(found ? found->view() : std::string_view{"telar-gateway"});
+      return program;
+    }
+
     void keep(Text& buffer, std::span<const telar::Byte> bytes, std::size_t limit) {
       const auto kept = std::min(bytes.size(), limit - buffer.size());
 
@@ -135,6 +143,31 @@ namespace telar::gui::inline foundation::inline system {
 
     Path program() {
       return telarProgram();
+    }
+
+    Path gatewayProgram() {
+      return gatewayProgramPath();
+    }
+
+    Path pairMachine(std::string_view address, std::string_view name) {
+      telar::SystemAllocator memory;
+      const auto program = gatewayProgramPath();
+      const ds::Array<std::string_view, 5> words{program.view(), "enroll", address, "--name", name};
+      const auto answer = ask(memory, words.view());
+
+      if (answer.timed_out) {
+        throw Failure{"the gateway did not answer the pairing in time"};
+      }
+
+      const auto saved = trimmed(answer.output.view());
+      if (answer.status != 0 || saved.empty() || saved.size() > PATH_MAX) {
+        throw Failure{trimmed(answer.errors.view()).empty() ? std::string_view{"the gateway refused the pairing"} : trimmed(answer.errors.view())};
+      }
+
+      Path destination;
+
+      destination.assign(saved);
+      return destination;
     }
 
     Path resolve() {

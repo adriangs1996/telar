@@ -27,32 +27,22 @@ def wait_socket(path, present):
         time.sleep(0.01)
 
 
-def bridge_handshake(binary, socket, environment, schema):
-    bridge = subprocess.Popen([str(binary), "server", "bridge", "--socket", str(socket)], env=environment,
-                              stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-    try:
-        hello = HANDSHAKE_MAGIC + bytes([CLIENT_HELLO]) + schema
-        bridge.stdin.write(FRAME_PREFIX.pack(len(hello)) + hello)
-        bridge.stdin.flush()
+def socket_handshake(path, schema):
+    """A client of this schema is accepted on the runtime's socket."""
+    hello = HANDSHAKE_MAGIC + bytes([CLIENT_HELLO]) + schema
+    expected_payload = HANDSHAKE_MAGIC + bytes([SERVER_ACCEPT]) + schema
+    expected = FRAME_PREFIX.pack(len(expected_payload)) + expected_payload
+    with sockets.socket(sockets.AF_UNIX) as client:
+        client.settimeout(10)
+        client.connect(str(path))
+        client.sendall(FRAME_PREFIX.pack(len(hello)) + hello)
         response = b""
-        deadline = time.monotonic() + 10
-        expected_payload = HANDSHAKE_MAGIC + bytes([SERVER_ACCEPT]) + schema
-        expected = FRAME_PREFIX.pack(len(expected_payload)) + expected_payload
         while len(response) < len(expected):
-            ready, _, _ = select.select([bridge.stdout], [], [], max(0, deadline - time.monotonic()))
-            if not ready:
-                raise RuntimeError("Bridge handshake timed out")
-            chunk = os.read(bridge.stdout.fileno(), len(expected) - len(response))
+            chunk = client.recv(len(expected) - len(response))
             if not chunk:
-                raise RuntimeError("Bridge ended before its handshake")
+                raise RuntimeError("The runtime ended before its handshake")
             response += chunk
         assert response == expected
-        bridge.stdin.close()
-        assert bridge.wait(timeout=5) == 0
-    finally:
-        if bridge.poll() is None:
-            bridge.kill()
-            bridge.wait()
 
 
 def isolated_environment(root):
@@ -102,57 +92,6 @@ def check_unwritable_shell_integration(binary, checkpoint_probe):
                 invoke("stop", "--socket", socket)
 
 
-def bridge_relays_large_frames(binary, root, environment):
-    """The bridge carries what a window sends over SSH byte for byte both ways, far past one
-    read of its relay, and ends with status 0 when the runtime closes its side."""
-    path = root / "echo.sock"
-    payload = os.urandom(200 * 1024)
-    with sockets.socket(sockets.AF_UNIX) as listener:
-        listener.bind(str(path))
-        listener.listen()
-        listener.settimeout(10)
-
-        def echo():
-            connection, _ = listener.accept()
-            with connection:
-                connection.settimeout(10)
-                echoed = 0
-                while echoed < len(payload):
-                    part = connection.recv(65536)
-                    if not part:
-                        break
-                    connection.sendall(part)
-                    echoed += len(part)
-
-        server = threading.Thread(target=echo)
-        server.start()
-        bridge = subprocess.Popen([str(binary), "server", "bridge", "--socket", str(path)], env=environment,
-                                  stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-        try:
-            writer = threading.Thread(target=bridge.stdin.write, args=(payload,))
-            writer.start()
-            received = b""
-            deadline = time.monotonic() + 10
-            while len(received) < len(payload):
-                ready, _, _ = select.select([bridge.stdout], [], [], max(0, deadline - time.monotonic()))
-                assert ready, len(received)
-                part = os.read(bridge.stdout.fileno(), 65536)
-                if not part:
-                    break
-                received += part
-            writer.join(10)
-            server.join(10)
-            assert received == payload, (len(received), len(payload))
-            assert bridge.wait(timeout=5) == 0
-        finally:
-            if bridge.poll() is None:
-                bridge.kill()
-                bridge.wait()
-            bridge.stdin.close()
-            bridge.stdout.close()
-            bridge.stderr.close()
-
-
 def stale_socket_is_not_running(binary, root, invoke, stop):
     """A socket file left by a runtime that crashed is no runtime: stop says so and endpoint
     starts one in its place, without anyone deleting the file by hand."""
@@ -196,7 +135,6 @@ def check_runtime(binary, checkpoint_probe):
 
         try:
             assert stop(socket) == "telar runtime is not running\n"
-            bridge_relays_large_frames(binary, root, environment)
             stale_socket_is_not_running(binary, root, invoke, stop)
             endpoint_reports_runtime_start_failure(binary, root, environment)
             endpoint = invoke("endpoint", "--socket", socket).stdout
@@ -210,7 +148,7 @@ def check_runtime(binary, checkpoint_probe):
             assert stat.S_IMODE(socket.stat().st_mode) == 0o600
             history = root / "data/telar/history.db"
             assert history.exists() and stat.S_IMODE(history.stat().st_mode) == 0o600
-            bridge_handshake(binary, socket, environment, schema)
+            socket_handshake(socket, schema)
 
             seeded = subprocess.run([str(checkpoint_probe), str(socket), "seed", str(root / "expected")],
                                     env=environment, capture_output=True, text=True, timeout=30)

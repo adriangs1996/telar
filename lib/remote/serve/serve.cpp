@@ -6,7 +6,6 @@ import telar.platform.process;
 import telar.platform.thread;
 import telar.remote.streams;
 import telar.sys.process;
-import telar.vocabulary;
 
 namespace telar::remote {
 

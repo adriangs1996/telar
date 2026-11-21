@@ -3,7 +3,6 @@ module telar.cli.commands.machine_ssh;
 import telar.tbc;
 import telar.cli.console.command_error;
 import telar.cli.session.control_session;
-import telar.platform.sha256;
 import telar.sys.posix;
 import telar.sys.process;
 import telar.base.memory.containers;

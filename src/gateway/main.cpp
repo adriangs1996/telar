@@ -40,6 +40,7 @@ namespace telar::remote {
         "                    Pair with the gateway a pairing address names; print the address to save\n"
         "  run [-t] [--to ADDRESS] ADDRESS COMMAND\n"
         "                    Run a shell command there with this process's streams\n"
+        "  attach ADDRESS    Carry the runtime there on the socket given as standard input\n"
         "  socket ADDRESS    Print the local socket that is the runtime there\n"
         "  forward ADDRESS PORT [ORIGIN]\n"
         "                    Print a local port to a port there, and hold it until stopped\n"
@@ -310,6 +311,10 @@ namespace telar::remote {
 
       if (command == "run") {
         return run(state, arguments);
+      }
+
+      if (command == "attach") {
+        return attachRemote(state, single(), STDIN_FILENO);
       }
 
       if (command == "key") {

@@ -43,7 +43,7 @@ namespace telar::gui::inline foundation::inline system {
     constexpr auto flags = SOCK_STREAM;
 #endif
     if (::socketpair(AF_UNIX, flags, 0, descriptors.dataMut()) != 0) {
-      throw runtime::SystemError{"Create SSH bridge socket"};
+      throw runtime::SystemError{"Create the gateway's socket"};
     }
 
     StdioSocket result;

@@ -5,7 +5,6 @@ static_assert(true);
 
 import std;
 import telar.base.ds;
-import telar.platform.fs;
 import telar.remote.identity;
 import telar.remote.tests.fixture;
 import telar.testing;

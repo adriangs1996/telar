@@ -189,7 +189,7 @@ namespace telar::runtime::cli {
 
   void runServer(Memory& memory, std::span<char* const> arguments) {
     const auto options = ServerOptions::parse(arguments);
-    if (options.action != ServerAction::stop && options.action != ServerAction::endpoint && options.action != ServerAction::bridge) {
+    if (options.action != ServerAction::stop && options.action != ServerAction::endpoint) {
       execRuntime(memory, arguments);
     }
 
@@ -203,8 +203,6 @@ namespace telar::runtime::cli {
     case ServerAction::endpoint:
       printEndpoint(memory, options, paths);
       return;
-    case ServerAction::bridge:
-      RuntimeConnection{paths.socket.data(), false}.bridge();
     case ServerAction::run:
     case ServerAction::help:
       return;

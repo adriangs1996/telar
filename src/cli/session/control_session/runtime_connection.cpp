@@ -2,7 +2,6 @@ module telar.cli.session.control_session;
 
 import std;
 import telar.sys.posix;
-import telar.sys.process;
 import telar.sys.socket;
 
 import telar.platform.net;
@@ -22,7 +21,7 @@ namespace telar::runtime::cli {
     }
   }
 
-  RuntimeConnection::RuntimeConnection(const char* path, bool negotiate)
+  RuntimeConnection::RuntimeConnection(const char* path)
       : client_(connect(path)) {
     try {
       const auto peer = peerCredentials(client_.descriptor());
@@ -30,9 +29,7 @@ namespace telar::runtime::cli {
         throw SystemError{"Runtime socket belongs to another user", EACCES};
       }
 
-      if (negotiate) {
-        client_.handshake();
-      }
+      client_.handshake();
     } catch (...) {
       client_.deinit();
       throw;
@@ -90,64 +87,6 @@ namespace telar::runtime::cli {
     }
 
     Codec::decode<RuntimeStopping>(response, storage);
-  }
-
-  namespace {
-
-    struct RelayDirection {
-      int source;
-      int destination;
-    };
-
-    [[noreturn]] void relay(RelayDirection direction) noexcept {
-      constexpr std::size_t buffer_bytes = std::size_t{64} * 1024;
-
-      ds::Array<Byte, buffer_bytes> buffer{};
-
-      for (;;) {
-        const auto count = ::read(direction.source, buffer.dataMut(), buffer.size());
-        if (count < 0 && sys::lastError() == EINTR) {
-          continue;
-        }
-
-        if (count <= 0) {
-          ::_exit(0);
-        }
-
-        auto pending = std::span<const Byte>{buffer}.first(static_cast<std::size_t>(count));
-
-        while (!pending.empty()) {
-          const auto written = ::write(direction.destination, pending.data(), pending.size());
-          if (written < 0 && sys::lastError() == EINTR) {
-            continue;
-          }
-
-          if (written <= 0) {
-            ::_exit(0);
-          }
-
-          pending = pending.subspan(static_cast<std::size_t>(written));
-        }
-      }
-    }
-
-    void* relayInput(void* context) noexcept {
-      relay(*static_cast<RelayDirection*>(context));
-    }
-
-  }
-
-  [[noreturn]] void RuntimeConnection::bridge() {
-    static_cast<void>(::signal(SIGPIPE, SIG_IGN));
-    RelayDirection upstream{.source = STDIN_FILENO, .destination = client_.descriptor()};
-    pthread_t thread{};
-    const auto result = ::pthread_create(&thread, nullptr, &relayInput, &upstream);
-    if (result != 0) {
-      throw SystemError{"Start runtime bridge", result};
-    }
-
-    ::pthread_detach(thread);
-    relay({.source = client_.descriptor(), .destination = STDOUT_FILENO});
   }
 
 }

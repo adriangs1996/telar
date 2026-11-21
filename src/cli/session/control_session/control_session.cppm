@@ -35,7 +35,7 @@ export {
 
     class RuntimeConnection {
     public:
-      explicit RuntimeConnection(const char* path, bool negotiate = true);
+      explicit RuntimeConnection(const char* path);
       ~RuntimeConnection();
       RuntimeConnection(const RuntimeConnection&) = delete;
       RuntimeConnection& operator=(const RuntimeConnection&) = delete;
@@ -43,7 +43,6 @@ export {
       RuntimeConnection& operator=(RuntimeConnection&&) = delete;
 
       void requestStop();
-      [[noreturn]] void bridge();
 
       // Generic over the protocol's messages, an open set, so it stays a template
       // here.
