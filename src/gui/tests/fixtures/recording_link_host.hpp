@@ -1,9 +1,9 @@
 // A link host for a build of the window's tests. In place of the host's browser it appends
 // each link the window opens to the file TELAR_GUI_TEST_LINK_RECORD names, one to a line,
 // which is where the tests read what was opened. A build takes it with
-// -DTELAR_GUI_LINK_HOST_HEADER=src/gui/tests/fixtures/recording_link_host.hpp, which includes
-// it before every source of the window: it names no type of Qt's or of telar's, only what
-// the process and the link it is given have.
+// -DTELAR_GUI_LINK_HOST_HEADER=src/gui/tests/fixtures/recording_link_host.hpp. It is included
+// where the window chooses its link host, before the types that host works with are named:
+// it names none of Qt's or of telar's, only what the process and the link it is given have.
 #pragma once
 
 #include <chrono>
