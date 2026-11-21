@@ -785,6 +785,24 @@ return {api_version = 2, client = {
 
       press(Qt::Key_Escape, QString{});
       QTRY_VERIFY2_WITH_TIMEOUT(shown().contains(QStringLiteral("TELAR <EDITOR> OK")), qPrintable(shown()), runtime_wait_ms);
+      // The view is on the window, not only in the session: every item up to the window shows.
+      QVERIFY(view->isVisible());
+      QVERIFY(view->width() > 0 && view->height() > 0);
+      // What Neovim drew is on the picture of the window: the editor's text is not the pane's bare background.
+      {
+        const auto image = window_->grabWindow();
+        const auto origin = view->mapToScene({0, 0}).toPoint();
+        const QRect area{origin, QSize{static_cast<int>(view->cellWidth() * 20), static_cast<int>(view->cellHeight() * 3)}};
+        QSet<QRgb> colors;
+
+        for (int y = area.top(); y < area.bottom(); ++y) {
+          for (int x = area.left(); x < area.right(); ++x) {
+            colors.insert(image.pixel(x, y));
+          }
+        }
+
+        QVERIFY2(colors.size() > 2, "the editor's cells are not drawn on the window");
+      }
       QTRY_COMPARE_WITH_TIMEOUT(view->mode(), QStringLiteral("normal"), runtime_wait_ms);
       QVERIFY(!view->cursorRect().isEmpty());
       shoot(QStringLiteral("editor-typed"));

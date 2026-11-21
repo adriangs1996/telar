@@ -173,7 +173,7 @@ export namespace telar::gui::features::nvim {
   // One editor pane as the window draws it. Each `*_revision` changes when what it names does,
   // so a view redraws only what changed.
   struct Editor {
-    explicit Editor(Memory& memory, std::uint64_t pane);
+    explicit Editor(Memory& made_in, std::uint64_t pane);
 
     [[nodiscard]] const Grid* grid(std::uint32_t id) const noexcept;
 
