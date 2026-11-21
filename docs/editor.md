@@ -24,9 +24,8 @@ focus. The tab is the one of the pane the command runs in; a tab without an edit
 one beside it. From outside a pane, `--client ID` names the window, and without it the window
 last typed in takes the request.
 
-A file path clicked in a terminal opens the same way when the tab has an editor pane. When it
-has none, an editor pane is made for the file if your editor is Neovim, and the link opens as
-before otherwise: in the editor `editor` or `$EDITOR` names.
+A file path clicked in a terminal opens the same way when the tab has an editor pane. A tab
+without one opens the link as before: in the editor `editor` or `$EDITOR` names.
 
 ## What the window draws itself
 
