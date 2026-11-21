@@ -8,5 +8,5 @@
 #   . "$HOME/.cargo/env"
 set -eu
 
-apk add --no-cache build-base cmake ninja python3 perl flex bison git linux-headers curl xz rustup
+apk add --no-cache build-base cmake ninja python3 perl flex bison git linux-headers curl xz zlib-dev rustup
 rustup-init -y -q --profile minimal --default-toolchain "${RUST_TOOLCHAIN:-1.93.1}"

@@ -59,7 +59,7 @@ def build(manifest, cache, prepare, root, jobs):
                '-DLLVM_BUILD_LLVM_DYLIB=ON', '-DLLVM_LINK_LLVM_DYLIB=ON',
                '-DCLANG_LINK_CLANG_DYLIB=ON',
                '-DLLVM_TARGETS_TO_BUILD=Native', '-DLLVM_INCLUDE_TESTS=OFF',
-               '-DLLVM_INCLUDE_BENCHMARKS=OFF', '-DLLVM_ENABLE_ZLIB=OFF',
+               '-DLLVM_INCLUDE_BENCHMARKS=OFF',
                '-DLLVM_ENABLE_ZSTD=OFF', '-DLLVM_ENABLE_LIBXML2=OFF',
                '-DLLVM_ENABLE_LIBEDIT=OFF', '-DLLVM_ENABLE_TERMINFO=OFF']
     musl = platform.system() == 'Linux' and bool(list(Path('/lib').glob('ld-musl-*')))
@@ -68,6 +68,9 @@ def build(manifest, cache, prepare, root, jobs):
         # none and points programs at glibc's loader; Alpine's own clang takes its compiler's triple.
         triple = subprocess.check_output([os.environ.get('CC', 'cc'), '-dumpmachine'], text=True).strip()
         options += ['-DLLVM_DEFAULT_TARGET_TRIPLE=' + triple, '-DLLVM_HOST_TRIPLE=' + triple]
+    # Alpine's x86_64 libc.a and C runtime objects keep their debug sections zlib-compressed,
+    # which lld reads only when built with zlib.
+    options += ['-DLLVM_ENABLE_ZLIB=' + ('FORCE_ON' if musl else 'OFF')]
     if platform.system() == 'Linux':
         options += ['-DLLVM_ENABLE_RUNTIMES=compiler-rt;libunwind;libcxxabi;libcxx',
                     '-DLIBCXX_ENABLE_SHARED=OFF', '-DLIBCXXABI_ENABLE_SHARED=OFF',
