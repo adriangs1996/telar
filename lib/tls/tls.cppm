@@ -121,6 +121,10 @@ export {
       TlsCertificate certificate;
 
       static CertificatePair authority(std::string_view name, std::chrono::seconds lifetime);
+
+      // A certificate that signs itself and authenticates one end of a connection, for a peer
+      // that pins its public key instead of following a chain.
+      static CertificatePair selfSigned(std::string_view name, std::chrono::seconds lifetime);
       [[nodiscard]] CertificatePair mint(std::string_view hostname) const;
       static CertificatePair parse(std::span<const std::uint8_t> key_pem, std::span<const std::uint8_t> certificate_pem);
       void validateAuthority(std::string_view name, bool system) const;
@@ -134,6 +138,18 @@ export {
       static void sign(TlsCertificate& certificate, EVP_PKEY* issuer);
       static int refusePassword(char*, int, int, void*) noexcept;
     };
+
+  }
+}
+
+// Interface: telar_tls/public_key_digest.cppm
+export {
+  namespace telar::runtime {
+
+    inline constexpr std::size_t public_key_digest_bytes = 32;
+
+    // The SHA-256 of a certificate's public key, which names the key whatever certificate carries it.
+    ds::Array<std::uint8_t, public_key_digest_bytes> publicKeyDigest(const X509* certificate);
 
   }
 }
@@ -486,6 +502,7 @@ export {
   using ::SSL_CTX;
   using ::X509;
   using ::X509_STORE;
+  using ::X509_STORE_CTX;
 
   using ::ASN1_TIME_compare;
   using ::ASN1_TIME_free;
@@ -499,12 +516,16 @@ export {
   using ::PEM_read_bio_X509_AUX;
   using ::SSL_CTX_new;
   using ::SSL_CTX_set_alpn_select_cb;
+  using ::SSL_CTX_set_cert_verify_callback;
   using ::SSL_CTX_set_num_tickets;
   using ::SSL_CTX_set_options;
   using ::SSL_CTX_set_verify;
+  using ::SSL_CTX_use_certificate;
+  using ::SSL_CTX_use_PrivateKey;
   using ::SSL_do_handshake;
   using ::SSL_get0_alpn_selected;
   using ::SSL_get0_param;
+  using ::SSL_get1_peer_certificate;
   using ::SSL_get_error;
   using ::SSL_new;
   using ::SSL_pending;
@@ -553,8 +574,10 @@ export {
   X(SSL_TLSEXT_ERR_ALERT_FATAL)          \
   X(SSL_TLSEXT_ERR_NOACK)                \
   X(SSL_TLSEXT_ERR_OK)                   \
+  X(SSL_VERIFY_FAIL_IF_NO_PEER_CERT)     \
   X(SSL_VERIFY_PEER)                     \
   X(TLS1_2_VERSION)                      \
+  X(TLS1_3_VERSION)                      \
   X(X509_TRUST_REJECTED)                 \
   X(X509_TRUST_SSL_SERVER)
 
@@ -577,12 +600,15 @@ namespace telar::runtime::tls::captured {
 #undef SSL_TLSEXT_ERR_ALERT_FATAL
 #undef SSL_TLSEXT_ERR_NOACK
 #undef SSL_TLSEXT_ERR_OK
+#undef SSL_VERIFY_FAIL_IF_NO_PEER_CERT
 #undef SSL_VERIFY_PEER
 #undef TLS1_2_VERSION
+#undef TLS1_3_VERSION
 #undef X509_TRUST_REJECTED
 #undef X509_TRUST_SSL_SERVER
 #undef OPENSSL_free
 #undef SSL_CTX_set1_verify_cert_store
+#undef SSL_CTX_set_max_proto_version
 #undef SSL_CTX_set_min_proto_version
 #undef SSL_CTX_set_mode
 #undef SSL_CTX_set_session_cache_mode
@@ -600,6 +626,7 @@ export {
 
   void OPENSSL_free(void* pointer);                                                  // NOLINT(readability-identifier-naming): exported under OpenSSL's own name
   long SSL_CTX_set1_verify_cert_store(SSL_CTX* context, X509_STORE* store);          // NOLINT(readability-identifier-naming): exported under OpenSSL's own name
+  long SSL_CTX_set_max_proto_version(SSL_CTX* context, int version);                 // NOLINT(readability-identifier-naming): exported under OpenSSL's own name
   long SSL_CTX_set_min_proto_version(SSL_CTX* context, int version);                 // NOLINT(readability-identifier-naming): exported under OpenSSL's own name
   long SSL_CTX_set_mode(SSL_CTX* context, long mode);                                // NOLINT(readability-identifier-naming): exported under OpenSSL's own name
   long SSL_CTX_set_session_cache_mode(SSL_CTX* context, long mode);                  // NOLINT(readability-identifier-naming): exported under OpenSSL's own name

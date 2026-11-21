@@ -65,6 +65,14 @@
       "sys",
       "tbc"
     ],
+    "remote": [
+      "base",
+      "platform",
+      "sys",
+      "tbc",
+      "tls",
+      "vocabulary"
+    ],
     "plugins": [
       "base",
       "client",
@@ -214,6 +222,12 @@
     "src/runtime/host/process_table/process_table.cppm": "telar.runtime.host.process_table",
     "lib/plugins/plugins.cppm": "telar.plugins",
     "lib/tls/tls.cppm": "telar.tls",
+    "lib/remote/identity/identity.cppm": "telar.remote.identity",
+    "lib/remote/channel/channel.cppm": "telar.remote.channel",
+    "lib/remote/streams/streams.cppm": "telar.remote.streams",
+    "lib/remote/serve/serve.cppm": "telar.remote.serve",
+    "lib/remote/link/link.cppm": "telar.remote.link",
+    "lib/remote/tests/fixture/fixture.cppm": "telar.remote.tests.fixture",
     "lib/base/memory/allocators/allocators.cppm": "telar.base.memory.allocators",
     "lib/base/memory/containers/containers.cppm": "telar.base.memory.containers",
     "lib/base/ds/ds.cppm": "telar.base.ds",
@@ -1156,6 +1170,10 @@
     ],
     "lib/plugins": [
       "telar.plugins"
+    ],
+    "lib/remote": [
+      "telar.remote.channel",
+      "telar.remote.identity"
     ],
     "lib/render": [
       "telar.render.document",

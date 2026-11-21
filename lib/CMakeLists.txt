@@ -23,6 +23,7 @@ add_subdirectory(platform)
 add_subdirectory(machines)
 add_subdirectory(git)
 add_subdirectory(tls)
+add_subdirectory(remote)
 add_subdirectory(plugins)
 add_subdirectory(config)
 
