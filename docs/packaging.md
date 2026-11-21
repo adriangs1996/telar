@@ -68,7 +68,7 @@ Telar.app/Contents/
   MacOS/telar-gui, telar-gui-command   the C++ client and its surface helper
   Frameworks/, PlugIns/      the managed Qt the client loads
   Resources/telar.icns       packaging/macos/telar.icns
-  Resources/bin/telar, telar-runtime, telar-config-check
+  Resources/bin/telar, telar-runtime, telar-config-check, telar-gateway
   Resources/bin/telar-diagram-renderer   native Mermaid rasterizer
   Resources/qml/             the Qt QML modules the client imports
   Resources/licenses/        notices of every library compiled in
@@ -96,6 +96,7 @@ The desktop archive is a relocatable tree:
 telar-linux-ARCH/
   bin/telar, telar-runtime,        the static headless tools
       telar-config-check,
+      telar-gateway,
       telar-diagram-renderer
   bin/telar-gui, telar-gui-command the C++ client and its surface helper
   bin/qt.conf                      points Qt at the plugins and QML below
@@ -114,8 +115,8 @@ from wherever it is unpacked. `telar` finds `telar-gui` and `telar-runtime`
 beside the file a symlink resolves to.
 
 The build for servers, where remote mode runs the runtime, is the C++
-runtime and CLI without a window: the `dist` preset of `CMakePresets.json`
-builds `telar`, `telar-runtime` and `telar-config-check` side by side. The release makes
+runtime, CLI and gateway without a window: the `dist` preset of `CMakePresets.json`
+builds `telar`, `telar-runtime`, `telar-config-check` and `telar-gateway` side by side. The release makes
 them static musl executables ([details](#the-linux-headless-build)), and
 the desktop archive carries the same files.
 
@@ -194,10 +195,10 @@ points at the newest one.
 
 | Asset | Contents |
 | --- | --- |
-| `telar-macos-aarch64.tar.gz` | `bin/telar`, `bin/telar-runtime`, `bin/telar-config-check`, `bin/telar-diagram-renderer`, notices |
+| `telar-macos-aarch64.tar.gz` | `bin/telar`, `bin/telar-runtime`, `bin/telar-config-check`, `bin/telar-gateway`, `bin/telar-diagram-renderer`, notices |
 | `Telar-macos-aarch64.dmg` | `Telar.app` (the C++ client with its Qt, runtime and CLI) and a link to `/Applications` |
 | `telar-linux-x86_64.tar.gz`, `telar-linux-aarch64.tar.gz` | the headless tools plus the C++ client, its Qt, the desktop entry and icon, notices ([layout](#linux)) |
-| `telar-linux-x86_64-headless.tar.gz`, `telar-linux-aarch64-headless.tar.gz` | the C++ `bin/telar`, `bin/telar-runtime`, `bin/telar-config-check`, `bin/telar-diagram-renderer`, notices |
+| `telar-linux-x86_64-headless.tar.gz`, `telar-linux-aarch64-headless.tar.gz` | the C++ `bin/telar`, `bin/telar-runtime`, `bin/telar-config-check`, `bin/telar-gateway`, `bin/telar-diagram-renderer`, notices |
 | `install.sh` | the installer from the tagged commit |
 | `SHA256SUMS` | SHA-256 of every asset above |
 
@@ -392,7 +393,7 @@ where `PREFIX` is the bin directory's parent: `~/.local` by default,
 `telar-gui --help` with `QT_QPA_PLATFORM=offscreen` and `LD_BIND_NOW=1`,
 which loads Qt and every library it needs without a display, and only then
 swaps the tree in and points `bin/telar` at `lib/telar/bin/telar`. It
-removes the `telar-runtime`, `telar-config-check` and
+removes the `telar-runtime`, `telar-config-check`, `telar-gateway` and
 `telar-diagram-renderer` files a headless install left in the bin
 directory, since `telar` now uses the ones in the tree, and writes
 `PREFIX/share/applications/telar.desktop`, with `Exec` naming the tree

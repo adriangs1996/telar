@@ -1,4 +1,4 @@
-export module telar.cli.commands.machine_ssh;
+export module telar.cli.commands.machine_gateway;
 
 import std;
 import telar.tbc;
@@ -149,7 +149,7 @@ export {
   }
 }
 
-// Interface: machine_ssh.cppm
+// Interface: machine_gateway.cppm
 export {
   namespace telar::runtime::cli::machine {
 

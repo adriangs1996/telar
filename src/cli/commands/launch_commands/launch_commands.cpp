@@ -7,7 +7,7 @@ import telar.cli.commands.plugin;
 import telar.cli.session.server;
 import telar.cli.commands.machine;
 import telar.cli.commands.window;
-import telar.cli.commands.machine_ssh;
+import telar.cli.commands.machine_gateway;
 import telar.machines;
 import telar.cli.console.output;
 import telar.base.ds;

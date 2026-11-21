@@ -9,7 +9,7 @@ set -o pipefail
 telar --machine omarchy clipboard get | chafa -f kitty
 ```
 
-The runtime captures its own machine's clipboard once. SSH forwards the bytes to
+The runtime captures its own machine's clipboard once. The gateway carries the bytes to
 this machine, where `chafa` renders them. This requires an image in the source
 clipboard and a terminal that supports Kitty graphics. The command does not take
 a screenshot itself or modify either clipboard.
@@ -50,8 +50,8 @@ transfer is admitted per runtime, with a 32 MiB content limit. Transfers pull
 content; there is no clipboard history, continuous monitoring or checkpoint data.
 Linux native reads have a five-second deadline.
 
-Access follows the runtime's same-account socket permissions and SSH
-authentication. A process running under that account, including an agent, can
+Access follows the runtime's same-account socket permissions and, from another
+machine, the pairing its gateway admits. A process running under that account, including an agent, can
 request the clipboard. There is no separate human-approval prompt in this version.
 
 ## Build and focused tests

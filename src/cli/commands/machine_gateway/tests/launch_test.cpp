@@ -12,7 +12,7 @@ import std;
 import telar.base.memory.allocators;
 import telar.testing;
 import telar.testing.test_memory;
-import telar.cli.commands.machine_ssh;
+import telar.cli.commands.machine_gateway;
 import telar.machines;
 import telar.base.ds;
 

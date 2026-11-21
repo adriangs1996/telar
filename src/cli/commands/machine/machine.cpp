@@ -2632,7 +2632,7 @@ fetch() {
 
       bool changed = false;
 
-      for (const std::string_view tool : {"telar-runtime", "telar-config-check"}) {
+      for (const std::string_view tool : {"telar-runtime", "telar-config-check", "telar-gateway"}) {
         const auto sibling = ds::format(memory, "{}/{}", parentOf(*build.binary), tool);
         if (::access(sibling.data(), R_OK) != 0) {
           continue;
@@ -2919,7 +2919,7 @@ exit 1
 
       build.digest = fileDigest(binary.data());
       ds::formatTo(build.directory, "-{}", build.digest->view().substr(0, MachineId::hex_digits));
-      for (const std::string_view tool : {"telar-runtime", "telar-config-check"}) {
+      for (const std::string_view tool : {"telar-runtime", "telar-config-check", "telar-gateway"}) {
         const auto companion = ds::format(memory, "{}/{}", parentOf(binary_path), tool);
         if (::access(companion.data(), R_OK) != 0) {
           throw CommandError{"SetupBinaryCompanionsMissing"};

@@ -3,7 +3,7 @@ export module telar.cli.commands.machine;
 import std;
 import telar.tbc;
 
-import telar.cli.commands.machine_ssh;
+import telar.cli.commands.machine_gateway;
 
 import telar.cli.commands.window;
 

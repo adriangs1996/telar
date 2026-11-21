@@ -8,7 +8,7 @@ import telar.base.memory.allocators;
 import telar.testing;
 import telar.testing.test_memory;
 import telar.machines;
-import telar.cli.commands.machine_ssh;
+import telar.cli.commands.machine_gateway;
 import telar.cli.commands.machine;
 
 namespace {

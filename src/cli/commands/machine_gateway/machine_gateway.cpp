@@ -1,4 +1,4 @@
-module telar.cli.commands.machine_ssh;
+module telar.cli.commands.machine_gateway;
 
 import telar.tbc;
 import telar.cli.console.command_error;
@@ -671,7 +671,7 @@ namespace telar::runtime::cli::machine {
 
   const char* describe(std::string_view error) {
     if (error == "SetupBinaryCompanionsMissing") {
-      return "a C++ --binary needs telar-runtime and telar-config-check beside it";
+      return "a --binary needs telar-runtime, telar-config-check and telar-gateway beside it";
     }
 
     if (error == "InsecureFile") {

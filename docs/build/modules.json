@@ -203,7 +203,7 @@
       "commands/project_setup",
       "commands/window",
       "commands/hook",
-      "commands/machine_ssh",
+      "commands/machine_gateway",
       "commands/tab",
       "commands/worktree",
       "commands/machine",
@@ -344,7 +344,7 @@
     "src/cli/commands/machine/machine.cppm": "telar.cli.commands.machine",
     "src/cli/commands/window/window.cppm": "telar.cli.commands.window",
     "src/cli/commands/launch_commands/launch_commands.cppm": "telar.cli.commands.launch_commands",
-    "src/cli/commands/machine_ssh/machine_ssh.cppm": "telar.cli.commands.machine_ssh",
+    "src/cli/commands/machine_gateway/machine_gateway.cppm": "telar.cli.commands.machine_gateway",
     "src/cli/commands/worktree/worktree.cppm": "telar.cli.commands.worktree",
     "src/cli/commands/project_setup/project_setup.cppm": "telar.cli.commands.project_setup",
     "src/cli/session/server/server.cppm": "telar.cli.session.server",
@@ -1237,8 +1237,8 @@
     "src/cli/commands/machine": [
       "telar.cli.commands.machine"
     ],
-    "src/cli/commands/machine_ssh": [
-      "telar.cli.commands.machine_ssh"
+    "src/cli/commands/machine_gateway": [
+      "telar.cli.commands.machine_gateway"
     ],
     "src/cli/commands/monitor": [
       "telar.cli.commands.monitor"

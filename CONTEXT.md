@@ -414,7 +414,7 @@ _Avoid_: Preview, Popover
 
 **Machine**:
 One computer whose runtime a client or the CLI can reach, through the local
-socket or an SSH connection. A machine runs one runtime per account; runtimes
+socket or through that machine's gateway. A machine runs one runtime per account; runtimes
 never know about each other.
 _Avoid_: Host, server, remote, node
 
@@ -424,8 +424,8 @@ to the label `machines.json` gives it, or its host name.
 _Avoid_: Localhost, home machine
 
 **Machine profile**:
-The saved record of how to reach a machine: a stable id, a label, an SSH
-destination, an optional color, whether windows connect to it, and after
+The saved record of how to reach a machine: a stable id, a label, the address
+of its gateway, an optional color, whether windows connect to it, and after
 setup the path of its telar and how its agent logins stood. It never holds
 credentials.
 _Avoid_: Remote config, connection, host entry

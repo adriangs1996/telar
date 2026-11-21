@@ -1314,7 +1314,7 @@ the whole window to the next or previous enabled machine, wrapping around.
 machines, which typing `:` in the palette also does; there Enter shows a
 machine, Shift+Enter enables or disables it, Ctrl+R renames it and Ctrl+D
 removes it. `telar.action.add_machine()` asks for a new machine's label and
-SSH destination. Each change is written to `machines.json`. They have no
+the address its gateway pairs with. Each change is written to `machines.json`. They have no
 default binding, and plugins cannot run them.
 
 `telar.action.monitor()` opens the monitor over the window: the processors,

@@ -282,13 +282,13 @@ def telar_skill_kept_there(binary):
 
 
 def binary_upload(binary):
-    """--binary installs this build there, telar and its runtime and config checker byte for
-    byte, verified there against their digests; a second setup finds them and sends
+    """--binary installs this build there, telar and its runtime, config checker and gateway
+    byte for byte, verified there against their digests; a second setup finds them and sends
     nothing. Every remote script runs in the remote home."""
     with machine(binary, real='1') as fixture:
         build = fixture.root / 'build'
         build.mkdir()
-        names = ('telar', 'telar-runtime', 'telar-config-check')
+        names = ('telar', 'telar-runtime', 'telar-config-check', 'telar-gateway')
         for name in names:
             shutil.copy2(binary.parent / name, build / name)
         status, output = fixture.run('machine', 'setup', FIXTURE, '--binary', str(build / 'telar'), *SKIP_ALL, '--json')

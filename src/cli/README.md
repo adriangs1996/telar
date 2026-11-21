@@ -1,19 +1,19 @@
 # telar CLI
 
 `telar`, the command line people and agents type. It implements help, agent
-hooks, agent CLI integration, machines and SSH dispatch, CLI installation, window
+hooks, agent CLI integration, machines and their dispatch, CLI installation, window
 startup, plugin packages, proxy CA trust, sessions (`workspace`, `tab`,
 `worktree`), `pane` and `agent`, execution, file/repository transfer, project
 setup, runtime inspection, diagnostics, history, the native API schema, and the
 window commands (`client`, `sidebar`, `workspace-list`, `layout`,
 `notification`, `command suggest`, `config` and configured plugins). `server`
-starts, finds, bridges and stops the runtime. It talks to the runtime over its
+starts, finds and stops the runtime, and runs the gateway other machines reach it by. It talks to the runtime over its
 socket with `telar-client` and shares code with the runtime and GUI through
 `lib/`; it never includes `src/runtime`.
 
 `hook` runs on every agent event, so `telar` stays small: it links libssl and
 libcrypto beside the system libraries, without the runtime's terminal engine,
-SQLite, pcap or frameworks. `telar server` (without `stop`, `endpoint` or `bridge`)
+SQLite, pcap or frameworks. `telar server` (without one of its commands)
 replaces itself with the `telar-runtime` installed beside it.
 
 The repository's tree builds this directory and writes `telar` next to
@@ -69,7 +69,7 @@ hooks ignore this variable.
 
 Machine profiles live in a private `machines.json` with locks and atomic
 replacement. `--machine LABEL COMMAND...` carries shell-neutral base64url
-words over managed SSH; `dispatch-argv` restores argv and preserves standard
+words through `telar-gateway`; `dispatch-argv` restores argv and preserves standard
 streams and exit status.
 
 Machine installers, configuration filters, login orchestration and window startup
