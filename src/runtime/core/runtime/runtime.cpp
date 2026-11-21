@@ -24,7 +24,7 @@ namespace telar::runtime {
 
     // The socket to listen on, once a fresh start has set the previous session aside: the listener
     // makes the runtime reachable, so a client that finds the socket finds the session set aside.
-    std::string_view setAsideBeforeListening(ConcurrentMemory& memory, const RuntimeOptions& options) {
+    tbc::val_a<std::string_view> setAsideBeforeListening(ConcurrentMemory& memory, tbc::ref_a<RuntimeOptions> options) {
       if (options.fresh && !options.session.path.empty()) {
         checkpoint::FileStore<ConcurrentMemory>::setAside(memory, options.session.path);
       }
