@@ -167,6 +167,11 @@ export {
       Service service_ = Service::attach;
     };
 
+    // Tells the peer this end is done and waits, for a moment, until the peer closes too. A
+    // connection closed with the peer's last bytes unread is reset, which could take from the
+    // peer what this end sent last.
+    void conclude(Channel& channel) noexcept;
+
     // Carries bytes both ways between a channel and a nonblocking stream socket until each
     // direction has ended, or either fails. An end one side reaches is passed on to the other.
     void relay(Channel& channel, int local) noexcept;

@@ -7,7 +7,7 @@ Arguments:
   --machine LABEL  Required: a saved machine other than this one.
 
 Effects: asks the machine where this repository's clone is (`worktree resolve` there),
-then `git fetch` over SSH into `refs/remotes/LABEL/BRANCH`. Touches no local runtime
+then `git fetch` through its gateway into `refs/remotes/LABEL/BRANCH`. Touches no local runtime
 and no local branch; review or merge the ref yourself afterwards.
 
 Results: `fetched BRANCH from LABEL into REF at COMMIT`; JSON `machine`, `branch`,

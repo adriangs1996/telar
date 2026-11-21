@@ -1,0 +1,18 @@
+telar server listen: Run this account's gateway in the foreground
+
+Usage: telar server listen [[HOST]:PORT] [--socket PATH]
+
+Arguments:
+  [HOST]:PORT      Where to listen: a port alone (`8352`, `:8352`) listens on every
+                   address of the machine, `HOST:PORT` on one. Default `:8352`.
+  --socket PATH    Serve the runtime at PATH instead of this account's own.
+
+Effects: becomes `telar-gateway serve`, which answers until it is stopped. Use it
+under the supervisor a machine already has (a container's entry point, a system
+service of the account); `telar server enable` installs a service of the account
+for the machines that have none. The gateway's key and the machines it admits are
+kept under $XDG_STATE_HOME/telar/gateway (else ~/.local/state/telar/gateway), which
+only this account reads. A machine reaches the gateway only when the port is
+reachable from it: open it in the firewall, or publish it from the container.
+
+Results: runs until stopped. Exit 1 when the port is taken.

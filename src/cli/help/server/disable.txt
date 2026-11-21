@@ -1,0 +1,10 @@
+telar server disable: Stop this account's gateway and remove its service
+
+Usage: telar server disable
+
+Effects: stops and removes the service `telar server enable` installed. The
+gateway's key and the machines it admits are kept, so enabling it again needs no
+new pairing. A gateway started another way, by `telar server listen` under a
+supervisor, is left to that supervisor. The runtime and its panes keep running.
+
+Results: nothing; exit 0.

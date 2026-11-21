@@ -30,8 +30,10 @@ namespace telar::remote {
     constexpr unsigned byte_bits = 8;
     constexpr unsigned byte_mask = 0xff;
 
-    // How long a finished command's streams may stay open before its status is asked for again.
-    constexpr int reap_interval_ms = 20;
+    // A command whose streams ended is about to exit: its status is asked for again after a
+    // wait that starts at a millisecond and doubles up to this one, so that a quick command is
+    // not held for a tick and a slow one is not polled in a loop.
+    constexpr int longest_reap_wait_ms = 20;
 
     void putU16(std::span<std::uint8_t> output, std::uint16_t value) noexcept {
       output[0] = static_cast<std::uint8_t>(value >> byte_bits);
@@ -129,14 +131,21 @@ namespace telar::remote {
       // The server's side: until the command exited and the client was told, or the client left.
       void server(const Process& process) noexcept {
         process_ = &process;
+        int reap_wait_ms = 1;
+
         while (!failed_ && !peer_ended_ && !told_) {
-          const bool waiting = sourcesEnded() && !exit_queued_;
+          bool waiting = sourcesEnded() && !exit_queued_;
 
           if (waiting) {
             queueExit();
+            waiting = !exit_queued_;
           }
 
-          step(waiting ? reap_interval_ms : -1);
+          step(waiting ? reap_wait_ms : -1);
+          if (waiting) {
+            reap_wait_ms = std::min(2 * reap_wait_ms, longest_reap_wait_ms);
+          }
+
           if (exit_queued_ && outgoing_.size() == 0) {
             told_ = channel_.finish().state != Transfer::State::wants_write;
           }

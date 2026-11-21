@@ -707,6 +707,25 @@ namespace telar::remote {
     }
   }
 
+  void conclude(Channel& channel) noexcept {
+    constexpr auto patience = std::chrono::seconds{2};
+    ds::Array<std::uint8_t, 512> discarded{};
+    const auto deadline = Clock::now() + patience;
+
+    static_cast<void>(channel.finish());
+    for (;;) {
+      const auto taken = channel.read(discarded.viewMut());
+      if (taken.state == Transfer::State::done) {
+        continue;
+      }
+
+      const bool waits = taken.state == Transfer::State::wants_read || taken.state == Transfer::State::wants_write;
+      if (!waits || !waitFor(channel.descriptor(), taken.state == Transfer::State::wants_read ? POLLIN : POLLOUT, deadline)) {
+        return;
+      }
+    }
+  }
+
   void relay(Channel& channel, int local) noexcept {
     // The buffers of both directions are this call's own: a relay runs on a thread whose stack
     // is sized to hold them.

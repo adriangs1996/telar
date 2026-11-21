@@ -1,0 +1,17 @@
+telar server pair: Print an address that pairs one other machine with this gateway
+
+Usage: telar server pair [--host HOST]
+
+Arguments:
+  --host HOST      The name or address the other machine reaches this one by, when
+                   it is not this machine's host name: a public address, a VPN
+                   name, `127.0.0.1` behind a published port.
+
+Effects: adds a pairing code to this account's gateway. The code enrolls the first
+machine that presents it, once, and expires after ten minutes; at most eight wait at
+a time. Nothing is contacted, and the gateway need not be running yet.
+
+Results: stdout holds the address alone, `telar://HOST:PORT#KEY.CODE`, for a script;
+stderr says what to run on the other machine: `telar machine add LABEL 'ADDRESS'`.
+KEY names this gateway's key, so the other machine connects to no other; treat the
+address as a password until it is used. Exit 0; 1 when too many codes are pending.

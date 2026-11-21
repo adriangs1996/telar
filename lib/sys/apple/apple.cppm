@@ -177,6 +177,7 @@ export {
   X(KERN_PROC_PID)             \
   X(KERN_SUCCESS)              \
   X(PROC_PGRP_ONLY)            \
+  X(PROC_UID_ONLY)             \
   X(PROC_PIDFDSOCKETINFO)      \
   X(PROC_PIDLISTFDS)           \
   X(PROC_PIDPATHINFO_MAXSIZE)  \
@@ -284,6 +285,7 @@ namespace telar::sys::captured {
 #undef KERN_PROC_PID
 #undef KERN_SUCCESS
 #undef PROC_PGRP_ONLY
+#undef PROC_UID_ONLY
 #undef PROC_PIDFDSOCKETINFO
 #undef PROC_PIDLISTFDS
 #undef PROC_PIDPATHINFO_MAXSIZE

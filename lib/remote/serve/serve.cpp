@@ -17,7 +17,6 @@ namespace telar::remote {
     constexpr auto forward_connect_timeout = std::chrono::seconds{3};
     constexpr auto runtime_start_timeout = std::chrono::seconds{15};
     constexpr auto refusal_delay = std::chrono::seconds{1};
-    constexpr auto drain_timeout = std::chrono::seconds{2};
     constexpr auto poll_interval = std::chrono::milliseconds{5};
     constexpr unsigned byte_bits = 8;
 
@@ -52,29 +51,16 @@ namespace telar::remote {
       static_cast<void>(::setenv("PATH", path.data(), 1)); // NOLINT(concurrency-mt-unsafe): set once, before the gateway starts a thread
     }
 
-    // Says no, and waits for the client to read it before the connection goes: a close with the
-    // client's request unread would reset the connection under the answer.
+    // Says no, and waits for the client to read it before the connection goes.
     void refuse(Channel& channel, Reply reply = Reply::refused) noexcept {
       try {
-        ds::Array<std::uint8_t, 256> discarded{};
-        const auto deadline = Clock::now() + drain_timeout;
-
         sendReply(channel, reply);
-        static_cast<void>(channel.finish());
-        while (Clock::now() < deadline) {
-          const auto taken = channel.read(discarded.viewMut());
-          if (taken.state == Transfer::State::ended || taken.state == Transfer::State::failed) {
-            return;
-          }
-
-          if (taken.state != Transfer::State::done) {
-            std::this_thread::sleep_for(poll_interval);
-          }
-        }
       } catch (const std::exception&) {
         // The client left first, which is as good as told.
         return;
       }
+
+      conclude(channel);
     }
 
     // The environment a command on a terminal starts with: the gateway's own, naming a terminal
@@ -322,6 +308,7 @@ namespace telar::remote {
         sendReply(channel, Reply::accepted);
         pumpTerminal(channel, process);
         process.shutdown();
+        conclude(channel);
         return;
       }
 
@@ -331,6 +318,7 @@ namespace telar::remote {
       pumpPipes(channel, process);
       // A client that left ends its command, as a closed terminal ends what ran in it.
       process.signal(SIGHUP);
+      conclude(channel);
     } catch (const SystemError&) {
       refuse(channel, Reply::unavailable);
     }
