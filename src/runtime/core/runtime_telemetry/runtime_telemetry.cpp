@@ -388,7 +388,9 @@ namespace telar::runtime::diagnostics {
       }
     }
 
-    for (auto* pane : model.panes.items()) { // NOLINT(misc-const-correctness): the pane's media is sampled through its shared handle, a mutation tbc sees through the pane
+    for (auto* stored : model.panes.items()) {
+      // What is summed here is a terminal's: its screen, its queues and its media.
+      auto* pane = asTerminal(stored); // NOLINT(misc-const-correctness): the pane's media is sampled through its shared handle, a mutation tbc sees through the pane
       if (pane == nullptr) {
         continue;
       }

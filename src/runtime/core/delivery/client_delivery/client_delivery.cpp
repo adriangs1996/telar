@@ -35,7 +35,7 @@ namespace telar::runtime {
     }
 
     // Sends the routed client the pane's request, or once it is announced, the execution it settled on.
-    void sendRequest(ClientSession& client, Pane& pane) {
+    void sendRequest(ClientSession& client, TerminalPane& pane) {
       auto& clipboard = pane.terminal.clipboardControl();
 
       try {
@@ -56,13 +56,13 @@ namespace telar::runtime {
 
   }
 
-  bool ClipboardService::eligible(const ClientSession& client, const Pane& pane) noexcept {
+  bool ClipboardService::eligible(const ClientSession& client, const TerminalPane& pane) noexcept {
     const auto* attachment = client.attachment(pane.id);
 
     return !pane.close_requested && !pane.output_closed && client.role == ClientRole::interactive && !client.connection.flags().closing && attachment != nullptr && attachment->desktop && attachment->desktop->pane_generation == pane.generation && attachment->desktop->visible && attachment->desktop->clipboard;
   }
 
-  void ClipboardService::configure(const ClientStore& clients, Pane& pane) {
+  void ClipboardService::configure(const ClientStore& clients, TerminalPane& pane) {
     ds::Array<control::ClipboardRoute, control::ClipboardGrants::capacity> routes;
     std::size_t count = 0;
     const ClientSession* preferred = nullptr;
@@ -85,7 +85,7 @@ namespace telar::runtime {
     pane.terminal.clipboardControl().routes(std::span{routes}.first(count), preferred != nullptr ? ds::Option{control::ClipboardRoute{.client = preferred->id, .generation = preferred->generation}} : ds::none);
   }
 
-  bool ClipboardService::advance(ClientStore& clients, Pane& pane, std::chrono::steady_clock::time_point now) {
+  bool ClipboardService::advance(ClientStore& clients, TerminalPane& pane, std::chrono::steady_clock::time_point now) {
     auto& clipboard = pane.terminal.clipboardControl();
 
     clipboard.expire(now);
@@ -112,8 +112,8 @@ namespace telar::runtime {
     return false;
   }
 
-  tbc::val_a<Pane*> ClipboardService::complete(tbc::mut_a<PaneStore> panes, ClientSession& sender, const CompleteClipboardDesktop& completion) {
-    auto* pane = findPane(panes, {.id = completion.ticket.pane_id, .generation = completion.ticket.pane_generation});
+  tbc::val_a<TerminalPane*> ClipboardService::complete(tbc::mut_a<PaneStore> panes, ClientSession& sender, const CompleteClipboardDesktop& completion) {
+    auto* pane = asTerminal(findPane(panes, {.id = completion.ticket.pane_id, .generation = completion.ticket.pane_generation}));
     if (pane == nullptr || sender.generation != completion.ticket.client_generation || !eligible(sender, *pane)) {
       return nullptr;
     }
@@ -159,7 +159,13 @@ namespace telar::runtime {
 
       candidates &= candidates - 1;
       auto& attachment = client.attachments.atMut(slots_[slot].index).getMut();
-      auto& pane = *model.panes.find(attachment.pane_id);
+      // An attachment's lanes are a terminal's: its cells, its scrollback and its graphics.
+      auto* found = asTerminal(model.panes.find(attachment.pane_id));
+      if (found == nullptr) {
+        continue;
+      }
+
+      auto& pane = *found;
       Output output{.connection = client.connection, .completing_exit = client.completing_exit, .frame_interval = client.frame_interval, .metrics = model.metrics, .now = now, .timeout = timeout};
       if (prepare(output, attachment, pane, lane)) {
         client.next_attachment = (slot + 1) % ClientSession::attachment_capacity;
@@ -170,7 +176,7 @@ namespace telar::runtime {
     return false;
   }
 
-  bool AttachmentDelivery::prepare(Output& output, Attachment& attachment, Pane& pane, DeliveryLane lane) {
+  bool AttachmentDelivery::prepare(Output& output, Attachment& attachment, TerminalPane& pane, DeliveryLane lane) {
     const auto& effects = pane.terminal.effects();
 
     switch (lane) {
@@ -228,7 +234,7 @@ namespace telar::runtime {
     return true;
   }
 
-  bool AttachmentDelivery::document(Connection<ConcurrentMemory>& connection, Attachment& attachment, const Pane& pane) {
+  bool AttachmentDelivery::document(Connection<ConcurrentMemory>& connection, Attachment& attachment, const TerminalPane& pane) {
     static_assert(PaneDocument::max_size == ::telar::render::max_document_bytes);
     const auto& effects = pane.terminal.effects();
     if (attachment.document_revision != effects.document_revision) {
@@ -255,7 +261,7 @@ namespace telar::runtime {
     return true;
   }
 
-  bool AttachmentDelivery::inlineDocuments(Connection<ConcurrentMemory>& connection, Attachment& attachment, const Pane& pane) {
+  bool AttachmentDelivery::inlineDocuments(Connection<ConcurrentMemory>& connection, Attachment& attachment, const TerminalPane& pane) {
     const auto& effects = pane.terminal.effects();
     const auto generation = pane.terminal.scrollbackGeneration();
     const auto trimmed = pane.terminal.scrollbackTrimmed();
@@ -313,7 +319,7 @@ namespace telar::runtime {
     return false;
   }
 
-  bool AttachmentDelivery::blocks(Connection<ConcurrentMemory>& connection, Attachment& attachment, const Pane& pane) {
+  bool AttachmentDelivery::blocks(Connection<ConcurrentMemory>& connection, Attachment& attachment, const TerminalPane& pane) {
     if (!pane.blocks || attachment.blocks_revision == pane.blocks->revision()) {
       return false;
     }
@@ -325,7 +331,7 @@ namespace telar::runtime {
     return true;
   }
 
-  bool AttachmentDelivery::scrollback(Connection<ConcurrentMemory>& connection, Attachment& attachment, Pane& pane) {
+  bool AttachmentDelivery::scrollback(Connection<ConcurrentMemory>& connection, Attachment& attachment, TerminalPane& pane) {
     const auto generation = pane.terminal.scrollbackGeneration();
     const auto trimmed = pane.terminal.scrollbackTrimmed();
     if (attachment.scrollback_generation == generation && attachment.scrollback_trimmed == trimmed) {
@@ -345,7 +351,7 @@ namespace telar::runtime {
     return true;
   }
 
-  bool AttachmentDelivery::cells(Output& output, Attachment& attachment, Pane& pane, Clock::time_point now, std::chrono::nanoseconds& timeout) {
+  bool AttachmentDelivery::cells(Output& output, Attachment& attachment, TerminalPane& pane, Clock::time_point now, std::chrono::nanoseconds& timeout) {
     if (attachment.frames.waitingForAck(pane.terminal.screen())) {
       return false;
     }
@@ -407,7 +413,7 @@ namespace telar::runtime {
     return true;
   }
 
-  bool AttachmentDelivery::exit(Output& output, Attachment& attachment, const Pane& pane) {
+  bool AttachmentDelivery::exit(Output& output, Attachment& attachment, const TerminalPane& pane) {
     if (!pane.output_closed || !pane.exit_status || !pane.media->idle() || attachment.frames.waitingForAck() || !slots_[attachment.slot].cells_current) {
       return false;
     }
@@ -425,14 +431,14 @@ namespace telar::runtime {
     return true;
   }
 
-  bool AttachmentDelivery::graphics(Output& output, Attachment& attachment, Pane& pane, std::chrono::nanoseconds& timeout) {
+  bool AttachmentDelivery::graphics(Output& output, Attachment& attachment, TerminalPane& pane, std::chrono::nanoseconds& timeout) {
     const bool sent = publishGraphics(output.connection, attachment, pane, timeout);
 
     TELAR_DIAGNOSTIC(output.metrics.graphics.merge(attachment.graphics.takeCounters()));
     return sent;
   }
 
-  bool AttachmentDelivery::publishGraphics(Connection<ConcurrentMemory>& connection, Attachment& attachment, Pane& pane, std::chrono::nanoseconds& timeout) {
+  bool AttachmentDelivery::publishGraphics(Connection<ConcurrentMemory>& connection, Attachment& attachment, TerminalPane& pane, std::chrono::nanoseconds& timeout) {
     const auto queued = connection.queuedBytes();
 
     if (pane.media->busy()) {
@@ -497,7 +503,7 @@ namespace telar::runtime {
     }
 
     for (auto& attachment : client.attachments.viewMut()) {
-      const auto* pane = model_.panes.find(attachment->pane_id);
+      const auto* pane = asTerminal(model_.panes.find(attachment->pane_id));
       if (pane == nullptr || attachment->clipboard_revision == pane->terminal.effects().clipboard_revision) {
         continue;
       }

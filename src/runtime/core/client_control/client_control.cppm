@@ -307,7 +307,7 @@ export {
 
         const auto group = agent->process_identity->pid;
         const auto member = agent->agent_identity->pid;
-        const auto root = pane.process->processId();
+        const auto root = pane.process_id;
         const auto lineage = client.verified_lineage.ancestors();
 
         for (std::size_t index = 0; index < lineage.size(); ++index) {
@@ -359,11 +359,11 @@ export {
         client.verified_pane = 0;
         client.verified_generation = 0;
         client.verified_lineage = {};
-        if (!client.peer_identity || pane->process->processId() <= 0) {
+        if (!client.peer_identity || pane->process_id <= 0) {
           throw RequestError{FailureCode::foreign_process, "The process does not descend from this pane"};
         }
 
-        client.pending_descent = DescentCheck{.client = client.id, .client_generation = client.generation, .pane = pane->id, .pane_generation = pane->generation, .request_id = request.request_id, .peer = *client.peer_identity, .root = pane->process->processId()};
+        client.pending_descent = DescentCheck{.client = client.id, .client_generation = client.generation, .pane = pane->id, .pane_generation = pane->generation, .request_id = request.request_id, .peer = *client.peer_identity, .root = pane->process_id};
         client.connection.flagsMut().read_paused = true;
       }
 
@@ -964,7 +964,8 @@ export {
 
         for (std::size_t visited = 0; visited < panes.size() && request.count < request.entries.size(); ++visited) {
           const auto slot = next_slot_++ % panes.size();
-          auto* pane = panes[slot];
+          // What a terminal prints is read for the agent in it; another kind of pane prints nothing.
+          auto* pane = asTerminal(panes[slot]);
           if (pane == nullptr) {
             continue;
           }
@@ -982,7 +983,8 @@ export {
 
       inline void observe(RuntimeModel& model, Agents& agents, std::uint64_t pane_id) {
         collect(model, agents);
-        auto* pane = model.panes.find(pane_id);
+        auto* found = model.panes.find(pane_id);
+        auto* pane = asTerminal(found);
         if (pending_ || pane == nullptr) {
           return;
         }
@@ -1016,7 +1018,8 @@ export {
 
           typename Processor::Request request;
 
-          for (auto* pane : model.panes.items()) {
+          for (auto* stored : model.panes.items()) {
+            auto* pane = asTerminal(stored);
             if (pane == nullptr || !pane->observer->seal()) {
               continue;
             }
@@ -1059,7 +1062,8 @@ export {
 
       // Applies one pane's observation, unless the pane is gone or exited since it was taken.
       inline static void applyEntry(RuntimeModel& model, Agents& agents, const Processor::ResultEntry& entry) {
-        auto* pane = findPane(model.panes, {.id = entry.pane, .generation = entry.generation});
+        auto* found = findPane(model.panes, {.id = entry.pane, .generation = entry.generation});
+        auto* pane = asTerminal(found);
         if (pane == nullptr || pane->exit_status) {
           return;
         }
@@ -1123,7 +1127,7 @@ export {
 
       // A sole pane discovers its foreground group on the worker; others read it here. A program's
       // listening ports are read again every `ports_interval`, output or not.
-      inline void enqueue(tbc::mut_a<typename Processor::Request> request, const Agents& agents, tbc::mut_a<Pane> pane, bool sole, std::chrono::steady_clock::time_point now) {
+      inline void enqueue(tbc::mut_a<typename Processor::Request> request, const Agents& agents, tbc::mut_a<TerminalPane> pane, bool sole, std::chrono::steady_clock::time_point now) {
         if (const auto drop = pane.observer->takeDrop()) {
           limits_.report(*drop);
         }
@@ -1140,7 +1144,7 @@ export {
         auto& entry = request.entries.atMut(request.count - 1);
 
         entry.input_revision = pane.input_revision;
-        entry.process_request = {pane.id, pane.generation, pane.cwd_revision, pane.process->processId(), 0};
+        entry.process_request = {pane.id, pane.generation, pane.cwd_revision, pane.process_id, 0};
         entry.process_request.cache = pane.process_cache;
         if (agent != nullptr) {
           entry.provider = agent->provider;
@@ -1163,8 +1167,8 @@ export {
         }
       }
 
-      inline static bool observes(const Pane& pane, const ProcessProbeResult& observation) {
-        return pane.generation == observation.request.generation && !pane.exit_status && pane.process->processId() == observation.request.root && pane.process->foregroundProcessGroup().valueOr(0) == observation.request.foreground;
+      inline static bool observes(const TerminalPane& pane, const ProcessProbeResult& observation) {
+        return pane.generation == observation.request.generation && !pane.exit_status && pane.process_id == observation.request.root && pane.process->foregroundProcessGroup().valueOr(0) == observation.request.foreground;
       }
 
       // Whether the pane list changed, for an observation of the pane's current process.

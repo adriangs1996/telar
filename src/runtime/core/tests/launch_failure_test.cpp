@@ -99,7 +99,8 @@ namespace {
 
       void watch(int descriptor, std::uint64_t token) {
         NativeEventLoop<ConcurrentMemory>::watch(descriptor, token);
-        for (const auto* pane : model.panes.items()) {
+        for (const auto* stored : model.panes.items()) {
+          const auto* pane = asTerminal(stored);
           if (pane != nullptr && pane->process->descriptor() == descriptor) {
             process = pane->process->processId();
             break;
@@ -173,7 +174,7 @@ namespace {
       }
 
       check(registration_failed && history.submissions == 3 && model.panes.size() == 1);
-      check(panes.require(model.panes, pane.id).process->processId() == retained_process && ::kill(retained_process, 0) == 0);
+      check(panes.requireTerminal(model.panes, pane.id).process->processId() == retained_process && ::kill(retained_process, 0) == 0);
       panes.remove(model, clients, pane.id);
 
       constexpr ds::Array<std::string_view, 1> missing{"/nonexistent/telar-launch-test"};

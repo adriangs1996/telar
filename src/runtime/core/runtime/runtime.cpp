@@ -111,13 +111,13 @@ namespace telar::runtime {
 
       labelDirectory(directories.atMut(count), pane->cwd);
 
-      const bool terminal_title = agent->title_source == AgentTitleSource::telar && !pane->terminal.effects().title().empty();
+      const bool terminal_title = agent->title_source == AgentTitleSource::telar && !programTitle(*pane).text.empty();
       const bool placeholder_title = !terminal_title && agent->title.view().empty();
       auto session_title = placeholder_title ? provider.placeholder : agent->title.view();
       auto title_source = agent->title_source;
 
       if (terminal_title) {
-        session_title = utf8Prefix(pane->terminal.effects().title(), title_bytes);
+        session_title = utf8Prefix(programTitle(*pane).text, title_bytes);
         title_source = AgentTitleSource::terminal;
       }
 
@@ -127,7 +127,7 @@ namespace telar::runtime {
           .pane_generation = pane->generation,
           .location = pane->location,
           .pane_index = static_cast<std::uint16_t>(position - tab->panes.begin() + 1),
-          .process_id = static_cast<std::uint32_t>(agent->process_identity ? agent->process_identity->pid : pane->process->processId()),
+          .process_id = static_cast<std::uint32_t>(agent->process_identity ? agent->process_identity->pid : pane->process_id),
           .session_id = agent->session_id,
           .workspace_label = utf8Prefix(workspace->displayName(), label_bytes),
           .tab_label = tab->label,
@@ -395,7 +395,8 @@ namespace telar::runtime {
 
   template <EventLoop Poller, HistoryEventSink History>
   void AgentService<Poller, History>::interrupt(RuntimeModel& model, Panes& panes, ClientSession& client, const InterruptAgent& request, bool focused) {
-    auto& pane = Panes::requireGeneration(model.panes, request.pane_id, request.pane_generation);
+    // An interrupt is a key typed into a terminal.
+    auto& pane = Panes::requireTerminalGeneration(model.panes, request.pane_id, request.pane_generation);
     if (pane.exit_status) {
       throw RequestError{FailureCode::pane_exited, "Pane already exited"};
     }
@@ -576,13 +577,16 @@ namespace telar::runtime {
       }
 
       // The registry learns of the change once this agent is no longer borrowed from it.
-      const bool revised = agent->cwd_revision != pane->cwd_revision || agent->title_revision != pane->terminal.effects().title_revision;
+      const auto title_revision = programTitle(*pane).revision;
+      const bool revised = agent->cwd_revision != pane->cwd_revision || agent->title_revision != title_revision;
       if (revised) {
         agent->cwd_revision = pane->cwd_revision;
-        agent->title_revision = pane->terminal.effects().title_revision;
+        agent->title_revision = title_revision;
       }
 
-      const bool settled = agent->interrupt_at && settleInterrupt(panes, focused(clients, layouts, pane->id), *pane, *agent, now);
+      // An interrupt settles on what the terminal shows after it.
+      auto* terminal = asTerminal(pane);
+      const bool settled = agent->interrupt_at && terminal != nullptr && settleInterrupt(panes, focused(clients, layouts, pane->id), *terminal, *agent, now);
       const auto current_time = wallMilliseconds();
 
       agent->evidence.expire(current_time);
@@ -639,7 +643,7 @@ namespace telar::runtime {
   }
 
   template <EventLoop Poller, HistoryEventSink History>
-  bool AgentService<Poller, History>::settleInterrupt(Panes& panes, bool focused, Pane& pane, Agent& agent, std::chrono::steady_clock::time_point now) {
+  bool AgentService<Poller, History>::settleInterrupt(Panes& panes, bool focused, TerminalPane& pane, Agent& agent, std::chrono::steady_clock::time_point now) {
     bool settled = false;
 
     if (hasIdleScreen(agent.provider)) {
@@ -1098,7 +1102,7 @@ namespace telar::runtime {
       throw RequestError{FailureCode::pane_not_found, "pane not attached"};
     }
 
-    Panes::require(model.panes, request.pane_id).requestClose();
+    requestClose(Panes::require(model.panes, request.pane_id));
   }
 
   template <EventLoop Poller, HistoryEventSink History>
@@ -1109,7 +1113,10 @@ namespace telar::runtime {
         continue;
       }
 
-      retainFinalText(model.exited_panes, *pane);
+      // What a terminal last showed is kept for a client that reads it after the pane is gone.
+      if (auto* terminal = asTerminal(pane)) {
+        retainFinalText(model.exited_panes, *terminal);
+      }
 
       const auto location = pane->location;
       const auto identity = pane->id;
@@ -1325,7 +1332,7 @@ namespace telar::runtime {
     std::ranges::copy(tab->panes.view().first(count), closing.dataMut());
     for (const auto identity : std::span{closing}.first(count)) {
       if (auto* pane = model.panes.find(identity)) {
-        pane->requestClose();
+        requestClose(*pane);
       }
     }
 
@@ -1365,7 +1372,7 @@ namespace telar::runtime {
   }
 
   template <EventLoop Poller, HistoryEventSink History>
-  void WorkspaceService<Poller, History>::retainFinalText(ExitedPanes& exited, Pane& pane) noexcept {
+  void WorkspaceService<Poller, History>::retainFinalText(ExitedPanes& exited, TerminalPane& pane) noexcept {
     const auto exit_code = pane.exitCode();
 
     try {
@@ -1970,28 +1977,41 @@ namespace telar::runtime {
   void Runtime<Poller, Background>::paneEvent(const Event& event) {
     TELAR_TRACE("runtime.paneEvent");
     auto* pane = model_.panes.findHandle(eventIdentity(event.token));
-    if (pane == nullptr || pane->process->descriptor() != event.descriptor) {
+    if (pane == nullptr) {
       TELAR_DIAGNOSTIC(diagnostics::accumulate(model_.metrics.stale_pane_events));
       return;
     }
 
-    const auto identity = pane->id;
+    visitPane(*pane, [&](auto& kind) {
+      paneEvent(kind, event);
+    });
+  }
+
+  template <EventLoop Poller, typename Background>
+    requires BackgroundExecutor<Background, ConcurrentMemory>
+  void Runtime<Poller, Background>::paneEvent(TerminalPane& pane, const Event& event) {
+    if (pane.process->descriptor() != event.descriptor) {
+      TELAR_DIAGNOSTIC(diagnostics::accumulate(model_.metrics.stale_pane_events));
+      return;
+    }
+
+    const auto identity = pane.id;
 
     try {
       if (event.kind == EventKind::readable) {
-        const auto mode = model_.panes.size() == 1 ? Pane::ReadMode::burst : Pane::ReadMode::once;
-        if (!pane->read(mode)) {
-          poller_.remove(pane->process->descriptor());
+        const auto mode = model_.panes.size() == 1 ? TerminalPane::ReadMode::burst : TerminalPane::ReadMode::once;
+        if (!pane.read(mode)) {
+          poller_.remove(pane.process->descriptor());
         }
       }
 
-      panes_.flushInput(*pane);
+      panes_.flushInput(pane);
       observations_.observe(model_, agents_, identity);
-      if (auto* observed = model_.panes.find(identity)) {
+      if (auto* observed = asTerminal(model_.panes.find(identity))) {
         media_.updateReadInterest(*observed);
       }
     } catch (const std::exception&) {
-      if (auto* failed = model_.panes.find(identity)) {
+      if (auto* failed = asTerminal(model_.panes.find(identity))) {
         panes_.failOutput(*failed);
       }
     }
@@ -2236,7 +2256,8 @@ namespace telar::runtime {
     requires BackgroundExecutor<Background, ConcurrentMemory>
   void Runtime<Poller, Background>::handle(std::uint64_t identity, const CompleteWords& message) {
     auto& client = requireClient(clients_, identity);
-    const auto* pane = model_.panes.find(message.pane_id);
+    // Words are completed for the shell of a terminal.
+    const auto* pane = asTerminal(model_.panes.find(message.pane_id));
     if (pane == nullptr) {
       throw RequestError{FailureCode::pane_not_found, "Could not complete words"};
     }
@@ -2258,7 +2279,8 @@ namespace telar::runtime {
     requires BackgroundExecutor<Background, ConcurrentMemory>
   void Runtime<Poller, Background>::handle(std::uint64_t identity, const RequestCommandSpec& message) {
     auto& client = requireClient(clients_, identity);
-    const auto* pane = model_.panes.find(message.pane_id);
+    // A command's spec is asked for the shell of a terminal.
+    const auto* pane = asTerminal(model_.panes.find(message.pane_id));
     if (pane == nullptr) {
       throw RequestError{FailureCode::pane_not_found, "Could not find a command spec"};
     }
@@ -2277,7 +2299,7 @@ namespace telar::runtime {
 
   template <EventLoop Poller, typename Background>
     requires BackgroundExecutor<Background, ConcurrentMemory>
-  tbc::val_a<WordRequest> Runtime<Poller, Background>::makeWordRequest(const ClientSession& client, std::uint64_t request_id, CompletionProvider provider, std::string_view prefix, tbc::holds<const Pane&, tbc::lt::a> pane) const {
+  tbc::val_a<WordRequest> Runtime<Poller, Background>::makeWordRequest(const ClientSession& client, std::uint64_t request_id, CompletionProvider provider, std::string_view prefix, tbc::holds<const TerminalPane&, tbc::lt::a> pane) const {
     WordRequest request{.client = client.id, .request = request_id, .provider = provider, .prefix = {}, .directory = {}, .home = {}, .path = {}};
 
     request.prefix.assign(prefix);
@@ -2320,7 +2342,9 @@ namespace telar::runtime {
     RequestContext context;
     const auto editor = identifyEditor(message.editor);
     if (editor != EditorKind::unsupported) {
-      for (const auto* pane : model_.panes.items()) {
+      for (const auto* stored : model_.panes.items()) {
+        // An editor to reuse is the program in the foreground of a terminal.
+        const auto* pane = asTerminal(stored);
         if (pane == nullptr || pane->exit_status || pane->close_requested || pane->location.workspace.id != source->location.workspace.id || pane->location.tab_id != source->location.tab_id || identifyEditor(pane->process_cache.identified.name.view()) != editor) {
           continue;
         }
@@ -2350,7 +2374,8 @@ namespace telar::runtime {
       return;
     }
 
-    auto* pane = model_.panes.find(message.pane_id);
+    // A suggestion reads what a terminal shows.
+    auto* pane = asTerminal(model_.panes.find(message.pane_id));
     if (pane == nullptr) {
       client.connection.send(CommandSuggestion{.request_id = message.request_id, .status = SuggestionStatus::failed});
       return;
@@ -2586,7 +2611,7 @@ namespace telar::runtime {
       // above it stays put while output grows.
       std::uint32_t bottom = 0;
 
-      if (const auto* pane = model_.panes.find(message.pane_id)) {
+      if (const auto* pane = asTerminal(model_.panes.find(message.pane_id))) {
         // The terminal's own count: the screen is captured when a frame goes out, and output read
         // since may have grown the scrollback past the row asked for.
         const auto total = static_cast<std::uint32_t>(std::min<std::size_t>(pane->terminal.totalRows(), std::numeric_limits<std::uint32_t>::max()));
@@ -2819,7 +2844,7 @@ namespace telar::runtime {
     runtime_clipboard_.collect(clients_);
     workspace_git_.collect(model_, Clock::now());
     shell_git_.collect([&](const ShellGitResult& result) {
-      auto* pane = findPane(model_.panes, {.id = result.pane, .generation = result.generation});
+      auto* pane = asTerminal(findPane(model_.panes, {.id = result.pane, .generation = result.generation}));
       if (pane != nullptr && !pane->shell_state.remote && !(pane->git == result.summary)) {
         pane->git = result.summary;
         ++pane->git_revision;
@@ -2933,9 +2958,36 @@ namespace telar::runtime {
     client.connection.send(reply);
   }
 
+  // What a terminal needs between events: its clipboard requests advanced, its shell observed
+  // when it changes the terminal without printing, its repository followed and its exit recorded.
   template <EventLoop Poller, typename Background>
     requires BackgroundExecutor<Background, ConcurrentMemory>
-  void Runtime<Poller, Background>::followRepository(Pane& pane, ShellGitService& shell_git) {
+  void Runtime<Poller, Background>::refreshPane(TerminalPane& pane, Clock::time_point now, bool poll_panes) {
+    try {
+      if (ClipboardService::advance(clients_, pane, now) && !pane.output_closed) {
+        panes_.flushInput(pane);
+        media_.updateReadInterest(pane);
+      }
+    } catch (const std::exception&) {
+      panes_.failOutput(pane);
+    }
+
+    // A program can change the terminal without printing, as `read -s` does; one that
+    // prints is observed as it reads.
+    if (poll_panes && !pane.exit_status && pane.shell_state.phase != ShellPhase::prompt) {
+      pane.observeShell();
+    }
+
+    followRepository(pane, shell_git_);
+    if (pane.exit_status && pane.output_closed && !pane.exit_observed) {
+      pane.observer->shellExit(*pane.exitCode());
+      pane.exit_observed = true;
+    }
+  }
+
+  template <EventLoop Poller, typename Background>
+    requires BackgroundExecutor<Background, ConcurrentMemory>
+  void Runtime<Poller, Background>::followRepository(TerminalPane& pane, ShellGitService& shell_git) {
     // A remote shell's repository is not on this host: forget the local one it left.
     if (pane.shell_state.remote && (pane.git.repository || !pane.git_directory.view().empty())) {
       pane.git = {};
@@ -2983,14 +3035,14 @@ namespace telar::runtime {
         break;
       }
 
-      if (pane == nullptr || pane->exit_status || pane->process->processId() <= 0) {
+      if (pane == nullptr || pane->exit_status || pane->process_id <= 0) {
         continue;
       }
 
       const auto* agent = agents_.find(pane->id, pane->generation);
       const auto working = agent != nullptr && agent->status != AgentStatus::done && agent->status != AgentStatus::failed;
 
-      work.roots.atMut(work.root_count++) = {.process = pane->process->processId(), .pane_id = pane->id, .agent = working};
+      work.roots.atMut(work.root_count++) = {.process = pane->process_id, .pane_id = pane->id, .agent = working};
     }
   }
 
@@ -3058,38 +3110,21 @@ namespace telar::runtime {
     timeout = std::min(timeout, std::chrono::duration_cast<std::chrono::nanoseconds>(next_pane_poll_ - now));
     const bool reap = std::exchange(children_exited_, false) || poll_panes;
 
-    for (auto* pane : model_.panes.items()) {
-      if (pane == nullptr) {
+    for (auto* stored : model_.panes.items()) {
+      if (stored == nullptr) {
         continue;
-      }
-
-      try {
-        if (ClipboardService::advance(clients_, *pane, now) && !pane->output_closed) {
-          panes_.flushInput(*pane);
-          media_.updateReadInterest(*pane);
-        }
-      } catch (const std::exception&) {
-        panes_.failOutput(*pane);
       }
 
       // SIGCHLD says a child exited; a closed output usually means it did. The beat catches a
       // child whose signal went to no one, such as one reaped while a test drives the loop.
-      if (!pane->exit_status && (reap || pane->output_closed)) {
-        pane->exit_status = pane->process.getMut().reap();
-        model_.pane_revision += static_cast<std::uint64_t>(pane->exit_status.hasValue());
+      if (!stored->exit_status && (reap || stored->output_closed)) {
+        stored->exit_status = reapProcess(*stored);
+        model_.pane_revision += static_cast<std::uint64_t>(stored->exit_status.hasValue());
       }
 
-      // A program can change the terminal without printing, as `read -s` does; one that
-      // prints is observed as it reads.
-      if (poll_panes && !pane->exit_status && pane->shell_state.phase != ShellPhase::prompt) {
-        pane->observeShell();
-      }
-
-      followRepository(*pane, shell_git_);
-      if (pane->exit_status && pane->output_closed && !pane->exit_observed) {
-        pane->observer->shellExit(*pane->exitCode());
-        pane->exit_observed = true;
-      }
+      visitPane(*stored, [&](auto& kind) {
+        refreshPane(kind, now, poll_panes);
+      });
     }
 
     if (executions_.refresh(model_)) {
@@ -3212,8 +3247,10 @@ namespace telar::runtime {
 
     for (auto* pane : model_.panes.items()) { // NOLINT(misc-const-correctness): the pane's session is finished through its shared observer, a mutation tbc sees through the pane
       if (pane != nullptr) {
-        pane->process->signal(SIGTERM);
-        pane->observer->finishSession();
+        signalProcess(*pane, SIGTERM);
+        if (const auto* terminal = asTerminal(pane)) {
+          terminal->observer->finishSession();
+        }
       }
     }
 

@@ -365,7 +365,7 @@ namespace {
     ClientStore clients{memory};
     const ds::Array<std::string_view, 1> arguments{"/bin/cat"};
     Command command{memory, Launch{.cwd = "/tmp", .arguments = arguments}};
-    auto owned = ds::makeBox<Pane>(memory, memory, 1, TabLocation{}, command, PaneLaunch{TerminalSize{20, 4, 8, 16}, model.media_budget, model.graphics_limits});
+    auto owned = ds::makeBox<TerminalPane>(memory, memory, 1, TabLocation{}, command, PaneLaunch{TerminalSize{20, 4, 8, 16}, model.media_budget, model.graphics_limits});
     auto& pane = owned.getMut();
 
     model.panes.insert(1, std::move(owned));
@@ -397,7 +397,7 @@ namespace {
     ClientStore clients{memory};
     const ds::Array<std::string_view, 1> arguments{"/bin/cat"};
     Command command{memory, Launch{.cwd = "/tmp", .arguments = arguments}};
-    auto owned = ds::makeBox<Pane>(memory, memory, 1, TabLocation{}, command, PaneLaunch{TerminalSize{20, 4, 8, 16}, model.media_budget, model.graphics_limits});
+    auto owned = ds::makeBox<TerminalPane>(memory, memory, 1, TabLocation{}, command, PaneLaunch{TerminalSize{20, 4, 8, 16}, model.media_budget, model.graphics_limits});
     auto& pane = owned.getMut();
 
     model.panes.insert(1, std::move(owned));

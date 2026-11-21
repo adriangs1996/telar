@@ -251,7 +251,7 @@ export {
 
     // The service that launches the restored panes and writes the input that resumes their agents.
     template <typename Panes>
-    concept PaneLauncher = requires(Panes& panes, RuntimeModel& model, Command<ConcurrentMemory>& command, Pane& pane, TabLocation location, TerminalSize size, std::uint64_t identity) {
+    concept PaneLauncher = requires(Panes& panes, RuntimeModel& model, Command<ConcurrentMemory>& command, TerminalPane& pane, TabLocation location, TerminalSize size, std::uint64_t identity) {
       panes.launch(model, {.location = location, .size = size}, command, identity).id;
       panes.flushInput(pane);
     };
@@ -392,7 +392,8 @@ export {
         const auto identity = panes_.launch(model_, {.location = TabLocation{.workspace = {.id = record.workspace}, .tab_id = record.tab}, .size = size}, command, record.id).id;
 
         model_.workspaces.find(record.workspace)->tabMut(record.tab)->panes.push(identity);
-        auto& pane = *model_.panes.find(identity);
+        // A restored pane is a terminal: its record is the command that runs on its PTY.
+        auto& pane = requireTerminal(model_.panes, identity);
 
         pane.launch.restore(record.arguments, record.argument_count);
         pane.restored_agent = resume;
@@ -400,7 +401,7 @@ export {
         if (resume && !direct) {
           writeResume(pane.input, resumed);
           // Writing the input may grow its buffer, so the pane is found again.
-          panes_.flushInput(*model_.panes.find(identity));
+          panes_.flushInput(requireTerminal(model_.panes, identity));
         }
       }
 
@@ -588,7 +589,7 @@ export {
             continue;
           }
 
-          PaneRecord record{.id = pane->id, .workspace = pane->location.workspace.id, .tab = pane->location.tab_id, .cwd = pane->cwd, .columns = pane->terminal.screen().cols, .rows = pane->terminal.screen().rows, .argument_count = pane->launch.count(), .arguments = pane->launch.bytes()};
+          PaneRecord record{.id = pane->id, .workspace = pane->location.workspace.id, .tab = pane->location.tab_id, .cwd = pane->cwd, .columns = pane->extent.cols, .rows = pane->extent.rows, .argument_count = pane->launch.count(), .arguments = pane->launch.bytes()};
 
           if (const auto* agent = agents.find(pane->id, pane->generation); agent != nullptr && validResumeSession(agent->provider, agent->session.view())) {
             record.provider = agent->provider;
@@ -631,7 +632,7 @@ export {
 
         for (std::size_t index = 0; index < panes.size(); ++index) {
           const auto* pane = panes[index];
-          const PaneStamp stamp = pane == nullptr ? PaneStamp{} : PaneStamp{pane->id, pane->cwd_revision, pane->terminal.screen().cols, pane->terminal.screen().rows, pane->output_closed || pane->exit_status.hasValue() || pane->close_requested};
+          const PaneStamp stamp = pane == nullptr ? PaneStamp{} : PaneStamp{pane->id, pane->cwd_revision, pane->extent.cols, pane->extent.rows, pane->output_closed || pane->exit_status.hasValue() || pane->close_requested};
 
           changed |= stamp != stamps_[index];
           stamps_.atMut(index) = stamp;

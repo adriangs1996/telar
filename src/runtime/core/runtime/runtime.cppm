@@ -177,7 +177,7 @@ export {
       static bool alerts(const Agent& agent, AgentStatus previous) noexcept;
 
       // Ends an interrupt once its pane settles; whether the agent's projection changed.
-      static bool settleInterrupt(Panes& panes, bool focused, Pane& pane, Agent& agent, std::chrono::steady_clock::time_point now);
+      static bool settleInterrupt(Panes& panes, bool focused, TerminalPane& pane, Agent& agent, std::chrono::steady_clock::time_point now);
 
       static Pane& require(PaneStore& panes, std::uint64_t identity, std::uint64_t generation);
 
@@ -384,7 +384,7 @@ export {
 
       void leaveEmptyViews(RuntimeModel& model, Panes& panes, ClientStore& clients, std::uint64_t workspace) noexcept;
 
-      void retainFinalText(ExitedPanes& exited, Pane& pane) noexcept;
+      void retainFinalText(ExitedPanes& exited, TerminalPane& pane) noexcept;
 
       // How a client opens a workspace: the pane it starts with, its name, and whether the client leaves
       // the panes it shows for it.
@@ -616,6 +616,7 @@ export {
       void clientEvent(const Event& event);
 
       void paneEvent(const Event& event);
+      void paneEvent(TerminalPane& pane, const Event& event);
 
       // The client's frames leave its connection while their requests run, so a request can change any
       // client, its own included, without touching the bytes it was decoded from.
@@ -676,7 +677,7 @@ export {
       // What a completion asks for, from the PATH and shell of the pane's shell where its
       // integration reported them, this runtime's PATH otherwise.
       // The request shares the names the pane's shell reported, region `a`.
-      tbc::val_a<WordRequest> makeWordRequest(const ClientSession& client, std::uint64_t request_id, CompletionProvider provider, std::string_view prefix, tbc::holds<const Pane&, tbc::lt::a> pane) const;
+      tbc::val_a<WordRequest> makeWordRequest(const ClientSession& client, std::uint64_t request_id, CompletionProvider provider, std::string_view prefix, tbc::holds<const TerminalPane&, tbc::lt::a> pane) const;
 
       void handle(std::uint64_t identity, const FindPaths& message);
 
@@ -812,7 +813,8 @@ export {
       static void deliverEditorReply(const PaneStore& panes, ClientSession& client, std::span<const Byte> payload);
 
       // The repository of the directory a pane's shell is at.
-      static void followRepository(Pane& pane, ShellGitService& shell_git);
+      static void followRepository(TerminalPane& pane, ShellGitService& shell_git);
+      void refreshPane(TerminalPane& pane, Clock::time_point now, bool poll_panes);
 
       void refreshServices(Clock::time_point now);
 
