@@ -992,7 +992,6 @@ return {api_version = 2, client = {
         view->send(QStringLiteral("<Cmd>call setline(1, map(range(1, 300), 'printf(\"row %d\", v:val)'))<CR>"));
         QTRY_VERIFY_WITH_TIMEOUT(shown().contains(QStringLiteral("row 12")), runtime_wait_ms);
         QVERIFY(!sliding() && !shown().contains(QStringLiteral("row 40")));
-        view->send(QStringLiteral("<C-d>"));
         const auto moves = [&] {
           QString text;
 
@@ -1002,11 +1001,26 @@ return {api_version = 2, client = {
 
           return text + shown().left(200);
         };
+        // A scroll the window is sent as a move of the rows it has slides; one it is sent whole,
+        // because it had not applied the frame before, arrives at once. A window that keeps up
+        // is sent moves: scrolling down and back up, one of them slides.
+        constexpr int slide_wait_ms = 1500;
+        constexpr int attempts = 8;
+        bool slid = false;
 
-        QTRY_VERIFY2_WITH_TIMEOUT(sliding(), qPrintable(moves()), runtime_wait_ms);
-        shoot(QStringLiteral("editor-scrolling"));
-        QTRY_VERIFY_WITH_TIMEOUT(!sliding(), runtime_wait_ms);
-        QVERIFY2(shown().contains(QStringLiteral("row 40")), qPrintable(shown()));
+        for (int attempt = 0; attempt < attempts && !slid; ++attempt) {
+          view->send(attempt % 2 == 0 ? QStringLiteral("<C-d>") : QStringLiteral("<C-u>"));
+          slid = QTest::qWaitFor(sliding, slide_wait_ms);
+          if (slid) {
+            shoot(QStringLiteral("editor-scrolling"));
+          }
+
+          QTRY_VERIFY_WITH_TIMEOUT(!sliding(), runtime_wait_ms);
+        }
+
+        QVERIFY2(slid, qPrintable(moves()));
+        view->send(QStringLiteral("gg<C-d>"));
+        QTRY_VERIFY2_WITH_TIMEOUT(shown().contains(QStringLiteral("row 40")) && !sliding(), qPrintable(shown()), runtime_wait_ms);
         view->send(QStringLiteral("<Cmd>bwipeout!<CR>"));
       }
 

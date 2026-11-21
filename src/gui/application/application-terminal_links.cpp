@@ -2,7 +2,6 @@ module telar.gui.application;
 
 import std;
 
-import telar.base.editors;
 import telar.gui.features.terminal.links;
 import telar.wire.editor;
 import telar.wire.vocabulary;
@@ -69,10 +68,9 @@ namespace telar::gui::application::terminal::links {
       return;
     }
 
-    // The tab's own editor pane shows the file. Where it has none and the person's editor is
-    // Neovim, one is made beside the pane instead of a terminal that would run it.
-    const bool own_editor = nvim::beside(session, *source_id) != 0 || (nvim::available(session) && runtime::identifyEditor(executable) == runtime::EditorKind::neovim);
-    if (own_editor && nvim::edit(session, *source_id, {.path = path.text().starts_with('/') ? path.text() : anchored, .line = path.line(), .column = path.column()})) {
+    // The tab's own editor pane shows the file. A tab without one opens the link as it always
+    // did: in the person's editor, in a pane that already runs it or in one made for it.
+    if (nvim::beside(session, *source_id) != 0 && nvim::edit(session, *source_id, {.path = path.text().starts_with('/') ? path.text() : anchored, .line = path.line(), .column = path.column()})) {
       return;
     }
 
