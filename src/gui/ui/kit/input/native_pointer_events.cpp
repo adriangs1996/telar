@@ -27,7 +27,9 @@ namespace telar::gui::qt {
       QEvent::Type kind = QEvent::None;
 
       if (event->type == QWindowSystemInterfacePrivate::Mouse) {
-        kind = dynamic_cast<const QWindowSystemInterfacePrivate::MouseEvent&>(*event).buttonType;
+        // The type tag names the class, as Qt's own dispatch reads it: a dynamic_cast needs the private
+        // class's type information, which Linux's Qt keeps inside its library, and throws bad_cast.
+        kind = static_cast<const QWindowSystemInterfacePrivate::MouseEvent&>(*event).buttonType; // NOLINT(cppcoreguidelines-pro-type-static-cast-downcast): the event's type tag names its class
       }
 
       const Dispatch scope{*this, kind};
