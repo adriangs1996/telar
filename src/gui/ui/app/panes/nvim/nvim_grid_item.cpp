@@ -112,7 +112,6 @@ namespace telar::gui::qt {
         .preedit = no_preedit,
         .fonts = editor_->fontCollection(),
         .grid = editor_->fontGrid(),
-        .selection = CellSelection{},
         .bounds = boundingRect(),
         .scale = window()->effectiveDevicePixelRatio(),
         .appearance = editor_->appearance(),

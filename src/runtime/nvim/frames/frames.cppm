@@ -1,7 +1,6 @@
 export module telar.runtime.nvim.frames;
 
 import std;
-import telar.tbc;
 import telar.base.ds;
 import telar.base.memory.allocators;
 import telar.wire.vocabulary;
@@ -46,17 +45,17 @@ export {
       // Each of the following gives the bytes of one message, which stay until the next call.
 
       // The next NvimGrid of the frame; empty once every grid that changed was written.
-      [[nodiscard]] tbc::val_a<std::span<const Byte>> next(const NvimScreen& screen);
+      [[nodiscard]] std::span<const Byte> next(const NvimScreen& screen);
 
       // The native surfaces: each as the message that says how it is now, empty when it did not
       // change after the frame the client has.
-      [[nodiscard]] tbc::val_a<std::span<const Byte>> cmdline(const NvimScreen& screen);
-      [[nodiscard]] tbc::val_a<std::span<const Byte>> popupMenu(const NvimScreen& screen);
-      [[nodiscard]] tbc::val_a<std::span<const Byte>> messageList(const NvimScreen& screen);
-      [[nodiscard]] tbc::val_a<std::span<const Byte>> tabLine(const NvimScreen& screen);
+      [[nodiscard]] std::span<const Byte> cmdline(const NvimScreen& screen);
+      [[nodiscard]] std::span<const Byte> popupMenu(const NvimScreen& screen);
+      [[nodiscard]] std::span<const Byte> messageList(const NvimScreen& screen);
+      [[nodiscard]] std::span<const Byte> tabLine(const NvimScreen& screen);
 
       // The NvimFrame that ends the frame.
-      [[nodiscard]] tbc::val_a<std::span<const Byte>> end(const NvimScreen& screen);
+      [[nodiscard]] std::span<const Byte> end(const NvimScreen& screen);
 
     private:
       // A span of cells: where its first cell is in the grid, how many it holds, and where

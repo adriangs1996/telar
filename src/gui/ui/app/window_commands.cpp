@@ -511,6 +511,15 @@ namespace telar::gui::qt {
     executeWindowBinding(action, resolved);
   }
 
+  // An action a configuration defines: one it names, or a notification it shows.
+  void WindowCommands::executeExtendedBinding(BindingAction action, const ConfigurationSource::Actions* resolved) {
+    if (const auto named = configuration_source_.namedAction(action, resolved)) {
+      executeNamedAction(*named);
+    } else {
+      executeNotificationBinding(action, resolved);
+    }
+  }
+
   void WindowCommands::executeWindowBinding(BindingAction action, const ConfigurationSource::Actions* resolved) {
     switch (action.kind) {
     case BindingActionKind::select_tab:
@@ -544,12 +553,7 @@ namespace telar::gui::qt {
       components_.refreshPanel();
       return;
     case BindingActionKind::extended:
-      if (const auto named = configuration_source_.namedAction(action, resolved)) {
-        executeNamedAction(*named);
-      } else {
-        executeNotificationBinding(action, resolved);
-      }
-
+      executeExtendedBinding(action, resolved);
       return;
     case BindingActionKind::none:
     case BindingActionKind::split_horizontal:

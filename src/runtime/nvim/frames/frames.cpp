@@ -291,7 +291,7 @@ namespace telar::runtime {
     flush();
   }
 
-  tbc::val_a<std::span<const Byte>> NvimFrames::next(const NvimScreen& screen) {
+  std::span<const Byte> NvimFrames::next(const NvimScreen& screen) {
     const auto grids = screen.grids();
 
     while (grid_ < grids.size()) {
@@ -364,7 +364,7 @@ namespace telar::runtime {
     return {};
   }
 
-  tbc::val_a<std::span<const Byte>> NvimFrames::cmdline(const NvimScreen& screen) {
+  std::span<const Byte> NvimFrames::cmdline(const NvimScreen& screen) {
     const auto& line = screen.commandLine();
     if (line.changed_at <= seen_) {
       return {};
@@ -389,7 +389,7 @@ namespace telar::runtime {
     return payload_.view();
   }
 
-  tbc::val_a<std::span<const Byte>> NvimFrames::popupMenu(const NvimScreen& screen) {
+  std::span<const Byte> NvimFrames::popupMenu(const NvimScreen& screen) {
     const auto& menu = screen.completion();
     if (menu.changed_at <= seen_) {
       return {};
@@ -440,7 +440,7 @@ namespace telar::runtime {
     return payload_.view();
   }
 
-  tbc::val_a<std::span<const Byte>> NvimFrames::messageList(const NvimScreen& screen) {
+  std::span<const Byte> NvimFrames::messageList(const NvimScreen& screen) {
     const auto& messages = screen.messages();
     if (messages.changed_at <= seen_) {
       return {};
@@ -469,7 +469,7 @@ namespace telar::runtime {
     return payload_.view();
   }
 
-  tbc::val_a<std::span<const Byte>> NvimFrames::tabLine(const NvimScreen& screen) {
+  std::span<const Byte> NvimFrames::tabLine(const NvimScreen& screen) {
     const auto& tabs = screen.tabs();
     if (tabs.changed_at <= seen_) {
       return {};
@@ -503,7 +503,7 @@ namespace telar::runtime {
     return payload_.view();
   }
 
-  tbc::val_a<std::span<const Byte>> NvimFrames::end(const NvimScreen& screen) {
+  std::span<const Byte> NvimFrames::end(const NvimScreen& screen) {
     const auto& cursor = screen.cursor();
     const auto modes = screen.modes();
     const auto mode = screen.currentMode() < modes.size() ? modes[screen.currentMode()] : NvimMode{};

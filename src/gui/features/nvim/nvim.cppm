@@ -177,6 +177,8 @@ export namespace telar::gui::features::nvim {
 
     [[nodiscard]] const Grid* grid(std::uint32_t id) const noexcept;
 
+    // What its grids are made in.
+    Memory& memory;
     std::uint64_t pane_id;
     // The grids, in the order Neovim made them.
     ds::Vec<ds::Box<Grid, Memory>, Memory> grids;

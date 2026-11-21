@@ -82,27 +82,64 @@ namespace telar::gui::features::nvim {
       grid.margin_right = message.margin_right;
     }
 
+    // What a grid's message did to the grid it names.
+    enum class Drawn : std::uint8_t {
+      // Its cells do not fit the grid as it is.
+      lost,
+      // Cells changed, or nothing did.
+      cells,
+      // Its place, or what it shows of its buffer, changed too.
+      placed,
+    };
+
     // Applies a grid's message to the grid it names: the rows a scroll moves, the cells that
-    // changed, and where the grid goes. False for cells that do not fit the grid as it is, and
-    // `layout_changed` once its place or what it shows of its buffer differs.
-    bool draw(Grid& grid, const NvimGrid& message, bool& layout_changed) {
+    // changed, and where the grid goes.
+    Drawn draw(Grid& grid, const NvimGrid& message) {
       for (const auto& scroll : message.scrolls) {
         if (!grid.screen.moveRows({.top = scroll.top, .bottom = scroll.bottom, .left = scroll.left, .right = scroll.right, .rows = scroll.rows})) {
-          return false;
+          return Drawn::lost;
         }
       }
 
       if (!grid.screen.draw({.columns = message.columns, .rows = message.rows}, message.full, message.spans)) {
-        return false;
-      }
-
-      if (!placedAs(grid, message)) {
-        place(grid, message);
-        layout_changed = true;
+        return Drawn::lost;
       }
 
       grid.frame = message.frame_id;
-      return true;
+      if (placedAs(grid, message)) {
+        return Drawn::cells;
+      }
+
+      place(grid, message);
+      return Drawn::placed;
+    }
+
+    // A grid's message for an editor that follows what it is sent: the grid is made when it is
+    // new, then drawn; the editor's layout changes once nothing of the grid is held.
+    Received applyGrid(Editor& editor, const NvimGrid& message) {
+      const bool known = editor.grid(message.grid) != nullptr;
+
+      // A grid the editor does not have starts with all its cells.
+      if (!known && !message.full) {
+        return lose(editor);
+      }
+
+      if (!known) {
+        auto& made_in = editor.memory;
+
+        editor.grids.push(ds::makeBox<Grid>(made_in, made_in, message.grid));
+      }
+
+      const auto drawn = draw(*gridOf(editor, message.grid), message);
+      if (drawn == Drawn::lost) {
+        return lose(editor);
+      }
+
+      if (!known || drawn == Drawn::placed) {
+        ++editor.layout_revision;
+      }
+
+      return Received::staged;
     }
 
     // Draws the cursor on the grid it is on and takes it off the others, so the painter of each
@@ -182,15 +219,16 @@ namespace telar::gui::features::nvim {
         text(memory),
         choices(memory) {}
 
-  Editor::Editor(Memory& memory, std::uint64_t pane)
-      : pane_id(pane),
-        grids(memory),
-        mode(memory),
-        cmdline(memory),
-        menu(memory),
-        messages(memory),
-        tabs(memory),
-        prompt(memory) {}
+  Editor::Editor(Memory& made_in, std::uint64_t pane)
+      : memory(made_in),
+        pane_id(pane),
+        grids(made_in),
+        mode(made_in),
+        cmdline(made_in),
+        menu(made_in),
+        messages(made_in),
+        tabs(made_in),
+        prompt(made_in) {}
 
   const Grid* Editor::grid(std::uint32_t id) const noexcept {
     for (const auto& grid : grids) {
@@ -257,28 +295,7 @@ namespace telar::gui::features::nvim {
       return Received::ignored;
     }
 
-    bool layout_changed = false;
-
-    if (gridOf(*editor, message.grid) == nullptr) {
-      // A grid the editor does not have starts with all its cells.
-      if (!message.full) {
-        return lose(*editor);
-      }
-
-      editor->grids.push(ds::makeBox<Grid>(Access::memory(state), Access::memory(state), message.grid));
-      layout_changed = true;
-    }
-
-    // The grid is changed first and the editor after, once nothing of the grid is held.
-    if (!draw(*gridOf(*editor, message.grid), message, layout_changed)) {
-      return lose(*editor);
-    }
-
-    if (layout_changed) {
-      ++editor->layout_revision;
-    }
-
-    return Received::staged;
+    return applyGrid(*editor, message);
   }
 
   Received receive(State& state, const NvimFrame& message) {
