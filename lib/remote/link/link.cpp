@@ -21,6 +21,8 @@ namespace telar::remote {
     constexpr auto hold_interval = std::chrono::milliseconds{250};
     constexpr auto watch_interval = std::chrono::milliseconds{250};
     constexpr auto watch_retry = std::chrono::seconds{5};
+    // How often an idle link looks at whether it is still wanted.
+    constexpr auto idle_check = std::chrono::seconds{30};
     constexpr auto poll_interval = std::chrono::milliseconds{5};
     constexpr std::string_view control_name = "/gateway.sock";
     constexpr std::size_t machine_name_digits = 12;
@@ -278,11 +280,27 @@ namespace telar::remote {
     wake();
   }
 
+  bool Link::busy() const noexcept {
+    const bool held = std::ranges::any_of(machines_, [](const Machine& machine) {
+      return machine.used && machine.holds != 0;
+    });
+
+    const bool forwarding = std::ranges::any_of(forwards_, [](const Forward& forward) {
+      return forward.used;
+    });
+
+    return held || forwarding || threads_.load() != 0;
+  }
+
   void Link::run() noexcept {
     constexpr std::size_t maximum_entries = 2 + maximum_machines + (2 * maximum_forwards);
     ds::Array<pollfd, maximum_entries> entries{};
     ds::Array<Accepted, maximum_entries> roles{};
+    const auto control_path = paths_.control();
+    ds::Array<char, sizeof(sockaddr_un::sun_path)> control_file{};
+    auto last_used = Clock::now();
 
+    std::ranges::copy(control_path.view(), control_file.viewMut().begin());
     while (!stopping_.load()) {
       std::size_t count = 0;
       const auto watch = [&](int descriptor, Accepted role) {
@@ -321,7 +339,20 @@ namespace telar::remote {
         }
       }
 
-      if (::poll(entries.dataMut(), static_cast<nfds_t>(count), -1) < 0 && sys::lastError() != EINTR) {
+      {
+        const std::scoped_lock lock{mutex_};
+
+        // A link nobody has used for a while ends, and so does one whose socket was removed,
+        // with the directory it lived in or by a newer link: nothing could reach it again.
+        last_used = busy() ? Clock::now() : last_used;
+        if (Clock::now() - last_used >= idle_lifetime || ::access(control_file.data(), F_OK) != 0) {
+          return;
+        }
+      }
+
+      const auto wait_ms = static_cast<int>(std::chrono::duration_cast<std::chrono::milliseconds>(idle_check).count());
+
+      if (::poll(entries.dataMut(), static_cast<nfds_t>(count), wait_ms) < 0 && sys::lastError() != EINTR) {
         return;
       }
 
@@ -336,6 +367,7 @@ namespace telar::remote {
         }
 
         for (auto socket = acceptConnection(entries[index].fd); socket; socket = acceptConnection(entries[index].fd)) {
+          last_used = Clock::now();
           threads_.fetch_add(1);
           try {
             // The thread owns the connection from here; the descriptor crosses as a number.

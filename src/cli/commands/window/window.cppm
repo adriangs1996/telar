@@ -54,7 +54,7 @@ export {
     struct SetupReport {
       static constexpr std::size_t max_text_bytes = 512;
       static constexpr std::size_t max_notes = 96;
-      static constexpr auto titles = ds::Array<const char*, 10>{"SSH access", "Platform", "telar", "Runtime", "Profile", "Agents", "Integrations", "Configuration", "Logins", "Check"};
+      static constexpr auto titles = ds::Array<const char*, 10>{"Gateway", "Platform", "telar", "Runtime", "Profile", "Agents", "Integrations", "Configuration", "Logins", "Check"};
       static constexpr auto steps = ds::Array<const char*, 10>{"gateway", "platform", "telar", "runtime", "profile", "agents", "integrations", "configuration", "logins", "check"};
       static constexpr auto statuses = ds::Array<const char*, 5>{"ok", "changed", "skipped", "failed", "pending"};
 

@@ -56,7 +56,12 @@ export {
       Link(Link&&) = delete;
       Link& operator=(Link&&) = delete;
 
-      // Serves requests and connections until `stop`, each on a thread of its own.
+      // How long a link nobody uses stays: one with no connection, no forward and no held
+      // machine for this long ends, and the next program that needs it starts another.
+      static constexpr auto idle_lifetime = std::chrono::minutes{10};
+
+      // Serves requests and connections until `stop`, each on a thread of its own. It ends by
+      // itself once idle for `idle_lifetime`, or when its control socket is gone.
       void run() noexcept;
 
       // Ends `run` from another thread or a signal handler.
@@ -136,6 +141,9 @@ export {
       void observe(Channel& channel, std::size_t machine, const Endpoint& endpoint);
       void releaseForward(std::size_t index, unsigned generation, bool closed_there) noexcept;
       void wake() noexcept;
+
+      // Whether anything uses the link now. The caller holds the lock.
+      [[nodiscard]] bool busy() const noexcept;
 
       const State& state_;
       LinkPaths paths_;
