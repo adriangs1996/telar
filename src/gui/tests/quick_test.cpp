@@ -1091,6 +1091,22 @@ return {api_version = 2, client = {
         view->send(QStringLiteral("<Cmd>bwipeout!<CR>"));
       }
 
+#ifdef TELAR_GUI_CUSTOM_LINK_HOST
+      // A link opened in the editor opens where this window is: `gx` on a URL reaches the
+      // window's opener, which a build with a link host of its own records in place of the
+      // host's browser.
+      {
+        const RecordedLinks recorder{directory_.filePath(QStringLiteral("editor links.txt"))};
+
+        view->send(QStringLiteral("<Cmd>enew! | call setline(1, 'see https://example.test/docs for more') | call cursor(1, 8)<CR>"));
+        QTRY_VERIFY2_WITH_TIMEOUT(shown().contains(QStringLiteral("example.test")), qPrintable(shown()), runtime_wait_ms);
+        view->send(QStringLiteral("gx"));
+        QTRY_COMPARE_WITH_TIMEOUT(recorder.targets(), (QStringList{QStringLiteral("https://example.test/docs")}), runtime_wait_ms);
+        view->send(QStringLiteral("<Cmd>bwipeout!<CR>"));
+        QTRY_VERIFY_WITH_TIMEOUT(!shown().contains(QStringLiteral("example.test")), runtime_wait_ms);
+      }
+#endif
+
       // The colorscheme is the window's theme: another preset reaches Neovim at once, and what
       // Neovim colors itself, the line of the cursor here, is drawn in the new colors. A run
       // that takes pictures takes one with the other preset.
