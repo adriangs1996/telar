@@ -20,6 +20,9 @@ Item {
     readonly property var blockLines: (line.block ?? "").length > 0 ? line.block.replace(/\n$/, "").split("\n") : []
     readonly property real inset: 14 * ratio
     readonly property real rowHeight: 40 * ratio
+    readonly property real footerHeight: 30 * ratio
+    // The room the key that leaves the line takes at its end.
+    readonly property real leaveWidth: 44 * ratio
     readonly property real cellWidth: typography.grid?.cellWidth ?? 8
     // The height of the editor's rows: the surface sits on a row's edge, so it never cuts a
     // line of text in half.
@@ -31,7 +34,7 @@ Item {
     property real reveal: shown ? 1 : 0
 
     width: Math.min(parent.width - 32 * ratio, 620 * ratio)
-    height: rowHeight + blockColumn.height
+    height: rowHeight + blockColumn.height + footerHeight
     x: Math.round((parent.width - width) / 2)
     y: rest - (1 - reveal) * 8 * ratio
     opacity: reveal
@@ -74,6 +77,19 @@ Item {
         width: root.width
         height: root.rowHeight
 
+        // What opened the line stands as the key it was.
+        Rectangle {
+            x: root.inset - 7 * root.ratio
+            y: Math.round((parent.height - height) / 2)
+            width: Math.max(glass.width, lead.width) + 14 * root.ratio
+            height: 24 * root.ratio
+            radius: 6 * root.ratio
+            color: Qt.alpha(root.colors.text, 0.07)
+            border.width: Math.max(1, root.ratio) / Screen.devicePixelRatio
+            border.color: Qt.alpha(root.colors.text, 0.14)
+            visible: glass.visible || lead.visible
+        }
+
         // What opened the line: the search glass, or the prompt Neovim gave.
         ChromeIcon {
             id: glass
@@ -100,8 +116,8 @@ Item {
 
         Item {
             id: field
-            x: root.inset + Math.max(glass.width, lead.width) + 10 * root.ratio + (root.line.indent ?? 0) * root.cellWidth
-            width: Math.max(0, root.width - x - root.inset)
+            x: root.inset + Math.max(glass.width, lead.width) + 18 * root.ratio + (root.line.indent ?? 0) * root.cellWidth
+            width: Math.max(0, root.width - x - root.inset - root.leaveWidth)
             height: parent.height
             clip: true
 
@@ -126,5 +142,26 @@ Item {
                 color: root.colors.accent
             }
         }
+
+        ChromeText {
+            x: root.width - width - root.inset
+            width: root.leaveWidth - 8 * root.ratio
+            height: parent.height
+            horizontalAlignment: Text.AlignRight
+            text: "esc"
+            pixelSize: root.typography.small
+            color: Qt.alpha(root.colors.text, 0.45)
+        }
+    }
+
+    KeyHintBar {
+        y: root.height - root.footerHeight
+        width: root.width
+        height: root.footerHeight
+        colors: root.colors
+        typography: root.typography
+        ratio: root.ratio
+        hints: root.searching ? [] : [{keys: ["⇥"], word: "Complete"}]
+        trailing: ({keys: ["↵"], word: root.searching ? "Search" : "Run"})
     }
 }

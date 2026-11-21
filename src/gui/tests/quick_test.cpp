@@ -1160,12 +1160,14 @@ return {api_version = 2, client = {
         QFile report{metrics};
 
         QVERIFY(report.open(QIODevice::WriteOnly));
-        report.write(QStringLiteral("{\"measure\":\"key to frame applied in the window\",\"samples\":%1,\"p50_us\":%2,\"p90_us\":%3,\"p99_us\":%4,\"max_us\":%5}\n")
+        report.write(QStringLiteral("{\"measure\":\"key to frame applied in the window\",\"samples\":%1,\"min_us\":%6,\"p10_us\":%7,\"p50_us\":%2,\"p90_us\":%3,\"p99_us\":%4,\"max_us\":%5}\n")
                 .arg(samples)
                 .arg(elapsed[samples / 2] / 1000)
                 .arg(elapsed[samples * 9 / 10] / 1000)
                 .arg(elapsed[samples * 99 / 100] / 1000)
                 .arg(elapsed.back() / 1000)
+                .arg(elapsed.front() / 1000)
+                .arg(elapsed[samples / 10] / 1000)
                 .toUtf8());
         press(Qt::Key_Escape, QString{});
       }

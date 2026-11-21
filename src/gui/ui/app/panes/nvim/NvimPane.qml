@@ -30,6 +30,8 @@ FocusScope {
         ratio: root.ratio
         // Without entering the command line, which would flash its surface.
         onChosen: index => view.send("<Cmd>tabnext " + index + "<CR>")
+        onClosed: index => view.send("<Cmd>" + index + "tabclose<CR>")
+        onAdded: view.send("<Cmd>tabnew<CR>")
     }
 
     NvimEditor {
@@ -325,6 +327,7 @@ FocusScope {
             // A picker has the pane: notices wait behind it, out of sight.
             visible: !(view.picker.open ?? false)
             messages: view.messages
+            onHistory: view.send("<Cmd>messages<CR>")
             colors: root.colors
             typography: root.typography
             ratio: root.ratio

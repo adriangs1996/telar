@@ -17,12 +17,15 @@ Item {
     readonly property bool shown: tabs.length > 1
     // A click on the tab at `index`, counted from one as Neovim counts its tab pages.
     signal chosen(int index)
+    signal closed(int index)
+    signal added()
 
     height: shown ? 30 * ratio : 0
     visible: shown
     clip: true
 
     Row {
+        id: strip
         x: 6 * root.ratio
         height: parent.height
         spacing: 2 * root.ratio
@@ -37,7 +40,8 @@ Item {
                 required property int index
                 readonly property bool current: modelData.handle === root.tabline.currentTab
 
-                width: Math.min(label.implicitWidth + 24 * root.ratio, 220 * root.ratio)
+                // The room of the mark that closes it is kept, so the names do not move.
+                width: Math.min(label.implicitWidth + 42 * root.ratio, 240 * root.ratio)
                 height: parent.height
 
                 HoverHandler {
@@ -58,15 +62,59 @@ Item {
 
                 Text {
                     id: label
-                    anchors.centerIn: parent
-                    width: Math.min(implicitWidth, parent.width - 16 * root.ratio)
+                    x: 12 * root.ratio
+                    height: parent.height
+                    verticalAlignment: Text.AlignVCenter
+                    width: Math.min(implicitWidth, parent.width - 38 * root.ratio)
                     text: tab.modelData.name.length > 0 ? tab.modelData.name : "[No Name]"
                     color: tab.current ? root.colors.text : Qt.alpha(root.colors.text, 0.6)
                     font.pixelSize: root.typography.small
                     textFormat: Text.PlainText
                     elide: Text.ElideMiddle
                 }
+
+                // Closes the tab page: shown on the one in use and on the one pointed at.
+                Text {
+                    x: parent.width - width - 10 * root.ratio
+                    height: parent.height
+                    verticalAlignment: Text.AlignVCenter
+                    text: "\u00d7"
+                    color: closing.hovered ? root.colors.text : Qt.alpha(root.colors.text, 0.45)
+                    font.pixelSize: root.typography.small
+                    visible: tab.current || hover.hovered
+
+                    HoverHandler {
+                        id: closing
+                        cursorShape: Qt.PointingHandCursor
+                    }
+
+                    TapHandler {
+                        onTapped: root.closed(tab.index + 1)
+                    }
+                }
             }
+        }
+    }
+
+    // Another tab page.
+    Text {
+        x: strip.x + strip.width + 8 * root.ratio
+        width: 22 * root.ratio
+        height: parent.height
+        horizontalAlignment: Text.AlignHCenter
+        verticalAlignment: Text.AlignVCenter
+        text: "+"
+        color: adding.hovered ? root.colors.text : Qt.alpha(root.colors.text, 0.5)
+        font.pixelSize: root.typography.body
+        visible: root.shown
+
+        HoverHandler {
+            id: adding
+            cursorShape: Qt.PointingHandCursor
+        }
+
+        TapHandler {
+            onTapped: root.added()
         }
     }
 

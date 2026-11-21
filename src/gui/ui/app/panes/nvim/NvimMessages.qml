@@ -16,6 +16,9 @@ Item {
     readonly property var items: messages.items ?? []
     // The notices shown: a message Neovim keeps is shown until its time is up.
     property var dismissed: ({})
+    // The person asked for everything that was said.
+    signal history()
+
     readonly property var shown: items.filter(item => item.text.length > 0 && !(root.stamp(item) in dismissed)).slice(-4)
 
     function stamp(item) {
@@ -29,7 +32,7 @@ Item {
         }
     }
 
-    width: Math.min(parent.width - 24 * ratio, 440 * ratio)
+    width: Math.min(parent.width - 24 * ratio, 300 * ratio)
     height: stack.height
     x: parent.width - width - 12 * ratio
     y: 12 * ratio
@@ -50,10 +53,20 @@ Item {
                 readonly property bool failure: modelData.kind === "error"
                 readonly property bool caution: modelData.kind === "warning"
                 readonly property color tone: failure ? root.colors.red : caution ? root.colors.yellow : root.colors.accent
+                // The first line says what happened; the rest is its detail.
+                readonly property var lines: modelData.text.split("\n")
+                readonly property string title: lines[0]
+                readonly property string detail: lines.slice(1).join("\n").trim()
                 property real reveal: 0
 
+                function dismiss() {
+                    const next = Object.assign({}, root.dismissed);
+                    next[root.stamp(notice.modelData)] = true;
+                    root.dismissed = next;
+                }
+
                 width: stack.width
-                height: body.implicitHeight + 20 * root.ratio
+                height: Math.max(body.implicitHeight, 24 * root.ratio) + 24 * root.ratio
                 opacity: reveal
                 transform: Translate { x: (1 - notice.reveal) * 12 * root.ratio }
 
@@ -67,11 +80,7 @@ Item {
                 Timer {
                     interval: notice.failure ? 9000 : 4500
                     running: true
-                    onTriggered: {
-                        const next = Object.assign({}, root.dismissed);
-                        next[root.stamp(notice.modelData)] = true;
-                        root.dismissed = next;
-                    }
+                    onTriggered: notice.dismiss()
                 }
 
                 NvimSurface {
@@ -80,28 +89,89 @@ Item {
                     ratio: root.ratio
                 }
 
+                // What kind of thing was said, before the words.
                 Rectangle {
-                    x: 10 * root.ratio
-                    y: 10 * root.ratio
-                    width: 3 * root.ratio
-                    height: parent.height - 20 * root.ratio
+                    x: 14 * root.ratio
+                    y: 13 * root.ratio
+                    width: 22 * root.ratio
+                    height: width
                     radius: width / 2
-                    color: notice.tone
+                    color: Qt.alpha(notice.tone, 0.16)
+
+                    Text {
+                        anchors.centerIn: parent
+                        text: notice.failure ? "\u00d7" : notice.caution ? "!" : "\u2713"
+                        color: notice.tone
+                        font.pixelSize: root.typography.small
+                        font.weight: Font.DemiBold
+                    }
+                }
+
+                Column {
+                    id: body
+                    x: 48 * root.ratio
+                    y: 12 * root.ratio
+                    width: parent.width - x - 34 * root.ratio
+                    spacing: 3 * root.ratio
+
+                    Text {
+                        width: parent.width
+                        text: notice.title
+                        color: root.colors.text
+                        font.pixelSize: root.typography.body
+                        font.weight: Font.DemiBold
+                        textFormat: Text.PlainText
+                        wrapMode: Text.Wrap
+                        maximumLineCount: 3
+                        elide: Text.ElideRight
+                    }
+
+                    Text {
+                        width: parent.width
+                        visible: notice.detail.length > 0
+                        text: notice.detail
+                        color: root.colors.subtext0
+                        font.pixelSize: root.typography.small
+                        textFormat: Text.PlainText
+                        wrapMode: Text.Wrap
+                        maximumLineCount: 10
+                        elide: Text.ElideRight
+                        lineHeight: 1.25
+                    }
+
+                    // An error is where the rest of what was said matters.
+                    Text {
+                        visible: notice.failure
+                        text: "History \u2192"
+                        color: historyArea.containsMouse ? root.colors.text : root.colors.accent
+                        font.pixelSize: root.typography.small
+
+                        MouseArea {
+                            id: historyArea
+                            anchors.fill: parent
+                            anchors.margins: -4 * root.ratio
+                            hoverEnabled: true
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: root.history()
+                        }
+                    }
                 }
 
                 Text {
-                    id: body
-                    x: 22 * root.ratio
-                    y: 10 * root.ratio
-                    width: parent.width - x - 14 * root.ratio
-                    text: notice.modelData.text
-                    color: root.colors.text
+                    x: parent.width - width - 14 * root.ratio
+                    y: 12 * root.ratio
+                    text: "\u00d7"
+                    color: closeArea.containsMouse ? root.colors.text : root.colors.subtext0
                     font.pixelSize: root.typography.body
-                    textFormat: Text.PlainText
-                    wrapMode: Text.Wrap
-                    maximumLineCount: 12
-                    elide: Text.ElideRight
-                    lineHeight: 1.25
+
+                    MouseArea {
+                        id: closeArea
+                        anchors.fill: parent
+                        anchors.margins: -6 * root.ratio
+                        hoverEnabled: true
+                        cursorShape: Qt.PointingHandCursor
+                        onClicked: notice.dismiss()
+                    }
                 }
             }
         }

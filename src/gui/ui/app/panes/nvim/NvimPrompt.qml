@@ -139,18 +139,29 @@ FocusScope {
                     visible: choice.chosen
                 }
 
-                // The number that picks the row at once.
-                ChromeText {
-                    x: 8 * root.ratio
-                    width: 18 * root.ratio
-                    height: parent.height
-                    text: choice.choiceIndex < 9 ? String(choice.choiceIndex + 1) : ""
-                    pixelSize: root.typography.small
-                    color: Qt.alpha(root.colors.text, 0.45)
+                // The number that picks the row at once, as the key it is.
+                Rectangle {
+                    x: 6 * root.ratio
+                    y: Math.round((parent.height - height) / 2)
+                    width: 20 * root.ratio
+                    height: 20 * root.ratio
+                    radius: 5 * root.ratio
+                    color: "transparent"
+                    border.width: Math.max(1, root.ratio) / Screen.devicePixelRatio
+                    border.color: Qt.alpha(root.colors.text, 0.22)
+                    visible: choice.choiceIndex < 9
+
+                    ChromeText {
+                        anchors.fill: parent
+                        horizontalAlignment: Text.AlignHCenter
+                        text: String(choice.choiceIndex + 1)
+                        pixelSize: root.typography.small
+                        color: Qt.alpha(root.colors.text, choice.chosen ? 0.8 : 0.5)
+                    }
                 }
 
                 ChromeText {
-                    x: 30 * root.ratio
+                    x: 36 * root.ratio
                     width: parent.width - x - 8 * root.ratio
                     height: parent.height
                     text: root.choices[choice.choiceIndex] ?? ""
@@ -184,6 +195,7 @@ FocusScope {
         colors: root.colors
         typography: root.typography
         ratio: root.ratio
-        hints: root.selecting ? [{keys: ["↑", "↓"], word: "Navigate"}, {keys: ["↵"], word: "Choose"}, {keys: ["esc"], word: "Cancel"}] : [{keys: ["↵"], word: "Accept"}, {keys: ["esc"], word: "Cancel"}]
+        hints: root.selecting ? [{keys: ["1–9"], word: "Choose"}, {keys: ["esc"], word: "Cancel"}] : [{keys: ["esc"], word: "Cancel"}]
+        trailing: ({keys: ["↵"], word: root.selecting ? "Choose" : "Accept"})
     }
 }

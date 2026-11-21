@@ -30,7 +30,10 @@ FocusScope {
     readonly property int visibleRows: Math.max(1, Math.floor(listHeight / rowHeight))
     readonly property int firstRow: Math.max(0, Math.min(rows.length - visibleRows, current - Math.floor(visibleRows / 2)))
     // The room left for the preview, in the parent's own coordinates.
-    readonly property rect previewArea: Qt.rect(x + listWidth + inset, y + inset, width - listWidth - 2 * inset, height - 2 * inset)
+    // The strip over the preview that names the file it shows.
+    readonly property real previewHeader: 34 * ratio
+    readonly property rect previewArea: Qt.rect(x + listWidth + inset, y + previewHeader + inset / 2, width - listWidth - 2 * inset, height - previewHeader - footerHeight - inset)
+    readonly property var currentRow: rows[current] ?? null
     property int current: 0
     // The entries marked for the quickfix list, by their place in the list.
     property var marked: []
@@ -339,17 +342,44 @@ FocusScope {
         x: root.listWidth
         y: root.inset
         width: Math.max(1, root.ratio) / Screen.devicePixelRatio
-        height: root.height - 2 * root.inset
+        height: root.height - root.inset - root.footerHeight
         color: Qt.alpha(root.colors.text, ChromeStyle.outlineAlpha)
+    }
+
+    // The file the preview shows: its name, then where it is.
+    Row {
+        x: root.listWidth + root.inset
+        width: root.width - x - root.inset
+        height: root.previewHeader
+        spacing: 8 * root.ratio
+        visible: root.currentRow !== null
+        clip: true
+
+        ChromeText {
+            height: parent.height
+            text: (root.currentRow?.name ?? "") + ((root.currentRow?.line ?? 0) > 0 ? ":" + root.currentRow.line : "")
+            pixelSize: root.typography.small
+            emphasized: true
+            color: root.colors.text
+        }
+
+        ChromeText {
+            height: parent.height
+            text: root.currentRow?.directory ?? ""
+            pixelSize: root.typography.small
+            color: Qt.alpha(root.colors.text, 0.45)
+        }
     }
 
     KeyHintBar {
         y: root.height - root.footerHeight
-        width: root.listWidth
+        width: root.width
         height: root.footerHeight
         colors: root.colors
         typography: root.typography
         ratio: root.ratio
-        hints: [{keys: ["↑", "↓"], word: "Navigate"}, {keys: ["⇥"], word: "Mark"}, {keys: ["↵"], word: root.marked.length > 0 ? "Quickfix" : "Open"}, {keys: ["⌃↵"], word: "Split"}]
+        hints: [{keys: ["↑", "↓"], word: "Navigate"}, {keys: ["⇥"], word: "Mark"}, {keys: ["⌃↵"], word: "Split"}]
+        // What Enter does, where the eye ends.
+        trailing: ({keys: ["↵"], word: root.marked.length > 0 ? "Quickfix" : "Open"})
     }
 }
