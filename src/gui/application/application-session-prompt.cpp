@@ -18,6 +18,11 @@ namespace telar::gui::application {
       return *change;
     }
 
+    // An editor's picker asked for these, under a request no path picker made.
+    if (const auto change = nvim::receive(*this, message)) {
+      return *change;
+    }
+
     return paths::receive(*this, message);
   }
 

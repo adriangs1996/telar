@@ -11,6 +11,7 @@ import telar.base.memory.allocators;
 import telar.tbc;
 import telar.gui.foundation.core;
 import telar.gui.foundation.terminal;
+import telar.wire.editor;
 import telar.wire.nvim;
 import telar.wire.pane_io;
 import telar.wire.vocabulary;
@@ -182,6 +183,36 @@ export namespace telar::gui::features::nvim {
     ds::Vec<Slice, Memory> choices;
   };
 
+  // One thing a picker lists: a file, a buffer or a line of a file, as pieces of the picker's
+  // text.
+  struct PickMatch {
+    Slice path;
+    // The line and the column of a match of text, counted from one; zero for a file or a buffer.
+    std::uint32_t line = 0;
+    std::uint32_t column = 0;
+    Slice text;
+    // The bytes of the path the query matched, as a piece of the picker's positions.
+    std::uint32_t first_position = 0;
+    std::uint16_t position_count = 0;
+  };
+
+  // The picker of an editor pane: the files, the lines or the buffers a query finds under a
+  // directory, which the runtime searches. The list is never the whole of what there is.
+  struct Picker {
+    explicit Picker(Memory& memory);
+
+    bool open = false;
+    NvimPickSource source = NvimPickSource::files;
+    ds::String<Memory> root;
+    ds::String<Memory> query;
+    // The request whose answer the list waits for; zero when none is under way.
+    std::uint64_t awaited = 0;
+    bool truncated = false;
+    ds::Vec<char, Memory> text;
+    ds::Vec<std::uint16_t, Memory> positions;
+    ds::Vec<PickMatch, Memory> matches;
+  };
+
   struct EditorCursor {
     std::uint32_t grid = 0;
     std::uint16_t row = 0;
@@ -223,6 +254,7 @@ export namespace telar::gui::features::nvim {
     Messages messages;
     TabLine tabs;
     Prompt prompt;
+    Picker picker;
     // Every frame applied.
     std::uint64_t revision = 0;
     // The grids there are, where each is placed and what of its buffer it shows.
@@ -232,6 +264,7 @@ export namespace telar::gui::features::nvim {
     std::uint64_t messages_revision = 0;
     std::uint64_t tabs_revision = 0;
     std::uint64_t prompt_revision = 0;
+    std::uint64_t picker_revision = 0;
   };
 
   // A key as Neovim names keys: one of its named keys or a character, and what is held with it.
@@ -309,6 +342,21 @@ export namespace telar::gui::features::nvim {
   // The reply to the prompt the editor shows, which is then closed here: the runtime confirms
   // it with a prompt of its own. None when the editor shows no prompt.
   [[nodiscard]] tbc::val_a<ds::Option<NvimPromptReply>> answer(State& state, std::uint64_t pane_id, bool accepted, std::uint32_t index, tbc::val_a<std::string_view> text);
+
+  // Opens the picker of an editor on a source, under a directory, or gives the one it has
+  // another source. False for a pane that is no editor.
+  bool pick(State& state, std::uint64_t pane_id, NvimPickSource source, std::string_view root);
+
+  // The query typed in a picker and the request that answers it; `request` zero asks nothing,
+  // and the list is empty until something is asked. False for a pane without an open picker.
+  bool ask(State& state, std::uint64_t pane_id, std::string_view query, std::uint64_t request);
+
+  // Closes an editor's picker. False when it had none open.
+  bool dismiss(State& state, std::uint64_t pane_id) noexcept;
+
+  // What the runtime found for a picker: the pane whose picker waited for it, or zero.
+  [[nodiscard]] std::uint64_t receive(State& state, const PathResults& message);
+  [[nodiscard]] std::uint64_t receive(State& state, const TextResults& message);
 
 }
 

@@ -778,6 +778,8 @@ return {api_version = 2, client = {
         QCoreApplication::sendEvent(view, &event);
       };
 
+      // A run that was cut short leaves no swap file for the next one to be asked about.
+      view->send(QStringLiteral("<Cmd>set noswapfile<CR>"));
       press(Qt::Key_I, QStringLiteral("i"));
       for (const auto character : QStringLiteral("TELAR <EDITOR> OK")) {
         press(character.toUpper().unicode(), QString{character}, character.isUpper() || character == QLatin1Char('<') || character == QLatin1Char('>') ? Qt::ShiftModifier : Qt::NoModifier);
@@ -894,6 +896,81 @@ return {api_version = 2, client = {
       QTRY_COMPARE_WITH_TIMEOUT(view->tabline().value(QStringLiteral("tabs")).toList().size(), 2, runtime_wait_ms);
       shoot(QStringLiteral("editor-tabs"));
 
+      // The picker lists what the runtime finds under the editor's directory, and opens what is
+      // chosen. Its list, its query and its keys are the window's; the preview is a float of
+      // Neovim's own, in the room the picker leaves for it.
+      {
+        const auto rows = [&] {
+          return view->picker().value(QStringLiteral("rows")).toList();
+        };
+        const auto names = [&] {
+          QStringList found;
+
+          for (const auto& row : rows()) {
+            found.append(row.toMap().value(QStringLiteral("name")).toString());
+          }
+
+          return found;
+        };
+
+        const auto floats = [&] {
+          int count = 0;
+
+          for (const auto& grid : view->editorState()->grids) {
+            count += grid->placement == application::nvim::NvimPlacement::floating ? 1 : 0;
+          }
+
+          return count;
+        };
+        const auto before = floats();
+
+        const auto said = [&] {
+          QStringList texts;
+
+          for (const auto& item : view->messages().value(QStringLiteral("items")).toList()) {
+            texts.append(item.toMap().value(QStringLiteral("text")).toString());
+          }
+
+          return texts.join(QStringLiteral(" | "));
+        };
+
+        // A directory of its own, so the search reads three files wherever the test runs. A
+        // run that takes pictures lists a real source file there.
+        const auto source_file = qEnvironmentVariable("TELAR_EDITOR_SHOT_FILE");
+        const auto body = shots.isEmpty() || source_file.isEmpty() ? QStringLiteral("['void draw();']") : QStringLiteral("readfile('%1')").arg(source_file);
+
+        view->send(QStringLiteral("<Cmd>call mkdir('telar-picker', 'p') | cd telar-picker | call writefile(['// first', '// the needle is here'] + %1, 'frames.cpp') | call writefile(['// screen'], 'screen.cpp') | call writefile(['// redraw'], 'redraw.cpp')<CR>").arg(body));
+        QTRY_VERIFY2_WITH_TIMEOUT(toQString(firstPane()->cwd).endsWith(QStringLiteral("/telar-picker")), qPrintable(toQString(firstPane()->cwd) + QLatin1Char('\n') + shown() + QLatin1String(" messages: ") + said()), runtime_wait_ms);
+        view->send(QStringLiteral("<Cmd>Telar files<CR>"));
+        QTRY_VERIFY_WITH_TIMEOUT(view->picker().value(QStringLiteral("open")).toBool(), runtime_wait_ms);
+        QCOMPARE(view->picker().value(QStringLiteral("source")).toString(), QStringLiteral("files"));
+        // Without a query, what the directory holds.
+        QTRY_VERIFY2_WITH_TIMEOUT(names().size() == 3 && names().contains(QStringLiteral("screen.cpp")), qPrintable(names().join(QLatin1Char(' '))), runtime_wait_ms);
+        view->searchPicker(QStringLiteral("fram"));
+        QTRY_COMPARE_WITH_TIMEOUT(names(), QStringList{QStringLiteral("frames.cpp")}, runtime_wait_ms);
+        // The preview is a float of the editor over the cells the picker leaves it.
+        QTRY_COMPARE_WITH_TIMEOUT(floats(), before + 1, runtime_wait_ms);
+        if (!shots.isEmpty()) {
+          QTest::qWait(250);
+        }
+
+        shoot(QStringLiteral("editor-picker"));
+        if (!QStandardPaths::findExecutable(QStringLiteral("rg")).isEmpty()) {
+          view->pick(QStringLiteral("text"));
+          QTRY_COMPARE_WITH_TIMEOUT(view->picker().value(QStringLiteral("source")).toString(), QStringLiteral("text"), runtime_wait_ms);
+          view->searchPicker(QStringLiteral("needle is"));
+          QTRY_VERIFY_WITH_TIMEOUT(rows().size() == 1 && rows().first().toMap().value(QStringLiteral("line")).toInt() == 2, runtime_wait_ms);
+          QCOMPARE(rows().first().toMap().value(QStringLiteral("text")).toString(), QStringLiteral("// the needle is here"));
+          shoot(QStringLiteral("editor-picker-text"));
+        }
+
+        view->acceptPicker(0);
+        QTRY_VERIFY_WITH_TIMEOUT(!view->picker().value(QStringLiteral("open")).toBool(), runtime_wait_ms);
+        QTRY_VERIFY2_WITH_TIMEOUT(shown().contains(QStringLiteral("the needle is here")), qPrintable(shown()), runtime_wait_ms);
+        QTRY_COMPARE_WITH_TIMEOUT(floats(), before, runtime_wait_ms);
+        view->send(QStringLiteral("<Cmd>bwipeout! | cd ..<CR>"));
+      }
+
       // A scroll slides the rows to their places: the grid clips itself while they travel, and
       // comes to rest with the rows Neovim has.
       {
@@ -916,7 +993,17 @@ return {api_version = 2, client = {
         QTRY_VERIFY_WITH_TIMEOUT(shown().contains(QStringLiteral("row 12")), runtime_wait_ms);
         QVERIFY(!sliding() && !shown().contains(QStringLiteral("row 40")));
         view->send(QStringLiteral("<C-d>"));
-        QTRY_VERIFY_WITH_TIMEOUT(sliding(), runtime_wait_ms);
+        const auto moves = [&] {
+          QString text;
+
+          for (const auto& grid : view->editorState()->grids) {
+            text += QStringLiteral("grid %1 %2x%3 placement %4 moved %5 kept %6; ").arg(grid->id).arg(grid->screen.columns()).arg(grid->screen.rows()).arg(static_cast<int>(grid->placement)).arg(grid->departed.moved).arg(grid->departed.count);
+          }
+
+          return text + shown().left(200);
+        };
+
+        QTRY_VERIFY2_WITH_TIMEOUT(sliding(), qPrintable(moves()), runtime_wait_ms);
         shoot(QStringLiteral("editor-scrolling"));
         QTRY_VERIFY_WITH_TIMEOUT(!sliding(), runtime_wait_ms);
         QVERIFY2(shown().contains(QStringLiteral("row 40")), qPrintable(shown()));

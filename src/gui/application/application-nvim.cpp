@@ -4,6 +4,7 @@ import std;
 
 import :access;
 import telar.gui.features.nvim;
+import telar.wire.editor;
 import telar.wire.nvim;
 import telar.wire.pane_io;
 import telar.wire.vocabulary;
@@ -135,6 +136,181 @@ namespace telar::gui::application::nvim {
     const ds::Array<std::string_view, 1> files{place.path};
 
     return workbench::splitEditor(session, ClientLayoutAxis::horizontal, files.view(), {.line = place.line, .column = place.column});
+  }
+
+  namespace {
+
+    // The queries shorter than this ask for no text: every line of every file would match.
+    constexpr std::size_t shortest_text_query = 2;
+    constexpr std::uint16_t path_limit = FindPaths::maximum_limit;
+    constexpr std::uint16_t text_limit = 100;
+
+    // The file a picker's entry names, as Neovim opens it: under the picker's directory unless
+    // it says where it is itself.
+    void locate(ds::String<Memory>& path, const Picker& picker, const PickMatch& match) {
+      const auto name = match.path.of(std::string_view{picker.text.data(), picker.text.size()});
+
+      path.clear();
+      if (!name.starts_with('/') && !name.starts_with('~')) {
+        path.append(picker.root.view());
+        if (!picker.root.view().ends_with('/')) {
+          path.append("/");
+        }
+      }
+
+      path.append(name);
+    }
+
+    Change shown(Session& session, std::uint64_t pane_id) {
+      Access::changedPane(session) = pane_id;
+      return Change::editor;
+    }
+
+  }
+
+  void pick(Session& session, std::uint64_t pane_id, NvimPickSource source) {
+    const auto* pane = findPane(session.panes, pane_id);
+    if (pane == nullptr || !reaches(session, pane_id) || !session.speaks(ClientTag::find_text) || !std::string_view{pane->cwd}.starts_with('/')) {
+      return;
+    }
+
+    if (feature::pick(session.nvim, pane_id, source, pane->cwd)) {
+      Access::changedPane(session) = pane_id;
+      search(session, pane_id, {});
+    }
+  }
+
+  void search(Session& session, std::uint64_t pane_id, std::string_view query) {
+    const auto* editor = feature::find(session.nvim, pane_id);
+    if (editor == nullptr || !editor->picker.open || !reaches(session, pane_id)) {
+      return;
+    }
+
+    const auto source = editor->picker.source;
+    const bool searches_text = source == NvimPickSource::text;
+
+    Access::changedPane(session) = pane_id;
+    if (query.size() > (searches_text ? FindText::maximum_query_bytes : FindPaths::maximum_query_bytes) || (searches_text && query.size() < shortest_text_query)) {
+      static_cast<void>(feature::ask(session.nvim, pane_id, query.substr(0, FindText::maximum_query_bytes), 0));
+      return;
+    }
+
+    const auto request = session.link.nextRequest();
+
+    static_cast<void>(feature::ask(session.nvim, pane_id, query, request));
+
+    // Read after the picker took the query: the messages view what it holds.
+    const auto& picker = feature::find(session.nvim, pane_id)->picker;
+
+    switch (source) {
+    case NvimPickSource::files:
+      session.link.send(FindPaths{.request_id = request, .root = picker.root.view(), .query = picker.query.view(), .kind = PathKindFilter::files, .limit = path_limit});
+      break;
+    case NvimPickSource::text:
+      session.link.send(FindText{.request_id = request, .root = picker.root.view(), .query = picker.query.view(), .limit = text_limit});
+      break;
+    case NvimPickSource::buffers:
+      session.link.send(NvimBuffers{.request_id = request, .pane_id = pane_id, .query = picker.query.view(), .limit = path_limit});
+      break;
+    }
+  }
+
+  void accept(Session& session, std::uint64_t pane_id, std::size_t index, NvimOpenIn in) {
+    const auto* editor = feature::find(session.nvim, pane_id);
+    if (editor == nullptr || !editor->picker.open || index >= editor->picker.matches.size()) {
+      return;
+    }
+
+    const auto& match = editor->picker.matches[index];
+    ds::String<Memory> path{editor->memory};
+
+    locate(path, editor->picker, match);
+    show(session, pane_id, {.path = path.view(), .line = match.line, .column = match.column, .in = in});
+    dismiss(session, pane_id);
+  }
+
+  void preview(Session& session, std::uint64_t pane_id, ds::Option<std::size_t> index, PreviewArea area) {
+    const auto* editor = feature::find(session.nvim, pane_id);
+    if (editor == nullptr || !reaches(session, pane_id) || !session.speaks(ClientTag::nvim_preview)) {
+      return;
+    }
+
+    if (!index || !editor->picker.open || *index >= editor->picker.matches.size() || area.columns == 0 || area.rows == 0) {
+      session.link.send(NvimPreview{.pane_id = pane_id});
+      return;
+    }
+
+    const auto& match = editor->picker.matches[*index];
+    ds::String<Memory> path{editor->memory};
+
+    locate(path, editor->picker, match);
+    if (path.size() <= max_nvim_path_bytes) {
+      session.link.send(NvimPreview{.pane_id = pane_id, .path = path.view(), .line = match.line, .row = area.row, .column = area.column, .columns = area.columns, .rows = area.rows});
+    }
+  }
+
+  void list(Session& session, std::uint64_t pane_id, std::span<const std::uint32_t> indices) {
+    const auto* editor = feature::find(session.nvim, pane_id);
+    if (editor == nullptr || !editor->picker.open || indices.empty() || indices.size() > NvimList::maximum_places || !reaches(session, pane_id)) {
+      return;
+    }
+
+    const auto& picker = editor->picker;
+    const std::string_view text{picker.text.data(), picker.text.size()};
+    ds::Vec<ds::String<Memory>, Memory> paths{editor->memory};
+    ds::Vec<TextMatch, Memory> places{editor->memory};
+
+    paths.reserve(indices.size());
+    places.reserve(indices.size());
+    for (const auto index : indices) {
+      if (index >= picker.matches.size()) {
+        continue;
+      }
+
+      const auto& match = picker.matches[index];
+      auto& path = paths.emplace(editor->memory);
+
+      locate(path, picker, match);
+      // A place without a line is the file's first.
+      places.push({.path = path.view(), .line = std::max<std::uint32_t>(match.line, 1), .column = std::max<std::uint32_t>(match.column, 1), .text = match.text.of(text)});
+    }
+
+    if (!places.empty()) {
+      session.link.send(NvimList{.pane_id = pane_id, .places = places.view()});
+      dismiss(session, pane_id);
+    }
+  }
+
+  void dismiss(Session& session, std::uint64_t pane_id) {
+    if (feature::dismiss(session.nvim, pane_id)) {
+      Access::changedPane(session) = pane_id;
+      if (reaches(session, pane_id) && session.speaks(ClientTag::nvim_preview)) {
+        session.link.send(NvimPreview{.pane_id = pane_id});
+      }
+    }
+  }
+
+  Change receive(Session& session, const NvimPick& message) {
+    pick(session, message.pane_id, message.source);
+
+    const auto* editor = feature::find(session.nvim, message.pane_id);
+
+    return editor != nullptr && editor->picker.open ? shown(session, message.pane_id) : Change::none;
+  }
+
+  Change receive(Session& session, const TextResults& message) {
+    const auto pane_id = feature::receive(session.nvim, message);
+
+    return pane_id == 0 ? Change::none : shown(session, pane_id);
+  }
+
+  ds::Option<Change> receive(Session& session, const PathResults& message) {
+    const auto pane_id = feature::receive(session.nvim, message);
+    if (pane_id == 0) {
+      return ds::none;
+    }
+
+    return shown(session, pane_id);
   }
 
   void navigate(Session& session, std::uint64_t pane_id, PaneDirection direction) {

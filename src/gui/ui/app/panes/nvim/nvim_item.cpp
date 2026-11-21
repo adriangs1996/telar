@@ -239,6 +239,133 @@ namespace telar::gui::qt {
     }
   }
 
+  namespace {
+
+    constexpr std::string_view sourceName(nvim::NvimPickSource source) noexcept {
+      switch (source) {
+      case nvim::NvimPickSource::files:
+        return "files";
+      case nvim::NvimPickSource::text:
+        return "text";
+      case nvim::NvimPickSource::buffers:
+        return "buffers";
+      }
+
+      return "files";
+    }
+
+  }
+
+  void NvimItem::pick(const QString& source) {
+    if (controller_ != nullptr) {
+      controller_->pick(pane_id_, source == QLatin1StringView{"text"} ? nvim::NvimPickSource::text : source == QLatin1StringView{"buffers"} ? nvim::NvimPickSource::buffers
+                                                                                                                                            : nvim::NvimPickSource::files);
+    }
+  }
+
+  void NvimItem::searchPicker(const QString& query) {
+    if (controller_ != nullptr) {
+      controller_->search(pane_id_, query);
+    }
+  }
+
+  void NvimItem::acceptPicker(int index, const QString& where) {
+    if (controller_ == nullptr || index < 0) {
+      return;
+    }
+
+    auto place = nvim::NvimOpenIn::place;
+    if (where == QLatin1StringView{"split"}) {
+      place = nvim::NvimOpenIn::split;
+    } else if (where == QLatin1StringView{"vertical"}) {
+      place = nvim::NvimOpenIn::vertical_split;
+    } else if (where == QLatin1StringView{"tab"}) {
+      place = nvim::NvimOpenIn::tab;
+    }
+
+    controller_->accept(pane_id_, static_cast<std::size_t>(index), place);
+  }
+
+  void NvimItem::previewPicker(int index, const QRectF& area) {
+    if (controller_ == nullptr || font_.cell.width() <= 0 || font_.cell.height() <= 0) {
+      return;
+    }
+
+    constexpr qreal most = std::numeric_limits<std::uint16_t>::max();
+    const auto cells = [&](qreal pixels, qreal cell, bool inward) {
+      const auto count = pixels / cell;
+
+      return static_cast<std::uint16_t>(std::clamp<qreal>(inward ? std::floor(count) : std::ceil(count), 0, most));
+    };
+
+    // The cells that fit whole inside the area: the float never passes its edges.
+    preview_area_ = index < 0 ? nvim::PreviewArea{} : nvim::PreviewArea{.row = cells(area.y(), font_.cell.height(), false), .column = cells(area.x(), font_.cell.width(), false), .columns = cells(area.width() - font_.cell.width(), font_.cell.width(), true), .rows = cells(area.height() - font_.cell.height(), font_.cell.height(), true)};
+    controller_->preview(pane_id_, index < 0 ? ds::Option<std::size_t>{} : ds::Option<std::size_t>{static_cast<std::size_t>(index)}, preview_area_);
+  }
+
+  void NvimItem::listPicker(const QVariantList& indices) {
+    if (controller_ == nullptr) {
+      return;
+    }
+
+    QList<std::uint32_t> marked;
+
+    for (const auto& index : indices) {
+      if (index.toInt() >= 0) {
+        marked.append(static_cast<std::uint32_t>(index.toInt()));
+      }
+    }
+
+    controller_->list(pane_id_, std::span<const std::uint32_t>{marked.constData(), static_cast<std::size_t>(marked.size())});
+  }
+
+  void NvimItem::closePicker() {
+    preview_area_ = {};
+    if (controller_ != nullptr) {
+      controller_->dismiss(pane_id_);
+    }
+  }
+
+  void NvimItem::projectPicker(const nvim::Editor& editor) {
+    if (picker_revision_ == editor.picker_revision) {
+      return;
+    }
+
+    const auto& picker = editor.picker;
+    const std::string_view text{picker.text.data(), picker.text.size()};
+    QVariantList rows;
+
+    picker_revision_ = editor.picker_revision;
+    rows.reserve(static_cast<qsizetype>(picker.matches.size()));
+    for (const auto& match : picker.matches) {
+      const auto path = match.path.of(text);
+      const auto slash = path.rfind('/');
+
+      rows.append(QVariantMap{
+          {QStringLiteral("name"), shown(slash == std::string_view::npos ? path : path.substr(slash + 1))},
+          {QStringLiteral("directory"), shown(slash == std::string_view::npos ? std::string_view{} : path.substr(0, slash))},
+          {QStringLiteral("line"), static_cast<int>(match.line)},
+          {QStringLiteral("text"), shown(match.text.of(text))},
+      });
+    }
+
+    picker_ = {
+        {QStringLiteral("open"), picker.open},
+        {QStringLiteral("source"), shown(sourceName(picker.source))},
+        {QStringLiteral("query"), shown(picker.query.view())},
+        {QStringLiteral("root"), shown(picker.root.view())},
+        {QStringLiteral("loading"), picker.awaited != 0},
+        {QStringLiteral("truncated"), picker.truncated},
+        {QStringLiteral("rows"), rows},
+    };
+
+    if (!picker.open) {
+      preview_area_ = {};
+    }
+
+    emit pickerChanged();
+  }
+
   void NvimItem::send(const QString& keys) {
     if (controller_ != nullptr) {
       const auto bytes = keys.toUtf8();
@@ -396,6 +523,8 @@ namespace telar::gui::qt {
           {QStringLiteral("border"), static_cast<int>(grid->border)},
           {QStringLiteral("title"), shown(grid->title.view())},
           {QStringLiteral("footer"), shown(grid->footer.view())},
+          // The float a picker asked for over its preview's cells: it is drawn over the picker.
+          {QStringLiteral("preview"), grid->placement == nvim::NvimPlacement::floating && preview_area_.columns != 0 && grid->row == preview_area_.row && grid->column == preview_area_.column && grid->width == preview_area_.columns && grid->height == preview_area_.rows},
       });
     }
 
@@ -530,6 +659,7 @@ namespace telar::gui::qt {
     projectMessages(editor);
     projectTabs(editor);
     projectPrompt(editor);
+    projectPicker(editor);
   }
 
   void NvimItem::projectCmdline(const nvim::Editor& editor) {

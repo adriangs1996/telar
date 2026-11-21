@@ -669,7 +669,12 @@ namespace telar::runtime {
         return false;
       }
 
-      context.screen.directory(*path);
+      // Neovim says the directory as it was typed: `:cd src` names it from where it was. Only
+      // one named from the root says where the editor works.
+      if (path->starts_with('/')) {
+        context.screen.directory(*path);
+      }
+
       return true;
     }
 

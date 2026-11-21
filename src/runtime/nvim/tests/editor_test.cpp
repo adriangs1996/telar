@@ -298,6 +298,10 @@ namespace {
       check(pulse.navigated && *pulse.navigated == PaneDirection::left && pulse.pick && *pulse.pick == NvimPickSource::text);
       check(pulse.listed && editor.buffers().token == 7 && editor.buffers().names.size() == 2, "a name a client could not list is left out");
       check(editor.screen().directory() == "/srv/project" && pulse.flushed, "the directory is published at once when no redraw is under way");
+      check(tell(editor, "telar_directory", 1, [](msgpack::Writer& writer) {
+        writer.string("relative/place");
+      }));
+      check(editor.screen().directory() == "/srv/project", "a directory not named from the root says nothing of where the editor works");
 
       check(tell(editor, "telar_navigate", 1, [](msgpack::Writer& writer) {
         writer.string("sideways");

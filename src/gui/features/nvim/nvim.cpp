@@ -255,6 +255,13 @@ namespace telar::gui::features::nvim {
     return index < count ? stamps[(head + index) % capacity] : 0;
   }
 
+  Picker::Picker(Memory& memory)
+      : root(memory),
+        query(memory),
+        text(memory),
+        positions(memory),
+        matches(memory) {}
+
   Grid::Grid(Memory& memory, std::uint32_t identity)
       : id(identity),
         screen(memory),
@@ -298,7 +305,8 @@ namespace telar::gui::features::nvim {
         menu(made_in),
         messages(made_in),
         tabs(made_in),
-        prompt(made_in) {}
+        prompt(made_in),
+        picker(made_in) {}
 
   const Grid* Editor::grid(std::uint32_t id) const noexcept {
     for (const auto& grid : grids) {
@@ -558,6 +566,134 @@ namespace telar::gui::features::nvim {
     editor->prompt.kind = NvimPromptKind::none;
     ++editor->prompt_revision;
     return reply;
+  }
+
+  namespace {
+
+    void clearMatches(Picker& picker) noexcept {
+      picker.text.clear();
+      picker.positions.clear();
+      picker.matches.clear();
+      picker.truncated = false;
+    }
+
+    // The editor whose picker waits for the answer to `request`.
+    Editor* awaiting(State& state, std::uint64_t request) noexcept {
+      if (request == 0) {
+        return nullptr;
+      }
+
+      for (auto& editor : Access::editors(state).viewMut()) {
+        if (editor->picker.open && editor->picker.awaited == request) {
+          return &editor.getMut();
+        }
+      }
+
+      return nullptr;
+    }
+
+    Slice keep(Picker& picker, std::string_view piece) {
+      const Slice slice{.offset = static_cast<std::uint32_t>(picker.text.size()), .size = static_cast<std::uint32_t>(piece.size())};
+
+      picker.text.extend(std::span<const char>{piece});
+      return slice;
+    }
+
+  }
+
+  bool pick(State& state, std::uint64_t pane_id, NvimPickSource source, std::string_view root) {
+    auto* editor = Access::find(state, pane_id);
+    if (editor == nullptr) {
+      return false;
+    }
+
+    auto& picker = editor->picker;
+
+    picker.open = true;
+    picker.source = source;
+    picker.root.assign(root);
+    picker.query.clear();
+    picker.awaited = 0;
+    clearMatches(picker);
+    ++editor->picker_revision;
+    return true;
+  }
+
+  bool ask(State& state, std::uint64_t pane_id, std::string_view query, std::uint64_t request) {
+    auto* editor = Access::find(state, pane_id);
+    if (editor == nullptr || !editor->picker.open) {
+      return false;
+    }
+
+    auto& picker = editor->picker;
+
+    picker.query.assign(query);
+    picker.awaited = request;
+    // Nothing asked: what was listed for another query is not this one's.
+    if (request == 0) {
+      clearMatches(picker);
+    }
+
+    ++editor->picker_revision;
+    return true;
+  }
+
+  bool dismiss(State& state, std::uint64_t pane_id) noexcept {
+    auto* editor = Access::find(state, pane_id);
+    if (editor == nullptr || !editor->picker.open) {
+      return false;
+    }
+
+    editor->picker.open = false;
+    editor->picker.awaited = 0;
+    clearMatches(editor->picker);
+    ++editor->picker_revision;
+    return true;
+  }
+
+  std::uint64_t receive(State& state, const PathResults& message) {
+    auto* editor = awaiting(state, message.request_id);
+    if (editor == nullptr) {
+      return 0;
+    }
+
+    auto& picker = editor->picker;
+
+    clearMatches(picker);
+    picker.truncated = message.truncated;
+    for (const auto& match : message.matches) {
+      const auto first = static_cast<std::uint32_t>(picker.positions.size());
+
+      picker.positions.extend(match.positions);
+      picker.matches.push({.path = keep(picker, match.path), .first_position = first, .position_count = static_cast<std::uint16_t>(match.positions.size())});
+    }
+
+    // A search still reading the directory answers again as it finds more.
+    if (message.complete) {
+      picker.awaited = 0;
+    }
+
+    ++editor->picker_revision;
+    return editor->pane_id;
+  }
+
+  std::uint64_t receive(State& state, const TextResults& message) {
+    auto* editor = awaiting(state, message.request_id);
+    if (editor == nullptr) {
+      return 0;
+    }
+
+    auto& picker = editor->picker;
+
+    clearMatches(picker);
+    picker.truncated = message.truncated;
+    picker.awaited = 0;
+    for (const auto& match : message.matches) {
+      picker.matches.push({.path = keep(picker, match.path), .line = match.line, .column = match.column, .text = keep(picker, match.text)});
+    }
+
+    ++editor->picker_revision;
+    return editor->pane_id;
   }
 
 }
