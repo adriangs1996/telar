@@ -121,6 +121,22 @@ namespace telar::gui::application::nvim {
     return 0;
   }
 
+  bool edit(Session& session, std::uint64_t pane_id, const Place& place) {
+    if (place.path.empty() || place.path.size() > max_nvim_path_bytes || !available(session)) {
+      return false;
+    }
+
+    if (const auto shown = beside(session, pane_id); shown != 0) {
+      show(session, shown, place);
+      workbench::focusPane(session, shown);
+      return true;
+    }
+
+    const ds::Array<std::string_view, 1> files{place.path};
+
+    return workbench::splitEditor(session, ClientLayoutAxis::horizontal, files.view(), {.line = place.line, .column = place.column});
+  }
+
   void navigate(Session& session, std::uint64_t pane_id, PaneDirection direction) {
     if (reaches(session, pane_id) && session.speaks(ClientTag::nvim_navigate)) {
       session.link.send(NvimNavigate{.pane_id = pane_id, .direction = direction});

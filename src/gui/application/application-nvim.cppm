@@ -84,6 +84,10 @@ export namespace telar::gui::application::nvim {
   // when the tab has none.
   [[nodiscard]] std::uint64_t beside(const Session& session, std::uint64_t pane_id) noexcept;
 
+  // Shows a file in the editor of the tab `pane_id` is in, which takes the focus, or in one made
+  // beside the focused pane when the tab has none. False when neither could be done.
+  bool edit(Session& session, std::uint64_t pane_id, const Place& place);
+
   // Moves to the editor's window on a side of its current one. When it has none there, the
   // runtime says so and the pane on that side takes the focus.
   void navigate(Session& session, std::uint64_t pane_id, PaneDirection direction);

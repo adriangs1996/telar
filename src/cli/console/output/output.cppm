@@ -77,6 +77,7 @@ export {
       render,
       process,
       monitor,
+      edit,
       count,
     };
 

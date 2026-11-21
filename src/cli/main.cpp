@@ -142,6 +142,8 @@ namespace telar::runtime::cli {
         return sessions::tab(memory, sessions::TabOptions::parse(options));
       case Family::worktree:
         return sessions::worktree(memory, sessions::WorktreeOptions::parse(options));
+      // A window performs it: its words were read as a routed command before any family's.
+      case Family::edit:
       case Family::count:
         break;
       }

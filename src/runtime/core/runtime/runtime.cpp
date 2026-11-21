@@ -1049,12 +1049,22 @@ namespace telar::runtime {
 
   template <EventLoop Poller, HistoryEventSink History>
   void WorkspaceService<Poller, History>::createEditor(RuntimeModel& model, Panes& panes, ClientStore& clients, std::uint64_t client_id, const CreateNvimPane& request) {
-    // The program, the flag that makes it speak its UI protocol on its pipes, then the files.
-    ds::Array<std::string_view, max_nvim_files + 2> arguments;
+    // The program, the flag that makes it speak its UI protocol on its pipes, where the cursor
+    // starts and then the files.
+    constexpr std::size_t cursor_capacity = 48;
+    ds::Array<std::string_view, max_nvim_files + 3> arguments;
+    ds::Array<char, cursor_capacity> cursor{};
     std::size_t count = 0;
 
     arguments.atMut(count++) = "nvim";
     arguments.atMut(count++) = "--embed";
+    if (request.line != 0 && !request.files.empty()) {
+      // Two numbers the runtime writes itself: nothing a client sent is run as a command.
+      const auto written = std::format_to_n(cursor.dataMut(), cursor.size(), "+call cursor({},{})", request.line, std::max<std::uint32_t>(request.column, 1));
+
+      arguments.atMut(count++) = std::string_view{cursor.data(), static_cast<std::size_t>(written.size)};
+    }
+
     for (const auto file : request.files) {
       // A name that starts as an option would be read as one.
       if (file.starts_with('-') || file.starts_with('+')) {

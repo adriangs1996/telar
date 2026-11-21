@@ -54,6 +54,9 @@ export extern "C++" {
       TerminalSize size{};
       std::string_view cwd;
       std::span<const std::string_view> files;
+      // Where the cursor starts in the first file, counted from one; zero leaves it to Neovim.
+      std::uint32_t line{};
+      std::uint32_t column{};
     };
 
     template <>
@@ -66,7 +69,9 @@ export extern "C++" {
               Field<&CreateNvimPane::new_tab, BoolByte, "new_tab">,
               Field<&CreateNvimPane::size, ValueCodec<TerminalSize>, "size">,
               Field<&CreateNvimPane::cwd, Text16<max_nvim_path_bytes>, "cwd">,
-              Field<&CreateNvimPane::files, CountedSpan<u16, Text16<max_nvim_path_bytes, false>, max_nvim_files>, "files">> {};
+              Field<&CreateNvimPane::files, CountedSpan<u16, Text16<max_nvim_path_bytes, false>, max_nvim_files>, "files">,
+              Field<&CreateNvimPane::line, u32, "line">,
+              Field<&CreateNvimPane::column, u32, "column">> {};
 
     // Keys typed into an editor pane, in Neovim's own notation: `<C-w>`, `<LT>` for a literal `<`.
     struct NvimInput {

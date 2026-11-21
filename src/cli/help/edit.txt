@@ -1,0 +1,20 @@
+telar edit: Open a file in the native editor pane of a window
+
+Usage: telar edit FILE[:LINE] [--client ID] [--json] [--socket PATH]
+
+Effects: the runtime forwards the request to a window: the one `--client ID` names
+(see `telar client list`), or the one last typed in. The window shows FILE in the
+editor pane of a tab, with the cursor at LINE when one is given, and gives that pane
+the focus; a tab without an editor pane gets one beside its focused pane. The tab is
+the one of the pane the command runs in, when the window shows it, and the window's
+active tab otherwise. A relative FILE is taken from the directory the command runs in.
+Needs a running runtime and a window; never starts one. Results: text
+`ACTION: STATUS` or JSON `client_id`, `client_generation`, `action`, `status`,
+`target_id`, `value`, `text`. `admitted` means the window took the request; the
+editor shows the file a moment later. Exit 0; 1 when the window refused (its reason
+on stderr, `EditorUnavailable` when its runtime has no editor panes); 2 no such
+window; 3 the window did not answer in time.
+
+A name that ends in a colon and a number is a file and a line: `telar edit
+src/main.cpp:42`. To open a file whose own name ends that way, add its line:
+`telar edit notes:2024:1`.

@@ -279,17 +279,39 @@ namespace telar::runtime::cli::window {
 
     int routed(Session& session, const RoutedOptions& options, Text& output) {
       const auto list = session.exchange<ClientList>(QueryClients{});
-      const auto route = std::ranges::find(list.entries, options.client_id, &ClientDescriptor::id);
+      // A command that names no window goes to the one last typed in.
+      const auto route = options.client_id != 0 ? std::ranges::find(list.entries, options.client_id, &ClientDescriptor::id) : std::ranges::max_element(list.entries, {}, &ClientDescriptor::last_input_sequence);
       if (route == list.entries.end()) {
         throw Failure{"ClientNotFound", 2};
       }
 
-      if (options.text.size() > maximum_command_text) {
+      Text absolute{output.memory()};
+      auto text = options.text;
+      auto target_id = options.target_id;
+
+      if (options.action == ClientAction::editor_open) {
+        // The window opens the file as this command names it: from where it was run.
+        if (!text.starts_with('/')) {
+          absolute.append(std::filesystem::current_path().native());
+          absolute.push('/');
+          absolute.append(text);
+          text = absolute;
+        }
+
+        // The tab of the pane the command was run in is where its editor is looked for.
+        if (const char* pane = std::getenv("TELAR_PANE_ID"); pane != nullptr) { // NOLINT(concurrency-mt-unsafe): the CLI reads its environment on its one thread
+          const std::string_view digits{pane};
+
+          static_cast<void>(std::from_chars(digits.data(), digits.data() + digits.size(), target_id));
+        }
+      }
+
+      if (text.size() > maximum_command_text) {
         throw Failure{"InvalidClientCommandText"};
       }
 
       try {
-        validateUtf8(options.text);
+        validateUtf8(text);
       } catch (const EncodingError&) {
         throw Failure{"InvalidClientCommandText"};
       }
@@ -297,9 +319,9 @@ namespace telar::runtime::cli::window {
       const ClientCommand command{
           .route = {.id = route->id, .generation = route->generation},
           .action = options.action,
-          .target_id = options.target_id,
+          .target_id = target_id,
           .value = options.value,
-          .text = options.text,
+          .text = text,
       };
 
       const auto reply = exchangeCommand(session, command);
