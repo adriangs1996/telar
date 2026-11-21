@@ -3339,6 +3339,14 @@ return {api_version=2, client={keybindings={
       QTRY_VERIFY_WITH_TIMEOUT(search->hasActiveFocus(), runtime_wait_ms);
       QTRY_COMPARE_WITH_TIMEOUT(search->property("text").toString(), QStringLiteral("folder/"), runtime_wait_ms);
       QVERIFY(!search->property("formControl").toBool());
+      // With TELAR_PATH_PICKER_SHOT set to a file, the window with the search open is saved there.
+      if (const auto shot = qEnvironmentVariable("TELAR_PATH_PICKER_SHOT"); !shot.isEmpty()) {
+        constexpr int settle_ms = 320;
+
+        QTest::qWait(settle_ms);
+        QVERIFY(window_->grabWindow().save(shot));
+      }
+
       QTest::keyClick(window_, Qt::Key_Tab);
       QTRY_COMPARE_WITH_TIMEOUT(client_->paths()->state().value(QStringLiteral("root")).toString(), root + QStringLiteral("/folder"), runtime_wait_ms);
       QTRY_COMPARE_WITH_TIMEOUT(search->property("text").toString(), QString{}, runtime_wait_ms);

@@ -20,4 +20,3 @@ telar_add_qml_sources(gui-quick
 add_subdirectory(prompt)
 add_subdirectory(links)
 add_subdirectory(history)
-add_subdirectory(paths)
