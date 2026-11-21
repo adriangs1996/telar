@@ -18,6 +18,7 @@ import telar.gui.application.tests.session_fixture;
 import telar.gui.application;
 import telar.gui.foundation.terminal;
 import telar.wire.clients;
+import telar.wire.editor;
 import telar.wire.layout;
 import telar.wire.nvim;
 import telar.wire.pane_io;
@@ -172,6 +173,64 @@ namespace {
     check(transport.last<NvimMenuSelect>().item == 4 && transport.last<NvimMenuSelect>().accept, "a click on the completion menu takes its item");
   }
 
+  // The picker of an editor asks the runtime for what its query finds, shows only the answer
+  // to its last question, and opens what is chosen where it is in the editor's directory.
+  void pickerSearchesThroughTheRuntime() {
+    SystemAllocator memory;
+    Transport transport;
+    TestSession client{memory, transport};
+
+    openEditor(client, transport);
+    deliver(client, PaneCwd{.pane_id = editor_pane, .cwd = "/srv/app"});
+    check(deliver(client, NvimPick{.pane_id = editor_pane, .source = NvimPickSource::files}) == application::Change::editor, "`:Telar files` opens the picker");
+
+    const auto* editor = application::nvim::editor(client, editor_pane);
+    const auto first = transport.last<FindPaths>();
+
+    check(editor->picker.open && first.root == "/srv/app" && first.query.empty() && first.kind == PathKindFilter::files, "which lists the files under the editor's directory");
+    application::nvim::search(client, editor_pane, "main");
+
+    const auto asked = transport.last<FindPaths>();
+    const ds::Array<std::uint16_t, 2> positions{4, 5};
+    const ds::Array<PathMatch, 1> stale{PathMatch{.path = "old.cpp"}};
+    const ds::Array<PathMatch, 2> found{PathMatch{.path = "src/main.cpp", .positions = positions.view()}, PathMatch{.path = "docs/main.md"}};
+
+    check(asked.query == "main" && asked.request_id != first.request_id);
+    check(deliver(client, PathResults{.request_id = first.request_id, .root = "/srv/app", .complete = true, .matches = stale.view()}) != application::Change::editor && editor->picker.matches.empty(), "the answer to an older question is not shown");
+    check(deliver(client, PathResults{.request_id = asked.request_id, .root = "/srv/app", .complete = true, .matches = found.view()}) == application::Change::editor && editor->picker.matches.size() == 2 && editor->picker.awaited == 0, "the answer to the last one is");
+
+    application::nvim::preview(client, editor_pane, std::size_t{0}, {.row = 2, .column = 40, .columns = 60, .rows = 20});
+    check(transport.last<NvimPreview>().path == "/srv/app/src/main.cpp" && transport.last<NvimPreview>().columns == 60, "the entry is previewed in a float over the cells the picker leaves");
+    application::nvim::accept(client, editor_pane, 1, NvimOpenIn::vertical_split);
+    check(transport.last<NvimOpen>().path == "/srv/app/docs/main.md" && transport.last<NvimOpen>().in == NvimOpenIn::vertical_split, "what is chosen opens where asked, under the picker's directory");
+    check(!editor->picker.open && transport.last<NvimPreview>().columns == 0, "and the picker closes with its preview");
+
+    // Lines of files, by their text: nothing is asked for a query every line would match.
+    application::nvim::pick(client, editor_pane, NvimPickSource::text);
+
+    const auto searches = transport.count(ClientTag::find_text);
+
+    application::nvim::search(client, editor_pane, "x");
+    check(transport.count(ClientTag::find_text) == searches && editor->picker.matches.empty());
+    application::nvim::search(client, editor_pane, "needle");
+
+    const auto text = transport.last<FindText>();
+    const ds::Array<TextMatch, 2> lines{TextMatch{.path = "a.cpp", .line = 4, .column = 2, .text = "the needle"}, TextMatch{.path = "b.cpp", .line = 9, .column = 1, .text = "needle too"}};
+
+    check(text.query == "needle" && text.root == "/srv/app");
+    check(deliver(client, TextResults{.request_id = text.request_id, .root = "/srv/app", .matches = lines.view()}) == application::Change::editor && editor->picker.matches.size() == 2 && editor->picker.matches[1].line == 9);
+
+    const ds::Array<std::uint32_t, 2> marked{0, 1};
+
+    application::nvim::list(client, editor_pane, marked.view());
+    check(transport.last<NvimList>().places.size() == 2 && transport.last<NvimList>().places[1].path == "/srv/app/b.cpp" && transport.last<NvimList>().places[1].line == 9 && !editor->picker.open, "the entries marked go to the quickfix list");
+
+    application::nvim::pick(client, editor_pane, NvimPickSource::buffers);
+    check(transport.last<NvimBuffers>().pane_id == editor_pane, "the buffers are the editor's to list");
+    application::nvim::dismiss(client, editor_pane);
+    check(!editor->picker.open);
+  }
+
   void lostFrameAsksForTheScreenOnce() {
     SystemAllocator memory;
     Transport transport;
@@ -223,6 +282,7 @@ namespace {
 
   const telar::testing::Case case_opens{"nvim_session.editor_opens_beside_and_is_drawn", editorOpensBesideAndIsDrawn};
   const telar::testing::Case case_input{"nvim_session.what_a_person_does_reaches_neovim", whatAPersonDoesReachesNeovim};
+  const telar::testing::Case case_picker{"nvim_session.picker_searches_through_the_runtime", pickerSearchesThroughTheRuntime};
   const telar::testing::Case case_files{"nvim_session.files_open_in_the_tabs_editor", filesOpenInTheTabsEditor};
   const telar::testing::Case case_navigation{"nvim_session.navigation_asks_the_editor_first", navigationAsksTheEditorFirst};
   const telar::testing::Case case_lost{"nvim_session.lost_frame_asks_for_the_screen_once", lostFrameAsksForTheScreenOnce};

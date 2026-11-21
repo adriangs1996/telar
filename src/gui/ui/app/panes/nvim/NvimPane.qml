@@ -57,7 +57,8 @@ FocusScope {
 
                 x: record.x
                 y: record.y + (1 - reveal) * 6 * root.ratio
-                z: record.layer
+                // The picker's preview is a float of Neovim's, drawn over the picker's surface.
+                z: (record.preview ?? false) ? 995 : record.layer
                 width: record.width
                 height: record.height
                 opacity: reveal
@@ -90,7 +91,7 @@ FocusScope {
                 readonly property real inset: border === 0 ? root.floatInset : 0
 
                 NvimSurface {
-                    visible: cell.floating
+                    visible: cell.floating && !(cell.record.preview ?? false)
                     x: -cell.inset
                     y: -cell.inset
                     width: cell.width + 2 * cell.inset
@@ -313,6 +314,36 @@ FocusScope {
             onPicked: index => {
                 view.chooseMenu((view.popupMenu.first ?? 0) + index);
                 view.forceActiveFocus();
+            }
+        }
+
+        NvimPicker {
+            id: pick
+            z: 990
+            picker: view.picker
+            colors: root.colors
+            typography: root.typography
+            ratio: root.ratio
+            onSearched: query => view.searchPicker(query)
+            onSourceChosen: source => view.pick(source)
+            onAccepted: (index, where) => {
+                view.acceptPicker(index, where);
+                view.forceActiveFocus();
+            }
+            onListed: indices => {
+                view.listPicker(indices);
+                view.forceActiveFocus();
+            }
+            onPreviewed: (index, area) => view.previewPicker(index, area)
+            onClosed: {
+                view.closePicker();
+                view.forceActiveFocus();
+            }
+            // Closed from elsewhere: the keys go back to the editor.
+            onShownChanged: {
+                if (!shown && activeFocus) {
+                    view.forceActiveFocus();
+                }
             }
         }
 

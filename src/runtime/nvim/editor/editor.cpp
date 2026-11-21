@@ -418,7 +418,7 @@ end
   // `[path]`: the directory of the current window.
   void NvimEditor::moved(msgpack::Reader& reader) {
     const auto path = reader.tuple(1) ? reader.string() : ds::none;
-    if (!path || *path == screen_.directory()) {
+    if (!path || !path->starts_with('/') || *path == screen_.directory()) {
       return;
     }
 

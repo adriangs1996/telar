@@ -22,6 +22,8 @@ export namespace telar::gui::application::nvim {
   using features::nvim::MenuItem;
   using features::nvim::Message;
   using features::nvim::Messages;
+  using features::nvim::Picker;
+  using features::nvim::PickMatch;
   using features::nvim::PopupMenu;
   using features::nvim::Prompt;
   using features::nvim::Slice;
@@ -33,6 +35,7 @@ export namespace telar::gui::application::nvim {
   using telar::NvimMouseAction;
   using telar::NvimMouseButton;
   using telar::NvimOpenIn;
+  using telar::NvimPickSource;
   using telar::NvimPlacement;
   using telar::NvimPromptKind;
 
@@ -88,6 +91,34 @@ export namespace telar::gui::application::nvim {
   // beside the focused pane when the tab has none. False when neither could be done.
   bool edit(Session& session, std::uint64_t pane_id, const Place& place);
 
+  // Opens the pane's picker on a source: files by name, lines of files by their text, or the
+  // editor's buffers, under the directory the editor works in. It lists what an empty query finds.
+  void pick(Session& session, std::uint64_t pane_id, NvimPickSource source);
+
+  // The query typed in the pane's picker: the runtime searches, and the list follows.
+  void search(Session& session, std::uint64_t pane_id, std::string_view query);
+
+  // Opens what the picker lists at `index` where `in` says, and closes the picker.
+  void accept(Session& session, std::uint64_t pane_id, std::size_t index, NvimOpenIn in = NvimOpenIn::place);
+
+  // The cells of the editor a picker leaves for its preview, from its top left one.
+  struct PreviewArea {
+    std::uint16_t row = 0;
+    std::uint16_t column = 0;
+    std::uint16_t columns = 0;
+    std::uint16_t rows = 0;
+  };
+
+  // Shows what the picker lists at `index` in a float of the editor over `area`, which takes
+  // no focus; without an index, closes that float.
+  void preview(Session& session, std::uint64_t pane_id, ds::Option<std::size_t> index, PreviewArea area);
+
+  // Sends the entries marked in the picker to the editor's quickfix list, and closes the picker.
+  void list(Session& session, std::uint64_t pane_id, std::span<const std::uint32_t> indices);
+
+  // Closes the pane's picker and its preview.
+  void dismiss(Session& session, std::uint64_t pane_id);
+
   // Moves to the editor's window on a side of its current one. When it has none there, the
   // runtime says so and the pane on that side takes the focus.
   void navigate(Session& session, std::uint64_t pane_id, PaneDirection direction);
@@ -109,5 +140,9 @@ namespace telar::gui::application::nvim {
   Change receive(Session& session, const NvimTabLine& message);
   Change receive(Session& session, const NvimPrompt& message);
   Change receive(Session& session, const NvimNavigated& message);
+  Change receive(Session& session, const NvimPick& message);
+  Change receive(Session& session, const TextResults& message);
+  // The paths a picker of an editor waited for; none when no picker did.
+  ds::Option<Change> receive(Session& session, const PathResults& message);
 
 }

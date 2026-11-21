@@ -67,6 +67,13 @@ namespace telar::gui::qt {
     void resize(std::uint64_t pane_id, TerminalSize size);
     void answer(std::uint64_t pane_id, bool accepted, std::uint32_t index, const QString& text);
     void choose(std::uint64_t pane_id, std::uint32_t item, bool accept);
+    // The pane's picker: what it lists, the query typed, what is opened from it and where.
+    void pick(std::uint64_t pane_id, application::nvim::NvimPickSource source);
+    void search(std::uint64_t pane_id, const QString& query);
+    void accept(std::uint64_t pane_id, std::size_t index, application::nvim::NvimOpenIn in);
+    void preview(std::uint64_t pane_id, ds::Option<std::size_t> index, application::nvim::PreviewArea area);
+    void list(std::uint64_t pane_id, std::span<const std::uint32_t> indices);
+    void dismiss(std::uint64_t pane_id);
 
   signals:
     // The pane's editor shows another frame, or asks something else.

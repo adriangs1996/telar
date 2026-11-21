@@ -64,6 +64,54 @@ namespace telar::gui::qt {
     });
   }
 
+  void NvimController::pick(std::uint64_t pane_id, application::nvim::NvimPickSource source) {
+    attempt([&](GuiSession& session) {
+      application::nvim::pick(session, pane_id, source);
+    });
+    // The picker changed here, not by a message of the runtime: its views are told.
+    emit editorChanged(pane_id);
+  }
+
+  void NvimController::search(std::uint64_t pane_id, const QString& query) {
+    const auto bytes = query.toUtf8();
+
+    attempt([&](GuiSession& session) {
+      application::nvim::search(session, pane_id, {bytes.constData(), static_cast<std::size_t>(bytes.size())});
+    });
+    // The picker changed here, not by a message of the runtime: its views are told.
+    emit editorChanged(pane_id);
+  }
+
+  void NvimController::accept(std::uint64_t pane_id, std::size_t index, application::nvim::NvimOpenIn in) {
+    attempt([&](GuiSession& session) {
+      application::nvim::accept(session, pane_id, index, in);
+    });
+    // The picker changed here, not by a message of the runtime: its views are told.
+    emit editorChanged(pane_id);
+  }
+
+  void NvimController::preview(std::uint64_t pane_id, ds::Option<std::size_t> index, application::nvim::PreviewArea area) {
+    attempt([&](GuiSession& session) {
+      application::nvim::preview(session, pane_id, index, area);
+    });
+  }
+
+  void NvimController::list(std::uint64_t pane_id, std::span<const std::uint32_t> indices) {
+    attempt([&](GuiSession& session) {
+      application::nvim::list(session, pane_id, indices);
+    });
+    // The picker changed here, not by a message of the runtime: its views are told.
+    emit editorChanged(pane_id);
+  }
+
+  void NvimController::dismiss(std::uint64_t pane_id) {
+    attempt([&](GuiSession& session) {
+      application::nvim::dismiss(session, pane_id);
+    });
+    // The picker changed here, not by a message of the runtime: its views are told.
+    emit editorChanged(pane_id);
+  }
+
   void NvimController::answer(std::uint64_t pane_id, bool accepted, std::uint32_t index, const QString& text) {
     const auto bytes = text.toUtf8();
 

@@ -277,6 +277,7 @@ function _G.__telar_preview(path, line, row, column, columns, rows)
   end
 
   vim.wo[preview].number = true
+  vim.wo[preview].wrap = false
   vim.wo[preview].cursorline = line > 0
   if line > 0 then
     pcall(vim.api.nvim_win_set_cursor, preview, { line, 0 })

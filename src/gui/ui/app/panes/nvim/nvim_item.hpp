@@ -59,6 +59,7 @@ namespace telar::gui::qt {
     Q_PROPERTY(QVariantMap messages READ messages NOTIFY messagesChanged)
     Q_PROPERTY(QVariantMap tabline READ tabline NOTIFY tablineChanged)
     Q_PROPERTY(QVariantMap prompt READ prompt NOTIFY promptChanged)
+    Q_PROPERTY(QVariantMap picker READ picker NOTIFY pickerChanged)
 
   public:
     explicit NvimItem(QQuickItem* parent = nullptr);
@@ -115,6 +116,10 @@ namespace telar::gui::qt {
       return cmdline_;
     }
 
+    [[nodiscard]] QVariantMap picker() const {
+      return picker_;
+    }
+
     [[nodiscard]] QVariantMap popupMenu() const {
       return popup_menu_;
     }
@@ -137,6 +142,15 @@ namespace telar::gui::qt {
     Q_INVOKABLE void send(const QString& keys);
     // Takes an item of the completion menu, counted among all it has, as a click on it does.
     Q_INVOKABLE void chooseMenu(int item);
+    // The editor's picker. A source is "files", "text" or "buffers"; where an entry opens is
+    // "", "split", "vertical" or "tab". The preview's area is in this item's pixels, and an
+    // index below zero closes it.
+    Q_INVOKABLE void pick(const QString& source);
+    Q_INVOKABLE void searchPicker(const QString& query);
+    Q_INVOKABLE void acceptPicker(int index, const QString& where = {});
+    Q_INVOKABLE void previewPicker(int index, const QRectF& area);
+    Q_INVOKABLE void listPicker(const QVariantList& indices);
+    Q_INVOKABLE void closePicker();
 
     // What a grid's item reads to draw: the editor as last shown, and how its cells are drawn.
     [[nodiscard]] const application::nvim::Editor* editorState() const noexcept;
@@ -176,6 +190,7 @@ namespace telar::gui::qt {
     void modeChanged();
     void readyChanged();
     void separatorsChanged();
+    void pickerChanged();
     void cmdlineChanged();
     void popupMenuChanged();
     void messagesChanged();
@@ -224,6 +239,7 @@ namespace telar::gui::qt {
     void projectMessages(const application::nvim::Editor& editor);
     void projectTabs(const application::nvim::Editor& editor);
     void projectPrompt(const application::nvim::Editor& editor);
+    void projectPicker(const application::nvim::Editor& editor);
     void restartBlink(const application::nvim::Editor& editor);
     [[nodiscard]] QRectF gridBounds(const application::nvim::Grid& grid) const noexcept;
     [[nodiscard]] ds::Option<Hit> hit(QPointF position) const;
@@ -233,6 +249,10 @@ namespace telar::gui::qt {
     std::uint64_t pane_id_ = 0;
     ListModel grids_;
     QVariantList separators_;
+    QVariantMap picker_;
+    std::uint64_t picker_revision_ = 0;
+    // The cells the picker's preview was last asked to cover: the float found there is it.
+    application::nvim::PreviewArea preview_area_;
     TerminalFont font_;
     FontGrid font_grid_;
     std::shared_ptr<const FontCollection> font_collection_;
