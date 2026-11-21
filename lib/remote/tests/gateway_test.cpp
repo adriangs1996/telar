@@ -179,7 +179,7 @@ namespace {
       endpoint.key = gateway.key();
       unpaired = std::string{endpoint.destination().view()};
       endpoint.secret = PairingCodes::mint(server.state.directory());
-      destination = std::string{enroll(client.state, endpoint.format().view(), "test client").view()};
+      destination = std::string{enroll(client.state, {.address = endpoint.format().view(), .name = "test client"}).view()};
     }
 
     ~Pair() {
@@ -315,13 +315,13 @@ namespace {
     bool refused = false;
 
     endpoint.secret = PairingCodes::mint(pair.server.state.directory());
-    check(enroll(second.state, endpoint.format().view(), "second").view() == pair.unpaired);
+    check(enroll(second.state, {.address = endpoint.format().view(), .name = "second"}).view() == pair.unpaired);
     check(pair.run(second.state, pair.unpaired, "echo yes").output == "yes\n");
 
     const tests::Gateway third;
 
     try {
-      static_cast<void>(enroll(third.state, endpoint.format().view(), "third"));
+      static_cast<void>(enroll(third.state, {.address = endpoint.format().view(), .name = "third"}));
     } catch (const ChannelFailure&) {
       refused = true;
     }
@@ -426,6 +426,112 @@ namespace {
       for (const int descriptor : {reply[0], reply[1]}) {
         ::close(descriptor);
       }
+    }
+  }
+
+  // The gateway reads which ports listen at most once a second. A port that opened since it
+  // last read them is looked for again when a client first asks about it, so a forward to it
+  // is not told at once that it closed.
+  void aForwardToAPortThatJustOpenedStaysOpen() {
+    const Pair pair;
+    const LocalLink local{pair};
+    auto first = listenTcp("127.0.0.1", 0);
+    const auto first_port = first.port;
+    EchoServer steady{std::move(first.socket)};
+    int kept[2];
+
+    // A forward that stays makes the gateway read its ports again and again.
+    check(::pipe(kept) == 0);
+    std::thread keeper{[&] {
+      static_cast<void>(LinkClient::forward(local.paths(), pair.destination, first_port, "kept", kept[1]));
+    }};
+
+    check(std::stoul(readSome(kept[0], 16)) != 0);
+    for (int round = 0; round < 4; ++round) {
+      auto listener = listenTcp("127.0.0.1", 0);
+      const auto port = listener.port;
+      EchoServer echo{std::move(listener.socket)};
+      int reply[2];
+      std::promise<int> ended;
+      auto status = ended.get_future();
+
+      check(::pipe(reply) == 0);
+      std::thread holder{[&] {
+        ended.set_value(LinkClient::forward(local.paths(), pair.destination, port, "just opened", reply[1]));
+      }};
+
+      check(std::stoul(readSome(reply[0], 16)) != 0);
+      const bool kept_open = status.wait_for(std::chrono::milliseconds{700}) == std::future_status::timeout;
+
+      echo.stop();
+      holder.join();
+      check(kept_open, "a forward to a port that just opened lasts while the port does");
+      for (const int descriptor : {reply[0], reply[1]}) {
+        ::close(descriptor);
+      }
+    }
+
+    steady.stop();
+    keeper.join();
+    for (const int descriptor : {kept[0], kept[1]}) {
+      ::close(descriptor);
+    }
+  }
+
+  // One watch of a held machine outlives many forwards. A port whose holder left is no longer
+  // watched there, so the ports the link has asked for never outgrow the forwards it keeps,
+  // however many it has opened since the watch began.
+  void theLinkStopsWatchingAPortItsHolderLeft() {
+    const Pair pair;
+    const LocalLink local{pair};
+    const auto control = local.paths().control();
+    const auto ask = [&](const std::string& request) {
+      auto socket = connectUnix(control.view());
+
+      check(static_cast<bool>(socket));
+      writeAll(socket.get(), request);
+      check(readSome(socket.get(), 16).starts_with("ok"), "the link accepts the request");
+      return socket;
+    };
+    const auto holder = ask("hold " + std::string{pair.destination} + "\n");
+    constexpr int batches = 7;
+    constexpr int batch = 10;
+    // The ports stay open there to the end: only their holders leave.
+    std::vector<Listener> ports;
+
+    for (int round = 0; round < batches; ++round) {
+      std::vector<telar::runtime::FileDescriptor> holders;
+
+      for (int index = 0; index < batch; ++index) {
+        ports.push_back(listenTcp("127.0.0.1", 0));
+        holders.push_back(ask("forward " + std::string{pair.destination} + " " + std::to_string(ports.back().port) + " test origin\n"));
+      }
+
+      // The watch asks the gateway about the forwards it finds once in each of its turns.
+      std::this_thread::sleep_for(std::chrono::milliseconds{400});
+    }
+
+    // The watch that saw them all still tells a forward its port closed there.
+    auto listener = listenTcp("127.0.0.1", 0);
+    const auto port = listener.port;
+    EchoServer echo{std::move(listener.socket)};
+    int reply[2];
+    std::promise<int> ended;
+    auto status = ended.get_future();
+
+    check(::pipe(reply) == 0);
+    std::thread last{[&] {
+      ended.set_value(LinkClient::forward(local.paths(), pair.destination, port, "test origin", reply[1]));
+    }};
+
+    check(std::stoul(readSome(reply[0], 16)) != 0);
+    echo.stop();
+    const bool told = status.wait_for(std::chrono::seconds{3}) == std::future_status::ready;
+
+    last.join();
+    check(told && status.get() == 0, "a forward opened after seventy others is told its port closed there");
+    for (const int descriptor : {reply[0], reply[1]}) {
+      ::close(descriptor);
     }
   }
 
@@ -564,6 +670,8 @@ namespace {
   const telar::testing::Case case_the_link_forwards_a_port_until_it_closes_there{"gateway.the_link_forwards_a_port_until_it_closes_there", theLinkForwardsAPortUntilItClosesThere};
   const telar::testing::Case case_a_port_a_machine_shares_is_forwarded_to_whoever_holds_it{"gateway.a_port_a_machine_shares_is_forwarded_to_whoever_holds_it", aPortAMachineSharesIsForwardedToWhoeverHoldsIt};
   const telar::testing::Case case_a_forward_opened_right_after_another_ended_is_told_its_port_closed_too{"gateway.a_forward_opened_right_after_another_ended_is_told_its_port_closed_too", aForwardOpenedRightAfterAnotherEndedIsToldItsPortClosedToo};
+  const telar::testing::Case case_a_forward_to_a_port_that_just_opened_stays_open{"gateway.a_forward_to_a_port_that_just_opened_stays_open", aForwardToAPortThatJustOpenedStaysOpen};
+  const telar::testing::Case case_the_link_stops_watching_a_port_its_holder_left{"gateway.the_link_stops_watching_a_port_its_holder_left", theLinkStopsWatchingAPortItsHolderLeft};
   const telar::testing::Case case_commands_through_the_link_run_on_a_connection_kept_ready{"gateway.commands_through_the_link_run_on_a_connection_kept_ready", commandsThroughTheLinkRunOnAConnectionKeptReady};
   const telar::testing::Case case_the_link_refuses_a_port_nothing_listens_on{"gateway.the_link_refuses_a_port_nothing_listens_on", theLinkRefusesAPortNothingListensOn};
 

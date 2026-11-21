@@ -179,7 +179,9 @@ export {
 
       void handshake(Clock::time_point deadline);
       void identifyPeer();
-      [[nodiscard]] Transfer result(int status, std::size_t bytes) noexcept;
+
+      // What a step OpenSSL did not complete reports, from the status it returned.
+      [[nodiscard]] Transfer stalled(int status) noexcept;
 
       runtime::FileDescriptor socket_;
       runtime::TlsConnection connection_;
@@ -263,7 +265,10 @@ export {
       [[nodiscard]] ds::Option<PortNotice> next() noexcept;
 
     private:
-      ds::Array<std::uint8_t, 8 * PortNotice::maximum_bytes> bytes_{};
+      // The longest notices the buffer holds between two reads of them.
+      static constexpr std::size_t buffered_notices = 8;
+
+      ds::Array<std::uint8_t, buffered_notices * PortNotice::maximum_bytes> bytes_{};
       std::size_t begin_ = 0;
       std::size_t end_ = 0;
     };

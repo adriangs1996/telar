@@ -352,23 +352,23 @@ namespace telar::runtime::machines {
     }
 
     // The host is a name or an address, an IPv6 one in brackets, and may be followed by a port.
-    const auto authority = text.substr(0, fragment);
+    const auto authority = textPrefix(text, fragment);
     const bool addressed = std::ranges::all_of(authority, [](char byte) {
       return (byte >= 'a' && byte <= 'z') || (byte >= 'A' && byte <= 'Z') || (byte >= '0' && byte <= '9') || byte == '.' || byte == '-' || byte == '_' || byte == ':' || byte == '[' || byte == ']';
     });
 
-    const auto keys = text.substr(fragment + 1);
+    const auto keys = textAfter(text, fragment + 1);
     const auto separator = keys.find('.');
 
-    return addressed && authority.front() != ':' && hexadecimal(keys.substr(0, separator), key_digits) && (separator == std::string_view::npos || hexadecimal(keys.substr(separator + 1), code_digits));
+    return addressed && authority.front() != ':' && hexadecimal(textPrefix(keys, separator), key_digits) && (separator == std::string_view::npos || hexadecimal(textAfter(keys, separator + 1), code_digits));
   }
 
   bool MachineAddress::pairing(std::string_view text) noexcept {
-    return valid(text) && text.substr(text.find('#')).contains('.');
+    return valid(text) && textAfter(text, text.find('#')).contains('.');
   }
 
   std::string_view MachineAddress::saved(std::string_view text) noexcept {
-    return pairing(text) ? text.substr(0, text.rfind('.')) : text;
+    return pairing(text) ? textPrefix(text, text.rfind('.')) : text;
   }
 
   MachineId MachineId::fromRaw(std::uint64_t value) {

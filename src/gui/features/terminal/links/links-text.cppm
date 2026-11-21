@@ -221,13 +221,17 @@ export {
       [[nodiscard]] ds::Option<LinkTarget> through(std::uint16_t local) const;
 
     private:
-      LocalPortLink(const LinkTarget& target, std::uint16_t port, std::size_t host_begin, std::size_t authority_end) noexcept;
+      // Where the host starts in the link's text, and where its authority ends.
+      struct Authority {
+        std::size_t host_begin = 0;
+        std::size_t end = 0;
+      };
+
+      LocalPortLink(LinkTarget target, std::uint16_t port, Authority authority) noexcept;
 
       LinkTarget target_;
       std::uint16_t port_;
-      // Where the host starts in the link's text, and where its authority ends.
-      std::size_t host_begin_;
-      std::size_t authority_end_;
+      Authority authority_;
     };
 
   }

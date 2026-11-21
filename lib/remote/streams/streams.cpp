@@ -2,6 +2,7 @@ module telar.remote.streams;
 
 import telar.base.ds;
 import telar.platform.net;
+import telar.platform.primitives;
 import telar.sys.posix;
 import telar.tbc;
 
@@ -27,15 +28,25 @@ namespace telar::remote {
     constexpr std::size_t payload_bytes = 16000;
     constexpr std::size_t frame_bytes = header_bytes + payload_bytes;
     constexpr std::size_t buffer_bytes = 2 * frame_bytes;
+    // A run request's header: whether it asks for a terminal, then where the terminal's rows,
+    // its columns and the command's length start.
+    constexpr std::size_t rows_offset = 1;
+    constexpr std::size_t columns_offset = 3;
+    constexpr std::size_t length_offset = 5;
     constexpr std::size_t request_bytes = 9;
     constexpr unsigned byte_bits = 8;
     constexpr unsigned byte_mask = 0xff;
+    constexpr std::uint32_t word_mask = 0xffff;
 
     // A command whose streams ended is about to exit: its status is asked for again every
     // millisecond for a while, so that a quick command is not held for a tick, and then at a
     // pace that does not poll a slow one in a loop.
     constexpr int quick_reaps = 64;
     constexpr int slow_reap_wait_ms = 20;
+
+    constexpr int reapWait(int reaps) noexcept {
+      return reaps < quick_reaps ? 1 : slow_reap_wait_ms;
+    }
 
     void putU16(std::span<std::uint8_t> output, std::uint16_t value) noexcept {
       output[0] = static_cast<std::uint8_t>(value >> byte_bits);
@@ -48,7 +59,7 @@ namespace telar::remote {
 
     void putU32(std::span<std::uint8_t> output, std::uint32_t value) noexcept {
       putU16(output, static_cast<std::uint16_t>(value >> (2 * byte_bits)));
-      putU16(output.subspan(2), static_cast<std::uint16_t>(value & 0xffffU));
+      putU16(output.subspan(2), static_cast<std::uint16_t>(value & word_mask));
     }
 
     std::uint32_t getU32(std::span<const std::uint8_t> input) noexcept {
@@ -80,7 +91,7 @@ namespace telar::remote {
     };
 
     // A buffer whose bytes leave from the front and arrive at the back.
-    struct Queue {
+    struct Queue { // NOLINT(cppcoreguidelines-pro-type-member-init): only the bytes a read or a frame wrote are read; zeroing 32 KiB twice for every command is work no read needs
       ds::Array<std::uint8_t, buffer_bytes> bytes;
       std::size_t begin = 0;
       std::size_t end = 0;
@@ -99,7 +110,7 @@ namespace telar::remote {
           begin = 0;
           end = 0;
         } else if (begin != 0 && bytes.size() - end < frame_bytes) {
-          std::memmove(bytes.dataMut(), bytes.data() + begin, size());
+          std::ranges::shift_left(bytes.viewMut().first(end), static_cast<std::ptrdiff_t>(begin));
           end -= begin;
           begin = 0;
         }
@@ -143,8 +154,7 @@ namespace telar::remote {
             waiting = !exit_queued_;
           }
 
-          step(!waiting ? -1 : reaps < quick_reaps ? 1
-                                                   : slow_reap_wait_ms);
+          step(waiting ? reapWait(reaps) : -1);
           reaps += waiting ? 1 : 0;
 
           if (exit_queued_ && outgoing_.size() == 0) {
@@ -224,8 +234,13 @@ namespace telar::remote {
 
           const auto payload = frame.subspan(header_bytes, length);
           const auto kind = static_cast<Kind>(frame[0]);
-          if (kind == Kind::data && !pour(sinks_.atMut(frame[1]), payload, delivered_, blocked_sink_)) {
-            break;
+          if (kind == Kind::data) {
+            auto& sink = sinks_.atMut(frame[1]);
+
+            if (!pour(sink, payload, delivered_)) {
+              blocked_sink_ = sink.descriptor;
+              break;
+            }
           }
 
           if (kind == Kind::end) {
@@ -243,8 +258,8 @@ namespace telar::remote {
       }
 
       // Writes a payload to its sink from the byte `delivered` counts, which it advances; false
-      // while part of it still waits for the sink, which `blocked` then names.
-      static bool pour(Sink& sink, std::span<const std::uint8_t> payload, std::size_t& delivered, int& blocked) noexcept {
+      // while part of it still waits for the sink.
+      static bool pour(Sink& sink, std::span<const std::uint8_t> payload, std::size_t& delivered) noexcept {
         while (sink.open && delivered < payload.size()) {
           const auto rest = payload.subspan(delivered);
           const auto written = ::write(sink.descriptor, rest.data(), rest.size());
@@ -253,7 +268,6 @@ namespace telar::remote {
           } else if (sys::lastError() == EINTR) {
             continue;
           } else if (sink.nonblocking && runtime::socketWouldBlock(sys::lastError())) {
-            blocked = sink.descriptor;
             return false;
           } else {
             // Its reader is gone: what remains for it is dropped, as a closed pipe drops it.
@@ -281,7 +295,8 @@ namespace telar::remote {
             continue;
           }
 
-          const auto count = ::read(source.descriptor, room.data() + header_bytes, payload_bytes);
+          const auto payload = room.subspan(header_bytes, payload_bytes);
+          const auto count = ::read(source.descriptor, payload.data(), payload.size());
 
           source.ready = false;
           if (count < 0 && (sys::lastError() == EINTR || runtime::socketWouldBlock(sys::lastError()))) {
@@ -318,9 +333,9 @@ namespace telar::remote {
 
       void note(Transfer::State state) noexcept {
         if (state == Transfer::State::wants_read) {
-          interest_ = static_cast<short>(interest_ | POLLIN);
+          interest_ = runtime::combineFlags(interest_, POLLIN);
         } else if (state == Transfer::State::wants_write) {
-          interest_ = static_cast<short>(interest_ | POLLOUT);
+          interest_ = runtime::combineFlags(interest_, POLLOUT);
         } else if (state == Transfer::State::failed) {
           failed_ = true;
         }
@@ -330,7 +345,7 @@ namespace telar::remote {
         ds::Array<pollfd, 2 + stream_count> entries{};
         std::size_t count = 0;
 
-        entries.atMut(count++) = {.fd = channel_.descriptor(), .events = interest_, .revents = 0};
+        entries.atMut(count++) = {.fd = channel_.descriptor(), .events = static_cast<short>(interest_), .revents = 0};
         if (blocked_sink_ >= 0) {
           entries.atMut(count++) = {.fd = blocked_sink_, .events = POLLOUT, .revents = 0};
         }
@@ -363,7 +378,8 @@ namespace telar::remote {
       std::size_t delivered_ = 0;
       ds::Option<int> status_;
       int blocked_sink_ = -1;
-      short interest_ = 0;
+      // The events awaited of the channel, as the int the system names them with.
+      int interest_ = 0;
       bool peer_ended_ = false;
       bool failed_ = false;
       bool exit_queued_ = false;
@@ -396,11 +412,16 @@ namespace telar::remote {
     }
 
     header.atMut(0) = request.terminal ? 1 : 0;
-    putU16(header.viewMut().subspan(1), request.rows);
-    putU16(header.viewMut().subspan(3), request.columns);
-    putU32(header.viewMut().subspan(5), static_cast<std::uint32_t>(command.size()));
+    putU16(header.viewMut().subspan(rows_offset), request.rows);
+    putU16(header.viewMut().subspan(columns_offset), request.columns);
+    putU32(header.viewMut().subspan(length_offset), static_cast<std::uint32_t>(command.size()));
     channel.send(header.view(), deadline);
-    channel.send({reinterpret_cast<const std::uint8_t*>(command.data()), command.size()}, deadline); // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast): the command is sent as its bytes
+    // The command's text and its length, viewed as the bytes sent.
+#pragma clang unsafe_buffer_usage begin
+    const std::span<const std::uint8_t> bytes{reinterpret_cast<const std::uint8_t*>(command.data()), command.size()}; // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast): the command is sent as its bytes
+#pragma clang unsafe_buffer_usage end
+
+    channel.send(bytes, deadline);
   }
 
   std::string_view receiveRunRequest(Channel& channel, RunRequest& request, std::span<char> command) {
@@ -411,15 +432,20 @@ namespace telar::remote {
     const auto deadline = Clock::now() + exchange_timeout;
 
     channel.receive(header.viewMut().subspan(1), deadline);
-    const std::size_t length = getU32(header.view().subspan(5));
+    const std::size_t length = getU32(header.view().subspan(length_offset));
     if (length == 0 || length > command.size()) {
       throw ChannelFailure{"The client asked to run a command longer than a gateway runs"};
     }
 
     request.terminal = header[0] != 0;
-    request.rows = getU16(header.view().subspan(1));
-    request.columns = getU16(header.view().subspan(3));
-    channel.receive({reinterpret_cast<std::uint8_t*>(command.data()), length}, deadline); // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast): the command is received as its bytes
+    request.rows = getU16(header.view().subspan(rows_offset));
+    request.columns = getU16(header.view().subspan(columns_offset));
+    // The room for the command, which the length was checked against, viewed as the bytes received.
+#pragma clang unsafe_buffer_usage begin
+    const std::span<std::uint8_t> bytes{reinterpret_cast<std::uint8_t*>(command.data()), length}; // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast): the command is received as its bytes
+#pragma clang unsafe_buffer_usage end
+
+    channel.receive(bytes, deadline);
     return {command.data(), length};
   }
 

@@ -57,9 +57,11 @@ namespace telar::remote {
     constexpr auto link_start_window = std::chrono::seconds{5};
     constexpr auto poll_interval = std::chrono::milliseconds{10};
     constexpr int usage_status = 2;
+    // Room for the name of the log a link starts with, after its directory.
+    constexpr std::size_t log_name_bytes = 32;
 
     // What a signal ends: the server or the link this process runs.
-    std::atomic<void (*)() noexcept> stop_running{nullptr};
+    std::atomic<void (*)() noexcept> stop_running{nullptr}; // NOLINT(cppcoreguidelines-avoid-non-const-global-variables): a signal handler reaches only a global
 
     void onSignal(int /*number*/) noexcept {
       if (const auto stop = stop_running.load()) {
@@ -94,12 +96,14 @@ namespace telar::remote {
       static Service* running = nullptr;
 
       running = &service;
-      stop_running.store([]() noexcept {
+      stop_running.store([] noexcept {
         running->stop();
       });
 
-      ::signal(SIGTERM, &onSignal);
-      ::signal(SIGINT, &onSignal);
+      if (::signal(SIGTERM, &onSignal) == SIG_ERR || ::signal(SIGINT, &onSignal) == SIG_ERR) {
+        throw runtime::SystemError{"Handle the signals that stop the gateway"};
+      }
+
       service.run();
       ::_exit(0);
     }
@@ -203,7 +207,7 @@ namespace telar::remote {
         }
       }
 
-      std::println("{}", enroll(state, address, name).view());
+      std::println("{}", enroll(state, {.address = address, .name = name}).view());
       return 0;
     }
 
@@ -275,9 +279,9 @@ namespace telar::remote {
       }
 
       const runtime::ExecutablePath self;
-      ds::Array<char, PATH_MAX + 32> log{};
-      ds::Array<char, 5> command{'l', 'i', 'n', 'k', '\0'};
-      ds::Array<char*, 3> arguments{const_cast<char*>(self.cStr()), command.dataMut(), nullptr}; // NOLINT(cppcoreguidelines-pro-type-const-cast): posix_spawn's C signature takes the arguments as char*, and does not write them
+      ds::Array<char, PATH_MAX + log_name_bytes> log{};
+      auto command = ds::toArray("link");
+      const ds::Array<char*, 3> arguments{const_cast<char*>(self.cStr()), command.dataMut(), nullptr}; // NOLINT(cppcoreguidelines-pro-type-const-cast): posix_spawn's C signature takes the arguments as char*, and does not write them
 
       std::format_to_n(log.dataMut(), log.size() - 1, "{}/gateway.start.log", paths.directory.view());
       static_cast<void>(runtime::cli::spawnDaemon(self.cStr(), arguments.data(), log.data()));
@@ -317,7 +321,7 @@ namespace telar::remote {
       const std::string_view command{words.front()};
       const auto arguments = words.subspan(1);
       const auto state = State::open(runtime::process_environment);
-      const auto single = [&]() -> std::string_view {
+      const auto single = [&] -> std::string_view {
         if (arguments.size() != 1) {
           throw std::invalid_argument{"the command takes one address"};
         }
@@ -395,6 +399,23 @@ namespace telar::remote {
       throw std::invalid_argument{"unknown command"};
     }
 
+    // Prints the failure that ended a command on stderr, as each kind of failure reads, and
+    // returns the status the process ends with.
+    int reportFailure(const std::exception& error) {
+      if (dynamic_cast<const std::invalid_argument*>(&error) != nullptr) {
+        std::println(stderr, "telar-gateway: {}; see `telar-gateway --help`", error.what());
+        return usage_status;
+      }
+
+      if (const auto* system = dynamic_cast<const runtime::SystemError*>(&error)) {
+        std::println(stderr, "telar-gateway: {}: {}", error.what(), std::system_category().message(system->code()));
+      } else {
+        std::println(stderr, "telar-gateway: {}", error.what());
+      }
+
+      return 1;
+    }
+
   }
 }
 
@@ -414,16 +435,17 @@ auto main(int argc, char** argv) -> int {
     const runtime::TlsLibrary library{memory};
 
     // A peer that closes its connection must fail the write that finds out, not end the process.
-    ::signal(SIGPIPE, SIG_IGN);
-    return remote::dispatch(memory, words);
-  } catch (const std::invalid_argument& error) {
-    std::println(stderr, "telar-gateway: {}; see `telar-gateway --help`", error.what());
-    return remote::usage_status;
-  } catch (const runtime::SystemError& error) {
-    std::println(stderr, "telar-gateway: {}: {}", error.what(), std::system_category().message(error.code()));
-  } catch (const std::exception& error) {
-    std::println(stderr, "telar-gateway: {}", error.what());
-  }
+    if (::signal(SIGPIPE, SIG_IGN) == SIG_ERR) {
+      throw runtime::SystemError{"Ignore the signal of a closed connection"};
+    }
 
-  return 1;
+    return remote::dispatch(memory, words);
+  } catch (const std::exception& error) {
+    try {
+      return remote::reportFailure(error);
+    } catch (const std::exception&) {
+      // stderr refused the report too, and nothing is left to tell it to.
+      return 1;
+    }
+  }
 }

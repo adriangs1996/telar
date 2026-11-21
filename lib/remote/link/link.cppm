@@ -48,7 +48,7 @@ export {
       static constexpr std::size_t origin_bytes = PortNotice::origin_bytes;
 
       // Binds the control socket; throws SystemError when another link already serves `paths`.
-      explicit Link(const State& state, const LinkPaths& paths);
+      explicit Link(const State& state, LinkPaths paths);
       ~Link();
 
       Link(const Link&) = delete;
@@ -74,7 +74,7 @@ export {
         Endpoint endpoint;
         runtime::FileDescriptor listener;
         // When its ports may next be asked for, after the gateway could not be reached.
-        Clock::time_point retry_at{};
+        Clock::time_point retry_at;
         unsigned holds = 0;
         // A thread hears of its ports as they open and close.
         bool watched = false;
@@ -82,7 +82,7 @@ export {
         // A connection for the next command run there, made while the last one ran, so that the
         // next spends no round trip connecting; when it was made, and whether one is being made.
         ds::Option<Channel> ready;
-        Clock::time_point ready_since{};
+        Clock::time_point ready_since;
         bool readying = false;
       };
 
@@ -115,10 +115,28 @@ export {
         unsigned generation = 0;
       };
 
+      // The descriptors one wait of `run` listens on, and what a connection on each is for.
+      struct Waits {
+        static constexpr std::size_t maximum = 2 + maximum_machines + (2 * maximum_forwards);
+
+        void add(int descriptor, Accepted role) noexcept;
+
+        ds::Array<pollfd, maximum> entries{};
+        ds::Array<Accepted, maximum> roles{};
+        std::size_t count = 0;
+      };
+
+      // Lists what the next wait listens on, closing the forwards nobody holds any more.
+      void gather(Waits& waits) noexcept;
+
+      // Hands each connection waiting on `listener` to a thread of its own; whether any waited.
+      [[nodiscard]] bool admit(int listener, Accepted role) noexcept;
+
+      // `attach` serves the machine and `carry` the forward a connection was accepted for.
       void answer(runtime::FileDescriptor socket, Accepted accepted) noexcept;
       void control(int socket);
-      void attach(int socket, std::size_t machine);
-      void carry(int socket, std::size_t forward, unsigned generation);
+      void attach(int socket, const Accepted& accepted);
+      void carry(int socket, const Accepted& accepted);
 
       void requestSocket(int socket, std::string_view destination);
       void requestForward(int socket, std::string_view arguments);
@@ -137,6 +155,10 @@ export {
       [[nodiscard]] ds::Option<std::size_t> openForward(const Endpoint& endpoint, std::uint16_t port, std::string_view origin, Opening opening);
       void closeForward(const Endpoint& endpoint, std::uint16_t port) noexcept;
 
+      // The slot of the forward that listens here for `port` of a machine; none when none does.
+      // The caller holds the lock.
+      [[nodiscard]] ds::Option<std::size_t> listeningForward(const Endpoint& endpoint, std::uint16_t port) const noexcept;
+
       // The slot of a machine, taken when it has none; none when every slot is taken. The
       // caller holds the lock.
       [[nodiscard]] ds::Option<std::size_t> machineSlot(const Endpoint& endpoint) noexcept;
@@ -146,7 +168,29 @@ export {
       void watchMachine(std::size_t machine) noexcept;
       void watch(std::size_t machine) noexcept;
       [[nodiscard]] bool observe(Channel& channel, std::size_t machine, const Endpoint& endpoint);
-      void releaseForward(std::size_t index, unsigned generation, bool closed_there) noexcept;
+
+      // What a watch reads of its machine's forwards between two waits: whether anything still
+      // needs the watch, and the ports to ask the gateway about, which `asked` does not hold yet.
+      struct WatchNeeds {
+        // The ports of the machine that forwards asked for here still need watched there.
+        ds::Array<std::uint16_t, maximum_forwards> wanted{};
+        std::size_t wanted_count = 0;
+        bool needed = false;
+      };
+
+      [[nodiscard]] WatchNeeds watchNeeds(std::size_t machine, const Endpoint& endpoint) noexcept;
+
+      // A forward as its holder knows it: its slot, and the generation the slot had when taken.
+      struct HeldForward {
+        std::size_t index = 0;
+        unsigned generation = 0;
+      };
+
+      void releaseForward(HeldForward held, bool closed_there) noexcept;
+
+      // Whether a forward is still its holder's, with the port open there; one that is keeps
+      // its machine watched.
+      [[nodiscard]] bool stillOpen(HeldForward held) noexcept;
       void wake() const noexcept;
 
       // Whether anything uses the link now. The caller holds the lock.
@@ -157,6 +201,8 @@ export {
       Identity identity_;
       Contexts contexts_;
       runtime::FileDescriptor control_;
+      // The control socket's path, with the terminator the system calls that name it need.
+      ds::Array<char, sizeof(sockaddr_un::sun_path)> control_file_{};
       std::mutex mutex_;
       ds::Array<Machine, maximum_machines> machines_;
       ds::Array<Forward, maximum_forwards> forwards_;
@@ -186,7 +232,7 @@ export {
 
       // Asks for a local port to a port of a machine, writes `PORT\n` to `output` and holds the
       // forward until this process ends or the port closes there. Returns 0 when it closed
-      // there, 1 when the link refused.
+      // there, 1 when the link refused or ended without saying so.
       [[nodiscard]] static int forward(const LinkPaths& paths, std::string_view destination, std::uint16_t port, std::string_view origin, int output);
 
       // Writes to `output` a line for each forward to the machine: its port there, its port
@@ -234,10 +280,17 @@ export {
     // for a gateway that cannot be reached or a runtime that cannot be started.
     [[nodiscard]] int attachRemote(const State& state, std::string_view destination, int socket) noexcept;
 
-    // Presents a pairing address to its gateway under `name`, and returns the address to save.
+    // What a client pairs with: the pairing address of a gateway, and the name that gateway
+    // lists the client under.
+    struct Enrollment {
+      std::string_view address;
+      std::string_view name;
+    };
+
+    // Presents a pairing address to its gateway under a name, and returns the address to save.
     // Throws ChannelFailure when the gateway refuses, and std::invalid_argument for an address
     // without a pairing code.
-    [[nodiscard]] Endpoint::Text enroll(const State& state, std::string_view address, std::string_view name);
+    [[nodiscard]] Endpoint::Text enroll(const State& state, const Enrollment& enrollment);
 
   }
 }

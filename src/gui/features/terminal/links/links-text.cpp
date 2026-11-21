@@ -447,7 +447,7 @@ namespace telar::gui::features::terminal::links {
       port = *written;
     }
 
-    return LocalPortLink{target, port, host_begin, authority_end};
+    return LocalPortLink{target, port, {.host_begin = host_begin, .end = authority_end}};
   }
 
   std::uint16_t LocalPortLink::port() const noexcept {
@@ -457,18 +457,18 @@ namespace telar::gui::features::terminal::links {
   ds::Option<LinkTarget> LocalPortLink::through(std::uint16_t local) const {
     constexpr std::size_t port_digits = 5;
     const auto text = target_.text();
-    const auto authority = text.substr(host_begin_, authority_end_ - host_begin_);
+    const auto authority = text.substr(authority_.host_begin, authority_.end - authority_.host_begin);
     const auto bracket = authority.rfind(']');
     const auto colon = authority.find(':', bracket == std::string_view::npos ? 0 : bracket);
     const auto host = authority.substr(0, colon);
     BoundedText<LinkText::maximum_uri_bytes + port_digits + 1> rewritten;
 
     try {
-      rewritten.append(text.substr(0, host_begin_));
+      rewritten.append(text.substr(0, authority_.host_begin));
       rewritten.append(host == "0.0.0.0" ? std::string_view{"localhost"} : host);
       rewritten.append(":");
       rewritten.appendDecimal(local);
-      rewritten.append(text.substr(authority_end_));
+      rewritten.append(text.substr(authority_.end));
     } catch (const std::length_error&) {
       return ds::none;
     }
@@ -476,11 +476,10 @@ namespace telar::gui::features::terminal::links {
     return LinkTarget::fromUri(rewritten.view());
   }
 
-  LocalPortLink::LocalPortLink(const LinkTarget& target, std::uint16_t port, std::size_t host_begin, std::size_t authority_end) noexcept
-      : target_(target),
+  LocalPortLink::LocalPortLink(LinkTarget target, std::uint16_t port, Authority authority) noexcept
+      : target_(std::move(target)),
         port_(port),
-        host_begin_(host_begin),
-        authority_end_(authority_end) {}
+        authority_(authority) {}
 
   ds::Option<LinkTarget> LinkTarget::fromPath(std::string_view text) {
     if (text.empty() || text.size() > LinkText::maximum_uri_bytes || !LinkText::validUtf8(text) || std::ranges::any_of(text, LinkText::control)) {

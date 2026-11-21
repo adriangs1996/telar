@@ -9,7 +9,6 @@ import telar.tbc;
 
 namespace telar::remote {
 
-  using runtime::FileDescriptor;
   using runtime::SystemError;
 
   namespace {
@@ -39,13 +38,6 @@ namespace telar::remote {
       return std::string_view{reinterpret_cast<const char*>(bytes.data()), bytes.size()}; // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast): the file's bytes are read as text
     }
 
-    void writeText(int directory, std::string_view name, std::string_view text) {
-      const std::span<const std::uint8_t> bytes{reinterpret_cast<const std::uint8_t*>(text.data()), text.size()}; // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast): the text is written as the file's bytes
-      if (const int error = runtime::writePrivateFile(directory, name, bytes, runtime::PrivateFileMode::replace)) {
-        throw SystemError{"Write gateway state", error};
-      }
-    }
-
     // A fixed text that grows a piece at a time and says when one did not fit.
     template <std::size_t Capacity>
     class Writer {
@@ -62,7 +54,7 @@ namespace telar::remote {
       void appendNumber(std::uint64_t number) {
         constexpr std::size_t digits = 20;
         ds::Array<char, digits> text{};
-        const auto end = std::to_chars(text.dataMut(), text.dataMut() + text.size(), number).ptr;
+        const auto* const end = std::to_chars(text.dataMut(), std::to_address(text.viewMut().end()), number).ptr;
 
         append({text.data(), static_cast<std::size_t>(end - text.data())});
       }
@@ -75,6 +67,20 @@ namespace telar::remote {
       ds::Array<char, Capacity> bytes_{};
       std::size_t length_ = 0;
     };
+
+    // Replaces the state file `name` with what `text` holds.
+    template <std::size_t Capacity>
+    void writeText(int directory, std::string_view name, const Writer<Capacity>& text) {
+      const auto view = text.view();
+      // The text is written as the file's bytes.
+#pragma clang unsafe_buffer_usage begin
+      const std::span<const std::uint8_t> bytes{reinterpret_cast<const std::uint8_t*>(view.data()), view.size()}; // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast): no cast-free view reads text as bytes
+#pragma clang unsafe_buffer_usage end
+
+      if (const int error = runtime::writePrivateFile(directory, name, bytes, runtime::PrivateFileMode::replace)) {
+        throw SystemError{"Write gateway state", error};
+      }
+    }
 
     std::uint64_t now() noexcept {
       return static_cast<std::uint64_t>(std::chrono::duration_cast<std::chrono::seconds>(std::chrono::system_clock::now().time_since_epoch()).count());
@@ -131,7 +137,7 @@ namespace telar::remote {
           text.append("\n");
         }
 
-        writeText(directory, pairing_file, text.view());
+        writeText(directory, pairing_file, text);
       }
     };
 
@@ -172,7 +178,7 @@ namespace telar::remote {
     }
 
     for (std::size_t index = 0; index < bytes.size(); ++index) {
-      const auto digits = text.substr(index * 2, 2);
+      const auto digits = runtime::substring(text, index * 2, 2);
       const auto value = runtime::parseExact<std::uint8_t>(digits, hexadecimal);
       if (!value || digits.front() == '+' || digits.front() == '-') {
         return false;
@@ -210,7 +216,7 @@ namespace telar::remote {
     }
 
     auto authority = text.substr(0, fragment);
-    auto keys = text.substr(fragment + 1);
+    const auto keys = text.substr(fragment + 1);
     Endpoint endpoint;
     std::string_view host = authority;
     std::string_view port;
@@ -349,20 +355,20 @@ namespace telar::remote {
 
     text.appendNumber(port);
     text.append("\n");
-    writeText(directory_.get(), port_file, text.view());
+    writeText(directory_.get(), port_file, text);
   }
 
   Identity Identity::loadOrCreate(int directory) {
     constexpr unsigned attempts = 2;
 
     for (unsigned attempt = 0; attempt < attempts; ++attempt) {
-      runtime::SensitiveBuffer<runtime::PemDocument::maximum_bytes> key_bytes;
-      ds::Array<unsigned char, runtime::PemDocument::maximum_bytes> certificate_bytes{};
+      runtime::SensitiveBuffer<runtime::PemDocument::maximum_bytes> key_buffer;
+      ds::Array<unsigned char, runtime::PemDocument::maximum_bytes> certificate_buffer{};
       const auto key = runtime::openPrivateFile(directory, key_file, runtime::PemDocument::maximum_bytes);
       const auto certificate = runtime::openPrivateFile(directory, certificate_file, runtime::PemDocument::maximum_bytes);
       if (key.file && certificate.file) {
-        const auto key_span = std::span<std::uint8_t>{key_bytes.bytes()}.first(key.size);
-        const auto certificate_span = certificate_bytes.viewMut().first(certificate.size);
+        const auto key_span = std::span<std::uint8_t>{key_buffer.bytes()}.first(key.size);
+        const auto certificate_span = certificate_buffer.viewMut().first(certificate.size);
 
         runtime::readPrivateFileBytes(key.file.get(), key_span);
         runtime::readPrivateFileBytes(certificate.file.get(), certificate_span);
@@ -488,7 +494,7 @@ namespace telar::remote {
       text.append("\n");
     }
 
-    writeText(directory, clients_file, text.view());
+    writeText(directory, clients_file, text);
   }
 
   StateLock::StateLock(int directory)

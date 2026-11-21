@@ -31,6 +31,13 @@ namespace telar::remote {
     constexpr unsigned byte_bits = 8;
     constexpr unsigned byte_mask = 0xff;
     constexpr int listen_backlog = 64;
+    // What a wait reads at a time of the bytes that woke it.
+    constexpr std::size_t wake_bytes = 64;
+    // What a row of a machine's forwards takes beside its origin: three numbers, how it came to
+    // be and what separates them.
+    constexpr std::size_t ports_row_bytes = 32;
+    // What starts the line a link refuses a request with, before the reason.
+    constexpr std::string_view refusal_prefix = "error ";
 
     using Line = ds::Array<char, LinkClient::line_bytes>;
 
@@ -41,14 +48,14 @@ namespace telar::remote {
       void append(std::string_view text) noexcept {
         const auto count = std::min(text.size(), Capacity - length_);
 
-        std::ranges::copy(text.substr(0, count), bytes_.viewMut().subspan(length_).begin());
+        std::ranges::copy(runtime::textPrefix(text, count), bytes_.viewMut().subspan(length_).begin());
         length_ += count;
       }
 
       void appendNumber(std::uint64_t number) noexcept {
         constexpr std::size_t digits = 20;
         ds::Array<char, digits> text{};
-        const auto end = std::to_chars(text.dataMut(), text.dataMut() + text.size(), number).ptr;
+        const auto* const end = std::to_chars(text.dataMut(), std::to_address(text.viewMut().end()), number).ptr;
 
         append({text.data(), static_cast<std::size_t>(end - text.data())});
       }
@@ -88,7 +95,8 @@ namespace telar::remote {
       try {
         runtime::configureProxySocket(socket.get());
       } catch (const SystemError&) {
-        return FileDescriptor{};
+        socket.reset();
+        return socket;
       }
 
       const int only = 1;
@@ -101,7 +109,7 @@ namespace telar::remote {
       // have been forgotten.
       static_cast<void>(::setsockopt(socket.get(), SOL_SOCKET, SO_REUSEADDR, &only, sizeof(only)));
       if (::bind(socket.get(), address.address(), address.length) != 0 || ::listen(socket.get(), listen_backlog) != 0) {
-        return FileDescriptor{};
+        socket.reset();
       }
 
       return socket;
@@ -234,7 +242,7 @@ namespace telar::remote {
 
   SocketPath LinkPaths::machine(std::string_view destination) const {
     runtime::Sha256 hash;
-    ds::Array<char, 2 * SHA256_DIGEST_LENGTH> digits{};
+    ds::Array<char, std::size_t{2} * SHA256_DIGEST_LENGTH> digits{};
     Text<sizeof(sockaddr_un::sun_path)> text;
     SocketPath path;
 
@@ -254,13 +262,16 @@ namespace telar::remote {
     return path;
   }
 
-  Link::Link(const State& state, const LinkPaths& paths)
+  Link::Link(const State& state, LinkPaths paths)
       : state_(state),
-        paths_(paths),
+        paths_(std::move(paths)),
         identity_(Identity::loadOrCreate(state.directory())),
         contexts_(identity_) {
     runtime::createPrivateDirectory(paths_.directory.view());
-    control_ = listenUnix(paths_.control().view());
+    const auto control = paths_.control();
+
+    std::ranges::copy(control.view(), control_file_.viewMut().begin());
+    control_ = listenUnix(control.view());
     if (::pipe(wake_.dataMut()) != 0) {
       throw SystemError{"Create the gateway's wake pipe"};
     }
@@ -281,11 +292,7 @@ namespace telar::remote {
       ::close(end);
     }
 
-    const auto control = paths_.control();
-    ds::Array<char, sizeof(sockaddr_un::sun_path)> path{};
-
-    std::ranges::copy(control.view(), path.viewMut().begin());
-    ::unlink(path.data());
+    ::unlink(control_file_.data());
   }
 
   void Link::wake() const noexcept {
@@ -311,91 +318,95 @@ namespace telar::remote {
     return held || forwarding || threads_.load() != 0;
   }
 
-  void Link::run() noexcept {
-    constexpr std::size_t maximum_entries = 2 + maximum_machines + (2 * maximum_forwards);
-    ds::Array<pollfd, maximum_entries> entries{};
-    ds::Array<Accepted, maximum_entries> roles{};
-    const auto control_path = paths_.control();
-    ds::Array<char, sizeof(sockaddr_un::sun_path)> control_file{};
-    auto last_used = Clock::now();
+  void Link::Waits::add(int descriptor, Accepted role) noexcept {
+    entries.atMut(count) = {.fd = descriptor, .events = POLLIN, .revents = 0};
+    roles.atMut(count++) = role;
+  }
 
-    std::ranges::copy(control_path.view(), control_file.viewMut().begin());
-    while (!stopping_.load()) {
-      std::size_t count = 0;
-      const auto watch = [&](int descriptor, Accepted role) {
-        entries.atMut(count) = {.fd = descriptor, .events = POLLIN, .revents = 0};
-        roles.atMut(count++) = role;
-      };
+  void Link::gather(Waits& waits) noexcept {
+    waits.count = 0;
+    waits.add(wake_[0], {});
+    waits.add(control_.get(), {.role = Role::control});
+    const std::scoped_lock lock{mutex_};
 
-      watch(wake_[0], {});
-      watch(control_.get(), {.role = Role::control});
-      {
-        const std::scoped_lock lock{mutex_};
+    for (std::size_t index = 0; index < machines_.size(); ++index) {
+      if (machines_[index].used && machines_[index].listener) {
+        waits.add(machines_[index].listener.get(), {.role = Role::machine, .index = index});
+      }
+    }
 
-        for (std::size_t index = 0; index < machines_.size(); ++index) {
-          if (machines_[index].used && machines_[index].listener) {
-            watch(machines_[index].listener.get(), {.role = Role::machine, .index = index});
-          }
-        }
-
-        for (std::size_t index = 0; index < forwards_.size(); ++index) {
-          auto& forward = forwards_.atMut(index);
-          // A forward nobody holds is closed here, between two waits, so that no wait ever
-          // names a descriptor another thread closed.
-          if (forward.used && forward.holders == 0) {
-            forward.listener.reset();
-            forward.listener_six.reset();
-            forward.used = forward.connections != 0;
-          }
-
-          if (forward.listener) {
-            watch(forward.listener.get(), {.role = Role::forward, .index = index, .generation = forward.generation});
-          }
-
-          if (forward.listener_six) {
-            watch(forward.listener_six.get(), {.role = Role::forward, .index = index, .generation = forward.generation});
-          }
-        }
+    for (std::size_t index = 0; index < forwards_.size(); ++index) {
+      auto& forward = forwards_.atMut(index);
+      // A forward nobody holds is closed here, between two waits, so that no wait ever
+      // names a descriptor another thread closed.
+      if (forward.used && forward.holders == 0) {
+        forward.listener.reset();
+        forward.listener_six.reset();
+        forward.used = forward.connections != 0;
       }
 
+      if (forward.listener) {
+        waits.add(forward.listener.get(), {.role = Role::forward, .index = index, .generation = forward.generation});
+      }
+
+      if (forward.listener_six) {
+        waits.add(forward.listener_six.get(), {.role = Role::forward, .index = index, .generation = forward.generation});
+      }
+    }
+  }
+
+  bool Link::admit(int listener, Accepted role) noexcept {
+    bool admitted = false;
+
+    for (auto socket = acceptConnection(listener); socket; socket = acceptConnection(listener)) {
+      admitted = true;
+      threads_.fetch_add(1);
+      try {
+        // The descriptor crosses as a number, and is the thread's once the thread has started:
+        // one that could not start leaves the connection here, which closes it.
+        runtime::startThread("Start a gateway connection", [this, descriptor = socket.get(), role] {
+          answer(FileDescriptor{descriptor}, role);
+        }).detach();
+
+        static_cast<void>(socket.release());
+      } catch (const SystemError&) {
+        threads_.fetch_sub(1);
+      }
+    }
+
+    return admitted;
+  }
+
+  void Link::run() noexcept {
+    const auto wait_ms = static_cast<int>(std::chrono::duration_cast<std::chrono::milliseconds>(idle_check).count());
+    Waits waits;
+    auto last_used = Clock::now();
+
+    while (!stopping_.load()) {
+      gather(waits);
       {
         const std::scoped_lock lock{mutex_};
 
         // A link nobody has used for a while ends, and so does one whose socket was removed,
         // with the directory it lived in or by a newer link: nothing could reach it again.
         last_used = busy() ? Clock::now() : last_used;
-        if (Clock::now() - last_used >= idle_lifetime || ::access(control_file.data(), F_OK) != 0) {
+        if (Clock::now() - last_used >= idle_lifetime || ::access(control_file_.data(), F_OK) != 0) {
           return;
         }
       }
 
-      const auto wait_ms = static_cast<int>(std::chrono::duration_cast<std::chrono::milliseconds>(idle_check).count());
-
-      if (::poll(entries.dataMut(), static_cast<nfds_t>(count), wait_ms) < 0 && sys::lastError() != EINTR) {
+      if (::poll(waits.entries.dataMut(), static_cast<nfds_t>(waits.count), wait_ms) < 0 && sys::lastError() != EINTR) {
         return;
       }
 
-      ds::Array<char, 64> drained{};
+      ds::Array<char, wake_bytes> drained{};
 
       while (::read(wake_[0], drained.dataMut(), drained.size()) > 0) {
       }
 
-      for (std::size_t index = 1; index < count; ++index) {
-        if (entries[index].revents == 0) {
-          continue;
-        }
-
-        for (auto socket = acceptConnection(entries[index].fd); socket; socket = acceptConnection(entries[index].fd)) {
+      for (std::size_t index = 1; index < waits.count; ++index) {
+        if (waits.entries[index].revents != 0 && admit(waits.entries[index].fd, waits.roles[index])) {
           last_used = Clock::now();
-          threads_.fetch_add(1);
-          try {
-            // The thread owns the connection from here; the descriptor crosses as a number.
-            runtime::startThread("Start a gateway connection", [this, descriptor = socket.release(), role = roles[index]] {
-              answer(FileDescriptor{descriptor}, role);
-            }).detach();
-          } catch (const SystemError&) {
-            threads_.fetch_sub(1);
-          }
         }
       }
     }
@@ -406,12 +417,12 @@ namespace telar::remote {
       // A local port is for any program of this machine, as a forwarded port always is; the
       // sockets are for this account alone.
       if (accepted.role == Role::forward) {
-        carry(socket.get(), accepted.index, accepted.generation);
+        carry(socket.get(), accepted);
       } else if (ownedByUser(socket.get())) {
         if (accepted.role == Role::control) {
           control(socket.get());
         } else {
-          attach(socket.get(), accepted.index);
+          attach(socket.get(), accepted);
         }
       }
     } catch (const std::exception&) { // NOLINT(bugprone-empty-catch): a connection that fails ends alone; the others go on
@@ -482,24 +493,26 @@ namespace telar::remote {
   }
 
   ds::Option<std::size_t> Link::machineSlot(const Endpoint& endpoint) noexcept {
-    ds::Option<std::size_t> vacant;
+    // The machine's own slot, or the first vacant one until that is found.
+    ds::Option<std::size_t> slot;
 
     for (std::size_t index = 0; index < machines_.size(); ++index) {
       if (machines_[index].used && sameMachine(machines_[index].endpoint, endpoint)) {
-        return index;
+        slot = index;
+        return slot;
       }
 
-      if (!machines_[index].used && !vacant) {
-        vacant = index;
+      if (!machines_[index].used && !slot) {
+        slot = index;
       }
     }
 
-    if (vacant) {
-      machines_.atMut(*vacant).endpoint = endpoint;
-      machines_.atMut(*vacant).used = true;
+    if (slot) {
+      machines_.atMut(*slot).endpoint = endpoint;
+      machines_.atMut(*slot).used = true;
     }
 
-    return vacant;
+    return slot;
   }
 
   void Link::watchMachine(std::size_t machine) noexcept {
@@ -582,49 +595,62 @@ namespace telar::remote {
         }
       }
 
-      ds::Array<std::uint16_t, maximum_forwards> asking{};
-      std::size_t asking_count = 0;
-      bool needed = false;
-
-      {
-        const std::scoped_lock lock{mutex_};
-        const bool held = machines_[machine].holds != 0;
-
-        for (auto& forward : forwards_.viewMut()) {
-          if (!forward.used || !forward.listener || !sameMachine(forward.endpoint, endpoint)) {
-            continue;
-          }
-
-          // Nothing here holds the machine any more: what it shares is no longer forwarded.
-          if (forward.automatic && !held) {
-            forward.automatic = false;
-            forward.holders -= std::min(forward.holders, 1U);
-            wake();
-          }
-
-          needed = needed || forward.holders != 0;
-          const bool known = std::ranges::contains(std::span{asked}.first(asked_count), forward.remote);
-          if (forward.holders != 0 && !forward.automatic && !known) {
-            asking.atMut(asking_count++) = forward.remote;
-          }
-        }
-
-        needed = needed || held;
-      }
-
-      if (!needed) {
+      const auto needs = watchNeeds(machine, endpoint);
+      if (!needs.needed) {
         return true;
       }
 
-      for (const auto port : std::span{asking}.first(asking_count)) {
-        PortNotice{.kind = PortNotice::Kind::watch, .port = port}.send(channel);
-        asked.atMut(asked_count++) = port;
+      const auto wanted = std::span{needs.wanted}.first(needs.wanted_count);
+
+      // A port whose holder left is no longer watched there, so what is asked never outgrows
+      // the forwards the link keeps.
+      for (std::size_t index = asked_count; index > 0; --index) {
+        const auto port = asked[index - 1];
+        if (!std::ranges::contains(wanted, port)) {
+          PortNotice{.kind = PortNotice::Kind::unwatch, .port = port}.send(channel);
+          asked.atMut(index - 1) = asked[asked_count - 1];
+          --asked_count;
+        }
+      }
+
+      for (const auto port : wanted) {
+        if (asked_count < asked.size() && !std::ranges::contains(std::span{asked}.first(asked_count), port)) {
+          PortNotice{.kind = PortNotice::Kind::watch, .port = port}.send(channel);
+          asked.atMut(asked_count++) = port;
+        }
       }
 
       static_cast<void>(waitReady(channel.descriptor(), POLLIN, Clock::now() + watch_interval));
     }
 
     return false;
+  }
+
+  Link::WatchNeeds Link::watchNeeds(std::size_t machine, const Endpoint& endpoint) noexcept {
+    WatchNeeds needs;
+    const std::scoped_lock lock{mutex_};
+    const bool held = machines_[machine].holds != 0;
+
+    for (auto& forward : forwards_.viewMut()) {
+      if (!forward.used || !forward.listener || !sameMachine(forward.endpoint, endpoint)) {
+        continue;
+      }
+
+      // Nothing here holds the machine any more: what it shares is no longer forwarded.
+      if (forward.automatic && !held) {
+        forward.automatic = false;
+        forward.holders -= std::min(forward.holders, 1U);
+        wake();
+      }
+
+      needs.needed = needs.needed || forward.holders != 0;
+      if (forward.holders != 0 && !forward.automatic && needs.wanted_count < needs.wanted.size()) {
+        needs.wanted.atMut(needs.wanted_count++) = forward.remote;
+      }
+    }
+
+    needs.needed = needs.needed || held;
+    return needs;
   }
 
   void Link::makeReady(std::size_t machine) noexcept {
@@ -781,13 +807,13 @@ namespace telar::remote {
     --machines_.atMut(*slot).holds;
   }
 
-  void Link::attach(int socket, std::size_t machine) {
+  void Link::attach(int socket, const Accepted& accepted) {
     Endpoint endpoint;
 
     {
       const std::scoped_lock lock{mutex_};
 
-      endpoint = machines_[machine].endpoint;
+      endpoint = machines_[accepted.index].endpoint;
     }
 
     auto channel = Channel::dial(contexts_, endpoint, Service::attach, Clock::now() + dial_timeout);
@@ -795,6 +821,17 @@ namespace telar::remote {
     // What the window has to say travels with the handshake's last flight instead of waiting a
     // round trip for the gateway's answer.
     static_cast<void>(relayOnceAnswered(channel, socket));
+  }
+
+  ds::Option<std::size_t> Link::listeningForward(const Endpoint& endpoint, std::uint16_t port) const noexcept {
+    for (std::size_t index = 0; index < forwards_.size(); ++index) {
+      const auto& forward = forwards_[index];
+      if (forward.used && forward.listener && forward.remote == port && sameMachine(forward.endpoint, endpoint)) {
+        return index;
+      }
+    }
+
+    return ds::none;
   }
 
   ds::Option<std::size_t> Link::openForward(const Endpoint& endpoint, std::uint16_t port, std::string_view origin, Opening opening) {
@@ -809,17 +846,16 @@ namespace telar::remote {
         return ds::none;
       }
 
-      for (std::size_t index = 0; index < forwards_.size(); ++index) {
-        auto& forward = forwards_.atMut(index);
-        if (forward.used && forward.listener && forward.remote == port && sameMachine(forward.endpoint, endpoint)) {
-          if (!shared || !forward.automatic) {
-            ++forward.holders;
-          }
+      if (const auto listening = listeningForward(endpoint, port)) {
+        auto& forward = forwards_.atMut(*listening);
 
-          forward.automatic = forward.automatic || shared;
-          watchMachine(*machine);
-          return index;
+        if (!shared || !forward.automatic) {
+          ++forward.holders;
         }
+
+        forward.automatic = forward.automatic || shared;
+        watchMachine(*machine);
+        return *listening;
       }
     }
 
@@ -882,15 +918,15 @@ namespace telar::remote {
         generation = forward.generation;
       }
 
-      releaseForward(index, generation, true);
+      releaseForward({.index = index, .generation = generation}, true);
     }
   }
 
-  void Link::releaseForward(std::size_t index, unsigned generation, bool closed_there) noexcept {
+  void Link::releaseForward(HeldForward held, bool closed_there) noexcept {
     const std::scoped_lock lock{mutex_};
-    auto& forward = forwards_.atMut(index);
+    auto& forward = forwards_.atMut(held.index);
 
-    if (!forward.used || forward.generation != generation) {
+    if (!forward.used || forward.generation != held.generation) {
       return;
     }
 
@@ -946,13 +982,13 @@ namespace telar::remote {
       return;
     }
 
-    unsigned generation = 0;
+    HeldForward forward{.index = *index};
     Text<LinkClient::line_bytes> reply;
 
     {
       const std::scoped_lock lock{mutex_};
 
-      generation = forwards_[*index].generation;
+      forward.generation = forwards_[*index].generation;
       reply.append("ok ");
       reply.appendNumber(forwards_[*index].local);
       reply.append("\n");
@@ -963,24 +999,8 @@ namespace telar::remote {
     // The forward lasts while its holder keeps this connection and the port stays open there.
     while (held && !stopping_.load()) {
       char byte = 0;
-      bool open = false;
 
-      {
-        const std::scoped_lock lock{mutex_};
-
-        open = forwards_[*index].used && forwards_[*index].generation == generation && forwards_[*index].holders != 0;
-        // A watch that ended, with the forward before this one or with a gateway that was lost
-        // for a while, starts again: it is what tells this forward its port closed there.
-        if (open) {
-          const Endpoint endpoint = forwards_[*index].endpoint;
-
-          if (const auto machine = machineSlot(endpoint)) {
-            watchMachine(*machine);
-          }
-        }
-      }
-
-      if (!open) {
+      if (!stillOpen(forward)) {
         static_cast<void>(writeAll(socket, "closed\n"));
         return;
       }
@@ -990,18 +1010,37 @@ namespace telar::remote {
       }
     }
 
-    releaseForward(*index, generation, false);
+    releaseForward(forward, false);
   }
 
-  void Link::carry(int socket, std::size_t index, unsigned generation) {
+  bool Link::stillOpen(HeldForward held) noexcept {
+    const std::scoped_lock lock{mutex_};
+    const auto& forward = forwards_[held.index];
+
+    if (!forward.used || forward.generation != held.generation || forward.holders == 0) {
+      return false;
+    }
+
+    // A watch that ended, with the forward before this one or with a gateway that was lost
+    // for a while, starts again: it is what tells this forward its port closed there.
+    const Endpoint endpoint = forward.endpoint;
+
+    if (const auto machine = machineSlot(endpoint)) {
+      watchMachine(*machine);
+    }
+
+    return true;
+  }
+
+  void Link::carry(int socket, const Accepted& accepted) {
     Endpoint endpoint;
     std::uint16_t port = 0;
 
     {
       const std::scoped_lock lock{mutex_};
-      auto& forward = forwards_.atMut(index);
+      auto& forward = forwards_.atMut(accepted.index);
 
-      if (!forward.used || forward.generation != generation || forward.holders == 0) {
+      if (!forward.used || forward.generation != accepted.generation || forward.holders == 0) {
         return;
       }
 
@@ -1027,7 +1066,7 @@ namespace telar::remote {
 
     {
       const std::scoped_lock lock{mutex_};
-      auto& forward = forwards_.atMut(index);
+      auto& forward = forwards_.atMut(accepted.index);
 
       forward.connections -= std::min(forward.connections, 1U);
       if (forward.connections == 0 && !forward.listener) {
@@ -1037,13 +1076,13 @@ namespace telar::remote {
 
     // The gateway refuses a port nothing listens on any more, which closes the forward here.
     if (reply == Reply::refused) {
-      releaseForward(index, generation, true);
+      releaseForward({.index = accepted.index, .generation = accepted.generation}, true);
     }
   }
 
   void Link::requestPorts(int socket, std::string_view destination) {
     Endpoint endpoint;
-    Text<maximum_forwards*(origin_bytes + 32)> text;
+    Text<maximum_forwards*(origin_bytes + ports_row_bytes)> text;
 
     try {
       endpoint = Endpoint::parse(destination);
@@ -1129,7 +1168,7 @@ namespace telar::remote {
       Text<line_bytes> message;
 
       message.append("telar gateway: ");
-      message.append(reply ? reply->substr(std::min<std::size_t>(reply->size(), 6)) : std::string_view{"the gateway link did not answer"});
+      message.append(reply ? runtime::textAfter(*reply, refusal_prefix.size()) : std::string_view{"the gateway link did not answer"});
       message.append("\n");
       static_cast<void>(writeAll(STDERR_FILENO, message.view()));
       return 1;
@@ -1143,11 +1182,17 @@ namespace telar::remote {
       return 1;
     }
 
-    // Holding the connection holds the forward; the link ends it when the port closes there.
+    // Holding the connection holds the forward; the link ends it when the port closes there,
+    // and says so. A link that ends without a word was stopped or lost.
     while (!waitReady(socket.get(), POLLIN, Clock::now() + reply_timeout)) {
     }
 
-    return 0;
+    if (readLine(socket.get(), line.viewMut(), Clock::now() + reply_timeout) == std::string_view{"closed"}) {
+      return 0;
+    }
+
+    static_cast<void>(writeAll(STDERR_FILENO, "telar gateway: the gateway link ended\n"));
+    return 1;
   }
 
   int LinkClient::ports(const LinkPaths& paths, std::string_view destination, int output) {
@@ -1308,8 +1353,8 @@ namespace telar::remote {
     }
   }
 
-  Endpoint::Text enroll(const State& state, std::string_view address, std::string_view name) {
-    const auto endpoint = Endpoint::parse(address);
+  Endpoint::Text enroll(const State& state, const Enrollment& enrollment) {
+    const auto endpoint = Endpoint::parse(enrollment.address);
     if (!endpoint.secret) {
       throw std::invalid_argument{"Expected a pairing address, as `telar server pair` prints it"};
     }
@@ -1318,11 +1363,11 @@ namespace telar::remote {
     const Contexts contexts{identity};
     auto channel = Channel::dial(contexts, endpoint, Service::pair, Clock::now() + dial_timeout);
     ds::Array<std::uint8_t, secret_bytes + 1 + AuthorizedClients::name_bytes> request{};
-    const auto length = std::min(name.size(), AuthorizedClients::name_bytes);
+    const auto length = std::min(enrollment.name.size(), AuthorizedClients::name_bytes);
 
     std::ranges::copy(endpoint.secret->view(), request.viewMut().begin());
     request.atMut(secret_bytes) = static_cast<std::uint8_t>(length);
-    std::ranges::copy(name.substr(0, length), request.viewMut().subspan(secret_bytes + 1).begin());
+    std::ranges::copy(enrollment.name.substr(0, length), request.viewMut().subspan(secret_bytes + 1).begin());
     channel.send(request.view().first(secret_bytes + 1 + length), Clock::now() + exchange_timeout);
     if (receiveReply(channel) != Reply::accepted) {
       throw ChannelFailure{"The gateway refused the pairing code: it was used, it expired or it was mistyped"};

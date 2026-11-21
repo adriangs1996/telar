@@ -26,6 +26,8 @@ namespace telar::remote {
     // of this machine's ports may be when it is.
     constexpr auto ports_interval = std::chrono::milliseconds{250};
     constexpr auto listening_age = std::chrono::seconds{1};
+    // How old the list must be for a port missing from it to be worth reading it again.
+    constexpr auto listening_recheck = std::chrono::milliseconds{20};
     constexpr auto line_timeout = std::chrono::seconds{2};
     constexpr std::size_t line_bytes = 256;
     constexpr unsigned byte_bits = 8;
@@ -36,7 +38,7 @@ namespace telar::remote {
     PathText terminated(std::string_view path) noexcept {
       PathText text{};
 
-      std::ranges::copy(path.substr(0, PATH_MAX), text.viewMut().begin());
+      std::ranges::copy(runtime::textPrefix(path, PATH_MAX), text.viewMut().begin());
       return text;
     }
 
@@ -83,7 +85,7 @@ namespace telar::remote {
 
         // The environment block ends at its null entry.
 #pragma clang unsafe_buffer_usage begin
-        for (char** entry = environ; entry != nullptr && *entry != nullptr; ++entry) {
+        for (char* const* entry = environ; entry != nullptr && *entry != nullptr; ++entry) {
           named = named || std::string_view{*entry}.starts_with("TERM=");
           entries_.push(*entry);
         }
@@ -111,9 +113,9 @@ namespace telar::remote {
         state_(state),
         identity_(Identity::loadOrCreate(state.directory())),
         contexts_(identity_),
-        listener_(listenTcp(options.host, options.port)) {
+        listener_(listenTcp(options.host, options.port)),
+        explicit_runtime_socket_(!options.runtime_socket.empty()) {
     runtime_socket_.assign(runtime::cli::SocketLocation::resolve(options.runtime_socket, runtime::process_environment, ::geteuid()).path());
-    explicit_runtime_socket_ = !options.runtime_socket.empty();
     if (::pipe(wake_.dataMut()) != 0) {
       throw SystemError{"Create the gateway's wake pipe"};
     }
@@ -170,31 +172,43 @@ namespace telar::remote {
         return;
       }
 
-      for (auto socket = acceptConnection(listener_.socket.get()); socket; socket = acceptConnection(listener_.socket.get())) {
-        if (connections_.fetch_add(1) >= maximum_connections) {
-          connections_.fetch_sub(1);
-          continue;
-        }
+      admitClients();
+      admitPrograms();
+    }
+  }
 
-        try {
-          // The thread owns the connection from here; the descriptor crosses as a number.
-          runtime::startThread("Start a gateway connection", [this, descriptor = socket.release()] {
-            answer(FileDescriptor{descriptor});
-          }).detach();
-        } catch (const SystemError&) {
-          connections_.fetch_sub(1);
-        }
+  void Server::admitClients() noexcept {
+    for (auto socket = acceptConnection(listener_.socket.get()); socket; socket = acceptConnection(listener_.socket.get())) {
+      if (connections_.fetch_add(1) >= maximum_connections) {
+        connections_.fetch_sub(1);
+        continue;
       }
 
-      for (auto socket = sharing_ ? acceptConnection(sharing_.get()) : FileDescriptor{}; socket; socket = acceptConnection(sharing_.get())) {
-        connections_.fetch_add(1);
-        try {
-          runtime::startThread("Start a gateway connection", [this, descriptor = socket.release()] {
-            share(FileDescriptor{descriptor});
-          }).detach();
-        } catch (const SystemError&) {
-          connections_.fetch_sub(1);
-        }
+      try {
+        // The descriptor crosses as a number, and is the thread's once the thread has started:
+        // one that could not start leaves the connection here, which closes it.
+        runtime::startThread("Start a gateway connection", [this, descriptor = socket.get()] {
+          answer(FileDescriptor{descriptor});
+        }).detach();
+
+        static_cast<void>(socket.release());
+      } catch (const SystemError&) {
+        connections_.fetch_sub(1);
+      }
+    }
+  }
+
+  void Server::admitPrograms() noexcept {
+    for (auto socket = sharing_ ? acceptConnection(sharing_.get()) : FileDescriptor{}; socket; socket = acceptConnection(sharing_.get())) {
+      connections_.fetch_add(1);
+      try {
+        runtime::startThread("Start a gateway connection", [this, descriptor = socket.get()] {
+          share(FileDescriptor{descriptor});
+        }).detach();
+
+        static_cast<void>(socket.release());
+      } catch (const SystemError&) {
+        connections_.fetch_sub(1);
       }
     }
   }
@@ -294,12 +308,12 @@ namespace telar::remote {
 
       auto path = terminated(program->view());
       auto socket = terminated(runtime_socket_.view());
-      auto home = terminated(runtime::processHome().empty() ? std::string_view{"/"} : runtime::processHome());
-      ds::Array<char, 7> server{'s', 'e', 'r', 'v', 'e', 'r', '\0'};
-      ds::Array<char, 9> endpoint{'e', 'n', 'd', 'p', 'o', 'i', 'n', 't', '\0'};
-      ds::Array<char, 9> option{'-', '-', 's', 'o', 'c', 'k', 'e', 't', '\0'};
+      const auto home = terminated(runtime::processHome().empty() ? std::string_view{"/"} : runtime::processHome());
+      auto server = ds::toArray("server");
+      auto endpoint = ds::toArray("endpoint");
+      auto option = ds::toArray("--socket");
       // A runtime at its default socket is started as any telar command starts it, without naming the socket.
-      ds::Array<char*, 6> arguments{path.dataMut(), server.dataMut(), endpoint.dataMut(), explicit_runtime_socket_ ? option.dataMut() : nullptr, socket.dataMut(), nullptr};
+      const ds::Array<char*, 6> arguments{path.dataMut(), server.dataMut(), endpoint.dataMut(), explicit_runtime_socket_ ? option.dataMut() : nullptr, socket.dataMut(), nullptr};
       runtime::PipeProcess process{{.executable = path.data(), .cwd = home.data(), .arguments = arguments.data(), .environment = environ, .size = {}}};
       const auto deadline = Clock::now() + runtime_start_timeout;
 
@@ -322,9 +336,9 @@ namespace telar::remote {
 
     command.atMut(text.size()) = '\0';
     auto shell = terminated(runtime::loginShell().view());
-    auto home = terminated(runtime::processHome().empty() ? std::string_view{"/"} : runtime::processHome());
+    const auto home = terminated(runtime::processHome().empty() ? std::string_view{"/"} : runtime::processHome());
     ds::Array<char, 3> flag{'-', 'c', '\0'};
-    ds::Array<char*, 4> arguments{shell.dataMut(), flag.dataMut(), command.dataMut(), nullptr};
+    const ds::Array<char*, 4> arguments{shell.dataMut(), flag.dataMut(), command.dataMut(), nullptr};
     runtime::SpawnSpec specification{
         .executable = shell.data(),
         .cwd = home.data(),
@@ -335,7 +349,7 @@ namespace telar::remote {
 
     try {
       if (request.terminal) {
-        ds::Array<char, 20> term{'T', 'E', 'R', 'M', '=', 'x', 't', 'e', 'r', 'm', '-', '2', '5', '6', 'c', 'o', 'l', 'o', 'r', '\0'};
+        auto term = ds::toArray("TERM=xterm-256color");
         const TerminalEnvironment environment{memory_, term.viewMut()};
 
         specification.environment = environment.data();
@@ -420,6 +434,71 @@ namespace telar::remote {
     return std::ranges::binary_search(std::span{listening_}.first(listening_count_), port);
   }
 
+  bool Server::listeningNow(std::uint16_t port) noexcept {
+    if (listening(port)) {
+      return true;
+    }
+
+    {
+      const std::scoped_lock lock{mutex_};
+
+      if (Clock::now() - listening_read_ < listening_recheck) {
+        return false;
+      }
+
+      // Read again at the next question, which is the one below.
+      listening_read_ = Clock::time_point{};
+    }
+
+    return listening(port);
+  }
+
+  Server::SharingRequest Server::SharingRequest::parse(std::string_view line) noexcept {
+    const auto first = line.find(' ');
+    const auto rest = first == std::string_view::npos ? std::string_view{} : runtime::textAfter(line, first + 1);
+    const auto second = rest.find(' ');
+
+    return {
+        .port = runtime::unsignedDecimal<std::uint16_t>(runtime::textPrefix(rest, second)).valueOr(0),
+        .origin = second == std::string_view::npos ? std::string_view{} : runtime::textAfter(rest, second + 1),
+        .sharing = runtime::textPrefix(line, first) == "share",
+    };
+  }
+
+  bool Server::recordSharing(unsigned owner, const SharingRequest& request) noexcept { // NOLINT(bugprone-exception-escape): assign throws only past its capacity, which the origin is cut to
+    const std::scoped_lock lock{mutex_};
+    auto* vacant = static_cast<Shared*>(nullptr);
+
+    for (auto& entry : shared_.viewMut()) {
+      if (entry.used && entry.port == request.port) {
+        // A port is shared once; whoever asked first keeps it, and only it withdraws it.
+        const bool own = entry.owner == owner;
+
+        entry.used = request.sharing || !own;
+        return own;
+      }
+
+      if (!entry.used && vacant == nullptr) {
+        vacant = &entry;
+      }
+    }
+
+    if (!request.sharing) {
+      return true;
+    }
+
+    // As many ports are shared as the gateway keeps: this one is not, and its program is told.
+    if (vacant == nullptr) {
+      return false;
+    }
+
+    vacant->origin.assign(runtime::textPrefix(request.origin, PortNotice::origin_bytes));
+    vacant->owner = owner;
+    vacant->port = request.port;
+    vacant->used = true;
+    return true;
+  }
+
   void Server::share(FileDescriptor socket) noexcept {
     unsigned owner = 0;
 
@@ -439,44 +518,13 @@ namespace telar::remote {
         continue;
       }
 
-      const auto request = readLine(socket.get(), line.viewMut(), Clock::now() + line_timeout);
-      if (!request) {
+      const auto asked = readLine(socket.get(), line.viewMut(), Clock::now() + line_timeout);
+      if (!asked) {
         break;
       }
 
-      const auto first = request->find(' ');
-      const auto rest = first == std::string_view::npos ? std::string_view{} : request->substr(first + 1);
-      const auto second = rest.find(' ');
-      const auto port = runtime::unsignedDecimal<std::uint16_t>(rest.substr(0, second));
-      const auto origin = second == std::string_view::npos ? std::string_view{} : rest.substr(second + 1);
-      const bool sharing = request->substr(0, first) == "share";
-      bool done = port.hasValue() && *port != 0 && (!sharing || listening(*port));
-
-      if (done) {
-        const std::scoped_lock lock{mutex_};
-        auto* vacant = static_cast<Shared*>(nullptr);
-
-        for (auto& entry : shared_.viewMut()) {
-          if (entry.used && entry.port == *port) {
-            // A port is shared once; whoever asked first keeps it, and only it withdraws it.
-            done = entry.owner == owner;
-            entry.used = sharing || entry.owner != owner;
-            vacant = nullptr;
-            break;
-          }
-
-          if (!entry.used && vacant == nullptr) {
-            vacant = &entry;
-          }
-        }
-
-        if (sharing && done && vacant != nullptr) {
-          vacant->origin.assign(origin.substr(0, std::min(origin.size(), PortNotice::origin_bytes)));
-          vacant->owner = owner;
-          vacant->port = *port;
-          vacant->used = true;
-        }
-      }
+      const auto request = SharingRequest::parse(*asked);
+      const bool done = request.port != 0 && (!request.sharing || listening(request.port)) && recordSharing(owner, request);
 
       if (!writeText(socket.get(), done ? "ok\n" : "refused\n", Clock::now() + line_timeout)) {
         break;
@@ -494,75 +542,77 @@ namespace telar::remote {
     connections_.fetch_sub(1);
   }
 
+  void Server::PortList::forget(std::uint16_t port) noexcept {
+    const auto kept = std::ranges::remove(ports.viewMut().first(count), port);
+
+    count = static_cast<std::size_t>(kept.begin() - ports.viewMut().begin());
+  }
+
+  void Server::tellShared(Channel& channel, PortList& told) {
+    // What this machine shares now, read under the lock and told outside it.
+    ds::Array<Shared, maximum_shared> shared;
+
+    {
+      const std::scoped_lock lock{mutex_};
+
+      shared = shared_;
+    }
+
+    for (std::size_t index = told.count; index > 0; --index) {
+      const auto port = told.ports[index - 1];
+      const bool still = std::ranges::any_of(shared, [port](const Shared& entry) {
+        return entry.used && entry.port == port;
+      });
+
+      if (!still || !listening(port)) {
+        told.forget(port);
+        PortNotice{.kind = PortNotice::Kind::closed, .port = port}.send(channel);
+      }
+    }
+
+    for (const auto& entry : shared) {
+      const bool known = std::ranges::contains(std::span{told.ports}.first(told.count), entry.port);
+      if (entry.used && !known && told.count < told.ports.size() && listening(entry.port)) {
+        PortNotice notice{.kind = PortNotice::Kind::shared, .port = entry.port};
+
+        notice.origin = entry.origin;
+        notice.send(channel);
+        told.ports.atMut(told.count++) = entry.port;
+      }
+    }
+  }
+
   void Server::ports(Channel& channel) {
     // The ports this client asked to hear about, and those shared here it was told to forward.
-    ds::Array<std::uint16_t, maximum_shared> watched{};
-    ds::Array<std::uint16_t, maximum_shared> told{};
-    std::size_t watched_count = 0;
-    std::size_t told_count = 0;
+    PortList watched;
+    PortList told;
     PortNotices notices;
-    const auto forget = [](std::span<std::uint16_t> ports, std::size_t& count, std::uint16_t port) {
-      const auto kept = std::ranges::remove(ports.first(count), port);
-
-      count = static_cast<std::size_t>(kept.begin() - ports.begin());
-    };
 
     sendReply(channel, Reply::accepted);
     while (!stopping_.load() && notices.receive(channel)) {
       while (const auto notice = notices.next()) {
-        forget(watched.viewMut(), watched_count, notice->port);
+        watched.forget(notice->port);
         if (notice->kind != PortNotice::Kind::watch) {
           continue;
         }
 
         // A port nothing listens on is closed before it was ever watched.
-        if (listening(notice->port) && watched_count < watched.size()) {
-          watched.atMut(watched_count++) = notice->port;
+        if (listeningNow(notice->port) && watched.count < watched.ports.size()) {
+          watched.ports.atMut(watched.count++) = notice->port;
         } else {
           PortNotice{.kind = PortNotice::Kind::closed, .port = notice->port}.send(channel);
         }
       }
 
-      for (std::size_t index = watched_count; index > 0; --index) {
-        const auto port = watched[index - 1];
+      for (std::size_t index = watched.count; index > 0; --index) {
+        const auto port = watched.ports[index - 1];
         if (!listening(port)) {
-          forget(watched.viewMut(), watched_count, port);
+          watched.forget(port);
           PortNotice{.kind = PortNotice::Kind::closed, .port = port}.send(channel);
         }
       }
 
-      // What this machine shares now, read under the lock and told outside it.
-      ds::Array<Shared, maximum_shared> shared;
-
-      {
-        const std::scoped_lock lock{mutex_};
-
-        shared = shared_;
-      }
-
-      for (std::size_t index = told_count; index > 0; --index) {
-        const auto port = told[index - 1];
-        const bool still = std::ranges::any_of(shared, [port](const Shared& entry) {
-          return entry.used && entry.port == port;
-        });
-
-        if (!still || !listening(port)) {
-          forget(told.viewMut(), told_count, port);
-          PortNotice{.kind = PortNotice::Kind::closed, .port = port}.send(channel);
-        }
-      }
-
-      for (const auto& entry : shared) {
-        const bool known = std::ranges::contains(std::span{told}.first(told_count), entry.port);
-        if (entry.used && !known && told_count < told.size() && listening(entry.port)) {
-          PortNotice notice{.kind = PortNotice::Kind::shared, .port = entry.port};
-
-          notice.origin = entry.origin;
-          notice.send(channel);
-          told.atMut(told_count++) = entry.port;
-        }
-      }
-
+      tellShared(channel, told);
       static_cast<void>(waitReady(channel.descriptor(), POLLIN, Clock::now() + ports_interval));
     }
   }

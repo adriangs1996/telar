@@ -60,15 +60,49 @@ export {
       void stop() noexcept;
 
     private:
+      // Hand each connection waiting on the TCP listener, and on the sharing socket, to a thread
+      // of its own.
+      void admitClients() noexcept;
+      void admitPrograms() noexcept;
+
       void answer(runtime::FileDescriptor socket) noexcept;
       void serve(Channel& channel);
       void attach(Channel& channel);
       void runCommand(Channel& channel);
-      void forward(Channel& channel);
+      static void forward(Channel& channel);
       void pair(Channel& channel);
       void ports(Channel& channel);
       void share(runtime::FileDescriptor socket) noexcept;
       [[nodiscard]] bool listening(std::uint16_t port) noexcept;
+      // The same for a port a client asks about for the first time, which may have opened after
+      // the list of listening ports was last read: one missing from the list is looked for again.
+      [[nodiscard]] bool listeningNow(std::uint16_t port) noexcept;
+
+      // What a program of this machine asks on the sharing socket: to share a port, or to stop.
+      struct SharingRequest {
+        // Zero when the line names no port.
+        std::uint16_t port = 0;
+        std::string_view origin;
+        bool sharing = false;
+
+        [[nodiscard]] static SharingRequest parse(std::string_view line) noexcept;
+      };
+
+      // Shares or withdraws a port for the connection `owner` numbers; false for a port another
+      // connection shares.
+      [[nodiscard]] bool recordSharing(unsigned owner, const SharingRequest& request) noexcept;
+
+      // The ports a client of the ports service is kept told about.
+      struct PortList {
+        ds::Array<std::uint16_t, maximum_shared> ports{};
+        std::size_t count = 0;
+
+        void forget(std::uint16_t port) noexcept;
+      };
+
+      // Tells a client which of the ports it was told to forward closed, and which ports this
+      // machine shares since.
+      void tellShared(Channel& channel, PortList& told);
       [[nodiscard]] runtime::FileDescriptor connectRuntime() const noexcept;
       void startRuntime() const noexcept;
 
@@ -95,7 +129,7 @@ export {
       // and the system is asked once a second for all.
       ds::Array<std::uint16_t, maximum_listening> listening_{};
       std::size_t listening_count_ = 0;
-      Clock::time_point listening_read_{};
+      Clock::time_point listening_read_;
       unsigned owners_ = 0;
       ds::Array<int, 2> wake_{-1, -1};
       std::atomic<unsigned> connections_{0};

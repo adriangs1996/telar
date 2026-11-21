@@ -2467,7 +2467,7 @@ namespace telar::runtime::cli::gateway_commands {
     // for the report of a failure.
     bool manage(Memory& memory, std::initializer_list<std::string_view> words, Text* said = nullptr) {
       try {
-        auto output = launch::capture(memory, launch::words(memory, words).view(), {}, command_timeout);
+        const auto output = launch::capture(memory, launch::words(memory, words).view(), {}, command_timeout);
 
         if (said != nullptr) {
           said->assign(output.err.view());
@@ -2715,7 +2715,7 @@ namespace telar::runtime::cli::port_sharing {
     constexpr std::size_t line_bytes = 256;
 
     // The child a signal meant for this process is passed on to.
-    std::atomic<pid_t> shared_child{0};
+    std::atomic<pid_t> shared_child{0}; // NOLINT(cppcoreguidelines-avoid-non-const-global-variables): a signal handler reaches only a global
 
     void passSignal(int number) noexcept {
       if (const auto child = shared_child.load(); child > 0) {
@@ -2730,22 +2730,23 @@ namespace telar::runtime::cli::port_sharing {
       const RuntimePaths<Memory> paths{memory, server_options, process_environment};
       const auto directory = std::string_view{paths.socket}.substr(0, paths.socket.view().rfind('/'));
       sockaddr_un address{};
+      FileDescriptor socket;
 
       if (directory.size() + sharing_socket.size() >= sizeof(address.sun_path)) {
-        return FileDescriptor{};
+        return socket;
       }
 
       address.sun_family = AF_UNIX;
-      auto end = std::ranges::copy(directory, std::span{address.sun_path}.begin()).out;
+      const auto end = std::ranges::copy(directory, std::span{address.sun_path}.begin()).out;
 
       std::ranges::copy(sharing_socket, end);
-      FileDescriptor socket{::socket(AF_UNIX, SOCK_STREAM, 0)};
-
-      if (!socket || ::connect(socket.get(), reinterpret_cast<const sockaddr*>(&address), sizeof(address)) != 0) { // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast): the socket API passes every address family as a sockaddr
-        return FileDescriptor{};
+      socket.reset(::socket(AF_UNIX, SOCK_STREAM, 0));
+      if (socket && ::connect(socket.get(), reinterpret_cast<const sockaddr*>(&address), sizeof(address)) == 0) { // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast): the socket API passes every address family as a sockaddr
+        setCloseOnExec(socket.get());
+      } else {
+        socket.reset();
       }
 
-      setCloseOnExec(socket.get());
       return socket;
     }
 
@@ -2803,7 +2804,7 @@ namespace telar::runtime::cli::port_sharing {
 
     shared_child.store(child);
     for (const int number : {SIGTERM, SIGINT, SIGHUP}) {
-      ::signal(number, &passSignal);
+      static_cast<void>(::signal(number, &passSignal));
     }
 
     const auto program = std::string_view{command.front()};

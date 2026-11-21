@@ -145,9 +145,9 @@ namespace telar::sys::captured {
   // The option that sets how long a connection idles before its first keepalive probe, which
   // Darwin and Linux name differently.
 #ifdef __APPLE__
-  inline constexpr int keepalive_idle_ = TCP_KEEPALIVE;
+  inline constexpr int keepalive_idle = TCP_KEEPALIVE;
 #else
-  inline constexpr int keepalive_idle_ = TCP_KEEPIDLE;
+  inline constexpr int keepalive_idle = TCP_KEEPIDLE;
 #endif
 
   // Control messages; the sizes bound buffers, so they stay constant expressions.
@@ -309,7 +309,7 @@ export namespace telar::sys {
 
   // The TCP option for the idle time before the first keepalive probe: TCP_KEEPALIVE on Darwin,
   // TCP_KEEPIDLE on Linux.
-  inline constexpr int tcp_keepalive_idle = captured::keepalive_idle_;
+  inline constexpr int tcp_keepalive_idle = captured::keepalive_idle;
 
   // The interface name an ifreq carries.
   inline constexpr auto& interfaceName(ifreq& request) noexcept {

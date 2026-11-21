@@ -26,6 +26,9 @@ namespace telar::remote {
 
     constexpr int listen_backlog = 64;
 
+    // What a channel being closed reads at a time of what its peer still sends.
+    constexpr std::size_t discard_bytes = 512;
+
     // A dead peer is noticed after this long without an answer: the idle time before the first
     // probe, then `keepalive_probes` of them `keepalive_interval` apart.
     constexpr int keepalive_idle = 30;
@@ -71,15 +74,14 @@ namespace telar::remote {
 
     FileDescriptor connectAddress(const sockaddr* address, socklen_t length, Clock::time_point deadline) noexcept {
       FileDescriptor socket{::socket(address->sa_family, SOCK_STREAM, IPPROTO_TCP)};
-      if (!socket || !prepare(socket.get())) {
-        return FileDescriptor{};
+      const bool reached = socket && prepare(socket.get()) && (::connect(socket.get(), address, length) == 0 || (sys::lastError() == EINPROGRESS && connected(socket.get(), deadline)));
+
+      if (reached) {
+        tuneTcp(socket.get());
+      } else {
+        socket.reset();
       }
 
-      if (::connect(socket.get(), address, length) != 0 && (sys::lastError() != EINPROGRESS || !connected(socket.get(), deadline))) {
-        return FileDescriptor{};
-      }
-
-      tuneTcp(socket.get());
       return socket;
     }
 
@@ -148,7 +150,7 @@ namespace telar::remote {
     }
 
     // One direction of a relay: the bytes read from one side and not yet written to the other.
-    struct Half {
+    struct Half { // NOLINT(cppcoreguidelines-pro-type-member-init): each read fills the bytes that are then written; zeroing 64 KiB twice for every relay is work no read needs
       static constexpr std::size_t capacity = std::size_t{64} * 1024;
 
       ds::Array<std::uint8_t, capacity> bytes;
@@ -177,16 +179,22 @@ namespace telar::remote {
       }
     };
 
-    // What a relay waits for when no direction can move.
+    // The event a step that could not move waits for.
+    constexpr short awaited(Transfer::State state) noexcept {
+      return static_cast<short>(state == Transfer::State::wants_read ? POLLIN : POLLOUT);
+    }
+
+    // What a relay waits for when no direction can move: the events of each side, kept as the
+    // int the system names them with until poll takes them.
     struct Interest {
-      short channel = 0;
-      short local = 0;
+      int channel = 0;
+      int local = 0;
 
       void note(Transfer::State state) noexcept {
         if (state == Transfer::State::wants_read) {
-          channel = static_cast<short>(channel | POLLIN);
+          channel = runtime::combineFlags(channel, POLLIN);
         } else if (state == Transfer::State::wants_write) {
-          channel = static_cast<short>(channel | POLLOUT);
+          channel = runtime::combineFlags(channel, POLLOUT);
         }
       }
     };
@@ -197,35 +205,47 @@ namespace telar::remote {
       failed,
     };
 
-    // Moves what it can from the channel to the local socket. While `answer` is awaited, the
-    // first byte the channel delivers is the gateway's answer and is kept from the socket; an
-    // answer other than `accepted` ends the relay.
+    // The answer a byte spells; one no gateway sends reads as `unavailable`.
+    constexpr Reply replyOf(std::uint8_t byte) noexcept {
+      return byte <= static_cast<std::uint8_t>(Reply::unavailable) ? static_cast<Reply>(byte) : Reply::unavailable;
+    }
+
+    // Reads the channel into an empty half. While `answer` is awaited, the first byte read is
+    // the gateway's answer and is kept from the socket; an answer other than `accepted` fails.
+    Step fillDown(Channel& channel, Half& half, Interest& interest, ds::Option<Reply>* answer) noexcept {
+      const auto read = channel.read(half.bytes.viewMut());
+      if (read.state == Transfer::State::failed) {
+        return Step::failed;
+      }
+
+      if (read.state == Transfer::State::ended) {
+        half.ended = true;
+        return Step::moved;
+      }
+
+      if (read.state != Transfer::State::done) {
+        interest.note(read.state);
+        return Step::idle;
+      }
+
+      half.filled(read.bytes);
+      if (answer == nullptr || answer->hasValue()) {
+        return Step::moved;
+      }
+
+      *answer = replyOf(half.bytes[0]);
+      half.drained(1);
+      return *answer == Reply::accepted ? Step::moved : Step::failed;
+    }
+
+    // Moves what it can from the channel to the local socket; `answer` as `fillDown` takes it.
     Step pumpDown(Channel& channel, int local, Half& half, Interest& interest, ds::Option<Reply>* answer = nullptr) noexcept {
       Step step = Step::idle;
 
       if (!half.ended && half.empty()) {
-        const auto read = channel.read(half.bytes.viewMut());
-        if (read.state == Transfer::State::failed) {
+        step = fillDown(channel, half, interest, answer);
+        if (step == Step::failed) {
           return Step::failed;
-        }
-
-        if (read.state == Transfer::State::done) {
-          half.filled(read.bytes);
-          step = Step::moved;
-          if (answer != nullptr && !answer->hasValue()) {
-            const auto byte = half.bytes[0];
-
-            *answer = byte <= static_cast<std::uint8_t>(Reply::unavailable) ? static_cast<Reply>(byte) : Reply::unavailable;
-            half.drained(1);
-            if (*answer != Reply::accepted) {
-              return Step::failed;
-            }
-          }
-        } else if (read.state == Transfer::State::ended) {
-          half.ended = true;
-          step = Step::moved;
-        } else {
-          interest.note(read.state);
         }
       }
 
@@ -236,7 +256,7 @@ namespace telar::remote {
           half.drained(static_cast<std::size_t>(written));
           step = Step::moved;
         } else if (runtime::socketWouldBlock(sys::lastError())) {
-          interest.local = static_cast<short>(interest.local | POLLOUT);
+          interest.local = runtime::combineFlags(interest.local, POLLOUT);
         } else {
           return Step::failed;
         }
@@ -264,7 +284,7 @@ namespace telar::remote {
           half.ended = true;
           step = Step::moved;
         } else if (runtime::socketWouldBlock(sys::lastError())) {
-          interest.local = static_cast<short>(interest.local | POLLIN);
+          interest.local = runtime::combineFlags(interest.local, POLLIN);
         } else {
           return Step::failed;
         }
@@ -331,7 +351,8 @@ namespace telar::remote {
   }
 
   Listener listenTcp(std::string_view host, std::uint16_t port) {
-    runtime::NetworkAddress address = runtime::NetworkAddress::ipv6(in6_addr{}, port);
+    const in6_addr every_address{};
+    runtime::NetworkAddress address = runtime::NetworkAddress::ipv6(every_address, port);
     bool every_family = host.empty();
 
     if (!host.empty()) {
@@ -410,7 +431,9 @@ namespace telar::remote {
     }
 
     std::ranges::copy(host, name.viewMut().begin());
-    static_cast<void>(std::to_chars(service.dataMut(), service.dataMut() + Endpoint::port_digits, port));
+    const auto digits = service.viewMut().first(Endpoint::port_digits);
+
+    static_cast<void>(std::to_chars(digits.data(), std::to_address(digits.end()), port));
     hints.ai_family = AF_UNSPEC;
     hints.ai_socktype = SOCK_STREAM;
     if (::getaddrinfo(name.data(), service.data(), &hints, &found) != 0) {
@@ -458,12 +481,12 @@ namespace telar::remote {
       }
 
       // Nobody listens on the socket a gateway that died left behind.
-      if (::unlink(address.sun_path) != 0 || ::bind(socket.get(), generic(address), sizeof(address)) != 0) {
+      if (::unlink(std::data(address.sun_path)) != 0 || ::bind(socket.get(), generic(address), sizeof(address)) != 0) {
         throw SystemError{"Replace the stale gateway socket"};
       }
     }
 
-    if (::chmod(address.sun_path, owner_only) != 0 || ::listen(socket.get(), listen_backlog) != 0) {
+    if (::chmod(std::data(address.sun_path), owner_only) != 0 || ::listen(socket.get(), listen_backlog) != 0) {
       throw SystemError{"Listen on the gateway socket"};
     }
 
@@ -483,7 +506,7 @@ namespace telar::remote {
 
     // A local connect completes or fails at once, so it is made before the socket stops blocking.
     if (!socket || ::connect(socket.get(), generic(address), sizeof(address)) != 0 || !prepare(socket.get())) {
-      return FileDescriptor{};
+      socket.reset();
     }
 
     return socket;
@@ -492,8 +515,8 @@ namespace telar::remote {
   FileDescriptor acceptConnection(int listener) noexcept {
     FileDescriptor connection{::accept(listener, nullptr, nullptr)};
 
-    if (!connection || !prepare(connection.get())) {
-      return FileDescriptor{};
+    if (connection && !prepare(connection.get())) {
+      connection.reset();
     }
 
     return connection;
@@ -550,7 +573,7 @@ namespace telar::remote {
       : server_(makeContext(TLS_server_method(), identity)),
         client_(makeContext(TLS_client_method(), identity)) {
     // A gateway asks every client for its certificate; a client always checks the gateway's.
-    SSL_CTX_set_verify(server_.get(), SSL_VERIFY_PEER | SSL_VERIFY_FAIL_IF_NO_PEER_CERT, nullptr);
+    SSL_CTX_set_verify(server_.get(), runtime::combineFlags(SSL_VERIFY_PEER, SSL_VERIFY_FAIL_IF_NO_PEER_CERT), nullptr);
     SSL_CTX_set_verify(client_.get(), SSL_VERIFY_PEER, nullptr);
     SSL_CTX_set_alpn_select_cb(server_.get(), &selectService, nullptr);
     runtime::requireTls(SSL_CTX_set_num_tickets(server_.get(), 0) == 1, "Disable TLS session tickets");
@@ -669,7 +692,7 @@ namespace telar::remote {
         throw ChannelFailure{"The TLS handshake failed"};
       }
 
-      if (!waitReady(socket_.get(), error == SSL_ERROR_WANT_READ ? POLLIN : POLLOUT, deadline)) {
+      if (!waitReady(socket_.get(), static_cast<short>(error == SSL_ERROR_WANT_READ ? POLLIN : POLLOUT), deadline)) {
         throw ChannelFailure{"The TLS handshake timed out"};
       }
     }
@@ -685,11 +708,7 @@ namespace telar::remote {
     peer_ = runtime::publicKeyDigest(certificate.get());
   }
 
-  Transfer Channel::result(int status, std::size_t bytes) noexcept {
-    if (status == 1) {
-      return {.state = Transfer::State::done, .bytes = bytes};
-    }
-
+  Transfer Channel::stalled(int status) noexcept {
     switch (SSL_get_error(connection_.get(), status)) {
     case SSL_ERROR_WANT_READ:
       return {.state = Transfer::State::wants_read};
@@ -731,7 +750,9 @@ namespace telar::remote {
     }
 
     ERR_clear_error();
-    return result(SSL_read_ex(connection_.get(), bytes.data(), bytes.size(), &count), count);
+    const int status = SSL_read_ex(connection_.get(), bytes.data(), bytes.size(), &count);
+
+    return status == 1 ? Transfer{.state = Transfer::State::done, .bytes = count} : stalled(status);
   }
 
   Transfer Channel::write(std::span<const std::uint8_t> bytes) noexcept {
@@ -742,7 +763,9 @@ namespace telar::remote {
     }
 
     ERR_clear_error();
-    return result(SSL_write_ex(connection_.get(), bytes.data(), bytes.size(), &count), count);
+    const int status = SSL_write_ex(connection_.get(), bytes.data(), bytes.size(), &count);
+
+    return status == 1 ? Transfer{.state = Transfer::State::done, .bytes = count} : stalled(status);
   }
 
   Transfer Channel::finish() noexcept {
@@ -755,7 +778,7 @@ namespace telar::remote {
     const int status = SSL_shutdown(connection_.get());
 
     // Zero says the notice went out and the peer's has not come yet, which is all this end awaits.
-    return status >= 0 ? Transfer{} : result(status, 0);
+    return status >= 0 ? Transfer{} : stalled(status);
   }
 
   bool Channel::buffered() const noexcept {
@@ -774,7 +797,7 @@ namespace telar::remote {
         throw ChannelFailure{"The connection to the gateway broke"};
       }
 
-      if (!waitReady(socket_.get(), written.state == Transfer::State::wants_read ? POLLIN : POLLOUT, deadline)) {
+      if (!waitReady(socket_.get(), awaited(written.state), deadline)) {
         throw ChannelFailure{"The gateway stopped answering"};
       }
     }
@@ -792,7 +815,7 @@ namespace telar::remote {
         throw ChannelFailure{"The connection to the gateway broke"};
       }
 
-      if (!waitReady(socket_.get(), taken.state == Transfer::State::wants_read ? POLLIN : POLLOUT, deadline)) {
+      if (!waitReady(socket_.get(), awaited(taken.state), deadline)) {
         throw ChannelFailure{"The gateway stopped answering"};
       }
     }
@@ -800,7 +823,7 @@ namespace telar::remote {
 
   void conclude(Channel& channel) noexcept {
     constexpr auto patience = std::chrono::seconds{2};
-    ds::Array<std::uint8_t, 512> discarded{};
+    ds::Array<std::uint8_t, discard_bytes> discarded{};
     const auto deadline = Clock::now() + patience;
 
     static_cast<void>(channel.finish());
@@ -811,7 +834,7 @@ namespace telar::remote {
       }
 
       const bool waits = taken.state == Transfer::State::wants_read || taken.state == Transfer::State::wants_write;
-      if (!waits || !waitReady(channel.descriptor(), taken.state == Transfer::State::wants_read ? POLLIN : POLLOUT, deadline)) {
+      if (!waits || !waitReady(channel.descriptor(), awaited(taken.state), deadline)) {
         return;
       }
     }
@@ -824,13 +847,13 @@ namespace telar::remote {
     void carry(Channel& channel, int local, ds::Option<Reply>* answer) noexcept {
       // The buffers of both directions are this call's own: a relay runs on a thread whose stack
       // is sized to hold them.
-      Half down;
-      Half up;
+      Half downward;
+      Half upward;
 
-      while (!down.closed || !up.closed) {
+      while (!downward.closed || !upward.closed) {
         Interest interest;
-        const auto moved_down = pumpDown(channel, local, down, interest, answer);
-        const auto moved_up = pumpUp(channel, local, up, interest);
+        const auto moved_down = pumpDown(channel, local, downward, interest, answer);
+        const auto moved_up = pumpUp(channel, local, upward, interest);
 
         if (moved_down == Step::failed || moved_up == Step::failed) {
           return;
@@ -841,8 +864,8 @@ namespace telar::remote {
         }
 
         ds::Array<pollfd, 2> entries{
-            pollfd{.fd = channel.descriptor(), .events = interest.channel, .revents = 0},
-            pollfd{.fd = local, .events = interest.local, .revents = 0},
+            pollfd{.fd = channel.descriptor(), .events = static_cast<short>(interest.channel), .revents = 0},
+            pollfd{.fd = local, .events = static_cast<short>(interest.local), .revents = 0},
         };
 
         if (::poll(entries.dataMut(), entries.size(), -1) < 0 && sys::lastError() != EINTR) {
@@ -874,7 +897,7 @@ namespace telar::remote {
     ds::Array<std::uint8_t, 1> byte{};
 
     channel.receive(byte.viewMut(), Clock::now() + exchange_timeout);
-    return byte[0] <= static_cast<std::uint8_t>(Reply::unavailable) ? static_cast<Reply>(byte[0]) : Reply::unavailable;
+    return replyOf(byte[0]);
   }
 
   void PortNotice::send(Channel& channel) const {
@@ -897,7 +920,7 @@ namespace telar::remote {
         begin_ = 0;
         end_ = 0;
       } else if (begin_ != 0) {
-        std::memmove(bytes_.dataMut(), bytes_.data() + begin_, end_ - begin_);
+        std::ranges::shift_left(bytes_.viewMut().first(end_), static_cast<std::ptrdiff_t>(begin_));
         end_ -= begin_;
         begin_ = 0;
       }
@@ -915,7 +938,7 @@ namespace telar::remote {
     }
   }
 
-  ds::Option<PortNotice> PortNotices::next() noexcept {
+  ds::Option<PortNotice> PortNotices::next() noexcept { // NOLINT(bugprone-exception-escape): assign throws only past its capacity, which the origin's length is checked against
     constexpr unsigned byte_bits = 8;
     const auto pending = bytes_.view().subspan(begin_, end_ - begin_);
 
@@ -939,7 +962,9 @@ namespace telar::remote {
         .port = static_cast<std::uint16_t>((static_cast<unsigned>(pending[1]) << byte_bits) | pending[2]),
     };
 
-    notice.origin.assign({reinterpret_cast<const char*>(pending.data() + PortNotice::header_bytes), length}); // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast): the origin's bytes are read as text
+    const auto origin = pending.subspan(PortNotice::header_bytes, length);
+
+    notice.origin.assign({reinterpret_cast<const char*>(origin.data()), origin.size()}); // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast): the origin's bytes are read as text
     begin_ += PortNotice::header_bytes + length;
     return notice;
   }

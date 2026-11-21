@@ -17,9 +17,13 @@ export {
     struct RunRequest {
       static constexpr std::size_t maximum_command_bytes = std::size_t{256} * 1024;
 
+      // The size of a terminal whose client names none.
+      static constexpr std::uint16_t default_rows = 24;
+      static constexpr std::uint16_t default_columns = 80;
+
       bool terminal = false;
-      std::uint16_t rows = 24;
-      std::uint16_t columns = 80;
+      std::uint16_t rows = default_rows;
+      std::uint16_t columns = default_columns;
     };
 
     // The exit status a client reports when the connection broke before the command's own came.
