@@ -82,7 +82,7 @@ namespace telar::gui::platform {
         throw ClipboardImageFailure{ClipboardImageError::source_bytes};
       }
 
-      transfer->png.append(std::as_bytes(std::span{encoded.constData(), static_cast<std::size_t>(encoded.size())}), AttachmentLimits::maximum_png_bytes);
+      transfer.getMut().png.append(std::as_bytes(std::span{encoded.constData(), static_cast<std::size_t>(encoded.size())}), AttachmentLimits::maximum_png_bytes);
     } catch (...) {
       erase(encoded);
       throw;
@@ -90,13 +90,13 @@ namespace telar::gui::platform {
 
     erase(encoded);
 
-    return ClipboardImageSource{transfer.release(), 0};
+    return ClipboardImageSource{transfer.intoRaw(), 0};
   }
 
   ClipboardImageSource ClipboardImageSource::fromPipe(ApplicationAllocator& memory, runtime::FileDescriptor descriptor, std::shared_ptr<ClipboardImageTransfer> status) {
     auto transfer = ds::makeBox<Transfer>(memory, Transfer{.memory = memory, .png = SensitiveBytes{memory}, .pipe = std::move(descriptor), .status = std::move(status)});
 
-    return ClipboardImageSource{transfer.release(), 0};
+    return ClipboardImageSource{transfer.intoRaw(), 0};
   }
 
   ClipboardImageSource::~ClipboardImageSource() {
