@@ -4,6 +4,7 @@ import std;
 
 import telar.base.ds;
 import telar.base.memory.allocators;
+import telar.tbc;
 import telar.gui.foundation.core;
 import telar.gui.foundation.terminal;
 import telar.wire.nvim;
@@ -14,7 +15,7 @@ namespace telar::gui::features::nvim {
 
   namespace {
 
-    void write(KeyText& text, std::string_view added) noexcept {
+    void write(KeyText& text, std::string_view added) {
       const auto room = KeyText::capacity - text.size;
       const auto kept = added.substr(0, std::min(added.size(), room));
 
@@ -81,6 +82,29 @@ namespace telar::gui::features::nvim {
       grid.margin_right = message.margin_right;
     }
 
+    // Applies a grid's message to the grid it names: the rows a scroll moves, the cells that
+    // changed, and where the grid goes. False for cells that do not fit the grid as it is, and
+    // `layout_changed` once its place or what it shows of its buffer differs.
+    bool draw(Grid& grid, const NvimGrid& message, bool& layout_changed) {
+      for (const auto& scroll : message.scrolls) {
+        if (!grid.screen.moveRows({.top = scroll.top, .bottom = scroll.bottom, .left = scroll.left, .right = scroll.right, .rows = scroll.rows})) {
+          return false;
+        }
+      }
+
+      if (!grid.screen.draw({.columns = message.columns, .rows = message.rows}, message.full, message.spans)) {
+        return false;
+      }
+
+      if (!placedAs(grid, message)) {
+        place(grid, message);
+        layout_changed = true;
+      }
+
+      grid.frame = message.frame_id;
+      return true;
+    }
+
     // Draws the cursor on the grid it is on and takes it off the others, so the painter of each
     // grid draws it or not from the grid's own screen.
     void placeCursor(Editor& editor) noexcept {
@@ -94,7 +118,7 @@ namespace telar::gui::features::nvim {
 
   }
 
-  KeyText notation(const Key& key) noexcept {
+  KeyText notation(const Key& key) {
     KeyText text;
     const bool modified = key.control || key.alt || key.super;
     // A codepoint that is no character is written as nothing: the function throws nothing.
@@ -233,33 +257,27 @@ namespace telar::gui::features::nvim {
       return Received::ignored;
     }
 
-    auto* grid = gridOf(*editor, message.grid);
-    if (grid == nullptr) {
+    bool layout_changed = false;
+
+    if (gridOf(*editor, message.grid) == nullptr) {
       // A grid the editor does not have starts with all its cells.
       if (!message.full) {
         return lose(*editor);
       }
 
-      grid = &editor->grids.push(ds::makeBox<Grid>(Access::memory(state), Access::memory(state), message.grid)).getMut();
-      ++editor->layout_revision;
+      editor->grids.push(ds::makeBox<Grid>(Access::memory(state), Access::memory(state), message.grid));
+      layout_changed = true;
     }
 
-    for (const auto& scroll : message.scrolls) {
-      if (!grid->screen.moveRows({.top = scroll.top, .bottom = scroll.bottom, .left = scroll.left, .right = scroll.right, .rows = scroll.rows})) {
-        return lose(*editor);
-      }
-    }
-
-    if (!grid->screen.draw({.columns = message.columns, .rows = message.rows}, message.full, message.spans)) {
+    // The grid is changed first and the editor after, once nothing of the grid is held.
+    if (!draw(*gridOf(*editor, message.grid), message, layout_changed)) {
       return lose(*editor);
     }
 
-    if (!placedAs(*grid, message)) {
-      place(*grid, message);
+    if (layout_changed) {
       ++editor->layout_revision;
     }
 
-    grid->frame = message.frame_id;
     return Received::staged;
   }
 
@@ -297,6 +315,7 @@ namespace telar::gui::features::nvim {
         .blink_on_ms = message.blink_on_ms,
         .blink_off_ms = message.blink_off_ms,
     };
+
     placeCursor(*editor);
     if (editor->mode.view() != message.mode) {
       editor->mode.assign(message.mode);
@@ -439,7 +458,7 @@ namespace telar::gui::features::nvim {
     return Received::presented;
   }
 
-  ds::Option<NvimPromptReply> answer(State& state, std::uint64_t pane_id, bool accepted, std::uint32_t index, std::string_view text) {
+  tbc::val_a<ds::Option<NvimPromptReply>> answer(State& state, std::uint64_t pane_id, bool accepted, std::uint32_t index, tbc::val_a<std::string_view> text) {
     auto* editor = Access::find(state, pane_id);
     if (editor == nullptr || editor->prompt.id == 0) {
       return ds::none;

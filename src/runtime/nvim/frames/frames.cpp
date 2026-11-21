@@ -100,17 +100,8 @@ namespace telar::runtime {
     }
 
     // The start of `text` a surface's message has room for.
-    constexpr std::string_view clipped(std::string_view text, std::size_t limit) noexcept {
+    constexpr std::string_view clipped(std::string_view text, std::size_t limit) {
       return text.substr(0, std::min(text.size(), limit));
-    }
-
-    // The entries a tab line names, as many as its message takes.
-    void collectTabs(ds::Vec<NvimTab, ConcurrentMemory>& tabs, std::span<const NvimTabs::Entry> entries, std::string_view text) {
-      tabs.clear();
-
-      for (const auto& entry : entries.first(std::min(entries.size(), max_nvim_tabs))) {
-        tabs.push({.handle = entry.handle, .name = clipped(entry.name.of(text), max_nvim_label_bytes)});
-      }
     }
 
     // Whether a client that has frame `seen` lacks something of a grid. A grid Neovim placed
@@ -123,147 +114,89 @@ namespace telar::runtime {
       return seen == 0 || grid.reset_at > seen || grid.cells_at > seen || grid.placed_at > seen || grid.viewport_at > seen || grid.scrolled_at > seen;
     }
 
+    // What a cell is of a character two cells wide: its left half, the empty right one, or
+    // neither.
+    constexpr CellWidth widthOf(const NvimCell& cell) noexcept {
+      if ((cell.flags & NvimCell::continuation) != 0) {
+        return CellWidth::continuation;
+      }
+
+      return (cell.flags & NvimCell::wide) != 0 ? CellWidth::wide : CellWidth::single;
+    }
+
+    // A cell waiting to be encoded: its style and width, and where its text lies in the text of
+    // the span being filled.
+    struct StagedCell {
+      CellStyle style;
+      CellWidth width = CellWidth::single;
+      std::uint8_t size = 0;
+      std::uint16_t offset = 0;
+    };
+
+    // The cells of one span while they are gathered: at most a span's worth, with their text
+    // one after another.
+    struct Staging {
+      ds::Array<StagedCell, NvimFrames::span_cells> cells{};
+      ds::Array<Byte, NvimFrames::span_cells * NvimCell::text_capacity> text{};
+      std::size_t count = 0;
+      std::size_t text_size = 0;
+      // Where the span's first cell is in the grid.
+      std::uint32_t start = 0;
+    };
+
+    // The cells a staged span holds, encoded after the bytes `encoded` already has. The text
+    // is read only once every cell of the span is staged, so no cell views a buffer that is
+    // still being written.
+    std::size_t encodeSpan(ds::Vec<Byte, ConcurrentMemory>& encoded, std::span<const StagedCell> staged, std::span<const Byte> text) {
+      ds::Array<Cell, NvimFrames::span_cells> cells{};
+
+      for (std::size_t index = 0; index < staged.size(); ++index) {
+        const auto& cell = staged[index];
+
+        cells.atMut(index) = {.width = cell.width, .style = cell.style, .text = text.subspan(cell.offset, cell.size)};
+      }
+
+      const auto run = cells.view().first(staged.size());
+      const auto offset = encoded.size();
+      const auto size = CellRunCodec::encodedSize(run);
+
+      encoded.resize(offset + size);
+      static_cast<void>(CellRunCodec::encode(run, encoded.viewMut().subspan(offset)));
+      return size;
+    }
+
+    // Writes `message` into `payload`, which then holds exactly its bytes.
+    template <typename Message>
+    void write(ds::Vec<Byte, ConcurrentMemory>& payload, const Message& message) {
+      payload.resize(Codec::encodedSize(message));
+      static_cast<void>(Codec::encode(message, payload.viewMut()));
+    }
+
   }
 
   NvimFrames::NvimFrames(ConcurrentMemory& memory)
       : cells_(memory),
-        texts_(memory),
-        bytes_(memory),
         runs_(memory),
-        spans_(memory),
-        removed_(memory),
-        menu_items_(memory),
-        messages_(memory),
-        tabs_(memory),
-        buffers_(memory) {}
+        payload_(memory) {}
 
   bool NvimFrames::pending(const NvimScreen& screen, std::uint64_t seen) noexcept {
     return screen.flushed() > seen;
   }
 
-  void NvimFrames::begin(const NvimScreen& screen, std::uint64_t pane_id, std::uint64_t seen) {
-    pane_ = pane_id;
+  void NvimFrames::begin(const NvimScreen& screen, NvimFrameFor target) {
+    pane_ = target.pane_id;
     // A client so far behind that the grids removed since are forgotten is sent every grid.
-    seen_ = seen < screen.removedForgottenAt() ? 0 : seen;
+    seen_ = target.seen < screen.removedForgottenAt() ? 0 : target.seen;
     frame_ = screen.flushed();
     grid_ = 0;
     row_ = 0;
     started_ = false;
     whole_ = false;
     replay_ = false;
-    cells_.reserve(message_cells);
-    // Reserved whole: the cells view their text here, so it must not move while they are filled.
-    texts_.reserve(message_cells * NvimCell::text_capacity);
   }
 
-  void NvimFrames::appendRow(const NvimScreen& screen, const NvimScreenGrid& grid, std::uint32_t row) {
-    const auto first = cells_.size();
-    std::uint16_t last_highlight = std::numeric_limits<std::uint16_t>::max();
-    CellStyle style;
-
-    for (const auto& cell : grid.row(row)) {
-      if (cell.highlight != last_highlight) {
-        last_highlight = cell.highlight;
-        style = styleOf(screen.highlightOf(cell.highlight));
-      }
-
-      const auto offset = texts_.size();
-      ds::Array<char, NvimCell::text_capacity> text{};
-      const auto size = screen.copyText(cell, text.viewMut());
-
-      texts_.resize(offset + size);
-      std::ranges::transform(text.view().first(size), texts_.viewMut().subspan(offset).begin(), [](char character) {
-        return static_cast<Byte>(character);
-      });
-
-      const bool continuation = (cell.flags & NvimCell::continuation) != 0;
-      const bool wide = (cell.flags & NvimCell::wide) != 0;
-
-      cells_.push({
-          .width = continuation ? CellWidth::continuation : wide ? CellWidth::wide
-                                                                 : CellWidth::single,
-          .style = style,
-          .text = texts_.view().subspan(offset, size),
-      });
-    }
-
-    const auto start = row * std::uint32_t{grid.columns};
-
-    if (!runs_.empty() && runs_.back().start + runs_.back().count == start) {
-      runs_.backMut().count += grid.columns;
-    } else {
-      runs_.push({.first = first, .count = grid.columns, .start = start});
-    }
-  }
-
-  void NvimFrames::collect(const NvimScreen& screen, const NvimScreenGrid& grid) {
-    cells_.clear();
-    texts_.clear();
-    runs_.clear();
-
-    for (; row_ < grid.rows; ++row_) {
-      if (!whole_ && grid.row_changed_at[row_] <= seen_) {
-        continue;
-      }
-
-      if (cells_.size() + grid.columns > message_cells || runs_.size() == max_nvim_grid_spans) {
-        return;
-      }
-
-      appendRow(screen, grid, row_);
-    }
-  }
-
-  void NvimFrames::encodeSpans() {
-    std::size_t total = 0;
-
-    for (const auto& run : runs_) {
-      total += CellRunCodec::encodedSize(cells_.view().subspan(run.first, run.count));
-    }
-
-    bytes_.resize(total);
-    spans_.clear();
-
-    std::size_t offset = 0;
-
-    for (const auto& run : runs_) {
-      const auto encoded = CellRunCodec::encode(cells_.view().subspan(run.first, run.count), bytes_.viewMut().subspan(offset));
-
-      spans_.push({.start = run.start, .count = static_cast<std::uint32_t>(run.count), .cells = bytes_.view().subspan(offset, encoded.size())});
-      offset += encoded.size();
-    }
-  }
-
-  NvimGrid NvimFrames::message(const NvimScreenGrid& grid, bool first) const {
-    return {
-        .pane_id = pane_,
-        .frame_id = frame_,
-        .grid = grid.id,
-        .columns = grid.columns,
-        .rows = grid.rows,
-        .placement = grid.placement,
-        .mouse_enabled = grid.mouse_enabled,
-        .row = grid.start_row,
-        .column = grid.start_column,
-        .width = grid.width,
-        .height = grid.height,
-        .z_index = grid.z_index,
-        .composition_index = grid.composition_index,
-        .window = grid.window,
-        .top_line = grid.viewport.top_line,
-        .bottom_line = grid.viewport.bottom_line,
-        .cursor_line = grid.viewport.cursor_line,
-        .cursor_column = grid.viewport.cursor_column,
-        .line_count = grid.viewport.line_count,
-        .scrolled_lines = grid.scrolled_lines,
-        .margin_top = grid.margins.top,
-        .margin_bottom = grid.margins.bottom,
-        .margin_left = grid.margins.left,
-        .margin_right = grid.margins.right,
-        .full = first && whole_,
-        .scrolls = first && replay_ ? grid.scrolls.view() : std::span<const NvimScroll>{},
-        .spans = spans_.view(),
-    };
+  std::uint64_t NvimFrames::frame() const noexcept {
+    return frame_;
   }
 
   void NvimFrames::start(const NvimScreenGrid& grid) {
@@ -278,7 +211,87 @@ namespace telar::runtime {
     row_ = 0;
   }
 
-  ds::Option<NvimGrid> NvimFrames::next(const NvimScreen& screen) {
+  void NvimFrames::collect(const NvimScreen& screen, const NvimScreenGrid& grid) {
+    Staging staging;
+    std::size_t taken = 0;
+    const auto flush = [&] {
+      if (staging.count == 0) {
+        return;
+      }
+
+      const auto offset = cells_.size();
+      const auto size = encodeSpan(cells_, staging.cells.view().first(staging.count), staging.text.view().first(staging.text_size));
+
+      runs_.push({.start = staging.start, .count = static_cast<std::uint32_t>(staging.count), .offset = offset, .size = size});
+      staging.count = 0;
+      staging.text_size = 0;
+    };
+
+    cells_.clear();
+    runs_.clear();
+
+    for (; row_ < grid.rows; ++row_) {
+      if (!whole_ && grid.row_changed_at[row_] <= seen_) {
+        continue;
+      }
+
+      // A row is sent whole or waits for the next message, which leaves room for its spans.
+      const auto row_spans = (std::size_t{grid.columns} / span_cells) + 2;
+      if (taken + grid.columns > message_cells || runs_.size() + row_spans > message_spans) {
+        break;
+      }
+
+      const auto first = row_ * std::uint32_t{grid.columns};
+
+      // Rows that follow one another share a span; a row after a gap starts its own.
+      if (staging.count != 0 && staging.start + staging.count != first) {
+        flush();
+      }
+
+      std::uint16_t last_highlight = std::numeric_limits<std::uint16_t>::max();
+      CellStyle style;
+      std::uint32_t column = 0;
+
+      for (const auto& cell : grid.row(row_)) {
+        if (staging.count == span_cells) {
+          flush();
+        }
+
+        if (staging.count == 0) {
+          staging.start = first + column;
+        }
+
+        if (cell.highlight != last_highlight) {
+          last_highlight = cell.highlight;
+          style = styleOf(screen.highlightOf(cell.highlight));
+        }
+
+        ds::Array<char, NvimCell::text_capacity> text{};
+        const auto size = screen.copyText(cell, text.viewMut());
+
+        std::ranges::transform(text.view().first(size), staging.text.viewMut().subspan(staging.text_size).begin(), [](char character) {
+          return static_cast<Byte>(character);
+        });
+
+        staging.cells.atMut(staging.count) = {
+            .style = style,
+            .width = widthOf(cell),
+            .size = static_cast<std::uint8_t>(size),
+            .offset = static_cast<std::uint16_t>(staging.text_size),
+        };
+
+        staging.text_size += size;
+        ++staging.count;
+        ++column;
+      }
+
+      taken += grid.columns;
+    }
+
+    flush();
+  }
+
+  tbc::val_a<std::span<const Byte>> NvimFrames::next(const NvimScreen& screen) {
     const auto grids = screen.grids();
 
     while (grid_ < grids.size()) {
@@ -295,49 +308,91 @@ namespace telar::runtime {
       }
 
       collect(screen, grid);
-      encodeSpans();
-
-      const bool finished = row_ == grid.rows;
-
-      if (finished) {
+      if (row_ == grid.rows) {
         ++grid_;
         started_ = false;
       }
 
       // The first message goes even without cells: it says where the grid is shown.
-      if (first || !spans_.empty()) {
-        return message(grid, first);
+      if (!first && runs_.empty()) {
+        continue;
       }
+
+      ds::Array<FrameSpan, message_spans> spans{};
+
+      for (std::size_t index = 0; index < runs_.size(); ++index) {
+        const auto& run = runs_[index];
+
+        spans.atMut(index) = {.start = run.start, .count = run.count, .cells = cells_.view().subspan(run.offset, run.size)};
+      }
+
+      write(
+          payload_,
+          NvimGrid{
+              .pane_id = pane_,
+              .frame_id = frame_,
+              .grid = grid.id,
+              .columns = grid.columns,
+              .rows = grid.rows,
+              .placement = grid.placement,
+              .mouse_enabled = grid.mouse_enabled,
+              .row = grid.start_row,
+              .column = grid.start_column,
+              .width = grid.width,
+              .height = grid.height,
+              .z_index = grid.z_index,
+              .composition_index = grid.composition_index,
+              .window = grid.window,
+              .top_line = grid.viewport.top_line,
+              .bottom_line = grid.viewport.bottom_line,
+              .cursor_line = grid.viewport.cursor_line,
+              .cursor_column = grid.viewport.cursor_column,
+              .line_count = grid.viewport.line_count,
+              .scrolled_lines = grid.scrolled_lines,
+              .margin_top = grid.margins.top,
+              .margin_bottom = grid.margins.bottom,
+              .margin_left = grid.margins.left,
+              .margin_right = grid.margins.right,
+              .full = first && whole_,
+              .scrolls = first && replay_ ? grid.scrolls.view() : std::span<const NvimScroll>{},
+              .spans = spans.view().first(runs_.size()),
+          }
+      );
+      return payload_.view();
     }
 
-    return ds::none;
+    return {};
   }
 
-  ds::Option<NvimCmdline> NvimFrames::cmdline(const NvimScreen& screen) const {
+  tbc::val_a<std::span<const Byte>> NvimFrames::cmdline(const NvimScreen& screen) {
     const auto& line = screen.commandLine();
     if (line.changed_at <= seen_) {
-      return ds::none;
+      return {};
     }
 
-    return NvimCmdline{
-        .pane_id = pane_,
-        .frame_id = frame_,
-        .visible = line.visible,
-        .level = line.level,
-        .first = static_cast<Byte>(line.first),
-        .special = static_cast<Byte>(line.special),
-        .position = line.position,
-        .indent = line.indent,
-        .prompt = clipped(line.prompt.view(), max_nvim_label_bytes),
-        .text = clipped(line.content.view(), max_nvim_line_bytes),
-        .block = clipped(line.block.view(), max_nvim_line_bytes),
-    };
+    write(
+        payload_,
+        NvimCmdline{
+            .pane_id = pane_,
+            .frame_id = frame_,
+            .visible = line.visible,
+            .level = line.level,
+            .first = static_cast<Byte>(line.first),
+            .special = static_cast<Byte>(line.special),
+            .position = line.position,
+            .indent = line.indent,
+            .prompt = clipped(line.prompt.view(), max_nvim_label_bytes),
+            .text = clipped(line.content.view(), max_nvim_line_bytes),
+            .block = clipped(line.block.view(), max_nvim_line_bytes),
+        }
+    );
+    return payload_.view();
   }
 
-  ds::Option<NvimPopupMenu> NvimFrames::popupMenu(const NvimScreen& screen) {
+  tbc::val_a<std::span<const Byte>> NvimFrames::popupMenu(const NvimScreen& screen) {
     const auto& menu = screen.completion();
     if (menu.changed_at <= seen_) {
-      return ds::none;
+      return {};
     }
 
     const auto total = menu.items.size();
@@ -351,111 +406,138 @@ namespace telar::runtime {
       first = std::min(static_cast<std::size_t>(menu.selected) - std::min(static_cast<std::size_t>(menu.selected), max_nvim_menu_items / 2), total - max_nvim_menu_items);
     }
 
-    menu_items_.clear();
+    ds::Array<NvimMenuItem, max_nvim_menu_items> items{};
+    std::size_t count = 0;
+
     if (menu.visible && !keeps) {
       const std::string_view text{menu.text.data(), menu.text.size()};
 
       for (const auto& item : menu.items.view().subspan(first, std::min(total - first, max_nvim_menu_items))) {
-        menu_items_.push({
+        items.atMut(count++) = {
             .word = clipped(item.word.of(text), max_nvim_label_bytes),
             .kind = clipped(item.kind.of(text), max_nvim_label_bytes),
             .menu = clipped(item.menu.of(text), max_nvim_label_bytes),
-        });
+        };
       }
     }
 
-    return NvimPopupMenu{
-        .pane_id = pane_,
-        .frame_id = frame_,
-        .visible = menu.visible,
-        .keeps_items = menu.visible && keeps,
-        .selected = menu.selected,
-        .grid = menu.grid,
-        .row = menu.row,
-        .column = menu.column,
-        .first = static_cast<std::uint32_t>(first),
-        .total = static_cast<std::uint32_t>(total),
-        .items = menu_items_.view(),
-    };
+    write(
+        payload_,
+        NvimPopupMenu{
+            .pane_id = pane_,
+            .frame_id = frame_,
+            .visible = menu.visible,
+            .keeps_items = menu.visible && keeps,
+            .selected = menu.selected,
+            .grid = menu.grid,
+            .row = menu.row,
+            .column = menu.column,
+            .first = static_cast<std::uint32_t>(first),
+            .total = static_cast<std::uint32_t>(total),
+            .items = items.view().first(count),
+        }
+    );
+    return payload_.view();
   }
 
-  ds::Option<NvimMessageList> NvimFrames::messageList(const NvimScreen& screen) {
+  tbc::val_a<std::span<const Byte>> NvimFrames::messageList(const NvimScreen& screen) {
     const auto& messages = screen.messages();
     if (messages.changed_at <= seen_) {
-      return ds::none;
+      return {};
     }
 
     const auto visible = messages.visible.view();
+    ds::Array<NvimMessageItem, max_nvim_messages> items{};
+    std::size_t count = 0;
 
-    messages_.clear();
     // The newest are the ones a client has room to show.
     for (const auto& message : visible.last(std::min(visible.size(), max_nvim_messages))) {
-      messages_.push({.id = message.id, .kind = message.kind, .text = clipped(message.content.view(), max_nvim_line_bytes)});
+      items.atMut(count++) = {.id = message.id, .kind = message.kind, .text = clipped(message.content.view(), max_nvim_line_bytes)};
     }
 
-    return NvimMessageList{
-        .pane_id = pane_,
-        .frame_id = frame_,
-        .mode = clipped(messages.mode.view(), max_nvim_label_bytes),
-        .command = clipped(messages.command.view(), max_nvim_label_bytes),
-        .ruler = clipped(messages.ruler.view(), max_nvim_label_bytes),
-        .messages = messages_.view(),
-    };
+    write(
+        payload_,
+        NvimMessageList{
+            .pane_id = pane_,
+            .frame_id = frame_,
+            .mode = clipped(messages.mode.view(), max_nvim_label_bytes),
+            .command = clipped(messages.command.view(), max_nvim_label_bytes),
+            .ruler = clipped(messages.ruler.view(), max_nvim_label_bytes),
+            .messages = items.view().first(count),
+        }
+    );
+    return payload_.view();
   }
 
-  ds::Option<NvimTabLine> NvimFrames::tabLine(const NvimScreen& screen) {
+  tbc::val_a<std::span<const Byte>> NvimFrames::tabLine(const NvimScreen& screen) {
     const auto& tabs = screen.tabs();
     if (tabs.changed_at <= seen_) {
-      return ds::none;
+      return {};
     }
 
     const std::string_view text{tabs.text.data(), tabs.text.size()};
+    ds::Array<NvimTab, max_nvim_tabs> pages{};
+    ds::Array<NvimTab, max_nvim_tabs> buffers{};
+    const auto page_count = std::min(tabs.tabs.size(), max_nvim_tabs);
+    const auto buffer_count = std::min(tabs.buffers.size(), max_nvim_tabs);
 
-    collectTabs(tabs_, tabs.tabs.view(), text);
-    collectTabs(buffers_, tabs.buffers.view(), text);
-    return NvimTabLine{
-        .pane_id = pane_,
-        .frame_id = frame_,
-        .current_tab = tabs.current_tab,
-        .current_buffer = tabs.current_buffer,
-        .tabs = tabs_.view(),
-        .buffers = buffers_.view(),
-    };
+    for (std::size_t index = 0; index < page_count; ++index) {
+      pages.atMut(index) = {.handle = tabs.tabs[index].handle, .name = clipped(tabs.tabs[index].name.of(text), max_nvim_label_bytes)};
+    }
+
+    for (std::size_t index = 0; index < buffer_count; ++index) {
+      buffers.atMut(index) = {.handle = tabs.buffers[index].handle, .name = clipped(tabs.buffers[index].name.of(text), max_nvim_label_bytes)};
+    }
+
+    write(
+        payload_,
+        NvimTabLine{
+            .pane_id = pane_,
+            .frame_id = frame_,
+            .current_tab = tabs.current_tab,
+            .current_buffer = tabs.current_buffer,
+            .tabs = pages.view().first(page_count),
+            .buffers = buffers.view().first(buffer_count),
+        }
+    );
+    return payload_.view();
   }
 
-  NvimFrame NvimFrames::end(const NvimScreen& screen) {
+  tbc::val_a<std::span<const Byte>> NvimFrames::end(const NvimScreen& screen) {
     const auto& cursor = screen.cursor();
     const auto modes = screen.modes();
     const auto mode = screen.currentMode() < modes.size() ? modes[screen.currentMode()] : NvimMode{};
-    const auto name = screen.modeName().substr(0, mode_.size());
-
-    std::ranges::copy(name, mode_.viewMut().begin());
-    removed_.clear();
+    ds::Array<std::uint32_t, max_nvim_removed_grids> removed{};
+    std::size_t count = 0;
 
     // A client that starts over forgets every grid it had; one that goes on is told the ones
     // Neovim destroyed after the frame it has.
-    for (const auto& removed : screen.removed()) {
-      if (seen_ != 0 && removed.at > seen_ && removed_.size() < max_nvim_removed_grids) {
-        removed_.push(removed.grid);
+    for (const auto& gone : screen.removed()) {
+      if (seen_ != 0 && gone.at > seen_ && count < max_nvim_removed_grids) {
+        removed.atMut(count++) = gone.grid;
       }
     }
 
-    return {
-        .pane_id = pane_,
-        .frame_id = frame_,
-        .base_frame_id = seen_,
-        .cursor_grid = cursor.grid,
-        .cursor_row = cursor.row,
-        .cursor_column = cursor.column,
-        .cursor_visible = !cursor.hidden,
-        .cursor_shape = cursorShape(mode.shape),
-        .cursor_percentage = mode.cell_percentage,
-        .blink_wait_ms = mode.blink_wait,
-        .blink_on_ms = mode.blink_on,
-        .blink_off_ms = mode.blink_off,
-        .mode = std::string_view{mode_.view()}.substr(0, name.size()),
-        .removed = removed_.view(),
-    };
+    write(
+        payload_,
+        NvimFrame{
+            .pane_id = pane_,
+            .frame_id = frame_,
+            .base_frame_id = seen_,
+            .cursor_grid = cursor.grid,
+            .cursor_row = cursor.row,
+            .cursor_column = cursor.column,
+            .cursor_visible = !cursor.hidden,
+            .cursor_shape = cursorShape(mode.shape),
+            .cursor_percentage = mode.cell_percentage,
+            .blink_wait_ms = mode.blink_wait,
+            .blink_on_ms = mode.blink_on,
+            .blink_off_ms = mode.blink_off,
+            .mode = clipped(screen.modeName(), max_nvim_mode_bytes),
+            .removed = removed.view().first(count),
+        }
+    );
+    return payload_.view();
   }
 
 }

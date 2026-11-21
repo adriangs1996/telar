@@ -140,7 +140,7 @@ end
 )lua";
 
     // The start of `text` that fits `limit` bytes.
-    constexpr std::string_view clipped(std::string_view text, std::size_t limit) noexcept {
+    constexpr std::string_view clipped(std::string_view text, std::size_t limit) {
       return text.substr(0, std::min(text.size(), limit));
     }
 

@@ -298,8 +298,8 @@ export {
 
       // A new editor pane in a tab: `launch` starts a Neovim with --embed, which the pane is the
       // only UI of. Its output, its errors and its input are three descriptors of one pane.
-      inline tbc::mut_a<NvimPane> launchEditor(tbc::mut_a<RuntimeModel> model, const PanePlacement& placement, const Launch& launch) {
-        const auto identity = allocateIdentity(model);
+      inline tbc::mut_a<NvimPane> launchEditor(tbc::mut_a<RuntimeModel> model, const PanePlacement& placement, const Launch& launch, std::uint64_t restored_identity = 0) {
+        const auto identity = allocateIdentity(model, restored_identity);
         Command command{memory_, launch, CommandPurpose::configured_helper};
 
         identify(command, model, placement, identity);

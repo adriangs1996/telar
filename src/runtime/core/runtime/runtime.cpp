@@ -932,7 +932,14 @@ namespace telar::runtime {
   }
 
   template <EventLoop Poller, HistoryEventSink History>
-  void WorkspaceService<Poller, History>::createTab(RuntimeModel& model, Panes& panes, ClientStore& clients, std::uint64_t client_id, const CreateTab& request, PaneKind kind) {
+  void WorkspaceService<Poller, History>::createTab(RuntimeModel& model, Panes& panes, ClientStore& clients, std::uint64_t client_id, const CreateTab& request) {
+    createTab(model, panes, clients, Asked{.client_id = client_id}, request);
+  }
+
+  template <EventLoop Poller, HistoryEventSink History>
+  void WorkspaceService<Poller, History>::createTab(RuntimeModel& model, Panes& panes, ClientStore& clients, Asked asked, const CreateTab& request) {
+    const auto [client_id, kind] = asked;
+
     if (!acquireGeometry(model.panes, model.metrics, requireClient(clients, client_id), require(model.workspaces, request.workspace))) {
       throw RequestError{FailureCode::resource_limit, "workspace geometry is leased by another client"};
     }
@@ -1020,7 +1027,14 @@ namespace telar::runtime {
   }
 
   template <EventLoop Poller, HistoryEventSink History>
-  void WorkspaceService<Poller, History>::createPane(RuntimeModel& model, Panes& panes, ClientStore& clients, std::uint64_t client_id, const CreatePane& request, PaneKind kind) {
+  void WorkspaceService<Poller, History>::createPane(RuntimeModel& model, Panes& panes, ClientStore& clients, std::uint64_t client_id, const CreatePane& request) {
+    createPane(model, panes, clients, Asked{.client_id = client_id}, request);
+  }
+
+  template <EventLoop Poller, HistoryEventSink History>
+  void WorkspaceService<Poller, History>::createPane(RuntimeModel& model, Panes& panes, ClientStore& clients, Asked asked, const CreatePane& request) {
+    const auto [client_id, kind] = asked;
+
     const auto* workspace = model.workspaces.find(request.location.workspace.id);
     const auto* tab = workspace == nullptr ? nullptr : workspace->tab(request.location.tab_id);
     if (request.location.workspace.kind != WorkspaceLocation::Kind::workspace || tab == nullptr || (!firstPane(model.panes, *tab) && !tabHeld(clients, request.location))) {
@@ -1052,9 +1066,9 @@ namespace telar::runtime {
     const Launch launch{.cwd = request.cwd, .arguments = arguments.view().first(count)};
 
     if (request.new_tab) {
-      createTab(model, panes, clients, client_id, CreateTab{.request_id = request.request_id, .workspace = request.location.workspace, .size = request.size, .launch = launch}, PaneKind::nvim);
+      createTab(model, panes, clients, Asked{.client_id = client_id, .kind = PaneKind::nvim}, CreateTab{.request_id = request.request_id, .workspace = request.location.workspace, .size = request.size, .launch = launch});
     } else {
-      createPane(model, panes, clients, client_id, CreatePane{.request_id = request.request_id, .location = request.location, .size = request.size, .launch = launch}, PaneKind::nvim);
+      createPane(model, panes, clients, Asked{.client_id = client_id, .kind = PaneKind::nvim}, CreatePane{.request_id = request.request_id, .location = request.location, .size = request.size, .launch = launch});
     }
   }
 

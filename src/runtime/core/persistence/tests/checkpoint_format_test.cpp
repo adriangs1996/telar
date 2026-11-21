@@ -53,8 +53,9 @@ namespace {
     }
 
     // A pane as `version` wrote it: arguments in a 16-bit length before version 9, no title
-    // before 2, the dropped flag of version 4 and the in-pane flag from version 8.
-    Encoder& pane(std::uint64_t id, std::uint16_t count, std::string_view arguments, bool dropped = false) {
+    // before 2, the dropped flag of version 4, the in-pane flag from version 8 and what kind of
+    // pane it is from version 11.
+    Encoder& pane(std::uint64_t id, std::uint16_t count, std::string_view arguments, bool dropped = false, Byte pane_kind = 1) {
       kind(checkpoint::Kind::pane).integer(id).integer(std::uint64_t{1}).integer(std::uint64_t{7}).text16("/tmp");
       integer(std::uint16_t{80}).integer(std::uint16_t{24}).integer(count);
       if (version_ >= 9) {
@@ -74,6 +75,10 @@ namespace {
 
       if (version_ == 4) {
         integer(Byte{dropped});
+      }
+
+      if (version_ >= 11) {
+        integer(pane_kind);
       }
 
       return *this;
@@ -201,6 +206,21 @@ namespace {
     return {bytes.begin(), bytes.end()};
   }
 
+  // A pane says what it is from version 11: an editor is restored as one, a checkpoint from
+  // before panes had kinds holds terminals, and a kind this runtime does not run is passed over
+  // with the rest of the session intact.
+  void testPaneKinds() {
+    Encoder current{checkpoint::current_version};
+    constexpr std::string_view editor{"nvim\0--embed\0notes.md\0", 22};
+    const auto decoded = decode(current.workspace(1, "Shells").pane(2, 3, editor, false, std::to_underlying(PaneKind::nvim)).pane(3, 1, cat).pane(4, 1, cat, false, 9).finish());
+
+    check(decoded.panes.size() == 2 && decoded.panes[0].kind == PaneKind::nvim && decoded.panes[0].argument_count == 3 && decoded.panes[1].kind == PaneKind::terminal && decoded.panes[1].id == 3, "each pane as the kind it was, and the unknown one passed over");
+
+    Encoder older{10};
+
+    check(decode(older.workspace(1, "Shells").pane(2, 1, cat).finish()).panes.at(0).kind == PaneKind::terminal, "a pane of a checkpoint without kinds is a terminal");
+  }
+
   void testPaneCap() {
     // A restore holds the panes a runtime can run, 256; a checkpoint with more is refused whole.
     check(decode(panes(256)).panes.size() == 256);
@@ -235,6 +255,7 @@ namespace {
 
   const telar::testing::Case case_worktree_round_trip{"checkpoint_format.worktree_round_trip", testWorktreeRoundTrip};
   const telar::testing::Case case_older_versions_decode{"checkpoint_format.older_versions_decode", testOlderVersionsDecode};
+  const telar::testing::Case case_pane_kinds{"checkpoint_format.pane_kinds", testPaneKinds};
   const telar::testing::Case case_pane_cap{"checkpoint_format.pane_cap", testPaneCap};
   const telar::testing::Case case_malformed_panes_rejected{"checkpoint_format.malformed_panes_rejected", testMalformedPanesRejected};
 

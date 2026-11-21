@@ -331,7 +331,7 @@ export {
 
       bool resize(std::uint32_t grid, NvimExtent size);
       void clear(std::uint32_t grid);
-      void destroy(std::uint32_t grid) noexcept;
+      void destroy(std::uint32_t grid);
 
       // Starts writing cells at a row and column of a grid; false for a place outside it.
       bool line(std::uint32_t grid, NvimPoint start) noexcept;

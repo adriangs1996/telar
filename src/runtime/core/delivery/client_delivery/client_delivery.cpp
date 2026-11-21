@@ -240,32 +240,30 @@ namespace telar::runtime {
     TELAR_TRACE("runtime.publishEditorFrame");
     auto& frames = output.editor_frames;
 
-    frames.begin(screen, pane.id, attachment.editor_seen);
-    while (const auto grid = frames.next(screen)) {
-      output.connection.send(*grid);
+    frames.begin(screen, {.pane_id = pane.id, .seen = attachment.editor_seen});
+    for (auto grid = frames.next(screen); !grid.empty(); grid = frames.next(screen)) {
+      output.connection.sendPayload(grid);
     }
 
     // Each native surface that changed, to take effect with the grids.
-    if (const auto cmdline = frames.cmdline(screen)) {
-      output.connection.send(*cmdline);
+    if (const auto cmdline = frames.cmdline(screen); !cmdline.empty()) {
+      output.connection.sendPayload(cmdline);
     }
 
-    if (const auto menu = frames.popupMenu(screen)) {
-      output.connection.send(*menu);
+    if (const auto menu = frames.popupMenu(screen); !menu.empty()) {
+      output.connection.sendPayload(menu);
     }
 
-    if (const auto messages = frames.messageList(screen)) {
-      output.connection.send(*messages);
+    if (const auto messages = frames.messageList(screen); !messages.empty()) {
+      output.connection.sendPayload(messages);
     }
 
-    if (const auto tabs = frames.tabLine(screen)) {
-      output.connection.send(*tabs);
+    if (const auto tabs = frames.tabLine(screen); !tabs.empty()) {
+      output.connection.sendPayload(tabs);
     }
 
-    const auto frame = frames.end(screen);
-
-    output.connection.send(frame);
-    attachment.editor_sent = frame.frame_id;
+    output.connection.sendPayload(frames.end(screen));
+    attachment.editor_sent = frames.frame();
     slots_.atMut(attachment.slot).cells_current = true;
     return true;
   }
@@ -531,6 +529,7 @@ namespace telar::runtime {
         .initial = prompt.initial,
         .choices = choices.view().first(count),
     });
+
     attachment.editor_prompt = serial;
     return true;
   }

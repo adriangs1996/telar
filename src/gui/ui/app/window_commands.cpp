@@ -884,15 +884,30 @@ namespace telar::gui::qt {
     }
   }
 
+  // An editor beside the focused pane, or in a tab of its own.
+  bool WindowCommands::executeEditor(window_actions::Action action) {
+    if (action == window_actions::Action::new_editor) {
+      static_cast<void>(application::workbench::splitEditor(store_.sessionMut(), ClientLayoutAxis::horizontal));
+      return true;
+    }
+
+    if (action == window_actions::Action::new_editor_tab) {
+      static_cast<void>(application::workbench::createEditorTab(store_.sessionMut()));
+      return true;
+    }
+
+    return false;
+  }
+
   bool WindowCommands::executeNavigation(window_actions::Action action, const QString& target) {
+    if (executeEditor(action)) {
+      return true;
+    }
+
     const auto identity = target.toULongLong();
 
     if (action == window_actions::Action::new_tab) {
       application::workbench::createTab(store_.sessionMut());
-    } else if (action == window_actions::Action::new_editor) {
-      static_cast<void>(application::workbench::splitEditor(store_.sessionMut(), ClientLayoutAxis::horizontal));
-    } else if (action == window_actions::Action::new_editor_tab) {
-      static_cast<void>(application::workbench::createEditorTab(store_.sessionMut()));
     } else if (action == window_actions::Action::select_tab) {
       if (const auto* active = store_.session().activeTab()) {
         // The tab is read before the session lends itself to change.

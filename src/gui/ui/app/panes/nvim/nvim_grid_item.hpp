@@ -14,6 +14,7 @@ static_assert(true);
 
 import telar.gui.foundation.core;
 import telar.gui.application;
+import telar.base.ds;
 
 namespace telar::gui::qt {
 
@@ -54,6 +55,20 @@ namespace telar::gui::qt {
 
     QPointer<NvimItem> editor_;
     std::uint32_t grid_id_ = 0;
+
+    // What the item last drew: its screen's revision, how cells are drawn, and whether the
+    // cursor was lit and the editor had the keyboard. A frame that changes none of them leaves
+    // the item as it is.
+    struct Drawn {
+      std::uint64_t revision = 0;
+      std::uint64_t appearance = 0;
+      bool cursor_on = false;
+      bool keyboard = false;
+
+      bool operator==(const Drawn&) const = default;
+    };
+
+    ds::Option<Drawn> drawn_;
     // The revision of each row when its fonts were last asked for.
     QList<std::uint64_t> font_row_revisions_;
     std::uint64_t font_appearance_ = 0;

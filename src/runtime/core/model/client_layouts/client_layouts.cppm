@@ -529,8 +529,6 @@ export {
       ds::Option<PipeProcess> process;
       // The flush that set the directory the pane last took from Neovim.
       std::uint64_t directory_at = 0;
-      // Whether the poller wakes the runtime when Neovim's input takes more.
-      bool write_interest = false;
     };
 
     // Calls `visitor` with the pane as the kind it is. A kind the visitor has no overload for

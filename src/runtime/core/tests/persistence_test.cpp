@@ -465,7 +465,8 @@ namespace {
     corrupt.emplace_back(fixture.begin(), fixture.end());
     corrupt.back()[0] = 'X';
     corrupt.emplace_back(fixture.begin(), fixture.end());
-    corrupt.back()[checkpoint::magic.size()] = 11;
+    // A version this runtime does not write yet.
+    corrupt.back()[checkpoint::magic.size()] = static_cast<Byte>(checkpoint::current_version + 1);
     corrupt.emplace_back(fixture.begin(), fixture.end() - 7);
 
     for (const auto& bytes : corrupt) {

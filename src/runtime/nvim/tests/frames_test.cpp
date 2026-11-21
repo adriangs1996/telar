@@ -30,17 +30,15 @@ namespace {
         std::vector<CellStyle> style;
       };
 
-      // Applies a message as it crosses the wire: encoded, then decoded from its bytes.
-      void apply(const NvimGrid& sent) {
-        std::vector<Byte> bytes(Codec::encodedSize(sent));
+      // Applies a grid's message as it crosses the wire: decoded from its bytes.
+      void applyGrid(std::span<const Byte> payload) {
         std::vector<Byte> scratch(256 * 1024);
         DecodeStorage storage{scratch};
-
-        static_cast<void>(Codec::encode(sent, std::span<Byte>{bytes}));
-        const auto message = Codec::decode<NvimGrid>(std::span<const Byte>{bytes}, storage);
+        const auto message = Codec::decode<NvimGrid>(payload, storage);
 
         check(message.pane_id == pane_id, "the grid names its pane");
         ++messages;
+        touched.insert(message.grid);
 
         auto& grid = grids[message.grid];
 
@@ -89,13 +87,10 @@ namespace {
         }
       }
 
-      void apply(const NvimFrame& sent) {
-        std::vector<Byte> bytes(Codec::encodedSize(sent));
+      void applyFrame(std::span<const Byte> payload) {
         std::vector<Byte> scratch(16 * 1024);
         DecodeStorage storage{scratch};
-
-        static_cast<void>(Codec::encode(sent, std::span<Byte>{bytes}));
-        const auto message = Codec::decode<NvimFrame>(std::span<const Byte>{bytes}, storage);
+        const auto message = Codec::decode<NvimFrame>(payload, storage);
 
         check(message.base_frame_id == 0 || message.base_frame_id == frame, "a frame changes the one the client has");
         if (message.base_frame_id == 0) {
@@ -103,6 +98,8 @@ namespace {
             return !touched.contains(entry.first);
           });
         }
+
+        touched.clear();
 
         for (const auto removed : message.removed) {
           grids.erase(removed);
@@ -133,16 +130,31 @@ namespace {
       const auto cells = client.cells;
 
       check(screen.settled(), "a frame is made of a settled screen");
-      frames.begin(screen, pane_id, client.frame);
+      frames.begin(screen, {.pane_id = pane_id, .seen = client.frame});
       client.touched.clear();
 
-      while (const auto grid = frames.next(screen)) {
-        client.touched.insert(grid->grid);
-        client.apply(*grid);
+      for (auto payload = frames.next(screen); !payload.empty(); payload = frames.next(screen)) {
+        client.applyGrid(payload);
       }
 
-      client.apply(frames.end(screen));
+      client.applyFrame(frames.end(screen));
       return {.messages = client.messages - messages, .cells = client.cells - cells};
+    }
+
+    // A message of the frame, decoded from the bytes the encoder wrote; what it views lasts
+    // until the encoder writes the next.
+    template <typename Message>
+    Message decoded(std::span<const Byte> payload, std::span<Byte> scratch) {
+      DecodeStorage storage{scratch};
+
+      check(!payload.empty(), "the message was written");
+      return Codec::decode<Message>(payload, storage);
+    }
+
+    // Writes the frame's grids and leaves the encoder ready for what follows them.
+    void skipGrids(NvimFrames& frames, const NvimScreen& screen) {
+      while (!frames.next(screen).empty()) {
+      }
     }
 
     std::string cellText(const NvimScreen& screen, const NvimCell& cell) {
@@ -406,6 +418,7 @@ namespace {
 
       check(mirrors(screen, client) && sent.cells == std::size_t{columns} * rows, "every cell of a large grid arrives");
       check(sent.messages == (std::size_t{columns} * rows + NvimFrames::message_cells - 1) / (NvimFrames::message_cells / columns * columns), "in as many messages as its cells need");
+      check(client.frame == screen.flushed() && frames.frame() == screen.flushed(), "all of them one frame");
     }
 
     void cursorAndMode() {
@@ -437,12 +450,11 @@ namespace {
         event(writer, "grid_cursor_goto", {1, 1, 3});
       });
 
-      frames.begin(screen, pane_id, 0);
+      std::vector<Byte> scratch(16 * 1024);
 
-      while (frames.next(screen)) {
-      }
-
-      const auto frame = frames.end(screen);
+      frames.begin(screen, {.pane_id = pane_id, .seen = 0});
+      skipGrids(frames, screen);
+      const auto frame = decoded<NvimFrame>(frames.end(screen), scratch);
 
       check(frame.frame_id == 1 && frame.base_frame_id == 0 && frame.cursor_grid == 1 && frame.cursor_row == 1 && frame.cursor_column == 3 && frame.cursor_visible, "where the cursor is");
       check(frame.cursor_shape == CursorShape::bar && frame.cursor_percentage == 25 && frame.mode == "insert", "its shape in the mode Neovim is in");
@@ -504,44 +516,44 @@ namespace {
         writer.array(0);
       });
 
-      frames.begin(screen, pane_id, 0);
+      std::vector<Byte> scratch(64 * 1024);
 
-      while (frames.next(screen)) {
-      }
+      frames.begin(screen, {.pane_id = pane_id, .seen = 0});
+      skipGrids(frames, screen);
 
-      const auto line = frames.cmdline(screen);
-      const auto menu = frames.popupMenu(screen);
-      const auto tabs = frames.tabLine(screen);
+      const auto line = decoded<NvimCmdline>(frames.cmdline(screen), scratch);
 
-      check(line && line->visible && line->first == ':' && line->text == "write" && line->position == 5 && line->level == 1 && line->frame_id == 1, "the command line as Neovim has it");
-      check(menu && menu->visible && !menu->keeps_items && menu->selected == 0 && menu->grid == -1 && menu->total == 2 && menu->items.size() == 2 && menu->items[1].word == "wall" && menu->items[0].kind == "cmd", "the completion menu with its items");
-      check(tabs && tabs->current_tab == 1 && tabs->tabs.size() == 1 && tabs->tabs[0].name == "main.cpp", "the tabs by name");
-      check(!frames.messageList(screen), "a surface that never changed is not sent");
+      check(line.visible && line.first == ':' && line.text == "write" && line.position == 5 && line.level == 1 && line.frame_id == 1, "the command line as Neovim has it");
+
+      const auto menu = decoded<NvimPopupMenu>(frames.popupMenu(screen), scratch);
+
+      check(menu.visible && !menu.keeps_items && menu.selected == 0 && menu.grid == -1 && menu.total == 2 && menu.items.size() == 2 && menu.items[1].word == "wall" && menu.items[0].kind == "cmd", "the completion menu with its items");
+
+      const auto tabs = decoded<NvimTabLine>(frames.tabLine(screen), scratch);
+
+      check(tabs.current_tab == 1 && tabs.tabs.size() == 1 && tabs.tabs[0].name == "main.cpp", "the tabs by name");
+      check(frames.messageList(screen).empty(), "a surface that never changed is not sent");
 
       // The selection moves: the client keeps the items it has.
       redraw(screen, memory, 1, [](msgpack::Writer& writer) {
         event(writer, "popupmenu_select", {1});
       });
-      frames.begin(screen, pane_id, 1);
+      frames.begin(screen, {.pane_id = pane_id, .seen = 1});
+      skipGrids(frames, screen);
 
-      while (frames.next(screen)) {
-      }
+      const auto moved = decoded<NvimPopupMenu>(frames.popupMenu(screen), scratch);
 
-      const auto moved = frames.popupMenu(screen);
-
-      check(moved && moved->keeps_items && moved->items.empty() && moved->selected == 1, "a selection that moved is sent without the items");
-      check(!frames.cmdline(screen) && !frames.tabLine(screen), "and the surfaces that did not change are left alone");
+      check(moved.keeps_items && moved.items.empty() && moved.selected == 1, "a selection that moved is sent without the items");
+      check(frames.cmdline(screen).empty() && frames.tabLine(screen).empty(), "and the surfaces that did not change are left alone");
 
       redraw(screen, memory, 2, [](msgpack::Writer& writer) {
         event(writer, "popupmenu_hide", {});
         event(writer, "cmdline_hide", {1, 0});
       });
-      frames.begin(screen, pane_id, 2);
-
-      while (frames.next(screen)) {
-      }
-
-      check(!frames.popupMenu(screen)->visible && !frames.cmdline(screen)->visible, "a surface that closed says so");
+      frames.begin(screen, {.pane_id = pane_id, .seen = 2});
+      skipGrids(frames, screen);
+      check(!decoded<NvimPopupMenu>(frames.popupMenu(screen), scratch).visible, "a menu that closed says so");
+      check(!decoded<NvimCmdline>(frames.cmdline(screen), scratch).visible, "and so does the command line");
     }
 
   }

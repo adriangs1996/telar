@@ -289,7 +289,7 @@ namespace telar::runtime {
     reset(*grid, stamp());
   }
 
-  void NvimScreen::destroy(std::uint32_t id) noexcept {
+  void NvimScreen::destroy(std::uint32_t id) {
     for (std::size_t index = 0; index < grids_.size(); ++index) {
       if (grids_[index]->id != id) {
         continue;

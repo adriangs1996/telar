@@ -271,7 +271,7 @@ namespace telar {
   // client takes a pane it was told nothing about for one.
   struct PaneKindNotice {
     std::uint64_t pane_id{};
-    PaneKind kind{};
+    PaneKind kind = PaneKind::terminal;
   };
 
   template <>

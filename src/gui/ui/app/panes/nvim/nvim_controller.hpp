@@ -77,8 +77,8 @@ namespace telar::gui::qt {
     template <typename Request>
     void attempt(Request request);
 
-    Store& store_;
-    TerminalHost& host_;
+    tbc::mut_a<Store> store_;
+    tbc::mut_a<TerminalHost> host_;
   };
 
 }

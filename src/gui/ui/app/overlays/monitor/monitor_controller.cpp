@@ -408,6 +408,8 @@ namespace telar::gui::qt {
       return true;
     case Action::none:
     case Action::new_tab:
+    case Action::new_editor:
+    case Action::new_editor_tab:
     case Action::select_tab:
     case Action::select_tab_index:
     case Action::next_tab:

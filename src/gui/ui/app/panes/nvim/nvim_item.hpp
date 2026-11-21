@@ -130,7 +130,7 @@ namespace telar::gui::qt {
     Q_INVOKABLE void send(const QString& keys);
 
     // What a grid's item reads to draw: the editor as last shown, and how its cells are drawn.
-    [[nodiscard]] const application::nvim::Editor* state() const noexcept;
+    [[nodiscard]] const application::nvim::Editor* editorState() const noexcept;
     [[nodiscard]] const application::Pane<Memory>* pane() const noexcept;
 
     [[nodiscard]] const TerminalFont& font() const noexcept {
@@ -152,6 +152,9 @@ namespace telar::gui::qt {
     [[nodiscard]] bool cursorOn() const noexcept {
       return cursor_on_;
     }
+
+    // Where the input method draws what it composes: at the cursor.
+    [[nodiscard]] QVariant inputMethodQuery(Qt::InputMethodQuery query) const override;
 
     // Asks the window's fonts for what draws `cells` and the editor's own font lacks.
     void requestFonts(std::span<const CellValue> cells);
@@ -180,7 +183,6 @@ namespace telar::gui::qt {
     void keyPressEvent(QKeyEvent* event) override;
     void keyReleaseEvent(QKeyEvent* event) override;
     void inputMethodEvent(QInputMethodEvent* event) override;
-    [[nodiscard]] QVariant inputMethodQuery(Qt::InputMethodQuery query) const override;
     void focusInEvent(QFocusEvent* event) override;
     void focusOutEvent(QFocusEvent* event) override;
     void mousePressEvent(QMouseEvent* event) override;
@@ -203,6 +205,11 @@ namespace telar::gui::qt {
     void synchronizeGrids(const application::nvim::Editor& editor);
     void synchronizeCursor(const application::nvim::Editor& editor);
     void synchronizeSurfaces(const application::nvim::Editor& editor);
+    void projectCmdline(const application::nvim::Editor& editor);
+    void projectMenu(const application::nvim::Editor& editor);
+    void projectMessages(const application::nvim::Editor& editor);
+    void projectTabs(const application::nvim::Editor& editor);
+    void projectPrompt(const application::nvim::Editor& editor);
     void restartBlink(const application::nvim::Editor& editor);
     [[nodiscard]] QRectF gridBounds(const application::nvim::Grid& grid) const noexcept;
     [[nodiscard]] ds::Option<Hit> hit(QPointF position) const;

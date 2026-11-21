@@ -396,7 +396,10 @@ namespace telar::gui::application::workbench {
       return false;
     }
 
-    return requestSplit(session, tab->focused_pane, axis, {.editor = true, .files = files});
+    // Read before the session lends itself to the request.
+    const auto focused = tab->focused_pane;
+
+    return requestSplit(session, focused, axis, {.editor = true, .files = files});
   }
 
   TabCreationOutcome createEditorTab(Session& session, std::span<const std::string_view> files) {
