@@ -92,6 +92,10 @@ namespace telar::gui::qt {
             .host = *this,
             .memory = memory,
         }),
+        editors_({
+            .store = store_,
+            .host = *this,
+        }),
         notifications_(store_),
         components_(store_, configuration_source_, element_slots_, memory),
         plugins_(store_, configuration_source_, memory),
@@ -644,7 +648,7 @@ namespace telar::gui::qt {
       const auto change = client->session.consume(byteView({payload.data(), static_cast<std::size_t>(payload.size())}), handler);
       // Terminal frames and documents reach their panes directly, and are the bulk of the
       // traffic; every other change may move what the projections read.
-      if (change != application::Change::none && change != application::Change::terminal && change != application::Change::document) {
+      if (change != application::Change::none && change != application::Change::terminal && change != application::Change::document && change != application::Change::editor) {
         store_.touch();
       }
 
@@ -722,6 +726,14 @@ namespace telar::gui::qt {
       break;
     case application::Change::monitor:
       monitor_.synchronize();
+      break;
+    case application::Change::editor:
+      // A link the editor opened is opened here, where the person is.
+      if (const auto link = application::nvim::takeLink(sessionMut(), session().changedPane())) {
+        static_cast<void>(links_.open(*link, session().changedPane()));
+      }
+
+      emit editors_.editorChanged(session().changedPane());
       break;
     case application::Change::peek:
       peek_.synchronize();

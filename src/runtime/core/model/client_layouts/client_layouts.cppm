@@ -15,6 +15,8 @@ import telar.runtime.terminal.osc_scanner;
 import telar.runtime.terminal.text_reader;
 import telar.runtime.transport.connection;
 import telar.runtime.core.model.slot_store;
+import telar.runtime.nvim.editor;
+import telar.runtime.nvim.frames;
 
 import telar.runtime.agents.screen_inference;
 import telar.runtime.diagnostics.runtime_counters;
@@ -31,6 +33,7 @@ import telar.base.diagnostics;
 import telar.config.runtime;
 import telar.wire.vocabulary;
 import telar.wire.clipboard;
+import telar.wire.editor;
 import telar.wire.layout;
 import telar.wire.pane_io;
 import telar.wire.worktrees;
@@ -112,9 +115,12 @@ export {
     };
 
     struct Attachment {
+      // `media` is the pane's, null for a pane that shows no images.
       explicit Attachment(ConcurrentMemory& memory, GraphicsCreditBudget& budget, std::uint64_t pane, std::shared_ptr<PaneMedia> media);
 
       std::uint64_t pane_id;
+      // What the pane is, which says whose frames an acknowledgment answers.
+      PaneKind kind = PaneKind::terminal;
       std::size_t slot = 0;
       FrameSync frames;
       GraphicsSynchronizer graphics;
@@ -139,6 +145,13 @@ export {
       std::uint64_t scrollback_generation = 0;
       std::uint64_t scrollback_trimmed = 0;
       FramePacer pacer;
+      // An editor pane's frames: the one this client applied, and the one it was last sent,
+      // which it has yet to acknowledge while the two differ. Zero is a client that has none
+      // and is sent the screen whole.
+      std::uint64_t editor_seen = 0;
+      std::uint64_t editor_sent = 0;
+      // The count of the editor's prompt this client was last told.
+      std::uint64_t editor_prompt = 0;
     };
 
     // client_layouts.cpp instantiates the constructor for ConcurrentMemory. It is not declared
@@ -232,19 +245,103 @@ export {
 export {
   namespace telar::runtime {
 
+    // What every pane has, whatever its kind: where it is, the process it started and what the
+    // runtime reports of both. A kind derives from it and adds its own state; code that needs
+    // that state asks for the kind by name, `as<TerminalPane>()`, and gets none for another one.
     class Pane {
+    public:
+      Pane(const Pane&) = delete;
+      Pane& operator=(const Pane&) = delete;
+      Pane(Pane&&) = delete;
+      Pane& operator=(Pane&&) = delete;
+
+      // The pane as the kind `Kind` names; null when it is of another kind.
+      template <std::derived_from<Pane> Kind>
+      TBC_GENERIC [[nodiscard]] inline const Kind* as() const noexcept {
+        return kind == Kind::pane_kind ? static_cast<const Kind*>(this) : nullptr; // NOLINT(cppcoreguidelines-pro-type-static-cast-downcast): `kind` says which derived type the pane was made as, the one place a pane is cast to its kind
+      }
+
+      template <std::derived_from<Pane> Kind>
+      TBC_GENERIC [[nodiscard]] inline Kind* asMut() noexcept {
+        return kind == Kind::pane_kind ? static_cast<Kind*>(this) : nullptr; // NOLINT(cppcoreguidelines-pro-type-static-cast-downcast): `kind` says which derived type the pane was made as, the one place a pane is cast to its kind
+      }
+
+      [[nodiscard]] ds::Option<std::int32_t> exitCode() const noexcept;
+
+      // The bytes of the foreground program's name the pane list shows.
+      static constexpr std::size_t foreground_bytes = 48;
+#if TELAR_DIAGNOSTICS
+      diagnostics::PaneCounters* counters = nullptr;
+#endif
+      const PaneKind kind;
+      std::uint64_t id;
+      std::uint64_t event_identity = 0;
+      std::uint64_t generation = 1;
+      std::uint64_t cwd_revision = 0;
+      std::uint64_t input_revision = 0;
+      std::uint64_t foreground_revision = 1;
+      // Since when foreground_group holds the terminal, as the pane list reports it.
+      std::chrono::steady_clock::time_point foreground_since = std::chrono::steady_clock::now();
+      // When listening_ports were last read.
+      std::chrono::steady_clock::time_point ports_checked;
+      std::uint64_t git_revision = 0;
+      ds::Option<std::uint64_t> worktree_checked_cwd;
+      ds::Option<std::chrono::steady_clock::time_point> last_input;
+      TabLocation location;
+      ds::String<ConcurrentMemory> cwd;
+      LaunchRecord<ConcurrentMemory> launch;
+      FixedText<foreground_bytes> foreground;
+      ds::Option<ConfigurePaneDesktop> desktop_theme;
+      ProcessCache process_cache;
+      ds::Option<AgentResume> restored_agent;
+      // The repository the pane works in, read after each command; zero until read.
+      ShellGitSummary git{};
+      FixedText<PATH_MAX> git_directory;
+      // The cells the pane's program draws on.
+      TerminalSize extent{};
+      std::uint32_t observers = 0;
+      // The process the pane started; zero while it has none.
+      pid_t process_id = 0;
+      // The process group in the foreground of the pane's program, as the pane list reports it.
+      pid_t foreground_group = 0;
+      std::uint32_t git_commands = std::numeric_limits<std::uint32_t>::max();
+      std::uint32_t process_rechecks = 0;
+      ds::Option<int> exit_status;
+      ds::Option<RejectedReporter> rejected_reporter;
+      // The TCP ports that process group listens on.
+      ListeningPorts listening_ports;
+      bool foreground_shell = true;
+      bool output_closed = false;
+      bool exit_observed = false;
+      bool write_interest = false;
+      bool read_paused = false;
+      bool close_requested = false;
+      bool process_recheck_requested = false;
+      bool process_recheck_running = false;
+      ds::Array<Byte, history_session_bytes> history_session{};
+
+    protected:
+      // A pane is made as one of its kinds, and the store that holds it frees it as that kind.
+      explicit Pane(PaneKind made_as, ConcurrentMemory& memory, std::uint64_t identity, TabLocation tab, std::string_view directory);
+      ~Pane() = default;
+    };
+
+    // A pane whose program runs on a PTY and is drawn as the terminal it writes to.
+    class TerminalPane final : public Pane {
       // The default writer of write: writev on the PTY.
       struct ResponseWriter {
         ssize_t operator()(int descriptor, std::span<const iovec> vectors) const;
       };
 
     public:
+      static constexpr PaneKind pane_kind = PaneKind::terminal;
+
       enum class ReadMode : std::uint8_t {
         once,
         burst,
       };
 
-      explicit Pane(ConcurrentMemory& memory, std::uint64_t identity, TabLocation tab, Command<ConcurrentMemory>& command, PaneLaunch settings);
+      explicit TerminalPane(ConcurrentMemory& memory, std::uint64_t identity, TabLocation tab, Command<ConcurrentMemory>& command, PaneLaunch settings);
 
       bool read(ReadMode mode = ReadMode::once);
 
@@ -329,50 +426,22 @@ export {
 
       ds::Option<bool> shellForeground() const noexcept;
 
-      ds::Option<std::int32_t> exitCode() const noexcept;
-
       static constexpr std::size_t input_limit = std::size_t{128} * 1024;
       static constexpr std::size_t read_buffer_size = std::size_t{16} * 1024;
-      // The bytes of the foreground program's name the pane list shows.
-      static constexpr std::size_t foreground_bytes = 48;
 #if TELAR_DIAGNOSTICS
-      diagnostics::PaneCounters* counters = nullptr;
       std::uint64_t input_dropped_bytes = 0;
 #endif
-      std::uint64_t id;
-      std::uint64_t event_identity = 0;
-      std::uint64_t generation = 1;
-      std::uint64_t cwd_revision = 0;
-      std::uint64_t input_revision = 0;
-      std::uint64_t foreground_revision = 1;
-      // Since when foreground_group holds the terminal, as the pane list reports it.
-      std::chrono::steady_clock::time_point foreground_since = std::chrono::steady_clock::now();
-      // When listening_ports were last read.
-      std::chrono::steady_clock::time_point ports_checked;
       // The link's round trip so far, smoothed, which echo_sent times.
       double link_average_ms = 0;
       // Zero until the pane has an integrated shell: other panes never send their state.
       std::uint64_t shell_revision = 0;
-      std::uint64_t git_revision = 0;
       std::chrono::steady_clock::time_point sync_started;
       std::shared_ptr<PtyResponseQueue> pty_responses;
       std::shared_ptr<PaneObserver> observer;
       std::shared_ptr<PaneMedia> media;
-      ds::Option<std::uint64_t> worktree_checked_cwd;
       // When input last reached a remote shell's line editor, until its echo arrives.
       ds::Option<std::chrono::steady_clock::time_point> echo_sent;
-      ds::Option<std::chrono::steady_clock::time_point> last_input;
-      TabLocation location;
-      ds::String<ConcurrentMemory> cwd;
-      LaunchRecord<ConcurrentMemory> launch;
       ByteQueue<ConcurrentMemory> input;
-      FixedText<foreground_bytes> foreground;
-      ds::Option<ConfigurePaneDesktop> desktop_theme;
-      ProcessCache process_cache;
-      ds::Option<AgentResume> restored_agent;
-      // The repository the integrated shell works in, read after each command; zero until read.
-      ShellGitSummary git{};
-      FixedText<PATH_MAX> git_directory;
       // The integrated shell's own reading of its signed marks, on the runtime's thread so its
       // state reaches clients with the output that changed it.
       ds::Option<CommandZones> shell_zones;
@@ -384,29 +453,11 @@ export {
       ds::Option<CommandBlocks> blocks;
       // Reads rows of `terminal`'s scrollback for clients that ask for them.
       ScrollbackRows scrollback_rows;
-      std::uint32_t observers = 0;
-      // The process group holding the terminal, as the pane list reports it.
-      pid_t foreground_group = 0;
-      std::uint32_t git_commands = std::numeric_limits<std::uint32_t>::max();
-      std::uint32_t process_rechecks = 0;
-      ds::Option<int> exit_status;
-      ds::Option<RejectedReporter> rejected_reporter;
       ds::Option<PtyProcess> process;
-      // The TCP ports that process group listens on.
-      ListeningPorts listening_ports;
-      bool foreground_shell = true;
-      bool output_closed = false;
-      bool exit_observed = false;
       bool shell_markers = false;
       bool needs_foreground_observation = false;
       // The shell the pane started, which an `ssh` session it nests stands in for.
       IntegratedShell local_shell = IntegratedShell::none;
-      bool write_interest = false;
-      bool read_paused = false;
-      bool close_requested = false;
-      bool process_recheck_requested = false;
-      bool process_recheck_running = false;
-      ds::Array<Byte, history_session_bytes> history_session{};
 
     private:
       // Counts the commands the integrated shell finished, for its clients, and keeps the marks
@@ -445,6 +496,118 @@ export {
 #if TELAR_DIAGNOSTICS
       void recordRead(std::size_t size, bool folded) noexcept;
 #endif
+    };
+
+    // A pane that shows a Neovim the runtime started with --embed and is the only UI of. What
+    // Neovim draws is kept in `editor` and reaches clients grid by grid, drawn natively.
+    class NvimPane final : public Pane {
+    public:
+      static constexpr PaneKind pane_kind = PaneKind::nvim;
+      // The bytes one read takes from Neovim, and the reads one event takes before other panes
+      // have their turn.
+      static constexpr std::size_t read_buffer_size = std::size_t{64} * 1024;
+      static constexpr unsigned read_burst = 8;
+
+      explicit NvimPane(ConcurrentMemory& memory, std::uint64_t identity, TabLocation tab, Command<ConcurrentMemory>& command, TerminalSize size);
+
+      // Reads what Neovim wrote and applies it to the editor's screen. False once Neovim closed
+      // its output, or wrote what the editor refuses: the pane is then to be closed.
+      bool read();
+
+      // Reads and drops what Neovim wrote to its standard error; false once that closed.
+      bool readErrors() noexcept;
+
+      // Writes the requests the editor queued to Neovim's input, as many as it takes now.
+      void write();
+
+      [[nodiscard]] bool hasInput() const noexcept;
+
+      void requestClose() noexcept;
+
+      void resize(TerminalSize size);
+
+      NvimEditor editor;
+      ds::Option<PipeProcess> process;
+      // The flush that set the directory the pane last took from Neovim.
+      std::uint64_t directory_at = 0;
+      // The client that last drove the editor: what Neovim says back is for it.
+      std::uint64_t driver = 0;
+
+      // A client's question about the editor's buffers, until Neovim lists them.
+      struct BufferQuery {
+        std::uint64_t client = 0;
+        std::uint64_t request_id = 0;
+        std::uint16_t limit = 0;
+        FixedText<FindPaths::maximum_query_bytes> query;
+      };
+
+      ds::Option<BufferQuery> buffer_query;
+    };
+
+    // Calls `visitor` with the pane as the kind it is. A kind the visitor has no overload for
+    // does not compile, so a new kind is decided at every visit.
+    template <typename Visitor>
+    TBC_GENERIC inline void visitPane(Pane& pane, Visitor&& visitor) {
+      switch (pane.kind) {
+      case PaneKind::terminal:
+        std::forward<Visitor>(visitor)(*pane.asMut<TerminalPane>());
+        return;
+      case PaneKind::nvim:
+        std::forward<Visitor>(visitor)(*pane.asMut<NvimPane>());
+        return;
+      }
+    }
+
+    template <typename Visitor>
+    TBC_GENERIC inline void visitPane(const Pane& pane, Visitor&& visitor) {
+      switch (pane.kind) {
+      case PaneKind::terminal:
+        std::forward<Visitor>(visitor)(*pane.as<TerminalPane>());
+        return;
+      case PaneKind::nvim:
+        std::forward<Visitor>(visitor)(*pane.as<NvimPane>());
+        return;
+      }
+    }
+
+    // The terminal a pane is; null for no pane and for a pane of another kind.
+    TBC_HOT_PATH [[nodiscard]] inline tbc::val_a<TerminalPane*> asTerminal(tbc::val_a<Pane*> pane) noexcept {
+      return pane == nullptr ? nullptr : pane->asMut<TerminalPane>();
+    }
+
+    TBC_HOT_PATH [[nodiscard]] inline tbc::val_a<const TerminalPane*> asTerminal(tbc::val_a<const Pane*> pane) noexcept {
+      return pane == nullptr ? nullptr : pane->as<TerminalPane>();
+    }
+
+    // The editor a pane is; null for no pane and for a pane of another kind.
+    TBC_HOT_PATH [[nodiscard]] inline tbc::val_a<NvimPane*> asNvim(tbc::val_a<Pane*> pane) noexcept {
+      return pane == nullptr ? nullptr : pane->asMut<NvimPane>();
+    }
+
+    TBC_HOT_PATH [[nodiscard]] inline tbc::val_a<const NvimPane*> asNvim(tbc::val_a<const Pane*> pane) noexcept {
+      return pane == nullptr ? nullptr : pane->as<NvimPane>();
+    }
+
+    // Asks a pane's program to end, as closing the pane does, whatever its kind.
+    void requestClose(Pane& pane) noexcept;
+
+    // The exit status of a pane's process once it ended; none while it runs.
+    ds::Option<int> reapProcess(Pane& pane) noexcept;
+
+    // Sends a signal to a pane's process.
+    void signalProcess(const Pane& pane, int number) noexcept;
+
+    // What the pane's program titled it, and a count of the times it changed.
+    struct ProgramTitle {
+      std::string_view text;
+      std::uint64_t revision = 0;
+    };
+
+    ProgramTitle programTitle(const Pane& pane) noexcept;
+
+    // Frees a pane as the kind it was made as.
+    struct PaneDisposal {
+      static void dispose(Pane* pane, ConcurrentMemory& memory) noexcept;
     };
 
   }
@@ -582,7 +745,7 @@ export {
 
     // The runtime's tables. Functions take the ones they read or change, so the borrows they keep of one
     // table are not disturbed by another, as Rust's disjoint field borrows are.
-    using PaneStore = SlotStore<Pane, pane_capacity, ConcurrentMemory>;
+    using PaneStore = SlotStore<Pane, pane_capacity, ConcurrentMemory, PaneDisposal>;
     using ClientStore = SlotStore<ClientSession, client_capacity, ConcurrentMemory>;
     using WorkspaceStore = SlotStore<Workspace, workspace_capacity, ConcurrentMemory>;
 
@@ -635,6 +798,16 @@ export {
 
     tbc::val_a<const Pane*> livePane(tbc::ref_a<PaneStore> panes, PaneKey key) noexcept;
 
+    // The terminal a request names by id: a request that only a terminal answers is refused for
+    // a pane of another kind, and for an id that names none.
+    tbc::mut_a<TerminalPane> requireTerminal(tbc::mut_a<PaneStore> panes, std::uint64_t identity);
+
+    // The terminal `pane` is, as a request that only a terminal answers needs it.
+    tbc::mut_a<TerminalPane> requireTerminal(tbc::mut_a<Pane> pane);
+
+    // The editor a request names by id, refused as requireTerminal refuses.
+    tbc::mut_a<NvimPane> requireNvim(tbc::mut_a<PaneStore> panes, std::uint64_t identity);
+
     // The pane an agent's report names, which must still run the generation it names and be the one
     // the runtime verified the reporting client inside.
     tbc::mut_a<Pane> requireReporterPane(tbc::mut_a<PaneStore> panes, const ClientSession& client, PaneKey key);
@@ -646,6 +819,8 @@ export {
 
       GraphicsLimits graphics_limits;
       RuntimeLimits limits;
+      // The buffers an editor pane's frames are written in, one set for every pane and client.
+      NvimFrames editor_frames;
       [[no_unique_address]] diagnostics::RuntimeCounters metrics;
       MediaBudget media_budget;
       AgentManifests manifests = builtinManifests();

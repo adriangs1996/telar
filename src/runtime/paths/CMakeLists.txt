@@ -1,6 +1,7 @@
 telar_add_domain(runtime paths
   SOURCES
     query_task/query_task.cpp
+    text_search/text_search.cpp
   DEPS transport workspaces)
 
 if(BUILD_TESTING)

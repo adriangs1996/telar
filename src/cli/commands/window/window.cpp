@@ -277,19 +277,46 @@ namespace telar::runtime::cli::window {
       }
     }
 
+    // A file as `telar edit` names it, from the directory the command was run in: the window
+    // that opens it works somewhere else. The path is kept in `absolute` when it is made here.
+    tbc::val_a<std::string_view> fromHere(tbc::mut_a<Text> absolute, tbc::val_a<std::string_view> file) {
+      if (file.starts_with('/')) {
+        return file;
+      }
+
+      absolute.append(std::filesystem::current_path().native());
+      absolute.push('/');
+      absolute.append(file);
+      return absolute;
+    }
+
+    // The pane the command was run in, whose tab is where its editor is looked for; zero
+    // outside a pane.
+    std::uint64_t callingPane() noexcept {
+      const char* named = std::getenv("TELAR_PANE_ID"); // NOLINT(concurrency-mt-unsafe): the CLI reads its environment on its one thread
+
+      return named == nullptr ? 0 : parseExact<std::uint64_t>(named).valueOr(0);
+    }
+
     int routed(Session& session, const RoutedOptions& options, Text& output) {
       const auto list = session.exchange<ClientList>(QueryClients{});
-      const auto route = std::ranges::find(list.entries, options.client_id, &ClientDescriptor::id);
+      // A command that names no window goes to the one last typed in.
+      const auto route = options.client_id != 0 ? std::ranges::find(list.entries, options.client_id, &ClientDescriptor::id) : std::ranges::max_element(list.entries, {}, &ClientDescriptor::last_input_sequence);
       if (route == list.entries.end()) {
         throw Failure{"ClientNotFound", 2};
       }
 
-      if (options.text.size() > maximum_command_text) {
+      Text absolute{output.memory()};
+      const bool edits = options.action == ClientAction::editor_open;
+      const auto text = edits ? fromHere(absolute, options.text) : options.text;
+      const auto target_id = edits ? callingPane() : options.target_id;
+
+      if (text.size() > maximum_command_text) {
         throw Failure{"InvalidClientCommandText"};
       }
 
       try {
-        validateUtf8(options.text);
+        validateUtf8(text);
       } catch (const EncodingError&) {
         throw Failure{"InvalidClientCommandText"};
       }
@@ -297,9 +324,9 @@ namespace telar::runtime::cli::window {
       const ClientCommand command{
           .route = {.id = route->id, .generation = route->generation},
           .action = options.action,
-          .target_id = options.target_id,
+          .target_id = target_id,
           .value = options.value,
-          .text = options.text,
+          .text = text,
       };
 
       const auto reply = exchangeCommand(session, command);

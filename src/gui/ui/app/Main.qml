@@ -86,6 +86,7 @@ Window {
         id: paneArea
         controller: telar.panes
         terminals: telar.terminals
+        editors: telar.editors
         documents: telar.documents
         copy: telar.copy
         attachments: telar.attachments

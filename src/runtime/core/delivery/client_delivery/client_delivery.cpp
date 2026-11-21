@@ -10,6 +10,7 @@ import telar.sys.process;
 
 import telar.runtime.terminal.control;
 import telar.render.document;
+import telar.wire.nvim;
 import telar.wire.pane_io;
 import telar.runtime.diagnostics.line;
 import telar.base.ds;
@@ -35,7 +36,7 @@ namespace telar::runtime {
     }
 
     // Sends the routed client the pane's request, or once it is announced, the execution it settled on.
-    void sendRequest(ClientSession& client, Pane& pane) {
+    void sendRequest(ClientSession& client, TerminalPane& pane) {
       auto& clipboard = pane.terminal.clipboardControl();
 
       try {
@@ -56,13 +57,13 @@ namespace telar::runtime {
 
   }
 
-  bool ClipboardService::eligible(const ClientSession& client, const Pane& pane) noexcept {
+  bool ClipboardService::eligible(const ClientSession& client, const TerminalPane& pane) noexcept {
     const auto* attachment = client.attachment(pane.id);
 
     return !pane.close_requested && !pane.output_closed && client.role == ClientRole::interactive && !client.connection.flags().closing && attachment != nullptr && attachment->desktop && attachment->desktop->pane_generation == pane.generation && attachment->desktop->visible && attachment->desktop->clipboard;
   }
 
-  void ClipboardService::configure(const ClientStore& clients, Pane& pane) {
+  void ClipboardService::configure(const ClientStore& clients, TerminalPane& pane) {
     ds::Array<control::ClipboardRoute, control::ClipboardGrants::capacity> routes;
     std::size_t count = 0;
     const ClientSession* preferred = nullptr;
@@ -85,7 +86,7 @@ namespace telar::runtime {
     pane.terminal.clipboardControl().routes(std::span{routes}.first(count), preferred != nullptr ? ds::Option{control::ClipboardRoute{.client = preferred->id, .generation = preferred->generation}} : ds::none);
   }
 
-  bool ClipboardService::advance(ClientStore& clients, Pane& pane, std::chrono::steady_clock::time_point now) {
+  bool ClipboardService::advance(ClientStore& clients, TerminalPane& pane, std::chrono::steady_clock::time_point now) {
     auto& clipboard = pane.terminal.clipboardControl();
 
     clipboard.expire(now);
@@ -112,8 +113,8 @@ namespace telar::runtime {
     return false;
   }
 
-  tbc::val_a<Pane*> ClipboardService::complete(tbc::mut_a<PaneStore> panes, ClientSession& sender, const CompleteClipboardDesktop& completion) {
-    auto* pane = findPane(panes, {.id = completion.ticket.pane_id, .generation = completion.ticket.pane_generation});
+  tbc::val_a<TerminalPane*> ClipboardService::complete(tbc::mut_a<PaneStore> panes, ClientSession& sender, const CompleteClipboardDesktop& completion) {
+    auto* pane = asTerminal(findPane(panes, {.id = completion.ticket.pane_id, .generation = completion.ticket.pane_generation}));
     if (pane == nullptr || sender.generation != completion.ticket.client_generation || !eligible(sender, *pane)) {
       return nullptr;
     }
@@ -159,9 +160,20 @@ namespace telar::runtime {
 
       candidates &= candidates - 1;
       auto& attachment = client.attachments.atMut(slots_[slot].index).getMut();
-      auto& pane = *model.panes.find(attachment.pane_id);
-      Output output{.connection = client.connection, .completing_exit = client.completing_exit, .frame_interval = client.frame_interval, .metrics = model.metrics, .now = now, .timeout = timeout};
-      if (prepare(output, attachment, pane, lane)) {
+      auto* found = model.panes.find(attachment.pane_id);
+      if (found == nullptr) {
+        continue;
+      }
+
+      Output output{.connection = client.connection, .completing_exit = client.completing_exit, .frame_interval = client.frame_interval, .metrics = model.metrics, .editor_frames = model.editor_frames, .now = now, .timeout = timeout};
+      bool prepared = false;
+
+      // Each kind of pane fills the lanes it has something for.
+      visitPane(*found, [&](auto& pane) {
+        prepared = prepare(output, attachment, pane, lane);
+      });
+
+      if (prepared) {
         client.next_attachment = (slot + 1) % ClientSession::attachment_capacity;
         return true;
       }
@@ -170,7 +182,93 @@ namespace telar::runtime {
     return false;
   }
 
-  bool AttachmentDelivery::prepare(Output& output, Attachment& attachment, Pane& pane, DeliveryLane lane) {
+  bool AttachmentDelivery::prepare(Output& output, Attachment& attachment, NvimPane& pane, DeliveryLane lane) {
+    switch (lane) {
+    case DeliveryLane::cells:
+      return editorFrame(output, attachment, pane);
+    case DeliveryLane::cwd:
+      return metadata(output.connection, attachment.cwd_revision, pane.cwd_revision + 1, PaneCwd{.pane_id = pane.id, .cwd = pane.cwd});
+    case DeliveryLane::foreground:
+      return metadata(output.connection, attachment.foreground_revision, pane.foreground_revision, PaneForeground{.pane_id = pane.id, .name = pane.foreground.view()});
+    case DeliveryLane::title: {
+      const auto title = programTitle(pane);
+
+      // An attachment starts at revision one, and a screen that was told no title at zero.
+      return metadata(output.connection, attachment.title_revision, title.revision + 1, PaneTitle{.pane_id = pane.id, .title = title.text});
+    }
+    case DeliveryLane::exit:
+      return exit(output, attachment, pane, attachment.editor_sent == attachment.editor_seen);
+    case DeliveryLane::scrollback:
+    case DeliveryLane::progress:
+    case DeliveryLane::shell:
+    case DeliveryLane::git:
+    case DeliveryLane::blocks:
+    case DeliveryLane::graphics:
+    case DeliveryLane::document:
+    case DeliveryLane::stopping:
+    case DeliveryLane::management:
+    case DeliveryLane::resync:
+    case DeliveryLane::clipboard:
+    case DeliveryLane::layout:
+    case DeliveryLane::proxy:
+    case DeliveryLane::agents:
+    case DeliveryLane::metrics:
+    case DeliveryLane::workspaces:
+    case DeliveryLane::panes:
+    case DeliveryLane::observation:
+    case DeliveryLane::count:
+      return false;
+    }
+
+    return false;
+  }
+
+  bool AttachmentDelivery::editorFrame(Output& output, Attachment& attachment, const NvimPane& pane) {
+    const auto& screen = pane.editor.screen();
+
+    // One frame is out at a time: the client says when it applied it. A screen in the middle of
+    // a redraw shows a state Neovim never meant to be seen, so it waits for the flush.
+    if (attachment.editor_sent != attachment.editor_seen || !screen.settled()) {
+      return false;
+    }
+
+    if (!NvimFrames::pending(screen, attachment.editor_seen)) {
+      slots_.atMut(attachment.slot).cells_current = true;
+      return editorPrompt(output.connection, attachment, pane);
+    }
+
+    TELAR_TRACE("runtime.publishEditorFrame");
+    auto& frames = output.editor_frames;
+
+    frames.begin(screen, {.pane_id = pane.id, .seen = attachment.editor_seen});
+    for (auto grid = frames.next(screen); !grid.empty(); grid = frames.next(screen)) {
+      output.connection.sendPayload(grid);
+    }
+
+    // Each native surface that changed, to take effect with the grids.
+    if (const auto cmdline = frames.cmdline(screen); !cmdline.empty()) {
+      output.connection.sendPayload(cmdline);
+    }
+
+    if (const auto menu = frames.popupMenu(screen); !menu.empty()) {
+      output.connection.sendPayload(menu);
+    }
+
+    if (const auto messages = frames.messageList(screen); !messages.empty()) {
+      output.connection.sendPayload(messages);
+    }
+
+    if (const auto tabs = frames.tabLine(screen); !tabs.empty()) {
+      output.connection.sendPayload(tabs);
+    }
+
+    output.connection.sendPayload(frames.end(screen));
+    attachment.editor_sent = frames.frame();
+    slots_.atMut(attachment.slot).cells_current = true;
+    return true;
+  }
+
+  bool AttachmentDelivery::prepare(Output& output, Attachment& attachment, TerminalPane& pane, DeliveryLane lane) {
     const auto& effects = pane.terminal.effects();
 
     switch (lane) {
@@ -193,7 +291,7 @@ namespace telar::runtime {
     case DeliveryLane::blocks:
       return blocks(output.connection, attachment, pane);
     case DeliveryLane::exit:
-      return exit(output, attachment, pane);
+      return exit(output, attachment, pane, pane.media->idle() && !attachment.frames.waitingForAck());
     case DeliveryLane::graphics:
       return graphics(output, attachment, pane, output.timeout);
     case DeliveryLane::document:
@@ -228,7 +326,7 @@ namespace telar::runtime {
     return true;
   }
 
-  bool AttachmentDelivery::document(Connection<ConcurrentMemory>& connection, Attachment& attachment, const Pane& pane) {
+  bool AttachmentDelivery::document(Connection<ConcurrentMemory>& connection, Attachment& attachment, const TerminalPane& pane) {
     static_assert(PaneDocument::max_size == ::telar::render::max_document_bytes);
     const auto& effects = pane.terminal.effects();
     if (attachment.document_revision != effects.document_revision) {
@@ -255,7 +353,7 @@ namespace telar::runtime {
     return true;
   }
 
-  bool AttachmentDelivery::inlineDocuments(Connection<ConcurrentMemory>& connection, Attachment& attachment, const Pane& pane) {
+  bool AttachmentDelivery::inlineDocuments(Connection<ConcurrentMemory>& connection, Attachment& attachment, const TerminalPane& pane) {
     const auto& effects = pane.terminal.effects();
     const auto generation = pane.terminal.scrollbackGeneration();
     const auto trimmed = pane.terminal.scrollbackTrimmed();
@@ -313,7 +411,7 @@ namespace telar::runtime {
     return false;
   }
 
-  bool AttachmentDelivery::blocks(Connection<ConcurrentMemory>& connection, Attachment& attachment, const Pane& pane) {
+  bool AttachmentDelivery::blocks(Connection<ConcurrentMemory>& connection, Attachment& attachment, const TerminalPane& pane) {
     if (!pane.blocks || attachment.blocks_revision == pane.blocks->revision()) {
       return false;
     }
@@ -325,7 +423,7 @@ namespace telar::runtime {
     return true;
   }
 
-  bool AttachmentDelivery::scrollback(Connection<ConcurrentMemory>& connection, Attachment& attachment, Pane& pane) {
+  bool AttachmentDelivery::scrollback(Connection<ConcurrentMemory>& connection, Attachment& attachment, TerminalPane& pane) {
     const auto generation = pane.terminal.scrollbackGeneration();
     const auto trimmed = pane.terminal.scrollbackTrimmed();
     if (attachment.scrollback_generation == generation && attachment.scrollback_trimmed == trimmed) {
@@ -345,7 +443,7 @@ namespace telar::runtime {
     return true;
   }
 
-  bool AttachmentDelivery::cells(Output& output, Attachment& attachment, Pane& pane, Clock::time_point now, std::chrono::nanoseconds& timeout) {
+  bool AttachmentDelivery::cells(Output& output, Attachment& attachment, TerminalPane& pane, Clock::time_point now, std::chrono::nanoseconds& timeout) {
     if (attachment.frames.waitingForAck(pane.terminal.screen())) {
       return false;
     }
@@ -407,8 +505,37 @@ namespace telar::runtime {
     return true;
   }
 
-  bool AttachmentDelivery::exit(Output& output, Attachment& attachment, const Pane& pane) {
-    if (!pane.output_closed || !pane.exit_status || !pane.media->idle() || attachment.frames.waitingForAck() || !slots_[attachment.slot].cells_current) {
+  bool AttachmentDelivery::editorPrompt(Connection<ConcurrentMemory>& connection, Attachment& attachment, const NvimPane& pane) {
+    const auto serial = pane.editor.promptSerial();
+    if (attachment.editor_prompt == serial) {
+      return false;
+    }
+
+    const auto& prompt = pane.editor.prompt();
+    const std::string_view text{prompt.text.data(), prompt.text.size()};
+    ds::Array<std::string_view, max_nvim_choices> choices;
+    std::size_t count = 0;
+
+    for (const auto& choice : prompt.choices) {
+      choices.atMut(count++) = choice.of(text);
+    }
+
+    connection.send(NvimPrompt{
+        .pane_id = pane.id,
+        .serial = serial,
+        .prompt_id = prompt.id,
+        .kind = prompt.kind,
+        .title = prompt.title,
+        .initial = prompt.initial,
+        .choices = choices.view().first(count),
+    });
+
+    attachment.editor_prompt = serial;
+    return true;
+  }
+
+  bool AttachmentDelivery::exit(Output& output, Attachment& attachment, const Pane& pane, bool delivered) {
+    if (!pane.output_closed || !pane.exit_status || !delivered || !slots_[attachment.slot].cells_current) {
       return false;
     }
 
@@ -425,14 +552,14 @@ namespace telar::runtime {
     return true;
   }
 
-  bool AttachmentDelivery::graphics(Output& output, Attachment& attachment, Pane& pane, std::chrono::nanoseconds& timeout) {
+  bool AttachmentDelivery::graphics(Output& output, Attachment& attachment, TerminalPane& pane, std::chrono::nanoseconds& timeout) {
     const bool sent = publishGraphics(output.connection, attachment, pane, timeout);
 
     TELAR_DIAGNOSTIC(output.metrics.graphics.merge(attachment.graphics.takeCounters()));
     return sent;
   }
 
-  bool AttachmentDelivery::publishGraphics(Connection<ConcurrentMemory>& connection, Attachment& attachment, Pane& pane, std::chrono::nanoseconds& timeout) {
+  bool AttachmentDelivery::publishGraphics(Connection<ConcurrentMemory>& connection, Attachment& attachment, TerminalPane& pane, std::chrono::nanoseconds& timeout) {
     const auto queued = connection.queuedBytes();
 
     if (pane.media->busy()) {
@@ -497,7 +624,7 @@ namespace telar::runtime {
     }
 
     for (auto& attachment : client.attachments.viewMut()) {
-      const auto* pane = model_.panes.find(attachment->pane_id);
+      const auto* pane = asTerminal(model_.panes.find(attachment->pane_id));
       if (pane == nullptr || attachment->clipboard_revision == pane->terminal.effects().clipboard_revision) {
         continue;
       }
@@ -572,12 +699,20 @@ namespace telar::runtime {
   }
 
   EditorService::EditorService(ConcurrentMemory& memory)
-      : editor_(memory) {}
+      : editor_(memory),
+        search_(memory) {}
 
   void EditorService::process(std::span<const Byte> payload, EncodedReply<ConcurrentMemory>& reply, const RequestContext& context) {
     constexpr std::size_t decode_scratch_bytes = 1024;
     ds::Array<Byte, decode_scratch_bytes> scratch{};
     DecodeStorage storage{scratch.viewMut()};
+
+    if (!payload.empty() && static_cast<ClientTag>(payload.front()) == ClientTag::find_text) {
+      static const std::atomic<bool> never{false};
+
+      search_.find(Codec::decode<FindText>(payload, storage), context.cancelled == nullptr ? never : *context.cancelled, reply);
+      return;
+    }
 
     editor_.open(Codec::decode<OpenEditor>(payload, storage), context, reply);
   }

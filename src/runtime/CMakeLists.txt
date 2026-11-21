@@ -64,6 +64,28 @@ foreach(script IN ITEMS "ZSHENV=zshenv.zsh" "ZSH=telar.zsh" "BASH=telar.bash" "F
   set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/terminal/shell_integration/${script_file}")
 endforeach()
 configure_file(terminal/shell_integration/scripts.inc.in "${CMAKE_CURRENT_BINARY_DIR}/generated/shell_scripts.inc" @ONLY)
+# What an embedded Neovim is taught is compiled in too: telar's side of the conversation, and
+# the modules of integrations/nvim it loads without anything installed on the host.
+file(REAL_PATH "${CMAKE_CURRENT_SOURCE_DIR}/../../integrations/nvim/lua/telar" telar_nvim_modules)
+foreach(script IN ITEMS "BOOTSTRAP=${CMAKE_CURRENT_SOURCE_DIR}/nvim/editor/bootstrap.lua" "INIT=${telar_nvim_modules}/init.lua" "THEME=${telar_nvim_modules}/theme.lua" "TINT=${telar_nvim_modules}/tint.lua" "NAVIGATE=${telar_nvim_modules}/navigate.lua")
+  string(REPLACE "=" ";" script "${script}")
+  list(GET script 0 script_name)
+  list(GET script 1 script_file)
+  file(READ "${script_file}" TELAR_NVIM_${script_name})
+  set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${script_file}")
+endforeach()
+configure_file(nvim/editor/scripts.inc.in "${CMAKE_CURRENT_BINARY_DIR}/generated/nvim_scripts.inc" @ONLY)
+# The Neovim telar provisions, and the configuration it starts it with where a host has none.
+file(REAL_PATH "${CMAKE_CURRENT_SOURCE_DIR}/../../cmake/nvim/manifest.cmake" telar_nvim_manifest)
+include("${telar_nvim_manifest}")
+foreach(script IN ITEMS "INIT=init.lua" "LOCK=lazy-lock.json")
+  string(REPLACE "=" ";" script "${script}")
+  list(GET script 0 script_name)
+  list(GET script 1 script_file)
+  file(READ "${CMAKE_CURRENT_SOURCE_DIR}/nvim/config/${script_file}" TELAR_NVIM_CONFIG_${script_name})
+  set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/nvim/config/${script_file}")
+endforeach()
+configure_file(nvim/provision/provision.inc.in "${CMAKE_CURRENT_BINARY_DIR}/generated/nvim_provision.inc" @ONLY)
 add_custom_command(
   OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/generated/cell_layout.inc"
   COMMAND Python3::Interpreter "${CMAKE_CURRENT_SOURCE_DIR}/tools/generate_cell_layout.py"
@@ -109,7 +131,7 @@ endif()
 
 # The domains of docs/build/modules.json (process_layers), lowest first.
 foreach(domain IN ITEMS diagnostics transport server/config suggestions host workers
-    terminal/shell_integration workspaces workspaces/worktrees paths metrics terminal history
+    terminal/shell_integration workspaces workspaces/worktrees paths nvim metrics terminal history
     terminal/command_capture terminal/graphics agents traffic/tap agents/observation core/model
     traffic/http1 traffic/http traffic/exchange_capture traffic/http2 traffic/tls traffic/redirect
     traffic traffic/proxy plugins workspaces/editors core/persistence core server)

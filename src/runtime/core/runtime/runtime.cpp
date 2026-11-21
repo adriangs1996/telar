@@ -4,6 +4,9 @@ module;
 
 module telar.runtime.core.runtime;
 
+import telar.runtime.nvim.editor;
+import telar.runtime.nvim.provision;
+import telar.runtime.paths.query_task;
 import telar.ghostty.vt;
 import telar.sys.process;
 import telar.platform.error;
@@ -111,13 +114,13 @@ namespace telar::runtime {
 
       labelDirectory(directories.atMut(count), pane->cwd);
 
-      const bool terminal_title = agent->title_source == AgentTitleSource::telar && !pane->terminal.effects().title().empty();
+      const bool terminal_title = agent->title_source == AgentTitleSource::telar && !programTitle(*pane).text.empty();
       const bool placeholder_title = !terminal_title && agent->title.view().empty();
       auto session_title = placeholder_title ? provider.placeholder : agent->title.view();
       auto title_source = agent->title_source;
 
       if (terminal_title) {
-        session_title = utf8Prefix(pane->terminal.effects().title(), title_bytes);
+        session_title = utf8Prefix(programTitle(*pane).text, title_bytes);
         title_source = AgentTitleSource::terminal;
       }
 
@@ -127,7 +130,7 @@ namespace telar::runtime {
           .pane_generation = pane->generation,
           .location = pane->location,
           .pane_index = static_cast<std::uint16_t>(position - tab->panes.begin() + 1),
-          .process_id = static_cast<std::uint32_t>(agent->process_identity ? agent->process_identity->pid : pane->process->processId()),
+          .process_id = static_cast<std::uint32_t>(agent->process_identity ? agent->process_identity->pid : pane->process_id),
           .session_id = agent->session_id,
           .workspace_label = utf8Prefix(workspace->displayName(), label_bytes),
           .tab_label = tab->label,
@@ -395,7 +398,8 @@ namespace telar::runtime {
 
   template <EventLoop Poller, HistoryEventSink History>
   void AgentService<Poller, History>::interrupt(RuntimeModel& model, Panes& panes, ClientSession& client, const InterruptAgent& request, bool focused) {
-    auto& pane = Panes::requireGeneration(model.panes, request.pane_id, request.pane_generation);
+    // An interrupt is a key typed into a terminal.
+    auto& pane = Panes::requireTerminalGeneration(model.panes, request.pane_id, request.pane_generation);
     if (pane.exit_status) {
       throw RequestError{FailureCode::pane_exited, "Pane already exited"};
     }
@@ -576,13 +580,16 @@ namespace telar::runtime {
       }
 
       // The registry learns of the change once this agent is no longer borrowed from it.
-      const bool revised = agent->cwd_revision != pane->cwd_revision || agent->title_revision != pane->terminal.effects().title_revision;
+      const auto title_revision = programTitle(*pane).revision;
+      const bool revised = agent->cwd_revision != pane->cwd_revision || agent->title_revision != title_revision;
       if (revised) {
         agent->cwd_revision = pane->cwd_revision;
-        agent->title_revision = pane->terminal.effects().title_revision;
+        agent->title_revision = title_revision;
       }
 
-      const bool settled = agent->interrupt_at && settleInterrupt(panes, focused(clients, layouts, pane->id), *pane, *agent, now);
+      // An interrupt settles on what the terminal shows after it.
+      auto* terminal = asTerminal(pane);
+      const bool settled = agent->interrupt_at && terminal != nullptr && settleInterrupt(panes, focused(clients, layouts, pane->id), *terminal, *agent, now);
       const auto current_time = wallMilliseconds();
 
       agent->evidence.expire(current_time);
@@ -639,7 +646,7 @@ namespace telar::runtime {
   }
 
   template <EventLoop Poller, HistoryEventSink History>
-  bool AgentService<Poller, History>::settleInterrupt(Panes& panes, bool focused, Pane& pane, Agent& agent, std::chrono::steady_clock::time_point now) {
+  bool AgentService<Poller, History>::settleInterrupt(Panes& panes, bool focused, TerminalPane& pane, Agent& agent, std::chrono::steady_clock::time_point now) {
     bool settled = false;
 
     if (hasIdleScreen(agent.provider)) {
@@ -928,6 +935,13 @@ namespace telar::runtime {
 
   template <EventLoop Poller, HistoryEventSink History>
   void WorkspaceService<Poller, History>::createTab(RuntimeModel& model, Panes& panes, ClientStore& clients, std::uint64_t client_id, const CreateTab& request) {
+    createTab(model, panes, clients, Asked{.client_id = client_id}, request);
+  }
+
+  template <EventLoop Poller, HistoryEventSink History>
+  void WorkspaceService<Poller, History>::createTab(RuntimeModel& model, Panes& panes, ClientStore& clients, Asked asked, const CreateTab& request) {
+    const auto [client_id, kind] = asked;
+
     if (!acquireGeometry(model.panes, model.metrics, requireClient(clients, client_id), require(model.workspaces, request.workspace))) {
       throw RequestError{FailureCode::resource_limit, "workspace geometry is leased by another client"};
     }
@@ -944,12 +958,13 @@ namespace telar::runtime {
     workspace.tabs.emplace(memory_, tab_id, request.label);
 
     try {
-      const auto pane = createAt(model, panes, clients, {.client_id = client_id, .location = TabLocation{.workspace = request.workspace, .tab_id = tab_id}, .launch = launch, .size = request.size});
+      const auto pane = createAt(model, panes, clients, {.client_id = client_id, .location = TabLocation{.workspace = request.workspace, .tab_id = tab_id}, .launch = launch, .size = request.size, .kind = kind});
 
       ++model.next_tab_id;
       const auto& opened = Panes::require(model.panes, pane);
       const auto& tabs = require(model.workspaces, request.workspace).tabs;
 
+      announceKind(requireClient(clients, client_id), opened);
       requireClient(clients, client_id).connection.send(TabCreated{
           .request_id = request.request_id,
           .location = opened.location,
@@ -1015,15 +1030,68 @@ namespace telar::runtime {
 
   template <EventLoop Poller, HistoryEventSink History>
   void WorkspaceService<Poller, History>::createPane(RuntimeModel& model, Panes& panes, ClientStore& clients, std::uint64_t client_id, const CreatePane& request) {
+    createPane(model, panes, clients, Asked{.client_id = client_id}, request);
+  }
+
+  template <EventLoop Poller, HistoryEventSink History>
+  void WorkspaceService<Poller, History>::createPane(RuntimeModel& model, Panes& panes, ClientStore& clients, Asked asked, const CreatePane& request) {
+    const auto [client_id, kind] = asked;
+
     const auto* workspace = model.workspaces.find(request.location.workspace.id);
     const auto* tab = workspace == nullptr ? nullptr : workspace->tab(request.location.tab_id);
     if (request.location.workspace.kind != WorkspaceLocation::Kind::workspace || tab == nullptr || (!firstPane(model.panes, *tab) && !tabHeld(clients, request.location))) {
       throw RequestError{FailureCode::pane_not_found, "tab not found"};
     }
 
-    const auto pane = createAt(model, panes, clients, {.client_id = client_id, .location = request.location, .launch = request.launch, .size = request.size});
+    const auto pane = createAt(model, panes, clients, {.client_id = client_id, .location = request.location, .launch = request.launch, .size = request.size, .kind = kind});
 
     sendOpened(requireClient(clients, client_id), request.request_id, Panes::require(model.panes, pane), true, GenerationField::omitted);
+  }
+
+  template <EventLoop Poller, HistoryEventSink History>
+  void WorkspaceService<Poller, History>::createEditor(RuntimeModel& model, Panes& panes, ClientStore& clients, EditorRequest asked, const NvimProvision& provision) {
+    const auto client_id = asked.client_id;
+    const auto& request = asked.request;
+    // The program, the flag that makes it speak its UI protocol on its pipes, telar's own
+    // configuration where the host has none, where the cursor starts and then the files.
+    constexpr std::size_t cursor_capacity = 48;
+    constexpr std::size_t fixed_arguments = 5;
+    ds::Array<std::string_view, max_nvim_files + fixed_arguments> arguments;
+    ds::Array<char, cursor_capacity> cursor{};
+    std::size_t count = 0;
+
+    arguments.atMut(count++) = provision.program();
+    arguments.atMut(count++) = "--embed";
+    if (!provision.ownInit().empty()) {
+      arguments.atMut(count++) = "-u";
+      arguments.atMut(count++) = provision.ownInit();
+    }
+
+    if (request.line != 0 && !request.files.empty()) {
+      // Two numbers the runtime writes itself: nothing a client sent is run as a command.
+      const auto written = std::format_to_n(cursor.dataMut(), cursor.size(), "+call cursor({},{})", request.line, std::max<std::uint32_t>(request.column, 1));
+
+      arguments.atMut(count++) = std::string_view{cursor.data(), static_cast<std::size_t>(written.size)};
+    }
+
+    for (const auto file : request.files) {
+      // A name that starts as an option would be read as one.
+      if (file.starts_with('-') || file.starts_with('+')) {
+        throw RequestError{FailureCode::invalid_request, "A file to edit cannot start with - or +"};
+      }
+
+      arguments.atMut(count++) = file;
+    }
+
+    // Its plugins and its state are kept apart from the user's own Neovim, and from telar's files.
+    const ds::Array<EnvironmentEntry, 1> own{EnvironmentEntry{.name = "NVIM_APPNAME", .value = NvimProvision::own_name}};
+    const Launch launch{.cwd = request.cwd, .arguments = arguments.view().first(count), .environment = provision.ownInit().empty() ? std::span<const EnvironmentEntry>{} : std::span<const EnvironmentEntry>{own.view()}};
+
+    if (request.new_tab) {
+      createTab(model, panes, clients, Asked{.client_id = client_id, .kind = PaneKind::nvim}, CreateTab{.request_id = request.request_id, .workspace = request.location.workspace, .size = request.size, .launch = launch});
+    } else {
+      createPane(model, panes, clients, Asked{.client_id = client_id, .kind = PaneKind::nvim}, CreatePane{.request_id = request.request_id, .location = request.location, .size = request.size, .launch = launch});
+    }
   }
 
   template <EventLoop Poller, HistoryEventSink History>
@@ -1098,7 +1166,7 @@ namespace telar::runtime {
       throw RequestError{FailureCode::pane_not_found, "pane not attached"};
     }
 
-    Panes::require(model.panes, request.pane_id).requestClose();
+    requestClose(Panes::require(model.panes, request.pane_id));
   }
 
   template <EventLoop Poller, HistoryEventSink History>
@@ -1109,7 +1177,10 @@ namespace telar::runtime {
         continue;
       }
 
-      retainFinalText(model.exited_panes, *pane);
+      // What a terminal last showed is kept for a client that reads it after the pane is gone.
+      if (auto* terminal = asTerminal(pane)) {
+        retainFinalText(model.exited_panes, *terminal);
+      }
 
       const auto location = pane->location;
       const auto identity = pane->id;
@@ -1325,7 +1396,7 @@ namespace telar::runtime {
     std::ranges::copy(tab->panes.view().first(count), closing.dataMut());
     for (const auto identity : std::span{closing}.first(count)) {
       if (auto* pane = model.panes.find(identity)) {
-        pane->requestClose();
+        requestClose(*pane);
       }
     }
 
@@ -1365,7 +1436,7 @@ namespace telar::runtime {
   }
 
   template <EventLoop Poller, HistoryEventSink History>
-  void WorkspaceService<Poller, History>::retainFinalText(ExitedPanes& exited, Pane& pane) noexcept {
+  void WorkspaceService<Poller, History>::retainFinalText(ExitedPanes& exited, TerminalPane& pane) noexcept {
     const auto exit_code = pane.exitCode();
 
     try {
@@ -1438,7 +1509,7 @@ namespace telar::runtime {
 
   template <EventLoop Poller, HistoryEventSink History>
   std::uint64_t WorkspaceService<Poller, History>::createAt(RuntimeModel& model, Panes& panes, ClientStore& clients, const TabOpening& opening) {
-    const auto& [client_id, location, requested, size] = opening;
+    const auto& [client_id, location, requested, size, kind] = opening;
     auto launch = requested;
 
     requireTab(model.workspaces, location);
@@ -1461,7 +1532,8 @@ namespace telar::runtime {
       launch.cwd = ownDirectory(fallback, require(model.workspaces, location.workspace).path);
     }
 
-    const auto pane = panes.launch(model, {.owner_colors = &client.colors, .bare_prompt = client.bare_prompt, .location = location, .size = size}, launch).id;
+    const PanePlacement placement{.owner_colors = &client.colors, .bare_prompt = client.bare_prompt, .location = location, .size = size};
+    const auto pane = kind == PaneKind::nvim ? panes.launchEditor(model, placement, launch).id : panes.launch(model, placement, launch).id;
 
     try {
       panes.attach(model, requireClient(clients, client_id), pane, size);
@@ -1520,7 +1592,15 @@ namespace telar::runtime {
   }
 
   template <EventLoop Poller, HistoryEventSink History>
+  void WorkspaceService<Poller, History>::announceKind(ClientSession& client, const Pane& pane) {
+    if (pane.kind != PaneKind::terminal) {
+      client.connection.send(PaneKindNotice{.pane_id = pane.id, .kind = pane.kind});
+    }
+  }
+
+  template <EventLoop Poller, HistoryEventSink History>
   void WorkspaceService<Poller, History>::sendOpened(ClientSession& client, std::uint64_t request, const Pane& pane, bool created, GenerationField generation) {
+    announceKind(client, pane);
     client.connection.send(PaneOpened{
         .request_id = request,
         .pane_id = pane.id,
@@ -1769,6 +1849,8 @@ namespace telar::runtime {
         monitor_(memory, process_inspector_, ProcessTable{memory}, NativeHostDetail{}),
         workspace_git_(limits_, memory),
         shell_git_(memory),
+        data_home_(memory, options.data_home),
+        editor_provision_(memory),
         words_(memory, options.configuration_directory),
         agent_files_(memory),
         descriptions_(memory, background_, options.descriptions),
@@ -1970,30 +2052,67 @@ namespace telar::runtime {
   void Runtime<Poller, Background>::paneEvent(const Event& event) {
     TELAR_TRACE("runtime.paneEvent");
     auto* pane = model_.panes.findHandle(eventIdentity(event.token));
-    if (pane == nullptr || pane->process->descriptor() != event.descriptor) {
+    if (pane == nullptr) {
       TELAR_DIAGNOSTIC(diagnostics::accumulate(model_.metrics.stale_pane_events));
       return;
     }
 
-    const auto identity = pane->id;
+    visitPane(*pane, [&](auto& kind) {
+      paneEvent(kind, event);
+    });
+  }
+
+  template <EventLoop Poller, typename Background>
+    requires BackgroundExecutor<Background, ConcurrentMemory>
+  void Runtime<Poller, Background>::paneEvent(TerminalPane& pane, const Event& event) {
+    if (pane.process->descriptor() != event.descriptor) {
+      TELAR_DIAGNOSTIC(diagnostics::accumulate(model_.metrics.stale_pane_events));
+      return;
+    }
+
+    const auto identity = pane.id;
 
     try {
       if (event.kind == EventKind::readable) {
-        const auto mode = model_.panes.size() == 1 ? Pane::ReadMode::burst : Pane::ReadMode::once;
-        if (!pane->read(mode)) {
-          poller_.remove(pane->process->descriptor());
+        const auto mode = model_.panes.size() == 1 ? TerminalPane::ReadMode::burst : TerminalPane::ReadMode::once;
+        if (!pane.read(mode)) {
+          poller_.remove(pane.process->descriptor());
         }
       }
 
-      panes_.flushInput(*pane);
+      panes_.flushInput(pane);
       observations_.observe(model_, agents_, identity);
-      if (auto* observed = model_.panes.find(identity)) {
+      if (auto* observed = asTerminal(model_.panes.find(identity))) {
         media_.updateReadInterest(*observed);
       }
     } catch (const std::exception&) {
-      if (auto* failed = model_.panes.find(identity)) {
+      if (auto* failed = asTerminal(model_.panes.find(identity))) {
         panes_.failOutput(*failed);
       }
+    }
+  }
+
+  template <EventLoop Poller, typename Background>
+    requires BackgroundExecutor<Background, ConcurrentMemory>
+  void Runtime<Poller, Background>::paneEvent(NvimPane& pane, const Event& event) {
+    try {
+      if (event.descriptor == pane.process->output()) {
+        if (!pane.read()) {
+          panes_.closeEditorOutput(pane);
+        }
+      } else if (event.descriptor == pane.process->error()) {
+        if (!pane.readErrors()) {
+          panes_.closeEditorErrors(pane);
+        }
+      } else if (event.descriptor != pane.process->input()) {
+        TELAR_DIAGNOSTIC(diagnostics::accumulate(model_.metrics.stale_pane_events));
+        return;
+      }
+
+      // What Neovim said may have queued an answer, and its input may take what was left.
+      panes_.flushEditor(pane);
+    } catch (const std::exception&) {
+      panes_.failEditor(pane);
     }
   }
 
@@ -2236,7 +2355,8 @@ namespace telar::runtime {
     requires BackgroundExecutor<Background, ConcurrentMemory>
   void Runtime<Poller, Background>::handle(std::uint64_t identity, const CompleteWords& message) {
     auto& client = requireClient(clients_, identity);
-    const auto* pane = model_.panes.find(message.pane_id);
+    // Words are completed for the shell of a terminal.
+    const auto* pane = asTerminal(model_.panes.find(message.pane_id));
     if (pane == nullptr) {
       throw RequestError{FailureCode::pane_not_found, "Could not complete words"};
     }
@@ -2258,7 +2378,8 @@ namespace telar::runtime {
     requires BackgroundExecutor<Background, ConcurrentMemory>
   void Runtime<Poller, Background>::handle(std::uint64_t identity, const RequestCommandSpec& message) {
     auto& client = requireClient(clients_, identity);
-    const auto* pane = model_.panes.find(message.pane_id);
+    // A command's spec is asked for the shell of a terminal.
+    const auto* pane = asTerminal(model_.panes.find(message.pane_id));
     if (pane == nullptr) {
       throw RequestError{FailureCode::pane_not_found, "Could not find a command spec"};
     }
@@ -2277,7 +2398,7 @@ namespace telar::runtime {
 
   template <EventLoop Poller, typename Background>
     requires BackgroundExecutor<Background, ConcurrentMemory>
-  tbc::val_a<WordRequest> Runtime<Poller, Background>::makeWordRequest(const ClientSession& client, std::uint64_t request_id, CompletionProvider provider, std::string_view prefix, tbc::holds<const Pane&, tbc::lt::a> pane) const {
+  tbc::val_a<WordRequest> Runtime<Poller, Background>::makeWordRequest(const ClientSession& client, std::uint64_t request_id, CompletionProvider provider, std::string_view prefix, tbc::holds<const TerminalPane&, tbc::lt::a> pane) const {
     WordRequest request{.client = client.id, .request = request_id, .provider = provider, .prefix = {}, .directory = {}, .home = {}, .path = {}};
 
     request.prefix.assign(prefix);
@@ -2320,7 +2441,9 @@ namespace telar::runtime {
     RequestContext context;
     const auto editor = identifyEditor(message.editor);
     if (editor != EditorKind::unsupported) {
-      for (const auto* pane : model_.panes.items()) {
+      for (const auto* stored : model_.panes.items()) {
+        // An editor to reuse is the program in the foreground of a terminal.
+        const auto* pane = asTerminal(stored);
         if (pane == nullptr || pane->exit_status || pane->close_requested || pane->location.workspace.id != source->location.workspace.id || pane->location.tab_id != source->location.tab_id || identifyEditor(pane->process_cache.identified.name.view()) != editor) {
           continue;
         }
@@ -2350,7 +2473,8 @@ namespace telar::runtime {
       return;
     }
 
-    auto* pane = model_.panes.find(message.pane_id);
+    // A suggestion reads what a terminal shows.
+    auto* pane = asTerminal(model_.panes.find(message.pane_id));
     if (pane == nullptr) {
       client.connection.send(CommandSuggestion{.request_id = message.request_id, .status = SuggestionStatus::failed});
       return;
@@ -2383,6 +2507,249 @@ namespace telar::runtime {
     requires BackgroundExecutor<Background, ConcurrentMemory>
   void Runtime<Poller, Background>::handle(std::uint64_t identity, const CreatePane& message) {
     workspaces_.createPane(model_, panes_, clients_, identity, message);
+  }
+
+  template <EventLoop Poller, typename Background>
+    requires BackgroundExecutor<Background, ConcurrentMemory>
+  void Runtime<Poller, Background>::handle(std::uint64_t identity, const CreateNvimPane& message) {
+    // A variable of the runtime's environment, kept: what the next one read returns may be
+    // where this one was.
+    const auto variable = [&](const char* name) {
+      const char* value = std::getenv(name); // NOLINT(concurrency-mt-unsafe): the runtime does not change its environment once it started
+
+      return ds::String<ConcurrentMemory>{memory_, value == nullptr ? std::string_view{} : std::string_view{value}};
+    };
+
+    const auto configured = variable("TELAR_NVIM");
+    // $XDG_CONFIG_HOME, or ~/.config: where the user's own configuration of Neovim would be.
+    auto config_home = variable("XDG_CONFIG_HOME");
+
+    if (!config_home.view().starts_with('/')) {
+      config_home = variable("HOME");
+      if (config_home.view().starts_with('/')) {
+        config_home.append("/.config");
+      } else {
+        config_home.clear();
+      }
+    }
+
+    // A runtime started with NVIM_APPNAME already names the configuration its editors load:
+    // telar's own is for a host that chose none.
+    if (!variable("NVIM_APPNAME").empty()) {
+      config_home.clear();
+    }
+
+    editor_provision_.resolve({.data_home = data_home_.view(), .config_home = config_home.view(), .configured = configured.view()});
+    workspaces_.createEditor(model_, panes_, clients_, {.client_id = identity, .request = message}, editor_provision_);
+  }
+
+  template <EventLoop Poller, typename Background>
+    requires BackgroundExecutor<Background, ConcurrentMemory>
+  void Runtime<Poller, Background>::handle(std::uint64_t identity, const NvimInput& message) {
+    panes_.editorRequest(model_, requireClient(clients_, identity), message.pane_id, [&](NvimEditor& editor) {
+      return editor.input(textView(message.keys));
+    });
+  }
+
+  template <EventLoop Poller, typename Background>
+    requires BackgroundExecutor<Background, ConcurrentMemory>
+  void Runtime<Poller, Background>::handle(std::uint64_t identity, const NvimPaste& message) {
+    panes_.editorRequest(model_, requireClient(clients_, identity), message.pane_id, [&](NvimEditor& editor) {
+      return editor.paste(textView(message.text));
+    });
+  }
+
+  template <EventLoop Poller, typename Background>
+    requires BackgroundExecutor<Background, ConcurrentMemory>
+  void Runtime<Poller, Background>::handle(std::uint64_t identity, const NvimMouse& message) {
+    panes_.editorRequest(model_, requireClient(clients_, identity), message.pane_id, [&](NvimEditor& editor) {
+      return editor.mouse(message);
+    });
+  }
+
+  template <EventLoop Poller, typename Background>
+    requires BackgroundExecutor<Background, ConcurrentMemory>
+  void Runtime<Poller, Background>::handle(std::uint64_t identity, const NvimFocus& message) {
+    panes_.editorRequest(model_, requireClient(clients_, identity), message.pane_id, [&](NvimEditor& editor) {
+      editor.focus(message.focused);
+      return true;
+    });
+  }
+
+  template <EventLoop Poller, typename Background>
+    requires BackgroundExecutor<Background, ConcurrentMemory>
+  void Runtime<Poller, Background>::handle(std::uint64_t identity, const NvimPromptReply& message) {
+    panes_.editorRequest(model_, requireClient(clients_, identity), message.pane_id, [&](NvimEditor& editor) {
+      return editor.answer({.id = message.prompt_id, .accepted = message.accepted, .index = message.index, .text = message.text});
+    });
+  }
+
+  template <EventLoop Poller, typename Background>
+    requires BackgroundExecutor<Background, ConcurrentMemory>
+  void Runtime<Poller, Background>::handle(std::uint64_t identity, const NvimOpen& message) {
+    panes_.editorRequest(model_, requireClient(clients_, identity), message.pane_id, [&](NvimEditor& editor) {
+      return editor.open({.path = message.path, .line = message.line, .column = message.column, .in = message.in});
+    });
+  }
+
+  template <EventLoop Poller, typename Background>
+    requires BackgroundExecutor<Background, ConcurrentMemory>
+  void Runtime<Poller, Background>::handle(std::uint64_t identity, const NvimNavigate& message) {
+    panes_.editorRequest(model_, requireClient(clients_, identity), message.pane_id, [&](NvimEditor& editor) {
+      return editor.navigate(message.direction);
+    });
+  }
+
+  template <EventLoop Poller, typename Background>
+    requires BackgroundExecutor<Background, ConcurrentMemory>
+  void Runtime<Poller, Background>::handle(std::uint64_t identity, const NvimMenuSelect& message) {
+    panes_.editorRequest(model_, requireClient(clients_, identity), message.pane_id, [&](NvimEditor& editor) {
+      return editor.selectMenu(message.item, message.accept);
+    });
+  }
+
+  template <EventLoop Poller, typename Background>
+    requires BackgroundExecutor<Background, ConcurrentMemory>
+  void Runtime<Poller, Background>::handle(std::uint64_t identity, const NvimBuffers& message) {
+    const auto& client = requireClient(clients_, identity);
+    auto& pane = requireNvim(model_.panes, message.pane_id);
+
+    if (client.attachment(message.pane_id) == nullptr) {
+      throw RequestError{FailureCode::pane_not_found, "The editor's buffers are listed for a client that shows it"};
+    }
+
+    // One question at a time: a newer one takes the place of the one before.
+    auto& query = pane.buffer_query.emplace();
+
+    query.client = client.id;
+    query.request_id = message.request_id;
+    query.limit = message.limit;
+    query.query.assign(message.query);
+    panes_.editorRequest(model_, client, message.pane_id, [&](NvimEditor& editor) {
+      return editor.listBuffers(message.request_id);
+    });
+  }
+
+  template <EventLoop Poller, typename Background>
+    requires BackgroundExecutor<Background, ConcurrentMemory>
+  void Runtime<Poller, Background>::handle(std::uint64_t identity, const NvimPreview& message) {
+    panes_.editorRequest(model_, requireClient(clients_, identity), message.pane_id, [&](NvimEditor& editor) {
+      return editor.preview({.path = message.path, .line = message.line}, {.row = message.row, .column = message.column, .columns = message.columns, .rows = message.rows});
+    });
+  }
+
+  template <EventLoop Poller, typename Background>
+    requires BackgroundExecutor<Background, ConcurrentMemory>
+  void Runtime<Poller, Background>::handle(std::uint64_t identity, const NvimList& message) {
+    panes_.editorRequest(model_, requireClient(clients_, identity), message.pane_id, [&](NvimEditor& editor) {
+      return editor.list(message.places);
+    });
+  }
+
+  template <EventLoop Poller, typename Background>
+    requires BackgroundExecutor<Background, ConcurrentMemory>
+  void Runtime<Poller, Background>::handle(std::uint64_t identity, const FindText& message) {
+    submitBackground(background_, requireClient(clients_, identity), message);
+  }
+
+  template <EventLoop Poller, typename Background>
+    requires BackgroundExecutor<Background, ConcurrentMemory>
+  void Runtime<Poller, Background>::relay(NvimPane& pane) {
+    const auto pulse = pane.editor.takePulse();
+    if (pulse.listed) {
+      answerBuffers(pane);
+    }
+
+    auto* driver = clients_.find(pane.driver);
+    if (driver == nullptr || driver->attachment(pane.id) == nullptr) {
+      return;
+    }
+
+    // What is yanked to a clipboard register is copied where the user types, as a selection
+    // of a terminal is, unless the runtime's policy keeps programs from the clipboard.
+    if (pulse.copied && panes_.controlPolicy().clipboard_write != control::Access::deny) {
+      driver->clipboard.replace(pane.id, byteView(pane.editor.clipboard()));
+    }
+
+    if (pulse.navigated) {
+      driver->connection.send(NvimNavigated{.pane_id = pane.id, .direction = *pulse.navigated});
+    }
+
+    if (pulse.pick) {
+      driver->connection.send(NvimPick{.pane_id = pane.id, .source = *pulse.pick});
+    }
+
+    if (pulse.opened) {
+      driver->connection.send(NvimLink{.pane_id = pane.id, .uri = pane.editor.link()});
+    }
+  }
+
+  template <EventLoop Poller, typename Background>
+    requires BackgroundExecutor<Background, ConcurrentMemory>
+  void Runtime<Poller, Background>::answerBuffers(NvimPane& pane) {
+    const auto& listed = pane.editor.buffers();
+    const auto query = std::exchange(pane.buffer_query, ds::none);
+    auto* client = query && query->request_id == listed.token ? clients_.find(query->client) : nullptr;
+    if (client == nullptr || pane.cwd.view().empty()) {
+      return;
+    }
+
+    struct Ranked {
+      std::int32_t score = 0;
+      std::uint32_t name = 0;
+    };
+
+    const std::string_view text{listed.text.data(), listed.text.size()};
+    const auto wanted = query->query.view();
+    const auto limit = std::min<std::size_t>(query->limit, FindPaths::maximum_limit);
+    FuzzyMatch<ConcurrentMemory> matcher{memory_};
+    ds::Array<Ranked, FindPaths::maximum_limit> ranked{};
+    std::size_t count = 0;
+    bool truncated = false;
+
+    for (std::uint32_t index = 0; index < listed.names.size(); ++index) {
+      // Without a query the names stay as Neovim gave them, the most recently used first.
+      const auto score = wanted.empty() ? ds::Option<std::int32_t>{-static_cast<std::int32_t>(index)} : matcher.score(listed.names[index].of(text), wanted);
+      if (!score) {
+        continue;
+      }
+
+      auto place = std::min(count, limit);
+
+      while (place > 0 && ranked[place - 1].score < *score) {
+        --place;
+      }
+
+      if (place == limit) {
+        truncated = true;
+        continue;
+      }
+
+      truncated = truncated || count == limit;
+      count = std::min(count + 1, limit);
+      std::ranges::move_backward(ranked.viewMut().subspan(place, count - place - 1), ranked.viewMut().subspan(place + 1, count - place - 1).end());
+      ranked.atMut(place) = {.score = *score, .name = index};
+    }
+
+    // A match marks at most one place for each byte of the query.
+    constexpr std::size_t positions_each = FindPaths::maximum_query_bytes;
+    ds::Array<std::uint16_t, FindPaths::maximum_limit * positions_each> positions{};
+    ds::Array<PathMatch, FindPaths::maximum_limit> matches{};
+    // Lent once: each match views its own piece of it.
+    const auto marked = positions.viewMut();
+
+    for (std::size_t index = 0; index < count; ++index) {
+      const auto name = listed.names[ranked[index].name].of(text);
+      const auto marks = marked.subspan(index * positions_each, std::min<std::size_t>(wanted.size(), positions_each));
+
+      if (!wanted.empty()) {
+        static_cast<void>(matcher.score(name, wanted, marks));
+      }
+
+      matches.atMut(index) = {.path = name, .kind = PathKind::file, .positions = wanted.empty() ? std::span<const std::uint16_t>{} : std::span<const std::uint16_t>{marks}};
+    }
+
+    client->connection.send(PathResults{.request_id = query->request_id, .root = pane.cwd.view(), .scanned = static_cast<std::uint32_t>(listed.names.size()), .complete = true, .truncated = truncated, .matches = matches.view().first(count)});
   }
 
   template <EventLoop Poller, typename Background>
@@ -2565,6 +2932,15 @@ namespace telar::runtime {
     requires BackgroundExecutor<Background, ConcurrentMemory>
   void Runtime<Poller, Background>::handle(std::uint64_t identity, const FrameAck& message) {
     if (auto* attachment = requireClient(clients_, identity).attachmentMut(message.pane_id)) {
+      if (attachment->kind == PaneKind::nvim) {
+        // An editor's client applied the frame it was last sent; an older one names nothing new.
+        if (message.frame_id == attachment->editor_sent) {
+          attachment->editor_seen = message.frame_id;
+        }
+
+        return;
+      }
+
       attachment->frames.acknowledge(message.frame_id);
       TELAR_DIAGNOSTIC(model_.metrics.frames.merge(attachment->frames.takeCounters()));
     }
@@ -2574,6 +2950,9 @@ namespace telar::runtime {
     requires BackgroundExecutor<Background, ConcurrentMemory>
   void Runtime<Poller, Background>::handle(std::uint64_t identity, const RequestSnapshot& message) {
     if (auto* attachment = requireClient(clients_, identity).attachmentMut(message.pane_id)) {
+      // An editor's client that starts over has no frame: the next one stands alone.
+      attachment->editor_seen = 0;
+      attachment->editor_sent = 0;
       attachment->frames.requestSnapshot();
     }
   }
@@ -2586,7 +2965,7 @@ namespace telar::runtime {
       // above it stays put while output grows.
       std::uint32_t bottom = 0;
 
-      if (const auto* pane = model_.panes.find(message.pane_id)) {
+      if (const auto* pane = asTerminal(model_.panes.find(message.pane_id))) {
         // The terminal's own count: the screen is captured when a frame goes out, and output read
         // since may have grown the scrollback past the row asked for.
         const auto total = static_cast<std::uint32_t>(std::min<std::size_t>(pane->terminal.totalRows(), std::numeric_limits<std::uint32_t>::max()));
@@ -2819,7 +3198,7 @@ namespace telar::runtime {
     runtime_clipboard_.collect(clients_);
     workspace_git_.collect(model_, Clock::now());
     shell_git_.collect([&](const ShellGitResult& result) {
-      auto* pane = findPane(model_.panes, {.id = result.pane, .generation = result.generation});
+      auto* pane = asTerminal(findPane(model_.panes, {.id = result.pane, .generation = result.generation}));
       if (pane != nullptr && !pane->shell_state.remote && !(pane->git == result.summary)) {
         pane->git = result.summary;
         ++pane->git_revision;
@@ -2933,9 +3312,62 @@ namespace telar::runtime {
     client.connection.send(reply);
   }
 
+  // What a terminal needs between events: its clipboard requests advanced, its shell observed
+  // when it changes the terminal without printing, its repository followed and its exit recorded.
   template <EventLoop Poller, typename Background>
     requires BackgroundExecutor<Background, ConcurrentMemory>
-  void Runtime<Poller, Background>::followRepository(Pane& pane, ShellGitService& shell_git) {
+  void Runtime<Poller, Background>::refreshPane(TerminalPane& pane, Clock::time_point now, bool poll_panes) {
+    try {
+      if (ClipboardService::advance(clients_, pane, now) && !pane.output_closed) {
+        panes_.flushInput(pane);
+        media_.updateReadInterest(pane);
+      }
+    } catch (const std::exception&) {
+      panes_.failOutput(pane);
+    }
+
+    // A program can change the terminal without printing, as `read -s` does; one that
+    // prints is observed as it reads.
+    if (poll_panes && !pane.exit_status && pane.shell_state.phase != ShellPhase::prompt) {
+      pane.observeShell();
+    }
+
+    followRepository(pane, shell_git_);
+    if (pane.exit_status && pane.output_closed && !pane.exit_observed) {
+      pane.observer->shellExit(*pane.exitCode());
+      pane.exit_observed = true;
+    }
+  }
+
+  template <EventLoop Poller, typename Background>
+    requires BackgroundExecutor<Background, ConcurrentMemory>
+  void Runtime<Poller, Background>::refreshPane(NvimPane& pane, Clock::time_point /*now*/, bool /*poll_panes*/) {
+    relay(pane);
+    // What the editor queued outside a request of a client, as its theme is, is written now.
+    if (pane.hasInput()) {
+      panes_.flushEditor(pane);
+    }
+
+    const auto& screen = pane.editor.screen();
+
+    // The pane's directory is the one Neovim last said it works in.
+    if (pane.directory_at != screen.directoryAt()) {
+      pane.directory_at = screen.directoryAt();
+      if (!screen.directory().empty() && pane.cwd.view() != screen.directory()) {
+        pane.cwd.assign(screen.directory());
+        ++pane.cwd_revision;
+      }
+    }
+
+    // A Neovim the editor could not attach to has nothing to show: its pane ends.
+    if (pane.editor.state() == NvimState::failed && !pane.close_requested) {
+      panes_.failEditor(pane);
+    }
+  }
+
+  template <EventLoop Poller, typename Background>
+    requires BackgroundExecutor<Background, ConcurrentMemory>
+  void Runtime<Poller, Background>::followRepository(TerminalPane& pane, ShellGitService& shell_git) {
     // A remote shell's repository is not on this host: forget the local one it left.
     if (pane.shell_state.remote && (pane.git.repository || !pane.git_directory.view().empty())) {
       pane.git = {};
@@ -2983,14 +3415,14 @@ namespace telar::runtime {
         break;
       }
 
-      if (pane == nullptr || pane->exit_status || pane->process->processId() <= 0) {
+      if (pane == nullptr || pane->exit_status || pane->process_id <= 0) {
         continue;
       }
 
       const auto* agent = agents_.find(pane->id, pane->generation);
       const auto working = agent != nullptr && agent->status != AgentStatus::done && agent->status != AgentStatus::failed;
 
-      work.roots.atMut(work.root_count++) = {.process = pane->process->processId(), .pane_id = pane->id, .agent = working};
+      work.roots.atMut(work.root_count++) = {.process = pane->process_id, .pane_id = pane->id, .agent = working};
     }
   }
 
@@ -3058,38 +3490,21 @@ namespace telar::runtime {
     timeout = std::min(timeout, std::chrono::duration_cast<std::chrono::nanoseconds>(next_pane_poll_ - now));
     const bool reap = std::exchange(children_exited_, false) || poll_panes;
 
-    for (auto* pane : model_.panes.items()) {
-      if (pane == nullptr) {
+    for (auto* stored : model_.panes.items()) {
+      if (stored == nullptr) {
         continue;
-      }
-
-      try {
-        if (ClipboardService::advance(clients_, *pane, now) && !pane->output_closed) {
-          panes_.flushInput(*pane);
-          media_.updateReadInterest(*pane);
-        }
-      } catch (const std::exception&) {
-        panes_.failOutput(*pane);
       }
 
       // SIGCHLD says a child exited; a closed output usually means it did. The beat catches a
       // child whose signal went to no one, such as one reaped while a test drives the loop.
-      if (!pane->exit_status && (reap || pane->output_closed)) {
-        pane->exit_status = pane->process.getMut().reap();
-        model_.pane_revision += static_cast<std::uint64_t>(pane->exit_status.hasValue());
+      if (!stored->exit_status && (reap || stored->output_closed)) {
+        stored->exit_status = reapProcess(*stored);
+        model_.pane_revision += static_cast<std::uint64_t>(stored->exit_status.hasValue());
       }
 
-      // A program can change the terminal without printing, as `read -s` does; one that
-      // prints is observed as it reads.
-      if (poll_panes && !pane->exit_status && pane->shell_state.phase != ShellPhase::prompt) {
-        pane->observeShell();
-      }
-
-      followRepository(*pane, shell_git_);
-      if (pane->exit_status && pane->output_closed && !pane->exit_observed) {
-        pane->observer->shellExit(*pane->exitCode());
-        pane->exit_observed = true;
-      }
+      visitPane(*stored, [&](auto& kind) {
+        refreshPane(kind, now, poll_panes);
+      });
     }
 
     if (executions_.refresh(model_)) {
@@ -3212,8 +3627,10 @@ namespace telar::runtime {
 
     for (auto* pane : model_.panes.items()) { // NOLINT(misc-const-correctness): the pane's session is finished through its shared observer, a mutation tbc sees through the pane
       if (pane != nullptr) {
-        pane->process->signal(SIGTERM);
-        pane->observer->finishSession();
+        signalProcess(*pane, SIGTERM);
+        if (const auto* terminal = asTerminal(pane)) {
+          terminal->observer->finishSession();
+        }
       }
     }
 

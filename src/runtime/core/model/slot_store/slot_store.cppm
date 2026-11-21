@@ -17,6 +17,7 @@ import telar.wire.graphics;
 import telar.wire.history;
 import telar.wire.layout;
 import telar.wire.monitor;
+import telar.wire.nvim;
 import telar.wire.pane_io;
 import telar.wire.runtime;
 import telar.wire.worktrees;
@@ -141,6 +142,18 @@ export {
         ClientRequest<RequestGraphicsSnapshot>,
         ClientRequest<OpenPane>,
         ClientRequest<CreatePane>,
+        ClientRequest<CreateNvimPane>,
+        ClientRequest<NvimInput>,
+        ClientRequest<NvimPaste>,
+        ClientRequest<NvimMouse>,
+        ClientRequest<NvimFocus>,
+        ClientRequest<NvimPromptReply>,
+        ClientRequest<NvimOpen>,
+        ClientRequest<NvimNavigate>,
+        ClientRequest<NvimMenuSelect>,
+        ClientRequest<NvimBuffers>,
+        ClientRequest<NvimPreview>,
+        ClientRequest<NvimList>,
         ClientRequest<ClosePane>,
         ClientRequest<PaneInput>,
         ClientRequest<PaneCommand>,
@@ -212,6 +225,7 @@ export {
         ClientRequest<CompleteWords>,
         ClientRequest<RequestCommandSpec>,
         ClientRequest<OpenEditor, ClientRole::interactive, RequestLane::worker>,
+        ClientRequest<FindText, ClientRole::interactive, RequestLane::worker>,
         ClientRequest<SuggestCommand, ClientRole::interactive, RequestLane::worker>>;
 
     ClientRole classifyRequest(ClientTag tag) noexcept;
@@ -320,8 +334,23 @@ export {
 export {
   namespace telar::runtime {
 
+    // How a store frees a value it holds: as the Box that allocated it. A store whose values are
+    // of several types derived from Value names a disposal that frees each as what it is.
+    template <typename Value>
+    struct TBC_GENERIC BoxDisposal {
+      template <Allocator Memory>
+      inline static void dispose(Value* value, Memory& memory) noexcept {
+        ds::Box<Value, Memory>::fromRaw(value, memory).reset();
+      }
+    };
+
+    // What a store of Value holds: a Value or, in a store whose disposal tells them apart, a
+    // value of a type derived from it.
+    template <typename Kind, typename Value>
+    concept StoredAs = std::same_as<Kind, Value> || std::derived_from<Kind, Value>;
+
     // Kept whole: a container over the caller's value, from modules that import this one (Pane, Execution...).
-    template <typename Value, std::size_t Capacity, Allocator Memory>
+    template <typename Value, std::size_t Capacity, Allocator Memory, typename Disposal = BoxDisposal<Value>>
     class TBC_GENERIC SlotStore {
       static_assert(Capacity > 0 && Capacity <= std::numeric_limits<std::uint16_t>::max());
 
@@ -334,7 +363,7 @@ export {
       inline ~SlotStore() {
         for (auto* value : items_) {
           if (value != nullptr) {
-            ds::Box<Value, Memory>::fromRaw(value, memory_).reset();
+            Disposal::dispose(value, memory_);
           }
         }
       }
@@ -352,14 +381,16 @@ export {
         return next_id_;
       }
 
-      inline std::uint64_t insert(std::uint64_t id, ds::Box<Value, Memory> value) {
+      template <StoredAs<Value> Kind>
+      inline std::uint64_t insert(std::uint64_t id, ds::Box<Kind, Memory> value) {
         const auto handle = insertProvisional(id, std::move(value));
 
         advanceCounter(id + 1);
         return handle;
       }
 
-      inline std::uint64_t insertProvisional(std::uint64_t id, ds::Box<Value, Memory> value) {
+      template <StoredAs<Value> Kind>
+      inline std::uint64_t insertProvisional(std::uint64_t id, ds::Box<Kind, Memory> value) {
         if (id == 0 || count_ == Capacity || find(id) != nullptr) {
           throw std::bad_alloc{};
         }
@@ -407,7 +438,7 @@ export {
         identities_.atMut(slot) = 0;
         items_.atMut(slot) = nullptr;
         --count_;
-        ds::Box<Value, Memory>::fromRaw(value, memory_).reset();
+        Disposal::dispose(value, memory_);
       }
 
       [[nodiscard]] inline std::size_t size() const noexcept {

@@ -83,8 +83,8 @@ namespace {
 
     workspaces.open(model, panes, clients, owner.session().id, OpenPane{.request_id = 1, .size = {80, 24, 0, 0}, .launch = Launch{.cwd = "/tmp", .arguments = arguments}});
     const auto opened = owner.receive<PaneOpened>();
-    auto& pane = panes.require(model.panes, opened.pane_id);
-    const std::vector<Byte> retained(Pane::input_limit, 'a');
+    auto& pane = panes.requireTerminal(model.panes, opened.pane_id);
+    const std::vector<Byte> retained(TerminalPane::input_limit, 'a');
 
     pane.input.append(retained);
     const auto revision = pane.input_revision;

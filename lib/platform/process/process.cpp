@@ -106,7 +106,11 @@ namespace telar::runtime {
         write("/");
         write(program);
         found[written] = '\0';
-        if (::access(found.data(), X_OK) == 0) {
+        // A directory passes the execute check, which for it means it may be searched: as a
+        // shell does, the search goes on past one that has the program's name.
+        struct stat status{};
+
+        if (::access(found.data(), X_OK) == 0 && ::stat(found.data(), &status) == 0 && S_ISREG(status.st_mode)) {
           return true;
         }
       }

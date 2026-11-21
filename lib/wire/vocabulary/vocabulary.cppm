@@ -151,6 +151,7 @@ export namespace telar {
   using telar::PaneForeground;
   using telar::PaneFrame;
   using telar::PaneKey;
+  using telar::PaneKind;
   using telar::PaneLifecycle;
   using telar::PaneListEntry;
   using telar::PaneMatch;

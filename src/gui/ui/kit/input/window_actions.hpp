@@ -20,6 +20,11 @@ namespace telar::gui::qt::window_actions {
   enum class Action : quint8 {
     none,
     new_tab,
+    new_editor,
+    new_editor_tab,
+    editor_files,
+    editor_grep,
+    editor_buffers,
     select_tab,
     select_tab_index,
     next_tab,

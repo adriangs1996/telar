@@ -550,7 +550,7 @@ namespace {
 
       workspaces.open(model, panes, clients, first.session().id, OpenPane{.request_id = 1, .size = {80, 24, 9, 18}, .launch = Launch{.cwd = "/tmp", .arguments = arguments}});
       const auto opened = first.receive<PaneOpened>();
-      auto& pane = panes.require(model.panes, opened.pane_id);
+      auto& pane = panes.requireTerminal(model.panes, opened.pane_id);
 
       panes.attach(model, second.session(), pane.id, {80, 24, 9, 18});
       ConfigurePaneDesktop desktop{.pane_id = pane.id, .pane_generation = pane.generation, .visible = true, .clipboard = true};
@@ -671,7 +671,7 @@ namespace {
       const ds::Array<std::string_view, 1> arguments{"/bin/cat"};
 
       workspaces.open(model, panes, clients, client.session().id, OpenPane{.request_id = 1, .size = {80, 24, 9, 18}, .launch = Launch{.cwd = "/tmp", .arguments = arguments}});
-      auto& pane = panes.require(model.panes, client.receive<PaneOpened>().pane_id);
+      auto& pane = panes.requireTerminal(model.panes, client.receive<PaneOpened>().pane_id);
       ConfigurePaneDesktop desktop{.pane_id = pane.id, .pane_generation = pane.generation, .visible = true, .clipboard = true};
 
       panes.configureDesktop(model, clients, client.session().id, desktop);
@@ -727,7 +727,7 @@ namespace {
           const ds::Array<std::string_view, 1> arguments{"/bin/cat"};
 
           workspaces.open(model, panes, clients, client.session().id, OpenPane{.request_id = 1, .size = {80, 24, 9, 18}, .launch = Launch{.cwd = "/tmp", .arguments = arguments}});
-          auto& pane = panes.require(model.panes, client.receive<PaneOpened>().pane_id);
+          auto& pane = panes.requireTerminal(model.panes, client.receive<PaneOpened>().pane_id);
 
           panes.configureDesktop(model, clients, client.session().id, ConfigurePaneDesktop{.pane_id = pane.id, .pane_generation = pane.generation, .visible = true, .clipboard = true});
           ClipboardService service;
@@ -848,7 +848,7 @@ namespace {
         const ds::Array<std::string_view, 1> arguments{"/bin/cat"};
 
         workspaces.open(model, panes, clients, client.session().id, OpenPane{.request_id = 1, .size = {80, 24, 9, 18}, .launch = Launch{.cwd = "/tmp", .arguments = arguments}});
-        auto& pane = panes.require(model.panes, client.receive<PaneOpened>().pane_id);
+        auto& pane = panes.requireTerminal(model.panes, client.receive<PaneOpened>().pane_id);
 
         panes.configureDesktop(model, clients, client.session().id, ConfigurePaneDesktop{.pane_id = pane.id, .pane_generation = pane.generation, .visible = true, .clipboard = true});
         pane.terminal.feed(bytes("\x1b]5522;type=write:id=pressure\x1b\\\x1b]5522;type=wdata\x1b\\"), *pane.media);
@@ -960,7 +960,7 @@ namespace {
           constexpr TerminalSize size{80, 24, 9, 18};
 
           workspaces.open(model, panes, clients, client.session().id, OpenPane{.request_id = 1, .size = size, .launch = launch});
-          auto* pane = &panes.require(model.panes, client.receive<PaneOpened>().pane_id);
+          auto* pane = &panes.requireTerminal(model.panes, client.receive<PaneOpened>().pane_id);
           termios settings{};
 
           check(::tcgetattr(pane->process->descriptor(), &settings) == 0);

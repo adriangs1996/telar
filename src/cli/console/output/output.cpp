@@ -40,6 +40,7 @@ namespace telar::runtime::cli {
       "render",
       "process",
       "monitor",
+      "edit",
   };
 
   std::string_view familyName(Family family) noexcept {

@@ -30,6 +30,16 @@ namespace telar {
     std::uint64_t generation = 0;
   };
 
+  // What a pane is: what it shows, and how the program in it is driven. The runtime keeps what
+  // every kind shares in one place and each kind's own beside it, so adding a kind adds its own
+  // state and leaves the others alone.
+  enum class PaneKind : Byte {
+    // A program on a PTY, drawn as the terminal it writes to.
+    terminal = 1,
+    // A Neovim the runtime starts and is the only UI of, drawn grid by grid.
+    nvim = 2,
+  };
+
   enum class EnvironmentMode : Byte {
     inherit_runtime = 0,
     replace = 1,
@@ -66,6 +76,8 @@ namespace telar {
     interrupt_unsupported = 15,
     foreign_process = 16,
     process_not_found = 17,
+    // The request is for a pane of another kind: a terminal's for an editor, or the reverse.
+    unsupported_pane_kind = 18,
   };
 
 }

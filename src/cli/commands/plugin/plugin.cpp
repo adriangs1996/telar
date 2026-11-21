@@ -9,6 +9,7 @@ import telar.platform.fs;
 import telar.platform.primitives;
 import telar.platform.process;
 import telar.base.ds;
+import telar.base.text;
 
 namespace telar::runtime::cli {
 
@@ -371,6 +372,17 @@ namespace telar::runtime::cli {
   }
 
   ds::Option<RoutedOptions> RoutedOptions::parse(Arguments words) {
+    // `telar edit FILE[:LINE]` has no verb: the family is the action, and without --client the
+    // window last typed in performs it.
+    if (!words.empty() && std::string_view{words[0]} == "edit") {
+      RoutedOptions self{.action = ClientAction::editor_open};
+      Cursor cursor{words.subspan(1)};
+
+      self.positionals(cursor);
+      self.options(cursor);
+      return self;
+    }
+
     if (words.size() < 2) {
       return ds::none;
     }
@@ -437,6 +449,24 @@ namespace telar::runtime::cli {
     return false;
   }
 
+  namespace {
+
+    // `FILE:LINE` names a line, when what follows the last colon is a number: the file is left
+    // in `text` and the line goes to `line`.
+    void placed(tbc::val_a<std::string_view>& text, std::int64_t& line) {
+      const auto colon = text.rfind(':');
+      if (colon == std::string_view::npos || colon == 0) {
+        return;
+      }
+
+      if (const auto number = parseExact<std::uint32_t>(text.substr(colon + 1))) {
+        line = *number;
+        text = text.substr(0, colon);
+      }
+    }
+
+  }
+
   void RoutedOptions::positionals(Cursor& cursor) {
     using enum ClientAction;
 
@@ -450,6 +480,16 @@ namespace telar::runtime::cli {
     case plugin_get:
       text = cursor.take("MissingPlugin");
       break;
+    case editor_open: {
+      text = cursor.take("MissingFile");
+      // An option where the file goes means there is none: `./--name` opens a file so named.
+      if (text.starts_with("--")) {
+        usage("MissingFile");
+      }
+
+      placed(text, value);
+      break;
+    }
     case layout_apply:
       text = cursor.take("MissingLayoutToken");
       break;

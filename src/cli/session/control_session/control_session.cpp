@@ -36,6 +36,8 @@ namespace telar::runtime::cli {
       return "permission denied for the runtime's user";
     case FailureCode::process_not_found:
       return "the process is gone, or another process has its pid now";
+    case FailureCode::unsupported_pane_kind:
+      return "that pane is of another kind: an editor does not answer what a terminal does, nor the reverse";
     case FailureCode::spawn_failed:
     case FailureCode::resource_limit:
     case FailureCode::internal:

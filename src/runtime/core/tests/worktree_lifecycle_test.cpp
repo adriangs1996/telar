@@ -101,7 +101,7 @@ namespace {
 
     workspaces.open(model, panes, clients, owner.session().id, OpenPane{.request_id = 1, .size = size, .launch = Launch{.cwd = "/", .arguments = arguments}});
     const auto opened = owner.receive<PaneOpened>();
-    auto& pane = panes.require(model.panes, opened.pane_id);
+    auto& pane = panes.requireTerminal(model.panes, opened.pane_id);
 
     panes.attach(model, observer.session(), pane.id, size);
     constexpr std::string_view final_output = "retained final output";

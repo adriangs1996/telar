@@ -38,6 +38,7 @@ export namespace telar {
   using telar::PaneFrame;
   using telar::PaneGit;
   using telar::PaneInput;
+  using telar::PaneKindNotice;
   using telar::PaneList;
   using telar::PaneOpened;
   using telar::PaneProgress;

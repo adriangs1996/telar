@@ -2034,6 +2034,8 @@ namespace telar::runtime::cli {
           result.skip.atMut(1) = true;
         } else if (name == "login") {
           result.skip.atMut(2) = true;
+        } else if (name == "editor") {
+          result.skip.atMut(3) = true;
         } else {
           throw std::invalid_argument{"UnknownSetupSkip"};
         }

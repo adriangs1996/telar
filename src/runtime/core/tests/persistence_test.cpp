@@ -245,7 +245,7 @@ namespace {
     check(model.panes.size() == 2);
     check(model.panes.find(1)->generation == 900);
     check(model.panes.find(257)->generation == 901);
-    check(model.panes.find(257)->terminal.screen().cols == 90);
+    check(requireTerminal(model.panes, 257).terminal.screen().cols == 90);
     check(model.panes.find(257)->launch.bytes() == model.panes.find(1)->launch.bytes());
     check(model.panes.nextId() == 300);
     check(model.workspaces.nextId() == 70);
@@ -340,7 +340,7 @@ namespace {
 
     restore.apply(checkpointFixture(buffer.viewMut()));
     expect(true);
-    auto* pane = model.panes.find(257);
+    auto* pane = asTerminal(model.panes.find(257));
 
     check(pane != nullptr);
     ++pane->cwd_revision;
@@ -410,7 +410,7 @@ namespace {
     checkpoint::Restore restore{memory, model, panes, layouts, false};
 
     restore.apply(writer.finish());
-    auto* pane = model.panes.find(identity);
+    auto* pane = asTerminal(model.panes.find(identity));
 
     check(pane != nullptr && pane->id == identity);
     check(model.panes.nextId() == identity + 1);
@@ -465,7 +465,8 @@ namespace {
     corrupt.emplace_back(fixture.begin(), fixture.end());
     corrupt.back()[0] = 'X';
     corrupt.emplace_back(fixture.begin(), fixture.end());
-    corrupt.back()[checkpoint::magic.size()] = 11;
+    // A version this runtime does not write yet.
+    corrupt.back()[checkpoint::magic.size()] = static_cast<Byte>(checkpoint::current_version + 1);
     corrupt.emplace_back(fixture.begin(), fixture.end() - 7);
 
     for (const auto& bytes : corrupt) {

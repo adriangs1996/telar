@@ -1,0 +1,20 @@
+telar_add_qml_sources(gui-quick
+  SOURCES
+    nvim_controller.cpp
+    nvim_controller.hpp
+    nvim_grid_item.cpp
+    nvim_grid_item.hpp
+    nvim_host.hpp
+    nvim_item.cpp
+    nvim_item.hpp
+    nvim_keys.hpp
+  QML_FILES
+    NvimCmdline.qml
+    NvimMessages.qml
+    NvimPane.qml
+    NvimPicker.qml
+    NvimPopupMenu.qml
+    NvimPrompt.qml
+    NvimSurface.qml
+    NvimTabline.qml
+  REGISTERS)

@@ -166,6 +166,42 @@ def neovim(home):
     assert (elsewhere / 'plugin/telar.lua').exists()
 
 
+def editor(home):
+    """The Neovim of the editor panes is kept only when its archive is the one this build
+    expects: other bytes install nothing, wherever they come from. No case here reaches the
+    network: an archive on the host stands in for the release's."""
+    target = Path(home.env['XDG_DATA_HOME']) / 'telar/nvim'
+    assert b'editor: absent' in home.run('integration', 'status', 'editor').stdout
+    forged = home.root / 'forged.tar.gz'
+    forged.write_bytes(b'not the release')
+    home.env['TELAR_NVIM_ARCHIVE'] = str(forged)
+    refused = home.run('integration', 'install', 'editor', status=1)
+    assert b'is not the one this telar expects' in refused.stderr and not target.exists(), refused
+    assert b'editor: absent' in home.run('integration', 'status', 'editor').stdout
+    home.run('integration', 'install', 'editor', '--settings', '/tmp/x', status=1)
+    assert b'editor: absent' in home.run('integration', 'uninstall', 'editor').stdout
+    del home.env['TELAR_NVIM_ARCHIVE']
+    # What telar's own configuration needs is said of a host that has none of its own, and
+    # only of what the host lacks.
+    path = home.env['PATH']
+    empty = home.root / 'no-tools'
+    empty.mkdir()
+    home.env['PATH'] = str(empty)
+    lacking = home.run('integration', 'status', 'editor').stdout
+    assert b'editor: needs git' in lacking and b'editor: needs a C compiler' in lacking, lacking
+    for tool in ('git', 'cc'):
+        (empty / tool).write_text('#!/bin/sh\n')
+        (empty / tool).chmod(0o755)
+    assert b'needs' not in home.run('integration', 'status', 'editor').stdout
+    (empty / 'git').unlink()
+    own = Path(home.env.get('XDG_CONFIG_HOME', home.home / '.config')) / 'nvim'
+    assert b'editor: needs git' in home.run('integration', 'status', 'editor').stdout
+    own.mkdir(parents=True)
+    assert b'needs' not in home.run('integration', 'status', 'editor').stdout
+    own.rmdir()
+    home.env['PATH'] = path
+
+
 def linked_settings(home):
     """Settings kept as a link into a dotfiles checkout stay a link, and the file it names
     gets the hooks with its own permissions; settings under missing directories get them."""
@@ -248,7 +284,7 @@ def main():
     parser.add_argument('--scratch', type=Path)
     args = parser.parse_args()
     count = 0
-    for check in (install_output, unparseable_settings, skills, extensions, neovim, plugin_trust, linked_settings, legacy_settings, proxy_trust_status):
+    for check in (install_output, unparseable_settings, skills, extensions, neovim, editor, plugin_trust, linked_settings, legacy_settings, proxy_trust_status):
         with tempfile.TemporaryDirectory(prefix='integration-', dir=args.scratch) as directory:
             home = Home(args.telar.resolve(), Path(directory).resolve())
             check(home)

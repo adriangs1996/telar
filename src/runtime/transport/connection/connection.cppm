@@ -170,7 +170,10 @@ export {
 #pragma clang diagnostic push
 #pragma clang diagnostic error "-Wswitch"
 
-    constexpr DeliveryLane deliveryLane(ServerTag tag) {
+    // An editor's grids, its surfaces and the frame that ends them leave by the lane of a
+    // terminal's cells, in the order they were made; what a pane is leaves ahead of the reply
+    // that first names it, by the lane of that reply.
+    constexpr DeliveryLane deliveryLane(ServerTag tag) { // NOLINT(readability-function-size): one case for each message the wire names, in one switch so that a message without a lane does not compile
       switch (tag) {
       case ServerTag::runtime_stopping:
         return DeliveryLane::stopping;
@@ -183,6 +186,13 @@ export {
       case ServerTag::proxy_status:
         return DeliveryLane::proxy;
       case ServerTag::pane_frame:
+      case ServerTag::nvim_grid:
+      case ServerTag::nvim_frame:
+      case ServerTag::nvim_cmdline:
+      case ServerTag::nvim_popup_menu:
+      case ServerTag::nvim_message_list:
+      case ServerTag::nvim_tab_line:
+      case ServerTag::nvim_prompt:
         return DeliveryLane::cells;
       case ServerTag::agent_snapshot:
         return DeliveryLane::agents;
@@ -223,6 +233,7 @@ export {
       case ServerTag::graphics_shared_image:
         return DeliveryLane::graphics;
       case ServerTag::pane_opened:
+      case ServerTag::pane_kind_notice:
       case ServerTag::request_failed:
       case ServerTag::tab_snapshot:
       case ServerTag::workspace_snapshot:
@@ -250,6 +261,10 @@ export {
       case ServerTag::client_command_result:
       case ServerTag::editor_opened:
       case ServerTag::path_results:
+      case ServerTag::text_results:
+      case ServerTag::nvim_navigated:
+      case ServerTag::nvim_pick:
+      case ServerTag::nvim_link:
       case ServerTag::completion_words:
       case ServerTag::command_spec:
       case ServerTag::worktree_registered:

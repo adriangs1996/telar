@@ -126,6 +126,10 @@ def cases():
         yield words + ['--client', '7'], {'empty': True}, 2, '', None
         yield words + ['--client', '7'], {'status': 3, 'text': 'FixtureRefusal'}, 1, '', None
     yield ['pane', 'split', '5', 'vertical', '--client', '7'], {}, 0, None, (6, 5, None)
+    # A file with its line, to the window named or, without one, to the one last typed in.
+    yield ['edit', '/tmp/a.cpp:12', '--client', '7'], {}, 0, None, (34, None, 12)
+    yield ['edit', '/tmp/a.cpp'], {}, 0, None, (34, None, None)
+    yield ['edit'], {}, 1, '', None
     yield ['pane', 'scroll', '5', '-3', '--client', '7'], {}, 0, None, (11, 5, -3)
     yield ['pane', 'close', '5', '--client', '7'], {}, 0, None, (7, 5, None)
     yield ['config','show','--client','7','--json'], {'text':'{"x":1.0,"y":1e2,"z":1e-20,"a":1e300,"b":-0.0,"c":1e999,"d":1e-999}'}, 0, '{"x":1,"y":100,"z":0.'+'0'*19+'1,"a":1'+'0'*300+',"b":-0,"c":1e999,"d":0}\n', None

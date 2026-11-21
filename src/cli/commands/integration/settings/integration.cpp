@@ -12,6 +12,10 @@ namespace telar::runtime::cli {
     const ExecutablePath executable;
     const ProcessEnvironment environment;
 
+    if (options.editor) {
+      return integration::runEditor(options);
+    }
+
     if (options.neovim) {
       return integration::runNeovim(memory, options, environment);
     }

@@ -33,6 +33,7 @@ static_assert(true);
 #include "ui/app/application_controller.hpp"
 #include "ui/app/chrome/mode_bar/native_mode_layout.hpp"
 #include "ui/app/overlays/notifications/notification_layout.hpp"
+#include "ui/app/panes/nvim/nvim_item.hpp"
 #include "ui/app/panes/pane_motion_layout.hpp"
 #include "ui/app/panes/terminal/terminal_item.hpp"
 #include "ui/design/controls/modal_reveal_layout.hpp"
@@ -591,6 +592,9 @@ return {api_version = 2, client = {
       environment.insert(QStringLiteral("TELAR_HISTORY"), directory_.filePath(QStringLiteral("history.db")));
       environment.insert(QStringLiteral("HISTFILE"), directory_.filePath(QStringLiteral("shell-history")));
       environment.insert(QStringLiteral("XDG_DATA_HOME"), directory_.filePath(QStringLiteral("data")));
+      // An editor pane's Neovim reads no configuration of whoever runs the tests, unless a run
+      // names one to show.
+      environment.insert(QStringLiteral("NVIM_APPNAME"), qEnvironmentVariable("TELAR_GUI_TEST_NVIM_APPNAME", QStringLiteral("telar-gui-test")));
       runtime_.setProcessEnvironment(environment);
       runtime_.start();
       QVERIFY(runtime_.waitForStarted());
@@ -688,6 +692,417 @@ return {api_version = 2, client = {
 
       QVERIFY(!image.isNull());
       QCOMPARE(client_->status()->error(), QString{});
+    }
+
+    // An editor in a tab of its own: the window draws what Neovim shows, grid by grid, and what
+    // is typed into the view reaches Neovim as keys. With TELAR_EDITOR_SHOTS set to a directory,
+    // the window as it shows each step is saved there.
+    Q_SLOT void editorPaneDrawsNeovim() {
+      if (QStandardPaths::findExecutable(QStringLiteral("nvim")).isEmpty()) {
+        QSKIP("Neovim is not installed on this host");
+      }
+
+      QTRY_VERIFY_WITH_TIMEOUT(terminalReady(), runtime_wait_ms);
+      const auto original_id = firstPane()->id;
+      const auto tab_count = client_->tabs()->rows()->rowCount();
+      bool opened = false;
+      const auto restore = qScopeGuard([&] {
+        if (opened) {
+          closeTemporaryTab({.count = tab_count, .pane_id = original_id});
+        }
+      });
+      const auto shots = qEnvironmentVariable("TELAR_EDITOR_SHOTS");
+      const auto shoot = [&](const QString& name) {
+        if (!shots.isEmpty()) {
+          // What comes in or goes out has settled before the picture is taken.
+          QTest::qWait(320);
+          QVERIFY(test::waitForSynchronizedFrame(*window_, runtime_wait_ms));
+          QVERIFY(window_->grabWindow().save(QDir{shots}.filePath(name + QStringLiteral(".png"))));
+        }
+      };
+      const auto editorView = [&] {
+        const auto views = test::visualItems(*window_->contentItem(), QStringLiteral("paneEditor"));
+
+        return views.empty() ? nullptr : qobject_cast<NvimItem*>(views.front());
+      };
+      // Every row of every grid the editor shows, one per line.
+      const auto shown = [&] {
+        QString text;
+        const auto* view = editorView();
+        const auto* editor = view == nullptr ? nullptr : view->editorState();
+
+        if (editor != nullptr) {
+          for (const auto& grid : editor->grids) {
+            text += screenText(grid->screen) + QLatin1Char('\n');
+          }
+        }
+
+        return text;
+      };
+
+      client_->commands()->execute(window_actions::Action::new_editor_tab);
+      QTRY_VERIFY2_WITH_TIMEOUT(client_->tabs()->rows()->rowCount() == tab_count + 1, qPrintable(QStringLiteral("no editor tab: %1 %2").arg(client_->status()->error(), errors_)), runtime_wait_ms);
+      opened = true;
+      QTRY_VERIFY2_WITH_TIMEOUT(editorView() != nullptr, qPrintable(QStringLiteral("no editor view: %1 %2").arg(client_->status()->error(), errors_)), runtime_wait_ms);
+      // The pane's view is made again as the tab settles: it is looked up each time.
+      const auto describe = [&] {
+        QString text = QStringLiteral("the editor drew nothing: %1 %2;").arg(client_->status()->error(), errors_);
+
+        if (const auto* pane = firstPane()) {
+          const auto* editor = client_->editors()->editor(pane->id);
+
+          text += QStringLiteral(" pane %1 attached=%2 exited=%3 editor=%4 frame=%5 grids=%6;").arg(pane->id).arg(pane->attached).arg(pane->exited).arg(editor != nullptr).arg(editor == nullptr ? 0 : editor->frame).arg(editor == nullptr ? 0 : editor->grids.size());
+        }
+
+        text += QStringLiteral(" original=%1 rows=%2;").arg(client_->pane(original_id) != nullptr).arg(client_->panes()->rows()->rowCount());
+
+        return text + QStringLiteral(" view=%1").arg(editorView() != nullptr);
+      };
+
+      QTRY_VERIFY2_WITH_TIMEOUT(editorView() != nullptr && editorView()->ready(), qPrintable(describe()), runtime_wait_ms);
+
+      auto* view = editorView();
+      const auto* editor = view->editorState();
+
+      QVERIFY(editor != nullptr && editor->grid(1) != nullptr);
+      QTRY_VERIFY_WITH_TIMEOUT(view->grids()->rowCount() >= 1 && view->cellWidth() > 0, runtime_wait_ms);
+      // The editor has the cells that fit its view, as a terminal has.
+      QTRY_COMPARE_WITH_TIMEOUT(static_cast<int>(editor->grid(1)->screen.columns()), static_cast<int>(std::floor(view->width() / view->cellWidth())), runtime_wait_ms);
+
+      // Typed into the view, key by key, as a person types.
+      view->forceActiveFocus();
+      QTRY_VERIFY_WITH_TIMEOUT(view->hasActiveFocus(), runtime_wait_ms);
+      const auto press = [&](int key, const QString& text, Qt::KeyboardModifiers modifiers = Qt::NoModifier) {
+        QKeyEvent event{QEvent::KeyPress, key, modifiers, text};
+
+        QCoreApplication::sendEvent(view, &event);
+      };
+
+      // A run that was cut short leaves no swap file for the next one to be asked about.
+      view->send(QStringLiteral("<Cmd>set noswapfile<CR>"));
+      press(Qt::Key_I, QStringLiteral("i"));
+      for (const auto character : QStringLiteral("TELAR <EDITOR> OK")) {
+        press(character.toUpper().unicode(), QString{character}, character.isUpper() || character == QLatin1Char('<') || character == QLatin1Char('>') ? Qt::ShiftModifier : Qt::NoModifier);
+      }
+
+      press(Qt::Key_Escape, QString{});
+      QTRY_VERIFY2_WITH_TIMEOUT(shown().contains(QStringLiteral("TELAR <EDITOR> OK")), qPrintable(shown()), runtime_wait_ms);
+      // The view is on the window, not only in the session: every item up to the window shows.
+      QVERIFY(view->isVisible());
+      QVERIFY(view->width() > 0 && view->height() > 0);
+      // What Neovim drew is on the picture of the window: the editor's text is not the pane's bare background.
+      {
+        const auto image = window_->grabWindow();
+        const auto origin = view->mapToScene({0, 0}).toPoint();
+        const QRect area{origin, QSize{static_cast<int>(view->cellWidth() * 20), static_cast<int>(view->cellHeight() * 3)}};
+        QSet<QRgb> colors;
+
+        for (int y = area.top(); y < area.bottom(); ++y) {
+          for (int x = area.left(); x < area.right(); ++x) {
+            colors.insert(image.pixel(x, y));
+          }
+        }
+
+        QVERIFY2(colors.size() > 2, "the editor's cells are not drawn on the window");
+      }
+      QTRY_COMPARE_WITH_TIMEOUT(view->mode(), QStringLiteral("normal"), runtime_wait_ms);
+      QVERIFY(!view->cursorRect().isEmpty());
+      shoot(QStringLiteral("editor-typed"));
+
+      // A run that takes pictures works in a directory anyone has, which the pane's header then
+      // shows, and on a real file, with whatever highlights it.
+      if (!shots.isEmpty()) {
+        view->send(QStringLiteral(":silent cd /tmp<CR>"));
+        QTRY_VERIFY_WITH_TIMEOUT(toQString(firstPane()->cwd).endsWith(QStringLiteral("/tmp")), runtime_wait_ms);
+      }
+
+      if (const auto file = qEnvironmentVariable("TELAR_EDITOR_SHOT_FILE"); !shots.isEmpty() && !file.isEmpty()) {
+        view->send(QStringLiteral(":edit! %1<CR>").arg(file));
+        QTRY_VERIFY_WITH_TIMEOUT(!shown().contains(QStringLiteral("TELAR <EDITOR> OK")), runtime_wait_ms);
+        shoot(QStringLiteral("editor-file"));
+      }
+
+      // The command line is a surface of the window's own, with the caret where Neovim has it.
+      press(Qt::Key_Colon, QStringLiteral(":"), Qt::ShiftModifier);
+      QTRY_VERIFY_WITH_TIMEOUT(view->cmdline().value(QStringLiteral("visible")).toBool(), runtime_wait_ms);
+      QCOMPARE(view->cmdline().value(QStringLiteral("first")).toString(), QStringLiteral(":"));
+      view->send(QStringLiteral("ec"));
+      QTRY_COMPARE_WITH_TIMEOUT(view->cmdline().value(QStringLiteral("text")).toString(), QStringLiteral("ec"), runtime_wait_ms);
+      QCOMPARE(view->cmdline().value(QStringLiteral("position")).toInt(), 2);
+      shoot(QStringLiteral("editor-cmdline"));
+
+      // Completing it opens Neovim's menu, which the window draws as a list of its own.
+      press(Qt::Key_Tab, QStringLiteral("\t"));
+      QTRY_VERIFY_WITH_TIMEOUT(view->popupMenu().value(QStringLiteral("visible")).toBool() && !view->popupMenu().value(QStringLiteral("items")).toList().isEmpty(), runtime_wait_ms);
+      QVERIFY(view->popupMenu().value(QStringLiteral("onCmdline")).toBool());
+      shoot(QStringLiteral("editor-completion"));
+      press(Qt::Key_Escape, QString{});
+      QTRY_VERIFY_WITH_TIMEOUT(!view->cmdline().value(QStringLiteral("visible")).toBool() && !view->popupMenu().value(QStringLiteral("visible")).toBool(), runtime_wait_ms);
+
+      // What Neovim says arrives as a notice, and asks for no key to go away.
+      view->send(QStringLiteral(":echomsg 'written by telar'<CR>"));
+      const auto said = [&] {
+        const auto items = view->messages().value(QStringLiteral("items")).toList();
+
+        return std::ranges::any_of(items, [](const QVariant& item) {
+          return item.toMap().value(QStringLiteral("text")).toString().contains(QStringLiteral("written by telar"));
+        });
+      };
+
+      QTRY_VERIFY_WITH_TIMEOUT(said(), runtime_wait_ms);
+      QTRY_COMPARE_WITH_TIMEOUT(view->mode(), QStringLiteral("normal"), runtime_wait_ms);
+      shoot(QStringLiteral("editor-message"));
+
+      // vim.ui.select is the window's dialog, whatever asked, and its answer reaches the caller.
+      view->send(QStringLiteral(":lua vim.ui.select({'Rename symbol', 'Extract function', 'Inline variable'}, {prompt = 'Code actions'}, function(choice) vim.g.telar_choice = choice end)<CR>"));
+      QTRY_COMPARE_WITH_TIMEOUT(view->prompt().value(QStringLiteral("kind")).toString(), QStringLiteral("select"), runtime_wait_ms);
+      QCOMPARE(view->prompt().value(QStringLiteral("title")).toString(), QStringLiteral("Code actions"));
+      QCOMPARE(view->prompt().value(QStringLiteral("choices")).toStringList().size(), 3);
+      shoot(QStringLiteral("editor-select"));
+      view->answer(true, 1);
+      QTRY_COMPARE_WITH_TIMEOUT(view->prompt().value(QStringLiteral("kind")).toString(), QString{}, runtime_wait_ms);
+      view->forceActiveFocus();
+      view->send(QStringLiteral(":echomsg 'chose ' .. g:telar_choice<CR>"));
+      QTRY_VERIFY_WITH_TIMEOUT(std::ranges::any_of(view->messages().value(QStringLiteral("items")).toList(), [](const QVariant& item) {
+        return item.toMap().value(QStringLiteral("text")).toString().contains(QStringLiteral("chose Extract function"));
+      }),
+          runtime_wait_ms);
+
+      // A float is one more grid, over the windows, which the window frames as it frames a dialog.
+      view->send(QStringLiteral(":lua local b = vim.api.nvim_create_buf(false, true); vim.api.nvim_buf_set_lines(b, 0, -1, false, {'  g  go to definition', '  r  references', '  a  code action', '  f  format'}); vim.api.nvim_open_win(b, false, {relative = 'editor', row = 4, col = 12, width = 28, height = 4, style = 'minimal'})<CR>"));
+      const auto floats = [&] {
+        int count = 0;
+
+        for (int row = 0; row < view->grids()->rowCount(); ++row) {
+          count += view->grids()->index(row, 0).data(ListModel::record_role).toMap().value(QStringLiteral("kind")).toString() == QStringLiteral("float") ? 1 : 0;
+        }
+
+        return count;
+      };
+
+      QTRY_COMPARE_WITH_TIMEOUT(floats(), 1, runtime_wait_ms);
+      shoot(QStringLiteral("editor-float"));
+
+      // A split is a second window grid, placed beside the first.
+      view->send(QStringLiteral(":only<CR>:vsplit<CR>"));
+      QTRY_VERIFY_WITH_TIMEOUT(floats() == 0 && view->grids()->rowCount() >= 3, runtime_wait_ms);
+      // Between the two windows, a line of the window's own over Neovim's separator.
+      QTRY_COMPARE_WITH_TIMEOUT(view->separators().size(), 1, runtime_wait_ms);
+      QVERIFY(view->separators().first().toMap().value(QStringLiteral("vertical")).toBool());
+      shoot(QStringLiteral("editor-split"));
+
+      // Neovim's tab pages are a strip of the window's own once there is more than one.
+      view->send(QStringLiteral(":tabnew<CR>"));
+      QTRY_COMPARE_WITH_TIMEOUT(view->tabline().value(QStringLiteral("tabs")).toList().size(), 2, runtime_wait_ms);
+      shoot(QStringLiteral("editor-tabs"));
+
+      // The picker lists what the runtime finds under the editor's directory, and opens what is
+      // chosen. Its list, its query and its keys are the window's; the preview is a float of
+      // Neovim's own, in the room the picker leaves for it.
+      {
+        const auto rows = [&] {
+          return view->picker().value(QStringLiteral("rows")).toList();
+        };
+        const auto names = [&] {
+          QStringList found;
+
+          for (const auto& row : rows()) {
+            found.append(row.toMap().value(QStringLiteral("name")).toString());
+          }
+
+          return found;
+        };
+
+        const auto floats = [&] {
+          int count = 0;
+
+          for (const auto& grid : view->editorState()->grids) {
+            count += grid->placement == application::nvim::NvimPlacement::floating ? 1 : 0;
+          }
+
+          return count;
+        };
+        const auto before = floats();
+
+        const auto said = [&] {
+          QStringList texts;
+
+          for (const auto& item : view->messages().value(QStringLiteral("items")).toList()) {
+            texts.append(item.toMap().value(QStringLiteral("text")).toString());
+          }
+
+          return texts.join(QStringLiteral(" | "));
+        };
+
+        // A directory of its own, so the search reads three files wherever the test runs. A
+        // run that takes pictures lists a real source file there.
+        const auto source_file = qEnvironmentVariable("TELAR_EDITOR_SHOT_FILE");
+        const auto body = shots.isEmpty() || source_file.isEmpty() ? QStringLiteral("['void draw();']") : QStringLiteral("readfile('%1')").arg(source_file);
+
+        view->send(QStringLiteral("<Cmd>call mkdir('telar-picker', 'p') | cd telar-picker | call writefile(['// first', '// the needle is here'] + %1, 'frames.cpp') | call writefile(['// screen'], 'screen.cpp') | call writefile(['// redraw'], 'redraw.cpp')<CR>").arg(body));
+        QTRY_VERIFY2_WITH_TIMEOUT(toQString(firstPane()->cwd).endsWith(QStringLiteral("/telar-picker")), qPrintable(toQString(firstPane()->cwd) + QLatin1Char('\n') + shown() + QLatin1String(" messages: ") + said()), runtime_wait_ms);
+        view->send(QStringLiteral("<Cmd>Telar files<CR>"));
+        QTRY_VERIFY_WITH_TIMEOUT(view->picker().value(QStringLiteral("open")).toBool(), runtime_wait_ms);
+        QCOMPARE(view->picker().value(QStringLiteral("source")).toString(), QStringLiteral("files"));
+        // Without a query, what the directory holds.
+        QTRY_VERIFY2_WITH_TIMEOUT(names().size() == 3 && names().contains(QStringLiteral("screen.cpp")), qPrintable(names().join(QLatin1Char(' '))), runtime_wait_ms);
+        view->searchPicker(QStringLiteral("fram"));
+        QTRY_COMPARE_WITH_TIMEOUT(names(), QStringList{QStringLiteral("frames.cpp")}, runtime_wait_ms);
+        // The preview is a float of the editor over the cells the picker leaves it.
+        QTRY_COMPARE_WITH_TIMEOUT(floats(), before + 1, runtime_wait_ms);
+        if (!shots.isEmpty()) {
+          QTest::qWait(250);
+        }
+
+        shoot(QStringLiteral("editor-picker"));
+        if (!QStandardPaths::findExecutable(QStringLiteral("rg")).isEmpty()) {
+          view->pick(QStringLiteral("text"));
+          QTRY_COMPARE_WITH_TIMEOUT(view->picker().value(QStringLiteral("source")).toString(), QStringLiteral("text"), runtime_wait_ms);
+          view->searchPicker(QStringLiteral("needle is"));
+          QTRY_VERIFY_WITH_TIMEOUT(rows().size() == 1 && rows().first().toMap().value(QStringLiteral("line")).toInt() == 2, runtime_wait_ms);
+          QCOMPARE(rows().first().toMap().value(QStringLiteral("text")).toString(), QStringLiteral("// the needle is here"));
+          shoot(QStringLiteral("editor-picker-text"));
+        }
+
+        view->acceptPicker(0);
+        QTRY_VERIFY_WITH_TIMEOUT(!view->picker().value(QStringLiteral("open")).toBool(), runtime_wait_ms);
+        QTRY_VERIFY2_WITH_TIMEOUT(shown().contains(QStringLiteral("the needle is here")), qPrintable(shown()), runtime_wait_ms);
+        QTRY_COMPARE_WITH_TIMEOUT(floats(), before, runtime_wait_ms);
+        view->send(QStringLiteral("<Cmd>bwipeout! | cd ..<CR>"));
+      }
+
+      // A scroll slides the rows to their places: the grid clips itself while they travel, and
+      // comes to rest with the rows Neovim has.
+      {
+        const auto sliding = [&] {
+          QList<QQuickItem*> pending{view};
+
+          while (!pending.isEmpty()) {
+            auto* item = pending.takeLast();
+            if (QByteArrayView{item->metaObject()->className()}.endsWith("NvimGridItem") && item->clip()) {
+              return true;
+            }
+
+            pending.append(item->childItems());
+          }
+
+          return false;
+        };
+
+        view->send(QStringLiteral("<Cmd>call setline(1, map(range(1, 300), 'printf(\"row %d\", v:val)'))<CR>"));
+        QTRY_VERIFY_WITH_TIMEOUT(shown().contains(QStringLiteral("row 12")), runtime_wait_ms);
+        QVERIFY(!sliding() && !shown().contains(QStringLiteral("row 40")));
+        const auto moves = [&] {
+          QString text;
+
+          for (const auto& grid : view->editorState()->grids) {
+            text += QStringLiteral("grid %1 %2x%3 placement %4 moved %5 kept %6; ").arg(grid->id).arg(grid->screen.columns()).arg(grid->screen.rows()).arg(static_cast<int>(grid->placement)).arg(grid->departed.moved).arg(grid->departed.count);
+          }
+
+          return text + shown().left(200);
+        };
+        // A scroll the window is sent as a move of the rows it has slides; one it is sent whole,
+        // because it had not applied the frame before, arrives at once. A window that keeps up
+        // is sent moves: scrolling down and back up, one of them slides.
+        constexpr int slide_wait_ms = 1500;
+        constexpr int attempts = 8;
+        bool slid = false;
+
+        for (int attempt = 0; attempt < attempts && !slid; ++attempt) {
+          view->send(attempt % 2 == 0 ? QStringLiteral("<C-d>") : QStringLiteral("<C-u>"));
+          slid = QTest::qWaitFor(sliding, slide_wait_ms);
+          if (slid) {
+            shoot(QStringLiteral("editor-scrolling"));
+          }
+
+          QTRY_VERIFY_WITH_TIMEOUT(!sliding(), runtime_wait_ms);
+        }
+
+        QVERIFY2(slid, qPrintable(moves()));
+        view->send(QStringLiteral("gg<C-d>"));
+        QTRY_VERIFY2_WITH_TIMEOUT(shown().contains(QStringLiteral("row 40")) && !sliding(), qPrintable(shown()), runtime_wait_ms);
+        view->send(QStringLiteral("<Cmd>bwipeout!<CR>"));
+      }
+
+      // The colorscheme is the window's theme: another preset reaches Neovim at once, and what
+      // Neovim colors itself, the line of the cursor here, is drawn in the new colors. A run
+      // that takes pictures takes one with the other preset.
+      {
+        const auto pixelOfRow = [&](int row) {
+          const auto point = view->mapToScene({view->width() / 2, (row + 0.5) * view->cellHeight()}).toPoint();
+
+          return window_->grabWindow().pixel(point);
+        };
+
+        view->send(QStringLiteral("<Cmd>enew! | setlocal cursorline | call setline(1, ['const value = 1', '', '']) | call cursor(1, 1)<CR>"));
+        QTRY_VERIFY2_WITH_TIMEOUT(shown().contains(QStringLiteral("const value")), qPrintable(shown()), runtime_wait_ms);
+        QTRY_VERIFY2_WITH_TIMEOUT(pixelOfRow(0) != pixelOfRow(2), "the cursor's line has a color of Neovim's own", runtime_wait_ms);
+
+        const auto line = pixelOfRow(0);
+        const QTemporaryDir directory;
+        const auto path = directory.filePath(QStringLiteral("config.lua"));
+
+        writeTestFile(path, "return {api_version=2,theme='vesper'}");
+        const auto restored = qScopeGuard([this] {
+          client_->loadConfiguration({}, {}, {});
+        });
+
+        client_->loadConfiguration(path, {}, {});
+        QCOMPARE(client_->status()->error(), QString{});
+        QTRY_VERIFY2_WITH_TIMEOUT(pixelOfRow(0) != line && pixelOfRow(0) != pixelOfRow(2), "the other preset did not reach the editor's own colors", runtime_wait_ms);
+        // The picture is of a real file, when the run was given one.
+        if (const auto file = qEnvironmentVariable("TELAR_EDITOR_SHOT_FILE"); !shots.isEmpty() && !file.isEmpty()) {
+          view->send(QStringLiteral("<Cmd>edit! %1<CR>").arg(file));
+          QTRY_VERIFY_WITH_TIMEOUT(!shown().contains(QStringLiteral("const value")), runtime_wait_ms);
+        }
+
+        shoot(QStringLiteral("editor-preset"));
+        view->send(QStringLiteral("<Cmd>bwipeout!<CR>"));
+      }
+
+      // With TELAR_EDITOR_METRICS set to a file, how long a key takes from the view to the frame
+      // that shows it, applied in this window: the runtime, Neovim and the way back.
+      if (const auto metrics = qEnvironmentVariable("TELAR_EDITOR_METRICS"); !metrics.isEmpty()) {
+        constexpr int samples = 400;
+        QList<qint64> elapsed;
+
+        view->send(QStringLiteral("<Cmd>enew!<CR>i"));
+        QTRY_COMPARE_WITH_TIMEOUT(view->mode(), QStringLiteral("insert"), runtime_wait_ms);
+        elapsed.reserve(samples);
+        for (int index = 0; index < samples; ++index) {
+          const auto before = view->editorState()->frame;
+          const QChar letter{QLatin1Char(static_cast<char>('a' + (index % 26)))};
+          QElapsedTimer timer;
+
+          timer.start();
+          press(letter.toUpper().unicode(), QString{letter});
+          while (view->editorState()->frame == before && timer.elapsed() < runtime_wait_ms) {
+            QCoreApplication::processEvents();
+          }
+
+          elapsed.append(timer.nsecsElapsed());
+          // Every sixty keys a new line, so no row grows past the view.
+          if (index % 60 == 59) {
+            press(Qt::Key_Return, QStringLiteral("\r"));
+            QTest::qWait(20);
+          }
+        }
+
+        std::ranges::sort(elapsed);
+        QFile report{metrics};
+
+        QVERIFY(report.open(QIODevice::WriteOnly));
+        report.write(QStringLiteral("{\"measure\":\"key to frame applied in the window\",\"samples\":%1,\"p50_us\":%2,\"p90_us\":%3,\"p99_us\":%4,\"max_us\":%5}\n")
+                .arg(samples)
+                .arg(elapsed[samples / 2] / 1000)
+                .arg(elapsed[samples * 9 / 10] / 1000)
+                .arg(elapsed[samples * 99 / 100] / 1000)
+                .arg(elapsed.back() / 1000)
+                .toUtf8());
+        press(Qt::Key_Escape, QString{});
+      }
+      QCOMPARE(client_->status()->error(), QString{});
+      QCOMPARE(errors_, QString{});
     }
 
     // The monitor lists every process its runtime reads, and the detail of the one selected; with
@@ -3157,7 +3572,7 @@ return {api_version=2, client={keybindings={
     Q_SLOT void paletteActionsUseOriginalLabelsAndReorderExistingTabs() {
       const auto commands = client_->commands()->list();
 
-      QCOMPARE(commands.size(), qsizetype{41});
+      QCOMPARE(commands.size(), qsizetype{46});
       QCOMPARE(commands.front().toMap().value(QStringLiteral("label")).toString(), QStringLiteral("Split right"));
       const QStringList tail{QStringLiteral("Copy process command"), QStringLiteral("Go to process pane"), QStringLiteral("Review process stack"), QStringLiteral("Review process open files"), QStringLiteral("Review process logs")};
 

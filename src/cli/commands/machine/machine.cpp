@@ -566,6 +566,34 @@ fetch() {
       report.end(Step::integrations, stepStatus(failed, changed), "{}", names(present).view());
     }
 
+    // The Neovim telar provisions for its editor panes, installed there by the telar that was
+    // just set up: it fetches the release its own build names and keeps it only when its bytes
+    // are the ones it expects. A host that cannot have it keeps its own Neovim: the note says why.
+    void provisionEditor(Memory& memory, SetupReport& report, std::string_view destination, const Platform& platform) {
+      try {
+        Text script{memory};
+
+        appendAssign(script, {.name = "telar", .value = platform.target});
+        script.append("exec \"$telar\" integration install editor\n");
+
+        const auto output = runScript(memory, destination, script, install_timeout);
+        if (output.status != 0) {
+          report.note(Step::integrations, "editor: not provisioned: {}", output.errorLine());
+          return;
+        }
+
+        report.note(Step::integrations, "editor: {}", whole(output).contains("already present") ? "already provisioned" : "provisioned");
+        // What the host lacks for telar's own configuration, as the installer found it.
+        for (const auto part : std::views::split(whole(output), '\n')) {
+          if (const std::string_view line{part}; line.starts_with("editor: needs ")) {
+            report.note(Step::integrations, "{}", line);
+          }
+        }
+      } catch (const std::exception& error) {
+        report.note(Step::integrations, "editor: not provisioned: {}", error.what());
+      }
+    }
+
     constexpr unsigned config_json_depth = 256;
 
     struct SyncEntry {
@@ -3159,6 +3187,10 @@ mkdir -p "$HOME/.local/bin" && "$telar" cli install --dir "$HOME/.local/bin" >/d
       const auto& current = reprobed ? *reprobed : *platform;
 
       integrateAgents(memory, report, target.destination, current);
+      if (!options.skip[3]) {
+        provisionEditor(memory, report, target.destination, current);
+      }
+
       if (options.skip[1]) {
         report.end(Step::configuration, Status::skipped, "--skip config");
       } else {

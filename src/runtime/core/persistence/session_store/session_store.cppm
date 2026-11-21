@@ -29,7 +29,7 @@ export {
   namespace telar::runtime::checkpoint {
 
     inline constexpr std::string_view magic = "TELARCKP";
-    inline constexpr std::uint16_t current_version = 10;
+    inline constexpr std::uint16_t current_version = 11;
     inline constexpr std::size_t maximum_bytes = std::size_t{4} * 1024 * 1024;
 
     enum class Kind : Byte {
@@ -76,6 +76,8 @@ export {
       std::string_view title;
       AgentTitleSource title_source = AgentTitleSource::telar;
       bool in_pane = false;
+      // What the pane is: a checkpoint written before panes had kinds holds only terminals.
+      PaneKind kind = PaneKind::terminal;
     };
 
     struct LayoutRecord {
@@ -251,7 +253,7 @@ export {
 
     // The service that launches the restored panes and writes the input that resumes their agents.
     template <typename Panes>
-    concept PaneLauncher = requires(Panes& panes, RuntimeModel& model, Command<ConcurrentMemory>& command, Pane& pane, TabLocation location, TerminalSize size, std::uint64_t identity) {
+    concept PaneLauncher = requires(Panes& panes, RuntimeModel& model, Command<ConcurrentMemory>& command, TerminalPane& pane, TabLocation location, TerminalSize size, std::uint64_t identity) {
       panes.launch(model, {.location = location, .size = size}, command, identity).id;
       panes.flushInput(pane);
     };
@@ -387,12 +389,23 @@ export {
         const auto arguments = direct ? resumed : std::span<const std::string_view>{original}.first(record.argument_count);
         Command command{memory_, Launch{.cwd = record.cwd, .arguments = arguments}};
         const TerminalSize size{.cols = record.columns == 0 ? std::uint16_t{80} : record.columns, .rows = record.rows == 0 ? std::uint16_t{24} : record.rows, .cell_width_px = 0, .cell_height_px = 0};
+
+        // An editor comes back as a Neovim on the files it was started with, in the directory
+        // it worked in: what was not written is in Neovim's swap files.
+        if (record.kind == PaneKind::nvim) {
+          const auto restored = panes_.launchEditor(model_, {.location = TabLocation{.workspace = {.id = record.workspace}, .tab_id = record.tab}, .size = size}, Launch{.cwd = record.cwd, .arguments = std::span<const std::string_view>{original}.first(record.argument_count)}, record.id).id;
+
+          model_.workspaces.find(record.workspace)->tabMut(record.tab)->panes.push(restored);
+          return;
+        }
+
         // Launching changes the model: the tab is found again, and the pane by its identity.
         // No client asked for it: its shell keeps its prompt, which telar's editor covers.
         const auto identity = panes_.launch(model_, {.location = TabLocation{.workspace = {.id = record.workspace}, .tab_id = record.tab}, .size = size}, command, record.id).id;
 
         model_.workspaces.find(record.workspace)->tabMut(record.tab)->panes.push(identity);
-        auto& pane = *model_.panes.find(identity);
+        // A restored pane is a terminal: its record is the command that runs on its PTY.
+        auto& pane = requireTerminal(model_.panes, identity);
 
         pane.launch.restore(record.arguments, record.argument_count);
         pane.restored_agent = resume;
@@ -400,7 +413,7 @@ export {
         if (resume && !direct) {
           writeResume(pane.input, resumed);
           // Writing the input may grow its buffer, so the pane is found again.
-          panes_.flushInput(*model_.panes.find(identity));
+          panes_.flushInput(requireTerminal(model_.panes, identity));
         }
       }
 
@@ -588,7 +601,7 @@ export {
             continue;
           }
 
-          PaneRecord record{.id = pane->id, .workspace = pane->location.workspace.id, .tab = pane->location.tab_id, .cwd = pane->cwd, .columns = pane->terminal.screen().cols, .rows = pane->terminal.screen().rows, .argument_count = pane->launch.count(), .arguments = pane->launch.bytes()};
+          PaneRecord record{.id = pane->id, .workspace = pane->location.workspace.id, .tab = pane->location.tab_id, .cwd = pane->cwd, .columns = pane->extent.cols, .rows = pane->extent.rows, .argument_count = pane->launch.count(), .arguments = pane->launch.bytes(), .kind = pane->kind};
 
           if (const auto* agent = agents.find(pane->id, pane->generation); agent != nullptr && validResumeSession(agent->provider, agent->session.view())) {
             record.provider = agent->provider;
@@ -631,7 +644,7 @@ export {
 
         for (std::size_t index = 0; index < panes.size(); ++index) {
           const auto* pane = panes[index];
-          const PaneStamp stamp = pane == nullptr ? PaneStamp{} : PaneStamp{pane->id, pane->cwd_revision, pane->terminal.screen().cols, pane->terminal.screen().rows, pane->output_closed || pane->exit_status.hasValue() || pane->close_requested};
+          const PaneStamp stamp = pane == nullptr ? PaneStamp{} : PaneStamp{pane->id, pane->cwd_revision, pane->extent.cols, pane->extent.rows, pane->output_closed || pane->exit_status.hasValue() || pane->close_requested};
 
           changed |= stamp != stamps_[index];
           stamps_.atMut(index) = stamp;

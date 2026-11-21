@@ -375,6 +375,7 @@ namespace telar::runtime::cli {
         .graphics = configuration.graphics,
         .control_policy = configuration.control_policy,
         .shell_integration = shell_integration,
+        .data_home = paths.data_home,
         .ssh_integration = configuration.ssh_integration,
         .configuration_directory = configuration_directory.empty() ? std::string_view{config_home} : configuration_directory,
     };
