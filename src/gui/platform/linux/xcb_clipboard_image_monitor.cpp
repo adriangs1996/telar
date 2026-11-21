@@ -478,11 +478,11 @@ namespace telar::gui::platform {
   XcbClipboardImageMonitor::~XcbClipboardImageMonitor() = default;
 
   void XcbClipboardImageMonitor::cancel() noexcept {
-    native_->cancel();
+    native_.getMut().cancel();
   }
 
   ClipboardImageSource XcbClipboardImageMonitor::capture() {
-    auto [descriptor, status] = native_->capture();
+    auto [descriptor, status] = native_.getMut().capture();
 
     return ClipboardImageSource::fromPipe(memory_, std::move(descriptor), std::move(status));
   }

@@ -317,19 +317,19 @@ namespace telar::gui::platform {
   WaylandClipboardImageMonitor::~WaylandClipboardImageMonitor() = default;
 
   bool WaylandClipboardImageMonitor::available() const noexcept {
-    return native_ != nullptr;
+    return native_.hasValue();
   }
 
   runtime::FileDescriptor WaylandClipboardImageMonitor::capture() {
-    if (!native_) {
+    if (!native_.hasValue()) {
       throw ClipboardImageFailure{ClipboardImageError::no_image};
     }
 
-    return native_->capture();
+    return native_.getMut().capture();
   }
 
   bool WaylandClipboardImageMonitor::acceptsLocalSelection(std::uint32_t seat_global) const noexcept {
-    return native_ != nullptr && native_->acceptsLocalSelection(seat_global);
+    return native_.hasValue() && native_->acceptsLocalSelection(seat_global);
   }
 
 }
