@@ -959,9 +959,10 @@ return {api_version = 2, client = {
       shoot(QStringLiteral("editor-split"));
 
       // Neovim's tab pages are a strip of the window's own once there is more than one.
-      view->send(QStringLiteral(":tabnew<CR>"));
+      // The buffer of the first has changes whatever the run showed in it.
+      view->send(QStringLiteral("<Cmd>setlocal modified | tabnew<CR>"));
       QTRY_COMPARE_WITH_TIMEOUT(view->tabline().value(QStringLiteral("tabs")).toList().size(), 2, runtime_wait_ms);
-      // The first shows what was typed and never written, and says so; the new one has nothing to write.
+      // The first shows changes that were never written, and says so; the new one has nothing to write.
       const auto unwritten = [&](int tab) {
         return view->tabline().value(QStringLiteral("tabs")).toList().value(tab).toMap().value(QStringLiteral("modified")).toBool();
       };
