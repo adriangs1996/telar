@@ -26,8 +26,9 @@
 # Second names of checks that are on. In clang-tidy 23 each cert check, and these of cppcoreguidelines,
 # is the check of another module under another name. The ones off here have the options of the check
 # they name, so they report what it reports and only take its time again: a tenth of the lint. A second
-# name with options of its own stays on: cert-arr39-c, cert-dcl16-c, cert-err33-c, cert-oop54-cpp,
-# cert-str34-c and cppcoreguidelines-avoid-magic-numbers.
+# name with options of its own stays on: cert-arr39-c, cert-dcl16-c, cert-err33-c, cert-oop54-cpp and
+# cert-str34-c. cppcoreguidelines-avoid-magic-numbers is off as well: it took none of the options
+# readability-magic-numbers has below, so it reported the user-defined literals those options allow.
 # Checks that crash clang-tidy 23.1.5, to re-enable once the pinned LLVM fixes them:
 #   bugprone-unchecked-optional-access and misc-static-initialization-cycle on module units that import std
 #   or see one declaration through several BMIs; performance-use-std-move at the end of
@@ -112,6 +113,7 @@ Checks: >-
   -cert-pos47-c,
   -cert-sig30-c,
   -cppcoreguidelines-avoid-c-arrays,
+  -cppcoreguidelines-avoid-magic-numbers,
   -cppcoreguidelines-c-copy-assignment-signature,
   -cppcoreguidelines-explicit-virtual-functions,
   -cppcoreguidelines-macro-to-enum,
