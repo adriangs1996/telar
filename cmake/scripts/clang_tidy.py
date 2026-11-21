@@ -2,10 +2,10 @@
 cmake/scripts/check.cmake.
 
 What a unit reported is kept in a stamp of its own, so a later run analyses again only the units whose
-object, profile or clang-tidy changed since, and reports the others as they did then. Ninja has rebuilt
-every object whose source, headers, imported modules or flags changed before this runs. A unit whose
-clang-tidy crashed keeps no stamp, so it is analysed again. Each stamp sits beside the fixes its unit's
-run exported, a directory clang-apply-replacements reads.
+object, profile, clang-tidy or plugin changed since, and reports the others as they did then. Ninja has
+rebuilt every object whose source, headers, imported modules or flags changed before this runs. A unit
+whose clang-tidy crashed keeps no stamp, so it is analysed again. Each stamp sits beside the fixes its
+unit's run exported, a directory clang-apply-replacements reads.
 """
 import argparse
 import concurrent.futures
@@ -34,6 +34,7 @@ def modified(path):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--clang-tidy', required=True, type=Path)
+    parser.add_argument('--plugin', type=Path, help='a plugin clang-tidy loads, tbc-tidy-scope')
     parser.add_argument('--build', required=True, type=Path)
     parser.add_argument('--stamps', required=True, type=Path)
     parser.add_argument('--jobs', required=True, type=int)
@@ -56,7 +57,7 @@ def main():
         if stamp.with_suffix('.json').name not in kept:
             stamp.unlink()
 
-    tool = modified(arguments.clang_tidy)
+    tool = max(modified(arguments.clang_tidy), modified(arguments.plugin))
     fresh, stale = [], []
     for source, output in units.items():
         stamp = stamp_of[source]
@@ -81,6 +82,8 @@ def main():
         stamp = stamp_of[source]
         command = [str(arguments.clang_tidy), '-p', str(arguments.build), '-quiet',
                    '--export-fixes', str(stamp.with_suffix('.yaml'))]
+        if arguments.plugin:
+            command.append(f'--load={arguments.plugin}')
         if arguments.checks:
             command.append(f'--checks={arguments.checks}')
         result = subprocess.run([*command, source], stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)

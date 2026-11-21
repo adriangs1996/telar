@@ -8,6 +8,8 @@
 #include <llvm/Support/raw_ostream.h>
 
 #include <mutex>
+#include <string>
+#include <vector>
 
 namespace tbc_lint {
   // Reads the modules allowed to keep function bodies in their interfaces: one module name per line,
@@ -23,6 +25,14 @@ namespace tbc_lint {
 
     // Counts the bodies one interface unit of a module keeps.
     void record(llvm::StringRef module, unsigned bodies);
+
+    // Counts again what a unit recorded in an earlier run whose report is replayed, `<bodies>
+    // <module>`, so that a module's entry is judged by all its interface units.
+    void replay(llvm::StringRef record);
+
+    // What the unit the calling thread checks records, which its stamp keeps; a unit is checked on
+    // one thread from start to end.
+    static inline thread_local std::vector<std::string>* unit_records = nullptr;
 
     // Reports each allowed module that every one of its checked interface units keeps free of bodies,
     // so that its entry can be removed. Returns whether there was one.

@@ -137,7 +137,12 @@ acepta `--timeout 600` para esos casos.
 Los targets lint y format incluyen `.cppm`. lint analiza cada fuente con el
 `.clang-tidy` más cercano, el perfil de su proyecto, y deja fuera las que no tienen
 ninguno; antes de analizar, construye los proveedores de módulos y las cabeceras
-generadas que lee la base de compilación. Las fixtures que no se compilan no están en
+generadas que lee la base de compilación. `just lint` y `just analyze` construyen antes
+`tbc-tidy-scope.so`, el plugin de clang-tidy de `lib/tbc`: limita lo que recorre cada
+check a lo que la unidad parsea ella misma, sin los módulos que importa, que se
+analizan con la unidad que los define. Sin el plugin el resultado sobre el código de
+cada unidad es el mismo y el análisis tarda varias veces más; `check.cmake` lo avisa
+cuando no lo encuentra o clang-tidy no lo carga. Las fixtures que no se compilan no están en
 la base y quedan fuera de lint.
 
 ## CI y release

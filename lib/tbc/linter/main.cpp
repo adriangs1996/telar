@@ -20,6 +20,8 @@
 #include <clang/Tooling/Tooling.h>
 #include <llvm/ADT/ArrayRef.h>
 #include <llvm/ADT/SmallPtrSet.h>
+#include <llvm/ADT/StringSet.h>
+#include <llvm/ADT/StringSwitch.h>
 #include <llvm/Support/CommandLine.h>
 #include <llvm/Support/MemoryBuffer.h>
 #include <llvm/Support/Regex.h>
@@ -28,6 +30,7 @@
 #include <llvm/Support/raw_ostream.h>
 
 #include <algorithm>
+#include <array>
 #include <atomic>
 #include <cstddef>
 #include <cstdint>
@@ -163,6 +166,16 @@ namespace {
     interface_bodies,
     standard_containers,
   };
+
+  // The checker a --scope names, as --checks spells it.
+  std::optional<checker> checkerNamed(llvm::StringRef name) {
+    return llvm::StringSwitch<std::optional<checker>>(name)
+        .Case("lifetime", checker::lifetime)
+        .Case("blank-lines", checker::blank_lines)
+        .Case("interface-bodies", checker::interface_bodies)
+        .Case("standard-containers", checker::standard_containers)
+        .Default(std::nullopt);
+  }
 
   struct settings {
     bool lifetime;
@@ -317,6 +330,7 @@ int main(int argc, const char** argv) try {
   const llvm::cl::opt<std::string> stamps("stamps", llvm::cl::desc("Directory where each checked unit leaves a stamp named after its source, '/' spelled '%': what it claimed and reported, and whether it failed"), llvm::cl::cat(category));
   const llvm::cl::opt<std::string> replay("replay", llvm::cl::desc("File naming the sources, one per line, whose stamps are reported again instead of checking them"), llvm::cl::cat(category));
   const llvm::cl::opt<std::string> container_allowlist("standard-containers-allowlist", llvm::cl::desc("File naming the folders standard-containers still allows, one per line"), llvm::cl::cat(category));
+  const llvm::cl::list<std::string> scopes("scope", llvm::cl::desc("<check>=<file>, where the file names, one per line, the sources the check applies to; a check with no scope applies to every source, so that one run parses each source once for checks of different scopes"), llvm::cl::cat(category));
   const llvm::cl::opt<std::string> interface_allowlist("interface-allowlist", llvm::cl::desc("File naming the modules interface-bodies allows to keep bodies, one per line"), llvm::cl::cat(category));
 
   // A run that only replays stamps checks no source.
@@ -375,6 +389,27 @@ int main(int argc, const char** argv) try {
 
   tbc_lint::container_allowlist containers(folders);
 
+  // The sources each check applies to, for the checks given a scope.
+  std::array<std::optional<llvm::StringSet<>>, 4> scoped;
+
+  for (const auto& scope : scopes) {
+    const auto [name, file] = llvm::StringRef(scope).split('=');
+    const auto check = checkerNamed(name);
+    auto listed = llvm::MemoryBuffer::getFile(file, /*IsText=*/true);
+    if (!check || !listed) {
+      llvm::errs() << "tbc-lint: --scope needs <check>=<file> with a check of --checks and a file that can be read, not " << scope << '\n';
+      return 2;
+    }
+
+    llvm::SmallVector<llvm::StringRef, 256> lines;
+    auto& selected = scoped.at(static_cast<std::size_t>(*check)).emplace();
+
+    (*listed)->getBuffer().split(lines, '\n', -1, false);
+    for (const auto line : lines) {
+      selected.insert(line);
+    }
+  }
+
   const auto& compilations = options->getCompilations();
   const auto& sources = options->getSourcePathList();
   const bool lifetime = checks.getBits() == 0 || checks.isSet(checker::lifetime);
@@ -424,10 +459,22 @@ int main(int argc, const char** argv) try {
         return 2;
       }
 
-      const auto [claims, output] = (*stamp)->getBuffer().split("output\n");
+      // What the unit recorded, one line each, up to the line that says its output follows: a recorded
+      // name may itself end in that word.
+      auto output = (*stamp)->getBuffer();
       llvm::SmallVector<llvm::StringRef, 16> names;
 
-      claims.split(names, '\n', -1, false);
+      while (!output.empty()) {
+        const auto [line, rest] = output.split('\n');
+
+        output = rest;
+        if (line == "output") {
+          break;
+        }
+
+        names.push_back(line);
+      }
+
       // The unit fails again only when it failed then: a compiler warning, or a warning without
       // --warnings-as-errors, is reported without failing it.
       for (auto line : names) {
@@ -435,6 +482,10 @@ int main(int argc, const char** argv) try {
           checked.preclaim(line);
         } else if (line.consume_front("allow ")) {
           containers.replay(line);
+        } else if (line.consume_front("blank ")) {
+          fixes.replay(line);
+        } else if (line.consume_front("module ")) {
+          interfaces.replay(line);
         } else if (line == "failed") {
           failed = true;
         }
@@ -448,13 +499,33 @@ int main(int argc, const char** argv) try {
     std::string output;
     std::vector<std::string> claimed;
     std::vector<std::string> allowed_uses;
+    std::vector<std::string> blank_lines_claimed;
+    std::vector<std::string> modules_recorded;
 
     tbc_lint::checked_definitions::unit_claims = &claimed;
     tbc_lint::container_allowlist::unit_events = &allowed_uses;
-    const bool unit_failed = checkUnit(compilations, sources[index], configuration, output) != 0;
+    tbc_lint::blank_line_fixes::unit_claims = &blank_lines_claimed;
+    tbc_lint::interface_modules::unit_records = &modules_recorded;
+
+    // The unit runs the checks whose scope names it.
+    const auto applies = [&](checker check) {
+      const auto& scope = scoped.at(static_cast<std::size_t>(check));
+
+      return !scope || scope->contains(sources[index]);
+    };
+
+    auto unit = configuration;
+
+    unit.lifetime = configuration.lifetime && applies(checker::lifetime);
+    unit.blank_lines = configuration.blank_lines && applies(checker::blank_lines);
+    unit.interface_bodies = configuration.interface_bodies && applies(checker::interface_bodies);
+    unit.standard_containers = configuration.standard_containers && applies(checker::standard_containers);
+    const bool unit_failed = checkUnit(compilations, sources[index], unit, output) != 0;
 
     tbc_lint::checked_definitions::unit_claims = nullptr;
     tbc_lint::container_allowlist::unit_events = nullptr;
+    tbc_lint::blank_line_fixes::unit_claims = nullptr;
+    tbc_lint::interface_modules::unit_records = nullptr;
     const std::scoped_lock lock(print);
 
     llvm::errs() << output;
@@ -463,7 +534,7 @@ int main(int argc, const char** argv) try {
     }
 
     // A unit whose object and tbc-lint stay unchanged reports the same next time, so its stamp keeps
-    // it, with the definitions it claimed for the run.
+    // it, with what it claimed and recorded for the run.
     if (!stamps.empty()) {
       std::error_code error;
       llvm::raw_fd_ostream stamp(stampOf(sources[index]), error);
@@ -474,6 +545,14 @@ int main(int argc, const char** argv) try {
 
       for (const auto& event : allowed_uses) {
         stamp << "allow " << event << '\n';
+      }
+
+      for (const auto& claim : blank_lines_claimed) {
+        stamp << "blank " << claim << '\n';
+      }
+
+      for (const auto& record : modules_recorded) {
+        stamp << "module " << record << '\n';
       }
 
       if (unit_failed) {

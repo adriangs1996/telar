@@ -20,6 +20,22 @@ function(tbc_find_linter project_directory out)
   set(${out} "${command}" PARENT_SCOPE)
 endfunction()
 
+# Sets <out> to tbc-tidy-scope, the clang-tidy plugin <directory> holds beside tbc-lint, when
+# <clang_tidy> loads it and lists its check, and to nothing otherwise: it is not built, or this
+# clang-tidy takes no plugins. A run without it reports the same and walks what each unit imports.
+function(tbc_find_tidy_scope directory clang_tidy out)
+  set(${out} "" PARENT_SCOPE)
+  set(plugin "${directory}/tbc-tidy-scope.so")
+  if(NOT EXISTS "${plugin}")
+    return()
+  endif()
+  execute_process(COMMAND "${clang_tidy}" "--load=${plugin}" "--checks=-*,tbc-parsed-scope" --list-checks
+    OUTPUT_VARIABLE listed ERROR_QUIET RESULT_VARIABLE result)
+  if(result EQUAL 0 AND listed MATCHES "tbc-parsed-scope")
+    set(${out} "${plugin}" PARENT_SCOPE)
+  endif()
+endfunction()
+
 # Sources must be translation units present in the consumer's compilation database.
 function(tbc_add_lifetime_check target)
   set(TBC_LINTER "" CACHE FILEPATH "Path to tbc-lint; otherwise use the project .tbc.json or PATH")

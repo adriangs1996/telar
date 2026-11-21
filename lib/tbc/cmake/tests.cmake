@@ -49,6 +49,13 @@ if(TBC_BUILD_LINTER)
       "$<TARGET_FILE:tbc-lint>" "${CMAKE_OSX_SYSROOT}")
   set_tests_properties(tbc-lint-standard-containers PROPERTIES TIMEOUT 120)
 
+  if(TARGET tbc-tidy-scope AND tbc_clang_tidy)
+    add_test(NAME tbc-tidy-scope
+      COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/tests/tidy_scope_test.py"
+        "$<TARGET_FILE:tbc-tidy-scope>" "${tbc_clang_tidy}" "${CMAKE_OSX_SYSROOT}" "${tbc_clang}")
+    set_tests_properties(tbc-tidy-scope PROPERTIES TIMEOUT 120)
+  endif()
+
   add_test(NAME tbc-spec-runner COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/tests/spec_runner_test.py")
   set_tests_properties(tbc-spec-runner PROPERTIES TIMEOUT 30 LABELS "spec")
 

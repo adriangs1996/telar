@@ -257,6 +257,9 @@ is the part of the rule that cannot be automated. Main files are checked;
 headers only when their path matches `--header-filter`, and a header that
 several units include is reported and fixed once. Checks combine, as in
 `--checks=lifetime,blank-lines`; without `--checks` only lifetimes are checked.
+A run of several checks parses each source once. When they do not apply to the
+same sources, `--scope=<check>=<file>` names, one per line, the sources a check
+applies to; a check without a scope applies to all of them.
 
 ## Interface bodies
 
@@ -383,6 +386,21 @@ C++ types, aliases, concepts, and type template parameters use `snake_case`, as
 in `view`, `lifetime`, and `lifetime_type`. Functions and methods use
 `camelCase`, as in `isView`. Macros use `UPPER_SNAKE_CASE`. The type and function
 naming rules are enforced by `readability-identifier-naming` in `.clang-tidy`.
+
+`lint` runs one clang-tidy per source, as many at once as the machine has cores.
+
+For the projects that import modules, this one builds `tbc-tidy-scope.so` beside
+`tbc-lint` (`linter/tidy_scope.cpp`), a clang-tidy plugin. Its one check,
+`tbc-parsed-scope`, reports nothing: it limits what the other checks traverse to
+what the unit parses itself outside system headers, as `tbc-lint` does for its own
+checks. Without it a check that asks for a node's parents, or walks the unit with a
+visitor of its own, reads every declaration of every module the unit imports. A
+unit's own code is reported the same either way; what it imports is reported with
+the unit that defines it, not once more by each importer. A consumer loads it with
+`clang-tidy --load=<plugin> --checks=tbc-parsed-scope`, and `tbc_find_tidy_scope` of
+`cmake/tbcLifetimeCheck.cmake` finds it and checks that clang-tidy takes it. This
+project's own sources import no module, so its `lint` gains nothing from it. A
+sanitizer build does not build it, as the pinned clang-tidy is not instrumented.
 
 Local build overrides belong in ignored `CMakeUserPresets.json`; build output and
 editor caches are also ignored. `.github/workflows/tbc.yml` validates the project

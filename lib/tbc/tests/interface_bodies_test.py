@@ -610,6 +610,30 @@ class InterfaceAllowlistTest(Fixture):
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertNotIn(CHECK, result.stderr)
 
+    def test_a_replayed_partition_with_bodies_keeps_the_module_allowed(self):
+        # The module's name ends in the word that opens a stamp's output, which the stamp must tell apart.
+        allowlist = self.write("allowlist.txt", "demo.output\n")
+        primary = self.unit("demo.output", self.CLEAN)
+        partition = self.write("demo-output-part.cppm", """
+            export module demo.output:part;
+
+            export int helper() {
+              return 0;
+            }
+            """)
+        stamps = self.root / "stamps"
+        stamps.mkdir()
+        options = ("--warnings-as-errors", f"--interface-allowlist={allowlist}", f"--stamps={stamps}")
+
+        checked = self.lint(primary, partition, options=options)
+        self.assertEqual(checked.returncode, 0, checked.stderr)
+
+        # The partition is replayed while the primary is checked: its bodies still count for the module.
+        replay = self.write("replay", f"{partition}\n")
+        replayed = self.lint(primary, options=(*options, f"--replay={replay}"))
+        self.assertEqual(replayed.returncode, 0, replayed.stderr)
+        self.assertEqual(replayed.stderr, checked.stderr)
+
     def test_an_invalid_allowlist_fails(self):
         allowlist = self.write("allowlist.txt", "demo:part\n")
         result = self.lint(self.unit("demo", self.CLEAN), options=(f"--interface-allowlist={allowlist}",))

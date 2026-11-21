@@ -2,21 +2,33 @@
 #   cmake -DCHECK=<check> -DBUILD_DIRECTORY=<tree> [-DJOBS=<n>] [-DFIX=ON] [-DFULL=ON]
 #         [-DTBC_LINTER=<path>] -P cmake/scripts/check.cmake
 # CHECK is lint, analyze, lifetime, blank_lines, interface_bodies or standard_containers; its scope is
-# the list of sources <tree>/checks/<check>.txt, which configuring the tree writes. lint runs clang-tidy
+# the list of sources <tree>/checks/<check>.txt, which configuring the tree writes. The last four are
+# tbc-lint's, and several of them joined with +, as lifetime+interface_bodies+blank_lines, run in one
+# pass that parses each source once and applies to it the checks whose scope lists it. lint runs clang-tidy
 # without its static analyzer, and analyze runs only the analyzer over lint's scope: it takes most of
-# clang-tidy's time. JOBS defaults to half the physical cores for both, as each clang-tidy loads the
-# BMIs its unit imports, and to the physical core count otherwise. FIX makes blank_lines insert the
-# missing blank lines instead of failing on them. lint, analyze, lifetime and standard_containers check
-# only the units whose object, profile, linter or allowlist changed since their last check, and report
-# the others as they did then; FULL checks them all.
+# clang-tidy's time. JOBS defaults to the physical core count; to half of it for those two when
+# clang-tidy runs without tbc's plugin, tbc-tidy-scope, as it then reads every BMI its unit imports. FIX
+# makes blank_lines insert the missing blank lines instead of failing on them. Every check checks only the
+# units whose object, profile, linter or allowlist changed since their last check, and reports the others
+# as they did then; FULL checks them all, and so does FIX.
 cmake_minimum_required(VERSION 3.25)
 
 get_filename_component(root "${CMAKE_CURRENT_LIST_DIR}/../.." ABSOLUTE)
 include("${root}/lib/tbc/cmake/tbcLifetimeCheck.cmake")
 
 set(checks lint analyze lifetime blank_lines interface_bodies standard_containers)
-if(NOT CHECK IN_LIST checks)
-  message(FATAL_ERROR "CHECK must be one of ${checks}, not '${CHECK}'")
+string(REPLACE "+" ";" selected "${CHECK}")
+list(LENGTH selected selected_count)
+foreach(check IN LISTS selected)
+  if(NOT check IN_LIST checks)
+    message(FATAL_ERROR "CHECK must be one of ${checks}, or several of tbc-lint's joined with +, not '${CHECK}'")
+  endif()
+  if(selected_count GREATER 1 AND (check STREQUAL "lint" OR check STREQUAL "analyze" OR FIX))
+    message(FATAL_ERROR "Only tbc-lint's checks run together, and none of them with FIX; CHECK is '${CHECK}'")
+  endif()
+endforeach()
+if(selected_count EQUAL 0)
+  message(FATAL_ERROR "Set CHECK to one of ${checks}")
 endif()
 if(NOT BUILD_DIRECTORY)
   message(FATAL_ERROR "Set BUILD_DIRECTORY to a configured build tree")
@@ -28,16 +40,15 @@ endif()
 load_cache("${build}" READ_WITH_PREFIX tree_ CMAKE_HOME_DIRECTORY CMAKE_CXX_COMPILER)
 set(project "${tree_CMAKE_HOME_DIRECTORY}")
 
+set(default_jobs FALSE)
 if(NOT JOBS)
   cmake_host_system_information(RESULT JOBS QUERY NUMBER_OF_PHYSICAL_CORES)
-  if(CHECK STREQUAL "lint" OR CHECK STREQUAL "analyze")
-    math(EXPR JOBS "(${JOBS} + 1) / 2")
-  endif()
+  set(default_jobs TRUE)
 endif()
 # analyze analyses the sources lint does.
-set(scope_check "${CHECK}")
+set(scope_checks ${selected})
 if(CHECK STREQUAL "analyze")
-  set(scope_check lint)
+  set(scope_checks lint)
 endif()
 if(NOT JOBS MATCHES "^[1-9][0-9]*$")
   message(FATAL_ERROR "JOBS must be a positive integer")
@@ -53,10 +64,15 @@ function(telar_check_prepare sources)
   # or module.
   execute_process(COMMAND "${CMAKE_COMMAND}" --build "${build}" --parallel "${JOBS}" --target build.ninja
     COMMAND_ERROR_IS_FATAL ANY)
-  if(NOT EXISTS "${build}/checks/${scope_check}.txt")
-    message(FATAL_ERROR "No target of ${build} registers for ${scope_check}")
-  endif()
-  file(STRINGS "${build}/checks/${scope_check}.txt" scope)
+  set(scope)
+  foreach(check IN LISTS scope_checks)
+    if(NOT EXISTS "${build}/checks/${check}.txt")
+      message(FATAL_ERROR "No target of ${build} registers for ${check}")
+    endif()
+    file(STRINGS "${build}/checks/${check}.txt" listed)
+    list(APPEND scope ${listed})
+  endforeach()
+  list(REMOVE_DUPLICATES scope)
   # CMake's Ninja generator writes one field per line, so reading the directory, file and output
   # lines in order is the database without parsing all of it once per entry, which string(JSON)
   # would do for each field it reads.
@@ -129,7 +145,6 @@ if(CHECK STREQUAL "lint" OR CHECK STREQUAL "analyze")
   if(NOT version_match OR CMAKE_MATCH_1 LESS 23)
     message(FATAL_ERROR "The lint profiles require clang-tidy 23 or newer; found ${clang_tidy}")
   endif()
-  telar_check_prepare(sources)
   # Each source is analysed with the .clang-tidy nearest it, its project's profile; the
   # scope holds only sources that have one, and configuring lists the profiles.
   file(STRINGS "${build}/checks/lint-profiles.txt" profiles)
@@ -143,6 +158,25 @@ if(CHECK STREQUAL "lint" OR CHECK STREQUAL "analyze")
   else()
     set(checks_option "-clang-analyzer-*")
   endif()
+  # With tbc's plugin the checks walk only what each unit parses itself; without it they report the
+  # same and also walk every module the unit imports, which takes several times as long.
+  tbc_find_linter("${project}" linter)
+  set(plugin_option)
+  if(linter)
+    cmake_path(GET linter PARENT_PATH linter_directory)
+    tbc_find_tidy_scope("${linter_directory}" "${clang_tidy}" scope)
+    if(scope)
+      string(APPEND checks_option ",tbc-parsed-scope")
+      set(plugin_option --plugin "${scope}")
+    endif()
+  endif()
+  if(NOT plugin_option)
+    message(STATUS "${CHECK}: tbc-tidy-scope is not built or this clang-tidy does not load it, so each unit walks all it imports")
+    if(default_jobs)
+      math(EXPR JOBS "(${JOBS} + 1) / 2")
+    endif()
+  endif()
+  telar_check_prepare(sources)
   # Each unit's stamp and the fixes it exported, a directory clang-apply-replacements reads.
   set(stamps "${build}/checks/stamps/${CHECK}")
   if(FULL)
@@ -151,7 +185,7 @@ if(CHECK STREQUAL "lint" OR CHECK STREQUAL "analyze")
   list(JOIN check_units "\n" listed)
   file(WRITE "${build}/checks/${CHECK}.units" "${listed}\n")
   execute_process(COMMAND "${python}" "${CMAKE_CURRENT_LIST_DIR}/clang_tidy.py"
-      --clang-tidy "${clang_tidy}" --build "${build}" --stamps "${stamps}" --jobs "${JOBS}"
+      --clang-tidy "${clang_tidy}" ${plugin_option} --build "${build}" --stamps "${stamps}" --jobs "${JOBS}"
       "--checks=${checks_option}" --name "${CHECK}" "${build}/checks/${CHECK}.units"
     WORKING_DIRECTORY "${project}"
     COMMAND_ERROR_IS_FATAL ANY)
@@ -162,38 +196,49 @@ tbc_find_linter("${project}" linter)
 if(NOT EXISTS "${linter}")
   message(FATAL_ERROR "tbc-lint was not found at '${linter}'. Build lib/tbc with its release preset or set TBC_LINTER.")
 endif()
-if(CHECK STREQUAL "lifetime")
-  set(arguments --warnings-as-errors)
-elseif(CHECK STREQUAL "blank_lines")
-  telar_repository_headers(headers)
-  if(FIX)
-    set(arguments --checks=blank-lines --fix "--header-filter=${headers}")
-  else()
-    set(arguments --checks=blank-lines --warnings-as-errors "--header-filter=${headers}")
+# What each selected check adds to one run of tbc-lint, and what decides its reports besides the
+# sources: an allowlist, so a new one checks every unit again.
+set(names)
+set(arguments)
+set(inputs "${linter}")
+foreach(check IN LISTS selected)
+  string(REPLACE "_" "-" name "${check}")
+  list(APPEND names "${name}")
+  if(selected_count GREATER 1)
+    list(APPEND arguments "--scope=${name}=${build}/checks/${check}.txt")
   endif()
-elseif(CHECK STREQUAL "standard_containers")
-  set(arguments --checks=standard-containers --warnings-as-errors "--standard-containers-allowlist=${root}/docs/build/standard-containers-allowlist.txt")
+  if(check STREQUAL "blank_lines")
+    telar_repository_headers(headers)
+    list(APPEND arguments "--header-filter=${headers}")
+  elseif(check STREQUAL "standard_containers")
+    list(APPEND arguments "--standard-containers-allowlist=${root}/docs/build/standard-containers-allowlist.txt")
+    list(APPEND inputs "${root}/docs/build/standard-containers-allowlist.txt")
+  elseif(check STREQUAL "interface_bodies")
+    # Rule 3 of the module layout: an interface carries declarations, and function bodies
+    # go to implementation units, except constexpr ones and the hot paths marked
+    # TBC_HOT_PATH. The allowlist names the modules that still keep bodies; the check
+    # fails on any other module with one, and on an allowed module whose checked
+    # interfaces keep none.
+    list(APPEND arguments "--interface-allowlist=${root}/docs/build/interface-bodies-allowlist.txt")
+    list(APPEND inputs "${root}/docs/build/interface-bodies-allowlist.txt")
+  endif()
+endforeach()
+list(JOIN names "," names)
+list(PREPEND arguments "--checks=${names}")
+if(FIX)
+  list(APPEND arguments --fix)
 else()
-  # Rule 3 of the module layout: an interface carries declarations, and function bodies
-  # go to implementation units, except constexpr ones and the hot paths marked
-  # TBC_HOT_PATH. The allowlist names the modules that still keep bodies; the check
-  # fails on any other module with one, and on an allowed module whose checked
-  # interfaces keep none.
-  set(arguments --checks=interface-bodies --warnings-as-errors "--interface-allowlist=${root}/docs/build/interface-bodies-allowlist.txt")
+  list(APPEND arguments --warnings-as-errors)
 endif()
 
 telar_check_prepare(sources)
 
 # Each unit is checked on its own, so a unit whose object and tbc-lint are older than the stamp its
 # last check left reports what it reported then, which tbc-lint replays: Ninja has rebuilt every
-# object whose source, headers or imported modules changed.
-if(CHECK STREQUAL "lifetime" OR CHECK STREQUAL "standard_containers")
+# object whose source, headers or imported modules changed. A run that fixes rewrites the sources it
+# reports on, so it checks them all and leaves no stamp.
+if(NOT FIX)
   set(stamps "${build}/checks/stamps/${CHECK}")
-  # The allowlist decides what standard_containers reports, so a new one checks every unit again.
-  set(inputs "${linter}")
-  if(CHECK STREQUAL "standard_containers")
-    list(APPEND inputs "${root}/docs/build/standard-containers-allowlist.txt")
-  endif()
   if(FULL)
     file(REMOVE_RECURSE "${stamps}")
   endif()

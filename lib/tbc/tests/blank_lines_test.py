@@ -681,6 +681,54 @@ class BlankLinesCommandTest(Fixture):
         self.assertEqual(filtered.stderr.count(AFTER_DECLARATIONS), 1, "a header shared by two units is reported once")
         self.assertEqual((self.root / "shared.hpp").read_text(), header.replace("compute(input);\n", "compute(input);\n\n"))
 
+    def test_a_scope_limits_the_check_to_its_sources(self):
+        text = source("""
+            void declared(int input) {
+              const int value = compute(input);
+              use(value);
+            }
+            """)
+        inside = self.write("inside.cpp", text)
+        outside = self.write("outside.cpp", text)
+        scope = self.write("scope", f"{inside}\n")
+
+        result = self.lint(inside, outside, options=(f"--scope=blank-lines={scope}",))
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(result.stderr.count(AFTER_DECLARATIONS), 1, result.stderr)
+        self.assertIn("inside.cpp", result.stderr)
+        self.assertNotIn("outside.cpp:", result.stderr)
+
+        invalid = self.lint(inside, options=(f"--scope=unknown={scope}",))
+        self.assertEqual(invalid.returncode, 2, invalid.stderr)
+
+    def test_a_replayed_unit_keeps_its_report_and_its_claim(self):
+        self.write("shared.hpp", textwrap.dedent("""\
+            #pragma once
+
+            int compute(int value);
+            void use(int value);
+
+            inline void declared(int input) {
+              const int value = compute(input);
+              use(value);
+            }
+            """))
+        main = self.write("main.cpp", '#include "shared.hpp"\n')
+        other = self.write("other.cpp", '#include "shared.hpp"\n')
+        stamps = self.root / "stamps"
+        stamps.mkdir()
+        options = ("--header-filter=shared\\.hpp$", f"--stamps={stamps}")
+
+        checked = self.lint(main, options=options)
+        self.assertEqual(checked.returncode, 0, checked.stderr)
+        self.assertEqual(checked.stderr.count(AFTER_DECLARATIONS), 1, checked.stderr)
+
+        # main is replayed while other is checked: the header is reported by main's stamp alone.
+        replay = self.write("replay", f"{main}\n")
+        replayed = self.lint(other, options=(*options, f"--replay={replay}"))
+        self.assertEqual(replayed.returncode, 0, replayed.stderr)
+        self.assertEqual(replayed.stderr.count(AFTER_DECLARATIONS), 1, replayed.stderr)
+
 
 if __name__ == "__main__":
     unittest.main()

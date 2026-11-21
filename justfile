@@ -75,6 +75,11 @@ gui-test *args: dev-bin
     "{{ cpp }}" build dev -- --target src/gui/all
     "{{ cpp }}" test dev -- -L '^gui\.' {{ args }}
 
+# Build and run the tests of one domain or library by its label, `just domain-test runtime.terminal`, without the other tests or the CLI the GUI's integration cases need.
+domain-test label *args: (configure "dev")
+    "{{ cpp }}" build dev -- --target {{ replace(replace_regex(label, '^lib\.', 'telar.'), ".", "-") }}-tests
+    "{{ cpp }}" test dev -- -L '^{{ replace(label, ".", "\\.") }}$' {{ args }}
+
 # Run cases of the window test alone, each in a couple of seconds: `just gui-case tabsCloseInOrder`.
 # Without a case it runs them all; `just gui-case -functions` lists them.
 gui-case *args: dev-bin
@@ -86,21 +91,28 @@ editor: (configure "dev")
     "{{ cpp }}" build dev -- --target cell-layout gui-editor --parallel 2
 
 # Check the C++ sources of the dev tree with clang-tidy, without its static analyzer or applying fixes.
-lint: (configure "dev")
+lint: lint-scope (configure "dev")
     "{{ cpp }}" exec -- cmake -DCHECK=lint "-DBUILD_DIRECTORY={{ build_dir }}/dev" -P cmake/scripts/check.cmake
 
 # Run clang-tidy's static analyzer over the sources lint checks.
-analyze: (configure "dev")
+analyze: lint-scope (configure "dev")
     "{{ cpp }}" exec -- cmake -DCHECK=analyze "-DBUILD_DIRECTORY={{ build_dir }}/dev" -P cmake/scripts/check.cmake
 
+# Build the clang-tidy plugin that keeps lint and analyze from walking what each unit imports.
+lint-scope: tbc-configure
+    "{{ cpp }}" build tbc -B lib/tbc/out/release -- --target tbc-tidy-scope
+
 # Build the optimized lifetime checker that the repository's .tbc.json names.
-lifetime-checker:
-    "{{ cpp }}" configure tbc -B lib/tbc/out/release --config Release -- -DBUILD_TESTING=OFF
+lifetime-checker: tbc-configure
     "{{ cpp }}" build tbc -B lib/tbc/out/release -- --target tbc-lint
 
 # Check the lifetimes of the C++ sources of the dev tree.
 lifetime: lifetime-checker (configure "dev")
     "{{ cpp }}" exec -- cmake -DCHECK=lifetime "-DBUILD_DIRECTORY={{ build_dir }}/dev" -P cmake/scripts/check.cmake
+
+# Run tbc-lint's four checks over the dev tree in one pass, which parses each source once.
+checks: lifetime-checker (configure "dev")
+    "{{ cpp }}" exec -- cmake -DCHECK=lifetime+interface_bodies+blank_lines+standard_containers "-DBUILD_DIRECTORY={{ build_dir }}/dev" -P cmake/scripts/check.cmake
 
 # Check that the module interfaces keep no function body outside the allowlist.
 interface-bodies: lifetime-checker (configure "dev")
@@ -158,6 +170,10 @@ configure preset="dev":
 playground:
   cmake --build out/dev --target gui-playground
   out/dev/src/gui/gui-playground src/gui/playground/play.qml
+
+[private]
+tbc-configure:
+    "{{ cpp }}" configure tbc -B lib/tbc/out/release --config Release -- -DBUILD_TESTING=OFF
 
 [private]
 dev-bin preset="dev" state_dir=dev_dir: (runtime-build preset)
