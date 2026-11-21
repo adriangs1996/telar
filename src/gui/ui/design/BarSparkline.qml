@@ -11,10 +11,11 @@ Item {
     required property color trackColor
     property real ratio: 1
 
-    readonly property int maximumColumns: 9
-    readonly property real columnWidth: 2 * ratio
-    readonly property real columnGap: 1 * ratio
-    readonly property real chartHeight: 12 * ratio
+    // The top bar's sparkline unless a host asks for a larger one.
+    property int maximumColumns: 9
+    property real columnWidth: 2 * ratio
+    property real columnGap: 1 * ratio
+    property real chartHeight: 12 * ratio
     readonly property real minimumColumnHeight: 2 * ratio
     readonly property real fullPercent: 100
     readonly property real density: Screen.devicePixelRatio

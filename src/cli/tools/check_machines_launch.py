@@ -33,7 +33,7 @@ def normalize(value, root, binary):
         value = value.replace(str(binary), '@EXECUTABLE@').replace(str(root), '@ROOT@')
         value = re.sub(r'm-[0-9a-f]{12}', 'm-@ID@', value)
         value = value.replace(socket.gethostname(), '@HOSTNAME@')
-        value = value.replace('886b480d', '@SCHEMA@').replace('cqp00007', '@SCHEMA@')
+        value = value.replace('886b480d', '@SCHEMA@').replace('cqp00008', '@SCHEMA@')
         return value
     return value
 
@@ -170,7 +170,7 @@ def outcomes(binary):
             run_terminal(name, ['--machine','box','worktree','remove','branch','--force'], streams)
         for case in cases[-3:]:
             case['stdout'] = ssh_contract(case['stdout'])
-        schema = 'cqp00007' if b'cqp00007' in binary.read_bytes() else '886b480d'
+        schema = 'cqp00008' if b'cqp00008' in binary.read_bytes() else '886b480d'
         fixtures = [
             ('reachable', f'printf "%s\\n" "$HOME" /bin/sh "{root}/remote.sock" {schema}\n'),
             ('incompatible', f'printf "%s\\n" "$HOME" /bin/sh "{root}/remote.sock" deadbeef\n'),
