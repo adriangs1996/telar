@@ -255,6 +255,8 @@ export namespace telar::gui::features::nvim {
     TabLine tabs;
     Prompt prompt;
     Picker picker;
+    // A link the editor opened, until the window opens it.
+    ds::String<Memory> link;
     // Every frame applied.
     std::uint64_t revision = 0;
     // The grids there are, where each is placed and what of its buffer it shows.
@@ -350,6 +352,10 @@ export namespace telar::gui::features::nvim {
   // The query typed in a picker and the request that answers it; `request` zero asks nothing,
   // and the list is empty until something is asked. False for a pane without an open picker.
   bool ask(State& state, std::uint64_t pane_id, std::string_view query, std::uint64_t request);
+
+  // A link the editor of a pane opened, kept until the window takes it; empty to drop it.
+  // False when the pane is no editor.
+  bool link(State& state, std::uint64_t pane_id, std::string_view uri);
 
   // Closes an editor's picker. False when it had none open.
   bool dismiss(State& state, std::uint64_t pane_id) noexcept;

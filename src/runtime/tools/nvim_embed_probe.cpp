@@ -151,6 +151,7 @@ namespace {
         told_.listed = told_.listed || pulse.listed;
         told_.navigated = pulse.navigated ? pulse.navigated : told_.navigated;
         told_.pick = pulse.pick ? pulse.pick : told_.pick;
+        told_.opened = told_.opened || pulse.opened;
         if (pulse.flushed) {
           ++flushes_;
           last_flush_ = Clock::now();
@@ -425,6 +426,18 @@ namespace {
 
       composeText(screen, 4, text, 4096);
       std::println("screen text: {:?}", text.view());
+      // `gx` on a link of the web tells the runtime, which opens it where the person is; a
+      // link nobody asked for is not opened.
+      static_cast<void>(session.editor().input("<Esc>"));
+      session.editor().command("enew! | call setline(1, 'see https://example.com/docs for more') | call cursor(1, 8)");
+      session.run(answer_time);
+      static_cast<void>(session.editor().input("gx"));
+      session.run(answer_time);
+      pulse = session.takeTold();
+      std::println("gx on a link -> told the runtime={} link={:?}", pulse.opened, session.editor().link());
+      session.editor().command("lua vim.ui.open('https://example.com/unasked')");
+      session.run(answer_time);
+      std::println("a link nothing asked for -> opened={}", session.takeTold().opened);
       session.editor().command("cd /");
       session.editor().command("lcd /tmp");
       session.run(answer_time);

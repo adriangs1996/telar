@@ -735,7 +735,7 @@ export {
 
         job.getMut().superseded = historySuperseded(*job);
         active_client_ = job->client;
-        active_tag_ = job->request.empty() ? ClientTag{} : static_cast<ClientTag>(job->request.front());
+        active_tag_ = job->request.empty() ? ds::Option<ClientTag>{} : ds::Option<ClientTag>{static_cast<ClientTag>(job->request.front())};
         active_cancelled_ = false;
         return Step::run;
       }
@@ -838,7 +838,7 @@ export {
       std::size_t outstanding_ = 0;
       bool stopping_ = false;
       std::uint64_t active_client_ = 0;
-      ClientTag active_tag_{};
+      ds::Option<ClientTag> active_tag_;
       std::atomic<bool> active_cancelled_{false};
       std::atomic<std::uint64_t> internal_failures_{0};
 #if TELAR_DIAGNOSTICS

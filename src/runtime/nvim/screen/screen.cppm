@@ -128,6 +128,14 @@ export {
       constexpr bool operator==(const NvimViewport&) const noexcept = default;
     };
 
+    // What a float's own configuration says of its frame: the sides it has a border on, and
+    // what is written on it.
+    struct NvimFloatFrame {
+      std::uint8_t border = 0;
+      std::string_view title;
+      std::string_view footer;
+    };
+
     struct NvimMargins {
       std::uint16_t top = 0;
       std::uint16_t bottom = 0;
@@ -368,7 +376,7 @@ export {
       void margins(std::uint32_t grid, NvimMargins margins) noexcept;
       // The frame of the float that shows `window`. False when no float shows it, or it has
       // that frame already.
-      bool decorate(std::uint64_t window, std::uint8_t border, std::string_view title, std::string_view footer);
+      bool decorate(std::uint64_t window, const NvimFloatFrame& frame);
       // A float placed since its frame was last asked for: its window, which then counts as
       // asked, or zero when there is none.
       [[nodiscard]] std::uint64_t nextUnframed() noexcept;

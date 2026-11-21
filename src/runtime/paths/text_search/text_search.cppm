@@ -20,7 +20,7 @@ export namespace telar::runtime {
     std::string_view text;
 
     // None for a line that is not a match: a path too long to list, or fields that are not numbers.
-    [[nodiscard]] static ds::Option<FileTextLine> parse(std::string_view written) noexcept;
+    [[nodiscard]] static ds::Option<FileTextLine> parse(std::string_view written);
   };
 
   // Searches the text of the files under a directory, with ripgrep where the host has it and

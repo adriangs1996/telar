@@ -7,6 +7,7 @@ import std;
 
 import :session;
 import telar.gui.features.nvim;
+import telar.gui.features.terminal.links;
 import telar.wire.nvim;
 import telar.wire.pane_io;
 import telar.wire.vocabulary;
@@ -91,6 +92,14 @@ export namespace telar::gui::application::nvim {
   // beside the focused pane when the tab has none. False when neither could be done.
   bool edit(Session& session, std::uint64_t pane_id, const Place& place);
 
+  // The link an editor pane opened, once: nothing when it opened none, or one the window
+  // does not open.
+  [[nodiscard]] ds::Option<features::terminal::links::LinkTarget> takeLink(Session& session, std::uint64_t pane_id);
+
+  // Opens the picker of the focused tab's editor pane, which takes the focus. False when the
+  // tab has no editor pane.
+  bool find(Session& session, NvimPickSource source);
+
   // Opens the pane's picker on a source: files by name, lines of files by their text, or the
   // editor's buffers, under the directory the editor works in. It lists what an empty query finds.
   void pick(Session& session, std::uint64_t pane_id, NvimPickSource source);
@@ -147,6 +156,7 @@ namespace telar::gui::application::nvim {
   Change receive(Session& session, const NvimPrompt& message);
   Change receive(Session& session, const NvimNavigated& message);
   Change receive(Session& session, const NvimPick& message);
+  Change receive(Session& session, const NvimLink& message);
   Change receive(Session& session, const TextResults& message);
   // The paths a picker of an editor waited for; none when no picker did.
   ds::Option<Change> receive(Session& session, const PathResults& message);

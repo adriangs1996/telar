@@ -107,7 +107,7 @@ export {
       bool destructive = false;
     };
 
-    inline constexpr auto palette_actions = ds::Array<PaletteAction, 43>{
+    inline constexpr auto palette_actions = ds::Array<PaletteAction, 46>{
         PaletteAction{.action = BindingActionKind::split_horizontal, .label = "Split right"},
         PaletteAction{.action = BindingActionKind::split_vertical, .label = "Split down"},
         PaletteAction{.action = BindingActionKind::focus_left, .label = "Focus pane left"},
@@ -119,6 +119,9 @@ export {
         PaletteAction{.action = BindingActionKind::new_tab, .label = "New tab"},
         PaletteAction{.action = BindingActionKind::new_editor, .label = "New editor"},
         PaletteAction{.action = BindingActionKind::new_editor_tab, .label = "New editor tab"},
+        PaletteAction{.action = BindingActionKind::editor_files, .label = "Find file in editor"},
+        PaletteAction{.action = BindingActionKind::editor_grep, .label = "Search text in editor"},
+        PaletteAction{.action = BindingActionKind::editor_buffers, .label = "Switch editor buffer"},
         PaletteAction{.action = BindingActionKind::rename_tab, .label = "Rename tab"},
         PaletteAction{.action = BindingActionKind::close_tab, .label = "Close tab", .destructive = true},
         PaletteAction{.action = BindingActionKind::next_tab, .label = "Next tab"},

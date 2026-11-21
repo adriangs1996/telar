@@ -368,8 +368,8 @@ namespace {
       deliver(frames, screen, client);
       check(client.grids[4].placement == NvimPlacement::floating && client.grids[4].border == 0 && client.grids[4].title.empty(), "a float starts without a frame");
       check(screen.nextUnframed() == window && screen.nextUnframed() == 0, "its frame is asked for once");
-      check(!screen.decorate(77, max_nvim_border, "Other", ""), "a frame for a window no float shows changes nothing");
-      check(screen.settled() && screen.decorate(window, max_nvim_border, "Keys", "esc close"), "the frame of the float is taken");
+      check(!screen.decorate(77, {.border = max_nvim_border, .title = "Other"}), "a frame for a window no float shows changes nothing");
+      check(screen.settled() && screen.decorate(window, {.border = max_nvim_border, .title = "Keys", .footer = "esc close"}), "the frame of the float is taken");
       check(!screen.settled(), "and waits for a flush as any change does");
       screen.flush();
 
@@ -377,7 +377,7 @@ namespace {
 
       check(sent.messages == 1 && sent.cells == 0, "the frame alone is sent without cells");
       check(client.grids[4].border == max_nvim_border && client.grids[4].title == "Keys" && client.grids[4].footer == "esc close", "the client learns the frame");
-      check(!screen.decorate(window, max_nvim_border, "Keys", "esc close") && screen.nextUnframed() == 0, "the same frame again changes nothing and is not asked for again");
+      check(!screen.decorate(window, {.border = max_nvim_border, .title = "Keys", .footer = "esc close"}) && screen.nextUnframed() == 0, "the same frame again changes nothing and is not asked for again");
     }
 
     // What an agent reads of an editor pane is what its screen shows: windows and floats over

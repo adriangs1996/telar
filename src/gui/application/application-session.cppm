@@ -636,6 +636,7 @@ export {
       Change apply(const NvimPrompt& message);
       Change apply(const NvimNavigated& message);
       Change apply(const NvimPick& message);
+      Change apply(const NvimLink& message);
       Change apply(const TextResults& message);
 
       Change apply(const ProxyStatus& message);

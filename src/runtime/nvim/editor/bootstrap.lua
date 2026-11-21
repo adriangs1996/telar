@@ -11,7 +11,7 @@ for name, source in pairs(modules) do
 end
 
 -- vim.ui.select and vim.ui.input ask the runtime, which shows them natively, and nothing loaded
--- later can put its own in their place. The answer comes back through __telar_prompt_answer.
+-- later can put its own in their place, nor in the place of vim.ui.open below. The answer comes back through __telar_prompt_answer.
 local pending, last = {}, 0
 local function ask(kind, title, initial, choices, done)
   last = last + 1
@@ -54,20 +54,26 @@ function _G.__telar_prompt_answer(id, accepted, index, text)
 end
 
 local ui = vim.ui
+
+-- A link of the web or of mail opens where the person is, which is not always where this
+-- Neovim runs: `gx` and anything else that calls vim.ui.open reach the runtime. A file is of
+-- this host, and opens here as it always did.
+local function open(target, ...)
+  if type(target) == "string" and (target:match("^https?://") or target:match("^mailto:")) then
+    vim.rpcnotify(channel, "telar_open", target)
+    return nil, nil
+  end
+
+  return ui.open(target, ...)
+end
+
+local own = { select = select, input = input, open = open }
 local guarded = setmetatable({}, {
   __index = function(_, key)
-    if key == "select" then
-      return select
-    end
-
-    if key == "input" then
-      return input
-    end
-
-    return ui[key]
+    return own[key] or ui[key]
   end,
   __newindex = function(_, key, value)
-    if key ~= "select" and key ~= "input" then
+    if own[key] == nil then
       ui[key] = value
     end
   end,
@@ -132,6 +138,9 @@ local function report()
 end
 
 vim.api.nvim_create_autocmd({ "DirChanged", "WinEnter", "TabEnter", "VimEnter" }, { group = group, callback = report })
+
+-- Command and a click follows the link under the pointer, as it does in a terminal of telar.
+vim.keymap.set("n", "<D-LeftMouse>", "<LeftMouse>gx", { remap = true, silent = true, desc = "Open the link under the pointer" })
 
 -- The pane's header shows the file being edited, unless the configuration names something else.
 vim.o.title = true

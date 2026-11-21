@@ -11,6 +11,7 @@ import telar.wire.editor;
 import telar.wire.vocabulary;
 import telar.base.memory.allocators;
 import telar.base.ds;
+import telar.base.text;
 
 namespace telar::runtime {
 
@@ -22,17 +23,9 @@ namespace telar::runtime {
     // A line is its path, two numbers, what separates them and its text.
     constexpr std::size_t line_capacity = TextMatch::maximum_path_bytes + TextMatch::maximum_text_bytes + 64;
 
-    ds::Option<std::uint32_t> number(std::string_view digits) noexcept {
-      std::uint32_t value = 0;
-      const auto* end = digits.data() + digits.size();
-      const auto parsed = std::from_chars(digits.data(), end, value);
-
-      return parsed.ec == std::errc{} && parsed.ptr == end && !digits.empty() ? ds::Option<std::uint32_t>{value} : ds::none;
-    }
-
     // The text of a match, cut to what a list shows at a character's edge and without the
     // blanks its line starts with.
-    std::string_view shown(std::string_view text) noexcept {
+    std::string_view shown(std::string_view text) {
       constexpr unsigned continuation_mask = 0xc0;
       constexpr unsigned continuation = 0x80;
 
@@ -52,23 +45,23 @@ namespace telar::runtime {
 
   }
 
-  ds::Option<FileTextLine> FileTextLine::parse(std::string_view written) noexcept {
+  ds::Option<FileTextLine> FileTextLine::parse(std::string_view written) {
     const auto path_end = written.find('\0');
     if (path_end == std::string_view::npos || path_end == 0 || path_end > TextMatch::maximum_path_bytes) {
       return ds::none;
     }
 
-    auto rest = written.substr(path_end + 1);
+    const auto rest = written.substr(path_end + 1);
     // git ends each field with a NUL; ripgrep writes the numbers as `line:column:`.
-    const char separator = rest.find('\0') == std::string_view::npos ? ':' : '\0';
+    const char separator = rest.contains('\0') ? '\0' : ':';
     const auto line_end = rest.find(separator);
     const auto column_end = line_end == std::string_view::npos ? line_end : rest.find(separator, line_end + 1);
     if (column_end == std::string_view::npos) {
       return ds::none;
     }
 
-    const auto line = number(rest.substr(0, line_end));
-    const auto column = number(rest.substr(line_end + 1, column_end - line_end - 1));
+    const auto line = parseExact<std::uint32_t>(rest.substr(0, line_end));
+    const auto column = parseExact<std::uint32_t>(rest.substr(line_end + 1, column_end - line_end - 1));
     if (!line || !column) {
       return ds::none;
     }
@@ -155,9 +148,11 @@ namespace telar::runtime {
 
     {
       ds::Array<char, PATH_MAX> found{};
-      const char* path = std::getenv("PATH"); // NOLINT(concurrency-mt-unsafe): the runtime does not change its environment once it started
+      const char* named = std::getenv("PATH"); // NOLINT(concurrency-mt-unsafe): the runtime does not change its environment once it started
+      // Kept: what looks a program up may read the environment again.
+      const ds::String<ConcurrentMemory> path{memory_, named == nullptr ? std::string_view{} : std::string_view{named}};
 
-      if (path != nullptr && findExecutable({.path = path, .program = "rg"}, found.viewMut())) {
+      if (!path.empty() && findExecutable({.path = path.view(), .program = "rg"}, found.viewMut())) {
         ripgrep.assign(found.data());
       }
     }
@@ -165,7 +160,9 @@ namespace telar::runtime {
     try {
       if (!ripgrep.empty()) {
         // Its own configuration file is left out: the search is the same for every user.
-        const ds::Array<std::string_view, 12> arguments{
+        // The directory is named: without one, ripgrep reads its standard input when that is a pipe.
+        constexpr std::size_t words = 14;
+        const ds::Array<std::string_view, words> arguments{
             ripgrep.view(),
             "--no-config",
             "--null",
@@ -178,16 +175,11 @@ namespace telar::runtime {
             "--max-columns=480",
             "--max-columns-preview",
             "-e",
+            request.query,
+            "./",
         };
 
-        ds::Array<std::string_view, 14> all{};
-
-        std::ranges::copy(arguments, all.viewMut().begin());
-        all.atMut(arguments.size()) = request.query;
-        // The directory is named: without one, ripgrep reads its standard input when that is a pipe.
-        all.atMut(arguments.size() + 1) = "./";
-
-        Command command{memory_, Launch{.cwd = request.root, .arguments = all.view()}, CommandPurpose::administration};
+        Command command{memory_, Launch{.cwd = request.root, .arguments = arguments.view()}, CommandPurpose::administration};
         CommandOutput<ConcurrentMemory> output{memory_, line_capacity, &cancelled};
 
         static_cast<void>(output.stream(command, deadline, consume));

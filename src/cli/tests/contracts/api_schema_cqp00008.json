@@ -147,6 +147,7 @@
     "nvim_cmdline": 202,
     "nvim_frame": 201,
     "nvim_grid": 200,
+    "nvim_link": 210,
     "nvim_message_list": 204,
     "nvim_navigated": 207,
     "nvim_pick": 209,

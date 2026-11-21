@@ -583,6 +583,12 @@ fetch() {
         }
 
         report.note(Step::integrations, "editor: {}", whole(output).contains("already present") ? "already provisioned" : "provisioned");
+        // What the host lacks for telar's own configuration, as the installer found it.
+        for (const auto part : std::views::split(whole(output), '\n')) {
+          if (const std::string_view line{part}; line.starts_with("editor: needs ")) {
+            report.note(Step::integrations, "{}", line);
+          }
+        }
       } catch (const std::exception& error) {
         report.note(Step::integrations, "editor: not provisioned: {}", error.what());
       }

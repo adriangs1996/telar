@@ -71,6 +71,11 @@ with ripgrep when the machine has it, and with git in a repository when it does 
 
 ![The picker with a file previewed](images/telar-editor-picker.png)
 
+The palette opens the same picker on the editor of the focused tab with **Find file in
+editor**, **Search text in editor** and **Switch editor buffer**; in a configuration they are
+`telar.action.editor_files()`, `telar.action.editor_grep()` and `telar.action.editor_buffers()`,
+to bind to a key or to call from a mod.
+
 The entry under the selection is shown beside the list in a float of Neovim itself: the
 preview is the real buffer, with its highlighting. `Enter` opens the entry, `Control+Enter` or
 `Command+Enter` in a split, and `Option+Enter` in a tab page. `Tab` marks entries, and `Enter` then sends the
@@ -90,6 +95,10 @@ by it again. `vim.g.telar_tint` takes the options of the theme's engine, such as
   runs: what is yanked to them is copied there, unless the runtime's `clipboard_write` policy
   is `deny`. Pasting the clipboard with the window's own shortcut reaches Neovim as one change.
   `"+p` puts back the last text yanked in the editor; it does not read the clipboard.
+- A link of the web or of mail opens on the machine you type on, wherever Neovim runs: `gx`,
+  Command and a click, and anything a plugin opens with `vim.ui.open`. One link opens for each
+  thing you do, so nothing in the editor opens links by itself. A file opens on the host, as
+  `vim.ui.open` always did.
 - Moving the focus to a side with `navigate_pane` asks the editor first for a window on that
   side, and moves to the pane there when it has none. No plugin is needed for it.
 - The pane's directory is the one of Neovim's current window, `:lcd` and `:tcd` included.
@@ -117,7 +126,8 @@ Neovim reads its usual configuration. A machine without `~/.config/nvim` gets te
 instead: lazy.nvim with a lockfile, the language servers found on its `PATH`, git signs and
 completion, with `<leader>f`, `<leader>/` and `<leader>b` on the picker. Its plugins are
 fetched the first time through the pane's proxy and need git; without a network the editor
-starts all the same with the parsers Neovim ships. They are kept under the name `telar-nvim`,
+starts all the same with the parsers Neovim ships. `telar integration status editor` and
+`telar machine setup` say when the host lacks git or a C compiler for them. They are kept under the name `telar-nvim`,
 so nothing of a Neovim of your own is touched, and a configuration you make later takes its
 place. A runtime started with `NVIM_APPNAME` uses the configuration that names.
 

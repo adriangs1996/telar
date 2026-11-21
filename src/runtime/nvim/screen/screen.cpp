@@ -583,14 +583,14 @@ namespace telar::runtime {
     grid->viewport_at = stamp();
   }
 
-  bool NvimScreen::decorate(std::uint64_t window, std::uint8_t border, std::string_view title, std::string_view footer) {
+  bool NvimScreen::decorate(std::uint64_t window, const NvimFloatFrame& frame) {
     for (std::size_t index = 0; index < grids_.size(); ++index) {
       const auto& shown = *grids_[index];
       if (shown.window != window || shown.placement != NvimPlacement::floating) {
         continue;
       }
 
-      if (shown.border == border && shown.title.view() == title && shown.footer.view() == footer) {
+      if (shown.border == frame.border && shown.title.view() == frame.title && shown.footer.view() == frame.footer) {
         return false;
       }
 
@@ -598,9 +598,9 @@ namespace telar::runtime {
       touch();
       auto& grid = grids_.atMut(index).getMut();
 
-      grid.border = border;
-      grid.title.assign(title);
-      grid.footer.assign(footer);
+      grid.border = frame.border;
+      grid.title.assign(frame.title);
+      grid.footer.assign(frame.footer);
       grid.placed_at = stamp();
       // What it was asked for stands: the stamp is this change's, not a new place.
       grid.framed_for = grid.placed_at;
@@ -846,16 +846,42 @@ namespace telar::runtime {
       std::size_t count = 0;
     };
 
-    // The cell of `grid` that covers a cell of the screen, if it covers it.
-    const NvimCell* covering(const NvimScreenGrid& grid, std::uint32_t row, std::uint32_t column) noexcept {
-      const auto local_row = static_cast<std::int64_t>(row) - grid.start_row;
-      const auto local_column = static_cast<std::int64_t>(column) - grid.start_column;
+    // A cell of the screen, by its row and its column.
+    struct ScreenPlace {
+      std::uint32_t row = 0;
+      std::uint32_t column = 0;
+    };
 
-      if (local_row < 0 || local_column < 0 || local_row >= grid.rows || local_column >= grid.columns) {
+    // The cell of `grid` that covers a place of the screen, if it covers it.
+    const NvimCell* covering(const NvimScreenGrid& grid, ScreenPlace place) noexcept {
+      const auto row = static_cast<std::int64_t>(place.row) - grid.start_row;
+      const auto column = static_cast<std::int64_t>(place.column) - grid.start_column;
+
+      if (row < 0 || column < 0 || std::cmp_greater_equal(row, grid.rows) || std::cmp_greater_equal(column, grid.columns)) {
         return nullptr;
       }
 
-      return &grid.row(static_cast<std::uint32_t>(local_row))[static_cast<std::size_t>(local_column)];
+      return &grid.row(static_cast<std::uint32_t>(row))[static_cast<std::size_t>(column)];
+    }
+
+    // The cell a place of the screen shows: the base grid's, unless a window's grid or a float
+    // covers it, the topmost of them.
+    tbc::ref_a<NvimCell> cellShown(tbc::ref_a<NvimScreen> screen, tbc::ref_a<Floats> floats, ScreenPlace place) noexcept {
+      const auto* cell = &screen.grid(1)->row(place.row)[place.column];
+
+      for (const auto& grid : screen.grids()) {
+        if (const auto* found = grid->placement == NvimPlacement::window ? covering(*grid, place) : nullptr) {
+          cell = found;
+        }
+      }
+
+      for (std::size_t index = 0; index < floats.count; ++index) {
+        if (const auto* found = covering(*floats.grids[index], place)) {
+          cell = found;
+        }
+      }
+
+      return *cell;
     }
 
   }
@@ -870,32 +896,20 @@ namespace telar::runtime {
     const auto shown = std::min<std::uint32_t>(rows, base->rows);
 
     for (std::uint32_t row = 0; row < shown; ++row) {
-      const auto start = text.size();
-      auto end = start;
+      // Where the row's text ends, without the blanks that close it.
+      auto end = text.size();
 
       for (std::uint32_t column = 0; column < base->columns; ++column) {
-        const auto* cell = &base->row(row)[column];
+        const auto& cell = cellShown(screen, floats, {.row = row, .column = column});
 
-        for (const auto& grid : screen.grids()) {
-          if (const auto* found = grid->placement == NvimPlacement::window ? covering(*grid, row, column) : nullptr) {
-            cell = found;
-          }
-        }
-
-        for (std::size_t index = 0; index < floats.count; ++index) {
-          if (const auto* found = covering(*floats.grids[index], row, column)) {
-            cell = found;
-          }
+        // The right half of a wide character has no text of its own.
+        if ((cell.flags & NvimCell::continuation) != 0) {
+          continue;
         }
 
         ds::Array<char, NvimCell::text_capacity> glyph{};
-        const auto size = screen.copyText(*cell, std::span<char, NvimCell::text_capacity>{glyph.viewMut()});
+        const auto size = screen.copyText(cell, std::span<char, NvimCell::text_capacity>{glyph.viewMut()});
         const std::string_view written{glyph.data(), size};
-
-        // The right half of a wide character has no text of its own.
-        if ((cell->flags & NvimCell::continuation) != 0) {
-          continue;
-        }
 
         if (text.size() + std::max<std::size_t>(size, 1) + 1 > limit) {
           return false;

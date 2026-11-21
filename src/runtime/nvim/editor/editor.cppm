@@ -57,6 +57,8 @@ export {
       ds::Option<PaneDirection> navigated;
       // `:Telar` asked for a picker.
       ds::Option<NvimPickSource> pick;
+      // Something opened a link: see NvimEditor::link().
+      bool opened = false;
     };
 
     // The names of the editor's listed buffers, most recently used first, as views of `text`,
@@ -166,6 +168,8 @@ export {
       [[nodiscard]] std::uint64_t promptSerial() const noexcept;
       // The text last yanked to a clipboard register.
       [[nodiscard]] std::string_view clipboard() const noexcept;
+      // The link last opened in the editor.
+      [[nodiscard]] std::string_view link() const noexcept;
       [[nodiscard]] const NvimBufferList& buffers() const noexcept;
 
     private:
@@ -177,6 +181,7 @@ export {
       // What telar's own side of the conversation in Neovim says, by the notification's name.
       void told(std::string_view method, std::span<const std::uint8_t> parameters);
       void copied(msgpack::Reader& reader);
+      void opened(msgpack::Reader& reader);
       void moved(msgpack::Reader& reader);
       void framed(msgpack::Reader& reader);
       void listed(msgpack::Reader& reader);
@@ -202,6 +207,10 @@ export {
       // The theme last given, sent again to a Neovim that attaches after it.
       ds::Option<TerminalTheme> theme_;
       ds::String<ConcurrentMemory> clipboard_;
+      ds::String<ConcurrentMemory> link_;
+      // Whether the person did something since the last link: one link opens for each thing
+      // they do, so nothing in the editor opens links by itself, or many at once.
+      bool asked_ = false;
       NvimBufferList buffers_;
       std::uint64_t channel_ = 0;
       // The first request asks what Neovim this is.

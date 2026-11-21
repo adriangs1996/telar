@@ -314,6 +314,19 @@ namespace {
       const auto after = editor.takePulse();
 
       check(!after.navigated && !after.copied && editor.state() == NvimState::attached, "what is not what it names changes nothing");
+
+      // A link opens for something the person did, once, and only one of the web or of mail.
+      const auto open = [&](std::string_view uri) {
+        check(tell(editor, "telar_open", 1, [&](msgpack::Writer& writer) {
+          writer.string(uri);
+        }));
+        return editor.takePulse().opened;
+      };
+
+      check(!open("https://example.com/unasked"), "nothing in the editor opens a link by itself");
+      check(editor.input("gx") && !open("file:///etc/passwd") && editor.link().empty(), "a file of the host is not a link for the person's machine");
+      check(editor.input("gx") && open("https://example.com/docs") && editor.link() == "https://example.com/docs");
+      check(!open("https://example.com/again"), "one link for each thing the person does");
     }
 
     // What the runtime asks of Neovim for a client: a side to move to, an item of the menu,

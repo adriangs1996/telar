@@ -13,6 +13,7 @@ static_assert(true);
 #include <cmath>
 #include <memory>
 #include <span>
+#include <utility>
 
 import telar.gui.foundation.core;
 import telar.gui.application;
@@ -173,11 +174,13 @@ namespace telar::gui::qt {
   }
 
   void NvimGridItem::composeRows() {
-    const auto* current = grid();
+    // The grid is the editor's, not this item's: the rows drawn view its cells.
+    const auto* shown = editor_ == nullptr ? nullptr : editor_->editorState();
+    const auto* current = shown == nullptr ? nullptr : shown->grid(grid_id_);
 
     drawn_rows_.clear();
     shift_ = 0;
-    if (current != nullptr && editor_ != nullptr && motion_.moving()) {
+    if (current != nullptr && motion_.moving()) {
       shift_ = slideRows(drawn_rows_, *current, {.offset = motion_.position() - reach_, .row_height = editor_->cellHeight()});
     }
   }
@@ -269,7 +272,7 @@ namespace telar::gui::qt {
         .owner = this,
         // The pane, or the float's own surface, is behind the cells that have no color.
         .background_provided = true,
-        .rows = std::span<const TerminalRow>{drawn_rows_.constData(), static_cast<std::size_t>(drawn_rows_.size())},
+        .rows = std::span<const TerminalRow>{std::as_const(drawn_rows_)},
         .shift = shift_,
     };
 

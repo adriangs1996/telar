@@ -160,6 +160,9 @@ namespace telar::gui::features::plugins {
     case Kind::new_tab:
     case Kind::new_editor:
     case Kind::new_editor_tab:
+    case Kind::editor_files:
+    case Kind::editor_grep:
+    case Kind::editor_buffers:
     case Kind::rename_tab:
     case Kind::close_tab:
     case Kind::move_tab_previous:

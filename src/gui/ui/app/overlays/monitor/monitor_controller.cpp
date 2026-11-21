@@ -410,6 +410,9 @@ namespace telar::gui::qt {
     case Action::new_tab:
     case Action::new_editor:
     case Action::new_editor_tab:
+    case Action::editor_files:
+    case Action::editor_grep:
+    case Action::editor_buffers:
     case Action::select_tab:
     case Action::select_tab_index:
     case Action::next_tab:

@@ -22,6 +22,7 @@ static_assert(true);
 #include <exception>
 #include <stdexcept>
 #include <string_view>
+#include <utility>
 
 import telar.gui.foundation.core;
 import telar.gui.foundation.fonts;
@@ -328,7 +329,7 @@ namespace telar::gui::qt {
       }
     }
 
-    controller_->list(pane_id_, std::span<const std::uint32_t>{marked.constData(), static_cast<std::size_t>(marked.size())});
+    controller_->list(pane_id_, std::span<const std::uint32_t>{std::as_const(marked)});
   }
 
   void NvimItem::closePicker() {
@@ -898,7 +899,7 @@ namespace telar::gui::qt {
       }
     }
 
-    echo_.confirm(static_cast<double>(echo_clock_.nsecsElapsed()) / nanoseconds_per_ms, {.grid = editor.cursor.grid, .row = editor.cursor.row, .column = editor.cursor.column}, std::span<const char32_t>{cells.constData(), static_cast<std::size_t>(cells.size())});
+    echo_.confirm(static_cast<double>(echo_clock_.nsecsElapsed()) / nanoseconds_per_ms, {.grid = editor.cursor.grid, .row = editor.cursor.row, .column = editor.cursor.column}, std::span<const char32_t>{std::as_const(cells)});
     if (editor.mode.view() != "insert") {
       echo_.clear();
     }
