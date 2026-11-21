@@ -22,7 +22,7 @@ export {
   namespace telar::runtime::cli::machine {
 
     enum class Step : std::uint8_t {
-      ssh,
+      gateway,
       platform,
       telar,
       runtime,
@@ -55,7 +55,7 @@ export {
       static constexpr std::size_t max_text_bytes = 512;
       static constexpr std::size_t max_notes = 96;
       static constexpr auto titles = ds::Array<const char*, 10>{"SSH access", "Platform", "telar", "Runtime", "Profile", "Agents", "Integrations", "Configuration", "Logins", "Check"};
-      static constexpr auto steps = ds::Array<const char*, 10>{"ssh", "platform", "telar", "runtime", "profile", "agents", "integrations", "configuration", "logins", "check"};
+      static constexpr auto steps = ds::Array<const char*, 10>{"gateway", "platform", "telar", "runtime", "profile", "agents", "integrations", "configuration", "logins", "check"};
       static constexpr auto statuses = ds::Array<const char*, 5>{"ok", "changed", "skipped", "failed", "pending"};
 
       using Line = FixedText<max_text_bytes>;

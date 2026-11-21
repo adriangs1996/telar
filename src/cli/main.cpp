@@ -120,8 +120,7 @@ namespace telar::runtime::cli {
         return runProxyTrust(shared, ProxyTrustOptions::parse(options), process_environment);
       }
       case Family::server:
-        runServer(memory, words);
-        return 0;
+        return runServerCommand(memory, words);
       case Family::workspace: {
         const auto parsed = sessions::WorkspaceOptions::parse(options);
         if (parsed.worktree) {

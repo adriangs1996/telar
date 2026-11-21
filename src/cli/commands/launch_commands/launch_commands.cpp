@@ -75,6 +75,15 @@ namespace telar::runtime::cli {
     return runMachine(memory, MachineOptions::parse(words));
   }
 
+  int runServerCommand(Memory& memory, std::span<char* const> words) {
+    if (words.size() > 1 && gateway_commands::handles(words[1])) {
+      return gateway_commands::run(memory, words.subspan(1));
+    }
+
+    runServer(memory, words);
+    return 0;
+  }
+
   int runCliCommand(std::span<char* const> words) {
     return runCliInstall(words);
   }

@@ -144,7 +144,7 @@ namespace telar::runtime::machines {
     case MachineError::duplicate_label:
       return "that label is already taken, by a saved machine or by this machine";
     case MachineError::duplicate_destination:
-      return "two saved machines cannot share one SSH destination";
+      return "two saved machines cannot share one address";
     case MachineError::too_many:
       return "machines.json already holds the most machines it can";
     case MachineError::invalid_label:
@@ -152,7 +152,7 @@ namespace telar::runtime::machines {
     case MachineError::invalid_color:
       return "colors are #RRGGBB or a theme role such as red or accent";
     case MachineError::invalid_destination:
-      return "destinations are an ssh host alias or user@host, without spaces or a leading '-'";
+      return "a machine is named by the address `telar server pair` prints there, telar://HOST:PORT#KEY";
     case MachineError::invalid_program:
       return "telar paths are absolute and hold only letters, digits, '/', '.', '_', '+' or '-'";
     case MachineError::invalid_profiles:

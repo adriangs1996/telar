@@ -12,6 +12,9 @@ export {
     using Dispatch = int (*)(std::span<char* const>);
 
     int runMachineCommand(Memory& memory, std::span<char* const> words);
+    // `telar server ...`, whose words start at `server`: the runtime's own commands, or those of
+    // the gateway that lets other machines reach it.
+    int runServerCommand(Memory& memory, std::span<char* const> words);
     int runCliCommand(std::span<char* const> words);
     int runCompletionsCommand(Memory& memory, std::span<char* const> words);
     int runWindowCommand(Memory& memory, std::span<char* const> words, bool gui);

@@ -30,7 +30,7 @@ namespace telar::remote {
         "On the machine clients reach:\n"
         "  serve [--listen [HOST]:PORT] [--runtime-socket PATH]\n"
         "                    Answer clients until stopped\n"
-        "  pair [--host HOST]\n"
+        "  pair [--host HOST] [--port PORT]\n"
         "                    Print an address that pairs one client, once, within ten minutes\n"
         "  clients           List the clients this account's gateway admits\n"
         "  revoke KEY|NAME   Stop admitting a client\n"
@@ -135,16 +135,21 @@ namespace telar::remote {
       static_cast<void>(::gethostname(name.dataMut(), name.size() - 1));
       std::string_view host{name.data()};
 
-      for (std::size_t index = 0; index < arguments.size(); ++index) {
-        if (std::string_view{arguments[index]} != "--host") {
-          throw std::invalid_argument{"pair takes --host HOST"};
-        }
+      ds::Option<std::uint16_t> port = state.port();
 
-        host = valueOf(arguments, index);
+      for (std::size_t index = 0; index < arguments.size(); ++index) {
+        const std::string_view argument{arguments[index]};
+        if (argument == "--host") {
+          host = valueOf(arguments, index);
+        } else if (argument == "--port") {
+          port = runtime::unsignedDecimal<std::uint16_t>(valueOf(arguments, index));
+        } else {
+          throw std::invalid_argument{"pair takes --host HOST and --port PORT"};
+        }
       }
 
       endpoint.host.assign(host);
-      endpoint.port = state.port().valueOr(default_port);
+      endpoint.port = port.valueOr(default_port);
       endpoint.key = Identity::loadOrCreate(state.directory()).key;
       endpoint.secret = PairingCodes::mint(state.directory());
       std::println("{}", endpoint.format().view());
