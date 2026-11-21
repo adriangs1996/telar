@@ -39,6 +39,10 @@
       "base",
       "tbc"
     ],
+    "msgpack": [
+      "base",
+      "tbc"
+    ],
     "platform": [
       "base",
       "sys",
@@ -117,6 +121,7 @@
       "workspaces",
       "workspaces/worktrees",
       "paths",
+      "nvim",
       "metrics",
       "terminal",
       "history",
@@ -282,6 +287,10 @@
     "src/runtime/workers/background_executor/background_executor.cppm": "telar.runtime.workers.background_executor",
     "src/runtime/core/delivery/client_delivery/client_delivery.cppm": "telar.runtime.core.delivery.client_delivery",
     "src/runtime/paths/query_task/query_task.cppm": "telar.runtime.paths.query_task",
+    "src/runtime/nvim/screen/screen.cppm": "telar.runtime.nvim.screen",
+    "src/runtime/nvim/redraw/redraw.cppm": "telar.runtime.nvim.redraw",
+    "src/runtime/nvim/rpc/rpc.cppm": "telar.runtime.nvim.rpc",
+    "src/runtime/nvim/editor/editor.cppm": "telar.runtime.nvim.editor",
     "src/runtime/terminal/osc_scanner/osc_scanner.cppm": "telar.runtime.terminal.osc_scanner",
     "src/runtime/terminal/text_reader/text_reader.cppm": "telar.runtime.terminal.text_reader",
     "src/runtime/terminal/graphics_storage/graphics_storage.cppm": "telar.runtime.terminal.graphics_storage",
@@ -407,6 +416,7 @@
     "lib/render/document/document.cppm": "telar.render.document",
     "lib/render/terminal/terminal.cppm": "telar.render.terminal",
     "lib/render/markdown/markdown.cppm": "telar.render.markdown",
+    "lib/msgpack/msgpack.cppm": "telar.msgpack",
     "src/cli/console/render/render.cppm": "telar.cli.console.render",
     "lib/wire/vocabulary/vocabulary.cppm": "telar.wire.vocabulary",
     "lib/sys/posix/posix.cppm": "telar.sys.posix",
@@ -1162,6 +1172,9 @@
       "telar.render.markdown",
       "telar.render.terminal"
     ],
+    "lib/msgpack": [
+      "telar.msgpack"
+    ],
     "lib/shell": [
       "telar.shell.syntax"
     ],
@@ -1394,6 +1407,7 @@
       "telar.runtime.metrics.host_sampler",
       "telar.runtime.metrics.monitor"
     ],
+    "src/runtime/nvim": [],
     "src/runtime/paths": [
       "telar.runtime.paths.query_task"
     ],
