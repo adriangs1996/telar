@@ -663,11 +663,15 @@ namespace telar::remote {
       return;
     }
 
-    {
-      const std::scoped_lock lock{mutex_};
+    for (bool waiting = true; waiting && !stopping_.load();) {
+      {
+        const std::scoped_lock lock{mutex_};
 
-      slot = machineSlot(endpoint);
-      if (slot) {
+        slot = machineSlot(endpoint);
+        if (!slot) {
+          break;
+        }
+
         auto& entry = machines_.atMut(*slot);
 
         // The connection kept ready is used when its gateway has neither closed it nor could
@@ -676,6 +680,13 @@ namespace telar::remote {
         if (channel && (Clock::now() - entry.ready_since >= ready_lifetime || channel->disturbed())) {
           channel.reset();
         }
+
+        // One being made is ahead of any started now, so it is waited for.
+        waiting = !channel && entry.readying;
+      }
+
+      if (waiting) {
+        std::this_thread::sleep_for(std::chrono::milliseconds{1});
       }
     }
 
