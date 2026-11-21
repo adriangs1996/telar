@@ -582,7 +582,7 @@ namespace {
           writer.string(word);
           writer.string("cmd");
           writer.string("");
-          writer.string("");
+          writer.string(std::string_view{word} == "wall" ? "writes every buffer" : "");
         }
         writer.integer(0);
         writer.unsignedInteger(0);
@@ -631,6 +631,7 @@ namespace {
       const auto moved = decoded<NvimPopupMenu>(frames.popupMenu(screen), scratch);
 
       check(moved.keeps_items && moved.items.empty() && moved.selected == 1, "a selection that moved is sent without the items");
+      check(menu.info.empty() && moved.info == "writes every buffer", "but with what the item now selected says of itself");
       check(frames.cmdline(screen).empty() && frames.tabLine(screen).empty(), "and the surfaces that did not change are left alone");
 
       redraw(screen, memory, 2, [](msgpack::Writer& writer) {

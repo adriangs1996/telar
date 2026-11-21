@@ -135,6 +135,8 @@ export namespace telar::gui::features::nvim {
     std::uint32_t total = 0;
     ds::Vec<char, Memory> text;
     ds::Vec<MenuItem, Memory> items;
+    // What the selected item says of itself.
+    ds::String<Memory> info;
   };
 
   struct Message {
@@ -158,6 +160,7 @@ export namespace telar::gui::features::nvim {
   struct Tab {
     std::uint64_t handle = 0;
     Slice name;
+    bool modified = false;
   };
 
   struct TabLine {

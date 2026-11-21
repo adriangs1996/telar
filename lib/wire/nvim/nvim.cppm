@@ -32,6 +32,8 @@ export extern "C++" {
     // The native surfaces: the command line, the completion menu, the messages and the tabs.
     inline constexpr std::size_t max_nvim_line_bytes = std::size_t{16} * 1024;
     inline constexpr std::size_t max_nvim_label_bytes = 512;
+    // The most of a completion item's documentation a client is sent.
+    inline constexpr std::size_t max_nvim_info_bytes = 2048;
     inline constexpr std::size_t max_nvim_menu_items = 512;
     inline constexpr std::size_t max_nvim_messages = 32;
     inline constexpr std::size_t max_nvim_tabs = 128;
@@ -514,6 +516,8 @@ export extern "C++" {
       std::uint32_t first{};
       std::uint32_t total{};
       std::span<const NvimMenuItem> items;
+      // What the selected item says of itself, as a completion's documentation: its start.
+      std::string_view info;
     };
 
     template <>
@@ -531,7 +535,8 @@ export extern "C++" {
               Field<&NvimPopupMenu::column, i32, "column">,
               Field<&NvimPopupMenu::first, u32, "first">,
               Field<&NvimPopupMenu::total, u32, "total">,
-              Field<&NvimPopupMenu::items, CountedSpan<u16, ValueCodec<NvimMenuItem>, max_nvim_menu_items>, "items">> {};
+              Field<&NvimPopupMenu::items, CountedSpan<u16, ValueCodec<NvimMenuItem>, max_nvim_menu_items>, "items">,
+              Field<&NvimPopupMenu::info, NvimText<max_nvim_info_bytes>, "info">> {};
 
     // What a message is, which says how a client shows it.
     enum class NvimMessageKind : Byte {
@@ -583,10 +588,12 @@ export extern "C++" {
     struct NvimTab {
       std::uint64_t handle{};
       std::string_view name;
+      // Whether what it shows has changes that were not written.
+      bool modified{};
     };
 
     template <>
-    struct BodySchema<NvimTab> : Serializer<Field<&NvimTab::handle, u64, "handle">, Field<&NvimTab::name, NvimText<max_nvim_label_bytes>, "name">> {};
+    struct BodySchema<NvimTab> : Serializer<Field<&NvimTab::handle, u64, "handle">, Field<&NvimTab::name, NvimText<max_nvim_label_bytes>, "name">, Field<&NvimTab::modified, BoolByte, "modified">> {};
 
     // Neovim's tab pages and listed buffers, and which of each is current.
     struct NvimTabLine {

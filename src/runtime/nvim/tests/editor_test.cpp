@@ -315,6 +315,20 @@ namespace {
 
       check(!after.navigated && !after.copied && editor.state() == NvimState::attached, "what is not what it names changes nothing");
 
+      // The tab pages with changes not written, which the tab line's own event does not say.
+      check(tell(editor, "telar_modified", 1, [](msgpack::Writer& writer) {
+        writer.array(2);
+        writer.unsignedInteger(1);
+        writer.unsignedInteger(3);
+      }));
+      check(editor.takePulse().flushed && std::ranges::equal(editor.screen().tabs().modified, std::array<std::uint64_t, 2>{1, 3}), "are kept for the tab strip, and shown at once");
+      check(tell(editor, "telar_modified", 1, [](msgpack::Writer& writer) {
+        writer.array(2);
+        writer.unsignedInteger(1);
+        writer.unsignedInteger(3);
+      }));
+      check(!editor.takePulse().flushed, "the same ones again change nothing");
+
       // A link opens for something the person did, once, and only one of the web or of mail.
       const auto open = [&](std::string_view uri) {
         check(tell(editor, "telar_open", 1, [&](msgpack::Writer& writer) {

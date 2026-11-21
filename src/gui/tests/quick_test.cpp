@@ -961,6 +961,12 @@ return {api_version = 2, client = {
       // Neovim's tab pages are a strip of the window's own once there is more than one.
       view->send(QStringLiteral(":tabnew<CR>"));
       QTRY_COMPARE_WITH_TIMEOUT(view->tabline().value(QStringLiteral("tabs")).toList().size(), 2, runtime_wait_ms);
+      // The first shows what was typed and never written, and says so; the new one has nothing to write.
+      const auto unwritten = [&](int tab) {
+        return view->tabline().value(QStringLiteral("tabs")).toList().value(tab).toMap().value(QStringLiteral("modified")).toBool();
+      };
+
+      QTRY_VERIFY_WITH_TIMEOUT(unwritten(0) && !unwritten(1), runtime_wait_ms);
       shoot(QStringLiteral("editor-tabs"));
 
       // The picker lists what the runtime finds under the editor's directory, and opens what is

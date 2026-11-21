@@ -211,10 +211,10 @@ namespace {
     showFirstFrame(state);
     const ds::Array items{NvimMenuItem{.word = "write", .kind = "cmd"}, NvimMenuItem{.word = "wall", .menu = "all"}};
     const ds::Array shown{NvimMessageItem{.id = 1, .kind = NvimMessageKind::error, .text = "E492"}};
-    const ds::Array tabs{NvimTab{.handle = 1, .name = "main.cpp"}, NvimTab{.handle = 2, .name = "notes"}};
+    const ds::Array tabs{NvimTab{.handle = 1, .name = "main.cpp"}, NvimTab{.handle = 2, .name = "notes", .modified = true}};
 
     check(receive(state, NvimCmdline{.pane_id = pane_id, .frame_id = 2, .visible = true, .level = 1, .first = ':', .position = 2, .text = "wr"}) == Received::staged);
-    check(receive(state, NvimPopupMenu{.pane_id = pane_id, .frame_id = 2, .visible = true, .selected = 1, .grid = -1, .total = 2, .items = items}) == Received::staged);
+    check(receive(state, NvimPopupMenu{.pane_id = pane_id, .frame_id = 2, .visible = true, .selected = 1, .grid = -1, .total = 2, .items = items, .info = "writes every buffer"}) == Received::staged);
     check(receive(state, NvimMessageList{.pane_id = pane_id, .frame_id = 2, .mode = "-- INSERT --", .messages = shown}) == Received::staged);
     check(receive(state, NvimTabLine{.pane_id = pane_id, .frame_id = 2, .current_tab = 2, .tabs = tabs}) == Received::staged);
 
@@ -225,12 +225,14 @@ namespace {
 
     check(editor.cmdline.visible && editor.cmdline.first == ':' && editor.cmdline.text.view() == "wr" && editor.cmdline.position == 2, "the command line");
     check(editor.menu.visible && editor.menu.selected == 1 && editor.menu.items.size() == 2 && editor.menu.items[1].word.of(menu_text) == "wall" && editor.menu.items[1].menu.of(menu_text) == "all" && editor.menu.items[0].kind.of(menu_text) == "cmd", "the completion menu");
+    check(editor.menu.info.view() == "writes every buffer", "with what its selected item says of itself");
     check(editor.messages.mode.view() == "-- INSERT --" && editor.messages.items.size() == 1 && editor.messages.items[0].kind == NvimMessageKind::error && editor.messages.items[0].text.of(message_text) == "E492", "the messages");
-    check(editor.tabs.current_tab == 2 && editor.tabs.tabs.size() == 2 && editor.tabs.tabs[1].name.of(tab_text) == "notes", "the tabs");
+    check(editor.tabs.current_tab == 2 && editor.tabs.tabs.size() == 2 && editor.tabs.tabs[1].name.of(tab_text) == "notes" && editor.tabs.tabs[1].modified && !editor.tabs.tabs[0].modified, "the tabs, and which has changes not written");
 
     // The selection moves: the items the editor has stay.
     check(receive(state, NvimPopupMenu{.pane_id = pane_id, .frame_id = 2, .visible = true, .keeps_items = true, .selected = 0, .grid = -1, .total = 2}) == Received::staged);
     check(editor.menu.selected == 0 && editor.menu.items.size() == 2, "a selection that moved keeps the items");
+    check(editor.menu.info.empty(), "and takes the documentation of the item it moved to, which has none");
     check(receive(state, NvimCmdline{.pane_id = pane_id, .frame_id = 1, .visible = false}) == Received::ignored && editor.cmdline.visible, "a surface of a frame already shown changes nothing");
   }
 

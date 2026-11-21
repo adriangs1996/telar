@@ -73,6 +73,17 @@ Item {
                     elide: Text.ElideMiddle
                 }
 
+                // Changes that were not written, where the mark that closes it would be.
+                Rectangle {
+                    x: parent.width - width - 13 * root.ratio
+                    y: Math.round((parent.height - height) / 2)
+                    width: 6 * root.ratio
+                    height: width
+                    radius: width / 2
+                    color: root.colors.yellow
+                    visible: (tab.modelData.modified ?? false) && !hover.hovered
+                }
+
                 // Closes the tab page: shown on the one in use and on the one pointed at.
                 Text {
                     x: parent.width - width - 10 * root.ratio
@@ -81,7 +92,7 @@ Item {
                     text: "\u00d7"
                     color: closing.hovered ? root.colors.text : Qt.alpha(root.colors.text, 0.45)
                     font.pixelSize: root.typography.small
-                    visible: tab.current || hover.hovered
+                    visible: hover.hovered || (tab.current && !(tab.modelData.modified ?? false))
 
                     HoverHandler {
                         id: closing

@@ -142,6 +142,32 @@ vim.api.nvim_create_autocmd({ "DirChanged", "WinEnter", "TabEnter", "VimEnter" }
 -- Command and a click follows the link under the pointer, as it does in a terminal of telar.
 vim.keymap.set("n", "<D-LeftMouse>", "<LeftMouse>gx", { remap = true, silent = true, desc = "Open the link under the pointer" })
 
+-- The tab pages whose window in use shows changes not written: Neovim's own tab line says
+-- their names, not this.
+local unwritten = nil
+local function tell_unwritten()
+  local tabs = {}
+  for _, tab in ipairs(vim.api.nvim_list_tabpages()) do
+    local found, window = pcall(vim.api.nvim_tabpage_get_win, tab)
+    if found and vim.bo[vim.api.nvim_win_get_buf(window)].modified then
+      tabs[#tabs + 1] = tab
+    end
+  end
+
+  local now = table.concat(tabs, ",")
+  if now ~= unwritten then
+    unwritten = now
+    vim.rpcnotify(channel, "telar_modified", tabs)
+  end
+end
+
+vim.api.nvim_create_autocmd({ "BufModifiedSet", "BufEnter", "BufWritePost", "WinEnter", "TabEnter", "TabClosed" }, {
+  group = group,
+  callback = function()
+    vim.schedule(tell_unwritten)
+  end,
+})
+
 -- The pane's header shows the file being edited, unless the configuration names something else.
 vim.o.title = true
 vim.o.titlestring = "%t%( %M%)"

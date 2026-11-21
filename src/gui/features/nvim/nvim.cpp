@@ -277,7 +277,8 @@ namespace telar::gui::features::nvim {
 
   PopupMenu::PopupMenu(Memory& memory)
       : text(memory),
-        items(memory) {}
+        items(memory),
+        info(memory) {}
 
   Messages::Messages(Memory& memory)
       : mode(memory),
@@ -458,6 +459,7 @@ namespace telar::gui::features::nvim {
     menu.row = message.row;
     menu.column = message.column;
     menu.total = message.total;
+    menu.info.assign(message.info);
     if (!message.keeps_items) {
       menu.first = message.first;
       menu.text.clear();
@@ -518,7 +520,7 @@ namespace telar::gui::features::nvim {
     for (const auto& tab : message.tabs) {
       const auto name = append(tabs.text, tab.name);
 
-      tabs.tabs.push({.handle = tab.handle, .name = name});
+      tabs.tabs.push({.handle = tab.handle, .name = name, .modified = tab.modified});
     }
 
     for (const auto& buffer : message.buffers) {

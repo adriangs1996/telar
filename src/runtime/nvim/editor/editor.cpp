@@ -389,6 +389,8 @@ end
       moved(reader);
     } else if (method == "telar_float") {
       framed(reader);
+    } else if (method == "telar_modified") {
+      changed(reader);
     } else if (method == "telar_buffers") {
       listed(reader);
     } else if (method == "telar_navigate") {
@@ -446,6 +448,28 @@ end
   }
 
   // `[window, sides, title, footer]`: a float's frame.
+  // `[tabs]`: the tab pages that show a buffer with changes not written.
+  void NvimEditor::changed(msgpack::Reader& reader) {
+    ds::Array<std::uint64_t, max_nvim_tabs> tabs{};
+    std::uint32_t count = 0;
+
+    if (!reader.tuple(1) || !reader.array(count) || count > max_nvim_tabs) {
+      return;
+    }
+
+    for (std::uint32_t index = 0; index < count; ++index) {
+      if (!reader.unsignedInteger(tabs.atMut(index))) {
+        return;
+      }
+    }
+
+    const bool settled = screen_.settled();
+
+    if (screen_.modifiedTabs(tabs.view().first(count))) {
+      publish(settled);
+    }
+  }
+
   void NvimEditor::framed(msgpack::Reader& reader) {
     constexpr std::uint32_t fields = 4;
     std::uint64_t window = 0;

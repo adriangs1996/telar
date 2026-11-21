@@ -338,6 +338,8 @@ export {
       ds::Vec<char, ConcurrentMemory> text;
       ds::Vec<Entry, ConcurrentMemory> tabs;
       ds::Vec<Entry, ConcurrentMemory> buffers;
+      // The tab pages whose window in use shows a buffer with changes not written.
+      ds::Vec<std::uint64_t, ConcurrentMemory> modified;
       std::uint64_t current_tab = 0;
       std::uint64_t current_buffer = 0;
       std::uint64_t changed_at = 0;
@@ -377,6 +379,9 @@ export {
       // The frame of the float that shows `window`. False when no float shows it, or it has
       // that frame already.
       bool decorate(std::uint64_t window, const NvimFloatFrame& frame);
+      // The tab pages that show changes not written, which Neovim's tab line does not say.
+      // False when they are the ones it had.
+      bool modifiedTabs(std::span<const std::uint64_t> tabs);
       // A float placed since its frame was last asked for: its window, which then counts as
       // asked, or zero when there is none.
       [[nodiscard]] std::uint64_t nextUnframed() noexcept;

@@ -434,6 +434,11 @@ namespace telar::runtime {
       }
     }
 
+    // The documentation of the item selected: of that one alone, each time it changes.
+    const std::string_view documented{menu.text.data(), menu.text.size()};
+    const bool chosen = menu.visible && menu.selected >= 0 && std::cmp_less(menu.selected, total);
+    const auto info = chosen ? clipped(menu.items[static_cast<std::size_t>(menu.selected)].info.of(documented), max_nvim_info_bytes) : std::string_view{};
+
     write(
         payload_,
         NvimPopupMenu{
@@ -448,6 +453,7 @@ namespace telar::runtime {
             .first = static_cast<std::uint32_t>(first),
             .total = static_cast<std::uint32_t>(total),
             .items = items.view().first(count),
+            .info = info,
         }
     );
     return payload_.view();
@@ -495,7 +501,11 @@ namespace telar::runtime {
     const auto buffer_count = std::min(tabs.buffers.size(), max_nvim_tabs);
 
     for (std::size_t index = 0; index < page_count; ++index) {
-      pages.atMut(index) = {.handle = tabs.tabs[index].handle, .name = clipped(tabs.tabs[index].name.of(text), max_nvim_label_bytes)};
+      pages.atMut(index) = {
+          .handle = tabs.tabs[index].handle,
+          .name = clipped(tabs.tabs[index].name.of(text), max_nvim_label_bytes),
+          .modified = std::ranges::contains(tabs.modified, tabs.tabs[index].handle),
+      };
     }
 
     for (std::size_t index = 0; index < buffer_count; ++index) {

@@ -184,6 +184,7 @@ export {
       void opened(msgpack::Reader& reader);
       void moved(msgpack::Reader& reader);
       void framed(msgpack::Reader& reader);
+      void changed(msgpack::Reader& reader);
       void listed(msgpack::Reader& reader);
       // Publishes a change made outside a redraw, unless a redraw under way will.
       void publish(bool was_settled) noexcept;

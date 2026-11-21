@@ -23,6 +23,10 @@ Item {
     readonly property var items: menu.items ?? []
     readonly property int selected: (menu.selected ?? -1) - (menu.first ?? 0)
     readonly property bool shown: (menu.visible ?? false) && items.length > 0
+    // What the selected item says of itself, shown beside the list.
+    readonly property string info: (menu.info ?? "").trim()
+    readonly property real infoWidth: Math.min(300 * ratio, parent.width * 0.4)
+    readonly property bool infoRight: x + width + 6 * ratio + infoWidth <= parent.width - 8 * ratio
     readonly property int visibleRows: Math.min(items.length, 10)
     readonly property real rowHeight: 26 * ratio
     readonly property real padding: 4 * ratio
@@ -142,5 +146,35 @@ Item {
         color: Qt.alpha(root.colors.text, 0.25)
         height: Math.max(12 * root.ratio, (root.height - 2 * root.padding) * root.visibleRows / Math.max(1, root.items.length))
         y: root.padding + (root.height - 2 * root.padding - height) * (root.firstRow / Math.max(1, root.items.length - root.visibleRows))
+    }
+
+    // The documentation of the item selected: beside the list, on the side that has room.
+    Item {
+        x: root.infoRight ? root.width + 6 * root.ratio : -width - 6 * root.ratio
+        width: root.infoWidth
+        height: Math.min(note.implicitHeight + 20 * root.ratio, 260 * root.ratio)
+        visible: root.shown && root.info.length > 0 && (root.infoRight || root.x - width - 6 * root.ratio >= 8 * root.ratio)
+
+        NvimSurface {
+            anchors.fill: parent
+            colors: root.colors
+            ratio: root.ratio
+        }
+
+        Text {
+            id: note
+            x: 12 * root.ratio
+            y: 10 * root.ratio
+            width: parent.width - 24 * root.ratio
+            height: parent.height - 20 * root.ratio
+            text: root.info
+            color: root.colors.subtext0
+            font.pixelSize: root.typography.small
+            textFormat: Text.PlainText
+            wrapMode: Text.Wrap
+            elide: Text.ElideRight
+            clip: true
+            lineHeight: 1.25
+        }
     }
 }
