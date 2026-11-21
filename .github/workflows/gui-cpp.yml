@@ -172,7 +172,7 @@ jobs:
       # clang-tidy over the units of this tree, in the configuration `just lint` checks, with tbc's
       # plugin, which keeps each unit from walking what it imports.
       - name: Lint
-        if: matrix.configuration == 'Debug' && runner.os == 'macOS'
+        if: matrix.configuration == 'Debug'
         run: |
           tools/cpp configure tbc -B lib/tbc/out/release --config Release -- -DBUILD_TESTING=OFF
           tools/cpp build tbc -B lib/tbc/out/release -- --target tbc-tidy-scope
