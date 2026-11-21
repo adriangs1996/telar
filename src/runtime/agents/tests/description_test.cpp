@@ -121,7 +121,10 @@ namespace {
     request.query.append("A private request");
     for (const auto& [script, expected] : cases) {
       const ds::Array<std::string_view, 3> arguments{"/bin/sh", "-c", script};
-      DescriptionGenerator generator{memory, DescriptionOptions{arguments, std::chrono::milliseconds{100}}};
+      // Only a script that waits is cut short. One that ends on its own keeps the generator's own
+      // limit, so a loaded machine that is slow to start its shell does not time it out.
+      const auto limit = expected == DescriptionStatus::timeout ? std::chrono::milliseconds{100} : DescriptionOptions::default_timeout;
+      DescriptionGenerator generator{memory, DescriptionOptions{arguments, limit}};
       const auto result = generator.observe(request);
 
       check(result.identity == request.identity);
