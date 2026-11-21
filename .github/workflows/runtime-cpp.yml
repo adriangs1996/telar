@@ -3,10 +3,10 @@ name: C++ runtime
 on:
   workflow_dispatch:
   pull_request:
-    paths: ['CMakeLists.txt', 'CMakePresets.json', 'src/CMakeLists.txt', 'src/runtime/**', 'src/cli/**', 'src/auth-daemon/**', 'lib/**', 'cmake/**', 'tools/check-cpp-*.py', 'tools/tests/**', 'justfile', 'tools/cpp', 'tools/bootstrap-cpp.py', 'tools/toolchain/**', '.github/actions/cpp-toolchain/**', '.github/workflows/runtime-cpp.yml', 'packaging/release/**', 'docs/build/interface-bodies-allowlist.txt']
+    paths: ['CMakeLists.txt', 'CMakePresets.json', 'src/CMakeLists.txt', 'src/runtime/**', 'src/cli/**', 'src/auth-daemon/**', 'lib/**', 'cmake/**', 'tools/check-cpp-*.py', 'tools/tests/**', 'justfile', 'tools/cpp', 'tools/bootstrap-cpp.py', 'tools/toolchain/**', '.github/actions/cpp-toolchain/**', '.github/workflows/runtime-cpp.yml', 'packaging/release/**', 'docs/build/interface-bodies-allowlist.txt', '.clang-tidy']
   push:
     branches: [main]
-    paths: ['CMakeLists.txt', 'CMakePresets.json', 'src/CMakeLists.txt', 'src/runtime/**', 'src/cli/**', 'src/auth-daemon/**', 'lib/**', 'cmake/**', 'tools/check-cpp-*.py', 'tools/tests/**', 'justfile', 'tools/cpp', 'tools/bootstrap-cpp.py', 'tools/toolchain/**', '.github/actions/cpp-toolchain/**', '.github/workflows/runtime-cpp.yml', 'packaging/release/**', 'docs/build/interface-bodies-allowlist.txt']
+    paths: ['CMakeLists.txt', 'CMakePresets.json', 'src/CMakeLists.txt', 'src/runtime/**', 'src/cli/**', 'src/auth-daemon/**', 'lib/**', 'cmake/**', 'tools/check-cpp-*.py', 'tools/tests/**', 'justfile', 'tools/cpp', 'tools/bootstrap-cpp.py', 'tools/toolchain/**', '.github/actions/cpp-toolchain/**', '.github/workflows/runtime-cpp.yml', 'packaging/release/**', 'docs/build/interface-bodies-allowlist.txt', '.clang-tidy']
 
 permissions:
   contents: read
