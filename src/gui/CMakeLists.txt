@@ -32,7 +32,8 @@ foreach(domain IN ITEMS foundation features
   add_subdirectory(${domain})
 endforeach()
 
-add_library(gui-posix STATIC platform/clipboard_image_file.c foundation/system/system-peer_identity.cpp foundation/system/system-window_lease.cpp foundation/system/system-profile_file.cpp foundation/system/system-stdio_socket.cpp foundation/system/system-managed_directory.cpp foundation/system/system-process_group.cpp)
+add_library(gui-posix STATIC platform/clipboard_image_file.c foundation/system/system-peer_identity.cpp foundation/system/system-window_lease.cpp foundation/system/system-profile_file.cpp foundation/system/system-stdio_socket.cpp foundation/system/system-managed_directory.cpp foundation/system/system-process_group.cpp
+  foundation/system/system-runtime_endpoint.cpp foundation/system/system-login_shell.cpp)
 target_sources(gui-posix PRIVATE platform/platform-clipboard_image_pipe.cpp)
 target_link_libraries(gui-posix PUBLIC gui-foundation-core gui-foundation-system gui-platform Threads::Threads)
 add_executable(telar-gui-command platform/surface_command_main.c)
@@ -154,9 +155,6 @@ if(TELAR_GUI_NATIVE)
   qt_add_library(gui-quick STATIC)
   target_link_libraries(gui-quick PRIVATE Qt6::GuiPrivate)
   target_link_libraries(gui-quick PUBLIC gui-clipboard-images)
-  # The sources of ui/ come from its folders (add_subdirectory(ui) below); these two belong to foundation/system/.
-  set(gui_quick_platform_sources foundation/system/system-runtime_endpoint.cpp foundation/system/system-login_shell.cpp)
-  target_sources(gui-quick PRIVATE ${gui_quick_platform_sources})
   set_source_files_properties(ui/app/panes/attachments/attachment_preview.cpp PROPERTIES COMPILE_OPTIONS "-ffp-contract=off")
 
   target_link_libraries(gui-quick PUBLIC gui-foundation-core gui-foundation-system gui-foundation-text
@@ -174,9 +172,6 @@ if(TELAR_GUI_NATIVE)
       <QKeyEvent> <QList> <QMetaObject> <QMouseEvent> <QObject> <QPointF> <QPointer>
       <QQuickItem> <QQuickWindow> <QRectF> <QSizeF> <QString> <QStringList> <QThread>
       <QTimer> <QVariant> <QVariantMap> <QWindow> <QtQml/qqmlregistration.h>)
-    # Module units import std; a prefix with the textual standard library would
-    # declare its names twice.
-    set_source_files_properties(${gui_quick_platform_sources} PROPERTIES SKIP_PRECOMPILE_HEADERS ON)
   endif()
   set(TELAR_GUI_LINK_HOST_HEADER "" CACHE FILEPATH "Header selecting a compile-time external link host")
   if(TELAR_GUI_LINK_HOST_HEADER)
