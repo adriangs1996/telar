@@ -103,11 +103,11 @@ export {
 
         ds::Option<Result> result;
 
+        // The worker holds its lock only to hand a request or a result over, never while it
+        // observes, so waiting for it costs as little as trying would, and the wake that saw the
+        // result takes it instead of leaving it for another.
         {
-          const std::unique_lock lock{mutex_, std::try_to_lock};
-          if (!lock.owns_lock()) {
-            return;
-          }
+          const std::scoped_lock lock{mutex_};
 
           result = std::move(result_);
           result_.reset();
