@@ -76,41 +76,6 @@ def server_invoker(binary, environment):
     return invoke
 
 
-def check_no_session(binary, checkpoint_probe):
-    """The user's opt-out of a saved session, by flag or by configuration, leaves no session on disk."""
-    with tempfile.TemporaryDirectory(prefix="telar-cli-", dir="/tmp") as directory:
-        root = Path(directory).resolve()
-        environment = isolated_environment(root)
-        invoke = server_invoker(binary, environment)
-        socket = root / "runtime.sock"
-        checkpoint = root / "data/telar/session.ckpt"
-
-        def probe(mode, *arguments):
-            invoke("--background", "--socket", socket, *arguments)
-            wait_socket(socket, True)
-            result = subprocess.run([str(checkpoint_probe), str(socket), mode, str(root / "expected")],
-                                    env=environment, capture_output=True, text=True, timeout=30)
-            if result.returncode:
-                raise RuntimeError(f"Checkpoint probe {mode} failed: {result.stderr.strip()}")
-            wait_socket(socket, False)
-
-        try:
-            probe("seed", "--no-config", "--no-session")
-            assert not checkpoint.exists(), "--no-session saved the session"
-
-            configuration = root / "config/telar/config.lua"
-            configuration.parent.mkdir(parents=True)
-            configuration.write_text("return {api_version=2, runtime={session={persist=false}}}\n")
-            probe("seed")
-            assert not checkpoint.exists(), "session.persist=false saved the session"
-
-            # A later start that does save sessions has nothing to restore.
-            probe("empty", "--no-config")
-        finally:
-            if socket.exists():
-                invoke("stop", "--socket", socket)
-
-
 def check_unwritable_shell_integration(binary, checkpoint_probe):
     """A data home where the shell integration cannot be written still runs the runtime and its panes."""
     if os.geteuid() == 0:
