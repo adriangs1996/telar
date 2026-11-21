@@ -142,7 +142,10 @@ generadas que lee la base de compilación. `just lint` y `just analyze` construy
 check a lo que la unidad parsea ella misma, sin los módulos que importa, que se
 analizan con la unidad que los define. Sin el plugin el resultado sobre el código de
 cada unidad es el mismo y el análisis tarda varias veces más; `check.cmake` lo avisa
-cuando no lo encuentra o clang-tidy no lo carga. Las fixtures que no se compilan no están en
+cuando no lo encuentra o clang-tidy no lo carga. Con el plugin, además, cada cabecera
+del proyecto la revisa una sola de las unidades que la incluyen: la que está a su lado
+y lleva su nombre si existe, y si no la más cercana en el árbol. El reparto sale del
+registro de dependencias de Ninja, así que una cabecera que nadie incluye no se revisa. Las fixtures que no se compilan no están en
 la base y quedan fuera de lint.
 
 ## CI y release

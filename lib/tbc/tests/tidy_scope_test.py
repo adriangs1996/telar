@@ -1,6 +1,7 @@
 """Check that clang-tidy with tbc-tidy-scope reports about a unit's own code what it reports without it,
 and leaves what the unit imports to the unit that defines it."""
 
+import os
 from pathlib import Path
 import re
 import subprocess
@@ -43,11 +44,16 @@ class TidyScopeTest(unittest.TestCase):
         result = subprocess.run(command, capture_output=True, text=True, timeout=60)
         self.assertEqual(result.returncode, 0, result.stderr)
 
-    def reports(self, path, plugin):
-        """The (file, line, check) of each report on a unit, with the plugin or without it."""
+    def reports(self, path, plugin, headers=None):
+        """The (file, line, check) of each report on a unit, with the plugin or without it. `headers`
+        are the ones a run gave the unit to check; None is a run that gives headers to no unit."""
         checks = CHECKS + (",tbc-parsed-scope" if plugin else "")
         command = [str(CLANG_TIDY), *([f"--load={PLUGIN}"] if plugin else []), f"--config={{Checks: '-*,{checks}', HeaderFilterRegex: '.*'}}", str(path), "--", *self.flags()]
-        result = subprocess.run(command, capture_output=True, text=True, timeout=120)
+        environment = None
+        if headers is not None:
+            listed = self.write("owned", "".join(f"{header}\n" for header in headers))
+            environment = dict(os.environ, TBC_PARSED_SCOPE_HEADERS=str(listed))
+        result = subprocess.run(command, capture_output=True, text=True, timeout=120, env=environment)
         self.assertNotIn("error: ", result.stderr, result.stderr)
         return sorted((Path(match["file"]).name, int(match["line"]), match["check"]) for match in REPORT.finditer(result.stdout))
 
@@ -104,6 +110,31 @@ class TidyScopeTest(unittest.TestCase):
         self.assertEqual(self.reports(unit, plugin=False), recursion)
         self.assertEqual(self.reports(unit, plugin=True), [])
         self.assertEqual(self.reports(base, plugin=True), recursion)
+
+    def test_a_header_is_reported_by_the_unit_the_run_gives_it_to(self):
+        header = self.write("shared.hpp", """
+            #pragma once
+
+            typedef int shared_legacy;
+            """)
+        first = self.write("first.cpp", """
+            #include "shared.hpp"
+
+            typedef int first_legacy;
+            """)
+        second = self.write("second.cpp", """
+            #include "shared.hpp"
+
+            typedef int second_legacy;
+            """)
+        shared = ("shared.hpp", 3, "modernize-use-using")
+
+        # A run that gives headers to no unit: both report the header.
+        self.assertEqual(self.reports(first, plugin=True), sorted([("first.cpp", 3, "modernize-use-using"), shared]))
+        self.assertEqual(self.reports(second, plugin=True), sorted([("second.cpp", 3, "modernize-use-using"), shared]))
+        # A run that gives it to the first: the second leaves it, and keeps its own file.
+        self.assertEqual(self.reports(first, plugin=True, headers=[header]), sorted([("first.cpp", 3, "modernize-use-using"), shared]))
+        self.assertEqual(self.reports(second, plugin=True, headers=[]), [("second.cpp", 3, "modernize-use-using")])
 
     def test_a_unit_that_imports_nothing_reports_the_same(self):
         self.write("system/library.h", """

@@ -396,7 +396,10 @@ what the unit parses itself outside system headers, as `tbc-lint` does for its o
 checks. Without it a check that asks for a node's parents, or walks the unit with a
 visitor of its own, reads every declaration of every module the unit imports. A
 unit's own code is reported the same either way; what it imports is reported with
-the unit that defines it, not once more by each importer. A consumer loads it with
+the unit that defines it, not once more by each importer. A header is parsed and
+checked by every unit that includes it; a run that names in `TBC_PARSED_SCOPE_HEADERS`
+a file listing the headers a unit checks, one real path per line, gives each header to
+one unit and the others leave it. A consumer loads it with
 `clang-tidy --load=<plugin> --checks=tbc-parsed-scope`, and `tbc_find_tidy_scope` of
 `cmake/tbcLifetimeCheck.cmake` finds it and checks that clang-tidy takes it. This
 project's own sources import no module, so its `lint` gains nothing from it. A
