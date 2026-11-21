@@ -114,7 +114,8 @@ namespace {
 
     expect(words == std::vector<std::string>{"/opt/telar bin/telar-gateway", "run", "--to", std::string{address}});
     expect(dispatch.size() == 4 && dispatch.view()[0] == "/opt/telar bin/telar-gateway" && dispatch.view()[1] == "run" && dispatch.view()[2] == address && dispatch.view()[3] == "x");
-    expect(machine::gateway(memory, address, "x", true).view()[2] == "-t");
+    expect(machine::gateway(memory, address, "x", {.terminal = true, .share = true}).view()[2] == "-t");
+    expect(machine::gateway(memory, address, "x", {.terminal = true, .share = true}).view()[3] == "--share");
 
     check(::setenv("TELAR_GATEWAY_PROGRAM", "/opt/it's/telar-gateway", 1) == 0);
     expect(failure([&] {

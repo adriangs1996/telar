@@ -168,7 +168,15 @@ export {
 
     // The argv that runs `command` in the account's shell on the machine at `destination`, through
     // the gateway program, with a terminal there only when `terminal`.
-    tbc::val_a<Argv> gateway(tbc::mut_a<Memory> memory, std::string_view destination, std::string_view command, bool terminal = false);
+    // What a command run on another machine needs of the way there.
+    struct GatewayRun {
+      // A terminal there, for a command that asks the person here.
+      bool terminal = false;
+      // The ports that machine shares are forwarded here while the command runs.
+      bool share = false;
+    };
+
+    tbc::val_a<Argv> gateway(tbc::mut_a<Memory> memory, std::string_view destination, std::string_view command, GatewayRun run = {});
 
     // `GIT_SSH_COMMAND` for Git traffic to the machine at `destination` through the gateway
     // program; Git must be told `GIT_SSH_VARIANT=simple`, so that it passes a host and a command.
@@ -209,6 +217,23 @@ export {
     Discovery discover(Memory& memory, const MachineProfile& profile, Text& detail);
 
     int check(Memory& memory, const MachineProfile& profile, bool json);
+
+  }
+}
+
+// Interface: port_sharing.cppm
+export {
+  namespace telar::runtime::cli::port_sharing {
+
+    // `telar share-ports -- PROGRAM ARGS...`: runs the program as its own child, in this process
+    // group, and tells this machine's gateway each port the group listens on while it runs, so
+    // that the machines connected to the gateway forward it. Without a gateway on this machine
+    // it becomes the program. Returns the program's exit status. `telar exec --autoshare`
+    // starts its command this way; it is not meant to be typed.
+    int run(Memory& memory, std::span<char* const> words);
+
+    // `telar --machine LABEL ports [--json]`: the ports of that machine forwarded here.
+    int list(Memory& memory, const machines::MachineProfile& profile, std::span<char* const> words);
 
   }
 }

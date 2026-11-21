@@ -67,6 +67,11 @@ namespace telar::runtime::cli {
         return 1;
       }
 
+      // The ports of a machine forwarded here are this machine's to list; the local one forwards none.
+      if (!command.empty() && std::string_view{command.front()} == "ports") {
+        return target ? port_sharing::list(memory, *target, command.subspan(1)) : 0;
+      }
+
       return target ? machine::forward(memory, *target, command) : dispatch(command);
     }
   }
@@ -82,6 +87,10 @@ namespace telar::runtime::cli {
 
     runServer(memory, words);
     return 0;
+  }
+
+  int runSharePorts(Memory& memory, std::span<char* const> words) {
+    return port_sharing::run(memory, words);
   }
 
   int runCliCommand(std::span<char* const> words) {
@@ -132,7 +141,7 @@ namespace telar::runtime::cli {
       return 1;
     }
 
-    if (command.empty() || (!family && first != "--version" && first != "-V" && first != "--skill" && first != "plugin-worker") || family == Family::gui) {
+    if (command.empty() || (!family && first != "--version" && first != "-V" && first != "--skill" && first != "plugin-worker" && first != "ports") || family == Family::gui) {
       return openMachineWindow(memory, command, family == Family::gui, label);
     }
 

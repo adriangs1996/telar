@@ -12,6 +12,8 @@ import telar.client;
 import telar.platform.daemon;
 import telar.platform.error;
 import telar.platform.fs;
+import telar.platform.listening;
+import telar.sys.socket;
 import telar.platform.primitives;
 import telar.wire.vocabulary;
 import telar.base.ds;
@@ -828,14 +830,18 @@ namespace telar::runtime::cli::machine {
     return Text{memory, program.view()};
   }
 
-  tbc::val_a<Argv> gateway(tbc::mut_a<Memory> memory, std::string_view destination, std::string_view command, bool terminal) {
+  tbc::val_a<Argv> gateway(tbc::mut_a<Memory> memory, std::string_view destination, std::string_view command, GatewayRun run) {
     MachineFieldRules::destination(destination);
     Argv argv{memory};
 
     argv.push(gatewayProgram(memory));
     argv.emplace(memory, "run");
-    if (terminal) {
+    if (run.terminal) {
       argv.emplace(memory, "-t");
+    }
+
+    if (run.share) {
+      argv.emplace(memory, "--share");
     }
 
     argv.emplace(memory, destination);
@@ -904,8 +910,21 @@ namespace telar::runtime::cli::machine {
     // confirmation does. It merges stderr into stdout and writes \r\n, so it is only
     // given when both ends here are a terminal; anyone else gets none, as before.
     const bool terminal = ::isatty(STDIN_FILENO) && ::isatty(STDOUT_FILENO);
+    // `exec --autoshare` shares the ports its command opens there: they are forwarded here
+    // while it runs, window or no window.
+    bool share = false;
+    bool executes = false;
 
-    return launch::inherit(gateway(memory, profile.destination(), remoteCommand(memory, profile, words), terminal).view());
+    for (const std::string_view word : words) {
+      if (word == "--") {
+        break;
+      }
+
+      share = share || (executes && word == "--autoshare");
+      executes = executes || word == "exec";
+    }
+
+    return launch::inherit(gateway(memory, profile.destination(), remoteCommand(memory, profile, words), {.terminal = terminal, .share = share}).view());
   }
 
   template <typename Words>
@@ -2689,6 +2708,201 @@ namespace telar::runtime::cli::gateway_commands {
     }
 
     return removeService(memory);
+  }
+
+}
+
+namespace telar::runtime::cli::port_sharing {
+
+  namespace {
+
+    constexpr std::string_view sharing_socket = "/gateway-ports.sock";
+    constexpr auto watch_interval = std::chrono::milliseconds{500};
+    constexpr auto answer_timeout_ms = 2000;
+    constexpr std::size_t maximum_ports = 64;
+    constexpr std::size_t line_bytes = 256;
+
+    // The child a signal meant for this process is passed on to.
+    std::atomic<pid_t> shared_child{0};
+
+    void passSignal(int number) noexcept {
+      if (const auto child = shared_child.load(); child > 0) {
+        ::kill(child, number);
+      }
+    }
+
+    // The gateway's socket for the programs of this machine, beside the runtime's; none when no
+    // gateway listens there.
+    FileDescriptor connectGateway(Memory& memory) {
+      const ServerOptions server_options{};
+      const RuntimePaths<Memory> paths{memory, server_options, process_environment};
+      const auto directory = std::string_view{paths.socket}.substr(0, paths.socket.view().rfind('/'));
+      sockaddr_un address{};
+
+      if (directory.size() + sharing_socket.size() >= sizeof(address.sun_path)) {
+        return FileDescriptor{};
+      }
+
+      address.sun_family = AF_UNIX;
+      auto end = std::ranges::copy(directory, std::span{address.sun_path}.begin()).out;
+
+      std::ranges::copy(sharing_socket, end);
+      FileDescriptor socket{::socket(AF_UNIX, SOCK_STREAM, 0)};
+
+      if (!socket || ::connect(socket.get(), reinterpret_cast<const sockaddr*>(&address), sizeof(address)) != 0) { // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast): the socket API passes every address family as a sockaddr
+        return FileDescriptor{};
+      }
+
+      setCloseOnExec(socket.get());
+      return socket;
+    }
+
+    // Asks the gateway to share or to stop sharing a port, and waits for its answer.
+    bool ask(int gateway, std::string_view verb, std::uint16_t port, std::string_view origin) {
+      ds::Array<char, line_bytes> line{};
+      const auto written = std::format_to_n(line.dataMut(), line.size() - 1, "{} {} {}\n", verb, port, origin);
+      pollfd entry{.fd = gateway, .events = POLLIN, .revents = 0};
+
+      if (writeDescriptor(gateway, byteView(std::string_view{line.data(), static_cast<std::size_t>(written.size)})) != 0 || ::poll(&entry, 1, answer_timeout_ms) <= 0) {
+        return false;
+      }
+
+      const auto count = ::read(gateway, line.dataMut(), line.size());
+
+      return count > 0 && std::string_view{line.data(), static_cast<std::size_t>(count)}.starts_with("ok");
+    }
+
+  }
+
+  int run(Memory& memory, std::span<char* const> words) {
+    if (words.size() < 2 || std::string_view{words.front()} != "--") {
+      throw std::invalid_argument{"ExpectedSharedCommand"};
+    }
+
+    const auto command = words.subspan(1);
+    launch::Argv argv{memory};
+
+    for (const std::string_view word : command) {
+      argv.emplace(memory, word);
+    }
+
+    const auto gateway = connectGateway(memory);
+    if (!gateway) {
+      // Nothing on this machine forwards ports to another: the program runs as it would alone.
+      launch::replace(argv.view());
+    }
+
+    ds::Vec<const char*, Memory> arguments{memory};
+
+    for (const auto& word : argv) {
+      arguments.push(word.data());
+    }
+
+    arguments.push(nullptr);
+    SpawnOptions spawn{0};
+    pid_t child = -1;
+
+    // The program stays in this process group, which is the execution's: what cancels the
+    // execution ends both, and the ports of the group are the program's.
+    spawn.keepStandardStreams();
+    if (const auto failure = ::posix_spawnp(&child, arguments.front(), &spawn.actions, &spawn.attributes, const_cast<char* const*>(arguments.data()), environ); failure != 0) { // NOLINT(cppcoreguidelines-pro-type-const-cast): posix_spawnp's C signature takes char* const[] and never writes through it
+      throw SystemError{"Start the shared command", failure};
+    }
+
+    shared_child.store(child);
+    for (const int number : {SIGTERM, SIGINT, SIGHUP}) {
+      ::signal(number, &passSignal);
+    }
+
+    const auto program = std::string_view{command.front()};
+    const auto origin = ds::format(memory, "exec {}", program.substr(program.rfind('/') + 1));
+    ds::Array<std::uint16_t, maximum_ports> shared{};
+    std::size_t shared_count = 0;
+    int status = 0;
+
+    for (;;) {
+      const auto waited = ::waitpid(child, &status, WNOHANG);
+      if (waited == child || (waited < 0 && sys::lastError() != EINTR)) {
+        break;
+      }
+
+      ds::Array<std::uint16_t, maximum_ports> listening{};
+      const auto found = listening.viewMut().first(groupListeningPorts(::geteuid(), ::getpgrp(), listening.viewMut()));
+
+      // A port the group stopped listening on is withdrawn; one it opened is shared.
+      for (std::size_t index = shared_count; index > 0; --index) {
+        const auto port = shared[index - 1];
+        if (!std::ranges::contains(found, port)) {
+          static_cast<void>(ask(gateway.get(), "unshare", port, origin));
+          shared.atMut(index - 1) = shared[--shared_count];
+        }
+      }
+
+      for (const auto port : found) {
+        if (shared_count < shared.size() && !std::ranges::contains(std::span{shared}.first(shared_count), port) && ask(gateway.get(), "share", port, origin)) {
+          shared.atMut(shared_count++) = port;
+        }
+      }
+
+      std::this_thread::sleep_for(watch_interval);
+    }
+
+    return shellExitCode(status);
+  }
+
+  int list(Memory& memory, const machines::MachineProfile& profile, std::span<char* const> words) {
+    constexpr auto list_timeout = std::chrono::seconds{15};
+    const bool json = words.size() == 1 && std::string_view{words.front()} == "--json";
+
+    if (!words.empty() && !json) {
+      throw std::invalid_argument{"UnknownPortsOption"};
+    }
+
+    launch::Argv argv{memory};
+
+    argv.push(machine::gatewayProgram(memory));
+    argv.emplace(memory, "ports");
+    argv.emplace(memory, profile.destination());
+    const auto listed = launch::capture(memory, argv.view(), {}, list_timeout);
+
+    if (listed.status != 0) {
+      std::print(stderr, "{}", listed.err.view());
+      return 1;
+    }
+
+    // Each row is `THERE HERE CONNECTIONS asked|shared ORIGIN`, the origin running to its end.
+    TextFields rows{{.text = listed.out.view(), .delimiter = "\n"}};
+    ds::String<Memory> output{memory};
+    bool first = true;
+
+    output.append(json ? "[" : "");
+    while (const auto row = rows.next()) {
+      TextFields fields{{.text = *row, .delimiter = " "}};
+      const auto there = fields.next().valueOr(std::string_view{});
+      const auto here = fields.next().valueOr(std::string_view{});
+      const auto connections = fields.next().valueOr(std::string_view{});
+      const auto kind = fields.next().valueOr(std::string_view{});
+      const auto prefix = there.size() + here.size() + connections.size() + kind.size() + 4;
+      const auto origin = row->size() > prefix ? row->substr(prefix) : std::string_view{};
+
+      if (kind.empty()) {
+        continue;
+      }
+
+      if (json) {
+        ds::formatTo(output, R"({}{{"port":{},"local_port":{},"url":"http://localhost:{}","connections":{},"shared":{},"origin":)", first ? "" : ",", there, here, here, connections, kind == "shared");
+        appendJsonText(output, origin, JsonEscapes::control);
+        output.append("}");
+      } else {
+        ds::formatTo(output, "{}\tlocalhost:{}\t{}\t{}\t{}\n", there, here, connections, kind, origin);
+      }
+
+      first = false;
+    }
+
+    output.append(json ? "]\n" : "");
+    std::print(stdout, "{}", output.view());
+    return 0;
   }
 
 }

@@ -16,6 +16,8 @@ export {
     // the gateway that lets other machines reach it.
     int runServerCommand(Memory& memory, std::span<char* const> words);
     int runCliCommand(std::span<char* const> words);
+    // `telar share-ports -- PROGRAM ARGS...`, which `telar exec --autoshare` starts its command under.
+    int runSharePorts(Memory& memory, std::span<char* const> words);
     int runCompletionsCommand(Memory& memory, std::span<char* const> words);
     int runWindowCommand(Memory& memory, std::span<char* const> words, bool gui);
     int dispatchMachine(std::span<char* const> words, Dispatch dispatch);

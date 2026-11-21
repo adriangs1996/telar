@@ -218,6 +218,10 @@ namespace telar::runtime::cli {
         execRuntime(memory, words);
       }
 
+      if (first == "share-ports") {
+        return runSharePorts(memory, words.subspan(1));
+      }
+
       const auto family = parseFamily(first);
       if (!family) {
         return runWindowCommand(memory, words, false);
