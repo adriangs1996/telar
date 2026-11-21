@@ -414,7 +414,7 @@ void initializerListRangeDangling() {
 
 // CASE: std.moved_into_caller_owner
 // PAIR: std.moved_owner
-// SOURCE: src/gui/ui/app/panes/terminal/scene/terminal_scene.cpp :: TerminalScene
+// SOURCE: src/gui/ui/kit/cell_scene/terminal_scene.cpp :: TerminalScene
 // STATUS: implemented
 // CONTRACT: Moving a unique_ptr hands its object to the destination, so a raw pointer follows the new owner.
 // SCENARIO: The replacement moves into the caller's owner before the raw pointer is returned; accept.
@@ -444,7 +444,7 @@ standard::node& movedIntoContainer(std::vector<std::unique_ptr<standard::node>>&
 
 // CASE: std.moved_into_local_owner
 // PAIR: std.moved_owner
-// SOURCE: src/gui/ui/app/panes/terminal/scene/terminal_scene.cpp :: TerminalScene
+// SOURCE: src/gui/ui/kit/cell_scene/terminal_scene.cpp :: TerminalScene
 // STATUS: implemented
 // CONTRACT: An object moved into a local owner dies with that owner.
 // SCENARIO: The raw pointer is returned after its new local owner goes out of scope.
