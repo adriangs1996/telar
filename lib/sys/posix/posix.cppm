@@ -448,6 +448,10 @@ export namespace telar::sys {
   // as a failure cause. An errno without a name gets the caller's fallback.
   const char* errorName(int code, const char* fallback = "Unexpected") noexcept;
 
+  // What the C library says about an errno, written into `buffer` or kept in its own static
+  // storage: glibc's strerror_r returns the message, POSIX's writes it and returns 0.
+  const char* errorText(int code, char* buffer, std::size_t size) noexcept;
+
   // sys/ioctl.h's _IOW and _IOWR take the argument's type, so they cross as templates: the request
   // that passes an Argument to the kernel, and the one that also reads it back.
   template <typename Argument>

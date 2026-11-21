@@ -23,16 +23,6 @@ namespace telar::runtime::cli {
       });
     }
 
-    // POSIX's strerror_r writes the message and returns 0; glibc's returns the message itself.
-    template <typename Result>
-    const char* errorMessage(Result result, const char* buffer) noexcept {
-      if constexpr (std::is_pointer_v<Result>) {
-        return result;
-      } else {
-        return result == 0 ? buffer : "Unknown error";
-      }
-    }
-
     int fail(std::string_view path, std::string_view reason) {
       std::println(stderr, "telar completions: {}: {}", path, reason);
       return 1;
@@ -41,11 +31,7 @@ namespace telar::runtime::cli {
     // strerror's buffer is shared by every thread; strerror_r writes the message into this one.
     int failWithError(std::string_view path, int code) {
       ds::Array<char, error_message_bytes> buffer{};
-      const auto view = buffer.viewMut();
-      // strerror_r writes at most the size it is given, and both come from the one span.
-#pragma clang unsafe_buffer_usage begin
-      const char* const message = errorMessage(::strerror_r(code, view.data(), view.size()), view.data());
-#pragma clang unsafe_buffer_usage end
+      const char* const message = sys::errorText(code, buffer.dataMut(), buffer.size());
 
       return fail(path, message);
     }

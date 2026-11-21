@@ -436,16 +436,6 @@ namespace telar::runtime::proxy_trust {
       output.atMut(static_cast<std::size_t>(written.size)) = '\0';
     }
 
-    // POSIX's strerror_r writes the message and returns 0; glibc's returns the message itself.
-    template <typename Result>
-    const char* errorMessage(Result result, const char* buffer) noexcept {
-      if constexpr (std::is_pointer_v<Result>) {
-        return result;
-      } else {
-        return result == 0 ? buffer : "Unknown error";
-      }
-    }
-
     // Writes one line to stderr, cut at notice_bytes, without stdio's shared state.
     void notice(std::initializer_list<std::string_view> parts) noexcept {
       ds::Array<char, notice_bytes> line{};
@@ -464,11 +454,7 @@ namespace telar::runtime::proxy_trust {
     // A failed rename's notice: the action, the file and why the system refused it.
     void renameFailed(std::string_view action, const char* path, int code) noexcept {
       ds::Array<char, reason_bytes> reason{};
-      const auto view = reason.viewMut();
-      // strerror_r writes at most the size it is given, and both come from the one span.
-#pragma clang unsafe_buffer_usage begin
-      const auto* const message = errorMessage(::strerror_r(code, view.data(), view.size()), view.data());
-#pragma clang unsafe_buffer_usage end
+      const auto* const message = sys::errorText(code, reason.dataMut(), reason.size());
 
       notice({"telar proxy trust: could not ", action, " ", path, ": ", message, "\n"});
     }
