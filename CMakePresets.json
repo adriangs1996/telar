@@ -36,12 +36,11 @@
     },
     {
       "name": "dist",
-      "displayName": "Release runtime and CLI for distribution (static on Linux)",
+      "displayName": "Release runtime, CLI and gateway for distribution (static on Linux)",
       "inherits": "release",
       "cacheVariables": {
         "TELAR_RUNTIME_DISTRIBUTABLE": "ON",
-        "TELAR_BUILD_GUI": "OFF",
-        "TELAR_BUILD_AUTH": "OFF"
+        "TELAR_BUILD_GUI": "OFF"
       }
     },
     {

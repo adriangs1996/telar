@@ -49,7 +49,7 @@ if [ -z "${GHOSTTY_VT_ROOT:-}" ]; then
 fi
 
 # The release preset with only the GUI; the headless archive brings the rest.
-"$root/tools/cpp" configure release -B "$work/gui" -- -DTELAR_BUILD_RUNTIME=OFF -DTELAR_BUILD_CLI=OFF -DTELAR_BUILD_AUTH=OFF \
+"$root/tools/cpp" configure release -B "$work/gui" -- -DTELAR_BUILD_RUNTIME=OFF -DTELAR_BUILD_CLI=OFF -DTELAR_BUILD_GATEWAY=OFF \
     -DGHOSTTY_VT_ROOT="$ghostty" -DTELAR_GUI_QT_BUILD_DIR="${TELAR_QT_CACHE:-$root/.qt-cache}" -DTELAR_GUI_QT_JOBS="$(nproc)"
 "$root/tools/cpp" build release -B "$work/gui" -- --target telar-gui telar-gui-command
 python3 "$root/src/gui/tools/package_linux.py" --build "$work/gui" --headless "$work/$name-headless" --output "$work/$name"
