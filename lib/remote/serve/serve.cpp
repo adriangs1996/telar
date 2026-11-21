@@ -77,7 +77,7 @@ namespace telar::remote {
     // type when it names none.
     class TerminalEnvironment {
     public:
-      explicit TerminalEnvironment(ConcurrentMemory& memory)
+      TerminalEnvironment(ConcurrentMemory& memory, std::span<char> term)
           : entries_(memory) {
         bool named = false;
 
@@ -90,7 +90,7 @@ namespace telar::remote {
 #pragma clang unsafe_buffer_usage end
 
         if (!named) {
-          entries_.push(term_.dataMut());
+          entries_.push(term.data());
         }
 
         entries_.push(nullptr);
@@ -101,7 +101,6 @@ namespace telar::remote {
       }
 
     private:
-      ds::Array<char, 20> term_{'T', 'E', 'R', 'M', '=', 'x', 't', 'e', 'r', 'm', '-', '2', '5', '6', 'c', 'o', 'l', 'o', 'r', '\0'};
       ds::Vec<char*, ConcurrentMemory> entries_;
     };
 
@@ -336,7 +335,8 @@ namespace telar::remote {
 
     try {
       if (request.terminal) {
-        const TerminalEnvironment environment{memory_};
+        ds::Array<char, 20> term{'T', 'E', 'R', 'M', '=', 'x', 't', 'e', 'r', 'm', '-', '2', '5', '6', 'c', 'o', 'l', 'o', 'r', '\0'};
+        const TerminalEnvironment environment{memory_, term.viewMut()};
 
         specification.environment = environment.data();
         runtime::PtyProcess process{specification};
@@ -422,6 +422,7 @@ namespace telar::remote {
 
   void Server::share(FileDescriptor socket) noexcept {
     unsigned owner = 0;
+
     {
       const std::scoped_lock lock{mutex_};
 
@@ -532,6 +533,7 @@ namespace telar::remote {
 
       // What this machine shares now, read under the lock and told outside it.
       ds::Array<Shared, maximum_shared> shared;
+
       {
         const std::scoped_lock lock{mutex_};
 

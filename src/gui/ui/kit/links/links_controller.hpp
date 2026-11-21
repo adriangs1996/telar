@@ -75,7 +75,7 @@ namespace telar::gui::qt {
 
     // Opens a link to a port of the active machine through a forward; false for any other link.
     bool openForwarded(const application::terminal::links::LinkTarget& target);
-    void startForward(std::unique_ptr<Forward>& slot, const application::terminal::links::LinkTarget& target, std::uint16_t port, std::string_view destination);
+    void startForward(std::size_t slot, const application::terminal::links::LinkTarget& target, std::uint16_t port, std::string_view destination);
     void forwardAnswered(Forward& forward);
     void forwardEnded(Forward* ended);
 

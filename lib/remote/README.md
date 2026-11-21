@@ -45,6 +45,12 @@ unavailable.
 Integers are big-endian. A relay passes on the end of each direction: a side
 that stops sending leaves the other free to finish.
 
+A client of `telar-attach/1` and `telar-forward/1` does not wait for the reply
+byte before it sends: its first bytes travel with the last flight of the
+handshake, and the reply comes back ahead of the service's own bytes. A gateway
+waits thirty seconds for the request of `telar-run/1` to start, so that a
+client can connect ahead of the command it will run.
+
 ## The state directory
 
 `TELAR_GATEWAY_STATE`, else `telar/gateway` under `XDG_STATE_HOME` or
@@ -63,9 +69,17 @@ that stops sending leaves the other free to finish.
 `telar-gateway link` is one process per account, started when first needed,
 with its sockets beside the runtime's. Programs ask it on `gateway.sock`, a
 line each: `socket ADDRESS`, `forward ADDRESS PORT ORIGIN`, `hold ADDRESS`,
-`ports ADDRESS`, `ping`, `stop`. A forward lasts while the connection that
-asked for it stays open, and a held machine has the ports it shares forwarded
-for as long as it is held.
+`run ADDRESS`, `ports ADDRESS`, `ping`, `stop`. A forward lasts while the
+connection that asked for it stays open, and a held machine has the ports it
+shares forwarded for as long as it is held.
+
+`run` answers `ok` and then carries the run service on the asking socket. While
+a command runs, the link connects again to its machine and keeps that
+connection for twenty seconds, so the next command there starts without a
+handshake. A command that finds no link connects by itself.
+
+The link ends by itself after ten minutes in which nothing connected to it, no
+forward was open and no machine was held, or when its control socket is gone.
 
 ## On the gateway's machine
 

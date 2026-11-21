@@ -18,6 +18,7 @@ import telar.remote.link;
 import telar.remote.serve;
 import telar.sys.posix;
 import telar.sys.process;
+import telar.tbc;
 import telar.tls;
 
 namespace telar::remote {
@@ -78,7 +79,7 @@ namespace telar::remote {
     }
 
     // The value after the option at `index`, which it steps to.
-    std::string_view valueOf(std::span<char* const> arguments, std::size_t& index) {
+    tbc::val_a<std::string_view> valueOf(tbc::val_a<std::span<char* const>> arguments, std::size_t& index) {
       if (index + 1 >= arguments.size()) {
         throw std::invalid_argument{"an option is missing its value"};
       }

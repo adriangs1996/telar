@@ -4,6 +4,7 @@ import telar.platform.error;
 import telar.platform.fs;
 import telar.platform.net;
 import telar.sys.posix;
+import telar.tbc;
 
 namespace telar::remote {
 
@@ -122,7 +123,7 @@ namespace telar::remote {
         const std::string_view name{reinterpret_cast<const char*>(names.data()), size}; // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast): ALPN names are ASCII text
         if (namedService(name)) {
           // The offer outlives the callback's use of it: OpenSSL copies the selection.
-          *selected = names.data();
+          *selected = tbc::raw(names.data());
           *length = size;
           return SSL_TLSEXT_ERR_OK;
         }

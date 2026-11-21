@@ -5,6 +5,7 @@ export module telar.remote.streams;
 import std;
 
 import telar.platform.process;
+import telar.tbc;
 import telar.remote.channel;
 
 // Interface: telar_remote/run_request.cppm
@@ -33,7 +34,7 @@ export {
 
     // Reads a request and its command into `command`, and returns the command's text there.
     // Throws ChannelFailure for a command longer than `command`.
-    [[nodiscard]] std::string_view receiveRunRequest(Channel& channel, RunRequest& request, std::span<char> command);
+    [[nodiscard]] tbc::val_a<std::string_view> receiveRunRequest(Channel& channel, RunRequest& request, tbc::val_a<std::span<char>> command);
 
   }
 }

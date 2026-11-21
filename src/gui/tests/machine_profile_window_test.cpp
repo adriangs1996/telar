@@ -132,7 +132,7 @@ namespace {
     ProfileFixture& operator=(ProfileFixture&&) = delete;
 
     bool start(std::string_view profiles, ProfileLoad expected = ProfileLoad::loaded) {
-      if (!directory.isValid() || !listener.listen(directory.filePath(QStringLiteral("runtime.sock"))) || !QFile::link(QCoreApplication::applicationDirPath() + QStringLiteral("/gui-ssh-runtime-fixture"), directory.filePath(QStringLiteral("ssh")))) {
+      if (!directory.isValid() || !listener.listen(directory.filePath(QStringLiteral("runtime.sock"))) || !QFile::link(QCoreApplication::applicationDirPath() + QStringLiteral("/gui-gateway-runtime-fixture"), directory.filePath(QStringLiteral("telar-gateway")))) {
         return false;
       }
 
@@ -411,11 +411,11 @@ namespace {
 
       application.machinePrompt()->search(QStringLiteral("Added"));
       application.machinePrompt()->submit(first_revision);
-      QCOMPARE(application.machinePrompt()->state().value(QStringLiteral("title")).toString(), QStringLiteral("Its SSH destination: user@host or an alias"));
+      QCOMPARE(application.machinePrompt()->state().value(QStringLiteral("title")).toString(), QStringLiteral("The address `telar server pair` prints there"));
       const auto second_revision = application.machinePrompt()->state().value(QStringLiteral("revision")).toString();
 
       QVERIFY(first_revision != second_revision);
-      application.machinePrompt()->search(QStringLiteral("window-added@fixture"));
+      application.machinePrompt()->search(QStringLiteral("telar://window-added.fixture#0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef.fedcba9876543210fedcba9876543210"));
       application.machinePrompt()->submit(first_revision);
       QVERIFY(!MachineProfileWindow::profiles(application).editing());
       QCOMPARE(application.dialogs()->kind(), telar::gui::qt::ApplicationController::Dialog::machine);
@@ -423,8 +423,8 @@ namespace {
       QVERIFY((application.dialogs()->kind() == telar::gui::qt::ApplicationController::Dialog::none));
       const auto& machines = MachineProfileWindow::machines(application);
 
-      QTRY_VERIFY(machines.findDestination("window-added@fixture").hasValue());
-      const auto slot = requireValue(machines.findDestination("window-added@fixture"), "Expected newly saved destination");
+      QTRY_VERIFY(machines.findDestination("telar://window-added.fixture#0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef").hasValue());
+      const auto slot = requireValue(machines.findDestination("telar://window-added.fixture#0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"), "Expected newly saved destination");
 
       application.commands()->execute(window_actions::Action::machine_picker);
       application.commands()->editMachineResult(machineChoice(application, QStringLiteral("Added")), window_actions::MachineEditAction::rename);
@@ -457,11 +457,11 @@ namespace {
       application.commands()->execute(window_actions::Action::add_machine);
       application.machinePrompt()->search(QStringLiteral("invalid label"));
       application.machinePrompt()->submit(application.machinePrompt()->state().value(QStringLiteral("revision")).toString());
-      application.machinePrompt()->search(QStringLiteral("window-invalid@fixture"));
+      application.machinePrompt()->search(QStringLiteral("telar://window-invalid.fixture#0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef.fedcba9876543210fedcba9876543210"));
       application.machinePrompt()->submit(application.machinePrompt()->state().value(QStringLiteral("revision")).toString());
       QTRY_VERIFY(!application.notifications()->center().items().empty());
       QCOMPARE(application.notifications()->center().items().front().title.view(), std::string_view{"Machine not saved"});
-      QVERIFY(!MachineProfileWindow::machines(application).findDestination("window-invalid@fixture"));
+      QVERIFY(!MachineProfileWindow::machines(application).findDestination("telar://window-invalid.fixture#0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"));
     }
 
     Q_SLOT static void setupOpensOriginalCommandOnTheLocalMachine() {

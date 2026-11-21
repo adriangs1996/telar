@@ -606,11 +606,11 @@ namespace {
       QVERIFY(!listener.hasPendingConnections());
     }
 
-    Q_SLOT static void framedSshTransportUsesTheAuditedDiscoverySchema() {
+    Q_SLOT static void framedGatewayTransportUsesTheAuditedDiscoverySchema() {
       const QTemporaryDir directory;
 
       QVERIFY(directory.isValid());
-      QVERIFY(QFile::link(QCoreApplication::applicationDirPath() + QStringLiteral("/gui-ssh-runtime-fixture"), directory.filePath(QStringLiteral("ssh"))));
+      QVERIFY(QFile::link(QCoreApplication::applicationDirPath() + QStringLiteral("/gui-gateway-runtime-fixture"), directory.filePath(QStringLiteral("telar-gateway"))));
       const auto previous_path = qgetenv("PATH");
       const auto restore_path = qScopeGuard([&] {
         qputenv("PATH", previous_path);
@@ -629,7 +629,7 @@ namespace {
       connection.openRemote({.destination = QStringLiteral("legacy"), .program = {}, .local_endpoint = directory.filePath(QStringLiteral("runtime.sock"))});
       QTRY_VERIFY2(connection.ready(), qPrintable(connection.error()));
       QCOMPARE(connection.schema(), telar::handshake::schemaOf(telar::handshake::Dialect::schema87));
-      const ReportLimit report{.reach = {.name = "legacy.ssh", .noun = "cells", .value = 1, .requested = 2, .route = "gui"}, .hits = 1};
+      const ReportLimit report{.reach = {.name = "legacy.gateway", .noun = "cells", .value = 1, .requested = 2, .route = "gui"}, .hits = 1};
 
       connection.send(report);
       QTRY_VERIFY(!received.isEmpty());
@@ -641,11 +641,11 @@ namespace {
       connection.close();
     }
 
-    Q_SLOT static void framedSshTransportAndPermanentFailure() {
+    Q_SLOT static void framedGatewayTransportAndPermanentFailure() {
       const QTemporaryDir directory;
 
       QVERIFY(directory.isValid());
-      QVERIFY(QFile::link(QCoreApplication::applicationDirPath() + QStringLiteral("/gui-ssh-runtime-fixture"), directory.filePath(QStringLiteral("ssh"))));
+      QVERIFY(QFile::link(QCoreApplication::applicationDirPath() + QStringLiteral("/gui-gateway-runtime-fixture"), directory.filePath(QStringLiteral("telar-gateway"))));
       const auto previous_path = qgetenv("PATH");
       const auto restore = qScopeGuard([previous_path] {
         static_cast<void>(qputenv("PATH", previous_path));
@@ -700,7 +700,7 @@ namespace {
       connection.openRemote({.destination = QStringLiteral("denied"), .program = {}, .local_endpoint = directory.filePath(QStringLiteral("runtime.sock"))});
       QTRY_VERIFY(connection.remoteError().hasValue());
       QCOMPARE(connection.remoteError(), ds::Option{MachineError::authentication_failed});
-      QVERIFY(connection.error().contains(QStringLiteral("Permission denied")));
+      QVERIFY(connection.error().contains(QStringLiteral("is not paired")));
       QCOMPARE(disconnects, std::size_t{1});
       constexpr int beyond_retry_ms = (application::RuntimeLink::first_retry_ms * 2) + 100;
 

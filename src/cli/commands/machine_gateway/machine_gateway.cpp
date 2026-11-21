@@ -2470,7 +2470,7 @@ namespace telar::runtime::cli::gateway_commands {
         auto output = launch::capture(memory, launch::words(memory, words).view(), {}, command_timeout);
 
         if (said != nullptr) {
-          *said = std::move(output.err);
+          said->assign(output.err.view());
         }
 
         return output.status == 0;

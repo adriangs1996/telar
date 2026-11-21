@@ -278,7 +278,7 @@ namespace telar::remote {
     ::unlink(path.data());
   }
 
-  void Link::wake() noexcept {
+  void Link::wake() const noexcept {
     const char byte = 0;
 
     static_cast<void>(::write(wake_[1], &byte, 1));
@@ -453,6 +453,7 @@ namespace telar::remote {
 
     const auto path = paths_.machine(endpoint.destination().view());
     Text<LinkClient::line_bytes> reply;
+
     {
       const std::scoped_lock lock{mutex_};
       const auto slot = machineSlot(endpoint);
@@ -512,6 +513,7 @@ namespace telar::remote {
 
   void Link::watch(std::size_t machine) noexcept {
     Endpoint endpoint;
+
     {
       const std::scoped_lock lock{mutex_};
 
@@ -568,6 +570,7 @@ namespace telar::remote {
       ds::Array<std::uint16_t, maximum_forwards> asking{};
       std::size_t asking_count = 0;
       bool needed = false;
+
       {
         const std::scoped_lock lock{mutex_};
         const bool held = machines_[machine].holds != 0;
@@ -609,6 +612,7 @@ namespace telar::remote {
 
   void Link::makeReady(std::size_t machine) noexcept {
     Endpoint endpoint;
+
     {
       const std::scoped_lock lock{mutex_};
       auto& entry = machines_.atMut(machine);
@@ -762,6 +766,7 @@ namespace telar::remote {
 
   void Link::attach(int socket, std::size_t machine) {
     Endpoint endpoint;
+
     {
       const std::scoped_lock lock{mutex_};
 
@@ -777,6 +782,7 @@ namespace telar::remote {
 
   ds::Option<std::size_t> Link::openForward(const Endpoint& endpoint, std::uint16_t port, std::string_view origin, Opening opening) {
     const bool shared = opening == Opening::shared;
+
     {
       const std::scoped_lock lock{mutex_};
       const auto machine = machineSlot(endpoint);
@@ -847,6 +853,7 @@ namespace telar::remote {
   void Link::closeForward(const Endpoint& endpoint, std::uint16_t port) noexcept {
     for (std::size_t index = 0; index < forwards_.size(); ++index) {
       unsigned generation = 0;
+
       {
         const std::scoped_lock lock{mutex_};
         const auto& forward = forwards_[index];
@@ -924,6 +931,7 @@ namespace telar::remote {
 
     unsigned generation = 0;
     Text<LinkClient::line_bytes> reply;
+
     {
       const std::scoped_lock lock{mutex_};
 
@@ -939,6 +947,7 @@ namespace telar::remote {
     while (held && !stopping_.load()) {
       char byte = 0;
       bool open = false;
+
       {
         const std::scoped_lock lock{mutex_};
 
@@ -961,6 +970,7 @@ namespace telar::remote {
   void Link::carry(int socket, std::size_t index, unsigned generation) {
     Endpoint endpoint;
     std::uint16_t port = 0;
+
     {
       const std::scoped_lock lock{mutex_};
       auto& forward = forwards_.atMut(index);

@@ -147,7 +147,7 @@ export {
       void watch(std::size_t machine) noexcept;
       void observe(Channel& channel, std::size_t machine, const Endpoint& endpoint);
       void releaseForward(std::size_t index, unsigned generation, bool closed_there) noexcept;
-      void wake() noexcept;
+      void wake() const noexcept;
 
       // Whether anything uses the link now. The caller holds the lock.
       [[nodiscard]] bool busy() const noexcept;

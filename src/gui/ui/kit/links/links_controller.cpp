@@ -59,11 +59,12 @@ namespace telar::gui::qt {
     }
 
     const auto key = store_.client(slot).key;
-    std::unique_ptr<Forward>* vacant = nullptr;
+    ds::Option<std::size_t> vacant;
 
-    for (auto& forward : forwards_.viewMut()) {
+    for (std::size_t index = 0; index < forwards_.size(); ++index) {
+      auto& forward = forwards_.atMut(index);
       if (!forward) {
-        vacant = vacant == nullptr ? &forward : vacant;
+        vacant = vacant ? vacant : ds::Option{index};
         continue;
       }
 
@@ -82,7 +83,7 @@ namespace telar::gui::qt {
       return true;
     }
 
-    if (vacant == nullptr) {
+    if (!vacant) {
       emit openingFailed(QStringLiteral("Could not open link: this window already forwards as many ports as it keeps"));
       return true;
     }
@@ -91,11 +92,11 @@ namespace telar::gui::qt {
     return true;
   }
 
-  void LinksController::startForward(std::unique_ptr<Forward>& slot, const application::terminal::links::LinkTarget& target, std::uint16_t port, std::string_view destination) {
+  void LinksController::startForward(std::size_t slot, const application::terminal::links::LinkTarget& target, std::uint16_t port, std::string_view destination) {
     const auto program = system::runtime_endpoint::gatewayProgram();
 
-    slot = std::make_unique<Forward>();
-    auto* forward = slot.get();
+    forwards_.atMut(slot) = std::make_unique<Forward>();
+    auto* forward = forwards_.atMut(slot).get();
 
     forward->destination = QByteArray{destination.data(), static_cast<qsizetype>(destination.size())};
     forward->remote = port;

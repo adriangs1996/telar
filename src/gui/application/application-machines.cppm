@@ -8,6 +8,7 @@ import telar.gui.features.machines;
 export namespace telar::gui::application::machines {
 
   using features::machines::MachineActivityTarget;
+  using features::machines::MachineAddress;
   using features::machines::MachineChromeGeometry;
   using features::machines::MachineClientKey;
   using features::machines::MachineConnectionPolicy;
@@ -17,7 +18,6 @@ export namespace telar::gui::application::machines {
   using features::machines::MachineError;
   using features::machines::MachineFacts;
   using features::machines::MachineFailure;
-  using features::machines::MachineAddress;
   using features::machines::MachineFieldRules;
   using features::machines::MachineFields;
   using features::machines::MachineLimits;
@@ -29,9 +29,9 @@ export namespace telar::gui::application::machines {
   using features::machines::MachinePickerTarget;
   using features::machines::MachineProfile;
   using features::machines::MachineProfileCodec;
+  using features::machines::MachineProfileEdits;
   using features::machines::MachineProfileMessages;
   using features::machines::MachineProfiles;
-  using features::machines::MachineProfileEdits;
   using features::machines::MachineProfileStore;
   using features::machines::MachineRemoteCommand;
   using features::machines::MachineRuntimeLocation;

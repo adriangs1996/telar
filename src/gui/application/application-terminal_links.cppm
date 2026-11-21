@@ -23,7 +23,6 @@ export namespace telar::gui::application::terminal::links {
   using features::terminal::links::LinkGrid;
   using features::terminal::links::LinkHit;
   using features::terminal::links::LinkHover;
-  using features::terminal::links::LocalPortLink;
   using features::terminal::links::LinkMatch;
   using features::terminal::links::LinkModifiers;
   using features::terminal::links::LinkOpening;
@@ -36,6 +35,7 @@ export namespace telar::gui::application::terminal::links {
   using features::terminal::links::LinkScheme;
   using features::terminal::links::LinkStatusGeometry;
   using features::terminal::links::LinkTarget;
+  using features::terminal::links::LocalPortLink;
   using features::terminal::links::PathEnvironment;
   using features::terminal::links::PathExpansion;
   using features::terminal::links::PresentedLink;

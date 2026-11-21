@@ -5,6 +5,7 @@ import telar.base.text;
 import telar.platform.error;
 import telar.platform.fs;
 import telar.platform.sha256;
+import telar.tbc;
 
 namespace telar::remote {
 
@@ -26,7 +27,7 @@ namespace telar::remote {
     using FileBytes = ds::Array<unsigned char, file_bytes>;
 
     // The text of a state file, read into `buffer`; empty when it does not exist.
-    std::string_view readText(int directory, std::string_view name, FileBytes& buffer) {
+    tbc::val_a<std::string_view> readText(int directory, std::string_view name, tbc::mut_a<FileBytes> buffer) {
       const auto opened = runtime::openPrivateFile(directory, name, buffer.size());
       if (!opened.file) {
         return {};
@@ -374,6 +375,7 @@ namespace telar::remote {
       // The first gateway process of an account makes the identity; one that loses the race to
       // another reads what the winner published.
       const StateLock lock{directory};
+
       if (runtime::openPrivateFile(directory, certificate_file, runtime::PemDocument::maximum_bytes).file) {
         continue;
       }
@@ -510,6 +512,7 @@ namespace telar::remote {
         .digest = digestOf(secret),
         .expires = now() + static_cast<std::uint64_t>(std::chrono::duration_cast<std::chrono::seconds>(lifetime).count()),
     };
+
     codes.save(directory);
     return secret;
   }

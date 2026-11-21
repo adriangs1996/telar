@@ -3,6 +3,7 @@ module telar.remote.streams;
 import telar.base.ds;
 import telar.platform.net;
 import telar.sys.posix;
+import telar.tbc;
 
 namespace telar::remote {
 
@@ -109,7 +110,7 @@ namespace telar::remote {
 
     class Pump {
     public:
-      explicit Pump(Channel& channel) noexcept
+      explicit Pump(tbc::mut_a<Channel> channel) noexcept
           : channel_(channel) {}
 
       void read(int descriptor, Stream stream) noexcept {
@@ -130,7 +131,7 @@ namespace telar::remote {
       }
 
       // The server's side: until the command exited and the client was told, or the client left.
-      void server(const Process& process) noexcept {
+      void server(tbc::ref_a<Process> process) noexcept {
         process_ = &process;
         int reaps = 0;
 
@@ -223,7 +224,7 @@ namespace telar::remote {
 
           const auto payload = frame.subspan(header_bytes, length);
           const auto kind = static_cast<Kind>(frame[0]);
-          if (kind == Kind::data && !pour(sinks_.atMut(frame[1]), payload)) {
+          if (kind == Kind::data && !pour(sinks_.atMut(frame[1]), payload, delivered_, blocked_sink_)) {
             break;
           }
 
@@ -241,17 +242,18 @@ namespace telar::remote {
         return moved;
       }
 
-      // Writes a payload to its sink; false while part of it still waits for the sink.
-      bool pour(Sink& sink, std::span<const std::uint8_t> payload) noexcept {
-        while (sink.open && delivered_ < payload.size()) {
-          const auto rest = payload.subspan(delivered_);
+      // Writes a payload to its sink from the byte `delivered` counts, which it advances; false
+      // while part of it still waits for the sink, which `blocked` then names.
+      static bool pour(Sink& sink, std::span<const std::uint8_t> payload, std::size_t& delivered, int& blocked) noexcept {
+        while (sink.open && delivered < payload.size()) {
+          const auto rest = payload.subspan(delivered);
           const auto written = ::write(sink.descriptor, rest.data(), rest.size());
           if (written > 0) {
-            delivered_ += static_cast<std::size_t>(written);
+            delivered += static_cast<std::size_t>(written);
           } else if (sys::lastError() == EINTR) {
             continue;
           } else if (sink.nonblocking && runtime::socketWouldBlock(sys::lastError())) {
-            blocked_sink_ = sink.descriptor;
+            blocked = sink.descriptor;
             return false;
           } else {
             // Its reader is gone: what remains for it is dropped, as a closed pipe drops it.
@@ -350,8 +352,8 @@ namespace telar::remote {
         }
       }
 
-      Channel& channel_;
-      const Process* process_ = nullptr;
+      tbc::mut_a<Channel> channel_;
+      tbc::val_a<const Process*> process_ = nullptr;
       ds::Array<Source, 2> sources_{};
       std::size_t source_count_ = 0;
       ds::Array<Sink, stream_count> sinks_{};
