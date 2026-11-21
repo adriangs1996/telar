@@ -62,12 +62,18 @@ def build(manifest, cache, prepare, root, jobs):
                '-DLLVM_INCLUDE_BENCHMARKS=OFF', '-DLLVM_ENABLE_ZLIB=OFF',
                '-DLLVM_ENABLE_ZSTD=OFF', '-DLLVM_ENABLE_LIBXML2=OFF',
                '-DLLVM_ENABLE_LIBEDIT=OFF', '-DLLVM_ENABLE_TERMINFO=OFF']
+    musl = platform.system() == 'Linux' and bool(list(Path('/lib').glob('ld-musl-*')))
+    if musl:
+        # LLVM guesses a glibc triple on musl, which links against libgcc where the system keeps
+        # none and points programs at glibc's loader; Alpine's own clang takes its compiler's triple.
+        triple = subprocess.check_output([os.environ.get('CC', 'cc'), '-dumpmachine'], text=True).strip()
+        options += ['-DLLVM_DEFAULT_TARGET_TRIPLE=' + triple, '-DLLVM_HOST_TRIPLE=' + triple]
     if platform.system() == 'Linux':
         options += ['-DLLVM_ENABLE_RUNTIMES=compiler-rt;libunwind;libcxxabi;libcxx',
                     '-DLIBCXX_ENABLE_SHARED=OFF', '-DLIBCXXABI_ENABLE_SHARED=OFF',
                     '-DLIBCXX_STATICALLY_LINK_ABI_IN_STATIC_LIBRARY=ON',
                     '-DLIBUNWIND_ENABLE_SHARED=OFF', '-DLIBCXXABI_USE_LLVM_UNWINDER=ON',
-                    '-DLIBCXX_HAS_MUSL_LIBC=' + ('ON' if list(Path('/lib').glob('ld-musl-*')) else 'OFF')]
+                    '-DLIBCXX_HAS_MUSL_LIBC=' + ('ON' if musl else 'OFF')]
     run(prefix / 'bin/cmake', '-S', sources['llvm'] / 'llvm', '-B', prefix / 'llvm-build', '-G', 'Ninja', *options)
     run(prefix / 'bin/cmake', '--build', prefix / 'llvm-build', '--target', 'install', '-j', jobs)
     (prefix / '.complete').write_text(identity + '\n')

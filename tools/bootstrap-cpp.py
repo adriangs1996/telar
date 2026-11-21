@@ -189,7 +189,10 @@ def main():
         if source_build and platform.system() == 'Linux':
             # Every native application dependency is compiled without distro GCC
             # LTO; libc++ and its unwind/compiler runtimes come from this release.
+            # C takes the same runtimes: CMake links C++ programs that hold C objects, such as Lua,
+            # with the C compiler's implicit libraries too, and a static link finds no libgcc_s.
             with toolchain.open('a') as output:
+                output.write('set(CMAKE_C_FLAGS_INIT "--rtlib=compiler-rt --unwindlib=libunwind")\n')
                 output.write('set(CMAKE_CXX_FLAGS_INIT "-stdlib=libc++ --rtlib=compiler-rt --unwindlib=libunwind")\n')
         subprocess.run([str(bin_dir / 'clang++'), '--version'], check=True)
         subprocess.run([str(bin_dir / 'cmake'), '--version'], check=True)
