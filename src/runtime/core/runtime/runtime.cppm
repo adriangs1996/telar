@@ -325,15 +325,23 @@ export {
 
       void createWorkspace(RuntimeModel& model, Panes& panes, ClientStore& clients, std::uint64_t client_id, const CreateWorkspace& request);
 
-      // The tab's first pane is of `kind`: a terminal that runs the launch, or an editor.
-      void createTab(RuntimeModel& model, Panes& panes, ClientStore& clients, std::uint64_t client_id, const CreateTab& request, PaneKind kind = PaneKind::terminal);
+      // Who asks for a pane, and what the pane is to be: a terminal that runs the request's
+      // launch, or an editor on it.
+      struct Asked {
+        std::uint64_t client_id = 0;
+        PaneKind kind = PaneKind::terminal;
+      };
+
+      void createTab(RuntimeModel& model, Panes& panes, ClientStore& clients, std::uint64_t client_id, const CreateTab& request);
+      void createTab(RuntimeModel& model, Panes& panes, ClientStore& clients, Asked asked, const CreateTab& request);
 
       // A tab launched without a client, in the colors of its workspace's geometry owner.
       std::uint64_t launchBackground(RuntimeModel& model, Panes& panes, const ConfigureTerminalColors* owner_colors, bool bare_prompt, const LaunchTab& request);
 
       void launchTab(RuntimeModel& model, Panes& panes, ClientStore& clients, std::uint64_t client_id, const LaunchTab& request);
 
-      void createPane(RuntimeModel& model, Panes& panes, ClientStore& clients, std::uint64_t client_id, const CreatePane& request, PaneKind kind = PaneKind::terminal);
+      void createPane(RuntimeModel& model, Panes& panes, ClientStore& clients, std::uint64_t client_id, const CreatePane& request);
+      void createPane(RuntimeModel& model, Panes& panes, ClientStore& clients, Asked asked, const CreatePane& request);
 
       // An editor pane on the request's files, in a tab of its own or beside a tab's panes.
       void createEditor(RuntimeModel& model, Panes& panes, ClientStore& clients, std::uint64_t client_id, const CreateNvimPane& request);

@@ -266,8 +266,6 @@ Item {
                     controller: root.terminals
                     paneId: pane.record.key
                     backgroundProvided: true
-                    // An editor pane draws its own grids over the terminal's place.
-                    visible: !pane.record.editor
                     property bool focusReady: false
                     readonly property bool modelFocused: pane.record.focused
 
@@ -361,30 +359,13 @@ Item {
                     }
                 }
 
-                // A Neovim the runtime runs, drawn natively in place of a terminal's rows.
-                Loader {
-                    id: editorView
-                    width: pane.record.content.width
-                    height: pane.record.content.height
-                    active: pane.record.editor
-                    onLoaded: terminal.focusSelectedPane()
-                    sourceComponent: NvimPane {
-                        objectName: "paneEditor"
-                        controller: root.editors
-                        paneId: pane.record.key
-                        colors: root.colors
-                        typography: root.typography
-                        ratio: root.ratio
-                        onPressed: root.actionRequested(WindowActions.Action.focus_pane, pane.record.key)
-
-                        Rectangle {
-                            anchors.fill: parent
-                            z: 1000
-                            visible: pane.framed && !pane.record.focused
-                            color: Qt.rgba(root.colors.background.r, root.colors.background.g, root.colors.background.b, 1)
-                            opacity: pane.record.dimAlpha
-                        }
-                    }
+                // An editor pane draws its own grids in the terminal's place. Bound only for an
+                // editor, so a terminal's own visibility is nobody else's to set.
+                Binding {
+                    target: terminal
+                    property: "visible"
+                    value: false
+                    when: pane.record.editor
                 }
 
                 // What a terminal draws over its rows: the documents, the commands' separators and
@@ -483,6 +464,31 @@ Item {
                         focusTarget: terminal
                         onFocusRequested: paneId => root.actionRequested(WindowActions.Action.focus_pane, paneId)
                     }
+
+                // A Neovim the runtime runs, drawn natively in place of a terminal's rows.
+                Loader {
+                    id: editorView
+                    width: pane.record.content.width
+                    height: pane.record.content.height
+                    active: pane.record.editor
+                    onLoaded: terminal.focusSelectedPane()
+                    sourceComponent: NvimPane {
+                        controller: root.editors
+                        paneId: pane.record.key
+                        colors: root.colors
+                        typography: root.typography
+                        ratio: root.ratio
+                        onPressed: root.actionRequested(WindowActions.Action.focus_pane, pane.record.key)
+
+                        Rectangle {
+                            anchors.fill: parent
+                            z: 1000
+                            visible: pane.framed && !pane.record.focused
+                            color: Qt.rgba(root.colors.background.r, root.colors.background.g, root.colors.background.b, 1)
+                            opacity: pane.record.dimAlpha
+                        }
+                    }
+                }
                 }
             }
 

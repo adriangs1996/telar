@@ -188,6 +188,7 @@ namespace telar::gui::qt {
     void scrollBinding(application::ScrollDirection direction);
     [[nodiscard]] QString bindingShortcut(BindingActionKind action) const;
     bool executeNavigation(window_actions::Action action, const QString& target);
+    bool executeEditor(window_actions::Action action);
     bool executePane(window_actions::Action action, std::uint64_t identity);
     void executeWindowAction(window_actions::Action action);
     bool executeMachineAction(window_actions::Action action);

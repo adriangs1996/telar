@@ -26,6 +26,8 @@ export extern "C++" {
     inline constexpr std::size_t max_nvim_scrolls = 64;
     inline constexpr std::size_t max_nvim_removed_grids = 256;
     inline constexpr std::size_t max_nvim_mode_bytes = 64;
+    // A cursor that covers its whole cell, in hundredths.
+    inline constexpr Byte max_nvim_cursor_percentage = 100;
     // The native surfaces: the command line, the completion menu, the messages and the tabs.
     inline constexpr std::size_t max_nvim_line_bytes = std::size_t{16} * 1024;
     inline constexpr std::size_t max_nvim_label_bytes = 512;
@@ -307,7 +309,7 @@ export extern "C++" {
               Field<&NvimFrame::cursor_column, u16, "cursor_column">,
               Field<&NvimFrame::cursor_visible, BoolByte, "cursor_visible">,
               Field<&NvimFrame::cursor_shape, EnumByte<CursorShape, std::to_underlying(CursorShape::hollow)>, "cursor_shape">,
-              Field<&NvimFrame::cursor_percentage, BoundedInteger<u8, 0, 100>, "cursor_percentage">,
+              Field<&NvimFrame::cursor_percentage, BoundedInteger<u8, 0, max_nvim_cursor_percentage>, "cursor_percentage">,
               Field<&NvimFrame::blink_wait_ms, u16, "blink_wait_ms">,
               Field<&NvimFrame::blink_on_ms, u16, "blink_on_ms">,
               Field<&NvimFrame::blink_off_ms, u16, "blink_off_ms">,

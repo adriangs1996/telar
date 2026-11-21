@@ -50,12 +50,21 @@ namespace telar::gui::qt {
   }
 
   const application::nvim::Grid* NvimGridItem::grid() const noexcept {
-    const auto* state = editor_ == nullptr ? nullptr : editor_->state();
+    const auto* shown = editor_ == nullptr ? nullptr : editor_->editorState();
 
-    return state == nullptr ? nullptr : state->grid(grid_id_);
+    return shown == nullptr ? nullptr : shown->grid(grid_id_);
   }
 
   void NvimGridItem::refresh() {
+    const auto* current = grid();
+    const ds::Option<Drawn> next = current == nullptr || editor_ == nullptr ? ds::Option<Drawn>{} : Drawn{.revision = current->screen.revision(), .appearance = editor_->appearance(), .cursor_on = editor_->cursorOn(), .keyboard = editor_->hasActiveFocus()};
+
+    // Most frames change one grid: the others keep what they drew.
+    if (next == drawn_ && next) {
+      return;
+    }
+
+    drawn_ = next;
     polish();
     update();
   }
@@ -103,7 +112,7 @@ namespace telar::gui::qt {
         .preedit = no_preedit,
         .fonts = editor_->fontCollection(),
         .grid = editor_->fontGrid(),
-        .selection = {},
+        .selection = CellSelection{},
         .bounds = boundingRect(),
         .scale = window()->effectiveDevicePixelRatio(),
         .appearance = editor_->appearance(),

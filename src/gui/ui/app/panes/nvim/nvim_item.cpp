@@ -19,7 +19,6 @@ static_assert(true);
 #include <cmath>
 #include <exception>
 #include <stdexcept>
-#include <string>
 #include <string_view>
 
 import telar.gui.foundation.core;
@@ -118,16 +117,44 @@ namespace telar::gui::qt {
     }
 
     ds::Option<nvim::NvimMouseButton> buttonOf(Qt::MouseButton button) noexcept {
-      switch (button) {
-      case Qt::LeftButton:
+      if (button == Qt::LeftButton) {
         return nvim::NvimMouseButton::left;
-      case Qt::RightButton:
-        return nvim::NvimMouseButton::right;
-      case Qt::MiddleButton:
-        return nvim::NvimMouseButton::middle;
-      default:
-        return ds::none;
       }
+
+      if (button == Qt::RightButton) {
+        return nvim::NvimMouseButton::right;
+      }
+
+      if (button == Qt::MiddleButton) {
+        return nvim::NvimMouseButton::middle;
+      }
+
+      return ds::none;
+    }
+
+    QString promptKind(nvim::NvimPromptKind kind) {
+      switch (kind) {
+      case nvim::NvimPromptKind::select:
+        return QStringLiteral("select");
+      case nvim::NvimPromptKind::input:
+        return QStringLiteral("input");
+      case nvim::NvimPromptKind::none:
+        return {};
+      }
+
+      return {};
+    }
+
+    // The tabs or the buffers of a tab line, each as QML shows it.
+    QVariantList tabRecords(std::span<const nvim::Tab> entries, std::string_view text) {
+      QVariantList records;
+
+      records.reserve(static_cast<qsizetype>(entries.size()));
+      for (const auto& entry : entries) {
+        records.append(QVariantMap{{QStringLiteral("handle"), static_cast<qulonglong>(entry.handle)}, {QStringLiteral("name"), shown(entry.name.of(text))}});
+      }
+
+      return records;
     }
 
   }
@@ -177,6 +204,7 @@ namespace telar::gui::qt {
     }
 
     pane_id_ = next;
+    ready_ = false;
     layout_revision_ = 0;
     cmdline_revision_ = 0;
     menu_revision_ = 0;
@@ -188,7 +216,7 @@ namespace telar::gui::qt {
     emit paneIdChanged();
   }
 
-  const nvim::Editor* NvimItem::state() const noexcept {
+  const nvim::Editor* NvimItem::editorState() const noexcept {
     return controller_ == nullptr ? nullptr : controller_->editor(pane_id_);
   }
 
@@ -399,128 +427,149 @@ namespace telar::gui::qt {
   }
 
   void NvimItem::synchronizeSurfaces(const nvim::Editor& editor) {
-    if (cmdline_revision_ != editor.cmdline_revision) {
-      const auto& line = editor.cmdline;
-      const auto text = line.text.view();
+    projectCmdline(editor);
+    projectMenu(editor);
+    projectMessages(editor);
+    projectTabs(editor);
+    projectPrompt(editor);
+  }
 
-      cmdline_revision_ = editor.cmdline_revision;
-      cmdline_ = {
-          {QStringLiteral("visible"), line.visible},
-          {QStringLiteral("level"), static_cast<int>(line.level)},
-          {QStringLiteral("first"), line.first == 0 ? QString{} : QString{QChar::fromLatin1(line.first)}},
-          {QStringLiteral("special"), line.special == 0 ? QString{} : QString{QChar::fromLatin1(line.special)}},
-          {QStringLiteral("prompt"), shown(line.prompt.view())},
-          {QStringLiteral("text"), shown(text)},
-          // The cursor counted in the characters QML lays out, not in Neovim's bytes.
-          {QStringLiteral("position"), shown(text.substr(0, std::min<std::size_t>(line.position, text.size()))).size()},
-          {QStringLiteral("indent"), static_cast<int>(line.indent)},
-          {QStringLiteral("block"), shown(line.block.view())},
-      };
-      emit cmdlineChanged();
+  void NvimItem::projectCmdline(const nvim::Editor& editor) {
+    if (cmdline_revision_ == editor.cmdline_revision) {
+      return;
     }
 
-    if (menu_revision_ != editor.menu_revision) {
-      const auto& menu = editor.menu;
-      const std::string_view text{menu.text.data(), menu.text.size()};
-      QVariantList items;
+    const auto& line = editor.cmdline;
+    const auto text = line.text.view();
 
-      menu_revision_ = editor.menu_revision;
-      items.reserve(static_cast<qsizetype>(menu.items.size()));
-      for (const auto& item : menu.items) {
-        items.append(QVariantMap{
-            {QStringLiteral("word"), shown(item.word.of(text))},
-            {QStringLiteral("kind"), shown(item.kind.of(text))},
-            {QStringLiteral("menu"), shown(item.menu.of(text))},
-        });
-      }
+    cmdline_revision_ = editor.cmdline_revision;
+    cmdline_ = {
+        {QStringLiteral("visible"), line.visible},
+        {QStringLiteral("level"), static_cast<int>(line.level)},
+        {QStringLiteral("first"), line.first == 0 ? QString{} : QString{QChar::fromLatin1(line.first)}},
+        {QStringLiteral("special"), line.special == 0 ? QString{} : QString{QChar::fromLatin1(line.special)}},
+        {QStringLiteral("prompt"), shown(line.prompt.view())},
+        {QStringLiteral("text"), shown(text)},
+        // The cursor counted in the characters QML lays out, not in Neovim's bytes.
+        {QStringLiteral("position"), shown(text.substr(0, std::min<std::size_t>(line.position, text.size()))).size()},
+        {QStringLiteral("indent"), static_cast<int>(line.indent)},
+        {QStringLiteral("block"), shown(line.block.view())},
+    };
 
-      QPointF anchor;
-      const bool on_cmdline = menu.grid < 0;
+    emit cmdlineChanged();
+  }
 
-      if (const auto* grid = on_cmdline ? nullptr : editor.grid(static_cast<std::uint32_t>(menu.grid))) {
-        anchor = gridBounds(*grid).topLeft() + QPointF{menu.column * font_.cell.width(), menu.row * font_.cell.height()};
-      }
-
-      popup_menu_ = {
-          {QStringLiteral("visible"), menu.visible},
-          {QStringLiteral("selected"), menu.selected},
-          {QStringLiteral("first"), static_cast<int>(menu.first)},
-          {QStringLiteral("total"), static_cast<int>(menu.total)},
-          {QStringLiteral("onCmdline"), on_cmdline},
-          {QStringLiteral("column"), menu.column},
-          {QStringLiteral("x"), anchor.x()},
-          {QStringLiteral("y"), anchor.y()},
-          {QStringLiteral("items"), items},
-      };
-      emit popupMenuChanged();
+  void NvimItem::projectMenu(const nvim::Editor& editor) {
+    if (menu_revision_ == editor.menu_revision) {
+      return;
     }
 
-    if (messages_revision_ != editor.messages_revision) {
-      const auto& messages = editor.messages;
-      const std::string_view text{messages.text.data(), messages.text.size()};
-      QVariantList items;
+    const auto& menu = editor.menu;
+    const std::string_view text{menu.text.data(), menu.text.size()};
+    QVariantList items;
 
-      messages_revision_ = editor.messages_revision;
-      for (const auto& message : messages.items) {
-        items.append(QVariantMap{
-            {QStringLiteral("id"), static_cast<qulonglong>(message.id)},
-            {QStringLiteral("kind"), messageKind(message.kind)},
-            {QStringLiteral("text"), shown(message.text.of(text)).trimmed()},
-        });
-      }
-
-      messages_ = {
-          {QStringLiteral("mode"), shown(messages.mode.view())},
-          {QStringLiteral("command"), shown(messages.command.view())},
-          {QStringLiteral("ruler"), shown(messages.ruler.view())},
-          {QStringLiteral("items"), items},
-      };
-      emit messagesChanged();
+    menu_revision_ = editor.menu_revision;
+    items.reserve(static_cast<qsizetype>(menu.items.size()));
+    for (const auto& item : menu.items) {
+      items.append(QVariantMap{
+          {QStringLiteral("word"), shown(item.word.of(text))},
+          {QStringLiteral("kind"), shown(item.kind.of(text))},
+          {QStringLiteral("menu"), shown(item.menu.of(text))},
+      });
     }
 
-    if (tabs_revision_ != editor.tabs_revision) {
-      const auto& tabs = editor.tabs;
-      const std::string_view text{tabs.text.data(), tabs.text.size()};
-      const auto listed = [&](const auto& entries) {
-        QVariantList list;
+    QPointF anchor;
+    const bool on_cmdline = menu.grid < 0;
 
-        for (const auto& entry : entries) {
-          list.append(QVariantMap{{QStringLiteral("handle"), static_cast<qulonglong>(entry.handle)}, {QStringLiteral("name"), shown(entry.name.of(text))}});
-        }
-
-        return list;
-      };
-
-      tabs_revision_ = editor.tabs_revision;
-      tabline_ = {
-          {QStringLiteral("currentTab"), static_cast<qulonglong>(tabs.current_tab)},
-          {QStringLiteral("currentBuffer"), static_cast<qulonglong>(tabs.current_buffer)},
-          {QStringLiteral("tabs"), listed(tabs.tabs)},
-          {QStringLiteral("buffers"), listed(tabs.buffers)},
-      };
-      emit tablineChanged();
+    if (const auto* grid = on_cmdline ? nullptr : editor.grid(static_cast<std::uint32_t>(menu.grid))) {
+      anchor = gridBounds(*grid).topLeft() + QPointF{menu.column * font_.cell.width(), menu.row * font_.cell.height()};
     }
 
-    if (prompt_revision_ != editor.prompt_revision) {
-      const auto& prompt = editor.prompt;
-      const std::string_view text{prompt.text.data(), prompt.text.size()};
-      QStringList choices;
+    popup_menu_ = {
+        {QStringLiteral("visible"), menu.visible},
+        {QStringLiteral("selected"), menu.selected},
+        {QStringLiteral("first"), static_cast<int>(menu.first)},
+        {QStringLiteral("total"), static_cast<int>(menu.total)},
+        {QStringLiteral("onCmdline"), on_cmdline},
+        {QStringLiteral("column"), menu.column},
+        {QStringLiteral("x"), anchor.x()},
+        {QStringLiteral("y"), anchor.y()},
+        {QStringLiteral("items"), items},
+    };
 
-      prompt_revision_ = editor.prompt_revision;
-      for (const auto& choice : prompt.choices) {
-        choices.append(shown(choice.of(text)));
-      }
+    emit popupMenuChanged();
+  }
 
-      prompt_ = {
-          {QStringLiteral("id"), static_cast<qulonglong>(prompt.id)},
-          {QStringLiteral("kind"), prompt.kind == nvim::NvimPromptKind::select ? QStringLiteral("select") : prompt.kind == nvim::NvimPromptKind::input ? QStringLiteral("input")
-                                                                                                                                                       : QString{}},
-          {QStringLiteral("title"), shown(prompt.title.view())},
-          {QStringLiteral("initial"), shown(prompt.initial.view())},
-          {QStringLiteral("choices"), choices},
-      };
-      emit promptChanged();
+  void NvimItem::projectMessages(const nvim::Editor& editor) {
+    if (messages_revision_ == editor.messages_revision) {
+      return;
     }
+
+    const auto& messages = editor.messages;
+    const std::string_view text{messages.text.data(), messages.text.size()};
+    QVariantList items;
+
+    messages_revision_ = editor.messages_revision;
+    for (const auto& message : messages.items) {
+      items.append(QVariantMap{
+          {QStringLiteral("id"), static_cast<qulonglong>(message.id)},
+          {QStringLiteral("kind"), messageKind(message.kind)},
+          {QStringLiteral("text"), shown(message.text.of(text)).trimmed()},
+      });
+    }
+
+    messages_ = {
+        {QStringLiteral("mode"), shown(messages.mode.view())},
+        {QStringLiteral("command"), shown(messages.command.view())},
+        {QStringLiteral("ruler"), shown(messages.ruler.view())},
+        {QStringLiteral("items"), items},
+    };
+
+    emit messagesChanged();
+  }
+
+  void NvimItem::projectTabs(const nvim::Editor& editor) {
+    if (tabs_revision_ == editor.tabs_revision) {
+      return;
+    }
+
+    const auto& tabs = editor.tabs;
+    const std::string_view text{tabs.text.data(), tabs.text.size()};
+
+    tabs_revision_ = editor.tabs_revision;
+    tabline_ = {
+        {QStringLiteral("currentTab"), static_cast<qulonglong>(tabs.current_tab)},
+        {QStringLiteral("currentBuffer"), static_cast<qulonglong>(tabs.current_buffer)},
+        {QStringLiteral("tabs"), tabRecords(tabs.tabs.view(), text)},
+        {QStringLiteral("buffers"), tabRecords(tabs.buffers.view(), text)},
+    };
+
+    emit tablineChanged();
+  }
+
+  void NvimItem::projectPrompt(const nvim::Editor& editor) {
+    if (prompt_revision_ == editor.prompt_revision) {
+      return;
+    }
+
+    const auto& prompt = editor.prompt;
+    const std::string_view text{prompt.text.data(), prompt.text.size()};
+    QStringList choices;
+
+    prompt_revision_ = editor.prompt_revision;
+    for (const auto& choice : prompt.choices) {
+      choices.append(shown(choice.of(text)));
+    }
+
+    prompt_ = {
+        {QStringLiteral("id"), static_cast<qulonglong>(prompt.id)},
+        {QStringLiteral("kind"), promptKind(prompt.kind)},
+        {QStringLiteral("title"), shown(prompt.title.view())},
+        {QStringLiteral("initial"), shown(prompt.initial.view())},
+        {QStringLiteral("choices"), choices},
+    };
+
+    emit promptChanged();
   }
 
   void NvimItem::refresh(qulonglong pane_id) {
@@ -528,7 +577,7 @@ namespace telar::gui::qt {
       return;
     }
 
-    const auto* editor = state();
+    const auto* editor = editorState();
     if (editor == nullptr) {
       grids_.reconcile({});
       return;
@@ -567,28 +616,31 @@ namespace telar::gui::qt {
 
   void NvimItem::inputMethodEvent(QInputMethodEvent* event) {
     if (const auto committed = event->commitString(); !committed.isEmpty() && controller_ != nullptr) {
-      std::string keys;
+      QByteArray keys;
 
       // Each character goes as a key, so the one that opens a key name goes by its own.
       for (const auto scalar : committed.toUcs4()) {
-        keys += nvim::notation({.codepoint = static_cast<std::uint32_t>(scalar)}).view();
+        const auto key = nvim::notation({.codepoint = static_cast<std::uint32_t>(scalar)});
+
+        keys.append(key.view().data(), static_cast<qsizetype>(key.view().size()));
       }
 
-      controller_->type(pane_id_, keys);
+      controller_->type(pane_id_, {keys.constData(), static_cast<std::size_t>(keys.size())});
     }
 
     event->accept();
   }
 
   QVariant NvimItem::inputMethodQuery(Qt::InputMethodQuery query) const {
-    switch (query) {
-    case Qt::ImEnabled:
+    if (query == Qt::ImEnabled) {
       return true;
-    case Qt::ImCursorRectangle:
-      return cursor_rect_;
-    default:
-      return QQuickItem::inputMethodQuery(query);
     }
+
+    if (query == Qt::ImCursorRectangle) {
+      return cursor_rect_;
+    }
+
+    return QQuickItem::inputMethodQuery(query);
   }
 
   void NvimItem::focusInEvent(QFocusEvent* event) {
@@ -597,7 +649,7 @@ namespace telar::gui::qt {
       controller_->focus(pane_id_, true);
     }
 
-    if (const auto* editor = state()) {
+    if (const auto* editor = editorState()) {
       restartBlink(*editor);
     }
 
@@ -618,7 +670,7 @@ namespace telar::gui::qt {
 
   // The topmost grid under a point, and the cell of it there.
   ds::Option<NvimItem::Hit> NvimItem::hit(QPointF position) const {
-    const auto* editor = state();
+    const auto* editor = editorState();
     if (editor == nullptr || font_.cell.width() <= 0 || font_.cell.height() <= 0) {
       return ds::none;
     }

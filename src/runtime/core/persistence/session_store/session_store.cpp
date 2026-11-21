@@ -10,7 +10,8 @@ namespace telar::runtime::checkpoint {
   namespace {
 
     // The versions that changed a record: titles, labels every tab has, the pane a resumed agent
-    // ran in, its arguments' 32-bit length, a worktree's dispatcher and its coordinator.
+    // ran in, its arguments' 32-bit length, a worktree's dispatcher and its coordinator, and
+    // what kind of pane a pane is.
     constexpr std::uint16_t titled_version = 2;
     constexpr std::uint16_t labeled_version = 3;
     constexpr std::uint16_t dropped_pane_version = 4;
@@ -18,6 +19,7 @@ namespace telar::runtime::checkpoint {
     constexpr std::uint16_t in_pane_version = 8;
     constexpr std::uint16_t long_arguments_version = 9;
     constexpr std::uint16_t coordinator_version = 10;
+    constexpr std::uint16_t kinds_version = 11;
 
     constexpr std::size_t maximum_title_bytes = 96;
 
@@ -243,6 +245,18 @@ namespace telar::runtime::checkpoint {
       return ds::none;
     }
 
+    if (version_ >= kinds_version) {
+      const auto kind = u8::decode(input_);
+
+      // A pane of a kind this runtime does not run is passed over; the rest of the session is
+      // restored without it.
+      if (kind != std::to_underlying(PaneKind::terminal) && kind != std::to_underlying(PaneKind::nvim)) {
+        return ds::none;
+      }
+
+      record.kind = static_cast<PaneKind>(kind);
+    }
+
     if (record.argument_count == 0) {
       throw EncodingError{"Checkpoint launch has no arguments"};
     }
@@ -417,6 +431,7 @@ namespace telar::runtime::checkpoint {
     text16(record.title);
     integer(static_cast<Byte>(record.title_source));
     integer(static_cast<Byte>(record.in_pane));
+    integer(static_cast<Byte>(record.kind));
   }
 
   void Writer::write(const WorktreeRecord& record) {

@@ -251,7 +251,7 @@ namespace {
 
   // A runtime whose PATH finds the stand-in as `nvim`, or finds no nvim at all.
   struct EditorHost {
-    explicit EditorHost(bool installed = true)
+    explicit EditorHost(bool installed = true, RuntimeHostOptions options = {})
         : programs(makeDirectory()) {
       if (installed) {
         const runtime::ExecutablePath self;
@@ -261,7 +261,7 @@ namespace {
 
       // The runtime starts as a child of this process and looks nvim up along its PATH.
       ::setenv("PATH", programs.c_str(), 1);
-      host.emplace();
+      host.emplace(options);
     }
 
     ~EditorHost() {
@@ -525,6 +525,38 @@ namespace {
     editor.until(peer, "opened /tmp/notes.md:7");
   }
 
+  // A runtime that keeps its session starts the editor again when it restarts, as the pane it
+  // was, and a client that attaches is sent its screen.
+  void testEditorReturnsWithTheSession() {
+    EditorHost editor_host{true, {.session = true}};
+    std::uint64_t pane = 0;
+
+    {
+      ProtocolPeer peer{editor_host.host->socket()};
+      const auto terminal = openTerminal(peer);
+      auto editor = openEditor(peer, terminal);
+
+      editor.until(peer, "ready");
+      pane = editor.pane;
+    }
+
+    editor_host.host->stop();
+    editor_host.host->start();
+
+    ProtocolPeer peer{editor_host.host->socket()};
+
+    peer.send(OpenPane{.request_id = 5, .target = {.kind = PaneTarget::Kind::pane, .id = pane}, .size = size});
+    peer.deadline(std::chrono::seconds{10});
+    const auto notice = peer.receive<PaneKindNotice>();
+    const auto opened = peer.receive<PaneOpened>();
+
+    check(notice.pane_id == pane && notice.kind == PaneKind::nvim && opened.pane_id == pane && !opened.created, "the pane is back, and is an editor");
+
+    Editor restored{.pane = pane};
+
+    restored.until(peer, "ready");
+  }
+
   void testClosingEndsTheEditor() {
     EditorHost editor_host;
     ProtocolPeer peer{editor_host.host->socket()};
@@ -567,6 +599,7 @@ namespace {
   const telar::testing::Case case_second{"nvim_pane_wire.second_client_is_sent_the_screen_whole", testSecondClientIsSentTheScreenWhole};
   const telar::testing::Case case_refused{"nvim_pane_wire.requests_of_another_kind_are_refused", testRequestsOfAnotherKindAreRefused};
   const telar::testing::Case case_prompt{"nvim_pane_wire.prompt_is_shown_and_answered", testPromptIsShownAndAnswered};
+  const telar::testing::Case case_session{"nvim_pane_wire.editor_returns_with_the_session", testEditorReturnsWithTheSession};
   const telar::testing::Case case_close{"nvim_pane_wire.closing_ends_the_editor", testClosingEndsTheEditor};
   const telar::testing::Case case_missing{"nvim_pane_wire.missing_neovim_fails_the_request", testMissingNeovimFailsTheRequest};
 

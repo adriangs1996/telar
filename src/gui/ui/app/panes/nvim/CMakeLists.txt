@@ -8,5 +8,11 @@ telar_add_qml_sources(gui-quick
     nvim_item.hpp
     nvim_keys.hpp
   QML_FILES
+    NvimCmdline.qml
+    NvimMessages.qml
     NvimPane.qml
+    NvimPopupMenu.qml
+    NvimPrompt.qml
+    NvimSurface.qml
+    NvimTabline.qml
   REGISTERS)

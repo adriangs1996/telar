@@ -8,6 +8,7 @@ import std;
 
 import telar.base.ds;
 import telar.base.memory.allocators;
+import telar.tbc;
 import telar.gui.foundation.core;
 import telar.gui.foundation.terminal;
 import telar.wire.nvim;
@@ -27,7 +28,8 @@ export namespace telar::gui::features::nvim {
     std::uint32_t offset = 0;
     std::uint32_t size = 0;
 
-    [[nodiscard]] constexpr std::string_view of(std::string_view text) const noexcept {
+    // The piece of `text` it names: it views the text, not the slice.
+    [[nodiscard]] constexpr tbc::val_a<std::string_view> of(tbc::val_a<std::string_view> text) const {
       return text.substr(std::min<std::size_t>(offset, text.size()), size);
     }
   };
@@ -156,8 +158,11 @@ export namespace telar::gui::features::nvim {
     std::uint16_t column = 0;
     bool visible = false;
     CursorShape shape = CursorShape::block;
+    // A cursor that covers its whole cell, in hundredths.
+    static constexpr Byte whole_cell = 100;
+
     // How much of its cell a bar or an underline covers, in hundredths.
-    Byte percentage = 100;
+    Byte percentage = whole_cell;
     std::uint16_t blink_wait_ms = 0;
     std::uint16_t blink_on_ms = 0;
     std::uint16_t blink_off_ms = 0;
@@ -222,7 +227,7 @@ export namespace telar::gui::features::nvim {
 
   // How Neovim is told the key. A character typed with nothing but shift goes as itself, so
   // every combination a keyboard makes reaches Neovim and none is mistaken for another.
-  [[nodiscard]] KeyText notation(const Key& key) noexcept;
+  [[nodiscard]] KeyText notation(const Key& key);
 
   // What a message of the runtime did to an editor.
   enum class Received : std::uint8_t {
@@ -261,17 +266,17 @@ export namespace telar::gui::features::nvim {
   // The editor a pane is; null for a pane that is a terminal.
   [[nodiscard]] const Editor* find(const State& state, std::uint64_t pane_id) noexcept;
 
-  Received receive(State& state, const NvimGrid& grid);
-  Received receive(State& state, const NvimFrame& frame);
-  Received receive(State& state, const NvimCmdline& cmdline);
-  Received receive(State& state, const NvimPopupMenu& menu);
-  Received receive(State& state, const NvimMessageList& messages);
-  Received receive(State& state, const NvimTabLine& tabs);
-  Received receive(State& state, const NvimPrompt& prompt);
+  Received receive(State& state, const NvimGrid& message);
+  Received receive(State& state, const NvimFrame& message);
+  Received receive(State& state, const NvimCmdline& message);
+  Received receive(State& state, const NvimPopupMenu& message);
+  Received receive(State& state, const NvimMessageList& message);
+  Received receive(State& state, const NvimTabLine& message);
+  Received receive(State& state, const NvimPrompt& message);
 
   // The reply to the prompt the editor shows, which is then closed here: the runtime confirms
   // it with a prompt of its own. None when the editor shows no prompt.
-  [[nodiscard]] ds::Option<NvimPromptReply> answer(State& state, std::uint64_t pane_id, bool accepted, std::uint32_t index, std::string_view text);
+  [[nodiscard]] tbc::val_a<ds::Option<NvimPromptReply>> answer(State& state, std::uint64_t pane_id, bool accepted, std::uint32_t index, tbc::val_a<std::string_view> text);
 
 }
 

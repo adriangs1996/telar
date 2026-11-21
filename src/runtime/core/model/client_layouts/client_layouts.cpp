@@ -200,8 +200,12 @@ namespace telar::runtime {
 
   NvimPane::NvimPane(ConcurrentMemory& memory, std::uint64_t identity, TabLocation tab, Command<ConcurrentMemory>& command, TerminalSize size)
       : Pane(pane_kind, memory, identity, tab, command.cwd()),
-        editor(memory, {.columns = size.cols, .rows = size.rows}, {}) {
+        // Neovim leaves its command line, its completion menu, its messages and its tabs to the
+        // client, which draws each natively.
+        editor(memory, {.columns = size.cols, .rows = size.rows}, {.command_line = true, .completion = true, .messages = true, .tabs = true}) {
     foreground.assign("nvim");
+    // What a restored session starts it with again.
+    launch.capture(command.arguments(), command.restorable());
     process.emplace(command.specification(size));
     process_id = process->processId();
     extent = size;
