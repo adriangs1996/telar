@@ -6,7 +6,7 @@ static_assert(true);
 #include "terminal_controller.hpp"
 #include "telar_base/memory/allocator.hpp"
 #include "terminal_item.hpp"
-#include "ui/app/panes/terminal/scene/window_images.hpp"
+#include "ui/kit/cell_scene/window_images.hpp"
 #include <QCoreApplication>
 #include <QtCore/qtypes.h>
 #include <algorithm>

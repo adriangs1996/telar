@@ -93,7 +93,7 @@ namespace telar::gui::qt {
   // coordinator: the display, the status, the frames, the dialogs, the machines, the chosen
   // activity and the commands. None of them calls back here except through the narrow
   // interfaces this class implements for the terminals, the machines and the commands.
-  class ApplicationController final : public QObject, private TerminalHost, private MachinesHost, private CommandsHost {
+  class ApplicationController final : public QObject, private TerminalHost, private NvimHost, private MachinesHost, private CommandsHost {
     friend struct test::MachineWindow;
     friend struct test::MachineProfileWindow;
 

@@ -4,8 +4,8 @@ static_assert(true);
 #endif
 
 #include "foundation/core/memory.hpp"
+#include "nvim_host.hpp"
 #include "tbc/view.hpp"
-#include "ui/app/panes/terminal/terminal_host.hpp"
 #include "ui/kit/store/store.hpp"
 #include <QByteArray>
 #include <QObject>
@@ -31,7 +31,7 @@ namespace telar::gui::qt {
   public:
     struct Parts {
       Store& store;
-      TerminalHost& host;
+      NvimHost& host;
     };
 
     // Keeps what the parts refer to, region `a`, not the parts themselves.
@@ -55,7 +55,7 @@ namespace telar::gui::qt {
       return store_.session().configuration;
     }
 
-    [[nodiscard]] TerminalHost& host() const noexcept {
+    [[nodiscard]] NvimHost& host() const noexcept {
       return host_;
     }
 
@@ -78,7 +78,7 @@ namespace telar::gui::qt {
     void attempt(Request request);
 
     tbc::mut_a<Store> store_;
-    tbc::mut_a<TerminalHost> host_;
+    tbc::mut_a<NvimHost> host_;
   };
 
 }

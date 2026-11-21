@@ -1,3 +1,4 @@
+add_subdirectory(cell_scene)
 add_subdirectory(config)
 add_subdirectory(fonts)
 add_subdirectory(input)
