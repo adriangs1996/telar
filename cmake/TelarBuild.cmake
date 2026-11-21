@@ -26,12 +26,13 @@ if(NOT CMAKE_CXX_COMPILER_ID STREQUAL "Clang" OR CMAKE_CXX_COMPILER_VERSION VERS
   message(FATAL_ERROR "Telar requires LLVM Clang 23.1.5 or newer. Use the pinned tools/bootstrap-cpp.py toolchain (AppleClang cannot scan these modules).")
 endif()
 
-# Clang reads every transitively imported BMI into its heap, so one translation
-# unit commonly peaks at 3-5 GiB. Scheduling by core count alone drives smaller
-# machines into swap, which costs far more than the lost parallelism.
+# Clang reads the BMIs a translation unit imports into its heap: a unit of this tree peaks at
+# 0.2 GiB at the median and, the largest test of the GUI with sanitizers, at 1.7 GiB. Scheduling
+# by core count alone drives a machine with less than 2 GiB per core into swap, which costs far
+# more than the lost parallelism, so each compilation is given 2 GiB.
 cmake_host_system_information(RESULT telar_memory_mib QUERY TOTAL_PHYSICAL_MEMORY)
 cmake_host_system_information(RESULT telar_core_count QUERY NUMBER_OF_LOGICAL_CORES)
-math(EXPR telar_default_compile_jobs "${telar_memory_mib} / 4096")
+math(EXPR telar_default_compile_jobs "${telar_memory_mib} / 2048")
 if(telar_default_compile_jobs GREATER telar_core_count)
   set(telar_default_compile_jobs ${telar_core_count})
 elseif(telar_default_compile_jobs LESS 1)
@@ -61,6 +62,18 @@ add_library(telar::build_flags ALIAS telar-build-flags)
 set_target_properties(telar-build-flags PROPERTIES EXPORT_NAME build_flags)
 target_compile_definitions(telar-build-flags INTERFACE TELAR_DEBUG=$<CONFIG:Debug>
   TELAR_DIAGNOSTICS=$<OR:$<CONFIG:Debug>,$<BOOL:${TELAR_DIAGNOSTICS}>>)
+# A Debug build describes lines alone unless it is asked for more: a backtrace, a sanitizer report
+# and a breakpoint on a line need nothing else, and describing every type and variable as well takes
+# an eighth of the time of each compilation and two thirds of each object. full is for a debugger
+# that reads variables. The option follows CMake's -g, so it is the one that counts.
+set(TELAR_DEBUG_INFO "lines" CACHE STRING "Debug information of a Debug build: lines, or full to inspect variables")
+set_property(CACHE TELAR_DEBUG_INFO PROPERTY STRINGS lines full)
+if(NOT TELAR_DEBUG_INFO MATCHES "^(lines|full)$")
+  message(FATAL_ERROR "TELAR_DEBUG_INFO must be lines or full, not '${TELAR_DEBUG_INFO}'")
+endif()
+if(TELAR_DEBUG_INFO STREQUAL "lines")
+  target_compile_options(telar-build-flags INTERFACE $<$<CONFIG:Debug>:-gline-tables-only>)
+endif()
 if(TELAR_SANITIZERS)
   target_compile_options(telar-build-flags INTERFACE -fsanitize=address,undefined -fno-omit-frame-pointer)
   target_link_options(telar-build-flags INTERFACE -fsanitize=address,undefined)

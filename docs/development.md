@@ -46,6 +46,17 @@ window on a development runtime with its own socket and history under
 shows every recipe. [Packaging](packaging.md) covers release archives,
 application bundles and desktop entries.
 
+A Debug build describes lines alone, which is what a backtrace, a sanitizer
+report and a breakpoint on a line need. To read variables in a debugger,
+configure the tree with `tools/cpp configure dev -- -DTELAR_DEBUG_INFO=full`.
+
+A tree runs one compilation per core where there are 2 GiB of memory for
+each, and `-DTELAR_COMPILE_JOBS=<n>` sets another count. A tree configured
+before keeps the count it was given then. The builds of several checkouts
+share the machine: `tools/cpp build` gives the first one every core, and one
+that starts while others run the cores divided by its place among them. A
+build that names its own `--parallel` keeps it.
+
 ## Making changes
 
 Test what you change before you commit:
@@ -53,8 +64,10 @@ Test what you change before you commit:
 ```sh
 just runtime-test     # runtime and CLI CTest groups
 just gui-test         # GUI tests, the integration ones against the runtime
+just domain-test runtime.terminal   # one domain's or library's tests, building only them
 just lint             # clang-tidy over the dev tree, checking only the units that changed
 just analyze          # clang-tidy's static analyzer, which lint leaves out
+just checks           # lifetimes, blank lines, interface bodies and standard containers in one pass
 ```
 
 Extra arguments go to CTest, for example `just runtime-test -R server-cli`.

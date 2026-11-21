@@ -28,6 +28,9 @@ PRESETS = tuple(preset['name'] for preset in json.loads(PRESETS_FILE.read_text()
                 if not preset.get('hidden'))
 TBC = 'tbc'
 CACHE = ROOT / '.toolchain'
+# The builds of every checkout of this user take their slots here.
+SLOTS = Path(os.environ.get('XDG_CACHE_HOME') or Path.home() / '.cache') / 'telar/build-slots'
+BUILD_SLOTS = 64
 
 
 def run(*args, **kwargs):
@@ -95,6 +98,42 @@ def lock_build(directory):
     os.set_inheritable(lock, True)
 
 
+def build_slot(directory):
+    """Take the lowest free build slot of this machine until this process and its children exit.
+
+    A tree schedules its own compilations, one per core where memory allows, and knows nothing of
+    the builds of other checkouts: three at once start three times the jobs the machine has cores
+    for. A slot is a lock on a file of `directory`, which the checkouts of one user share, so the
+    kernel frees it however the build ends. Returns the slot, 0 for a build that found none taken,
+    and the descriptor that holds it; 0 and no descriptor where the directory cannot be used.
+    """
+    try:
+        directory.mkdir(mode=0o700, parents=True, exist_ok=True)
+        for index in range(BUILD_SLOTS):
+            slot = os.open(directory / str(index), os.O_CREAT | os.O_WRONLY | os.O_NOFOLLOW, 0o600)
+            try:
+                fcntl.flock(slot, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            except BlockingIOError:
+                os.close(slot)
+                continue
+            os.set_inheritable(slot, True)
+            return index, slot
+    except OSError:
+        pass
+    return 0, None
+
+
+def shared(arguments, slot, cores):
+    """The arguments of a build in `slot`: its own when it is the first or names how many jobs it
+    runs, and otherwise with the cores divided by its place among the builds that are running."""
+    if slot == 0 or any(argument.startswith(('--parallel', '-j')) for argument in arguments):
+        return arguments
+    jobs = max(1, cores // (slot + 1))
+    print(f'Other builds are running on this machine: {jobs} job{"s" if jobs > 1 else ""} at a time', file=sys.stderr, flush=True)
+    at = arguments.index('--') if '--' in arguments else len(arguments)
+    return [*arguments[:at], '--parallel', str(jobs), *arguments[at:]]
+
+
 def main():
     if len(sys.argv) > 1 and sys.argv[1] == 'exec':
         extra = sys.argv[2:]
@@ -157,7 +196,8 @@ def main():
         stamp.write_text(identity)
     elif args.command == 'build':
         lock_build(build)
-        run('cmake', '--build', build, *extra)
+        slot, _ = build_slot(SLOTS)
+        run('cmake', '--build', build, *shared(extra, slot, os.cpu_count() or 1))
     else:
         run('ctest', '--test-dir', build, '--output-on-failure', *extra)
 

@@ -34,6 +34,8 @@ that work for you before you make one more module public: the list is meant to s
   and what fails when you miss one: `docs/build/recipes.md`.
 - One case of the window test in two seconds, where the whole program takes eighty:
   `just gui-case <case>`; `just gui-case -functions` lists the cases.
+- The tests of the one domain or library you changed, building only them: `just domain-test <label>`,
+  with the label its cases carry, `runtime.terminal` or `lib.base`.
 - Run one `ctest` at a time in a build tree: two at once corrupt the lists of cases it
   discovers.
 - Toolchain, configure, build and test commands: `docs/build/cpp-modules.md`.
