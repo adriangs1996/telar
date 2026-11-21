@@ -1,6 +1,6 @@
 telar machine add: Save a machine: a label and an SSH destination
 
-Usage: telar machine add LABEL DESTINATION [--color COLOR] [--disabled] [--check] [--setup [--binary PATH] [--skip agents,config,login]] [--json]
+Usage: telar machine add LABEL DESTINATION [--color COLOR] [--disabled] [--check] [--setup [--binary PATH] [--skip agents,config,login,editor]] [--json]
 
 Arguments:
   DESTINATION      An SSH destination (`user@host`, a `~/.ssh/config` host...); unique.

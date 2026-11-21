@@ -296,6 +296,7 @@
     "src/runtime/nvim/rpc/rpc.cppm": "telar.runtime.nvim.rpc",
     "src/runtime/nvim/editor/editor.cppm": "telar.runtime.nvim.editor",
     "src/runtime/nvim/frames/frames.cppm": "telar.runtime.nvim.frames",
+    "src/runtime/nvim/provision/provision.cppm": "telar.runtime.nvim.provision",
     "src/runtime/terminal/osc_scanner/osc_scanner.cppm": "telar.runtime.terminal.osc_scanner",
     "src/runtime/terminal/text_reader/text_reader.cppm": "telar.runtime.terminal.text_reader",
     "src/runtime/terminal/graphics_storage/graphics_storage.cppm": "telar.runtime.terminal.graphics_storage",
@@ -1424,7 +1425,8 @@
     ],
     "src/runtime/nvim": [
       "telar.runtime.nvim.editor",
-      "telar.runtime.nvim.frames"
+      "telar.runtime.nvim.frames",
+      "telar.runtime.nvim.provision"
     ],
     "src/runtime/paths": [
       "telar.runtime.paths.query_task",

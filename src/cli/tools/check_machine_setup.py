@@ -139,7 +139,7 @@ def run(binary, provider, seed, login=False, prepare=None):
         if prepare:prepare(root,env)
         result=[]
         for repetition in range(2):
-            child=subprocess.run([str(binary),'machine','setup','fixture','--skip','agents,config' if login else 'agents,login','--json'],env=env,cwd=root,capture_output=True,text=True,timeout=90)
+            child=subprocess.run([str(binary),'machine','setup','fixture','--skip','agents,config,editor' if login else 'agents,login,editor','--json'],env=env,cwd=root,capture_output=True,text=True,timeout=90)
             files=snapshot(root,binary)
             # Fixture files contain implementation paths and schema by design.
             result.append({'status':child.returncode,'stdout':normalize(child.stdout,root,binary),'stderr':normalize(child.stderr,root,binary),'files':files})
@@ -221,8 +221,22 @@ def steps(output):
     return {step['step']: step['status'] for step in json.loads(output)['steps']}
 
 
-SKIP_ALL_BUT_CONFIG = ('--skip', 'agents,login')
-SKIP_ALL = ('--skip', 'agents,config,login')
+SKIP_ALL_BUT_CONFIG = ('--skip', 'agents,login,editor')
+SKIP_ALL = ('--skip', 'agents,config,login,editor')
+
+
+def editor_is_provisioned(binary):
+    """Setup has the machine's own telar provision the editor's Neovim, after the agents'
+    integrations, unless it is skipped; the machine saying nothing is taken as done."""
+    with machine(binary) as fixture:
+        status, output = fixture.run('machine', 'setup', 'fixture', '--skip', 'agents,config,login', '--json')
+        notes = [note for step in json.loads(output)['steps'] if step['step'] == 'integrations' for note in step.get('notes', [])]
+        assert status == 0 and any(note.startswith('editor: ') for note in notes), output
+        before = len(fixture.calls())
+    with machine(binary) as fixture:
+        status, output = fixture.run('machine', 'setup', 'fixture', *SKIP_ALL, '--json')
+        notes = [note for step in json.loads(output)['steps'] if step['step'] == 'integrations' for note in step.get('notes', [])]
+        assert status == 0 and not any(note.startswith('editor: ') for note in notes) and len(fixture.calls()) == before - 1, output
 
 
 def probe_failures(binary):
@@ -319,7 +333,7 @@ def logins(binary):
     only for an OpenAI model, Pi only with a provider, and a code pasted here reaches the
     login pane while an empty answer sends nothing."""
     with machine(binary, agents=('codex',), login='pending', there='codex', pane_text=CODEX_DEVICE_SCREEN) as fixture:
-        status, output = fixture.run('machine', 'setup', 'fixture', '--skip', 'agents,config')
+        status, output = fixture.run('machine', 'setup', 'fixture', '--skip', 'agents,config,editor')
         assert 'https://auth.openai.com/codex/device' in output and 'ABCD-EFGH9' in output, output
     for model, opened in (('openai/gpt-5', 1), ('anthropic/claude', 0)):
         with machine(binary, agents=('opencode', 'pi'), login='pending', there='opencode,pi') as fixture:
@@ -328,7 +342,7 @@ def logins(binary):
             (Path(fixture.env['XDG_CONFIG_HOME']) / 'opencode/opencode.json').write_text(json.dumps({'model': model}))
             (fixture.home / '.pi/agent').mkdir(parents=True)
             (fixture.home / '.pi/agent/settings.json').write_text('{}')
-            status, output = fixture.run('machine', 'setup', 'fixture', '--skip', 'agents,config', '--json')
+            status, output = fixture.run('machine', 'setup', 'fixture', '--skip', 'agents,config,editor', '--json')
             argv = fixture.root / 'argv.jsonl'
             commands = [json.loads(line) for line in argv.read_text().splitlines()] if argv.exists() else []
             assert [words[:2] for words in commands].count(['workspace', 'create']) == opened, (model, commands)
@@ -337,7 +351,7 @@ def logins(binary):
         with machine(binary, login='paste') as fixture:
             log = fixture.root / 'sent.jsonl'
             fixture.env['FIXTURE_SENT'] = str(log)
-            status, output = fixture.run('machine', 'setup', 'fixture', '--skip', 'agents,config', answers=answer)
+            status, output = fixture.run('machine', 'setup', 'fixture', '--skip', 'agents,config,editor', answers=answer)
             texts = [json.loads(line)['text'].strip() for line in log.read_text().splitlines()] if log.exists() else []
             assert texts == sent, (answer, texts, output)
 
@@ -355,7 +369,7 @@ def agent_installs(binary):
                         'while [ $# -gt 0 ]; do [ "$1" = -o ] && out=$2; shift; done\n'
                         f'printf \'#!/bin/sh\\necho %s >> "{fetched}"\\n\' "$url" > "$out"\n')
         curl.chmod(0o700)
-        status, output = fixture.run('machine', 'setup', 'fixture', '--skip', 'config,login', '--json')
+        status, output = fixture.run('machine', 'setup', 'fixture', '--skip', 'config,login,editor', '--json')
         assert steps(output)['agents'] == 'changed', output
         assert fetched.read_text().split() == ['https://chatgpt.com/codex/install.sh'], fetched.read_text()
 
@@ -428,6 +442,7 @@ def interactive_ssh(binary):
 def contracts(binary):
     """Setup contracts asserted on their effects alone, beside the recorded outputs."""
     probe_failures(binary)
+    editor_is_provisioned(binary)
     configuration_sync(binary)
     refused_sync(binary)
     codex_hooks(binary)

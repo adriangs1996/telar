@@ -5,6 +5,7 @@ module;
 module telar.runtime.core.runtime;
 
 import telar.runtime.nvim.editor;
+import telar.runtime.nvim.provision;
 import telar.runtime.paths.query_task;
 import telar.ghostty.vt;
 import telar.sys.process;
@@ -1048,16 +1049,24 @@ namespace telar::runtime {
   }
 
   template <EventLoop Poller, HistoryEventSink History>
-  void WorkspaceService<Poller, History>::createEditor(RuntimeModel& model, Panes& panes, ClientStore& clients, std::uint64_t client_id, const CreateNvimPane& request) {
-    // The program, the flag that makes it speak its UI protocol on its pipes, where the cursor
-    // starts and then the files.
+  void WorkspaceService<Poller, History>::createEditor(RuntimeModel& model, Panes& panes, ClientStore& clients, EditorRequest asked, const NvimProvision& provision) {
+    const auto client_id = asked.client_id;
+    const auto& request = asked.request;
+    // The program, the flag that makes it speak its UI protocol on its pipes, telar's own
+    // configuration where the host has none, where the cursor starts and then the files.
     constexpr std::size_t cursor_capacity = 48;
-    ds::Array<std::string_view, max_nvim_files + 3> arguments;
+    constexpr std::size_t fixed_arguments = 5;
+    ds::Array<std::string_view, max_nvim_files + fixed_arguments> arguments;
     ds::Array<char, cursor_capacity> cursor{};
     std::size_t count = 0;
 
-    arguments.atMut(count++) = "nvim";
+    arguments.atMut(count++) = provision.program();
     arguments.atMut(count++) = "--embed";
+    if (!provision.ownInit().empty()) {
+      arguments.atMut(count++) = "-u";
+      arguments.atMut(count++) = provision.ownInit();
+    }
+
     if (request.line != 0 && !request.files.empty()) {
       // Two numbers the runtime writes itself: nothing a client sent is run as a command.
       const auto written = std::format_to_n(cursor.dataMut(), cursor.size(), "+call cursor({},{})", request.line, std::max<std::uint32_t>(request.column, 1));
@@ -1074,7 +1083,9 @@ namespace telar::runtime {
       arguments.atMut(count++) = file;
     }
 
-    const Launch launch{.cwd = request.cwd, .arguments = arguments.view().first(count)};
+    // Its plugins and its state are kept apart from the user's own Neovim, and from telar's files.
+    const ds::Array<EnvironmentEntry, 1> own{EnvironmentEntry{.name = "NVIM_APPNAME", .value = NvimProvision::own_name}};
+    const Launch launch{.cwd = request.cwd, .arguments = arguments.view().first(count), .environment = provision.ownInit().empty() ? std::span<const EnvironmentEntry>{} : std::span<const EnvironmentEntry>{own.view()}};
 
     if (request.new_tab) {
       createTab(model, panes, clients, Asked{.client_id = client_id, .kind = PaneKind::nvim}, CreateTab{.request_id = request.request_id, .workspace = request.location.workspace, .size = request.size, .launch = launch});
@@ -1838,6 +1849,8 @@ namespace telar::runtime {
         monitor_(memory, process_inspector_, ProcessTable{memory}, NativeHostDetail{}),
         workspace_git_(limits_, memory),
         shell_git_(memory),
+        data_home_(memory, options.data_home),
+        editor_provision_(memory),
         words_(memory, options.configuration_directory),
         agent_files_(memory),
         descriptions_(memory, background_, options.descriptions),
@@ -2499,7 +2512,25 @@ namespace telar::runtime {
   template <EventLoop Poller, typename Background>
     requires BackgroundExecutor<Background, ConcurrentMemory>
   void Runtime<Poller, Background>::handle(std::uint64_t identity, const CreateNvimPane& message) {
-    workspaces_.createEditor(model_, panes_, clients_, identity, message);
+    // $XDG_CONFIG_HOME, or ~/.config: where the user's own configuration of Neovim would be.
+    const char* named = std::getenv("XDG_CONFIG_HOME"); // NOLINT(concurrency-mt-unsafe): the runtime does not change its environment once it started
+    const char* home = std::getenv("HOME");             // NOLINT(concurrency-mt-unsafe): as above
+    const char* configured = std::getenv("TELAR_NVIM"); // NOLINT(concurrency-mt-unsafe): as above
+    ds::String<ConcurrentMemory> config_home{memory_, named != nullptr && *named == '/' ? std::string_view{named} : std::string_view{}};
+
+    if (config_home.empty() && home != nullptr && *home == '/') {
+      config_home.assign(home);
+      config_home.append("/.config");
+    }
+
+    // A runtime started with NVIM_APPNAME already names the configuration its editors load:
+    // telar's own is for a host that chose none.
+    if (std::getenv("NVIM_APPNAME") != nullptr) { // NOLINT(concurrency-mt-unsafe): as above
+      config_home.clear();
+    }
+
+    editor_provision_.resolve({.data_home = data_home_.view(), .config_home = config_home.view(), .configured = configured == nullptr ? std::string_view{} : std::string_view{configured}});
+    workspaces_.createEditor(model_, panes_, clients_, {.client_id = identity, .request = message}, editor_provision_);
   }
 
   template <EventLoop Poller, typename Background>

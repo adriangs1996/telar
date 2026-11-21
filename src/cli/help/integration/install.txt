@@ -1,6 +1,7 @@
-telar integration install: Add telar's hooks (or extension/plugin) and skills for an agent, or its Neovim plugin
+telar integration install: Add telar's hooks (or extension/plugin) and skills for an agent, its Neovim plugin, or the Neovim of its editor panes
 
 Usage: telar integration install claude|codex|pi|cursor|opencode|neovim [--settings PATH]
+       telar integration install editor
 
 Arguments:
   --settings PATH  An absolute path to write instead of the agent's default file; for
@@ -20,6 +21,16 @@ plugin no longer has. Inside a telar pane the plugin paints the window's theme
 telar's panes; elsewhere it does nothing. Each file starts with
 `-- telar-integration: neovim`, and a file without that line stops the install
 before anything is written.
+
+For editor, fetches the Neovim release this telar was built for from that release's
+own page (through HTTPS_PROXY when it is set), checks the archive against the SHA-256
+the build carries, and unpacks it under $XDG_DATA_HOME/telar/nvim/VERSION
+(~/.local/share by default), where the runtime looks for it before the Neovim of its
+PATH. Other bytes are refused and nothing is installed. TELAR_NVIM_ARCHIVE names an
+archive already on the host, for one without a network; it is checked the same. Needs
+curl (unless TELAR_NVIM_ARCHIVE is set), tar, and sha256sum or shasum. Nothing of the
+host's own Neovim or its configuration is touched; `telar integration uninstall
+editor` removes only what this installed.
 
 Results: one line per thing installed, already present or updated. Exit 0; 1 when
 the settings are not a JSON object or a file at the path is not telar's.
