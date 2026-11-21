@@ -13,12 +13,12 @@ static_assert(true);
 #include "telar_wire/serializers/telar_messages.hpp"
 #include "terminal_controller.hpp"
 #include "ui/app/panes/terminal/links/link_preview.hpp"
-#include "ui/app/panes/terminal/scroll_motion.hpp"
 #include "ui/kit/fonts/font_collection.hpp"
 #include "ui/kit/fonts/resident_fonts.hpp"
 #include "ui/kit/fonts/terminal_font.hpp"
 #include "ui/kit/fonts/window_font_catalog.hpp"
 #include "ui/kit/models/list_model.hpp"
+#include "ui/kit/motion/scroll_motion.hpp"
 #include <QKeyEvent>
 #include <QList>
 #include <QPointer>

@@ -34,6 +34,30 @@ export namespace telar::gui::features::nvim {
     }
   };
 
+  // The rows a scroll took off a grid, nearest the grid first: what a view slides out of sight
+  // while the rows that stayed slide to their places.
+  struct DepartedRows {
+    explicit DepartedRows(Memory& memory);
+
+    [[nodiscard]] std::span<const CellValue> row(std::size_t index) const noexcept;
+    // What names the cells of `row(index)`: no two rows kept ever share it.
+    [[nodiscard]] std::uint64_t stamp(std::size_t index) const noexcept;
+
+    // One slot for each row of the grid, reused in turn; `head` holds the nearest row.
+    ds::Vec<CellValue, Memory> cells;
+    ds::Vec<std::uint64_t, Memory> stamps;
+    std::uint16_t columns = 0;
+    std::uint16_t capacity = 0;
+    std::uint16_t count = 0;
+    std::uint16_t head = 0;
+    // The rows left at the top, or at the bottom.
+    bool above = false;
+    std::uint64_t last_stamp = 0;
+    // The rows the grid's text has moved up, summed: its change between two frames is how far
+    // a view has to slide. Only scrolls of the whole grid count.
+    std::int64_t moved = 0;
+  };
+
   // One grid of an editor: the default grid, a window or a float. Its cells are a screen the
   // terminal's painter draws; the rest says where it goes and what of its buffer it shows.
   struct Grid {
@@ -41,6 +65,7 @@ export namespace telar::gui::features::nvim {
 
     std::uint32_t id;
     Screen<Memory> screen;
+    DepartedRows departed;
     NvimPlacement placement = NvimPlacement::hidden;
     bool mouse_enabled = false;
     // A window's place on the default grid, or a float's on the editor, in cells.

@@ -884,12 +884,44 @@ return {api_version = 2, client = {
       // A split is a second window grid, placed beside the first.
       view->send(QStringLiteral(":only<CR>:vsplit<CR>"));
       QTRY_VERIFY_WITH_TIMEOUT(floats() == 0 && view->grids()->rowCount() >= 3, runtime_wait_ms);
+      // Between the two windows, a line of the window's own over Neovim's separator.
+      QTRY_COMPARE_WITH_TIMEOUT(view->separators().size(), 1, runtime_wait_ms);
+      QVERIFY(view->separators().first().toMap().value(QStringLiteral("vertical")).toBool());
       shoot(QStringLiteral("editor-split"));
 
       // Neovim's tab pages are a strip of the window's own once there is more than one.
       view->send(QStringLiteral(":tabnew<CR>"));
       QTRY_COMPARE_WITH_TIMEOUT(view->tabline().value(QStringLiteral("tabs")).toList().size(), 2, runtime_wait_ms);
       shoot(QStringLiteral("editor-tabs"));
+
+      // A scroll slides the rows to their places: the grid clips itself while they travel, and
+      // comes to rest with the rows Neovim has.
+      {
+        const auto sliding = [&] {
+          QList<QQuickItem*> pending{view};
+
+          while (!pending.isEmpty()) {
+            auto* item = pending.takeLast();
+            if (QByteArrayView{item->metaObject()->className()}.endsWith("NvimGridItem") && item->clip()) {
+              return true;
+            }
+
+            pending.append(item->childItems());
+          }
+
+          return false;
+        };
+
+        view->send(QStringLiteral("<Cmd>call setline(1, map(range(1, 300), 'printf(\"row %d\", v:val)'))<CR>"));
+        QTRY_VERIFY_WITH_TIMEOUT(shown().contains(QStringLiteral("row 12")), runtime_wait_ms);
+        QVERIFY(!sliding() && !shown().contains(QStringLiteral("row 40")));
+        view->send(QStringLiteral("<C-d>"));
+        QTRY_VERIFY_WITH_TIMEOUT(sliding(), runtime_wait_ms);
+        shoot(QStringLiteral("editor-scrolling"));
+        QTRY_VERIFY_WITH_TIMEOUT(!sliding(), runtime_wait_ms);
+        QVERIFY2(shown().contains(QStringLiteral("row 40")), qPrintable(shown()));
+        view->send(QStringLiteral("<Cmd>bwipeout!<CR>"));
+      }
 
       // With TELAR_EDITOR_METRICS set to a file, how long a key takes from the view to the frame
       // that shows it, applied in this window: the runtime, Neovim and the way back.

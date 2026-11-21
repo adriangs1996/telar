@@ -7,8 +7,10 @@ static_assert(true);
 #include "nvim_keys.hpp"
 #include "ui/kit/input/key_adapter.hpp"
 #include "ui/kit/models/projection.hpp"
+#include <QCursor>
 #include <QDebug>
 #include <QGuiApplication>
+#include <QHoverEvent>
 #include <QInputMethod>
 #include <QInputMethodEvent>
 #include <QMouseEvent>
@@ -164,6 +166,7 @@ namespace telar::gui::qt {
     setFlag(ItemAcceptsInputMethod);
     setFlag(ItemIsFocusScope, false);
     setAcceptedMouseButtons(Qt::LeftButton | Qt::RightButton | Qt::MiddleButton);
+    setAcceptHoverEvents(true);
     setActiveFocusOnTab(false);
     blink_.setSingleShot(true);
     connect(&blink_, &QTimer::timeout, this, [this] {
@@ -389,6 +392,91 @@ namespace telar::gui::qt {
     grids_.reconcile(std::move(records));
   }
 
+  namespace {
+
+    // The character Neovim rules a row with between two windows one over the other, when no
+    // status line stands there.
+    bool rules(std::string_view text) noexcept {
+      return text == "─" || text == "━" || text == "═";
+    }
+
+  }
+
+  void NvimItem::synchronizeSeparators(const nvim::Editor& editor) {
+    QVariantList separators;
+    const auto* base = editor.grid(1);
+    const auto width = font_.cell.width();
+    const auto height = font_.cell.height();
+    const auto add = [&](bool vertical, QRectF bounds) {
+      separators.append(QVariantMap{
+          {QStringLiteral("vertical"), vertical},
+          {QStringLiteral("x"), bounds.x()},
+          {QStringLiteral("y"), bounds.y()},
+          {QStringLiteral("width"), bounds.width()},
+          {QStringLiteral("height"), bounds.height()},
+      });
+    };
+
+    for (const auto& grid : editor.grids) {
+      if (base == nullptr || grid->id == 1 || grid->placement != nvim::NvimPlacement::window) {
+        continue;
+      }
+
+      // A window that does not start at the editor's left edge has a separator's column there.
+      if (grid->column > 0) {
+        add(true, {(grid->column - 1) * width, grid->row * height, width, grid->height * height});
+      }
+
+      const auto above = grid->row - 1;
+      if (above >= 0 && std::cmp_less(above, base->screen.rows()) && std::cmp_less(grid->column, base->screen.columns()) &&
+          rules(base->screen.row(static_cast<std::size_t>(above))[static_cast<std::size_t>(grid->column)].utf8())) {
+        add(false, {grid->column * width, above * height, grid->width * width, height});
+      }
+    }
+
+    if (separators != separators_) {
+      separators_ = std::move(separators);
+      emit separatorsChanged();
+    }
+  }
+
+  Qt::CursorShape NvimItem::pointerAt(QPointF position) const {
+    const auto* editor = editorState();
+    const auto where = hit(position);
+    const auto* grid = editor == nullptr || !where ? nullptr : editor->grid(where->grid);
+    if (grid == nullptr || !grid->mouse_enabled) {
+      return Qt::ArrowCursor;
+    }
+
+    if (grid->id != 1) {
+      return grid->placement == nvim::NvimPlacement::window ? Qt::IBeamCursor : Qt::ArrowCursor;
+    }
+
+    for (const auto& separator : separators_) {
+      const auto record = separator.toMap();
+      const QRectF bounds{record.value(QStringLiteral("x")).toReal(), record.value(QStringLiteral("y")).toReal(), record.value(QStringLiteral("width")).toReal(), record.value(QStringLiteral("height")).toReal()};
+
+      if (bounds.contains(position)) {
+        return record.value(QStringLiteral("vertical")).toBool() ? Qt::SplitHCursor : Qt::SplitVCursor;
+      }
+    }
+
+    // A status line with a window under it is dragged to resize the two.
+    const bool between = std::ranges::any_of(editor->grids, [&](const auto& other) {
+      return other->id != 1 && other->placement == nvim::NvimPlacement::window && other->row == where->row + 1 && where->column >= other->column && std::cmp_less(where->column, other->column + other->width);
+    });
+
+    return between ? Qt::SplitVCursor : Qt::ArrowCursor;
+  }
+
+  void NvimItem::hoverMoveEvent(QHoverEvent* event) {
+    if (const auto shape = pointerAt(event->position()); cursor().shape() != shape) {
+      setCursor(shape);
+    }
+
+    QQuickItem::hoverMoveEvent(event);
+  }
+
   void NvimItem::synchronizeCursor(const nvim::Editor& editor) {
     QRectF bounds;
 
@@ -586,6 +674,7 @@ namespace telar::gui::qt {
     if (layout_revision_ != editor->layout_revision || grids_.rowCount() == 0) {
       layout_revision_ = editor->layout_revision;
       synchronizeGrids(*editor);
+      synchronizeSeparators(*editor);
     }
 
     synchronizeCursor(*editor);

@@ -3,7 +3,7 @@
 static_assert(true);
 #endif
 
-#include "ui/app/panes/terminal/scroll_motion.hpp"
+#include "ui/kit/motion/scroll_motion.hpp"
 #include <cmath>
 #include <cstddef>
 #include <cstdint>

@@ -53,6 +53,7 @@ namespace telar::gui::qt {
     // Whether Neovim has drawn its first frame.
     Q_PROPERTY(bool ready READ ready NOTIFY readyChanged)
     // The surfaces Neovim leaves to its UI, each as QML draws it.
+    Q_PROPERTY(QVariantList separators READ separators NOTIFY separatorsChanged)
     Q_PROPERTY(QVariantMap cmdline READ cmdline NOTIFY cmdlineChanged)
     Q_PROPERTY(QVariantMap popupMenu READ popupMenu NOTIFY popupMenuChanged)
     Q_PROPERTY(QVariantMap messages READ messages NOTIFY messagesChanged)
@@ -102,6 +103,12 @@ namespace telar::gui::qt {
 
     [[nodiscard]] bool ready() const noexcept {
       return ready_;
+    }
+
+    // Where Neovim fills cells with a separator's character between two windows, in pixels:
+    // the window draws a line of its own over each.
+    [[nodiscard]] QVariantList separators() const {
+      return separators_;
     }
 
     [[nodiscard]] QVariantMap cmdline() const {
@@ -166,6 +173,7 @@ namespace telar::gui::qt {
     void cursorChanged();
     void modeChanged();
     void readyChanged();
+    void separatorsChanged();
     void cmdlineChanged();
     void popupMenuChanged();
     void messagesChanged();
@@ -189,6 +197,7 @@ namespace telar::gui::qt {
     void mouseMoveEvent(QMouseEvent* event) override;
     void mouseReleaseEvent(QMouseEvent* event) override;
     void wheelEvent(QWheelEvent* event) override;
+    void hoverMoveEvent(QHoverEvent* event) override;
 
   private:
     // A cell of a grid under a point of this item.
@@ -203,6 +212,9 @@ namespace telar::gui::qt {
     void refreshFonts();
     void resizeEditor();
     void synchronizeGrids(const application::nvim::Editor& editor);
+    void synchronizeSeparators(const application::nvim::Editor& editor);
+    // The pointer a place of the editor shows: text to select, a separator to drag, or neither.
+    [[nodiscard]] Qt::CursorShape pointerAt(QPointF position) const;
     void synchronizeCursor(const application::nvim::Editor& editor);
     void synchronizeSurfaces(const application::nvim::Editor& editor);
     void projectCmdline(const application::nvim::Editor& editor);
@@ -218,6 +230,7 @@ namespace telar::gui::qt {
     QPointer<NvimController> controller_;
     std::uint64_t pane_id_ = 0;
     ListModel grids_;
+    QVariantList separators_;
     TerminalFont font_;
     FontGrid font_grid_;
     std::shared_ptr<const FontCollection> font_collection_;

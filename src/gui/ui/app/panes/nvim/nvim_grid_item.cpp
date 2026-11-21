@@ -5,9 +5,13 @@ static_assert(true);
 
 #include "nvim_grid_item.hpp"
 #include "ui/kit/cell_scene/terminal_scene.hpp"
+#include "ui/kit/scene/window_animation_clock.hpp"
 #include <QQuickWindow>
 #include <QSGNode>
+#include <algorithm>
+#include <cmath>
 #include <memory>
+#include <span>
 
 import telar.gui.foundation.core;
 import telar.gui.application;
@@ -55,8 +59,143 @@ namespace telar::gui::qt {
     return shown == nullptr ? nullptr : shown->grid(grid_id_);
   }
 
+  ScrollTime NvimGridItem::now() const {
+    return {.nanoseconds = window() == nullptr ? 0 : static_cast<std::int64_t>(WindowAnimationClock::forWindow(*window()).now())};
+  }
+
+  void NvimGridItem::itemChange(ItemChange change, const ItemChangeData& data) {
+    // The frames a slide counts are its window's.
+    if (change == ItemSceneChange) {
+      rest();
+    }
+
+    QQuickItem::itemChange(change, data);
+  }
+
+  void NvimGridItem::slide(double distance, const application::nvim::Grid& current) {
+    const auto reach = static_cast<double>(current.screen.rows()) * editor_->cellHeight();
+    const auto from = motion_.moving() ? motion_.position() - reach_ : 0.0;
+
+    // A view each way is as far as rows are kept to slide.
+    reach_ = reach;
+    motion_.tune({.wheel_ms = static_cast<double>(editor_->controller()->configuration().scroll.wheel_ms)});
+    motion_.setLimit(2 * reach);
+    motion_.place(reach + from + distance);
+    motion_.wheel(reach - motion_.position(), now());
+    if (!motion_.moving()) {
+      rest();
+      return;
+    }
+
+    setClip(true);
+    if (!frames_) {
+      frames_ = connect(window(), &QQuickWindow::afterAnimating, this, &NvimGridItem::advance);
+    }
+
+    composeRows();
+    window()->update();
+  }
+
+  void NvimGridItem::advance() {
+    if (!motion_.advance(now()) || !isVisible()) {
+      rest();
+      return;
+    }
+
+    composeRows();
+    update();
+    window()->update();
+  }
+
+  void NvimGridItem::rest() {
+    motion_.stop();
+    disconnect(frames_);
+    frames_ = {};
+    if (!drawn_rows_.isEmpty() || clip()) {
+      drawn_rows_.clear();
+      shift_ = 0;
+      setClip(false);
+      update();
+    }
+  }
+
+  void NvimGridItem::composeRows() {
+    const auto* current = grid();
+
+    drawn_rows_.clear();
+    shift_ = 0;
+    if (current == nullptr || editor_ == nullptr || !motion_.moving()) {
+      return;
+    }
+
+    const auto& screen = current->screen;
+    const auto& departed = current->departed;
+    const auto height = editor_->cellHeight();
+    const auto offset = motion_.position() - reach_;
+    // Rows that came up slide over the ones that left above them, and the other way around: a
+    // slide the other way has no rows to show, and the grid's own stand in their places.
+    constexpr double in_place = 0.01;
+    const auto distance = std::min(std::abs(offset), static_cast<double>(departed.count) * height);
+
+    if (distance < in_place || height <= 0 || (offset > 0) != departed.above) {
+      return;
+    }
+
+    constexpr std::uint64_t departed_source = std::uint64_t{1} << 63U;
+    const auto rows = static_cast<std::size_t>(screen.rows());
+    const auto whole = static_cast<std::size_t>(std::ceil(distance / height));
+    const auto own = [&](std::size_t row) {
+      drawn_rows_.append({.cells = screen.row(row), .revision = screen.rowRevision(row), .source = row, .screen_row = static_cast<std::int32_t>(row)});
+    };
+    const auto gone = [&](std::size_t index) {
+      drawn_rows_.append({.cells = departed.row(index), .revision = departed.stamp(index), .source = departed_source});
+    };
+
+    drawn_rows_.reserve(static_cast<qsizetype>(rows + 1));
+    if (departed.above) {
+      shift_ = (static_cast<double>(whole) * height) - distance;
+      for (auto index = whole; index-- > 0;) {
+        gone(index);
+      }
+
+      for (std::size_t row = 0; row < std::min(rows, rows - whole + 1); ++row) {
+        own(row);
+      }
+
+      return;
+    }
+
+    const auto first = static_cast<std::size_t>(std::floor(distance / height));
+
+    shift_ = distance - (static_cast<double>(first) * height);
+    for (auto row = first; row < rows; ++row) {
+      own(row);
+    }
+
+    for (std::size_t index = 0; index < whole; ++index) {
+      gone(index);
+    }
+  }
+
   void NvimGridItem::refresh() {
     const auto* current = grid();
+
+    if (current == nullptr || editor_ == nullptr) {
+      moved_seen_ = ds::none;
+      rest();
+    } else {
+      const auto moved = current->departed.moved;
+      const auto before = moved_seen_.valueOr(moved);
+
+      moved_seen_ = moved;
+      // The setting a terminal's rows follow: without it they arrive at once.
+      if (moved != before && isVisible() && window() != nullptr && editor_->controller() != nullptr && editor_->controller()->configuration().scroll.smooth) {
+        slide(static_cast<double>(moved - before) * editor_->cellHeight(), *current);
+      } else if (motion_.moving()) {
+        // The rows drawn view the grid's cells, which this frame changed.
+        composeRows();
+      }
+    }
     const ds::Option<Drawn> next = current == nullptr || editor_ == nullptr ? ds::Option<Drawn>{} : Drawn{.revision = current->screen.revision(), .appearance = editor_->appearance(), .cursor_on = editor_->cursorOn(), .keyboard = editor_->hasActiveFocus()};
 
     // Most frames change one grid: the others keep what they drew.
@@ -112,7 +251,8 @@ namespace telar::gui::qt {
         .preedit = no_preedit,
         .fonts = editor_->fontCollection(),
         .grid = editor_->fontGrid(),
-        .bounds = boundingRect(),
+        // A slide draws one row past the grid's last, partly shown, which the item clips.
+        .bounds = drawn_rows_.isEmpty() ? boundingRect() : boundingRect().adjusted(0, 0, 0, editor_->cellHeight()),
         .scale = window()->effectiveDevicePixelRatio(),
         .appearance = editor_->appearance(),
         .box_stroke = editor_->fontGrid().box_stroke,
@@ -123,6 +263,8 @@ namespace telar::gui::qt {
         .owner = this,
         // The pane, or the float's own surface, is behind the cells that have no color.
         .background_provided = true,
+        .rows = std::span<const TerminalRow>{drawn_rows_.constData(), static_cast<std::size_t>(drawn_rows_.size())},
+        .shift = shift_,
     };
 
     return TerminalScene::synchronizeNode(previous, *window(), frame);

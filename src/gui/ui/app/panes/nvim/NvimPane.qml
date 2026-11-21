@@ -132,6 +132,39 @@ FocusScope {
             }
         }
 
+        // Between two windows Neovim fills cells with a separator's character: a line of the
+        // window's own stands over each. The cells stay Neovim's to drag.
+        Repeater {
+            model: view.separators
+
+            delegate: Item {
+                id: separator
+
+                required property var modelData
+
+                x: modelData.x
+                y: modelData.y
+                z: 0.5
+                width: modelData.width
+                height: modelData.height
+
+                Rectangle {
+                    readonly property color base: root.colors.terminalBackground
+
+                    anchors.fill: parent
+                    color: Qt.rgba(base.r, base.g, base.b, 1)
+                }
+
+                Rectangle {
+                    x: separator.modelData.vertical ? Math.round((parent.width - width) / 2) : 0
+                    y: separator.modelData.vertical ? 0 : Math.round((parent.height - height) / 2)
+                    width: separator.modelData.vertical ? 1 : parent.width
+                    height: separator.modelData.vertical ? parent.height : 1
+                    color: root.colors.border
+                }
+            }
+        }
+
         // The cursor's own layer: a mark that travels from where the cursor was to where it
         // is and fades as it arrives. The cursor itself is already there, drawn with the cells,
         // so nothing waits for the motion.
