@@ -91,6 +91,13 @@ namespace telar {
     request_process_signal = 0x53,
     request_process_priority = 0x54,
     query_history_workspaces = 0x55,
+    create_nvim_pane = 0x56,
+    nvim_input = 0x57,
+    nvim_paste = 0x58,
+    nvim_mouse = 0x59,
+    nvim_focus = 0x5a,
+    nvim_prompt_reply = 0x5b,
+    nvim_open = 0x5c,
   };
 
   enum class ServerTag : Byte {
@@ -160,6 +167,14 @@ namespace telar {
     monitor_snapshot = 0xc4,
     pane_theme = 0xc5,
     history_workspaces = 0xc6,
+    pane_kind_notice = 0xc7,
+    nvim_grid = 0xc8,
+    nvim_frame = 0xc9,
+    nvim_cmdline = 0xca,
+    nvim_popup_menu = 0xcb,
+    nvim_message_list = 0xcc,
+    nvim_tab_line = 0xcd,
+    nvim_prompt = 0xce,
   };
 
   struct RequestRuntimeState {
@@ -451,6 +466,20 @@ namespace telar {
       return "request_process_priority";
     case ClientTag::query_history_workspaces:
       return "query_history_workspaces";
+    case ClientTag::create_nvim_pane:
+      return "create_nvim_pane";
+    case ClientTag::nvim_input:
+      return "nvim_input";
+    case ClientTag::nvim_paste:
+      return "nvim_paste";
+    case ClientTag::nvim_mouse:
+      return "nvim_mouse";
+    case ClientTag::nvim_focus:
+      return "nvim_focus";
+    case ClientTag::nvim_prompt_reply:
+      return "nvim_prompt_reply";
+    case ClientTag::nvim_open:
+      return "nvim_open";
     }
 
     return {};
@@ -588,6 +617,22 @@ namespace telar {
       return "monitor_snapshot";
     case ServerTag::history_workspaces:
       return "history_workspaces";
+    case ServerTag::pane_kind_notice:
+      return "pane_kind_notice";
+    case ServerTag::nvim_grid:
+      return "nvim_grid";
+    case ServerTag::nvim_frame:
+      return "nvim_frame";
+    case ServerTag::nvim_cmdline:
+      return "nvim_cmdline";
+    case ServerTag::nvim_popup_menu:
+      return "nvim_popup_menu";
+    case ServerTag::nvim_message_list:
+      return "nvim_message_list";
+    case ServerTag::nvim_tab_line:
+      return "nvim_tab_line";
+    case ServerTag::nvim_prompt:
+      return "nvim_prompt";
     case ServerTag::pane_theme:
       return "pane_theme";
     }

@@ -4,6 +4,7 @@ import std;
 import telar.tbc;
 import telar.base.ds;
 import telar.base.memory.allocators;
+import telar.wire.nvim;
 
 namespace telar::runtime {
 
@@ -67,7 +68,7 @@ namespace telar::runtime {
 
     // Copies the cells a scroll moves, row by row from the end the rows leave. A row that moves
     // whole keeps the flush that last changed it; one that moves in part changed `now`.
-    void moveRows(NvimGrid& grid, NvimScroll scroll, std::uint64_t now) {
+    void moveRows(NvimScreenGrid& grid, NvimScroll scroll, std::uint64_t now) {
       const bool upward = scroll.rows > 0;
       const bool whole_rows = scroll.left == 0 && scroll.right == grid.columns;
       const std::size_t width = static_cast<std::size_t>(scroll.right) - scroll.left;
@@ -85,11 +86,13 @@ namespace telar::runtime {
         std::ranges::copy(cells.subspan((source * columns) + scroll.left, width), cells.subspan((target * columns) + scroll.left, width).begin());
         changed[target] = whole_rows ? changed[source] : now;
       }
+
+      grid.cells_at = now;
     }
 
     // Keeps a scroll of whole rows for clients to replay: they are then sent only the rows that
     // changed. Past what a flush keeps, the grid is sent whole instead.
-    void recordScroll(NvimGrid& grid, NvimScroll scroll, std::uint64_t now) {
+    void recordScroll(NvimScreenGrid& grid, NvimScroll scroll, std::uint64_t now) {
       if (grid.scrolled_at != now) {
         grid.scrolled_before = grid.scrolled_at;
         grid.scrolled_at = now;
@@ -107,13 +110,13 @@ namespace telar::runtime {
 
   }
 
-  NvimGrid::NvimGrid(ConcurrentMemory& memory, std::uint32_t identity)
+  NvimScreenGrid::NvimScreenGrid(ConcurrentMemory& memory, std::uint32_t identity)
       : id(identity),
         cells(memory),
         row_changed_at(memory),
         scrolls(memory) {}
 
-  std::span<const NvimCell> NvimGrid::row(std::uint32_t index) const noexcept {
+  std::span<const NvimCell> NvimScreenGrid::row(std::uint32_t index) const noexcept {
     return cells.view().subspan(std::size_t{index} * columns, columns);
   }
 
@@ -178,7 +181,8 @@ namespace telar::runtime {
         command_line_(memory),
         completion_(memory),
         messages_(memory),
-        tabs_(memory) {
+        tabs_(memory),
+        removed_(memory) {
     highlights_.push({});
   }
 
@@ -218,21 +222,22 @@ namespace telar::runtime {
     return ds::none;
   }
 
-  NvimGrid* NvimScreen::find(std::uint32_t id) noexcept {
+  NvimScreenGrid* NvimScreen::find(std::uint32_t id) noexcept {
     const auto index = indexOf(id);
 
     return index ? &grids_.atMut(*index).getMut() : nullptr;
   }
 
-  NvimGrid& NvimScreen::add(std::uint32_t id) {
+  NvimScreenGrid& NvimScreen::add(std::uint32_t id) {
     recent_ = grids_.size();
-    return grids_.push(ds::makeBox<NvimGrid>(memory_, memory_, id)).getMut();
+    return grids_.push(ds::makeBox<NvimScreenGrid>(memory_, memory_, id)).getMut();
   }
 
-  void NvimScreen::reset(NvimGrid& grid, std::uint64_t stamp) noexcept {
+  void NvimScreen::reset(NvimScreenGrid& grid, std::uint64_t stamp) noexcept {
     std::ranges::fill(grid.row_changed_at.viewMut(), stamp);
     grid.scrolls.clear();
     grid.reset_at = stamp;
+    grid.cells_at = stamp;
   }
 
   bool NvimScreen::resize(std::uint32_t id, NvimExtent size) {
@@ -295,7 +300,12 @@ namespace telar::runtime {
 
       [[maybe_unused]] const auto removed = grids_.remove(index);
 
-      grids_removed_at_ = stamp();
+      if (removed_.size() == NvimLimits::grids) {
+        removed_forgotten_at_ = removed_.front().at;
+        [[maybe_unused]] const auto forgotten = removed_.remove(0);
+      }
+
+      removed_.push({.grid = id, .at = stamp()});
       return;
     }
   }
@@ -314,6 +324,7 @@ namespace telar::runtime {
     }
 
     grid.row_changed_at.atMut(start.row) = now;
+    grid.cells_at = now;
     put_grid_ = *index;
     put_ = start;
     touch();
@@ -406,6 +417,7 @@ namespace telar::runtime {
       for (std::uint32_t row = 0; row < owned.rows; ++row) {
         if (dropClusters(owned.cells.viewMut().subspan(std::size_t{row} * owned.columns, owned.columns))) {
           owned.row_changed_at.atMut(row) = stamp();
+          owned.cells_at = stamp();
         }
       }
     }
@@ -519,7 +531,7 @@ namespace telar::runtime {
     return static_cast<std::uint16_t>(links_.size());
   }
 
-  NvimGrid* NvimScreen::place(std::uint32_t id, NvimPlacement placement) {
+  NvimScreenGrid* NvimScreen::place(std::uint32_t id, NvimPlacement placement) {
     auto* grid = find(id);
     if (grid == nullptr) {
       if (grids_.size() == NvimLimits::grids) {
@@ -537,12 +549,12 @@ namespace telar::runtime {
 
   void NvimScreen::hide(std::uint32_t id) noexcept {
     auto* grid = find(id);
-    if (grid == nullptr || grid->placement == NvimPlacement::none) {
+    if (grid == nullptr || grid->placement == NvimPlacement::hidden) {
       return;
     }
 
     touch();
-    grid->placement = NvimPlacement::none;
+    grid->placement = NvimPlacement::hidden;
     grid->placed_at = stamp();
   }
 
@@ -647,18 +659,22 @@ namespace telar::runtime {
     return tabs_;
   }
 
-  std::span<const ds::Box<NvimGrid, ConcurrentMemory>> NvimScreen::grids() const noexcept {
+  std::span<const ds::Box<NvimScreenGrid, ConcurrentMemory>> NvimScreen::grids() const noexcept {
     return grids_.view();
   }
 
-  const NvimGrid* NvimScreen::grid(std::uint32_t id) const noexcept {
+  const NvimScreenGrid* NvimScreen::grid(std::uint32_t id) const noexcept {
     const auto index = indexOf(id);
 
     return index ? &*grids_[*index] : nullptr;
   }
 
-  std::uint64_t NvimScreen::gridsRemovedAt() const noexcept {
-    return grids_removed_at_;
+  std::span<const NvimRemoved> NvimScreen::removed() const noexcept {
+    return removed_.view();
+  }
+
+  std::uint64_t NvimScreen::removedForgottenAt() const noexcept {
+    return removed_forgotten_at_;
   }
 
   const NvimHighlight& NvimScreen::highlightOf(std::uint16_t id) const noexcept {

@@ -59,7 +59,7 @@ namespace telar {
 
   template <>
   struct MessageSchema<RequestFailed>
-      : Schema<Direction::server, ServerTag::request_failed, Field<&RequestFailed::request_id, u64, "request_id">, Field<&RequestFailed::code, EnumInteger<FailureCode, u16, std::to_underlying(FailureCode::pane_not_found), std::to_underlying(FailureCode::process_not_found)>, "code">, Field<&RequestFailed::message, Utf8Tail<RequestFailed::maximum_message_bytes>, "message">> {};
+      : Schema<Direction::server, ServerTag::request_failed, Field<&RequestFailed::request_id, u64, "request_id">, Field<&RequestFailed::code, EnumInteger<FailureCode, u16, std::to_underlying(FailureCode::pane_not_found), std::to_underlying(FailureCode::unsupported_pane_kind)>, "code">, Field<&RequestFailed::message, Utf8Tail<RequestFailed::maximum_message_bytes>, "message">> {};
 
   struct RuntimeStopping {};
 

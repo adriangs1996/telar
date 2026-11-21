@@ -3,7 +3,7 @@ telar_add_domain(runtime core/model
     client_layouts/client_layouts-launch_record.cpp
     client_layouts/client_layouts.cpp
     slot_store/slot_store.cpp
-  DEPS diagnostics transport host terminal/shell_integration terminal history terminal/command_capture terminal/graphics agents
+  DEPS diagnostics transport host nvim terminal/shell_integration terminal history terminal/command_capture terminal/graphics agents
        agents/observation)
 
 if(BUILD_TESTING)

@@ -42,6 +42,7 @@ import telar.wire.graphics;
 import telar.wire.history;
 import telar.wire.layout;
 import telar.wire.monitor;
+import telar.wire.nvim;
 import telar.runtime.host.process_table;
 import telar.wire.pane_io;
 import telar.wire.runtime;
@@ -324,14 +325,18 @@ export {
 
       void createWorkspace(RuntimeModel& model, Panes& panes, ClientStore& clients, std::uint64_t client_id, const CreateWorkspace& request);
 
-      void createTab(RuntimeModel& model, Panes& panes, ClientStore& clients, std::uint64_t client_id, const CreateTab& request);
+      // The tab's first pane is of `kind`: a terminal that runs the launch, or an editor.
+      void createTab(RuntimeModel& model, Panes& panes, ClientStore& clients, std::uint64_t client_id, const CreateTab& request, PaneKind kind = PaneKind::terminal);
 
       // A tab launched without a client, in the colors of its workspace's geometry owner.
       std::uint64_t launchBackground(RuntimeModel& model, Panes& panes, const ConfigureTerminalColors* owner_colors, bool bare_prompt, const LaunchTab& request);
 
       void launchTab(RuntimeModel& model, Panes& panes, ClientStore& clients, std::uint64_t client_id, const LaunchTab& request);
 
-      void createPane(RuntimeModel& model, Panes& panes, ClientStore& clients, std::uint64_t client_id, const CreatePane& request);
+      void createPane(RuntimeModel& model, Panes& panes, ClientStore& clients, std::uint64_t client_id, const CreatePane& request, PaneKind kind = PaneKind::terminal);
+
+      // An editor pane on the request's files, in a tab of its own or beside a tab's panes.
+      void createEditor(RuntimeModel& model, Panes& panes, ClientStore& clients, std::uint64_t client_id, const CreateNvimPane& request);
 
       void renameWorkspace(RuntimeModel& model, ClientSession& client, const RenameWorkspace& request);
 
@@ -406,6 +411,7 @@ export {
         TabLocation location;
         Launch launch;
         TerminalSize size{};
+        PaneKind kind = PaneKind::terminal;
       };
 
       std::uint64_t createAt(RuntimeModel& model, Panes& panes, ClientStore& clients, const TabOpening& opening);
@@ -422,6 +428,10 @@ export {
       };
 
       static void sendOpened(ClientSession& client, std::uint64_t request, const Pane& pane, bool created, GenerationField generation = GenerationField::included);
+
+      // Says what a pane is before the message that first names it to a client, which takes a
+      // pane it was told nothing about for a terminal.
+      static void announceKind(ClientSession& client, const Pane& pane);
 
       static constexpr std::size_t maximum_tabs = 64;
       static constexpr std::size_t maximum_panes_per_tab = 64;
@@ -617,6 +627,7 @@ export {
 
       void paneEvent(const Event& event);
       void paneEvent(TerminalPane& pane, const Event& event);
+      void paneEvent(NvimPane& pane, const Event& event);
 
       // The client's frames leave its connection while their requests run, so a request can change any
       // client, its own included, without touching the bytes it was decoded from.
@@ -688,6 +699,13 @@ export {
       void handle(std::uint64_t identity, const OpenPane& message);
 
       void handle(std::uint64_t identity, const CreatePane& message);
+      void handle(std::uint64_t identity, const CreateNvimPane& message);
+      void handle(std::uint64_t identity, const NvimInput& message);
+      void handle(std::uint64_t identity, const NvimPaste& message);
+      void handle(std::uint64_t identity, const NvimMouse& message);
+      void handle(std::uint64_t identity, const NvimFocus& message);
+      void handle(std::uint64_t identity, const NvimPromptReply& message);
+      void handle(std::uint64_t identity, const NvimOpen& message);
 
       void handle(std::uint64_t identity, const ClosePane& message);
 
@@ -815,6 +833,7 @@ export {
       // The repository of the directory a pane's shell is at.
       static void followRepository(TerminalPane& pane, ShellGitService& shell_git);
       void refreshPane(TerminalPane& pane, Clock::time_point now, bool poll_panes);
+      void refreshPane(NvimPane& pane, Clock::time_point now, bool poll_panes);
 
       void refreshServices(Clock::time_point now);
 

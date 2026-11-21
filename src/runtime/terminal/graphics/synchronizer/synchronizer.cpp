@@ -85,7 +85,7 @@ namespace telar::runtime {
         pane_(pane) {}
 
   GraphicsSynchronizer::~GraphicsSynchronizer() {
-    if (shared_) {
+    if (shared_ && media_) {
       media_->noteSharedTransport(false);
     }
   }
@@ -112,7 +112,11 @@ namespace telar::runtime {
   void GraphicsSynchronizer::configure(bool shared) noexcept {
     if (shared_ != shared) {
       shared_ = shared;
-      media_->noteSharedTransport(shared);
+      // A pane that shows no images has no media to tell.
+      if (media_) {
+        media_->noteSharedTransport(shared);
+      }
+
       requestSnapshot();
     }
   }

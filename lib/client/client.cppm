@@ -44,9 +44,12 @@ export {
       // cqp00003 added ReadPaneRows, PaneRows, PaneScrollback, SearchPaneRows, PaneCommand and
       // ConfigureShellPrompt; cqp00004 added PaneDocument; cqp00005 added the editor colors to
       // ConfigureTerminalColors, ReadPaneTheme and PaneTheme; cqp00006 added QueryMonitor,
-      // MonitorSnapshot, RequestProcessSignal and RequestProcessPriority; cqp00007 adds
-      // QueryHistoryWorkspaces and HistoryWorkspaces. Peers without them reject the messages.
-      inline constexpr SchemaId schema_id{'c', 'q', 'p', '0', '0', '0', '0', '7'};
+      // MonitorSnapshot, RequestProcessSignal and RequestProcessPriority; cqp00007 added
+      // QueryHistoryWorkspaces and HistoryWorkspaces; cqp00008 adds the editor pane: CreateNvimPane,
+      // NvimInput, NvimPaste, NvimMouse, NvimFocus, NvimPromptReply, NvimOpen, PaneKindNotice,
+      // NvimGrid, NvimFrame, NvimCmdline, NvimPopupMenu, NvimMessageList, NvimTabLine and
+      // NvimPrompt, and the failure a request answers for a pane of another kind. Peers without them reject the messages.
+      inline constexpr SchemaId schema_id{'c', 'q', 'p', '0', '0', '0', '0', '8'};
 
       // The schemas a client of this build can speak with a runtime, oldest first. Each added
       // messages to the one before it and left the layouts of the others alone, so a client that
@@ -60,17 +63,19 @@ export {
         cqp00005,
         cqp00006,
         cqp00007,
+        cqp00008,
       };
 
-      inline constexpr Dialect current_dialect = Dialect::cqp00007;
+      inline constexpr Dialect current_dialect = Dialect::cqp00008;
 
-      inline constexpr ds::Array<SchemaId, 7> dialect_schemas{
+      inline constexpr ds::Array<SchemaId, 8> dialect_schemas{
           SchemaId{'8', '7', '6', 'b', '4', '8', '0', 'd'},
           SchemaId{'c', 'q', 'p', '0', '0', '0', '0', '2'},
           SchemaId{'c', 'q', 'p', '0', '0', '0', '0', '3'},
           SchemaId{'c', 'q', 'p', '0', '0', '0', '0', '4'},
           SchemaId{'c', 'q', 'p', '0', '0', '0', '0', '5'},
           SchemaId{'c', 'q', 'p', '0', '0', '0', '0', '6'},
+          SchemaId{'c', 'q', 'p', '0', '0', '0', '0', '7'},
           schema_id,
       };
 
@@ -110,6 +115,14 @@ export {
           return Dialect::cqp00006;
         case ClientTag::query_history_workspaces:
           return Dialect::cqp00007;
+        case ClientTag::create_nvim_pane:
+        case ClientTag::nvim_input:
+        case ClientTag::nvim_paste:
+        case ClientTag::nvim_mouse:
+        case ClientTag::nvim_focus:
+        case ClientTag::nvim_prompt_reply:
+        case ClientTag::nvim_open:
+          return Dialect::cqp00008;
         default:
           return Dialect::schema87;
         }

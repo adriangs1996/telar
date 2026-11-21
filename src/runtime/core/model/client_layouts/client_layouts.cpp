@@ -159,29 +159,123 @@ namespace telar::runtime {
   ds::Option<int> reapProcess(Pane& pane) noexcept {
     ds::Option<int> status;
 
-    visitPane(pane, [&](TerminalPane& terminal) {
-      status = terminal.process.getMut().reap();
+    visitPane(pane, [&](auto& kind) {
+      status = kind.process.getMut().reap();
     });
 
     return status;
   }
 
   void signalProcess(const Pane& pane, int number) noexcept {
-    visitPane(pane, [&](const TerminalPane& terminal) {
-      terminal.process->signal(number);
+    visitPane(pane, [&](const auto& kind) {
+      kind.process->signal(number);
     });
+  }
+
+  namespace {
+
+    ProgramTitle titleOf(const TerminalPane& pane) noexcept {
+      const auto& effects = pane.terminal.effects();
+
+      return {.text = effects.title(), .revision = effects.title_revision};
+    }
+
+    ProgramTitle titleOf(const NvimPane& pane) noexcept {
+      const auto& screen = pane.editor.screen();
+
+      return {.text = screen.title(), .revision = screen.titleAt()};
+    }
+
   }
 
   ProgramTitle programTitle(const Pane& pane) noexcept {
     ProgramTitle title;
 
-    visitPane(pane, [&](const TerminalPane& terminal) {
-      const auto& effects = terminal.terminal.effects();
-
-      title = {.text = effects.title(), .revision = effects.title_revision};
+    visitPane(pane, [&](const auto& kind) {
+      title = titleOf(kind);
     });
 
     return title;
+  }
+
+  NvimPane::NvimPane(ConcurrentMemory& memory, std::uint64_t identity, TabLocation tab, Command<ConcurrentMemory>& command, TerminalSize size)
+      : Pane(pane_kind, memory, identity, tab, command.cwd()),
+        editor(memory, {.columns = size.cols, .rows = size.rows}, {}) {
+    foreground.assign("nvim");
+    process.emplace(command.specification(size));
+    process_id = process->processId();
+    extent = size;
+  }
+
+  bool NvimPane::read() {
+    ds::Array<Byte, read_buffer_size> buffer; // NOLINT(cppcoreguidelines-pro-type-member-init): the read path reads only the bytes read(2) wrote
+
+    for (unsigned attempt = 0; attempt < read_burst; ++attempt) {
+      const auto count = ::read(process->output(), buffer.dataMut(), buffer.size());
+      if (count < 0) {
+        // Nothing more for now is not an end: the pipe stays open.
+        return socketWouldBlock(sys::lastError()) || sys::lastError() == EINTR;
+      }
+
+      if (count == 0 || !editor.receive(buffer.view().first(static_cast<std::size_t>(count)))) {
+        output_closed = true;
+        return false;
+      }
+    }
+
+    return true;
+  }
+
+  bool NvimPane::readErrors() noexcept {
+    constexpr std::size_t drained_bytes = 4096;
+    ds::Array<Byte, drained_bytes> buffer; // NOLINT(cppcoreguidelines-pro-type-member-init): what is read is dropped
+    const auto count = ::read(process->error(), buffer.dataMut(), buffer.size());
+
+    return count > 0 || (count < 0 && (socketWouldBlock(sys::lastError()) || sys::lastError() == EINTR));
+  }
+
+  void NvimPane::write() {
+    const auto bytes = editor.pending();
+    if (bytes.empty() || process->input() < 0) {
+      return;
+    }
+
+    const auto count = ::write(process->input(), bytes.data(), bytes.size());
+    if (count > 0) {
+      editor.written(static_cast<std::size_t>(count));
+      return;
+    }
+
+    if (count < 0 && (socketWouldBlock(sys::lastError()) || sys::lastError() == EINTR)) {
+      return;
+    }
+
+    throw std::system_error{count < 0 ? sys::lastError() : EIO, std::generic_category(), "Editor write failed"};
+  }
+
+  bool NvimPane::hasInput() const noexcept {
+    return !editor.pending().empty() && process->input() >= 0;
+  }
+
+  void NvimPane::requestClose() noexcept {
+    if (close_requested) {
+      return;
+    }
+
+    // Neovim leaves on the signal, keeping what was not written in its swap files, and the
+    // signal reaches what it started. Its descriptors stay open until the pane is removed: the
+    // poller that watches them is the pane service's to tell.
+    close_requested = true;
+    process->signal(SIGTERM);
+  }
+
+  void NvimPane::resize(TerminalSize size) {
+    if (extent == size) {
+      return;
+    }
+
+    extent = size;
+    editor.resize({.columns = size.cols, .rows = size.rows});
   }
 
   TerminalPane::TerminalPane(ConcurrentMemory& memory, std::uint64_t identity, TabLocation tab, Command<ConcurrentMemory>& command, PaneLaunch settings)
@@ -689,10 +783,24 @@ namespace telar::runtime {
   tbc::mut_a<TerminalPane> requireTerminal(tbc::mut_a<Pane> pane) {
     auto* terminal = pane.asMut<TerminalPane>();
     if (terminal == nullptr) {
-      throw RequestError{FailureCode::invalid_request, "This pane is not a terminal"};
+      throw RequestError{FailureCode::unsupported_pane_kind, "This pane is not a terminal"};
     }
 
     return *terminal;
+  }
+
+  tbc::mut_a<NvimPane> requireNvim(tbc::mut_a<PaneStore> panes, std::uint64_t identity) {
+    auto* pane = panes.find(identity);
+    if (pane == nullptr) {
+      throw RequestError{FailureCode::pane_not_found, "Pane does not exist"};
+    }
+
+    auto* editor = pane->asMut<NvimPane>();
+    if (editor == nullptr) {
+      throw RequestError{FailureCode::unsupported_pane_kind, "This pane is not an editor"};
+    }
+
+    return *editor;
   }
 
   tbc::mut_a<TerminalPane> requireTerminal(tbc::mut_a<PaneStore> panes, std::uint64_t identity) {
@@ -719,6 +827,7 @@ namespace telar::runtime {
 
   RuntimeModel::RuntimeModel(ConcurrentMemory& memory, GraphicsLimits graphics)
       : graphics_limits(graphics),
+        editor_frames(memory),
         media_budget(graphics.global_bytes),
         panes(memory),
         workspaces(memory),

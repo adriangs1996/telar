@@ -7,6 +7,7 @@ import std;
 import telar.tbc;
 import telar.base.ds;
 import telar.base.memory.allocators;
+import telar.wire.nvim;
 
 // Interface: nvim/screen.cppm
 export {
@@ -110,31 +111,11 @@ export {
       [[nodiscard]] tbc::val_a<std::string_view> of(tbc::val_a<std::string_view> text) const;
     };
 
-    enum class NvimPlacement : std::uint8_t {
-      // Not shown: never placed, hidden or closed.
-      none,
-      window,
-      floating,
-      external,
-      // The message grid, a row of the default grid's.
-      message,
-    };
-
     enum class NvimAnchor : std::uint8_t {
       north_west,
       north_east,
       south_west,
       south_east,
-    };
-
-    // A copy of screen cells Neovim asks for in place of sending them again.
-    struct NvimScroll {
-      std::uint16_t top = 0;
-      std::uint16_t bottom = 0;
-      std::uint16_t left = 0;
-      std::uint16_t right = 0;
-      // More than zero moves the region's cells up.
-      std::int16_t rows = 0;
     };
 
     struct NvimViewport {
@@ -156,10 +137,16 @@ export {
       constexpr bool operator==(const NvimMargins&) const noexcept = default;
     };
 
+    // A grid Neovim destroyed, and the flush it went in.
+    struct NvimRemoved {
+      std::uint32_t grid = 0;
+      std::uint64_t at = 0;
+    };
+
     // Every `*_at` is the flush that last changed what it names: a client that has flush N is
     // sent what changed after N.
-    struct NvimGrid {
-      explicit NvimGrid(ConcurrentMemory& memory, std::uint32_t identity);
+    struct NvimScreenGrid {
+      explicit NvimScreenGrid(ConcurrentMemory& memory, std::uint32_t identity);
 
       [[nodiscard]] std::span<const NvimCell> row(std::uint32_t index) const noexcept;
 
@@ -175,8 +162,10 @@ export {
       std::uint64_t scrolled_before = 0;
       // When every row has to be sent again: the grid was made, resized or cleared.
       std::uint64_t reset_at = 0;
+      // When a cell of it last changed.
+      std::uint64_t cells_at = 0;
 
-      NvimPlacement placement = NvimPlacement::none;
+      NvimPlacement placement = NvimPlacement::hidden;
       NvimAnchor anchor = NvimAnchor::north_west;
       bool mouse_enabled = true;
       std::uint64_t window = 0;
@@ -291,17 +280,6 @@ export {
       std::uint64_t changed_at = 0;
     };
 
-    enum class NvimMessageKind : std::uint8_t {
-      plain,
-      error,
-      warning,
-      confirm,
-      progress,
-      search_count,
-      // The output of a command that lists: :ls, :set, a shell command.
-      list,
-    };
-
     struct NvimMessage {
       explicit NvimMessage(ConcurrentMemory& memory);
 
@@ -370,7 +348,7 @@ export {
       [[nodiscard]] std::uint16_t link(std::string_view url);
 
       // Null when the grid was never sized and there is no room for another.
-      [[nodiscard]] NvimGrid* place(std::uint32_t grid, NvimPlacement placement);
+      [[nodiscard]] NvimScreenGrid* place(std::uint32_t grid, NvimPlacement placement);
       void hide(std::uint32_t grid) noexcept;
       void viewport(std::uint32_t grid, const NvimViewport& viewport, std::int64_t scroll_delta) noexcept;
       void margins(std::uint32_t grid, NvimMargins margins) noexcept;
@@ -399,10 +377,13 @@ export {
       // No event since the last flush: the screen is what Neovim means to show.
       [[nodiscard]] bool settled() const noexcept;
 
-      [[nodiscard]] std::span<const ds::Box<NvimGrid, ConcurrentMemory>> grids() const noexcept;
-      [[nodiscard]] const NvimGrid* grid(std::uint32_t id) const noexcept;
-      // When a grid was last destroyed: a client older than that forgets the grids it is not sent.
-      [[nodiscard]] std::uint64_t gridsRemovedAt() const noexcept;
+      [[nodiscard]] std::span<const ds::Box<NvimScreenGrid, ConcurrentMemory>> grids() const noexcept;
+      [[nodiscard]] const NvimScreenGrid* grid(std::uint32_t id) const noexcept;
+      // The grids Neovim destroyed, oldest first, each with the flush it went in: a client is
+      // told the ones that went after the frame it has. Only the last of them are kept; a
+      // client that has a frame before `removedForgottenAt` is sent the screen whole instead.
+      [[nodiscard]] std::span<const NvimRemoved> removed() const noexcept;
+      [[nodiscard]] std::uint64_t removedForgottenAt() const noexcept;
 
       [[nodiscard]] const NvimHighlight& highlightOf(std::uint16_t id) const noexcept;
       [[nodiscard]] std::string_view linkOf(const NvimHighlight& highlight) const noexcept;
@@ -438,18 +419,18 @@ export {
       };
 
       [[nodiscard]] ds::Option<std::size_t> indexOf(std::uint32_t id) const noexcept;
-      [[nodiscard]] NvimGrid* find(std::uint32_t id) noexcept;
-      NvimGrid& add(std::uint32_t id);
+      [[nodiscard]] NvimScreenGrid* find(std::uint32_t id) noexcept;
+      NvimScreenGrid& add(std::uint32_t id);
       [[nodiscard]] std::uint32_t intern(std::string_view text);
       void dropClusters() noexcept;
       // Replaces the clusters of one row, which is then sent again.
       static bool dropClusters(std::span<NvimCell> row) noexcept;
       // Marks every row of a grid to be sent again, as changed at `stamp`.
-      static void reset(NvimGrid& grid, std::uint64_t stamp) noexcept;
+      static void reset(NvimScreenGrid& grid, std::uint64_t stamp) noexcept;
       void touch() noexcept;
 
       ConcurrentMemory& memory_;
-      ds::Vec<ds::Box<NvimGrid, ConcurrentMemory>, ConcurrentMemory> grids_;
+      ds::Vec<ds::Box<NvimScreenGrid, ConcurrentMemory>, ConcurrentMemory> grids_;
       // Where the last lookup found its grid: a redraw names the same one many times in a row.
       mutable std::size_t recent_ = 0;
       std::size_t cell_count_ = 0;
@@ -482,8 +463,9 @@ export {
       NvimMessages messages_;
       NvimTabs tabs_;
 
+      ds::Vec<NvimRemoved, ConcurrentMemory> removed_;
+      std::uint64_t removed_forgotten_at_ = 0;
       std::uint64_t flushed_ = 0;
-      std::uint64_t grids_removed_at_ = 0;
       bool settled_ = true;
     };
 

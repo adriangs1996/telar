@@ -5,6 +5,7 @@ import telar.tbc;
 import telar.msgpack;
 import telar.base.ds;
 import telar.base.memory.allocators;
+import telar.wire.nvim;
 import telar.runtime.nvim.screen;
 
 namespace telar::runtime {
@@ -399,7 +400,7 @@ namespace telar::runtime {
               .bottom = static_cast<std::uint16_t>(bottom),
               .left = static_cast<std::uint16_t>(left),
               .right = static_cast<std::uint16_t>(right),
-              .rows = static_cast<std::int16_t>(rows),
+              .rows = static_cast<std::int32_t>(rows),
           }
       );
     }
@@ -442,7 +443,7 @@ namespace telar::runtime {
     }
 
     // Where a float is anchored: the parameters of win_float_pos after its window.
-    bool floatAnchor(Arguments& arguments, NvimGrid& grid) {
+    bool floatAnchor(Arguments& arguments, NvimScreenGrid& grid) {
       const auto anchor = arguments.string();
       if (!anchor) {
         return false;
