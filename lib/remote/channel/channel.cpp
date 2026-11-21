@@ -56,24 +56,9 @@ namespace telar::remote {
       return true;
     }
 
-    // Waits for `events` on `descriptor`; false when the deadline passes first.
-    bool waitFor(int descriptor, short events, Clock::time_point deadline) noexcept {
-      for (;;) {
-        pollfd entry{.fd = descriptor, .events = events, .revents = 0};
-        const int ready = ::poll(&entry, 1, pollTimeout(deadline));
-        if (ready > 0) {
-          return true;
-        }
-
-        if (ready == 0 || sys::lastError() != EINTR) {
-          return false;
-        }
-      }
-    }
-
     // Finishes a nonblocking connect; false when it failed or the deadline passed.
     bool connected(int socket, Clock::time_point deadline) noexcept {
-      if (!waitFor(socket, POLLOUT, deadline)) {
+      if (!waitReady(socket, POLLOUT, deadline)) {
         return false;
       }
 
@@ -502,6 +487,53 @@ namespace telar::remote {
     return connection;
   }
 
+  bool waitReady(int descriptor, short events, Clock::time_point deadline) noexcept {
+    for (;;) {
+      pollfd entry{.fd = descriptor, .events = events, .revents = 0};
+      const int ready = ::poll(&entry, 1, pollTimeout(deadline));
+      if (ready > 0) {
+        return true;
+      }
+
+      if (ready == 0 || sys::lastError() != EINTR) {
+        return false;
+      }
+    }
+  }
+
+  bool writeText(int descriptor, std::string_view text, Clock::time_point deadline) noexcept {
+    while (!text.empty()) {
+      const auto written = ::write(descriptor, text.data(), text.size());
+      if (written > 0) {
+        text.remove_prefix(static_cast<std::size_t>(written));
+      } else if (!runtime::socketWouldBlock(sys::lastError()) || !waitReady(descriptor, POLLOUT, deadline)) {
+        return false;
+      }
+    }
+
+    return true;
+  }
+
+  ds::Option<std::string_view> readLine(int descriptor, std::span<char> line, Clock::time_point deadline) noexcept {
+    std::size_t length = 0;
+
+    while (length < line.size()) {
+      char byte = 0;
+      const auto count = ::read(descriptor, &byte, 1);
+      if (count == 1) {
+        if (byte == '\n') {
+          return std::string_view{line.data(), length};
+        }
+
+        line[length++] = byte;
+      } else if (count == 0 || !runtime::socketWouldBlock(sys::lastError()) || !waitReady(descriptor, POLLIN, deadline)) {
+        return ds::none;
+      }
+    }
+
+    return ds::none;
+  }
+
   Contexts::Contexts(const Identity& identity)
       : server_(makeContext(TLS_server_method(), identity)),
         client_(makeContext(TLS_client_method(), identity)) {
@@ -612,7 +644,7 @@ namespace telar::remote {
         throw ChannelFailure{"The TLS handshake failed"};
       }
 
-      if (!waitFor(socket_.get(), error == SSL_ERROR_WANT_READ ? POLLIN : POLLOUT, deadline)) {
+      if (!waitReady(socket_.get(), error == SSL_ERROR_WANT_READ ? POLLIN : POLLOUT, deadline)) {
         throw ChannelFailure{"The TLS handshake timed out"};
       }
     }
@@ -683,7 +715,7 @@ namespace telar::remote {
         throw ChannelFailure{"The connection to the gateway broke"};
       }
 
-      if (!waitFor(socket_.get(), written.state == Transfer::State::wants_read ? POLLIN : POLLOUT, deadline)) {
+      if (!waitReady(socket_.get(), written.state == Transfer::State::wants_read ? POLLIN : POLLOUT, deadline)) {
         throw ChannelFailure{"The gateway stopped answering"};
       }
     }
@@ -701,7 +733,7 @@ namespace telar::remote {
         throw ChannelFailure{"The connection to the gateway broke"};
       }
 
-      if (!waitFor(socket_.get(), taken.state == Transfer::State::wants_read ? POLLIN : POLLOUT, deadline)) {
+      if (!waitReady(socket_.get(), taken.state == Transfer::State::wants_read ? POLLIN : POLLOUT, deadline)) {
         throw ChannelFailure{"The gateway stopped answering"};
       }
     }
@@ -720,7 +752,7 @@ namespace telar::remote {
       }
 
       const bool waits = taken.state == Transfer::State::wants_read || taken.state == Transfer::State::wants_write;
-      if (!waits || !waitFor(channel.descriptor(), taken.state == Transfer::State::wants_read ? POLLIN : POLLOUT, deadline)) {
+      if (!waits || !waitReady(channel.descriptor(), taken.state == Transfer::State::wants_read ? POLLIN : POLLOUT, deadline)) {
         return;
       }
     }
@@ -767,6 +799,73 @@ namespace telar::remote {
 
     channel.receive(byte.viewMut(), Clock::now() + exchange_timeout);
     return byte[0] <= static_cast<std::uint8_t>(Reply::unavailable) ? static_cast<Reply>(byte[0]) : Reply::unavailable;
+  }
+
+  void PortNotice::send(Channel& channel) const {
+    constexpr unsigned byte_bits = 8;
+    constexpr unsigned byte_mask = 0xff;
+    ds::Array<std::uint8_t, maximum_bytes> frame{};
+    const auto text = origin.view();
+
+    frame.atMut(0) = static_cast<std::uint8_t>(kind);
+    frame.atMut(1) = static_cast<std::uint8_t>(port >> byte_bits);
+    frame.atMut(2) = static_cast<std::uint8_t>(port & byte_mask);
+    frame.atMut(3) = static_cast<std::uint8_t>(text.size());
+    std::ranges::copy(text, frame.viewMut().subspan(header_bytes).begin());
+    channel.send(frame.view().first(header_bytes + text.size()), Clock::now() + exchange_timeout);
+  }
+
+  bool PortNotices::receive(Channel& channel) noexcept {
+    for (;;) {
+      if (begin_ == end_) {
+        begin_ = 0;
+        end_ = 0;
+      } else if (begin_ != 0) {
+        std::memmove(bytes_.dataMut(), bytes_.data() + begin_, end_ - begin_);
+        end_ -= begin_;
+        begin_ = 0;
+      }
+
+      if (end_ == bytes_.size()) {
+        return true;
+      }
+
+      const auto taken = channel.read(bytes_.viewMut().subspan(end_));
+      if (taken.state != Transfer::State::done) {
+        return taken.state == Transfer::State::wants_read || taken.state == Transfer::State::wants_write;
+      }
+
+      end_ += taken.bytes;
+    }
+  }
+
+  ds::Option<PortNotice> PortNotices::next() noexcept {
+    constexpr unsigned byte_bits = 8;
+    const auto pending = bytes_.view().subspan(begin_, end_ - begin_);
+
+    if (pending.size() < PortNotice::header_bytes) {
+      return ds::none;
+    }
+
+    const std::size_t length = pending[3];
+    if (length > PortNotice::origin_bytes || pending[0] < static_cast<std::uint8_t>(PortNotice::Kind::watch) || pending[0] > static_cast<std::uint8_t>(PortNotice::Kind::closed)) {
+      // A frame no gateway sends: what follows cannot be read either, so it is all dropped.
+      begin_ = end_;
+      return ds::none;
+    }
+
+    if (pending.size() < PortNotice::header_bytes + length) {
+      return ds::none;
+    }
+
+    PortNotice notice{
+        .kind = static_cast<PortNotice::Kind>(pending[0]),
+        .port = static_cast<std::uint16_t>((static_cast<unsigned>(pending[1]) << byte_bits) | pending[2]),
+    };
+
+    notice.origin.assign({reinterpret_cast<const char*>(pending.data() + PortNotice::header_bytes), length}); // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast): the origin's bytes are read as text
+    begin_ += PortNotice::header_bytes + length;
+    return notice;
   }
 
 }

@@ -32,6 +32,15 @@ export {
       static constexpr unsigned maximum_handshakes = 32;
       static constexpr auto handshake_timeout = std::chrono::seconds{10};
 
+      // The most ports programs of this machine share with every client at once.
+      static constexpr std::size_t maximum_shared = 64;
+      static constexpr std::size_t maximum_listening = 512;
+
+      // The name, beside the runtime's socket, of the socket a program of this machine asks on
+      // for one of its ports to be shared: `share PORT ORIGIN` and `unshare PORT`, a line
+      // each, answered `ok` or `refused`. What it shared ends with its connection.
+      static constexpr std::string_view sharing_socket = "gateway-ports.sock";
+
       // Binds the listener and records its port in `state`, which the server borrows.
       explicit Server(ConcurrentMemory& memory, const State& state, const ServeOptions& options);
       ~Server();
@@ -57,6 +66,9 @@ export {
       void runCommand(Channel& channel);
       void forward(Channel& channel);
       void pair(Channel& channel);
+      void ports(Channel& channel);
+      void share(runtime::FileDescriptor socket) noexcept;
+      [[nodiscard]] bool listening(std::uint16_t port) noexcept;
       [[nodiscard]] runtime::FileDescriptor connectRuntime() const noexcept;
       void startRuntime() const noexcept;
 
@@ -67,6 +79,24 @@ export {
       Listener listener_;
       runtime::FixedText<PATH_MAX> runtime_socket_;
       bool explicit_runtime_socket_ = false;
+
+      // A port a program of this machine shares, and the connection that asked for it.
+      struct Shared {
+        runtime::FixedText<PortNotice::origin_bytes> origin;
+        unsigned owner = 0;
+        std::uint16_t port = 0;
+        bool used = false;
+      };
+
+      runtime::FileDescriptor sharing_;
+      std::mutex mutex_;
+      ds::Array<Shared, maximum_shared> shared_;
+      // The ports this account listens on, as last read, and when: several clients watch them
+      // and the system is asked once a second for all.
+      ds::Array<std::uint16_t, maximum_listening> listening_{};
+      std::size_t listening_count_ = 0;
+      Clock::time_point listening_read_{};
+      unsigned owners_ = 0;
       ds::Array<int, 2> wake_{-1, -1};
       std::atomic<unsigned> connections_{0};
       std::atomic<unsigned> handshakes_{0};

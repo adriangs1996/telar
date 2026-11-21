@@ -385,22 +385,107 @@ namespace {
     const auto rows = readAll(listing[0]);
 
     check(rows.starts_with(std::to_string(port) + " " + std::to_string(local_port) + " "), "a forward is listed with both ports");
-    check(rows.ends_with(" test origin\n"));
+    check(rows.ends_with(" asked test origin\n"));
 
-    // Once nothing listens there, the next connection finds the gateway refusing the port, and
-    // the forward ends for whoever held it.
+    // Once nothing listens there the gateway says so, and the forward ends for whoever held
+    // it without anyone having to try the port again.
     echo.stop();
-    {
-      const auto connection = connectLocalPort(local_port);
-
-      check(readSome(connection.get(), 1).empty());
-    }
-
     holder.join();
     check(status == 0, "the holder is told the port closed there");
+    check(!connectLocalPort(local_port), "the port is free here again");
     for (const int descriptor : {reply[0], reply[1], listing[0]}) {
       ::close(descriptor);
     }
+  }
+
+  // The forwards of a machine, as the link lists them.
+  std::string forwardsOf(const LocalLink& local, std::string_view destination) {
+    int listing[2];
+
+    check(::pipe(listing) == 0);
+    check(LinkClient::ports(local.paths(), destination, listing[1]) == 0);
+    ::close(listing[1]);
+    auto rows = readAll(listing[0]);
+
+    ::close(listing[0]);
+    return rows;
+  }
+
+  // Asks until the forwards of a machine are what is awaited, for the few seconds the gateway
+  // and the link take to tell each other.
+  template <typename Awaited>
+  std::string awaitForwards(const LocalLink& local, std::string_view destination, Awaited awaited) {
+    std::string rows;
+
+    for (int attempt = 0; attempt < 100; ++attempt) {
+      rows = forwardsOf(local, destination);
+      if (awaited(rows)) {
+        break;
+      }
+
+      std::this_thread::sleep_for(std::chrono::milliseconds{50});
+    }
+
+    return rows;
+  }
+
+  void aPortAMachineSharesIsForwardedToWhoeverHoldsIt() {
+    const Pair pair;
+    const LocalLink local{pair};
+    auto listener = listenTcp("127.0.0.1", 0);
+    const auto port = listener.port;
+    const EchoServer echo{std::move(listener.socket)};
+    const auto sharing_path = std::string{pair.server.directory.path()} + "/" + std::string{Server::sharing_socket};
+    const auto prefix = std::to_string(port) + " ";
+
+    // A program of the machine shares the port before anyone holds the machine: nothing is
+    // forwarded for nobody.
+    auto sharing = connectUnix(sharing_path);
+
+    check(static_cast<bool>(sharing));
+    writeAll(sharing.get(), "share " + std::to_string(port) + " exec dev server\n");
+    check(readSome(sharing.get(), 3) == "ok\n");
+    writeAll(sharing.get(), "share 1 nothing listens on it\n");
+    check(readSome(sharing.get(), 8) == "refused\n", "a port nothing listens on is not shared");
+    check(forwardsOf(local, pair.destination).empty());
+
+    auto held = LinkClient::hold(local.paths(), pair.destination);
+
+    check(static_cast<bool>(held));
+    const auto rows = awaitForwards(local, pair.destination, [&](const std::string& text) {
+      return text.starts_with(prefix);
+    });
+
+    check(rows.starts_with(prefix) && rows.ends_with(" shared exec dev server\n"), "the holder gets the port without asking for it");
+    const auto local_port = static_cast<std::uint16_t>(std::stoul(rows.substr(prefix.size())));
+    {
+      const auto connection = connectLocalPort(local_port);
+
+      check(static_cast<bool>(connection));
+      writeAll(connection.get(), "shared");
+      check(readExactly(connection.get(), 6) == "shared");
+    }
+
+    // The program that shared it leaves: the port is no longer forwarded.
+    sharing.reset();
+    check(awaitForwards(local, pair.destination, [](const std::string& text) {
+      return text.empty();
+    }).empty(),
+        "a port stops being forwarded when what shared it ends");
+
+    // Shared again, it comes back; and it goes when nothing here holds the machine any more.
+    sharing = connectUnix(sharing_path);
+    writeAll(sharing.get(), "share " + std::to_string(port) + " again\n");
+    check(readSome(sharing.get(), 3) == "ok\n");
+    check(awaitForwards(local, pair.destination, [&](const std::string& text) {
+      return text.starts_with(prefix);
+    }).ends_with(" shared again\n"));
+
+    held.reset();
+    check(awaitForwards(local, pair.destination, [](const std::string& text) {
+      return text.empty();
+    }).empty(),
+        "a shared port is forwarded only while something holds its machine");
   }
 
   void theLinkRefusesAPortNothingListensOn() {
@@ -424,6 +509,7 @@ namespace {
   const telar::testing::Case case_pairing_codes_enroll_once{"gateway.pairing_codes_enroll_once", pairingCodesEnrollOnce};
   const telar::testing::Case case_the_link_offers_a_machines_runtime_on_a_local_socket{"gateway.the_link_offers_a_machines_runtime_on_a_local_socket", theLinkOffersAMachinesRuntimeOnALocalSocket};
   const telar::testing::Case case_the_link_forwards_a_port_until_it_closes_there{"gateway.the_link_forwards_a_port_until_it_closes_there", theLinkForwardsAPortUntilItClosesThere};
+  const telar::testing::Case case_a_port_a_machine_shares_is_forwarded_to_whoever_holds_it{"gateway.a_port_a_machine_shares_is_forwarded_to_whoever_holds_it", aPortAMachineSharesIsForwardedToWhoeverHoldsIt};
   const telar::testing::Case case_the_link_refuses_a_port_nothing_listens_on{"gateway.the_link_refuses_a_port_nothing_listens_on", theLinkRefusesAPortNothingListensOn};
 
 }

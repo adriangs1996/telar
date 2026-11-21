@@ -5,6 +5,7 @@ export module telar.remote.channel;
 import std;
 
 import telar.base.ds;
+import telar.base.memory.containers;
 import telar.platform.primitives;
 import telar.remote.identity;
 import telar.sys.socket;
@@ -88,6 +89,17 @@ export {
     // The connection `listener` has waiting, nonblocking and closed in children; none when it
     // has none.
     [[nodiscard]] runtime::FileDescriptor acceptConnection(int listener) noexcept;
+
+    // Waits for `events` on `descriptor`; false when `deadline` passes first.
+    [[nodiscard]] bool waitReady(int descriptor, short events, Clock::time_point deadline) noexcept;
+
+    // Writes all of `text` to a descriptor that may not block; false when its reader is gone or
+    // stalls past `deadline`.
+    [[nodiscard]] bool writeText(int descriptor, std::string_view text, Clock::time_point deadline) noexcept;
+
+    // The line a descriptor sends next, into `line` and without its newline; none when it ends,
+    // stalls past `deadline` or sends a line longer than `line`.
+    [[nodiscard]] ds::Option<std::string_view> readLine(int descriptor, std::span<char> line, Clock::time_point deadline) noexcept;
 
   }
 }
@@ -194,6 +206,52 @@ export {
 
     void sendReply(Channel& channel, Reply reply);
     [[nodiscard]] Reply receiveReply(Channel& channel);
+
+  }
+}
+
+// Interface: telar_remote/port_notice.cppm
+export {
+  namespace telar::remote {
+
+    // What the two ends of the ports service tell each other about a port of the gateway's
+    // machine. A client asks for a port to be watched; the gateway says which ports its
+    // machine shares with every client, and when a watched or shared port stops listening.
+    struct PortNotice {
+      enum class Kind : std::uint8_t {
+        watch = 1,
+        unwatch = 2,
+        shared = 3,
+        closed = 4,
+      };
+
+      static constexpr std::size_t origin_bytes = 96;
+      static constexpr std::size_t header_bytes = 4;
+      static constexpr std::size_t maximum_bytes = header_bytes + origin_bytes;
+
+      Kind kind = Kind::closed;
+      std::uint16_t port = 0;
+      // What asked for the port to be shared, as a person reads it.
+      runtime::FixedText<origin_bytes> origin;
+
+      // Sends the notice whole, waiting up to the exchange timeout. Throws ChannelFailure.
+      void send(Channel& channel) const;
+    };
+
+    // The notices a channel has delivered so far, each handed to the caller once.
+    class PortNotices {
+    public:
+      // Reads what the channel has without waiting. False when the channel ended or failed.
+      [[nodiscard]] bool receive(Channel& channel) noexcept;
+
+      // The next whole notice received; none until one is complete.
+      [[nodiscard]] ds::Option<PortNotice> next() noexcept;
+
+    private:
+      ds::Array<std::uint8_t, 8 * PortNotice::maximum_bytes> bytes_{};
+      std::size_t begin_ = 0;
+      std::size_t end_ = 0;
+    };
 
   }
 }

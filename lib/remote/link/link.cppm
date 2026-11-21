@@ -45,7 +45,7 @@ export {
     public:
       static constexpr std::size_t maximum_machines = 16;
       static constexpr std::size_t maximum_forwards = 64;
-      static constexpr std::size_t origin_bytes = 96;
+      static constexpr std::size_t origin_bytes = PortNotice::origin_bytes;
 
       // Binds the control socket; throws SystemError when another link already serves `paths`.
       explicit Link(const State& state, const LinkPaths& paths);
@@ -63,10 +63,16 @@ export {
       void stop() noexcept;
 
     private:
-      // A machine whose runtime the link offers on a local socket.
+      // A machine the link reaches: its runtime on a local socket once one is asked for, and
+      // the programs here that hold it, for which its shared ports are forwarded.
       struct Machine {
         Endpoint endpoint;
         runtime::FileDescriptor listener;
+        // When its ports may next be asked for, after the gateway could not be reached.
+        Clock::time_point retry_at{};
+        unsigned holds = 0;
+        // A thread hears of its ports as they open and close.
+        bool watched = false;
         bool used = false;
       };
 
@@ -82,6 +88,8 @@ export {
         unsigned connections = 0;
         // Bumped each time the slot is given to another forward, so a holder knows its own.
         unsigned generation = 0;
+        // Held for the machine's holders because the machine shares the port, not asked for.
+        bool automatic = false;
         bool used = false;
       };
 
@@ -105,8 +113,27 @@ export {
       void requestSocket(int socket, std::string_view destination);
       void requestForward(int socket, std::string_view arguments);
       void requestPorts(int socket, std::string_view destination);
+      void requestHold(int socket, std::string_view destination);
 
-      [[nodiscard]] ds::Option<std::size_t> openForward(const Endpoint& endpoint, std::uint16_t port, std::string_view origin);
+      // How a forward comes to be: asked for by a program here, after the gateway confirms the
+      // port listens, or shared by the machine, which already knows it does.
+      enum class Opening : std::uint8_t {
+        asked,
+        shared,
+      };
+
+      [[nodiscard]] ds::Option<std::size_t> openForward(const Endpoint& endpoint, std::uint16_t port, std::string_view origin, Opening opening);
+      void closeForward(const Endpoint& endpoint, std::uint16_t port) noexcept;
+
+      // The slot of a machine, taken when it has none; none when every slot is taken. The
+      // caller holds the lock.
+      [[nodiscard]] ds::Option<std::size_t> machineSlot(const Endpoint& endpoint) noexcept;
+
+      // Starts the thread that hears of a machine's ports, unless one runs or the gateway was
+      // unreachable a moment ago. The caller holds the lock.
+      void watchMachine(std::size_t machine) noexcept;
+      void watch(std::size_t machine) noexcept;
+      void observe(Channel& channel, std::size_t machine, const Endpoint& endpoint);
       void releaseForward(std::size_t index, unsigned generation, bool closed_there) noexcept;
       void wake() noexcept;
 
@@ -148,8 +175,12 @@ export {
       [[nodiscard]] static int forward(const LinkPaths& paths, std::string_view destination, std::uint16_t port, std::string_view origin, int output);
 
       // Writes to `output` a line for each forward to the machine: its port there, its port
-      // here, its open connections and what asked for it.
+      // here, its open connections, `asked` or `shared`, and what asked for it or shared it.
       [[nodiscard]] static int ports(const LinkPaths& paths, std::string_view destination, int output);
+
+      // Holds the machine at `destination`: while the descriptor returned stays open, the ports
+      // that machine shares are forwarded here. None when no link answers.
+      [[nodiscard]] static runtime::FileDescriptor hold(const LinkPaths& paths, std::string_view destination) noexcept;
 
       // Asks the link to end.
       static void stop(const LinkPaths& paths) noexcept;

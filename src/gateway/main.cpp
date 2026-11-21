@@ -10,6 +10,7 @@ import telar.base.text;
 import telar.platform.daemon;
 import telar.platform.error;
 import telar.platform.paths;
+import telar.platform.primitives;
 import telar.platform.process;
 import telar.remote.channel;
 import telar.remote.identity;
@@ -38,9 +39,11 @@ namespace telar::remote {
         "On the machine a client runs on:\n"
         "  enroll ADDRESS [--name NAME]\n"
         "                    Pair with the gateway a pairing address names; print the address to save\n"
-        "  run [-t] [--to ADDRESS] ADDRESS COMMAND\n"
-        "                    Run a shell command there with this process's streams\n"
-        "  attach ADDRESS    Carry the runtime there on the socket given as standard input\n"
+        "  run [-t] [--share] [--to ADDRESS] ADDRESS COMMAND\n"
+        "                    Run a shell command there with this process's streams; with --share,\n"
+        "                    forward here the ports that machine shares while it runs\n"
+        "  attach ADDRESS    Carry the runtime there on the socket given as standard input, and\n"
+        "                    forward here the ports that machine shares meanwhile\n"
         "  socket ADDRESS    Print the local socket that is the runtime there\n"
         "  forward ADDRESS PORT [ORIGIN]\n"
         "                    Print a local port to a port there, and hold it until stopped\n"
@@ -203,14 +206,33 @@ namespace telar::remote {
       return 0;
     }
 
+    void ensureLink(const LinkPaths& paths);
+
+    // Holds the machine at `destination` in the link, so that the ports it shares are forwarded
+    // here while the descriptor stays open. Forwarding is a convenience: a link that cannot be
+    // started or reached leaves the command it accompanies to run without it.
+    runtime::FileDescriptor holdMachine(std::string_view destination) noexcept {
+      try {
+        const auto paths = LinkPaths::resolve(runtime::process_environment);
+
+        ensureLink(paths);
+        return LinkClient::hold(paths, destination);
+      } catch (const std::exception&) {
+        return runtime::FileDescriptor{};
+      }
+    }
+
     int run(const State& state, std::span<char* const> arguments) {
       RemoteCommand remote;
       std::size_t index = 0;
+      bool share = false;
 
       for (; index < arguments.size(); ++index) {
         const std::string_view argument{arguments[index]};
         if (argument == "-t") {
           remote.terminal = true;
+        } else if (argument == "--share") {
+          share = true;
         } else if (argument == "--to") {
           remote.destination = valueOf(arguments, index);
         } else {
@@ -229,6 +251,8 @@ namespace telar::remote {
       }
 
       remote.command = rest[1];
+      const auto held = share ? holdMachine(remote.destination) : runtime::FileDescriptor{};
+
       return runRemote(state, remote);
     }
 
@@ -314,7 +338,10 @@ namespace telar::remote {
       }
 
       if (command == "attach") {
-        return attachRemote(state, single(), STDIN_FILENO);
+        const auto destination = single();
+        const auto held = holdMachine(destination);
+
+        return attachRemote(state, destination, STDIN_FILENO);
       }
 
       if (command == "key") {
