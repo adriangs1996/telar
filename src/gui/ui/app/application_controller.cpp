@@ -327,6 +327,13 @@ namespace telar::gui::qt {
     });
 
     connect(&monitor_, &MonitorController::failed, &status_, &WindowStatus::report);
+    connect(&monitor_, &MonitorController::machineRequested, this, [this](application::machines::MachineToken token) {
+      commands_.interact([this, token] {
+        machines_.select(token);
+      });
+    });
+
+    connect(&machines_, &MachinesCoordinator::changed, &monitor_, &MonitorController::machineChanged);
     connect(&commands_, &WindowCommands::monitorRequested, this, [this](window_actions::Action action) {
       const auto showing = store_.dialog().kind == Dialog::monitor;
       if (!showing) {

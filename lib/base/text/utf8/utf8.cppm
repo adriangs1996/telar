@@ -15,3 +15,7 @@ export namespace telar {
 export namespace telar::runtime {
   using telar::runtime::utf8Prefix;
 }
+
+export namespace telar::utf8 {
+  using telar::utf8::isContinuation;
+}

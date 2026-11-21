@@ -207,6 +207,7 @@
   "upward_imports": [],
   "interfaces": {
     "src/gui/application/application-monitor.cppm": "telar.gui.application:monitor",
+    "src/gui/features/monitor/monitor-presentation.cppm": "telar.gui.features.monitor:presentation",
     "src/gui/features/monitor/monitor.cppm": "telar.gui.features.monitor",
     "src/cli/commands/monitor/monitor.cppm": "telar.cli.commands.monitor",
     "src/runtime/metrics/monitor/monitor.cppm": "telar.runtime.metrics.monitor",

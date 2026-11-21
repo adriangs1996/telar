@@ -2,9 +2,11 @@ pragma ComponentBehavior: Bound
 
 import Telar.Gui
 import QtQuick
+import QtQuick.Controls.Basic
 
 // The monitor over the window, as btop draws it: the processors, memory, disks and network of the
-// active machine, then every process, sortable and filterable, and the actions on the selected one.
+// active machine, then every process with what it is to telar, and the actions on the selected
+// one. The process table is set in the terminal's font; the controller gives every cell its text.
 FocusScope {
     id: root
 
@@ -12,13 +14,24 @@ FocusScope {
     required property var colors
     required property var typography
     property real ratio: 1
-    readonly property var host: controller.host
+    // Where the window's top bar ends: the monitor starts below it, clear of the window's buttons.
+    property real topInset: 0
+
+    readonly property var header: controller.header
+    readonly property var panels: controller.panels
     readonly property var view: controller.view
     readonly property var detail: controller.detail
-    readonly property real gap: 8 * ratio
-    readonly property real rowHeight: Math.round(typography.bodyRow ?? (typography.body * 1.6))
-    readonly property real physicalPixel: 1 / Screen.devicePixelRatio
-    // An action that asks before it runs: KILL, and attaching a debugger.
+    readonly property var footer: controller.footer
+    readonly property var grid: typography.grid ?? ({})
+    readonly property real cell: grid.cellWidth ?? 8
+    readonly property real line: Math.ceil((grid.cellHeight ?? 16) * 1.2)
+    readonly property real gap: 10 * ratio
+    readonly property real inset: 16 * ratio
+    readonly property real controlHeight: Math.round(typography.bodyRow ?? (typography.body * 1.8))
+    readonly property real radius: ChromeStyle.surfaceRadius * ratio
+    readonly property real hairline: 1 / Screen.devicePixelRatio
+    readonly property bool hasDetail: (detail.pid ?? 0) > 0
+    // An action that asks before it runs: TERM, KILL, and attaching a debugger.
     property string confirming: ""
 
     visible: telar.dialogs.kind === Store.Dialog.monitor
@@ -29,40 +42,77 @@ FocusScope {
             table.forceActiveFocus();
     }
 
-    function bytes(value) {
-        const units = ["B", "K", "M", "G", "T"];
-        let amount = value;
-        let unit = 0;
-        while (amount >= 1024 && unit + 1 < units.length) {
-            amount /= 1024;
-            unit += 1;
-        }
-        return unit === 0 ? amount.toFixed(0) + "B" : amount.toFixed(1) + units[unit];
+    function toneColor(tone) {
+        return tone === "hot" ? colors.red : tone === "warm" ? colors.yellow : colors.text;
     }
 
-    function percent(value) {
-        return value.toFixed(1) + "%";
-    }
-
-    function sortBy(column) {
-        if (root.view.sort === column)
-            root.controller.toggleReverse();
+    function run(action) {
+        confirming = "";
+        if (action === "debug")
+            controller.review("debug");
         else
-            root.controller.setSort(column);
+            controller.signal(action);
     }
 
-    function act(name) {
-        if (name === "KILL" || name === "debug") {
-            if (root.confirming !== name) {
-                root.confirming = name;
+    function ask(action) {
+        if (hasDetail)
+            confirming = action;
+    }
+
+    function key(event) {
+        const pressed = event.key;
+        if (confirming !== "") {
+            if (pressed === Qt.Key_Return || pressed === Qt.Key_Enter) {
+                run(confirming);
+                event.accepted = true;
+                return;
+            }
+            if (pressed === Qt.Key_Escape) {
+                confirming = "";
+                event.accepted = true;
                 return;
             }
         }
-        root.confirming = "";
-        if (name === "debug")
-            root.controller.review("debug");
-        else
-            root.controller.signal(name);
+
+        const page = Math.max(1, Math.floor(table.height / line) - 1);
+        const far = 1000000;
+        const moves = {
+            [Qt.Key_Up]: -1,
+            [Qt.Key_Down]: 1,
+            [Qt.Key_PageUp]: -page,
+            [Qt.Key_PageDown]: page,
+            [Qt.Key_Home]: -far,
+            [Qt.Key_End]: far
+        };
+        event.accepted = true;
+        if (moves[pressed] !== undefined) {
+            controller.move(moves[pressed]);
+        } else if (pressed === Qt.Key_Left || pressed === Qt.Key_Right) {
+            controller.foldSelected(pressed === Qt.Key_Left);
+        } else if (pressed === Qt.Key_Slash) {
+            filter.forceActiveFocus();
+        } else if (pressed === Qt.Key_Escape) {
+            if (hasDetail)
+                controller.clearSelection();
+            else
+                controller.close();
+        } else if (event.text === "e") {
+            controller.toggleTree();
+        } else if (event.text === "s") {
+            controller.cycleSort();
+        } else if (event.text === "r") {
+            controller.toggleReverse();
+        } else if (event.text === "t") {
+            ask("TERM");
+        } else if (event.text === "k") {
+            ask("KILL");
+        } else if (event.text === "g" && (detail.pane ?? false)) {
+            controller.focusPane();
+        } else if (event.text === "c" && hasDetail) {
+            controller.copyCommand();
+        } else {
+            event.accepted = false;
+        }
     }
 
     Connections {
@@ -73,23 +123,10 @@ FocusScope {
         }
     }
 
-    Keys.onPressed: event => {
-        if (event.key === Qt.Key_Escape) {
-            if (root.view.selected > 0)
-                root.controller.clearSelection();
-            else
-                root.controller.close();
-            event.accepted = true;
-        } else if (event.key === Qt.Key_Slash) {
-            filter.forceActiveFocus();
-            event.accepted = true;
-        }
-    }
-
     Rectangle {
         anchors.fill: parent
         color: root.colors.background
-        opacity: 0.6
+        opacity: 0.55
     }
 
     MouseArea {
@@ -99,365 +136,675 @@ FocusScope {
         onWheel: wheel => wheel.accepted = true
     }
 
-    Rectangle {
-        id: panel
-        anchors.fill: parent
-        anchors.margins: 24 * root.ratio
-        color: root.colors.panel_bg
-        border.color: root.colors.surface1
-        border.width: root.physicalPixel
-        radius: 8 * root.ratio
+    DialogSurface {
+        id: surface
 
-        Column {
-            anchors.fill: parent
-            anchors.margins: root.gap * 1.5
+        x: root.inset
+        y: root.topInset + root.gap
+        width: root.width - 2 * root.inset
+        height: Math.max(0, root.height - y - root.inset)
+        colors: root.colors
+        ratio: root.ratio
+    }
+
+    Item {
+        id: body
+
+        x: surface.x + root.inset
+        y: surface.y + root.gap
+        width: surface.width - 2 * root.inset
+        height: surface.height - 2 * root.gap
+
+        // Title, the machine shown, and the others the window keeps.
+        OverlayHeader {
+            id: title
+
+            width: body.width
+            height: root.controlHeight
+            colors: root.colors
+            typography: root.typography
+            ratio: root.ratio
+            title: "Monitor"
+            note: root.header.note ?? ""
+
+            Repeater {
+                model: root.controller.machines.length > 1 ? root.controller.machines : []
+
+                delegate: ChromeButton {
+                    id: machine
+
+                    required property var modelData
+
+                    height: root.controlHeight
+                    leftPadding: 8 * root.ratio
+                    rightPadding: 8 * root.ratio
+                    colors: root.colors
+                    pixelSize: root.typography.small
+                    checked: modelData.active
+                    enabled: modelData.live || modelData.active
+                    text: modelData.label + (modelData.status.length > 0 ? " · " + modelData.status : "")
+                    emphasized: modelData.active
+                    onClicked: root.controller.selectMachine(modelData.slot)
+                    Accessible.name: "Show " + modelData.label + " in the monitor"
+                }
+            }
+        }
+
+        // The filter, which processes, and how they are laid out.
+        Item {
+            id: toolbar
+
+            y: title.y + title.height + root.gap
+            width: body.width
+            height: root.controlHeight
+
+            Rectangle {
+                id: filterBox
+
+                width: Math.min(40 * root.cell, toolbar.width / 3)
+                height: toolbar.height
+                radius: ChromeStyle.controlRadius * root.ratio
+                color: root.colors.surface0
+                border.width: root.hairline
+                border.color: filter.activeFocus ? root.colors.accent : "transparent"
+
+                FormTextField {
+                    id: filter
+
+                    x: 8 * root.ratio
+                    width: filterBox.width - 16 * root.ratio
+                    height: filterBox.height
+                    colors: root.colors
+                    typography: root.typography
+                    ratio: root.ratio
+                    placeholderPrefix: "/"
+                    placeholderText: " filter by name, command, user or pid"
+                    onTextEdited: root.controller.setFilter(text)
+                    Keys.onDownPressed: table.forceActiveFocus()
+                    Keys.onReturnPressed: table.forceActiveFocus()
+                    Keys.onEnterPressed: table.forceActiveFocus()
+                    Keys.onEscapePressed: {
+                        if (!filter.cancelComposition())
+                            table.forceActiveFocus();
+                    }
+                    Accessible.name: "Filter processes"
+                }
+            }
+
+            Segmented {
+                x: filterBox.width + root.gap
+                options: [
+                    {
+                        key: "all",
+                        label: "All",
+                        count: root.view.all ?? 0
+                    },
+                    {
+                        key: "telar",
+                        label: "In telar",
+                        count: root.view.telar ?? 0
+                    },
+                    {
+                        key: "agents",
+                        label: "Agents",
+                        count: root.view.agents ?? 0
+                    }
+                ]
+                current: root.view.scope ?? "all"
+                onChosen: key => root.controller.setScope(key)
+            }
+
+            Segmented {
+                x: toolbar.width - width
+                options: [
+                    {
+                        key: "flat",
+                        label: "List"
+                    },
+                    {
+                        key: "tree",
+                        label: "Tree"
+                    },
+                    {
+                        key: "owner",
+                        label: "By owner"
+                    }
+                ]
+                current: root.view.layout ?? "flat"
+                onChosen: key => root.controller.setLayout(key)
+            }
+        }
+
+        // Processors, memory, disks and network.
+        Row {
+            id: gauges
+
+            readonly property real share: (body.width - 3 * root.gap) / 4.35
+
+            y: toolbar.y + toolbar.height + root.gap
+            width: body.width
+            height: Math.max(cpuPanel.implicitHeight, memoryPanel.implicitHeight, diskPanel.implicitHeight, networkPanel.implicitHeight)
             spacing: root.gap
 
-            // Title, filter, scope, tree, close.
-            Row {
-                id: header
-                width: parent.width
-                height: root.rowHeight
-                spacing: root.gap * 1.5
+            Panel {
+                id: cpuPanel
 
-                ChromeText {
-                    width: 90 * root.ratio
-                    height: parent.height
-                    text: "Monitor"
-                    pixelSize: root.typography.body
-                    emphasized: true
-                    color: root.colors.accent
-                }
+                width: gauges.share * 1.35
+                height: gauges.height
+                title: "cpu"
+                value: root.panels.cpu ?? ""
 
-                Rectangle {
-                    width: 280 * root.ratio
-                    height: parent.height
-                    radius: 4 * root.ratio
-                    color: root.colors.surface0
-                    border.color: filter.activeFocus ? root.colors.accent : "transparent"
-                    border.width: root.physicalPixel
+                // The newest share at the right edge, as the history fills from the right.
+                Item {
+                    width: cpuPanel.contentWidth
+                    height: 2 * root.line
 
-                    TextInput {
-                        id: filter
-                        anchors.fill: parent
-                        anchors.leftMargin: root.gap
-                        anchors.rightMargin: root.gap
-                        verticalAlignment: TextInput.AlignVCenter
-                        color: root.colors.text
-                        font.pixelSize: root.typography.body
-                        clip: true
-                        text: root.view.filter ?? ""
-                        onTextEdited: root.controller.setFilter(text)
-                        Keys.onEscapePressed: table.forceActiveFocus()
-                        Keys.onDownPressed: table.forceActiveFocus()
-                        Accessible.name: "Filter processes"
-
-                        ChromeText {
-                            anchors.fill: parent
-                            text: "/ filter by name, command, user or pid"
-                            pixelSize: root.typography.small
-                            color: root.colors.overlay1
-                            visible: filter.text.length === 0 && !filter.activeFocus
-                        }
+                    BarSparkline {
+                        x: parent.width - width
+                        width: implicitWidth
+                        height: parent.height
+                        samples: root.panels.history ?? []
+                        maximumColumns: 60
+                        columnGap: 1 * root.ratio
+                        columnWidth: Math.max(1, (parent.width - (maximumColumns - 1) * columnGap) / maximumColumns)
+                        chartHeight: height
+                    color: Number(root.panels.cpu ? parseFloat(root.panels.cpu) : 0) > 85 ? root.colors.red : root.colors.green
+                        trackColor: Qt.alpha(root.colors.text, 0.06)
+                        ratio: root.ratio
                     }
                 }
 
-                Repeater {
-                    model: [["all", "All"], ["telar", "In panes"], ["agents", "Agents"]]
+                Grid {
+                    id: cores
 
-                    delegate: Chip {
-                        required property var modelData
-                        label: modelData[1]
-                        active: root.view.scope === modelData[0]
-                        onClicked: root.controller.setScope(modelData[0])
-                    }
-                }
+                    columns: (root.panels.cores ?? []).length > 8 ? 4 : 2
+                    columnSpacing: 2 * root.cell
+                    width: cpuPanel.contentWidth
 
-                Chip {
-                    label: "Tree"
-                    active: root.view.tree ?? false
-                    onClicked: root.controller.toggleTree()
-                }
+                    Repeater {
+                        model: root.panels.cores ?? []
 
-                ChromeText {
-                    width: 260 * root.ratio
-                    height: parent.height
-                    text: (root.host.ready ?? false) ? root.host.processes + " processes · " + root.host.threads + " threads" : (root.controller.available ? "Reading the processes…" : "This machine's runtime has no monitor; update telar there")
-                    pixelSize: root.typography.small
-                    color: root.colors.subtext0
-                }
-            }
+                        delegate: MeterRow {
+                            required property var modelData
 
-            // Processors, memory, disks and network.
-            Row {
-                id: gauges
-                width: parent.width
-                height: 150 * root.ratio
-                spacing: root.gap
-
-                Box {
-                    width: (gauges.width - 3 * root.gap) * 0.34
-                    height: gauges.height
-                    title: "CPU " + root.percent(root.host.cpu ?? 0)
-
-                    Flow {
-                        id: coreGrid
-                        // Four cores a row, or two when there are few.
-                        readonly property int columns: (root.host.cores ?? []).length > 8 ? 4 : 2
-                        anchors.fill: parent
-                        anchors.topMargin: root.rowHeight
-                        spacing: 4 * root.ratio
-
-                        Repeater {
-                            model: root.host.cores ?? []
-
-                            delegate: Meter {
-                                required property var modelData
-                                required property int index
-                                width: (coreGrid.width - (coreGrid.columns - 1) * coreGrid.spacing) / coreGrid.columns
-                                label: String(index)
-                                fraction: modelData / 100
-                                caption: modelData.toFixed(0) + "%"
-                            }
-                        }
-                    }
-                }
-
-                Box {
-                    width: (gauges.width - 3 * root.gap) * 0.22
-                    height: gauges.height
-                    title: "Memory"
-
-                    Column {
-                        anchors.fill: parent
-                        anchors.topMargin: root.rowHeight
-                        spacing: 4 * root.ratio
-
-                        Meter {
-                            width: parent.width
-                            label: "Used"
-                            fraction: (root.host.memoryUsed ?? 0) / Math.max(1, root.host.memoryTotal ?? 1)
-                            caption: root.bytes(root.host.memoryUsed ?? 0) + " / " + root.bytes(root.host.memoryTotal ?? 0)
-                        }
-
-                        Meter {
-                            width: parent.width
-                            label: "Cached"
-                            fraction: (root.host.memoryCached ?? 0) / Math.max(1, root.host.memoryTotal ?? 1)
-                            caption: root.bytes(root.host.memoryCached ?? 0)
-                        }
-
-                        Meter {
-                            width: parent.width
-                            label: "Swap"
-                            fraction: (root.host.swapUsed ?? 0) / Math.max(1, root.host.swapTotal ?? 1)
-                            caption: root.bytes(root.host.swapUsed ?? 0) + " / " + root.bytes(root.host.swapTotal ?? 0)
-                        }
-                    }
-                }
-
-                Box {
-                    width: (gauges.width - 3 * root.gap) * 0.22
-                    height: gauges.height
-                    title: "Disks  ↓" + root.bytes(root.host.diskRead ?? 0) + "/s ↑" + root.bytes(root.host.diskWritten ?? 0) + "/s"
-
-                    Column {
-                        anchors.fill: parent
-                        anchors.topMargin: root.rowHeight
-                        spacing: 4 * root.ratio
-
-                        Repeater {
-                            model: root.host.disks ?? []
-
-                            delegate: Meter {
-                                required property var modelData
-                                width: parent.width
-                                label: modelData.path
-                                fraction: modelData.used / Math.max(1, modelData.total)
-                                caption: root.bytes(modelData.available) + " free"
-                            }
-                        }
-                    }
-                }
-
-                Box {
-                    width: (gauges.width - 3 * root.gap) * 0.22
-                    height: gauges.height
-                    title: "Network"
-
-                    Column {
-                        anchors.fill: parent
-                        anchors.topMargin: root.rowHeight
-                        spacing: 2 * root.ratio
-
-                        Repeater {
-                            model: (root.host.interfaces ?? []).filter(item => item.received > 0 || item.sent > 0)
-
-                            delegate: ChromeText {
-                                required property var modelData
-                                width: parent.width
-                                height: root.typography.smallRow ?? root.rowHeight
-                                text: modelData.name + "  ↓" + root.bytes(modelData.received) + "/s  ↑" + root.bytes(modelData.sent) + "/s"
-                                pixelSize: root.typography.small
-                                color: root.colors.text
-                            }
+                            width: (cores.width - (cores.columns - 1) * cores.columnSpacing) / cores.columns
+                            height: root.line
+                            colors: root.colors
+                            grid: root.grid
+                            ratio: root.ratio
+                            labelWidth: 3 * root.cell
+                            valueWidth: 5 * root.cell
+                            label: modelData.label
+                            value: modelData.value
+                            fraction: modelData.fraction
+                            tone: modelData.tone
                         }
                     }
                 }
             }
 
-            // The column titles; a click sorts by it, a second click reverses.
-            Row {
-                id: columns
-                width: parent.width
-                height: root.rowHeight
-                spacing: 0
+            Panel {
+                id: memoryPanel
 
-                Repeater {
-                    model: [["pid", "PID", 0.07], ["", "USER", 0.10], ["cpu", "CPU%", 0.07], ["memory", "MEM", 0.08], ["threads", "THR", 0.05], ["", "S", 0.03], ["", "PANE", 0.05], ["name", "PROGRAM", 0.15], ["", "COMMAND", 0.40]]
+                width: gauges.share
+                height: gauges.height
+                title: "memory"
+                value: root.panels.memoryTotal ?? ""
 
-                    delegate: Item {
-                        id: column
-                        required property var modelData
-                        width: columns.width * modelData[2]
-                        height: columns.height
-
-                        ChromeText {
-                            anchors.fill: parent
-                            text: column.modelData[1] + (root.view.sort === column.modelData[0] && column.modelData[0] !== "" ? (root.view.reverse ? " ▲" : " ▼") : "")
-                            pixelSize: root.typography.small
-                            emphasized: root.view.sort === column.modelData[0]
-                            color: root.view.sort === column.modelData[0] ? root.colors.accent : root.colors.subtext0
-                        }
-
-                        MouseArea {
-                            anchors.fill: parent
-                            enabled: column.modelData[0] !== ""
-                            cursorShape: enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
-                            onClicked: root.sortBy(column.modelData[0])
-                        }
-                    }
+                Meters {
+                    panel: memoryPanel
+                    model: root.panels.memory ?? []
                 }
             }
 
-            ListView {
-                id: table
-                width: parent.width
-                height: parent.height - header.height - gauges.height - columns.height - details.height - 4 * root.gap
-                clip: true
-                model: root.controller.rows
-                focus: true
-                boundsBehavior: Flickable.StopAtBounds
-                keyNavigationEnabled: true
-                highlightMoveDuration: 0
-                currentIndex: -1
-                onCurrentIndexChanged: {
-                    const item = currentItem as ProcessRow;
-                    if (item !== null)
-                        root.controller.select(item.record.pid, item.record.started);
-                }
-                Keys.onReturnPressed: details.forceActiveFocus()
+            Panel {
+                id: diskPanel
 
-                delegate: ProcessRow {}
+                width: gauges.share
+                height: gauges.height
+                title: "disks"
+
+                Meters {
+                    panel: diskPanel
+                    model: root.panels.disks ?? []
+                }
+            }
+
+            Panel {
+                id: networkPanel
+
+                width: gauges.share
+                height: gauges.height
+                title: "network"
+
+                Meters {
+                    panel: networkPanel
+                    model: root.panels.network ?? []
+                }
+            }
+        }
+
+        // The columns' titles; a click sorts by one, a second click reverses.
+        Item {
+            id: columnTitles
+
+            y: gauges.y + gauges.height + root.gap
+            width: table.width
+            height: root.line
+
+            Repeater {
+                model: root.controller.columns
+
+                delegate: Item {
+                    id: titleCell
+
+                    required property var modelData
+
+                    x: modelData.x
+                    width: modelData.width
+                    height: columnTitles.height
+
+                    CellText {
+                        anchors.fill: parent
+                        text: titleCell.modelData.title
+                        grid: root.grid
+                        color: titleCell.modelData.owner ? root.colors.yellow : titleCell.modelData.sorted ? root.colors.text : root.colors.subtext0
+                        bold: titleCell.modelData.sorted
+                    }
+
+                    MouseArea {
+                        anchors.fill: parent
+                        enabled: titleCell.modelData.sort.length > 0
+                        cursorShape: enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
+                        onClicked: root.controller.setSort(titleCell.modelData.sort)
+                    }
+                }
             }
 
             Rectangle {
-                id: details
+                y: parent.height - height
                 width: parent.width
-                height: (root.detail.pid ?? 0) > 0 ? 4 * root.rowHeight : (root.controller.error.length > 0 ? root.rowHeight : 0)
-                color: root.colors.surface0
-                radius: 4 * root.ratio
-                visible: height > 0
+                height: root.hairline
+                color: root.colors.surface1
+            }
+        }
 
-                Column {
-                    anchors.fill: parent
-                    anchors.margins: root.gap / 2
-                    spacing: 0
+        // The processes the table shows; the controller holds what is above and below them.
+        Item {
+            id: table
 
-                    ChromeText {
-                        width: parent.width
-                        height: root.rowHeight
-                        visible: root.controller.error.length > 0
-                        text: root.controller.error
-                        pixelSize: root.typography.small
-                        color: root.colors.red
+            readonly property real scrollbarWidth: 6 * root.ratio
+            property real wheelRest: 0
+
+            y: columnTitles.y + columnTitles.height + 2 * root.ratio
+            width: body.width
+            height: Math.max(root.line, (details.visible ? details.y : (confirmBar.visible ? confirmBar.y : footerBar.y)) - root.gap - y)
+            clip: true
+            focus: true
+            activeFocusOnTab: true
+
+            function measure() {
+                root.controller.setTable(Qt.size(width - scrollbarWidth - root.gap, height), Qt.size(root.cell, root.line));
+            }
+
+            // Later, not inside the binding that resized the table: measuring changes what it binds to.
+            onWidthChanged: Qt.callLater(measure)
+            onHeightChanged: Qt.callLater(measure)
+            Component.onCompleted: Qt.callLater(measure)
+            Keys.onPressed: event => root.key(event)
+
+            Connections {
+                target: root
+
+                function onCellChanged() {
+                    Qt.callLater(table.measure);
+                }
+
+                function onLineChanged() {
+                    Qt.callLater(table.measure);
+                }
+            }
+
+            Repeater {
+                model: root.controller.rows
+
+                delegate: TableRow {}
+            }
+
+            MouseArea {
+                anchors.fill: parent
+                acceptedButtons: Qt.NoButton
+                onWheel: wheel => {
+                    const delta = wheel.pixelDelta.y !== 0 ? -wheel.pixelDelta.y / root.line : -wheel.angleDelta.y / 40;
+                    table.wheelRest += delta;
+                    const steps = Math.trunc(table.wheelRest);
+                    if (steps !== 0) {
+                        table.wheelRest -= steps;
+                        root.controller.scroll(steps);
+                    }
+                    wheel.accepted = true;
+                }
+            }
+
+            Rectangle {
+                x: table.width - table.scrollbarWidth
+                y: table.height * (root.footer.position ?? 0)
+                width: table.scrollbarWidth
+                height: Math.max(2 * root.line, table.height * (root.footer.size ?? 1))
+                radius: width / 2
+                color: Qt.alpha(root.colors.text, 0.18)
+                visible: (root.footer.size ?? 1) < 1
+            }
+        }
+
+        // The selected process: what it is, and what telar knows of it, with its actions.
+        Row {
+            id: details
+
+            y: (confirmBar.visible ? confirmBar.y : footerBar.y) - root.gap - height
+            width: body.width
+            height: 6 * root.line
+            spacing: root.gap
+            visible: root.hasDetail
+
+            Panel {
+                width: (details.width - root.gap) / 2
+                height: details.height
+                title: root.detail.program ?? ""
+                value: "pid " + (root.detail.pid ?? "") + " · " + (root.detail.state ?? "") + " · nice " + (root.detail.nice ?? 0)
+
+                Facts {
+                    rows: [["command", root.detail.arguments ?? ""], ["directory", root.detail.directory ?? ""], ["ports", root.detail.ports ?? ""], ["usage", root.detail.usage ?? ""]]
+                }
+            }
+
+            Panel {
+                id: telarPanel
+
+                width: (details.width - root.gap) / 2
+                height: details.height
+                title: "in telar"
+
+                Facts {
+                    rows: [["owner", root.detail.owner ?? ""], ["parents", root.detail.lineage ?? ""], ["children", root.detail.children ?? ""]]
+                }
+
+                Row {
+                    height: root.controlHeight
+                    spacing: 6 * root.ratio
+
+                    DetailButton {
+                        id: reviewButton
+
+                        text: "Review ▾"
+                        onClicked: reviewMenu.open()
+
+                        Popup {
+                            id: reviewMenu
+
+                            y: -height - 4 * root.ratio
+                            padding: 4 * root.ratio
+
+                            background: DialogSurface {
+                                colors: root.colors
+                                ratio: root.ratio
+                            }
+
+                            contentItem: Column {
+                                spacing: 2 * root.ratio
+
+                                Repeater {
+                                    model: [["stack", "Stack"], ["files", "Open files"], ["logs", "Logs"], ["debug", "Debugger…"]]
+
+                                    delegate: DetailButton {
+                                        required property var modelData
+
+                                        width: 14 * root.cell
+                                        text: modelData[1]
+                                        danger: modelData[0] === "debug"
+                                        onClicked: {
+                                            reviewMenu.close();
+                                            if (modelData[0] === "debug")
+                                                root.ask("debug");
+                                            else
+                                                root.controller.review(modelData[0]);
+                                        }
+                                    }
+                                }
+                            }
+                        }
                     }
 
-                    ChromeText {
-                        width: parent.width
-                        height: root.rowHeight
-                        visible: (root.detail.pid ?? 0) > 0
-                        text: (root.detail.program ?? "") + "  ·  pid " + (root.detail.pid ?? "") + "  ·  " + (root.detail.user ?? "") + "  ·  " + (root.detail.state ?? "") + "  ·  nice " + (root.detail.nice ?? 0) + ((root.detail.pane ?? 0) > 0 ? "  ·  pane " + root.detail.pane : "") + ((root.detail.ports ?? "").length > 0 ? "  ·  ports " + root.detail.ports : "") + "  ·  " + (root.detail.directory ?? "")
-                        pixelSize: root.typography.small
-                        emphasized: true
-                        color: root.colors.text
+                    DetailButton {
+                        text: "Pane"
+                        visible: root.detail.pane ?? false
+                        onClicked: root.controller.focusPane()
                     }
 
-                    ChromeText {
-                        width: parent.width
-                        height: root.rowHeight
-                        visible: (root.detail.pid ?? 0) > 0
-                        text: root.detail.arguments ?? ""
-                        pixelSize: root.typography.small
-                        color: root.colors.subtext0
+                    DetailButton {
+                        text: "Copy"
+                        onClicked: root.controller.copyCommand()
+                    }
+
+                    Divider {}
+
+                    DetailButton {
+                        text: (root.detail.stopped ?? false) ? "Resume" : "Pause"
+                        onClicked: root.controller.signal((root.detail.stopped ?? false) ? "CONT" : "STOP")
                     }
 
                     Row {
-                        height: root.rowHeight
-                        spacing: root.gap
-                        visible: (root.detail.pid ?? 0) > 0
+                        height: root.controlHeight
 
-                        Chip {
-                            label: "Pause"
-                            onClicked: root.act("STOP")
+                        ChromeText {
+                            width: implicitWidth + 6 * root.ratio
+                            height: parent.height
+                            text: "nice"
+                            pixelSize: root.typography.small
+                            color: root.colors.subtext0
                         }
 
-                        Chip {
-                            label: "Resume"
-                            onClicked: root.act("CONT")
+                        DetailButton {
+                            text: "−"
+                            onClicked: root.controller.renice((root.detail.nice ?? 0) - 1)
+                            Accessible.name: "Raise the process's priority"
                         }
 
-                        Chip {
-                            label: "Terminate"
-                            onClicked: root.act("TERM")
+                        CellText {
+                            width: 3 * root.cell
+                            height: parent.height
+                            text: String(root.detail.nice ?? 0)
+                            grid: root.grid
+                            color: root.colors.text
                         }
 
-                        Chip {
-                            label: root.confirming === "KILL" ? "Kill? click again" : "Kill"
-                            danger: true
-                            onClicked: root.act("KILL")
+                        DetailButton {
+                            text: "+"
+                            onClicked: root.controller.renice((root.detail.nice ?? 0) + 1)
+                            Accessible.name: "Lower the process's priority"
+                        }
+                    }
+
+                    Divider {}
+
+                    DetailButton {
+                        text: "TERM"
+                        danger: true
+                        onClicked: root.ask("TERM")
+                    }
+
+                    DetailButton {
+                        text: "KILL"
+                        danger: true
+                        onClicked: root.ask("KILL")
+                    }
+                }
+            }
+        }
+
+        // What an action that asks first is about to do.
+        Rectangle {
+            id: confirmBar
+
+            y: footerBar.y - root.gap - height
+            width: body.width
+            height: root.controlHeight + 2 * 6 * root.ratio
+            radius: root.radius
+            color: Qt.alpha(root.colors.red, 0.12)
+            border.width: root.hairline
+            border.color: Qt.alpha(root.colors.red, 0.6)
+            visible: root.confirming !== ""
+
+            ChromeText {
+                x: root.gap
+                width: confirmActions.x - 2 * root.gap
+                height: parent.height
+                pixelSize: root.typography.small
+                color: root.colors.text
+                text: {
+                    const target = (root.detail.program ?? "") + " (" + (root.detail.pid ?? "") + ")";
+                    if (root.confirming === "debug")
+                        return "Attaching a debugger stops " + target + " until you detach it.";
+                    return "Send " + root.confirming + " to " + target + "? telar checks it is still the same process first.";
+                }
+            }
+
+            Row {
+                id: confirmActions
+
+                x: confirmBar.width - width - root.gap
+                y: (confirmBar.height - height) / 2
+                spacing: 6 * root.ratio
+
+                DetailButton {
+                    text: root.confirming === "debug" ? "Attach debugger" : "Send " + root.confirming
+                    danger: true
+                    onClicked: root.run(root.confirming)
+                }
+
+                DetailButton {
+                    text: "Cancel"
+                    onClicked: root.confirming = ""
+                }
+            }
+        }
+
+        KeyHintBar {
+            id: footerBar
+
+            y: body.height - height
+            width: body.width
+            height: root.controlHeight
+            colors: root.colors
+            typography: root.typography
+            ratio: root.ratio
+            hints: {
+                const hints = [
+                    {
+                        keys: ["↑", "↓"],
+                        word: "move"
+                    },
+                    {
+                        keys: ["/"],
+                        word: "filter"
+                    },
+                    {
+                        keys: ["e"],
+                        word: "tree"
+                    },
+                    {
+                        keys: ["s"],
+                        word: "sort"
+                    },
+                    {
+                        keys: ["r"],
+                        word: "reverse"
+                    }
+                ];
+                if (root.view.layout === "tree")
+                    hints.push({
+                        keys: ["←", "→"],
+                        word: "fold"
+                    });
+                if (root.detail.pane ?? false)
+                    hints.push({
+                        keys: ["g"],
+                        word: "pane"
+                    });
+                hints.push({
+                    keys: ["t"],
+                    word: "TERM"
+                }, {
+                    keys: ["k"],
+                    word: "KILL"
+                }, {
+                    keys: ["Esc"],
+                    word: root.hasDetail ? "deselect" : "close"
+                });
+                return hints;
+            }
+            trailing: ({
+                    keys: [],
+                    word: root.controller.error.length > 0 ? root.controller.error : (root.footer.count ?? "")
+                })
+        }
+    }
+
+    // A group of buttons of which one is chosen, with an optional count after each label.
+    component Segmented: Rectangle {
+        id: segmented
+
+        property var options: []
+        property string current
+        signal chosen(string key)
+
+        width: segments.width + 2 * root.hairline
+        height: root.controlHeight
+        radius: ChromeStyle.controlRadius * root.ratio
+        color: "transparent"
+        border.width: root.hairline
+        border.color: root.colors.surface1
+
+        Row {
+            id: segments
+
+            x: root.hairline
+
+            Repeater {
+                model: segmented.options
+
+                delegate: ChromeButton {
+                    id: segment
+
+                    required property var modelData
+
+                    height: segmented.height
+                    leftPadding: 10 * root.ratio
+                    rightPadding: 10 * root.ratio
+                    colors: root.colors
+                    pixelSize: root.typography.small
+                    checked: modelData.key === segmented.current
+                    text: modelData.label
+                    onClicked: segmented.chosen(modelData.key)
+                    Accessible.name: modelData.label
+
+                    contentItem: Row {
+                        spacing: 5 * root.ratio
+
+                        ChromeText {
+                            height: segment.height
+                            text: segment.modelData.label
+                            pixelSize: root.typography.small
+                            emphasized: segment.checked
+                            color: segment.checked ? root.colors.text : root.colors.subtext0
                         }
 
-                        Chip {
-                            label: "Nice +5"
-                            onClicked: root.controller.renice((root.detail.nice ?? 0) + 5)
-                        }
-
-                        Chip {
-                            label: "Copy command"
-                            onClicked: root.controller.copyCommand()
-                        }
-
-                        Chip {
-                            label: "Go to pane"
-                            visible: (root.detail.pane ?? 0) > 0
-                            onClicked: root.controller.focusPane()
-                        }
-
-                        Repeater {
-                            model: [["stack", "Stack"], ["files", "Files"], ["logs", "Logs"]]
-
-                            delegate: Chip {
-                                required property var modelData
-                                label: "Review " + modelData[1].toLowerCase()
-                                onClicked: root.controller.review(modelData[0])
-                            }
-                        }
-
-                        Chip {
-                            label: root.confirming === "debug" ? "Debug stops it; click again" : "Debug"
-                            danger: true
-                            onClicked: root.act("debug")
+                        ChromeText {
+                            height: segment.height
+                            text: segment.modelData.count === undefined ? "" : String(segment.modelData.count)
+                            pixelSize: root.typography.small
+                            color: root.colors.overlay1
+                            visible: text.length > 0
                         }
                     }
                 }
@@ -465,132 +812,265 @@ FocusScope {
         }
     }
 
-    component Chip: Rectangle {
-        id: chip
-        property string label
-        property bool active: false
-        property bool danger: false
-        signal clicked
+    // A box of the monitor: a title, a value at its right, and what it holds below.
+    component Panel: Rectangle {
+        id: panel
 
-        width: chipText.implicitWidth + 2 * root.gap
-        height: root.rowHeight
-        radius: 4 * root.ratio
-        color: active ? Qt.alpha(root.colors.accent, 0.25) : chipMouse.containsMouse ? root.colors.surface1 : root.colors.surface0
-        border.color: danger ? root.colors.red : active ? root.colors.accent : "transparent"
-        border.width: root.physicalPixel
-
-        Text {
-            id: chipText
-            anchors.centerIn: parent
-            text: chip.label
-            color: chip.danger ? root.colors.red : root.colors.text
-            font.pixelSize: root.typography.small
-        }
-
-        MouseArea {
-            id: chipMouse
-            anchors.fill: parent
-            hoverEnabled: true
-            cursorShape: Qt.PointingHandCursor
-            onClicked: chip.clicked()
-        }
-
-        Accessible.role: Accessible.Button
-        Accessible.name: label
-    }
-
-    component Box: Rectangle {
-        id: box
         property string title
+        property string value
+        default property alias content: contents.data
+        readonly property real padding: 10 * root.ratio
+        readonly property real contentWidth: width - 2 * padding
+
+        implicitHeight: contents.y + contents.implicitHeight + padding
+        radius: root.radius
         color: root.colors.surface0
-        radius: 4 * root.ratio
-        clip: true
 
         ChromeText {
-            x: root.gap
-            width: parent.width - 2 * root.gap
-            height: root.rowHeight
-            text: box.title
+            x: panel.padding
+            y: panel.padding / 2
+            width: panel.contentWidth - valueText.width
+            height: root.controlHeight
+            text: panel.title
             pixelSize: root.typography.small
             emphasized: true
             color: root.colors.accent
         }
+
+        CellText {
+            id: valueText
+
+            x: panel.width - panel.padding - width
+            y: panel.padding / 2
+            width: implicitWidth
+            height: root.controlHeight
+            text: panel.value
+            grid: root.grid
+            color: root.colors.text
+        }
+
+        Column {
+            id: contents
+
+            x: panel.padding
+            y: panel.padding / 2 + root.controlHeight
+            width: panel.contentWidth
+            spacing: 2 * root.ratio
+        }
     }
 
-    component Meter: Item {
-        id: meter
-        property string label
-        property real fraction: 0
-        property string caption
-        height: root.typography.smallRow ?? root.rowHeight
+    // The measures of a panel, one per row; the labels and values take the cells their longest needs,
+    // and the bars the rest.
+    component Meters: Column {
+        id: meters
+
+        required property Item panel
+        property var model: []
+        readonly property int labelCells: Math.max(1, ...model.map(entry => entry.label.length))
+        readonly property int valueCells: Math.max(1, ...model.map(entry => entry.value.length))
+
+        width: panel.contentWidth
+        spacing: 2 * root.ratio
+
+        Repeater {
+            model: meters.model
+
+            delegate: MeterRow {
+                required property var modelData
+
+                width: meters.width
+                height: root.line
+                colors: root.colors
+                grid: root.grid
+                ratio: root.ratio
+                labelWidth: meters.labelCells * root.cell
+                valueWidth: meters.valueCells * root.cell
+                label: modelData.label
+                value: modelData.value
+                fraction: modelData.fraction
+                tone: modelData.tone
+            }
+        }
+    }
+
+    // Name and value pairs of a detail.
+    component Facts: Column {
+        id: facts
+
+        property var rows: []
+
+        width: parent ? parent.width : 0
+
+        Repeater {
+            model: facts.rows
+
+            delegate: Item {
+                id: fact
+
+                required property var modelData
+
+                width: facts.width
+                height: root.line
+
+                ChromeText {
+                    width: 10 * root.cell
+                    height: parent.height
+                    text: fact.modelData[0]
+                    pixelSize: root.typography.small
+                    color: root.colors.subtext0
+                }
+
+                CellText {
+                    x: 10 * root.cell
+                    width: parent.width - x
+                    height: parent.height
+                    text: fact.modelData[1]
+                    grid: root.grid
+                    color: root.colors.text
+                    clip: true
+                }
+            }
+        }
+    }
+
+    // A button of the detail; a dangerous one reads in red.
+    component DetailButton: ChromeButton {
+        id: action
+
+        property bool danger: false
+
+        height: root.controlHeight
+        leftPadding: 9 * root.ratio
+        rightPadding: 9 * root.ratio
+        colors: root.colors
+        pixelSize: root.typography.small
+
+        contentItem: ChromeText {
+            text: action.text
+            pixelSize: action.pixelSize
+            color: action.danger ? root.colors.red : root.colors.text
+            horizontalAlignment: Text.AlignHCenter
+            wholePixelCentering: true
+        }
 
         Rectangle {
             anchors.fill: parent
-            anchors.leftMargin: root.gap
-            anchors.rightMargin: root.gap
-            radius: 2 * root.ratio
-            color: root.colors.surface1
-
-            Rectangle {
-                width: parent.width * Math.max(0, Math.min(1, meter.fraction))
-                height: parent.height
-                radius: parent.radius
-                color: meter.fraction > 0.85 ? root.colors.red : meter.fraction > 0.6 ? root.colors.yellow : root.colors.green
-                opacity: 0.55
-            }
-        }
-
-        ChromeText {
-            x: root.gap * 1.5
-            width: parent.width - 3 * root.gap
-            height: parent.height
-            text: meter.label + "  " + meter.caption
-            pixelSize: root.typography.small
-            color: root.colors.text
+            radius: ChromeStyle.controlRadius * root.ratio
+            color: "transparent"
+            border.width: root.hairline
+            border.color: action.danger ? Qt.alpha(root.colors.red, 0.5) : root.colors.surface1
         }
     }
 
-    component ProcessRow: Rectangle {
+    component Divider: Rectangle {
+        width: root.hairline
+        height: root.controlHeight * 0.7
+        anchors.verticalCenter: parent ? parent.verticalCenter : undefined
+        color: root.colors.surface1
+    }
+
+    // A row of the table: a process, a group's title in an owner listing, or a row still on its way.
+    component TableRow: Item {
         id: row
+
         required property var record
         required property int index
-        readonly property bool current: record.pid === root.view.selected
-        width: ListView.view.width
-        height: root.rowHeight
-        color: current ? Qt.alpha(root.colors.accent, 0.2) : index % 2 === 0 ? "transparent" : Qt.alpha(root.colors.surface0, 0.4)
+        readonly property bool process: record.kind === "process"
+        readonly property bool group: record.kind === "group"
+        readonly property var columns: root.controller.columns
 
-        Row {
+        y: index * root.line
+        width: table.width - table.scrollbarWidth - root.gap
+        height: root.line
+        // Until the controller hears the table shrank, a row past its end stays hidden, never half shown.
+        visible: y + height <= table.height + 0.5
+
+        Rectangle {
             anchors.fill: parent
+            radius: 3 * root.ratio
+            color: row.record.selected ? Qt.alpha(root.colors.accent, 0.2) : row.group ? root.colors.surface0 : pointer.containsMouse && row.process ? Qt.alpha(root.colors.text, ChromeStyle.hoverAlpha) : "transparent"
+        }
 
-            Repeater {
-                model: [
-                    [String(row.record.pid), 0.07],
-                    [row.record.user, 0.10],
-                    [row.record.measured ? row.record.cpu.toFixed(1) : "-", 0.07],
-                    [row.record.measured ? root.bytes(row.record.memory) : "-", 0.08],
-                    [row.record.measured ? String(row.record.threads) : "-", 0.05],
-                    [row.record.state.substring(0, 1).toUpperCase(), 0.03],
-                    [row.record.pane > 0 ? String(row.record.pane) : "-", 0.05],
-                    ["  ".repeat(row.record.depth) + row.record.program, 0.15],
-                    [row.record.command, 0.40]
-                ]
+        Rectangle {
+            width: 2 * root.ratio
+            height: parent.height
+            color: root.colors.accent
+            visible: row.record.selected ?? false
+        }
 
-                delegate: ChromeText {
-                    required property var modelData
-                    width: row.width * modelData[1]
-                    height: row.height
-                    text: modelData[0]
-                    pixelSize: root.typography.small
-                    color: row.record.agent ? root.colors.mauve : row.record.cpu >= 50 ? root.colors.peach : root.colors.text
+        Repeater {
+            model: row.process ? row.columns : []
+
+            delegate: CellText {
+                id: cellText
+
+                required property var modelData
+                required property int index
+
+                x: modelData.x
+                width: modelData.width
+                height: row.height
+                clip: true
+                grid: root.grid
+                text: (row.record.cells ?? [])[index] ?? ""
+                color: {
+                    if (index === 2 || index === 4)
+                        return root.colors.subtext0;
+                    if (index === 6)
+                        return root.toneColor(row.record.cpuTone);
+                    if (index === 7)
+                        return row.record.owner === "none" ? root.colors.overlay1 : row.record.owner === "inherited" ? Qt.alpha(root.colors.yellow, 0.75) : root.colors.yellow;
+                    return root.colors.text;
                 }
             }
         }
 
+        CellText {
+            x: root.cell
+            width: row.columns.length > 6 ? row.columns[5].x - x : 0
+            height: row.height
+            visible: row.group
+            clip: true
+            grid: root.grid
+            bold: true
+            text: row.group ? row.record.title + "  ·  " + row.record.count : ""
+            color: row.record.title === "no owner in telar" ? root.colors.subtext0 : root.colors.yellow
+        }
+
+        CellText {
+            x: row.columns.length > 6 ? row.columns[5].x : 0
+            width: row.columns.length > 6 ? row.columns[5].width : 0
+            height: row.height
+            visible: row.group
+            grid: root.grid
+            text: row.group ? row.record.memory : ""
+            color: root.colors.subtext0
+        }
+
+        CellText {
+            x: row.columns.length > 6 ? row.columns[6].x : 0
+            width: row.columns.length > 6 ? row.columns[6].width : 0
+            height: row.height
+            visible: row.group
+            grid: root.grid
+            text: row.group ? row.record.cpu : ""
+            color: root.colors.subtext0
+        }
+
         MouseArea {
+            id: pointer
+
             anchors.fill: parent
+            hoverEnabled: true
+            enabled: row.process
+            cursorShape: row.process ? Qt.PointingHandCursor : Qt.ArrowCursor
             onClicked: {
-                row.ListView.view.currentIndex = row.index;
-                row.ListView.view.forceActiveFocus();
+                root.controller.selectRow(row.index);
+                table.forceActiveFocus();
+            }
+            onDoubleClicked: {
+                if (row.record.foldable)
+                    root.controller.toggleFold(row.record.pid);
             }
         }
     }

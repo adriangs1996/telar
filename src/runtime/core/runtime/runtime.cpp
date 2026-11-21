@@ -2992,6 +2992,17 @@ namespace telar::runtime {
 
       work.roots.atMut(work.root_count++) = {.process = pane->process->processId(), .pane_id = pane->id, .agent = working};
     }
+
+    // The windows and commands connected to the runtime are telar's processes too.
+    for (const auto* client : clients_.items()) {
+      if (work.client_count == work.clients.size()) {
+        break;
+      }
+
+      if (client != nullptr && client->peer_identity) {
+        work.clients.atMut(work.client_count++) = client->peer_identity->pid;
+      }
+    }
   }
 
   template <EventLoop Poller, typename Background>
