@@ -268,8 +268,17 @@ export {
         return pane;
       }
 
+      // The terminal a request names: a request only a terminal answers is refused for another kind.
+      inline static TerminalPane& requireTerminal(PaneStore& panes, std::uint64_t identity) {
+        return telar::runtime::requireTerminal(require(panes, identity));
+      }
+
+      inline static TerminalPane& requireTerminalGeneration(PaneStore& panes, std::uint64_t identity, std::uint64_t generation) {
+        return telar::runtime::requireTerminal(requireGeneration(panes, identity, generation));
+      }
+
       // A new pane in a tab, in the colors of the workspace's geometry owner when there is one.
-      inline tbc::mut_a<Pane> launch(tbc::mut_a<RuntimeModel> model, const PanePlacement& placement, const Launch& launch) {
+      inline tbc::mut_a<TerminalPane> launch(tbc::mut_a<RuntimeModel> model, const PanePlacement& placement, const Launch& launch) {
         const auto identity = allocateIdentity(model);
 
         if (launch.environment_mode != EnvironmentMode::inherit_runtime || !launch.environment.empty()) {
@@ -281,12 +290,12 @@ export {
         return launchPrepared(model, placement, command, identity);
       }
 
-      inline tbc::mut_a<Pane> launch(tbc::mut_a<RuntimeModel> model, const PanePlacement& placement, Command<ConcurrentMemory>& command, std::uint64_t restored_identity = 0) {
+      inline tbc::mut_a<TerminalPane> launch(tbc::mut_a<RuntimeModel> model, const PanePlacement& placement, Command<ConcurrentMemory>& command, std::uint64_t restored_identity = 0) {
         return launchPrepared(model, placement, command, allocateIdentity(model, restored_identity));
       }
 
       inline tbc::mut_a<Attachment> attach(RuntimeModel& model, tbc::mut_a<ClientSession> client, std::uint64_t pane_id, TerminalSize size) {
-        auto* workspace = model.workspaces.find(require(model.panes, pane_id).location.workspace.id);
+        auto* workspace = model.workspaces.find(requireTerminal(model.panes, pane_id).location.workspace.id);
         if (workspace == nullptr) {
           throw RequestError{FailureCode::workspace_not_found, "Workspace does not exist"};
         }
@@ -296,7 +305,7 @@ export {
         }
 
         const bool controls_geometry = acquireGeometry(model.panes, model.metrics, client, *workspace);
-        auto& pane = require(model.panes, pane_id);
+        auto& pane = requireTerminal(model.panes, pane_id);
 
         if (controls_geometry) {
           pane.resize(size);
@@ -415,8 +424,28 @@ export {
           std::abort();
         }
 
-        auto& removed = *found;
+        visitPane(*found, [&](auto& kind) {
+          release(kind);
+        });
 
+        // A worker may still be reading a terminal's observer and media: each is kept until the
+        // worker is done with it.
+        if (auto* terminal = found->asMut<TerminalPane>()) { // NOLINT(misc-const-correctness): its observer and media are retired through their shared handles, a mutation tbc sees through the pane
+          terminal->observer->retiredNextMut() = std::move(model.retired_observers);
+          model.retired_observers = terminal->observer;
+          ++model.retired_observer_count;
+          terminal->media->retiredNextMut() = std::move(model.retired_media);
+          model.retired_media = terminal->media;
+          ++model.retired_media_count;
+        }
+
+        model.panes.erase(identity);
+        ++model.pane_revision;
+      }
+
+      // Lets go of what a terminal holds outside its pane before the pane is erased: its
+      // descriptor, the session its observer records and the transfers its media has under way.
+      inline void release(TerminalPane& removed) noexcept {
         poller_.remove(removed.process->descriptor());
         if (removed.exit_status && !removed.exit_observed) {
           removed.observer->shellExit(*removed.exitCode());
@@ -425,14 +454,6 @@ export {
 
         removed.observer->finishSession();
         removed.media->cancel();
-        removed.observer->retiredNextMut() = std::move(model.retired_observers);
-        model.retired_observers = removed.observer;
-        ++model.retired_observer_count;
-        removed.media->retiredNextMut() = std::move(model.retired_media);
-        model.retired_media = removed.media;
-        ++model.retired_media_count;
-        model.panes.erase(identity);
-        ++model.pane_revision;
       }
 
       template <typename Observer = IgnorePaneInput>
@@ -441,7 +462,7 @@ export {
           return;
         }
 
-        auto& pane = require(model.panes, request.pane_id);
+        auto& pane = requireTerminal(model.panes, request.pane_id);
         if (pane.output_closed) {
           return;
         }
@@ -454,7 +475,7 @@ export {
         }
 
         recordInputOrigin(model, clients, {.client = client_id, .pane = request.pane_id});
-        ClipboardService::configure(clients, require(model.panes, request.pane_id));
+        ClipboardService::configure(clients, requireTerminal(model.panes, request.pane_id));
       }
 
       inline static std::size_t typedSize(bool paste, std::span<const Byte> text, std::span<const Byte> enter) noexcept {
@@ -471,7 +492,7 @@ export {
       };
 
       template <typename Observer>
-      inline static void type(Pane& pane, const TypedLine& line, const Observer& observe) {
+      inline static void type(TerminalPane& pane, const TypedLine& line, const Observer& observe) {
         const auto forward = [&](std::span<const Byte> bytes) {
           pane.enqueueInput(bytes);
           observe(pane, bytes);
@@ -497,19 +518,19 @@ export {
       }
 
       // Writes a paste to a pane's input queue, framed when its program asked for bracketed paste.
-      inline static void paste(Pane& pane, std::span<const Byte> text, bool bracketed) {
+      inline static void paste(TerminalPane& pane, std::span<const Byte> text, bool bracketed) {
         BracketedPaste::encode(textView(text), bracketed, [&](std::string_view bytes) {
           pane.enqueueInput(byteView(bytes));
         });
       }
 
-      inline bool admitInput(Pane& pane, std::size_t bytes) {
-        if (bytes <= Pane::input_limit - pane.input.size()) {
+      inline bool admitInput(TerminalPane& pane, std::size_t bytes) {
+        if (bytes <= TerminalPane::input_limit - pane.input.size()) {
           return true;
         }
 
         TELAR_DIAGNOSTIC(diagnostics::accumulate(pane.input_dropped_bytes, bytes));
-        limits_.report(LimitReach{.name = "panes.input_queue_capacity", .noun = "queued input bytes", .value = Pane::input_limit, .requested = saturatedAdd(pane.input.size(), bytes)});
+        limits_.report(LimitReach{.name = "panes.input_queue_capacity", .noun = "queued input bytes", .value = TerminalPane::input_limit, .requested = saturatedAdd(pane.input.size(), bytes)});
         return false;
       }
 
@@ -518,15 +539,15 @@ export {
           return;
         }
 
-        auto* workspace = model.workspaces.find(require(model.panes, request.pane_id).location.workspace.id);
+        auto* workspace = model.workspaces.find(requireTerminal(model.panes, request.pane_id).location.workspace.id);
         if (workspace == nullptr || !acquireGeometry(model.panes, model.metrics, client, *workspace)) {
           return;
         }
 
-        require(model.panes, request.pane_id).resize(request.size);
+        requireTerminal(model.panes, request.pane_id).resize(request.size);
       }
 
-      inline void flushInput(Pane& pane) {
+      inline void flushInput(TerminalPane& pane) {
         if (pane.output_closed) {
           return;
         }
@@ -549,7 +570,7 @@ export {
         }
       }
 
-      inline void failOutput(Pane& pane) noexcept {
+      inline void failOutput(TerminalPane& pane) noexcept {
         pane.terminal.abortControl();
         pane.media->cancel();
         pane.requestClose();
@@ -558,7 +579,7 @@ export {
       }
 
       inline void configureDesktop(RuntimeModel& model, ClientStore& clients, std::uint64_t client_id, const ConfigurePaneDesktop& request) {
-        const auto pane = requireGeneration(model.panes, request.pane_id, request.pane_generation).id;
+        const auto pane = requireTerminalGeneration(model.panes, request.pane_id, request.pane_generation).id;
         auto* client = clients.find(client_id);
         auto* attachment = client == nullptr ? nullptr : client->attachmentMut(pane);
         if (attachment == nullptr || client->connection.flags().closing) {
@@ -571,7 +592,7 @@ export {
 
         attachment->desktop = request;
         refreshDesktop(model, clients, pane);
-        flushInput(require(model.panes, pane));
+        flushInput(requireTerminal(model.panes, pane));
       }
 
       // A change of only the editor colors leaves the terminals alone: applying colors repaints a
@@ -584,7 +605,8 @@ export {
           return;
         }
 
-        for (auto* pane : model.panes.items()) {
+        for (auto* stored : model.panes.items()) {
+          auto* pane = asTerminal(stored);
           const auto* workspace = pane == nullptr ? nullptr : model.workspaces.find(pane->location.workspace.id);
           if (workspace != nullptr && workspace->geometry_client == client.id && !pane->desktop_theme) {
             pane->terminal.configureColors(request);
@@ -602,7 +624,7 @@ export {
           return;
         }
 
-        auto& pane = require(panes, request.pane_id);
+        auto& pane = requireTerminal(panes, request.pane_id);
         constexpr std::size_t clipboard_limit = std::size_t{1024} * 1024;
         TextReader reader{memory_, pane.terminal, clipboard_limit};
 
@@ -622,7 +644,7 @@ export {
           return;
         }
 
-        auto& pane = require(model.panes, request.pane_id);
+        auto& pane = requireTerminal(model.panes, request.pane_id);
         if (pane.output_closed) {
           return;
         }
@@ -638,12 +660,12 @@ export {
         }
 
         recordInputOrigin(model, clients, {.client = client_id, .pane = request.pane_id});
-        ClipboardService::configure(clients, require(model.panes, request.pane_id));
+        ClipboardService::configure(clients, requireTerminal(model.panes, request.pane_id));
       }
 
       template <typename Observer = IgnorePaneInput>
       inline void sendText(PaneStore& panes, ClientSession& client, const SendPaneText& request, std::string_view prefix = {}, const Observer& observe = {}) {
-        auto& pane = requireGeneration(panes, request.pane_id, request.pane_generation);
+        auto& pane = requireTerminalGeneration(panes, request.pane_id, request.pane_generation);
         if (pane.output_closed) {
           throw RequestError{FailureCode::pane_exited, "Pane process has exited"};
         }
@@ -656,7 +678,7 @@ export {
         if (!admitInput(pane, required)) {
           constexpr std::size_t message_bytes = 160;
           ds::Array<char, message_bytes> message{};
-          const auto written = std::format_to_n(message.dataMut(), static_cast<std::ptrdiff_t>(message.size()), "the pane's input queue holds its limit of {} bytes; the program in it is not reading input", Pane::input_limit);
+          const auto written = std::format_to_n(message.dataMut(), static_cast<std::ptrdiff_t>(message.size()), "the pane's input queue holds its limit of {} bytes; the program in it is not reading input", TerminalPane::input_limit);
           const auto length = std::min(static_cast<std::size_t>(written.size), message.size());
 
           client.connection.send(RequestFailed{.request_id = request.request_id, .code = FailureCode::resource_limit, .message = {message.data(), length}});
@@ -674,7 +696,7 @@ export {
       }
 
       inline void pasteClipboard(RuntimeModel& model, ClientStore& clients, std::uint64_t client_id, const PastePaneClipboard& request) {
-        auto& pane = requireGeneration(model.panes, request.pane_id, request.pane_generation);
+        auto& pane = requireTerminalGeneration(model.panes, request.pane_id, request.pane_generation);
         const auto* client = clients.find(client_id);
         if (client == nullptr || !ClipboardService::eligible(*client, pane) || pane.output_closed) {
           throw RequestError{FailureCode::invalid_request, "Clipboard paste requires a live visible attachment"};
@@ -699,7 +721,7 @@ export {
         }
 
         recordInputOrigin(model, clients, {.client = client_id, .pane = request.pane_id});
-        flushInput(require(model.panes, request.pane_id));
+        flushInput(requireTerminal(model.panes, request.pane_id));
         if (auto* current = clients.find(client_id)) {
           current->connection.send(RequestCompleted{.request_id = request.request_id});
         }
@@ -709,7 +731,7 @@ export {
       template <typename Request>
         requires std::same_as<Request, SearchPane> || std::same_as<Request, SearchPaneRows>
       inline static void search(PaneStore& panes, ClientSession& client, const Request& request) {
-        auto& pane = require(panes, request.pane_id);
+        auto& pane = requireTerminal(panes, request.pane_id);
         if (client.role == ClientRole::interactive && client.attachment(pane.id) == nullptr) {
           throw RequestError{FailureCode::pane_not_found, "Pane is not attached"};
         }
@@ -751,7 +773,7 @@ export {
 
       // Rows of an attached pane's scrollback, which its client draws while it scrolls.
       inline static void readRows(PaneStore& panes, ClientSession& client, const ReadPaneRows& request) {
-        auto& pane = require(panes, request.pane_id);
+        auto& pane = requireTerminal(panes, request.pane_id);
         if (client.attachment(pane.id) == nullptr) {
           throw RequestError{FailureCode::pane_not_found, "Pane is not attached"};
         }
@@ -765,7 +787,7 @@ export {
         }
 
         try {
-          auto& pane = require(panes, client.search->paneId());
+          auto& pane = requireTerminal(panes, client.search->paneId());
           if (client.search.getMut().advance(pane.terminal.handle(), pane.terminal.contentRevision())) {
             client.connection.send(client.search.getMut().result());
             client.search.reset();
@@ -808,7 +830,7 @@ export {
       // Visibility is the union of explicit live reports. The oldest visible
       // reporter supplies theme facts; focus and the geometry lease cannot steal it.
       inline static void refreshDesktop(RuntimeModel& model, const ClientStore& clients, std::uint64_t identity) {
-        auto& pane = require(model.panes, identity);
+        auto& pane = requireTerminal(model.panes, identity);
         control::ClientFacts facts;
         const ConfigurePaneDesktop* theme = nullptr;
         std::uint64_t theme_client = std::numeric_limits<std::uint64_t>::max();
@@ -868,7 +890,7 @@ export {
         return {.id = identity, .generation = model.next_pane_generation++};
       }
 
-      inline tbc::mut_a<Pane> launchPrepared(tbc::mut_a<RuntimeModel> model, const PanePlacement& placement, Command<ConcurrentMemory>& command, PaneKey identity) {
+      inline tbc::mut_a<TerminalPane> launchPrepared(tbc::mut_a<RuntimeModel> model, const PanePlacement& placement, Command<ConcurrentMemory>& command, PaneKey identity) {
         constexpr std::size_t identity_text_bytes = 32;
         const auto set_identity = [&](std::string_view name, std::uint64_t value) {
           ds::Array<char, identity_text_bytes> text{};
@@ -888,7 +910,7 @@ export {
 
         proxy_.apply(command);
         const auto shell = shell_integration_.apply(command, placement.bare_prompt);
-        auto pane = ds::makeBox<Pane>(memory_, memory_, identity.id, placement.location, command, PaneLaunch{.size = placement.size, .media_budget = model.media_budget, .graphics = model.graphics_limits, .shell = shell});
+        auto pane = ds::makeBox<TerminalPane>(memory_, memory_, identity.id, placement.location, command, PaneLaunch{.size = placement.size, .media_budget = model.media_budget, .graphics = model.graphics_limits, .shell = shell});
 
         TELAR_DIAGNOSTIC(pane.getMut().counters = &model.metrics.panes);
         pane.getMut().generation = identity.generation;
@@ -909,7 +931,7 @@ export {
           registered = true;
           ++model.pane_revision;
           // The pane now lives in the table, where it is found again.
-          auto& inserted = *model.panes.find(identity.id);
+          auto& inserted = requireTerminal(model.panes, identity.id);
 
           inserted.event_identity = handle;
           if (handle > maximum_event_identity) {
@@ -921,7 +943,10 @@ export {
         } catch (const std::exception& error) {
           history_.recordHistory(HistoryEventView{.kind = HistoryEventKind::launch_failed, .session = session, .finished_at_ms = ObservationTime::now().milliseconds, .failure = {.generation = identity.generation, .phase = phase, .cause = launchFailureCause(error)}});
           if (registered) {
-            poller_.remove(model.panes.find(identity.id)->process->descriptor());
+            if (const auto* failed = asTerminal(model.panes.find(identity.id))) {
+              poller_.remove(failed->process->descriptor());
+            }
+
             model.panes.erase(identity.id);
             ++model.pane_revision;
           }
@@ -929,16 +954,16 @@ export {
           throw;
         }
 
-        return *model.panes.find(identity.id);
+        return requireTerminal(model.panes, identity.id);
       }
 
       inline void refreshAfterDetach(RuntimeModel& model, const ClientStore& clients, std::uint64_t identity) noexcept {
         try {
           refreshDesktop(model, clients, identity);
-          flushInput(require(model.panes, identity));
+          flushInput(requireTerminal(model.panes, identity));
         } catch (...) {
           if (auto* pane = model.panes.find(identity)) {
-            pane->requestClose();
+            requestClose(*pane);
           }
         }
       }

@@ -81,7 +81,7 @@ namespace {
 
     workspaces.open(model, panes, clients, owner.session().id, OpenPane{.request_id = 1, .size = {80, 24, 0, 0}, .launch = Launch{.cwd = "/tmp", .arguments = arguments}});
     const auto opened = owner.receive<PaneOpened>();
-    auto& pane = panes.require(model.panes, opened.pane_id);
+    auto& pane = panes.requireTerminal(model.panes, opened.pane_id);
     const auto location = pane.location;
     auto& workspace = workspaces.require(model.workspaces, location.workspace);
     const ReadPane read{.request_id = 2, .pane_id = pane.id, .pane_generation = pane.generation, .rows = 24, .source = PaneTextSource::screen};

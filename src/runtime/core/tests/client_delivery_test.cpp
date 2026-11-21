@@ -251,7 +251,7 @@ namespace {
       const ds::Array<std::string_view, 1> arguments{"/bin/cat"};
 
       workspaces.open(model, panes, clients, client.id, OpenPane{.request_id = 1, .size = {80, 24, 0, 0}, .launch = Launch{.cwd = "/tmp", .arguments = arguments}});
-      auto& pane = panes.require(model.panes, peer.receive<PaneOpened>().pane_id);
+      auto& pane = panes.requireTerminal(model.panes, peer.receive<PaneOpened>().pane_id);
       const auto now = std::chrono::steady_clock::now();
       auto timeout = std::chrono::nanoseconds::max();
 
@@ -284,7 +284,7 @@ namespace {
       const ds::Array<std::string_view, 1> arguments{"/bin/cat"};
 
       workspaces.open(model, panes, clients, client.id, OpenPane{.request_id = 1, .size = {40, 5, 0, 0}, .launch = Launch{.cwd = "/tmp", .arguments = arguments}});
-      auto& pane = panes.require(model.panes, peer.receive<PaneOpened>().pane_id);
+      auto& pane = panes.requireTerminal(model.panes, peer.receive<PaneOpened>().pane_id);
       const auto now = std::chrono::steady_clock::now();
       auto timeout = std::chrono::nanoseconds::max();
 
@@ -339,7 +339,7 @@ namespace {
       const ds::Array<std::string_view, 1> arguments{"/bin/cat"};
 
       workspaces.open(model, panes, clients, client.id, OpenPane{.request_id = 1, .size = {40, 5, 0, 0}, .launch = Launch{.cwd = "/tmp", .arguments = arguments}});
-      auto& pane = panes.require(model.panes, peer.receive<PaneOpened>().pane_id);
+      auto& pane = panes.requireTerminal(model.panes, peer.receive<PaneOpened>().pane_id);
       const auto now = std::chrono::steady_clock::now();
       auto timeout = std::chrono::nanoseconds::max();
       const auto deliver = [&] {
@@ -351,7 +351,7 @@ namespace {
       ObservationWorker<decltype(processor)&> worker{std::in_place, processor};
       const auto feed = [&](std::string_view bytes) {
         while (!bytes.empty()) {
-          const auto take = std::min(bytes.size(), Pane::read_buffer_size);
+          const auto take = std::min(bytes.size(), TerminalPane::read_buffer_size);
 
           while (pane.media->holdsRead(take)) {
             check(pane.media->seal());
@@ -518,7 +518,7 @@ namespace {
       check(peer.receive<PaneCwd>().pane_id == ids[1] && client.next_attachment == 2);
 
       for (auto& attachment : client.attachments.viewMut()) {
-        auto& pane = panes.require(model.panes, attachment->pane_id);
+        auto& pane = panes.requireTerminal(model.panes, attachment->pane_id);
 
         attachment.getMut().foreground_revision = pane.foreground_revision;
         attachment.getMut().scrollback_generation = pane.terminal.scrollbackGeneration();
@@ -538,7 +538,7 @@ namespace {
 
       ClientDelivery delivery{memory, model};
       NoState state;
-      auto& pane = panes.require(model.panes, ids[0]);
+      auto& pane = panes.requireTerminal(model.panes, ids[0]);
       const auto blocked_bytes = fillSocket(client.connection.descriptor());
 
       client.connection.send(RequestCompleted{55});
@@ -597,7 +597,7 @@ namespace {
 
       workspaces.open(model, panes, clients, client.id, OpenPane{.request_id = 1, .size = {80, 24, 0, 0}, .launch = Launch{.cwd = "/tmp", .arguments = arguments}});
       const auto opened = peer.receive<PaneOpened>();
-      auto& pane = panes.require(model.panes, opened.pane_id);
+      auto& pane = panes.requireTerminal(model.panes, opened.pane_id);
       auto timeout = std::chrono::nanoseconds::max();
       const auto start = std::chrono::steady_clock::now() + std::chrono::minutes{1};
       const auto frame = [&](std::chrono::steady_clock::time_point now) {

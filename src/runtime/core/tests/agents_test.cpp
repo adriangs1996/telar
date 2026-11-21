@@ -164,7 +164,7 @@ namespace {
 
     workspaces.open(model, panes, clients, reporter.session().id, OpenPane{.request_id = 1, .size = {80, 24, 8, 16}, .launch = Launch{.cwd = "/tmp", .arguments = arguments}});
     const auto opened = reporter.receive<PaneOpened>();
-    auto& pane = panes.require(model.panes, opened.pane_id);
+    auto& pane = panes.requireTerminal(model.panes, opened.pane_id);
 
     reporter.session().peer_identity = inspector.current;
     inspector.descendant = false;
@@ -216,7 +216,7 @@ namespace {
     agents.reportTitle(model, reporter.session(), ReportAgentTitle{.request_id = 31, .pane_id = pane.id, .pane_generation = pane.generation, .provider = AgentProvider::claude});
     reporter.receive<RequestCompleted>();
 
-    const std::vector<Byte> blocked_input(Pane::input_limit, 'a');
+    const std::vector<Byte> blocked_input(TerminalPane::input_limit, 'a');
 
     pane.input.append(blocked_input);
 
@@ -305,8 +305,8 @@ namespace {
       identity = reporter.receive<PaneOpened>().pane_id;
     }
 
-    auto& pane = panes.require(model.panes, identities[0]);
-    auto& other_pane = panes.require(model.panes, identities[1]);
+    auto& pane = panes.requireTerminal(model.panes, identities[0]);
+    auto& other_pane = panes.requireTerminal(model.panes, identities[1]);
     ReportAgent report{.request_id = 2, .pane_id = pane.id, .pane_generation = pane.generation, .provider = AgentProvider::claude, .state = AgentReportState::working};
     const auto rejected = [&](auto&& action, FailureCode expected) {
       try {
@@ -473,7 +473,7 @@ namespace {
     for (auto& identity : identities.viewMut()) {
       workspaces.createWorkspace(model, panes, clients, reporter.session().id, CreateWorkspace{.request_id = 1, .size = {80, 24, 8, 16}, .launch = Launch{.cwd = "/tmp", .arguments = arguments}});
       identity = reporter.receive<PaneOpened>().pane_id;
-      auto& pane = panes.require(model.panes, identity);
+      auto& pane = panes.requireTerminal(model.panes, identity);
 
       agents.report(model, reporter.session(), ReportAgent{.request_id = 1, .pane_id = pane.id, .pane_generation = pane.generation, .state = AgentReportState::ready});
       reporter.receive<RequestCompleted>();
@@ -483,8 +483,8 @@ namespace {
       reporter.receive<RequestCompleted>();
     }
 
-    check(agents.find(identities.front(), panes.require(model.panes, identities.front()).generation)->title_state == AgentTitleState::pending);
-    check(agents.find(identities.back(), panes.require(model.panes, identities.back()).generation)->description_phase == DescriptionPhase::waiting_work);
+    check(agents.find(identities.front(), panes.requireTerminal(model.panes, identities.front()).generation)->title_state == AgentTitleState::pending);
+    check(agents.find(identities.back(), panes.requireTerminal(model.panes, identities.back()).generation)->description_phase == DescriptionPhase::waiting_work);
     auto request = agents.nextDescription();
 
     check(request && request->query.view() == "Fix parser");
@@ -509,7 +509,7 @@ namespace {
 
     request = agents.nextDescription();
     check(request.hasValue());
-    check(agents.find(identities.back(), panes.require(model.panes, identities.back()).generation)->title_state == AgentTitleState::pending);
+    check(agents.find(identities.back(), panes.requireTerminal(model.panes, identities.back()).generation)->title_state == AgentTitleState::pending);
     agents.reportTitle(model, reporter.session(), ReportAgentTitle{.request_id = 1, .pane_id = request->identity.pane, .pane_generation = request->identity.generation, .title = "Agent title"});
     reporter.receive<RequestCompleted>();
     result.identity = request->identity;
@@ -568,7 +568,7 @@ namespace {
 
     workspaces.open(model, panes, clients, reporter.session().id, OpenPane{.request_id = 1, .size = {80, 24, 8, 16}, .launch = Launch{.cwd = "/tmp", .arguments = arguments}});
     const auto opened = reporter.receive<PaneOpened>();
-    auto& pane = panes.require(model.panes, opened.pane_id);
+    auto& pane = panes.requireTerminal(model.panes, opened.pane_id);
     const ReportAgent report{.request_id = 4, .pane_id = pane.id, .pane_generation = pane.generation, .provider = AgentProvider::claude, .state = AgentReportState::working};
 
     reporter.session().peer_identity = inspector.current;

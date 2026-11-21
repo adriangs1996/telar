@@ -163,7 +163,7 @@ namespace {
       const ds::Array<std::string_view, 1> arguments{"/bin/cat"};
 
       workspaces.open(model, panes, clients, client.session().id, OpenPane{.request_id = 1, .size = {80, 24, 9, 18}, .launch = Launch{.cwd = "/tmp", .arguments = arguments}});
-      auto& pane = panes.require(model.panes, client.receive<PaneOpened>().pane_id);
+      auto& pane = panes.requireTerminal(model.panes, client.receive<PaneOpened>().pane_id);
       termios settings{};
 
       check(::tcgetattr(pane.process->descriptor(), &settings) == 0);
@@ -196,7 +196,7 @@ namespace {
       const ds::Array<std::string_view, 1> arguments{"/bin/cat"};
 
       workspaces.open(model, panes, clients, first.session().id, OpenPane{.request_id = 1, .size = {80, 24, 9, 18}, .launch = Launch{.cwd = "/tmp", .arguments = arguments}});
-      auto& pane = panes.require(model.panes, first.receive<PaneOpened>().pane_id);
+      auto& pane = panes.requireTerminal(model.panes, first.receive<PaneOpened>().pane_id);
 
       check(!pane.terminal.hasPendingControl());
       termios settings{};
@@ -301,7 +301,7 @@ namespace {
       const ds::Array<std::string_view, 1> arguments{"/bin/cat"};
 
       workspaces.open(model, panes, clients, client.session().id, OpenPane{.request_id = 1, .size = {80, 24, 9, 18}, .launch = Launch{.cwd = "/tmp", .arguments = arguments}});
-      auto& pane = panes.require(model.panes, client.receive<PaneOpened>().pane_id);
+      auto& pane = panes.requireTerminal(model.panes, client.receive<PaneOpened>().pane_id);
       termios settings{};
 
       check(::tcgetattr(pane.process->descriptor(), &settings) == 0);
@@ -420,7 +420,7 @@ namespace {
 
       workspaces.open(model, panes, clients, first.session().id, OpenPane{.request_id = 1, .size = {80, 24, 9, 18}, .launch = launch});
       const auto opened = first.receive<PaneOpened>();
-      auto& pane = panes.require(model.panes, opened.pane_id);
+      auto& pane = panes.requireTerminal(model.panes, opened.pane_id);
 
       panes.attach(model, second.session(), pane.id, {80, 24, 9, 18});
       auto* workspace = model.workspaces.find(pane.location.workspace.id);

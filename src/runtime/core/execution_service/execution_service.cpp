@@ -320,7 +320,9 @@ namespace telar::runtime {
     }
 
     workspace.geometry_client = client.id;
-    for (auto* pane : panes.items()) {
+    for (auto* stored : panes.items()) {
+      // The colors are a terminal's palette; a pane of another kind is drawn with its own.
+      auto* pane = asTerminal(stored);
       if (pane != nullptr && pane->location.workspace.id == workspace.id) {
         if (!pane->desktop_theme) {
           pane->terminal.configureColors(client.colors);

@@ -138,8 +138,8 @@ namespace {
     const ds::Array<std::string_view, 1> arguments{"/bin/cat"};
     Command command{memory, Launch{.cwd = "/tmp", .arguments = arguments}};
 
-    model.panes.insert(1, ds::makeBox<Pane>(memory, memory, 1, TabLocation{.workspace = {.id = 7}, .tab_id = 1}, command, PaneLaunch{TerminalSize{20, 4, 8, 16}, model.media_budget, model.graphics_limits}));
-    auto& pane = *model.panes.find(1);
+    model.panes.insert(1, ds::makeBox<TerminalPane>(memory, memory, 1, TabLocation{.workspace = {.id = 7}, .tab_id = 1}, command, PaneLaunch{TerminalSize{20, 4, 8, 16}, model.media_budget, model.graphics_limits}));
+    auto& pane = requireTerminal(model.panes, 1);
     GatedWorktreeDetector probe;
     WorktreeDetectionService<GatedWorktreeDetector&> service{probe};
 
@@ -201,8 +201,8 @@ namespace {
     const auto first = model.worktrees.registerEntry(RegisterWorktree{.source = source, .path = "/repository-first", .branch = "first"});
 
     model.worktrees.find(first.worktree)->workspace = worktree_workspace;
-    model.panes.insert(1, ds::makeBox<Pane>(memory, memory, 1, TabLocation{.workspace = {.id = worktree_workspace}, .tab_id = 1}, command, PaneLaunch{TerminalSize{20, 4, 8, 16}, model.media_budget, model.graphics_limits}));
-    auto& pane = *model.panes.find(1);
+    model.panes.insert(1, ds::makeBox<TerminalPane>(memory, memory, 1, TabLocation{.workspace = {.id = worktree_workspace}, .tab_id = 1}, command, PaneLaunch{TerminalSize{20, 4, 8, 16}, model.media_budget, model.graphics_limits}));
+    auto& pane = requireTerminal(model.panes, 1);
     GatedWorktreeDetector probe;
     WorktreeDetectionService<GatedWorktreeDetector&> service{probe};
 

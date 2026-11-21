@@ -135,24 +135,71 @@ namespace telar::runtime {
     return verified_pane == pane.id && verified_generation == pane.generation;
   }
 
-  Pane::Pane(ConcurrentMemory& memory, std::uint64_t identity, TabLocation tab, Command<ConcurrentMemory>& command, PaneLaunch settings)
-      : id(identity),
+  Pane::Pane(PaneKind made_as, ConcurrentMemory& memory, std::uint64_t identity, TabLocation tab, std::string_view directory)
+      : kind(made_as),
+        id(identity),
+        location(tab),
+        cwd(memory, directory),
+        launch(memory) {
+    randomBytes(history_session.dataMut(), history_session.size());
+  }
+
+  void PaneDisposal::dispose(Pane* pane, ConcurrentMemory& memory) noexcept {
+    visitPane(*pane, [&]<typename Kind>(Kind& made) {
+      ds::Box<Kind, ConcurrentMemory>::fromRaw(&made, memory).reset();
+    });
+  }
+
+  void requestClose(Pane& pane) noexcept {
+    visitPane(pane, [](auto& kind) {
+      kind.requestClose();
+    });
+  }
+
+  ds::Option<int> reapProcess(Pane& pane) noexcept {
+    ds::Option<int> status;
+
+    visitPane(pane, [&](TerminalPane& terminal) {
+      status = terminal.process.getMut().reap();
+    });
+
+    return status;
+  }
+
+  void signalProcess(const Pane& pane, int number) noexcept {
+    visitPane(pane, [&](const TerminalPane& terminal) {
+      terminal.process->signal(number);
+    });
+  }
+
+  ProgramTitle programTitle(const Pane& pane) noexcept {
+    ProgramTitle title;
+
+    visitPane(pane, [&](const TerminalPane& terminal) {
+      const auto& effects = terminal.terminal.effects();
+
+      title = {.text = effects.title(), .revision = effects.title_revision};
+    });
+
+    return title;
+  }
+
+  TerminalPane::TerminalPane(ConcurrentMemory& memory, std::uint64_t identity, TabLocation tab, Command<ConcurrentMemory>& command, PaneLaunch settings)
+      : Pane(pane_kind, memory, identity, tab, command.cwd()),
         pty_responses(std::allocate_shared<PtyResponseQueue>(AllocatorRef<PtyResponseQueue, ConcurrentMemory>{memory})),
         observer(std::allocate_shared<PaneObserver>(AllocatorRef<PaneObserver, ConcurrentMemory>{memory}, memory, settings.size, command.cwd(), false, settings.shell ? ds::Option{settings.shell->token} : ds::none)),
         media(std::allocate_shared<PaneMedia>(AllocatorRef<PaneMedia, ConcurrentMemory>{memory}, memory, settings.media_budget, settings.graphics, settings.size, pty_responses)),
-        location(tab),
-        cwd(memory, command.cwd()),
-        launch(memory),
         input(memory, input_limit),
         terminal(memory, settings.size, TerminalPurpose::separate_media, pty_responses, GraphicsQueryResources{settings.graphics, settings.media_budget, &media->queryUsage()}),
         scrollback_rows(memory) {
-    randomBytes(history_session.dataMut(), history_session.size());
     input.reserve(input_limit);
     launch.capture(command.arguments(), command.restorable());
     const auto executable = std::string_view{command.arguments().front()};
 
     foreground.assign(utf8Prefix(executable.substr(executable.rfind('/') + 1), foreground_bytes));
     process.emplace(command.specification(settings.size));
+    process_id = process->processId();
+    extent = settings.size;
     terminal.attachMedia(*media);
     shell_state.pane_id = identity;
     if (settings.shell) {
@@ -165,11 +212,11 @@ namespace telar::runtime {
     }
   }
 
-  ssize_t Pane::ResponseWriter::operator()(int descriptor, std::span<const iovec> vectors) const {
+  ssize_t TerminalPane::ResponseWriter::operator()(int descriptor, std::span<const iovec> vectors) const {
     return ::writev(descriptor, vectors.data(), static_cast<int>(vectors.size()));
   }
 
-  bool Pane::read(ReadMode mode) {
+  bool TerminalPane::read(ReadMode mode) {
     constexpr std::size_t batch_byte_limit = std::size_t{64} * 1024;
     constexpr unsigned batch_read_limit = 8;
     ds::Array<Byte, read_buffer_size> buffer; // NOLINT(cppcoreguidelines-pro-type-member-init): the PTY read path reads only the bytes read(2) wrote
@@ -220,7 +267,7 @@ namespace telar::runtime {
     return observed(true);
   }
 
-  void Pane::ingest(std::span<const Byte> bytes, [[maybe_unused]] bool folded) {
+  void TerminalPane::ingest(std::span<const Byte> bytes, [[maybe_unused]] bool folded) {
     TELAR_DIAGNOSTIC(recordRead(bytes.size(), folded));
     const auto in_foreground = needs_foreground_observation ? shellForeground() : ds::none;
 
@@ -239,7 +286,7 @@ namespace telar::runtime {
     feedMarks(bytes, completions);
   }
 
-  void Pane::feedMarks(std::span<const Byte> bytes, const ShellCompletions& completions) {
+  void TerminalPane::feedMarks(std::span<const Byte> bytes, const ShellCompletions& completions) {
     std::size_t fed = 0;
     const auto now = std::chrono::steady_clock::now();
 
@@ -261,7 +308,7 @@ namespace telar::runtime {
     }
   }
 
-  void Pane::observeShell() noexcept {
+  void TerminalPane::observeShell() noexcept {
     if (!shell_zones) {
       return;
     }
@@ -314,11 +361,11 @@ namespace telar::runtime {
     }
   }
 
-  bool Pane::hasInput() const noexcept {
+  bool TerminalPane::hasInput() const noexcept {
     return !input.empty() || !pty_responses->empty();
   }
 
-  void Pane::requestClose() noexcept {
+  void TerminalPane::requestClose() noexcept {
     if (close_requested) {
       return;
     }
@@ -327,7 +374,7 @@ namespace telar::runtime {
     process->shutdown();
   }
 
-  void Pane::enqueueInput(std::span<const Byte> bytes) {
+  void TerminalPane::enqueueInput(std::span<const Byte> bytes) {
     input.append(bytes);
 #if TELAR_DIAGNOSTICS
     if (counters != nullptr) {
@@ -345,19 +392,20 @@ namespace telar::runtime {
     needs_foreground_observation = true;
   }
 
-  void Pane::submitCommand(std::span<const Byte> text) {
+  void TerminalPane::submitCommand(std::span<const Byte> text) {
     observer->bytes(ObservationKind::command, text, shellForeground());
   }
 
-  void Pane::resumeControl() {
+  void TerminalPane::resumeControl() {
     terminal.resumeControl(*media);
   }
 
-  void Pane::resize(TerminalSize size) {
+  void TerminalPane::resize(TerminalSize size) {
     if (terminal.hasSize(size)) {
       return;
     }
 
+    extent = size;
     terminal.resize(size, *media);
     if (blocks) {
       blocks.getMut().follow(true);
@@ -368,7 +416,7 @@ namespace telar::runtime {
     media->resize(size);
   }
 
-  ds::Option<bool> Pane::shellForeground() const noexcept {
+  ds::Option<bool> TerminalPane::shellForeground() const noexcept {
     if (shell_markers) {
       return ds::none;
     }
@@ -382,7 +430,7 @@ namespace telar::runtime {
     return exit_status ? ds::Option{shellExitCode(*exit_status)} : ds::none;
   }
 
-  void Pane::ShellCompletions::complete(CommandCompletion completion) noexcept {
+  void TerminalPane::ShellCompletions::complete(CommandCompletion completion) noexcept {
     ++state.commands;
     state.status = completion.exit_code.valueOr(0);
     if (count != 0 && kept[count - 1].action == 'D') {
@@ -390,17 +438,17 @@ namespace telar::runtime {
     }
   }
 
-  void Pane::ShellCompletions::mark(CommandMark mark) noexcept {
+  void TerminalPane::ShellCompletions::mark(CommandMark mark) noexcept {
     if (count < kept.size()) {
       kept.atMut(count++) = Mark{.action = mark.action, .end = mark.end, .status = ds::none};
     }
   }
 
-  auto Pane::ShellCompletions::marks() const noexcept -> std::span<const Mark> {
+  auto TerminalPane::ShellCompletions::marks() const noexcept -> std::span<const Mark> {
     return std::span<const Mark>{kept}.first(count);
   }
 
-  void Pane::timeLink(std::chrono::steady_clock::duration elapsed) noexcept {
+  void TerminalPane::timeLink(std::chrono::steady_clock::duration elapsed) noexcept {
     constexpr double longest_ms = 5000;
     // The average keeps most of its past, and clients hear of a change of a tenth or more.
     constexpr double previous_weight = 0.7;
@@ -421,7 +469,7 @@ namespace telar::runtime {
     }
   }
 
-  void Pane::expireProgress(ds::Option<bool> shell_foreground) noexcept {
+  void TerminalPane::expireProgress(ds::Option<bool> shell_foreground) noexcept {
     if (terminal.effects().progress_state == PaneProgressState::remove) {
       return;
     }
@@ -438,7 +486,7 @@ namespace telar::runtime {
   }
 
 #if TELAR_DIAGNOSTICS
-  void Pane::recordRead(std::size_t size, bool folded) noexcept {
+  void TerminalPane::recordRead(std::size_t size, bool folded) noexcept {
     if (counters == nullptr) {
       return;
     }
@@ -636,6 +684,24 @@ namespace telar::runtime {
     const auto* pane = findPane(panes, key);
 
     return pane != nullptr && !pane->exit_status && !pane->close_requested ? pane : nullptr;
+  }
+
+  tbc::mut_a<TerminalPane> requireTerminal(tbc::mut_a<Pane> pane) {
+    auto* terminal = pane.asMut<TerminalPane>();
+    if (terminal == nullptr) {
+      throw RequestError{FailureCode::invalid_request, "This pane is not a terminal"};
+    }
+
+    return *terminal;
+  }
+
+  tbc::mut_a<TerminalPane> requireTerminal(tbc::mut_a<PaneStore> panes, std::uint64_t identity) {
+    auto* pane = panes.find(identity);
+    if (pane == nullptr) {
+      throw RequestError{FailureCode::pane_not_found, "Pane does not exist"};
+    }
+
+    return requireTerminal(*pane);
   }
 
   tbc::mut_a<Pane> requireReporterPane(tbc::mut_a<PaneStore> panes, const ClientSession& client, PaneKey key) {

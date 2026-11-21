@@ -113,7 +113,7 @@ namespace {
       check(peer->receive<RequestCompleted>().request_id == 2);
     }
 
-    auto& pane = panes.require(model.panes, opened.pane_id);
+    auto& pane = panes.requireTerminal(model.panes, opened.pane_id);
 
     pane.output_closed = true;
     pane.exit_status = 0;

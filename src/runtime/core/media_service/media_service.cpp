@@ -332,7 +332,7 @@ namespace telar::runtime {
     const auto panes = model.panes.items();
 
     for (std::size_t visited = 0; visited < panes.size() && request.count < request.entries.size(); ++visited) {
-      auto* pane = panes[next_slot_++ % panes.size()];
+      auto* pane = asTerminal(panes[next_slot_++ % panes.size()]);
       if (pane == nullptr) {
         continue;
       }
@@ -373,12 +373,12 @@ namespace telar::runtime {
   }
 
   template <EventLoop Poller, typename Limits, HistoryEventSink History>
-  void MediaService<Poller, Limits, History>::updateReadInterest(Pane& pane) {
+  void MediaService<Poller, Limits, History>::updateReadInterest(TerminalPane& pane) {
     if (pane.output_closed) {
       return;
     }
 
-    const bool paused = pane.terminal.hasPendingControl() || pane.media->holdsRead(Pane::read_buffer_size);
+    const bool paused = pane.terminal.hasPendingControl() || pane.media->holdsRead(TerminalPane::read_buffer_size);
     if (paused != pane.read_paused) {
       poller_.readInterest(pane.process->descriptor(), eventToken(EventSource::pane, pane.event_identity), !paused);
       pane.read_paused = paused;
@@ -387,7 +387,8 @@ namespace telar::runtime {
 
   template <EventLoop Poller, typename Limits, HistoryEventSink History>
   void MediaService<Poller, Limits, History>::finish(RuntimeModel& model) noexcept {
-    for (auto* pane : model.panes.items()) { // NOLINT(misc-const-correctness): the pane's media is cancelled through its shared handle, a mutation tbc sees through the pane
+    for (auto* stored : model.panes.items()) {
+      auto* pane = asTerminal(stored); // NOLINT(misc-const-correctness): the pane's media is cancelled through its shared handle, a mutation tbc sees through the pane
       if (pane != nullptr) {
         pane->media->cancel();
       }
@@ -408,7 +409,9 @@ namespace telar::runtime {
       Processor::Request request;
 
       enqueueRetired(model, request);
-      for (auto* pane : model.panes.items()) { // NOLINT(misc-const-correctness): the pane's media is sealed through its shared handle, a mutation tbc sees through the pane
+      for (auto* stored : model.panes.items()) {
+        auto* pane = asTerminal(stored); // NOLINT(misc-const-correctness): the pane's media is sealed through its shared handle, a mutation tbc sees through the pane
+
         if (request.count == request.entries.size()) {
           break;
         }
@@ -471,7 +474,7 @@ namespace telar::runtime {
     }
 
     for (const auto& entry : std::span{result.entries}.first(result.count)) {
-      auto* pane = findPane(model.panes, {.id = entry.pane, .generation = entry.generation});
+      auto* pane = asTerminal(findPane(model.panes, {.id = entry.pane, .generation = entry.generation}));
       if (pane == nullptr) {
         continue;
       }

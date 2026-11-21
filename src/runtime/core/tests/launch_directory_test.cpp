@@ -93,7 +93,7 @@ namespace {
 
     workspaces.open(model, panes, clients, owner.session().id, OpenPane{.request_id = 1, .size = size, .launch = Launch{.cwd = "/", .arguments = arguments}});
     const auto opened = owner.receive<PaneOpened>();
-    auto& pane = panes.require(model.panes, opened.pane_id);
+    auto& pane = panes.requireTerminal(model.panes, opened.pane_id);
 
     pane.cwd.assign("/observed/directory");
     const Launch launch{.cwd = "/explicit", .cwd_source = pane.id, .arguments = arguments};
@@ -271,7 +271,7 @@ namespace {
 
     workspaces.open(model, panes, clients, owner.session().id, request);
     const auto opened = owner.receive<PaneOpened>();
-    auto& pane = panes.require(model.panes, opened.pane_id);
+    auto& pane = panes.requireTerminal(model.panes, opened.pane_id);
 
     pane.terminal.refresh();
     const auto revision = pane.terminal.screen().revision;
@@ -284,7 +284,7 @@ namespace {
     check(!reused.created && reused.pane_id == pane.id);
     check(owner.session().attachment(pane.id) == attachment && pane.terminal.screen().revision == revision);
 
-    const auto& background = *model.panes.find(workspaces.launchBackground(model, panes, decltype(workspaces)::ownerColors(model.workspaces, clients, opened.location.workspace.id), false, LaunchTab{.request_id = 2, .workspace = opened.location.workspace.id, .label = "Background", .size = size, .launch = launch}));
+    const auto& background = requireTerminal(model.panes, workspaces.launchBackground(model, panes, decltype(workspaces)::ownerColors(model.workspaces, clients, opened.location.workspace.id), false, LaunchTab{.request_id = 2, .workspace = opened.location.workspace.id, .label = "Background", .size = size, .launch = launch}));
     GhosttyColorRgb foreground;
 
     checkGhostty(ghostty_terminal_get(background.terminal.handle(), GHOSTTY_TERMINAL_DATA_COLOR_FOREGROUND, &foreground));

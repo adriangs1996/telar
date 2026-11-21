@@ -303,7 +303,7 @@ export {
 
       void collect(RuntimeModel& model, ClientStore& clients, Panes& service);
 
-      void updateReadInterest(Pane& pane);
+      void updateReadInterest(TerminalPane& pane);
 
       void finish(RuntimeModel& model) noexcept;
 

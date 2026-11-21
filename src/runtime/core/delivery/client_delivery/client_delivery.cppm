@@ -34,13 +34,13 @@ export {
     // Desktop clipboard routing between panes and their attached clients.
     class ClipboardService {
     public:
-      static bool eligible(const ClientSession& client, const Pane& pane) noexcept;
+      static bool eligible(const ClientSession& client, const TerminalPane& pane) noexcept;
 
-      static void configure(const ClientStore& clients, Pane& pane);
+      static void configure(const ClientStore& clients, TerminalPane& pane);
 
-      static bool advance(ClientStore& clients, Pane& pane, std::chrono::steady_clock::time_point now);
+      static bool advance(ClientStore& clients, TerminalPane& pane, std::chrono::steady_clock::time_point now);
 
-      static tbc::val_a<Pane*> complete(tbc::mut_a<PaneStore> panes, ClientSession& sender, const CompleteClipboardDesktop& completion);
+      static tbc::val_a<TerminalPane*> complete(tbc::mut_a<PaneStore> panes, ClientSession& sender, const CompleteClipboardDesktop& completion);
 
     private:
       static bool precedes(const ClientSession& candidate, const ClientSession& current, std::uint64_t pane) noexcept;
@@ -80,32 +80,32 @@ export {
         std::chrono::nanoseconds& timeout;
       };
 
-      bool prepare(Output& output, Attachment& attachment, Pane& pane, DeliveryLane lane);
+      bool prepare(Output& output, Attachment& attachment, TerminalPane& pane, DeliveryLane lane);
 
       template <typename Message>
       static bool metadata(Connection<ConcurrentMemory>& connection, std::uint64_t& observed, std::uint64_t revision, const Message& message);
 
       // The pane's document, one chunk per delivery; a newer revision restarts from its start, so
       // a client never assembles parts of two documents.
-      static bool document(Connection<ConcurrentMemory>& connection, Attachment& attachment, const Pane& pane);
+      static bool document(Connection<ConcurrentMemory>& connection, Attachment& attachment, const TerminalPane& pane);
 
       // The documents that stand for rows of the pane's scrollback: one a client has that the pane
       // let go of is withdrawn first, then each one's parts go in order, then rows that moved.
-      static bool inlineDocuments(Connection<ConcurrentMemory>& connection, Attachment& attachment, const Pane& pane);
+      static bool inlineDocuments(Connection<ConcurrentMemory>& connection, Attachment& attachment, const TerminalPane& pane);
 
-      static bool blocks(Connection<ConcurrentMemory>& connection, Attachment& attachment, const Pane& pane);
+      static bool blocks(Connection<ConcurrentMemory>& connection, Attachment& attachment, const TerminalPane& pane);
 
       // How the scrollback numbers its rows, before a frame numbered so. A viewport held above the
       // bottom keeps showing the same rows when the scrollback drops rows above them.
-      static bool scrollback(Connection<ConcurrentMemory>& connection, Attachment& attachment, Pane& pane);
+      static bool scrollback(Connection<ConcurrentMemory>& connection, Attachment& attachment, TerminalPane& pane);
 
-      bool cells(Output& output, Attachment& attachment, Pane& pane, Clock::time_point now, std::chrono::nanoseconds& timeout);
+      bool cells(Output& output, Attachment& attachment, TerminalPane& pane, Clock::time_point now, std::chrono::nanoseconds& timeout);
 
-      bool exit(Output& output, Attachment& attachment, const Pane& pane);
+      bool exit(Output& output, Attachment& attachment, const TerminalPane& pane);
 
-      static bool graphics(Output& output, Attachment& attachment, Pane& pane, std::chrono::nanoseconds& timeout);
+      static bool graphics(Output& output, Attachment& attachment, TerminalPane& pane, std::chrono::nanoseconds& timeout);
 
-      static bool publishGraphics(Connection<ConcurrentMemory>& connection, Attachment& attachment, Pane& pane, std::chrono::nanoseconds& timeout);
+      static bool publishGraphics(Connection<ConcurrentMemory>& connection, Attachment& attachment, TerminalPane& pane, std::chrono::nanoseconds& timeout);
 
       ds::Array<Slot, ClientSession::attachment_capacity> slots_;
       std::uint64_t occupied_ = 0;
@@ -153,11 +153,17 @@ export {
           return;
         }
 
+        auto* terminal = pane->asMut<TerminalPane>();
+        if (terminal == nullptr) {
+          send(RequestFailed{.request_id = request.request_id, .code = FailureCode::invalid_request, .message = "This pane is not a terminal"});
+          return;
+        }
+
         constexpr std::size_t maximum_text_bytes = 262144;
         // Read before the reader borrows the pane's terminal for as long as its text is sent.
-        const auto pane_id = pane->id;
-        const auto exit_code = pane->exitCode();
-        TextReader reader{memory_, pane->terminal, maximum_text_bytes};
+        const auto pane_id = terminal->id;
+        const auto exit_code = terminal->exitCode();
+        TextReader reader{memory_, terminal->terminal, maximum_text_bytes};
 
         reader.read(request.source, request.rows);
         send(PaneText{.request_id = request.request_id, .pane_id = pane_id, .truncated = reader.truncated(), .text = reader.text(), .exit_code = exit_code});
