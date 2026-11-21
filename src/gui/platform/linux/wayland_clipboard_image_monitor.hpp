@@ -2,6 +2,7 @@
 
 #include "foundation/core/application_memory.hpp"
 #include "foundation/core/memory.hpp"
+#include "telar_base/ds/containers.hpp"
 #include "telar_platform/file_descriptor.hpp"
 #include <cstdint>
 
