@@ -528,6 +528,11 @@ export {
       template <typename Message>
       Change dispatchMessage(std::span<const Byte> payload, DecodeStorage& storage, ClientCommandHandler& handler);
 
+      using Dispatch = Change (Session::*)(std::span<const Byte> payload, DecodeStorage& storage, ClientCommandHandler& handler);
+      using DispatchTable = ds::Array<Dispatch, std::numeric_limits<Byte>::max() + 1>;
+      // What applies each of the runtime's messages, by its tag.
+      [[nodiscard]] static consteval DispatchTable routed();
+
       void recoverRuntime(std::string_view reason);
 
       Change apply(const GraphicsSnapshot& message);

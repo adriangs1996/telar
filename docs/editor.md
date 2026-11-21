@@ -89,6 +89,8 @@ in the editor at once, and a `:colorscheme` set by the configuration or by a plu
 by it again. `vim.g.telar_tint` takes the options of the theme's engine, such as
 `{ transparent = false }`.
 
+![The same file after the window changed to the Vesper preset](images/telar-editor-preset.png)
+
 ## The clipboard, the focus and the directory
 
 - The registers `+` and `*` are the clipboard of the machine you type on, wherever Neovim
