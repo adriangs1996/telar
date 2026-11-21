@@ -280,25 +280,35 @@ FocusScope {
                     color: root.colors.accent
                 }
 
-                ChromeText {
+                // The path as the terminal's path picker draws one: its directory quiet, its
+                // name plain, what the query matched marked. Then the line, for a match of text.
+                Row {
                     id: name
                     x: 10 * root.ratio
                     width: Math.min(implicitWidth, parent.width - 20 * root.ratio)
                     height: entry.textual ? parent.height / 2 : parent.height
-                    text: (entry.row.name ?? "") + (entry.textual ? ":" + entry.row.line : "")
-                    pixelSize: root.typography.body
-                    emphasized: entry.chosen
-                    color: entry.chosen ? root.colors.text : root.colors.subtext0
-                }
+                    clip: true
 
-                ChromeText {
-                    x: name.x + name.width + 10 * root.ratio
-                    width: Math.max(0, parent.width - x - 8 * root.ratio)
-                    height: name.height
-                    text: entry.row.directory ?? ""
-                    pixelSize: root.typography.small
-                    color: Qt.alpha(root.colors.text, 0.45)
-                    elide: Text.ElideLeft
+                    Repeater {
+                        model: entry.row.runs ?? []
+
+                        delegate: ChromeText {
+                            required property var modelData
+                            height: name.height
+                            text: modelData.text
+                            pixelSize: root.typography.body
+                            emphasized: modelData.bold
+                            color: modelData.bold ? root.colors.accent : modelData.colorRole === "text" ? root.colors.text : Qt.alpha(root.colors.text, 0.5)
+                        }
+                    }
+
+                    ChromeText {
+                        height: name.height
+                        visible: entry.textual
+                        text: ":" + (entry.row.line ?? 0)
+                        pixelSize: root.typography.body
+                        color: Qt.alpha(root.colors.text, 0.5)
+                    }
                 }
 
                 // The line that matched, under the file that holds it.

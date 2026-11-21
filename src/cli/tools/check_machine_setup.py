@@ -76,6 +76,10 @@ elif command.endswith("server endpoint'"):
  print(home);print('/bin/sh');print(home+'/runtime.sock');print(schema)
 elif command.endswith(' machine receive-config') and os.environ.get('FIXTURE_RECEIVE')=='fail':
  sys.stdin.buffer.read();print('cannot write there',file=sys.stderr);sys.exit(1)
+elif command.startswith('exec /bin/sh -c ') and '/telar/nvim;' in command:
+ # The package's own Neovim, sent over standard input: unpacked in the remote home for real,
+ # which has none of this side's XDG directories.
+ sys.exit(subprocess.run(['/bin/sh','-c',command],env={key:value for key,value in remote_env.items() if not key.startswith('XDG_')}).returncode)
 elif os.environ.get('FIXTURE_REAL') and command.startswith('exec /bin/sh -c '):
  sys.exit(subprocess.run(['/bin/sh','-c',command],env=remote_env).returncode)
 elif command.endswith(' machine receive-config'):
@@ -237,6 +241,34 @@ def editor_is_provisioned(binary):
         status, output = fixture.run('machine', 'setup', 'fixture', *SKIP_ALL, '--json')
         notes = [note for step in json.loads(output)['steps'] if step['step'] == 'integrations' for note in step.get('notes', [])]
         assert status == 0 and not any(note.startswith('editor: ') for note in notes) and len(fixture.calls()) == before - 1, output
+
+
+def editor_is_sent(binary):
+    """Where this telar's package brought a Neovim and the machine is of the system and the
+    processor it is for, setup sends it there, so the machine needs no network for it; a
+    machine of another kind fetches its own. The fixture's machine says it is Darwin on arm64."""
+    with tempfile.TemporaryDirectory(prefix='telar-package-', dir='/tmp') as temporary:
+        package = Path(temporary).resolve()
+        (package / 'bin').mkdir()
+        packaged = package / 'bin' / 'telar'
+        shutil.copy2(binary, packaged)
+        nvim = package / 'share/telar/nvim/9.9.9/bin/nvim'
+        nvim.parent.mkdir(parents=True)
+        nvim.write_text('#!/bin/sh\necho packaged\n')
+        nvim.chmod(0o755)
+        same = tuple(subprocess.run(['uname', '-sm'], capture_output=True, text=True).stdout.split()) == ('Darwin', 'arm64')
+        with machine(packaged) as fixture:
+            there = fixture.remote / '.local/share/telar/nvim/9.9.9/bin/nvim'
+            for sent in (same, False):
+                status, output = fixture.run('machine', 'setup', 'fixture', '--skip', 'agents,config,login', '--json')
+                notes = [note for step in json.loads(output)['steps'] if step['step'] == 'integrations' for note in step.get('notes', [])]
+                assert status == 0 and there.exists() == same, output
+                # Sent once: a machine that has it is sent nothing.
+                assert ("editor: provisioned from this telar's package" in notes) == sent, output
+            assert not same or there.read_text() == nvim.read_text()
+    with machine(binary) as fixture:
+        status, output = fixture.run('machine', 'setup', 'fixture', '--skip', 'agents,config,login', '--json')
+        assert status == 0 and "this telar's package" not in output and not (fixture.remote / '.local/share/telar/nvim').exists(), output
 
 
 def probe_failures(binary):
@@ -443,6 +475,7 @@ def contracts(binary):
     """Setup contracts asserted on their effects alone, beside the recorded outputs."""
     probe_failures(binary)
     editor_is_provisioned(binary)
+    editor_is_sent(binary)
     configuration_sync(binary)
     refused_sync(binary)
     codex_hooks(binary)

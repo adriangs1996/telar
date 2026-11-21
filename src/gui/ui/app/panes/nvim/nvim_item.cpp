@@ -6,6 +6,7 @@ static_assert(true);
 #include "nvim_item.hpp"
 #include "nvim_keys.hpp"
 #include "ui/kit/input/key_adapter.hpp"
+#include "ui/kit/models/path_label_runs.hpp"
 #include "ui/kit/models/projection.hpp"
 #include <QCursor>
 #include <QDebug>
@@ -354,7 +355,12 @@ namespace telar::gui::qt {
       const auto path = match.path.of(text);
       const auto slash = path.rfind('/');
 
+      // The path as the terminal's path picker shows one: the same runs, from the same code.
+      constexpr std::uint16_t label_columns = 96;
+      const auto marks = std::span<const std::uint16_t>{std::as_const(picker.positions).view()}.subspan(match.first_position, match.position_count);
+
       rows.append(QVariantMap{
+          {QStringLiteral("runs"), pathLabelRuns(path, marks, label_columns)},
           {QStringLiteral("name"), shown(slash == std::string_view::npos ? path : path.substr(slash + 1))},
           {QStringLiteral("directory"), shown(slash == std::string_view::npos ? std::string_view{} : path.substr(0, slash))},
           {QStringLiteral("line"), static_cast<int>(match.line)},

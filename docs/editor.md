@@ -129,7 +129,9 @@ telar integration install editor
 
 fetches the Neovim release this telar was built for, checks the archive against the SHA-256
 the build carries, and unpacks it under `~/.local/share/telar/nvim/VERSION`. `telar machine
-setup` runs it on the machine it sets up, unless `--skip editor`. On a machine without a
+setup` runs it on the machine it sets up, unless `--skip editor`. When the telar you run came
+with its Neovim and the machine is of the same system and processor, setup sends it that one
+first, and the machine fetches nothing. On a machine without a
 network, `TELAR_NVIM_ARCHIVE=/path/to/archive` takes an archive that is already there; it is
 checked the same.
 

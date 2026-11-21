@@ -6,6 +6,7 @@ static_assert(true);
 #include "path_picker_controller.hpp"
 #include "platform/window.hpp"
 #include "ui/kit/fonts/chrome_fonts.hpp"
+#include "ui/kit/models/path_label_runs.hpp"
 #include "ui/kit/models/projection.hpp"
 #include <QVariantList>
 #include <QVariantMap>
@@ -24,21 +25,6 @@ import telar.base.ds;
 
 namespace telar::gui::qt {
   namespace {
-
-    QString pathRunColor(application::paths::PathLabelTone tone) {
-      switch (tone) {
-      case application::paths::PathLabelTone::match:
-        return QStringLiteral("accent");
-      case application::paths::PathLabelTone::name:
-        return QStringLiteral("text");
-      case application::paths::PathLabelTone::directory:
-      case application::paths::PathLabelTone::ellipsis:
-        return QStringLiteral("subtext0");
-      }
-
-      // A tone outside the enum draws as the dimmed text.
-      return QStringLiteral("subtext0");
-    }
 
     template <typename MapBounds>
     QVariantList pathRows(const application::paths::PathPickerPage& page, const application::paths::PathPickerGeometry& geometry, std::size_t selection, MapBounds local) {
@@ -107,22 +93,13 @@ namespace telar::gui::qt {
     rows.reserve(static_cast<qsizetype>(end - begin));
     for (auto index = begin; index < end; ++index) {
       const auto& match = matches[index];
-      application::paths::PathLabel label;
-
-      label.layout(page.path(match), match.highlights(), width);
-      QVariantList runs;
-
-      runs.reserve(static_cast<qsizetype>(label.runs().size()));
-      for (const auto& run : label.runs()) {
-        runs.append(QVariantMap{{QStringLiteral("text"), toQString(run.text)}, {QStringLiteral("colorRole"), pathRunColor(run.tone)}, {QStringLiteral("bold"), run.tone == application::paths::PathLabelTone::match}});
-      }
 
       rows.append(QVariantMap{
           {QStringLiteral("index"), static_cast<qulonglong>(index)},
           {QStringLiteral("path"), toQString(page.path(match))},
           {QStringLiteral("directory"), match.kind == PathKind::directory},
           {QStringLiteral("selected"), index == selection_},
-          {QStringLiteral("runs"), std::move(runs)},
+          {QStringLiteral("runs"), pathLabelRuns(page.path(match), match.highlights(), width)},
       });
     }
 

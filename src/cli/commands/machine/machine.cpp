@@ -569,8 +569,91 @@ fetch() {
     // The Neovim telar provisions for its editor panes, installed there by the telar that was
     // just set up: it fetches the release its own build names and keeps it only when its bytes
     // are the ones it expects. A host that cannot have it keeps its own Neovim: the note says why.
+    // The Neovim this telar's own package brought, as the directory its version names beside
+    // the directory of telar's programs; none when it brought none.
+    ds::Option<std::filesystem::path> packagedEditor() {
+      std::error_code failure;
+      const auto versions = std::filesystem::path{ExecutablePath{}.view()}.parent_path().parent_path() / "share/telar/nvim";
+
+      for (const auto& version : std::filesystem::directory_iterator{versions, failure}) {
+        // A version is digits and dots: it is written into what the machine runs.
+        const auto name = version.path().filename().native();
+        const bool plain = !name.empty() && std::ranges::all_of(name, [](char letter) {
+          return (letter >= '0' && letter <= '9') || letter == '.';
+        });
+
+        if (plain && ::access((version.path() / "bin/nvim").c_str(), X_OK) == 0) {
+          return version.path();
+        }
+      }
+
+      return ds::none;
+    }
+
+    // Sends the machine the Neovim of this telar's package, when the machine is of the system
+    // and the processor the package is for: it then needs no network for it. False when there
+    // is none to send, the machine is another kind, it has that Neovim already, or it could
+    // not be sent: the machine's own telar then finds it or fetches it.
+    bool sendEditor(Memory& memory, std::string_view destination, const Platform& platform) {
+      const auto packaged = packagedEditor();
+      if (!packaged) {
+        return false;
+      }
+
+      // This system and this processor, named as the machine's are.
+      const auto here = launch::capture(memory, launch::words(memory, {"uname", "-sm"}).view(), {}, install_timeout);
+      const auto named = trimText(whole(here), " \t\r\n");
+      const auto space = named.find(' ');
+      if (here.status != 0 || space == std::string_view::npos) {
+        return false;
+      }
+
+      try {
+        // The releases of Neovim for Linux are glibc's.
+        if (Platform::systemName(named.substr(0, space)) != platform.os || Platform::architectureName(named.substr(space + 1)) != platform.arch || (platform.os == "linux" && platform.libc != "gnu")) {
+          return false;
+        }
+      } catch (const CommandError&) {
+        return false;
+      }
+
+      const Text parent{memory, packaged->parent_path().native()};
+      const Text version{memory, packaged->filename().native()};
+      const auto packed = launch::capture(
+          memory,
+          launch::words(memory, {"/bin/sh", "-c", R"(archive=$(mktemp "${TMPDIR:-/tmp}/telar-nvim.XXXXXX") && tar -czf "$archive" -C "$1" "$2" && printf %s "$archive")", "sh", parent.view(), version.view()}).view(),
+          {},
+          install_timeout
+      );
+      if (packed.status != 0) {
+        return false;
+      }
+
+      const Text archive_path{memory, trimText(whole(packed), " \t\r\n")};
+      const FileDescriptor archive{::open(archive_path.data(), combineFlags(O_RDONLY, O_CLOEXEC))}; // NOLINT(cppcoreguidelines-pro-type-vararg): open's C signature is variadic
+
+      static_cast<void>(::unlink(archive_path.data()));
+      if (!archive) {
+        return false;
+      }
+
+      // Unpacked beside its place and then moved there, so a run cut short leaves no half of it.
+      const auto command = ds::format(
+          memory,
+          R"(exec /bin/sh -c 'set -eu; nvim=${{XDG_DATA_HOME:-$HOME/.local/share}}/telar/nvim; target=$nvim/{0}; if [ -x "$target/bin/nvim" ]; then cat >/dev/null; exit 0; fi; echo sent; mkdir -p "$nvim"; rm -rf "$target.incoming"; mkdir "$target.incoming"; tar -xzf - -C "$target.incoming"; rm -rf "$target"; mv "$target.incoming/{0}" "$target"; rmdir "$target.incoming"')",
+          version.view()
+      );
+
+      const auto sent = launch::captureFile(memory, ssh(memory, destination, command).view(), archive.get(), install_timeout);
+
+      return sent.status == 0 && whole(sent).contains("sent");
+    }
+
     void provisionEditor(Memory& memory, SetupReport& report, std::string_view destination, const Platform& platform) {
       try {
+        // The package's own Neovim goes first, where it fits the machine; the machine's telar
+        // then finds it there and fetches nothing.
+        const bool sent = sendEditor(memory, destination, platform);
         Text script{memory};
 
         appendAssign(script, {.name = "telar", .value = platform.target});
@@ -582,7 +665,12 @@ fetch() {
           return;
         }
 
-        report.note(Step::integrations, "editor: {}", whole(output).contains("already present") ? "already provisioned" : "provisioned");
+        if (sent) {
+          report.note(Step::integrations, "editor: provisioned from this telar's package");
+        } else {
+          report.note(Step::integrations, "editor: {}", whole(output).contains("already present") ? "already provisioned" : "provisioned");
+        }
+
         // What the host lacks for telar's own configuration, as the installer found it.
         for (const auto part : std::views::split(whole(output), '\n')) {
           if (const std::string_view line{part}; line.starts_with("editor: needs ")) {
