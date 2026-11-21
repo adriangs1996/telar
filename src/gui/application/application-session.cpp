@@ -287,13 +287,9 @@ namespace telar::gui::application {
     return consume(payload, handler);
   }
 
-  Change Session::consume(std::span<const Byte> payload, ClientCommandHandler& handler) {
-    if (payload.empty()) {
-      throw EncodingError{"Empty server message"};
-    }
-
-    using Dispatch = Change (Session::*)(std::span<const Byte> payload, DecodeStorage& storage, ClientCommandHandler& handler);
-    using DispatchTable = ds::Array<Dispatch, std::numeric_limits<Byte>::max() + 1>;
+  // The runtime's messages by tag, each with what applies it. One the window has no use for is
+  // in `ignored`, in consume.
+  consteval Session::DispatchTable Session::routed() {
     constexpr auto by_tag = []<typename... Messages>(std::type_identity<Messages>...) consteval -> DispatchTable {
       static_assert((std::same_as<std::remove_const_t<decltype(MessageSchema<Messages>::tag)>, ServerTag> && ...), "only the runtime's messages");
       DispatchTable table{};
@@ -306,8 +302,7 @@ namespace telar::gui::application {
       return table;
     };
 
-    // The runtime's messages by tag. One the window has no use for is in `ignored` below.
-    static constexpr auto messages = by_tag(
+    return by_tag(
         std::type_identity<PaneFrame>{},
         std::type_identity<ClientCommand>{},
         std::type_identity<PaneFocusCommand>{},
@@ -373,6 +368,14 @@ namespace telar::gui::application {
         std::type_identity<Notification>{},
         std::type_identity<RuntimeStopping>{}
     );
+  }
+
+  Change Session::consume(std::span<const Byte> payload, ClientCommandHandler& handler) {
+    if (payload.empty()) {
+      throw EncodingError{"Empty server message"};
+    }
+
+    static constexpr auto messages = routed();
 
     // The messages a window has no use for: answers to requests it never sends, and what the
     // runtime tells a client of another kind. Every message the wire names is in `messages` or

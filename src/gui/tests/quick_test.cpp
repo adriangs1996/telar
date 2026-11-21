@@ -1024,6 +1024,42 @@ return {api_version = 2, client = {
         view->send(QStringLiteral("<Cmd>bwipeout!<CR>"));
       }
 
+      // The colorscheme is the window's theme: another preset reaches Neovim at once, and what
+      // Neovim colors itself, the line of the cursor here, is drawn in the new colors. A run
+      // that takes pictures takes one with the other preset.
+      {
+        const auto pixelOfRow = [&](int row) {
+          const auto point = view->mapToScene({view->width() / 2, (row + 0.5) * view->cellHeight()}).toPoint();
+
+          return window_->grabWindow().pixel(point);
+        };
+
+        view->send(QStringLiteral("<Cmd>enew! | setlocal cursorline | call setline(1, ['const value = 1', '', '']) | call cursor(1, 1)<CR>"));
+        QTRY_VERIFY2_WITH_TIMEOUT(shown().contains(QStringLiteral("const value")), qPrintable(shown()), runtime_wait_ms);
+        QTRY_VERIFY2_WITH_TIMEOUT(pixelOfRow(0) != pixelOfRow(2), "the cursor's line has a color of Neovim's own", runtime_wait_ms);
+
+        const auto line = pixelOfRow(0);
+        const QTemporaryDir directory;
+        const auto path = directory.filePath(QStringLiteral("config.lua"));
+
+        writeTestFile(path, "return {api_version=2,theme='vesper'}");
+        const auto restored = qScopeGuard([this] {
+          client_->loadConfiguration({}, {}, {});
+        });
+
+        client_->loadConfiguration(path, {}, {});
+        QCOMPARE(client_->status()->error(), QString{});
+        QTRY_VERIFY2_WITH_TIMEOUT(pixelOfRow(0) != line && pixelOfRow(0) != pixelOfRow(2), "the other preset did not reach the editor's own colors", runtime_wait_ms);
+        // The picture is of a real file, when the run was given one.
+        if (const auto file = qEnvironmentVariable("TELAR_EDITOR_SHOT_FILE"); !shots.isEmpty() && !file.isEmpty()) {
+          view->send(QStringLiteral("<Cmd>edit! %1<CR>").arg(file));
+          QTRY_VERIFY_WITH_TIMEOUT(!shown().contains(QStringLiteral("const value")), runtime_wait_ms);
+        }
+
+        shoot(QStringLiteral("editor-preset"));
+        view->send(QStringLiteral("<Cmd>bwipeout!<CR>"));
+      }
+
       // With TELAR_EDITOR_METRICS set to a file, how long a key takes from the view to the frame
       // that shows it, applied in this window: the runtime, Neovim and the way back.
       if (const auto metrics = qEnvironmentVariable("TELAR_EDITOR_METRICS"); !metrics.isEmpty()) {
