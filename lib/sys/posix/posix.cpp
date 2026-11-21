@@ -1,10 +1,10 @@
 module;
 #include <cerrno>
-#include <cstddef>
 #include <cstring>
-#include <type_traits>
 
 module telar.sys.posix;
+
+import std;
 
 namespace telar::sys {
 
