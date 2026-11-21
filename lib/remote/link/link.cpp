@@ -139,14 +139,23 @@ namespace telar::remote {
       return local;
     }
 
-    // Asks the gateway of `endpoint` for a connection to `port` there. The reply says whether
-    // anything listens on it.
-    ds::Option<Reply> requestPort(Channel& channel, std::uint16_t port) noexcept {
+    // Asks the gateway of a channel for a connection to `port` of its machine; false when the
+    // request could not be sent.
+    bool sendPort(Channel& channel, std::uint16_t port) noexcept {
       try {
         const ds::Array<std::uint8_t, 2> request{static_cast<std::uint8_t>(port >> byte_bits), static_cast<std::uint8_t>(port & byte_mask)};
 
         channel.send(request.view(), Clock::now() + exchange_timeout);
-        return receiveReply(channel);
+        return true;
+      } catch (const ChannelFailure&) {
+        return false;
+      }
+    }
+
+    // The same, waiting for the gateway to say whether anything listens on the port.
+    ds::Option<Reply> requestPort(Channel& channel, std::uint16_t port) noexcept {
+      try {
+        return sendPort(channel, port) ? ds::Option{receiveReply(channel)} : ds::none;
       } catch (const ChannelFailure&) {
         return ds::none;
       }
@@ -420,6 +429,8 @@ namespace telar::remote {
       requestPorts(socket, arguments);
     } else if (verb == "hold") {
       requestHold(socket, arguments);
+    } else if (verb == "run") {
+      requestRun(socket, arguments);
     } else if (verb == "ping") {
       static_cast<void>(writeAll(socket, "ok\n"));
     } else if (verb == "stop") {
@@ -596,6 +607,102 @@ namespace telar::remote {
     }
   }
 
+  void Link::makeReady(std::size_t machine) noexcept {
+    Endpoint endpoint;
+    {
+      const std::scoped_lock lock{mutex_};
+      auto& entry = machines_.atMut(machine);
+
+      if (entry.readying || stopping_.load()) {
+        return;
+      }
+
+      entry.readying = true;
+      endpoint = entry.endpoint;
+      threads_.fetch_add(1);
+    }
+
+    try {
+      runtime::startThread("Start a gateway connection", [this, machine, endpoint] {
+        ds::Option<Channel> channel;
+
+        try {
+          channel.emplace(Channel::dial(contexts_, endpoint, Service::run, Clock::now() + dial_timeout));
+        } catch (const std::exception&) {
+          channel.reset();
+        }
+
+        {
+          const std::scoped_lock lock{mutex_};
+          auto& entry = machines_.atMut(machine);
+
+          entry.ready = std::move(channel);
+          entry.ready_since = Clock::now();
+          entry.readying = false;
+        }
+
+        threads_.fetch_sub(1);
+      }).detach();
+    } catch (const SystemError&) {
+      const std::scoped_lock lock{mutex_};
+
+      machines_.atMut(machine).readying = false;
+      threads_.fetch_sub(1);
+    }
+  }
+
+  void Link::requestRun(int socket, std::string_view destination) {
+    Endpoint endpoint;
+    ds::Option<std::size_t> slot;
+    ds::Option<Channel> channel;
+
+    try {
+      endpoint = Endpoint::parse(destination);
+    } catch (const std::invalid_argument&) {
+      static_cast<void>(writeAll(socket, "error that is no gateway address\n"));
+      return;
+    }
+
+    {
+      const std::scoped_lock lock{mutex_};
+
+      slot = machineSlot(endpoint);
+      if (slot) {
+        auto& entry = machines_.atMut(*slot);
+
+        // The connection kept ready is used when its gateway has neither closed it nor could
+        // have given up waiting for it.
+        channel = entry.ready.take();
+        if (channel && (Clock::now() - entry.ready_since >= ready_lifetime || channel->disturbed())) {
+          channel.reset();
+        }
+      }
+    }
+
+    try {
+      if (!channel) {
+        channel.emplace(Channel::dial(contexts_, endpoint, Service::run, Clock::now() + dial_timeout));
+      }
+    } catch (const ChannelFailure& failure) {
+      Text<LinkClient::line_bytes> reply;
+
+      reply.append("error ");
+      reply.append(failure.what());
+      reply.append("\n");
+      static_cast<void>(writeAll(socket, reply.view()));
+      return;
+    }
+
+    // The next command of this machine finds a connection made while this one runs.
+    if (slot) {
+      makeReady(*slot);
+    }
+
+    if (writeAll(socket, "ok\n")) {
+      relay(channel.getMut(), socket);
+    }
+  }
+
   void Link::requestHold(int socket, std::string_view destination) {
     Endpoint endpoint;
     ds::Option<std::size_t> slot;
@@ -651,9 +758,10 @@ namespace telar::remote {
     }
 
     auto channel = Channel::dial(contexts_, endpoint, Service::attach, Clock::now() + dial_timeout);
-    if (receiveReply(channel) == Reply::accepted) {
-      relay(channel, socket);
-    }
+
+    // What the window has to say travels with the handshake's last flight instead of waiting a
+    // round trip for the gateway's answer.
+    static_cast<void>(relayOnceAnswered(channel, socket));
   }
 
   ds::Option<std::size_t> Link::openForward(const Endpoint& endpoint, std::uint16_t port, std::string_view origin, Opening opening) {
@@ -860,9 +968,10 @@ namespace telar::remote {
     try {
       auto channel = Channel::dial(contexts_, endpoint, Service::forward, Clock::now() + dial_timeout);
 
-      reply = requestPort(channel, port);
-      if (reply == Reply::accepted) {
-        relay(channel, socket);
+      // The connection's first bytes follow the request at once; the gateway's answer comes
+      // back ahead of the port's.
+      if (sendPort(channel, port)) {
+        reply = relayOnceAnswered(channel, socket);
       }
     } catch (const ChannelFailure&) {
       // A gateway that cannot be reached says nothing of the port; the forward stays.
@@ -1037,6 +1146,24 @@ namespace telar::remote {
     return FileDescriptor{};
   }
 
+  FileDescriptor LinkClient::run(const LinkPaths& paths, std::string_view destination) noexcept {
+    try {
+      Line line{};
+      Text<line_bytes> request;
+      auto socket = connectUnix(paths.control().view());
+
+      request.append("run ");
+      request.append(destination);
+      request.append("\n");
+      if (socket && writeAll(socket.get(), request.view()) && readLine(socket.get(), line.viewMut(), Clock::now() + reply_timeout) == std::string_view{"ok"}) {
+        return socket;
+      }
+    } catch (const std::exception&) { // NOLINT(bugprone-empty-catch): without a link the caller connects by itself
+    }
+
+    return FileDescriptor{};
+  }
+
   void LinkClient::stop(const LinkPaths& paths) noexcept {
     try {
       Line line{};
@@ -1054,9 +1181,22 @@ namespace telar::remote {
   int runRemote(const State& state, const RemoteCommand& remote) noexcept {
     try {
       const auto endpoint = Endpoint::parse(remote.destination);
-      const auto identity = Identity::loadOrCreate(state.directory());
-      const Contexts contexts{identity};
-      auto channel = Channel::dial(contexts, endpoint, Service::run, Clock::now() + dial_timeout);
+      // Through the link the command may find a connection already made to its machine; without
+      // one it makes its own.
+      auto through = remote.link != nullptr ? LinkClient::run(*remote.link, remote.destination) : FileDescriptor{};
+      ds::Option<Identity> identity;
+      ds::Option<Contexts> contexts;
+      ds::Option<Channel> connection;
+
+      if (through) {
+        connection.emplace(Channel::local(std::move(through), Service::run));
+      } else {
+        identity.emplace(Identity::loadOrCreate(state.directory()));
+        contexts.emplace(*identity);
+        connection.emplace(Channel::dial(*contexts, endpoint, Service::run, Clock::now() + dial_timeout));
+      }
+
+      auto& channel = connection.getMut();
       RunRequest request{.terminal = remote.terminal};
       winsize size{};
 
@@ -1095,18 +1235,20 @@ namespace telar::remote {
       const Contexts contexts{identity};
       auto channel = Channel::dial(contexts, endpoint, Service::attach, Clock::now() + dial_timeout);
 
-      if (const auto reply = receiveReply(channel); reply != Reply::accepted) {
+      runtime::configureProxySocket(socket);
+      // What the window has to say travels with the handshake's last flight instead of waiting a
+      // round trip for the gateway's answer.
+      const auto reply = relayOnceAnswered(channel, socket);
+      if (reply != Reply::accepted) {
         Text<LinkClient::line_bytes> message;
 
         message.append("telar gateway: ");
-        message.append(reply == Reply::refused ? describe(reply) : "the runtime there could not be reached or started");
+        message.append(reply == Reply::refused ? describe(Reply::refused) : "the runtime there could not be reached or started");
         message.append("\n");
         static_cast<void>(writeAll(STDERR_FILENO, message.view()));
         return reply == Reply::refused ? connection_lost_status : 1;
       }
 
-      runtime::configureProxySocket(socket);
-      relay(channel, socket);
       return 0;
     } catch (const std::exception& failure) {
       Text<LinkClient::line_bytes> message;

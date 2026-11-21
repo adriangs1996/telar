@@ -252,6 +252,17 @@ namespace telar::remote {
 
       remote.command = rest[1];
       const auto held = share ? holdMachine(remote.destination) : runtime::FileDescriptor{};
+      ds::Option<LinkPaths> paths;
+
+      // The link may hold a connection to the machine already; a link that cannot be started
+      // only means the command connects by itself.
+      try {
+        paths.emplace(LinkPaths::resolve(runtime::process_environment));
+        ensureLink(*paths);
+        remote.link = &paths.get();
+      } catch (const std::exception&) {
+        remote.link = nullptr;
+      }
 
       return runRemote(state, remote);
     }

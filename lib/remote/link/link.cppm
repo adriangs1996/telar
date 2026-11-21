@@ -79,6 +79,11 @@ export {
         // A thread hears of its ports as they open and close.
         bool watched = false;
         bool used = false;
+        // A connection for the next command run there, made while the last one ran, so that the
+        // next spends no round trip connecting; when it was made, and whether one is being made.
+        ds::Option<Channel> ready;
+        Clock::time_point ready_since{};
+        bool readying = false;
       };
 
       // A port of a machine offered on a port of this one.
@@ -119,6 +124,8 @@ export {
       void requestForward(int socket, std::string_view arguments);
       void requestPorts(int socket, std::string_view destination);
       void requestHold(int socket, std::string_view destination);
+      void requestRun(int socket, std::string_view destination);
+      void makeReady(std::size_t machine) noexcept;
 
       // How a forward comes to be: asked for by a program here, after the gateway confirms the
       // port listens, or shared by the machine, which already knows it does.
@@ -190,6 +197,11 @@ export {
       // that machine shares are forwarded here. None when no link answers.
       [[nodiscard]] static runtime::FileDescriptor hold(const LinkPaths& paths, std::string_view destination) noexcept;
 
+      // A socket to the run service of the machine at `destination`, through a connection the
+      // link may already hold to its gateway. None when no link answers or it cannot reach the
+      // machine: the caller then connects by itself.
+      [[nodiscard]] static runtime::FileDescriptor run(const LinkPaths& paths, std::string_view destination) noexcept;
+
       // Asks the link to end.
       static void stop(const LinkPaths& paths) noexcept;
     };
@@ -207,6 +219,9 @@ export {
       std::string_view command;
       bool terminal = false;
       LocalStreams streams;
+      // The link to go through when it answers, which may hold a connection ready; none to
+      // always connect anew.
+      const LinkPaths* link = nullptr;
     };
 
     // Runs a command in the shell of the account at its destination and returns its exit status.

@@ -196,8 +196,10 @@ namespace telar::remote {
       failed,
     };
 
-    // Moves what it can from the channel to the local socket.
-    Step pumpDown(Channel& channel, int local, Half& half, Interest& interest) noexcept {
+    // Moves what it can from the channel to the local socket. While `answer` is awaited, the
+    // first byte the channel delivers is the gateway's answer and is kept from the socket; an
+    // answer other than `accepted` ends the relay.
+    Step pumpDown(Channel& channel, int local, Half& half, Interest& interest, ds::Option<Reply>* answer = nullptr) noexcept {
       Step step = Step::idle;
 
       if (!half.ended && half.empty()) {
@@ -209,6 +211,15 @@ namespace telar::remote {
         if (read.state == Transfer::State::done) {
           half.filled(read.bytes);
           step = Step::moved;
+          if (answer != nullptr && !answer->hasValue()) {
+            const auto byte = half.bytes[0];
+
+            *answer = byte <= static_cast<std::uint8_t>(Reply::unavailable) ? static_cast<Reply>(byte) : Reply::unavailable;
+            half.drained(1);
+            if (*answer != Reply::accepted) {
+              return Step::failed;
+            }
+          }
         } else if (read.state == Transfer::State::ended) {
           half.ended = true;
           step = Step::moved;
@@ -619,6 +630,19 @@ namespace telar::remote {
     return channel;
   }
 
+  Channel Channel::local(FileDescriptor socket, Service service) noexcept {
+    Channel channel{std::move(socket), runtime::TlsConnection{}};
+
+    channel.service_ = service;
+    return channel;
+  }
+
+  bool Channel::disturbed() const noexcept {
+    pollfd entry{.fd = socket_.get(), .events = POLLIN, .revents = 0};
+
+    return buffered() || ::poll(&entry, 1, 0) != 0;
+  }
+
   Service Channel::service() const noexcept {
     return service_;
   }
@@ -677,8 +701,33 @@ namespace telar::remote {
     }
   }
 
+  namespace {
+
+    // What a read or a write of a local socket did, as a channel reports it.
+    Transfer localResult(ssize_t count, bool reading) noexcept {
+      if (count > 0) {
+        return {.state = Transfer::State::done, .bytes = static_cast<std::size_t>(count)};
+      }
+
+      if (count == 0 && reading) {
+        return {.state = Transfer::State::ended};
+      }
+
+      if (runtime::socketWouldBlock(sys::lastError())) {
+        return {.state = reading ? Transfer::State::wants_read : Transfer::State::wants_write};
+      }
+
+      return {.state = Transfer::State::failed};
+    }
+
+  }
+
   Transfer Channel::read(std::span<std::uint8_t> bytes) noexcept {
     std::size_t count = 0;
+
+    if (!connection_) {
+      return localResult(::read(socket_.get(), bytes.data(), bytes.size()), true);
+    }
 
     ERR_clear_error();
     return result(SSL_read_ex(connection_.get(), bytes.data(), bytes.size(), &count), count);
@@ -687,11 +736,20 @@ namespace telar::remote {
   Transfer Channel::write(std::span<const std::uint8_t> bytes) noexcept {
     std::size_t count = 0;
 
+    if (!connection_) {
+      return localResult(::write(socket_.get(), bytes.data(), bytes.size()), false);
+    }
+
     ERR_clear_error();
     return result(SSL_write_ex(connection_.get(), bytes.data(), bytes.size(), &count), count);
   }
 
   Transfer Channel::finish() noexcept {
+    if (!connection_) {
+      static_cast<void>(::shutdown(socket_.get(), SHUT_WR));
+      return {};
+    }
+
     ERR_clear_error();
     const int status = SSL_shutdown(connection_.get());
 
@@ -700,7 +758,7 @@ namespace telar::remote {
   }
 
   bool Channel::buffered() const noexcept {
-    return SSL_pending(connection_.get()) > 0;
+    return connection_ && SSL_pending(connection_.get()) > 0;
   }
 
   void Channel::send(std::span<const std::uint8_t> bytes, Clock::time_point deadline) {
@@ -758,34 +816,51 @@ namespace telar::remote {
     }
   }
 
-  void relay(Channel& channel, int local) noexcept {
-    // The buffers of both directions are this call's own: a relay runs on a thread whose stack
-    // is sized to hold them.
-    Half down;
-    Half up;
+  namespace {
 
-    while (!down.closed || !up.closed) {
-      Interest interest;
-      const auto moved_down = pumpDown(channel, local, down, interest);
-      const auto moved_up = pumpUp(channel, local, up, interest);
+    // Carries both directions until each has ended or either fails; with `answer`, the first
+    // byte from the channel is taken as the gateway's answer.
+    void carry(Channel& channel, int local, ds::Option<Reply>* answer) noexcept {
+      // The buffers of both directions are this call's own: a relay runs on a thread whose stack
+      // is sized to hold them.
+      Half down;
+      Half up;
 
-      if (moved_down == Step::failed || moved_up == Step::failed) {
-        return;
-      }
+      while (!down.closed || !up.closed) {
+        Interest interest;
+        const auto moved_down = pumpDown(channel, local, down, interest, answer);
+        const auto moved_up = pumpUp(channel, local, up, interest);
 
-      if (moved_down == Step::moved || moved_up == Step::moved) {
-        continue;
-      }
+        if (moved_down == Step::failed || moved_up == Step::failed) {
+          return;
+        }
 
-      ds::Array<pollfd, 2> entries{
-          pollfd{.fd = channel.descriptor(), .events = interest.channel, .revents = 0},
-          pollfd{.fd = local, .events = interest.local, .revents = 0},
-      };
+        if (moved_down == Step::moved || moved_up == Step::moved) {
+          continue;
+        }
 
-      if (::poll(entries.dataMut(), entries.size(), -1) < 0 && sys::lastError() != EINTR) {
-        return;
+        ds::Array<pollfd, 2> entries{
+            pollfd{.fd = channel.descriptor(), .events = interest.channel, .revents = 0},
+            pollfd{.fd = local, .events = interest.local, .revents = 0},
+        };
+
+        if (::poll(entries.dataMut(), entries.size(), -1) < 0 && sys::lastError() != EINTR) {
+          return;
+        }
       }
     }
+
+  }
+
+  ds::Option<Reply> relayOnceAnswered(Channel& channel, int local) noexcept {
+    ds::Option<Reply> answer;
+
+    carry(channel, local, &answer);
+    return answer;
+  }
+
+  void relay(Channel& channel, int local) noexcept {
+    carry(channel, local, nullptr);
   }
 
   void sendReply(Channel& channel, Reply reply) {

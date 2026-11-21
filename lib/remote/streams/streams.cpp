@@ -30,10 +30,11 @@ namespace telar::remote {
     constexpr unsigned byte_bits = 8;
     constexpr unsigned byte_mask = 0xff;
 
-    // A command whose streams ended is about to exit: its status is asked for again after a
-    // wait that starts at a millisecond and doubles up to this one, so that a quick command is
-    // not held for a tick and a slow one is not polled in a loop.
-    constexpr int longest_reap_wait_ms = 20;
+    // A command whose streams ended is about to exit: its status is asked for again every
+    // millisecond for a while, so that a quick command is not held for a tick, and then at a
+    // pace that does not poll a slow one in a loop.
+    constexpr int quick_reaps = 64;
+    constexpr int slow_reap_wait_ms = 20;
 
     void putU16(std::span<std::uint8_t> output, std::uint16_t value) noexcept {
       output[0] = static_cast<std::uint8_t>(value >> byte_bits);
@@ -131,7 +132,7 @@ namespace telar::remote {
       // The server's side: until the command exited and the client was told, or the client left.
       void server(const Process& process) noexcept {
         process_ = &process;
-        int reap_wait_ms = 1;
+        int reaps = 0;
 
         while (!failed_ && !peer_ended_ && !told_) {
           bool waiting = sourcesEnded() && !exit_queued_;
@@ -141,10 +142,9 @@ namespace telar::remote {
             waiting = !exit_queued_;
           }
 
-          step(waiting ? reap_wait_ms : -1);
-          if (waiting) {
-            reap_wait_ms = std::min(2 * reap_wait_ms, longest_reap_wait_ms);
-          }
+          step(!waiting ? -1 : reaps < quick_reaps ? 1
+                                                   : slow_reap_wait_ms);
+          reaps += waiting ? 1 : 0;
 
           if (exit_queued_ && outgoing_.size() == 0) {
             told_ = channel_.finish().state != Transfer::State::wants_write;
@@ -403,9 +403,12 @@ namespace telar::remote {
 
   std::string_view receiveRunRequest(Channel& channel, RunRequest& request, std::span<char> command) {
     ds::Array<std::uint8_t, request_bytes> header{};
+
+    // The request may be long in coming; once it starts, the rest follows at once.
+    channel.receive(header.viewMut().first(1), Clock::now() + run_patience);
     const auto deadline = Clock::now() + exchange_timeout;
 
-    channel.receive(header.viewMut(), deadline);
+    channel.receive(header.viewMut().subspan(1), deadline);
     const std::size_t length = getU32(header.view().subspan(5));
     if (length == 0 || length > command.size()) {
       throw ChannelFailure{"The client asked to run a command longer than a gateway runs"};

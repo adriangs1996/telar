@@ -147,6 +147,14 @@ export {
       // Throws ChannelFailure.
       [[nodiscard]] static Channel dial(const Contexts& contexts, const Endpoint& endpoint, Service service, Clock::time_point deadline);
 
+      // A channel over a stream socket of this machine, with nothing in between: the link at the
+      // other end of the socket carries its bytes on a connection it keeps to the gateway.
+      [[nodiscard]] static Channel local(runtime::FileDescriptor socket, Service service) noexcept;
+
+      // Whether the peer has sent anything, its end included, that this end has not read: a
+      // channel kept ready for later use is still good only while it has not.
+      [[nodiscard]] bool disturbed() const noexcept;
+
       [[nodiscard]] Service service() const noexcept;
       [[nodiscard]] const PublicKey& peer() const noexcept;
       [[nodiscard]] int descriptor() const noexcept;
@@ -206,6 +214,13 @@ export {
 
     void sendReply(Channel& channel, Reply reply);
     [[nodiscard]] Reply receiveReply(Channel& channel);
+
+    // A relay for the client of a service that answers before it streams: what the socket has
+    // to send goes out at once, without waiting a round trip for the gateway's answer, and the
+    // first byte that comes back is that answer, not the socket's. Returns it, or nothing when
+    // the channel ended before any byte came; unless it is `accepted`, nothing was carried
+    // back.
+    [[nodiscard]] ds::Option<Reply> relayOnceAnswered(Channel& channel, int local) noexcept;
 
   }
 }

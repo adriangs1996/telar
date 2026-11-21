@@ -26,6 +26,11 @@ export {
 
     void sendRunRequest(Channel& channel, const RunRequest& request, std::string_view command);
 
+    // How long a gateway waits for a request to start: a client keeps a connection ready for
+    // its next command for less than this, so that the command spends no time connecting.
+    inline constexpr auto run_patience = std::chrono::seconds{30};
+    inline constexpr auto ready_lifetime = std::chrono::seconds{20};
+
     // Reads a request and its command into `command`, and returns the command's text there.
     // Throws ChannelFailure for a command longer than `command`.
     [[nodiscard]] std::string_view receiveRunRequest(Channel& channel, RunRequest& request, std::span<char> command);

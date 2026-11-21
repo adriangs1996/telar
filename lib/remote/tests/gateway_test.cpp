@@ -194,7 +194,7 @@ namespace {
       std::string error;
     };
 
-    Result run(const State& state, std::string_view target, std::string_view command, std::string_view input = {}) const {
+    Result run(const State& state, std::string_view target, std::string_view command, std::string_view input = {}, const LinkPaths* link = nullptr) const {
       int in[2];
       int out[2];
       int err[2];
@@ -214,7 +214,7 @@ namespace {
         result.error = readAll(err[0]);
       }};
 
-      result.status = runRemote(state, {.destination = target, .command = command, .streams = {.input = in[0], .output = out[1], .error = err[1]}});
+      result.status = runRemote(state, {.destination = target, .command = command, .streams = {.input = in[0], .output = out[1], .error = err[1]}, .link = link});
       ::close(out[1]);
       ::close(err[1]);
       writer.join();
@@ -488,6 +488,28 @@ namespace {
         "a shared port is forwarded only while something holds its machine");
   }
 
+  // A command that goes through the link finds, from the second on, a connection the link
+  // made while the one before ran; it runs the same either way.
+  void commandsThroughTheLinkRunOnAConnectionKeptReady() {
+    const Pair pair;
+    const LocalLink local{pair};
+    const auto paths = local.paths();
+
+    for (int round = 1; round <= 4; ++round) {
+      const auto command = "cat; echo round " + std::to_string(round) + " >&2; exit " + std::to_string(round);
+      const auto result = pair.run(pair.client.state, pair.destination, command, "through the link", &paths);
+
+      check(result.output == "through the link" && result.error == "round " + std::to_string(round) + "\n" && result.status == round);
+      // The connection for the next command is made behind this one's back.
+      std::this_thread::sleep_for(std::chrono::milliseconds{50});
+    }
+
+    const tests::Gateway stranger;
+    const auto refused = pair.run(stranger.state, pair.destination, "echo no", {}, &paths);
+
+    check(refused.status == 0 && refused.output == "no\n", "the link runs commands as the account whose link it is, whoever asks on its socket");
+  }
+
   void theLinkRefusesAPortNothingListensOn() {
     const Pair pair;
     const LocalLink local{pair};
@@ -510,6 +532,7 @@ namespace {
   const telar::testing::Case case_the_link_offers_a_machines_runtime_on_a_local_socket{"gateway.the_link_offers_a_machines_runtime_on_a_local_socket", theLinkOffersAMachinesRuntimeOnALocalSocket};
   const telar::testing::Case case_the_link_forwards_a_port_until_it_closes_there{"gateway.the_link_forwards_a_port_until_it_closes_there", theLinkForwardsAPortUntilItClosesThere};
   const telar::testing::Case case_a_port_a_machine_shares_is_forwarded_to_whoever_holds_it{"gateway.a_port_a_machine_shares_is_forwarded_to_whoever_holds_it", aPortAMachineSharesIsForwardedToWhoeverHoldsIt};
+  const telar::testing::Case case_commands_through_the_link_run_on_a_connection_kept_ready{"gateway.commands_through_the_link_run_on_a_connection_kept_ready", commandsThroughTheLinkRunOnAConnectionKeptReady};
   const telar::testing::Case case_the_link_refuses_a_port_nothing_listens_on{"gateway.the_link_refuses_a_port_nothing_listens_on", theLinkRefusesAPortNothingListensOn};
 
 }
