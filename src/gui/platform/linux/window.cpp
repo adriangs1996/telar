@@ -30,7 +30,7 @@ namespace telar::gui::platform {
     return false;
   }
 
-  void deliverPendingWindowUpdate(QWindow&) {}
+  void deliverPendingWindowUpdate(const QWindow& /*window*/) {}
 
   namespace {
 
