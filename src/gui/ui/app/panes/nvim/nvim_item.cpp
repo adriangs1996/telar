@@ -819,6 +819,7 @@ namespace telar::gui::qt {
 
     synchronizeCursor(*editor);
     synchronizeSurfaces(*editor);
+    confirmPrediction(*editor);
     if (!ready_ && editor->frame != 0) {
       ready_ = true;
       emit readyChanged();
@@ -836,7 +837,75 @@ namespace telar::gui::qt {
     }
 
     controller_->type(pane_id_, nvim::notation(*key).view());
+    predict(*event);
     event->accept();
+  }
+
+  void NvimItem::predict(const QKeyEvent& event) {
+    const auto* editor = editorState();
+    if (editor == nullptr) {
+      return;
+    }
+
+    if (!echo_clock_.isValid()) {
+      echo_clock_.start();
+    }
+
+    constexpr double nanoseconds_per_ms = 1e6;
+    const auto typed = event.text().toUcs4();
+    // What a key types as itself: no chord, and nothing the editor shows of its own over the text.
+    const bool plain = typed.size() == 1 && (event.modifiers() & ~(Qt::ShiftModifier | Qt::KeypadModifier)) == Qt::NoModifier;
+    const bool typing = editor->mode.view() == "insert" && !editor->menu.visible && !editor->cmdline.visible && !editor->picker.open;
+
+    echo_.sent(static_cast<double>(echo_clock_.nsecsElapsed()) / nanoseconds_per_ms);
+    if (plain && echo_.predict(typed.front(), {.grid = editor->cursor.grid, .row = editor->cursor.row, .column = editor->cursor.column}, typing)) {
+      publishPrediction();
+    } else if (!plain || !typing) {
+      // A key that is not a letter moves the editor on: what was ahead no longer is.
+      echo_.clear();
+      publishPrediction();
+    }
+  }
+
+  void NvimItem::confirmPrediction(const nvim::Editor& editor) {
+    if (!echo_clock_.isValid()) {
+      return;
+    }
+
+    constexpr double nanoseconds_per_ms = 1e6;
+    const auto origin = echo_.origin();
+    const auto* grid = echo_.pending().empty() ? nullptr : editor.grid(origin.grid);
+    QList<char32_t> cells;
+
+    // The row the letters wait on, a code point for each cell.
+    if (grid != nullptr && origin.row < grid->screen.rows()) {
+      for (const auto& cell : grid->screen.row(origin.row)) {
+        const auto text = QString::fromUtf8(cell.utf8().data(), static_cast<qsizetype>(cell.utf8().size())).toUcs4();
+
+        cells.append(text.isEmpty() ? U' ' : text.front());
+      }
+    }
+
+    echo_.confirm(static_cast<double>(echo_clock_.nsecsElapsed()) / nanoseconds_per_ms, {.grid = editor.cursor.grid, .row = editor.cursor.row, .column = editor.cursor.column}, std::span<const char32_t>{cells.constData(), static_cast<std::size_t>(cells.size())});
+    if (editor.mode.view() != "insert") {
+      echo_.clear();
+    }
+
+    publishPrediction();
+  }
+
+  void NvimItem::publishPrediction() {
+    const auto pending = echo_.pending();
+    const auto text = QString::fromUcs4(pending.data(), static_cast<qsizetype>(pending.size()));
+    const auto* editor = editorState();
+    const auto* grid = editor == nullptr || pending.empty() ? nullptr : editor->grid(echo_.origin().grid);
+    const auto origin = grid == nullptr ? QPointF{} : gridBounds(*grid).topLeft() + QPointF{echo_.origin().column * font_.cell.width(), echo_.origin().row * font_.cell.height()};
+
+    if (text != prediction_ || origin != prediction_origin_) {
+      prediction_ = text;
+      prediction_origin_ = origin;
+      emit predictionChanged();
+    }
   }
 
   void NvimItem::keyReleaseEvent(QKeyEvent* event) {

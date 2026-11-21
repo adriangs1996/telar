@@ -5,6 +5,7 @@ static_assert(true);
 
 #include "foundation/core/memory.hpp"
 #include "nvim_controller.hpp"
+#include "predictive_echo.hpp"
 #include "telar_wire/codecs/telar_value_codec.hpp"
 #include "telar_wire/serializers/telar_cells.hpp"
 #include "telar_wire/serializers/telar_frame.hpp"
@@ -13,6 +14,7 @@ static_assert(true);
 #include "ui/kit/fonts/terminal_font.hpp"
 #include "ui/kit/fonts/window_font_catalog.hpp"
 #include "ui/kit/models/list_model.hpp"
+#include <QElapsedTimer>
 #include <QKeyEvent>
 #include <QPointer>
 #include <QQuickItem>
@@ -60,6 +62,8 @@ namespace telar::gui::qt {
     Q_PROPERTY(QVariantMap tabline READ tabline NOTIFY tablineChanged)
     Q_PROPERTY(QVariantMap prompt READ prompt NOTIFY promptChanged)
     Q_PROPERTY(QVariantMap picker READ picker NOTIFY pickerChanged)
+    Q_PROPERTY(QString prediction READ prediction NOTIFY predictionChanged)
+    Q_PROPERTY(QPointF predictionOrigin READ predictionOrigin NOTIFY predictionChanged)
 
   public:
     explicit NvimItem(QQuickItem* parent = nullptr);
@@ -118,6 +122,16 @@ namespace telar::gui::qt {
 
     [[nodiscard]] QVariantMap picker() const {
       return picker_;
+    }
+
+    // The letters typed in insert mode that the editor has not shown yet, where the way to it
+    // is slow, and the corner of the cell the first goes in.
+    [[nodiscard]] QString prediction() const {
+      return prediction_;
+    }
+
+    [[nodiscard]] QPointF predictionOrigin() const noexcept {
+      return prediction_origin_;
     }
 
     [[nodiscard]] QVariantMap popupMenu() const {
@@ -191,6 +205,7 @@ namespace telar::gui::qt {
     void readyChanged();
     void separatorsChanged();
     void pickerChanged();
+    void predictionChanged();
     void cmdlineChanged();
     void popupMenuChanged();
     void messagesChanged();
@@ -240,6 +255,10 @@ namespace telar::gui::qt {
     void projectTabs(const application::nvim::Editor& editor);
     void projectPrompt(const application::nvim::Editor& editor);
     void projectPicker(const application::nvim::Editor& editor);
+    // Takes a key that was sent, and a frame that arrived, to the letters shown ahead.
+    void predict(const QKeyEvent& event);
+    void confirmPrediction(const application::nvim::Editor& editor);
+    void publishPrediction();
     void restartBlink(const application::nvim::Editor& editor);
     [[nodiscard]] QRectF gridBounds(const application::nvim::Grid& grid) const noexcept;
     [[nodiscard]] ds::Option<Hit> hit(QPointF position) const;
@@ -250,6 +269,10 @@ namespace telar::gui::qt {
     ListModel grids_;
     QVariantList separators_;
     QVariantMap picker_;
+    PredictiveEcho echo_;
+    QElapsedTimer echo_clock_;
+    QString prediction_;
+    QPointF prediction_origin_;
     std::uint64_t picker_revision_ = 0;
     // The cells the picker's preview was last asked to cover: the float found there is it.
     application::nvim::PreviewArea preview_area_;
