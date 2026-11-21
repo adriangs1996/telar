@@ -115,6 +115,14 @@ export namespace telar::gui::application::workbench {
   // Splits the focused pane along `axis`; false when it cannot be split now.
   bool split(Session& session, ClientLayoutAxis axis);
 
+  // Splits the focused pane along `axis`, the new pane being an editor on `files`, or on an
+  // empty buffer without any. False when the session cannot: its runtime runs no editors, or a
+  // pane is still being opened or closed.
+  bool splitEditor(Session& session, ClientLayoutAxis axis, std::span<const std::string_view> files = {});
+
+  // A tab of its own for an editor on `files`.
+  TabCreationOutcome createEditorTab(Session& session, std::span<const std::string_view> files = {});
+
   bool closePane(Session& session, std::uint64_t pane_id);
 
   void toggleFullscreen(Session& session);

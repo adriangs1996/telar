@@ -197,6 +197,33 @@ export namespace telar::gui::features::nvim {
     std::uint64_t prompt_revision = 0;
   };
 
+  // A key as Neovim names keys: one of its named keys or a character, and what is held with it.
+  struct Key {
+    // "Esc", "CR", "F5" and the like; empty for a character.
+    std::string_view name;
+    std::uint32_t codepoint = 0;
+    bool control = false;
+    bool alt = false;
+    bool shift = false;
+    bool super = false;
+  };
+
+  // A key in the notation nvim_input() reads: `a`, `<lt>`, `<C-w>`, `<S-Tab>`, `<D-s>`.
+  struct KeyText {
+    static constexpr std::size_t capacity = 32;
+
+    [[nodiscard]] constexpr std::string_view view() const noexcept {
+      return std::string_view{bytes.data(), size};
+    }
+
+    ds::Array<char, capacity> bytes{};
+    std::uint8_t size = 0;
+  };
+
+  // How Neovim is told the key. A character typed with nothing but shift goes as itself, so
+  // every combination a keyboard makes reaches Neovim and none is mistaken for another.
+  [[nodiscard]] KeyText notation(const Key& key) noexcept;
+
   // What a message of the runtime did to an editor.
   enum class Received : std::uint8_t {
     // It names no editor of this window, or it is older than what is shown.

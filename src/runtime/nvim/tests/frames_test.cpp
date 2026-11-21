@@ -252,11 +252,10 @@ namespace {
 
       const auto& highlighted = client.grids[1].style[8];
       const CellColor accent{.kind = CellColor::Kind::rgb, .channels = {0xf0, 0xdf, 0xaf}};
-      const CellColor text{.kind = CellColor::Kind::rgb, .channels = {0xdc, 0xdc, 0xcc}};
 
       check(highlighted.foreground == accent && highlighted.background == CellColor{}, "a highlight's color, and the client's own for the one Neovim leaves unset");
       check((highlighted.flags & std::to_underlying(CellAttribute::bold)) != 0 && (highlighted.flags >> 8U) == std::to_underlying(UnderlineStyle::curly), "its attributes and its underline");
-      check(client.grids[1].style[0].foreground == text, "a cell without a highlight takes Neovim's default color");
+      check(client.grids[1].style[0].foreground == CellColor{} && client.grids[1].style[0].background == CellColor{}, "a cell without a highlight is drawn in the client's own colors, whatever Neovim's defaults are");
 
       redraw(screen, memory, 1, [](msgpack::Writer& writer) {
         fill(writer, 1, 2, "z", 8);
@@ -265,6 +264,37 @@ namespace {
       const auto second = deliver(frames, screen, client);
 
       check(mirrors(screen, client) && second.messages == 1 && second.cells == 8, "then only the row that changed");
+    }
+
+    // msg_set_pos names grid zero while Neovim has no grid for messages, and a window may be
+    // placed before it is given a size: neither is a grid a client can be sent.
+    void unsizedGridsAreNotSent() {
+      testing::TestMemory adapter;
+      ConcurrentMemory& memory = adapter;
+      NvimScreen screen{memory};
+      NvimFrames frames{memory};
+      Client client;
+
+      redraw(screen, memory, 3, [](msgpack::Writer& writer) {
+        event(writer, "grid_resize", {1, 4, 2});
+        writer.array(2);
+        writer.string("msg_set_pos");
+        writer.array(6);
+        writer.unsignedInteger(0);
+        writer.unsignedInteger(1);
+        writer.boolean(false);
+        writer.string("");
+        writer.unsignedInteger(200);
+        writer.unsignedInteger(0);
+        event(writer, "win_pos", {7, 1000, 0, 0, 4, 2});
+      });
+
+      check(screen.grid(0) == nullptr, "no grid is made for the messages Neovim has no grid for");
+      check(deliver(frames, screen, client).messages == 1 && client.grids.size() == 1 && client.grids.contains(1), "a grid without a size is not sent");
+      redraw(screen, memory, 1, [](msgpack::Writer& writer) {
+        event(writer, "grid_resize", {7, 4, 2});
+      });
+      check(deliver(frames, screen, client).messages == 1 && client.grids.contains(7) && client.grids[7].placement == NvimPlacement::window, "once it has one, it is sent with where it goes");
     }
 
     void placementAloneSendsNoCells() {
@@ -518,6 +548,7 @@ namespace {
 
   const telar::testing::Case case_surfaces{"nvim_frames.surfaces_are_sent_when_they_change", surfacesAreSentWhenTheyChange};
   const telar::testing::Case case_snapshot{"nvim_frames.snapshot_then_changes", snapshotThenChanges};
+  const telar::testing::Case case_unsized{"nvim_frames.unsized_grids_are_not_sent", unsizedGridsAreNotSent};
   const telar::testing::Case case_placement{"nvim_frames.placement_alone_sends_no_cells", placementAloneSendsNoCells};
   const telar::testing::Case case_scroll{"nvim_frames.scroll_is_replayed", scrollIsReplayed};
   const telar::testing::Case case_removed{"nvim_frames.removed_grids_are_forgotten", removedGridsAreForgotten};

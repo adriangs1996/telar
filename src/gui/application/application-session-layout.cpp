@@ -18,6 +18,7 @@ import telar.wire.agents;
 import telar.wire.clipboard;
 import telar.wire.editor;
 import telar.wire.layout;
+import telar.wire.nvim;
 import telar.wire.pane_io;
 import telar.wire.runtime;
 import telar.wire.vocabulary;
@@ -154,6 +155,10 @@ namespace telar::gui::application {
     sendRegistered(kind, request, 0, [](Pending& registered, const Request& sent) {
       if constexpr (std::same_as<Request, CreateTab>) {
         registered.location.workspace = sent.workspace;
+        registered.size = sent.size;
+      } else if constexpr (std::same_as<Request, CreateNvimPane>) {
+        // A tab whose first pane is an editor, answered as a tab that runs a command is.
+        registered.location.workspace = sent.location.workspace;
         registered.size = sent.size;
       } else {
         registered.location = sent.location;
@@ -922,6 +927,7 @@ namespace telar::gui::application {
   template void Session::Link::sendOpeningRequest<CreateWorkspace>(RequestKind kind, CreateWorkspace request, TabLocation location, ds::Option<std::uint64_t> fallback_workspace);
   template void Session::Link::sendSnapshotRequest<RequestTabSnapshot>(RequestTabSnapshot request);
   template void Session::Link::sendTabOperation<CreateTab>(RequestKind kind, CreateTab request);
+  template void Session::Link::sendTabOperation<CreateNvimPane>(RequestKind kind, CreateNvimPane request);
   template void Session::Link::sendTabOperation<RenameTab>(RequestKind kind, RenameTab request);
   template void Session::Link::sendTabOperation<MoveTab>(RequestKind kind, MoveTab request);
   template void Session::Link::sendTabOperation<CloseTab>(RequestKind kind, CloseTab request);

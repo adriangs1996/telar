@@ -33,6 +33,7 @@ static_assert(true);
 #include "ui/app/application_controller.hpp"
 #include "ui/app/chrome/mode_bar/native_mode_layout.hpp"
 #include "ui/app/overlays/notifications/notification_layout.hpp"
+#include "ui/app/panes/nvim/nvim_item.hpp"
 #include "ui/app/panes/pane_motion_layout.hpp"
 #include "ui/app/panes/terminal/terminal_item.hpp"
 #include "ui/design/controls/modal_reveal_layout.hpp"
@@ -591,6 +592,9 @@ return {api_version = 2, client = {
       environment.insert(QStringLiteral("TELAR_HISTORY"), directory_.filePath(QStringLiteral("history.db")));
       environment.insert(QStringLiteral("HISTFILE"), directory_.filePath(QStringLiteral("shell-history")));
       environment.insert(QStringLiteral("XDG_DATA_HOME"), directory_.filePath(QStringLiteral("data")));
+      // An editor pane's Neovim reads no configuration of whoever runs the tests, unless a run
+      // names one to show.
+      environment.insert(QStringLiteral("NVIM_APPNAME"), qEnvironmentVariable("TELAR_GUI_TEST_NVIM_APPNAME", QStringLiteral("telar-gui-test")));
       runtime_.setProcessEnvironment(environment);
       runtime_.start();
       QVERIFY(runtime_.waitForStarted());
@@ -688,6 +692,107 @@ return {api_version = 2, client = {
 
       QVERIFY(!image.isNull());
       QCOMPARE(client_->status()->error(), QString{});
+    }
+
+    // An editor in a tab of its own: the window draws what Neovim shows, grid by grid, and what
+    // is typed into the view reaches Neovim as keys. With TELAR_EDITOR_SHOTS set to a directory,
+    // the window as it shows each step is saved there.
+    Q_SLOT void editorPaneDrawsNeovim() {
+      if (QStandardPaths::findExecutable(QStringLiteral("nvim")).isEmpty()) {
+        QSKIP("Neovim is not installed on this host");
+      }
+
+      QTRY_VERIFY_WITH_TIMEOUT(terminalReady(), runtime_wait_ms);
+      const auto original_id = firstPane()->id;
+      const auto tab_count = client_->tabs()->rows()->rowCount();
+      bool opened = false;
+      const auto restore = qScopeGuard([&] {
+        if (opened) {
+          closeTemporaryTab({.count = tab_count, .pane_id = original_id});
+        }
+      });
+      const auto shots = qEnvironmentVariable("TELAR_EDITOR_SHOTS");
+      const auto shoot = [&](const QString& name) {
+        if (!shots.isEmpty()) {
+          QVERIFY(test::waitForSynchronizedFrame(*window_, runtime_wait_ms));
+          QVERIFY(window_->grabWindow().save(QDir{shots}.filePath(name + QStringLiteral(".png"))));
+        }
+      };
+      const auto editorView = [&] {
+        const auto views = test::visualItems(*window_->contentItem(), QStringLiteral("paneEditor"));
+
+        return views.empty() ? nullptr : qobject_cast<NvimItem*>(views.front());
+      };
+      // Every row of every grid the editor shows, one per line.
+      const auto shown = [&] {
+        QString text;
+        const auto* view = editorView();
+        const auto* editor = view == nullptr ? nullptr : view->state();
+
+        if (editor != nullptr) {
+          for (const auto& grid : editor->grids) {
+            text += screenText(grid->screen) + QLatin1Char('\n');
+          }
+        }
+
+        return text;
+      };
+
+      client_->commands()->execute(window_actions::Action::new_editor_tab);
+      QTRY_VERIFY2_WITH_TIMEOUT(client_->tabs()->rows()->rowCount() == tab_count + 1, qPrintable(QStringLiteral("no editor tab: %1 %2").arg(client_->status()->error(), errors_)), runtime_wait_ms);
+      opened = true;
+      QTRY_VERIFY2_WITH_TIMEOUT(editorView() != nullptr, qPrintable(QStringLiteral("no editor view: %1 %2").arg(client_->status()->error(), errors_)), runtime_wait_ms);
+      // The pane's view is made again as the tab settles: it is looked up each time.
+      const auto describe = [&] {
+        QString text = QStringLiteral("the editor drew nothing: %1 %2;").arg(client_->status()->error(), errors_);
+
+        if (const auto* pane = firstPane()) {
+          const auto* editor = client_->editors()->editor(pane->id);
+
+          text += QStringLiteral(" pane %1 attached=%2 exited=%3 editor=%4 frame=%5 grids=%6;").arg(pane->id).arg(pane->attached).arg(pane->exited).arg(editor != nullptr).arg(editor == nullptr ? 0 : editor->frame).arg(editor == nullptr ? 0 : editor->grids.size());
+        }
+
+        text += QStringLiteral(" original=%1 rows=%2;").arg(client_->pane(original_id) != nullptr).arg(client_->panes()->rows()->rowCount());
+
+        return text + QStringLiteral(" view=%1").arg(editorView() != nullptr);
+      };
+
+      QTRY_VERIFY2_WITH_TIMEOUT(editorView() != nullptr && editorView()->ready(), qPrintable(describe()), runtime_wait_ms);
+
+      auto* view = editorView();
+      const auto* editor = view->state();
+
+      QVERIFY(editor != nullptr && editor->grid(1) != nullptr);
+      QTRY_VERIFY_WITH_TIMEOUT(view->grids()->rowCount() >= 1 && view->cellWidth() > 0, runtime_wait_ms);
+      // The editor has the cells that fit its view, as a terminal has.
+      QTRY_COMPARE_WITH_TIMEOUT(static_cast<int>(editor->grid(1)->screen.columns()), static_cast<int>(std::floor(view->width() / view->cellWidth())), runtime_wait_ms);
+
+      // Typed into the view, key by key, as a person types.
+      view->forceActiveFocus();
+      QTRY_VERIFY_WITH_TIMEOUT(view->hasActiveFocus(), runtime_wait_ms);
+      const auto press = [&](int key, const QString& text, Qt::KeyboardModifiers modifiers = Qt::NoModifier) {
+        QKeyEvent event{QEvent::KeyPress, key, modifiers, text};
+
+        QCoreApplication::sendEvent(view, &event);
+      };
+
+      press(Qt::Key_I, QStringLiteral("i"));
+      for (const auto character : QStringLiteral("TELAR <EDITOR> OK")) {
+        press(character.toUpper().unicode(), QString{character}, character.isUpper() || character == QLatin1Char('<') || character == QLatin1Char('>') ? Qt::ShiftModifier : Qt::NoModifier);
+      }
+
+      press(Qt::Key_Escape, QString{});
+      QTRY_VERIFY2_WITH_TIMEOUT(shown().contains(QStringLiteral("TELAR <EDITOR> OK")), qPrintable(shown()), runtime_wait_ms);
+      QTRY_COMPARE_WITH_TIMEOUT(view->mode(), QStringLiteral("normal"), runtime_wait_ms);
+      QVERIFY(!view->cursorRect().isEmpty());
+      shoot(QStringLiteral("editor-typed"));
+
+      // A split is a second window grid, placed beside the first.
+      view->send(QStringLiteral(":vsplit<CR>"));
+      QTRY_VERIFY_WITH_TIMEOUT(view->grids()->rowCount() >= 3, runtime_wait_ms);
+      shoot(QStringLiteral("editor-split"));
+      QCOMPARE(client_->status()->error(), QString{});
+      QCOMPARE(errors_, QString{});
     }
 
     // The monitor lists every process its runtime reads, and the detail of the one selected; with

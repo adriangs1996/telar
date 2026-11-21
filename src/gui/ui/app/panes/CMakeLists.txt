@@ -16,5 +16,6 @@ telar_add_qml_sources(gui-quick
 
 add_subdirectory(header)
 add_subdirectory(terminal)
+add_subdirectory(nvim)
 add_subdirectory(documents)
 add_subdirectory(attachments)

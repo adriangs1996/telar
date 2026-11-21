@@ -16,8 +16,9 @@ namespace telar::runtime {
     constexpr std::uint32_t channel_mask = 0xff;
     constexpr unsigned underline_shift = 8;
 
-    constexpr CellColor colorOf(std::uint32_t own, std::uint32_t fallback) noexcept {
-      const auto rgb = own != NvimHighlight::unset ? own : fallback;
+    // A color a highlight leaves unset is the client's default: the pane is drawn in telar's
+    // theme, whatever colors Neovim's own default has.
+    constexpr CellColor colorOf(std::uint32_t rgb) noexcept {
       if (rgb == NvimHighlight::unset) {
         return {};
       }
@@ -61,13 +62,12 @@ namespace telar::runtime {
         Underline{.highlight = NvimHighlight::underline, .style = UnderlineStyle::single},
     };
 
-    // A highlight as the style of a cell on the wire. A color it leaves to Neovim's defaults
-    // takes theirs, and one they leave unset is the client's own default.
-    constexpr CellStyle styleOf(const NvimHighlight& highlight, const NvimHighlight& defaults) noexcept {
+    // A highlight as the style of a cell on the wire.
+    constexpr CellStyle styleOf(const NvimHighlight& highlight) noexcept {
       CellStyle style{
-          .foreground = colorOf(highlight.foreground, defaults.foreground),
-          .background = colorOf(highlight.background, defaults.background),
-          .underline_color = colorOf(highlight.special, defaults.special),
+          .foreground = colorOf(highlight.foreground),
+          .background = colorOf(highlight.background),
+          .underline_color = colorOf(highlight.special),
       };
 
       for (const auto& attribute : attributes) {
@@ -113,8 +113,13 @@ namespace telar::runtime {
       }
     }
 
-    // Whether a client that has frame `seen` lacks something of a grid.
+    // Whether a client that has frame `seen` lacks something of a grid. A grid Neovim placed
+    // before giving it a size has no cells to show yet, and is sent once it has.
     constexpr bool changedSince(const NvimScreenGrid& grid, std::uint64_t seen) noexcept {
+      if (grid.columns == 0 || grid.rows == 0) {
+        return false;
+      }
+
       return seen == 0 || grid.reset_at > seen || grid.cells_at > seen || grid.placed_at > seen || grid.viewport_at > seen || grid.scrolled_at > seen;
     }
 
@@ -159,7 +164,7 @@ namespace telar::runtime {
     for (const auto& cell : grid.row(row)) {
       if (cell.highlight != last_highlight) {
         last_highlight = cell.highlight;
-        style = styleOf(screen.highlightOf(cell.highlight), screen.defaults());
+        style = styleOf(screen.highlightOf(cell.highlight));
       }
 
       const auto offset = texts_.size();

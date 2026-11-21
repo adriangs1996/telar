@@ -242,6 +242,18 @@ namespace {
     check(receive(state, NvimPrompt{.pane_id = pane_id, .serial = 2}) == Received::presented && prompt.id == 0, "the runtime's word that nothing is asked");
   }
 
+  void keysAreWrittenAsNeovimNamesThem() {
+    check(notation({.codepoint = 'a'}).view() == "a" && notation({.codepoint = 'A', .shift = true}).view() == "A", "a character typed with nothing but shift is itself");
+    check(notation({.codepoint = 0xf1}).view() == "\xc3\xb1", "also past ASCII");
+    check(notation({.codepoint = '<'}).view() == "<lt>", "the character that opens a key name goes by its own");
+    check(notation({.codepoint = 'w', .control = true}).view() == "<C-w>" && notation({.codepoint = 'p', .control = true, .shift = true}).view() == "<C-S-p>", "what is held with a character");
+    check(notation({.codepoint = 's', .super = true}).view() == "<D-s>" && notation({.codepoint = 'x', .alt = true}).view() == "<A-x>", "Command and Option reach Neovim, which a terminal cannot tell it");
+    check(notation({.name = "Esc"}).view() == "<Esc>" && notation({.name = "Tab", .shift = true}).view() == "<S-Tab>" && notation({.name = "F5", .control = true, .alt = true}).view() == "<C-A-F5>", "a named key");
+    check(notation({.codepoint = ' '}).view() == " " && notation({.codepoint = ' ', .control = true}).view() == "<C-Space>" && notation({.codepoint = ' ', .shift = true}).view() == "<S-Space>", "the space bar, alone and held with something");
+    check(notation({.codepoint = '<', .control = true}).view() == "<C-lt>");
+  }
+
+  const telar::testing::Case case_keys{"nvim.keys_are_written_as_neovim_names_them", keysAreWrittenAsNeovimNamesThem};
   const telar::testing::Case case_frame{"nvim.frame_is_shown_when_it_ends", frameIsShownWhenItEnds};
   const telar::testing::Case case_changes{"nvim.changes_follow_the_frame_shown", changesFollowTheFrameShown};
   const telar::testing::Case case_scroll{"nvim.scroll_moves_the_rows_it_has", scrollMovesTheRowsItHas};

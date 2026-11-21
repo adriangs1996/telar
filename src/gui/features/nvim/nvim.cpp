@@ -14,6 +14,14 @@ namespace telar::gui::features::nvim {
 
   namespace {
 
+    void write(KeyText& text, std::string_view added) noexcept {
+      const auto room = KeyText::capacity - text.size;
+      const auto kept = added.substr(0, std::min(added.size(), room));
+
+      std::ranges::copy(kept, text.bytes.viewMut().subspan(text.size).begin());
+      text.size = static_cast<std::uint8_t>(text.size + kept.size());
+    }
+
     // Appends `added` to a surface's text and says where it lies there.
     Slice append(ds::Vec<char, Memory>& text, std::string_view added) {
       const Slice slice{.offset = static_cast<std::uint32_t>(text.size()), .size = static_cast<std::uint32_t>(added.size())};
@@ -84,6 +92,39 @@ namespace telar::gui::features::nvim {
       }
     }
 
+  }
+
+  KeyText notation(const Key& key) noexcept {
+    KeyText text;
+    const bool modified = key.control || key.alt || key.super;
+    // A codepoint that is no character is written as nothing: the function throws nothing.
+    const auto character = Utf8Scalar::valid(key.codepoint) ? Utf8Scalar::encode(key.codepoint) : Utf8Scalar{};
+    auto name = key.name;
+
+    if (name.empty()) {
+      if (key.codepoint == '<') {
+        // Written by name: a bare `<` would open a key name.
+        name = "lt";
+      } else if (key.codepoint == ' ' && (modified || key.shift)) {
+        name = "Space";
+      } else if (!modified) {
+        write(text, character.view());
+        return text;
+      } else {
+        name = character.view();
+      }
+    }
+
+    write(text, "<");
+    for (const auto& [held, prefix] : {std::pair{key.control, std::string_view{"C-"}}, std::pair{key.alt, std::string_view{"A-"}}, std::pair{key.shift && (modified || !key.name.empty() || key.codepoint == ' '), std::string_view{"S-"}}, std::pair{key.super, std::string_view{"D-"}}}) {
+      if (held) {
+        write(text, prefix);
+      }
+    }
+
+    write(text, name);
+    write(text, ">");
+    return text;
   }
 
   Grid::Grid(Memory& memory, std::uint32_t identity)

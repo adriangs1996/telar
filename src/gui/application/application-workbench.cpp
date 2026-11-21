@@ -13,6 +13,7 @@ import telar.gui.foundation.core;
 import telar.gui.foundation.keys;
 import telar.gui.foundation.model;
 import telar.wire.layout;
+import telar.wire.nvim;
 import telar.wire.pane_io;
 import telar.wire.vocabulary;
 import telar.wire.worktrees;
@@ -32,8 +33,16 @@ namespace telar::gui::application::workbench {
       });
     }
 
-    // Splits pane `pane_id` along `axis`, the new pane running `arguments` or the session's launch.
-    bool requestSplit(Session& session, std::uint64_t pane_id, ClientLayoutAxis axis, ds::Option<std::span<const std::string_view>> arguments) {
+    // What a new pane is: a terminal that runs the session's launch or `arguments`, or an
+    // editor on `files`.
+    struct NewPane {
+      ds::Option<std::span<const std::string_view>> arguments = ds::none;
+      bool editor = false;
+      std::span<const std::string_view> files;
+    };
+
+    // Splits pane `pane_id` along `axis`, the new pane being `added`.
+    bool requestSplit(Session& session, std::uint64_t pane_id, ClientLayoutAxis axis, const NewPane& added) {
       auto* tab = activeTabMut(session.tabs, session.active_tab);
       const auto* pane = findPane(session.panes, pane_id);
       if (paneOperationPending(session) || tab == nullptr || pane == nullptr || !pane->attached || pane->exited || !sameTab(pane->location, tab->location)) {
@@ -55,13 +64,18 @@ namespace telar::gui::application::workbench {
       auto launch = session.launch_defaults.launch();
 
       launch.cwd_source = pane_id;
-      if (arguments) {
-        launch.arguments = *arguments;
+      if (added.arguments) {
+        launch.arguments = *added.arguments;
       }
 
       try {
         session.link.send(PaneResize{.pane_id = pane_id, .size = sizes->existing});
-        session.link.send(CreatePane{.request_id = request_id, .location = tab->location, .size = sizes->added, .launch = launch});
+        if (added.editor) {
+          // The editor starts where the pane it splits works.
+          session.link.send(CreateNvimPane{.request_id = request_id, .location = tab->location, .size = sizes->added, .cwd = pane->cwd, .files = added.files});
+        } else {
+          session.link.send(CreatePane{.request_id = request_id, .location = tab->location, .size = sizes->added, .launch = launch});
+        }
       } catch (...) {
         session.link.complete(request_id);
         recoverSplit(session, registered.location, registered.pane_id);
@@ -71,7 +85,7 @@ namespace telar::gui::application::workbench {
       return true;
     }
 
-    TabCreationOutcome requestTab(Session& session, std::string_view label, std::span<const std::string_view> arguments) {
+    TabCreationOutcome requestTab(Session& session, std::string_view label, const NewPane& added) {
       if (tabOperationPending(session)) {
         return TabCreationOutcome::busy;
       }
@@ -88,11 +102,15 @@ namespace telar::gui::application::workbench {
       auto launch = session.launch_defaults.launch();
 
       launch.cwd_source = pane->id;
-      if (!arguments.empty()) {
-        launch.arguments = arguments;
+      if (added.arguments && !added.arguments->empty()) {
+        launch.arguments = *added.arguments;
       }
 
-      session.link.sendTabOperation(RequestKind::create_tab, CreateTab{.workspace = tab->location.workspace, .label = label, .size = feature::launchSize(session.workbench), .launch = launch});
+      if (added.editor) {
+        session.link.sendTabOperation(RequestKind::create_tab, CreateNvimPane{.location = tab->location, .new_tab = true, .size = feature::launchSize(session.workbench), .cwd = pane->cwd, .files = added.files});
+      } else {
+        session.link.sendTabOperation(RequestKind::create_tab, CreateTab{.workspace = tab->location.workspace, .label = label, .size = feature::launchSize(session.workbench), .launch = launch});
+      }
 
       return TabCreationOutcome::requested;
     }
@@ -205,7 +223,7 @@ namespace telar::gui::application::workbench {
       throw EncodingError{"Invalid command tab bounds"};
     }
 
-    return requestTab(session, command.label(), command.argv());
+    return requestTab(session, command.label(), {.arguments = command.argv()});
   }
 
   void renameTab(Session& session, std::string_view label) {
@@ -369,7 +387,24 @@ namespace telar::gui::application::workbench {
 
     const auto focused = tab->focused_pane;
 
-    return requestSplit(session, focused, axis, ds::none);
+    return requestSplit(session, focused, axis, {});
+  }
+
+  bool splitEditor(Session& session, ClientLayoutAxis axis, std::span<const std::string_view> files) {
+    const auto* tab = activeTab(session.tabs, session.active_tab);
+    if (tab == nullptr || !session.speaks(ClientTag::create_nvim_pane) || files.size() > max_nvim_files) {
+      return false;
+    }
+
+    return requestSplit(session, tab->focused_pane, axis, {.editor = true, .files = files});
+  }
+
+  TabCreationOutcome createEditorTab(Session& session, std::span<const std::string_view> files) {
+    if (!session.speaks(ClientTag::create_nvim_pane) || files.size() > max_nvim_files) {
+      return TabCreationOutcome::unavailable;
+    }
+
+    return requestTab(session, {}, {.editor = true, .files = files});
   }
 
   bool closePane(Session& session, std::uint64_t pane_id) {
@@ -538,7 +573,7 @@ namespace telar::gui::application::workbench {
 
   void launchTab(Session& session, std::span<const std::string_view> arguments) {
     if (activeTab(session.tabs, session.active_tab) != nullptr) {
-      static_cast<void>(requestTab(session, {}, arguments));
+      static_cast<void>(requestTab(session, {}, {.arguments = arguments}));
     } else {
       auto launch = session.launch_defaults.launch();
 
@@ -548,7 +583,7 @@ namespace telar::gui::application::workbench {
   }
 
   void launchSplit(Session& session, std::uint64_t pane_id, std::span<const std::string_view> arguments) {
-    if (!requestSplit(session, pane_id, ClientLayoutAxis::horizontal, arguments)) {
+    if (!requestSplit(session, pane_id, ClientLayoutAxis::horizontal, {.arguments = arguments})) {
       throw std::runtime_error{"PaneSplitUnavailable"};
     }
   }

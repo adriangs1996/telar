@@ -30,6 +30,7 @@ static_assert(true);
 #include "ui/app/overlays/workspace_form/workspace_form_controller.hpp"
 #include "ui/app/panes/attachments/attachments_controller.hpp"
 #include "ui/app/panes/documents/documents_controller.hpp"
+#include "ui/app/panes/nvim/nvim_controller.hpp"
 #include "ui/app/panes/panes_controller.hpp"
 #include "ui/app/panes/terminal/copy_controller.hpp"
 #include "ui/app/panes/terminal/history/history_controller.hpp"
@@ -118,6 +119,7 @@ namespace telar::gui::qt {
     Q_PROPERTY(telar::gui::qt::ComponentsController* components READ components CONSTANT)
     Q_PROPERTY(telar::gui::qt::CopyController* copy READ copy CONSTANT)
     Q_PROPERTY(telar::gui::qt::TerminalController* terminals READ terminals CONSTANT)
+    Q_PROPERTY(telar::gui::qt::NvimController* editors READ editors CONSTANT)
     Q_PROPERTY(telar::gui::qt::NotificationsController* notifications READ notifications CONSTANT)
     Q_PROPERTY(telar::gui::qt::MachinePromptController* machinePrompt READ machinePrompt CONSTANT)
     Q_PROPERTY(telar::gui::qt::MachineChromeController* machineChrome READ machineChrome CONSTANT)
@@ -241,6 +243,10 @@ namespace telar::gui::qt {
 
     TerminalController* terminals() noexcept {
       return &terminals_;
+    }
+
+    NvimController* editors() noexcept {
+      return &editors_;
     }
 
     NotificationsController* notifications() noexcept {
@@ -371,6 +377,7 @@ namespace telar::gui::qt {
     tbc::val_self<CopyController> copy_;
     // After the copy mode and the prompt, which the terminals read.
     tbc::val_self<TerminalController> terminals_;
+    tbc::val_self<NvimController> editors_;
     tbc::val_self<NotificationsController> notifications_;
     tbc::val_self<ComponentsController> components_;
     tbc::val_self<PluginRunner> plugins_;
