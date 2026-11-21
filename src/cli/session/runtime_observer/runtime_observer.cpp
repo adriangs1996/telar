@@ -159,6 +159,7 @@ namespace telar::runtime::cli::api {
 
         ds::formatTo(output, "{}:{}", quoteJson(entry.name, JsonEscapes::control), entry.value);
       }
+
       output.append("}}\n");
     } else {
       ds::formatTo(output, "schema {} fingerprint {}\n\nclient requests\n", nativeSchemaVersion(), fingerprint);
