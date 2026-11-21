@@ -114,8 +114,8 @@ namespace telar::gui::platform {
       poller_.stop();
       QCoreApplication::instance()->removeNativeEventFilter(this);
       finish(ClipboardImageError::read_failed);
-      for (const auto cookie : cookies_) {
-        discard(cookie);
+      for (std::size_t index = 0; index < cookies_.size(); ++index) {
+        discard(cookies_[index]);
       }
     }
 
@@ -198,7 +198,23 @@ namespace telar::gui::platform {
       }
     }
 
-    [[nodiscard]] std::unique_ptr<void, Free> reply(unsigned int& sequence) {
+    // The outstanding request of a slot: an atom's, by its index, or the owner's or the property's.
+    unsigned int& sequenceOf(std::size_t slot) noexcept {
+      if (slot == owner_slot) {
+        return owner_cookie_;
+      }
+
+      if (slot == property_slot) {
+        return property_cookie_;
+      }
+
+      return cookies_.atMut(slot);
+    }
+
+    // The reply to a slot's request once it came, which clears the slot; a request is named by its
+    // slot, not its field, as a reference into this object would overlap the object the call mutates.
+    [[nodiscard]] std::unique_ptr<void, Free> reply(std::size_t slot) {
+      auto& sequence = sequenceOf(slot);
       if (sequence == 0) {
         return {nullptr, &std::free};
       }
@@ -223,7 +239,7 @@ namespace telar::gui::platform {
         return atoms_[index] != XCB_ATOM_NONE;
       }
 
-      const auto value = reply(cookies_.atMut(index));
+      const auto value = reply(index);
       if (!value) {
         initialization_failed_ = cookies_[index] == 0;
         if (initialization_failed_) {
@@ -292,7 +308,7 @@ namespace telar::gui::platform {
       }
 
       if (owner_ == XCB_WINDOW_NONE) {
-        const auto value = reply(owner_cookie_);
+        const auto value = reply(owner_slot);
         if (!value) {
           return;
         }
@@ -319,7 +335,7 @@ namespace telar::gui::platform {
     }
 
     void receive() {
-      auto value = reply(property_cookie_);
+      auto value = reply(property_slot);
       if (!value || phase_ == Phase::idle) {
         return;
       }
@@ -453,6 +469,8 @@ namespace telar::gui::platform {
     QTimer poller_;
     ds::Array<xcb_atom_t, atom_count> atoms_{};
     ds::Array<unsigned int, atom_count> cookies_{};
+    static constexpr std::size_t owner_slot = atom_count;
+    static constexpr std::size_t property_slot = atom_count + 1;
     std::shared_ptr<ClipboardImageTransfer> status_;
     runtime::FileDescriptor writing_;
     std::unique_ptr<xcb_get_property_reply_t, EraseProperty> property_;

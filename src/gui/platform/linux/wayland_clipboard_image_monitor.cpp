@@ -3,6 +3,7 @@
 #include "foundation/core/memory.hpp"
 #include "platform/clipboard_image_file.h"
 #include "platform/clipboard_image_source.hpp"
+#include "tbc/view.hpp"
 #include "telar_base/ds/values.hpp"
 #include "telar_base/memory/allocator.hpp"
 #include "telar_platform/file_descriptor.hpp"
@@ -24,7 +25,7 @@ namespace telar::gui::platform {
   struct WaylandClipboardImageMonitor::Native final {
     class Registry final : public QtWayland::wl_registry {
     public:
-      explicit Registry(Native& owner)
+      explicit Registry(Native* owner)
           : owner_(owner) {}
 
       ~Registry() override = default;
@@ -35,20 +36,20 @@ namespace telar::gui::platform {
 
     protected:
       void registry_global(std::uint32_t name, const QString& interface, std::uint32_t version) override {
-        owner_.global(name, interface, version);
+        owner_->global(name, interface, version);
       }
 
       void registry_global_remove(std::uint32_t name) override {
-        owner_.remove(name);
+        owner_->remove(name);
       }
 
     private:
-      Native& owner_;
+      Native* owner_;
     };
 
     class Device final : public QtWayland::wl_data_device {
     public:
-      explicit Device(Native& owner)
+      explicit Device(Native* owner)
           : owner_(owner) {}
 
       ~Device() override = default;
@@ -59,19 +60,19 @@ namespace telar::gui::platform {
 
     protected:
       void data_device_data_offer(::wl_data_offer* handle) override {
-        owner_.offered(handle);
+        owner_->offered(handle);
       }
 
       void data_device_selection(::wl_data_offer* handle) override {
-        owner_.select(handle);
+        owner_->select(handle);
       }
 
       void data_device_enter(std::uint32_t /*serial*/, ::wl_surface* /*surface*/, wl_fixed_t /*x*/, wl_fixed_t /*y*/, ::wl_data_offer* handle) override {
-        owner_.entered(handle);
+        owner_->entered(handle);
       }
 
     private:
-      Native& owner_;
+      Native* owner_;
     };
 
     struct Offer final : QtWayland::wl_data_offer {
@@ -105,7 +106,7 @@ namespace telar::gui::platform {
 
     explicit Native(::wl_display* display)
         : display_(display),
-          registry_(*this) {
+          registry_(tbc::raw(this)) {
       auto* const registry = wl_display_get_registry(display_);
       if (registry == nullptr) {
         failed_ = true;
@@ -139,7 +140,7 @@ namespace telar::gui::platform {
         throw ClipboardImageFailure{ClipboardImageError::read_failed};
       }
 
-      if (selected_ == nullptr || !selected_->png) {
+      if (!selected_ || !offers_[*selected_].png) {
         throw ClipboardImageFailure{ClipboardImageError::no_image};
       }
 
@@ -150,7 +151,7 @@ namespace telar::gui::platform {
 
       runtime::FileDescriptor reading{descriptors.read_descriptor};
       const runtime::FileDescriptor writing{descriptors.write_descriptor};
-      selected_->receive(QStringLiteral("image/png"), writing.get());
+      offers_.atMut(*selected_).receive(QStringLiteral("image/png"), writing.get());
       flush();
       if (failed_) {
         throw ClipboardImageFailure{ClipboardImageError::read_failed};
@@ -160,7 +161,7 @@ namespace telar::gui::platform {
     }
 
     [[nodiscard]] bool acceptsLocalSelection(std::uint32_t seat_global) const noexcept {
-      return !failed_ && !binding_retired_ && seat_global != 0 && seat_global_ == seat_global && selected_ != nullptr && selected_->png;
+      return !failed_ && !binding_retired_ && seat_global != 0 && seat_global_ == seat_global && selected_ && offers_[*selected_].png;
     }
 
   private:
@@ -205,7 +206,7 @@ namespace telar::gui::platform {
         return;
       }
 
-      device_.emplace(*this);
+      device_.emplace(tbc::raw(this));
       device_.getMut().init(device);
       flush();
     }
@@ -275,10 +276,11 @@ namespace telar::gui::platform {
     }
 
     void select(::wl_data_offer* handle) noexcept {
-      selected_ = nullptr;
-      for (auto& offer : offers_.viewMut()) {
+      selected_ = ds::none;
+      for (std::size_t index = 0; index < offers_.size(); ++index) {
+        auto& offer = offers_.atMut(index);
         if (handle != nullptr && offer.isInitialized() && offer.object() == handle) {
-          selected_ = &offer;
+          selected_ = index;
         } else {
           offer.clear();
         }
@@ -286,8 +288,9 @@ namespace telar::gui::platform {
     }
 
     void entered(::wl_data_offer* handle) {
-      for (auto& offer : offers_.viewMut()) {
-        if (offer.isInitialized() && offer.object() == handle && &offer != selected_) {
+      for (std::size_t index = 0; index < offers_.size(); ++index) {
+        auto& offer = offers_.atMut(index);
+        if (offer.isInitialized() && offer.object() == handle && selected_ != index) {
           offer.clear();
         }
       }
@@ -302,7 +305,8 @@ namespace telar::gui::platform {
     std::uint32_t manager_global_ = 0;
     ::wl_data_device_manager* manager_ = nullptr;
     ds::Array<Offer, maximum_pending_offers> offers_;
-    Offer* selected_ = nullptr;
+    // The selection, an index into offers_: a pointer into them would be a borrow of this object.
+    ds::Option<std::size_t> selected_;
     bool failed_ = false;
     bool binding_retired_ = false;
   };

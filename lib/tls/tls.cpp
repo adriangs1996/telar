@@ -464,9 +464,10 @@ namespace telar::runtime::proxy_trust {
     // A failed rename's notice: the action, the file and why the system refused it.
     void renameFailed(std::string_view action, const char* path, int code) noexcept {
       ds::Array<char, reason_bytes> reason{};
-      // strerror_r writes at most the size it is given.
+      const auto view = reason.viewMut();
+      // strerror_r writes at most the size it is given, and both come from the one span.
 #pragma clang unsafe_buffer_usage begin
-      const auto* const message = errorMessage(::strerror_r(code, reason.dataMut(), reason.size()), reason.data());
+      const auto* const message = errorMessage(::strerror_r(code, view.data(), view.size()), view.data());
 #pragma clang unsafe_buffer_usage end
 
       notice({"telar proxy trust: could not ", action, " ", path, ": ", message, "\n"});

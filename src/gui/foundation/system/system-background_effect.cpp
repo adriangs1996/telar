@@ -32,6 +32,7 @@ extern "C" {
 module telar.gui.foundation.system;
 
 import std;
+import telar.tbc;
 
 namespace telar::gui::inline foundation::inline system {
   namespace {
@@ -124,7 +125,8 @@ namespace telar::gui::inline foundation::inline system {
       }
 
       void attachDisplay(Display& display) {
-        display_ = &display;
+        // Qt owns the display and outlives this effect, which it calls back by address.
+        display_ = tbc::raw(&display);
         native_.registry = display.wl_registry();
         const auto* application = qGuiApp->nativeInterface<QNativeInterface::QWaylandApplication>();
         native_.compositor = application->compositor();
