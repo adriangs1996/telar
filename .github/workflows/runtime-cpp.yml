@@ -106,17 +106,21 @@ jobs:
           path: lib/tbc/out/release/tbc-lint
           key: ${{ steps.tbc-lint.outputs.cache-primary-key }}
 
-      - name: Check lifetimes
+      # One pass of tbc-lint, which parses each unit once for the three checks.
+      - name: Check lifetimes, interface bodies and blank lines
         if: matrix.configuration == 'Release'
-        run: tools/cpp build ci -- --target lifetime
+        run: |
+          tools/cpp exec -- cmake -DCHECK=lifetime+interface_bodies+blank_lines \
+            -DBUILD_DIRECTORY=out/ci -DJOBS=3 -P cmake/scripts/check.cmake
 
-      - name: Check interface bodies
-        if: matrix.configuration == 'Release'
-        run: tools/cpp build ci -- --target interface-bodies
-
-      - name: Check blank lines
-        if: matrix.configuration == 'Release'
-        run: tools/cpp build ci -- --target blank-lines
+      # clang-tidy over the units of this tree, in the configuration `just lint` checks, with tbc's
+      # plugin, which keeps each unit from walking what it imports.
+      - name: Lint
+        if: matrix.configuration == 'Debug'
+        run: |
+          tools/cpp configure tbc -B lib/tbc/out/release --config Release -- -DBUILD_TESTING=OFF
+          tools/cpp build tbc -B lib/tbc/out/release -- --target tbc-tidy-scope
+          tools/cpp exec -- cmake -DCHECK=lint -DBUILD_DIRECTORY=out/ci -DJOBS=3 -P cmake/scripts/check.cmake
 
       - name: Retain validation reports
         if: always()

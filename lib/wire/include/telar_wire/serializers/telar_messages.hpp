@@ -295,7 +295,7 @@ namespace telar {
 #pragma clang diagnostic push
 #pragma clang diagnostic error "-Wswitch"
 
-  [[nodiscard]] constexpr std::string_view clientTagName(ClientTag tag) noexcept {
+  [[nodiscard]] constexpr std::string_view clientTagName(ClientTag tag) noexcept { // NOLINT(readability-function-size): one case per tag, in one switch, is what makes a tag without its name an error
     switch (tag) {
     case ClientTag::open_pane:
       return "open_pane";
@@ -456,7 +456,7 @@ namespace telar {
     return {};
   }
 
-  [[nodiscard]] constexpr std::string_view serverTagName(ServerTag tag) noexcept {
+  [[nodiscard]] constexpr std::string_view serverTagName(ServerTag tag) noexcept { // NOLINT(readability-function-size): one case per tag, as clientTagName
     switch (tag) {
     case ServerTag::pane_opened:
       return "pane_opened";

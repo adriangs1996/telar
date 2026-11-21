@@ -326,7 +326,7 @@ namespace telar::runtime {
       return;
     }
 
-    typename Processor::Request request;
+    Processor::Request request;
 
     enqueueRetired(model, request);
     const auto panes = model.panes.items();
@@ -405,7 +405,7 @@ namespace telar::runtime {
         }
       });
 
-      typename Processor::Request request;
+      Processor::Request request;
 
       enqueueRetired(model, request);
       for (auto* pane : model.panes.items()) { // NOLINT(misc-const-correctness): the pane's media is sealed through its shared handle, a mutation tbc sees through the pane

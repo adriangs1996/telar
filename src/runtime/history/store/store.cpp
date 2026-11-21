@@ -778,7 +778,7 @@ END;
     Statement recorded{database_, "SELECT DISTINCT workspace_path FROM session LIMIT ?1"};
 
     // One more than a reply lists, to tell a full reply from a truncated one.
-    recorded.bind(1, static_cast<std::int64_t>(HistoryWorkspaces::maximum_paths + 1));
+    recorded.bind(1, static_cast<std::int64_t>(HistoryWorkspaces::maximum_paths) + 1);
     ds::Vec<std::string_view, ConcurrentMemory> paths{memory_};
     HistoryWorkspaces result{.request_id = request.request_id};
     std::size_t bytes = 0;
