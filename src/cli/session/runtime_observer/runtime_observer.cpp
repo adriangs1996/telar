@@ -101,7 +101,7 @@ namespace telar::runtime::cli::api {
     template <typename Enum, typename Name, typename Row>
     void eachNamed(Name name, Row row) {
       for (unsigned value = 0; value <= std::numeric_limits<Byte>::max(); ++value) {
-        if (const auto text = name(static_cast<Enum>(value)); !text.empty()) {
+        if (const auto text = name(static_cast<Enum>(value)); !text.empty()) { // NOLINT(clang-analyzer-optin.core.EnumCastOutOfRange): every byte is tried, and `name` tells the ones the wire names
           row(text, value);
         }
       }

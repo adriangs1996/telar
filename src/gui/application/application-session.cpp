@@ -304,7 +304,7 @@ namespace telar::gui::application {
     template <typename Routes>
     consteval bool placesEachMessage(const Routes& routes) {
       for (std::size_t value = 0; value < routes.size(); ++value) {
-        const auto tag = static_cast<ServerTag>(value);
+        const auto tag = static_cast<ServerTag>(value); // NOLINT(clang-analyzer-optin.core.EnumCastOutOfRange): every byte is tried, and serverTagName tells the ones that name a tag
         const bool routed = routes.at(value) != nullptr;
         const bool skipped = std::ranges::find(ignored_messages, tag) != ignored_messages.end();
 

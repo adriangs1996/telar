@@ -6,7 +6,8 @@ include_guard(GLOBAL)
 #
 #   lint              clang-tidy, with the .clang-tidy nearest each source; a source with
 #                     none in the project has no lint profile and is not linted
-#   analyze           clang-tidy's static analyzer, which lint leaves out, over lint's sources
+#   analyze           clang-tidy's static analyzer, which lint leaves out, over lint's sources, in
+#                     its shallow mode unless the script is given DEEP
 #   lifetime          tbc-lint's lifetime analysis
 #   blank_lines       tbc-lint's blank lines of docs/code-style.md
 #   interface_bodies  tbc-lint's rule that module interfaces keep no function bodies

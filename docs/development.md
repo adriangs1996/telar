@@ -66,7 +66,7 @@ just runtime-test     # runtime and CLI CTest groups
 just gui-test         # GUI tests, the integration ones against the runtime
 just domain-test runtime.terminal   # one domain's or library's tests, building only them
 just lint             # clang-tidy over the dev tree, checking only the units that changed
-just analyze          # clang-tidy's static analyzer, which lint leaves out
+just analyze          # clang-tidy's static analyzer, which lint leaves out; `just analyze deep` for its whole analysis
 just checks           # lifetimes, blank lines, interface bodies and standard containers in one pass
 ```
 

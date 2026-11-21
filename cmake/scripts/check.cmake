@@ -1,12 +1,12 @@
 # Runs one quality check of cmake/TelarChecks.cmake over a configured tree:
-#   cmake -DCHECK=<check> -DBUILD_DIRECTORY=<tree> [-DJOBS=<n>] [-DFIX=ON] [-DFULL=ON]
+#   cmake -DCHECK=<check> -DBUILD_DIRECTORY=<tree> [-DJOBS=<n>] [-DFIX=ON] [-DFULL=ON] [-DDEEP=ON]
 #         [-DTBC_LINTER=<path>] -P cmake/scripts/check.cmake
 # CHECK is lint, analyze, lifetime, blank_lines, interface_bodies or standard_containers; its scope is
 # the list of sources <tree>/checks/<check>.txt, which configuring the tree writes. The last four are
 # tbc-lint's, and several of them joined with +, as lifetime+interface_bodies+blank_lines, run in one
 # pass that parses each source once and applies to it the checks whose scope lists it. lint runs clang-tidy
 # without its static analyzer, and analyze runs only the analyzer over lint's scope: it takes most of
-# clang-tidy's time. JOBS defaults to the physical core count; to half of it for those two when
+# clang-tidy's time, and with DEEP five times as much. JOBS defaults to the physical core count; to half of it for those two when
 # clang-tidy runs without tbc's plugin, tbc-tidy-scope, as it then reads every BMI its unit imports. FIX
 # makes blank_lines insert the missing blank lines instead of failing on them. Every check checks only the
 # units whose object, profile, linter or allowlist changed since their last check, and reports the others
@@ -153,8 +153,15 @@ if(CHECK STREQUAL "lint" OR CHECK STREQUAL "analyze")
       COMMAND_ERROR_IS_FATAL ANY)
   endforeach()
   # Every profile enables the analyzer whole, so analyze keeps only it and lint everything else.
+  set(analyzer_options)
   if(CHECK STREQUAL "analyze")
     set(checks_option "-*,clang-analyzer-*")
+    # The analyzer follows a function into the templates it calls, telar::ds above all, until its budget
+    # for the function runs out, which is where four fifths of its time go. Its shallow mode explores each
+    # function a few calls deep and reports the same on this tree; DEEP asks for the whole analysis.
+    if(NOT DEEP)
+      set(analyzer_options --extra-arg=-Xclang --extra-arg=-analyzer-config --extra-arg=-Xclang --extra-arg=mode=shallow)
+    endif()
   else()
     set(checks_option "-clang-analyzer-*")
   endif()
@@ -186,7 +193,7 @@ if(CHECK STREQUAL "lint" OR CHECK STREQUAL "analyze")
   file(WRITE "${build}/checks/${CHECK}.units" "${listed}\n")
   execute_process(COMMAND "${python}" "${CMAKE_CURRENT_LIST_DIR}/clang_tidy.py"
       --clang-tidy "${clang_tidy}" ${plugin_option} --build "${build}" --stamps "${stamps}" --jobs "${JOBS}"
-      "--checks=${checks_option}" --name "${CHECK}" "${build}/checks/${CHECK}.units"
+      "--checks=${checks_option}" ${analyzer_options} --name "${CHECK}" "${build}/checks/${CHECK}.units"
     WORKING_DIRECTORY "${project}"
     COMMAND_ERROR_IS_FATAL ANY)
   return()

@@ -94,9 +94,9 @@ editor: (configure "dev")
 lint: lint-scope (configure "dev")
     "{{ cpp }}" exec -- cmake -DCHECK=lint "-DBUILD_DIRECTORY={{ build_dir }}/dev" -P cmake/scripts/check.cmake
 
-# Run clang-tidy's static analyzer over the sources lint checks.
-analyze: lint-scope (configure "dev")
-    "{{ cpp }}" exec -- cmake -DCHECK=analyze "-DBUILD_DIRECTORY={{ build_dir }}/dev" -P cmake/scripts/check.cmake
+# Run clang-tidy's static analyzer over the sources lint checks, in its shallow mode; `just analyze deep` runs the whole analysis, five times as long.
+analyze depth="shallow": lint-scope (configure "dev")
+    "{{ cpp }}" exec -- cmake -DCHECK=analyze "-DDEEP={{ if depth == "deep" { "ON" } else { "OFF" } }}" "-DBUILD_DIRECTORY={{ build_dir }}/dev" -P cmake/scripts/check.cmake
 
 # Build the clang-tidy plugin that keeps lint and analyze from walking what each unit imports.
 lint-scope: tbc-configure
