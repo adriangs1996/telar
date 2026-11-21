@@ -448,6 +448,41 @@ namespace telar::runtime::cli {
     return false;
   }
 
+  namespace {
+
+    // The number `digits` writes, when it is one a line of a file can be.
+    ds::Option<std::uint32_t> lineNumber(std::string_view digits) noexcept {
+      constexpr std::uint32_t base = 10;
+      constexpr std::uint32_t most = std::numeric_limits<std::uint32_t>::max() / base;
+      std::uint32_t number = 0;
+
+      for (const auto digit : digits) {
+        if (digit < '0' || digit > '9' || number >= most) {
+          return ds::none;
+        }
+
+        number = (number * base) + static_cast<std::uint32_t>(digit - '0');
+      }
+
+      return digits.empty() ? ds::none : ds::Option<std::uint32_t>{number};
+    }
+
+    // `FILE:LINE` names a line, when what follows the last colon is a number: the file is left
+    // in `text` and the line goes to `line`.
+    void placed(tbc::val_a<std::string_view>& text, std::int64_t& line) noexcept {
+      const auto colon = text.rfind(':');
+      if (colon == std::string_view::npos || colon == 0) {
+        return;
+      }
+
+      if (const auto number = lineNumber(text.substr(colon + 1))) {
+        line = *number;
+        text = text.substr(0, colon);
+      }
+    }
+
+  }
+
   void RoutedOptions::positionals(Cursor& cursor) {
     using enum ClientAction;
 
@@ -468,21 +503,7 @@ namespace telar::runtime::cli {
         usage("MissingFile");
       }
 
-      // `FILE:LINE` names a line, when what follows the last colon is a number.
-      const auto colon = text.rfind(':');
-      std::uint32_t line = 0;
-
-      if (colon != std::string_view::npos && colon > 0 && colon + 1 < text.size()) {
-        const auto digits = text.substr(colon + 1);
-        const auto* end = digits.data() + digits.size();
-        const auto parsed = std::from_chars(digits.data(), end, line);
-
-        if (parsed.ec == std::errc{} && parsed.ptr == end) {
-          value = line;
-          text = text.substr(0, colon);
-        }
-      }
-
+      placed(text, value);
       break;
     }
     case layout_apply:

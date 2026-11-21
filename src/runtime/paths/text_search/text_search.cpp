@@ -42,6 +42,7 @@ namespace telar::runtime {
       }
 
       auto size = TextMatch::maximum_text_bytes;
+
       while (size > 0 && (static_cast<unsigned char>(text[size]) & continuation_mask) == continuation) {
         --size;
       }
@@ -88,18 +89,6 @@ namespace telar::runtime {
         text_(memory),
         found_(memory) {}
 
-  void FileTextSearch::keep(const FileTextLine& line) {
-    found_.push({
-        .path = static_cast<std::uint32_t>(text_.size()),
-        .path_size = static_cast<std::uint16_t>(line.path.size()),
-        .text_size = static_cast<std::uint16_t>(line.text.size()),
-        .line = line.line,
-        .column = line.column,
-    });
-    text_.extend(std::span<const char>{line.path});
-    text_.extend(std::span<const char>{line.text});
-  }
-
   bool FileTextSearch::feed(std::span<const Byte> bytes, std::size_t limit) {
     for (const auto byte : bytes) {
       const auto character = static_cast<char>(byte);
@@ -114,20 +103,32 @@ namespace telar::runtime {
         continue;
       }
 
-      const auto parsed = oversized_ ? ds::none : FileTextLine::parse(std::string_view{line_.data(), line_.size()});
+      // The match is kept before its line is given up: it views the line.
+      const bool whole = !oversized_;
+      bool full = false;
+
+      if (const auto parsed = whole ? FileTextLine::parse(std::string_view{line_.data(), line_.size()}) : ds::none) {
+        full = found_.size() == limit;
+        if (!full) {
+          found_.push({
+              .path = static_cast<std::uint32_t>(text_.size()),
+              .path_size = static_cast<std::uint16_t>(parsed->path.size()),
+              .text_size = static_cast<std::uint16_t>(parsed->text.size()),
+              .line = parsed->line,
+              .column = parsed->column,
+          });
+
+          text_.extend(std::span<const char>{parsed->path});
+          text_.extend(std::span<const char>{parsed->text});
+        }
+      }
 
       line_.clear();
       oversized_ = false;
-      if (!parsed) {
-        continue;
-      }
-
-      if (found_.size() == limit) {
+      if (full) {
         truncated_ = true;
         return false;
       }
-
-      keep(*parsed);
     }
 
     return true;
@@ -148,14 +149,24 @@ namespace telar::runtime {
     const auto consume = [&](std::span<const Byte> bytes) {
       return feed(bytes, request.limit);
     };
-    ds::Array<char, PATH_MAX> program{};
-    const char* path = std::getenv("PATH"); // NOLINT(concurrency-mt-unsafe): the runtime does not change its environment once it started
+
+    // ripgrep, where the runtime's PATH has it.
+    ds::String<ConcurrentMemory> ripgrep{memory_};
+
+    {
+      ds::Array<char, PATH_MAX> found{};
+      const char* path = std::getenv("PATH"); // NOLINT(concurrency-mt-unsafe): the runtime does not change its environment once it started
+
+      if (path != nullptr && findExecutable({.path = path, .program = "rg"}, found.viewMut())) {
+        ripgrep.assign(found.data());
+      }
+    }
 
     try {
-      if (path != nullptr && findExecutable({.path = path, .program = "rg"}, std::span<char, PATH_MAX>{program.viewMut()})) {
+      if (!ripgrep.empty()) {
         // Its own configuration file is left out: the search is the same for every user.
         const ds::Array<std::string_view, 12> arguments{
-            program.data(),
+            ripgrep.view(),
             "--no-config",
             "--null",
             "--line-number",
@@ -168,6 +179,7 @@ namespace telar::runtime {
             "--max-columns-preview",
             "-e",
         };
+
         ds::Array<std::string_view, 14> all{};
 
         std::ranges::copy(arguments, all.viewMut().begin());

@@ -68,6 +68,7 @@ namespace telar::gui::qt {
     attempt([&](GuiSession& session) {
       application::nvim::pick(session, pane_id, source);
     });
+
     // The picker changed here, not by a message of the runtime: its views are told.
     emit editorChanged(pane_id);
   }
@@ -78,14 +79,16 @@ namespace telar::gui::qt {
     attempt([&](GuiSession& session) {
       application::nvim::search(session, pane_id, {bytes.constData(), static_cast<std::size_t>(bytes.size())});
     });
+
     // The picker changed here, not by a message of the runtime: its views are told.
     emit editorChanged(pane_id);
   }
 
-  void NvimController::accept(std::uint64_t pane_id, std::size_t index, application::nvim::NvimOpenIn in) {
+  void NvimController::accept(std::uint64_t pane_id, application::nvim::Choice choice) {
     attempt([&](GuiSession& session) {
-      application::nvim::accept(session, pane_id, index, in);
+      application::nvim::accept(session, pane_id, choice);
     });
+
     // The picker changed here, not by a message of the runtime: its views are told.
     emit editorChanged(pane_id);
   }
@@ -100,6 +103,7 @@ namespace telar::gui::qt {
     attempt([&](GuiSession& session) {
       application::nvim::list(session, pane_id, indices);
     });
+
     // The picker changed here, not by a message of the runtime: its views are told.
     emit editorChanged(pane_id);
   }
@@ -108,6 +112,7 @@ namespace telar::gui::qt {
     attempt([&](GuiSession& session) {
       application::nvim::dismiss(session, pane_id);
     });
+
     // The picker changed here, not by a message of the runtime: its views are told.
     emit editorChanged(pane_id);
   }

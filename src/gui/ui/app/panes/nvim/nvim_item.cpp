@@ -256,10 +256,21 @@ namespace telar::gui::qt {
 
   }
 
+  namespace {
+
+    nvim::NvimPickSource sourceNamed(const QString& name) {
+      if (name == QLatin1StringView{"text"}) {
+        return nvim::NvimPickSource::text;
+      }
+
+      return name == QLatin1StringView{"buffers"} ? nvim::NvimPickSource::buffers : nvim::NvimPickSource::files;
+    }
+
+  }
+
   void NvimItem::pick(const QString& source) {
     if (controller_ != nullptr) {
-      controller_->pick(pane_id_, source == QLatin1StringView{"text"} ? nvim::NvimPickSource::text : source == QLatin1StringView{"buffers"} ? nvim::NvimPickSource::buffers
-                                                                                                                                            : nvim::NvimPickSource::files);
+      controller_->pick(pane_id_, sourceNamed(source));
     }
   }
 
@@ -275,6 +286,7 @@ namespace telar::gui::qt {
     }
 
     auto place = nvim::NvimOpenIn::place;
+
     if (where == QLatin1StringView{"split"}) {
       place = nvim::NvimOpenIn::split;
     } else if (where == QLatin1StringView{"vertical"}) {
@@ -283,7 +295,7 @@ namespace telar::gui::qt {
       place = nvim::NvimOpenIn::tab;
     }
 
-    controller_->accept(pane_id_, static_cast<std::size_t>(index), place);
+    controller_->accept(pane_id_, {.index = static_cast<std::size_t>(index), .where = place});
   }
 
   void NvimItem::previewPicker(int index, const QRectF& area) {
@@ -524,7 +536,7 @@ namespace telar::gui::qt {
           {QStringLiteral("title"), shown(grid->title.view())},
           {QStringLiteral("footer"), shown(grid->footer.view())},
           // The float a picker asked for over its preview's cells: it is drawn over the picker.
-          {QStringLiteral("preview"), grid->placement == nvim::NvimPlacement::floating && preview_area_.columns != 0 && grid->row == preview_area_.row && grid->column == preview_area_.column && grid->width == preview_area_.columns && grid->height == preview_area_.rows},
+          {QStringLiteral("preview"), grid->placement == nvim::NvimPlacement::floating && preview_area_.columns != 0 && std::cmp_equal(grid->row, preview_area_.row) && std::cmp_equal(grid->column, preview_area_.column) && grid->width == preview_area_.columns && grid->height == preview_area_.rows},
       });
     }
 

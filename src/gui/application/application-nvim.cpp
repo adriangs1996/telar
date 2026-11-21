@@ -215,17 +215,17 @@ namespace telar::gui::application::nvim {
     }
   }
 
-  void accept(Session& session, std::uint64_t pane_id, std::size_t index, NvimOpenIn in) {
+  void accept(Session& session, std::uint64_t pane_id, Choice choice) {
     const auto* editor = feature::find(session.nvim, pane_id);
-    if (editor == nullptr || !editor->picker.open || index >= editor->picker.matches.size()) {
+    if (editor == nullptr || !editor->picker.open || choice.index >= editor->picker.matches.size()) {
       return;
     }
 
-    const auto& match = editor->picker.matches[index];
+    const auto& match = editor->picker.matches[choice.index];
     ds::String<Memory> path{editor->memory};
 
     locate(path, editor->picker, match);
-    show(session, pane_id, {.path = path.view(), .line = match.line, .column = match.column, .in = in});
+    show(session, pane_id, {.path = path.view(), .line = match.line, .column = match.column, .in = choice.where});
     dismiss(session, pane_id);
   }
 
@@ -260,19 +260,24 @@ namespace telar::gui::application::nvim {
     ds::Vec<ds::String<Memory>, Memory> paths{editor->memory};
     ds::Vec<TextMatch, Memory> places{editor->memory};
 
+    // Every path is made before any place views one: the places are views of them.
     paths.reserve(indices.size());
-    places.reserve(indices.size());
     for (const auto index : indices) {
-      if (index >= picker.matches.size()) {
+      if (index < picker.matches.size()) {
+        locate(paths.emplace(editor->memory), picker, picker.matches[index]);
+      }
+    }
+
+    places.reserve(paths.size());
+    for (std::size_t made = 0, at = 0; at < indices.size(); ++at) {
+      if (indices[at] >= picker.matches.size()) {
         continue;
       }
 
-      const auto& match = picker.matches[index];
-      auto& path = paths.emplace(editor->memory);
+      const auto& match = picker.matches[indices[at]];
 
-      locate(path, picker, match);
       // A place without a line is the file's first.
-      places.push({.path = path.view(), .line = std::max<std::uint32_t>(match.line, 1), .column = std::max<std::uint32_t>(match.column, 1), .text = match.text.of(text)});
+      places.push({.path = paths[made++].view(), .line = std::max<std::uint32_t>(match.line, 1), .column = std::max<std::uint32_t>(match.column, 1), .text = match.text.of(text)});
     }
 
     if (!places.empty()) {
@@ -294,8 +299,9 @@ namespace telar::gui::application::nvim {
     pick(session, message.pane_id, message.source);
 
     const auto* editor = feature::find(session.nvim, message.pane_id);
+    const bool opened = editor != nullptr && editor->picker.open;
 
-    return editor != nullptr && editor->picker.open ? shown(session, message.pane_id) : Change::none;
+    return opened ? shown(session, message.pane_id) : Change::none;
   }
 
   Change receive(Session& session, const TextResults& message) {

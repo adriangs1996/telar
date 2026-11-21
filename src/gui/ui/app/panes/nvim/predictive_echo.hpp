@@ -65,7 +65,8 @@ namespace telar::gui {
         const auto sample = std::max(0.0, now_ms - *awaiting_);
 
         // The same smoothing the runtime gives a remote shell's link.
-        link_ms_ = link_ms_ == 0 ? sample : (link_ms_ * kept) + (sample * (1 - kept));
+        link_ms_ = measured_ ? (link_ms_ * kept) + (sample * (1 - kept)) : sample;
+        measured_ = true;
         awaiting_ = ds::none;
       }
 
@@ -156,6 +157,7 @@ namespace telar::gui {
 
     double refresh_ms_;
     double link_ms_ = 0;
+    bool measured_ = false;
     ds::Option<double> awaiting_;
     ds::Array<char32_t, capacity> letters_{};
     std::size_t count_ = 0;

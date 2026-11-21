@@ -2512,24 +2512,34 @@ namespace telar::runtime {
   template <EventLoop Poller, typename Background>
     requires BackgroundExecutor<Background, ConcurrentMemory>
   void Runtime<Poller, Background>::handle(std::uint64_t identity, const CreateNvimPane& message) {
-    // $XDG_CONFIG_HOME, or ~/.config: where the user's own configuration of Neovim would be.
-    const char* named = std::getenv("XDG_CONFIG_HOME"); // NOLINT(concurrency-mt-unsafe): the runtime does not change its environment once it started
-    const char* home = std::getenv("HOME");             // NOLINT(concurrency-mt-unsafe): as above
-    const char* configured = std::getenv("TELAR_NVIM"); // NOLINT(concurrency-mt-unsafe): as above
-    ds::String<ConcurrentMemory> config_home{memory_, named != nullptr && *named == '/' ? std::string_view{named} : std::string_view{}};
+    // A variable of the runtime's environment, kept: what the next one read returns may be
+    // where this one was.
+    const auto variable = [&](const char* name) {
+      const char* value = std::getenv(name); // NOLINT(concurrency-mt-unsafe): the runtime does not change its environment once it started
 
-    if (config_home.empty() && home != nullptr && *home == '/') {
-      config_home.assign(home);
-      config_home.append("/.config");
+      return ds::String<ConcurrentMemory>{memory_, value == nullptr ? std::string_view{} : std::string_view{value}};
+    };
+
+    const auto configured = variable("TELAR_NVIM");
+    // $XDG_CONFIG_HOME, or ~/.config: where the user's own configuration of Neovim would be.
+    auto config_home = variable("XDG_CONFIG_HOME");
+
+    if (!config_home.view().starts_with('/')) {
+      config_home = variable("HOME");
+      if (config_home.view().starts_with('/')) {
+        config_home.append("/.config");
+      } else {
+        config_home.clear();
+      }
     }
 
     // A runtime started with NVIM_APPNAME already names the configuration its editors load:
     // telar's own is for a host that chose none.
-    if (std::getenv("NVIM_APPNAME") != nullptr) { // NOLINT(concurrency-mt-unsafe): as above
+    if (!variable("NVIM_APPNAME").empty()) {
       config_home.clear();
     }
 
-    editor_provision_.resolve({.data_home = data_home_.view(), .config_home = config_home.view(), .configured = configured == nullptr ? std::string_view{} : std::string_view{configured}});
+    editor_provision_.resolve({.data_home = data_home_.view(), .config_home = config_home.view(), .configured = configured.view()});
     workspaces_.createEditor(model_, panes_, clients_, {.client_id = identity, .request = message}, editor_provision_);
   }
 
@@ -2603,6 +2613,7 @@ namespace telar::runtime {
   void Runtime<Poller, Background>::handle(std::uint64_t identity, const NvimBuffers& message) {
     const auto& client = requireClient(clients_, identity);
     auto& pane = requireNvim(model_.panes, message.pane_id);
+
     if (client.attachment(message.pane_id) == nullptr) {
       throw RequestError{FailureCode::pane_not_found, "The editor's buffers are listed for a client that shows it"};
     }
@@ -2700,6 +2711,7 @@ namespace telar::runtime {
       }
 
       auto place = std::min(count, limit);
+
       while (place > 0 && ranked[place - 1].score < *score) {
         --place;
       }
@@ -2719,10 +2731,12 @@ namespace telar::runtime {
     constexpr std::size_t positions_each = FindPaths::maximum_query_bytes;
     ds::Array<std::uint16_t, FindPaths::maximum_limit * positions_each> positions{};
     ds::Array<PathMatch, FindPaths::maximum_limit> matches{};
+    // Lent once: each match views its own piece of it.
+    const auto marked = positions.viewMut();
 
     for (std::size_t index = 0; index < count; ++index) {
       const auto name = listed.names[ranked[index].name].of(text);
-      const auto marks = positions.viewMut().subspan(index * positions_each, std::min<std::size_t>(wanted.size(), positions_each));
+      const auto marks = marked.subspan(index * positions_each, std::min<std::size_t>(wanted.size(), positions_each));
 
       if (!wanted.empty()) {
         static_cast<void>(matcher.score(name, wanted, marks));

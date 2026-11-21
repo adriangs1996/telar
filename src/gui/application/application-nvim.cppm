@@ -98,8 +98,14 @@ export namespace telar::gui::application::nvim {
   // The query typed in the pane's picker: the runtime searches, and the list follows.
   void search(Session& session, std::uint64_t pane_id, std::string_view query);
 
-  // Opens what the picker lists at `index` where `in` says, and closes the picker.
-  void accept(Session& session, std::uint64_t pane_id, std::size_t index, NvimOpenIn in = NvimOpenIn::place);
+  // An entry of a picker, by its place in the list, and where it is to be opened.
+  struct Choice {
+    std::size_t index = 0;
+    NvimOpenIn where = NvimOpenIn::place;
+  };
+
+  // Opens what the picker lists at the choice's place, and closes the picker.
+  void accept(Session& session, std::uint64_t pane_id, Choice choice);
 
   // The cells of the editor a picker leaves for its preview, from its top left one.
   struct PreviewArea {

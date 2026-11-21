@@ -277,6 +277,38 @@ namespace telar::runtime::cli::window {
       }
     }
 
+    // A file as `telar edit` names it, from the directory the command was run in: the window
+    // that opens it works somewhere else. The path is kept in `absolute` when it is made here.
+    tbc::val_a<std::string_view> fromHere(tbc::holds<Text&, tbc::lt::a> absolute, tbc::val_a<std::string_view> file) {
+      if (file.starts_with('/')) {
+        return file;
+      }
+
+      absolute.append(std::filesystem::current_path().native());
+      absolute.push('/');
+      absolute.append(file);
+      return absolute;
+    }
+
+    // The pane the command was run in, whose tab is where its editor is looked for; zero
+    // outside a pane.
+    std::uint64_t callingPane() noexcept {
+      constexpr std::uint64_t base = 10;
+      constexpr std::uint64_t most = std::numeric_limits<std::uint64_t>::max() / base;
+      const char* named = std::getenv("TELAR_PANE_ID"); // NOLINT(concurrency-mt-unsafe): the CLI reads its environment on its one thread
+      std::uint64_t pane = 0;
+
+      for (const auto digit : named == nullptr ? std::string_view{} : std::string_view{named}) {
+        if (digit < '0' || digit > '9' || pane >= most) {
+          return 0;
+        }
+
+        pane = (pane * base) + static_cast<std::uint64_t>(digit - '0');
+      }
+
+      return pane;
+    }
+
     int routed(Session& session, const RoutedOptions& options, Text& output) {
       const auto list = session.exchange<ClientList>(QueryClients{});
       // A command that names no window goes to the one last typed in.
@@ -286,25 +318,9 @@ namespace telar::runtime::cli::window {
       }
 
       Text absolute{output.memory()};
-      auto text = options.text;
-      auto target_id = options.target_id;
-
-      if (options.action == ClientAction::editor_open) {
-        // The window opens the file as this command names it: from where it was run.
-        if (!text.starts_with('/')) {
-          absolute.append(std::filesystem::current_path().native());
-          absolute.push('/');
-          absolute.append(text);
-          text = absolute;
-        }
-
-        // The tab of the pane the command was run in is where its editor is looked for.
-        if (const char* pane = std::getenv("TELAR_PANE_ID"); pane != nullptr) { // NOLINT(concurrency-mt-unsafe): the CLI reads its environment on its one thread
-          const std::string_view digits{pane};
-
-          static_cast<void>(std::from_chars(digits.data(), digits.data() + digits.size(), target_id));
-        }
-      }
+      const bool edits = options.action == ClientAction::editor_open;
+      const auto text = edits ? fromHere(absolute, options.text) : options.text;
+      const auto target_id = edits ? callingPane() : options.target_id;
 
       if (text.size() > maximum_command_text) {
         throw Failure{"InvalidClientCommandText"};
