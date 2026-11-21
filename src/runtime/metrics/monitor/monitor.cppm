@@ -34,10 +34,17 @@ export {
       MonitorSort sort = MonitorSort::cpu;
       bool reverse = false;
       MonitorScope scope = MonitorScope::all;
-      bool tree = false;
+      MonitorLayout layout = MonitorLayout::flat;
       FixedText<MonitorLimits::filter_bytes> filter;
+      std::uint32_t offset = 0;
       std::uint16_t limit = 0;
+      bool fold = false;
+      ds::Array<std::int32_t, MonitorLimits::maximum_toggled> toggled{};
+      std::uint8_t toggled_count = 0;
       ProcessInstance detail{};
+
+      // Whether the query folds or unfolds the branch of `pid` against the default.
+      [[nodiscard]] bool toggles(std::int32_t pid) const noexcept;
     };
 
     // A process of the table with what the monitor derives from it. The text is read once, when the
@@ -50,6 +57,7 @@ export {
       AgentProvider agent = AgentProvider::unknown;
       // It is an agent or descends from one.
       bool under_agent = false;
+      ProcessOwner owner = ProcessOwner::none;
       bool described = false;
       FixedText<MonitorLimits::name_bytes> name;
       FixedText<MonitorLimits::user_bytes> user;
@@ -57,6 +65,8 @@ export {
     };
 
     inline constexpr std::size_t maximum_monitor_answers = 16;
+    // The clients of the runtime the monitor names as telar's, beside the runtime itself.
+    inline constexpr std::size_t maximum_monitor_clients = 64;
 
     // The answers of one round, in the order of its queries; none for a query that names a process
     // that is gone or was replaced.
@@ -84,7 +94,8 @@ export {
       MonitorSampler& operator=(MonitorSampler&&) = delete;
 
       // Takes the processes, leaving the previous reading's storage in `records` for the next one.
-      void update(ds::Vec<ProcessRecord, ConcurrentMemory>& records, const HostDetail& host, Clock::time_point now, std::span<const PaneRoot> roots);
+      // `clients` are the processes connected to the runtime: its windows and its CLI.
+      void update(ds::Vec<ProcessRecord, ConcurrentMemory>& records, const HostDetail& host, Clock::time_point now, std::span<const PaneRoot> roots, std::span<const pid_t> clients = {});
 
       // Two readings were taken, so CPU and rates are known.
       [[nodiscard]] bool ready() const noexcept;
@@ -107,14 +118,36 @@ export {
         FixedText<MonitorLimits::arguments_bytes> arguments;
         FixedText<MonitorLimits::directory_bytes> directory;
         ListeningPorts ports{};
-        ds::Array<std::int32_t, MonitorLimits::maximum_children> children{};
+        // They view the names of entries_.
+        ds::Array<MonitorRelative, MonitorLimits::maximum_children> children{};
         std::uint16_t child_count = 0;
+        ds::Array<MonitorRelative, MonitorLimits::maximum_lineage> lineage{};
+        std::uint8_t lineage_count = 0;
+      };
+
+      // One row of a query's listing.
+      struct Listed {
+        std::uint32_t index = 0;
+        std::uint8_t depth = 0;
+        std::uint32_t guides = 0;
+        std::uint32_t folded = 0;
+      };
+
+      // What a tree adds up over an entry's branch, the entry included.
+      struct Branch {
+        std::uint64_t cpu_permille = 0;
+        std::uint64_t resident_bytes = 0;
+        std::uint32_t descendants = 0;
+        std::uint16_t children = 0;
       };
 
       void attribute(std::span<const PaneRoot> roots);
       void measureHost(const HostDetail& host, double seconds);
       [[nodiscard]] static bool matches(const MonitorEntry& entry, const MonitorView& view) noexcept;
       [[nodiscard]] static bool before(const MonitorEntry& left, const MonitorEntry& right, const MonitorView& view) noexcept;
+      // As `before`, but a tree orders siblings by their branches' processor and memory.
+      [[nodiscard]] bool beforeBranch(std::uint32_t left, std::uint32_t right, const MonitorView& view) const noexcept;
+      [[nodiscard]] MonitorProcess row(const MonitorEntry& entry, const Listed& listed) const noexcept;
 
       // Where a query's rows and detail are written.
       struct Placement {
@@ -122,6 +155,8 @@ export {
         std::size_t first = 0;
         std::size_t count = 0;
         std::uint32_t matched = 0;
+        std::size_t first_group = 0;
+        std::size_t group_count = 0;
         ds::Option<std::size_t> detail;
       };
 
@@ -133,6 +168,16 @@ export {
       bool detail(const ProcessInstance& instance);
       void select(const MonitorView& view);
       void selectTree(const MonitorView& view);
+      void selectOwners(const MonitorView& view);
+      [[nodiscard]] ds::Option<std::uint32_t> selectedParent(std::uint32_t index) const noexcept;
+      void sumBranches();
+      void pushChildren(const Listed& listed);
+      void groupOwners(std::size_t first);
+      // Whether the row's branch shows folded in the view's tree.
+      [[nodiscard]] bool folds(const Listed& listed, const MonitorView& view) const noexcept;
+
+      // A process an owner listing leaves out.
+      static constexpr std::uint16_t no_group = std::numeric_limits<std::uint16_t>::max();
 
       tbc::mut_a<ConcurrentMemory> memory_;
       tbc::val_a<ProcessInspector> inspector_;
@@ -140,17 +185,25 @@ export {
       tbc::val_a<ds::Vec<MonitorEntry, ConcurrentMemory>> entries_;
       tbc::val_a<ds::Vec<MonitorEntry, ConcurrentMemory>> previous_;
       tbc::val_a<ds::Vec<UserName, ConcurrentMemory>> users_;
-      // Scratch: the selection of one query, with the depth of each row in a tree.
+      // Scratch: the selection of one query, and its listing.
       tbc::val_a<ds::Vec<std::uint32_t, ConcurrentMemory>> selected_;
-      tbc::val_a<ds::Vec<std::uint8_t, ConcurrentMemory>> depths_;
+      tbc::val_a<ds::Vec<Listed, ConcurrentMemory>> listed_;
       tbc::val_a<ds::Vec<std::uint32_t, ConcurrentMemory>> ordered_;
       tbc::val_a<ds::Vec<std::uint8_t, ConcurrentMemory>> flags_;
-      tbc::val_a<ds::Vec<std::pair<std::uint32_t, std::uint8_t>, ConcurrentMemory>> stack_;
+      tbc::val_a<ds::Vec<Listed, ConcurrentMemory>> stack_;
+      // Scratch, by entry: what a tree adds up over its branch, and an owner listing's group.
+      tbc::val_a<ds::Vec<Branch, ConcurrentMemory>> branches_;
+      tbc::val_a<ds::Vec<std::uint16_t, ConcurrentMemory>> group_of_;
       // What the answers of a round view.
       tbc::val_self<ds::Vec<MonitorProcess, ConcurrentMemory>> rows_;
+      tbc::val_a<ds::Vec<MonitorGroup, ConcurrentMemory>> groups_;
       tbc::val_a<ds::Vec<DetailText, ConcurrentMemory>> details_;
       ds::Option<Clock::time_point> sampled_;
       std::uint32_t readings_ = 0;
+      // The runtime's own process and its clients', which the monitor names as telar's.
+      pid_t self_ = 0;
+      ds::Array<pid_t, maximum_monitor_clients> clients_{};
+      std::size_t client_count_ = 1;
 
       HostDetail host_{};
       ds::Array<std::uint16_t, HostDetail::maximum_cores> cores_{};
@@ -161,6 +214,8 @@ export {
       tbc::val_self<ds::Array<MonitorInterface, HostDetail::maximum_interfaces>> interfaces_{};
       tbc::val_self<ds::Array<MonitorDisk, HostDetail::maximum_mounts>> disks_{};
       std::uint32_t thread_count_ = 0;
+      std::uint32_t telar_count_ = 0;
+      std::uint32_t agent_count_ = 0;
     };
 
   }

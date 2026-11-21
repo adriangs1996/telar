@@ -21,6 +21,7 @@ namespace telar::runtime::cli::monitor {
 
     constexpr ds::Array<std::string_view, 5> sort_names{"cpu", "memory", "threads", "pid", "name"};
     constexpr ds::Array<std::string_view, 3> scope_names{"all", "telar", "agents"};
+    constexpr ds::Array<std::string_view, 5> owner_names{"none", "pane", "agent", "agent_child", "telar"};
     constexpr ds::Array<std::string_view, 6> signal_names{"TERM", "KILL", "STOP", "CONT", "HUP", "INT"};
     constexpr ds::Array<std::string_view, 4> tool_names{"stack", "files", "logs", "debug"};
     constexpr ds::Array<std::string_view, 6> state_names{"unknown", "running", "sleeping", "idle", "stopped", "zombie"};
@@ -141,7 +142,7 @@ namespace telar::runtime::cli::monitor {
         ds::formatTo(output, "{}", quoteJson(program(process)));
       }
 
-      ds::formatTo(output, ",\"depth\":{}", process.depth);
+      ds::formatTo(output, R"(,"owner":{},"depth":{})", quoteJson(nameOf(process.owner, owner_names)), process.depth);
       if (!open) {
         output.push('}');
       }
@@ -211,7 +212,7 @@ namespace telar::runtime::cli::monitor {
 
       output.append("],\"children\":[");
       for (std::size_t index = 0; index < detail.children.size(); ++index) {
-        ds::formatTo(output, "{}{}", index == 0 ? "" : ",", detail.children[index]);
+        ds::formatTo(output, "{}{}", index == 0 ? "" : ",", detail.children[index].pid);
       }
 
       output.append("]}");
@@ -243,8 +244,8 @@ namespace telar::runtime::cli::monitor {
       }
 
       output.append("\nChildren:");
-      for (const auto child : detail.children) {
-        ds::formatTo(output, " {}", child);
+      for (const auto& child : detail.children) {
+        ds::formatTo(output, " {}", child.pid);
       }
 
       output.push('\n');
@@ -344,7 +345,7 @@ namespace telar::runtime::cli::monitor {
           .sort = options.sort,
           .reverse = options.reverse,
           .scope = options.scope,
-          .tree = options.tree,
+          .layout = options.tree ? MonitorLayout::tree : MonitorLayout::flat,
           .filter = options.filter,
           .limit = listing(options.command) ? options.limit : std::uint16_t{0},
           .detail = options.command == Command::process_get || options.command == Command::process_review ? options.process : ProcessInstance(),

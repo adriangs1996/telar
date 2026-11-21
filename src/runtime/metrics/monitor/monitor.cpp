@@ -117,25 +117,69 @@ namespace telar::runtime {
       entry.described = true;
     }
 
-    MonitorProcess row(const MonitorEntry& entry, std::uint8_t depth) noexcept {
-      return {
-          .instance = {.pid = entry.record.pid, .started_seconds = entry.record.started_seconds, .started_microseconds = entry.record.started_microseconds},
-          .parent = std::max(entry.record.parent, 0),
-          .user_id = entry.record.user,
-          .user = entry.user.view(),
-          .name = entry.name.view(),
-          .command = entry.command.view(),
-          .state = entry.record.state,
-          .measured = entry.record.measured,
-          .cpu_permille = entry.cpu_permille,
-          .resident_bytes = entry.record.resident_bytes,
-          .threads = entry.record.threads,
-          .nice = entry.record.nice,
-          .pane_id = entry.pane_id,
-          .agent = entry.agent,
-          .depth = depth,
-      };
+    // What a process is to telar, from where it runs and what runs it: `telar` names the runtime's
+    // own processes.
+    ProcessOwner ownerOf(const MonitorEntry& entry, std::span<const pid_t> telar) noexcept {
+      if (std::ranges::contains(telar, entry.record.pid)) {
+        return ProcessOwner::telar;
+      }
+
+      if (entry.pane_id == 0) {
+        return ProcessOwner::none;
+      }
+
+      if (entry.agent != AgentProvider::unknown) {
+        return ProcessOwner::agent;
+      }
+
+      return entry.under_agent ? ProcessOwner::agent_child : ProcessOwner::pane;
     }
+
+    bool underAgent(ProcessOwner owner) noexcept {
+      return owner == ProcessOwner::agent || owner == ProcessOwner::agent_child;
+    }
+
+    std::uint32_t saturated(std::uint64_t value) noexcept {
+      return static_cast<std::uint32_t>(std::min<std::uint64_t>(value, std::numeric_limits<std::uint32_t>::max()));
+    }
+
+  }
+
+  bool MonitorView::toggles(std::int32_t pid) const noexcept {
+    return std::ranges::contains(toggled.view().first(toggled_count), pid);
+  }
+
+  MonitorProcess MonitorSampler::row(const MonitorEntry& entry, const Listed& listed) const noexcept {
+    MonitorProcess result{
+        .instance = {.pid = entry.record.pid, .started_seconds = entry.record.started_seconds, .started_microseconds = entry.record.started_microseconds},
+        .parent = std::max(entry.record.parent, 0),
+        .user_id = entry.record.user,
+        .user = entry.user.view(),
+        .name = entry.name.view(),
+        .command = entry.command.view(),
+        .state = entry.record.state,
+        .measured = entry.record.measured,
+        .cpu_permille = entry.cpu_permille,
+        .resident_bytes = entry.record.resident_bytes,
+        .threads = entry.record.threads,
+        .nice = entry.record.nice,
+        .pane_id = entry.pane_id,
+        .agent = entry.agent,
+        .owner = entry.owner,
+        .depth = listed.depth,
+        .guides = listed.guides,
+        .folded = listed.folded,
+        .branch_cpu_permille = entry.cpu_permille,
+    };
+
+    if (listed.index < branches_.size()) {
+      const auto& branch = branches_[listed.index];
+
+      result.children = branch.children;
+      result.branch_cpu_permille = saturated(branch.cpu_permille);
+    }
+
+    return result;
   }
 
   MonitorSampler::MonitorSampler(ConcurrentMemory& memory, const ProcessInspector& inspector)
@@ -145,15 +189,26 @@ namespace telar::runtime {
         previous_(memory),
         users_(memory),
         selected_(memory),
-        depths_(memory),
+        listed_(memory),
         ordered_(memory),
         flags_(memory),
         stack_(memory),
+        branches_(memory),
+        group_of_(memory),
         rows_(memory),
-        details_(memory) {}
+        groups_(memory),
+        details_(memory),
+        self_(::getpid()) {
+    clients_.atMut(0) = self_;
+  }
 
-  void MonitorSampler::update(ds::Vec<ProcessRecord, ConcurrentMemory>& records, const HostDetail& host, Clock::time_point now, std::span<const PaneRoot> roots) {
+  void MonitorSampler::update(ds::Vec<ProcessRecord, ConcurrentMemory>& records, const HostDetail& host, Clock::time_point now, std::span<const PaneRoot> roots, std::span<const pid_t> clients) {
     const auto seconds = sampled_ ? std::chrono::duration<double>(now - *sampled_).count() : 0.0;
+
+    // The runtime first, then as many clients as fit.
+    clients_.atMut(0) = self_;
+    client_count_ = 1 + std::min(clients.size(), clients_.size() - 1);
+    std::ranges::copy(clients.first(client_count_ - 1), clients_.viewMut().subspan(1).begin());
 
     std::ranges::sort(records.viewMut(), {}, &ProcessRecord::pid);
     std::swap(previous_, entries_);
@@ -284,6 +339,14 @@ namespace telar::runtime {
         flags_.atMut(ordered_[chain]) = resolved;
       }
     }
+
+    telar_count_ = 0;
+    agent_count_ = 0;
+    for (auto& entry : entries_.viewMut()) {
+      entry.owner = ownerOf(entry, clients_.view().first(client_count_));
+      telar_count_ += entry.owner != ProcessOwner::none ? 1U : 0U;
+      agent_count_ += underAgent(entry.owner) ? 1U : 0U;
+    }
   }
 
   void MonitorSampler::measureHost(const HostDetail& host, double seconds) {
@@ -345,7 +408,7 @@ namespace telar::runtime {
   }
 
   bool MonitorSampler::matches(const MonitorEntry& entry, const MonitorView& view) noexcept {
-    if ((view.scope == MonitorScope::telar && entry.pane_id == 0) || (view.scope == MonitorScope::agents && !entry.under_agent)) {
+    if ((view.scope == MonitorScope::telar && entry.owner == ProcessOwner::none) || (view.scope == MonitorScope::agents && !underAgent(entry.owner))) {
       return false;
     }
 
@@ -387,47 +450,164 @@ namespace telar::runtime {
     return left.record.pid < right.record.pid;
   }
 
+  bool MonitorSampler::beforeBranch(std::uint32_t left, std::uint32_t right, const MonitorView& view) const noexcept {
+    const auto& left_branch = branches_[left];
+    const auto& right_branch = branches_[right];
+    const auto order = [&](auto first, auto second) {
+      if (first == second) {
+        return entries_[left].record.pid < entries_[right].record.pid;
+      }
+
+      return (first > second) != view.reverse;
+    };
+
+    switch (view.sort) {
+    case MonitorSort::cpu:
+      return order(left_branch.cpu_permille, right_branch.cpu_permille);
+    case MonitorSort::memory:
+      return order(left_branch.resident_bytes, right_branch.resident_bytes);
+    case MonitorSort::threads:
+    case MonitorSort::pid:
+    case MonitorSort::name:
+      break;
+    }
+
+    return before(entries_[left], entries_[right], view);
+  }
+
+  bool MonitorSampler::folds(const Listed& listed, const MonitorView& view) const noexcept {
+    const auto& branch = branches_[listed.index];
+    if (branch.children == 0) {
+      return false;
+    }
+
+    // A tree's roots stay open: folding one would fold most of the listing.
+    const auto folded = view.fold && listed.depth > 0 && branch.children > MonitorLimits::folded_children;
+
+    return folded != view.toggles(entries_[listed.index].record.pid);
+  }
+
+  // The listing of one query in listed_: every row, so that matched counts them; the answer takes the
+  // rows of its window.
   void MonitorSampler::select(const MonitorView& view) {
     selected_.clear();
-    ordered_.clear();
-    depths_.clear();
+    listed_.clear();
+    branches_.clear();
     for (std::uint32_t index = 0; index < entries_.size(); ++index) {
       if (matches(entries_[index], view)) {
         selected_.push(index);
       }
     }
 
-    if (view.tree) {
+    if (view.layout == MonitorLayout::tree) {
       selectTree(view);
       return;
     }
 
-    const auto count = std::min<std::size_t>(view.limit, selected_.size());
+    if (view.layout == MonitorLayout::owner) {
+      selectOwners(view);
+      return;
+    }
+
+    // Only the rows up to the window's end need their order.
+    const auto count = std::min<std::size_t>(std::size_t{view.offset} + view.limit, selected_.size());
     const auto less = [&](std::uint32_t left, std::uint32_t right) {
       return before(entries_[left], entries_[right], view);
     };
 
     std::ranges::partial_sort(selected_.viewMut(), selected_.viewMut().begin() + static_cast<std::ptrdiff_t>(count), less);
     for (std::size_t index = 0; index < count; ++index) {
-      ordered_.push(selected_[index]);
-      depths_.push(0);
+      listed_.push({.index = selected_[index]});
     }
   }
 
-  // Each selected process under its selected parent, siblings in the query's order; a process
-  // whose parent is not selected starts a tree of its own.
-  void MonitorSampler::selectTree(const MonitorView& view) {
+  // Each selected process under its selected parent; a process whose parent is not selected starts
+  // a tree of its own. Siblings go in the query's order of their branches, and a folded branch lists
+  // its first process alone.
+  ds::Option<std::uint32_t> MonitorSampler::selectedParent(std::uint32_t index) const noexcept {
+    const auto parent = indexOf(entries_[index].record.parent);
+    if (!parent || *parent == index || flags_[*parent] == 0) {
+      return ds::none;
+    }
+
+    return *parent;
+  }
+
+  // Each branch's sums: every process goes before its parent in ordered_, then they add up from the
+  // last. selected_ is sorted by parent.
+  void MonitorSampler::sumBranches() {
+    const auto parent_of = [&](std::uint32_t index) {
+      return entries_[index].record.parent;
+    };
+
+    branches_.clear();
+    branches_.resize(entries_.size(), Branch{});
+    ordered_.clear();
+    stack_.clear();
+    for (const auto index : selected_) {
+      if (!selectedParent(index)) {
+        stack_.push({.index = index});
+      }
+    }
+
+    while (!stack_.empty()) {
+      const auto index = stack_.pop()->index;
+
+      ordered_.push(index);
+      for (const auto child : std::ranges::equal_range(selected_, entries_[index].record.pid, {}, parent_of)) {
+        if (child != index) {
+          stack_.push({.index = child});
+        }
+      }
+    }
+
+    for (auto position = ordered_.size(); position-- > 0;) {
+      const auto index = ordered_[position];
+      auto& branch = branches_.atMut(index);
+
+      branch.cpu_permille += entries_[index].cpu_permille;
+      branch.resident_bytes += entries_[index].record.resident_bytes;
+      if (const auto parent = selectedParent(index)) {
+        auto& above = branches_.atMut(*parent);
+
+        above.cpu_permille += branch.cpu_permille;
+        above.resident_bytes += branch.resident_bytes;
+        above.descendants += branch.descendants + 1;
+        above.children = static_cast<std::uint16_t>(std::min<std::uint32_t>(above.children + 1U, std::numeric_limits<std::uint16_t>::max()));
+      }
+    }
+  }
+
+  // Pushes the children of `listed` last first, so the first is taken first; every child but the
+  // last has a sibling after it, which its guides say.
+  void MonitorSampler::pushChildren(const Listed& listed) {
     constexpr std::size_t deepest = std::numeric_limits<std::uint8_t>::max();
     const auto parent_of = [&](std::uint32_t index) {
       return entries_[index].record.parent;
     };
 
-    std::ranges::sort(selected_.viewMut(), [&](std::uint32_t left, std::uint32_t right) {
-      const auto left_parent = parent_of(left);
-      const auto right_parent = parent_of(right);
+    const auto children = std::ranges::equal_range(selected_, entries_[listed.index].record.pid, {}, parent_of);
+    const auto depth = static_cast<std::uint8_t>(std::min<std::size_t>(listed.depth + 1U, deepest));
+    const auto continues = listed.depth < MonitorLimits::guide_levels ? std::uint32_t{1} << listed.depth : 0;
+    bool last = true;
 
-      return left_parent != right_parent ? left_parent < right_parent : before(entries_[left], entries_[right], view);
-    });
+    for (const auto child : std::views::reverse(children)) {
+      if (child == listed.index) {
+        continue;
+      }
+
+      stack_.push({.index = child, .depth = depth, .guides = last ? listed.guides : listed.guides | continues});
+      last = false;
+    }
+  }
+
+  // Each selected process under its selected parent; a process whose parent is not selected starts
+  // a tree of its own. Siblings go in the query's order of their branches, and a folded branch lists
+  // its first process alone.
+  void MonitorSampler::selectTree(const MonitorView& view) {
+    const auto parent_of = [&](std::uint32_t index) {
+      return entries_[index].record.parent;
+    };
 
     flags_.clear();
     flags_.resize(entries_.size(), 0);
@@ -435,35 +615,139 @@ namespace telar::runtime {
       flags_.atMut(index) = 1;
     }
 
+    std::ranges::sort(selected_.viewMut(), {}, parent_of);
+    sumBranches();
+
+    // Siblings in the query's order: sorted by parent, then by branch.
+    std::ranges::sort(selected_.viewMut(), [&](std::uint32_t left, std::uint32_t right) {
+      const auto left_parent = parent_of(left);
+      const auto right_parent = parent_of(right);
+
+      return left_parent != right_parent ? left_parent < right_parent : beforeBranch(left, right, view);
+    });
+
     stack_.clear();
-    // Roots in reverse order, so the first is taken first.
-    for (auto position = selected_.size(); position-- > 0;) {
-      const auto index = selected_[position];
-      const auto parent = indexOf(parent_of(index));
-      if (!parent || *parent == index || flags_[*parent] == 0) {
-        stack_.push({index, 0});
+    for (const auto index : selected_) {
+      if (!selectedParent(index)) {
+        stack_.push({.index = index});
       }
     }
 
-    std::ranges::sort(stack_.viewMut(), [&](const auto& left, const auto& right) {
-      return before(entries_[right.first], entries_[left.first], view);
+    // Roots in reverse order, so the first is taken first.
+    std::ranges::sort(stack_.viewMut(), [&](const Listed& left, const Listed& right) {
+      return beforeBranch(right.index, left.index, view);
     });
 
-    while (!stack_.empty() && ordered_.size() < view.limit) {
-      const auto [index, depth] = *stack_.pop();
-      const auto pid = entries_[index].record.pid;
+    while (!stack_.empty()) {
+      auto listed = *stack_.pop();
 
-      ordered_.push(index);
-      depths_.push(depth);
-
-      const auto children = std::ranges::equal_range(selected_, pid, {}, parent_of);
-
-      // Pushed last first, so the first is taken first.
-      for (const auto child : std::views::reverse(children)) {
-        if (child != index) {
-          stack_.push({child, static_cast<std::uint8_t>(std::min<std::size_t>(depth + 1U, deepest))});
-        }
+      if (folds(listed, view)) {
+        listed.folded = branches_[listed.index].descendants;
+        listed_.push(listed);
+        continue;
       }
+
+      listed_.push(listed);
+      pushChildren(listed);
+    }
+  }
+
+  // Adds up the selected processes of each owner into groups_ from `first`: one group for each pane,
+  // one for telar's and one for those of no pane. group_of_ says each process's group.
+  void MonitorSampler::groupOwners(std::size_t first) {
+    // A pane's group is an agent's once any of its processes is one.
+    const auto group_owner = [](ProcessOwner owner) {
+      return owner == ProcessOwner::agent || owner == ProcessOwner::agent_child ? ProcessOwner::pane : owner;
+    };
+
+    group_of_.clear();
+    group_of_.resize(entries_.size(), no_group);
+    for (const auto index : selected_) {
+      const auto& entry = entries_[index];
+      const auto owner = group_owner(entry.owner);
+      const auto pane = owner == ProcessOwner::pane ? entry.pane_id : 0;
+      const auto groups = groups_.view().subspan(first);
+      const auto found = std::ranges::find_if(groups, [&](const MonitorGroup& group) {
+        return group_owner(group.owner) == owner && group.pane_id == pane;
+      });
+
+      const auto position = static_cast<std::size_t>(found - groups.begin());
+
+      if (found == groups.end() && groups.size() == MonitorLimits::maximum_groups) {
+        continue;
+      }
+
+      if (found == groups.end()) {
+        groups_.push({.owner = owner, .pane_id = pane});
+      }
+
+      auto& group = groups_.atMut(first + position);
+
+      group.owner = underAgent(entry.owner) ? ProcessOwner::agent : group.owner;
+      ++group.processes;
+      group.cpu_permille = saturated(std::uint64_t{group.cpu_permille} + entry.cpu_permille);
+      group.resident_bytes += entry.record.resident_bytes;
+      group_of_.atMut(index) = static_cast<std::uint16_t>(position);
+    }
+  }
+
+  // The processes of each pane together, then telar's, then those of no pane: a pane's group goes
+  // before the others in the query's order of its processor share, and the processes of a group in
+  // the query's order.
+  void MonitorSampler::selectOwners(const MonitorView& view) {
+    const auto first = groups_.size();
+
+    groupOwners(first);
+
+    const auto groups = groups_.viewMut().subspan(first);
+    const auto group_before = [&](const MonitorGroup& left, const MonitorGroup& right) {
+      const auto left_none = left.owner == ProcessOwner::none;
+      const auto right_none = right.owner == ProcessOwner::none;
+      if (left_none != right_none) {
+        return right_none;
+      }
+
+      if (left.cpu_permille != right.cpu_permille) {
+        return (left.cpu_permille > right.cpu_permille) != view.reverse;
+      }
+
+      return left.pane_id < right.pane_id;
+    };
+
+    // Each group's rank in the listing, by its index before the sort.
+    ds::Array<std::uint16_t, MonitorLimits::maximum_groups> rank{};
+    ds::Array<std::uint16_t, MonitorLimits::maximum_groups> order{};
+
+    std::ranges::iota(order.viewMut().first(groups.size()), std::uint16_t{0});
+    std::ranges::sort(order.viewMut().first(groups.size()), [&](std::uint16_t left, std::uint16_t right) {
+      return group_before(groups[left], groups[right]);
+    });
+
+    for (std::size_t position = 0; position < groups.size(); ++position) {
+      rank.atMut(order[position]) = static_cast<std::uint16_t>(position);
+    }
+
+    std::ranges::sort(groups, group_before);
+
+    // A process past the last group the reply carries is left out of the listing.
+    std::size_t kept = 0;
+
+    for (const auto index : selected_) {
+      if (group_of_[index] != no_group) {
+        selected_.atMut(kept++) = index;
+      }
+    }
+
+    selected_.truncate(kept);
+    std::ranges::sort(selected_.viewMut(), [&](std::uint32_t left, std::uint32_t right) {
+      const auto left_rank = rank[group_of_[left]];
+      const auto right_rank = rank[group_of_[right]];
+
+      return left_rank != right_rank ? left_rank < right_rank : before(entries_[left], entries_[right], view);
+    });
+
+    for (const auto index : selected_) {
+      listed_.push({.index = index});
     }
   }
 
@@ -492,6 +776,8 @@ namespace telar::runtime {
         snapshot.swap_total_bytes = host_.swap_total_bytes;
         snapshot.swap_used_bytes = host_.swap_used_bytes;
         snapshot.process_count = static_cast<std::uint32_t>(entries_.size());
+        snapshot.telar_count = telar_count_;
+        snapshot.agent_count = agent_count_;
         snapshot.thread_count = thread_count_;
       }
 
@@ -508,6 +794,7 @@ namespace telar::runtime {
       if ((view.sections & MonitorSections::processes) != 0) {
         snapshot.matched = placement.matched;
         snapshot.processes = rows_.view().subspan(placement.first, placement.count);
+        snapshot.groups = groups_.view().subspan(placement.first_group, placement.group_count);
       }
 
       if (placement.detail) {
@@ -515,11 +802,12 @@ namespace telar::runtime {
         const auto& entry = text.entry ? entries_[*text.entry] : text.fresh;
 
         snapshot.detail = MonitorDetail{
-            .process = row(entry, 0),
+            .process = row(entry, Listed{.index = std::numeric_limits<std::uint32_t>::max()}),
             .arguments = text.arguments.view(),
             .directory = text.directory.view(),
             .ports = text.ports.view(),
             .children = {text.children.data(), text.child_count},
+            .lineage = {text.lineage.data(), text.lineage_count},
         };
       }
     }
@@ -537,6 +825,7 @@ namespace telar::runtime {
     }
 
     rows_.clear();
+    groups_.clear();
     details_.clear();
     rows_.reserve(rows);
     details_.reserve(views.size());
@@ -554,12 +843,19 @@ namespace telar::runtime {
       }
 
       if ((view.sections & MonitorSections::processes) != 0) {
+        placement.first_group = groups_.size();
         select(view);
+        placement.group_count = groups_.size() - placement.first_group;
+
+        const auto first = std::min<std::size_t>(view.offset, listed_.size());
+
         placement.first = rows_.size();
-        placement.count = std::min(ordered_.size(), rows_.capacity() - placement.first);
-        placement.matched = static_cast<std::uint32_t>(selected_.size());
+        placement.count = std::min({listed_.size() - first, std::size_t{view.limit}, rows_.capacity() - placement.first});
+        placement.matched = static_cast<std::uint32_t>(view.layout == MonitorLayout::flat ? selected_.size() : listed_.size());
         for (std::size_t index = 0; index < placement.count; ++index) {
-          rows_.push(row(entries_[ordered_[index]], depths_[index]));
+          const auto& listed = listed_[first + index];
+
+          rows_.push(row(entries_[listed.index], listed));
         }
       }
     }
@@ -592,6 +888,8 @@ namespace telar::runtime {
         text.fresh.pane_id = entries_[*parent].pane_id;
         text.fresh.under_agent = entries_[*parent].under_agent || text.fresh.agent != AgentProvider::unknown;
       }
+
+      text.fresh.owner = ownerOf(text.fresh, clients_.view().first(client_count_));
     }
 
     displayCopy(text.arguments, inspector_.commandLine(pid, arguments.viewMut()).text);
@@ -602,10 +900,25 @@ namespace telar::runtime {
 
     for (const auto& entry : entries_) {
       if (entry.record.parent == pid && entry.record.pid != pid && text.child_count < MonitorLimits::maximum_children) {
-        text.children.atMut(text.child_count++) = entry.record.pid;
+        text.children.atMut(text.child_count++) = {.pid = entry.record.pid, .name = entry.name.view()};
       }
     }
 
+    // The nearest ancestors, collected upwards, then turned to read from the root down.
+    auto ancestor = indexOf(record->parent);
+
+    while (ancestor && text.lineage_count < MonitorLimits::maximum_lineage && entries_[*ancestor].record.pid != pid) {
+      const auto& entry = entries_[*ancestor];
+
+      text.lineage.atMut(text.lineage_count++) = {.pid = entry.record.pid, .name = entry.name.view()};
+      if (entry.record.parent == entry.record.pid) {
+        break;
+      }
+
+      ancestor = indexOf(entry.record.parent);
+    }
+
+    std::ranges::reverse(text.lineage.viewMut().first(text.lineage_count));
     return true;
   }
 

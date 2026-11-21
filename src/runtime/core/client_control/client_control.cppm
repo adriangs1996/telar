@@ -591,6 +591,9 @@ export {
       bool sample = false;
       ds::Array<PaneRoot, MonitorLimitsOfWork::maximum_roots> roots{};
       std::uint16_t root_count = 0;
+      // The processes of the runtime's clients.
+      ds::Array<pid_t, maximum_monitor_clients> clients{};
+      std::uint8_t client_count = 0;
       ds::Array<MonitorQueryTicket, MonitorLimitsOfWork::maximum_queries> queries{};
       std::uint8_t query_count = 0;
       ds::Array<MonitorActionTicket, MonitorLimitsOfWork::maximum_actions> actions{};
@@ -640,7 +643,7 @@ export {
 
         try {
           if (work.sample && processes_.read(records_) && host_.read(detail_)) {
-            sampler_.update(records_, detail_, std::chrono::steady_clock::now(), {work.roots.data(), work.root_count});
+            sampler_.update(records_, detail_, std::chrono::steady_clock::now(), {work.roots.data(), work.root_count}, {work.clients.data(), work.client_count});
             outcome.sampled = true;
           }
 
@@ -768,12 +771,16 @@ export {
             .sort = message.sort,
             .reverse = message.reverse,
             .scope = message.scope,
-            .tree = message.tree,
+            .layout = message.layout,
+            .offset = message.offset,
             .limit = message.limit,
+            .fold = message.fold,
             .detail = message.detail,
         };
 
         ticket.view.filter.assign(message.filter);
+        ticket.view.toggled_count = static_cast<std::uint8_t>(std::min(message.toggled.size(), ticket.view.toggled.size()));
+        std::ranges::copy(message.toggled.first(ticket.view.toggled_count), ticket.view.toggled.dataMut());
         wake(now);
       }
 
@@ -808,6 +815,7 @@ export {
 
         work_.sample = due;
         work_.root_count = 0;
+        work_.client_count = 0;
         std::forward<Roots>(roots)(work_);
         work_.query_count = answerable ? static_cast<std::uint8_t>(pending_queries_) : 0;
         for (std::size_t index = 0; index < work_.query_count; ++index) {
