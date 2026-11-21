@@ -184,11 +184,17 @@ namespace telar::gui::qt {
         // presented once, here on the worker, and the address it leaves is what is saved.
         if (edit.kind == application::machines::MachineEditKind::add) {
           const auto address = edit.value;
-          if (!address.starts_with("telar://") || !address.contains('#')) {
+          if (!application::machines::MachineAddress::valid(address)) {
             throw application::machines::MachineFailure{application::machines::MachineError::invalid_destination};
           }
 
-          if (address.substr(address.find('#')).contains('.')) {
+          // The machine must be one that can be saved before a pairing code is spent on it.
+          auto trial = store.load();
+          auto saved = edit;
+
+          saved.value = application::machines::MachineAddress::saved(address);
+          application::machines::MachineProfileEdits::apply(trial, saved, random, textView(request.local_label));
+          if (application::machines::MachineAddress::pairing(address)) {
             paired = system::runtime_endpoint::pairMachine(address, textView(request.local_label));
             edit.value = paired.view();
           }

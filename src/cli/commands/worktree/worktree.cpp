@@ -756,7 +756,7 @@ namespace telar::runtime::cli::sessions {
               {"UnknownRevision", "that revision names no commit here"},
               {"GitPushFailed", "git push to the machine failed; a branch with other history there is never overwritten"},
               {"GitFetchFailed", "git fetch from the machine failed"},
-              {"UnquotableSshOption", "telar's runtime directory has a quote in its path, which git cannot be given safely"},
+              {"UnquotableGatewayCommand", "telar is installed in a path with a quote in it, which git cannot be given safely"},
               {"NotARepository", "not inside a git repository"},
           },
       };

@@ -685,18 +685,32 @@ def repositories(f, prepare_probe=None):
 
 def dispatch(f):
     """A dispatch to another machine never overwrites commits its clone's branch holds."""
-    bindir = f.root / "ssh-bin"
+    bindir = f.root / "gateway-bin"
     bindir.mkdir(mode=0o700)
-    # The other machine is this one: the remote command runs locally, as sshd would run it, in HOME.
-    (bindir / "ssh").write_text('#!/bin/sh\nfor command; do :; done\ncd "$HOME" || exit 255\nexec /bin/sh -c "$command"\n')
-    (bindir / "ssh").chmod(0o700)
+    key = "00112233445566778899aabbccddeeff" * 2
+    address = f"telar://box:8352#{key}"
+    transfers = f.root / "gateway-transfers"
+    # The other machine is this one. The stand-in takes telar-gateway's `run [-t] [--to ADDRESS]
+    # ADDRESS COMMAND` and runs the command locally, as the gateway there would run it, in HOME.
+    # With --to, as Git calls it, it records the machine, Git's host and the service asked for.
+    gateway = bindir / "telar-gateway"
+    gateway.write_text(f'''#!/bin/sh
+[ "$1" = run ] || exit 2
+shift
+[ "$1" = -t ] && shift
+[ "$1" = --to ] && {{ named=$2; shift 2; }}
+[ $# -eq 2 ] || exit 2
+[ -n "$named" ] && printf '%s %s %s\\n' "$named" "$1" "${{2%% *}}" >> "{transfers}"
+cd "$HOME" || exit 255
+exec /bin/sh -c "$2"
+''')
+    gateway.chmod(0o700)
     profiles = Path(f.env["XDG_CONFIG_HOME"]) / "telar/machines.json"
     profiles.parent.mkdir(mode=0o700, exist_ok=True)
     profiles.write_text(json.dumps({"version": 2, "local_label": "local", "machines": [
-        {"id": "m-0123456789ab", "label": "box", "destination": "box", "telar_path": str(f.binary)}]}))
+        {"id": "m-0123456789ab", "label": "box", "destination": address, "telar_path": str(f.binary)}]}))
     profiles.chmod(0o600)
-    path = f.env["PATH"]
-    f.env["PATH"] = f"{bindir}:{path}"
+    f.env["TELAR_GATEWAY_PROGRAM"] = str(gateway)
     try:
         source = f.root / "dispatched"
         source.mkdir(mode=0o700)
@@ -723,18 +737,21 @@ def dispatch(f):
         fetched = json.loads(f.invoke("dispatch/fetch", "worktree", "fetch", "fresh", "--machine", "box", "--json", cwd=source).stdout)
         assert fetched == {"machine": "box", "branch": "fresh", "ref": "refs/remotes/box/fresh", "commit": local}, fetched
         assert f.git(source, "rev-parse", "refs/remotes/box/fresh").decode().strip() == local
-        # A destination Git would split into host, port and path fetches nothing, though the
-        # machine names its clone.
-        remote_telar = bindir / "telar-colon"
+        # An address the shell Git runs the gateway program with cannot hold as one word fetches
+        # nothing, though the machine names its clone.
+        remote_telar = bindir / "telar-quote"
         remote_telar.write_text("#!/bin/sh\nprintf '%s\\n' '" + json.dumps({"path": str(clone)}) + "'\n")
         remote_telar.chmod(0o700)
         machines = json.loads(profiles.read_text())
-        machines["machines"].append({"id": "m-0123456789ac", "label": "colon", "destination": "user@host:22", "telar_path": str(remote_telar)})
+        machines["machines"].append({"id": "m-0123456789ac", "label": "quote", "destination": f"telar://it's:8352#{key}", "telar_path": str(remote_telar)})
         profiles.write_text(json.dumps(machines))
-        f.invoke("dispatch/fetch-colon", "worktree", "fetch", "fresh", "--machine", "colon", cwd=source, code=1)
-        assert not f.git(source, "for-each-ref", "refs/remotes/colon/").strip()
+        f.invoke("dispatch/fetch-quote", "worktree", "fetch", "fresh", "--machine", "quote", cwd=source, code=1)
+        assert not f.git(source, "for-each-ref", "refs/remotes/quote/").strip()
+        # Git reached the clone through the gateway program alone: the machine by its address,
+        # and a host that names nothing.
+        assert set(transfers.read_text().splitlines()) == {f"{address} telar git-receive-pack", f"{address} telar git-upload-pack"}, transfers.read_text()
     finally:
-        f.env["PATH"] = path
+        del f.env["TELAR_GATEWAY_PROGRAM"]
 
 
 def run_suite(binary, root, with_runtime=True, prepare_probe=None):

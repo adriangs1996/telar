@@ -263,6 +263,33 @@ namespace {
     check(rejected && budget.liveBytes() == 0 && budget.failures() != 0, "allocation rejection must stay observable and release every parser temporary");
   }
 
+  // A machine is named by the address of what answers for it; the pairing code it may carry is never saved.
+  void addressesNameAGatewayAndItsKey() {
+    constexpr std::string_view key = "00112233445566778899aabbccddeeff00112233445566778899AABBCCDDEEFF";
+    constexpr std::string_view code = "0123456789abcdef0123456789abcdef";
+    const auto address = [&](std::string_view authority, std::string_view suffix = {}) {
+      return std::string{"telar://"} + std::string{authority} + "#" + std::string{key} + std::string{suffix};
+    };
+
+    for (const std::string_view authority : {"box", "box.example:8352", "10.0.0.2:9", "[fd00::1]:8352"}) {
+      check(MachineAddress::valid(address(authority)) && !MachineAddress::pairing(address(authority)), "an address without a code is a saved one");
+      check(MachineAddress::saved(address(authority)) == address(authority));
+    }
+
+    const auto pairing = address("box:8352", "." + std::string{code});
+
+    check(MachineAddress::valid(pairing) && MachineAddress::pairing(pairing));
+    check(MachineAddress::saved(pairing) == address("box:8352"), "a profile never keeps the pairing code");
+    for (const std::string_view other : {"dev@box", "ssh://dev@box", "telar://box:8352", "telar://#00", "telar://box#zz", "telar://bo x#00"}) {
+      check(!MachineAddress::valid(other), "what names no key is no address");
+    }
+
+    check(!MachineAddress::valid(address("box", ".1234")), "a code is 32 digits");
+    check(!MachineAddress::valid(std::string{"telar://box#"} + std::string{key.substr(1)}), "a key is 64 digits");
+    check(!MachineAddress::valid(address(":8352")));
+  }
+
+  const telar::testing::Case case_addresses_name_a_gateway_and_its_key{"machine_profiles.addresses_name_a_gateway_and_its_key", addressesNameAGatewayAndItsKey};
   const telar::testing::Case case_identities_keep_their_stable_representation{"machine_profiles.identities_keep_their_stable_representation", identitiesKeepTheirStableRepresentation};
   const telar::testing::Case case_profiles_preserve_identity_order_and_rejected_edits{"machine_profiles.profiles_preserve_identity_order_and_rejected_edits", profilesPreserveIdentityOrderAndRejectedEdits};
   const telar::testing::Case case_versions_and_json_round_trips_preserve_every_field{"machine_profiles.versions_and_json_round_trips_preserve_every_field", versionsAndJsonRoundTripsPreserveEveryField};

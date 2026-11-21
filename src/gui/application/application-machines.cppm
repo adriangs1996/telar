@@ -17,6 +17,7 @@ export namespace telar::gui::application::machines {
   using features::machines::MachineError;
   using features::machines::MachineFacts;
   using features::machines::MachineFailure;
+  using features::machines::MachineAddress;
   using features::machines::MachineFieldRules;
   using features::machines::MachineFields;
   using features::machines::MachineLimits;
@@ -30,6 +31,7 @@ export namespace telar::gui::application::machines {
   using features::machines::MachineProfileCodec;
   using features::machines::MachineProfileMessages;
   using features::machines::MachineProfiles;
+  using features::machines::MachineProfileEdits;
   using features::machines::MachineProfileStore;
   using features::machines::MachineRemoteCommand;
   using features::machines::MachineRuntimeLocation;

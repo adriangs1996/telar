@@ -24,7 +24,7 @@ if [ "$arch" = arm64 ]; then
 fi
 
 # The executables the archive ships, beside each other in bin/.
-tools="telar telar-runtime telar-config-check telar-diagram-renderer"
+tools="telar telar-runtime telar-config-check telar-gateway telar-diagram-renderer"
 
 build() {
     stage=$1

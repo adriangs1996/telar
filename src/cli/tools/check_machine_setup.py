@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Check setup's file sync through a substituted SSH transport and real receivers."""
+"""Check setup's file sync through a substituted gateway program and real receivers."""
 import contextlib
 import json
 import os
@@ -10,12 +10,14 @@ import shutil
 import subprocess
 import tempfile
 import types
-from check_machines_launch import VERSION, environment, normalize, snapshot
+from check_machines_launch import GATEWAY_ARGV, NOT_PAIRED, VERSION, address, environment, install_gateway, normalize, snapshot
 
-SHIM = r'''#!/usr/bin/env python3
-import os,sys,subprocess,json,shlex,base64
+# The machine every setup here reaches, and the address `telar server pair` would print for it.
+FIXTURE = address('fixture')
+PAIRING = FIXTURE + '.' + '0123456789abcdef' * 2
+
+SHIM = GATEWAY_ARGV + r'''import os,subprocess,json,shlex,base64
 from pathlib import Path
-command=sys.argv[-1]
 home=os.environ['FIXTURE_REMOTE_HOME']
 schema=os.environ['FIXTURE_SCHEMA']
 mode=os.environ.get('FIXTURE_LOGIN','')
@@ -63,10 +65,13 @@ def respond(words):
 if os.environ.get('FIXTURE_CALLS'):
  with open(os.environ['FIXTURE_CALLS'],'a') as log:log.write(json.dumps({'argv':sys.argv[1:],'terminal':os.isatty(0)})+'\n')
 remote_env=dict(os.environ,HOME=home,PATH=home+'/.local/bin:/usr/bin:/bin')
-# Batch-mode SSH refused until the person has logged in once on their terminal.
-if os.environ.get('FIXTURE_AUTH')=='once':
- if command=='true':(Path(home)/'confirmed').touch();sys.exit(0)
- if not (Path(home)/'confirmed').exists():print('dev@fixture: Permission denied (publickey).',file=sys.stderr);sys.exit(255)
+# A pairing address enrolls this machine by its name and leaves the address to save; with
+# FIXTURE_AUTH=once the gateway admits no machine before that.
+paired=Path(home)/'fixture-paired'
+if request['verb']=='enroll':
+ paired.write_text(request['name']+'\n');print(request['destination'].rpartition('.')[0]);sys.exit(0)
+if os.environ.get('FIXTURE_AUTH')=='once' and not paired.exists():
+ print('@NOT_PAIRED@',file=sys.stderr);sys.exit(255)
 if ' dispatch-argv ' in command:
  words=[base64.urlsafe_b64decode(word[1:]+'='*((-len(word[1:]))%4)).decode() for word in command.split(' dispatch-argv ',1)[1].split()]
  respond(words)
@@ -100,7 +105,7 @@ else:
   count=Path(home)/'fixture-auth-count'
   before=int(count.read_text()) if count.exists() else 0
   count.write_text(str(before+1))
-  if mode=='ssh-failure':sys.exit(255)
+  if mode=='unreachable':sys.exit(255)
   # 'paste' logs in once the person has answered, its pane still open.
   sys.exit(0 if mode=='done' or mode in ('ended','paste') and before>0 else 1)
  elif mode and script.startswith(('cat "','rm -f "','umask 077 && mkdir')):
@@ -110,7 +115,7 @@ else:
  elif script.startswith('while IFS= read -r path;'):
   for path in script.split("TELAR_PATHS'\n",1)[-1].splitlines():
    if os.path.exists(path):print(path)
-'''.replace('0.0.0', VERSION)
+'''.replace('0.0.0', VERSION).replace('@NOT_PAIRED@', NOT_PAIRED)
 
 
 def run(binary, provider, seed, login=False, prepare=None):
@@ -118,7 +123,7 @@ def run(binary, provider, seed, login=False, prepare=None):
     with tempfile.TemporaryDirectory(prefix='telar-sync-',dir='/tmp') as temporary:
         root=Path(temporary).resolve();env=environment(root)
         home=Path(env['HOME']);remote=root/'remote';remote.mkdir(mode=0o700)
-        bindir=root/'bin';bindir.mkdir();(bindir/'ssh').write_text(SHIM);(bindir/'ssh').chmod(0o700)
+        bindir=root/'bin';bindir.mkdir();install_gateway(bindir,env,SHIM)
         command='cursor-agent' if provider=='cursor' else provider
         (bindir/command).write_text('#!/bin/sh\nexit 0\n');(bindir/command).chmod(0o700)
         env['PATH']=str(bindir)+':/usr/bin:/bin'
@@ -139,7 +144,7 @@ def run(binary, provider, seed, login=False, prepare=None):
         if prepare:prepare(root,env)
         result=[]
         for repetition in range(2):
-            child=subprocess.run([str(binary),'machine','setup','fixture','--skip','agents,config' if login else 'agents,login','--json'],env=env,cwd=root,capture_output=True,text=True,timeout=90)
+            child=subprocess.run([str(binary),'machine','setup',FIXTURE,'--skip','agents,config' if login else 'agents,login','--json'],env=env,cwd=root,capture_output=True,text=True,timeout=90)
             files=snapshot(root,binary)
             # Fixture files contain implementation paths and schema by design.
             result.append({'status':child.returncode,'stdout':normalize(child.stdout,root,binary),'stderr':normalize(child.stderr,root,binary),'files':files})
@@ -173,8 +178,8 @@ def stale_login_record(root, env):
 
 @contextlib.contextmanager
 def machine(binary, agents=('claude',), **fixture):
-    """A private home with these agents on PATH, a remote home and the shim as ssh;
-    `fixture` sets the shim's FIXTURE_* modes."""
+    """A private home with these agents on PATH, a remote home and the shim as the gateway
+    program; `fixture` sets the shim's FIXTURE_* modes."""
     with tempfile.TemporaryDirectory(prefix='telar-setup-', dir='/tmp') as temporary:
         root = Path(temporary).resolve()
         env = environment(root)
@@ -182,8 +187,7 @@ def machine(binary, agents=('claude',), **fixture):
         remote.mkdir(mode=0o700)
         bindir = root / 'bin'
         bindir.mkdir()
-        (bindir / 'ssh').write_text(SHIM)
-        (bindir / 'ssh').chmod(0o700)
+        install_gateway(bindir, env, SHIM)
         for agent in agents:
             (bindir / agent).write_text('#!/bin/sh\nexit 0\n')
             (bindir / agent).chmod(0o700)
@@ -227,15 +231,15 @@ SKIP_ALL = ('--skip', 'agents,config,login')
 
 def probe_failures(binary):
     """A probe that prints no platform, as a shell banner does, installs nothing; a probe
-    that fails there is a platform failure over working SSH."""
+    that fails there is a platform failure behind a gateway that admits this machine."""
     with machine(binary, probe='banner') as fixture:
-        status, output = fixture.run('machine', 'setup', 'fixture', *SKIP_ALL, '--json')
+        status, output = fixture.run('machine', 'setup', FIXTURE, *SKIP_ALL, '--json')
         assert status == 1 and steps(output)['platform'] == 'failed', output
         assert len(fixture.calls()) == 1, fixture.calls()
     with machine(binary, probe='exit3') as fixture:
-        status, output = fixture.run('machine', 'setup', 'fixture', *SKIP_ALL, '--json')
+        status, output = fixture.run('machine', 'setup', FIXTURE, *SKIP_ALL, '--json')
         result = steps(output)
-        assert status == 1 and (result['ssh'], result['platform']) == ('ok', 'failed'), output
+        assert status == 1 and (result['gateway'], result['platform']) == ('ok', 'failed'), output
 
 
 def configuration_sync(binary):
@@ -254,7 +258,7 @@ def configuration_sync(binary):
             (claude / 'hooks' / name).chmod(0o755)
         hooks = [{'command': '~/.claude/hooks/run.sh'}, {'command': '$HOME/.claude/hooks/other.sh --flag'}, {'command': '~/.claude/hooks/missing.sh'}]
         (claude / 'settings.json').write_text(json.dumps({'hooks': {'Stop': [{'hooks': hooks}]}}))
-        status, output = fixture.run('machine', 'setup', 'fixture', *SKIP_ALL_BUT_CONFIG, '--json')
+        status, output = fixture.run('machine', 'setup', FIXTURE, *SKIP_ALL_BUT_CONFIG, '--json')
         assert status == 0 and steps(output)['configuration'] == 'changed', output
         sent = fixture.remote / '.claude'
         assert (sent / 'skills/small/SKILL.md').exists() and not (sent / 'skills/big/huge.md').exists(), output
@@ -273,7 +277,7 @@ def telar_skill_kept_there(binary):
         theirs = fixture.remote / '.claude/skills/telar/SKILL.md'
         theirs.parent.mkdir(parents=True)
         theirs.write_text('telar skill of the remote build\n')
-        status, output = fixture.run('machine', 'setup', 'fixture', *SKIP_ALL_BUT_CONFIG, '--json')
+        status, output = fixture.run('machine', 'setup', FIXTURE, *SKIP_ALL_BUT_CONFIG, '--json')
         assert status == 0 and theirs.read_text() == 'telar skill of the remote build\n', output
 
 
@@ -287,13 +291,13 @@ def binary_upload(binary):
         names = ('telar', 'telar-runtime', 'telar-config-check')
         for name in names:
             shutil.copy2(binary.parent / name, build / name)
-        status, output = fixture.run('machine', 'setup', 'fixture', '--binary', str(build / 'telar'), *SKIP_ALL, '--json')
+        status, output = fixture.run('machine', 'setup', FIXTURE, '--binary', str(build / 'telar'), *SKIP_ALL, '--json')
         assert status == 0 and steps(output)['telar'] == 'changed', output
         installed = Path(next(step['detail'] for step in json.loads(output)['steps'] if step['step'] == 'telar').split(' at ', 1)[1]).parent
         for name in names:
             assert (installed / name).read_bytes() == (build / name).read_bytes(), name
         before = len(fixture.calls())
-        status, output = fixture.run('machine', 'setup', 'fixture', '--binary', str(build / 'telar'), *SKIP_ALL, '--json')
+        status, output = fixture.run('machine', 'setup', FIXTURE, '--binary', str(build / 'telar'), *SKIP_ALL, '--json')
         assert status == 0 and steps(output)['telar'] == 'ok', output
         uploads = [call for call in fixture.calls()[before:] if call['argv'][-1].startswith('exec /bin/sh -c ')]
         assert not uploads, uploads
@@ -319,7 +323,7 @@ def logins(binary):
     only for an OpenAI model, Pi only with a provider, and a code pasted here reaches the
     login pane while an empty answer sends nothing."""
     with machine(binary, agents=('codex',), login='pending', there='codex', pane_text=CODEX_DEVICE_SCREEN) as fixture:
-        status, output = fixture.run('machine', 'setup', 'fixture', '--skip', 'agents,config')
+        status, output = fixture.run('machine', 'setup', FIXTURE, '--skip', 'agents,config')
         assert 'https://auth.openai.com/codex/device' in output and 'ABCD-EFGH9' in output, output
     for model, opened in (('openai/gpt-5', 1), ('anthropic/claude', 0)):
         with machine(binary, agents=('opencode', 'pi'), login='pending', there='opencode,pi') as fixture:
@@ -328,7 +332,7 @@ def logins(binary):
             (Path(fixture.env['XDG_CONFIG_HOME']) / 'opencode/opencode.json').write_text(json.dumps({'model': model}))
             (fixture.home / '.pi/agent').mkdir(parents=True)
             (fixture.home / '.pi/agent/settings.json').write_text('{}')
-            status, output = fixture.run('machine', 'setup', 'fixture', '--skip', 'agents,config', '--json')
+            status, output = fixture.run('machine', 'setup', FIXTURE, '--skip', 'agents,config', '--json')
             argv = fixture.root / 'argv.jsonl'
             commands = [json.loads(line) for line in argv.read_text().splitlines()] if argv.exists() else []
             assert [words[:2] for words in commands].count(['workspace', 'create']) == opened, (model, commands)
@@ -337,7 +341,7 @@ def logins(binary):
         with machine(binary, login='paste') as fixture:
             log = fixture.root / 'sent.jsonl'
             fixture.env['FIXTURE_SENT'] = str(log)
-            status, output = fixture.run('machine', 'setup', 'fixture', '--skip', 'agents,config', answers=answer)
+            status, output = fixture.run('machine', 'setup', FIXTURE, '--skip', 'agents,config', answers=answer)
             texts = [json.loads(line)['text'].strip() for line in log.read_text().splitlines()] if log.exists() else []
             assert texts == sent, (answer, texts, output)
 
@@ -355,7 +359,7 @@ def agent_installs(binary):
                         'while [ $# -gt 0 ]; do [ "$1" = -o ] && out=$2; shift; done\n'
                         f'printf \'#!/bin/sh\\necho %s >> "{fetched}"\\n\' "$url" > "$out"\n')
         curl.chmod(0o700)
-        status, output = fixture.run('machine', 'setup', 'fixture', '--skip', 'config,login', '--json')
+        status, output = fixture.run('machine', 'setup', FIXTURE, '--skip', 'config,login', '--json')
         assert steps(output)['agents'] == 'changed', output
         assert fetched.read_text().split() == ['https://chatgpt.com/codex/install.sh'], fetched.read_text()
 
@@ -365,7 +369,7 @@ def refused_sync(binary):
     with machine(binary, receive='fail') as fixture:
         (fixture.home / '.claude').mkdir()
         (fixture.home / '.claude/settings.json').write_text('{"theme":"dark"}')
-        status, output = fixture.run('machine', 'setup', 'fixture', *SKIP_ALL_BUT_CONFIG, '--json')
+        status, output = fixture.run('machine', 'setup', FIXTURE, *SKIP_ALL_BUT_CONFIG, '--json')
         assert status == 1 and steps(output)['configuration'] == 'failed', output
 
 
@@ -374,7 +378,7 @@ def codex_hooks(binary):
     with machine(binary, agents=('codex',)) as fixture:
         (fixture.home / '.codex').mkdir()
         (fixture.home / '.codex/hooks.json').write_text(json.dumps({'hooks': {'Stop': [{'hooks': [{'type': 'command', 'command': 'echo mine'}]}]}}))
-        status, output = fixture.run('machine', 'setup', 'fixture', *SKIP_ALL_BUT_CONFIG, '--json')
+        status, output = fixture.run('machine', 'setup', FIXTURE, *SKIP_ALL_BUT_CONFIG, '--json')
         assert status == 0, output
         synced = (fixture.remote / '.codex/hooks.json').read_text()
         program = str(fixture.remote / '.local/share/telar/versions' / VERSION / 'telar')
@@ -385,9 +389,9 @@ def add_then_setup(binary):
     """`machine add --setup` saves the machine and sets it up; `--check` saves a machine
     that answers."""
     with machine(binary) as fixture:
-        status, output = fixture.run('machine', 'add', 'box', 'dev@box', '--setup', *SKIP_ALL, '--json')
-        assert status == 0 and steps(output)['ssh'] == 'ok', output
-        status, output = fixture.run('machine', 'add', 'new', 'dev@new', '--check')
+        status, output = fixture.run('machine', 'add', 'box', address('box'), '--setup', *SKIP_ALL, '--json')
+        assert status == 0 and steps(output)['gateway'] == 'ok', output
+        status, output = fixture.run('machine', 'add', 'new', address('new'), '--check')
         assert status == 0, output
         _, listed = fixture.run('machine', 'list', '--json')
         assert {row['label'] for row in json.loads(listed)['machines']} == {'box', 'new'}, listed
@@ -397,9 +401,9 @@ def terminal_answers(binary):
     """On a terminal, --confirm changes nothing without a yes, and a runtime of another
     build there is stopped only after one."""
     with machine(binary) as fixture:
-        status, output = fixture.run('machine', 'setup', 'fixture', '--confirm', *SKIP_ALL, answers=b'no\n')
+        status, output = fixture.run('machine', 'setup', FIXTURE, '--confirm', *SKIP_ALL, answers=b'no\n')
         assert status == 0 and 'Nothing was changed' in output and not fixture.calls(), output
-        status, output = fixture.run('machine', 'setup', 'fixture', '--confirm', *SKIP_ALL, answers=b'yes\n')
+        status, output = fixture.run('machine', 'setup', FIXTURE, '--confirm', *SKIP_ALL, answers=b'yes\n')
         assert status == 0 and fixture.calls(), output
     for answer, expected in ((b'\n', False), (b'n\n', False), (b'y\n', True)):
         with machine(binary, endpoint='mismatch', scripts='real') as fixture:
@@ -407,22 +411,33 @@ def terminal_answers(binary):
             telar.parent.mkdir(parents=True)
             telar.write_text(f'#!/bin/sh\n[ "$1 $2" = "server stop" ] && touch "{fixture.remote}/stopped" && echo "telar runtime is stopping"\n')
             telar.chmod(0o700)
-            status, output = fixture.run('machine', 'setup', 'fixture', *SKIP_ALL, answers=answer)
+            status, output = fixture.run('machine', 'setup', FIXTURE, *SKIP_ALL, answers=answer)
             assert (fixture.remote / 'stopped').exists() == expected and (status == 0) == expected, (answer, status, output)
 
 
-def interactive_ssh(binary):
-    """Batch SSH refused on a terminal: one interactive ssh with the person's terminal and
-    no agent forwarding, then the probe again."""
+def pairing(binary):
+    """A gateway that does not admit this machine fails setup at its first step, with nothing
+    enrolled or saved. A pairing address enrolls this machine once, under its own name; what
+    is saved, and what every command there is sent to, is the address without the code."""
     with machine(binary, auth='once') as fixture:
-        status, output = fixture.run('machine', 'setup', 'fixture', *SKIP_ALL, answers=b'')
-        calls = fixture.calls()
-        interactive = [call for call in calls if call['argv'][-1] == 'true']
-        assert status == 0 and len(interactive) == 1, (status, output, calls)
-        argv = interactive[0]['argv']
-        assert interactive[0]['terminal'] and 'ForwardAgent=no' in argv and argv[-3:] == ['--', 'fixture', 'true'], argv
-        probes = [call for call in calls if call['argv'][-1] == 'exec /bin/sh -s']
-        assert len(probes) >= 2, calls
+        status, output = fixture.run('machine', 'setup', FIXTURE, *SKIP_ALL, '--json')
+        assert status == 1 and steps(output) == {'gateway': 'failed'}, output
+        assert [call['argv'][0] for call in fixture.calls()] == ['run'], fixture.calls()
+        listed = json.loads(fixture.run('machine', 'list', '--json')[1])
+        assert not listed['machines'], listed
+        status, output = fixture.run('machine', 'setup', PAIRING, *SKIP_ALL, '--json')
+        assert status == 0 and steps(output)['gateway'] == 'ok', output
+        calls = [call['argv'] for call in fixture.calls()]
+        assert [argv for argv in calls if argv[0] == 'enroll'] == [['enroll', PAIRING, '--name', listed['local']]], calls
+        assert {argv[-2] for argv in calls if argv[0] == 'run'} == {FIXTURE}, calls
+        saved = json.loads(fixture.run('machine', 'list', '--json')[1])['machines']
+        assert [(row['label'], row['destination']) for row in saved] == [('fixture', FIXTURE)], saved
+    with machine(binary, auth='once') as fixture:
+        status, output = fixture.run('machine', 'add', 'box', PAIRING, '--check')
+        calls = [call['argv'] for call in fixture.calls()]
+        assert status == 0 and [argv[0] for argv in calls] == ['enroll', 'run'] and calls[1][-2] == FIXTURE, (status, output, calls)
+        saved = json.loads(fixture.run('machine', 'list', '--json')[1])['machines']
+        assert [(row['label'], row['destination']) for row in saved] == [('box', FIXTURE)], saved
 
 
 def contracts(binary):
@@ -433,7 +448,7 @@ def contracts(binary):
     codex_hooks(binary)
     add_then_setup(binary)
     terminal_answers(binary)
-    interactive_ssh(binary)
+    pairing(binary)
     binary_upload(binary)
     logins(binary)
     agent_installs(binary)

@@ -862,14 +862,6 @@ namespace telar::runtime::cli::machine {
     return ds::format(memory, "'{}' run --to '{}'", program, destination);
   }
 
-  bool gatewayAddress(std::string_view destination) noexcept {
-    return destination.starts_with("telar://") && destination.contains('#');
-  }
-
-  bool pairingAddress(std::string_view destination) noexcept {
-    return gatewayAddress(destination) && destination.substr(destination.find('#')).contains('.');
-  }
-
   tbc::val_a<Text> pair(tbc::mut_a<Memory> memory, std::string_view address, std::string_view name) {
     constexpr auto pairing_timeout = std::chrono::seconds{60};
     Argv argv{memory};

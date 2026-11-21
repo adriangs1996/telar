@@ -125,14 +125,6 @@ namespace {
     check(::unsetenv("TELAR_GATEWAY_PROGRAM") == 0);
   }
 
-  // A machine is named by its gateway's address, and one that still carries its pairing code is
-  // told apart from the address a profile saves.
-  void gatewayAddressesAreToldApart() {
-    expect(machine::gatewayAddress("telar://box:8352#00ff") && !machine::pairingAddress("telar://box:8352#00ff"));
-    expect(machine::pairingAddress("telar://box.example:8352#00ff.1234"));
-    expect(!machine::gatewayAddress("dev@box") && !machine::gatewayAddress("telar://box:8352") && !machine::pairingAddress("ssh://dev@box.example"));
-  }
-
   // A remote command that fails, or whose output overflows what is kept, is the caller's
   // failure, never its output.
   void remoteCaptureFailsOnStatusOrOverflow() {
@@ -212,7 +204,6 @@ namespace {
   const telar::testing::Case case_capture_tail{"launch.capture_keeps_tail_and_counts_dropped", captureKeepsTailAndCountsDropped};
   const telar::testing::Case case_inherit_signal{"launch.inherit_signal_is_failure", inheritSignalIsFailure};
   const telar::testing::Case case_git_gateway{"launch.git_gateway_command_names_the_machine", gitGatewayCommandNamesTheMachine};
-  const telar::testing::Case case_gateway_addresses{"launch.gateway_addresses_are_told_apart", gatewayAddressesAreToldApart};
   const telar::testing::Case case_remote_capture{"launch.remote_capture_fails_on_status_or_overflow", remoteCaptureFailsOnStatusOrOverflow};
   const telar::testing::Case case_window_options{"launch.window_options_command_after_separator", windowOptionsCommandAfterSeparator};
 

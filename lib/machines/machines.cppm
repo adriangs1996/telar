@@ -234,6 +234,35 @@ export {
   }
 }
 
+// Interface: telar_machines/address.cppm
+export {
+  namespace telar::runtime::machines {
+
+    // The address a machine is reached at and saved by, `telar://HOST[:PORT]#KEY`: where its
+    // gateway listens and the 64 hexadecimal digits that name the gateway's key. The address a
+    // gateway prints to pair with adds `.CODE`, 32 digits that enroll one machine, once, and
+    // that a profile never keeps.
+    struct MachineAddress {
+      static constexpr std::string_view scheme = "telar://";
+      static constexpr std::size_t key_digits = 64;
+      static constexpr std::size_t code_digits = 32;
+
+      // Whether `text` is such an address, with or without a pairing code.
+      [[nodiscard]] static bool valid(std::string_view text) noexcept;
+
+      // Whether it is one that still carries its pairing code.
+      [[nodiscard]] static bool pairing(std::string_view text) noexcept;
+
+      // The address a profile saves: a valid one without its pairing code.
+      [[nodiscard]] static std::string_view saved(std::string_view text) noexcept;
+
+    private:
+      static bool hexadecimal(std::string_view digits, std::size_t count) noexcept;
+    };
+
+  }
+}
+
 // Interface: telar_machines/identity.cppm
 export {
   namespace telar::runtime::machines {

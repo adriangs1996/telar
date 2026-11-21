@@ -110,8 +110,8 @@ namespace telar::runtime::machines {
         "DuplicateMachineDestination",
         "UnknownMachine",
         "RemoteDiscoveryUnreadable",
-        "SshHostKeyRejected",
-        "SshAuthenticationFailed",
+        "GatewayKeyRejected",
+        "GatewayPairingRefused",
         "RemoteTelarMissing",
         "RemoteTelarIncompatible",
         "RemoteRuntimeIncompatible",
@@ -332,6 +332,43 @@ namespace telar::runtime::machines {
 
   bool MachineFieldRules::alphanumeric(char byte) noexcept {
     return decimal(byte) || (byte >= 'a' && byte <= 'z') || (byte >= 'A' && byte <= 'Z');
+  }
+
+  bool MachineAddress::hexadecimal(std::string_view digits, std::size_t count) noexcept {
+    return digits.size() == count && std::ranges::all_of(digits, [](char byte) {
+      return (byte >= '0' && byte <= '9') || (byte >= 'a' && byte <= 'f') || (byte >= 'A' && byte <= 'F');
+    });
+  }
+
+  bool MachineAddress::valid(std::string_view text) noexcept {
+    if (!text.starts_with(scheme)) {
+      return false;
+    }
+
+    text.remove_prefix(scheme.size());
+    const auto fragment = text.find('#');
+    if (fragment == std::string_view::npos || fragment == 0) {
+      return false;
+    }
+
+    // The host is a name or an address, an IPv6 one in brackets, and may be followed by a port.
+    const auto authority = text.substr(0, fragment);
+    const bool addressed = std::ranges::all_of(authority, [](char byte) {
+      return (byte >= 'a' && byte <= 'z') || (byte >= 'A' && byte <= 'Z') || (byte >= '0' && byte <= '9') || byte == '.' || byte == '-' || byte == '_' || byte == ':' || byte == '[' || byte == ']';
+    });
+
+    const auto keys = text.substr(fragment + 1);
+    const auto separator = keys.find('.');
+
+    return addressed && authority.front() != ':' && hexadecimal(keys.substr(0, separator), key_digits) && (separator == std::string_view::npos || hexadecimal(keys.substr(separator + 1), code_digits));
+  }
+
+  bool MachineAddress::pairing(std::string_view text) noexcept {
+    return valid(text) && text.substr(text.find('#')).contains('.');
+  }
+
+  std::string_view MachineAddress::saved(std::string_view text) noexcept {
+    return pairing(text) ? text.substr(0, text.rfind('.')) : text;
   }
 
   MachineId MachineId::fromRaw(std::uint64_t value) {

@@ -185,10 +185,6 @@ export {
     // Presents a pairing address to its gateway under `name`, and returns the address to save.
     tbc::val_a<Text> pair(tbc::mut_a<Memory> memory, std::string_view address, std::string_view name);
 
-    // Whether a destination is a gateway address, and whether it still carries a pairing code.
-    [[nodiscard]] bool gatewayAddress(std::string_view destination) noexcept;
-    [[nodiscard]] bool pairingAddress(std::string_view destination) noexcept;
-
     // The shell command that runs `words` as one telar command there.
     template <typename Words>
     tbc::val_a<Text> remoteCommand(tbc::mut_a<Memory> memory, const MachineProfile& profile, const Words& words);

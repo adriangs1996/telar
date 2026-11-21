@@ -2398,14 +2398,22 @@ fetch() {
   }
 
   tbc::val_a<Target> resolve(tbc::mut_a<Memory> memory, const MachineProfiles& profiles, const MachineOptions& options) {
+    const auto address = MachineAddress::saved(options.label);
+
     for (const auto& profile : profiles.rows()) {
-      if (profile.label() == options.label || profile.destination() == options.label) {
+      if (profile.label() == options.label || profile.destination() == address) {
+        // A saved machine named by a new pairing address is paired again: its gateway stopped
+        // admitting this machine, and the code admits it once more.
+        if (MachineAddress::pairing(options.label)) {
+          static_cast<void>(pair(memory, options.label, localLabel(profiles).view()));
+        }
+
         return {.label = Text{memory, profile.label()}, .destination = Text{memory, profile.destination()}, .saved = profile};
       }
     }
 
     MachineFieldRules::profileDestination(options.label);
-    if (!gatewayAddress(options.label)) {
+    if (!MachineAddress::valid(options.label)) {
       throw MachineFailure{MachineError::invalid_destination};
     }
 
@@ -2439,12 +2447,14 @@ fetch() {
       throw;
     }
 
-    // A pairing address is presented once, here, and the address it leaves is the one saved.
-    Text destination = pairingAddress(options.label) ? pair(memory, options.label, localLabel(profiles).view()) : Text{memory, options.label};
-    const MachineOptions trial{.action = MachineOptions::Action::add, .label = label, .value = destination};
+    // The machine must be one this telar can save before a pairing code is spent on it. The code
+    // is then presented once, here, and the address it leaves is the one saved.
+    const MachineOptions trial{.action = MachineOptions::Action::add, .label = label, .value = address};
     auto copy = profiles;
 
     change(copy, trial);
+    Text destination = MachineAddress::pairing(options.label) ? pair(memory, options.label, localLabel(profiles).view()) : Text{memory, options.label};
+
     return {.label = std::move(label), .destination = std::move(destination), .saved = ds::none};
   }
 
@@ -3195,14 +3205,18 @@ namespace telar::runtime::cli {
     // Saves a machine named by its gateway's address. A pairing address is presented to the
     // gateway first, so that what is saved is an address this machine is already admitted at.
     int addMachine(Memory& memory, const Text& path, const machines::MachineProfiles& profiles, const MachineOptions& options) {
-      if (!machine::gatewayAddress(options.value)) {
+      if (!machines::MachineAddress::valid(options.value)) {
         throw machines::MachineFailure{machines::MachineError::invalid_destination};
       }
 
-      // A label or an address that cannot be saved is refused before any code is spent.
-      static_cast<void>(machine::newProfile(profiles, options));
-      const Text destination = machine::pairingAddress(options.value) ? machine::pair(memory, options.value, machine::localLabel(profiles).view()) : Text{memory, options.value};
+      // A label or an address that cannot be saved, or that is saved already, is refused before
+      // any code is spent.
       auto paired = options;
+      auto trial = profiles;
+
+      paired.value = machines::MachineAddress::saved(options.value);
+      machine::change(trial, paired);
+      const Text destination = machines::MachineAddress::pairing(options.value) ? machine::pair(memory, options.value, machine::localLabel(profiles).view()) : Text{memory, options.value};
 
       paired.value = destination;
       if (const auto status = checkBeforeAdd(memory, profiles, paired)) {

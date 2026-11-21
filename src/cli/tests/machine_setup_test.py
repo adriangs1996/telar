@@ -15,7 +15,7 @@ def main():
     args = parser.parse_args()
     actual = []
     cases = [(f'{index}-{provider}', provider, seed, False) for index, (provider, seed) in enumerate(scenarios())]
-    cases += [('login-'+mode, 'claude', '{}', mode) for mode in ('done', 'pending', 'ended', 'failed', 'lost', 'ssh-failure')]
+    cases += [('login-'+mode, 'claude', '{}', mode) for mode in ('done', 'pending', 'ended', 'failed', 'lost', 'unreachable')]
     for name, provider, seed, login in cases:
         for index, result in enumerate(run(args.telar.resolve(), provider, seed, login)):
             actual.append(summary({'name': f'{name}-{index}', **result}))

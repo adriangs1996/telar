@@ -5,6 +5,7 @@
 #   curl -fsSL https://github.com/adriangs1996/telar/releases/latest/download/install.sh | sh -s -- --app
 #   sh install.sh --version 0.3.0 --bin-dir /usr/local/bin --sudo
 #   sh install.sh --binary ./telar --sha256 HEX --bin-dir DIR
+#   curl -fsSL https://github.com/adriangs1996/telar/releases/latest/download/install.sh | sh -s -- --headless --serve
 #
 # The Linux desktop build is a tree, the tools beside the native client and
 # its Qt libraries: it goes to PREFIX/lib/telar, with telar linked from the
@@ -30,6 +31,9 @@ variant=auto
 fallback=
 install_app=false
 use_sudo=false
+serve=false
+listen=
+host=
 pinned=
 binary=
 
@@ -52,6 +56,14 @@ Usage: install.sh [options]
                     does not start.
   --sudo            Write with sudo, for directories such as /usr/local/bin
                     or /Applications.
+  --serve           After installing, let other machines reach this account's
+                    telar: start its gateway as a service of the account
+                    (telar server enable) and print the address another
+                    machine pairs with (telar machine add LABEL ADDRESS).
+  --listen [HOST]:PORT
+                    With --serve, where the gateway listens (default :8352).
+  --host NAME       With --serve, the name or address other machines reach
+                    this one by, when it is not its host name.
   --sha256 HEX      The archive, disk image or --binary must have this
                     SHA-256, besides matching the release's SHA256SUMS.
                     telar machine setup passes the hash this machine's
@@ -128,6 +140,20 @@ while [ $# -gt 0 ]; do
         --sudo)
             use_sudo=true
             shift
+            ;;
+        --serve)
+            serve=true
+            shift
+            ;;
+        --listen)
+            [ $# -ge 2 ] || fail "--listen needs a value"
+            listen=$2
+            shift 2
+            ;;
+        --host)
+            [ $# -ge 2 ] || fail "--host needs a value"
+            host=$2
+            shift 2
             ;;
         --sha256)
             [ $# -ge 2 ] || fail "--sha256 needs a value"
@@ -305,7 +331,7 @@ refuse() {
 # from there; sets staged and installed. A failed copy or check changes
 # nothing installed, and a running telar keeps its file.
 stage() {
-    for tool in telar telar-runtime telar-config-check telar-diagram-renderer; do
+    for tool in telar telar-runtime telar-config-check telar-gateway telar-diagram-renderer; do
         if [ -f "$source_dir/$tool" ]; then
             staged="$staged $tool"
             run cp "$source_dir/$tool" "$bin_dir/.$tool.new"
@@ -352,7 +378,7 @@ install_tree() {
     run rm -rf "$lib_dir/.telar.old"
     run ln -sfn "$tree/bin/telar" "$bin_dir/.telar.new"
     run mv -f "$bin_dir/.telar.new" "$bin_dir/telar"
-    for tool in telar-runtime telar-config-check telar-diagram-renderer; do
+    for tool in telar-runtime telar-config-check telar-gateway telar-diagram-renderer; do
         if [ -f "$bin_dir/$tool" ] && [ ! -L "$bin_dir/$tool" ]; then
             run rm -f "$bin_dir/$tool"
         fi
@@ -504,3 +530,19 @@ case :$PATH: in
     *) printf 'Add %s to PATH to run telar.\n' "$bin_dir" ;;
 esac
 printf 'A runtime that is already running keeps its version until telar server stop.\n'
+
+# --serve: the gateway that lets other machines reach this account's telar, as a
+# service of the account, and the address another machine pairs with. It runs
+# as the invoking user, never through sudo.
+if [ "$serve" = true ]; then
+    set -- server enable
+    if [ -n "$listen" ]; then
+        set -- "$@" "$listen"
+    fi
+
+    if [ -n "$host" ]; then
+        set -- "$@" --host "$host"
+    fi
+
+    "$bin_dir/telar" "$@" || fail "telar is installed, but its gateway could not be started; run telar server enable"
+fi

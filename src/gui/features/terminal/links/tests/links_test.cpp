@@ -181,12 +181,19 @@ namespace {
   // A development server's link names a port of the machine that printed it, which a pane of
   // another machine reaches through a port here.
   void linksToAPortOfTheirMachineAreRewrittenThroughAForward() {
-    const auto link = [](std::string_view text) {
-      return LocalPortLink::parse(*LinkTarget::fromUri(text));
+    // A text the terminal would not take for a link at all names no port either.
+    const auto link = [](std::string_view text) -> telar::ds::Option<LocalPortLink> {
+      const auto target = LinkTarget::fromUri(text);
+
+      return target ? LocalPortLink::parse(*target) : telar::ds::none;
     };
     const auto through = [&](std::string_view text, std::uint16_t local) {
       return std::string{link(text)->through(local)->text()};
     };
+
+    for (const std::string_view local : {"http://localhost:3000/", "https://localhost/app", "http://127.0.0.1", "http://[::1]:5173/x?y#z", "https://LOCALHOST", "http://0.0.0.0:8000/docs"}) {
+      check(link(local).hasValue(), local);
+    }
 
     check(link("http://localhost:3000/")->port() == 3000);
     check(link("https://localhost/app")->port() == 443 && link("http://127.0.0.1")->port() == 80, "a link without a port names its scheme's own");
