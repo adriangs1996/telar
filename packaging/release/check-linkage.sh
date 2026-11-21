@@ -25,7 +25,7 @@ libwayland-client.so.0 libwayland-cursor.so.0 libwayland-egl.so.1
 libxkbcommon.so.0 libxkbcommon-x11.so.0 libX11.so.6 libX11-xcb.so.1 libxcb.so.1
 libxcb-cursor.so.0 libxcb-glx.so.0 libxcb-icccm.so.4 libxcb-image.so.0
 libxcb-keysyms.so.1 libxcb-randr.so.0 libxcb-render.so.0 libxcb-render-util.so.0
-libxcb-shape.so.0 libxcb-shm.so.0 libxcb-sync.so.1 libxcb-xfixes.so.0 libxcb-xkb.so.1
+libxcb-shape.so.0 libxcb-shm.so.0 libxcb-sync.so.1 libxcb-util.so.1 libxcb-xfixes.so.0 libxcb-xkb.so.1
 libfontconfig.so.1 libdbus-1.so.3'
 
 fail() {
@@ -83,9 +83,11 @@ check_linux() {
     binary=$1
     allowed=$2
     needed=$(readelf -d "$binary" | sed -n 's/.*(NEEDED).*\[\(.*\)\].*/\1/p')
+    # Every library outside the list is reported, so one run names them all.
     for library in $needed; do
         if ! contains "$library" "$allowed"; then
-            fail "$binary needs $library, which this build must not link"
+            printf 'check-linkage: %s needs %s, which this build must not link\n' "$binary" "$library" >&2
+            refused=1
         fi
     done
 
@@ -111,6 +113,7 @@ check_static() {
     printf '%s: static, no shared library\n' "$binary"
 }
 
+refused=
 bundled=
 if [ -n "${TELAR_BUNDLED_LIBRARIES:-}" ]; then
     bundled=$(ls "$TELAR_BUNDLED_LIBRARIES")
@@ -128,3 +131,5 @@ for binary in "$@"; do
         *) fail "unknown kind $kind" ;;
     esac
 done
+
+[ -z "$refused" ] || exit 1
