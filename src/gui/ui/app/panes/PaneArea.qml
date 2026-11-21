@@ -464,6 +464,7 @@ Item {
                         focusTarget: terminal
                         onFocusRequested: paneId => root.actionRequested(WindowActions.Action.focus_pane, paneId)
                     }
+                }
 
                 // A Neovim the runtime runs, drawn natively in place of a terminal's rows.
                 Loader {
@@ -488,7 +489,6 @@ Item {
                             opacity: pane.record.dimAlpha
                         }
                     }
-                }
                 }
             }
 
