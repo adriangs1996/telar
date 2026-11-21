@@ -4,6 +4,7 @@ telar_add_qml_sources(gui-quick
     nvim_controller.hpp
     nvim_grid_item.cpp
     nvim_grid_item.hpp
+    nvim_host.hpp
     nvim_item.cpp
     nvim_item.hpp
     nvim_keys.hpp

@@ -4,7 +4,7 @@ static_assert(true);
 #endif
 
 #include "nvim_grid_item.hpp"
-#include "ui/app/panes/terminal/scene/terminal_scene.hpp"
+#include "ui/kit/cell_scene/terminal_scene.hpp"
 #include <QQuickWindow>
 #include <QSGNode>
 #include <memory>
