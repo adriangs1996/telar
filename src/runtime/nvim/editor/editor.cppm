@@ -6,7 +6,10 @@ import telar.msgpack;
 import telar.base.ds;
 import telar.base.memory.allocators;
 import telar.base.memory.containers;
+import telar.wire.editor;
 import telar.wire.nvim;
+import telar.wire.pane_io;
+import telar.wire.vocabulary;
 import telar.runtime.nvim.rpc;
 import telar.runtime.nvim.screen;
 
@@ -46,6 +49,24 @@ export {
       // A flush ended: the screen has something new to show.
       bool flushed = false;
       bool bell = false;
+      // Something was yanked to a clipboard register: see NvimEditor::clipboard().
+      bool copied = false;
+      // The buffers asked for arrived: see NvimEditor::buffers().
+      bool listed = false;
+      // The editor had no window on that side of its current one.
+      ds::Option<PaneDirection> navigated;
+      // `:Telar` asked for a picker.
+      ds::Option<NvimPickSource> pick;
+    };
+
+    // The names of the editor's listed buffers, most recently used first, as views of `text`,
+    // for the request `token` names.
+    struct NvimBufferList {
+      explicit NvimBufferList(ConcurrentMemory& memory);
+
+      std::uint64_t token = 0;
+      ds::Vec<char, ConcurrentMemory> text;
+      ds::Vec<NvimSlice, ConcurrentMemory> names;
     };
 
     // What something in Neovim asks the user through vim.ui.select or vim.ui.input, until it is
@@ -75,6 +96,15 @@ export {
       std::string_view path;
       std::uint32_t line = 0;
       std::uint32_t column = 0;
+      NvimOpenIn in = NvimOpenIn::place;
+    };
+
+    // The cells of the editor a float covers, from its top left one.
+    struct NvimArea {
+      std::uint16_t row = 0;
+      std::uint16_t column = 0;
+      std::uint16_t columns = 0;
+      std::uint16_t rows = 0;
     };
 
     // One Neovim started with --embed, as the conversation over its pipes: what to write to its
@@ -106,8 +136,20 @@ export {
       void resize(NvimSize size);
       void focus(bool focused);
       bool command(std::string_view command);
-      // Shows a file, in the window that already shows it or in the current one.
+      // Shows a file where `place.in` says.
       bool open(const NvimPlace& place);
+      // The window's theme as the colorscheme. False when its colors are not all there.
+      bool theme(const TerminalTheme& colors);
+      // Moves to the window on a side; `takePulse().navigated` says there was none.
+      bool navigate(PaneDirection direction);
+      // Selects an item of the completion menu, and takes it when `accept`.
+      bool selectMenu(std::uint32_t item, bool accept);
+      // Asks for the listed buffers, which arrive as `buffers()` with this token.
+      bool listBuffers(std::uint64_t token);
+      // Shows a file in a float that takes no focus over `area`; without an area, closes it.
+      bool preview(const NvimPlace& place, NvimArea area);
+      // Fills the quickfix list with places and opens it.
+      bool list(std::span<const TextMatch> places);
       // Hands the user's answer to whatever asked. False for a prompt that is no longer open.
       bool answer(const NvimAnswer& answer);
 
@@ -122,6 +164,9 @@ export {
       // What is asked of the user now, and a count that grows each time that changes.
       [[nodiscard]] const NvimPromptRequest& prompt() const noexcept;
       [[nodiscard]] std::uint64_t promptSerial() const noexcept;
+      // The text last yanked to a clipboard register.
+      [[nodiscard]] std::string_view clipboard() const noexcept;
+      [[nodiscard]] const NvimBufferList& buffers() const noexcept;
 
     private:
       bool handle(std::span<const std::uint8_t> message);
@@ -129,6 +174,17 @@ export {
       bool answered(msgpack::Reader& reader, std::span<const std::uint8_t> message);
       bool identified(std::span<const std::uint8_t> result);
       bool prompted(std::span<const std::uint8_t> parameters);
+      // What telar's own side of the conversation in Neovim says, by the notification's name.
+      void told(std::string_view method, std::span<const std::uint8_t> parameters);
+      void copied(msgpack::Reader& reader);
+      void moved(msgpack::Reader& reader);
+      void framed(msgpack::Reader& reader);
+      void listed(msgpack::Reader& reader);
+      // Publishes a change made outside a redraw, unless a redraw under way will.
+      void publish(bool was_settled) noexcept;
+      // Asks for the frame of every float placed since it was last asked.
+      void frameFloats();
+      bool sendTheme();
       void dismissPrompt();
       void attach();
       void refuse(std::uint64_t id);
@@ -143,10 +199,16 @@ export {
       NvimPulse pulse_;
       NvimPromptRequest prompt_;
       std::uint64_t prompt_serial_ = 0;
+      // The theme last given, sent again to a Neovim that attaches after it.
+      ds::Option<TerminalTheme> theme_;
+      ds::String<ConcurrentMemory> clipboard_;
+      NvimBufferList buffers_;
       std::uint64_t channel_ = 0;
       // The first request asks what Neovim this is.
       std::uint32_t identify_request_ = 1;
       std::uint32_t next_request_ = identify_request_ + 1;
+      // The request that teaches Neovim telar's side of the conversation; zero before it is sent.
+      std::uint32_t bootstrap_request_ = 0;
       tbc::val_static<std::string_view> failure_;
       NvimState state_ = NvimState::identifying;
       bool focused_ = true;

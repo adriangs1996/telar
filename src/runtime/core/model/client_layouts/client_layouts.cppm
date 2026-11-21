@@ -33,6 +33,7 @@ import telar.base.diagnostics;
 import telar.config.runtime;
 import telar.wire.vocabulary;
 import telar.wire.clipboard;
+import telar.wire.editor;
 import telar.wire.layout;
 import telar.wire.pane_io;
 import telar.wire.worktrees;
@@ -529,6 +530,18 @@ export {
       ds::Option<PipeProcess> process;
       // The flush that set the directory the pane last took from Neovim.
       std::uint64_t directory_at = 0;
+      // The client that last drove the editor: what Neovim says back is for it.
+      std::uint64_t driver = 0;
+
+      // A client's question about the editor's buffers, until Neovim lists them.
+      struct BufferQuery {
+        std::uint64_t client = 0;
+        std::uint64_t request_id = 0;
+        std::uint16_t limit = 0;
+        FixedText<FindPaths::maximum_query_bytes> query;
+      };
+
+      ds::Option<BufferQuery> buffer_query;
     };
 
     // Calls `visitor` with the pane as the kind it is. A kind the visitor has no overload for

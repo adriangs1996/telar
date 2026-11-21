@@ -121,6 +121,12 @@ export {
           Addition{.tag = ClientTag::nvim_focus, .dialect = Dialect::cqp00008},
           Addition{.tag = ClientTag::nvim_prompt_reply, .dialect = Dialect::cqp00008},
           Addition{.tag = ClientTag::nvim_open, .dialect = Dialect::cqp00008},
+          Addition{.tag = ClientTag::nvim_navigate, .dialect = Dialect::cqp00008},
+          Addition{.tag = ClientTag::nvim_menu_select, .dialect = Dialect::cqp00008},
+          Addition{.tag = ClientTag::find_text, .dialect = Dialect::cqp00008},
+          Addition{.tag = ClientTag::nvim_buffers, .dialect = Dialect::cqp00008},
+          Addition{.tag = ClientTag::nvim_preview, .dialect = Dialect::cqp00008},
+          Addition{.tag = ClientTag::nvim_list, .dialect = Dialect::cqp00008},
       };
 
       // The first dialect whose runtime understands `tag`.

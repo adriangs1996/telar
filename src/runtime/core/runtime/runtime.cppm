@@ -714,6 +714,16 @@ export {
       void handle(std::uint64_t identity, const NvimFocus& message);
       void handle(std::uint64_t identity, const NvimPromptReply& message);
       void handle(std::uint64_t identity, const NvimOpen& message);
+      void handle(std::uint64_t identity, const NvimNavigate& message);
+      void handle(std::uint64_t identity, const NvimMenuSelect& message);
+      void handle(std::uint64_t identity, const NvimBuffers& message);
+      void handle(std::uint64_t identity, const NvimPreview& message);
+      void handle(std::uint64_t identity, const NvimList& message);
+      void handle(std::uint64_t identity, const FindText& message);
+      // What an editor told the runtime besides what it drew, to the client that drives it.
+      void relay(NvimPane& pane);
+      // Answers a client's question about an editor's buffers with the ones its query matches.
+      void answerBuffers(NvimPane& pane);
 
       void handle(std::uint64_t identity, const ClosePane& message);
 

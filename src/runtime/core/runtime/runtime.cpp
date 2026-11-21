@@ -5,6 +5,7 @@ module;
 module telar.runtime.core.runtime;
 
 import telar.runtime.nvim.editor;
+import telar.runtime.paths.query_task;
 import telar.ghostty.vt;
 import telar.sys.process;
 import telar.platform.error;
@@ -2536,8 +2537,160 @@ namespace telar::runtime {
     requires BackgroundExecutor<Background, ConcurrentMemory>
   void Runtime<Poller, Background>::handle(std::uint64_t identity, const NvimOpen& message) {
     panes_.editorRequest(model_, requireClient(clients_, identity), message.pane_id, [&](NvimEditor& editor) {
-      return editor.open({.path = message.path, .line = message.line, .column = message.column});
+      return editor.open({.path = message.path, .line = message.line, .column = message.column, .in = message.in});
     });
+  }
+
+  template <EventLoop Poller, typename Background>
+    requires BackgroundExecutor<Background, ConcurrentMemory>
+  void Runtime<Poller, Background>::handle(std::uint64_t identity, const NvimNavigate& message) {
+    panes_.editorRequest(model_, requireClient(clients_, identity), message.pane_id, [&](NvimEditor& editor) {
+      return editor.navigate(message.direction);
+    });
+  }
+
+  template <EventLoop Poller, typename Background>
+    requires BackgroundExecutor<Background, ConcurrentMemory>
+  void Runtime<Poller, Background>::handle(std::uint64_t identity, const NvimMenuSelect& message) {
+    panes_.editorRequest(model_, requireClient(clients_, identity), message.pane_id, [&](NvimEditor& editor) {
+      return editor.selectMenu(message.item, message.accept);
+    });
+  }
+
+  template <EventLoop Poller, typename Background>
+    requires BackgroundExecutor<Background, ConcurrentMemory>
+  void Runtime<Poller, Background>::handle(std::uint64_t identity, const NvimBuffers& message) {
+    const auto& client = requireClient(clients_, identity);
+    auto& pane = requireNvim(model_.panes, message.pane_id);
+    if (client.attachment(message.pane_id) == nullptr) {
+      throw RequestError{FailureCode::pane_not_found, "The editor's buffers are listed for a client that shows it"};
+    }
+
+    // One question at a time: a newer one takes the place of the one before.
+    auto& query = pane.buffer_query.emplace();
+
+    query.client = client.id;
+    query.request_id = message.request_id;
+    query.limit = message.limit;
+    query.query.assign(message.query);
+    panes_.editorRequest(model_, client, message.pane_id, [&](NvimEditor& editor) {
+      return editor.listBuffers(message.request_id);
+    });
+  }
+
+  template <EventLoop Poller, typename Background>
+    requires BackgroundExecutor<Background, ConcurrentMemory>
+  void Runtime<Poller, Background>::handle(std::uint64_t identity, const NvimPreview& message) {
+    panes_.editorRequest(model_, requireClient(clients_, identity), message.pane_id, [&](NvimEditor& editor) {
+      return editor.preview({.path = message.path, .line = message.line}, {.row = message.row, .column = message.column, .columns = message.columns, .rows = message.rows});
+    });
+  }
+
+  template <EventLoop Poller, typename Background>
+    requires BackgroundExecutor<Background, ConcurrentMemory>
+  void Runtime<Poller, Background>::handle(std::uint64_t identity, const NvimList& message) {
+    panes_.editorRequest(model_, requireClient(clients_, identity), message.pane_id, [&](NvimEditor& editor) {
+      return editor.list(message.places);
+    });
+  }
+
+  template <EventLoop Poller, typename Background>
+    requires BackgroundExecutor<Background, ConcurrentMemory>
+  void Runtime<Poller, Background>::handle(std::uint64_t identity, const FindText& message) {
+    submitBackground(background_, requireClient(clients_, identity), message);
+  }
+
+  template <EventLoop Poller, typename Background>
+    requires BackgroundExecutor<Background, ConcurrentMemory>
+  void Runtime<Poller, Background>::relay(NvimPane& pane) {
+    const auto pulse = pane.editor.takePulse();
+    if (pulse.listed) {
+      answerBuffers(pane);
+    }
+
+    auto* driver = clients_.find(pane.driver);
+    if (driver == nullptr || driver->attachment(pane.id) == nullptr) {
+      return;
+    }
+
+    // What is yanked to a clipboard register is copied where the user types, as a selection
+    // of a terminal is, unless the runtime's policy keeps programs from the clipboard.
+    if (pulse.copied && panes_.controlPolicy().clipboard_write != control::Access::deny) {
+      driver->clipboard.replace(pane.id, byteView(pane.editor.clipboard()));
+    }
+
+    if (pulse.navigated) {
+      driver->connection.send(NvimNavigated{.pane_id = pane.id, .direction = *pulse.navigated});
+    }
+
+    if (pulse.pick) {
+      driver->connection.send(NvimPick{.pane_id = pane.id, .source = *pulse.pick});
+    }
+  }
+
+  template <EventLoop Poller, typename Background>
+    requires BackgroundExecutor<Background, ConcurrentMemory>
+  void Runtime<Poller, Background>::answerBuffers(NvimPane& pane) {
+    const auto& listed = pane.editor.buffers();
+    const auto query = std::exchange(pane.buffer_query, ds::none);
+    auto* client = query && query->request_id == listed.token ? clients_.find(query->client) : nullptr;
+    if (client == nullptr || pane.cwd.view().empty()) {
+      return;
+    }
+
+    struct Ranked {
+      std::int32_t score = 0;
+      std::uint32_t name = 0;
+    };
+
+    const std::string_view text{listed.text.data(), listed.text.size()};
+    const auto wanted = query->query.view();
+    const auto limit = std::min<std::size_t>(query->limit, FindPaths::maximum_limit);
+    FuzzyMatch<ConcurrentMemory> matcher{memory_};
+    ds::Array<Ranked, FindPaths::maximum_limit> ranked{};
+    std::size_t count = 0;
+    bool truncated = false;
+
+    for (std::uint32_t index = 0; index < listed.names.size(); ++index) {
+      // Without a query the names stay as Neovim gave them, the most recently used first.
+      const auto score = wanted.empty() ? ds::Option<std::int32_t>{-static_cast<std::int32_t>(index)} : matcher.score(listed.names[index].of(text), wanted);
+      if (!score) {
+        continue;
+      }
+
+      auto place = std::min(count, limit);
+      while (place > 0 && ranked[place - 1].score < *score) {
+        --place;
+      }
+
+      if (place == limit) {
+        truncated = true;
+        continue;
+      }
+
+      truncated = truncated || count == limit;
+      count = std::min(count + 1, limit);
+      std::ranges::move_backward(ranked.viewMut().subspan(place, count - place - 1), ranked.viewMut().subspan(place + 1, count - place - 1).end());
+      ranked.atMut(place) = {.score = *score, .name = index};
+    }
+
+    // A match marks at most one place for each byte of the query.
+    constexpr std::size_t positions_each = FindPaths::maximum_query_bytes;
+    ds::Array<std::uint16_t, FindPaths::maximum_limit * positions_each> positions{};
+    ds::Array<PathMatch, FindPaths::maximum_limit> matches{};
+
+    for (std::size_t index = 0; index < count; ++index) {
+      const auto name = listed.names[ranked[index].name].of(text);
+      const auto marks = positions.viewMut().subspan(index * positions_each, std::min<std::size_t>(wanted.size(), positions_each));
+
+      if (!wanted.empty()) {
+        static_cast<void>(matcher.score(name, wanted, marks));
+      }
+
+      matches.atMut(index) = {.path = name, .kind = PathKind::file, .positions = wanted.empty() ? std::span<const std::uint16_t>{} : std::span<const std::uint16_t>{marks}};
+    }
+
+    client->connection.send(PathResults{.request_id = query->request_id, .root = pane.cwd.view(), .scanned = static_cast<std::uint32_t>(listed.names.size()), .complete = true, .truncated = truncated, .matches = matches.view().first(count)});
   }
 
   template <EventLoop Poller, typename Background>
@@ -3130,6 +3283,12 @@ namespace telar::runtime {
   template <EventLoop Poller, typename Background>
     requires BackgroundExecutor<Background, ConcurrentMemory>
   void Runtime<Poller, Background>::refreshPane(NvimPane& pane, Clock::time_point /*now*/, bool /*poll_panes*/) {
+    relay(pane);
+    // What the editor queued outside a request of a client, as its theme is, is written now.
+    if (pane.hasInput()) {
+      panes_.flushEditor(pane);
+    }
+
     const auto& screen = pane.editor.screen();
 
     // The pane's directory is the one Neovim last said it works in.

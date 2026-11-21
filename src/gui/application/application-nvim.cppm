@@ -32,6 +32,7 @@ export namespace telar::gui::application::nvim {
   using telar::NvimMouse;
   using telar::NvimMouseAction;
   using telar::NvimMouseButton;
+  using telar::NvimOpenIn;
   using telar::NvimPlacement;
   using telar::NvimPromptKind;
 
@@ -68,8 +69,27 @@ export namespace telar::gui::application::nvim {
   // or nothing when they dismissed it.
   void answer(Session& session, std::uint64_t pane_id, bool accepted, std::uint32_t index = 0, std::string_view text = {});
 
-  // Shows a file in the pane, with the cursor at `line` and `column` when they are not zero.
-  void show(Session& session, std::uint64_t pane_id, std::string_view path, std::uint32_t line = 0, std::uint32_t column = 0);
+  // A place in a file: its line and column count from one, zero for wherever the cursor is.
+  struct Place {
+    std::string_view path;
+    std::uint32_t line = 0;
+    std::uint32_t column = 0;
+    NvimOpenIn in = NvimOpenIn::place;
+  };
+
+  // Shows a file in the pane, where `place.in` says.
+  void show(Session& session, std::uint64_t pane_id, const Place& place);
+
+  // The editor pane of the tab `pane_id` is in, which a file a person points at opens in; zero
+  // when the tab has none.
+  [[nodiscard]] std::uint64_t beside(const Session& session, std::uint64_t pane_id) noexcept;
+
+  // Moves to the editor's window on a side of its current one. When it has none there, the
+  // runtime says so and the pane on that side takes the focus.
+  void navigate(Session& session, std::uint64_t pane_id, PaneDirection direction);
+
+  // Selects an item of the completion menu, counted among all it has, and takes it when `accept`.
+  void choose(Session& session, std::uint64_t pane_id, std::uint32_t item, bool accept);
 
 }
 
@@ -84,5 +104,6 @@ namespace telar::gui::application::nvim {
   Change receive(Session& session, const NvimMessageList& message);
   Change receive(Session& session, const NvimTabLine& message);
   Change receive(Session& session, const NvimPrompt& message);
+  Change receive(Session& session, const NvimNavigated& message);
 
 }

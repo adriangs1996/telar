@@ -98,6 +98,12 @@ namespace telar {
     nvim_focus = 0x5a,
     nvim_prompt_reply = 0x5b,
     nvim_open = 0x5c,
+    nvim_navigate = 0x5d,
+    nvim_menu_select = 0x5e,
+    find_text = 0x5f,
+    nvim_buffers = 0x60,
+    nvim_preview = 0x61,
+    nvim_list = 0x62,
   };
 
   enum class ServerTag : Byte {
@@ -175,6 +181,9 @@ namespace telar {
     nvim_message_list = 0xcc,
     nvim_tab_line = 0xcd,
     nvim_prompt = 0xce,
+    nvim_navigated = 0xcf,
+    text_results = 0xd0,
+    nvim_pick = 0xd1,
   };
 
   struct RequestRuntimeState {
@@ -480,6 +489,18 @@ namespace telar {
       return "nvim_prompt_reply";
     case ClientTag::nvim_open:
       return "nvim_open";
+    case ClientTag::nvim_navigate:
+      return "nvim_navigate";
+    case ClientTag::nvim_menu_select:
+      return "nvim_menu_select";
+    case ClientTag::find_text:
+      return "find_text";
+    case ClientTag::nvim_buffers:
+      return "nvim_buffers";
+    case ClientTag::nvim_preview:
+      return "nvim_preview";
+    case ClientTag::nvim_list:
+      return "nvim_list";
     }
 
     return {};
@@ -633,6 +654,12 @@ namespace telar {
       return "nvim_tab_line";
     case ServerTag::nvim_prompt:
       return "nvim_prompt";
+    case ServerTag::nvim_navigated:
+      return "nvim_navigated";
+    case ServerTag::text_results:
+      return "text_results";
+    case ServerTag::nvim_pick:
+      return "nvim_pick";
     case ServerTag::pane_theme:
       return "pane_theme";
     }

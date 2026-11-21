@@ -233,6 +233,12 @@ namespace telar::gui::qt {
     }
   }
 
+  void NvimItem::chooseMenu(int item) {
+    if (controller_ != nullptr && item >= 0) {
+      controller_->choose(pane_id_, static_cast<std::uint32_t>(item), true);
+    }
+  }
+
   void NvimItem::send(const QString& keys) {
     if (controller_ != nullptr) {
       const auto bytes = keys.toUtf8();
@@ -386,6 +392,10 @@ namespace telar::gui::qt {
           {QStringLiteral("scrolledLines"), static_cast<qlonglong>(grid->scrolled_lines)},
           {QStringLiteral("marginTop"), grid->margin_top * font_.cell.height()},
           {QStringLiteral("marginBottom"), grid->margin_bottom * font_.cell.height()},
+          // A float's frame, which the window draws in place of the cells of its border.
+          {QStringLiteral("border"), static_cast<int>(grid->border)},
+          {QStringLiteral("title"), shown(grid->title.view())},
+          {QStringLiteral("footer"), shown(grid->footer.view())},
       });
     }
 

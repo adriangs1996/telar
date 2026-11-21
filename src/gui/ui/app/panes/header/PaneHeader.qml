@@ -11,6 +11,8 @@ PaneHeaderLayout {
     required property var typography
     property bool focused: false
     property bool prefixPending: false
+    // What the pane's own view adds after its context: an editor's file and mode.
+    property string detail: ""
     // Mod content for the header's pieces, by slot name.
     readonly property var elements: record.elements ?? ({})
     readonly property var builtins: ({pane_mark: markPiece, pane_program: programPiece, pane_context: contextPiece, pane_status: statusPiece, pane_progress: progressPiece})
@@ -70,7 +72,7 @@ PaneHeaderLayout {
         y: root.nameBounds.y
         width: Math.max(0, root.nameBounds.x + root.nameBounds.width - x)
         height: root.nameBounds.height
-        text: (root.record.remote ? root.record.remote + "   " : "") + (root.record.context ?? "") + (root.record.git ? "   " + root.record.git : "")
+        text: (root.record.remote ? root.record.remote + "   " : "") + (root.record.context ?? "") + (root.record.git ? "   " + root.record.git : "") + (root.detail.length > 0 ? "   " + root.detail : "")
         pixelSize: root.typography.small
         color: root.colors.subtext0
         visible: !root.elements.pane_context && width >= 4 * root.typography.body && text.length > 0

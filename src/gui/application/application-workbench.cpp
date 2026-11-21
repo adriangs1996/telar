@@ -304,6 +304,13 @@ namespace telar::gui::application::workbench {
 
   void navigate(Session& session, PaneDirection direction) {
     const auto* pane = focusedPane(session.panes, session.tabs, session.active_tab);
+    // An editor pane is asked for the window on that side, and says when it has none.
+    if (pane != nullptr && nvim::editor(session, pane->id) != nullptr) {
+      nvim::navigate(session, pane->id, direction);
+
+      return;
+    }
+
     if (pane == nullptr || pane->foreground != "nvim") {
       focusToward(session, direction);
 

@@ -64,6 +64,17 @@ foreach(script IN ITEMS "ZSHENV=zshenv.zsh" "ZSH=telar.zsh" "BASH=telar.bash" "F
   set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/terminal/shell_integration/${script_file}")
 endforeach()
 configure_file(terminal/shell_integration/scripts.inc.in "${CMAKE_CURRENT_BINARY_DIR}/generated/shell_scripts.inc" @ONLY)
+# What an embedded Neovim is taught is compiled in too: telar's side of the conversation, and
+# the modules of integrations/nvim it loads without anything installed on the host.
+file(REAL_PATH "${CMAKE_CURRENT_SOURCE_DIR}/../../integrations/nvim/lua/telar" telar_nvim_modules)
+foreach(script IN ITEMS "BOOTSTRAP=${CMAKE_CURRENT_SOURCE_DIR}/nvim/editor/bootstrap.lua" "INIT=${telar_nvim_modules}/init.lua" "THEME=${telar_nvim_modules}/theme.lua" "TINT=${telar_nvim_modules}/tint.lua" "NAVIGATE=${telar_nvim_modules}/navigate.lua")
+  string(REPLACE "=" ";" script "${script}")
+  list(GET script 0 script_name)
+  list(GET script 1 script_file)
+  file(READ "${script_file}" TELAR_NVIM_${script_name})
+  set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${script_file}")
+endforeach()
+configure_file(nvim/editor/scripts.inc.in "${CMAKE_CURRENT_BINARY_DIR}/generated/nvim_scripts.inc" @ONLY)
 add_custom_command(
   OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/generated/cell_layout.inc"
   COMMAND Python3::Interpreter "${CMAKE_CURRENT_SOURCE_DIR}/tools/generate_cell_layout.py"

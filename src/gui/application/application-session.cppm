@@ -634,6 +634,7 @@ export {
       Change apply(const NvimMessageList& message);
       Change apply(const NvimTabLine& message);
       Change apply(const NvimPrompt& message);
+      Change apply(const NvimNavigated& message);
 
       Change apply(const ProxyStatus& message);
 

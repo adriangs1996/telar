@@ -15,6 +15,9 @@ Item {
     required property var typography
     property real ratio: 1
     // The cell the menu hangs from, in the parent's coordinates, and the cell's size.
+    // An item was clicked: its place among the items the menu was sent.
+    signal picked(int index)
+
     required property point anchor
     required property real cellHeight
     readonly property var items: menu.items ?? []
@@ -70,8 +73,15 @@ Item {
                 NativeRoundedRectangle {
                     anchors.fill: parent
                     radius: ChromeStyle.controlRadius * root.ratio
-                    color: Qt.alpha(root.colors.text, ChromeStyle.selectionAlpha)
-                    visible: row.chosen
+                    color: Qt.alpha(root.colors.text, row.chosen ? ChromeStyle.selectionAlpha : ChromeStyle.selectionAlpha / 2)
+                    visible: row.chosen || pointer.containsMouse
+                }
+
+                ActionPointer {
+                    id: pointer
+                    anchors.fill: parent
+                    identity: String(row.itemIndex)
+                    onActivated: root.picked(row.itemIndex)
                 }
 
                 CellText {

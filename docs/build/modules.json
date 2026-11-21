@@ -290,6 +290,7 @@
     "src/runtime/workers/background_executor/background_executor.cppm": "telar.runtime.workers.background_executor",
     "src/runtime/core/delivery/client_delivery/client_delivery.cppm": "telar.runtime.core.delivery.client_delivery",
     "src/runtime/paths/query_task/query_task.cppm": "telar.runtime.paths.query_task",
+    "src/runtime/paths/text_search/text_search.cppm": "telar.runtime.paths.text_search",
     "src/runtime/nvim/screen/screen.cppm": "telar.runtime.nvim.screen",
     "src/runtime/nvim/redraw/redraw.cppm": "telar.runtime.nvim.redraw",
     "src/runtime/nvim/rpc/rpc.cppm": "telar.runtime.nvim.rpc",
@@ -1426,7 +1427,8 @@
       "telar.runtime.nvim.frames"
     ],
     "src/runtime/paths": [
-      "telar.runtime.paths.query_task"
+      "telar.runtime.paths.query_task",
+      "telar.runtime.paths.text_search"
     ],
     "src/runtime/plugins": [
       "telar.runtime.plugins.run_worker",

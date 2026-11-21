@@ -76,7 +76,8 @@ export {
       TBC_GENERIC inline void submit(std::uint64_t client, const Message& message, const RequestContext& context = {}) {
         if constexpr (std::same_as<Message, FindPaths>) {
           path_service_.submit(client, message);
-        } else if constexpr (std::same_as<Message, OpenEditor>) {
+        } else if constexpr (std::same_as<Message, OpenEditor> || std::same_as<Message, FindText>) {
+          // A search of text is a child process to wait for, as asking an editor is.
           editor_.submit(client, message, context);
         } else if constexpr (std::same_as<Message, SuggestCommand>) {
           suggestions_.submit(client, message, context);

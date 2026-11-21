@@ -102,7 +102,7 @@ namespace {
     check(transport.last<NvimMouse>().grid == 3 && transport.last<NvimMouse>().column == 7);
     application::nvim::focus(client, editor_pane, false);
     check(!transport.last<NvimFocus>().focused);
-    application::nvim::show(client, editor_pane, "/tmp/a.txt", 3, 1);
+    application::nvim::show(client, editor_pane, {.path = "/tmp/a.txt", .line = 3, .column = 1});
     check(transport.last<NvimOpen>().path == "/tmp/a.txt" && transport.last<NvimOpen>().line == 3);
 
     const auto resizes = transport.count(ClientTag::pane_resize);

@@ -4,6 +4,7 @@ export module telar.wire.nvim;
 
 import std;
 import telar.wire.vocabulary;
+import telar.wire.editor;
 
 // The schemas specialize `MessageSchema`, which telar.wire.vocabulary declares in its global
 // fragment; naming the template here keeps it reachable from importers.
@@ -35,6 +36,8 @@ export extern "C++" {
     inline constexpr std::size_t max_nvim_messages = 32;
     inline constexpr std::size_t max_nvim_tabs = 128;
     inline constexpr std::size_t max_nvim_choices = 1024;
+    // Every side of a float bordered: top 1, right 2, bottom 4 and left 8.
+    inline constexpr Byte max_nvim_border = 15;
 
     // Text that Neovim, or what runs in it, wrote: bounded, and otherwise taken as it comes. A
     // client reads it as untrusted bytes that may not be UTF-8.
@@ -162,18 +165,119 @@ export extern "C++" {
               Field<&NvimPromptReply::index, u32, "index">,
               Field<&NvimPromptReply::text, NvimText<max_nvim_line_bytes>, "text">> {};
 
-    // Shows a file in an editor pane, in the window that already shows it or in the current
-    // one, with the cursor at `line` and `column` when they are not zero. Both count from one.
+    // Where a file is shown in an editor: in the window that already shows it or else the
+    // current one, in a window made under or beside the current one, or in a tab page.
+    enum class NvimOpenIn : Byte {
+      place,
+      split,
+      vertical_split,
+      tab,
+    };
+
+    // Shows a file in an editor pane, with the cursor at `line` and `column` when they are not
+    // zero. Both count from one.
     struct NvimOpen {
       std::uint64_t pane_id{};
       std::string_view path;
       std::uint32_t line{};
       std::uint32_t column{};
+      NvimOpenIn in{};
     };
 
     template <>
     struct MessageSchema<NvimOpen>
-        : Schema<Direction::client, ClientTag::nvim_open, Field<&NvimOpen::pane_id, NonzeroU64, "pane_id">, Field<&NvimOpen::path, Text16<max_nvim_path_bytes, false>, "path">, Field<&NvimOpen::line, u32, "line">, Field<&NvimOpen::column, u32, "column">> {};
+        : Schema<Direction::client, ClientTag::nvim_open, Field<&NvimOpen::pane_id, NonzeroU64, "pane_id">, Field<&NvimOpen::path, Text16<max_nvim_path_bytes, false>, "path">, Field<&NvimOpen::line, u32, "line">, Field<&NvimOpen::column, u32, "column">, Field<&NvimOpen::in, EnumByte<NvimOpenIn, std::to_underlying(NvimOpenIn::tab)>, "in">> {};
+
+    // Moves to the editor's window on a side of the current one. When it has none there the
+    // runtime answers NvimNavigated, and the pane on that side is the client's to focus.
+    struct NvimNavigate {
+      std::uint64_t pane_id{};
+      PaneDirection direction{};
+    };
+
+    template <>
+    struct MessageSchema<NvimNavigate>
+        : Schema<Direction::client, ClientTag::nvim_navigate, Field<&NvimNavigate::pane_id, NonzeroU64, "pane_id">, Field<&NvimNavigate::direction, EnumByte<PaneDirection, std::to_underlying(PaneDirection::down)>, "direction">> {};
+
+    // The editor had no window on that side of its current one.
+    struct NvimNavigated {
+      std::uint64_t pane_id{};
+      PaneDirection direction{};
+    };
+
+    template <>
+    struct MessageSchema<NvimNavigated>
+        : Schema<Direction::server, ServerTag::nvim_navigated, Field<&NvimNavigated::pane_id, NonzeroU64, "pane_id">, Field<&NvimNavigated::direction, EnumByte<PaneDirection, std::to_underlying(PaneDirection::down)>, "direction">> {};
+
+    // Selects an item of the completion menu, counted from zero among all it has; `accept`
+    // also takes it and closes the menu, as a click on it does.
+    struct NvimMenuSelect {
+      std::uint64_t pane_id{};
+      std::uint32_t item{};
+      bool accept{};
+    };
+
+    template <>
+    struct MessageSchema<NvimMenuSelect>
+        : Schema<Direction::client, ClientTag::nvim_menu_select, Field<&NvimMenuSelect::pane_id, NonzeroU64, "pane_id">, Field<&NvimMenuSelect::item, u32, "item">, Field<&NvimMenuSelect::accept, BoolByte, "accept">> {};
+
+    // The editor's listed buffers whose names match `query`, best first, answered as
+    // PathResults with an empty root. An empty query lists them most recently used first.
+    struct NvimBuffers {
+      std::uint64_t request_id{};
+      std::uint64_t pane_id{};
+      std::string_view query;
+      std::uint16_t limit{};
+    };
+
+    template <>
+    struct MessageSchema<NvimBuffers>
+        : Schema<Direction::client, ClientTag::nvim_buffers, Field<&NvimBuffers::request_id, NonzeroU64, "request_id">, Field<&NvimBuffers::pane_id, NonzeroU64, "pane_id">, Field<&NvimBuffers::query, SizedText<u16, FindPaths::maximum_query_bytes, true, TextRule::utf8_no_nul>, "query">, Field<&NvimBuffers::limit, BoundedInteger<u16, 1, FindPaths::maximum_limit>, "limit">> {};
+
+    // Shows a file in a float of the editor that takes no focus, over the cells a picker leaves
+    // for it, with `line` in view. Without columns or rows, the float is closed.
+    struct NvimPreview {
+      std::uint64_t pane_id{};
+      std::string_view path;
+      std::uint32_t line{};
+      std::uint16_t row{};
+      std::uint16_t column{};
+      std::uint16_t columns{};
+      std::uint16_t rows{};
+    };
+
+    template <>
+    struct MessageSchema<NvimPreview>
+        : Schema<Direction::client, ClientTag::nvim_preview, Field<&NvimPreview::pane_id, NonzeroU64, "pane_id">, Field<&NvimPreview::path, Text16<max_nvim_path_bytes>, "path">, Field<&NvimPreview::line, u32, "line">, Field<&NvimPreview::row, u16, "row">, Field<&NvimPreview::column, u16, "column">, Field<&NvimPreview::columns, u16, "columns">, Field<&NvimPreview::rows, u16, "rows">> {};
+
+    // Fills the editor's quickfix list with places and opens it.
+    struct NvimList {
+      static constexpr std::size_t maximum_places = FindText::maximum_limit;
+
+      std::uint64_t pane_id{};
+      std::span<const TextMatch> places;
+    };
+
+    template <>
+    struct MessageSchema<NvimList>
+        : Schema<Direction::client, ClientTag::nvim_list, Field<&NvimList::pane_id, NonzeroU64, "pane_id">, Field<&NvimList::places, CountedSpan<u16, ValueCodec<TextMatch>, NvimList::maximum_places>, "places">> {};
+
+    // What a picker lists: files by name, lines of files by their text, or the editor's buffers.
+    enum class NvimPickSource : Byte {
+      files,
+      text,
+      buffers,
+    };
+
+    // Something in the editor asked for a picker, as `:Telar files` does.
+    struct NvimPick {
+      std::uint64_t pane_id{};
+      NvimPickSource source{};
+    };
+
+    template <>
+    struct MessageSchema<NvimPick>
+        : Schema<Direction::server, ServerTag::nvim_pick, Field<&NvimPick::pane_id, NonzeroU64, "pane_id">, Field<&NvimPick::source, EnumByte<NvimPickSource, std::to_underlying(NvimPickSource::buffers)>, "source">> {};
 
     // How a grid is shown: not at all, as a window in the editor's layout, floating over it, in
     // a window of its own, or as the rows messages scroll in.
@@ -231,6 +335,12 @@ export extern "C++" {
       std::uint16_t margin_bottom{};
       std::uint16_t margin_left{};
       std::uint16_t margin_right{};
+      // A float's frame as its window's configuration gives it: the sides Neovim draws a border
+      // on, as top 1, right 2, bottom 4 and left 8, its title and its footer. A client draws
+      // them itself, in place of the cells of those sides.
+      Byte border{};
+      std::string_view title;
+      std::string_view footer;
       // Every row follows: the client forgets what the grid showed.
       bool full{};
       std::span<const NvimScroll> scrolls;
@@ -269,6 +379,9 @@ export extern "C++" {
               Field<&NvimGrid::margin_bottom, u16, "margin_bottom">,
               Field<&NvimGrid::margin_left, u16, "margin_left">,
               Field<&NvimGrid::margin_right, u16, "margin_right">,
+              Field<&NvimGrid::border, BoundedInteger<u8, 0, max_nvim_border>, "border">,
+              Field<&NvimGrid::title, NvimText<max_nvim_label_bytes>, "title">,
+              Field<&NvimGrid::footer, NvimText<max_nvim_label_bytes>, "footer">,
               Field<&NvimGrid::full, BoolByte, "full">,
               Field<&NvimGrid::scrolls, CountedSpan<u8, ValueCodec<NvimScroll>, max_nvim_scrolls>, "scrolls">,
               Field<&NvimGrid::spans, CountedSpan<u16, ValueCodec<FrameSpan>, max_nvim_grid_spans>, "spans">> {};

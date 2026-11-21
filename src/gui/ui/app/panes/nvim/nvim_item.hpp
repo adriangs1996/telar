@@ -135,6 +135,8 @@ namespace telar::gui::qt {
     Q_INVOKABLE void answer(bool accepted, int index = 0, const QString& text = {});
     // Keys in Neovim's notation, from a native surface: a tab that was clicked, a menu item.
     Q_INVOKABLE void send(const QString& keys);
+    // Takes an item of the completion menu, counted among all it has, as a click on it does.
+    Q_INVOKABLE void chooseMenu(int item);
 
     // What a grid's item reads to draw: the editor as last shown, and how its cells are drawn.
     [[nodiscard]] const application::nvim::Editor* editorState() const noexcept;

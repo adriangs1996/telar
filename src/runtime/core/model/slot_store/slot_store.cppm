@@ -149,6 +149,11 @@ export {
         ClientRequest<NvimFocus>,
         ClientRequest<NvimPromptReply>,
         ClientRequest<NvimOpen>,
+        ClientRequest<NvimNavigate>,
+        ClientRequest<NvimMenuSelect>,
+        ClientRequest<NvimBuffers>,
+        ClientRequest<NvimPreview>,
+        ClientRequest<NvimList>,
         ClientRequest<ClosePane>,
         ClientRequest<PaneInput>,
         ClientRequest<PaneCommand>,
@@ -220,6 +225,7 @@ export {
         ClientRequest<CompleteWords>,
         ClientRequest<RequestCommandSpec>,
         ClientRequest<OpenEditor, ClientRole::interactive, RequestLane::worker>,
+        ClientRequest<FindText, ClientRole::interactive, RequestLane::worker>,
         ClientRequest<SuggestCommand, ClientRole::interactive, RequestLane::worker>>;
 
     ClientRole classifyRequest(ClientTag tag) noexcept;

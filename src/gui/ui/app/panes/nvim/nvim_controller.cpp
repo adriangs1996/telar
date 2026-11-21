@@ -58,6 +58,12 @@ namespace telar::gui::qt {
     });
   }
 
+  void NvimController::choose(std::uint64_t pane_id, std::uint32_t item, bool accept) {
+    attempt([&](GuiSession& session) {
+      application::nvim::choose(session, pane_id, item, accept);
+    });
+  }
+
   void NvimController::answer(std::uint64_t pane_id, bool accepted, std::uint32_t index, const QString& text) {
     const auto bytes = text.toUtf8();
 
