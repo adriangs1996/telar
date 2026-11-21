@@ -39,7 +39,7 @@ fi
 
 "$root/tools/cpp" configure dist -B "$work/runtime" -- -DGHOSTTY_VT_ROOT="$ghostty"
 "$root/tools/cpp" build dist -B "$work/runtime" -- --target distributable-linkage
-"$root/tools/cpp" exec -- cmake --install "$work/runtime" --prefix "$work/$name"
+"$root/tools/cpp" exec -- cmake --install "$work/runtime" --component telar --prefix "$work/$name"
 
 # An explicit target keeps crt-static off the build scripts and proc macros.
 host=$(rustc -vV | sed -n 's/^host: //p')

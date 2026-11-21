@@ -7,7 +7,7 @@ set(CMAKE_INSTALL_DEFAULT_COMPONENT_NAME telar-base)
 add_subdirectory(tbc)
 add_subdirectory(sys)
 add_subdirectory(base)
-unset(CMAKE_INSTALL_DEFAULT_COMPONENT_NAME)
+set(CMAKE_INSTALL_DEFAULT_COMPONENT_NAME telar)
 
 add_subdirectory(vocabulary)
 add_subdirectory(ghostty)

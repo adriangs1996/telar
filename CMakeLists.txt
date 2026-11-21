@@ -73,6 +73,9 @@ include(cmake/openssl.cmake)
 include(cmake/deps/native.cmake)
 include(cmake/deps/ghostty.cmake)
 
+# What the release ships installs as the telar component; lib/ sets the telar-base
+# development package apart, which a release leaves out.
+set(CMAKE_INSTALL_DEFAULT_COMPONENT_NAME telar)
 add_subdirectory(lib)
 add_subdirectory(src)
 

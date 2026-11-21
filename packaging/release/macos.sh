@@ -45,7 +45,7 @@ build() {
     "$root/tools/cpp" configure dist -B "$stage/runtime" -- -DCMAKE_OSX_DEPLOYMENT_TARGET="$macos_min" \
         -DGHOSTTY_VT_ROOT="$ghostty"
     "$root/tools/cpp" build dist -B "$stage/runtime" -- --target distributable-linkage
-    cmake --install "$stage/runtime" --prefix "$stage/prefix"
+    cmake --install "$stage/runtime" --component telar --prefix "$stage/prefix"
 
     cargo build --release --locked --manifest-path "$root/tools/diagram-renderer/Cargo.toml" --target-dir "$stage/renderer"
     install -m 755 "$stage/renderer/release/telar-diagram-renderer" "$stage/prefix/bin/telar-diagram-renderer"
