@@ -280,30 +280,35 @@ FocusScope {
             }
         }
 
-        // The cursor's own layer: a mark that travels from where the cursor was to where it
-        // is and fades as it arrives. The cursor itself is already there, drawn with the cells,
-        // so nothing waits for the motion.
-        Rectangle {
-            id: trail
+        // The cursor, in a layer of its own over the cells, in the shape the mode Neovim is in
+        // gives it. It slides to where it goes with telar's curve; a step to the next cell, as
+        // typing makes, is taken at once, so the cursor is never behind what is typed. Moving or
+        // blinking it draws none of the cells again. Without the keyboard it is hollow.
+        Item {
+            id: caret
 
+            objectName: "editorCaret"
             readonly property rect target: view.cursorRect
-            property real travel: 0
+            readonly property var look: view.caret ?? ({})
+            readonly property string shape: look.shape ?? "block"
+            readonly property real share: Math.max(0.1, (look.percentage ?? 100) / 100)
+            readonly property bool focused: view.activeFocus
+            readonly property color tint: look.color ?? root.colors.text
 
             z: 900
-            width: target.width
+            width: target.width * ((look.wide ?? false) ? 2 : 1)
             height: target.height
-            radius: 2 * root.ratio
-            color: root.colors.accent
-            opacity: 0.28 * (1 - travel)
-            visible: travel < 1 && view.activeFocus
+            visible: (look.visible ?? false) && target.width > 0 && ((look.on ?? true) || !focused)
 
             onTargetChanged: {
-                // A step to the next cell needs no mark; a jump is followed by the eye.
-                const far = Math.abs(target.x - x) > 2.5 * target.width || Math.abs(target.y - y) > 0.5 * target.height;
-                if (far && width > 0 && travel >= 1) {
+                // A step along a row or to the next one is typing's; anything else is a jump.
+                const step = Math.abs(target.y - y) < 0.5 * target.height && Math.abs(target.x - x) <= 1.5 * target.width;
+                if (!step && width > 0 && glide.ready) {
+                    glide.stop();
                     glide.from = Qt.point(x, y);
-                    glide.restart();
-                } else if (!glide.running) {
+                    glide.start();
+                } else {
+                    glide.stop();
                     x = target.x;
                     y = target.y;
                 }
@@ -313,13 +318,45 @@ FocusScope {
                 id: glide
 
                 property point from
+                // The first place it takes has nowhere to come from.
+                property bool ready: false
 
-                NumberAnimation { target: trail; property: "x"; from: glide.from.x; to: trail.target.x; duration: 90; easing.type: Easing.OutCubic }
-                NumberAnimation { target: trail; property: "y"; from: glide.from.y; to: trail.target.y; duration: 90; easing.type: Easing.OutCubic }
-                NumberAnimation { target: trail; property: "travel"; from: 0; to: 1; duration: 150; easing.type: Easing.OutQuad }
+                NumberAnimation { target: caret; property: "x"; from: glide.from.x; to: caret.target.x; duration: 90; easing.type: Easing.OutCubic }
+                NumberAnimation { target: caret; property: "y"; from: glide.from.y; to: caret.target.y; duration: 90; easing.type: Easing.OutCubic }
             }
 
-            Component.onCompleted: travel = 1
+            Component.onCompleted: {
+                x = target.x;
+                y = target.y;
+                glide.ready = true;
+            }
+
+            // A block covers its cell and draws the cell's text again in the cursor's text color;
+            // a bar and an underline cover the share of it the mode asks for.
+            Rectangle {
+                visible: caret.focused
+                x: 0
+                y: caret.shape === "underline" ? caret.height * (1 - caret.share) : 0
+                width: caret.shape === "bar" ? Math.max(1, Math.round(caret.width * caret.share)) : caret.width
+                height: caret.shape === "underline" ? Math.max(1, Math.round(caret.height * caret.share)) : caret.height
+                color: caret.tint
+
+                CellText {
+                    anchors.fill: parent
+                    visible: caret.shape === "block" && (caret.look.text ?? "").length > 0
+                    text: caret.look.text ?? ""
+                    grid: root.typography.grid
+                    color: caret.look.textColor ?? root.colors.background
+                }
+            }
+
+            Rectangle {
+                visible: !caret.focused
+                anchors.fill: parent
+                color: "transparent"
+                border.width: Math.max(1, root.ratio) / Screen.devicePixelRatio
+                border.color: caret.tint
+            }
         }
 
         // What Neovim shows of its mode, of a command half typed and of the ruler, on the row it

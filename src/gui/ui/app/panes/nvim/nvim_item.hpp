@@ -52,6 +52,10 @@ namespace telar::gui::qt {
     // Where the cursor's cell is, for what follows it: a trail, the input method.
     Q_PROPERTY(QRectF cursorRect READ cursorRect NOTIFY cursorChanged)
     Q_PROPERTY(QString mode READ mode NOTIFY modeChanged)
+    // The cursor the pane draws in a layer of its own, over the cells: visible, lit (its blink),
+    // shape ("block", "bar" or "underline"), percentage of the cell it covers, the text of its
+    // cell and whether that is wide, and its colors.
+    Q_PROPERTY(QVariantMap caret READ caret NOTIFY caretChanged)
     // Whether Neovim has drawn its first frame.
     Q_PROPERTY(bool ready READ ready NOTIFY readyChanged)
     // The surfaces Neovim leaves to its UI, each as QML draws it.
@@ -186,6 +190,10 @@ namespace telar::gui::qt {
       return appearance_;
     }
 
+    [[nodiscard]] QVariantMap caret() const {
+      return caret_;
+    }
+
     [[nodiscard]] bool cursorOn() const noexcept {
       return cursor_on_;
     }
@@ -202,6 +210,7 @@ namespace telar::gui::qt {
     void metricsChanged();
     void cursorChanged();
     void modeChanged();
+    void caretChanged();
     void readyChanged();
     void separatorsChanged();
     void pickerChanged();
@@ -259,6 +268,7 @@ namespace telar::gui::qt {
     void predict(const QKeyEvent& event);
     void confirmPrediction(const application::nvim::Editor& editor);
     void publishPrediction();
+    void synchronizeCaret(const application::nvim::Editor& editor);
     void restartBlink(const application::nvim::Editor& editor);
     [[nodiscard]] QRectF gridBounds(const application::nvim::Grid& grid) const noexcept;
     [[nodiscard]] ds::Option<Hit> hit(QPointF position) const;
@@ -291,6 +301,7 @@ namespace telar::gui::qt {
     bool cursor_on_ = true;
     QRectF cursor_rect_;
     QString mode_;
+    QVariantMap caret_;
     bool ready_ = false;
     QVariantMap cmdline_;
     QVariantMap popup_menu_;

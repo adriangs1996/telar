@@ -283,7 +283,9 @@ namespace telar::gui::qt {
     connect(&blink_, &QTimer::timeout, this, [this] {
       cursor_on_ = !cursor_on_;
       blink_.start(cursor_on_ ? blink_cursor_.blink_on_ms : blink_cursor_.blink_off_ms);
-      emit frameShown();
+      // A blink changes the cursor's layer alone: the cells stay as they were drawn.
+      caret_.insert(QStringLiteral("on"), cursor_on_);
+      emit caretChanged();
     });
   }
 
@@ -783,9 +785,63 @@ namespace telar::gui::qt {
       restartBlink(editor);
     }
 
+    synchronizeCaret(editor);
+
     if (const auto mode = shown(editor.mode.view()); mode != mode_) {
       mode_ = mode;
       emit modeChanged();
+    }
+  }
+
+  // The cursor's layer: its shape as the mode Neovim is in gives it, and the cell under it,
+  // which a block draws again in the cursor's text color.
+  void NvimItem::synchronizeCaret(const nvim::Editor& editor) {
+    const auto& cursor = editor.cursor;
+    const auto* grid = editor.grid(cursor.grid);
+    QString text;
+    bool wide = false;
+
+    if (grid != nullptr) {
+      const auto row = grid->screen.row(cursor.row);
+
+      if (cursor.column < row.size()) {
+        text = QString::fromUtf8(row[cursor.column].utf8());
+        wide = row[cursor.column].width == CellWidth::wide;
+      }
+    }
+
+    const auto shape = [&] {
+      switch (cursor.shape) {
+      case CursorShape::bar:
+        return QStringLiteral("bar");
+      case CursorShape::underline:
+        return QStringLiteral("underline");
+      case CursorShape::default_shape:
+      case CursorShape::block:
+      case CursorShape::hollow:
+        break;
+      }
+
+      return QStringLiteral("block");
+    }();
+
+    const auto* configuration = controller_ == nullptr ? nullptr : &controller_->configuration();
+    const auto color = configuration == nullptr ? QColor{} : toQColor(configuration->theme.cursor);
+    const auto text_color = configuration == nullptr ? QColor{} : toQColor(configuration->theme.cursor_text.valueOr(configuration->theme.background));
+    QVariantMap caret{
+        {QStringLiteral("visible"), grid != nullptr && cursor.visible},
+        {QStringLiteral("on"), cursor_on_},
+        {QStringLiteral("shape"), shape},
+        {QStringLiteral("percentage"), static_cast<int>(cursor.percentage)},
+        {QStringLiteral("text"), text.trimmed().isEmpty() ? QString{} : text},
+        {QStringLiteral("wide"), wide},
+        {QStringLiteral("color"), color},
+        {QStringLiteral("textColor"), text_color},
+    };
+
+    if (caret != caret_) {
+      caret_ = std::move(caret);
+      emit caretChanged();
     }
   }
 

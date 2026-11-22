@@ -75,8 +75,6 @@ namespace telar::gui::qt {
     struct Drawn {
       std::uint64_t revision = 0;
       std::uint64_t appearance = 0;
-      bool cursor_on = false;
-      bool keyboard = false;
 
       bool operator==(const Drawn&) const = default;
     };

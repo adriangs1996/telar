@@ -854,6 +854,41 @@ return {api_version = 2, client = {
 
       press(Qt::Key_Escape, QString{});
       QTRY_VERIFY2_WITH_TIMEOUT(shown().contains(QStringLiteral("TELAR <EDITOR> OK")), qPrintable(shown()), runtime_wait_ms);
+
+      // The cursor is a layer of its own: a step to the next cell is taken at once, a jump
+      // slides there, and both end on the cell Neovim's cursor is on.
+      {
+        const auto carets = test::visualItems(*window_->contentItem(), QStringLiteral("editorCaret"));
+
+        QVERIFY(!carets.empty());
+        auto* caret = carets.front();
+        const auto on = [&] {
+          const auto cell = view->cursorRect();
+
+          return qFuzzyCompare(caret->x() + 1, cell.x() + 1) && qFuzzyCompare(caret->y() + 1, cell.y() + 1);
+        };
+
+        QTRY_VERIFY_WITH_TIMEOUT(on(), runtime_wait_ms);
+        const auto stepped_from = view->cursorRect();
+
+        view->send(QStringLiteral("h"));
+        QTRY_VERIFY_WITH_TIMEOUT(view->cursorRect() != stepped_from, runtime_wait_ms);
+        QVERIFY2(on(), "a step is taken at once");
+        const auto jumped_from = view->cursorRect();
+        bool between = false;
+        QMetaObject::Connection watch = connect(view, &NvimItem::cursorChanged, this, [&] {
+          between = between || !on();
+        });
+
+        view->send(QStringLiteral("0"));
+        QTRY_VERIFY_WITH_TIMEOUT(view->cursorRect() != jumped_from, runtime_wait_ms);
+        QObject::disconnect(watch);
+        QVERIFY2(between, "a jump slides");
+        QTRY_VERIFY_WITH_TIMEOUT(on(), runtime_wait_ms);
+        view->send(QStringLiteral("$"));
+        QTRY_VERIFY_WITH_TIMEOUT(view->cursorRect() == stepped_from && on(), runtime_wait_ms);
+      }
+
       // The view is on the window, not only in the session: every item up to the window shows.
       QVERIFY(view->isVisible());
       QVERIFY(view->width() > 0 && view->height() > 0);

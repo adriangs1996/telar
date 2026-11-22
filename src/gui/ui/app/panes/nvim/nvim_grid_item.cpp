@@ -205,7 +205,7 @@ namespace telar::gui::qt {
       }
     }
 
-    const ds::Option<Drawn> next = current == nullptr || editor_ == nullptr ? ds::Option<Drawn>{} : Drawn{.revision = current->screen.revision(), .appearance = editor_->appearance(), .cursor_on = editor_->cursorOn(), .keyboard = editor_->hasActiveFocus()};
+    const ds::Option<Drawn> next = current == nullptr || editor_ == nullptr ? ds::Option<Drawn>{} : Drawn{.revision = current->screen.revision(), .appearance = editor_->appearance()};
 
     // Most frames change one grid: the others keep what they drew.
     if (next == drawn_ && next) {
@@ -265,10 +265,11 @@ namespace telar::gui::qt {
         .scale = window()->effectiveDevicePixelRatio(),
         .appearance = editor_->appearance(),
         .box_stroke = editor_->fontGrid().box_stroke,
-        // The cursor is Neovim's to show or hide; without the keyboard it is drawn hollow.
+        // The pane draws the cursor in a layer of its own, which moves and blinks without the
+        // cells being drawn again.
         .pane_focused = true,
         .keyboard = editor_->hasActiveFocus(),
-        .cursor_on = editor_->cursorOn(),
+        .cursor_on = false,
         .owner = this,
         // The pane, or the float's own surface, is behind the cells that have no color.
         .background_provided = true,
