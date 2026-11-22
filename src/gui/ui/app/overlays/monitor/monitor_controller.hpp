@@ -40,6 +40,7 @@ namespace telar::gui::qt {
     Q_PROPERTY(QVariantList columns READ columns NOTIFY changed)
     Q_PROPERTY(QVariantMap detail READ detail NOTIFY changed)
     Q_PROPERTY(QVariantMap footer READ footer NOTIFY changed)
+    Q_PROPERTY(QVariantMap confirmation READ confirmation NOTIFY changed)
     Q_PROPERTY(QString error READ error NOTIFY changed)
     Q_PROPERTY(QAbstractItemModel* rows READ rows CONSTANT)
 
@@ -61,6 +62,8 @@ namespace telar::gui::qt {
     [[nodiscard]] QVariantList columns() const;
     [[nodiscard]] QVariantMap detail() const;
     [[nodiscard]] QVariantMap footer() const;
+    // The action waiting for a yes, and the process it acts on; empty when none waits.
+    [[nodiscard]] QVariantMap confirmation() const;
     [[nodiscard]] QString error() const;
     [[nodiscard]] QAbstractItemModel* rows() noexcept;
 
@@ -85,12 +88,18 @@ namespace telar::gui::qt {
     Q_INVOKABLE void toggleFold(int pid);
     // Folds or unfolds the selected process's branch.
     Q_INVOKABLE void foldSelected(bool folded);
-    // TERM, KILL, STOP or CONT to the selected process.
+    // STOP or CONT to the selected process; TERM and KILL ask first.
     Q_INVOKABLE void signal(const QString& name);
+    // TERM, KILL or attaching the debugger to the process selected now, once confirmed. Another
+    // selection or machine cancels it.
+    Q_INVOKABLE void ask(const QString& action);
+    Q_INVOKABLE void confirm();
+    Q_INVOKABLE void cancel();
     Q_INVOKABLE void renice(int nice);
     Q_INVOKABLE void copyCommand();
     Q_INVOKABLE void focusPane();
-    // Splits the focused pane beside one that runs `telar process review` on the selected process.
+    // Splits the focused pane beside one that runs `telar process review` on the selected process:
+    // its stack, files or logs; the debugger asks first.
     Q_INVOKABLE void review(const QString& tool);
     // Shows the machine of the window's list in `slot`, and the monitor with it.
     Q_INVOKABLE void selectMachine(int slot);
@@ -115,6 +124,21 @@ namespace telar::gui::qt {
     void machineRequested(application::machines::MachineToken token);
 
   private:
+    enum class Confirmable : std::uint8_t {
+      terminate,
+      kill,
+      debug,
+    };
+
+    // An action asked on a process of a machine; it runs on that one or on none.
+    struct Confirmation {
+      Confirmable action{};
+      application::monitor::ProcessInstance process{};
+      application::machines::MachineToken machine{};
+      // The process as the window named it when it asked.
+      QString target;
+    };
+
     void refresh();
     // Asks again at once, for a view that changed.
     void restart();
@@ -132,6 +156,12 @@ namespace telar::gui::qt {
     [[nodiscard]] ds::Option<std::size_t> selectedRow() const;
     [[nodiscard]] QVariantMap processRecord(const application::monitor::ProcessRow& row) const;
     [[nodiscard]] QVariantMap groupRecord(const application::monitor::GroupRow& group) const;
+    // Whether the process and the machine it was asked on are still the ones selected.
+    [[nodiscard]] bool current(const Confirmation& confirmation) const;
+    // The program and pid of a process the window holds; its pid alone otherwise.
+    [[nodiscard]] QString target(const application::monitor::ProcessInstance& process) const;
+    void send(const application::monitor::ProcessInstance& process, application::monitor::ProcessSignal signal);
+    void launch(const application::monitor::ProcessInstance& process, const QString& tool);
 
     Store& store_;
     ListModel rows_;
@@ -142,6 +172,7 @@ namespace telar::gui::qt {
     qreal cell_width_ = 0;
     // A row the person moved to that the window did not hold yet; selected when it arrives.
     ds::Option<std::size_t> pending_row_;
+    ds::Option<Confirmation> confirmation_;
     QString home_;
   };
 

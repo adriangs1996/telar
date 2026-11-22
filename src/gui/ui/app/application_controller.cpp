@@ -327,18 +327,27 @@ namespace telar::gui::qt {
     });
 
     connect(&monitor_, &MonitorController::failed, &status_, &WindowStatus::report);
-    connect(&monitor_, &MonitorController::machineRequested, this, [this](application::machines::MachineToken token) {
-      commands_.interact([this, token] {
+
+    const auto open_monitor = [this] {
+      dialogs_.show(Dialog::monitor);
+      monitor_.opened();
+    };
+
+    // Showing another machine closes every dialog; the monitor that asked for it opens again on it.
+    connect(&monitor_, &MonitorController::machineRequested, this, [this, open_monitor](application::machines::MachineToken token) {
+      commands_.interact([this, token, open_monitor] {
         machines_.select(token);
+        if (store_.machines().active() == token.slot && store_.dialog().kind == Dialog::none) {
+          open_monitor();
+        }
       });
     });
 
     connect(&machines_, &MachinesCoordinator::changed, &monitor_, &MonitorController::machineChanged);
-    connect(&commands_, &WindowCommands::monitorRequested, this, [this](window_actions::Action action) {
+    connect(&commands_, &WindowCommands::monitorRequested, this, [this, open_monitor](window_actions::Action action) {
       const auto showing = store_.dialog().kind == Dialog::monitor;
       if (!showing) {
-        dialogs_.show(Dialog::monitor);
-        monitor_.opened();
+        open_monitor();
       }
 
       if (action == window_actions::Action::process_picker) {

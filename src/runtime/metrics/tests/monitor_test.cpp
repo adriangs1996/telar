@@ -96,6 +96,26 @@ namespace {
     check(rows[1].cpu_permille == 0);
   }
 
+  // Answers between two readings carry the same sample; the next reading counts a new one.
+  void testSampleCount() {
+    Fixture fixture;
+    MonitorView view{.sections = MonitorSections::host};
+    const auto sample = [&] {
+      const auto answers = fixture.sampler.answer({&view, 1});
+
+      check(answers[0].hasValue());
+      return answers[0]->sample;
+    };
+
+    fixture.read({process(1, 0, "busy", 0)});
+    fixture.read({process(1, 0, "busy", 1'000'000'000)});
+    const auto first = sample();
+
+    check(first != 0 && sample() == first);
+    fixture.read({process(1, 0, "busy", 2'000'000'000)});
+    check(sample() == first + 1, std::to_string(first));
+  }
+
   // A recycled pid is a new process: its time is not compared with the old one's.
   void testRecycledPid() {
     Fixture fixture;
@@ -395,11 +415,12 @@ namespace {
     DecodeStorage storage{.remaining = {reinterpret_cast<Byte*>(words.data()), words.size() * sizeof(std::max_align_t)}};
     const auto decoded = Codec::decode<MonitorSnapshot>(std::span<const Byte>{bytes}, storage);
 
-    check(decoded.processes.size() == snapshot.processes.size() && decoded.cores.size() == snapshot.cores.size());
+    check(decoded.processes.size() == snapshot.processes.size() && decoded.cores.size() == snapshot.cores.size() && decoded.sample == 2);
     check(decoded.detail && decoded.detail->process.instance.pid == ::getpid());
   }
 
   const telar::testing::Case case_cpu_share{"monitor.cpu_share", testCpuShare};
+  const telar::testing::Case case_sample_count{"monitor.sample_count", testSampleCount};
   const telar::testing::Case case_recycled_pid{"monitor.recycled_pid", testRecycledPid};
   const telar::testing::Case case_pane_attribution{"monitor.pane_attribution", testPaneAttribution};
   const telar::testing::Case case_order_and_filter{"monitor.order_and_filter", testOrderAndFilter};

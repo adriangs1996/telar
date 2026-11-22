@@ -252,6 +252,7 @@ namespace telar::runtime {
     measureHost(host, seconds);
     sampled_ = now;
     readings_ = std::min<std::uint32_t>(readings_ + 1, 2);
+    ++sample_;
   }
 
   bool MonitorSampler::ready() const noexcept {
@@ -766,6 +767,7 @@ namespace telar::runtime {
       auto& snapshot = answers.atMut(query).emplace();
 
       snapshot.sections = view.sections;
+      snapshot.sample = sample_;
       if ((view.sections & MonitorSections::host) != 0) {
         snapshot.cpu_permille = cpu_permille_;
         snapshot.cores = cores_.view().first(host_.core_count);

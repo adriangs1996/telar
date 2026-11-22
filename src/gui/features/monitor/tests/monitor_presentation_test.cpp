@@ -144,7 +144,7 @@ namespace {
       processes.atMut(index).instance.pid = static_cast<std::int32_t>(30 + index);
     }
 
-    check(receive(state, MonitorSnapshot{.request_id = 5, .cpu_permille = 420, .matched = 100, .processes = processes.view()}));
+    check(receive(state, MonitorSnapshot{.request_id = 5, .sample = 1, .cpu_permille = 420, .matched = 100, .processes = processes.view()}));
     check(state.offset == 30 && state.processes.size() == 30 && covers(state));
     check(state.cpuHistory().size() == 1 && state.cpuHistory()[0] == 420);
     state.view.first = 55;
@@ -156,6 +156,54 @@ namespace {
     check(state.view.first == 10, std::to_string(state.view.first));
   }
 
+  // An answer to a listing the view left keeps the readings but not the rows, and owes the query
+  // for the current one.
+  void staleListingsAreDropped() {
+    telar::testing::TestMemory adapter;
+    Memory& memory = adapter;
+    State state{memory};
+    ds::Array<MonitorProcess, 2> processes{};
+
+    processes.atMut(0).instance.pid = 1;
+    processes.atMut(1).instance.pid = 2;
+    state.view.visible = 10;
+    wait(state, 1);
+    check(receive(state, MonitorSnapshot{.request_id = 1, .sample = 3, .matched = 2, .processes = processes.view()}));
+    check(!state.owed && state.matched == 2);
+
+    wait(state, 2);
+    relist(state.view).filter.assign("other");
+    check(receive(state, MonitorSnapshot{.request_id = 2, .sample = 3, .cpu_permille = 70, .matched = 0}));
+    check(state.owed && state.matched == 2 && state.processes.size() == 2 && state.cpu_permille == 70);
+
+    wait(state, 3);
+    check(!state.owed);
+    check(receive(state, MonitorSnapshot{.request_id = 3, .sample = 4, .matched = 0}));
+    check(state.matched == 0 && state.processes.empty());
+  }
+
+  // The history takes one share per reading of the runtime, however many answers repeat it.
+  void historyCountsReadings() {
+    telar::testing::TestMemory adapter;
+    Memory& memory = adapter;
+    State state{memory};
+    const auto answer = [&](std::uint64_t id, std::uint64_t sample, std::uint16_t share) {
+      wait(state, id);
+      check(receive(state, MonitorSnapshot{.request_id = id, .sample = sample, .cpu_permille = share}));
+    };
+
+    answer(1, 7, 100);
+    answer(2, 7, 100);
+    answer(3, 7, 100);
+    answer(4, 8, 250);
+    check(state.cpuHistory().size() == 2 && state.cpuHistory()[1] == 250, std::to_string(state.cpuHistory().size()));
+
+    // A new runtime counts again from the start.
+    reset(state);
+    answer(5, 2, 300);
+    check(state.cpuHistory().size() == 3);
+  }
+
   const telar::testing::Case case_columns{"monitor_presentation.columns_share_the_width", columnsShareTheWidth};
   const telar::testing::Case case_fit{"monitor_presentation.fit_counts_characters", fitCountsCharacters};
   const telar::testing::Case case_amounts{"monitor_presentation.amounts_read_short", amountsReadShort};
@@ -165,5 +213,7 @@ namespace {
   const telar::testing::Case case_owner_rows{"monitor_presentation.owner_rows", ownerRows};
   const telar::testing::Case case_toggled{"monitor_presentation.toggled_branches", toggledBranches};
   const telar::testing::Case case_answers{"monitor_presentation.answers_fill_the_window", answersFillTheWindow};
+  const telar::testing::Case case_stale{"monitor_presentation.stale_listings_are_dropped", staleListingsAreDropped};
+  const telar::testing::Case case_history{"monitor_presentation.history_counts_readings", historyCountsReadings};
 
 }

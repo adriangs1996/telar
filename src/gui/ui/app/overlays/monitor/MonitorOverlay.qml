@@ -31,44 +31,35 @@ FocusScope {
     readonly property real radius: ChromeStyle.surfaceRadius * ratio
     readonly property real hairline: 1 / Screen.devicePixelRatio
     readonly property bool hasDetail: (detail.pid ?? 0) > 0
-    // An action that asks before it runs: TERM, KILL, and attaching a debugger.
-    property string confirming: ""
+    // An action that asks before it runs, TERM, KILL or attaching a debugger, and the process it
+    // was asked on; another selection cancels it.
+    readonly property var confirmation: controller.confirmation
+    readonly property string confirming: confirmation.action ?? ""
 
+    objectName: "monitorOverlay"
     visible: telar.dialogs.kind === Store.Dialog.monitor
     z: 50
     onVisibleChanged: {
-        confirming = "";
         if (visible)
             table.forceActiveFocus();
+        else
+            controller.cancel();
     }
 
     function toneColor(tone) {
         return tone === "hot" ? colors.red : tone === "warm" ? colors.yellow : colors.text;
     }
 
-    function run(action) {
-        confirming = "";
-        if (action === "debug")
-            controller.review("debug");
-        else
-            controller.signal(action);
-    }
-
-    function ask(action) {
-        if (hasDetail)
-            confirming = action;
-    }
-
     function key(event) {
         const pressed = event.key;
         if (confirming !== "") {
             if (pressed === Qt.Key_Return || pressed === Qt.Key_Enter) {
-                run(confirming);
+                controller.confirm();
                 event.accepted = true;
                 return;
             }
             if (pressed === Qt.Key_Escape) {
-                confirming = "";
+                controller.cancel();
                 event.accepted = true;
                 return;
             }
@@ -103,9 +94,9 @@ FocusScope {
         } else if (event.text === "r") {
             controller.toggleReverse();
         } else if (event.text === "t") {
-            ask("TERM");
+            controller.ask("TERM");
         } else if (event.text === "k") {
-            ask("KILL");
+            controller.ask("KILL");
         } else if (event.text === "g" && (detail.pane ?? false)) {
             controller.focusPane();
         } else if (event.text === "c" && hasDetail) {
@@ -211,6 +202,7 @@ FocusScope {
                 FormTextField {
                     id: filter
 
+                    objectName: "monitorFilter"
                     x: 8 * root.ratio
                     width: filterBox.width - 16 * root.ratio
                     height: filterBox.height
@@ -228,6 +220,16 @@ FocusScope {
                             table.forceActiveFocus();
                     }
                     Accessible.name: "Filter processes"
+                }
+
+                // The filter of the session shown, as another machine's monitor or a new opening has
+                // it; while someone types, what they type is the filter.
+                Binding {
+                    target: filter
+                    property: "text"
+                    value: root.view.filter ?? ""
+                    when: !filter.activeFocus
+                    restoreMode: Binding.RestoreNone
                 }
             }
 
@@ -275,15 +277,19 @@ FocusScope {
             }
         }
 
-        // Processors, memory, disks and network.
+        // Processors, memory, disks and network. A machine with many cores or disks scrolls them in
+        // their panel, so the table keeps tableRows rows below with the detail and a confirmation open.
         Row {
             id: gauges
 
             readonly property real share: (body.width - 3 * root.gap) / 4.35
+            readonly property int tableRows: 5
+            readonly property real below: root.gap + root.line + 2 * root.ratio + tableRows * root.line + root.gap + details.height + root.gap + confirmBar.height + root.gap + footerBar.height
+            readonly property real tallest: Math.max(cpuPanel.implicitHeight, memoryPanel.implicitHeight, diskPanel.implicitHeight, networkPanel.implicitHeight)
 
             y: toolbar.y + toolbar.height + root.gap
             width: body.width
-            height: Math.max(cpuPanel.implicitHeight, memoryPanel.implicitHeight, diskPanel.implicitHeight, networkPanel.implicitHeight)
+            height: Math.max(root.controlHeight + 2 * root.line, Math.min(tallest, body.height - y - below))
             spacing: root.gap
 
             Panel {
@@ -436,6 +442,7 @@ FocusScope {
             readonly property real scrollbarWidth: 6 * root.ratio
             property real wheelRest: 0
 
+            objectName: "monitorTable"
             y: columnTitles.y + columnTitles.height + 2 * root.ratio
             width: body.width
             height: Math.max(root.line, (details.visible ? details.y : (confirmBar.visible ? confirmBar.y : footerBar.y)) - root.gap - y)
@@ -501,6 +508,7 @@ FocusScope {
         Row {
             id: details
 
+            objectName: "monitorDetails"
             y: (confirmBar.visible ? confirmBar.y : footerBar.y) - root.gap - height
             width: body.width
             height: 6 * root.line
@@ -565,7 +573,7 @@ FocusScope {
                                         onClicked: {
                                             reviewMenu.close();
                                             if (modelData[0] === "debug")
-                                                root.ask("debug");
+                                                root.controller.ask("debug");
                                             else
                                                 root.controller.review(modelData[0]);
                                         }
@@ -630,13 +638,13 @@ FocusScope {
                     DetailButton {
                         text: "TERM"
                         danger: true
-                        onClicked: root.ask("TERM")
+                        onClicked: root.controller.ask("TERM")
                     }
 
                     DetailButton {
                         text: "KILL"
                         danger: true
-                        onClicked: root.ask("KILL")
+                        onClicked: root.controller.ask("KILL")
                     }
                 }
             }
@@ -662,7 +670,7 @@ FocusScope {
                 pixelSize: root.typography.small
                 color: root.colors.text
                 text: {
-                    const target = (root.detail.program ?? "") + " (" + (root.detail.pid ?? "") + ")";
+                    const target = root.confirmation.target ?? "";
                     if (root.confirming === "debug")
                         return "Attaching a debugger stops " + target + " until you detach it.";
                     return "Send " + root.confirming + " to " + target + "? telar checks it is still the same process first.";
@@ -679,12 +687,12 @@ FocusScope {
                 DetailButton {
                     text: root.confirming === "debug" ? "Attach debugger" : "Send " + root.confirming
                     danger: true
-                    onClicked: root.run(root.confirming)
+                    onClicked: root.controller.confirm()
                 }
 
                 DetailButton {
                     text: "Cancel"
-                    onClicked: root.confirming = ""
+                    onClicked: root.controller.cancel()
                 }
             }
         }
@@ -812,7 +820,8 @@ FocusScope {
         }
     }
 
-    // A box of the monitor: a title, a value at its right, and what it holds below.
+    // A box of the monitor: a title, a value at its right, and what it holds below, which scrolls
+    // when the box is shorter than it.
     component Panel: Rectangle {
         id: panel
 
@@ -822,7 +831,7 @@ FocusScope {
         readonly property real padding: 10 * root.ratio
         readonly property real contentWidth: width - 2 * padding
 
-        implicitHeight: contents.y + contents.implicitHeight + padding
+        implicitHeight: scroller.y + contents.implicitHeight + padding
         radius: root.radius
         color: root.colors.surface0
 
@@ -849,13 +858,30 @@ FocusScope {
             color: root.colors.text
         }
 
-        Column {
-            id: contents
+        Flickable {
+            id: scroller
+
+            readonly property bool overflows: contentHeight > height + 0.5
 
             x: panel.padding
             y: panel.padding / 2 + root.controlHeight
             width: panel.contentWidth
-            spacing: 2 * root.ratio
+            height: Math.max(0, panel.height - y - panel.padding)
+            contentWidth: width
+            contentHeight: contents.implicitHeight
+            clip: overflows
+            interactive: overflows
+            boundsBehavior: Flickable.StopAtBounds
+            ScrollIndicator.vertical: ScrollIndicator {
+                visible: scroller.overflows
+            }
+
+            Column {
+                id: contents
+
+                width: scroller.width
+                spacing: 2 * root.ratio
+            }
         }
     }
 

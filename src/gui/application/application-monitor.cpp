@@ -81,7 +81,13 @@ namespace telar::gui::application::monitor {
   }
 
   bool refresh(Session& session) {
-    if (!available(session) || session.monitor.waiting != 0) {
+    if (!available(session)) {
+      return false;
+    }
+
+    // One query at a time: this one leaves when the one in flight is answered.
+    if (session.monitor.waiting != 0) {
+      session.monitor.owed = true;
       return false;
     }
 

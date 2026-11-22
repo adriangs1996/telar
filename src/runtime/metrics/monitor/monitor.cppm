@@ -200,6 +200,8 @@ export {
       tbc::val_a<ds::Vec<DetailText, ConcurrentMemory>> details_;
       ds::Option<Clock::time_point> sampled_;
       std::uint32_t readings_ = 0;
+      // Every reading taken, which the answers carry so a client tells a new one from a repeat.
+      std::uint64_t sample_ = 0;
       // The runtime's own process and its clients', which the monitor names as telar's.
       pid_t self_ = 0;
       ds::Array<pid_t, maximum_monitor_clients> clients_{};

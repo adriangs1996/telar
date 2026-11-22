@@ -37,6 +37,7 @@ export namespace telar::gui::application::monitor {
   using features::monitor::meterTone;
   using features::monitor::ownerText;
   using features::monitor::percent;
+  using features::monitor::relist;
   using features::monitor::rowCount;
   using features::monitor::rowOf;
   using features::monitor::slotAt;
@@ -55,8 +56,8 @@ export namespace telar::gui::application::monitor {
   // Whether the runtime of this session answers the monitor.
   [[nodiscard]] bool available(const Session& session) noexcept;
 
-  // Asks the runtime for what the view shows, unless its last question is unanswered; false when
-  // the session cannot ask.
+  // Asks the runtime for what the view shows; false when the session cannot ask now. While its last
+  // question is unanswered the state owes this one, to ask once that one is answered.
   bool refresh(Session& session);
 
   [[nodiscard]] const State& state(const Session& session) noexcept;

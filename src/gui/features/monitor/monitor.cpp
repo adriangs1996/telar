@@ -79,7 +79,7 @@ namespace telar::gui::features::monitor {
   }
 
   void toggle(View& view, std::int32_t pid) noexcept {
-    const auto pids = view.toggled.viewMut().first(view.toggled_count);
+    const auto pids = relist(view).toggled.viewMut().first(view.toggled_count);
 
     if (const auto found = std::ranges::find(pids, pid); found != pids.end()) {
       std::ranges::copy(std::next(found), pids.end(), found);
@@ -93,6 +93,11 @@ namespace telar::gui::features::monitor {
     }
 
     view.toggled.atMut(view.toggled_count++) = pid;
+  }
+
+  View& relist(View& view) noexcept {
+    ++view.listing;
+    return view;
   }
 
   State::State(Memory& memory)
@@ -147,6 +152,8 @@ namespace telar::gui::features::monitor {
   void wait(State& state, std::uint64_t request_id) noexcept {
     state.waiting = request_id;
     state.asked_offset = window(state).offset;
+    state.asked_listing = state.view.listing;
+    state.owed = false;
   }
 
   bool receive(State& state, const MonitorSnapshot& snapshot) {
@@ -157,7 +164,11 @@ namespace telar::gui::features::monitor {
     state.waiting = 0;
     state.error.assign({});
     state.cpu_permille = snapshot.cpu_permille;
-    remember(state, snapshot.cpu_permille);
+    if (snapshot.sample != state.sample) {
+      state.sample = snapshot.sample;
+      remember(state, snapshot.cpu_permille);
+    }
+
     state.cores.clear();
     state.cores.extend(snapshot.cores);
     state.memory_total_bytes = snapshot.memory_total_bytes;
@@ -192,24 +203,29 @@ namespace telar::gui::features::monitor {
       copy(kept.name, interface.name);
     }
 
-    state.matched = snapshot.matched;
-    state.offset = state.asked_offset;
-    state.processes.clear();
-    state.processes.reserve(snapshot.processes.size());
-    for (const auto& process : snapshot.processes) {
-      state.processes.push(row(process));
-    }
+    // Rows of a listing the view left are not shown: the query for the current one goes next.
+    if (state.asked_listing != state.view.listing) {
+      state.owed = true;
+    } else {
+      state.matched = snapshot.matched;
+      state.offset = state.asked_offset;
+      state.processes.clear();
+      state.processes.reserve(snapshot.processes.size());
+      for (const auto& process : snapshot.processes) {
+        state.processes.push(row(process));
+      }
 
-    state.groups.clear();
-    for (const auto& group : snapshot.groups) {
-      state.groups.push(GroupRow{.owner = group.owner, .pane_id = group.pane_id, .processes = group.processes, .cpu_permille = group.cpu_permille, .resident_bytes = group.resident_bytes});
-    }
+      state.groups.clear();
+      for (const auto& group : snapshot.groups) {
+        state.groups.push(GroupRow{.owner = group.owner, .pane_id = group.pane_id, .processes = group.processes, .cpu_permille = group.cpu_permille, .resident_bytes = group.resident_bytes});
+      }
 
-    // A listing that got shorter keeps its last screen full.
-    const auto rows = rowCount(state.matched, state.groups.view(), state.view.layout);
+      // A listing that got shorter keeps its last screen full.
+      const auto rows = rowCount(state.matched, state.groups.view(), state.view.layout);
 
-    if (std::size_t{state.view.first} + state.view.visible > rows) {
-      state.view.first = static_cast<std::uint32_t>(rows > state.view.visible ? rows - state.view.visible : 0);
+      if (std::size_t{state.view.first} + state.view.visible > rows) {
+        state.view.first = static_cast<std::uint32_t>(rows > state.view.visible ? rows - state.view.visible : 0);
+      }
     }
 
     state.detail.reset();
@@ -262,6 +278,9 @@ namespace telar::gui::features::monitor {
   void reset(State& state) noexcept {
     state.waiting = 0;
     state.acting = 0;
+    state.owed = false;
+    // A new runtime counts its readings from the start.
+    state.sample = 0;
   }
 
 }

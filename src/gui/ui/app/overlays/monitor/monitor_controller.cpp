@@ -32,6 +32,8 @@ namespace telar::gui::qt {
     constexpr ds::Array<const char*, 3> scope_names{"all", "telar", "agents"};
     constexpr ds::Array<const char*, 3> layout_names{"flat", "tree", "owner"};
     constexpr ds::Array<const char*, 6> state_names{"unknown", "running", "sleeping", "idle", "stopped", "zombie"};
+    // The actions that ask first, in the order of MonitorController::Confirmable.
+    constexpr ds::Array<const char*, 3> confirmable_names{"TERM", "KILL", "debug"};
     // The sorts `s` steps through, in the order a person meets them.
     constexpr ds::Array<MonitorSort, 5> sort_cycle{MonitorSort::cpu, MonitorSort::memory, MonitorSort::threads, MonitorSort::pid, MonitorSort::name};
     constexpr std::size_t microsecond_digits = 6;
@@ -185,6 +187,7 @@ namespace telar::gui::qt {
   void MonitorController::opened() {
     revision_ = 0;
     pending_row_ = ds::none;
+    confirmation_ = ds::none;
     refresh();
     timer_.start();
     publish();
@@ -227,17 +230,24 @@ namespace telar::gui::qt {
     publish();
     emit changed();
 
-    // The answer was to an older view: the rows shown moved past it, or another process is selected.
+    // The answer was to an older view: the view changed while it was asked, the rows shown moved
+    // past it, or another process is selected.
     const auto& view = state.view;
     const auto stale_detail = view.selected.pid != 0 && (!state.detail || state.detail->process.instance.pid != view.selected.pid);
 
-    if (stale_detail || !monitor::covers(state)) {
+    if (state.owed || stale_detail || !monitor::covers(state)) {
       refresh();
     }
   }
 
   void MonitorController::publish() {
     const auto& state = monitor::state(store_.session());
+
+    // A confirmation names one process on one machine: another selection cancels it.
+    if (confirmation_ && !current(*confirmation_)) {
+      confirmation_ = ds::none;
+    }
+
     const auto& view = state.view;
     const auto groups = state.groups.view();
     const auto count = monitor::rowCount(state.matched, groups, view.layout);
@@ -685,9 +695,8 @@ namespace telar::gui::qt {
   }
 
   void MonitorController::setSort(const QString& sort) {
-    auto& view = monitor::view(store_.sessionMut());
-
     if (const auto index = indexOf(sort_names, sort)) {
+      auto& view = monitor::relist(monitor::view(store_.sessionMut()));
       const auto chosen = static_cast<MonitorSort>(*index);
 
       view.reverse = view.sort == chosen && !view.reverse;
@@ -698,7 +707,7 @@ namespace telar::gui::qt {
   }
 
   void MonitorController::cycleSort() {
-    auto& view = monitor::view(store_.sessionMut());
+    auto& view = monitor::relist(monitor::view(store_.sessionMut()));
     const auto* const found = std::ranges::find(sort_cycle, view.sort);
     const auto next = (static_cast<std::size_t>(found - sort_cycle.begin()) + 1) % sort_cycle.size();
 
@@ -709,7 +718,7 @@ namespace telar::gui::qt {
   }
 
   void MonitorController::toggleReverse() {
-    auto& view = monitor::view(store_.sessionMut());
+    auto& view = monitor::relist(monitor::view(store_.sessionMut()));
 
     view.reverse = !view.reverse;
     view.first = 0;
@@ -717,9 +726,9 @@ namespace telar::gui::qt {
   }
 
   void MonitorController::setScope(const QString& scope) {
-    auto& view = monitor::view(store_.sessionMut());
-
     if (const auto index = indexOf(scope_names, scope)) {
+      auto& view = monitor::relist(monitor::view(store_.sessionMut()));
+
       view.scope = static_cast<MonitorScope>(*index);
       view.first = 0;
       restart();
@@ -733,7 +742,7 @@ namespace telar::gui::qt {
       return;
     }
 
-    view.layout = static_cast<MonitorLayout>(*index);
+    monitor::relist(view).layout = static_cast<MonitorLayout>(*index);
     view.first = 0;
     columns_ = monitor::columns(cells_, view.layout);
     restart();
@@ -748,8 +757,12 @@ namespace telar::gui::qt {
   void MonitorController::setFilter(const QString& filter) {
     auto& view = monitor::view(store_.sessionMut());
     const auto bytes = filter.toUtf8();
+    const auto kept = runtime::utf8Prefix(utf8(bytes), monitor::MonitorLimits::filter_bytes);
+    if (kept == view.filter.view()) {
+      return;
+    }
 
-    view.filter.assign(runtime::utf8Prefix(utf8(bytes), monitor::MonitorLimits::filter_bytes));
+    monitor::relist(view).filter.assign(kept);
     view.first = 0;
     restart();
   }
@@ -778,8 +791,8 @@ namespace telar::gui::qt {
   }
 
   void MonitorController::signal(const QString& name) {
-    static constexpr ds::Array<const char*, 4> names{"TERM", "KILL", "STOP", "CONT"};
-    static constexpr ds::Array<ProcessSignal, 4> kinds{ProcessSignal::terminate, ProcessSignal::kill, ProcessSignal::stop, ProcessSignal::resume};
+    static constexpr ds::Array<const char*, 2> names{"STOP", "CONT"};
+    static constexpr ds::Array<ProcessSignal, 2> kinds{ProcessSignal::stop, ProcessSignal::resume};
     // A copy: the call below changes the session the view lives in.
     const auto chosen = monitor::state(store_.session()).view.selected;
     const auto index = indexOf(names, name);
@@ -787,9 +800,100 @@ namespace telar::gui::qt {
       return;
     }
 
-    if (!monitor::signal(store_.sessionMut(), chosen, kinds[*index])) {
+    send(chosen, kinds[*index]);
+  }
+
+  void MonitorController::send(const ProcessInstance& process, ProcessSignal signal) {
+    if (!monitor::signal(store_.sessionMut(), process, signal)) {
       emit failed(QStringLiteral("The monitor is busy with another request; try again"));
     }
+  }
+
+  void MonitorController::ask(const QString& action) {
+    const auto& machines = store_.machines();
+    const auto selected = monitor::state(store_.session()).view.selected;
+    const auto index = indexOf(confirmable_names, action);
+    if (!index || selected.pid == 0) {
+      return;
+    }
+
+    confirmation_.emplace(Confirmation{
+        .action = static_cast<Confirmable>(*index),
+        .process = selected,
+        .machine = machines.token(machines.active()),
+        .target = target(selected),
+    });
+
+    emit changed();
+  }
+
+  void MonitorController::confirm() {
+    if (!confirmation_) {
+      return;
+    }
+
+    const auto asked = *confirmation_;
+
+    confirmation_ = ds::none;
+    emit changed();
+    if (!showing() || !current(asked)) {
+      return;
+    }
+
+    switch (asked.action) {
+    case Confirmable::terminate:
+      send(asked.process, ProcessSignal::terminate);
+      break;
+    case Confirmable::kill:
+      send(asked.process, ProcessSignal::kill);
+      break;
+    case Confirmable::debug:
+      launch(asked.process, QStringLiteral("debug"));
+      break;
+    }
+  }
+
+  void MonitorController::cancel() {
+    if (confirmation_) {
+      confirmation_ = ds::none;
+      emit changed();
+    }
+  }
+
+  bool MonitorController::current(const Confirmation& confirmation) const {
+    const auto& machines = store_.machines();
+
+    return monitor::state(store_.session()).view.selected == confirmation.process && machines.token(machines.active()) == confirmation.machine;
+  }
+
+  QString MonitorController::target(const ProcessInstance& process) const {
+    const auto& state = monitor::state(store_.session());
+    const auto named = [&](const monitor::ProcessRow& row) {
+      return QStringLiteral("%1 (%2)").arg(toQString(program(row))).arg(process.pid);
+    };
+
+    for (const auto& row : state.processes) {
+      if (row.instance == process) {
+        return named(row);
+      }
+    }
+
+    if (state.detail && state.detail->process.instance == process) {
+      return named(state.detail->process);
+    }
+
+    return QStringLiteral("pid %1").arg(process.pid);
+  }
+
+  QVariantMap MonitorController::confirmation() const {
+    if (!confirmation_) {
+      return {};
+    }
+
+    return {
+        {QStringLiteral("action"), QString::fromLatin1(confirmable_names[static_cast<std::size_t>(confirmation_->action)])},
+        {QStringLiteral("target"), confirmation_->target},
+    };
   }
 
   void MonitorController::renice(int nice) {
@@ -824,16 +928,24 @@ namespace telar::gui::qt {
   }
 
   void MonitorController::review(const QString& tool) {
-    static constexpr ds::Array<const char*, 4> tools{"stack", "files", "logs", "debug"};
-    const auto& state = monitor::state(store_.session());
+    static constexpr ds::Array<const char*, 3> tools{"stack", "files", "logs"};
+    const auto selected = monitor::state(store_.session()).view.selected;
+    if (!indexOf(tools, tool) || selected.pid == 0) {
+      return;
+    }
+
+    launch(selected, tool);
+  }
+
+  void MonitorController::launch(const ProcessInstance& process, const QString& tool) {
     const auto* focused = store_.session().focusedPane();
-    if (!indexOf(tools, tool) || state.view.selected.pid == 0 || focused == nullptr) {
+    if (focused == nullptr) {
       return;
     }
 
     // The new pane runs on the process's machine: its `telar` checks the instance again, runs the
     // tool, then leaves a shell.
-    const auto script = QStringLiteral("\"${TELAR_BIN_PATH:-telar}\" process review %1 --started %2 --tool %3; exec \"${SHELL:-/bin/sh}\" -l").arg(state.view.selected.pid).arg(started(state.view.selected), tool).toUtf8();
+    const auto script = QStringLiteral("\"${TELAR_BIN_PATH:-telar}\" process review %1 --started %2 --tool %3; exec \"${SHELL:-/bin/sh}\" -l").arg(process.pid).arg(started(process), tool).toUtf8();
     const ds::Array<std::string_view, 3> arguments{"/bin/sh", "-c", utf8(script)};
     const auto pane = focused->id;
 
@@ -866,11 +978,12 @@ namespace telar::gui::qt {
     }
 
     switch (action) {
+    // As with the monitor's own keys, TERM and KILL wait there for a yes.
     case Action::process_terminate:
-      signal(QStringLiteral("TERM"));
+      ask(QStringLiteral("TERM"));
       break;
     case Action::process_kill:
-      signal(QStringLiteral("KILL"));
+      ask(QStringLiteral("KILL"));
       break;
     case Action::process_stop:
       signal(QStringLiteral("STOP"));

@@ -47,7 +47,8 @@ export namespace telar::gui::features::monitor {
   inline constexpr std::size_t error_bytes = 256;
   // The relatives a detail keeps: its nearest ancestors, and its first children.
   inline constexpr std::size_t kept_relatives = 16;
-  // The processor shares the window keeps, one per answer: 2 minutes at an answer every 2 s.
+  // The processor shares the window keeps, one per reading of the runtime: 2 minutes at a reading
+  // every 2 s.
   inline constexpr std::size_t history_samples = 60;
 
   struct DiskRow {
@@ -104,6 +105,8 @@ export namespace telar::gui::features::monitor {
     std::uint16_t visible = 0;
     // The process whose detail the window shows; pid 0 for none.
     ProcessInstance selected{};
+    // Grows with each change to which processes the listing holds or to their order.
+    std::uint32_t listing = 0;
 
     [[nodiscard]] std::span<const std::int32_t> toggledPids() const noexcept;
   };
@@ -112,14 +115,21 @@ export namespace telar::gui::features::monitor {
   // when the view holds as many as the query carries.
   void toggle(View& view, std::int32_t pid) noexcept;
 
+  // The view lists other processes, or in another order: the rows an older query asked for are not
+  // kept. Returns the view, for the change.
+  View& relist(View& view) noexcept;
+
   struct State {
     explicit State(tbc::mut_a<Memory> memory);
 
     View view{};
     // The query in flight, 0 when none; the window asks again only once it is answered.
     std::uint64_t waiting = 0;
-    // The first row of the listing the query in flight asked for.
+    // The first row of the listing the query in flight asked for, and the listing it asked for.
     std::uint32_t asked_offset = 0;
+    std::uint32_t asked_listing = 0;
+    // The view changed while a query was in flight: the window asks again once it is answered.
+    bool owed = false;
     // The signal or priority in flight, 0 when none.
     std::uint64_t acting = 0;
     // Grows with every answer the window keeps.
@@ -128,9 +138,11 @@ export namespace telar::gui::features::monitor {
     FixedText<error_bytes> error;
 
     std::uint16_t cpu_permille = 0;
-    // The last history_samples shares of all cores, oldest first.
+    // The last history_samples shares of all cores, oldest first, and the runtime's reading the last
+    // one came from: an answer that repeats it adds none.
     ds::Array<std::uint16_t, history_samples> history{};
     std::uint8_t history_count = 0;
+    std::uint64_t sample = 0;
     tbc::val_a<ds::Vec<std::uint16_t, Memory>> cores;
     std::uint64_t memory_total_bytes = 0;
     std::uint64_t memory_used_bytes = 0;
@@ -169,7 +181,8 @@ export namespace telar::gui::features::monitor {
   // The state now waits for the answer to `request_id`: the query that left under it.
   void wait(State& state, std::uint64_t request_id) noexcept;
 
-  // Keeps the answer the state waits for; false for any other.
+  // Keeps the answer the state waits for; false for any other. An answer to a listing the view has
+  // since changed keeps the machine's readings and the detail, not the rows.
   bool receive(State& state, const MonitorSnapshot& snapshot);
 
   // The runtime refused `request_id`; false when the state waits for no such request.

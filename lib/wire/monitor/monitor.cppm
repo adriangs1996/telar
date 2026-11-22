@@ -122,6 +122,8 @@ export extern "C++" {
       std::int32_t pid{};
       std::uint64_t started_seconds{};
       std::uint64_t started_microseconds{};
+
+      bool operator==(const ProcessInstance&) const noexcept = default;
     };
 
     template <>
@@ -320,6 +322,8 @@ export extern "C++" {
     struct MonitorSnapshot {
       std::uint64_t request_id{};
       std::uint8_t sections{};
+      // Counts the readings the runtime took: two answers with the same count carry the same shares.
+      std::uint64_t sample{};
       // Of all cores together: 1000 is every core busy.
       std::uint16_t cpu_permille{};
       std::span<const std::uint16_t> cores;
@@ -354,6 +358,7 @@ export extern "C++" {
               ServerTag::monitor_snapshot,
               Field<&MonitorSnapshot::request_id, NonzeroU64, "request_id">,
               Field<&MonitorSnapshot::sections, BoundedInteger<u8, 0, MonitorSections::all>, "sections">,
+              Field<&MonitorSnapshot::sample, u64, "sample">,
               Field<&MonitorSnapshot::cpu_permille, BoundedInteger<u16, 0, MonitorLimits::whole_permille>, "cpu_permille">,
               Field<&MonitorSnapshot::cores, CountedSpan<u16, BoundedInteger<u16, 0, MonitorLimits::whole_permille>, MonitorLimits::maximum_cores>, "cores">,
               Field<&MonitorSnapshot::memory_total_bytes, u64, "memory_total_bytes">,

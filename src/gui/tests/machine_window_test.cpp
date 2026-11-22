@@ -102,6 +102,7 @@ static_assert(true);
 #include <QQuickWindow>
 #include <QRegularExpression>
 #include <QSize>
+#include <QSizeF>
 #include <QString>
 #include <QStringList>
 #include <QStringLiteral>
@@ -136,6 +137,7 @@ import telar.gui.features.notifications;
 import telar.wire.agents;
 import telar.wire.content;
 import telar.wire.layout;
+import telar.wire.monitor;
 import telar.base.ds;
 
 namespace telar::gui::test {
@@ -373,6 +375,90 @@ namespace {
 
   AgentSnapshotEntry activityAgent(std::string_view title) {
     return {.pane_id = pane_id, .pane_generation = 1, .location = location, .pane_index = 1, .workspace_label = "project", .session_title = title, .title_source = AgentTitleSource::agent, .title_state = AgentTitleState::ready, .provider = AgentProvider::codex, .provider_name = "codex", .status = AgentStatus::working, .sequence = 1};
+  }
+
+  // Two processes a runtime's monitor lists, and the cores of a large machine.
+  constexpr ProcessInstance first_process{.pid = 101, .started_seconds = 1};
+  constexpr ProcessInstance second_process{.pid = 102, .started_seconds = 1};
+  constexpr std::size_t many_cores = 128;
+  const ds::Array<MonitorProcess, 2> monitored{
+      MonitorProcess{.instance = first_process, .name = "alpha", .measured = true},
+      MonitorProcess{.instance = second_process, .name = "beta", .measured = true},
+  };
+
+  // A runtime's monitor: each query the window sends gets the processes and a new reading.
+  struct MonitorReplies {
+    WireRuntime& runtime;
+    std::span<const std::uint16_t> cores;
+    std::size_t answered = 0;
+    std::uint64_t sample = 0;
+
+    // Answers the query in flight, if one left since the last answer.
+    void serve() {
+      const auto asked_count = runtime.count(ClientTag::query_monitor);
+      if (asked_count == answered) {
+        return;
+      }
+
+      answered = asked_count;
+      const auto asked = runtime.last<QueryMonitor>();
+      MonitorSnapshot snapshot{
+          .request_id = asked.request_id,
+          .sections = MonitorSections::all,
+          .sample = ++sample,
+          .cores = cores,
+          .process_count = monitored.size(),
+          .matched = monitored.size(),
+          .processes = monitored.view(),
+      };
+
+      for (const auto& process : monitored) {
+        if (process.instance == asked.detail) {
+          snapshot.detail.emplace(MonitorDetail{.process = process});
+        }
+      }
+
+      runtime.send(snapshot);
+    }
+  };
+
+  QVariantMap monitorRecord(ApplicationController& application, int row) {
+    const auto* model = application.monitor()->rows();
+
+    return model->data(model->index(row, 0), ListModel::record_role).toMap();
+  }
+
+  // Whether the monitor lists both processes, answering the queries it sends meanwhile.
+  bool monitorLists(ApplicationController& application, MonitorReplies& replies) {
+    return waitForGuiCondition([&] {
+      replies.serve();
+
+      return application.monitor()->rows()->rowCount() == 2 && monitorRecord(application, 1).value(QStringLiteral("kind")) == QStringLiteral("process");
+    },
+        wait_ms);
+  }
+
+  // Selects the listing's first process and waits for its detail.
+  bool monitorSelectsFirst(ApplicationController& application, MonitorReplies& replies) {
+    application.monitor()->selectRow(0);
+
+    return waitForGuiCondition([&] {
+      replies.serve();
+
+      return application.monitor()->detail().value(QStringLiteral("pid")).toInt() == first_process.pid;
+    },
+        wait_ms);
+  }
+
+  int activeMachine(ApplicationController& application) {
+    for (const auto& machine : application.monitor()->machines()) {
+      const auto row = machine.toMap();
+      if (row.value(QStringLiteral("active")).toBool()) {
+        return row.value(QStringLiteral("slot")).toInt();
+      }
+    }
+
+    return -1;
   }
 
   struct MachineFixture {
@@ -2219,6 +2305,128 @@ namespace {
       static_cast<void>(MachineWindow::replace(application, retired.machine.slot));
       MachineWindow::links(application).linkOpeningFinished(retired, LinkOpeningFailure::process);
       QVERIFY(application.notifications()->center().items().empty());
+    }
+
+    // The monitor's list of machines shows another one in the monitor, with that machine's filter in
+    // the filter's field; on a machine of many cores the table keeps its rows with the detail open.
+    Q_SLOT static void monitorShowsAnotherMachineWithItsFilter() {
+      MachineFixture fixture;
+      auto& application = fixture.application;
+      QQmlApplicationEngine engine;
+
+      engine.rootContext()->setContextProperty(QStringLiteral("telar"), &application);
+      engine.loadFromModule(QStringLiteral("Telar.Gui"), QStringLiteral("Main"));
+      QCOMPARE(engine.rootObjects().size(), 1);
+      auto* window = qobject_cast<QQuickWindow*>(engine.rootObjects().front());
+
+      QVERIFY(window != nullptr);
+      constexpr QSize small_window{1000, 640};
+
+      window->resize(small_window);
+      application.setWindow(*window);
+      QVERIFY(fixture.start());
+      fixture.local_runtime->send(ClientLayoutSnapshot{});
+      fixture.remote_runtime->send(ClientLayoutSnapshot{});
+      QVERIFY(finishOpening(*fixture.local_runtime));
+      window->show();
+      QVERIFY(QTest::qWaitForWindowExposed(window));
+
+      const ds::Array<std::uint16_t, many_cores> cores{};
+      MonitorReplies local{.runtime = *fixture.local_runtime, .cores = cores.view()};
+      MonitorReplies remote{.runtime = *fixture.remote_runtime, .cores = cores.view()};
+      auto* monitor = application.monitor();
+      auto* overlay = window->findChild<QQuickItem*>(QStringLiteral("monitorOverlay"));
+      auto* table = window->findChild<QQuickItem*>(QStringLiteral("monitorTable"));
+      auto* details = window->findChild<QQuickItem*>(QStringLiteral("monitorDetails"));
+      auto* filter = window->findChild<QQuickItem*>(QStringLiteral("monitorFilter"));
+      const auto filterText = [&] {
+        return filter->property("text").toString();
+      };
+
+      QVERIFY(overlay != nullptr && table != nullptr && details != nullptr && filter != nullptr);
+      application.commands()->execute(window_actions::Action::monitor);
+      QCOMPARE(application.dialogs()->kind(), ApplicationController::Dialog::monitor);
+      QVERIFY(monitorLists(application, local));
+      monitor->setFilter(QStringLiteral("alpha"));
+      QVERIFY(monitorLists(application, local));
+      QCOMPARE(filterText(), QStringLiteral("alpha"));
+
+      // The cores' panel scrolls; five rows of the table stay above the detail.
+      constexpr int least_rows = 5;
+      const auto line = overlay->property("line").toReal();
+
+      QVERIFY(monitorSelectsFirst(application, local));
+      QTRY_VERIFY_WITH_TIMEOUT(details->isVisible(), wait_ms);
+      QVERIFY2(table->height() >= least_rows * line - 0.5, qPrintable(QStringLiteral("table %1, line %2").arg(table->height()).arg(line)));
+      QVERIFY(table->mapToScene({0, table->height()}).y() <= details->mapToScene({0, 0}).y() + 0.5);
+
+      monitor->selectMachine(fixture.remote.machine.slot);
+      QVERIFY(finishOpening(*fixture.remote_runtime));
+      QCOMPARE(activeMachine(application), fixture.remote.machine.slot);
+      QCOMPARE(application.dialogs()->kind(), ApplicationController::Dialog::monitor);
+      QVERIFY(monitorLists(application, remote));
+      QCOMPARE(filterText(), QString{});
+
+      monitor->setFilter(QStringLiteral("beta"));
+      QVERIFY(monitorLists(application, remote));
+      monitor->selectMachine(Machines::local_slot);
+      QCOMPARE(application.dialogs()->kind(), ApplicationController::Dialog::monitor);
+      QVERIFY(monitorLists(application, local));
+      QCOMPARE(filterText(), QStringLiteral("alpha"));
+    }
+
+    // A confirmation acts on the process and the machine it named: moving to another process or
+    // machine cancels it, and the palette's TERM asks as the monitor's key does.
+    Q_SLOT static void monitorConfirmsOnTheProcessItNamed() {
+      MachineFixture fixture;
+      QQuickWindow window;
+      auto& application = fixture.application;
+      constexpr QSize size{800, 600};
+
+      window.resize(size);
+      application.setWindow(window);
+      QVERIFY(fixture.start());
+      fixture.local_runtime->send(ClientLayoutSnapshot{});
+      fixture.remote_runtime->send(ClientLayoutSnapshot{});
+      QVERIFY(finishOpening(*fixture.local_runtime));
+
+      const ds::Array<std::uint16_t, 4> cores{};
+      MonitorReplies local{.runtime = *fixture.local_runtime, .cores = cores.view()};
+      auto* monitor = application.monitor();
+      const auto signals_sent = [&](WireRuntime& runtime) {
+        return runtime.count(ClientTag::request_process_signal);
+      };
+
+      application.commands()->execute(window_actions::Action::monitor);
+      monitor->setTable(QSizeF{800, 400}, QSizeF{8, 16});
+      QVERIFY(monitorLists(application, local));
+      QVERIFY(monitorSelectsFirst(application, local));
+
+      monitor->ask(QStringLiteral("TERM"));
+      QCOMPARE(monitor->confirmation().value(QStringLiteral("target")).toString(), QStringLiteral("alpha (101)"));
+      monitor->move(1);
+      QVERIFY(monitor->confirmation().isEmpty());
+      monitor->confirm();
+      QCOMPARE(signals_sent(*fixture.local_runtime), 0);
+
+      monitor->ask(QStringLiteral("KILL"));
+      QCOMPARE(monitor->confirmation().value(QStringLiteral("target")).toString(), QStringLiteral("beta (102)"));
+      monitor->confirm();
+      QTRY_COMPARE_WITH_TIMEOUT(signals_sent(*fixture.local_runtime), 1, wait_ms);
+      const auto sent = fixture.local_runtime->last<RequestProcessSignal>();
+
+      QVERIFY(sent.process == second_process && sent.signal == ProcessSignal::kill);
+      fixture.local_runtime->send(RequestCompleted{.request_id = sent.request_id});
+
+      // The palette's TERM waits in the monitor for a yes; showing another machine forgets it.
+      application.commands()->execute(window_actions::Action::process_terminate);
+      QCOMPARE(monitor->confirmation().value(QStringLiteral("action")).toString(), QStringLiteral("TERM"));
+      QCOMPARE(signals_sent(*fixture.local_runtime), 1);
+      monitor->selectMachine(fixture.remote.machine.slot);
+      QVERIFY(finishOpening(*fixture.remote_runtime));
+      QVERIFY(monitor->confirmation().isEmpty());
+      monitor->confirm();
+      QCOMPARE(signals_sent(*fixture.local_runtime) + signals_sent(*fixture.remote_runtime), 1);
     }
   };
 
