@@ -9,8 +9,9 @@ Arguments:
   --reverse       The other way round.
   --filter TEXT   Only processes whose name, command or user contains TEXT, ignoring
                   case, or whose pid is TEXT. At most 256 bytes.
-  --scope         all (default); telar: those running in a pane; agents: agents and
-                  the processes they started.
+  --scope         all (default); telar: those running in telar's panes, the runtime
+                  and its clients; agents: the agents in telar's panes and the
+                  processes they started.
   --tree          Each process under its parent, siblings in the chosen order; a
                   process whose parent is filtered out starts its own tree.
   --limit N       At most N rows, 1 to 1024 (default 1024).
@@ -23,4 +24,5 @@ running, S sleeping, I idle, T stopped, Z zombie), PANE, PROGRAM, COMMAND, then
 with `pid`, `started`, `parent`, `user`, `user_id`, `name`, `program`, `command`
 (cut to 256 bytes), `state`, `measured`, `cpu_permille`, `resident_bytes` and
 `threads` (null when not measured), `nice`, `pane_id` (null outside panes), `agent`
-(null when none) and `depth`. Exit 0.
+(null when none), `owner` (none, pane, agent, agent_child or telar) and `depth`.
+Exit 0.
