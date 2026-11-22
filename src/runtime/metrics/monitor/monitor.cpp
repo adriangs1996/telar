@@ -731,15 +731,10 @@ namespace telar::runtime {
     std::ranges::sort(groups, group_before);
 
     // A process past the last group the reply carries is left out of the listing.
-    std::size_t kept = 0;
+    static_cast<void>(selected_.retain([&](std::uint32_t index) {
+      return group_of_[index] != no_group;
+    }));
 
-    for (const auto index : selected_) {
-      if (group_of_[index] != no_group) {
-        selected_.atMut(kept++) = index;
-      }
-    }
-
-    selected_.truncate(kept);
     std::ranges::sort(selected_.viewMut(), [&](std::uint32_t left, std::uint32_t right) {
       const auto left_rank = rank[group_of_[left]];
       const auto right_rank = rank[group_of_[right]];

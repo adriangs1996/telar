@@ -29,10 +29,13 @@ namespace telar::gui::application::monitor {
 
       constexpr std::string_view prefix = "tab ";
       ds::Array<char, prefix.size() + std::numeric_limits<std::uint32_t>::digits10 + 1> text{};
-      auto* const start = std::ranges::copy(prefix, text.dataMut()).out;
-      const auto converted = std::to_chars(start, std::to_address(text.viewMut().end()), tab.position + 1U);
+      const auto output = text.viewMut();
+      const auto digits = output.subspan(prefix.size());
 
-      return named(std::string_view{text.view().first(static_cast<std::size_t>(converted.ptr - text.data()))});
+      std::ranges::copy(prefix, output.begin());
+      const auto converted = std::to_chars(digits.data(), std::to_address(digits.end()), tab.position + 1U);
+
+      return named(std::string_view{output.data(), static_cast<std::size_t>(converted.ptr - output.data())});
     }
 
     // The title of the agent the pane runs, else its name or its provider's; empty when it runs none.

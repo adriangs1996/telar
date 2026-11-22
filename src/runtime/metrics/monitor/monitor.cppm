@@ -147,7 +147,8 @@ export {
       [[nodiscard]] static bool before(const MonitorEntry& left, const MonitorEntry& right, const MonitorView& view) noexcept;
       // As `before`, but a tree orders siblings by their branches' processor and memory.
       [[nodiscard]] bool beforeBranch(std::uint32_t left, std::uint32_t right, const MonitorView& view) const noexcept;
-      [[nodiscard]] MonitorProcess row(const MonitorEntry& entry, const Listed& listed) const noexcept;
+      // It views the entry's text.
+      [[nodiscard]] tbc::val_a<MonitorProcess> row(tbc::ref_a<MonitorEntry> entry, const Listed& listed) const noexcept;
 
       // Where a query's rows and detail are written.
       struct Placement {
@@ -197,7 +198,8 @@ export {
       // What the answers of a round view.
       tbc::val_self<ds::Vec<MonitorProcess, ConcurrentMemory>> rows_;
       tbc::val_a<ds::Vec<MonitorGroup, ConcurrentMemory>> groups_;
-      tbc::val_a<ds::Vec<DetailText, ConcurrentMemory>> details_;
+      // Their relatives view the names of entries_.
+      tbc::val_self<ds::Vec<DetailText, ConcurrentMemory>> details_;
       ds::Option<Clock::time_point> sampled_;
       std::uint32_t readings_ = 0;
       // Every reading taken, which the answers carry so a client tells a new one from a repeat.
