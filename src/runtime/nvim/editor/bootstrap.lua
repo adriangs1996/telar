@@ -11,7 +11,8 @@ for name, source in pairs(modules) do
 end
 
 -- vim.ui.select and vim.ui.input ask the runtime, which shows them natively, and nothing loaded
--- later can put its own in their place, nor in the place of vim.ui.open below. The answer comes back through __telar_prompt_answer.
+-- later can put its own in their place, nor in the place of vim.ui.open below. The answer comes
+-- back through __telar_prompt_answer.
 local pending, last = {}, 0
 local function ask(kind, title, initial, choices, done, origin)
   last = last + 1

@@ -61,8 +61,8 @@ Neovim leaves these to its UI, and the window draws each as one of its own surfa
   ![A selection asked through vim.ui.select](images/telar-editor-select.png)
 
 The surfaces draw their icons with Symbols Nerd Font, the font telar bundles: the same glyphs
-Neovim's own interfaces draw with it. A file, in the picker, in the terminal's path search and in
-a tab page, shows the icon of its type; a folder, a folder's. Their colors are roles of the
+Neovim's own interfaces draw with it. A file, in the picker, in the terminal's path search and
+in a tab page, shows the icon of its type; a folder, a folder's. Their colors are roles of the
 window's palette, so they follow the theme.
 
 A floating window keeps its own cells and gets the surface and the shadow of a dialog. When
@@ -76,9 +76,9 @@ it to resize them.
 A scroll slides the rows to their places with the motion a terminal's rows have, and follows
 the same `scroll.smooth` setting. The cursor is drawn in a layer of its own, in the shape the
 mode gives it: it slides to where a jump takes it, takes a step to the next cell at once, as
-typing does, and moving or blinking it draws none of the text again. Keys reach Neovim as what was pressed: Command and Option
-are told apart from Control, and every combination with Shift arrives, which a terminal cannot
-always tell Neovim.
+typing does, and moving or blinking it draws none of the text again. Keys reach Neovim as what
+was pressed: Command and Option are told apart from Control, and every combination with Shift
+arrives, which a terminal cannot always tell Neovim.
 
 ![Two windows side by side](images/telar-editor-split.png)
 
@@ -103,10 +103,10 @@ to bind to a key or to call from a mod. `telar.action.edit("docs/notes.md")`, or
 `telar.action.edit({ file = "src/main.cpp", line = 42 })`, opens a file by its name, taken
 from the focused pane's directory.
 
-The entry under the selection is shown beside the list in a float of Neovim itself: the
-preview is the real buffer, with its highlighting. `Enter` opens the entry, `Control+Enter` or
-`Command+Enter` in a split, and `Option+Enter` in a tab page. `Tab` marks entries, and `Enter` then sends the
-marked ones to the quickfix list. `Shift+Tab` changes what is listed.
+The entry under the selection is shown beside the list in a float of Neovim itself: the preview
+is the real buffer, with its highlighting. `Enter` opens the entry, `Control+Enter` or
+`Command+Enter` in a split, and `Option+Enter` in a tab page. `Tab` marks entries, and `Enter`
+then sends the marked ones to the quickfix list. `Shift+Tab` changes what is listed.
 
 ## telar's theme
 
