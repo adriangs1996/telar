@@ -83,6 +83,7 @@ namespace telar::gui::qt {
         };
 
         putIcon(record, iconOf(page.path(match), match.kind));
+        putChange(record, match.change);
         rows.append(std::move(record));
       }
 
@@ -112,6 +113,7 @@ namespace telar::gui::qt {
       };
 
       putIcon(record, iconOf(page.path(match), match.kind));
+      putChange(record, match.change);
       rows.append(std::move(record));
     }
 

@@ -8,10 +8,11 @@ import Telar.Gui
 // preview when its host has one. The terminal's path search and the editor's picker are both
 // this panel; each gives it its rows and decides what its keys do.
 //
-// A row is {runs, suffix, detail, icon, iconTone, marked}: `runs` are the parts of its name,
+// A row is {runs, suffix, detail, icon, iconTone, badge, badgeTone, marked}: `runs` are the parts of its name,
 // each {text, colorRole, bold}, as a path's label gives them; `suffix` follows the name;
 // `detail` is a second line under it; `icon` is the glyph of what it is, a file's type or a
-// folder, drawn in `iconTone`, a role of the window's colors.
+// folder, drawn in `iconTone`, a role of the window's colors; `badge` is a letter at its end,
+// what git says of it, drawn in `badgeTone`.
 Item {
     id: root
 
@@ -225,6 +226,7 @@ Item {
                 readonly property var row: root.rows[rowIndex] ?? ({})
                 readonly property bool chosen: rowIndex === root.current
                 readonly property bool iconed: (row.icon ?? "").length > 0
+                readonly property real badged: (row.badge ?? "").length > 0 ? badge.implicitWidth + 12 * root.ratio : 0
 
                 y: index * root.rowHeight
                 width: parent.width
@@ -245,6 +247,19 @@ Item {
                     height: parent.height - 12 * root.ratio
                     radius: width / 2
                     color: root.colors.accent
+                }
+
+                // What git says of it, at the row's end.
+                ChromeText {
+                    id: badge
+                    x: parent.width - width - 12 * root.ratio
+                    width: implicitWidth
+                    height: root.detailed ? parent.height / 2 : parent.height
+                    visible: line.badged > 0
+                    text: line.row.badge ?? ""
+                    pixelSize: root.typography.small
+                    emphasized: true
+                    color: root.colors[line.row.badgeTone ?? "subtext0"] ?? root.colors.subtext0
                 }
 
                 Item {
@@ -270,7 +285,7 @@ Item {
                 Row {
                     id: label
                     x: 10 * root.ratio + icon.width
-                    width: Math.min(implicitWidth, parent.width - x - 10 * root.ratio)
+                    width: Math.min(implicitWidth, parent.width - x - 10 * root.ratio - line.badged)
                     height: (line.row.detail ?? "").length > 0 ? parent.height / 2 : parent.height
                     clip: true
 

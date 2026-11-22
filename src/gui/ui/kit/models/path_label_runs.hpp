@@ -48,4 +48,39 @@ namespace telar::gui::qt {
     return runs;
   }
 
+  // What git says of a path, as the letter a row shows at its end and the role of the window's
+  // colors it is drawn in; no letter for a path as committed.
+  inline void putChange(QVariantMap& record, PathChange change) {
+    struct Mark {
+      const char* letter;
+      const char* tone;
+    };
+
+    const auto mark = [&] -> Mark {
+      switch (change) {
+      case PathChange::modified:
+        return {.letter = "M", .tone = "yellow"};
+      case PathChange::added:
+        return {.letter = "A", .tone = "green"};
+      case PathChange::deleted:
+        return {.letter = "D", .tone = "red"};
+      case PathChange::renamed:
+        return {.letter = "R", .tone = "blue"};
+      case PathChange::untracked:
+        return {.letter = "U", .tone = "green"};
+      case PathChange::conflicted:
+        return {.letter = "!", .tone = "red"};
+      case PathChange::none:
+        break;
+      }
+
+      return {.letter = "", .tone = ""};
+    }();
+
+    if (*mark.letter != 0) {
+      record.insert(QStringLiteral("badge"), QString::fromLatin1(mark.letter));
+      record.insert(QStringLiteral("badgeTone"), QString::fromLatin1(mark.tone));
+    }
+  }
+
 }

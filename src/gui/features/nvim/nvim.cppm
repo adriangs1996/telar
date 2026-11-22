@@ -198,6 +198,8 @@ export namespace telar::gui::features::nvim {
     // The bytes of the path the query matched, as a piece of the picker's positions.
     std::uint32_t first_position = 0;
     std::uint16_t position_count = 0;
+    // What git says of the file; none for a line of text or a buffer.
+    PathChange change = PathChange::none;
   };
 
   // The picker of an editor pane: the files, the lines or the buffers a query finds under a
@@ -206,6 +208,9 @@ export namespace telar::gui::features::nvim {
     explicit Picker(Memory& memory);
 
     bool open = false;
+    // The first search of files since the picker opened reads the directory again, so what was
+    // made or changed since the last one shows, and says so.
+    bool fresh = false;
     NvimPickSource source = NvimPickSource::files;
     ds::String<Memory> root;
     ds::String<Memory> query;
@@ -356,6 +361,9 @@ export namespace telar::gui::features::nvim {
   // The query typed in a picker and the request that answers it; `request` zero asks nothing,
   // and the list is empty until something is asked. False for a pane without an open picker.
   bool ask(State& state, std::uint64_t pane_id, std::string_view query, std::uint64_t request);
+
+  // The picker's directory was read again for a search.
+  void refreshed(State& state, std::uint64_t pane_id) noexcept;
 
   // A link the editor of a pane opened, kept until the window takes it; empty to drop it.
   // False when the pane is no editor.

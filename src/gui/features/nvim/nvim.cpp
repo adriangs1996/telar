@@ -614,6 +614,7 @@ namespace telar::gui::features::nvim {
     auto& picker = editor->picker;
 
     picker.open = true;
+    picker.fresh = true;
     picker.source = source;
     picker.root.assign(root);
     picker.query.clear();
@@ -640,6 +641,12 @@ namespace telar::gui::features::nvim {
 
     ++editor->picker_revision;
     return true;
+  }
+
+  void refreshed(State& state, std::uint64_t pane_id) noexcept {
+    if (auto* editor = Access::find(state, pane_id)) {
+      editor->picker.fresh = false;
+    }
   }
 
   bool link(State& state, std::uint64_t pane_id, std::string_view uri) {
@@ -679,7 +686,7 @@ namespace telar::gui::features::nvim {
       const auto first = static_cast<std::uint32_t>(picker.positions.size());
 
       picker.positions.extend(match.positions);
-      picker.matches.push({.path = keep(picker, match.path), .first_position = first, .position_count = static_cast<std::uint16_t>(match.positions.size())});
+      picker.matches.push({.path = keep(picker, match.path), .first_position = first, .position_count = static_cast<std::uint16_t>(match.positions.size()), .change = match.change});
     }
 
     // A search still reading the directory answers again as it finds more.

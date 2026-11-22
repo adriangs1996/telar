@@ -117,6 +117,8 @@ FocusScope {
             runs: row.runs ?? [],
             icon: row.icon ?? "",
             iconTone: row.iconTone ?? "",
+            badge: row.badge ?? "",
+            badgeTone: row.badgeTone ?? "",
             suffix: (row.line ?? 0) > 0 ? ":" + row.line : "",
             detail: (row.line ?? 0) > 0 ? (row.text ?? "") : "",
             marked: root.marked.indexOf(index) >= 0

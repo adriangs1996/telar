@@ -1116,11 +1116,35 @@ return {api_version = 2, client = {
 
         view->send(QStringLiteral("<Cmd>call mkdir('telar-picker', 'p') | cd telar-picker | call writefile(['// first', '// the needle is here'] + %1, 'frames.cpp') | call writefile(['// screen'], 'screen.cpp') | call writefile(['// redraw'], 'redraw.cpp')<CR>").arg(body));
         QTRY_VERIFY2_WITH_TIMEOUT(toQString(firstPane()->cwd).endsWith(QStringLiteral("/telar-picker")), qPrintable(toQString(firstPane()->cwd) + QLatin1Char('\n') + shown() + QLatin1String(" messages: ") + said()), runtime_wait_ms);
+        // A repository where one file is committed and changed since, one is committed as it is
+        // and one was never added: the picker says what git holds of each.
+        const bool versioned = !QStandardPaths::findExecutable(QStringLiteral("git")).isEmpty();
+
+        if (versioned) {
+          view->send(QStringLiteral("<Cmd>call system('export GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1 && git init -q && git add screen.cpp redraw.cpp && git -c user.name=t -c user.email=t@t -c commit.gpgsign=false commit -qm first') | call writefile(['// screen', '// changed'], 'screen.cpp')<CR>"));
+        }
+
         view->send(QStringLiteral("<Cmd>Telar files<CR>"));
         QTRY_VERIFY_WITH_TIMEOUT(view->picker().value(QStringLiteral("open")).toBool(), runtime_wait_ms);
         QCOMPARE(view->picker().value(QStringLiteral("source")).toString(), QStringLiteral("files"));
         // Without a query, what the directory holds.
         QTRY_VERIFY2_WITH_TIMEOUT(names().size() == 3 && names().contains(QStringLiteral("screen.cpp")), qPrintable(names().join(QLatin1Char(' '))), runtime_wait_ms);
+        if (versioned) {
+          const auto mark = [&](const QString& name) {
+            for (const auto& row : rows()) {
+              if (row.toMap().value(QStringLiteral("name")).toString() == name) {
+                return row.toMap().value(QStringLiteral("badge")).toString();
+              }
+            }
+
+            return QStringLiteral("absent");
+          };
+
+          QTRY_COMPARE_WITH_TIMEOUT(mark(QStringLiteral("screen.cpp")), QStringLiteral("M"), runtime_wait_ms);
+          QCOMPARE(mark(QStringLiteral("frames.cpp")), QStringLiteral("U"));
+          QCOMPARE(mark(QStringLiteral("redraw.cpp")), QString{});
+        }
+
         view->searchPicker(QStringLiteral("fram"));
         QTRY_COMPARE_WITH_TIMEOUT(names(), QStringList{QStringLiteral("frames.cpp")}, runtime_wait_ms);
         // The preview is a float of the editor over the cells the picker leaves it, and none

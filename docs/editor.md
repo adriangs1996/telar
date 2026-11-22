@@ -82,6 +82,11 @@ with ripgrep when the machine has it, and with git in a repository when it does 
 
 ![The picker with a file previewed](images/telar-editor-picker.png)
 
+In a repository, a file found by its name says at the end of its row what git holds of it: `M`
+changed, `A` added to the index, `D` removed, `U` never added, `!` in conflict. The terminal's
+path search says the same. The first search after the picker opens reads the directory again,
+so a file made or changed since shows, and says so.
+
 The palette opens the same picker on the editor of the focused tab with **Find file in
 editor**, **Search text in editor** and **Switch editor buffer**; in a configuration they are
 `telar.action.editor_files()`, `telar.action.editor_grep()` and `telar.action.editor_buffers()`,

@@ -815,6 +815,18 @@ namespace telar {
     directory = 1,
   };
 
+  // What git says of a path against the checkout's index and head: nothing when it is as
+  // committed or outside a repository.
+  enum class PathChange : Byte {
+    none = 0,
+    modified = 1,
+    added = 2,
+    deleted = 3,
+    renamed = 4,
+    untracked = 5,
+    conflicted = 6,
+  };
+
   enum class LimitOrigin : Byte {
     runtime = 0,
     client = 1,
@@ -1063,6 +1075,7 @@ namespace telar {
     std::string_view path;
     PathKind kind = PathKind::file;
     std::span<const std::uint16_t> positions;
+    PathChange change = PathChange::none;
   };
 
   struct LimitListEntry {
@@ -1430,7 +1443,7 @@ namespace telar {
 
   template <>
   struct BodySchema<PathMatch>
-      : Serializer<Field<&PathMatch::path, DisplayText16<max_match_path_bytes, false>, "path">, Field<&PathMatch::kind, EnumByte<PathKind, 1>, "kind">, Field<&PathMatch::positions, CountedSpan<u8, u16, max_match_positions>, "positions">> {
+      : Serializer<Field<&PathMatch::path, DisplayText16<max_match_path_bytes, false>, "path">, Field<&PathMatch::kind, EnumByte<PathKind, 1>, "kind">, Field<&PathMatch::positions, CountedSpan<u8, u16, max_match_positions>, "positions">, Field<&PathMatch::change, EnumByte<PathChange, std::to_underlying(PathChange::conflicted)>, "change">> {
     static void validate(const PathMatch& value);
   };
 

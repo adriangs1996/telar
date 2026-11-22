@@ -254,7 +254,8 @@ namespace telar::gui::application::nvim {
 
     switch (source) {
     case NvimPickSource::files:
-      session.link.send(FindPaths{.request_id = request, .root = picker.root.view(), .query = picker.query.view(), .kind = PathKindFilter::files, .limit = path_limit});
+      session.link.send(FindPaths{.request_id = request, .root = picker.root.view(), .query = picker.query.view(), .kind = PathKindFilter::files, .limit = path_limit, .refresh = picker.fresh});
+      feature::refreshed(session.nvim, pane_id);
       break;
     case NvimPickSource::text:
       session.link.send(FindText{.request_id = request, .root = picker.root.view(), .query = picker.query.view(), .limit = text_limit});

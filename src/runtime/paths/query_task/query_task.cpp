@@ -264,7 +264,8 @@ namespace telar::runtime {
   template <Allocator Memory>
   PathIndexStorage<Memory>::PathIndexStorage(Memory& memory)
       : memory_(memory),
-        bytes_(allocateValues<char>(memory_, maximum_bytes)) {
+        bytes_(allocateValues<char>(memory_, maximum_bytes)),
+        changes_(memory) {
     if (bytes_.empty()) {
       throw std::bad_alloc{};
     }
@@ -291,6 +292,8 @@ namespace telar::runtime {
     published.store(0, std::memory_order_relaxed);
     complete.store(false, std::memory_order_relaxed);
     cancelled.store(false, std::memory_order_relaxed);
+    changes_published.store(false, std::memory_order_relaxed);
+    changes_.clear();
   }
 
   template <Allocator Memory>
@@ -326,6 +329,60 @@ namespace telar::runtime {
     complete.store(true, std::memory_order_release);
   }
 
+  template <Allocator Memory>
+  bool PathIndexStorage<Memory>::noteChange(std::string_view relative, PathChange change) {
+    if (changes_.size() == maximum_changes) {
+      return false;
+    }
+
+    static_cast<void>(changes_.assign(ds::String<Memory>{memory_, relative}, change));
+    return true;
+  }
+
+  template <Allocator Memory>
+  void PathIndexStorage<Memory>::publishChanges() noexcept {
+    changes_published.store(true, std::memory_order_release);
+  }
+
+  template <Allocator Memory>
+  PathChange PathIndexStorage<Memory>::change(std::string_view relative) const noexcept {
+    if (!changes_published.load(std::memory_order_acquire)) {
+      return PathChange::none;
+    }
+
+    const auto* const found = changes_.find(relative);
+
+    return found == nullptr ? PathChange::none : *found;
+  }
+
+  PathChange pathChange(char staged, char unstaged) noexcept {
+    if (staged == '?') {
+      return PathChange::untracked;
+    }
+
+    if (staged == 'U' || unstaged == 'U' || (staged == 'A' && unstaged == 'A') || (staged == 'D' && unstaged == 'D')) {
+      return PathChange::conflicted;
+    }
+
+    if (staged == 'D' || unstaged == 'D') {
+      return PathChange::deleted;
+    }
+
+    if (staged == 'A') {
+      return PathChange::added;
+    }
+
+    if (staged == 'R' || unstaged == 'R') {
+      return PathChange::renamed;
+    }
+
+    const auto changed = [](char state) {
+      return state == 'M' || state == 'T' || state == 'C';
+    };
+
+    return changed(staged) || changed(unstaged) ? PathChange::modified : PathChange::none;
+  }
+
   template class PathIndexStorage<SystemAllocator>;
   template class PathIndexStorage<ConcurrentMemory>;
 
@@ -340,12 +397,19 @@ namespace telar::runtime {
       if (!directory) {
         storage_.failure = PathBuildFailure::unreadable;
       } else {
-        if (insideGit(root)) {
+        const bool repository = insideGit(root);
+
+        if (repository) {
           tracked(root);
         }
 
         if (storage_.count == 0 && !storage_.cancelled.load(std::memory_order_relaxed)) {
           walk(directory.get());
+        }
+
+        // After the paths, which a search shows as they come: what git says of them follows.
+        if (repository && !storage_.cancelled.load(std::memory_order_relaxed)) {
+          changes(root);
         }
       }
     } catch (const std::bad_alloc&) {
@@ -432,6 +496,36 @@ namespace telar::runtime {
     } catch (const SystemError&) {  // NOLINT(bugprone-empty-catch): without git the walk lists the directory instead
     } catch (const RequestError&) { // NOLINT(bugprone-empty-catch): without git the walk lists the directory instead
     }
+  }
+
+  void PathIndexBuilder::changes(const char* root) {
+    try {
+      const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds{2};
+      GitRepository git{memory_, root, deadline, storage_.cancelled};
+      // git names a path from the repository's top, the index from `root`: the part between.
+      const ds::String<ConcurrentMemory> prefix{memory_, git.run({"rev-parse", "--show-prefix"})};
+      TrackedPath current;
+      // Each record is two letters, what the index and the work tree hold, a space and a path.
+      constexpr std::size_t record_head = 3;
+      const auto note = [&](std::string_view record) {
+        if (record.size() <= record_head || !record.substr(record_head).starts_with(prefix.view())) {
+          return true;
+        }
+
+        const auto change = pathChange(record[0], record[1]);
+
+        return change == PathChange::none || storage_.noteChange(record.substr(record_head + prefix.size()), change);
+      };
+
+      git.stream({"status", "--porcelain=v1", "-z", "--no-renames", "--untracked-files=all", "--", "."}, [&](std::span<const Byte> bytes) {
+        return current.feed(bytes, storage_.cancelled, note);
+      });
+    } catch (const SystemError&) {    // NOLINT(bugprone-empty-catch): without git's answer every path shows as committed
+    } catch (const RequestError&) {   // NOLINT(bugprone-empty-catch): without git's answer every path shows as committed
+    } catch (const std::bad_alloc&) { // NOLINT(bugprone-empty-catch): the changes noted before are kept, the paths are whole
+    }
+
+    storage_.publishChanges();
   }
 
   FileDescriptor PathIndexBuilder::openRelative(int root, std::string_view relative) {

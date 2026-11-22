@@ -375,6 +375,7 @@ namespace telar::gui::qt {
       };
 
       putIcon(row, fileIcon(path));
+      putChange(row, match.change);
       rows.append(std::move(row));
     }
 

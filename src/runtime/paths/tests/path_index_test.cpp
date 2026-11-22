@@ -13,6 +13,7 @@ import telar.runtime.transport.connection;
 import telar.wire.editor;
 import telar.wire.runtime;
 import telar.wire.vocabulary;
+import telar.base.ds;
 
 namespace {
 
@@ -24,6 +25,7 @@ namespace {
   struct Found {
     std::string path;
     PathKind kind;
+    PathChange change = PathChange::none;
 
     bool operator==(const Found&) const = default;
   };
@@ -44,10 +46,17 @@ namespace {
     Listing found{.complete = result.complete, .truncated = result.truncated};
 
     for (const auto& match : result.matches) {
-      found.paths.push_back({std::string{match.path}, match.kind});
+      found.paths.push_back({.path = std::string{match.path}, .kind = match.kind, .change = match.change});
     }
 
     return found;
+  }
+
+  // What a listing says git holds of a path; none when it does not list it.
+  ds::Option<PathChange> changeOf(const Listing& found, std::string_view path) {
+    const auto entry = std::ranges::find(found.paths, path, &Found::path);
+
+    return entry == found.paths.end() ? ds::Option<PathChange>{} : ds::Option<PathChange>{entry->change};
   }
 
   bool lists(const Listing& found, std::string_view path) {
@@ -86,6 +95,59 @@ namespace {
     check(lists(found, "src/untracked.txt"), "an untracked file is missing");
     check(!lists(found, "src/ignored.txt"), "an ignored file is listed");
     check(directories == 1 && !lists(found, "src"), "a parent directory is not listed once, as a directory");
+  }
+
+  // Each path says what git holds of it, against the repository's head and its index, from a
+  // root below the repository's top as well; a committed one says nothing.
+  void testGitChangesOfPaths() {
+    if (std::system("command -v git >/dev/null 2>&1") != 0) {
+      telar::testing::skip("git is not installed");
+    }
+
+    telar::testing::TestMemory adapter;
+    ConcurrentMemory& memory = adapter;
+    TemporaryDirectory repository{"/tmp/telar-paths-XXXXXX"};
+    const std::string root{repository.path()};
+
+    write(root + "/src/committed.txt");
+    write(root + "/src/modified.txt");
+    write(root + "/src/removed.txt");
+    write(root + "/other.txt");
+    const auto commit = "cd " + root + " && export GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1 && git init -q && git add . && git -c user.name=t -c user.email=t@t commit -qm first";
+
+    check(std::system(commit.c_str()) == 0);
+    std::ofstream{root + "/src/modified.txt"} << "changed";
+    std::filesystem::remove(root + "/src/removed.txt");
+    write(root + "/src/staged.txt");
+    write(root + "/src/untracked.txt");
+    write(root + "/other-untracked.txt");
+    const auto stage = "cd " + root + " && GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1 git add src/staged.txt";
+
+    check(std::system(stage.c_str()) == 0);
+    PathIndex index{memory};
+    const auto top = listing(memory, index, root);
+
+    check(top.complete);
+    check(changeOf(top, "src/committed.txt") == PathChange::none, "a committed file");
+    check(changeOf(top, "src/modified.txt") == PathChange::modified, "a modified file");
+    check(changeOf(top, "src/removed.txt") == PathChange::deleted, "a file removed from the work tree");
+    check(changeOf(top, "src/staged.txt") == PathChange::added, "a file added to the index");
+    check(changeOf(top, "src/untracked.txt") == PathChange::untracked, "an untracked file");
+
+    // Below the top, git's paths are made the root's.
+    PathIndex below{memory};
+    const auto inner = listing(memory, below, root + "/src");
+
+    check(inner.complete && changeOf(inner, "modified.txt") == PathChange::modified && changeOf(inner, "untracked.txt") == PathChange::untracked);
+    check(changeOf(inner, "committed.txt") == PathChange::none && !lists(inner, "other-untracked.txt"));
+  }
+
+  // What git says of a path, by the two letters its short status gives it.
+  void testPathChangeLetters() {
+    check(pathChange('?', '?') == PathChange::untracked && pathChange(' ', 'M') == PathChange::modified && pathChange('M', ' ') == PathChange::modified);
+    check(pathChange('A', ' ') == PathChange::added && pathChange('A', 'M') == PathChange::added && pathChange(' ', 'D') == PathChange::deleted);
+    check(pathChange('U', 'U') == PathChange::conflicted && pathChange('A', 'A') == PathChange::conflicted && pathChange('D', 'D') == PathChange::conflicted);
+    check(pathChange(' ', 'T') == PathChange::modified && pathChange(' ', ' ') == PathChange::none);
   }
 
   void testUnreadableRoot() {
@@ -190,6 +252,8 @@ namespace {
   }
 
   const telar::testing::Case case_git_index_respects_ignore{"path_index.git_index_respects_ignore", testGitIndexRespectsIgnore};
+  const telar::testing::Case case_git_changes_of_paths{"path_index.git_changes_of_paths", testGitChangesOfPaths};
+  const telar::testing::Case case_path_change_letters{"path_index.path_change_letters", testPathChangeLetters};
   const telar::testing::Case case_unreadable_root{"path_index.unreadable_root", testUnreadableRoot};
   const telar::testing::Case case_skips_heavy_directories{"path_index.skips_heavy_directories", testSkipsHeavyDirectories};
   const telar::testing::Case case_ranking_contract{"path_index.ranking_contract", testRankingContract};

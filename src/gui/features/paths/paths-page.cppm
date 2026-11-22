@@ -47,6 +47,7 @@ export {
       std::uint16_t offset = 0;
       std::uint16_t length = 0;
       PathKind kind = PathKind::file;
+      PathChange change = PathChange::none;
       ds::Array<std::uint16_t, PathPickerLimits::query_bytes> positions{};
       std::uint8_t position_count = 0;
 
