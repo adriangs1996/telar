@@ -1170,9 +1170,9 @@ return {api_version = 2, client = {
       QVERIFY(view->separators().first().toMap().value(QStringLiteral("vertical")).toBool());
       shoot(QStringLiteral("editor-split"));
 
-      // The status line of the whole editor is drawn natively over its row: the cells on a
-      // background of their own are pills of that color, an icon of the Nerd Fonts is drawn as
-      // one, and the two sides keep the gap Neovim put between them.
+      // The status line of the whole editor is drawn natively over its row, flat: the cells on a
+      // background of their own are a section of their own, an icon of the Nerd Fonts is drawn
+      // as one, and the two sides keep the gap Neovim put between them.
       view->send(QStringLiteral("<Cmd>lua vim.o.statusline = '%#Visual# NORMAL %#StatusLine# ' .. vim.fn.nr2char(0xe0a0) .. ' main %=%#PmenuSel# %l:%c '; vim.o.laststatus = 3<CR>"));
       const auto status = [&] {
         return view->statusLine();
@@ -1194,20 +1194,20 @@ return {api_version = 2, client = {
       }
 
       QVERIFY2(drawn.contains(QStringLiteral(" main ")), qPrintable(drawn));
-      QVERIFY(piece(QStringLiteral("left"), 0).value(QStringLiteral("pill")).toBool());
-      QVERIFY(!piece(QStringLiteral("left"), 1).value(QStringLiteral("pill")).toBool());
+      QCOMPARE(status().value(QStringLiteral("left")).toList().size(), 2);
+      QCOMPARE(piece(QStringLiteral("left"), 0).value(QStringLiteral("count")).toInt(), 1);
       QVERIFY(token(piece(QStringLiteral("left"), 1).value(QStringLiteral("first")).toInt()).value(QStringLiteral("icon")).toBool());
-      QVERIFY(piece(QStringLiteral("right"), 0).value(QStringLiteral("pill")).toBool());
       QVERIFY(QRegularExpression{QStringLiteral("^\\d+:\\d+$")}.match(token(piece(QStringLiteral("right"), 0).value(QStringLiteral("first")).toInt()).value(QStringLiteral("text")).toString()).hasMatch());
       shoot(QStringLiteral("editor-status"));
 
-      // A line that gives the mode no color of its own shows it as the mode's pill.
+      // A line that opens with the name of the mode writes it in the theme's color for the mode,
+      // and one that opens with something else names no mode.
       const auto lines = test::visualItems(*window_->contentItem(), QStringLiteral("editorStatusLine"));
 
       QCOMPARE(lines.size(), std::size_t{1});
-      QCOMPARE(lines.front()->property("modeToken").toInt(), -1);
-      view->send(QStringLiteral("<Cmd>lua vim.o.statusline = ' NORMAL  main %= %l:%c '<CR>"));
       QTRY_COMPARE_WITH_TIMEOUT(lines.front()->property("modeToken").toInt(), 0, runtime_wait_ms);
+      view->send(QStringLiteral("<Cmd>lua vim.o.statusline = ' main %= NORMAL %l:%c '<CR>"));
+      QTRY_COMPARE_WITH_TIMEOUT(lines.front()->property("modeToken").toInt(), -1, runtime_wait_ms);
       view->send(QStringLiteral("<Cmd>set laststatus& statusline&<CR>"));
       QTRY_VERIFY_WITH_TIMEOUT(!status().value(QStringLiteral("visible")).toBool(), runtime_wait_ms);
 

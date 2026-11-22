@@ -152,7 +152,7 @@ namespace telar::gui::qt {
     }
 
     // The status line of the whole editor, drawn natively over its row: {visible, row, tokens
-    // [{text, color, bold, italic, icon, gap}], left and right [{first, count, background, pill}]}.
+    // [{text, color, bold, italic, icon, gap}], left and right [{first, count}]}.
     [[nodiscard]] QVariantMap statusLine() const {
       return status_line_;
     }

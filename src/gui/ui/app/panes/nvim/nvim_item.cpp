@@ -1041,7 +1041,7 @@ namespace telar::gui::qt {
 
       tokens.append(QVariantMap{
           {QStringLiteral("text"), shown(token.text.of(text))},
-          {QStringLiteral("color"), named(has(CellAttribute::inverse) ? token.style.background : token.style.foreground)},
+          {QStringLiteral("color"), named(token.ink)},
           {QStringLiteral("bold"), has(CellAttribute::bold)},
           {QStringLiteral("italic"), has(CellAttribute::italic)},
           {QStringLiteral("icon"), token.icon},
@@ -1054,8 +1054,6 @@ namespace telar::gui::qt {
           .append(QVariantMap{
               {QStringLiteral("first"), static_cast<int>(piece.first)},
               {QStringLiteral("count"), static_cast<int>(piece.count)},
-              {QStringLiteral("background"), piece.background ? named(*piece.background) : QString{}},
-              {QStringLiteral("pill"), piece.background.hasValue()},
           });
     }
 

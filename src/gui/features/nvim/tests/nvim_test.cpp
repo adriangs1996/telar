@@ -320,6 +320,12 @@ namespace {
     check(line.tokens[3].icon && tokenText(line, 4) == "src/" && line.tokens[4].gap == 2 && tokenText(line, 5) == "main.cpp" && line.tokens[5].gap == 0, "words in two styles side by side stay two, with no gap between");
     check(line.pieces[3].right && line.pieces[3].background && tokenText(line, line.pieces[3].first) == "1:1", "what follows the gap is the right side");
 
+    // The line is drawn flat: a word keeps whichever of its color and its background stands
+    // apart from the line's.
+    check(line.tokens[0].ink == mode.background, "dark letters on the mode's color are written in the mode's color");
+    check(line.tokens[2].ink == branch.foreground, "light letters on a background near the line's keep their own color");
+    check(line.tokens[4].ink == line_style.foreground, "and a word on the line's own background keeps its own");
+
     // Neovim's own status line reverses its colors: what it is drawn on is its foreground.
     const CellStyle reversed{.flags = std::to_underlying(CellAttribute::inverse), .foreground = rgb(40, 40, 40), .background = rgb(220, 220, 220)};
 
@@ -328,6 +334,16 @@ namespace {
     readStatusLine(row, line);
     check(line.pieces.size() == 2 && !line.pieces[0].background && !line.pieces[1].background && line.pieces[1].right, "a line all on one background is words on the line's own");
     check(tokenText(line, 0) == "file.txt" && tokenText(line, 1) == "[+]" && line.tokens[1].gap == 1 && tokenText(line, line.pieces[1].first) == "10,1");
+    check(line.tokens[0].ink == reversed.background, "a reversed word is written in its background");
+
+    // A color Neovim leaves to the window cannot be compared, and the word keeps its own.
+    const CellStyle unset{.background = rgb(130, 170, 255)};
+
+    row.clear();
+    paint(row, "                ", line_style);
+    paint(row, " VISUAL ", unset);
+    readStatusLine(row, line);
+    check(line.tokens.size() == 1 && line.tokens[0].ink == CellColor{}, "a word in the window's own color keeps it");
   }
 
   // A frame says on which row of the default grid the status line of the whole editor is.

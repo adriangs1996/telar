@@ -177,17 +177,21 @@ export namespace telar::gui::features::nvim {
   };
 
   // A word of the status line, as the window draws it in place of the line's cells: cells side
-  // by side in one style, or one icon of the Nerd Fonts' private area.
+  // by side in one style, or one icon of the Nerd Fonts' private area. The window draws the line
+  // flat, on one background, so `ink` is the color the word keeps there: its own, or the
+  // background of its piece when that stands apart from the line's more, as the name of the mode
+  // on a background of the mode's color does.
   struct StatusToken {
     Slice text;
     CellStyle style;
+    CellColor ink;
     bool icon = false;
     // The blank cells between it and the token before it in its piece.
     std::uint8_t gap = 0;
   };
 
-  // Tokens that go together: the cells that share a background other than the line's own, drawn
-  // as one pill of that color, or a stretch on the line's own background. `right` pieces come
+  // Tokens that go together: the cells that share a background other than the line's own, as a
+  // section of a statusline is, or a stretch on the line's own background. `right` pieces come
   // after the gap Neovim fills between the line's two sides.
   struct StatusPiece {
     std::uint32_t first = 0;

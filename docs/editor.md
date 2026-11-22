@@ -45,10 +45,10 @@ Neovim leaves these to its UI, and the window draws each as one of its own surfa
 
   ![The completion menu, each entry with its kind's icon](images/telar-editor-completion.png)
 - The status line of the whole editor, while `laststatus` is 3, as lualine and telar's own
-  configuration set it: what the configuration puts there, drawn over its row in telar's type.
-  Its sections on a background of their own are pills of that color, their icons are drawn
-  with the bundled symbols, and a line that opens with the name of the mode shows it in a pill
-  of the theme's color for that mode.
+  configuration set it: what the configuration puts there, drawn over its row in telar's type
+  and flat, on the editor's own background. Its sections on a background of their own keep
+  their color and are parted by space, their icons are drawn with the bundled symbols, and a
+  line that opens with the name of the mode writes it in the theme's color for that mode.
 
   ![lualine's status line, drawn natively](images/telar-editor-status.png)
 

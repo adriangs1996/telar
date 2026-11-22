@@ -340,6 +340,35 @@ namespace telar::gui::features::nvim {
       return (style.flags & std::to_underlying(CellAttribute::inverse)) != 0 ? style.foreground : style.background;
     }
 
+    // How far apart two colors are, as the squared distance of their channels.
+    std::uint32_t apart(const CellColor& one, const CellColor& other) noexcept {
+      std::uint32_t distance = 0;
+
+      for (std::size_t channel = 0; channel < one.channels.size(); ++channel) {
+        const auto step = static_cast<int>(one.channels[channel]) - static_cast<int>(other.channels[channel]);
+
+        distance += static_cast<std::uint32_t>(step * step);
+      }
+
+      return distance;
+    }
+
+    // The color a word keeps on the line's own background: its own, or the background it was
+    // drawn on when that stands apart from the line's more. Colors Neovim leaves to the window
+    // are not compared, and the word keeps its own.
+    CellColor inkOf(const CellStyle& style, const ds::Option<CellColor>& own, const CellColor& base) noexcept {
+      const auto& ink = (style.flags & std::to_underlying(CellAttribute::inverse)) != 0 ? style.background : style.foreground;
+      const auto known = [](const CellColor& color) {
+        return color.kind == CellColor::Kind::rgb;
+      };
+
+      if (!own || !known(ink) || !known(*own) || !known(base)) {
+        return ink;
+      }
+
+      return apart(*own, base) > apart(ink, base) ? *own : ink;
+    }
+
     bool blank(const CellValue& cell) noexcept {
       const auto text = cell.utf8();
 
@@ -367,7 +396,7 @@ namespace telar::gui::features::nvim {
 
     // Puts a cell in the last piece: with the word before it when nothing parts them and they
     // share a style, as a word of its own otherwise, and an icon always on its own.
-    void addWord(StatusLine& line, const CellValue& cell, std::uint8_t gap) {
+    void addWord(StatusLine& line, const CellValue& cell, std::uint8_t gap, const CellColor& base) {
       auto& piece = line.pieces.backMut();
       const auto text = cell.utf8();
       const bool icon = symbol(text);
@@ -379,7 +408,7 @@ namespace telar::gui::features::nvim {
         return;
       }
 
-      line.tokens.push({.text = {.offset = offset, .size = static_cast<std::uint32_t>(text.size())}, .style = cell.style, .icon = icon, .gap = gap});
+      line.tokens.push({.text = {.offset = offset, .size = static_cast<std::uint32_t>(text.size())}, .style = cell.style, .ink = inkOf(cell.style, piece.background, base), .icon = icon, .gap = gap});
       ++piece.count;
     }
 
@@ -451,7 +480,7 @@ namespace telar::gui::features::nvim {
         gap = 0;
       }
 
-      addWord(line, cell, gap);
+      addWord(line, cell, gap, base);
       gap = 0;
     }
   }
