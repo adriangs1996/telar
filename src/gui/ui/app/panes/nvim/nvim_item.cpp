@@ -150,6 +150,110 @@ namespace telar::gui::qt {
       return {};
     }
 
+    // What was typed of the word a completion completes: on the command line, its text from where
+    // the menu hangs to the cursor; on a grid, the cells of the cursor's row between them.
+    QString completed(const nvim::Editor& editor) {
+      const auto& menu = editor.menu;
+
+      if (menu.grid < 0) {
+        const auto line = editor.cmdline.text.view();
+        const auto from = std::min<std::size_t>(static_cast<std::size_t>(std::max(0, menu.column)), line.size());
+        const auto until = std::clamp<std::size_t>(editor.cmdline.position, from, line.size());
+
+        return QString::fromUtf8(line.substr(from, until - from));
+      }
+
+      const auto& cursor = editor.cursor;
+      const auto* grid = editor.grid(static_cast<std::uint32_t>(menu.grid));
+      if (grid == nullptr || std::cmp_not_equal(cursor.grid, menu.grid) || std::cmp_not_equal(cursor.row, menu.row) || std::cmp_less(cursor.column, menu.column)) {
+        return {};
+      }
+
+      const auto cells = grid->screen.row(static_cast<std::size_t>(menu.row));
+      QString typed;
+
+      for (auto column = static_cast<std::size_t>(std::max(0, menu.column)); column < std::min<std::size_t>(cursor.column, cells.size()); ++column) {
+        typed += QString::fromUtf8(cells[column].utf8());
+      }
+
+      return typed;
+    }
+
+    // A completion's word and what was typed of it.
+    struct Completion {
+      const QString& word;
+      const QString& typed;
+    };
+
+    // A completion's word in runs, those of the letters typed marked: each typed letter in turn,
+    // case aside, at its first place after the one before. A word that does not hold them all
+    // is one run.
+    QVariantList wordRuns(Completion completion) {
+      const auto& [word, typed] = completion;
+      QVariantList runs;
+      QString run;
+      bool marking = false;
+      qsizetype next = 0;
+      const auto close = [&] {
+        if (!run.isEmpty()) {
+          runs.append(QVariantMap{{QStringLiteral("text"), run}, {QStringLiteral("matched"), marking}});
+          run.clear();
+        }
+      };
+
+      for (const auto letter : word) {
+        const bool matched = next < typed.size() && letter.toCaseFolded() == typed[next].toCaseFolded();
+
+        if (matched != marking) {
+          close();
+          marking = matched;
+        }
+
+        run += letter;
+        next += matched ? 1 : 0;
+      }
+
+      close();
+      if (next < typed.size()) {
+        runs = {QVariantMap{{QStringLiteral("text"), word}, {QStringLiteral("matched"), false}}};
+      }
+
+      return runs;
+    }
+
+    // The command line's text in the runs Neovim highlights it in, each {text, color, bold,
+    // italic}: a color of its own, or none for the default one.
+    // Generic over the editor's runs, which the window keeps in a vector of its own memory.
+    template <typename Runs>
+    QVariantList textRuns(std::string_view text, const Runs& runs) {
+      QVariantList shown_runs;
+      std::size_t start = 0;
+
+      for (const auto& run : runs) {
+        if (start >= text.size()) {
+          break;
+        }
+
+        const auto bytes = std::min<std::size_t>(run.bytes, text.size() - start);
+        const auto& foreground = run.style.foreground;
+        const auto attributes = run.style.flags;
+        const auto has = [&](CellAttribute attribute) {
+          return (attributes & std::to_underlying(attribute)) != 0;
+        };
+
+        shown_runs.append(QVariantMap{
+            {QStringLiteral("text"), shown(text.substr(start, bytes))},
+            {QStringLiteral("color"), foreground.kind == CellColor::Kind::rgb ? QColor{foreground.channels[0], foreground.channels[1], foreground.channels[2]}.name() : QString{}},
+            {QStringLiteral("bold"), has(CellAttribute::bold)},
+            {QStringLiteral("italic"), has(CellAttribute::italic)},
+        });
+
+        start += bytes;
+      }
+
+      return shown_runs;
+    }
+
     // The tabs or the buffers of a tab line, each as QML shows it.
     QVariantList tabRecords(std::span<const nvim::Tab> entries, std::string_view text) {
       QVariantList records;
@@ -720,6 +824,7 @@ namespace telar::gui::qt {
         {QStringLiteral("special"), line.special == 0 ? QString{} : QString{QChar::fromLatin1(line.special)}},
         {QStringLiteral("prompt"), shown(line.prompt.view())},
         {QStringLiteral("text"), shown(text)},
+        {QStringLiteral("runs"), textRuns(text, line.runs)},
         // The cursor counted in the characters QML lays out, not in Neovim's bytes.
         {QStringLiteral("position"), shown(text.substr(0, std::min<std::size_t>(line.position, text.size()))).size()},
         {QStringLiteral("indent"), static_cast<int>(line.indent)},
@@ -740,10 +845,14 @@ namespace telar::gui::qt {
 
     menu_revision_ = editor.menu_revision;
     items.reserve(static_cast<qsizetype>(menu.items.size()));
+    const auto typed = completed(editor);
+
     for (const auto& item : menu.items) {
       const auto kind = item.kind.of(text);
+      const auto word = shown(item.word.of(text));
       QVariantMap entry{
-          {QStringLiteral("word"), shown(item.word.of(text))},
+          {QStringLiteral("word"), word},
+          {QStringLiteral("runs"), wordRuns({.word = word, .typed = typed})},
           {QStringLiteral("kind"), shown(kind)},
           {QStringLiteral("menu"), shown(item.menu.of(text))},
       };
@@ -844,6 +953,7 @@ namespace telar::gui::qt {
         {QStringLiteral("id"), static_cast<qulonglong>(prompt.id)},
         {QStringLiteral("kind"), promptKind(prompt.kind)},
         {QStringLiteral("title"), shown(prompt.title.view())},
+        {QStringLiteral("origin"), shown(prompt.origin.view())},
         {QStringLiteral("initial"), shown(prompt.initial.view())},
         {QStringLiteral("choices"), choices},
     };

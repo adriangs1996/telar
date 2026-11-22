@@ -34,12 +34,14 @@ without one opens the link as before: in the editor `editor` or `$EDITOR` names.
 
 Neovim leaves these to its UI, and the window draws each as one of its own surfaces:
 
-- The command line, for `:`, a search or a prompt, with the menu that completes it.
+- The command line, for `:`, a search or a prompt, with the menu that completes it. Its text
+  keeps the highlights Neovim gives it, as a prompt that colors what is typed asks for.
 
   ![The command line with its completion menu](images/telar-editor-cmdline.png)
 
 - The completion menu while typing. A click on an entry takes it. An entry that says its kind,
-  as a language server's do, shows it by its icon.
+  as a language server's do, shows it by its icon, and the letters typed of each word are
+  marked.
 
   ![The completion menu, each entry with its kind's icon](images/telar-editor-completion.png)
 - Messages, as notices that go away by themselves. An error stays longer, and none waits for
@@ -49,7 +51,12 @@ Neovim leaves these to its UI, and the window draws each as one of its own surfa
   ![Two tab pages](images/telar-editor-tabs.png)
 
 - `vim.ui.select` and `vim.ui.input`, whatever asks and whatever the configuration loads: a
-  plugin that replaces them later is ignored.
+  plugin that replaces them later is ignored. They open by the word under the cursor. A
+  selection says who asks, the language server of a code action or the caller's kind, and a
+  list longer than nine opens as the picker, with a search. A text to type starts with what
+  Neovim proposes, selected.
+
+  ![vim.ui.input by the word it asks about](images/telar-editor-input.png)
 
   ![A selection asked through vim.ui.select](images/telar-editor-select.png)
 

@@ -528,6 +528,7 @@ namespace telar::runtime {
         .title = prompt.title,
         .initial = prompt.initial,
         .choices = choices.view().first(count),
+        .origin = prompt.origin,
     });
 
     attachment.editor_prompt = serial;

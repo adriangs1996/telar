@@ -9,8 +9,8 @@ import Telar.Gui
 Item {
     id: root
 
-    // The editor's menu: visible, selected, first, total, items [{word, kind, menu, icon,
-    // iconTone}], x, y. An item's icon says its kind.
+    // The editor's menu: visible, selected, first, total, items [{word, runs, kind, menu, icon,
+    // iconTone}], x, y. An item's icon says its kind; its runs mark the letters typed of it.
     required property var menu
     required property var colors
     required property var typography
@@ -135,15 +135,26 @@ Item {
                     }
                 }
 
-                CellText {
+                // The word, the letters of it that were typed marked.
+                Row {
                     id: word
                     x: root.kinded ? 14 * root.ratio + root.chipWidth : 8 * root.ratio
                     height: parent.height
                     width: Math.min(implicitWidth, Math.max(0, parent.width - x - detail.implicitWidth - 20 * root.ratio))
-                    text: row.item.word ?? ""
-                    grid: root.typography.grid
-                    color: row.chosen ? root.colors.text : root.colors.subtext0
                     clip: true
+
+                    Repeater {
+                        model: row.item.runs ?? [{text: row.item.word ?? "", matched: false}]
+
+                        delegate: CellText {
+                            required property var modelData
+                            height: word.height
+                            text: modelData.text
+                            grid: root.typography.grid
+                            bold: modelData.matched
+                            color: modelData.matched || row.chosen ? root.colors.text : root.colors.subtext0
+                        }
+                    }
                 }
 
                 // What the item adds of itself, as its type, at the row's end.

@@ -383,6 +383,24 @@ namespace telar::runtime {
       return {};
     }
 
+    // The runs of the text it sends, in the styles their highlights draw; none when the text is
+    // all in the default one.
+    const auto text = clipped(line.content.view(), max_nvim_line_bytes);
+    ds::Array<NvimTextRun, max_nvim_text_runs> runs{};
+    std::size_t run_count = 0;
+    bool styled = false;
+
+    for (const auto& chunk : line.content.chunks) {
+      if (run_count == runs.size() || chunk.offset >= text.size()) {
+        break;
+      }
+
+      const auto bytes = static_cast<std::uint32_t>(std::min<std::size_t>(chunk.size, text.size() - chunk.offset));
+
+      runs.atMut(run_count++) = {.bytes = bytes, .style = styleOf(screen.highlightOf(chunk.highlight))};
+      styled = styled || chunk.highlight != 0;
+    }
+
     write(
         payload_,
         NvimCmdline{
@@ -395,8 +413,9 @@ namespace telar::runtime {
             .position = line.position,
             .indent = line.indent,
             .prompt = clipped(line.prompt.view(), max_nvim_label_bytes),
-            .text = clipped(line.content.view(), max_nvim_line_bytes),
+            .text = text,
             .block = clipped(line.block.view(), max_nvim_line_bytes),
+            .runs = styled ? runs.view().first(run_count) : std::span<const NvimTextRun>{},
         }
     );
     return payload_.view();

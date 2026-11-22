@@ -611,6 +611,7 @@ namespace {
       const auto line = decoded<NvimCmdline>(frames.cmdline(screen), scratch);
 
       check(line.visible && line.first == ':' && line.text == "write" && line.position == 5 && line.level == 1 && line.frame_id == 1, "the command line as Neovim has it");
+      check(line.runs.empty(), "text without a highlight is sent without runs");
 
       const auto menu = decoded<NvimPopupMenu>(frames.popupMenu(screen), scratch);
 
@@ -646,6 +647,55 @@ namespace {
 
   }
 
+  // The command line's text keeps Neovim's highlights, run after run, in the styles they draw.
+  void commandLineKeepsItsHighlights() {
+    testing::TestMemory adapter;
+    ConcurrentMemory& memory = adapter;
+    NvimScreen screen{memory};
+    NvimFrames frames{memory};
+
+    redraw(screen, memory, 3, [](msgpack::Writer& writer) {
+      event(writer, "grid_resize", {1, 20, 4});
+      writer.array(2);
+      writer.string("hl_attr_define");
+      writer.array(4);
+      writer.unsignedInteger(7);
+      writer.map(2);
+      writer.string("foreground");
+      writer.unsignedInteger(0xf0dfaf);
+      writer.string("bold");
+      writer.boolean(true);
+      writer.map(0);
+      writer.array(0);
+      writer.array(2);
+      writer.string("cmdline_show");
+      writer.array(6);
+      writer.array(2);
+      for (const auto& [highlight, text] : {std::pair{7U, "wr"}, std::pair{0U, "ite"}}) {
+        writer.array(2);
+        writer.unsignedInteger(highlight);
+        writer.string(text);
+      }
+      writer.unsignedInteger(5);
+      writer.string(":");
+      writer.string("");
+      writer.unsignedInteger(0);
+      writer.unsignedInteger(1);
+    });
+
+    std::vector<Byte> scratch(16 * 1024);
+
+    frames.begin(screen, {.pane_id = 3, .seen = 0});
+    skipGrids(frames, screen);
+    const auto line = decoded<NvimCmdline>(frames.cmdline(screen), scratch);
+    const CellColor highlighted{.kind = CellColor::Kind::rgb, .channels = {0xf0, 0xdf, 0xaf}};
+
+    check(line.text == "write" && line.runs.size() == 2, "a run for each piece of the line");
+    check(line.runs[0].bytes == 2 && line.runs[0].style.foreground == highlighted && (line.runs[0].style.flags & std::to_underlying(CellAttribute::bold)) != 0, "the highlighted piece in its style");
+    check(line.runs[1].bytes == 3 && line.runs[1].style.foreground.kind == CellColor::Kind::default_color, "the rest in the default one");
+  }
+
+  const telar::testing::Case case_highlights{"nvim_frames.command_line_keeps_its_highlights", commandLineKeepsItsHighlights};
   const telar::testing::Case case_surfaces{"nvim_frames.surfaces_are_sent_when_they_change", surfacesAreSentWhenTheyChange};
   const telar::testing::Case case_snapshot{"nvim_frames.snapshot_then_changes", snapshotThenChanges};
   const telar::testing::Case case_unsized{"nvim_frames.unsized_grids_are_not_sent", unsizedGridsAreNotSent};

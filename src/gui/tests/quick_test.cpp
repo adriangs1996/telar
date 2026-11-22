@@ -980,9 +980,23 @@ return {api_version = 2, client = {
       press(Qt::Key_Escape, QString{});
       QTRY_VERIFY_WITH_TIMEOUT(!view->cmdline().value(QStringLiteral("visible")).toBool() && !view->popupMenu().value(QStringLiteral("visible")).toBool(), runtime_wait_ms);
 
+      // The command line's text comes with Neovim's highlights, as a prompt that colors what is
+      // typed in it asks for.
+      view->send(QStringLiteral(":call input({'prompt': 'Color ', 'highlight': {typed -> [[0, len(typed), 'ErrorMsg']]}})<CR>red"));
+      const auto colored = [&] {
+        const auto runs = view->cmdline().value(QStringLiteral("runs")).toList();
+
+        return !runs.isEmpty() && runs.first().toMap().value(QStringLiteral("text")).toString() == QStringLiteral("red") && !runs.first().toMap().value(QStringLiteral("color")).toString().isEmpty();
+      };
+
+      QTRY_VERIFY2_WITH_TIMEOUT(colored(), qPrintable(view->cmdline().value(QStringLiteral("text")).toString()), runtime_wait_ms);
+      press(Qt::Key_Escape, QString{});
+      QTRY_VERIFY_WITH_TIMEOUT(!view->cmdline().value(QStringLiteral("visible")).toBool(), runtime_wait_ms);
+
       // A completion that says what its items are shows each kind by its icon, as a language
-      // server's completion does.
-      view->send(QStringLiteral("o<Cmd>call complete(col('.'), [{'word': 'draw', 'kind': 'Function'}, {'word': 'drawn', 'kind': 'Variable'}, {'word': 'Drawing', 'kind': 'Class'}])<CR>"));
+      // server's completion does. It inserts nothing until one is chosen, as a configuration
+      // for a language server sets, so the letters typed are what the line holds.
+      view->send(QStringLiteral("<Cmd>set completeopt=menu,noinsert<CR>odr<Cmd>call complete(col('.') - 2, [{'word': 'draw', 'kind': 'Function'}, {'word': 'drawn', 'kind': 'Variable'}, {'word': 'Drawing', 'kind': 'Class'}])<CR>"));
       const auto kinds = [&] {
         QStringList icons;
 
@@ -995,9 +1009,24 @@ return {api_version = 2, client = {
 
       QTRY_VERIFY2_WITH_TIMEOUT(kinds().size() == 3, qPrintable(QStringLiteral("mode %1 menu %2 items %3 shown %4").arg(view->mode()).arg(view->popupMenu().value(QStringLiteral("visible")).toBool()).arg(view->popupMenu().value(QStringLiteral("items")).toList().size()).arg(shown().left(300))), runtime_wait_ms);
       QVERIFY2(!kinds().contains(QString{}) && kinds().removeDuplicates() == 0, qPrintable(kinds().join(QLatin1Char(' '))));
+      // The letters typed are marked in each word, case aside.
+      const auto marked = [&](int index) {
+        QString letters;
+
+        for (const auto& run : view->popupMenu().value(QStringLiteral("items")).toList().at(index).toMap().value(QStringLiteral("runs")).toList()) {
+          if (run.toMap().value(QStringLiteral("matched")).toBool()) {
+            letters += run.toMap().value(QStringLiteral("text")).toString();
+          }
+        }
+
+        return letters;
+      };
+
+      QCOMPARE(marked(0), QStringLiteral("dr"));
+      QCOMPARE(marked(2), QStringLiteral("Dr"));
       shoot(QStringLiteral("editor-completion-kinds"));
       press(Qt::Key_Escape, QString{});
-      view->send(QStringLiteral("<Cmd>silent undo<CR>"));
+      view->send(QStringLiteral("<Cmd>silent undo | set completeopt&<CR>"));
       QTRY_VERIFY_WITH_TIMEOUT(!view->popupMenu().value(QStringLiteral("visible")).toBool() && view->mode() == QStringLiteral("normal"), runtime_wait_ms);
 
       // What Neovim says arrives as a notice, and asks for no key to go away.
@@ -1015,9 +1044,11 @@ return {api_version = 2, client = {
       shoot(QStringLiteral("editor-message"));
 
       // vim.ui.select is the window's dialog, whatever asked, and its answer reaches the caller.
-      view->send(QStringLiteral(":lua vim.ui.select({'Rename symbol', 'Extract function', 'Inline variable'}, {prompt = 'Code actions'}, function(choice) vim.g.telar_choice = choice end)<CR>"));
+      view->send(QStringLiteral(":lua vim.ui.select({'Rename symbol', 'Extract function', 'Inline variable'}, {prompt = 'Code actions', kind = 'refactor'}, function(choice) vim.g.telar_choice = choice end)<CR>"));
       QTRY_COMPARE_WITH_TIMEOUT(view->prompt().value(QStringLiteral("kind")).toString(), QStringLiteral("select"), runtime_wait_ms);
       QCOMPARE(view->prompt().value(QStringLiteral("title")).toString(), QStringLiteral("Code actions"));
+      // Who asks is said beside the title.
+      QCOMPARE(view->prompt().value(QStringLiteral("origin")).toString(), QStringLiteral("refactor"));
       QCOMPARE(view->prompt().value(QStringLiteral("choices")).toStringList().size(), 3);
       shoot(QStringLiteral("editor-select"));
       view->answer(true, 1);
@@ -1026,6 +1057,58 @@ return {api_version = 2, client = {
       view->send(QStringLiteral(":echomsg 'chose ' .. g:telar_choice<CR>"));
       QTRY_VERIFY_WITH_TIMEOUT(std::ranges::any_of(view->messages().value(QStringLiteral("items")).toList(), [](const QVariant& item) {
         return item.toMap().value(QStringLiteral("text")).toString().contains(QStringLiteral("chose Extract function"));
+      }),
+          runtime_wait_ms);
+
+      // vim.ui.input opens by the word under the cursor, what Neovim proposes selected in the
+      // field, and what is typed reaches the caller.
+      view->send(QStringLiteral(":lua vim.ui.input({prompt = 'New name', default = 'request_id'}, function(text) vim.g.telar_named = text end)<CR>"));
+      QTRY_COMPARE_WITH_TIMEOUT(view->prompt().value(QStringLiteral("kind")).toString(), QStringLiteral("input"), runtime_wait_ms);
+      QCOMPARE(view->prompt().value(QStringLiteral("initial")).toString(), QStringLiteral("request_id"));
+      const auto asks = test::visualItems(*window_->contentItem(), QStringLiteral("editorPrompt"));
+
+      QVERIFY(!asks.empty());
+      QTRY_VERIFY_WITH_TIMEOUT(asks.front()->opacity() == 1.0, runtime_wait_ms);
+      const auto cursor = view->cursorRect();
+      const QRectF placed{asks.front()->x(), asks.front()->y(), asks.front()->width(), asks.front()->height()};
+
+      QVERIFY2(placed.top() >= cursor.bottom() || placed.bottom() <= cursor.top(), "the prompt does not cover the word it asks about");
+      QVERIFY2(std::abs(placed.top() - cursor.bottom()) < 3 * view->cellHeight() || std::abs(placed.bottom() - cursor.top()) < 3 * view->cellHeight(), "the prompt opens by the cursor");
+      const auto fields = test::visualItems(*window_->contentItem(), QStringLiteral("editorInputField"));
+
+      QVERIFY(!fields.empty());
+      // What Neovim proposed is in the field, selected, and the field has the keys.
+      QTRY_COMPARE_WITH_TIMEOUT(fields.front()->property("selectedText").toString(), QStringLiteral("request_id"), runtime_wait_ms);
+      QTRY_VERIFY_WITH_TIMEOUT(fields.front()->hasActiveFocus(), runtime_wait_ms);
+      shoot(QStringLiteral("editor-input"));
+      view->answer(true, 0, QStringLiteral("renamed"));
+      QTRY_COMPARE_WITH_TIMEOUT(view->prompt().value(QStringLiteral("kind")).toString(), QString{}, runtime_wait_ms);
+      view->forceActiveFocus();
+      view->send(QStringLiteral(":echomsg 'named ' .. g:telar_named<CR>"));
+      QTRY_VERIFY_WITH_TIMEOUT(std::ranges::any_of(view->messages().value(QStringLiteral("items")).toList(), [](const QVariant& item) {
+        return item.toMap().value(QStringLiteral("text")).toString().contains(QStringLiteral("named renamed"));
+      }),
+          runtime_wait_ms);
+
+      // A list longer than the keys that pick it is the window's picker, which a query searches.
+      view->send(QStringLiteral(":lua vim.ui.select({'alpha', 'bravo', 'charlie', 'delta', 'echo', 'foxtrot', 'golf', 'hotel', 'india', 'juliett', 'kilo', 'lima'}, {prompt = 'Words'}, function(choice) vim.g.telar_word = choice end)<CR>"));
+      QTRY_COMPARE_WITH_TIMEOUT(view->prompt().value(QStringLiteral("choices")).toStringList().size(), 12, runtime_wait_ms);
+      const auto searches = test::visualItems(*window_->contentItem(), QStringLiteral("editorSelectSearch"));
+
+      QVERIFY(!searches.empty());
+      QTRY_VERIFY_WITH_TIMEOUT(searches.front()->hasActiveFocus(), runtime_wait_ms);
+      for (const char letter : std::string_view{"jlt"}) {
+        QTest::keyClick(window_, letter);
+      }
+
+      QTRY_COMPARE_WITH_TIMEOUT(asks.front()->property("found").toList().size(), 1, runtime_wait_ms);
+      shoot(QStringLiteral("editor-select-search"));
+      QTest::keyClick(window_, Qt::Key_Return);
+      QTRY_COMPARE_WITH_TIMEOUT(view->prompt().value(QStringLiteral("kind")).toString(), QString{}, runtime_wait_ms);
+      view->forceActiveFocus();
+      view->send(QStringLiteral(":echomsg 'word ' .. g:telar_word<CR>"));
+      QTRY_VERIFY_WITH_TIMEOUT(std::ranges::any_of(view->messages().value(QStringLiteral("items")).toList(), [](const QVariant& item) {
+        return item.toMap().value(QStringLiteral("text")).toString().contains(QStringLiteral("word juliett"));
       }),
           runtime_wait_ms);
 

@@ -122,15 +122,26 @@ Item {
             height: parent.height
             clip: true
 
-            CellText {
+            // The line as Neovim highlights it, run after run; all of it in the text's color when
+            // it has no highlight.
+            Row {
                 id: typed
                 // The line follows its caret once it is longer than the field.
                 x: Math.min(0, field.width - 2 * root.cellWidth - (root.line.position ?? 0) * root.cellWidth)
                 height: parent.height
-                width: implicitWidth
-                text: root.line.text ?? ""
-                grid: root.typography.grid
-                color: root.colors.text
+
+                Repeater {
+                    model: (root.line.runs ?? []).length > 0 ? root.line.runs : [{text: root.line.text ?? "", color: "", bold: false}]
+
+                    delegate: CellText {
+                        required property var modelData
+                        height: typed.height
+                        text: modelData.text
+                        grid: root.typography.grid
+                        bold: modelData.bold ?? false
+                        color: (modelData.color ?? "").length > 0 ? modelData.color : root.colors.text
+                    }
+                }
             }
 
             Rectangle {

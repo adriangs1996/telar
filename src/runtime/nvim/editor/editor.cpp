@@ -271,6 +271,7 @@ end
   NvimPromptRequest::NvimPromptRequest(ConcurrentMemory& memory)
       : title(memory),
         initial(memory),
+        origin(memory),
         text(memory),
         choices(memory) {}
 
@@ -577,12 +578,15 @@ end
   // one, so what does not read as a prompt is passed over, and what does is cut to what a
   // client is sent.
   bool NvimEditor::prompted(std::span<const std::uint8_t> parameters) {
+    // The id, the kind, the title, the initial text, the choices and, after them, who asks.
     constexpr std::uint32_t fields = 5;
+    constexpr std::uint32_t fields_with_origin = 6;
     msgpack::Reader reader{parameters};
     std::uint64_t id = 0;
     std::uint32_t count = 0;
+    std::uint32_t given = 0;
 
-    if (!reader.tuple(fields) || !reader.unsignedInteger(id) || id == 0) {
+    if (!reader.array(given) || (given != fields && given != fields_with_origin) || !reader.unsignedInteger(id) || id == 0) {
       return true;
     }
 
@@ -614,6 +618,13 @@ end
       }
     }
 
+    prompt_.origin.clear();
+    if (given == fields_with_origin) {
+      if (const auto who = reader.string()) {
+        prompt_.origin.assign(clipped(*who, max_nvim_label_bytes));
+      }
+    }
+
     ++prompt_serial_;
     return true;
   }
@@ -637,6 +648,7 @@ end
     prompt_.kind = NvimPromptKind::none;
     prompt_.title.clear();
     prompt_.initial.clear();
+    prompt_.origin.clear();
     prompt_.text.clear();
     prompt_.choices.clear();
     ++prompt_serial_;

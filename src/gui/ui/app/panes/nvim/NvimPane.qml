@@ -425,6 +425,7 @@ FocusScope {
             id: ask
             z: 980
             prompt: view.prompt
+            anchor: view.cursorRect
             colors: root.colors
             typography: root.typography
             ratio: root.ratio

@@ -13,10 +13,25 @@ end
 -- vim.ui.select and vim.ui.input ask the runtime, which shows them natively, and nothing loaded
 -- later can put its own in their place, nor in the place of vim.ui.open below. The answer comes back through __telar_prompt_answer.
 local pending, last = {}, 0
-local function ask(kind, title, initial, choices, done)
+local function ask(kind, title, initial, choices, done, origin)
   last = last + 1
   pending[last] = done
-  vim.rpcnotify(channel, "telar_prompt", last, kind, tostring(title or ""), tostring(initial or ""), choices)
+  vim.rpcnotify(channel, "telar_prompt", last, kind, tostring(title or ""), tostring(initial or ""), choices, tostring(origin or ""))
+end
+
+-- Who asks, as the selector shows it beside its title: the language server whose code actions
+-- these are, or the kind the caller gives.
+local function origin(items, opts)
+  local first = type(items[1]) == "table" and items[1] or {}
+  local context = type(first.ctx) == "table" and first.ctx or {}
+  if opts.kind == "codeaction" and context.client_id then
+    local client = vim.lsp.get_client_by_id(context.client_id)
+    if client then
+      return client.name
+    end
+  end
+
+  return type(opts.kind) == "string" and opts.kind or ""
 end
 
 local function select(items, opts, on_choice)
@@ -33,7 +48,7 @@ local function select(items, opts, on_choice)
     else
       on_choice(nil, nil)
     end
-  end)
+  end, origin(items, opts))
 end
 
 local function input(opts, on_confirm)

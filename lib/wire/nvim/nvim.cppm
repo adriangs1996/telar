@@ -34,6 +34,8 @@ export extern "C++" {
     inline constexpr std::size_t max_nvim_label_bytes = 512;
     // The most of a completion item's documentation a client is sent.
     inline constexpr std::size_t max_nvim_info_bytes = 2048;
+    // The styled runs of the command line's text a client is sent.
+    inline constexpr std::size_t max_nvim_text_runs = 256;
     inline constexpr std::size_t max_nvim_menu_items = 512;
     inline constexpr std::size_t max_nvim_messages = 32;
     inline constexpr std::size_t max_nvim_tabs = 128;
@@ -451,6 +453,15 @@ export extern "C++" {
     // NvimFrame that ends it, and takes effect with that frame.
 
     // The command line: `:`, a search, or the prompt of input(). Not visible, it is closed.
+    // A run of the command line's text in one style: how many of its bytes, drawn how.
+    struct NvimTextRun {
+      std::uint32_t bytes{};
+      CellStyle style{};
+    };
+
+    template <>
+    struct BodySchema<NvimTextRun> : Serializer<Field<&NvimTextRun::bytes, u32, "bytes">, Field<&NvimTextRun::style, ValueCodec<CellStyle>, "style">> {};
+
     struct NvimCmdline {
       std::uint64_t pane_id{};
       std::uint64_t frame_id{};
@@ -468,6 +479,9 @@ export extern "C++" {
       std::string_view text;
       // The lines of a block above it, as a function being typed has, each ended by a newline.
       std::string_view block;
+      // How `text` is drawn, run after run from its start, as Neovim highlights it; none when all
+      // of it is in the default style.
+      std::span<const NvimTextRun> runs;
     };
 
     template <>
@@ -485,7 +499,8 @@ export extern "C++" {
               Field<&NvimCmdline::indent, u32, "indent">,
               Field<&NvimCmdline::prompt, NvimText<max_nvim_label_bytes>, "prompt">,
               Field<&NvimCmdline::text, NvimText<max_nvim_line_bytes>, "text">,
-              Field<&NvimCmdline::block, NvimText<max_nvim_line_bytes>, "block">> {};
+              Field<&NvimCmdline::block, NvimText<max_nvim_line_bytes>, "block">,
+              Field<&NvimCmdline::runs, CountedSpan<u16, ValueCodec<NvimTextRun>, max_nvim_text_runs>, "runs">> {};
 
     // One entry of the completion menu: the word, what kind of thing it is, and a note.
     struct NvimMenuItem {
@@ -639,6 +654,8 @@ export extern "C++" {
       std::string_view title;
       std::string_view initial;
       std::span<const std::string_view> choices;
+      // Who asks: a language server, or the caller's kind; empty for none.
+      std::string_view origin;
     };
 
     template <>
@@ -652,7 +669,8 @@ export extern "C++" {
               Field<&NvimPrompt::kind, EnumByte<NvimPromptKind, std::to_underlying(NvimPromptKind::input)>, "kind">,
               Field<&NvimPrompt::title, NvimText<max_nvim_label_bytes>, "title">,
               Field<&NvimPrompt::initial, NvimText<max_nvim_line_bytes>, "initial">,
-              Field<&NvimPrompt::choices, CountedSpan<u16, NvimText<max_nvim_label_bytes>, max_nvim_choices>, "choices">> {};
+              Field<&NvimPrompt::choices, CountedSpan<u16, NvimText<max_nvim_label_bytes>, max_nvim_choices>, "choices">,
+              Field<&NvimPrompt::origin, NvimText<max_nvim_label_bytes>, "origin">> {};
 
   }
 }

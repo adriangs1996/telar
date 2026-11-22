@@ -80,6 +80,8 @@ export {
       NvimPromptKind kind = NvimPromptKind::none;
       ds::String<ConcurrentMemory> title;
       ds::String<ConcurrentMemory> initial;
+      // Who asks: the language server of a code action, or the caller's kind; empty for none.
+      ds::String<ConcurrentMemory> origin;
       // The choices of a selection, in order, as views of `text`.
       ds::Vec<char, ConcurrentMemory> text;
       ds::Vec<NvimSlice, ConcurrentMemory> choices;

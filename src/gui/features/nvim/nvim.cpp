@@ -273,7 +273,8 @@ namespace telar::gui::features::nvim {
   Cmdline::Cmdline(Memory& memory)
       : prompt(memory),
         text(memory),
-        block(memory) {}
+        block(memory),
+        runs(memory) {}
 
   PopupMenu::PopupMenu(Memory& memory)
       : text(memory),
@@ -295,6 +296,7 @@ namespace telar::gui::features::nvim {
   Prompt::Prompt(Memory& memory)
       : title(memory),
         initial(memory),
+        origin(memory),
         text(memory),
         choices(memory) {}
 
@@ -441,6 +443,8 @@ namespace telar::gui::features::nvim {
     line.prompt.assign(message.prompt);
     line.text.assign(message.text);
     line.block.assign(message.block);
+    line.runs.clear();
+    line.runs.extend(message.runs);
     ++editor->cmdline_revision;
     return Received::staged;
   }
@@ -546,6 +550,7 @@ namespace telar::gui::features::nvim {
     prompt.kind = prompt.id == 0 ? NvimPromptKind::none : message.kind;
     prompt.title.assign(message.title);
     prompt.initial.assign(message.initial);
+    prompt.origin.assign(message.origin);
     prompt.text.clear();
     prompt.choices.clear();
 

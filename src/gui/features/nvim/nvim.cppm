@@ -112,6 +112,8 @@ export namespace telar::gui::features::nvim {
     ds::String<Memory> prompt;
     ds::String<Memory> text;
     ds::String<Memory> block;
+    // How `text` is drawn, run after run; none when all of it is in the default style.
+    ds::Vec<NvimTextRun, Memory> runs;
   };
 
   struct MenuItem {
@@ -183,6 +185,8 @@ export namespace telar::gui::features::nvim {
     NvimPromptKind kind = NvimPromptKind::none;
     ds::String<Memory> title;
     ds::String<Memory> initial;
+    // Who asks: a language server, or the caller's kind.
+    ds::String<Memory> origin;
     ds::Vec<char, Memory> text;
     ds::Vec<Slice, Memory> choices;
   };
