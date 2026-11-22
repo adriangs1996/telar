@@ -313,6 +313,149 @@ namespace telar::gui::features::nvim {
         picker(made_in),
         link(made_in) {}
 
+  namespace {
+
+    // A cell whose text is a symbol of the private use areas, where the Nerd Fonts keep their
+    // icons: U+E000 to U+F8FF, and the planes from U+F0000.
+    bool symbol(std::string_view text) noexcept {
+      constexpr unsigned char basic = 0xEE;
+      constexpr unsigned char basic_end = 0xEF;
+      constexpr unsigned char basic_last = 0xA3;
+      constexpr unsigned char plane = 0xF3;
+      constexpr unsigned char plane_first = 0xB0;
+      constexpr unsigned char last_plane = 0xF4;
+
+      if (text.size() < 3) {
+        return false;
+      }
+
+      const auto lead = static_cast<unsigned char>(text[0]);
+      const auto next = static_cast<unsigned char>(text[1]);
+
+      return lead == basic || (lead == basic_end && next <= basic_last) || (lead == plane && next >= plane_first && text.size() >= 4) || (lead == last_plane && text.size() >= 4);
+    }
+
+    // What a cell is drawn on: its background, or its foreground when reversed.
+    CellColor groundOf(const CellStyle& style) noexcept {
+      return (style.flags & std::to_underlying(CellAttribute::inverse)) != 0 ? style.foreground : style.background;
+    }
+
+    bool blank(const CellValue& cell) noexcept {
+      const auto text = cell.utf8();
+
+      return text.empty() || text == " ";
+    }
+
+    // Where the second side starts: past the longest stretch of blank cells on the line's own
+    // background, of two cells at least, which Neovim fills between the sides; the line's end
+    // when there is none.
+    std::size_t sidesParted(std::span<const CellValue> row, const CellColor& base) noexcept {
+      std::size_t longest = 1;
+      std::size_t end = row.size();
+      std::size_t stretch = 0;
+
+      for (std::size_t index = 0; index < row.size(); ++index) {
+        stretch = blank(row[index]) && groundOf(row[index].style) == base ? stretch + 1 : 0;
+        if (stretch > longest) {
+          longest = stretch;
+          end = index + 1;
+        }
+      }
+
+      return end;
+    }
+
+    // Puts a cell in the last piece: with the word before it when nothing parts them and they
+    // share a style, as a word of its own otherwise, and an icon always on its own.
+    void addWord(StatusLine& line, const CellValue& cell, std::uint8_t gap) {
+      auto& piece = line.pieces.backMut();
+      const auto text = cell.utf8();
+      const bool icon = symbol(text);
+      const auto offset = static_cast<std::uint32_t>(line.text.size());
+
+      line.text.extend(std::span<const char>{text});
+      if (piece.count != 0 && gap == 0 && !icon && !line.tokens.back().icon && line.tokens.back().style == cell.style) {
+        line.tokens.backMut().text.size += static_cast<std::uint32_t>(text.size());
+        return;
+      }
+
+      line.tokens.push({.text = {.offset = offset, .size = static_cast<std::uint32_t>(text.size())}, .style = cell.style, .icon = icon, .gap = gap});
+      ++piece.count;
+    }
+
+    // The background most of the cells have.
+    CellColor commonGround(std::span<const CellValue> row) noexcept {
+      constexpr std::size_t kept = 16;
+      ds::Array<CellColor, kept> grounds{};
+      ds::Array<std::uint32_t, kept> counts{};
+      std::size_t known = 0;
+
+      for (const auto& cell : row) {
+        const auto ground = groundOf(cell.style);
+        std::size_t index = 0;
+
+        while (index < known && !(grounds[index] == ground)) {
+          ++index;
+        }
+
+        if (index == known && known < kept) {
+          grounds.atMut(known++) = ground;
+        }
+
+        if (index < known) {
+          ++counts.atMut(index);
+        }
+      }
+
+      const auto most = std::ranges::max_element(counts.view().first(std::max<std::size_t>(known, 1)));
+
+      return grounds[static_cast<std::size_t>(most - counts.view().begin())];
+    }
+
+  }
+
+  StatusLine::StatusLine(Memory& memory)
+      : text(memory),
+        tokens(memory),
+        pieces(memory) {}
+
+  void readStatusLine(std::span<const CellValue> row, StatusLine& line) {
+    line.text.clear();
+    line.tokens.clear();
+    line.pieces.clear();
+
+    const auto base = commonGround(row);
+    const auto gap_end = sidesParted(row, base);
+    std::uint8_t gap = 0;
+
+    for (std::size_t index = 0; index < row.size(); ++index) {
+      const auto& cell = row[index];
+      const auto ground = groundOf(cell.style);
+      const bool pill = !(ground == base);
+      const bool right = index >= gap_end;
+
+      if (cell.width == CellWidth::continuation) {
+        continue;
+      }
+
+      const bool same_piece = !line.pieces.empty() && line.pieces.back().right == right && line.pieces.back().background.hasValue() == pill && (!pill || *line.pieces.back().background == ground);
+
+      // A blank cell parts the words of the piece it is in, and opens none.
+      if (blank(cell)) {
+        gap = same_piece && gap < std::numeric_limits<std::uint8_t>::max() ? static_cast<std::uint8_t>(gap + 1) : gap;
+        continue;
+      }
+
+      if (!same_piece) {
+        line.pieces.push({.first = static_cast<std::uint32_t>(line.tokens.size()), .background = pill ? ds::Option<CellColor>{ground} : ds::Option<CellColor>{}, .right = right});
+        gap = 0;
+      }
+
+      addWord(line, cell, gap);
+      gap = 0;
+    }
+  }
+
   const Grid* Editor::grid(std::uint32_t id) const noexcept {
     for (const auto& grid : grids) {
       if (grid->id == id) {
@@ -417,6 +560,7 @@ namespace telar::gui::features::nvim {
     };
 
     placeCursor(*editor);
+    editor->status_row = message.status_line ? ds::Option<std::uint16_t>{message.status_row} : ds::Option<std::uint16_t>{};
     if (editor->mode.view() != message.mode) {
       editor->mode.assign(message.mode);
     }

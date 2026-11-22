@@ -193,6 +193,7 @@ export {
       void copied(msgpack::Reader& reader);
       void opened(msgpack::Reader& reader);
       void moved(msgpack::Reader& reader);
+      void placedStatus(msgpack::Reader& reader);
       void framed(msgpack::Reader& reader);
       void changed(msgpack::Reader& reader);
       void listed(msgpack::Reader& reader);

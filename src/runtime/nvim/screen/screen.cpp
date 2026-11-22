@@ -686,6 +686,15 @@ namespace telar::runtime {
     directory_at_ = stamp();
   }
 
+  void NvimScreen::statusLine(ds::Option<std::uint16_t> row) noexcept {
+    touch();
+    status_line_ = row;
+  }
+
+  ds::Option<std::uint16_t> NvimScreen::statusLine() const noexcept {
+    return status_line_;
+  }
+
   void NvimScreen::mouse(bool enabled) noexcept {
     mouse_ = enabled;
   }

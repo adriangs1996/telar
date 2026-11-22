@@ -394,6 +394,8 @@ end
       framed(reader);
     } else if (method == "telar_tabs") {
       changed(reader);
+    } else if (method == "telar_status") {
+      placedStatus(reader);
     } else if (method == "telar_buffers") {
       listed(reader);
     } else if (method == "telar_navigate") {
@@ -450,7 +452,26 @@ end
     publish(settled);
   }
 
-  // `[window, sides, title, footer]`: a float's frame.
+  // `[row]`: the row of the default grid the status line of the whole editor is drawn on; -1
+  // while there is none.
+  void NvimEditor::placedStatus(msgpack::Reader& reader) {
+    std::int64_t row = -1;
+
+    if (!reader.tuple(1) || !reader.integer(row) || row < -1 || std::cmp_greater_equal(row, size_.rows)) {
+      return;
+    }
+
+    const auto current = screen_.statusLine();
+    if (row < 0 ? !current : current && std::cmp_equal(*current, row)) {
+      return;
+    }
+
+    const bool settled = screen_.settled();
+
+    screen_.statusLine(row < 0 ? ds::Option<std::uint16_t>{} : ds::Option<std::uint16_t>{static_cast<std::uint16_t>(row)});
+    publish(settled);
+  }
+
   // `[[tab, modified, diagnostics]...]`: what is marked on each tab page that has something.
   void NvimEditor::changed(msgpack::Reader& reader) {
     constexpr std::uint32_t fields = 3;

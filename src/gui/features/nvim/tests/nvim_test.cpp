@@ -268,6 +268,79 @@ namespace {
     check(notation({.codepoint = '<', .control = true}).view() == "<C-lt>");
   }
 
+  // A row of cells drawn in `style`, one for each character of `text` and one for each icon.
+  void paint(std::vector<CellValue>& row, std::string_view text, CellStyle style = {}) {
+    while (!text.empty()) {
+      const auto lead = static_cast<unsigned char>(text.front());
+      const std::size_t size = lead < 0x80 ? 1 : lead < 0xE0 ? 2
+                                             : lead < 0xF0   ? 3
+                                                             : 4;
+      CellValue cell;
+
+      cell.style = style;
+      cell.length = static_cast<Byte>(size);
+      std::ranges::copy(text.substr(0, size), reinterpret_cast<char*>(cell.text.viewMut().data()));
+      row.push_back(cell);
+      text.remove_prefix(size);
+    }
+  }
+
+  CellColor rgb(Byte red, Byte green, Byte blue) {
+    return {.kind = CellColor::Kind::rgb, .channels = {red, green, blue}};
+  }
+
+  std::string tokenText(const StatusLine& line, std::size_t index) {
+    return std::string{line.tokens[index].text.of({line.text.data(), line.text.size()})};
+  }
+
+  // The status line is read from the cells Neovim drew: its pills, its words and its icons, on
+  // the two sides of its gap, whatever statusline drew it.
+  void statusLineIsReadFromItsCells() {
+    Fixture fixture;
+    const CellStyle line_style{.foreground = rgb(200, 200, 200), .background = rgb(30, 30, 30)};
+    const CellStyle mode{.flags = std::to_underlying(CellAttribute::bold), .foreground = rgb(0, 0, 0), .background = rgb(130, 170, 255)};
+    const CellStyle branch{.foreground = rgb(255, 255, 255), .background = rgb(60, 60, 80)};
+    const CellStyle named{.flags = std::to_underlying(CellAttribute::bold), .foreground = rgb(200, 200, 200), .background = rgb(30, 30, 30)};
+    std::vector<CellValue> row;
+
+    paint(row, " NORMAL ", mode);
+    paint(row, " \ue0a0 main ", branch);
+    paint(row, " \U000f0b26  src/", line_style);
+    paint(row, "main.cpp", named);
+    paint(row, "                    ", line_style);
+    paint(row, " 1:1 ", mode);
+
+    StatusLine line{fixture.memory};
+
+    readStatusLine(row, line);
+    check(line.pieces.size() == 4, "a pill for each background of its own, and one stretch on the line's");
+    check(line.pieces[0].background && *line.pieces[0].background == mode.background && line.pieces[0].count == 1 && tokenText(line, 0) == "NORMAL", "the mode's pill, without the cells that pad it");
+    check(line.pieces[1].background && line.tokens[1].icon && tokenText(line, 2) == "main" && line.tokens[2].gap == 1, "an icon of the Nerd Fonts is a token of its own");
+    check(!line.pieces[2].background && !line.pieces[2].right && line.pieces[2].count == 3, "the words on the line's own background");
+    check(line.tokens[3].icon && tokenText(line, 4) == "src/" && line.tokens[4].gap == 2 && tokenText(line, 5) == "main.cpp" && line.tokens[5].gap == 0, "words in two styles side by side stay two, with no gap between");
+    check(line.pieces[3].right && line.pieces[3].background && tokenText(line, line.pieces[3].first) == "1:1", "what follows the gap is the right side");
+
+    // Neovim's own status line reverses its colors: what it is drawn on is its foreground.
+    const CellStyle reversed{.flags = std::to_underlying(CellAttribute::inverse), .foreground = rgb(40, 40, 40), .background = rgb(220, 220, 220)};
+
+    row.clear();
+    paint(row, "file.txt [+]          10,1   All", reversed);
+    readStatusLine(row, line);
+    check(line.pieces.size() == 2 && !line.pieces[0].background && !line.pieces[1].background && line.pieces[1].right, "a line all on one background is words on the line's own");
+    check(tokenText(line, 0) == "file.txt" && tokenText(line, 1) == "[+]" && line.tokens[1].gap == 1 && tokenText(line, line.pieces[1].first) == "10,1");
+  }
+
+  // A frame says on which row of the default grid the status line of the whole editor is.
+  void frameSaysWhereTheStatusLineIs() {
+    Fixture fixture;
+
+    check(receive(fixture.state, NvimFrame{.pane_id = pane_id, .frame_id = 1, .status_line = true, .status_row = 22}) == Received::presented);
+    check(find(fixture.state, pane_id)->status_row == std::uint16_t{22});
+    check(receive(fixture.state, NvimFrame{.pane_id = pane_id, .frame_id = 2, .base_frame_id = 1}) == Received::presented && !find(fixture.state, pane_id)->status_row, "and when there is none");
+  }
+
+  const telar::testing::Case case_status{"nvim.status_line_is_read_from_its_cells", statusLineIsReadFromItsCells};
+  const telar::testing::Case case_status_row{"nvim.frame_says_where_the_status_line_is", frameSaysWhereTheStatusLineIs};
   const telar::testing::Case case_keys{"nvim.keys_are_written_as_neovim_names_them", keysAreWrittenAsNeovimNamesThem};
   const telar::testing::Case case_frame{"nvim.frame_is_shown_when_it_ends", frameIsShownWhenItEnds};
   const telar::testing::Case case_changes{"nvim.changes_follow_the_frame_shown", changesFollowTheFrameShown};

@@ -1170,6 +1170,47 @@ return {api_version = 2, client = {
       QVERIFY(view->separators().first().toMap().value(QStringLiteral("vertical")).toBool());
       shoot(QStringLiteral("editor-split"));
 
+      // The status line of the whole editor is drawn natively over its row: the cells on a
+      // background of their own are pills of that color, an icon of the Nerd Fonts is drawn as
+      // one, and the two sides keep the gap Neovim put between them.
+      view->send(QStringLiteral("<Cmd>lua vim.o.statusline = '%#Visual# NORMAL %#StatusLine# ' .. vim.fn.nr2char(0xe0a0) .. ' main %=%#PmenuSel# %l:%c '; vim.o.laststatus = 3<CR>"));
+      const auto status = [&] {
+        return view->statusLine();
+      };
+      const auto piece = [&](const QString& side, int index) {
+        return status().value(side).toList().value(index).toMap();
+      };
+      const auto token = [&](int index) {
+        return status().value(QStringLiteral("tokens")).toList().value(index).toMap();
+      };
+
+      // Neovim may say where the line is a frame before it draws it there.
+      QTRY_VERIFY_WITH_TIMEOUT(status().value(QStringLiteral("visible")).toBool() && token(0).value(QStringLiteral("text")).toString() == QStringLiteral("NORMAL") && status().value(QStringLiteral("right")).toList().size() == 1, runtime_wait_ms);
+      // The row it is drawn over is the one Neovim drew it on.
+      QString drawn;
+
+      for (const auto& cell : view->editorState()->grid(1)->screen.row(static_cast<std::size_t>(status().value(QStringLiteral("row")).toInt()))) {
+        drawn += toQString(cell.utf8());
+      }
+
+      QVERIFY2(drawn.contains(QStringLiteral(" main ")), qPrintable(drawn));
+      QVERIFY(piece(QStringLiteral("left"), 0).value(QStringLiteral("pill")).toBool());
+      QVERIFY(!piece(QStringLiteral("left"), 1).value(QStringLiteral("pill")).toBool());
+      QVERIFY(token(piece(QStringLiteral("left"), 1).value(QStringLiteral("first")).toInt()).value(QStringLiteral("icon")).toBool());
+      QVERIFY(piece(QStringLiteral("right"), 0).value(QStringLiteral("pill")).toBool());
+      QVERIFY(QRegularExpression{QStringLiteral("^\\d+:\\d+$")}.match(token(piece(QStringLiteral("right"), 0).value(QStringLiteral("first")).toInt()).value(QStringLiteral("text")).toString()).hasMatch());
+      shoot(QStringLiteral("editor-status"));
+
+      // A line that gives the mode no color of its own shows it as the mode's pill.
+      const auto lines = test::visualItems(*window_->contentItem(), QStringLiteral("editorStatusLine"));
+
+      QCOMPARE(lines.size(), std::size_t{1});
+      QCOMPARE(lines.front()->property("modeToken").toInt(), -1);
+      view->send(QStringLiteral("<Cmd>lua vim.o.statusline = ' NORMAL  main %= %l:%c '<CR>"));
+      QTRY_COMPARE_WITH_TIMEOUT(lines.front()->property("modeToken").toInt(), 0, runtime_wait_ms);
+      view->send(QStringLiteral("<Cmd>set laststatus& statusline&<CR>"));
+      QTRY_VERIFY_WITH_TIMEOUT(!status().value(QStringLiteral("visible")).toBool(), runtime_wait_ms);
+
       // Neovim's tab pages are a strip of the window's own once there is more than one.
       // The buffer of the first has changes whatever the run showed in it.
       view->send(QStringLiteral("<Cmd>lua vim.diagnostic.set(vim.api.nvim_create_namespace('telar-test'), 0, {{lnum = 0, col = 0, message = 'a warning', severity = vim.diagnostic.severity.WARN}}, {virtual_text = false, signs = false, underline = false})<CR>"));

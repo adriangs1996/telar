@@ -426,6 +426,10 @@ export extern "C++" {
       std::string_view mode;
       // The grids Neovim destroyed since the base frame.
       std::span<const std::uint32_t> removed;
+      // The row of the default grid the status line of the whole editor is on, which a client
+      // draws natively; `status_line` is false while there is none.
+      bool status_line{};
+      std::uint16_t status_row{};
     };
 
     template <>
@@ -446,7 +450,9 @@ export extern "C++" {
               Field<&NvimFrame::blink_on_ms, u16, "blink_on_ms">,
               Field<&NvimFrame::blink_off_ms, u16, "blink_off_ms">,
               Field<&NvimFrame::mode, NvimText<max_nvim_mode_bytes>, "mode">,
-              Field<&NvimFrame::removed, CountedSpan<u16, u32, max_nvim_removed_grids>, "removed">> {};
+              Field<&NvimFrame::removed, CountedSpan<u16, u32, max_nvim_removed_grids>, "removed">,
+              Field<&NvimFrame::status_line, BoolByte, "status_line">,
+              Field<&NvimFrame::status_row, u16, "status_row">> {};
 
     // The surfaces below are Neovim's own, which a client draws natively in place of the cells
     // Neovim would have used. Each is sent with the frame `frame_id` that changed it, before the

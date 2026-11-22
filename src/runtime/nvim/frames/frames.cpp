@@ -581,6 +581,8 @@ namespace telar::runtime {
             .blink_off_ms = mode.blink_off,
             .mode = clipped(screen.modeName(), max_nvim_mode_bytes),
             .removed = removed.view().first(count),
+            .status_line = screen.statusLine().hasValue(),
+            .status_row = screen.statusLine().valueOr(0),
         }
     );
     return payload_.view();

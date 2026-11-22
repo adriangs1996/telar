@@ -28,6 +28,9 @@ export namespace telar::gui::application::nvim {
   using features::nvim::PopupMenu;
   using features::nvim::Prompt;
   using features::nvim::Slice;
+  using features::nvim::StatusLine;
+  using features::nvim::StatusPiece;
+  using features::nvim::StatusToken;
   using features::nvim::Tab;
   using features::nvim::TabLine;
 
@@ -41,6 +44,7 @@ export namespace telar::gui::application::nvim {
   using telar::NvimPromptKind;
 
   using features::nvim::notation;
+  using features::nvim::readStatusLine;
 
   // The modifier keys held with a mouse event, as the bits of NvimMouse::modifiers.
   inline constexpr Byte mouse_shift = telar::nvim_mouse_shift;

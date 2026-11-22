@@ -190,6 +190,21 @@ vim.api.nvim_create_autocmd({ "BufModifiedSet", "BufEnter", "BufWritePost", "Win
   end,
 })
 
+-- The row of the status line of the whole editor, which the window draws natively: the one
+-- above the command line while 'laststatus' is 3, and none otherwise.
+local status_row = nil
+local function tell_status()
+  local row = vim.o.laststatus == 3 and vim.o.lines - vim.o.cmdheight - 1 or -1
+  if row ~= status_row then
+    status_row = row
+    vim.rpcnotify(channel, "telar_status", row)
+  end
+end
+
+-- A status line that comes or goes resizes the windows, whoever set the option and when.
+vim.api.nvim_create_autocmd({ "VimEnter", "UIEnter", "VimResized", "WinResized" }, { group = group, callback = tell_status })
+vim.api.nvim_create_autocmd("OptionSet", { group = group, pattern = { "laststatus", "cmdheight" }, callback = tell_status })
+
 -- The pane's header shows the file being edited, unless the configuration names something else.
 vim.o.title = true
 vim.o.titlestring = "%t%( %M%)"

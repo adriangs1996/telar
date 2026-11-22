@@ -176,6 +176,38 @@ export namespace telar::gui::features::nvim {
     ds::Vec<Tab, Memory> buffers;
   };
 
+  // A word of the status line, as the window draws it in place of the line's cells: cells side
+  // by side in one style, or one icon of the Nerd Fonts' private area.
+  struct StatusToken {
+    Slice text;
+    CellStyle style;
+    bool icon = false;
+    // The blank cells between it and the token before it in its piece.
+    std::uint8_t gap = 0;
+  };
+
+  // Tokens that go together: the cells that share a background other than the line's own, drawn
+  // as one pill of that color, or a stretch on the line's own background. `right` pieces come
+  // after the gap Neovim fills between the line's two sides.
+  struct StatusPiece {
+    std::uint32_t first = 0;
+    std::uint32_t count = 0;
+    ds::Option<CellColor> background;
+    bool right = false;
+  };
+
+  struct StatusLine {
+    explicit StatusLine(Memory& memory);
+
+    ds::Vec<char, Memory> text;
+    ds::Vec<StatusToken, Memory> tokens;
+    ds::Vec<StatusPiece, Memory> pieces;
+  };
+
+  // Reads the cells of the status line Neovim drew, whatever draws it: its background is the one
+  // most of its cells have, and the longest blank stretch on it parts its two sides.
+  void readStatusLine(std::span<const CellValue> row, StatusLine& line);
+
   // What vim.ui.select or vim.ui.input asks; `id` is zero while nothing is asked.
   struct Prompt {
     explicit Prompt(Memory& memory);
@@ -266,6 +298,9 @@ export namespace telar::gui::features::nvim {
     PopupMenu menu;
     Messages messages;
     TabLine tabs;
+    // The row of the default grid the status line of the whole editor is on; none while there
+    // is no such line, and the window draws what Neovim drew.
+    ds::Option<std::uint16_t> status_row;
     Prompt prompt;
     Picker picker;
     // A link the editor opened, until the window opens it.

@@ -44,6 +44,14 @@ Neovim leaves these to its UI, and the window draws each as one of its own surfa
   marked.
 
   ![The completion menu, each entry with its kind's icon](images/telar-editor-completion.png)
+- The status line of the whole editor, while `laststatus` is 3, as lualine and telar's own
+  configuration set it: what the configuration puts there, drawn over its row in telar's type.
+  Its sections on a background of their own are pills of that color, their icons are drawn
+  with the bundled symbols, and a line that opens with the name of the mode shows it in a pill
+  of the theme's color for that mode.
+
+  ![lualine's status line, drawn natively](images/telar-editor-status.png)
+
 - Messages, as notices that go away by themselves. An error stays longer, and none waits for
   a key.
 - Tab pages, as a strip over the editor once there is more than one.

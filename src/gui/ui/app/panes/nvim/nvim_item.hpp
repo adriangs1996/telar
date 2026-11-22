@@ -64,6 +64,7 @@ namespace telar::gui::qt {
     Q_PROPERTY(QVariantMap popupMenu READ popupMenu NOTIFY popupMenuChanged)
     Q_PROPERTY(QVariantMap messages READ messages NOTIFY messagesChanged)
     Q_PROPERTY(QVariantMap tabline READ tabline NOTIFY tablineChanged)
+    Q_PROPERTY(QVariantMap statusLine READ statusLine NOTIFY statusLineChanged)
     Q_PROPERTY(QVariantMap prompt READ prompt NOTIFY promptChanged)
     Q_PROPERTY(QVariantMap picker READ picker NOTIFY pickerChanged)
     Q_PROPERTY(QString prediction READ prediction NOTIFY predictionChanged)
@@ -150,6 +151,12 @@ namespace telar::gui::qt {
       return tabline_;
     }
 
+    // The status line of the whole editor, drawn natively over its row: {visible, row, tokens
+    // [{text, color, bold, italic, icon, gap}], left and right [{first, count, background, pill}]}.
+    [[nodiscard]] QVariantMap statusLine() const {
+      return status_line_;
+    }
+
     [[nodiscard]] QVariantMap prompt() const {
       return prompt_;
     }
@@ -219,6 +226,7 @@ namespace telar::gui::qt {
     void popupMenuChanged();
     void messagesChanged();
     void tablineChanged();
+    void statusLineChanged();
     void promptChanged();
     // A frame was applied, or how cells are drawn changed: each grid's item draws again.
     void frameShown();
@@ -262,6 +270,7 @@ namespace telar::gui::qt {
     void projectMenu(const application::nvim::Editor& editor);
     void projectMessages(const application::nvim::Editor& editor);
     void projectTabs(const application::nvim::Editor& editor);
+    void projectStatus(const application::nvim::Editor& editor);
     void projectPrompt(const application::nvim::Editor& editor);
     void projectPicker(const application::nvim::Editor& editor);
     // Takes a key that was sent, and a frame that arrived, to the letters shown ahead.
@@ -307,6 +316,13 @@ namespace telar::gui::qt {
     QVariantMap popup_menu_;
     QVariantMap messages_;
     QVariantMap tabline_;
+    QVariantMap status_line_;
+    // The cells of the status line, read again only when Neovim drew its row again.
+    ds::Option<application::nvim::StatusLine> status_cells_;
+    bool status_shown_ = false;
+    std::uint64_t status_layout_ = 0;
+    std::uint16_t status_row_ = 0;
+    std::uint64_t status_revision_ = 0;
     QVariantMap prompt_;
     // The revisions of the editor each projection was last made at.
     std::uint64_t layout_revision_ = 0;

@@ -390,6 +390,26 @@ namespace {
       check(!open("https://example.com/again"), "one link for each thing the person does");
     }
 
+    // Neovim's side says on which row the status line of the whole editor is, and that there is
+    // none; a row the editor does not have says nothing.
+    void statusLineRowIsKept() {
+      testing::TestMemory adapter;
+      ConcurrentMemory& memory = adapter;
+      NvimEditor editor{memory, {.columns = 80, .rows = 24}, {}};
+      const auto place = [&](std::int64_t row) {
+        return tell(editor, "telar_status", 1, [&](msgpack::Writer& writer) {
+          writer.integer(row);
+        });
+      };
+
+      attach(editor);
+      drain(editor);
+      static_cast<void>(editor.takePulse());
+      check(place(22) && editor.screen().statusLine() == std::uint16_t{22} && editor.takePulse().flushed, "kept, and shown at once");
+      check(place(40) && editor.screen().statusLine() == std::uint16_t{22}, "a row past the editor's last is passed over");
+      check(place(-1) && !editor.screen().statusLine() && editor.takePulse().flushed, "none");
+    }
+
     // Neovim's input takes what it has room for and says how much: the rest goes again, ahead of
     // what was typed since, and nothing is lost or typed twice.
     void keysNeovimLeavesGoAgain() {
@@ -509,6 +529,7 @@ namespace {
   const telar::testing::Case case_open{"nvim_editor.opens_a_file_where_asked", opensAFileWhereAsked};
   const telar::testing::Case case_theme{"nvim_editor.theme_is_the_colorscheme", themeIsTheColorscheme};
   const telar::testing::Case case_told{"nvim_editor.neovim_tells_the_runtime", neovimTellsTheRuntime};
+  const telar::testing::Case case_status{"nvim_editor.status_line_row_is_kept", statusLineRowIsKept};
   const telar::testing::Case case_keys{"nvim_editor.keys_neovim_leaves_go_again", keysNeovimLeavesGoAgain};
   const telar::testing::Case case_link{"nvim_editor.link_is_the_gestures_only", linkIsTheGesturesOnly};
   const telar::testing::Case case_asks{"nvim_editor.clients_ask_through_the_runtime", clientsAskThroughTheRuntime};

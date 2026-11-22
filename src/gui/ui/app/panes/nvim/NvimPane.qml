@@ -244,6 +244,19 @@ FocusScope {
             }
         }
 
+        // The status line of the whole editor, natively, over the row Neovim draws it on.
+        NvimStatusLine {
+            objectName: "editorStatusLine"
+            z: 0.6
+            width: view.width
+            status: view.statusLine
+            mode: view.mode
+            colors: root.colors
+            typography: root.typography
+            cellHeight: view.cellHeight
+            ratio: root.ratio
+        }
+
         // Letters typed in insert mode over a slow link, shown where they will be before the
         // frame that carries them arrives. The frame replaces them, right or wrong.
         Item {

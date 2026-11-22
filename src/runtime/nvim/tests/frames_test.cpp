@@ -545,6 +545,14 @@ namespace {
 
       check(frame.frame_id == 1 && frame.base_frame_id == 0 && frame.cursor_grid == 1 && frame.cursor_row == 1 && frame.cursor_column == 3 && frame.cursor_visible, "where the cursor is");
       check(frame.cursor_shape == CursorShape::bar && frame.cursor_percentage == 25 && frame.mode == "insert", "its shape in the mode Neovim is in");
+      check(!frame.status_line, "no status line of the whole editor until Neovim's side says where it is");
+
+      screen.statusLine(std::uint16_t{1});
+      frames.begin(screen, {.pane_id = pane_id, .seen = frame.frame_id});
+      skipGrids(frames, screen);
+      const auto placed = decoded<NvimFrame>(frames.end(screen), scratch);
+
+      check(placed.status_line && placed.status_row == 1, "each frame says on which row it is");
     }
 
   }

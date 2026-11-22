@@ -327,6 +327,8 @@ namespace telar::gui::qt {
     messages_revision_ = 0;
     tabs_revision_ = 0;
     prompt_revision_ = 0;
+    status_cells_.reset();
+    status_shown_ = false;
     refresh(pane_id_);
     polish();
     emit paneIdChanged();
@@ -860,6 +862,7 @@ namespace telar::gui::qt {
     projectMenu(editor);
     projectMessages(editor);
     projectTabs(editor);
+    projectStatus(editor);
     projectPrompt(editor);
     projectPicker(editor);
   }
@@ -989,6 +992,82 @@ namespace telar::gui::qt {
     };
 
     emit tablineChanged();
+  }
+
+  void NvimItem::projectStatus(const nvim::Editor& editor) {
+    const auto* grid = editor.grid(1);
+    const auto row = editor.status_row;
+    const bool present = grid != nullptr && row && *row < grid->screen.rows();
+    const auto revision = present ? grid->screen.rowRevision(*row) : 0;
+
+    // Read again only when Neovim drew the row again, it moved, or the grids are others.
+    if (present == status_shown_ && (!present || (*row == status_row_ && revision == status_revision_ && editor.layout_revision == status_layout_))) {
+      return;
+    }
+
+    status_shown_ = present;
+    status_layout_ = editor.layout_revision;
+    status_row_ = row.valueOr(0);
+    status_revision_ = revision;
+    if (!present) {
+      status_line_ = {{QStringLiteral("visible"), false}};
+      emit statusLineChanged();
+      return;
+    }
+
+    if (!status_cells_) {
+      status_cells_.emplace(editor.memory);
+    }
+
+    auto& line = status_cells_.getMut();
+
+    nvim::readStatusLine(grid->screen.row(*row), line);
+
+    const std::string_view text{line.text.data(), line.text.size()};
+    const auto named = [](const CellColor& color) {
+      return color.kind == CellColor::Kind::rgb ? QColor{color.channels[0], color.channels[1], color.channels[2]}.name() : QString{};
+    };
+
+    QVariantList tokens;
+    QVariantList left;
+    QVariantList right;
+
+    tokens.reserve(static_cast<qsizetype>(line.tokens.size()));
+    for (const auto& token : line.tokens) {
+      const auto flags = token.style.flags;
+      const auto has = [&](CellAttribute attribute) {
+        return (flags & std::to_underlying(attribute)) != 0;
+      };
+
+      tokens.append(QVariantMap{
+          {QStringLiteral("text"), shown(token.text.of(text))},
+          {QStringLiteral("color"), named(has(CellAttribute::inverse) ? token.style.background : token.style.foreground)},
+          {QStringLiteral("bold"), has(CellAttribute::bold)},
+          {QStringLiteral("italic"), has(CellAttribute::italic)},
+          {QStringLiteral("icon"), token.icon},
+          {QStringLiteral("gap"), static_cast<int>(token.gap)},
+      });
+    }
+
+    for (const auto& piece : line.pieces) {
+      (piece.right ? right : left)
+          .append(QVariantMap{
+              {QStringLiteral("first"), static_cast<int>(piece.first)},
+              {QStringLiteral("count"), static_cast<int>(piece.count)},
+              {QStringLiteral("background"), piece.background ? named(*piece.background) : QString{}},
+              {QStringLiteral("pill"), piece.background.hasValue()},
+          });
+    }
+
+    status_line_ = {
+        {QStringLiteral("visible"), true},
+        {QStringLiteral("row"), static_cast<int>(*row)},
+        {QStringLiteral("tokens"), tokens},
+        {QStringLiteral("left"), left},
+        {QStringLiteral("right"), right},
+    };
+
+    emit statusLineChanged();
   }
 
   void NvimItem::projectPrompt(const nvim::Editor& editor) {

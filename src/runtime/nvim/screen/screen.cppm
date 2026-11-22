@@ -403,6 +403,9 @@ export {
       void currentMode(std::size_t index, std::string_view name);
       void title(std::string_view title);
       void directory(std::string_view path);
+      // The row of the default grid Neovim draws its one status line on, which a client draws
+      // natively; none while there is no status line for the whole editor.
+      void statusLine(ds::Option<std::uint16_t> row) noexcept;
       void mouse(bool enabled) noexcept;
 
       [[nodiscard]] NvimCommandLine& commandLineMut() noexcept;
@@ -447,6 +450,7 @@ export {
       [[nodiscard]] std::uint64_t titleAt() const noexcept;
       [[nodiscard]] std::string_view directory() const noexcept;
       [[nodiscard]] std::uint64_t directoryAt() const noexcept;
+      [[nodiscard]] ds::Option<std::uint16_t> statusLine() const noexcept;
       [[nodiscard]] bool mouseEnabled() const noexcept;
 
       [[nodiscard]] const NvimCommandLine& commandLine() const noexcept;
@@ -501,6 +505,7 @@ export {
       std::uint64_t title_at_ = 0;
       ds::String<ConcurrentMemory> directory_;
       std::uint64_t directory_at_ = 0;
+      ds::Option<std::uint16_t> status_line_;
       bool mouse_ = false;
 
       NvimCommandLine command_line_;
