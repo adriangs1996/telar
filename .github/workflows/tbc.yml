@@ -2,6 +2,7 @@ name: tbc
 
 on:
   push:
+    branches: [main]
     paths: [".clang-format", "lib/tbc/**", "src/**/*.cppm", "src/**/*.cpp", "src/**/*.hpp", "tools/cpp", "tools/bootstrap-cpp.py", "tools/toolchain/**", "cmake/**", ".github/actions/cpp-toolchain/**", ".github/workflows/tbc.yml"]
   pull_request:
     paths: [".clang-format", "lib/tbc/**", "src/**/*.cppm", "src/**/*.cpp", "src/**/*.hpp", "tools/cpp", "tools/bootstrap-cpp.py", "tools/toolchain/**", "cmake/**", ".github/actions/cpp-toolchain/**", ".github/workflows/tbc.yml"]
