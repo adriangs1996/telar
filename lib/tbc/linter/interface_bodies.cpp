@@ -246,6 +246,21 @@ namespace tbc_lint {
     const std::scoped_lock lock(mutex_);
 
     bodies_[module] += bodies;
+    if (unit_records != nullptr) {
+      unit_records->push_back(std::to_string(bodies) + " " + module.str());
+    }
+  }
+
+  void interface_modules::replay(llvm::StringRef record) {
+    const auto [count, module] = record.split(' ');
+    unsigned bodies = 0;
+    if (count.getAsInteger(10, bodies)) {
+      return;
+    }
+
+    const std::scoped_lock lock(mutex_);
+
+    bodies_[module] += bodies;
   }
 
   bool interface_modules::reportStale(llvm::raw_ostream& output, bool errors, llvm::StringRef allowlist) const {

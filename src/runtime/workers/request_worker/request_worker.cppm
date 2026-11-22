@@ -169,16 +169,17 @@ export {
           // A result may view the request it answers, which stays here until the next one is accepted.
           auto result = service_.observe(*processing_);
 
+          // Published and signalled under the lock a collect takes. A collect the signal wakes finds
+          // the result published, where a signal raised first left it a moment with nothing to take;
+          // and one that sees the result published waits for the lock, so it finds the signal raised
+          // and drains it, where a result published first left the signal up with nothing behind it.
           {
             const std::scoped_lock lock{mutex_};
 
             result_ = std::move(result);
+            result_ready_.store(true, std::memory_order_release);
+            signal_.notify();
           }
-
-          // Signalled once the lock is free, which a collect the signal wakes would otherwise find
-          // taken, and published after the signal, so the collect that takes the result drains it.
-          signal_.notify();
-          result_ready_.store(true, std::memory_order_release);
 
           if (completion_ != nullptr) {
             completion_->notify();

@@ -277,6 +277,46 @@ namespace telar::gui::application {
     }
   }
 
+  namespace {
+    // The messages a window has no use for: answers to requests it never sends, and what the
+    // runtime tells a client of another kind. Every message the wire names is routed by
+    // Session::consume or here, so one added to ServerTag is routed or ignored on purpose, or does
+    // not compile.
+    constexpr ds::Array ignored_messages{
+        ServerTag::notification_shown,
+        ServerTag::history_stats_result,
+        ServerTag::pane_focus_result,
+        ServerTag::client_list,
+        ServerTag::client_command_result,
+        ServerTag::worktree_registered,
+        ServerTag::limit_list,
+        ServerTag::execution_reply,
+        ServerTag::clipboard_desktop_request,
+        ServerTag::clipboard_desktop_execute,
+        ServerTag::clipboard_desktop_cancel,
+        ServerTag::runtime_clipboard_chunk,
+        ServerTag::pane_theme,
+        ServerTag::history_workspaces,
+    };
+
+    // Whether each message of ServerTag is routed by `routes`, a handler per tag, or listed in
+    // ignored_messages, and never both.
+    template <typename Routes>
+    consteval bool placesEachMessage(const Routes& routes) {
+      for (std::size_t value = 0; value < routes.size(); ++value) {
+        const auto tag = static_cast<ServerTag>(value); // NOLINT(clang-analyzer-optin.core.EnumCastOutOfRange): every byte is tried, and serverTagName tells the ones that name a tag
+        const bool routed = routes.at(value) != nullptr;
+        const bool skipped = std::ranges::find(ignored_messages, tag) != ignored_messages.end();
+
+        if (serverTagName(tag).empty() ? routed || skipped : routed == skipped) {
+          return false;
+        }
+      }
+
+      return true;
+    }
+  }
+
   Change Session::consume(std::span<const Byte> payload) {
     UnsupportedClientCommand handler;
 
@@ -302,7 +342,7 @@ namespace telar::gui::application {
       return table;
     };
 
-    // The runtime's messages by tag. One the window has no use for is in `ignored` below.
+    // The runtime's messages by tag. One the window has no use for is in ignored_messages.
     static constexpr auto messages = by_tag(
         std::type_identity<PaneFrame>{},
         std::type_identity<ClientCommand>{},
@@ -358,40 +398,7 @@ namespace telar::gui::application {
         std::type_identity<RuntimeStopping>{}
     );
 
-    // The messages a window has no use for: answers to requests it never sends, and what the
-    // runtime tells a client of another kind. Every message the wire names is in `messages` or
-    // here, so one added to ServerTag is routed or ignored on purpose, or does not compile.
-    static constexpr ds::Array ignored{
-        ServerTag::notification_shown,
-        ServerTag::history_stats_result,
-        ServerTag::pane_focus_result,
-        ServerTag::client_list,
-        ServerTag::client_command_result,
-        ServerTag::worktree_registered,
-        ServerTag::limit_list,
-        ServerTag::execution_reply,
-        ServerTag::clipboard_desktop_request,
-        ServerTag::clipboard_desktop_execute,
-        ServerTag::clipboard_desktop_cancel,
-        ServerTag::runtime_clipboard_chunk,
-        ServerTag::pane_theme,
-        ServerTag::history_workspaces,
-    };
-
-    static_assert([] {
-      for (std::size_t value = 0; value < messages.size(); ++value) {
-        const auto tag = static_cast<ServerTag>(value);
-        const bool routed = messages.at(value) != nullptr;
-        const bool skipped = std::ranges::find(ignored, tag) != ignored.end();
-
-        if (serverTagName(tag).empty() ? routed || skipped : routed == skipped) {
-          return false;
-        }
-      }
-
-      return true;
-    }(),
-        "Each message of ServerTag is routed in `messages` or listed in `ignored`, and never both");
+    static_assert(placesEachMessage(messages), "Each message of ServerTag is routed in `messages` or listed in ignored_messages, and never both");
 
     DecodeStorage storage{decode_.viewMut()};
     const auto dispatch = messages[payload.front()];

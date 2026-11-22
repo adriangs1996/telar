@@ -97,8 +97,25 @@ namespace tbc_lint {
 
   bool blank_line_fixes::claim(llvm::StringRef path, unsigned offset) {
     const std::scoped_lock lock(mutex_);
+    const bool first = insertions_[path].insert(offset).second;
 
-    return insertions_[path].insert(offset).second;
+    if (first && unit_claims != nullptr) {
+      unit_claims->push_back(std::to_string(offset) + " " + path.str());
+    }
+
+    return first;
+  }
+
+  void blank_line_fixes::replay(llvm::StringRef claim) {
+    const auto [offset, path] = claim.split(' ');
+    unsigned insertion = 0;
+    if (offset.getAsInteger(10, insertion)) {
+      return;
+    }
+
+    const std::scoped_lock lock(mutex_);
+
+    insertions_[path].insert(insertion);
   }
 
   bool blank_line_fixes::apply(llvm::raw_ostream& errors) const {

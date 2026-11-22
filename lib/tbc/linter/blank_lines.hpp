@@ -23,6 +23,14 @@ namespace tbc_lint {
     // True when no other unit claimed this insertion first.
     bool claim(llvm::StringRef path, unsigned offset);
 
+    // Registers an insertion a unit claimed in an earlier run whose report is replayed, `<offset>
+    // <path>`, so that no unit checked now reports it again.
+    void replay(llvm::StringRef claim);
+
+    // The claims of the unit the calling thread checks, which its stamp keeps; a unit is checked on
+    // one thread from start to end.
+    static inline thread_local std::vector<std::string>* unit_claims = nullptr;
+
     // Inserts every claimed blank line. Returns false and explains why when a file cannot be written.
     bool apply(llvm::raw_ostream& errors) const;
 

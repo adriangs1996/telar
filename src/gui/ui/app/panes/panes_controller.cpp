@@ -41,7 +41,8 @@ namespace telar::gui::qt {
       }
 
       // The gesture is in the window's points; the workbench places the divider in its own pixels.
-      if (application::workbench::dragDivider(store_.sessionMut(), static_cast<std::size_t>(index), x * scale_, y * scale_, commit)) {
+      const application::workbench::DividerDrag drag{.node = static_cast<std::size_t>(index), .x = x * scale_, .y = y * scale_, .commit = commit};
+      if (application::workbench::dragDivider(store_.sessionMut(), drag)) {
         synchronize();
       }
     } catch (const std::exception& error) {

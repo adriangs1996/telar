@@ -41,7 +41,20 @@ if(MODE STREQUAL "lint" OR MODE STREQUAL "lifetime-check" OR MODE STREQUAL "blan
   endif()
 
   if(MODE STREQUAL "lint")
-    set(command "${CLANG_TIDY}" "-p=${BINARY_DIR}" "--config-file=${SOURCE_DIR}/.clang-tidy")
+    # One clang-tidy per source and one per core at a time: the largest source takes most of the time
+    # all of them add up to, and the others fit beside it. run-clang-tidy takes each source as a
+    # regular expression over the database's paths.
+    find_program(RUN_CLANG_TIDY NAMES run-clang-tidy HINTS "${COMPILER_DIR}")
+    if(NOT RUN_CLANG_TIDY)
+      message(FATAL_ERROR "run-clang-tidy was not found beside clang-tidy in ${COMPILER_DIR}.")
+    endif()
+    set(command "${RUN_CLANG_TIDY}" -clang-tidy-binary "${CLANG_TIDY}" -p "${BINARY_DIR}" -config-file "${SOURCE_DIR}/.clang-tidy" -quiet)
+    set(patterns)
+    foreach(source IN LISTS sources)
+      string(REGEX REPLACE "([][+.*()?^$\\|{}])" "\\\\\\1" pattern "${source}")
+      list(APPEND patterns "^${pattern}$")
+    endforeach()
+    set(sources ${patterns})
   elseif(MODE STREQUAL "blank-lines")
     # HEADER_FILTER, a POSIX extended regular expression, adds the headers whose path it matches.
     set(command "${TBC_LINT}" --checks=blank-lines --warnings-as-errors "-p=${BINARY_DIR}")

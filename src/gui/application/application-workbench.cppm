@@ -99,10 +99,18 @@ export namespace telar::gui::application::workbench {
   // Moves the focused pane's border toward `direction`; false when it cannot move.
   bool resizeToward(Session& session, PaneDirection direction);
 
-  // Moves the divider of layout node `node` of the active tab to the point, in the pixels of the
-  // session's geometry, a person drags it to. `commit` ends the drag: the layout is then kept for
-  // the next connection, as after any other change of it. False when the divider did not move.
-  bool dragDivider(Session& session, std::size_t node, double x, double y, bool commit);
+  // The divider of layout node `node` of the active tab and the point, in the pixels of the
+  // session's geometry, a person drags it to. `commit` ends the drag.
+  struct DividerDrag {
+    std::size_t node = 0;
+    double x = 0;
+    double y = 0;
+    bool commit = false;
+  };
+
+  // Moves the divider to the point of the drag. A drag that ends keeps the layout for the next
+  // connection, as any other change of it does. False when the divider did not move.
+  bool dragDivider(Session& session, const DividerDrag& drag);
 
   // Splits the focused pane along `axis`; false when it cannot be split now.
   bool split(Session& session, ClientLayoutAxis axis);

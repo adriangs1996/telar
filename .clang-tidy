@@ -23,6 +23,12 @@
 # Checks that -Wunsafe-buffer-usage covers, which also sees calls into libc:
 #   cppcoreguidelines-pro-bounds-avoid-unchecked-container-access, -pro-bounds-constant-array-index,
 #   -pro-bounds-pointer-arithmetic.
+# Second names of checks that are on. In clang-tidy 23 each cert check, and these of cppcoreguidelines,
+# is the check of another module under another name. The ones off here have the options of the check
+# they name, so they report what it reports and only take its time again: a tenth of the lint. A second
+# name with options of its own stays on: cert-arr39-c, cert-dcl16-c, cert-err33-c, cert-oop54-cpp and
+# cert-str34-c. cppcoreguidelines-avoid-magic-numbers is off as well: it took none of the options
+# readability-magic-numbers has below, so it reported the user-defined literals those options allow.
 # Checks that crash clang-tidy 23.1.5, to re-enable once the pinned LLVM fixes them:
 #   bugprone-unchecked-optional-access and misc-static-initialization-cycle on module units that import std
 #   or see one declaration through several BMIs; performance-use-std-move at the end of
@@ -68,7 +74,55 @@ Checks: >-
   -cppcoreguidelines-pro-bounds-pointer-arithmetic,
   -bugprone-unchecked-optional-access,
   -misc-static-initialization-cycle,
-  -performance-use-std-move
+  -performance-use-std-move,
+  -cert-con36-c,
+  -cert-con54-cpp,
+  -cert-ctr56-cpp,
+  -cert-dcl03-c,
+  -cert-dcl37-c,
+  -cert-dcl50-cpp,
+  -cert-dcl51-cpp,
+  -cert-dcl54-cpp,
+  -cert-dcl58-cpp,
+  -cert-dcl59-cpp,
+  -cert-env33-c,
+  -cert-err09-cpp,
+  -cert-err34-c,
+  -cert-err52-cpp,
+  -cert-err58-cpp,
+  -cert-err60-cpp,
+  -cert-err61-cpp,
+  -cert-exp42-c,
+  -cert-exp45-c,
+  -cert-fio38-c,
+  -cert-flp30-c,
+  -cert-flp37-c,
+  -cert-int09-c,
+  -cert-mem57-cpp,
+  -cert-msc24-c,
+  -cert-msc30-c,
+  -cert-msc32-c,
+  -cert-msc33-c,
+  -cert-msc50-cpp,
+  -cert-msc51-cpp,
+  -cert-msc54-cpp,
+  -cert-oop11-cpp,
+  -cert-oop57-cpp,
+  -cert-oop58-cpp,
+  -cert-pos44-c,
+  -cert-pos47-c,
+  -cert-sig30-c,
+  -cppcoreguidelines-avoid-c-arrays,
+  -cppcoreguidelines-avoid-magic-numbers,
+  -cppcoreguidelines-c-copy-assignment-signature,
+  -cppcoreguidelines-explicit-virtual-functions,
+  -cppcoreguidelines-macro-to-enum,
+  -cppcoreguidelines-narrowing-conversions,
+  -cppcoreguidelines-noexcept-destructor,
+  -cppcoreguidelines-noexcept-move-operations,
+  -cppcoreguidelines-noexcept-swap,
+  -cppcoreguidelines-non-private-member-variables-in-classes,
+  -cppcoreguidelines-use-default-member-init
 ExtraArgs:
   - -Weverything
   - -Wno-c++98-compat

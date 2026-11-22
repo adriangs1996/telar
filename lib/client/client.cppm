@@ -51,7 +51,7 @@ export {
       // The schemas a client of this build can speak with a runtime, oldest first. Each added
       // messages to the one before it and left the layouts of the others alone, so a client that
       // sends an older runtime only the requests it knows speaks its dialect. The last is this
-      // build's. A new schema joins the enum, dialect_schemas and, for each request it adds, since.
+      // build's. A new schema joins the enum, dialect_schemas and, for each request it adds, additions.
       enum class Dialect : std::uint8_t {
         schema87,
         cqp00002,
@@ -75,13 +75,13 @@ export {
       };
 
       [[nodiscard]] constexpr const SchemaId& schemaOf(Dialect dialect) noexcept {
-        return dialect_schemas.at(std::to_underlying(dialect));
+        return dialect_schemas[std::to_underlying(dialect)];
       }
 
       // The dialect of a runtime that answers with `schema`; nothing for one this build cannot speak.
       [[nodiscard]] constexpr ds::Option<Dialect> dialectOf(const SchemaId& schema) noexcept {
         for (std::size_t index = 0; index < dialect_schemas.size(); ++index) {
-          if (dialect_schemas.at(index) == schema) {
+          if (dialect_schemas[index] == schema) {
             return static_cast<Dialect>(index);
           }
         }
@@ -89,30 +89,37 @@ export {
         return ds::none;
       }
 
-      // The first dialect whose runtime understands `tag`: what each schema added, in one place. A
-      // request no case names is one every dialect has.
+      // A request a schema added, and the first dialect whose runtime understands it.
+      struct Addition {
+        ClientTag tag;
+        Dialect dialect;
+      };
+
+      // What each schema added, in one place. A request it does not name is one every dialect has.
+      inline constexpr ds::Array additions{
+          Addition{.tag = ClientTag::hold_tab, .dialect = Dialect::cqp00002},
+          Addition{.tag = ClientTag::read_pane_rows, .dialect = Dialect::cqp00003},
+          Addition{.tag = ClientTag::search_pane_rows, .dialect = Dialect::cqp00003},
+          Addition{.tag = ClientTag::pane_command, .dialect = Dialect::cqp00003},
+          Addition{.tag = ClientTag::configure_shell_prompt, .dialect = Dialect::cqp00003},
+          // Its layout gained the editor colors with the schema that added ReadPaneTheme.
+          Addition{.tag = ClientTag::configure_terminal_colors, .dialect = Dialect::cqp00005},
+          Addition{.tag = ClientTag::read_pane_theme, .dialect = Dialect::cqp00005},
+          Addition{.tag = ClientTag::query_monitor, .dialect = Dialect::cqp00006},
+          Addition{.tag = ClientTag::request_process_signal, .dialect = Dialect::cqp00006},
+          Addition{.tag = ClientTag::request_process_priority, .dialect = Dialect::cqp00006},
+          Addition{.tag = ClientTag::query_history_workspaces, .dialect = Dialect::cqp00007},
+      };
+
+      // The first dialect whose runtime understands `tag`.
       [[nodiscard]] constexpr Dialect since(ClientTag tag) noexcept {
-        switch (tag) {
-        case ClientTag::hold_tab:
-          return Dialect::cqp00002;
-        case ClientTag::read_pane_rows:
-        case ClientTag::search_pane_rows:
-        case ClientTag::pane_command:
-        case ClientTag::configure_shell_prompt:
-          return Dialect::cqp00003;
-        // Its layout gained the editor colors with the schema that added ReadPaneTheme.
-        case ClientTag::configure_terminal_colors:
-        case ClientTag::read_pane_theme:
-          return Dialect::cqp00005;
-        case ClientTag::query_monitor:
-        case ClientTag::request_process_signal:
-        case ClientTag::request_process_priority:
-          return Dialect::cqp00006;
-        case ClientTag::query_history_workspaces:
-          return Dialect::cqp00007;
-        default:
-          return Dialect::schema87;
+        for (const auto& addition : additions) {
+          if (addition.tag == tag) {
+            return addition.dialect;
+          }
         }
+
+        return Dialect::schema87;
       }
 
       // Whether a runtime of dialect `peer` understands `tag`.
