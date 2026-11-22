@@ -980,6 +980,26 @@ return {api_version = 2, client = {
       press(Qt::Key_Escape, QString{});
       QTRY_VERIFY_WITH_TIMEOUT(!view->cmdline().value(QStringLiteral("visible")).toBool() && !view->popupMenu().value(QStringLiteral("visible")).toBool(), runtime_wait_ms);
 
+      // A completion that says what its items are shows each kind by its icon, as a language
+      // server's completion does.
+      view->send(QStringLiteral("o<Cmd>call complete(col('.'), [{'word': 'draw', 'kind': 'Function'}, {'word': 'drawn', 'kind': 'Variable'}, {'word': 'Drawing', 'kind': 'Class'}])<CR>"));
+      const auto kinds = [&] {
+        QStringList icons;
+
+        for (const auto& item : view->popupMenu().value(QStringLiteral("items")).toList()) {
+          icons.append(item.toMap().value(QStringLiteral("icon")).toString());
+        }
+
+        return icons;
+      };
+
+      QTRY_VERIFY2_WITH_TIMEOUT(kinds().size() == 3, qPrintable(QStringLiteral("mode %1 menu %2 items %3 shown %4").arg(view->mode()).arg(view->popupMenu().value(QStringLiteral("visible")).toBool()).arg(view->popupMenu().value(QStringLiteral("items")).toList().size()).arg(shown().left(300))), runtime_wait_ms);
+      QVERIFY2(!kinds().contains(QString{}) && kinds().removeDuplicates() == 0, qPrintable(kinds().join(QLatin1Char(' '))));
+      shoot(QStringLiteral("editor-completion-kinds"));
+      press(Qt::Key_Escape, QString{});
+      view->send(QStringLiteral("u"));
+      QTRY_VERIFY_WITH_TIMEOUT(!view->popupMenu().value(QStringLiteral("visible")).toBool() && view->mode() == QStringLiteral("normal"), runtime_wait_ms);
+
       // What Neovim says arrives as a notice, and asks for no key to go away.
       view->send(QStringLiteral(":echomsg 'written by telar'<CR>"));
       const auto said = [&] {
@@ -3387,6 +3407,11 @@ return {api_version=2, client={keybindings={
       if (const auto shot = qEnvironmentVariable("TELAR_PATH_PICKER_SHOT"); !shot.isEmpty()) {
         constexpr int settle_ms = 320;
 
+        // The list the panel draws, not only the session's count.
+        QTRY_VERIFY_WITH_TIMEOUT(std::ranges::any_of(panel->findChildren<QQuickItem*>(), [](const QQuickItem* item) {
+          return !item->property("listed").toList().isEmpty();
+        }),
+            runtime_wait_ms);
         QTest::qWait(settle_ms);
         QVERIFY(window_->grabWindow().save(shot));
       }

@@ -8,9 +8,10 @@ import Telar.Gui
 // preview when its host has one. The terminal's path search and the editor's picker are both
 // this panel; each gives it its rows and decides what its keys do.
 //
-// A row is {runs, suffix, detail, icon, marked}: `runs` are the parts of its name, each
-// {text, colorRole, bold}, as a path's label gives them; `suffix` follows the name; `detail`
-// is a second line under it; `icon` is "directory", "file" or nothing.
+// A row is {runs, suffix, detail, icon, iconTone, marked}: `runs` are the parts of its name,
+// each {text, colorRole, bold}, as a path's label gives them; `suffix` follows the name;
+// `detail` is a second line under it; `icon` is the glyph of what it is, a file's type or a
+// folder, drawn in `iconTone`, a role of the window's colors.
 Item {
     id: root
 
@@ -20,7 +21,8 @@ Item {
     // The name tests and accessibility find the query's field by, and what it says it is.
     property string fieldName: "pickerSearch"
     property string searchName: "Search"
-    property string glyph: "›"
+    // The icon before the query: what is searched.
+    property string glyph: "\uea6d"
     property int maximumQueryBytes: 256
     // Where the search is rooted, shown when it has no scopes to choose from.
     property string label: ""
@@ -66,14 +68,14 @@ Item {
     signal rowPointed(int index)
     signal scopeChosen(string name)
 
-    ChromeText {
+    ChromeIcon {
         id: mark
         x: 16 * root.ratio
-        width: 16 * root.ratio
-        height: root.headerHeight
-        text: root.glyph
-        pixelSize: root.typography.body
-        emphasized: true
+        y: Math.round((root.headerHeight - height) / 2)
+        width: Math.round(root.typography.body * 1.15)
+        height: width
+        glyph: root.glyph
+        pixelSize: width
         color: root.colors.accent
     }
 
@@ -133,7 +135,10 @@ Item {
                 required property var modelData
                 readonly property bool chosen: modelData.name === root.scope
 
-                width: name.implicitWidth + 16 * root.ratio
+                readonly property string glyph: modelData.icon ?? ""
+                readonly property real iconSide: glyph.length > 0 ? Math.round(root.typography.small * 1.1) : 0
+
+                width: name.implicitWidth + iconSide + (iconSide > 0 ? 5 * root.ratio : 0) + 16 * root.ratio
                 height: root.scopeHeight
                 // A chip is whole or not shown: the keys still reach the scopes left out.
                 visible: x + width <= parent.width
@@ -147,9 +152,20 @@ Item {
                     visible: entry.chosen
                 }
 
+                ChromeIcon {
+                    x: 8 * root.ratio
+                    y: Math.round((parent.height - height) / 2)
+                    width: entry.iconSide
+                    height: entry.iconSide
+                    glyph: entry.glyph
+                    pixelSize: entry.iconSide
+                    color: entry.chosen ? root.colors.accent : root.colors.subtext0
+                    visible: entry.iconSide > 0
+                }
+
                 ChromeText {
                     id: name
-                    anchors.centerIn: parent
+                    x: 8 * root.ratio + entry.iconSide + (entry.iconSide > 0 ? 5 * root.ratio : 0)
                     width: implicitWidth
                     height: parent.height
                     text: entry.modelData.label
@@ -231,15 +247,22 @@ Item {
                     color: root.colors.accent
                 }
 
-                CellText {
+                Item {
                     id: icon
                     x: 10 * root.ratio
-                    width: line.iconed ? 2 * (root.typography.grid?.cellWidth ?? 8) : 0
+                    width: line.iconed ? (root.compact ? 2 * (root.typography.grid?.cellWidth ?? 8) : 24 * root.ratio) : 0
                     height: root.detailed ? parent.height / 2 : parent.height
                     visible: line.iconed
-                    text: line.row.icon === "directory" ? "" : ""
-                    grid: root.typography.grid
-                    color: line.row.icon === "directory" ? root.colors.blue : root.colors.subtext0
+
+                    ChromeIcon {
+                        anchors.left: parent.left
+                        anchors.verticalCenter: parent.verticalCenter
+                        width: height
+                        height: Math.round(root.typography.body * 1.15)
+                        glyph: line.row.icon ?? ""
+                        pixelSize: height
+                        color: root.colors[line.row.iconTone ?? "subtext0"] ?? root.colors.subtext0
+                    }
                 }
 
                 // The name: its directory quiet, its own part plain, what the query matched

@@ -161,7 +161,7 @@ if(TELAR_GUI_NATIVE)
 
   target_link_libraries(gui-quick PUBLIC gui-foundation-core gui-foundation-system gui-foundation-text
     gui-foundation-terminal gui-foundation-fonts gui-foundation-actions gui-foundation-keys gui-foundation-model
-    gui-foundation-agents gui-foundation-drawing gui-foundation-forms
+    gui-foundation-agents gui-foundation-drawing gui-foundation-forms gui-foundation-icons
     gui-platform
     gui-application gui-platform-native gui-keyboard gui-fonts-native gui-machine-profiles Qt6::Quick
     Qt6::QuickControls2 Qt6::Network Qt6::Concurrent)

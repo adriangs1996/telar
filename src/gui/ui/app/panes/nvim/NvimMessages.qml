@@ -98,12 +98,13 @@ Item {
                     radius: width / 2
                     color: Qt.alpha(notice.tone, 0.16)
 
-                    Text {
+                    ChromeIcon {
                         anchors.centerIn: parent
-                        text: notice.failure ? "\u00d7" : notice.caution ? "!" : "\u2713"
+                        width: Math.round(root.typography.body * 1.05)
+                        height: width
+                        glyph: notice.failure ? "\uea87" : notice.caution ? "\uea6c" : "\uea74"
+                        pixelSize: width
                         color: notice.tone
-                        font.pixelSize: root.typography.small
-                        font.weight: Font.DemiBold
                     }
                 }
 
@@ -157,12 +158,14 @@ Item {
                     }
                 }
 
-                Text {
+                ChromeIcon {
                     x: parent.width - width - 14 * root.ratio
-                    y: 12 * root.ratio
-                    text: "\u00d7"
+                    y: 14 * root.ratio
+                    width: Math.round(root.typography.small * 0.9)
+                    height: width
+                    glyph: "\uea76"
+                    pixelSize: width
                     color: closeArea.containsMouse ? root.colors.text : root.colors.subtext0
-                    font.pixelSize: root.typography.body
 
                     MouseArea {
                         id: closeArea

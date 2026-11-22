@@ -159,6 +159,7 @@
       "foundation/agents",
       "foundation/drawing",
       "foundation/forms",
+      "foundation/icons",
       "features/peek",
       "features/monitor",
       "features/nvim",
@@ -547,6 +548,7 @@
     "src/gui/foundation/keys/keys-configuration.cppm": "telar.gui.foundation.keys:configuration",
     "src/gui/foundation/keys/keys-key_encoder.cppm": "telar.gui.foundation.keys:key_encoder",
     "src/gui/foundation/keys/keys.cppm": "telar.gui.foundation.keys",
+    "src/gui/foundation/icons/icons.cppm": "telar.gui.foundation.icons",
     "src/gui/foundation/model/model-navigation_target.cppm": "telar.gui.foundation.model:navigation_target",
     "src/gui/foundation/model/model-suggestion_limits.cppm": "telar.gui.foundation.model:suggestion_limits",
     "src/gui/foundation/model/model.cppm": "telar.gui.foundation.model",
@@ -757,6 +759,7 @@
     "src/gui/foundation/core/memory.hpp": "Objective-C++ ABI",
     "src/gui/tests/qt_case.hpp": "Qt adapter dependency",
     "src/gui/ui/kit/models/path_label_runs.hpp": "Only Qt adapters use it; no module unit does",
+    "src/gui/ui/kit/models/glyph_icon.hpp": "Only Qt adapters use it; no module unit does",
     "src/gui/tests/fixtures/recording_link_host.hpp": "Included by name from the build's definition, where the window chooses its link host",
     "src/gui/ui/app/panes/nvim/predictive_echo.hpp": "Only the editor's Qt adapter and its test use it; no module unit does",
     "src/gui/ui/kit/motion/scroll_motion.hpp": "Only Qt adapters and their tests use it; no module unit does",
@@ -1367,6 +1370,9 @@
     ],
     "src/gui/foundation/forms": [
       "telar.gui.foundation.forms"
+    ],
+    "src/gui/foundation/icons": [
+      "telar.gui.foundation.icons"
     ],
     "src/gui/foundation/keys": [
       "telar.gui.foundation.keys"

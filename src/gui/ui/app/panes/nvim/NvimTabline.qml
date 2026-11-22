@@ -4,11 +4,12 @@ import QtQuick
 import Telar.Gui
 
 // Neovim's tab pages as a strip of telar's own over the editor: the current one lit, a click
-// to go to another. It takes no room while Neovim has a single tab.
+// to go to another, each with the icon of the type of the file it shows. It takes no room
+// while Neovim has a single tab.
 Item {
     id: root
 
-    // The editor's tabs: currentTab, tabs [{handle, name}].
+    // The editor's tabs: currentTab, tabs [{handle, name, icon, iconTone, modified, diagnostics}].
     required property var tabline
     required property var colors
     required property var typography
@@ -42,9 +43,10 @@ Item {
 
                 // The room of the mark that closes it is kept, so the names do not move.
                 readonly property int diagnostics: modelData.diagnostics ?? 0
-                readonly property real noted: diagnostics > 0 ? count.implicitWidth + 8 * root.ratio : 0
+                readonly property real noted: diagnostics > 0 ? count.width + 8 * root.ratio : 0
+                readonly property real iconSide: Math.round(root.typography.small * 1.2)
 
-                width: Math.min(label.implicitWidth + noted + 42 * root.ratio, 260 * root.ratio)
+                width: Math.min(label.implicitWidth + iconSide + noted + 48 * root.ratio, 260 * root.ratio)
                 height: parent.height
 
                 HoverHandler {
@@ -63,12 +65,24 @@ Item {
                     color: Qt.alpha(root.colors.text, tab.current ? ChromeStyle.selectionAlpha : hover.hovered ? ChromeStyle.hoverAlpha : 0)
                 }
 
+                ChromeIcon {
+                    id: kind
+                    x: 10 * root.ratio
+                    y: Math.round((parent.height - height) / 2)
+                    width: tab.iconSide
+                    height: tab.iconSide
+                    glyph: tab.modelData.icon ?? ""
+                    pixelSize: tab.iconSide
+                    color: root.colors[tab.modelData.iconTone ?? "subtext0"] ?? root.colors.subtext0
+                    opacity: tab.current ? 1 : 0.7
+                }
+
                 Text {
                     id: label
-                    x: 12 * root.ratio
+                    x: kind.x + kind.width + 6 * root.ratio
                     height: parent.height
                     verticalAlignment: Text.AlignVCenter
-                    width: Math.min(implicitWidth, parent.width - tab.noted - 38 * root.ratio)
+                    width: Math.min(implicitWidth, parent.width - x - tab.noted - 26 * root.ratio)
                     text: tab.modelData.name.length > 0 ? tab.modelData.name : "[No Name]"
                     color: tab.current ? root.colors.text : Qt.alpha(root.colors.text, 0.6)
                     font.pixelSize: root.typography.small
@@ -77,15 +91,29 @@ Item {
                 }
 
                 // The warnings and the errors of what it shows, after its name.
-                Text {
+                Row {
                     id: count
                     x: label.x + label.width + 8 * root.ratio
                     height: parent.height
-                    verticalAlignment: Text.AlignVCenter
-                    text: "\u25b2" + tab.diagnostics
-                    color: root.colors.yellow
-                    font.pixelSize: root.typography.small
+                    spacing: 3 * root.ratio
                     visible: tab.diagnostics > 0
+
+                    ChromeIcon {
+                        y: Math.round((parent.height - height) / 2)
+                        width: Math.round(root.typography.small * 1.05)
+                        height: width
+                        glyph: "\uea6c"
+                        pixelSize: width
+                        color: root.colors.yellow
+                    }
+
+                    Text {
+                        height: parent.height
+                        verticalAlignment: Text.AlignVCenter
+                        text: tab.diagnostics
+                        color: root.colors.yellow
+                        font.pixelSize: root.typography.small
+                    }
                 }
 
                 // Changes that were not written, where the mark that closes it would be.
@@ -100,13 +128,14 @@ Item {
                 }
 
                 // Closes the tab page: shown on the one in use and on the one pointed at.
-                Text {
-                    x: parent.width - width - 10 * root.ratio
-                    height: parent.height
-                    verticalAlignment: Text.AlignVCenter
-                    text: "\u00d7"
+                ChromeIcon {
+                    x: parent.width - width - 9 * root.ratio
+                    y: Math.round((parent.height - height) / 2)
+                    width: Math.round(root.typography.small * 0.85)
+                    height: width
+                    glyph: "\uea76"
+                    pixelSize: width
                     color: closing.hovered ? root.colors.text : Qt.alpha(root.colors.text, 0.45)
-                    font.pixelSize: root.typography.small
                     visible: hover.hovered || (tab.current && !(tab.modelData.modified ?? false))
 
                     HoverHandler {
@@ -123,15 +152,14 @@ Item {
     }
 
     // Another tab page.
-    Text {
-        x: strip.x + strip.width + 8 * root.ratio
-        width: 22 * root.ratio
-        height: parent.height
-        horizontalAlignment: Text.AlignHCenter
-        verticalAlignment: Text.AlignVCenter
-        text: "+"
+    ChromeIcon {
+        x: strip.x + strip.width + 10 * root.ratio
+        y: Math.round((parent.height - height) / 2)
+        width: Math.round(root.typography.small * 1.1)
+        height: width
+        glyph: "\uea60"
+        pixelSize: width
         color: adding.hovered ? root.colors.text : Qt.alpha(root.colors.text, 0.5)
-        font.pixelSize: root.typography.body
         visible: root.shown
 
         HoverHandler {

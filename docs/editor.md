@@ -38,7 +38,10 @@ Neovim leaves these to its UI, and the window draws each as one of its own surfa
 
   ![The command line with its completion menu](images/telar-editor-cmdline.png)
 
-- The completion menu while typing. A click on an entry takes it.
+- The completion menu while typing. A click on an entry takes it. An entry that says its kind,
+  as a language server's do, shows it by its icon.
+
+  ![The completion menu, each entry with its kind's icon](images/telar-editor-completion.png)
 - Messages, as notices that go away by themselves. An error stays longer, and none waits for
   a key.
 - Tab pages, as a strip over the editor once there is more than one.
@@ -49,6 +52,11 @@ Neovim leaves these to its UI, and the window draws each as one of its own surfa
   plugin that replaces them later is ignored.
 
   ![A selection asked through vim.ui.select](images/telar-editor-select.png)
+
+The surfaces draw their icons with Symbols Nerd Font, the font telar bundles: the same glyphs
+Neovim's own interfaces draw with it. A file, in the picker, in the terminal's path search and in
+a tab page, shows the icon of its type; a folder, a folder's. Their colors are roles of the
+window's palette, so they follow the theme.
 
 A floating window keeps its own cells and gets the surface and the shadow of a dialog. When
 its window has a border, the window draws the frame in place of the border's characters and

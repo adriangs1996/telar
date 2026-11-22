@@ -90,16 +90,17 @@ Item {
             visible: glass.visible || lead.visible
         }
 
-        // What opened the line: the search glass, or the prompt Neovim gave.
+        // What opened the line: a command's prompt or the search glass as icons, or the prompt
+        // Neovim gave.
         ChromeIcon {
             id: glass
             x: root.inset
             width: visible ? 18 * root.ratio : 0
             height: parent.height
-            glyph: ""
+            glyph: root.searching ? "\uea6d" : "\uea85"
             pixelSize: root.typography.body
             color: root.colors.accent
-            visible: root.searching && (root.line.prompt ?? "").length === 0
+            visible: (root.searching || root.first === ":") && (root.line.prompt ?? "").length === 0
         }
 
         CellText {

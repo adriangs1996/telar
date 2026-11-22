@@ -6,6 +6,7 @@ static_assert(true);
 #include "path_picker_controller.hpp"
 #include "platform/window.hpp"
 #include "ui/kit/fonts/chrome_fonts.hpp"
+#include "ui/kit/models/glyph_icon.hpp"
 #include "ui/kit/models/path_label_runs.hpp"
 #include "ui/kit/models/projection.hpp"
 #include <QVariantList>
@@ -25,6 +26,11 @@ import telar.base.ds;
 
 namespace telar::gui::qt {
   namespace {
+
+    // A folder's icon, or a file's by its name.
+    GlyphIcon iconOf(std::string_view path, PathKind kind) noexcept {
+      return kind == PathKind::directory ? directoryIcon() : fileIcon(path);
+    }
 
     template <typename MapBounds>
     QVariantList pathRows(const application::paths::PathPickerPage& page, const application::paths::PathPickerGeometry& geometry, std::size_t selection, MapBounds local) {
@@ -67,14 +73,17 @@ namespace telar::gui::qt {
 
         icon.x = static_cast<std::uint16_t>(icon.x + inset);
         icon.width = static_cast<std::uint16_t>(std::min<std::uint16_t>(1, icon.width - inset));
-        rows.append(QVariantMap{
+        QVariantMap record{
             {QStringLiteral("path"), toQString(page.path(match))},
             {QStringLiteral("bounds"), local(row.bounds)},
             {QStringLiteral("iconBounds"), local(icon)},
             {QStringLiteral("directory"), match.kind == PathKind::directory},
             {QStringLiteral("selected"), row.index == selection},
             {QStringLiteral("runs"), std::move(runs)},
-        });
+        };
+
+        putIcon(record, iconOf(page.path(match), match.kind));
+        rows.append(std::move(record));
       }
 
       return rows;
@@ -94,13 +103,16 @@ namespace telar::gui::qt {
     for (auto index = begin; index < end; ++index) {
       const auto& match = matches[index];
 
-      rows.append(QVariantMap{
+      QVariantMap record{
           {QStringLiteral("index"), static_cast<qulonglong>(index)},
           {QStringLiteral("path"), toQString(page.path(match))},
           {QStringLiteral("directory"), match.kind == PathKind::directory},
           {QStringLiteral("selected"), index == selection_},
           {QStringLiteral("runs"), pathLabelRuns(page.path(match), match.highlights(), width)},
-      });
+      };
+
+      putIcon(record, iconOf(page.path(match), match.kind));
+      rows.append(std::move(record));
     }
 
     return rows;

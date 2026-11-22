@@ -81,9 +81,21 @@ FocusScope {
         ratio: root.ratio
     }
 
-    ChromeText {
+    // What is asked: a choice among items, or a text to type.
+    ChromeIcon {
+        id: asking
         x: 16 * root.ratio
-        width: root.width - 32 * root.ratio
+        y: Math.round((root.headerHeight - height) / 2)
+        width: Math.round(root.typography.body * 1.15)
+        height: width
+        glyph: root.selecting ? "\ueb85" : "\uea73"
+        pixelSize: width
+        color: root.colors.accent
+    }
+
+    ChromeText {
+        x: asking.x + asking.width + 8 * root.ratio
+        width: root.width - x - 16 * root.ratio
         height: root.headerHeight
         text: (root.prompt.title ?? "").replace(/[:\s]+$/, "") || (root.selecting ? "Select" : "Input")
         pixelSize: root.typography.body

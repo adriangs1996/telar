@@ -21,7 +21,7 @@ FocusScope {
     readonly property bool shown: picker.open ?? false
     readonly property var rows: picker.rows ?? []
     readonly property string source: picker.source ?? "files"
-    readonly property var sources: [{name: "files", label: "Files"}, {name: "text", label: "Text"}, {name: "buffers", label: "Buffers"}]
+    readonly property var sources: [{name: "files", label: "Files", icon: "\uea7b"}, {name: "text", label: "Text", icon: "\uea6d"}, {name: "buffers", label: "Buffers", icon: "\ueaf0"}]
     // The room left for the preview, in the parent's own coordinates.
     readonly property rect previewArea: Qt.rect(x + panel.previewArea.x, y + panel.previewArea.y, panel.previewArea.width, panel.previewArea.height)
     readonly property var currentRow: rows[current] ?? null
@@ -110,11 +110,13 @@ FocusScope {
         ratio: root.ratio
         fieldName: "editorPickerSearch"
         searchName: "Search the editor's files"
-        glyph: root.source === "text" ? "/" : "›"
+        glyph: root.sources.find(source => source.name === root.source)?.icon ?? "\uea6d"
         scopes: root.sources
         scope: root.source
         rows: root.rows.map((row, index) => ({
             runs: row.runs ?? [],
+            icon: row.icon ?? "",
+            iconTone: row.iconTone ?? "",
             suffix: (row.line ?? 0) > 0 ? ":" + row.line : "",
             detail: (row.line ?? 0) > 0 ? (row.text ?? "") : "",
             marked: root.marked.indexOf(index) >= 0

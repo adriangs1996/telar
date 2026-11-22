@@ -9,7 +9,8 @@ import Telar.Gui
 Item {
     id: root
 
-    // The editor's menu: visible, selected, first, total, items [{word, kind, menu}], x, y.
+    // The editor's menu: visible, selected, first, total, items [{word, kind, menu, icon,
+    // iconTone}], x, y. An item's icon says its kind.
     required property var menu
     required property var colors
     required property var typography
@@ -29,6 +30,9 @@ Item {
     readonly property bool infoRight: x + width + 6 * ratio + infoWidth <= parent.width - 8 * ratio
     readonly property int visibleRows: Math.min(items.length, 10)
     readonly property real rowHeight: 26 * ratio
+    // The column of the kinds' icons, kept for every row once one item has a kind.
+    readonly property bool iconed: items.some(item => (item.icon ?? "").length > 0)
+    readonly property real iconSide: Math.round(typography.body * 1.15)
     readonly property real padding: 4 * ratio
     // The first row shown: the selection is kept in view.
     readonly property int firstRow: Math.max(0, Math.min(items.length - visibleRows, selected - Math.floor(visibleRows / 2)))
@@ -69,6 +73,7 @@ Item {
                 readonly property int itemIndex: root.firstRow + index
                 readonly property var item: root.items[itemIndex] ?? ({})
                 readonly property bool chosen: itemIndex === root.selected
+                readonly property color tone: root.colors[item.iconTone ?? "accent"] ?? root.colors.accent
 
                 y: index * root.rowHeight
                 width: parent.width
@@ -88,9 +93,20 @@ Item {
                     onActivated: root.picked(row.itemIndex)
                 }
 
+                ChromeIcon {
+                    x: 8 * root.ratio
+                    y: Math.round((parent.height - height) / 2)
+                    width: root.iconSide
+                    height: root.iconSide
+                    glyph: row.item.icon ?? ""
+                    pixelSize: root.iconSide
+                    color: row.tone
+                    visible: root.iconed && (row.item.icon ?? "").length > 0
+                }
+
                 CellText {
                     id: word
-                    x: 8 * root.ratio
+                    x: 8 * root.ratio + (root.iconed ? root.iconSide + 6 * root.ratio : 0)
                     height: parent.height
                     width: Math.min(implicitWidth, Math.max(0, parent.width - x - kindChip.width - 16 * root.ratio))
                     text: row.item.word ?? ""
@@ -121,14 +137,14 @@ Item {
                     NativeRoundedRectangle {
                         anchors.fill: parent
                         radius: ChromeStyle.smallRadius * root.ratio
-                        color: Qt.alpha(root.colors.accent, 0.14)
+                        color: Qt.alpha(row.tone, 0.14)
                     }
 
                     Text {
                         id: kindLabel
                         anchors.centerIn: parent
                         text: kindChip.label
-                        color: root.colors.accent
+                        color: row.tone
                         font.pixelSize: root.typography.small
                         textFormat: Text.PlainText
                     }

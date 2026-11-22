@@ -6,6 +6,7 @@ static_assert(true);
 #include "nvim_item.hpp"
 #include "nvim_keys.hpp"
 #include "ui/kit/input/key_adapter.hpp"
+#include "ui/kit/models/glyph_icon.hpp"
 #include "ui/kit/models/path_label_runs.hpp"
 #include "ui/kit/models/projection.hpp"
 #include <QCursor>
@@ -155,7 +156,11 @@ namespace telar::gui::qt {
 
       records.reserve(static_cast<qsizetype>(entries.size()));
       for (const auto& entry : entries) {
-        records.append(QVariantMap{{QStringLiteral("handle"), static_cast<qulonglong>(entry.handle)}, {QStringLiteral("name"), shown(entry.name.of(text))}, {QStringLiteral("modified"), entry.modified}, {QStringLiteral("diagnostics"), static_cast<int>(entry.diagnostics)}});
+        QVariantMap record{{QStringLiteral("handle"), static_cast<qulonglong>(entry.handle)}, {QStringLiteral("name"), shown(entry.name.of(text))}, {QStringLiteral("modified"), entry.modified}, {QStringLiteral("diagnostics"), static_cast<int>(entry.diagnostics)}};
+
+        // A tab is shown by the file its window holds.
+        putIcon(record, fileIcon(entry.name.of(text)));
+        records.append(std::move(record));
       }
 
       return records;
@@ -361,13 +366,16 @@ namespace telar::gui::qt {
       constexpr std::uint16_t label_columns = 96;
       const auto marks = std::span<const std::uint16_t>{std::as_const(picker.positions).view()}.subspan(match.first_position, match.position_count);
 
-      rows.append(QVariantMap{
+      QVariantMap row{
           {QStringLiteral("runs"), pathLabelRuns(path, marks, label_columns)},
           {QStringLiteral("name"), shown(slash == std::string_view::npos ? path : path.substr(slash + 1))},
           {QStringLiteral("directory"), shown(slash == std::string_view::npos ? std::string_view{} : path.substr(0, slash))},
           {QStringLiteral("line"), static_cast<int>(match.line)},
           {QStringLiteral("text"), shown(match.text.of(text))},
-      });
+      };
+
+      putIcon(row, fileIcon(path));
+      rows.append(std::move(row));
     }
 
     picker_ = {
@@ -732,11 +740,19 @@ namespace telar::gui::qt {
     menu_revision_ = editor.menu_revision;
     items.reserve(static_cast<qsizetype>(menu.items.size()));
     for (const auto& item : menu.items) {
-      items.append(QVariantMap{
+      const auto kind = item.kind.of(text);
+      QVariantMap entry{
           {QStringLiteral("word"), shown(item.word.of(text))},
-          {QStringLiteral("kind"), shown(item.kind.of(text))},
+          {QStringLiteral("kind"), shown(kind)},
           {QStringLiteral("menu"), shown(item.menu.of(text))},
-      });
+      };
+
+      // What the item is, by the icon of its kind; an item that says no kind has none.
+      if (!kind.empty()) {
+        putIcon(entry, kindIcon(kind));
+      }
+
+      items.append(std::move(entry));
     }
 
     QPointF anchor;
