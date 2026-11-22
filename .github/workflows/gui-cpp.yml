@@ -241,3 +241,14 @@ jobs:
             QT_QUICK_BACKEND=software QT_QPA_PLATFORM=offscreen ./gui-quick-test \
             editorPaneDrawsNeovim pathPickerBrowsesAndInsertsWithoutExecuting pathPickerQueryLimitPreservesCompleteUtf8 \
             detectedLinkHoverAndCopy pointerLinkOpening pointerLinkRevalidation textualAndRoutedLinks
+
+      # Each surface of the editor pane against the picture kept of it, with both presets: a
+      # change of how one looks fails here until its picture is taken again.
+      - name: Compare the editor's surfaces with their reference pictures
+        working-directory: out/ci/src/gui
+        run: |
+          for preset in zenburn vesper; do
+            TELAR_EDITOR_REFERENCES="$GITHUB_WORKSPACE/src/gui/tests/references/editor" TELAR_EDITOR_PRESET="$preset" \
+              TELAR_GUI_TEST_RUNTIME="$PWD/../runtime/telar" PATH="$PWD/../runtime:$PATH" \
+              QT_QUICK_BACKEND=software QT_QPA_PLATFORM=offscreen ./gui-quick-test editorPaneDrawsNeovim
+          done
