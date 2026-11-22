@@ -10,6 +10,7 @@ import Telar.Gui
 // the list in a float of Neovim itself, which the pane draws over the room the panel leaves.
 FocusScope {
     id: root
+    objectName: "editorPicker"
 
     // The editor's picker: open, source, query, root, loading, truncated and rows of
     // {runs, name, directory, line, text}.

@@ -113,13 +113,16 @@ Item {
         color: Qt.alpha(root.colors.text, ChromeStyle.outlineAlpha)
     }
 
-    // What is searched in: the scopes to choose from, or where the search is rooted.
+    // What is searched in: the scopes to choose from, or where the search is rooted. In a
+    // narrow list they stop before the count, never over the preview beside them.
     Row {
         x: 12 * root.ratio
         y: root.headerHeight
+        width: Math.max(0, root.listWidth - x - 12 * root.ratio - count.implicitWidth - spacing)
         height: root.scopeHeight
         spacing: 4 * root.ratio
         visible: root.scopes.length > 0
+        clip: true
 
         Repeater {
             model: root.scopes
@@ -132,6 +135,8 @@ Item {
 
                 width: name.implicitWidth + 16 * root.ratio
                 height: root.scopeHeight
+                // A chip is whole or not shown: the keys still reach the scopes left out.
+                visible: x + width <= parent.width
 
                 NativeRoundedRectangle {
                     y: 5 * root.ratio

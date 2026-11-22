@@ -1103,8 +1103,31 @@ return {api_version = 2, client = {
         QTRY_VERIFY2_WITH_TIMEOUT(names().size() == 3 && names().contains(QStringLiteral("screen.cpp")), qPrintable(names().join(QLatin1Char(' '))), runtime_wait_ms);
         view->searchPicker(QStringLiteral("fram"));
         QTRY_COMPARE_WITH_TIMEOUT(names(), QStringList{QStringLiteral("frames.cpp")}, runtime_wait_ms);
-        // The preview is a float of the editor over the cells the picker leaves it.
+        // The preview is a float of the editor over the cells the picker leaves it, and none
+        // of it lies past them.
         QTRY_COMPARE_WITH_TIMEOUT(floats(), before + 1, runtime_wait_ms);
+        const auto pickers = test::visualItems(*window_->contentItem(), QStringLiteral("editorPicker"));
+
+        QVERIFY(!pickers.empty());
+        const auto room = pickers.front()->property("previewArea").toRectF();
+
+        int inside = 0;
+
+        // A float that reaches into the preview's room is the preview, whole inside it.
+        for (const auto& grid : view->editorState()->grids) {
+          if (grid->placement == application::nvim::NvimPlacement::floating) {
+            const QRectF cells{grid->column * view->cellWidth(), grid->row * view->cellHeight(), grid->width * view->cellWidth(), grid->height * view->cellHeight()};
+
+            if (!room.intersects(cells)) {
+              continue;
+            }
+
+            QVERIFY2(room.contains(cells), qPrintable(QStringLiteral("preview %1,%2 %3x%4 past %5,%6 %7x%8").arg(cells.x()).arg(cells.y()).arg(cells.width()).arg(cells.height()).arg(room.x()).arg(room.y()).arg(room.width()).arg(room.height())));
+            ++inside;
+          }
+        }
+
+        QCOMPARE(inside, 1);
         if (!shots.isEmpty()) {
           QTest::qWait(250);
         }

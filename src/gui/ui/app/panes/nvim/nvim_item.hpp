@@ -276,6 +276,9 @@ namespace telar::gui::qt {
     std::uint64_t picker_revision_ = 0;
     // The cells the picker's preview was last asked to cover: the float found there is it.
     application::nvim::PreviewArea preview_area_;
+    // What it was asked for, in pixels: a font of another size covers it with other cells.
+    int preview_index_ = -1;
+    QRectF preview_pixels_;
     TerminalFont font_;
     FontGrid font_grid_;
     std::shared_ptr<const FontCollection> font_collection_;

@@ -312,6 +312,8 @@ namespace telar::gui::qt {
       return static_cast<std::uint16_t>(std::clamp<qreal>(inward ? std::floor(count) : std::ceil(count), 0, most));
     };
 
+    preview_index_ = index;
+    preview_pixels_ = area;
     // The cells that fit whole inside the area: the float never passes its edges.
     preview_area_ = index < 0 ? nvim::PreviewArea{} : nvim::PreviewArea{.row = cells(area.y(), font_.cell.height(), false), .column = cells(area.x(), font_.cell.width(), false), .columns = cells(area.width() - font_.cell.width(), font_.cell.width(), true), .rows = cells(area.height() - font_.cell.height(), font_.cell.height(), true)};
     controller_->preview(pane_id_, index < 0 ? ds::Option<std::size_t>{} : ds::Option<std::size_t>{static_cast<std::size_t>(index)}, preview_area_);
@@ -411,6 +413,12 @@ namespace telar::gui::qt {
       emit metricsChanged();
       polish();
       refresh(pane_id_);
+      // The preview covers the same pixels with the cells of this font.
+      if (preview_area_.columns != 0) {
+        const auto pixels = preview_pixels_;
+
+        previewPicker(preview_index_, pixels);
+      }
     } catch (const std::exception& error) {
       qWarning() << "Editor font:" << error.what();
     }

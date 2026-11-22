@@ -54,19 +54,24 @@ FocusScope {
                 required property var record
                 readonly property bool floating: record.kind === "float"
                 readonly property bool windowed: record.kind === "window"
-                // A float comes in as a dialog does: a short fade and a rise of a few units.
-                property real reveal: floating ? 0 : 1
+                readonly property bool preview: record.preview ?? false
+                // The room the picker leaves its preview, which the preview never draws past:
+                // not while a new size is on its way to Neovim, nor while the picker moves.
+                readonly property rect room: preview ? pick.previewArea : Qt.rect(0, 0, 0, 0)
+                // A float comes in as a dialog does: a short fade and a rise of a few units. The
+                // preview comes with its picker instead.
+                property real reveal: floating && !preview ? 0 : 1
 
                 x: record.x
                 y: record.y + (1 - reveal) * 6 * root.ratio
                 // The picker's preview is a float of Neovim's, drawn over the picker's surface.
-                z: (record.preview ?? false) ? 995 : record.layer
+                z: preview ? 995 : record.layer
                 width: record.width
                 height: record.height
                 opacity: reveal
 
                 NumberAnimation on reveal {
-                    running: cell.floating
+                    running: cell.floating && !cell.preview
                     to: 1
                     duration: 140
                     easing.type: Easing.OutCubic
@@ -93,7 +98,7 @@ FocusScope {
                 readonly property real inset: border === 0 ? root.floatInset : 0
 
                 NvimSurface {
-                    visible: cell.floating && !(cell.record.preview ?? false)
+                    visible: cell.floating && !cell.preview
                     x: -cell.inset
                     y: -cell.inset
                     width: cell.width + 2 * cell.inset
@@ -103,19 +108,47 @@ FocusScope {
                 }
 
                 Item {
-                    x: cell.cutLeft
-                    y: cell.cutTop
-                    width: cell.width - cell.cutLeft - cell.cutRight
-                    height: cell.height - cell.cutTop - cell.cutBottom
-                    clip: cell.border !== 0
+                    id: shown
+
+                    x: cell.preview ? Math.max(0, cell.room.x - cell.x) : cell.cutLeft
+                    y: cell.preview ? Math.max(0, cell.room.y - cell.y) : cell.cutTop
+                    width: Math.max(0, (cell.preview ? Math.min(cell.width, cell.room.x + cell.room.width - cell.x) : cell.width - cell.cutRight) - x)
+                    height: Math.max(0, (cell.preview ? Math.min(cell.height, cell.room.y + cell.room.height - cell.y) : cell.height - cell.cutBottom) - y)
+                    clip: cell.border !== 0 || cell.preview
 
                     NvimGrid {
-                        x: -cell.cutLeft
-                        y: -cell.cutTop
+                        x: -shown.x
+                        y: -shown.y
                         width: cell.width
                         height: cell.height
                         editor: view
                         gridId: cell.record.gridId
+                    }
+
+                    // A line longer than the preview fades out at its edge, rather than stop in
+                    // the middle of a word against the picker's border.
+                    Rectangle {
+                        id: fade
+
+                        readonly property color base: root.colors.terminalBackground
+
+                        visible: cell.preview
+                        x: parent.width - width
+                        width: Math.min(parent.width / 4, 3 * view.cellWidth)
+                        height: parent.height
+                        gradient: Gradient {
+                            orientation: Gradient.Horizontal
+
+                            GradientStop {
+                                position: 0
+                                color: Qt.rgba(fade.base.r, fade.base.g, fade.base.b, 0)
+                            }
+
+                            GradientStop {
+                                position: 1
+                                color: Qt.rgba(fade.base.r, fade.base.g, fade.base.b, 1)
+                            }
+                        }
                     }
                 }
 
