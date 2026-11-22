@@ -169,13 +169,18 @@ jobs:
           tools/cpp exec -- cmake -DCHECK=lifetime+interface_bodies${{ runner.os == 'macOS' && '+blank_lines' || '' }} \
             -DBUILD_DIRECTORY=out/ci -DJOBS=3 -P cmake/scripts/check.cmake
 
-      # clang-tidy over the units of this tree, in the configuration `just lint` checks, with tbc's
-      # plugin, which keeps each unit from walking what it imports. The units only Linux builds have not
-      # been through the lint yet, so there the step reports what it finds without failing the job.
-      - name: Lint
+      # tbc's plugin, which keeps each unit of the lint from walking what it imports. It fails the job
+      # on every system when it does not build, as the lint below does not on Linux.
+      - name: Build the lint plugin
         if: matrix.configuration == 'Debug'
-        continue-on-error: ${{ runner.os == 'Linux' }}
         run: |
           tools/cpp configure tbc -B lib/tbc/out/release --config Release -- -DBUILD_TESTING=OFF
           tools/cpp build tbc -B lib/tbc/out/release -- --target tbc-tidy-scope
-          tools/cpp exec -- cmake -DCHECK=lint -DBUILD_DIRECTORY=out/ci -DJOBS=3 -P cmake/scripts/check.cmake
+
+      # clang-tidy over the units of this tree, in the configuration `just lint` checks. The units only
+      # Linux builds have not been through the lint yet, so there the step reports what it finds without
+      # failing the job.
+      - name: Lint
+        if: matrix.configuration == 'Debug'
+        continue-on-error: ${{ runner.os == 'Linux' }}
+        run: tools/cpp exec -- cmake -DCHECK=lint -DBUILD_DIRECTORY=out/ci -DJOBS=3 -P cmake/scripts/check.cmake
