@@ -869,8 +869,18 @@ return {api_version = 2, client = {
         const int samples = asked > 0 ? asked : usual_samples;
         QList<qint64> elapsed;
 
-        view->send(QStringLiteral("<Cmd>enew!<CR>i"));
-        QTRY_COMPARE_WITH_TIMEOUT(view->mode(), QStringLiteral("insert"), runtime_wait_ms);
+        // TELAR_EDITOR_METRICS_SURFACE=cmdline types in the command line, which the window
+        // draws as a surface of its own, where the keys otherwise go to a buffer in insert mode.
+        const bool in_cmdline = qEnvironmentVariable("TELAR_EDITOR_METRICS_SURFACE") == QStringLiteral("cmdline");
+
+        if (in_cmdline) {
+          press(Qt::Key_Colon, QStringLiteral(":"), Qt::ShiftModifier);
+          QTRY_VERIFY_WITH_TIMEOUT(view->cmdline().value(QStringLiteral("visible")).toBool(), runtime_wait_ms);
+        } else {
+          view->send(QStringLiteral("<Cmd>enew!<CR>i"));
+          QTRY_COMPARE_WITH_TIMEOUT(view->mode(), QStringLiteral("insert"), runtime_wait_ms);
+        }
+
         elapsed.reserve(samples);
         for (int index = 0; index < samples; ++index) {
           const auto before = view->editorState()->frame;
@@ -884,9 +894,15 @@ return {api_version = 2, client = {
           }
 
           elapsed.append(timer.nsecsElapsed());
-          // Every sixty keys a new line, so no row grows past the view.
+          // Every sixty keys a new line, so no row grows past the view; the command line is
+          // emptied instead.
           if (index % 60 == 59) {
-            press(Qt::Key_Return, QStringLiteral("\r"));
+            if (in_cmdline) {
+              view->send(QStringLiteral("<C-u>"));
+            } else {
+              press(Qt::Key_Return, QStringLiteral("\r"));
+            }
+
             QTest::qWait(20);
           }
         }
@@ -905,7 +921,12 @@ return {api_version = 2, client = {
                 .arg(elapsed[samples / 10] / 1000)
                 .toUtf8());
         press(Qt::Key_Escape, QString{});
-        view->send(QStringLiteral("<Cmd>bwipeout!<CR>"));
+        if (in_cmdline) {
+          QTRY_VERIFY_WITH_TIMEOUT(!view->cmdline().value(QStringLiteral("visible")).toBool(), runtime_wait_ms);
+        } else {
+          view->send(QStringLiteral("<Cmd>bwipeout!<CR>"));
+        }
+
         QTRY_VERIFY2_WITH_TIMEOUT(shown().contains(QStringLiteral("TELAR <EDITOR> OK")), qPrintable(shown()), runtime_wait_ms);
         QTRY_COMPARE_WITH_TIMEOUT(view->mode(), QStringLiteral("normal"), runtime_wait_ms);
       }

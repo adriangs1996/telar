@@ -176,7 +176,11 @@ out/dev/src/runtime/nvim-embed-probe --clean     # the same against the Neovim o
 
 `TELAR_EDITOR_METRICS=FILE` makes the window test's `editorPaneDrawsNeovim` case write how long
 a key takes from the view to the frame that shows it, and `TELAR_EDITOR_SHOTS=DIR` makes it
-save the window at each step.
+save the window at each step. `TELAR_EDITOR_METRICS_KEYS=N` types that many keys, enough of
+them to make the window scroll while it types, and `TELAR_EDITOR_METRICS_SURFACE=cmdline`
+types them in the command line. Without `QT_QPA_PLATFORM=offscreen` and `QT_QUICK_BACKEND`
+the case runs in a window of the desktop, drawn as the one you use is; only the measurement
+is meant to pass there.
 
 ## Its reference pictures
 
