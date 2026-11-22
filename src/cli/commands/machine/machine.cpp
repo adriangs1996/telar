@@ -649,6 +649,15 @@ fetch() {
       return sent.status == 0 && whole(sent).contains("sent");
     }
 
+    // How the machine came by its Neovim, from what its installer printed.
+    std::string_view provisioned(std::string_view printed) noexcept {
+      if (printed.contains("shipped with")) {
+        return "shipped with the machine's telar";
+      }
+
+      return printed.contains("already present") ? "already provisioned" : "provisioned";
+    }
+
     void provisionEditor(Memory& memory, SetupReport& report, std::string_view destination, const Platform& platform) {
       try {
         // The package's own Neovim goes first, where it fits the machine; the machine's telar
@@ -668,7 +677,7 @@ fetch() {
         if (sent) {
           report.note(Step::integrations, "editor: provisioned from this telar's package");
         } else {
-          report.note(Step::integrations, "editor: {}", whole(output).contains("already present") ? "already provisioned" : "provisioned");
+          report.note(Step::integrations, "editor: {}", provisioned(whole(output)));
         }
 
         // What the host lacks for telar's own configuration, as the installer found it.

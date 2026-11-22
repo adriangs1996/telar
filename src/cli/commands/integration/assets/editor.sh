@@ -7,6 +7,13 @@ action=${1:-status}
 version=@TELAR_NVIM_VERSION@
 data=${XDG_DATA_HOME:-${HOME:?HOME is not set}/.local/share}
 target=$data/telar/nvim/$version
+# The Neovim this telar's own package brought, when the second word names where the package
+# keeps it and this host runs it: the runtime starts that one, so there is nothing to fetch.
+shipped=${2:+$2/$version}
+
+ships() {
+    [ -n "$shipped" ] && [ "$shipped" != "$target" ] && [ -x "$shipped/bin/nvim" ] && "$shipped/bin/nvim" --version >/dev/null 2>&1
+}
 
 # What telar's own configuration needs of a host that has none of its own: git to fetch its
 # plugins, and a C compiler for the parsers Neovim does not ship. The editor starts without them.
@@ -20,7 +27,14 @@ needs() {
 
 case "$action" in
 status)
-    if [ -x "$target/bin/nvim" ]; then echo "editor: present at $target/bin/nvim"; else echo "editor: absent"; fi
+    if [ -x "$target/bin/nvim" ]; then
+        echo "editor: present at $target/bin/nvim"
+    elif ships; then
+        echo "editor: shipped with this telar at $shipped/bin/nvim"
+    else
+        echo "editor: absent"
+    fi
+
     needs
     exit 0
     ;;
@@ -37,6 +51,12 @@ esac
 
 if [ -x "$target/bin/nvim" ]; then
     echo "editor: already present at $target/bin/nvim"
+    needs
+    exit 0
+fi
+
+if ships; then
+    echo "editor: shipped with this telar at $shipped/bin/nvim"
     needs
     exit 0
 fi

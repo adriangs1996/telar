@@ -5,6 +5,7 @@ import argparse
 import json
 import os
 from pathlib import Path
+import re
 import shutil
 import subprocess
 import tempfile
@@ -200,6 +201,25 @@ def editor(home):
     assert b'needs' not in home.run('integration', 'status', 'editor').stdout
     own.rmdir()
     home.env['PATH'] = path
+    # The Neovim a package brings, beside the directory of its programs, is the one the runtime
+    # starts on a host that runs it: the status says so and an install fetches nothing. One the
+    # host cannot run is as if the package brought none.
+    manifest = Path(__file__).resolve().parents[3] / 'cmake/nvim/manifest.cmake'
+    version = re.search(r'TELAR_NVIM_VERSION "([0-9.]+)"', manifest.read_text()).group(1)
+    packaged = home.root / 'package/bin/telar'
+    packaged.parent.mkdir(parents=True)
+    shutil.copy2(home.binary, packaged)
+    shipped = home.root / 'package/share/telar/nvim' / version / 'bin/nvim'
+    shipped.parent.mkdir(parents=True)
+    shipped.write_text('#!/bin/sh\n')
+    shipped.chmod(0o755)
+    place = f'share/telar/nvim/{version}/bin/nvim'.encode()
+    said = home.run('integration', 'status', 'editor', binary=packaged).stdout
+    assert b'editor: shipped with this telar at ' in said and place in said, said
+    kept = home.run('integration', 'install', 'editor', binary=packaged).stdout
+    assert b'editor: shipped with this telar at ' in kept and not target.exists(), kept
+    shipped.write_text('#!/bin/sh\nexit 1\n')
+    assert b'editor: absent' in home.run('integration', 'status', 'editor', binary=packaged).stdout
 
 
 def linked_settings(home):

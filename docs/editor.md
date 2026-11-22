@@ -128,7 +128,9 @@ telar integration install editor
 ```
 
 fetches the Neovim release this telar was built for, checks the archive against the SHA-256
-the build carries, and unpacks it under `~/.local/share/telar/nvim/VERSION`. `telar machine
+the build carries, and unpacks it under `~/.local/share/telar/nvim/VERSION`. A telar whose
+package brought its Neovim, on a host that runs it, fetches nothing: the command and
+`telar integration status editor` say it is shipped with this telar. `telar machine
 setup` runs it on the machine it sets up, unless `--skip editor`. When the telar you run came
 with its Neovim and the machine is of the same system and processor, setup sends it that one
 first, and the machine fetches nothing. On a machine without a

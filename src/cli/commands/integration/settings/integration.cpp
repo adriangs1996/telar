@@ -13,7 +13,7 @@ namespace telar::runtime::cli {
     const ProcessEnvironment environment;
 
     if (options.editor) {
-      return integration::runEditor(options);
+      return integration::runEditor(options, executable.view());
     }
 
     if (options.neovim) {
