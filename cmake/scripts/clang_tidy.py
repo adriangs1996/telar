@@ -184,7 +184,8 @@ def main():
         command.extend(f'--extra-arg={argument}' for argument in arguments.extra_arg)
         environment = None
         if owned is not None:
-            listed = stamp.with_suffix('.headers')
+            # clang-tidy reads the list from the directory of the unit's compile command.
+            listed = stamp.with_suffix('.headers').absolute()
             listed.write_text(''.join(header + '\n' for header in owned[source]))
             environment = dict(os.environ, TBC_PARSED_SCOPE_HEADERS=str(listed))
         result = subprocess.run([*command, source], stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, env=environment)
