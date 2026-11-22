@@ -9,7 +9,7 @@
 # clang-tidy's time, and with DEEP five times as much. JOBS defaults to the physical core count; to half of it for those two when
 # clang-tidy runs without tbc's plugin, tbc-tidy-scope, as it then reads every BMI its unit imports. FIX
 # makes blank_lines insert the missing blank lines instead of failing on them. Every check checks only the
-# units whose object, profile, linter or allowlist changed since their last check, and reports the others
+# units whose object, profile, linter, allowlist or, for checks run together, scope changed since their last check, and reports the others
 # as they did then; FULL checks them all, and so does FIX.
 cmake_minimum_required(VERSION 3.25)
 
@@ -206,7 +206,10 @@ if(NOT EXISTS "${linter}")
   message(FATAL_ERROR "tbc-lint was not found at '${linter}'. Build lib/tbc with its release preset or set TBC_LINTER.")
 endif()
 # What each selected check adds to one run of tbc-lint, and what decides its reports besides the
-# sources: an allowlist, so a new one checks every unit again.
+# sources: an allowlist, so a new one checks every unit again. Several checks in one pass apply to a
+# unit the ones whose scope lists it, so a scope that changes checks every unit again too: a unit that
+# enters or leaves one keeps its object, and its stamp would replay the checks it had. Configuring
+# rewrites a scope only when its sources change.
 set(names)
 set(arguments)
 set(inputs "${linter}")
@@ -215,6 +218,7 @@ foreach(check IN LISTS selected)
   list(APPEND names "${name}")
   if(selected_count GREATER 1)
     list(APPEND arguments "--scope=${name}=${build}/checks/${check}.txt")
+    list(APPEND inputs "${build}/checks/${check}.txt")
   endif()
   if(check STREQUAL "blank_lines")
     telar_repository_headers(headers)
