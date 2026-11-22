@@ -11,6 +11,7 @@ telar_add_qml_sources(gui-quick
     HistoryHint.qml
     KeyHint.qml
     KeyHintBar.qml
+    MeterRow.qml
     PaletteButton.qml
     PromptActions.qml
     PromptField.qml
