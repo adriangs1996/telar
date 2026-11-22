@@ -2,12 +2,15 @@
 """`telar integration`, `telar plugin trust` and `telar proxy trust status` through the executable, in private homes:
 the files they write, keep and remove, and the output other telar commands parse."""
 import argparse
+import hashlib
 import json
 import os
 from pathlib import Path
+import platform
 import re
 import shutil
 import subprocess
+import tarfile
 import tempfile
 
 CLAUDE = ('claude', '.claude', 'settings.json')
@@ -222,6 +225,37 @@ def editor(home):
     assert b'editor: absent' in home.run('integration', 'status', 'editor', binary=packaged).stdout
 
 
+def concurrent_editor_installs(home):
+    """Installs of the editor that run at once all succeed and leave one Neovim in its place.
+    The installer runs as the build configures it, for an archive made here and its SHA-256."""
+    names = {('Linux', 'x86_64'): 'nvim-linux-x86_64', ('Linux', 'aarch64'): 'nvim-linux-arm64', ('Darwin', 'arm64'): 'nvim-macos-arm64', ('Darwin', 'x86_64'): 'nvim-macos-x86_64'}
+    name = names.get((platform.system(), platform.machine()))
+    if name is None:
+        return
+    unpacked = home.root / 'release' / name
+    (unpacked / 'bin').mkdir(parents=True)
+    (unpacked / 'bin/nvim').write_text('#!/bin/sh\n')
+    (unpacked / 'bin/nvim').chmod(0o755)
+    (unpacked / 'share/nvim/runtime').mkdir(parents=True)
+    for index in range(400):
+        (unpacked / f'share/nvim/runtime/file{index}.vim').write_text('" ' * 256)
+    archive = home.root / f'{name}.tar.gz'
+    with tarfile.open(archive, 'w:gz') as packed:
+        packed.add(unpacked, arcname=name)
+    digest = hashlib.sha256(archive.read_bytes()).hexdigest()
+    template = Path(__file__).resolve().parents[1] / 'commands/integration/assets/editor.sh'
+    script = home.root / 'editor.sh'
+    script.write_text(re.sub(r'@TELAR_NVIM_SHA256_[A-Z0-9_]+@', digest, template.read_text().replace('@TELAR_NVIM_VERSION@', '0.0.0')))
+    env = dict(home.env, TELAR_NVIM_ARCHIVE=str(archive))
+    runs = [subprocess.Popen(['sh', str(script), 'install'], env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE) for _ in range(6)]
+    results = [(run.wait(timeout=120), *run.communicate()) for run in runs]
+    assert all(status == 0 for status, _, _ in results), results
+    nvim = Path(home.env['XDG_DATA_HOME']) / 'telar/nvim'
+    found = sorted(str(path.relative_to(nvim)) for path in nvim.rglob('nvim') if path.is_file())
+    assert found == ['0.0.0/bin/nvim'], found
+    assert sorted(path.name for path in nvim.iterdir()) == ['0.0.0'], list(nvim.iterdir())
+
+
 def linked_settings(home):
     """Settings kept as a link into a dotfiles checkout stay a link, and the file it names
     gets the hooks with its own permissions; settings under missing directories get them."""
@@ -304,7 +338,7 @@ def main():
     parser.add_argument('--scratch', type=Path)
     args = parser.parse_args()
     count = 0
-    for check in (install_output, unparseable_settings, skills, extensions, neovim, editor, plugin_trust, linked_settings, legacy_settings, proxy_trust_status):
+    for check in (install_output, unparseable_settings, skills, extensions, neovim, editor, concurrent_editor_installs, plugin_trust, linked_settings, legacy_settings, proxy_trust_status):
         with tempfile.TemporaryDirectory(prefix='integration-', dir=args.scratch) as directory:
             home = Home(args.telar.resolve(), Path(directory).resolve())
             check(home)

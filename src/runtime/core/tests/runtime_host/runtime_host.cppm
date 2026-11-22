@@ -15,6 +15,7 @@ export module telar.runtime.core.tests.runtime_host;
 
 import std;
 import telar.base.memory.allocators;
+import telar.config.runtime;
 import telar.platform.process;
 import telar.runtime.workers.background_executor;
 import telar.runtime.host.event_loop;
@@ -29,7 +30,8 @@ using telar::testing::check;
 
 namespace {
 
-  // The child half: argv is `--runtime-host DIRECTORY GUARD [--session] [--resume] [--suggest ENGINE]`. The runtime listens on
+  // The child half: argv is `--runtime-host DIRECTORY GUARD [--session] [--resume] [--suggest ENGINE]
+  // [--clipboard-write POLICY]`. The runtime listens on
   // DIRECTORY/runtime.sock and, with --session, keeps its session in DIRECTORY/session.ckpt. GUARD is
   // the read end of a pipe whose write end only the test holds: when the test ends, however it ends,
   // the pipe reads end of file and the runtime stops as on SIGTERM, so no runtime outlives its test,
@@ -48,6 +50,7 @@ namespace {
     bool resume = false;
     bool data = false;
     std::string_view engine;
+    std::string_view clipboard_write = "allow";
 
     for (int index = 4; index < argc; ++index) {
       const std::string_view flag{argv[index]};
@@ -57,6 +60,10 @@ namespace {
       data |= flag == "--data";
       if (flag == "--suggest" && index + 1 < argc) {
         engine = argv[++index];
+      }
+
+      if (flag == "--clipboard-write" && index + 1 < argc) {
+        clipboard_write = argv[++index];
       }
     }
 
@@ -93,12 +100,15 @@ namespace {
     poller.watchSignal(SIGTERM);
     poller.watchSignal(SIGINT);
     poller.watchSignal(SIGCHLD);
-    const RuntimeOptions options{
+    RuntimeOptions options{
         .socket = socket,
         .cli_executable = cli.view(),
         .session = {.path = session_path, .resume_agents = resume},
         .data_home = data_home,
     };
+
+    options.control_policy.clipboard_write = clipboard_write == "deny" ? control::Access::deny : clipboard_write == "ask" ? control::Access::ask
+                                                                                                                          : control::Access::allow;
 
     Runtime runtime{memory, poller, background, options};
 
@@ -122,6 +132,8 @@ export {
     std::string suggestion_engine;
     // Gives the runtime a data directory of its own, `data` under the host's, as a server has.
     bool data_home = false;
+    // What the runtime lets programs do to the clipboard: allow, ask or deny.
+    std::string clipboard_write = "allow";
   };
 
   class RuntimeHost {
@@ -184,6 +196,8 @@ export {
         arguments.push_back("--resume");
       }
 
+      arguments.push_back("--clipboard-write");
+      arguments.push_back(options_.clipboard_write.c_str());
       if (!options_.suggestion_engine.empty()) {
         arguments.push_back("--suggest");
         arguments.push_back(options_.suggestion_engine.c_str());

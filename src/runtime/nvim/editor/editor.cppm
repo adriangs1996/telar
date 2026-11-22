@@ -132,7 +132,8 @@ export {
       [[nodiscard]] std::span<const std::uint8_t> pending() const noexcept;
       void written(std::size_t count) noexcept;
 
-      // Keys in Neovim's notation, as nvim_input() takes them. False when they do not fit.
+      // Keys in Neovim's notation, as nvim_input() takes them. Neovim takes what its input has
+      // room for, and the rest goes again, in order. False when they do not fit.
       bool input(std::string_view keys);
       bool paste(std::string_view text);
       // A mouse event on a cell of a grid, as a client sent it.
@@ -148,7 +149,8 @@ export {
       bool navigate(PaneDirection direction);
       // Selects an item of the completion menu, and takes it when `accept`.
       bool selectMenu(std::uint32_t item, bool accept);
-      // Asks for the listed buffers, which arrive as `buffers()` with this token.
+      // Asks for the listed buffers, which arrive as `buffers()` with this token. A list asked
+      // for before is dropped when it arrives.
       bool listBuffers(std::uint64_t token);
       // Shows a file in a float that takes no focus over `area`; without an area, closes it.
       bool preview(const NvimPlace& place, NvimArea area);
@@ -178,6 +180,12 @@ export {
       bool handle(std::span<const std::uint8_t> message);
       bool notified(msgpack::Reader& reader, std::span<const std::uint8_t> message);
       bool answered(msgpack::Reader& reader, std::span<const std::uint8_t> message);
+      // Sends the typed keys Neovim has not taken.
+      bool sendTyped();
+      // Neovim's answer to the keys under way: how many of their bytes it took.
+      void took(bool refused, msgpack::Reader& reader);
+      // A flush ended: what waited for Neovim to read some of its input goes again.
+      void drew();
       bool identified(std::span<const std::uint8_t> result);
       bool prompted(std::span<const std::uint8_t> parameters);
       // What telar's own side of the conversation in Neovim says, by the notification's name.
@@ -211,10 +219,24 @@ export {
       ds::Option<TerminalTheme> theme_;
       ds::String<ConcurrentMemory> clipboard_;
       ds::String<ConcurrentMemory> link_;
-      // Whether the person did something since the last link: one link opens for each thing
-      // they do, so nothing in the editor opens links by itself, or many at once.
+      // Whether the person did something that may open a link: one link opens for each thing
+      // they do, so nothing in the editor opens links by itself, or many at once. It holds from
+      // the keys or the click until the first flush after Neovim took them, which is drawn once
+      // it ran what they map to.
       bool asked_ = false;
+      // The click under way, until Neovim answered it; zero for none.
+      std::uint32_t click_request_ = 0;
+      // Keys typed and not yet taken. Neovim's input takes what it has room for, so one call
+      // carries them at a time and what it left goes again, ahead of what was typed since.
+      ByteQueue<ConcurrentMemory> typed_;
+      // The nvim_input under way and how many bytes of `typed_` it carries; zero for none.
+      std::uint32_t input_request_ = 0;
+      std::size_t input_sent_ = 0;
+      // Neovim took none of the last keys: they go again once it drew, having read its input.
+      bool input_stalled_ = false;
       NvimBufferList buffers_;
+      // The token of the last list asked for.
+      std::uint64_t buffers_asked_ = 0;
       std::uint64_t channel_ = 0;
       // The first request asks what Neovim this is.
       std::uint32_t identify_request_ = 1;

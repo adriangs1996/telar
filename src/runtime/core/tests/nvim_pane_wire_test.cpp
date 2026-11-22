@@ -218,13 +218,17 @@ namespace {
         std::uint64_t token = 0;
 
         static_cast<void>(reader.unsignedInteger(token));
-        tell("telar_buffers", 2, [&](msgpack::Writer& writer) {
-          writer.unsignedInteger(token);
-          writer.array(3);
-          writer.string("docs/editor.md");
-          writer.string("src/main.cpp");
-          writer.string("README.md");
-        });
+        // The list asked as token 30 is answered late, after the next one is asked, as a
+        // Neovim busy when it was asked would.
+        if (token == late_buffers) {
+          held_ = token;
+          return;
+        }
+
+        listBuffers(token);
+        if (held_ != 0) {
+          listBuffers(std::exchange(held_, 0));
+        }
       } else if (source.contains("vim.cmd.drop")) {
         std::uint64_t line = 0;
         const auto path = std::string{reader.string().valueOr("")};
@@ -232,6 +236,16 @@ namespace {
         static_cast<void>(reader.unsignedInteger(line));
         draw("opened " + path + ":" + std::to_string(line), false);
       }
+    }
+
+    static void listBuffers(std::uint64_t token) {
+      tell("telar_buffers", 2, [&](msgpack::Writer& writer) {
+        writer.unsignedInteger(token);
+        writer.array(3);
+        writer.string("docs/editor.md");
+        writer.string("src/main.cpp");
+        writer.string("README.md");
+      });
     }
 
     template <typename Result>
@@ -321,7 +335,9 @@ namespace {
 
     std::uint64_t columns_ = 0;
     std::uint64_t rows_ = 0;
+    static constexpr std::uint64_t late_buffers = 30;
     std::uint64_t themes_ = 0;
+    std::uint64_t held_ = 0;
     std::string typed_;
   };
 
@@ -648,6 +664,45 @@ namespace {
     editor.until(peer, "picked 2");
   }
 
+  // A query asked while an older one waits for Neovim's answer is answered, whatever order the
+  // answers come in.
+  void testNewestBuffersQueryIsAnswered() {
+    EditorHost editor_host;
+    ProtocolPeer peer{editor_host.host->socket()};
+    const auto terminal = openTerminal(peer);
+    auto editor = openEditor(peer, terminal);
+
+    editor.until(peer, "ready");
+    peer.deadline(std::chrono::seconds{10});
+    peer.send(NvimBuffers{.request_id = 30, .pane_id = editor.pane, .query = "read", .limit = 10});
+    peer.send(NvimBuffers{.request_id = 31, .pane_id = editor.pane, .query = "main", .limit = 10});
+
+    // The stand-in answers the first after the second was asked.
+    const auto found = peer.receive<PathResults>();
+
+    check(found.request_id == 31 && found.matches.size() == 1 && found.matches[0].path == "src/main.cpp", "the newest query gets its answer, and the older one none");
+  }
+
+  // A yank reaches the clipboard where the user types only when programs may write it: `ask`
+  // keeps it from there, as a terminal's program is kept while no client can ask.
+  void testYankFollowsTheClipboardPolicy() {
+    for (const std::string_view policy : {"ask", "deny"}) {
+      EditorHost editor_host{true, {.clipboard_write = std::string{policy}}};
+      ProtocolPeer peer{editor_host.host->socket()};
+      const auto terminal = openTerminal(peer);
+      auto editor = openEditor(peer, terminal);
+
+      editor.until(peer, "ready");
+      peer.deadline(std::chrono::seconds{10});
+      peer.send(NvimInput{.pane_id = editor.pane, .keys = bytes("<F6>")});
+      peer.send(NvimInput{.pane_id = editor.pane, .keys = bytes("<F7>")});
+
+      const auto first = peer.receiveAny<PaneClipboard, NvimPick>();
+
+      check(std::holds_alternative<NvimPick>(first), "what was yanked stays off the client's clipboard");
+    }
+  }
+
   // The editor's colorscheme is the theme of the client that owns its workspace, when it
   // attaches and whenever that client changes it.
   void testEditorTakesTheWindowsTheme() {
@@ -736,8 +791,16 @@ namespace {
 
   // A runtime that keeps its session starts the editor again when it restarts, as the pane it
   // was, and a client that attaches is sent its screen.
+  // On telar's own configuration it comes back keeping its files under the same name.
   void testEditorReturnsWithTheSession() {
-    EditorHost editor_host{true, {.session = true}};
+    runtime::TemporaryDirectory home{"/tmp/telar-nvim-home-XXXXXX"};
+    const std::string root{home.path()};
+
+    ::setenv("HOME", root.c_str(), 1);
+    ::unsetenv("XDG_CONFIG_HOME");
+    ::unsetenv("NVIM_APPNAME");
+    ::unsetenv("TELAR_NVIM");
+    EditorHost editor_host{true, {.session = true, .data_home = true}};
     std::uint64_t pane = 0;
 
     {
@@ -746,6 +809,8 @@ namespace {
       auto editor = openEditor(peer, terminal);
 
       editor.until(peer, "ready");
+      peer.send(NvimInput{.pane_id = editor.pane, .keys = bytes("<F9>")});
+      editor.until(peer, "telar's as telar-nvim");
       pane = editor.pane;
     }
 
@@ -764,6 +829,8 @@ namespace {
     Editor restored{.pane = pane};
 
     restored.until(peer, "ready");
+    peer.send(NvimInput{.pane_id = pane, .keys = bytes("<F9>")});
+    restored.until(peer, "telar's as telar-nvim");
   }
 
   void testClosingEndsTheEditor() {
@@ -811,6 +878,8 @@ namespace {
   const telar::testing::Case case_text{"nvim_pane_wire.editor_text_is_read", testEditorTextIsRead};
   const telar::testing::Case case_configuration{"nvim_pane_wire.host_without_configuration_gets_telars", testHostWithoutConfigurationGetsTelars};
   const telar::testing::Case case_tells{"nvim_pane_wire.editor_tells_its_client", testEditorTellsItsClient};
+  const telar::testing::Case case_newest{"nvim_pane_wire.newest_buffers_query_is_answered", testNewestBuffersQueryIsAnswered};
+  const telar::testing::Case case_policy{"nvim_pane_wire.yank_follows_the_clipboard_policy", testYankFollowsTheClipboardPolicy};
   const telar::testing::Case case_theme{"nvim_pane_wire.editor_takes_the_windows_theme", testEditorTakesTheWindowsTheme};
   const telar::testing::Case case_session{"nvim_pane_wire.editor_returns_with_the_session", testEditorReturnsWithTheSession};
   const telar::testing::Case case_close{"nvim_pane_wire.closing_ends_the_editor", testClosingEndsTheEditor};

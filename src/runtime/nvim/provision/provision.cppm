@@ -3,6 +3,7 @@ export module telar.runtime.nvim.provision;
 import std;
 import telar.base.ds;
 import telar.base.memory.allocators;
+import telar.wire.vocabulary;
 
 export namespace telar::runtime {
 
@@ -51,5 +52,10 @@ export namespace telar::runtime {
     ds::String<ConcurrentMemory> program_;
     ds::String<ConcurrentMemory> init_;
   };
+
+  // The environment of a Neovim an editor pane starts with `arguments`, as the runtime builds
+  // them or as a session saved them: on telar's own configuration, which only the runtime names
+  // with -u, it keeps its files under NvimProvision::own_name.
+  [[nodiscard]] std::span<const EnvironmentEntry> nvimEnvironment(std::span<const std::string_view> arguments) noexcept;
 
 }

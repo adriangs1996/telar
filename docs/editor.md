@@ -121,12 +121,14 @@ by it again. `vim.g.telar_tint` takes the options of the theme's engine, such as
 ## The clipboard, the focus and the directory
 
 - The registers `+` and `*` are the clipboard of the machine you type on, wherever Neovim
-  runs: what is yanked to them is copied there, unless the runtime's `clipboard_write` policy
-  is `deny`. Pasting the clipboard with the window's own shortcut reaches Neovim as one change.
+  runs: what is yanked to them is copied there while the runtime's `clipboard_write` policy is
+  `allow`, as it is unless configured. With `ask` or `deny` nothing is copied, as for a
+  terminal's program. Pasting the clipboard with the window's own shortcut reaches Neovim as
+  one change.
   `"+p` puts back the last text yanked in the editor; it does not read the clipboard.
 - A link of the web or of mail opens on the machine you type on, wherever Neovim runs: `gx`,
   Command and a click, and anything a plugin opens with `vim.ui.open`. One link opens for each
-  thing you do, so nothing in the editor opens links by itself. A file opens on the host, as
+  thing you do, while Neovim does it, so nothing in the editor opens links by itself. A file opens on the host, as
   `vim.ui.open` always did. Text whose highlight names a URL, as a link of a Markdown file
   does, is underlined, and the pointer over it is the one of a link.
 - Moving the focus to a side with `navigate_pane` asks the editor first for a window on that

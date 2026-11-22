@@ -1084,9 +1084,7 @@ namespace telar::runtime {
       arguments.atMut(count++) = file;
     }
 
-    // Its plugins and its state are kept apart from the user's own Neovim, and from telar's files.
-    const ds::Array<EnvironmentEntry, 1> own{EnvironmentEntry{.name = "NVIM_APPNAME", .value = NvimProvision::own_name}};
-    const Launch launch{.cwd = request.cwd, .arguments = arguments.view().first(count), .environment = provision.ownInit().empty() ? std::span<const EnvironmentEntry>{} : std::span<const EnvironmentEntry>{own.view()}};
+    const Launch launch{.cwd = request.cwd, .arguments = arguments.view().first(count)};
 
     if (request.new_tab) {
       createTab(model, panes, clients, Asked{.client_id = client_id, .kind = PaneKind::nvim}, CreateTab{.request_id = request.request_id, .workspace = request.location.workspace, .size = request.size, .launch = launch});
@@ -2675,9 +2673,10 @@ namespace telar::runtime {
       return;
     }
 
-    // What is yanked to a clipboard register is copied where the user types, as a selection
-    // of a terminal is, unless the runtime's policy keeps programs from the clipboard.
-    if (pulse.copied && panes_.controlPolicy().clipboard_write != control::Access::deny) {
+    // What is yanked to a clipboard register is copied where the user types when the runtime's
+    // policy lets programs write the clipboard. What runs in Neovim may yank without the person,
+    // so `ask` holds it back as it holds back a terminal's program while no client can ask.
+    if (pulse.copied && panes_.controlPolicy().clipboard_write == control::Access::allow) {
       driver->clipboard.replace(pane.core.id, byteView(pane.body.editor.clipboard()));
     }
 
@@ -2698,8 +2697,13 @@ namespace telar::runtime {
     requires BackgroundExecutor<Background, ConcurrentMemory>
   void Runtime<Poller, Background>::answerBuffers(PaneRef<NvimBody> pane) {
     const auto& listed = pane.body.editor.buffers();
+    // An answer to a query asked before the one waiting leaves that one waiting for its own.
+    if (!pane.body.buffer_query || pane.body.buffer_query->request_id != listed.token) {
+      return;
+    }
+
     const auto query = std::exchange(pane.body.buffer_query, ds::none);
-    auto* client = query && query->request_id == listed.token ? clients_.find(query->client) : nullptr;
+    auto* client = clients_.find(query->client);
     if (client == nullptr || pane.core.cwd.view().empty()) {
       return;
     }

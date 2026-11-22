@@ -97,7 +97,11 @@ command -v tar >/dev/null 2>&1 || {
 }
 
 work=$(mktemp -d "${TMPDIR:-/tmp}/telar-nvim.XXXXXX")
-trap 'rm -rf "$work"' EXIT HUP INT TERM
+lock=$target.lock
+held=
+incoming=
+trap 'rm -rf "$work" ${incoming:+"$incoming"}; [ -z "$held" ] || rmdir "$lock" 2>/dev/null' EXIT
+trap 'exit 1' HUP INT TERM
 
 # An archive already on the host, for one without a network: it must be the same bytes.
 archive=${TELAR_NVIM_ARCHIVE:-}
@@ -134,9 +138,31 @@ if [ ! -x "$work/unpacked/$name/bin/nvim" ]; then
     exit 1
 fi
 
+# One install at a time puts the version in place; another that ran beside it finds it there.
+# The lock is held only to move it, so one older than a minute was left by an install that
+# was killed.
+waited=0
+until mkdir "$lock" 2>/dev/null; do
+    waited=$((waited + 1))
+    if [ "$waited" -gt 60 ]; then
+        echo "telar integration: $lock is held; remove it if no install of the editor is running" >&2
+        exit 1
+    fi
+    sleep 1
+done
+held=1
+
+if [ -x "$target/bin/nvim" ]; then
+    echo "editor: already present at $target/bin/nvim"
+    needs
+    exit 0
+fi
+
 # Unpacked beside its place and then moved there, so a run cut short leaves no half of it.
-rm -rf "$target.incoming" "$target"
-mv "$work/unpacked/$name" "$target.incoming"
-mv "$target.incoming" "$target"
+incoming=$(mktemp -d "$target.incoming.XXXXXX")
+mv "$work/unpacked/$name" "$incoming/$name"
+rm -rf "$target"
+mv "$incoming/$name" "$target"
+rmdir "$incoming"
 echo "editor: installed at $target/bin/nvim"
 needs

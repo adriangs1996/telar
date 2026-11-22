@@ -146,4 +146,14 @@ namespace telar::runtime {
     return init_.view();
   }
 
+  std::span<const EnvironmentEntry> nvimEnvironment(std::span<const std::string_view> arguments) noexcept {
+    static constexpr ds::Array<EnvironmentEntry, 1> own{EnvironmentEntry{.name = "NVIM_APPNAME", .value = NvimProvision::own_name}};
+
+    if (!std::ranges::contains(arguments, std::string_view{"-u"})) {
+      return {};
+    }
+
+    return own.view();
+  }
+
 }

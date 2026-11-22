@@ -221,6 +221,40 @@ namespace {
       });
     }
 
+    // Neovim's answer to the request `id`: `taken` bytes of the keys it was given.
+    bool answer(NvimEditor& editor, std::uint64_t id, std::uint64_t taken) {
+      return feed(editor, [&](msgpack::Writer& writer) {
+        writer.array(4);
+        writer.unsignedInteger(1);
+        writer.unsignedInteger(id);
+        writer.nil();
+        writer.unsignedInteger(taken);
+      });
+    }
+
+    // A redraw that only ends a frame.
+    bool flush(NvimEditor& editor) {
+      return tell(editor, "redraw", 1, [](msgpack::Writer& writer) {
+        writer.array(2);
+        writer.string("flush");
+        writer.array(0);
+      });
+    }
+
+    // The keys of each nvim_input the editor wrote for Neovim.
+    std::vector<std::pair<std::uint64_t, std::string>> typed(NvimEditor& editor) {
+      std::vector<std::pair<std::uint64_t, std::string>> keys;
+
+      for (const auto& call : drain(editor)) {
+        msgpack::Reader reader{call.parameters};
+
+        check(call.method == "nvim_input" && reader.tuple(1));
+        keys.emplace_back(call.id, std::string{reader.string().valueOr("")});
+      }
+
+      return keys;
+    }
+
     TerminalTheme sampleTheme() {
       TerminalTheme theme;
 
@@ -273,6 +307,13 @@ namespace {
       attach(editor);
       drain(editor);
       static_cast<void>(editor.takePulse());
+      check(editor.listBuffers(6) && editor.listBuffers(7));
+      check(tell(editor, "telar_buffers", 2, [](msgpack::Writer& writer) {
+        writer.unsignedInteger(6);
+        writer.array(1);
+        writer.string("src/old.cpp");
+      }));
+      check(!editor.takePulse().listed, "a list asked for before the last one is dropped");
       check(tell(editor, "telar_clipboard", 1, [](msgpack::Writer& writer) {
         writer.string("two\nlines");
       }));
@@ -349,6 +390,69 @@ namespace {
       check(!open("https://example.com/again"), "one link for each thing the person does");
     }
 
+    // Neovim's input takes what it has room for and says how much: the rest goes again, ahead of
+    // what was typed since, and nothing is lost or typed twice.
+    void keysNeovimLeavesGoAgain() {
+      testing::TestMemory adapter;
+      ConcurrentMemory& memory = adapter;
+      NvimEditor editor{memory, {.columns = 80, .rows = 24}, {}};
+
+      attach(editor);
+      drain(editor);
+      check(editor.input("abc<Esc>") && editor.input("gh"));
+
+      auto sent = typed(editor);
+
+      check(sent.size() == 1 && sent[0].second == "abc<Esc>", "one call carries keys at a time");
+      check(answer(editor, sent[0].first, 3));
+      sent = typed(editor);
+      check(sent.size() == 1 && sent[0].second == "<Esc>gh", "what Neovim left goes again first, then what was typed since");
+      check(answer(editor, sent[0].first, 0) && typed(editor).empty(), "nothing goes while its input has no room");
+      check(editor.input("i") && typed(editor).empty(), "a key typed meanwhile waits behind them");
+      check(flush(editor));
+      sent = typed(editor);
+      check(sent.size() == 1 && sent[0].second == "<Esc>ghi", "once it drew, having read its input, they go again");
+      check(answer(editor, sent[0].first, 8) && typed(editor).empty() && editor.input("j"), "all taken, the next keys go at once");
+      check(typed(editor).size() == 1 && !editor.input(std::string(NvimEditor::input_limit, 'x')), "keys past what may wait are refused whole");
+    }
+
+    // A link opens for what the person did: from the keys or the click until Neovim drew what
+    // they did, and not from a plugin afterwards.
+    void linkIsTheGesturesOnly() {
+      testing::TestMemory adapter;
+      ConcurrentMemory& memory = adapter;
+      NvimEditor editor{memory, {.columns = 80, .rows = 24}, {}};
+
+      attach(editor);
+      drain(editor);
+      static_cast<void>(editor.takePulse());
+
+      const auto open = [&](std::string_view uri) {
+        check(tell(editor, "telar_open", 1, [&](msgpack::Writer& writer) {
+          writer.string(uri);
+        }));
+        return editor.takePulse().opened;
+      };
+
+      check(editor.input("gx"));
+      auto sent = typed(editor);
+
+      check(flush(editor) && answer(editor, sent[0].first, 2), "a frame drawn before Neovim took the keys leaves them the person's");
+      check(open("https://example.com/docs"), "what the keys open before Neovim drew what they did");
+      check(editor.input("a"));
+      sent = typed(editor);
+      check(answer(editor, sent[0].first, 1) && flush(editor));
+      check(!open("https://example.com/later"), "a link opened after the frame that answered the keys is no one's");
+
+      check(editor.mouse({.grid = 1, .row = 2, .column = 3, .button = NvimMouseButton::left, .action = NvimMouseAction::press, .modifiers = nvim_mouse_command}));
+      const auto clicked = drain(editor);
+
+      check(clicked.size() == 1 && clicked[0].method == "nvim_input_mouse" && flush(editor) && answer(editor, clicked[0].id, 0));
+      check(open("https://example.com/clicked"), "what a click opens");
+      check(editor.mouse({.grid = 1, .row = 2, .column = 3, .button = NvimMouseButton::left, .action = NvimMouseAction::release}));
+      check(answer(editor, drain(editor).front().id, 0) && flush(editor) && !open("https://example.com/late"), "and not once Neovim drew what it did");
+    }
+
     // What the runtime asks of Neovim for a client: a side to move to, an item of the menu,
     // the buffers, a preview and a list of places.
     void clientsAskThroughTheRuntime() {
@@ -405,6 +509,8 @@ namespace {
   const telar::testing::Case case_open{"nvim_editor.opens_a_file_where_asked", opensAFileWhereAsked};
   const telar::testing::Case case_theme{"nvim_editor.theme_is_the_colorscheme", themeIsTheColorscheme};
   const telar::testing::Case case_told{"nvim_editor.neovim_tells_the_runtime", neovimTellsTheRuntime};
+  const telar::testing::Case case_keys{"nvim_editor.keys_neovim_leaves_go_again", keysNeovimLeavesGoAgain};
+  const telar::testing::Case case_link{"nvim_editor.link_is_the_gestures_only", linkIsTheGesturesOnly};
   const telar::testing::Case case_asks{"nvim_editor.clients_ask_through_the_runtime", clientsAskThroughTheRuntime};
   const telar::testing::Case case_bootstrap{"nvim_editor.refused_bootstrap_fails_the_editor", refusedBootstrapFailsTheEditor};
 

@@ -285,6 +285,7 @@ end
         prompt_(memory),
         clipboard_(memory),
         link_(memory),
+        typed_(memory, input_limit),
         buffers_(memory) {
     request(output_, {.id = identify_request_, .method = "nvim_get_api_info"}, [](msgpack::Writer&) {});
   }
@@ -372,6 +373,7 @@ end
     pulse_.bell = pulse_.bell || outcome.bell;
     if (outcome.flushes != 0) {
       frameFloats();
+      drew();
     }
 
     return true;
@@ -504,7 +506,8 @@ end
     std::uint64_t token = 0;
     std::uint32_t count = 0;
 
-    if (!reader.tuple(2) || !reader.unsignedInteger(token) || !reader.array(count)) {
+    // A list asked before the last one is not what anyone waits for: it would take its place.
+    if (!reader.tuple(2) || !reader.unsignedInteger(token) || token != buffers_asked_ || !reader.array(count)) {
       return;
     }
 
@@ -556,6 +559,16 @@ end
     const auto error = reader.value();
     if (!error) {
       return fail("Neovim wrote a response without a result");
+    }
+
+    if (id == input_request_ && id != 0) {
+      took(error->kind != msgpack::Kind::nil, reader);
+      return true;
+    }
+
+    if (id == click_request_ && id != 0) {
+      click_request_ = 0;
+      return true;
     }
 
     // Without telar's side of the conversation the editor would attach half taught.
@@ -788,11 +801,17 @@ end
       return false;
     }
 
-    return request(output_, {.id = next_request_++, .method = "nvim_exec_lua", .parameters = 2, .room = room}, [&](msgpack::Writer& writer) {
+    const bool queued = request(output_, {.id = next_request_++, .method = "nvim_exec_lua", .parameters = 2, .room = room}, [&](msgpack::Writer& writer) {
       writer.string(script);
       writer.array(1);
       writer.unsignedInteger(token);
     });
+
+    if (queued) {
+      buffers_asked_ = token;
+    }
+
+    return queued;
   }
 
   bool NvimEditor::preview(const NvimPlace& place, NvimArea area) {
@@ -969,14 +988,67 @@ end
 
   bool NvimEditor::input(std::string_view keys) {
     // Keys typed before Neovim attached wait in its input, as typeahead does.
-    if (state_ == NvimState::failed || keys.empty() || keys.size() > input_limit) {
+    if (state_ == NvimState::failed || keys.empty() || typed_.size() + keys.size() > input_limit) {
       return false;
     }
 
-    asked_ = true;
-    return request(output_, {.id = next_request_++, .method = "nvim_input", .parameters = 1, .room = keys.size()}, [&](msgpack::Writer& writer) {
+    const auto before = typed_.size();
+
+    typed_.append(byteView(keys));
+    // Behind keys under way, or that wait for Neovim to read its input, these wait too.
+    if (input_request_ != 0 || input_stalled_ || sendTyped()) {
+      asked_ = true;
+      return true;
+    }
+
+    typed_.truncate(before);
+    return false;
+  }
+
+  bool NvimEditor::sendTyped() {
+    const auto keys = textView(typed_.readable());
+    const auto id = next_request_++;
+    const bool queued = request(output_, {.id = id, .method = "nvim_input", .parameters = 1, .room = keys.size()}, [&](msgpack::Writer& writer) {
       writer.string(keys);
     });
+
+    if (queued) {
+      input_request_ = id;
+      input_sent_ = keys.size();
+      input_stalled_ = false;
+    }
+
+    return queued;
+  }
+
+  void NvimEditor::took(bool refused, msgpack::Reader& reader) {
+    std::uint64_t taken = 0;
+
+    // What Neovim refused would be refused again: it is dropped, as an answer that does not say
+    // how much it took.
+    if (refused || !reader.unsignedInteger(taken) || taken > input_sent_) {
+      taken = input_sent_;
+    }
+
+    typed_.consume(static_cast<std::size_t>(taken));
+    input_request_ = 0;
+    input_sent_ = 0;
+    if (!typed_.empty()) {
+      // Room for some is room for more: the rest goes at once. Room for none waits for a flush.
+      input_stalled_ = taken == 0 || !sendTyped();
+    }
+  }
+
+  void NvimEditor::drew() {
+    if (input_stalled_) {
+      static_cast<void>(sendTyped());
+    }
+
+    // Neovim answered the keys or the click and drew what they did: a link it opens from now on
+    // is not the person's.
+    if (input_request_ == 0 && click_request_ == 0 && typed_.empty()) {
+      asked_ = false;
+    }
   }
 
   bool NvimEditor::paste(std::string_view text) {
@@ -1024,8 +1096,6 @@ end
       return false;
     }
 
-    asked_ = true;
-
     ds::Array<char, 4> modifiers{};
     std::size_t count = 0;
 
@@ -1035,7 +1105,8 @@ end
       }
     }
 
-    return request(output_, {.id = next_request_++, .method = "nvim_input_mouse", .parameters = parameter_count, .room = room}, [&](msgpack::Writer& writer) {
+    const auto id = next_request_++;
+    const bool queued = request(output_, {.id = id, .method = "nvim_input_mouse", .parameters = parameter_count, .room = room}, [&](msgpack::Writer& writer) {
       writer.string(buttonName(event.button));
       writer.string(actionName(event.action));
       writer.string(std::string_view{modifiers.view()}.substr(0, count));
@@ -1043,6 +1114,13 @@ end
       writer.unsignedInteger(event.row);
       writer.unsignedInteger(event.column);
     });
+
+    if (queued) {
+      asked_ = true;
+      click_request_ = id;
+    }
+
+    return queued;
   }
 
   void NvimEditor::resize(NvimSize size) {

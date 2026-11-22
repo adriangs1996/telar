@@ -43,6 +43,7 @@ import telar.runtime.diagnostics.runtime_counters;
 import telar.runtime.history.event;
 import telar.runtime.core.model.slot_store;
 import telar.runtime.nvim.editor;
+import telar.runtime.nvim.provision;
 import telar.base.ds;
 
 // Interface: runtime/limit_service.cppm
@@ -300,7 +301,15 @@ export {
       // only UI of. Its output, its errors and its input are three descriptors of one pane.
       inline tbc::val_a<PaneRef<NvimBody>> launchEditor(tbc::mut_a<RuntimeModel> model, const PanePlacement& placement, const Launch& launch, std::uint64_t restored_identity = 0) {
         const auto identity = allocateIdentity(model, restored_identity);
-        Command command{memory_, launch, CommandPurpose::configured_helper};
+        // Its plugins and its state are kept apart from the user's own Neovim, and from telar's
+        // files, whether it starts now or comes back with a session.
+        Launch started = launch;
+
+        if (started.environment.empty()) {
+          started.environment = nvimEnvironment(launch.arguments);
+        }
+
+        Command command{memory_, started, CommandPurpose::configured_helper};
 
         identify(command, model, placement, identity);
         proxy_.apply(command);
