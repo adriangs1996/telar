@@ -8,9 +8,11 @@ license is in `JetBrainsMono-OFL.txt`.
 
 `TelarForma-Regular.ttf` is the GUI's default terminal face, Telar Forma Regular,
 version 0.106. Its SHA-256 is
-`9324d4cd24202cd135b2a5c11b2fed4884fa36f7476389b95c80b695ef711bbe`.
+`d459bdd9aa152480f7bdb66a97945f08df9ddf186c691f8b1c94fe7549a81567`.
 It uses the approved 50/50 design with a slashed zero and the `1`, `f`, `w`,
-`t`, `o` and `y` drawings retained from version 0.103.
+`t`, `o` and `y` drawings retained from version 0.103. Its `l` is JetBrains
+Mono's, scaled by 710/730 and centred in the 575-unit cell, the ratio at which
+Telar Forma draws JetBrains Mono's stems and ascenders.
 Selecting `client.gui.font.family = "Telar Forma"` loads the embedded file,
 without requiring a system installation. Only `Regular` is available;
 bold and italic terminal attributes use the existing synthesized styles.
