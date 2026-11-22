@@ -159,8 +159,8 @@ export namespace telar {
   using telar::PaneTarget;
   using telar::PaneTextMode;
   using telar::PaneTextSource;
-  using telar::PathKind;
   using telar::PathChange;
+  using telar::PathKind;
   using telar::PathKindFilter;
   using telar::PathMatch;
   using telar::PercentSentinel;
