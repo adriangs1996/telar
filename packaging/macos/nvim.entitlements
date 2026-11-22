@@ -6,5 +6,11 @@
          runtime kills it at the first line of Lua. -->
     <key>com.apple.security.cs.allow-unsigned-executable-memory</key>
     <true/>
+    <!-- Neovim loads parsers that are not this team's: the ones a configuration builds on the
+         machine, as telar's own does, are signed by whoever compiled them. Without this the
+         hardened runtime refuses every one of them, the ones it ships with among them when
+         the signature is ad hoc. -->
+    <key>com.apple.security.cs.disable-library-validation</key>
+    <true/>
 </dict>
 </plist>
