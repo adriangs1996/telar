@@ -189,12 +189,20 @@ jobs:
   # search and the links, which no other job opens a window for. The link tests need a build
   # with a link host of its own, so this one has the recording host of the tests.
   window:
-    runs-on: macos-26
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-26, ubuntu-24.04]
+    runs-on: ${{ matrix.os }}
     timeout-minutes: 90
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+
+      - name: Install Linux desktop SDK
+        if: runner.os == 'Linux'
+        run: sudo packaging/release/install-linux-deps.sh
 
       - id: cpp
         uses: ./.github/actions/cpp-toolchain
@@ -205,7 +213,7 @@ jobs:
         id: toolchain
         shell: bash
         run: |
-          { "$CXX" --version; cmake --version; uname -m; xcrun --show-sdk-path; } > "$RUNNER_TEMP/qt-toolchain"
+          { "$CXX" --version; cmake --version; uname -m; if [[ "$RUNNER_OS" == macOS ]]; then xcrun --show-sdk-path; fi; } > "$RUNNER_TEMP/qt-toolchain"
           echo "key=$(python3 -c 'import hashlib,sys; print(hashlib.sha256(open(sys.argv[1],"rb").read()).hexdigest())' "$RUNNER_TEMP/qt-toolchain")" >> "$GITHUB_OUTPUT"
 
       # The Qt the Debug job of the matrix built and saved: restored, never saved from here.
@@ -220,10 +228,12 @@ jobs:
         run: |
           echo "GHOSTTY_VT_ROOT=$(tools/cpp vt | tail -n 1)" >> "$GITHUB_ENV"
 
+      # The link tests record what the window would open, through a host of their own; they run
+      # on macOS, where the window opens links through the system.
       - name: Configure the window, the runtime and the recording link host
         run: |
           tools/cpp configure ci -- -DCMAKE_BUILD_TYPE=Debug -DTELAR_BUILD_AUTH=OFF -DTELAR_GUI_QT_JOBS=3 \
-            -DTELAR_GUI_LINK_HOST_HEADER="$PWD/src/gui/tests/fixtures/recording_link_host.hpp"
+            ${{ runner.os == 'macOS' && '-DTELAR_GUI_LINK_HOST_HEADER="$PWD/src/gui/tests/fixtures/recording_link_host.hpp"' || '' }}
 
       - name: Build the window test and the runtime
         run: tools/cpp build ci -- --parallel 3 --target gui-quick-test telar telar-runtime
@@ -240,11 +250,13 @@ jobs:
           TELAR_GUI_TEST_RUNTIME="$PWD/../runtime/telar" PATH="$PWD/../runtime:$PATH" \
             QT_QUICK_BACKEND=software QT_QPA_PLATFORM=offscreen ./gui-quick-test \
             editorPaneDrawsNeovim pathPickerBrowsesAndInsertsWithoutExecuting pathPickerQueryLimitPreservesCompleteUtf8 \
-            detectedLinkHoverAndCopy pointerLinkOpening pointerLinkRevalidation textualAndRoutedLinks
+            ${{ runner.os == 'macOS' && 'detectedLinkHoverAndCopy pointerLinkOpening pointerLinkRevalidation textualAndRoutedLinks' || '' }}
 
       # Each surface of the editor pane against the picture kept of it, with both presets: a
-      # change of how one looks fails here until its picture is taken again.
+      # change of how one looks fails here until its picture is taken again. The pictures are of
+      # macOS's fonts.
       - name: Compare the editor's surfaces with their reference pictures
+        if: runner.os == 'macOS'
         working-directory: out/ci/src/gui
         run: |
           for preset in zenburn vesper; do
