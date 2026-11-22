@@ -45,6 +45,24 @@ export extern "C++" {
       agents = 2,
     };
 
+    // How a query orders the processes it lists: one list, each under its parent, or by the pane or
+    // agent they belong to.
+    enum class MonitorLayout : Byte {
+      flat = 0,
+      tree = 1,
+      owner = 2,
+    };
+
+    // What a process is to telar: nothing, a process of a pane, an agent, a process an agent runs,
+    // or telar's own runtime.
+    enum class ProcessOwner : Byte {
+      none = 0,
+      pane = 1,
+      agent = 2,
+      agent_child = 3,
+      telar = 4,
+    };
+
     enum class ProcessSignal : Byte {
       terminate = 0,
       kill = 1,
@@ -60,6 +78,16 @@ export extern "C++" {
       static constexpr std::size_t maximum_disks = 32;
       static constexpr std::size_t maximum_interfaces = 32;
       static constexpr std::size_t maximum_children = 256;
+      // The processes a detail names from its root down to it.
+      static constexpr std::size_t maximum_lineage = 16;
+      // The tree's branches a query folds or unfolds against the default.
+      static constexpr std::size_t maximum_toggled = 64;
+      // A group for each pane, one for telar and one for the processes of no pane.
+      static constexpr std::size_t maximum_groups = 258;
+      // A tree draws its guides for this many levels.
+      static constexpr std::size_t guide_levels = 32;
+      // A tree folds a branch with more children than this until the query unfolds it.
+      static constexpr std::size_t folded_children = 8;
       static constexpr std::size_t filter_bytes = 256;
       static constexpr std::size_t name_bytes = 32;
       static constexpr std::size_t user_bytes = 32;
@@ -94,6 +122,8 @@ export extern "C++" {
       std::int32_t pid{};
       std::uint64_t started_seconds{};
       std::uint64_t started_microseconds{};
+
+      bool operator==(const ProcessInstance&) const noexcept = default;
     };
 
     template <>
@@ -109,9 +139,15 @@ export extern "C++" {
       MonitorSort sort{};
       bool reverse{};
       MonitorScope scope{};
-      bool tree{};
+      MonitorLayout layout{};
       std::string_view filter;
+      // The rows the reply lists: `limit` of them, after the first `offset` of the listing.
+      std::uint32_t offset{};
       std::uint16_t limit{};
+      // Whether a tree folds by default the branches with more than folded_children children.
+      bool fold{};
+      // The processes whose branches the tree folds when it would not, or unfolds when it would.
+      std::span<const std::int32_t> toggled;
       // A process whose arguments, directory, ports and children the reply carries; pid 0 for none.
       ProcessInstance detail{};
     };
@@ -126,9 +162,12 @@ export extern "C++" {
               Field<&QueryMonitor::sort, EnumByte<MonitorSort, static_cast<Byte>(MonitorSort::name)>, "sort">,
               Field<&QueryMonitor::reverse, BoolByte, "reverse">,
               Field<&QueryMonitor::scope, EnumByte<MonitorScope, static_cast<Byte>(MonitorScope::agents)>, "scope">,
-              Field<&QueryMonitor::tree, BoolByte, "tree">,
+              Field<&QueryMonitor::layout, EnumByte<MonitorLayout, static_cast<Byte>(MonitorLayout::owner)>, "layout">,
               Field<&QueryMonitor::filter, DisplayText16<MonitorLimits::filter_bytes>, "filter">,
+              Field<&QueryMonitor::offset, u32, "offset">,
               Field<&QueryMonitor::limit, BoundedInteger<u16, 0, MonitorLimits::maximum_processes>, "limit">,
+              Field<&QueryMonitor::fold, BoolByte, "fold">,
+              Field<&QueryMonitor::toggled, CountedSpan<u8, BoundedInteger<i32, 1>, MonitorLimits::maximum_toggled>, "toggled">,
               Field<&QueryMonitor::detail, ValueCodec<ProcessInstance>, "detail">> {};
 
     struct MonitorDisk {
@@ -189,8 +228,18 @@ export extern "C++" {
       std::uint64_t pane_id{};
       // The agent this process is, unknown when it is none.
       AgentProvider agent{};
+      ProcessOwner owner{};
       // Its depth in a tree listing; 0 in a flat one.
       std::uint8_t depth{};
+      // In a tree: bit k says the branch at depth k + 1 on its path goes on below this row, so bit
+      // depth - 1 is whether a later sibling follows it. Levels past guide_levels have no bit.
+      std::uint32_t guides{};
+      // In a tree: its children the listing selected, and the processes of its branch it hides
+      // while folded; 0 when it is unfolded.
+      std::uint16_t children{};
+      std::uint32_t folded{};
+      // In a tree: its share of the processor with its branch's.
+      std::uint32_t branch_cpu_permille{};
     };
 
     template <>
@@ -210,7 +259,43 @@ export extern "C++" {
               Field<&MonitorProcess::nice, BoundedInteger<i32, MonitorLimits::highest_nice, MonitorLimits::lowest_nice>, "nice">,
               Field<&MonitorProcess::pane_id, u64, "pane_id">,
               Field<&MonitorProcess::agent, EnumByte<AgentProvider, max_agent_provider_index>, "agent">,
-              Field<&MonitorProcess::depth, u8, "depth">> {};
+              Field<&MonitorProcess::owner, EnumByte<ProcessOwner, static_cast<Byte>(ProcessOwner::telar)>, "owner">,
+              Field<&MonitorProcess::depth, u8, "depth">,
+              Field<&MonitorProcess::guides, u32, "guides">,
+              Field<&MonitorProcess::children, u16, "children">,
+              Field<&MonitorProcess::folded, u32, "folded">,
+              Field<&MonitorProcess::branch_cpu_permille, u32, "branch_cpu_permille">> {};
+
+    // A process a detail names beside the one it is of: an ancestor or a child.
+    struct MonitorRelative {
+      std::int32_t pid{};
+      std::string_view name;
+    };
+
+    template <>
+    struct BodySchema<MonitorRelative>
+        : Serializer<
+              Field<&MonitorRelative::pid, BoundedInteger<i32, 0>, "pid">,
+              Field<&MonitorRelative::name, DisplayText16<MonitorLimits::name_bytes>, "name">> {};
+
+    // The processes of one owner in an owner listing, in the listing's order: a pane's, telar's, or
+    // those of no pane.
+    struct MonitorGroup {
+      ProcessOwner owner{};
+      std::uint64_t pane_id{};
+      std::uint32_t processes{};
+      std::uint32_t cpu_permille{};
+      std::uint64_t resident_bytes{};
+    };
+
+    template <>
+    struct BodySchema<MonitorGroup>
+        : Serializer<
+              Field<&MonitorGroup::owner, EnumByte<ProcessOwner, static_cast<Byte>(ProcessOwner::telar)>, "owner">,
+              Field<&MonitorGroup::pane_id, u64, "pane_id">,
+              Field<&MonitorGroup::processes, u32, "processes">,
+              Field<&MonitorGroup::cpu_permille, u32, "cpu_permille">,
+              Field<&MonitorGroup::resident_bytes, u64, "resident_bytes">> {};
 
     struct MonitorDetail {
       MonitorProcess process{};
@@ -218,7 +303,10 @@ export extern "C++" {
       std::string_view arguments;
       std::string_view directory;
       std::span<const std::uint16_t> ports;
-      std::span<const std::int32_t> children;
+      std::span<const MonitorRelative> children;
+      // Its ancestors, from the root of its tree down to its parent, at most maximum_lineage of the
+      // nearest.
+      std::span<const MonitorRelative> lineage;
     };
 
     template <>
@@ -228,11 +316,14 @@ export extern "C++" {
               Field<&MonitorDetail::arguments, DisplayText16<MonitorLimits::arguments_bytes>, "arguments">,
               Field<&MonitorDetail::directory, DisplayText16<MonitorLimits::directory_bytes>, "directory">,
               Field<&MonitorDetail::ports, CountedSpan<u8, BoundedInteger<u16, 1>, max_listed_ports>, "ports">,
-              Field<&MonitorDetail::children, CountedSpan<u16, BoundedInteger<i32, 1>, MonitorLimits::maximum_children>, "children">> {};
+              Field<&MonitorDetail::children, CountedSpan<u16, ValueCodec<MonitorRelative>, MonitorLimits::maximum_children>, "children">,
+              Field<&MonitorDetail::lineage, CountedSpan<u8, ValueCodec<MonitorRelative>, MonitorLimits::maximum_lineage>, "lineage">> {};
 
     struct MonitorSnapshot {
       std::uint64_t request_id{};
       std::uint8_t sections{};
+      // Counts the readings the runtime took: two answers with the same count carry the same shares.
+      std::uint64_t sample{};
       // Of all cores together: 1000 is every core busy.
       std::uint16_t cpu_permille{};
       std::span<const std::uint16_t> cores;
@@ -243,14 +334,20 @@ export extern "C++" {
       std::uint64_t swap_total_bytes{};
       std::uint64_t swap_used_bytes{};
       std::uint32_t process_count{};
+      // Of those, the ones telar runs: in its panes or its own, and those an agent runs.
+      std::uint32_t telar_count{};
+      std::uint32_t agent_count{};
       std::uint32_t thread_count{};
       std::uint64_t disk_read_per_second{};
       std::uint64_t disk_written_per_second{};
       std::span<const MonitorDisk> disks;
       std::span<const MonitorInterface> interfaces;
-      // How many processes match the query; the reply lists at most its limit of them.
+      // How many rows the listing has: the processes that match the query but those a folded branch
+      // hides. The reply lists at most its limit of them, from its offset.
       std::uint32_t matched{};
       std::span<const MonitorProcess> processes;
+      // In an owner listing, every group in the listing's order.
+      std::span<const MonitorGroup> groups;
       ds::Option<MonitorDetail> detail;
     };
 
@@ -261,6 +358,7 @@ export extern "C++" {
               ServerTag::monitor_snapshot,
               Field<&MonitorSnapshot::request_id, NonzeroU64, "request_id">,
               Field<&MonitorSnapshot::sections, BoundedInteger<u8, 0, MonitorSections::all>, "sections">,
+              Field<&MonitorSnapshot::sample, u64, "sample">,
               Field<&MonitorSnapshot::cpu_permille, BoundedInteger<u16, 0, MonitorLimits::whole_permille>, "cpu_permille">,
               Field<&MonitorSnapshot::cores, CountedSpan<u16, BoundedInteger<u16, 0, MonitorLimits::whole_permille>, MonitorLimits::maximum_cores>, "cores">,
               Field<&MonitorSnapshot::memory_total_bytes, u64, "memory_total_bytes">,
@@ -270,6 +368,8 @@ export extern "C++" {
               Field<&MonitorSnapshot::swap_total_bytes, u64, "swap_total_bytes">,
               Field<&MonitorSnapshot::swap_used_bytes, u64, "swap_used_bytes">,
               Field<&MonitorSnapshot::process_count, u32, "process_count">,
+              Field<&MonitorSnapshot::telar_count, u32, "telar_count">,
+              Field<&MonitorSnapshot::agent_count, u32, "agent_count">,
               Field<&MonitorSnapshot::thread_count, u32, "thread_count">,
               Field<&MonitorSnapshot::disk_read_per_second, u64, "disk_read_per_second">,
               Field<&MonitorSnapshot::disk_written_per_second, u64, "disk_written_per_second">,
@@ -277,6 +377,7 @@ export extern "C++" {
               Field<&MonitorSnapshot::interfaces, CountedSpan<u8, ValueCodec<MonitorInterface>, MonitorLimits::maximum_interfaces>, "interfaces">,
               Field<&MonitorSnapshot::matched, u32, "matched">,
               Field<&MonitorSnapshot::processes, CountedSpan<u16, ValueCodec<MonitorProcess>, MonitorLimits::maximum_processes>, "processes">,
+              Field<&MonitorSnapshot::groups, CountedSpan<u16, ValueCodec<MonitorGroup>, MonitorLimits::maximum_groups>, "groups">,
               Field<&MonitorSnapshot::detail, OptionalValue<ValueCodec<MonitorDetail>>, "detail">> {};
 
     // Sends a signal to a process the runtime's user may signal. The runtime reads the process again

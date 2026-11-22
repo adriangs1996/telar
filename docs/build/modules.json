@@ -216,6 +216,7 @@
     "src/gui/application/application-monitor.cppm": "telar.gui.application:monitor",
     "src/gui/application/application-nvim.cppm": "telar.gui.application:nvim",
     "src/gui/features/nvim/nvim.cppm": "telar.gui.features.nvim",
+    "src/gui/features/monitor/monitor-presentation.cppm": "telar.gui.features.monitor:presentation",
     "src/gui/features/monitor/monitor.cppm": "telar.gui.features.monitor",
     "src/cli/commands/monitor/monitor.cppm": "telar.cli.commands.monitor",
     "src/runtime/metrics/monitor/monitor.cppm": "telar.runtime.metrics.monitor",

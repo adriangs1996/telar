@@ -127,7 +127,7 @@ def run(binary, provider, seed, login=False, prepare=None):
         (bindir/command).write_text('#!/bin/sh\nexit 0\n');(bindir/command).chmod(0o700)
         env['PATH']=str(bindir)+':/usr/bin:/bin'
         if login:env['FIXTURE_LOGIN']=login
-        env.update(FIXTURE_REMOTE_HOME=str(remote),FIXTURE_TELAR=str(binary),FIXTURE_SCHEMA='cqp00008' if b'cqp00008' in binary.read_bytes() else '886b480d')
+        env.update(FIXTURE_REMOTE_HOME=str(remote),FIXTURE_TELAR=str(binary),FIXTURE_SCHEMA='cqp00009' if b'cqp00009' in binary.read_bytes() else '886b480d')
         roots={'claude':home/'.claude','codex':home/'.codex','pi':home/'.pi/agent','opencode':Path(env['XDG_CONFIG_HOME'])/'opencode','cursor':home/'.cursor'}
         local=roots[provider];local.mkdir(parents=True,mode=0o700)
         filename={'claude':'settings.json','codex':'config.toml','pi':'settings.json','opencode':'opencode.jsonc','cursor':'hooks.json'}[provider]
@@ -193,7 +193,7 @@ def machine(binary, agents=('claude',), **fixture):
             (bindir / agent).chmod(0o700)
         calls = root / 'calls.jsonl'
         env.update(PATH=f'{bindir}:/usr/bin:/bin', FIXTURE_REMOTE_HOME=str(remote), FIXTURE_TELAR=str(binary), FIXTURE_CALLS=str(calls),
-                   FIXTURE_SCHEMA='cqp00008' if b'cqp00008' in binary.read_bytes() else '886b480d')
+                   FIXTURE_SCHEMA='cqp00009' if b'cqp00009' in binary.read_bytes() else '886b480d')
         env.update({'FIXTURE_' + key.upper(): value for key, value in fixture.items()})
         (Path(env['XDG_CONFIG_HOME']) / 'telar').mkdir(exist_ok=True, mode=0o700)
 

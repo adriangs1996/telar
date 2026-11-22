@@ -1422,26 +1422,85 @@ return {api_version = 2, client = {
       QCOMPARE(errors_, QString{});
     }
 
-    // The monitor lists every process its runtime reads, and the detail of the one selected; with
-    // TELAR_MONITOR_SHOT set, the window as it shows them is saved there.
+    // The monitor lists every process its runtime reads, says which ones telar runs, and shows the
+    // detail of the one selected; with TELAR_MONITOR_SHOT set, the window as it shows them is saved
+    // there, and its tree and owner listings beside it.
     Q_SLOT void monitorListsTheRuntimeProcesses() {
       QTRY_VERIFY_WITH_TIMEOUT(terminalReady(), runtime_wait_ms);
       auto* monitor = client_->monitor();
+      const auto shot = qEnvironmentVariable("TELAR_MONITOR_SHOT");
+      const auto save = [&](const QString& suffix) {
+        if (!shot.isEmpty()) {
+          // The table measures itself after the frame that resized it.
+          constexpr int settle_ms = 200;
+
+          QTest::qWait(settle_ms);
+          QVERIFY(window_->grabWindow().save(suffix.isEmpty() ? shot : QString{shot}.replace(QStringLiteral(".png"), suffix + QStringLiteral(".png"))));
+        }
+      };
+      const auto record = [&](int row) {
+        return monitor->rows()->index(row, 0).data(ListModel::record_role).toMap();
+      };
 
       client_->commands()->execute(window_actions::Action::monitor);
       QCOMPARE(client_->dialogs()->kind(), Store::Dialog::monitor);
       QVERIFY(monitor->available());
-      QTRY_VERIFY_WITH_TIMEOUT(monitor->rows()->rowCount() > 1, runtime_wait_ms);
-      QVERIFY(monitor->host().value(QStringLiteral("processes")).toInt() > 1);
+      QTRY_VERIFY_WITH_TIMEOUT(monitor->rows()->rowCount() > 1 && record(0).value(QStringLiteral("kind")) == QStringLiteral("process"), runtime_wait_ms);
+      QVERIFY(monitor->view().value(QStringLiteral("all")).toInt() > 1);
 
-      const auto first = monitor->rows()->index(0, 0).data(ListModel::record_role).toMap();
+      // The pane's shell is telar's, and the scope of telar's processes lists only those.
+      const auto owned = [&] {
+        for (int row = 0; row < monitor->rows()->rowCount(); ++row) {
+          if (record(row).value(QStringLiteral("owner")).toString() != QStringLiteral("owned") && record(row).value(QStringLiteral("owner")).toString() != QStringLiteral("inherited")) {
+            return false;
+          }
+        }
 
-      monitor->select(first.value(QStringLiteral("pid")).toInt(), first.value(QStringLiteral("started")).toString());
-      QTRY_COMPARE_WITH_TIMEOUT(monitor->detail().value(QStringLiteral("pid")).toInt(), first.value(QStringLiteral("pid")).toInt(), runtime_wait_ms);
-      if (const auto shot = qEnvironmentVariable("TELAR_MONITOR_SHOT"); !shot.isEmpty()) {
-        QVERIFY(window_->grabWindow().save(shot));
+        return monitor->rows()->rowCount() > 0;
+      };
+
+      // A program the pane runs as claude is an agent, and what it runs is the agent's.
+      const QTemporaryDir directory;
+      const auto agent = directory.filePath(QStringLiteral("claude"));
+      const auto pane_id = firstPane()->id;
+      const auto agents = [&] {
+        return monitor->view().value(QStringLiteral("agents")).toInt();
+      };
+
+      QVERIFY(directory.isValid() && QFile::link(QStringLiteral("/bin/sh"), agent));
+      QVERIFY(client_->terminals()->input(pane_id, QStringLiteral("'%1' -c 'sleep 60; true'\r").arg(agent).toUtf8()));
+      monitor->setScope(QStringLiteral("telar"));
+      QTRY_VERIFY_WITH_TIMEOUT(agents() >= 2 && owned() && monitor->rows()->rowCount() >= 5, runtime_wait_ms);
+
+      // The agent's detail names its parents, up to the pane's shell.
+      int agent_row = 0;
+
+      while (agent_row < monitor->rows()->rowCount() && !record(agent_row).value(QStringLiteral("cells")).toStringList().value(1).contains(QStringLiteral("claude"))) {
+        ++agent_row;
       }
 
+      QVERIFY(agent_row < monitor->rows()->rowCount());
+      const auto chosen = record(agent_row).value(QStringLiteral("pid")).toInt();
+
+      monitor->selectRow(agent_row);
+      QTRY_COMPARE_WITH_TIMEOUT(monitor->detail().value(QStringLiteral("pid")).toInt(), chosen, runtime_wait_ms);
+      QVERIFY(monitor->detail().value(QStringLiteral("lineage")).toString() != QStringLiteral("none"));
+      save({});
+
+      // A tree lists each process under its parent, the agent's child under the agent.
+      monitor->setLayout(QStringLiteral("tree"));
+      QTRY_VERIFY_WITH_TIMEOUT(monitor->view().value(QStringLiteral("layout")).toString() == QStringLiteral("tree") && record(0).value(QStringLiteral("foldable")).toBool(), runtime_wait_ms);
+      save(QStringLiteral("-tree"));
+
+      // An owner listing puts a title before each group.
+      monitor->setLayout(QStringLiteral("owner"));
+      QTRY_COMPARE_WITH_TIMEOUT(record(0).value(QStringLiteral("kind")).toString(), QStringLiteral("group"), runtime_wait_ms);
+      save(QStringLiteral("-owner"));
+
+      QVERIFY(client_->terminals()->input(pane_id, QByteArrayLiteral("\x03")));
+      QTRY_COMPARE_WITH_TIMEOUT(agents(), 0, runtime_wait_ms);
+      monitor->setScope(QStringLiteral("all"));
+      monitor->setLayout(QStringLiteral("flat"));
       monitor->close();
       QCOMPARE(client_->dialogs()->kind(), Store::Dialog::none);
     }

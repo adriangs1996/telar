@@ -28,7 +28,12 @@ namespace telar::gui::features::monitor {
           .nice = process.nice,
           .pane_id = process.pane_id,
           .agent = process.agent,
+          .owner = process.owner,
           .depth = process.depth,
+          .guides = process.guides,
+          .children = process.children,
+          .folded = process.folded,
+          .branch_cpu_permille = process.branch_cpu_permille,
       };
 
       copy(result.user, process.user);
@@ -37,29 +42,118 @@ namespace telar::gui::features::monitor {
       return result;
     }
 
+    template <std::size_t Size>
+    std::uint8_t keep(ds::Array<Relative, Size>& kept, std::span<const MonitorRelative> relatives) {
+      const auto count = std::min(relatives.size(), Size);
+
+      for (std::size_t index = 0; index < count; ++index) {
+        kept.atMut(index).pid = relatives[index].pid;
+        copy(kept.atMut(index).name, relatives[index].name);
+      }
+
+      return static_cast<std::uint8_t>(count);
+    }
+
+    // The history keeps the newest history_samples shares.
+    void remember(State& state, std::uint16_t share) noexcept {
+      if (state.history_count == history_samples) {
+        std::ranges::copy(state.history.view().subspan(1), state.history.dataMut());
+        --state.history_count;
+      }
+
+      state.history.atMut(state.history_count++) = share;
+    }
+
+  }
+
+  std::span<const Relative> ProcessDetail::keptChildren() const noexcept {
+    return children.view().first(std::min<std::size_t>(child_count, kept_relatives));
+  }
+
+  std::span<const Relative> ProcessDetail::keptLineage() const noexcept {
+    return lineage.view().first(lineage_count);
+  }
+
+  std::span<const std::int32_t> View::toggledPids() const noexcept {
+    return toggled.view().first(toggled_count);
+  }
+
+  void toggle(View& view, std::int32_t pid) noexcept {
+    const auto pids = relist(view).toggled.viewMut().first(view.toggled_count);
+
+    if (const auto found = std::ranges::find(pids, pid); found != pids.end()) {
+      std::ranges::copy(std::next(found), pids.end(), found);
+      --view.toggled_count;
+      return;
+    }
+
+    if (view.toggled_count == view.toggled.size()) {
+      std::ranges::copy(pids.subspan(1), pids.begin());
+      --view.toggled_count;
+    }
+
+    view.toggled.atMut(view.toggled_count++) = pid;
+  }
+
+  View& relist(View& view) noexcept {
+    ++view.listing;
+    return view;
   }
 
   State::State(Memory& memory)
       : cores(memory),
         disks(memory),
         interfaces(memory),
-        processes(memory) {}
+        processes(memory),
+        groups(memory) {}
+
+  std::span<const std::uint16_t> State::cpuHistory() const noexcept {
+    return history.view().first(history_count);
+  }
+
+  Window window(const State& state) noexcept {
+    return windowAround(state.view.first, state.view.visible, state.groups.view(), state.view.layout);
+  }
+
+  bool covers(const State& state) noexcept {
+    const auto& view = state.view;
+    const auto rows = rowCount(state.matched, state.groups.view(), view.layout);
+    const auto end = std::min<std::size_t>(std::size_t{view.first} + view.visible, rows);
+    const auto held_end = std::size_t{state.offset} + state.processes.size();
+
+    for (auto row = std::size_t{view.first}; row < end; ++row) {
+      const auto slot = slotAt(row, state.groups.view(), view.layout);
+      if (!slot.group && (slot.index < state.offset || slot.index >= held_end)) {
+        return false;
+      }
+    }
+
+    return true;
+  }
 
   QueryMonitor query(const State& state) noexcept {
+    const auto asked = window(state);
+
     return {
         .sections = MonitorSections::all,
         .sort = state.view.sort,
         .reverse = state.view.reverse,
         .scope = state.view.scope,
-        .tree = state.view.tree,
+        .layout = state.view.layout,
         .filter = state.view.filter.view(),
-        .limit = View::rows,
+        .offset = asked.offset,
+        .limit = asked.limit,
+        .fold = true,
+        .toggled = state.view.toggledPids(),
         .detail = state.view.selected,
     };
   }
 
   void wait(State& state, std::uint64_t request_id) noexcept {
     state.waiting = request_id;
+    state.asked_offset = window(state).offset;
+    state.asked_listing = state.view.listing;
+    state.owed = false;
   }
 
   bool receive(State& state, const MonitorSnapshot& snapshot) {
@@ -70,6 +164,11 @@ namespace telar::gui::features::monitor {
     state.waiting = 0;
     state.error.assign({});
     state.cpu_permille = snapshot.cpu_permille;
+    if (snapshot.sample != state.sample) {
+      state.sample = snapshot.sample;
+      remember(state, snapshot.cpu_permille);
+    }
+
     state.cores.clear();
     state.cores.extend(snapshot.cores);
     state.memory_total_bytes = snapshot.memory_total_bytes;
@@ -79,6 +178,8 @@ namespace telar::gui::features::monitor {
     state.swap_total_bytes = snapshot.swap_total_bytes;
     state.swap_used_bytes = snapshot.swap_used_bytes;
     state.process_count = snapshot.process_count;
+    state.telar_count = snapshot.telar_count;
+    state.agent_count = snapshot.agent_count;
     state.thread_count = snapshot.thread_count;
     state.disk_read_per_second = snapshot.disk_read_per_second;
     state.disk_written_per_second = snapshot.disk_written_per_second;
@@ -92,16 +193,39 @@ namespace telar::gui::features::monitor {
 
     state.interfaces.clear();
     for (const auto& interface : snapshot.interfaces) {
-      auto& kept = state.interfaces.push(InterfaceRow{.received_per_second = interface.received_per_second, .sent_per_second = interface.sent_per_second});
+      auto& kept = state.interfaces.push(InterfaceRow{
+          .received_per_second = interface.received_per_second,
+          .sent_per_second = interface.sent_per_second,
+          .received_bytes = interface.received_bytes,
+          .sent_bytes = interface.sent_bytes,
+      });
 
       copy(kept.name, interface.name);
     }
 
-    state.matched = snapshot.matched;
-    state.processes.clear();
-    state.processes.reserve(snapshot.processes.size());
-    for (const auto& process : snapshot.processes) {
-      state.processes.push(row(process));
+    // Rows of a listing the view left are not shown: the query for the current one goes next.
+    if (state.asked_listing != state.view.listing) {
+      state.owed = true;
+    } else {
+      state.matched = snapshot.matched;
+      state.offset = state.asked_offset;
+      state.processes.clear();
+      state.processes.reserve(snapshot.processes.size());
+      for (const auto& process : snapshot.processes) {
+        state.processes.push(row(process));
+      }
+
+      state.groups.clear();
+      for (const auto& group : snapshot.groups) {
+        state.groups.push(GroupRow{.owner = group.owner, .pane_id = group.pane_id, .processes = group.processes, .cpu_permille = group.cpu_permille, .resident_bytes = group.resident_bytes});
+      }
+
+      // A listing that got shorter keeps its last screen full.
+      const auto rows = rowCount(state.matched, state.groups.view(), state.view.layout);
+
+      if (std::size_t{state.view.first} + state.view.visible > rows) {
+        state.view.first = static_cast<std::uint32_t>(rows > state.view.visible ? rows - state.view.visible : 0);
+      }
     }
 
     state.detail.reset();
@@ -114,6 +238,8 @@ namespace telar::gui::features::monitor {
       detail.port_count = static_cast<std::uint8_t>(std::min(snapshot.detail->ports.size(), max_listed_ports));
       std::ranges::copy(snapshot.detail->ports.first(detail.port_count), detail.ports.dataMut());
       detail.child_count = static_cast<std::uint16_t>(snapshot.detail->children.size());
+      static_cast<void>(keep(detail.children, snapshot.detail->children));
+      detail.lineage_count = keep(detail.lineage, snapshot.detail->lineage);
     }
 
     ++state.revision;
@@ -152,6 +278,9 @@ namespace telar::gui::features::monitor {
   void reset(State& state) noexcept {
     state.waiting = 0;
     state.acting = 0;
+    state.owed = false;
+    // A new runtime counts its readings from the start.
+    state.sample = 0;
   }
 
 }

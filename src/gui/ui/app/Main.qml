@@ -184,6 +184,7 @@ Window {
         colors: telar.colors
         typography: root.geometry.typography
         ratio: root.ratio
+        topInset: root.geometry.navigation.y + root.geometry.navigation.height
     }
 
     AttachmentModal {
