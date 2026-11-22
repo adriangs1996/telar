@@ -36,6 +36,13 @@ export {
       rename_workspace,
       close_pane,
       new_tab,
+      // An editor pane beside the focused one, or in a tab of its own.
+      new_editor,
+      new_editor_tab,
+      // The picker of the tab's editor pane, on files, on the text of files or on its buffers.
+      editor_files,
+      editor_grep,
+      editor_buffers,
       next_tab,
       previous_tab,
       rename_tab,
@@ -85,7 +92,7 @@ export {
       bool operator==(const BindingAction&) const = default;
     };
 
-    inline constexpr auto builtin_binding_actions = ds::Array<std::pair<std::string_view, BindingActionKind>, 57>{
+    inline constexpr auto builtin_binding_actions = ds::Array<std::pair<std::string_view, BindingActionKind>, 62>{
         {
             {"scroll-pane-up", BindingActionKind::scroll_pane_up},
             {"scroll-pane-down", BindingActionKind::scroll_pane_down},
@@ -114,6 +121,11 @@ export {
             {"rename-workspace", BindingActionKind::rename_workspace},
             {"close-pane", BindingActionKind::close_pane},
             {"new-tab", BindingActionKind::new_tab},
+            {"new-editor", BindingActionKind::new_editor},
+            {"new-editor-tab", BindingActionKind::new_editor_tab},
+            {"editor-files", BindingActionKind::editor_files},
+            {"editor-grep", BindingActionKind::editor_grep},
+            {"editor-buffers", BindingActionKind::editor_buffers},
             {"next-tab", BindingActionKind::next_tab},
             {"previous-tab", BindingActionKind::previous_tab},
             {"rename-tab", BindingActionKind::rename_tab},

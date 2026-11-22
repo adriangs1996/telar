@@ -267,6 +267,17 @@ namespace telar {
   template <>
   struct MessageSchema<PaneExited> : Schema<Direction::server, ServerTag::pane_exited, Field<&PaneExited::pane_id, NonzeroU64, "pane_id">, Field<&PaneExited::kind, EnumByte<ExitKind, 1>, "kind">, Field<&PaneExited::value, u32, "value">> {};
 
+  // What a pane is, sent before the first message that names a pane that is not a terminal: a
+  // client takes a pane it was told nothing about for one.
+  struct PaneKindNotice {
+    std::uint64_t pane_id{};
+    PaneKind kind = PaneKind::terminal;
+  };
+
+  template <>
+  struct MessageSchema<PaneKindNotice>
+      : Schema<Direction::server, ServerTag::pane_kind_notice, Field<&PaneKindNotice::pane_id, NonzeroU64, "pane_id">, Field<&PaneKindNotice::kind, EnumByte<PaneKind, std::to_underlying(PaneKind::nvim), std::to_underlying(PaneKind::terminal)>, "kind">> {};
+
   // Every live pane, so a client can list the ones it has not opened. Bounded by the runtime's
   // pane capacity.
   inline constexpr std::size_t max_pane_list_entries = 256;

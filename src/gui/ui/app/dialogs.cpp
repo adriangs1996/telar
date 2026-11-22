@@ -11,7 +11,7 @@ static_assert(true);
 #include "ui/app/overlays/peek/peek_controller.hpp"
 #include "ui/app/overlays/workspace_form/workspace_form_controller.hpp"
 #include "ui/app/panes/terminal/history/history_controller.hpp"
-#include "ui/app/panes/terminal/paths/path_picker_controller.hpp"
+#include "ui/kit/paths/path_picker_controller.hpp"
 #include <QString>
 #include <cstdint>
 #include <optional>

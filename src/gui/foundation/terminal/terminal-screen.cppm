@@ -49,6 +49,23 @@ export namespace telar::gui::inline foundation::inline terminal {
     }
   };
 
+  // The cells of a grid that is not a terminal's screen: an editor's window, which has a size
+  // of its own.
+  struct GridExtent {
+    std::uint16_t columns = 0;
+    std::uint16_t rows = 0;
+  };
+
+  // Rows `top` up to `bottom` of columns `left` up to `right`, moved `rows` rows up, or down
+  // when negative: what scrolled out is left as it was, for the cells sent after it to replace.
+  struct RowMove {
+    std::uint16_t top = 0;
+    std::uint16_t bottom = 0;
+    std::uint16_t left = 0;
+    std::uint16_t right = 0;
+    std::int32_t rows = 0;
+  };
+
   enum class FrameApplication : std::uint8_t {
     applied,
     stale,
@@ -90,22 +107,7 @@ export namespace telar::gui::inline foundation::inline terminal {
 
       // Every span is decoded before anything changes, so a frame that fails to decode leaves the
       // screen as it was.
-      std::size_t changed = 0;
-
-      for (const auto& span : frame.spans) {
-        changed += span.count;
-      }
-
-      staged_.clear();
-      staged_.reserve(changed);
-      for (const auto& span : frame.spans) {
-        auto reader = span.reader();
-
-        while (const auto cell = reader.next()) {
-          staged_.emplace(*cell);
-        }
-      }
-
+      stage(frame.spans);
       reserve(frame);
 
       if (snapshot) {
@@ -114,15 +116,7 @@ export namespace telar::gui::inline foundation::inline terminal {
         row_revisions_.resize(frame.rows, revision_ + 1);
       }
 
-      const auto* staged = staged_.data();
-
-      for (const auto& span : frame.spans) {
-        std::copy_n(staged, span.count, cells_.dataMut() + span.start);
-        staged += span.count;
-        const auto last = (span.start + span.count - 1) / frame.cols;
-
-        std::fill(row_revisions_.dataMut() + (span.start / frame.cols), row_revisions_.dataMut() + last + 1, revision_ + 1);
-      }
+      commit(frame.cols, frame.spans);
 
       if (frame.text_metadata) {
         const auto& metadata = *frame.text_metadata;
@@ -151,6 +145,70 @@ export namespace telar::gui::inline foundation::inline terminal {
       ++revision_;
 
       return FrameApplication::applied;
+    }
+
+    // Changes the cells of a grid an editor draws. `whole` gives it its size and blanks it
+    // first; otherwise the spans change the cells it has. False, with the grid as it was, for
+    // cells that do not fit the grid: a grid of another size that was not sent whole, or a span
+    // past its end.
+    bool draw(GridExtent extent, bool whole, std::span<const FrameSpan> spans) {
+      const auto count = static_cast<std::size_t>(extent.columns) * extent.rows;
+      if (count == 0 || count > maximum_cells || (!whole && (extent.columns != columns_ || extent.rows != rows_))) {
+        return false;
+      }
+
+      for (const auto& span : spans) {
+        if (span.count == 0 || span.start >= count || span.count > count - span.start) {
+          return false;
+        }
+      }
+
+      stage(spans);
+      if (whole) {
+        columns_ = extent.columns;
+        rows_ = extent.rows;
+        cells_.clear();
+        cells_.resize(count);
+        row_revisions_.clear();
+        row_revisions_.resize(rows_, revision_ + 1);
+        scroll_ = {.total_rows = rows_, .offset = 0};
+      }
+
+      commit(columns_, spans);
+      ++revision_;
+      return true;
+    }
+
+    // Moves rows the grid has, as a scroll the editor made does. False for a move outside it.
+    bool moveRows(const RowMove& move) {
+      if (move.top >= move.bottom || move.bottom > rows_ || move.left >= move.right || move.right > columns_ || move.rows == 0 || std::abs(move.rows) >= move.bottom - move.top) {
+        return false;
+      }
+
+      const bool upward = move.rows > 0;
+      const auto width = static_cast<std::size_t>(move.right - move.left);
+      const int step = upward ? 1 : -1;
+      const int last = upward ? move.bottom - move.rows : move.top - move.rows - 1;
+
+      // From the end the rows leave, so a row is read before another is written over it.
+      for (int row = upward ? move.top : move.bottom - 1; row != last; row += step) {
+        const auto source = (static_cast<std::size_t>(row + move.rows) * columns_) + move.left;
+        const auto target = (static_cast<std::size_t>(row) * columns_) + move.left;
+
+        std::copy_n(cells_.data() + source, width, cells_.dataMut() + target);
+        row_revisions_.atMut(static_cast<std::size_t>(row)) = revision_ + 1;
+      }
+
+      ++revision_;
+      return true;
+    }
+
+    // Where the cursor is drawn on a grid an editor draws, or that it is not on it.
+    void placeCursor(const Cursor& cursor) noexcept {
+      if (cursor_.visible != cursor.visible || cursor_.x != cursor.x || cursor_.y != cursor.y || cursor_.shape != cursor.shape || cursor_.blink != cursor.blink) {
+        cursor_ = cursor;
+        ++revision_;
+      }
     }
 
     [[nodiscard]] std::span<const CellValue> row(std::size_t index) const noexcept {
@@ -299,6 +357,38 @@ export namespace telar::gui::inline foundation::inline terminal {
     std::uint32_t cells_offset_ = 0;
     PointerShape pointer_shape_{};
     MetadataStatus metadata_status_ = MetadataStatus::complete;
+
+    // Decodes the cells of `spans`, in order, before any of them replaces a cell.
+    void stage(std::span<const FrameSpan> spans) {
+      std::size_t changed = 0;
+
+      for (const auto& span : spans) {
+        changed += span.count;
+      }
+
+      staged_.clear();
+      staged_.reserve(changed);
+      for (const auto& span : spans) {
+        auto reader = span.reader();
+
+        while (const auto cell = reader.next()) {
+          staged_.emplace(*cell);
+        }
+      }
+    }
+
+    // Writes the staged cells where their spans put them, and marks the rows they change.
+    void commit(std::uint16_t columns, std::span<const FrameSpan> spans) {
+      const auto* staged = staged_.data();
+
+      for (const auto& span : spans) {
+        std::copy_n(staged, span.count, cells_.dataMut() + span.start);
+        staged += span.count;
+        const auto last = (span.start + span.count - 1) / columns;
+
+        std::fill(row_revisions_.dataMut() + (span.start / columns), row_revisions_.dataMut() + last + 1, revision_ + 1);
+      }
+    }
 
     void reserve(const PaneFrame& frame) {
       cells_.reserve(static_cast<std::size_t>(frame.cols) * frame.rows);

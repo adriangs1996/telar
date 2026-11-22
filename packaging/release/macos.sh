@@ -46,6 +46,10 @@ build() {
         -DGHOSTTY_VT_ROOT="$ghostty"
     "$root/tools/cpp" build dist -B "$stage/runtime" -- --target distributable-linkage
     cmake --install "$stage/runtime" --component telar --prefix "$stage/prefix"
+    # The Neovim of the editor panes goes in the package: the telar just built fetches the
+    # release it was built for and keeps it only with the SHA-256 it carries.
+    # TELAR_NVIM_ARCHIVE names an archive that is already here.
+    XDG_DATA_HOME="$stage/prefix/share" "$stage/prefix/bin/telar" integration install editor
 
     cargo build --release --locked --manifest-path "$root/tools/diagram-renderer/Cargo.toml" --target-dir "$stage/renderer"
     install -m 755 "$stage/renderer/release/telar-diagram-renderer" "$stage/prefix/bin/telar-diagram-renderer"
@@ -84,6 +88,9 @@ package() {
         cp "$app/Contents/Resources/bin/$tool" "$tree/bin/"
     done
     cp -R "$app/Contents/Resources/licenses" "$tree/share/telar/licenses"
+    if [ -d "$app/Contents/Resources/share/telar/nvim" ]; then
+        cp -R "$app/Contents/Resources/share/telar/nvim" "$tree/share/telar/nvim"
+    fi
     # Leave out Finder metadata and extended attributes such as provenance.
     tar --no-xattrs --no-mac-metadata -czf "$out/$name.tar.gz" -C "$stage" "$name"
 

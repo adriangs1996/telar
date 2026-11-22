@@ -6,6 +6,8 @@ static_assert(true);
 #include "path_picker_controller.hpp"
 #include "platform/window.hpp"
 #include "ui/kit/fonts/chrome_fonts.hpp"
+#include "ui/kit/models/glyph_icon.hpp"
+#include "ui/kit/models/path_label_runs.hpp"
 #include "ui/kit/models/projection.hpp"
 #include <QVariantList>
 #include <QVariantMap>
@@ -25,19 +27,9 @@ import telar.base.ds;
 namespace telar::gui::qt {
   namespace {
 
-    QString pathRunColor(application::paths::PathLabelTone tone) {
-      switch (tone) {
-      case application::paths::PathLabelTone::match:
-        return QStringLiteral("accent");
-      case application::paths::PathLabelTone::name:
-        return QStringLiteral("text");
-      case application::paths::PathLabelTone::directory:
-      case application::paths::PathLabelTone::ellipsis:
-        return QStringLiteral("subtext0");
-      }
-
-      // A tone outside the enum draws as the dimmed text.
-      return QStringLiteral("subtext0");
+    // A folder's icon, or a file's by its name.
+    GlyphIcon iconOf(std::string_view path, PathKind kind) noexcept {
+      return kind == PathKind::directory ? directoryIcon() : fileIcon(path);
     }
 
     template <typename MapBounds>
@@ -81,14 +73,18 @@ namespace telar::gui::qt {
 
         icon.x = static_cast<std::uint16_t>(icon.x + inset);
         icon.width = static_cast<std::uint16_t>(std::min<std::uint16_t>(1, icon.width - inset));
-        rows.append(QVariantMap{
+        QVariantMap record{
             {QStringLiteral("path"), toQString(page.path(match))},
             {QStringLiteral("bounds"), local(row.bounds)},
             {QStringLiteral("iconBounds"), local(icon)},
             {QStringLiteral("directory"), match.kind == PathKind::directory},
             {QStringLiteral("selected"), row.index == selection},
             {QStringLiteral("runs"), std::move(runs)},
-        });
+        };
+
+        putIcon(record, iconOf(page.path(match), match.kind));
+        putChange(record, match.change);
+        rows.append(std::move(record));
       }
 
       return rows;
@@ -107,23 +103,18 @@ namespace telar::gui::qt {
     rows.reserve(static_cast<qsizetype>(end - begin));
     for (auto index = begin; index < end; ++index) {
       const auto& match = matches[index];
-      application::paths::PathLabel label;
 
-      label.layout(page.path(match), match.highlights(), width);
-      QVariantList runs;
-
-      runs.reserve(static_cast<qsizetype>(label.runs().size()));
-      for (const auto& run : label.runs()) {
-        runs.append(QVariantMap{{QStringLiteral("text"), toQString(run.text)}, {QStringLiteral("colorRole"), pathRunColor(run.tone)}, {QStringLiteral("bold"), run.tone == application::paths::PathLabelTone::match}});
-      }
-
-      rows.append(QVariantMap{
+      QVariantMap record{
           {QStringLiteral("index"), static_cast<qulonglong>(index)},
           {QStringLiteral("path"), toQString(page.path(match))},
           {QStringLiteral("directory"), match.kind == PathKind::directory},
           {QStringLiteral("selected"), index == selection_},
-          {QStringLiteral("runs"), std::move(runs)},
-      });
+          {QStringLiteral("runs"), pathLabelRuns(page.path(match), match.highlights(), width)},
+      };
+
+      putIcon(record, iconOf(page.path(match), match.kind));
+      putChange(record, match.change);
+      rows.append(std::move(record));
     }
 
     return rows;

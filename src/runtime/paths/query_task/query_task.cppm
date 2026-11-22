@@ -74,6 +74,9 @@ export {
       PathKind kind;
     };
 
+    // What git says of a path of the index; none when it is as committed.
+    [[nodiscard]] PathChange pathChange(char staged, char unstaged) noexcept;
+
     enum class PathBuildFailure : std::uint8_t {
       none,
       unreadable,
@@ -88,6 +91,8 @@ export {
     public:
       static constexpr std::size_t maximum_entries = std::size_t{512} * 1024;
       static constexpr std::size_t maximum_bytes = std::size_t{32} * 1024 * 1024;
+      // The changed paths it keeps; a checkout with more shows the rest as unchanged.
+      static constexpr std::size_t maximum_changes = std::size_t{64} * 1024;
 
       explicit PathIndexStorage(Memory& memory);
 
@@ -108,6 +113,15 @@ export {
 
       void finish() noexcept;
 
+      // The builder notes what git says of a path, before it publishes all it noted at once;
+      // false once it keeps as many as it can.
+      bool noteChange(std::string_view relative, PathChange change);
+
+      void publishChanges() noexcept;
+
+      // What git says of a path: none until the builder published the changes it read.
+      [[nodiscard]] PathChange change(std::string_view relative) const noexcept;
+
       // One builder appends to fixed storage; readers access only the released prefix. Public beside
       // the private storage: the git reader borrows `cancelled` alone while the builder appends, as
       // Rust borrows one field of a struct, where an accessor would lend the whole storage.
@@ -115,6 +129,7 @@ export {
       std::atomic<std::size_t> published{0};
       std::atomic<bool> complete{false};
       std::atomic<bool> cancelled{false};
+      std::atomic<bool> changes_published{false};
       std::size_t count = 0;
       std::size_t bytes_used = 0;
       bool truncated = false;
@@ -127,6 +142,7 @@ export {
       Memory& memory_;
       std::span<char> bytes_;
       std::span<IndexedPath> entries_;
+      ds::Map<ds::String<Memory>, PathChange, Memory> changes_;
     };
 
     extern template class PathIndexStorage<SystemAllocator>;
@@ -157,6 +173,9 @@ export {
       bool appendTracked(std::string_view relative, tbc::mut_a<Directories> directories);
 
       void tracked(const char* root);
+
+      // Reads what git says of the paths under `root` that are not as committed.
+      void changes(const char* root);
 
       static FileDescriptor openRelative(int root, std::string_view relative);
 
@@ -269,7 +288,7 @@ export {
         for (std::size_t index = 0; index < count; ++index) {
           const auto& entry = storage_.entry(ranked[index].entry);
 
-          matches.atMut(index) = {.path = path(entry), .kind = entry.kind, .positions = std::span{positions[index]}.first(request.query.size())};
+          matches.atMut(index) = {.path = path(entry), .kind = entry.kind, .positions = std::span{positions[index]}.first(request.query.size()), .change = storage_.change(path(entry))};
         }
 
         reply.send(PathResults{.request_id = request.request_id, .root = root_, .scanned = static_cast<std::uint32_t>(published), .complete = complete, .truncated = complete && storage_.truncated, .matches = std::span{matches}.first(count)});

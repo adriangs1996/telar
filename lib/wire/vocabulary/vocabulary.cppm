@@ -151,6 +151,7 @@ export namespace telar {
   using telar::PaneForeground;
   using telar::PaneFrame;
   using telar::PaneKey;
+  using telar::PaneKind;
   using telar::PaneLifecycle;
   using telar::PaneListEntry;
   using telar::PaneMatch;
@@ -158,6 +159,7 @@ export namespace telar {
   using telar::PaneTarget;
   using telar::PaneTextMode;
   using telar::PaneTextSource;
+  using telar::PathChange;
   using telar::PathKind;
   using telar::PathKindFilter;
   using telar::PathMatch;

@@ -178,6 +178,7 @@ namespace telar::gui::qt {
     void executeBinding(BindingAction action, const ConfigurationSource::Actions* resolved = nullptr);
     // A binding that is neither a window action nor a navigation.
     void executeWindowBinding(BindingAction action, const ConfigurationSource::Actions* resolved);
+    void executeExtendedBinding(BindingAction action, const ConfigurationSource::Actions* resolved);
     void luaBindingFinished(KeyBindings::Hold hold, bool stale, const QString& error, ds::Function<void()> apply);
     void applyEffects(const application::components::ResolvedEffects<ApplicationAllocator>& effects);
     void executeNamedAction(const NamedActionDescription& named);
@@ -188,6 +189,7 @@ namespace telar::gui::qt {
     void scrollBinding(application::ScrollDirection direction);
     [[nodiscard]] QString bindingShortcut(BindingActionKind action) const;
     bool executeNavigation(window_actions::Action action, const QString& target);
+    bool executeEditor(window_actions::Action action);
     bool executePane(window_actions::Action action, std::uint64_t identity);
     void executeWindowAction(window_actions::Action action);
     bool executeMachineAction(window_actions::Action action);

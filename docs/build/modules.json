@@ -39,6 +39,10 @@
       "base",
       "tbc"
     ],
+    "msgpack": [
+      "base",
+      "tbc"
+    ],
     "platform": [
       "base",
       "sys",
@@ -117,6 +121,7 @@
       "workspaces",
       "workspaces/worktrees",
       "paths",
+      "nvim",
       "metrics",
       "terminal",
       "history",
@@ -154,8 +159,10 @@
       "foundation/agents",
       "foundation/drawing",
       "foundation/forms",
+      "foundation/icons",
       "features/peek",
       "features/monitor",
+      "features/nvim",
       "features/palette",
       "features/paths",
       "features/history",
@@ -207,6 +214,8 @@
   "upward_imports": [],
   "interfaces": {
     "src/gui/application/application-monitor.cppm": "telar.gui.application:monitor",
+    "src/gui/application/application-nvim.cppm": "telar.gui.application:nvim",
+    "src/gui/features/nvim/nvim.cppm": "telar.gui.features.nvim",
     "src/gui/features/monitor/monitor-presentation.cppm": "telar.gui.features.monitor:presentation",
     "src/gui/features/monitor/monitor.cppm": "telar.gui.features.monitor",
     "src/cli/commands/monitor/monitor.cppm": "telar.cli.commands.monitor",
@@ -283,6 +292,13 @@
     "src/runtime/workers/background_executor/background_executor.cppm": "telar.runtime.workers.background_executor",
     "src/runtime/core/delivery/client_delivery/client_delivery.cppm": "telar.runtime.core.delivery.client_delivery",
     "src/runtime/paths/query_task/query_task.cppm": "telar.runtime.paths.query_task",
+    "src/runtime/paths/text_search/text_search.cppm": "telar.runtime.paths.text_search",
+    "src/runtime/nvim/screen/screen.cppm": "telar.runtime.nvim.screen",
+    "src/runtime/nvim/redraw/redraw.cppm": "telar.runtime.nvim.redraw",
+    "src/runtime/nvim/rpc/rpc.cppm": "telar.runtime.nvim.rpc",
+    "src/runtime/nvim/editor/editor.cppm": "telar.runtime.nvim.editor",
+    "src/runtime/nvim/frames/frames.cppm": "telar.runtime.nvim.frames",
+    "src/runtime/nvim/provision/provision.cppm": "telar.runtime.nvim.provision",
     "src/runtime/terminal/osc_scanner/osc_scanner.cppm": "telar.runtime.terminal.osc_scanner",
     "src/runtime/terminal/text_reader/text_reader.cppm": "telar.runtime.terminal.text_reader",
     "src/runtime/terminal/graphics_storage/graphics_storage.cppm": "telar.runtime.terminal.graphics_storage",
@@ -408,6 +424,7 @@
     "lib/render/document/document.cppm": "telar.render.document",
     "lib/render/terminal/terminal.cppm": "telar.render.terminal",
     "lib/render/markdown/markdown.cppm": "telar.render.markdown",
+    "lib/msgpack/msgpack.cppm": "telar.msgpack",
     "src/cli/console/render/render.cppm": "telar.cli.console.render",
     "lib/wire/vocabulary/vocabulary.cppm": "telar.wire.vocabulary",
     "lib/sys/posix/posix.cppm": "telar.sys.posix",
@@ -424,6 +441,7 @@
     "lib/wire/graphics/graphics.cppm": "telar.wire.graphics",
     "lib/wire/history/history.cppm": "telar.wire.history",
     "lib/wire/layout/layout.cppm": "telar.wire.layout",
+    "lib/wire/nvim/nvim.cppm": "telar.wire.nvim",
     "lib/wire/pane_io/pane_io.cppm": "telar.wire.pane_io",
     "lib/wire/runtime/runtime.cppm": "telar.wire.runtime",
     "lib/wire/worktrees/worktrees.cppm": "telar.wire.worktrees",
@@ -531,6 +549,7 @@
     "src/gui/foundation/keys/keys-configuration.cppm": "telar.gui.foundation.keys:configuration",
     "src/gui/foundation/keys/keys-key_encoder.cppm": "telar.gui.foundation.keys:key_encoder",
     "src/gui/foundation/keys/keys.cppm": "telar.gui.foundation.keys",
+    "src/gui/foundation/icons/icons.cppm": "telar.gui.foundation.icons",
     "src/gui/foundation/model/model-navigation_target.cppm": "telar.gui.foundation.model:navigation_target",
     "src/gui/foundation/model/model-suggestion_limits.cppm": "telar.gui.foundation.model:suggestion_limits",
     "src/gui/foundation/model/model.cppm": "telar.gui.foundation.model",
@@ -740,7 +759,11 @@
     "src/gui/features/terminal/attachments/types.hpp": "Objective-C++ ABI",
     "src/gui/foundation/core/memory.hpp": "Objective-C++ ABI",
     "src/gui/tests/qt_case.hpp": "Qt adapter dependency",
-    "src/gui/ui/app/panes/terminal/scroll_motion.hpp": "Only Qt adapters and their tests use it; no module unit does",
+    "src/gui/ui/kit/models/path_label_runs.hpp": "Only Qt adapters use it; no module unit does",
+    "src/gui/ui/kit/models/glyph_icon.hpp": "Only Qt adapters use it; no module unit does",
+    "src/gui/tests/fixtures/recording_link_host.hpp": "Included by name from the build's definition, where the window chooses its link host",
+    "src/gui/ui/app/panes/nvim/predictive_echo.hpp": "Only the editor's Qt adapter and its test use it; no module unit does",
+    "src/gui/ui/kit/motion/scroll_motion.hpp": "Only Qt adapters and their tests use it; no module unit does",
     "src/gui/foundation/core/wheel_accumulator.hpp": "Objective-C++ ABI",
     "src/gui/platform/clipboard_image_file.h": "Objective-C++ ABI",
     "src/gui/platform/clipboard_image_monitor.hpp": "Objective-C++ ABI",
@@ -814,7 +837,7 @@
     "src/gui/ui/design/controls/form_composition_events.hpp": "Qt moc/QML integration",
     "src/gui/ui/design/controls/form_input_context.hpp": "Qt moc/QML integration",
     "src/gui/ui/design/controls/form_text_grid.hpp": "Qt moc/QML integration",
-    "src/gui/ui/app/panes/terminal/scene/graphics_scene.hpp": "Qt moc/QML integration",
+    "src/gui/ui/kit/cell_scene/graphics_scene.hpp": "Qt moc/QML integration",
     "src/gui/ui/app/panes/terminal/history/history_controller.hpp": "Qt moc/QML integration",
     "src/gui/ui/app/panes/terminal/history/layout/history_empty_layout.hpp": "Qt moc/QML integration",
     "src/gui/ui/app/panes/terminal/history/layout/history_filters_layout.hpp": "Qt moc/QML integration",
@@ -828,7 +851,7 @@
     "src/gui/ui/kit/input/history_scroll_events.hpp": "Qt moc/QML integration",
     "src/gui/ui/app/panes/terminal/history/layout/history_selection_layout.hpp": "Qt moc/QML integration",
     "src/gui/ui/kit/process/host_command.hpp": "Qt moc/QML integration",
-    "src/gui/ui/app/panes/terminal/scene/image_resource.hpp": "Qt moc/QML integration",
+    "src/gui/ui/kit/cell_scene/image_resource.hpp": "Qt moc/QML integration",
     "src/gui/ui/kit/input/key_adapter.hpp": "Qt moc/QML integration",
     "src/gui/ui/app/key_bindings.hpp": "Qt moc/QML integration",
     "src/gui/ui/kit/input/key_encoding.hpp": "Qt moc/QML integration",
@@ -896,7 +919,7 @@
     "src/gui/ui/app/chrome/activity/activity_controller.hpp": "Qt moc/QML integration",
     "src/gui/ui/app/overlays/palette/palette_controller.hpp": "Qt moc/QML integration",
     "src/gui/ui/app/overlays/workspace_form/workspace_form_controller.hpp": "Qt moc/QML integration",
-    "src/gui/ui/app/panes/terminal/paths/path_picker_controller.hpp": "Qt moc/QML integration",
+    "src/gui/ui/kit/paths/path_picker_controller.hpp": "Qt moc/QML integration",
     "src/gui/ui/app/overlays/machine_prompt/machine_prompt_controller.hpp": "Qt moc/QML integration",
     "src/gui/ui/app/overlays/peek/peek_controller.hpp": "Qt moc/QML integration",
     "src/gui/ui/app/panes/terminal/copy_controller.hpp": "Qt moc/QML integration",
@@ -909,13 +932,18 @@
     "src/gui/ui/app/chrome/components/surface_command.hpp": "Qt moc/QML integration",
     "src/gui/ui/app/overlays/notifications/system_notifier.hpp": "Qt moc/QML integration",
     "src/gui/ui/app/chrome/tabs/tab_strip_layout.hpp": "Qt moc/QML integration",
+    "src/gui/ui/app/panes/nvim/nvim_controller.hpp": "Qt moc/QML integration",
+    "src/gui/ui/app/panes/nvim/nvim_grid_item.hpp": "Qt moc/QML integration",
+    "src/gui/ui/app/panes/nvim/nvim_host.hpp": "Qt moc/QML integration",
+    "src/gui/ui/app/panes/nvim/nvim_item.hpp": "Qt moc/QML integration",
+    "src/gui/ui/app/panes/nvim/nvim_keys.hpp": "Qt presentation helper",
     "src/gui/ui/app/panes/terminal/terminal_controller.hpp": "Qt moc/QML integration",
-    "src/gui/ui/app/panes/terminal/scene/terminal_decorations.hpp": "Qt moc/QML integration",
+    "src/gui/ui/kit/cell_scene/terminal_decorations.hpp": "Qt moc/QML integration",
     "src/gui/ui/kit/fonts/terminal_font.hpp": "Qt moc/QML integration",
     "src/gui/ui/app/panes/terminal/terminal_host.hpp": "Qt moc/QML integration",
     "src/gui/ui/kit/input/terminal_input.hpp": "Qt moc/QML integration",
     "src/gui/ui/app/panes/terminal/terminal_item.hpp": "Qt moc/QML integration",
-    "src/gui/ui/app/panes/terminal/scene/terminal_scene.hpp": "Qt moc/QML integration",
+    "src/gui/ui/kit/cell_scene/terminal_scene.hpp": "Qt moc/QML integration",
     "src/gui/ui/kit/scene/text_scene.hpp": "Qt moc/QML integration",
     "src/gui/ui/kit/fonts/typography_projection.hpp": "Qt moc/QML integration",
     "src/gui/ui/kit/text/utf16_encoding.hpp": "Qt moc/QML integration",
@@ -924,7 +952,7 @@
     "src/gui/ui/kit/fonts/window_font_catalog.hpp": "Qt moc/QML integration",
     "src/gui/ui/kit/timing/window_frame_pacer.hpp": "Qt moc/QML integration",
     "src/gui/ui/kit/machines/window_identity.hpp": "Qt moc/QML integration",
-    "src/gui/ui/app/panes/terminal/scene/window_images.hpp": "Qt moc/QML integration",
+    "src/gui/ui/kit/cell_scene/window_images.hpp": "Qt moc/QML integration",
     "src/gui/tests/agent_report_fixture.hpp": "Test or tool support (local textual fixture)",
     "src/gui/tests/appearance_fixture.hpp": "Qt adapter dependency",
     "src/gui/tests/assertions.hpp": "Objective-C++ ABI",
@@ -1163,6 +1191,9 @@
       "telar.render.markdown",
       "telar.render.terminal"
     ],
+    "lib/msgpack": [
+      "telar.msgpack"
+    ],
     "lib/shell": [
       "telar.shell.syntax"
     ],
@@ -1193,6 +1224,7 @@
       "telar.wire.graphics",
       "telar.wire.history",
       "telar.wire.layout",
+      "telar.wire.nvim",
       "telar.wire.monitor",
       "telar.wire.pane_io",
       "telar.wire.runtime",
@@ -1283,6 +1315,9 @@
     "src/gui/features/palette": [
       "telar.gui.features.palette"
     ],
+    "src/gui/features/nvim": [
+      "telar.gui.features.nvim"
+    ],
     "src/gui/features/paths": [
       "telar.gui.features.paths"
     ],
@@ -1336,6 +1371,9 @@
     ],
     "src/gui/foundation/forms": [
       "telar.gui.foundation.forms"
+    ],
+    "src/gui/foundation/icons": [
+      "telar.gui.foundation.icons"
     ],
     "src/gui/foundation/keys": [
       "telar.gui.foundation.keys"
@@ -1395,8 +1433,14 @@
       "telar.runtime.metrics.host_sampler",
       "telar.runtime.metrics.monitor"
     ],
+    "src/runtime/nvim": [
+      "telar.runtime.nvim.editor",
+      "telar.runtime.nvim.frames",
+      "telar.runtime.nvim.provision"
+    ],
     "src/runtime/paths": [
-      "telar.runtime.paths.query_task"
+      "telar.runtime.paths.query_task",
+      "telar.runtime.paths.text_search"
     ],
     "src/runtime/plugins": [
       "telar.runtime.plugins.run_worker",

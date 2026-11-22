@@ -67,6 +67,7 @@ namespace telar::gui::features::paths {
       retained.offset = static_cast<std::uint16_t>(page_used_);
       retained.length = static_cast<std::uint16_t>(match.path.size());
       retained.kind = match.kind;
+      retained.change = match.change;
       retained.position_count = static_cast<std::uint8_t>(match.positions.size());
       std::ranges::copy(match.positions, retained.positions.viewMut().begin());
       std::ranges::copy(match.path, page_.viewMut().subspan(page_used_).begin());

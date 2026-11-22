@@ -36,7 +36,7 @@ def normalize(value, root, binary):
         value = value.replace(str(binary), '@EXECUTABLE@').replace(str(root), '@ROOT@')
         value = re.sub(r'm-[0-9a-f]{12}', 'm-@ID@', value)
         value = value.replace(socket.gethostname(), '@HOSTNAME@')
-        value = value.replace('886b480d', '@SCHEMA@').replace('cqp00008', '@SCHEMA@')
+        value = value.replace('886b480d', '@SCHEMA@').replace('cqp00009', '@SCHEMA@')
         value = value.replace(f'telar {VERSION}', 'telar @VERSION@').replace(f'versions/{VERSION}', 'versions/@VERSION@')
         return value
     return value
@@ -174,9 +174,11 @@ def outcomes(binary):
             run_terminal(name, ['--machine','box','worktree','remove','branch','--force'], streams)
         for case in cases[-3:]:
             case['stdout'] = ssh_contract(case['stdout'])
-        schema = 'cqp00008' if b'cqp00008' in binary.read_bytes() else '886b480d'
+        schema = 'cqp00009' if b'cqp00009' in binary.read_bytes() else '886b480d'
         fixtures = [
             ('reachable', f'printf "%s\\n" "$HOME" /bin/sh "{root}/remote.sock" {schema}\n'),
+            # A machine whose telar says what its editor panes have and lack.
+            ('editor', f'case "$*" in *"integration status editor") printf "editor: absent\\neditor: needs git, to fetch the plugins\\n";; *) printf "%s\\n" "$HOME" /bin/sh "{root}/remote.sock" {schema};; esac\n'),
             ('incompatible', f'printf "%s\\n" "$HOME" /bin/sh "{root}/remote.sock" deadbeef\n'),
             ('unreadable', 'printf "startup banner\\n"\n'),
             ('missing', 'echo "sh: telar: command not found" >&2\nexit 127\n'),

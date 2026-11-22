@@ -34,3 +34,4 @@ telar_add_qml_sources(gui-quick
 add_subdirectory(chrome)
 add_subdirectory(panes)
 add_subdirectory(overlays)
+add_subdirectory(pickers)

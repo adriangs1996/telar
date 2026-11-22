@@ -161,7 +161,7 @@ if(TELAR_GUI_NATIVE)
 
   target_link_libraries(gui-quick PUBLIC gui-foundation-core gui-foundation-system gui-foundation-text
     gui-foundation-terminal gui-foundation-fonts gui-foundation-actions gui-foundation-keys gui-foundation-model
-    gui-foundation-agents gui-foundation-drawing gui-foundation-forms
+    gui-foundation-agents gui-foundation-drawing gui-foundation-forms gui-foundation-icons
     gui-platform
     gui-application gui-platform-native gui-keyboard gui-fonts-native gui-machine-profiles Qt6::Quick
     Qt6::QuickControls2 Qt6::Network Qt6::Concurrent)
@@ -185,8 +185,9 @@ if(TELAR_GUI_NATIVE)
       message(FATAL_ERROR "TELAR_GUI_LINK_HOST_HEADER does not exist: ${gui_link_host_header}")
     endif()
 
-    target_compile_options(gui-quick PUBLIC "$<$<COMPILE_LANGUAGE:CXX>:-include>" "$<$<COMPILE_LANGUAGE:CXX>:${gui_link_host_header}>")
-    target_compile_definitions(gui-quick PUBLIC TELAR_GUI_CUSTOM_LINK_HOST=1)
+    # The header is included where the link host is chosen, not before every source: a module
+    # unit must start with its module declaration.
+    target_compile_definitions(gui-quick PUBLIC TELAR_GUI_CUSTOM_LINK_HOST=1 "TELAR_GUI_LINK_HOST_HEADER=\"${gui_link_host_header}\"")
   endif()
 
   target_link_libraries(gui-quick PRIVATE gui-surface-command Qt6::Svg)

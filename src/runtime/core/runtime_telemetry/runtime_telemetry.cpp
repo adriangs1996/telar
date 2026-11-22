@@ -388,23 +388,25 @@ namespace telar::runtime::diagnostics {
       }
     }
 
-    for (auto* pane : model.panes.items()) { // NOLINT(misc-const-correctness): the pane's media is sampled through its shared handle, a mutation tbc sees through the pane
-      if (pane == nullptr) {
+    for (auto* stored : model.panes.items()) {
+      // What is summed here is a terminal's: its screen, its queues and its media.
+      const auto pane = asTerminal(stored); // NOLINT(misc-const-correctness): the pane's media is sampled through its shared handle, a mutation tbc sees through the pane
+      if (!pane) {
         continue;
       }
 
-      dirty_panes += static_cast<std::size_t>(pane->terminal.dirty());
-      pane_input_queue_depth += pane->input.size();
-      accumulate(pane_input_dropped_bytes, pane->input_dropped_bytes);
-      const auto responses = pane->pty_responses->snapshot();
+      dirty_panes += static_cast<std::size_t>(pane->body.terminal.dirty());
+      pane_input_queue_depth += pane->body.input.size();
+      accumulate(pane_input_dropped_bytes, pane->body.input_dropped_bytes);
+      const auto responses = pane->body.pty_responses->snapshot();
 
       pty_response_queue_depth += responses.messages;
       pty_response_queue_bytes += responses.bytes;
       accumulate(pty_response_dropped, responses.dropped);
-      pane_media_used += pane->media->usedBytes();
-      media_queue.merge(pane->media->queueMetrics());
-      graphics_storage.merge(pane->media->storageMetrics());
-      terminal_storage.merge(pane->terminal.storageMetrics());
+      pane_media_used += pane->body.media->usedBytes();
+      media_queue.merge(pane->body.media->queueMetrics());
+      graphics_storage.merge(pane->body.media->storageMetrics());
+      terminal_storage.merge(pane->body.terminal.storageMetrics());
     }
 
     line.field("client_count", clients.size());

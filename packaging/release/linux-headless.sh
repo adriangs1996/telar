@@ -40,6 +40,10 @@ fi
 "$root/tools/cpp" configure dist -B "$work/runtime" -- -DGHOSTTY_VT_ROOT="$ghostty"
 "$root/tools/cpp" build dist -B "$work/runtime" -- --target distributable-linkage
 "$root/tools/cpp" exec -- cmake --install "$work/runtime" --component telar --prefix "$work/$name"
+# The Neovim of the editor panes goes in the package, fetched and checked by the telar just
+# built. Its releases are built for glibc, and this archive is built where there may be none:
+# the runtime starts it only on a host that can run it.
+TELAR_NVIM_ANY_LIBC=1 XDG_DATA_HOME="$work/$name/share" "$work/$name/bin/telar" integration install editor
 
 # An explicit target keeps crt-static off the build scripts and proc macros.
 host=$(rustc -vV | sed -n 's/^host: //p')

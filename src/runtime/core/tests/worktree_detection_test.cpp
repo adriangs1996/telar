@@ -139,32 +139,32 @@ namespace {
     Command command{memory, Launch{.cwd = "/tmp", .arguments = arguments}};
 
     model.panes.insert(1, ds::makeBox<Pane>(memory, memory, 1, TabLocation{.workspace = {.id = 7}, .tab_id = 1}, command, PaneLaunch{TerminalSize{20, 4, 8, 16}, model.media_budget, model.graphics_limits}));
-    auto& pane = *model.panes.find(1);
+    const auto pane = requireTerminal(model.panes, 1);
     GatedWorktreeDetector probe;
     WorktreeDetectionService<GatedWorktreeDetector&> service{probe};
 
     service.tick(model);
-    pane.cwd.assign("/tmp/changed");
-    ++pane.cwd_revision;
+    pane.core.cwd.assign("/tmp/changed");
+    ++pane.core.cwd_revision;
     probe.release();
     collect(model, service);
     check(model.workspaces.size() == 0 && model.worktrees.containing("/tmp") == nullptr);
 
     probe.released = false;
     service.tick(model);
-    ++pane.generation;
+    ++pane.core.generation;
     probe.release();
     collect(model, service);
-    check(model.worktrees.containing(pane.cwd) == nullptr);
-    ++pane.cwd_revision;
+    check(model.worktrees.containing(pane.core.cwd) == nullptr);
+    ++pane.core.cwd_revision;
     service.tick(model);
     collect(model, service);
-    const auto* entry = model.worktrees.containing(pane.cwd);
+    const auto* entry = model.worktrees.containing(pane.core.cwd);
 
     check(entry != nullptr && entry->source == 7 && entry->branch.view() == "external" && entry->origin == WorktreeOrigin::external);
     const auto revision = model.workspace_revision;
 
-    ++pane.cwd_revision;
+    ++pane.core.cwd_revision;
     service.tick(model);
     check(model.workspace_revision == revision);
 
@@ -174,11 +174,11 @@ namespace {
       model.worktrees.registerEntry(RegisterWorktree{.source = 7, .origin = WorktreeOrigin::external, .path = path, .branch = "external"});
     }
 
-    pane.cwd.assign("/tmp/another");
-    ++pane.cwd_revision;
+    pane.core.cwd.assign("/tmp/another");
+    ++pane.core.cwd_revision;
     service.tick(model);
     collect(model, service);
-    check(model.worktrees.containing(pane.cwd) == nullptr);
+    check(model.worktrees.containing(pane.core.cwd) == nullptr);
     for (unsigned index = 0; index < 16; ++index) {
       const auto path = "/managed/" + std::to_string(index);
 
@@ -202,12 +202,12 @@ namespace {
 
     model.worktrees.find(first.worktree)->workspace = worktree_workspace;
     model.panes.insert(1, ds::makeBox<Pane>(memory, memory, 1, TabLocation{.workspace = {.id = worktree_workspace}, .tab_id = 1}, command, PaneLaunch{TerminalSize{20, 4, 8, 16}, model.media_budget, model.graphics_limits}));
-    auto& pane = *model.panes.find(1);
+    const auto pane = requireTerminal(model.panes, 1);
     GatedWorktreeDetector probe;
     WorktreeDetectionService<GatedWorktreeDetector&> service{probe};
 
-    pane.cwd.assign("/repository-second");
-    ++pane.cwd_revision;
+    pane.core.cwd.assign("/repository-second");
+    ++pane.core.cwd_revision;
     probe.release();
     service.tick(model);
     collect(model, service);

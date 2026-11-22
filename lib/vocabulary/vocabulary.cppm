@@ -12,6 +12,7 @@ export namespace telar {
   using telar::FailureCode;
   using telar::Launch;
   using telar::PaneKey;
+  using telar::PaneKind;
   using telar::TerminalSize;
 }
 

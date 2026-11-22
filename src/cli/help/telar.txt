@@ -15,6 +15,7 @@ Sessions (what the runtime keeps alive)
   workspace       Create, list, rename and show workspaces: a directory and its ordered tabs
   tab             List, open, rename, move and close the tabs of a workspace; select them in a window
   pane            Read, type into and watch any pane; list panes; and, through a window, split, close, focus, resize and scroll them
+  edit            Open a file in the native editor pane of a window
   worktree        Git worktrees as tasks: create one for an agent, run commands in it, inspect and remove it
 
 Agents (running in panes)

@@ -20,6 +20,7 @@ import telar.gui.features.terminal.links;
 import telar.gui.features.paths;
 import telar.gui.features.peek;
 import telar.gui.features.monitor;
+import telar.gui.features.nvim;
 import telar.gui.foundation.system;
 import :client_view_state;
 import :sidebar;
@@ -39,6 +40,7 @@ import telar.wire.graphics;
 import telar.wire.history;
 import telar.wire.layout;
 import telar.wire.monitor;
+import telar.wire.nvim;
 import telar.wire.pane_io;
 import telar.wire.runtime;
 import telar.wire.vocabulary;
@@ -69,6 +71,8 @@ export {
       document,
       // The monitor's answer, or what the runtime refused of it.
       monitor,
+      // An editor pane shows another frame, or asks something else of the person.
+      editor,
     };
 
     // The clock a session reads, monotonic and in nanoseconds.
@@ -524,6 +528,11 @@ export {
       template <typename Message>
       Change dispatchMessage(std::span<const Byte> payload, DecodeStorage& storage, ClientCommandHandler& handler);
 
+      using Dispatch = Change (Session::*)(std::span<const Byte> payload, DecodeStorage& storage, ClientCommandHandler& handler);
+      using DispatchTable = ds::Array<Dispatch, std::numeric_limits<Byte>::max() + 1>;
+      // What applies each of the runtime's messages, by its tag.
+      [[nodiscard]] static consteval DispatchTable routed();
+
       void recoverRuntime(std::string_view reason);
 
       Change apply(const GraphicsSnapshot& message);
@@ -621,6 +630,19 @@ export {
 
       Change apply(const SystemMetrics& message);
       Change apply(const MonitorSnapshot& message);
+
+      Change apply(const PaneKindNotice& message);
+      Change apply(const NvimGrid& message);
+      Change apply(const NvimFrame& message);
+      Change apply(const NvimCmdline& message);
+      Change apply(const NvimPopupMenu& message);
+      Change apply(const NvimMessageList& message);
+      Change apply(const NvimTabLine& message);
+      Change apply(const NvimPrompt& message);
+      Change apply(const NvimNavigated& message);
+      Change apply(const NvimPick& message);
+      Change apply(const NvimLink& message);
+      Change apply(const TextResults& message);
 
       Change apply(const ProxyStatus& message);
 
@@ -814,6 +836,8 @@ export {
       tbc::val_a<features::history::State> history;
       tbc::val_a<features::peek::State> peek;
       tbc::val_a<features::monitor::State> monitor;
+      // The editor panes: what each Neovim shows, as the runtime last sent it.
+      tbc::val_a<features::nvim::State> nvim;
       features::paths::State paths;
       features::palette::State palette;
 

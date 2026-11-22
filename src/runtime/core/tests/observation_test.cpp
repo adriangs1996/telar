@@ -377,9 +377,11 @@ namespace {
     const ds::Array<Byte, 1> editing{'x'};
     const ds::Array<Byte, 1> submitted{'\r'};
 
-    pane.enqueueInput(editing);
+    auto& terminal = *pane.asMut<TerminalBody>();
+
+    enqueueInput({.core = pane, .body = terminal}, editing);
     service.observe(model, agents, pane.id);
-    pane.enqueueInput(submitted);
+    enqueueInput({.core = pane, .body = terminal}, submitted);
 
     pollfd completion{service.descriptor(), POLLIN, 0};
     const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds{2};
@@ -389,7 +391,7 @@ namespace {
       service.collect(model, agents);
     }
 
-    check(pane.cwd == "/observed" && pane.needs_foreground_observation);
+    check(pane.cwd == "/observed" && terminal.needs_foreground_observation);
   }
 
   void testEmptyObservationRequiresExplicitRecheck(ConcurrentMemory& memory) {

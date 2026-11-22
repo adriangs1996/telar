@@ -1022,6 +1022,35 @@ namespace telar::runtime::cli::machine {
     }
   }
 
+  namespace {
+
+    // What the machine says of its editor: the lines `telar integration status editor` prints
+    // there, without their `editor: `. Nothing from a telar that has no such command, or when
+    // it cannot be asked: the check is of the runtime, and stands without it.
+    void editorStatus(Memory& memory, const MachineProfile& profile, ds::Vec<Text, Memory>& lines) {
+      constexpr std::string_view mark = "editor: ";
+      constexpr std::size_t most = 4;
+      launch::Output output{memory};
+
+      try {
+        output = launch::capture(memory, ssh(memory, profile.destination(), MachineRemoteCommand::editor(profile.program()).view()).view(), {}, endpoint_timeout);
+      } catch (const std::exception&) {
+        return;
+      }
+
+      if (output.status != 0) {
+        return;
+      }
+
+      for (const auto part : std::views::split(output.out.view(), '\n')) {
+        if (const std::string_view line{part}; line.starts_with(mark) && lines.size() < most) {
+          lines.emplace(memory, line.substr(mark.size()));
+        }
+      }
+    }
+
+  }
+
   int check(Memory& memory, const MachineProfile& profile, bool json) {
     Text detail{memory};
     ds::Option<Discovery> found;
@@ -1049,6 +1078,9 @@ namespace telar::runtime::cli::machine {
 
     const auto schema = textView(found->schema().view());
     const auto local_schema = textView(handshake::schema_id.view());
+    ds::Vec<Text, Memory> editor{memory};
+
+    editorStatus(memory, profile, editor);
 
     if (json) {
       ds::String<Memory> output{memory};
@@ -1064,6 +1096,17 @@ namespace telar::runtime::cli::machine {
         appendJsonText(output, value, JsonEscapes::control);
       }
 
+      // The editor's lines, when the machine's telar says them.
+      if (!editor.empty()) {
+        output.append(",\"editor\":[");
+        for (std::size_t index = 0; index < editor.size(); ++index) {
+          output.append(index == 0 ? "" : ",");
+          appendJsonText(output, editor[index].view(), JsonEscapes::control);
+        }
+
+        output.append("]");
+      }
+
       output.append("}\n");
       std::print(stdout, "{}", output.view());
     } else {
@@ -1074,6 +1117,10 @@ namespace telar::runtime::cli::machine {
         output.print("matches this telar)\n");
       } else {
         output.print("does not match this telar {}; update telar on one side)\n", local_schema);
+      }
+
+      for (const auto& line : editor) {
+        output.print("  editor\t{}\n", line.view());
       }
 
       output.flush();
@@ -2034,6 +2081,8 @@ namespace telar::runtime::cli {
           result.skip.atMut(1) = true;
         } else if (name == "login") {
           result.skip.atMut(2) = true;
+        } else if (name == "editor") {
+          result.skip.atMut(3) = true;
         } else {
           throw std::invalid_argument{"UnknownSetupSkip"};
         }

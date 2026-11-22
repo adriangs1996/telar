@@ -10,6 +10,7 @@ import telar.gui.features.history;
 import telar.gui.features.prompt;
 import telar.gui.foundation.keys;
 import telar.gui.features.paths;
+import telar.gui.features.nvim;
 import telar.gui.features.peek;
 import telar.gui.features.palette;
 import telar.config.client;
@@ -23,6 +24,7 @@ import telar.wire.editor;
 import telar.wire.graphics;
 import telar.wire.history;
 import telar.wire.layout;
+import telar.wire.nvim;
 import telar.wire.pane_io;
 import telar.wire.runtime;
 import telar.wire.vocabulary;
@@ -90,6 +92,7 @@ namespace telar::gui::application {
         history(allocator),
         peek(allocator),
         monitor(allocator),
+        nvim(allocator),
         decode_(allocator),
         clipboard_(allocator),
         error_(allocator),
@@ -257,6 +260,7 @@ namespace telar::gui::application {
     features::paths::close(paths);
     features::peek::close(peek);
     features::monitor::reset(monitor);
+    features::nvim::detach(nvim);
     features::palette::discard(palette);
     link.forgetRequests();
     features::terminal::links::suspend(links);
@@ -323,13 +327,9 @@ namespace telar::gui::application {
     return consume(payload, handler);
   }
 
-  Change Session::consume(std::span<const Byte> payload, ClientCommandHandler& handler) {
-    if (payload.empty()) {
-      throw EncodingError{"Empty server message"};
-    }
-
-    using Dispatch = Change (Session::*)(std::span<const Byte> payload, DecodeStorage& storage, ClientCommandHandler& handler);
-    using DispatchTable = ds::Array<Dispatch, std::numeric_limits<Byte>::max() + 1>;
+  // The runtime's messages by tag, each with what applies it. One the window has no use for is
+  // in ignored_messages.
+  consteval Session::DispatchTable Session::routed() {
     constexpr auto by_tag = []<typename... Messages>(std::type_identity<Messages>...) consteval -> DispatchTable {
       static_assert((std::same_as<std::remove_const_t<decltype(MessageSchema<Messages>::tag)>, ServerTag> && ...), "only the runtime's messages");
       DispatchTable table{};
@@ -342,8 +342,7 @@ namespace telar::gui::application {
       return table;
     };
 
-    // The runtime's messages by tag. One the window has no use for is in ignored_messages.
-    static constexpr auto messages = by_tag(
+    return by_tag(
         std::type_identity<PaneFrame>{},
         std::type_identity<ClientCommand>{},
         std::type_identity<PaneFocusCommand>{},
@@ -390,6 +389,18 @@ namespace telar::gui::application {
         std::type_identity<CommandSuggestion>{},
         std::type_identity<SystemMetrics>{},
         std::type_identity<MonitorSnapshot>{},
+        std::type_identity<PaneKindNotice>{},
+        std::type_identity<NvimGrid>{},
+        std::type_identity<NvimFrame>{},
+        std::type_identity<NvimCmdline>{},
+        std::type_identity<NvimPopupMenu>{},
+        std::type_identity<NvimMessageList>{},
+        std::type_identity<NvimTabLine>{},
+        std::type_identity<NvimPrompt>{},
+        std::type_identity<NvimNavigated>{},
+        std::type_identity<NvimPick>{},
+        std::type_identity<NvimLink>{},
+        std::type_identity<TextResults>{},
         std::type_identity<ProxyStatus>{},
         std::type_identity<RequestFailed>{},
         std::type_identity<RequestCompleted>{},
@@ -397,6 +408,14 @@ namespace telar::gui::application {
         std::type_identity<Notification>{},
         std::type_identity<RuntimeStopping>{}
     );
+  }
+
+  Change Session::consume(std::span<const Byte> payload, ClientCommandHandler& handler) {
+    if (payload.empty()) {
+      throw EncodingError{"Empty server message"};
+    }
+
+    static constexpr auto messages = routed();
 
     static_assert(placesEachMessage(messages), "Each message of ServerTag is routed in `messages` or listed in ignored_messages, and never both");
 
@@ -637,6 +656,54 @@ namespace telar::gui::application {
     return features::monitor::receive(monitor, message) ? Change::monitor : Change::none;
   }
 
+  Change Session::apply(const PaneKindNotice& message) {
+    return nvim::receive(*this, message);
+  }
+
+  Change Session::apply(const NvimGrid& message) {
+    return nvim::receive(*this, message);
+  }
+
+  Change Session::apply(const NvimFrame& message) {
+    return nvim::receive(*this, message);
+  }
+
+  Change Session::apply(const NvimCmdline& message) {
+    return nvim::receive(*this, message);
+  }
+
+  Change Session::apply(const NvimPopupMenu& message) {
+    return nvim::receive(*this, message);
+  }
+
+  Change Session::apply(const NvimMessageList& message) {
+    return nvim::receive(*this, message);
+  }
+
+  Change Session::apply(const NvimTabLine& message) {
+    return nvim::receive(*this, message);
+  }
+
+  Change Session::apply(const NvimPrompt& message) {
+    return nvim::receive(*this, message);
+  }
+
+  Change Session::apply(const NvimNavigated& message) {
+    return nvim::receive(*this, message);
+  }
+
+  Change Session::apply(const NvimPick& message) {
+    return nvim::receive(*this, message);
+  }
+
+  Change Session::apply(const NvimLink& message) {
+    return nvim::receive(*this, message);
+  }
+
+  Change Session::apply(const TextResults& message) {
+    return nvim::receive(*this, message);
+  }
+
   bool Session::monitors() const noexcept {
     return speaks(ClientTag::query_monitor);
   }
@@ -786,6 +853,19 @@ namespace telar::gui::application {
   template void Session::Link::send<InterruptAgent>(const InterruptAgent& message);
   template void Session::Link::send<LaunchWorktree>(const LaunchWorktree& message);
   template void Session::Link::send<MoveTab>(const MoveTab& message);
+  template void Session::Link::send<CreateNvimPane>(const CreateNvimPane& message);
+  template void Session::Link::send<NvimFocus>(const NvimFocus& message);
+  template void Session::Link::send<NvimInput>(const NvimInput& message);
+  template void Session::Link::send<NvimMouse>(const NvimMouse& message);
+  template void Session::Link::send<NvimBuffers>(const NvimBuffers& message);
+  template void Session::Link::send<NvimList>(const NvimList& message);
+  template void Session::Link::send<NvimPreview>(const NvimPreview& message);
+  template void Session::Link::send<FindText>(const FindText& message);
+  template void Session::Link::send<NvimMenuSelect>(const NvimMenuSelect& message);
+  template void Session::Link::send<NvimNavigate>(const NvimNavigate& message);
+  template void Session::Link::send<NvimOpen>(const NvimOpen& message);
+  template void Session::Link::send<NvimPaste>(const NvimPaste& message);
+  template void Session::Link::send<NvimPromptReply>(const NvimPromptReply& message);
   template void Session::Link::send<OpenEditor>(const OpenEditor& message);
   template void Session::Link::send<OpenPane>(const OpenPane& message);
   template void Session::Link::send<PaneCommand>(const PaneCommand& message);

@@ -292,7 +292,7 @@ namespace {
     workspace.getMut().tabs.atMut(0).panes.push(pane_id);
     model.workspaces.insert(workspace_id, std::move(workspace));
     model.panes.insert(pane_id, std::move(pane));
-    target.session().attachments.push(ds::makeBox<Attachment>(memory, memory, target.session().graphics_credit, pane_id, model.panes.find(pane_id)->media));
+    target.session().attachments.push(ds::makeBox<Attachment>(memory, memory, target.session().graphics_credit, pane_id, requireTerminal(model.panes, pane_id).body.media));
     target.session().last_input_pane = pane_id;
     target.session().last_input_sequence = 7;
 

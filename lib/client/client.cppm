@@ -45,10 +45,13 @@ export {
       // ConfigureShellPrompt; cqp00004 added PaneDocument; cqp00005 added the editor colors to
       // ConfigureTerminalColors, ReadPaneTheme and PaneTheme; cqp00006 added QueryMonitor,
       // MonitorSnapshot, RequestProcessSignal and RequestProcessPriority; cqp00007 added
-      // QueryHistoryWorkspaces and HistoryWorkspaces; cqp00008 gives the monitor's query a layout, a
+      // QueryHistoryWorkspaces and HistoryWorkspaces; cqp00008 gave the monitor's query a layout, a
       // window of rows and folded branches, and its answer each process's owner, tree guides, groups
-      // and the detail's lineage. Peers without them reject the messages.
-      inline constexpr SchemaId schema_id{'c', 'q', 'p', '0', '0', '0', '0', '8'};
+      // and the detail's lineage; cqp00009 adds the editor pane: CreateNvimPane, NvimInput, NvimPaste,
+      // NvimMouse, NvimFocus, NvimPromptReply, NvimOpen, PaneKindNotice, NvimGrid, NvimFrame,
+      // NvimCmdline, NvimPopupMenu, NvimMessageList, NvimTabLine and NvimPrompt, and the failure a
+      // request answers for a pane of another kind. Peers without them reject the messages.
+      inline constexpr SchemaId schema_id{'c', 'q', 'p', '0', '0', '0', '0', '9'};
 
       // The schemas a client of this build can speak with a runtime, oldest first. Each added
       // messages to the one before it and left the layouts of the others alone, so a client that
@@ -63,11 +66,12 @@ export {
         cqp00006,
         cqp00007,
         cqp00008,
+        cqp00009,
       };
 
-      inline constexpr Dialect current_dialect = Dialect::cqp00008;
+      inline constexpr Dialect current_dialect = Dialect::cqp00009;
 
-      inline constexpr ds::Array<SchemaId, 8> dialect_schemas{
+      inline constexpr ds::Array<SchemaId, 9> dialect_schemas{
           SchemaId{'8', '7', '6', 'b', '4', '8', '0', 'd'},
           SchemaId{'c', 'q', 'p', '0', '0', '0', '0', '2'},
           SchemaId{'c', 'q', 'p', '0', '0', '0', '0', '3'},
@@ -75,6 +79,7 @@ export {
           SchemaId{'c', 'q', 'p', '0', '0', '0', '0', '5'},
           SchemaId{'c', 'q', 'p', '0', '0', '0', '0', '6'},
           SchemaId{'c', 'q', 'p', '0', '0', '0', '0', '7'},
+          SchemaId{'c', 'q', 'p', '0', '0', '0', '0', '8'},
           schema_id,
       };
 
@@ -114,6 +119,19 @@ export {
           Addition{.tag = ClientTag::query_history_workspaces, .dialect = Dialect::cqp00007},
           // Its layout and its answer's gained the monitor's layouts, owners and lineage.
           Addition{.tag = ClientTag::query_monitor, .dialect = Dialect::cqp00008},
+          Addition{.tag = ClientTag::create_nvim_pane, .dialect = Dialect::cqp00009},
+          Addition{.tag = ClientTag::nvim_input, .dialect = Dialect::cqp00009},
+          Addition{.tag = ClientTag::nvim_paste, .dialect = Dialect::cqp00009},
+          Addition{.tag = ClientTag::nvim_mouse, .dialect = Dialect::cqp00009},
+          Addition{.tag = ClientTag::nvim_focus, .dialect = Dialect::cqp00009},
+          Addition{.tag = ClientTag::nvim_prompt_reply, .dialect = Dialect::cqp00009},
+          Addition{.tag = ClientTag::nvim_open, .dialect = Dialect::cqp00009},
+          Addition{.tag = ClientTag::nvim_navigate, .dialect = Dialect::cqp00009},
+          Addition{.tag = ClientTag::nvim_menu_select, .dialect = Dialect::cqp00009},
+          Addition{.tag = ClientTag::find_text, .dialect = Dialect::cqp00009},
+          Addition{.tag = ClientTag::nvim_buffers, .dialect = Dialect::cqp00009},
+          Addition{.tag = ClientTag::nvim_preview, .dialect = Dialect::cqp00009},
+          Addition{.tag = ClientTag::nvim_list, .dialect = Dialect::cqp00009},
       };
 
       // The first dialect whose runtime understands `tag`.

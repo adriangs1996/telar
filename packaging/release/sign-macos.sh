@@ -18,6 +18,7 @@
 set -eu
 
 identity=${MACOS_SIGNING_IDENTITY:-}
+root=$(cd "$(dirname "$0")/../.." && pwd)
 app=$1/Telar.app
 contents=$app/Contents
 
@@ -41,6 +42,24 @@ done
 for executable in "$contents"/Resources/bin/* "$contents"/MacOS/*; do
     sign "$executable"
 done
+
+# The Neovim of the editor panes: its parsers as any library, then the program, which under
+# the hardened runtime needs leave to run the code LuaJIT writes.
+nvim=$contents/Resources/share/telar/nvim
+if [ -d "$nvim" ]; then
+    find "$nvim" -type f -name '*.so' | while read -r parser; do
+        sign "$parser"
+    done
+
+    find "$nvim" -type f -path '*/bin/*' | while read -r program; do
+        if [ -n "$identity" ]; then
+            codesign --force --options runtime --timestamp --entitlements "$root/packaging/macos/nvim.entitlements" \
+                --sign "$identity" "$program"
+        else
+            codesign --force --sign - "$program"
+        fi
+    done
+fi
 
 sign "$app"
 codesign --verify --strict --deep --verbose=2 "$app"

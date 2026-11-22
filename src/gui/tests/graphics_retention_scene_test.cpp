@@ -11,8 +11,8 @@ static_assert(true);
 #include "telar_wire/serializers/telar_cells.hpp"
 #include "telar_wire/serializers/telar_frame.hpp"
 #include "telar_wire/serializers/telar_messages.hpp"
-#include "ui/app/panes/terminal/scene/graphics_scene.hpp"
-#include "ui/app/panes/terminal/scene/window_images.hpp"
+#include "ui/kit/cell_scene/graphics_scene.hpp"
+#include "ui/kit/cell_scene/window_images.hpp"
 #include "ui/kit/scene/scene_nodes.hpp"
 #include <QColor>
 #include <QDir>

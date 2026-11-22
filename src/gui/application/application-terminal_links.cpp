@@ -68,6 +68,12 @@ namespace telar::gui::application::terminal::links {
       return;
     }
 
+    // The tab's own editor pane shows the file. A tab without one opens the link as it always
+    // did: in the person's editor, in a pane that already runs it or in one made for it.
+    if (nvim::beside(session, *source_id) != 0 && nvim::edit(session, *source_id, {.path = path.text().starts_with('/') ? path.text() : anchored, .line = path.line(), .column = path.column()})) {
+      return;
+    }
+
     const auto* source = findPane(session.panes, *source_id);
     const features::terminal::links::EditorRequest request{
         .request_id = source->generation == 0 ? 0 : session.link.nextRequest(),

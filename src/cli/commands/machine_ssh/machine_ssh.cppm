@@ -107,7 +107,7 @@ export {
       bool json = false;
       bool setup = false;
       bool confirm = false;
-      ds::Array<bool, 3> skip{};
+      ds::Array<bool, 4> skip{};
 
       static MachineOptions parse(std::span<char* const> args);
     };

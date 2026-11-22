@@ -13,6 +13,7 @@ telar_add_qml_sources(gui-quick
     KeyHintBar.qml
     MeterRow.qml
     PaletteButton.qml
+    PickerPanel.qml
     PromptActions.qml
     PromptField.qml
     SystemSummary.qml)

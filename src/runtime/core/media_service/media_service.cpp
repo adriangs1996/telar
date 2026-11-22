@@ -332,27 +332,27 @@ namespace telar::runtime {
     const auto panes = model.panes.items();
 
     for (std::size_t visited = 0; visited < panes.size() && request.count < request.entries.size(); ++visited) {
-      auto* pane = panes[next_slot_++ % panes.size()];
-      if (pane == nullptr) {
+      const auto pane = asTerminal(panes[next_slot_++ % panes.size()]);
+      if (!pane) {
         continue;
       }
 
-      if (pane->media->failed()) {
-        if (!pane->output_closed) {
+      if (pane->body.media->failed()) {
+        if (!pane->core.output_closed) {
           service.failOutput(*pane);
         }
 
         continue;
       }
 
-      if (!pane->media->busy()) {
-        pane->media->discardUnwantedTransfers([&](ImageKey key, bool shared) {
-          return wanted(clients, pane->id, key, shared);
+      if (!pane->body.media->busy()) {
+        pane->body.media->discardUnwantedTransfers([&](ImageKey key, bool shared) {
+          return wanted(clients, pane->core.id, key, shared);
         });
       }
 
-      if (pane->media->seal()) {
-        request.entries.atMut(request.count++) = {.pane = pane->id, .generation = pane->generation, .media = pane->media};
+      if (pane->body.media->seal()) {
+        request.entries.atMut(request.count++) = {.pane = pane->core.id, .generation = pane->core.generation, .media = pane->body.media};
       }
 
       updateReadInterest(*pane);
@@ -373,23 +373,24 @@ namespace telar::runtime {
   }
 
   template <EventLoop Poller, typename Limits, HistoryEventSink History>
-  void MediaService<Poller, Limits, History>::updateReadInterest(Pane& pane) {
-    if (pane.output_closed) {
+  void MediaService<Poller, Limits, History>::updateReadInterest(PaneRef<TerminalBody> pane) {
+    if (pane.core.output_closed) {
       return;
     }
 
-    const bool paused = pane.terminal.hasPendingControl() || pane.media->holdsRead(Pane::read_buffer_size);
-    if (paused != pane.read_paused) {
-      poller_.readInterest(pane.process->descriptor(), eventToken(EventSource::pane, pane.event_identity), !paused);
-      pane.read_paused = paused;
+    const bool paused = pane.body.terminal.hasPendingControl() || pane.body.media->holdsRead(TerminalBody::read_buffer_size);
+    if (paused != pane.core.read_paused) {
+      poller_.readInterest(pane.body.process->descriptor(), eventToken(EventSource::pane, pane.core.event_identity), !paused);
+      pane.core.read_paused = paused;
     }
   }
 
   template <EventLoop Poller, typename Limits, HistoryEventSink History>
   void MediaService<Poller, Limits, History>::finish(RuntimeModel& model) noexcept {
-    for (auto* pane : model.panes.items()) { // NOLINT(misc-const-correctness): the pane's media is cancelled through its shared handle, a mutation tbc sees through the pane
-      if (pane != nullptr) {
-        pane->media->cancel();
+    for (auto* stored : model.panes.items()) {
+      const auto pane = asTerminal(stored); // NOLINT(misc-const-correctness): the pane's media is cancelled through its shared handle, a mutation tbc sees through the pane
+      if (pane) {
+        pane->body.media->cancel();
       }
     }
 
@@ -408,13 +409,15 @@ namespace telar::runtime {
       Processor::Request request;
 
       enqueueRetired(model, request);
-      for (auto* pane : model.panes.items()) { // NOLINT(misc-const-correctness): the pane's media is sealed through its shared handle, a mutation tbc sees through the pane
+      for (auto* stored : model.panes.items()) {
+        const auto pane = asTerminal(stored); // NOLINT(misc-const-correctness): the pane's media is sealed through its shared handle, a mutation tbc sees through the pane
+
         if (request.count == request.entries.size()) {
           break;
         }
 
-        if (pane != nullptr && pane->media->seal()) {
-          request.entries.atMut(request.count++) = {.pane = pane->id, .generation = pane->generation, .media = pane->media};
+        if (pane && pane->body.media->seal()) {
+          request.entries.atMut(request.count++) = {.pane = pane->core.id, .generation = pane->core.generation, .media = pane->body.media};
         }
       }
 
@@ -471,8 +474,8 @@ namespace telar::runtime {
     }
 
     for (const auto& entry : std::span{result.entries}.first(result.count)) {
-      auto* pane = findPane(model.panes, {.id = entry.pane, .generation = entry.generation});
-      if (pane == nullptr) {
+      const auto pane = asTerminal(findPane(model.panes, {.id = entry.pane, .generation = entry.generation}));
+      if (!pane) {
         continue;
       }
 
@@ -482,15 +485,15 @@ namespace telar::runtime {
       }
 
       if (entry.reset) {
-        requestGraphicsSnapshots(clients.items(), pane->id);
+        requestGraphicsSnapshots(clients.items(), pane->core.id);
       }
 
-      if (auto* terminal = pane->media->terminal()) {
+      if (auto* terminal = pane->body.media->terminal()) {
         reportLimits(model.graphics_limits, *terminal);
-        stageTransfers(clients, model.metrics, pane->id, terminal->graphics());
+        stageTransfers(clients, model.metrics, pane->core.id, terminal->graphics());
       }
 
-      if (!pane->output_closed) {
+      if (!pane->core.output_closed) {
         service.flushInput(*pane);
       }
 

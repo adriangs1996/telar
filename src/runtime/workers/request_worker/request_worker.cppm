@@ -434,6 +434,18 @@ export {
           }
         }
 
+        if constexpr (std::same_as<Message, FindText>) {
+          // A client's newer search ends the one running for it, and takes the place of the one
+          // it still has queued.
+          if (active_client_ == client && active_tag_ == ClientTag::find_text) {
+            active_cancelled_ = true;
+          }
+
+          if (replaceQueued(client, message)) {
+            return;
+          }
+        }
+
         if (admissionFull() || stopping_) {
           TELAR_DIAGNOSTIC(++queue_metrics_.dropped);
           if constexpr (history_queue && std::same_as<Message, ImportHistory>) {
@@ -642,14 +654,15 @@ export {
         return requests_.size() + (history_queue ? 0 : batch_.size());
       }
 
-      // A client's newer path query takes the place of the one it still has queued.
-      inline bool replaceQueued(std::uint64_t client, const FindPaths& message) {
+      // A client's newer query takes the place of the one of its kind it still has queued.
+      template <typename Message>
+      inline bool replaceQueued(std::uint64_t client, const Message& message) {
         for (auto* queue : {&batch_, &requests_}) {
           for (std::size_t index = 0; index < queue->size(); ++index) {
-            auto& queued = (*queue)[index];
-            if (!queued.cancelled && queued.client == client) {
+            auto& queued = queue->atMut(index);
+            if (!queued.cancelled && queued.client == client && !queued.request.empty() && static_cast<ClientTag>(queued.request.front()) == MessageSchema<Message>::tag) {
               queued.request.resize(Codec::encodedSize(message));
-              Codec::encode(message, queued.request);
+              Codec::encode(message, queued.request.viewMut());
               queued.request_id = message.request_id;
               return true;
             }
@@ -722,6 +735,7 @@ export {
 
         job.getMut().superseded = historySuperseded(*job);
         active_client_ = job->client;
+        active_tag_ = job->request.empty() ? ds::Option<ClientTag>{} : ds::Option<ClientTag>{static_cast<ClientTag>(job->request.front())};
         active_cancelled_ = false;
         return Step::run;
       }
@@ -824,6 +838,7 @@ export {
       std::size_t outstanding_ = 0;
       bool stopping_ = false;
       std::uint64_t active_client_ = 0;
+      ds::Option<ClientTag> active_tag_;
       std::atomic<bool> active_cancelled_{false};
       std::atomic<std::uint64_t> internal_failures_{0};
 #if TELAR_DIAGNOSTICS

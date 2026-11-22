@@ -1,5 +1,5 @@
 # The vocabulary of the GUI, lowest first: each folder is a module and a domain that imports only
 # the ones before it.
-foreach(module IN ITEMS core text system terminal fonts actions keys model agents drawing forms)
+foreach(module IN ITEMS core text system terminal fonts actions keys model agents drawing forms icons)
   add_subdirectory(${module})
 endforeach()

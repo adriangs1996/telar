@@ -1385,9 +1385,9 @@ Item {
                         CellText {
                             x: root.pillX + root.cell
                             anchors.verticalCenter: parent.verticalCenter
-                            text: pathRow.modelData.directory ? "" : ""
+                            text: pathRow.modelData.icon ?? ""
                             grid: root.grid
-                            color: pathRow.modelData.directory ? root.colors.blue : root.colors.subtext0
+                            color: root.colors[pathRow.modelData.iconTone ?? "subtext0"] ?? root.colors.subtext0
                         }
 
                         Row {

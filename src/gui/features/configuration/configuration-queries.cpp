@@ -360,7 +360,7 @@ namespace telar::gui::features::configuration {
     }
 
     using VoidAction = std::pair<BindingActionKind, std::string_view>;
-    constexpr auto voids = ds::Array<VoidAction, 33>{
+    constexpr auto voids = ds::Array<VoidAction, 38>{
         VoidAction{BindingActionKind::toggle_pane_fullscreen, "toggle_pane_fullscreen"},
         VoidAction{BindingActionKind::toggle_sidebar, "toggle_sidebar"},
         VoidAction{BindingActionKind::toggle_workspace_list, "toggle_workspace_list"},
@@ -370,6 +370,11 @@ namespace telar::gui::features::configuration {
         VoidAction{BindingActionKind::rename_workspace, "rename_workspace"},
         VoidAction{BindingActionKind::close_pane, "close_pane"},
         VoidAction{BindingActionKind::new_tab, "new_tab"},
+        VoidAction{BindingActionKind::new_editor, "new_editor"},
+        VoidAction{BindingActionKind::new_editor_tab, "new_editor_tab"},
+        VoidAction{BindingActionKind::editor_files, "editor_files"},
+        VoidAction{BindingActionKind::editor_grep, "editor_grep"},
+        VoidAction{BindingActionKind::editor_buffers, "editor_buffers"},
         VoidAction{BindingActionKind::rename_tab, "rename_tab"},
         VoidAction{BindingActionKind::close_tab, "close_tab"},
         VoidAction{BindingActionKind::detach, "detach"},
@@ -454,6 +459,11 @@ namespace telar::gui::features::configuration {
     case BindingActionKind::rename_workspace:
     case BindingActionKind::close_pane:
     case BindingActionKind::new_tab:
+    case BindingActionKind::new_editor:
+    case BindingActionKind::new_editor_tab:
+    case BindingActionKind::editor_files:
+    case BindingActionKind::editor_grep:
+    case BindingActionKind::editor_buffers:
     case BindingActionKind::rename_tab:
     case BindingActionKind::close_tab:
     case BindingActionKind::move_tab_previous:

@@ -8,6 +8,7 @@ Item {
 
     required property PanesController controller
     required property TerminalController terminals
+    required property NvimController editors
     required property DocumentsController documents
     required property CopyController copy
     // The controllers of the overlays a pane hosts: the attachment shelf, and the history, path
@@ -74,6 +75,8 @@ Item {
             readonly property real frameWidth: resizing ? Math.max(0, record.frame.width + width - record.width) : record.frame.width
             readonly property real frameHeight: resizing ? Math.max(0, record.frame.height + height - record.height) : record.frame.height
             readonly property bool resizing: width !== record.width || height !== record.height
+            // What draws the pane and takes its keys: the editor's view, or the terminal's.
+            readonly property Item contentView: editorView.item ?? terminal
             visible: width > 0 && height > 0
 
             HoverHandler {
@@ -123,7 +126,7 @@ Item {
                         anchors.fill: parent
                         onPressed: {
                             root.actionRequested(WindowActions.Action.focus_pane, pane.record.key);
-                            terminal.forceActiveFocus(Qt.MouseFocusReason);
+                            pane.contentView.forceActiveFocus(Qt.MouseFocusReason);
                         }
                     }
                 }
@@ -154,6 +157,16 @@ Item {
                 height: pane.framed ? Math.min(pane.frameHeight, pane.record.content.y - y, root.headerHeight) : 0
                 visible: pane.framed && !pane.drawnHeader
                 record: pane.record.chrome
+                // An editor says which file it shows and the mode it is in.
+                detail: {
+                    const shown = editorView.item?.editor;
+                    if (!shown || !shown.ready) {
+                        return "";
+                    }
+
+                    const file = pane.record.title === pane.record.chrome.program ? "" : pane.record.title;
+                    return [file, shown.mode.toUpperCase()].filter(part => part.length > 0).join(" · ");
+                }
                 onElementActivated: (slot, key, revision, element) => root.elementActivated(slot, key, revision, element)
                 colors: root.colors
                 typography: root.typography
@@ -166,7 +179,7 @@ Item {
                     anchors.fill: parent
                     onPressed: {
                         root.actionRequested(WindowActions.Action.focus_pane, pane.record.key);
-                        terminal.forceActiveFocus(Qt.MouseFocusReason);
+                        pane.contentView.forceActiveFocus(Qt.MouseFocusReason);
                     }
                 }
             }
@@ -268,7 +281,7 @@ Item {
 
                     function focusSelectedPane() {
                         if (terminal.modelFocused && root.dialog === Store.Dialog.none && !root.keyboardCovered) {
-                            terminal.forceActiveFocus();
+                            pane.contentView.forceActiveFocus();
                         }
                     }
 
@@ -296,7 +309,7 @@ Item {
                     // Geometry refreshes keep the same selection and must preserve chrome focus.
                     onModelFocusedChanged: {
                         if (!terminal.modelFocused) {
-                            terminal.focus = false;
+                            pane.contentView.focus = false;
                         } else if (terminal.focusReady) {
                             terminal.focusSelectedPane();
                         }
@@ -356,95 +369,136 @@ Item {
                     }
                 }
 
-                // The commands the shell ran: a separator over each one's prompt, and a dot per
-                // command beside the pane to reach it.
-                // Documents drawn in place of the rows of text they stand for, moving with them,
-                // under the separators and the prompt line.
-                InlineDocuments {
+                // An editor pane draws its own grids in the terminal's place. Bound only for an
+                // editor, so a terminal's own visibility is nobody else's to set.
+                Binding {
+                    target: terminal
+                    property: "visible"
+                    value: false
+                    when: pane.record.editor
+                }
+
+                // What a terminal draws over its rows: the documents, the commands' separators and
+                // rail, the prompt line. An editor pane has none of them.
+                Item {
                     anchors.fill: parent
-                    transform: Translate { y: -viewport.rise }
-                    controller: root.documents
-                    paneId: pane.record.key
-                    view: terminal
-                    colors: root.colors
-                    grid: root.typography.grid
-                    ratio: root.ratio
+                    visible: !pane.record.editor
+
+                    // The commands the shell ran: a separator over each one's prompt, and a dot per
+                    // command beside the pane to reach it.
+                    // Documents drawn in place of the rows of text they stand for, moving with them,
+                    // under the separators and the prompt line.
+                    InlineDocuments {
+                        anchors.fill: parent
+                        transform: Translate { y: -viewport.rise }
+                        controller: root.documents
+                        paneId: pane.record.key
+                        view: terminal
+                        colors: root.colors
+                        grid: root.typography.grid
+                        ratio: root.ratio
+                    }
+
+                    CommandSeparators {
+                        id: separators
+                        view: terminal
+                        // With the rows, which a view scrolled by pixels draws shifted up.
+                        transform: Translate { y: -viewport.rise - terminal.scrollShift }
+                        pinnedOffset: viewport.rise + terminal.scrollShift
+                        colors: root.colors
+                        grid: root.typography.grid
+                        ratio: root.ratio
+                        moving: promptLine.moving
+                        interruptKey: promptLine.interruptKey
+                        queueing: promptLine.queueing
+                        secret: promptLine.secret
+                        offerFailure: promptLine.offerFailure
+                    }
+
+                    PromptLine {
+                        id: promptLine
+                        revealDelay: separators.revealDelay
+                        transform: Translate { y: -viewport.rise }
+                        paneId: pane.record.key
+                        colors: root.colors
+                        typography: root.typography
+                        grid: root.typography.grid
+                        history: root.history
+                        pathPicker: root.pathPicker
+                        copy: root.copy
+                        prompt: root.prompt
+                        lineSearch: root.lineSearch
+                        controlModifier: root.controlModifier
+                        superModifier: root.superModifier
+                        terminal: terminal
+                        ratio: root.ratio
+                        focused: pane.record.focused
+                        onCancelled: root.actionRequested(WindowActions.Action.cancel, "")
+                    }
+
+                    // Back to the live end, above the docked line.
+                    JumpToEnd {
+                        view: terminal
+                        colors: root.colors
+                        grid: root.typography.grid
+                        ratio: root.ratio
+                        moving: promptLine.moving
+                        anchors.horizontalCenter: parent.horizontalCenter
+                        anchors.bottom: parent.bottom
+                        anchors.bottomMargin: promptLine.dockedHeight + 10 * root.ratio
+                        z: 3
+                    }
+
+                    CommandRail {
+                        view: terminal
+                        colors: root.colors
+                        ratio: root.ratio
+                        moving: promptLine.moving
+                        anchors.right: parent.right
+                        anchors.rightMargin: 4 * root.ratio
+                        anchors.top: parent.top
+                        anchors.topMargin: 12 * root.ratio
+                        anchors.bottom: parent.bottom
+                        anchors.bottomMargin: 28 * root.ratio
+                    }
+
+                    // A document the pane's program shows natively covers its rows while it runs.
+                    DocumentView {
+                        anchors.fill: parent
+                        z: 4
+                        controller: root.documents
+                        paneId: pane.record.key
+                        colors: root.colors
+                        grid: root.typography.grid
+                        ratio: root.ratio
+                        focusTarget: terminal
+                        onFocusRequested: paneId => root.actionRequested(WindowActions.Action.focus_pane, paneId)
+                    }
                 }
 
-                CommandSeparators {
-                    id: separators
-                    view: terminal
-                    // With the rows, which a view scrolled by pixels draws shifted up.
-                    transform: Translate { y: -viewport.rise - terminal.scrollShift }
-                    pinnedOffset: viewport.rise + terminal.scrollShift
-                    colors: root.colors
-                    grid: root.typography.grid
-                    ratio: root.ratio
-                    moving: promptLine.moving
-                    interruptKey: promptLine.interruptKey
-                    queueing: promptLine.queueing
-                    secret: promptLine.secret
-                    offerFailure: promptLine.offerFailure
-                }
+                // A Neovim the runtime runs, drawn natively in place of a terminal's rows.
+                Loader {
+                    id: editorView
+                    width: pane.record.content.width
+                    height: pane.record.content.height
+                    active: pane.record.editor
+                    onLoaded: terminal.focusSelectedPane()
+                    sourceComponent: NvimPane {
+                        controller: root.editors
+                        paneId: pane.record.key
+                        colors: root.colors
+                        typography: root.typography
+                        ratio: root.ratio
+                        onPressed: root.actionRequested(WindowActions.Action.focus_pane, pane.record.key)
 
-                PromptLine {
-                    id: promptLine
-                    revealDelay: separators.revealDelay
-                    transform: Translate { y: -viewport.rise }
-                    paneId: pane.record.key
-                    colors: root.colors
-                    typography: root.typography
-                    grid: root.typography.grid
-                    history: root.history
-                    pathPicker: root.pathPicker
-                    copy: root.copy
-                    prompt: root.prompt
-                    lineSearch: root.lineSearch
-                    controlModifier: root.controlModifier
-                    superModifier: root.superModifier
-                    terminal: terminal
-                    ratio: root.ratio
-                    focused: pane.record.focused
-                    onCancelled: root.actionRequested(WindowActions.Action.cancel, "")
-                }
-
-                // Back to the live end, above the docked line.
-                JumpToEnd {
-                    view: terminal
-                    colors: root.colors
-                    grid: root.typography.grid
-                    ratio: root.ratio
-                    moving: promptLine.moving
-                    anchors.horizontalCenter: parent.horizontalCenter
-                    anchors.bottom: parent.bottom
-                    anchors.bottomMargin: promptLine.dockedHeight + 10 * root.ratio
-                    z: 3
-                }
-
-                CommandRail {
-                    view: terminal
-                    colors: root.colors
-                    ratio: root.ratio
-                    moving: promptLine.moving
-                    anchors.right: parent.right
-                    anchors.rightMargin: 4 * root.ratio
-                    anchors.top: parent.top
-                    anchors.topMargin: 12 * root.ratio
-                    anchors.bottom: parent.bottom
-                    anchors.bottomMargin: 28 * root.ratio
-                }
-
-                // A document the pane's program shows natively covers its rows while it runs.
-                DocumentView {
-                    anchors.fill: parent
-                    z: 4
-                    controller: root.documents
-                    paneId: pane.record.key
-                    colors: root.colors
-                    grid: root.typography.grid
-                    ratio: root.ratio
-                    focusTarget: terminal
-                    onFocusRequested: paneId => root.actionRequested(WindowActions.Action.focus_pane, paneId)
+                        Rectangle {
+                            anchors.fill: parent
+                            z: 1000
+                            visible: pane.framed && !pane.record.focused
+                            color: Qt.rgba(root.colors.background.r, root.colors.background.g, root.colors.background.b, 1)
+                            opacity: pane.record.dimAlpha
+                        }
+                    }
                 }
             }
 

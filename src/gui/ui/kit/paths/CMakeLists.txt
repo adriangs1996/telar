@@ -5,5 +5,4 @@ telar_add_qml_sources(gui-quick
     path_picker_projection.cpp
   QML_FILES
     PathKeys.qml
-    PathPickerPanel.qml
   REGISTERS)

@@ -19,4 +19,8 @@ telar_add_test(checkpoint-probe NO_TEST SOURCES checkpoint_probe.cpp LIBRARIES r
 # A fixture of its own virtual interface; CTest runs its packet self-test.
 telar_add_test(traffic-interface-probe SOURCES traffic_interface_probe.cpp LIBRARIES runtime-host runtime-traffic runtime-tools-support
   TEST traffic-interface-fixture-tests ARGS --self-test LABELS runtime.traffic)
+# Drives a real Neovim as the runtime's editor does and prints what it measured.
+telar_add_test(nvim-embed-probe PROBE SOURCES nvim_embed_probe.cpp LIBRARIES runtime-nvim runtime-tools-support)
+# What decoding a redraw and writing a client its frame cost, without a Neovim.
+telar_add_test(nvim-redraw-bench PROBE SOURCES nvim_redraw_bench.cpp LIBRARIES runtime-nvim runtime-tools-support)
 telar_add_probes(runtime-probes)

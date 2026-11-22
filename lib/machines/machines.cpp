@@ -1130,6 +1130,10 @@ namespace telar::runtime::machines {
     return format(bridge_prefix, program, bridge_suffix);
   }
 
+  MachineRemoteCommand::Text MachineRemoteCommand::editor(ds::Option<std::string_view> program) {
+    return format(bridge_prefix, program, editor_suffix);
+  }
+
   MachineRemoteCommand::Text MachineRemoteCommand::format(std::string_view prefix, ds::Option<std::string_view> program, std::string_view suffix) {
     if (program) {
       MachineFieldRules::program(*program);

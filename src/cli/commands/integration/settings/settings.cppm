@@ -26,6 +26,8 @@ export {
       AgentProvider provider = AgentProvider::unknown;
       // Neovim instead of an agent: `settings` then names its site directory.
       bool neovim = false;
+      // The Neovim telar provisions for its editor panes, instead of an agent.
+      bool editor = false;
       std::string_view settings;
       bool legacy = false;
 
@@ -68,6 +70,12 @@ export {
 // Interface: integration/neovim.cppm
 export {
   namespace telar::runtime::cli::integration {
+
+    // Installs, removes or reports the Neovim telar provisions under its data directory, by the
+    // script the build wrote its release and checksums into. `executable` is this telar: the
+    // Neovim its package brought beside it counts as there. It returns only when the script
+    // could not be started.
+    int runEditor(const IntegrationOptions& options, std::string_view executable);
 
     // Installs, removes or reports telar's Neovim plugin under Neovim's site directory,
     // $XDG_DATA_HOME/$NVIM_APPNAME/site, which Neovim and lazy.nvim load without configuration.

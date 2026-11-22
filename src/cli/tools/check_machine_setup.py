@@ -76,6 +76,10 @@ elif command.endswith("server endpoint'"):
  print(home);print('/bin/sh');print(home+'/runtime.sock');print(schema)
 elif command.endswith(' machine receive-config') and os.environ.get('FIXTURE_RECEIVE')=='fail':
  sys.stdin.buffer.read();print('cannot write there',file=sys.stderr);sys.exit(1)
+elif command.startswith('exec /bin/sh -c ') and '/telar/nvim;' in command:
+ # The package's own Neovim, sent over standard input: unpacked in the remote home for real,
+ # which has none of this side's XDG directories.
+ sys.exit(subprocess.run(['/bin/sh','-c',command],env={key:value for key,value in remote_env.items() if not key.startswith('XDG_')}).returncode)
 elif os.environ.get('FIXTURE_REAL') and command.startswith('exec /bin/sh -c '):
  sys.exit(subprocess.run(['/bin/sh','-c',command],env=remote_env).returncode)
 elif command.endswith(' machine receive-config'):
@@ -123,7 +127,7 @@ def run(binary, provider, seed, login=False, prepare=None):
         (bindir/command).write_text('#!/bin/sh\nexit 0\n');(bindir/command).chmod(0o700)
         env['PATH']=str(bindir)+':/usr/bin:/bin'
         if login:env['FIXTURE_LOGIN']=login
-        env.update(FIXTURE_REMOTE_HOME=str(remote),FIXTURE_TELAR=str(binary),FIXTURE_SCHEMA='cqp00008' if b'cqp00008' in binary.read_bytes() else '886b480d')
+        env.update(FIXTURE_REMOTE_HOME=str(remote),FIXTURE_TELAR=str(binary),FIXTURE_SCHEMA='cqp00009' if b'cqp00009' in binary.read_bytes() else '886b480d')
         roots={'claude':home/'.claude','codex':home/'.codex','pi':home/'.pi/agent','opencode':Path(env['XDG_CONFIG_HOME'])/'opencode','cursor':home/'.cursor'}
         local=roots[provider];local.mkdir(parents=True,mode=0o700)
         filename={'claude':'settings.json','codex':'config.toml','pi':'settings.json','opencode':'opencode.jsonc','cursor':'hooks.json'}[provider]
@@ -139,7 +143,7 @@ def run(binary, provider, seed, login=False, prepare=None):
         if prepare:prepare(root,env)
         result=[]
         for repetition in range(2):
-            child=subprocess.run([str(binary),'machine','setup','fixture','--skip','agents,config' if login else 'agents,login','--json'],env=env,cwd=root,capture_output=True,text=True,timeout=90)
+            child=subprocess.run([str(binary),'machine','setup','fixture','--skip','agents,config,editor' if login else 'agents,login,editor','--json'],env=env,cwd=root,capture_output=True,text=True,timeout=90)
             files=snapshot(root,binary)
             # Fixture files contain implementation paths and schema by design.
             result.append({'status':child.returncode,'stdout':normalize(child.stdout,root,binary),'stderr':normalize(child.stderr,root,binary),'files':files})
@@ -189,7 +193,7 @@ def machine(binary, agents=('claude',), **fixture):
             (bindir / agent).chmod(0o700)
         calls = root / 'calls.jsonl'
         env.update(PATH=f'{bindir}:/usr/bin:/bin', FIXTURE_REMOTE_HOME=str(remote), FIXTURE_TELAR=str(binary), FIXTURE_CALLS=str(calls),
-                   FIXTURE_SCHEMA='cqp00008' if b'cqp00008' in binary.read_bytes() else '886b480d')
+                   FIXTURE_SCHEMA='cqp00009' if b'cqp00009' in binary.read_bytes() else '886b480d')
         env.update({'FIXTURE_' + key.upper(): value for key, value in fixture.items()})
         (Path(env['XDG_CONFIG_HOME']) / 'telar').mkdir(exist_ok=True, mode=0o700)
 
@@ -221,8 +225,50 @@ def steps(output):
     return {step['step']: step['status'] for step in json.loads(output)['steps']}
 
 
-SKIP_ALL_BUT_CONFIG = ('--skip', 'agents,login')
-SKIP_ALL = ('--skip', 'agents,config,login')
+SKIP_ALL_BUT_CONFIG = ('--skip', 'agents,login,editor')
+SKIP_ALL = ('--skip', 'agents,config,login,editor')
+
+
+def editor_is_provisioned(binary):
+    """Setup has the machine's own telar provision the editor's Neovim, after the agents'
+    integrations, unless it is skipped; the machine saying nothing is taken as done."""
+    with machine(binary) as fixture:
+        status, output = fixture.run('machine', 'setup', 'fixture', '--skip', 'agents,config,login', '--json')
+        notes = [note for step in json.loads(output)['steps'] if step['step'] == 'integrations' for note in step.get('notes', [])]
+        assert status == 0 and any(note.startswith('editor: ') for note in notes), output
+        before = len(fixture.calls())
+    with machine(binary) as fixture:
+        status, output = fixture.run('machine', 'setup', 'fixture', *SKIP_ALL, '--json')
+        notes = [note for step in json.loads(output)['steps'] if step['step'] == 'integrations' for note in step.get('notes', [])]
+        assert status == 0 and not any(note.startswith('editor: ') for note in notes) and len(fixture.calls()) == before - 1, output
+
+
+def editor_is_sent(binary):
+    """Where this telar's package brought a Neovim and the machine is of the system and the
+    processor it is for, setup sends it there, so the machine needs no network for it; a
+    machine of another kind fetches its own. The fixture's machine says it is Darwin on arm64."""
+    with tempfile.TemporaryDirectory(prefix='telar-package-', dir='/tmp') as temporary:
+        package = Path(temporary).resolve()
+        (package / 'bin').mkdir()
+        packaged = package / 'bin' / 'telar'
+        shutil.copy2(binary, packaged)
+        nvim = package / 'share/telar/nvim/9.9.9/bin/nvim'
+        nvim.parent.mkdir(parents=True)
+        nvim.write_text('#!/bin/sh\necho packaged\n')
+        nvim.chmod(0o755)
+        same = tuple(subprocess.run(['uname', '-sm'], capture_output=True, text=True).stdout.split()) == ('Darwin', 'arm64')
+        with machine(packaged) as fixture:
+            there = fixture.remote / '.local/share/telar/nvim/9.9.9/bin/nvim'
+            for sent in (same, False):
+                status, output = fixture.run('machine', 'setup', 'fixture', '--skip', 'agents,config,login', '--json')
+                notes = [note for step in json.loads(output)['steps'] if step['step'] == 'integrations' for note in step.get('notes', [])]
+                assert status == 0 and there.exists() == same, output
+                # Sent once: a machine that has it is sent nothing.
+                assert ("editor: provisioned from this telar's package" in notes) == sent, output
+            assert not same or there.read_text() == nvim.read_text()
+    with machine(binary) as fixture:
+        status, output = fixture.run('machine', 'setup', 'fixture', '--skip', 'agents,config,login', '--json')
+        assert status == 0 and "this telar's package" not in output and not (fixture.remote / '.local/share/telar/nvim').exists(), output
 
 
 def probe_failures(binary):
@@ -319,7 +365,7 @@ def logins(binary):
     only for an OpenAI model, Pi only with a provider, and a code pasted here reaches the
     login pane while an empty answer sends nothing."""
     with machine(binary, agents=('codex',), login='pending', there='codex', pane_text=CODEX_DEVICE_SCREEN) as fixture:
-        status, output = fixture.run('machine', 'setup', 'fixture', '--skip', 'agents,config')
+        status, output = fixture.run('machine', 'setup', 'fixture', '--skip', 'agents,config,editor')
         assert 'https://auth.openai.com/codex/device' in output and 'ABCD-EFGH9' in output, output
     for model, opened in (('openai/gpt-5', 1), ('anthropic/claude', 0)):
         with machine(binary, agents=('opencode', 'pi'), login='pending', there='opencode,pi') as fixture:
@@ -328,7 +374,7 @@ def logins(binary):
             (Path(fixture.env['XDG_CONFIG_HOME']) / 'opencode/opencode.json').write_text(json.dumps({'model': model}))
             (fixture.home / '.pi/agent').mkdir(parents=True)
             (fixture.home / '.pi/agent/settings.json').write_text('{}')
-            status, output = fixture.run('machine', 'setup', 'fixture', '--skip', 'agents,config', '--json')
+            status, output = fixture.run('machine', 'setup', 'fixture', '--skip', 'agents,config,editor', '--json')
             argv = fixture.root / 'argv.jsonl'
             commands = [json.loads(line) for line in argv.read_text().splitlines()] if argv.exists() else []
             assert [words[:2] for words in commands].count(['workspace', 'create']) == opened, (model, commands)
@@ -337,7 +383,7 @@ def logins(binary):
         with machine(binary, login='paste') as fixture:
             log = fixture.root / 'sent.jsonl'
             fixture.env['FIXTURE_SENT'] = str(log)
-            status, output = fixture.run('machine', 'setup', 'fixture', '--skip', 'agents,config', answers=answer)
+            status, output = fixture.run('machine', 'setup', 'fixture', '--skip', 'agents,config,editor', answers=answer)
             texts = [json.loads(line)['text'].strip() for line in log.read_text().splitlines()] if log.exists() else []
             assert texts == sent, (answer, texts, output)
 
@@ -355,7 +401,7 @@ def agent_installs(binary):
                         'while [ $# -gt 0 ]; do [ "$1" = -o ] && out=$2; shift; done\n'
                         f'printf \'#!/bin/sh\\necho %s >> "{fetched}"\\n\' "$url" > "$out"\n')
         curl.chmod(0o700)
-        status, output = fixture.run('machine', 'setup', 'fixture', '--skip', 'config,login', '--json')
+        status, output = fixture.run('machine', 'setup', 'fixture', '--skip', 'config,login,editor', '--json')
         assert steps(output)['agents'] == 'changed', output
         assert fetched.read_text().split() == ['https://chatgpt.com/codex/install.sh'], fetched.read_text()
 
@@ -428,6 +474,8 @@ def interactive_ssh(binary):
 def contracts(binary):
     """Setup contracts asserted on their effects alone, beside the recorded outputs."""
     probe_failures(binary)
+    editor_is_provisioned(binary)
+    editor_is_sent(binary)
     configuration_sync(binary)
     refused_sync(binary)
     codex_hooks(binary)

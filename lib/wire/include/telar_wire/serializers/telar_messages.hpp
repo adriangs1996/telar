@@ -91,6 +91,19 @@ namespace telar {
     request_process_signal = 0x53,
     request_process_priority = 0x54,
     query_history_workspaces = 0x55,
+    create_nvim_pane = 0x56,
+    nvim_input = 0x57,
+    nvim_paste = 0x58,
+    nvim_mouse = 0x59,
+    nvim_focus = 0x5a,
+    nvim_prompt_reply = 0x5b,
+    nvim_open = 0x5c,
+    nvim_navigate = 0x5d,
+    nvim_menu_select = 0x5e,
+    find_text = 0x5f,
+    nvim_buffers = 0x60,
+    nvim_preview = 0x61,
+    nvim_list = 0x62,
   };
 
   enum class ServerTag : Byte {
@@ -160,6 +173,18 @@ namespace telar {
     monitor_snapshot = 0xc4,
     pane_theme = 0xc5,
     history_workspaces = 0xc6,
+    pane_kind_notice = 0xc7,
+    nvim_grid = 0xc8,
+    nvim_frame = 0xc9,
+    nvim_cmdline = 0xca,
+    nvim_popup_menu = 0xcb,
+    nvim_message_list = 0xcc,
+    nvim_tab_line = 0xcd,
+    nvim_prompt = 0xce,
+    nvim_navigated = 0xcf,
+    text_results = 0xd0,
+    nvim_pick = 0xd1,
+    nvim_link = 0xd2,
   };
 
   struct RequestRuntimeState {
@@ -451,6 +476,32 @@ namespace telar {
       return "request_process_priority";
     case ClientTag::query_history_workspaces:
       return "query_history_workspaces";
+    case ClientTag::create_nvim_pane:
+      return "create_nvim_pane";
+    case ClientTag::nvim_input:
+      return "nvim_input";
+    case ClientTag::nvim_paste:
+      return "nvim_paste";
+    case ClientTag::nvim_mouse:
+      return "nvim_mouse";
+    case ClientTag::nvim_focus:
+      return "nvim_focus";
+    case ClientTag::nvim_prompt_reply:
+      return "nvim_prompt_reply";
+    case ClientTag::nvim_open:
+      return "nvim_open";
+    case ClientTag::nvim_navigate:
+      return "nvim_navigate";
+    case ClientTag::nvim_menu_select:
+      return "nvim_menu_select";
+    case ClientTag::find_text:
+      return "find_text";
+    case ClientTag::nvim_buffers:
+      return "nvim_buffers";
+    case ClientTag::nvim_preview:
+      return "nvim_preview";
+    case ClientTag::nvim_list:
+      return "nvim_list";
     }
 
     return {};
@@ -588,6 +639,30 @@ namespace telar {
       return "monitor_snapshot";
     case ServerTag::history_workspaces:
       return "history_workspaces";
+    case ServerTag::pane_kind_notice:
+      return "pane_kind_notice";
+    case ServerTag::nvim_grid:
+      return "nvim_grid";
+    case ServerTag::nvim_frame:
+      return "nvim_frame";
+    case ServerTag::nvim_cmdline:
+      return "nvim_cmdline";
+    case ServerTag::nvim_popup_menu:
+      return "nvim_popup_menu";
+    case ServerTag::nvim_message_list:
+      return "nvim_message_list";
+    case ServerTag::nvim_tab_line:
+      return "nvim_tab_line";
+    case ServerTag::nvim_prompt:
+      return "nvim_prompt";
+    case ServerTag::nvim_navigated:
+      return "nvim_navigated";
+    case ServerTag::text_results:
+      return "text_results";
+    case ServerTag::nvim_pick:
+      return "nvim_pick";
+    case ServerTag::nvim_link:
+      return "nvim_link";
     case ServerTag::pane_theme:
       return "pane_theme";
     }
@@ -704,6 +779,9 @@ namespace telar {
     plugin_enable = 31,
     plugin_disable = 32,
     plugin_run = 33,
+    // Shows the file `text` names in the editor pane of a tab, at line `value` when it is not
+    // zero; `target_id` is the pane the command came from, when it came from one.
+    editor_open = 34,
   };
 
   enum class ClientCommandStatus : Byte {
@@ -735,6 +813,18 @@ namespace telar {
   enum class PathKind : Byte {
     file = 0,
     directory = 1,
+  };
+
+  // What git says of a path against the checkout's index and head: nothing when it is as
+  // committed or outside a repository.
+  enum class PathChange : Byte {
+    none = 0,
+    modified = 1,
+    added = 2,
+    deleted = 3,
+    renamed = 4,
+    untracked = 5,
+    conflicted = 6,
   };
 
   enum class LimitOrigin : Byte {
@@ -985,6 +1075,7 @@ namespace telar {
     std::string_view path;
     PathKind kind = PathKind::file;
     std::span<const std::uint16_t> positions;
+    PathChange change = PathChange::none;
   };
 
   struct LimitListEntry {
@@ -1257,7 +1348,7 @@ namespace telar {
 
   template <>
   struct BodySchema<ClientCommand>
-      : Serializer<Field<&ClientCommand::request_id, NonzeroU64, "request_id">, Field<&ClientCommand::route, ValueCodec<ClientRoute>, "route">, Field<&ClientCommand::action, EnumByte<ClientAction, std::to_underlying(ClientAction::plugin_run)>, "action">, Field<&ClientCommand::status, EnumByte<ClientCommandStatus, 3>, "status">, Field<&ClientCommand::target_id, u64, "target_id">, Field<&ClientCommand::value, i64, "value">, Field<&ClientCommand::text, Utf8Text16<max_client_command_text_bytes>, "text">> {};
+      : Serializer<Field<&ClientCommand::request_id, NonzeroU64, "request_id">, Field<&ClientCommand::route, ValueCodec<ClientRoute>, "route">, Field<&ClientCommand::action, EnumByte<ClientAction, std::to_underlying(ClientAction::editor_open)>, "action">, Field<&ClientCommand::status, EnumByte<ClientCommandStatus, 3>, "status">, Field<&ClientCommand::target_id, u64, "target_id">, Field<&ClientCommand::value, i64, "value">, Field<&ClientCommand::text, Utf8Text16<max_client_command_text_bytes>, "text">> {};
 
   template <>
   struct BodySchema<ClientLayoutPane>
@@ -1352,7 +1443,7 @@ namespace telar {
 
   template <>
   struct BodySchema<PathMatch>
-      : Serializer<Field<&PathMatch::path, DisplayText16<max_match_path_bytes, false>, "path">, Field<&PathMatch::kind, EnumByte<PathKind, 1>, "kind">, Field<&PathMatch::positions, CountedSpan<u8, u16, max_match_positions>, "positions">> {
+      : Serializer<Field<&PathMatch::path, DisplayText16<max_match_path_bytes, false>, "path">, Field<&PathMatch::kind, EnumByte<PathKind, 1>, "kind">, Field<&PathMatch::positions, CountedSpan<u8, u16, max_match_positions>, "positions">, Field<&PathMatch::change, EnumByte<PathChange, std::to_underlying(PathChange::conflicted)>, "change">> {
     static void validate(const PathMatch& value);
   };
 

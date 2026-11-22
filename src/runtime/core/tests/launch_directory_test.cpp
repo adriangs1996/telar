@@ -93,16 +93,16 @@ namespace {
 
     workspaces.open(model, panes, clients, owner.session().id, OpenPane{.request_id = 1, .size = size, .launch = Launch{.cwd = "/", .arguments = arguments}});
     const auto opened = owner.receive<PaneOpened>();
-    auto& pane = panes.require(model.panes, opened.pane_id);
+    const auto pane = panes.requireTerminal(model.panes, opened.pane_id);
 
-    pane.cwd.assign("/observed/directory");
-    const Launch launch{.cwd = "/explicit", .cwd_source = pane.id, .arguments = arguments};
+    pane.core.cwd.assign("/observed/directory");
+    const Launch launch{.cwd = "/explicit", .cwd_source = pane.core.id, .arguments = arguments};
     LaunchDirectory directory;
 
-    for (const LaunchDirectoryScope scope : {LaunchDirectoryScope{}, LaunchDirectoryScope{pane.location.workspace}, LaunchDirectoryScope{pane.location}}) {
+    for (const LaunchDirectoryScope scope : {LaunchDirectoryScope{}, LaunchDirectoryScope{pane.core.location.workspace}, LaunchDirectoryScope{pane.core.location}}) {
       const auto resolved = resolveLaunchDirectory(model, owner.session(), launch, directory, scope);
 
-      check(resolved.cwd == pane.cwd && resolved.cwd_source == 0 && resolved.arguments.data() == arguments.data());
+      check(resolved.cwd == pane.core.cwd && resolved.cwd_source == 0 && resolved.arguments.data() == arguments.data());
     }
 
     check(resolveLaunchDirectory(model, outsider.session(), Launch{.cwd = "/explicit"}, directory).cwd == "/explicit");
@@ -115,46 +115,46 @@ namespace {
         FailureCode::invalid_request,
         unavailable);
     expectFailure([&] {
-      resolveLaunchDirectory(model, owner.session(), launch, directory, WorkspaceLocation{.id = pane.location.workspace.id + 1});
+      resolveLaunchDirectory(model, owner.session(), launch, directory, WorkspaceLocation{.id = pane.core.location.workspace.id + 1});
     },
         FailureCode::invalid_request,
         unavailable);
     expectFailure([&] {
-      resolveLaunchDirectory(model, owner.session(), launch, directory, TabLocation{pane.location.workspace, pane.location.tab_id + 1});
+      resolveLaunchDirectory(model, owner.session(), launch, directory, TabLocation{pane.core.location.workspace, pane.core.location.tab_id + 1});
     },
         FailureCode::invalid_request,
         unavailable);
 
-    pane.requestClose();
+    requestClose(pane.core);
     expectFailure([&] {
       resolveLaunchDirectory(model, owner.session(), launch, directory);
     },
         FailureCode::invalid_request,
         unavailable);
-    pane.requestClose();
-    check(pane.close_requested);
+    requestClose(pane.core);
+    check(pane.core.close_requested);
     expectFailure([&] {
       resolveLaunchDirectory(model, owner.session(), launch, directory);
     },
         FailureCode::invalid_request,
         unavailable);
-    pane.close_requested = false;
-    pane.exit_status = 0;
+    pane.core.close_requested = false;
+    pane.core.exit_status = 0;
     expectFailure([&] {
       resolveLaunchDirectory(model, owner.session(), launch, directory);
     },
         FailureCode::invalid_request,
         unavailable);
-    pane.exit_status.reset();
-    panes.detach(model, clients, {.client = owner.session().id, .pane = pane.id});
+    pane.core.exit_status.reset();
+    panes.detach(model, clients, {.client = owner.session().id, .pane = pane.core.id});
     expectFailure([&] {
       resolveLaunchDirectory(model, owner.session(), launch, directory);
     },
         FailureCode::invalid_request,
         unavailable);
 
-    owner.session().attachments.push(ds::makeBox<Attachment>(memory, memory, owner.session().graphics_credit, pane.id, pane.media));
-    panes.remove(model, clients, pane.id);
+    owner.session().attachments.push(ds::makeBox<Attachment>(memory, memory, owner.session().graphics_credit, pane.core.id, pane.body.media));
+    panes.remove(model, clients, pane.core.id);
     expectFailure([&] {
       resolveLaunchDirectory(model, owner.session(), launch, directory);
     },
@@ -182,9 +182,9 @@ namespace {
     const TabLocation empty{WorkspaceLocation{.id = identity}, stored.tabs.front().id};
     const Launch launch{.cwd = "/", .arguments = arguments};
     Command command{memory, launch};
-    auto& existing = panes.launch(model, {.location = TabLocation{empty.workspace, stored.tabs.back().id}, .size = size}, command);
+    const auto existing = panes.launch(model, {.location = TabLocation{empty.workspace, stored.tabs.back().id}, .size = size}, command);
 
-    stored.tabs.atMut(stored.tabs.size() - 1).panes.push(existing.id);
+    stored.tabs.atMut(stored.tabs.size() - 1).panes.push(existing.core.id);
 
     expectFailure([&] {
       workspaces.open(model, panes, clients, owner.session().id, OpenPane{.request_id = 1, .target = {.kind = PaneTarget::Kind::workspace, .id = identity}, .size = size});
@@ -271,23 +271,23 @@ namespace {
 
     workspaces.open(model, panes, clients, owner.session().id, request);
     const auto opened = owner.receive<PaneOpened>();
-    auto& pane = panes.require(model.panes, opened.pane_id);
+    const auto pane = panes.requireTerminal(model.panes, opened.pane_id);
 
-    pane.terminal.refresh();
-    const auto revision = pane.terminal.screen().revision;
-    const auto* attachment = owner.session().attachment(pane.id);
+    pane.body.terminal.refresh();
+    const auto revision = pane.body.terminal.screen().revision;
+    const auto* attachment = owner.session().attachment(pane.core.id);
 
     workspaces.open(model, panes, clients, owner.session().id, request);
     const auto reused = owner.receive<PaneOpened>();
 
-    pane.terminal.refresh();
-    check(!reused.created && reused.pane_id == pane.id);
-    check(owner.session().attachment(pane.id) == attachment && pane.terminal.screen().revision == revision);
+    pane.body.terminal.refresh();
+    check(!reused.created && reused.pane_id == pane.core.id);
+    check(owner.session().attachment(pane.core.id) == attachment && pane.body.terminal.screen().revision == revision);
 
-    const auto& background = *model.panes.find(workspaces.launchBackground(model, panes, decltype(workspaces)::ownerColors(model.workspaces, clients, opened.location.workspace.id), false, LaunchTab{.request_id = 2, .workspace = opened.location.workspace.id, .label = "Background", .size = size, .launch = launch}));
+    const auto background = requireTerminal(model.panes, workspaces.launchBackground(model, panes, decltype(workspaces)::ownerColors(model.workspaces, clients, opened.location.workspace.id), false, LaunchTab{.request_id = 2, .workspace = opened.location.workspace.id, .label = "Background", .size = size, .launch = launch}));
     GhosttyColorRgb foreground;
 
-    checkGhostty(ghostty_terminal_get(background.terminal.handle(), GHOSTTY_TERMINAL_DATA_COLOR_FOREGROUND, &foreground));
+    checkGhostty(ghostty_terminal_get(background.body.terminal.handle(), GHOSTTY_TERMINAL_DATA_COLOR_FOREGROUND, &foreground));
     check(foreground.r == 17 && foreground.g == 34 && foreground.b == 51);
   }
 

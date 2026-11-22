@@ -8,6 +8,7 @@ telar_add_library(telar-wire
     execution/execution.cpp
     graphics/graphics.cpp
     layout/layout.cpp
+    nvim/nvim.cpp
     pane_io/pane_io.cpp
     vocabulary/vocabulary.cpp
     worktrees/worktrees.cpp

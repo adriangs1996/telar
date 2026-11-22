@@ -113,11 +113,11 @@ namespace {
       check(peer->receive<RequestCompleted>().request_id == 2);
     }
 
-    auto& pane = panes.require(model.panes, opened.pane_id);
+    const auto pane = panes.requireTerminal(model.panes, opened.pane_id);
 
-    pane.output_closed = true;
-    pane.exit_status = 0;
-    panes.release(model, clients, {.client = owner.session().id, .pane = pane.id});
+    pane.core.output_closed = true;
+    pane.core.exit_status = 0;
+    panes.release(model, clients, {.client = owner.session().id, .pane = pane.core.id});
     workspaces.collectExited(model, panes, clients);
     check(model.panes.find(opened.pane_id) == nullptr);
     check(workspaces.requireTab(model.workspaces, location).panes.empty());

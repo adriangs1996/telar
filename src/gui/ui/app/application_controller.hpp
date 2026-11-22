@@ -30,10 +30,10 @@ static_assert(true);
 #include "ui/app/overlays/workspace_form/workspace_form_controller.hpp"
 #include "ui/app/panes/attachments/attachments_controller.hpp"
 #include "ui/app/panes/documents/documents_controller.hpp"
+#include "ui/app/panes/nvim/nvim_controller.hpp"
 #include "ui/app/panes/panes_controller.hpp"
 #include "ui/app/panes/terminal/copy_controller.hpp"
 #include "ui/app/panes/terminal/history/history_controller.hpp"
-#include "ui/app/panes/terminal/paths/path_picker_controller.hpp"
 #include "ui/app/panes/terminal/prompt/prompt_controller.hpp"
 #include "ui/app/panes/terminal/terminal_controller.hpp"
 #include "ui/design/elements/element_slots.hpp"
@@ -42,6 +42,7 @@ static_assert(true);
 #include "ui/kit/links/links_controller.hpp"
 #include "ui/kit/machines/machine_client.hpp"
 #include "ui/kit/machines/runtime_connection.hpp"
+#include "ui/kit/paths/path_picker_controller.hpp"
 #include "ui/kit/plugins/plugin_runner.hpp"
 #include "ui/kit/store/store.hpp"
 #include "window_commands.hpp"
@@ -92,7 +93,7 @@ namespace telar::gui::qt {
   // coordinator: the display, the status, the frames, the dialogs, the machines, the chosen
   // activity and the commands. None of them calls back here except through the narrow
   // interfaces this class implements for the terminals, the machines and the commands.
-  class ApplicationController final : public QObject, private TerminalHost, private MachinesHost, private CommandsHost {
+  class ApplicationController final : public QObject, private TerminalHost, private NvimHost, private MachinesHost, private CommandsHost {
     friend struct test::MachineWindow;
     friend struct test::MachineProfileWindow;
 
@@ -118,6 +119,7 @@ namespace telar::gui::qt {
     Q_PROPERTY(telar::gui::qt::ComponentsController* components READ components CONSTANT)
     Q_PROPERTY(telar::gui::qt::CopyController* copy READ copy CONSTANT)
     Q_PROPERTY(telar::gui::qt::TerminalController* terminals READ terminals CONSTANT)
+    Q_PROPERTY(telar::gui::qt::NvimController* editors READ editors CONSTANT)
     Q_PROPERTY(telar::gui::qt::NotificationsController* notifications READ notifications CONSTANT)
     Q_PROPERTY(telar::gui::qt::MachinePromptController* machinePrompt READ machinePrompt CONSTANT)
     Q_PROPERTY(telar::gui::qt::MachineChromeController* machineChrome READ machineChrome CONSTANT)
@@ -241,6 +243,10 @@ namespace telar::gui::qt {
 
     TerminalController* terminals() noexcept {
       return &terminals_;
+    }
+
+    NvimController* editors() noexcept {
+      return &editors_;
     }
 
     NotificationsController* notifications() noexcept {
@@ -371,6 +377,7 @@ namespace telar::gui::qt {
     tbc::val_self<CopyController> copy_;
     // After the copy mode and the prompt, which the terminals read.
     tbc::val_self<TerminalController> terminals_;
+    tbc::val_self<NvimController> editors_;
     tbc::val_self<NotificationsController> notifications_;
     tbc::val_self<ComponentsController> components_;
     tbc::val_self<PluginRunner> plugins_;

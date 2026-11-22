@@ -15,6 +15,7 @@ import telar.runtime.core.model.client_layouts;
 import telar.runtime.host.process_probe;
 import telar.runtime.core.media_service;
 import telar.runtime.core.execution_service;
+import telar.runtime.nvim.provision;
 
 import telar.runtime.agents.description_generator;
 import telar.runtime.core.persistence.session_store;
@@ -42,6 +43,7 @@ import telar.wire.graphics;
 import telar.wire.history;
 import telar.wire.layout;
 import telar.wire.monitor;
+import telar.wire.nvim;
 import telar.runtime.host.process_table;
 import telar.wire.pane_io;
 import telar.wire.runtime;
@@ -177,7 +179,7 @@ export {
       static bool alerts(const Agent& agent, AgentStatus previous) noexcept;
 
       // Ends an interrupt once its pane settles; whether the agent's projection changed.
-      static bool settleInterrupt(Panes& panes, bool focused, Pane& pane, Agent& agent, std::chrono::steady_clock::time_point now);
+      static bool settleInterrupt(Panes& panes, bool focused, PaneRef<TerminalBody> pane, Agent& agent, std::chrono::steady_clock::time_point now);
 
       static Pane& require(PaneStore& panes, std::uint64_t identity, std::uint64_t generation);
 
@@ -253,6 +255,8 @@ export {
       GraphicsLimits graphics;
       control::Policy control_policy{};
       std::string_view shell_integration;
+      // Where telar keeps its own files, among them the Neovim and the configuration it provisions.
+      std::string_view data_home;
       bool ssh_integration = false;
       // Where the user's completion specs live: the configuration's own directory.
       std::string_view configuration_directory;
@@ -324,7 +328,21 @@ export {
 
       void createWorkspace(RuntimeModel& model, Panes& panes, ClientStore& clients, std::uint64_t client_id, const CreateWorkspace& request);
 
+      // Who asks for a pane, and what the pane is to be: a terminal that runs the request's
+      // launch, or an editor on it.
+      // A client's request for an editor pane.
+      struct EditorRequest {
+        std::uint64_t client_id = 0;
+        const CreateNvimPane& request;
+      };
+
+      struct Asked {
+        std::uint64_t client_id = 0;
+        PaneKind kind = PaneKind::terminal;
+      };
+
       void createTab(RuntimeModel& model, Panes& panes, ClientStore& clients, std::uint64_t client_id, const CreateTab& request);
+      void createTab(RuntimeModel& model, Panes& panes, ClientStore& clients, Asked asked, const CreateTab& request);
 
       // A tab launched without a client, in the colors of its workspace's geometry owner.
       std::uint64_t launchBackground(RuntimeModel& model, Panes& panes, const ConfigureTerminalColors* owner_colors, bool bare_prompt, const LaunchTab& request);
@@ -332,6 +350,10 @@ export {
       void launchTab(RuntimeModel& model, Panes& panes, ClientStore& clients, std::uint64_t client_id, const LaunchTab& request);
 
       void createPane(RuntimeModel& model, Panes& panes, ClientStore& clients, std::uint64_t client_id, const CreatePane& request);
+      void createPane(RuntimeModel& model, Panes& panes, ClientStore& clients, Asked asked, const CreatePane& request);
+
+      // An editor pane on the request's files, in a tab of its own or beside a tab's panes.
+      void createEditor(RuntimeModel& model, Panes& panes, ClientStore& clients, EditorRequest asked, const NvimProvision& provision);
 
       void renameWorkspace(RuntimeModel& model, ClientSession& client, const RenameWorkspace& request);
 
@@ -384,7 +406,7 @@ export {
 
       void leaveEmptyViews(RuntimeModel& model, Panes& panes, ClientStore& clients, std::uint64_t workspace) noexcept;
 
-      void retainFinalText(ExitedPanes& exited, Pane& pane) noexcept;
+      void retainFinalText(ExitedPanes& exited, PaneRef<TerminalBody> pane) noexcept;
 
       // How a client opens a workspace: the pane it starts with, its name, and whether the client leaves
       // the panes it shows for it.
@@ -406,6 +428,7 @@ export {
         TabLocation location;
         Launch launch;
         TerminalSize size{};
+        PaneKind kind = PaneKind::terminal;
       };
 
       std::uint64_t createAt(RuntimeModel& model, Panes& panes, ClientStore& clients, const TabOpening& opening);
@@ -422,6 +445,10 @@ export {
       };
 
       static void sendOpened(ClientSession& client, std::uint64_t request, const Pane& pane, bool created, GenerationField generation = GenerationField::included);
+
+      // Says what a pane is before the message that first names it to a client, which takes a
+      // pane it was told nothing about for a terminal.
+      static void announceKind(ClientSession& client, const Pane& pane);
 
       static constexpr std::size_t maximum_tabs = 64;
       static constexpr std::size_t maximum_panes_per_tab = 64;
@@ -616,6 +643,8 @@ export {
       void clientEvent(const Event& event);
 
       void paneEvent(const Event& event);
+      void paneEvent(PaneRef<TerminalBody> pane, const Event& event);
+      void paneEvent(PaneRef<NvimBody> pane, const Event& event);
 
       // The client's frames leave its connection while their requests run, so a request can change any
       // client, its own included, without touching the bytes it was decoded from.
@@ -676,7 +705,7 @@ export {
       // What a completion asks for, from the PATH and shell of the pane's shell where its
       // integration reported them, this runtime's PATH otherwise.
       // The request shares the names the pane's shell reported, region `a`.
-      tbc::val_a<WordRequest> makeWordRequest(const ClientSession& client, std::uint64_t request_id, CompletionProvider provider, std::string_view prefix, tbc::holds<const Pane&, tbc::lt::a> pane) const;
+      tbc::val_a<WordRequest> makeWordRequest(const ClientSession& client, std::uint64_t request_id, CompletionProvider provider, std::string_view prefix, tbc::holds<const TerminalBody&, tbc::lt::a> pane) const;
 
       void handle(std::uint64_t identity, const FindPaths& message);
 
@@ -687,6 +716,23 @@ export {
       void handle(std::uint64_t identity, const OpenPane& message);
 
       void handle(std::uint64_t identity, const CreatePane& message);
+      void handle(std::uint64_t identity, const CreateNvimPane& message);
+      void handle(std::uint64_t identity, const NvimInput& message);
+      void handle(std::uint64_t identity, const NvimPaste& message);
+      void handle(std::uint64_t identity, const NvimMouse& message);
+      void handle(std::uint64_t identity, const NvimFocus& message);
+      void handle(std::uint64_t identity, const NvimPromptReply& message);
+      void handle(std::uint64_t identity, const NvimOpen& message);
+      void handle(std::uint64_t identity, const NvimNavigate& message);
+      void handle(std::uint64_t identity, const NvimMenuSelect& message);
+      void handle(std::uint64_t identity, const NvimBuffers& message);
+      void handle(std::uint64_t identity, const NvimPreview& message);
+      void handle(std::uint64_t identity, const NvimList& message);
+      void handle(std::uint64_t identity, const FindText& message);
+      // What an editor told the runtime besides what it drew, to the client that drives it.
+      void relay(PaneRef<NvimBody> pane);
+      // Answers a client's question about an editor's buffers with the ones its query matches.
+      void answerBuffers(PaneRef<NvimBody> pane);
 
       void handle(std::uint64_t identity, const ClosePane& message);
 
@@ -812,7 +858,9 @@ export {
       static void deliverEditorReply(const PaneStore& panes, ClientSession& client, std::span<const Byte> payload);
 
       // The repository of the directory a pane's shell is at.
-      static void followRepository(Pane& pane, ShellGitService& shell_git);
+      static void followRepository(PaneRef<TerminalBody> pane, ShellGitService& shell_git);
+      void refreshPane(PaneRef<TerminalBody> pane, Clock::time_point now, bool poll_panes);
+      void refreshPane(PaneRef<NvimBody> pane, Clock::time_point now, bool poll_panes);
 
       void refreshServices(Clock::time_point now);
 
@@ -862,6 +910,10 @@ export {
       MonitorService<ProcessTable, NativeHostDetail> monitor_;
       WorkspaceGitService<WorkspaceGitProbe> workspace_git_;
       ShellGitService shell_git_;
+      // Where telar keeps its own files, and the Neovim and configuration found there for the
+      // editor pane being made.
+      ds::String<ConcurrentMemory> data_home_;
+      NvimProvision editor_provision_;
       WordService words_;
       // This runtime's PATH, read once: nothing in the runtime changes it.
       std::string_view runtime_path_ = runtimePath();

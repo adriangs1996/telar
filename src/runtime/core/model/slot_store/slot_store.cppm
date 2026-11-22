@@ -17,6 +17,7 @@ import telar.wire.graphics;
 import telar.wire.history;
 import telar.wire.layout;
 import telar.wire.monitor;
+import telar.wire.nvim;
 import telar.wire.pane_io;
 import telar.wire.runtime;
 import telar.wire.worktrees;
@@ -141,6 +142,18 @@ export {
         ClientRequest<RequestGraphicsSnapshot>,
         ClientRequest<OpenPane>,
         ClientRequest<CreatePane>,
+        ClientRequest<CreateNvimPane>,
+        ClientRequest<NvimInput>,
+        ClientRequest<NvimPaste>,
+        ClientRequest<NvimMouse>,
+        ClientRequest<NvimFocus>,
+        ClientRequest<NvimPromptReply>,
+        ClientRequest<NvimOpen>,
+        ClientRequest<NvimNavigate>,
+        ClientRequest<NvimMenuSelect>,
+        ClientRequest<NvimBuffers>,
+        ClientRequest<NvimPreview>,
+        ClientRequest<NvimList>,
         ClientRequest<ClosePane>,
         ClientRequest<PaneInput>,
         ClientRequest<PaneCommand>,
@@ -212,6 +225,7 @@ export {
         ClientRequest<CompleteWords>,
         ClientRequest<RequestCommandSpec>,
         ClientRequest<OpenEditor, ClientRole::interactive, RequestLane::worker>,
+        ClientRequest<FindText, ClientRole::interactive, RequestLane::worker>,
         ClientRequest<SuggestCommand, ClientRole::interactive, RequestLane::worker>>;
 
     ClientRole classifyRequest(ClientTag tag) noexcept;

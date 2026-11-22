@@ -27,6 +27,12 @@ static_assert(true);
 
 #include "tbc/view.hpp"
 
+// A build may bring a link host of its own, as the one the window's tests record with: its
+// header says which, with TELAR_GUI_LINK_HOST.
+#ifdef TELAR_GUI_LINK_HOST_HEADER
+#include TELAR_GUI_LINK_HOST_HEADER
+#endif
+
 import telar.gui.application;
 import telar.gui.foundation.system;
 import telar.base.ds;

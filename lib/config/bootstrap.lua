@@ -250,6 +250,22 @@ function telar.action.plugin(options)
 	return { kind = "plugin", plugin = options.plugin, action = options.action }
 end
 
+-- Opens a file in the editor pane of the focused tab: `telar edit FILE`, which the window
+-- runs itself where it has editor panes, and in a tab of its own where it has none.
+function telar.action.edit(options)
+	if type(options) == "string" then
+		options = { file = options }
+	end
+	local place = options.file
+	if type(place) ~= "string" or place == "" then
+		error("telar.action.edit needs the file to open", 2)
+	end
+	if options.line ~= nil then
+		place = place .. ":" .. tostring(options.line)
+	end
+	return { kind = "command-tab", command = { "telar", "edit", place }, label = "edit" }
+end
+
 function telar.action.command_tab(options)
 	return { kind = "command-tab", command = options.command, label = options.label }
 end
@@ -276,6 +292,11 @@ for _, name in ipairs({
 	"rename-workspace",
 	"close-pane",
 	"new-tab",
+	"new-editor",
+	"new-editor-tab",
+	"editor-files",
+	"editor-grep",
+	"editor-buffers",
 	"rename-tab",
 	"close-tab",
 	"detach",
