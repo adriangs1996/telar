@@ -56,13 +56,9 @@ Item {
 
         // As many cells as a name has room for: a longer path is cut where its label says.
         readonly property int columns: Math.max(8, Math.floor((listWidth - 56 * root.ratio) / Math.max(1, root.typography.grid?.cellWidth ?? 8)))
-        // The paths listed, read again whenever the session or the selection changes.
-        readonly property var listed: {
-            const session = root.state;
-            const placed = root.regions;
-
-            return root.controller.rows(columns, 0, 64);
-        }
+        // The paths listed, read again whenever the session or the selection changes: both are
+        // read in the expression itself, where a compiled binding cannot drop them as unused.
+        readonly property var listed: root.state && root.regions ? root.controller.rows(columns, 0, 64) : []
 
         anchors.fill: parent
         compact: true
