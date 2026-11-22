@@ -245,89 +245,10 @@ export {
 export {
   namespace telar::runtime {
 
-    // What every pane has, whatever its kind: where it is, the process it started and what the
-    // runtime reports of both. A kind derives from it and adds its own state; code that needs
-    // that state asks for the kind by name, `as<TerminalPane>()`, and gets none for another one.
-    class Pane {
-    public:
-      Pane(const Pane&) = delete;
-      Pane& operator=(const Pane&) = delete;
-      Pane(Pane&&) = delete;
-      Pane& operator=(Pane&&) = delete;
-
-      // The pane as the kind `Kind` names; null when it is of another kind.
-      template <std::derived_from<Pane> Kind>
-      TBC_GENERIC [[nodiscard]] inline const Kind* as() const noexcept {
-        return kind == Kind::pane_kind ? static_cast<const Kind*>(this) : nullptr; // NOLINT(cppcoreguidelines-pro-type-static-cast-downcast): `kind` says which derived type the pane was made as, the one place a pane is cast to its kind
-      }
-
-      template <std::derived_from<Pane> Kind>
-      TBC_GENERIC [[nodiscard]] inline Kind* asMut() noexcept {
-        return kind == Kind::pane_kind ? static_cast<Kind*>(this) : nullptr; // NOLINT(cppcoreguidelines-pro-type-static-cast-downcast): `kind` says which derived type the pane was made as, the one place a pane is cast to its kind
-      }
-
-      [[nodiscard]] ds::Option<std::int32_t> exitCode() const noexcept;
-
-      // The bytes of the foreground program's name the pane list shows.
-      static constexpr std::size_t foreground_bytes = 48;
-#if TELAR_DIAGNOSTICS
-      diagnostics::PaneCounters* counters = nullptr;
-#endif
-      const PaneKind kind;
-      std::uint64_t id;
-      std::uint64_t event_identity = 0;
-      std::uint64_t generation = 1;
-      std::uint64_t cwd_revision = 0;
-      std::uint64_t input_revision = 0;
-      std::uint64_t foreground_revision = 1;
-      // Since when foreground_group holds the terminal, as the pane list reports it.
-      std::chrono::steady_clock::time_point foreground_since = std::chrono::steady_clock::now();
-      // When listening_ports were last read.
-      std::chrono::steady_clock::time_point ports_checked;
-      std::uint64_t git_revision = 0;
-      ds::Option<std::uint64_t> worktree_checked_cwd;
-      ds::Option<std::chrono::steady_clock::time_point> last_input;
-      TabLocation location;
-      ds::String<ConcurrentMemory> cwd;
-      LaunchRecord<ConcurrentMemory> launch;
-      FixedText<foreground_bytes> foreground;
-      ds::Option<ConfigurePaneDesktop> desktop_theme;
-      ProcessCache process_cache;
-      ds::Option<AgentResume> restored_agent;
-      // The repository the pane works in, read after each command; zero until read.
-      ShellGitSummary git{};
-      FixedText<PATH_MAX> git_directory;
-      // The cells the pane's program draws on.
-      TerminalSize extent{};
-      std::uint32_t observers = 0;
-      // The process the pane started; zero while it has none.
-      pid_t process_id = 0;
-      // The process group in the foreground of the pane's program, as the pane list reports it.
-      pid_t foreground_group = 0;
-      std::uint32_t git_commands = std::numeric_limits<std::uint32_t>::max();
-      std::uint32_t process_rechecks = 0;
-      ds::Option<int> exit_status;
-      ds::Option<RejectedReporter> rejected_reporter;
-      // The TCP ports that process group listens on.
-      ListeningPorts listening_ports;
-      bool foreground_shell = true;
-      bool output_closed = false;
-      bool exit_observed = false;
-      bool write_interest = false;
-      bool read_paused = false;
-      bool close_requested = false;
-      bool process_recheck_requested = false;
-      bool process_recheck_running = false;
-      ds::Array<Byte, history_session_bytes> history_session{};
-
-    protected:
-      // A pane is made as one of its kinds, and the store that holds it frees it as that kind.
-      explicit Pane(PaneKind made_as, ConcurrentMemory& memory, std::uint64_t identity, TabLocation tab, std::string_view directory);
-      ~Pane() = default;
-    };
-
-    // A pane whose program runs on a PTY and is drawn as the terminal it writes to.
-    class TerminalPane final : public Pane {
+    // What a pane whose program runs on a PTY has of its own: the terminal the program writes
+    // to and what the runtime reads of it. It changes nothing of what every pane has: what
+    // changes both is a function of the pane as a terminal, `PaneRef<TerminalBody>`.
+    class TerminalBody {
       // The default writer of write: writev on the PTY.
       struct ResponseWriter {
         ssize_t operator()(int descriptor, std::span<const iovec> vectors) const;
@@ -341,8 +262,12 @@ export {
         burst,
       };
 
-      explicit TerminalPane(ConcurrentMemory& memory, std::uint64_t identity, TabLocation tab, Command<ConcurrentMemory>& command, PaneLaunch settings);
+      explicit TerminalBody(ConcurrentMemory& memory, std::uint64_t identity, const Command<ConcurrentMemory>& command, const PaneLaunch& settings);
 
+      // Starts the pane's program, once the body is in its pane; the process it started.
+      pid_t start(ConcurrentMemory& memory, Command<ConcurrentMemory>& command, const PaneLaunch& settings);
+
+      // Reads what the program wrote; false once its output closed.
       bool read(ReadMode mode = ReadMode::once);
 
       // Reads where the integrated shell is and how the line discipline is set, and counts a
@@ -411,7 +336,8 @@ export {
 
       bool hasInput() const noexcept;
 
-      void requestClose() noexcept;
+      // Ends the program, as closing its pane does.
+      void endProgram() noexcept;
 
       void enqueueInput(std::span<const Byte> bytes);
 
@@ -422,13 +348,15 @@ export {
       // The terminal feeds the pane's media as it resumes.
       void resumeControl();
 
-      void resize(TerminalSize size);
+      // False when the terminal has that size already.
+      bool resize(TerminalSize size);
 
       ds::Option<bool> shellForeground() const noexcept;
 
       static constexpr std::size_t input_limit = std::size_t{128} * 1024;
       static constexpr std::size_t read_buffer_size = std::size_t{16} * 1024;
 #if TELAR_DIAGNOSTICS
+      diagnostics::PaneCounters* counters = nullptr;
       std::uint64_t input_dropped_bytes = 0;
 #endif
       // The link's round trip so far, smoothed, which echo_sent times.
@@ -498,9 +426,10 @@ export {
 #endif
     };
 
-    // A pane that shows a Neovim the runtime started with --embed and is the only UI of. What
-    // Neovim draws is kept in `editor` and reaches clients grid by grid, drawn natively.
-    class NvimPane final : public Pane {
+    // What a pane that shows a Neovim has of its own: the Neovim the runtime started with
+    // --embed and is the only UI of. What Neovim draws is kept in `editor` and reaches clients
+    // grid by grid, drawn natively.
+    class NvimBody {
     public:
       static constexpr PaneKind pane_kind = PaneKind::nvim;
       // The bytes one read takes from Neovim, and the reads one event takes before other panes
@@ -508,11 +437,21 @@ export {
       static constexpr std::size_t read_buffer_size = std::size_t{64} * 1024;
       static constexpr unsigned read_burst = 8;
 
-      explicit NvimPane(ConcurrentMemory& memory, std::uint64_t identity, TabLocation tab, Command<ConcurrentMemory>& command, TerminalSize size);
+      explicit NvimBody(ConcurrentMemory& memory, TerminalSize size);
 
-      // Reads what Neovim wrote and applies it to the editor's screen. False once Neovim closed
-      // its output, or wrote what the editor refuses: the pane is then to be closed.
-      bool read();
+      // How a read of what Neovim wrote ended: there may be more, the read failed, or Neovim
+      // closed its output or wrote what the editor refuses.
+      enum class Read : std::uint8_t {
+        open,
+        failed,
+        closed,
+      };
+
+      // Starts Neovim, once the body is in its pane; the process it started.
+      pid_t start(Command<ConcurrentMemory>& command, TerminalSize size);
+
+      // Reads what Neovim wrote and applies it to the editor's screen.
+      Read read();
 
       // Reads and drops what Neovim wrote to its standard error; false once that closed.
       bool readErrors() noexcept;
@@ -522,9 +461,8 @@ export {
 
       [[nodiscard]] bool hasInput() const noexcept;
 
-      void requestClose() noexcept;
-
-      void resize(TerminalSize size);
+      // Asks Neovim to leave, as closing its pane does.
+      void endProgram() noexcept;
 
       NvimEditor editor;
       ds::Option<PipeProcess> process;
@@ -544,49 +482,192 @@ export {
       ds::Option<BufferQuery> buffer_query;
     };
 
-    // Calls `visitor` with the pane as the kind it is. A kind the visitor has no overload for
-    // does not compile, so a new kind is decided at every visit.
+    // A pane: what every pane has, whatever its kind, which is where it is, the process it
+    // started and what the runtime reports of both, and `body`, the state of the kind it is. Code
+    // that needs that state asks for the body by name, `as<TerminalBody>()`, and gets none from a
+    // pane of another kind.
+    class Pane {
+    public:
+      // A terminal, whose program `command` is.
+      explicit Pane(ConcurrentMemory& memory, std::uint64_t identity, TabLocation tab, Command<ConcurrentMemory>& command, PaneLaunch settings);
+
+      // An editor, whose Neovim `command` is.
+      explicit Pane(ConcurrentMemory& memory, std::uint64_t identity, TabLocation tab, Command<ConcurrentMemory>& command, TerminalSize size);
+
+      ~Pane() = default;
+
+      Pane(const Pane&) = delete;
+      Pane& operator=(const Pane&) = delete;
+      Pane(Pane&&) = delete;
+      Pane& operator=(Pane&&) = delete;
+
+      // The body of the kind `Body` names; null when the pane is of another kind.
+      template <typename Body>
+      TBC_GENERIC [[nodiscard]] inline const Body* as() const noexcept {
+        return std::get_if<Body>(&body);
+      }
+
+      template <typename Body>
+      TBC_GENERIC [[nodiscard]] inline Body* asMut() noexcept {
+        return std::get_if<Body>(&body);
+      }
+
+      [[nodiscard]] PaneKind kind() const noexcept;
+
+      [[nodiscard]] ds::Option<std::int32_t> exitCode() const noexcept;
+
+      // The bytes of the foreground program's name the pane list shows.
+      static constexpr std::size_t foreground_bytes = 48;
+      std::uint64_t id;
+      std::uint64_t event_identity = 0;
+      std::uint64_t generation = 1;
+      std::uint64_t cwd_revision = 0;
+      std::uint64_t input_revision = 0;
+      std::uint64_t foreground_revision = 1;
+      // Since when foreground_group holds the terminal, as the pane list reports it.
+      std::chrono::steady_clock::time_point foreground_since = std::chrono::steady_clock::now();
+      // When listening_ports were last read.
+      std::chrono::steady_clock::time_point ports_checked;
+      std::uint64_t git_revision = 0;
+      ds::Option<std::uint64_t> worktree_checked_cwd;
+      ds::Option<std::chrono::steady_clock::time_point> last_input;
+      TabLocation location;
+      ds::String<ConcurrentMemory> cwd;
+      LaunchRecord<ConcurrentMemory> launch;
+      FixedText<foreground_bytes> foreground;
+      ds::Option<ConfigurePaneDesktop> desktop_theme;
+      ProcessCache process_cache;
+      ds::Option<AgentResume> restored_agent;
+      // The repository the pane works in, read after each command; zero until read.
+      ShellGitSummary git{};
+      FixedText<PATH_MAX> git_directory;
+      // The cells the pane's program draws on.
+      TerminalSize extent{};
+      std::uint32_t observers = 0;
+      // The process the pane started; zero while it has none.
+      pid_t process_id = 0;
+      // The process group in the foreground of the pane's program, as the pane list reports it.
+      pid_t foreground_group = 0;
+      std::uint32_t git_commands = std::numeric_limits<std::uint32_t>::max();
+      std::uint32_t process_rechecks = 0;
+      ds::Option<int> exit_status;
+      ds::Option<RejectedReporter> rejected_reporter;
+      // The TCP ports that process group listens on.
+      ListeningPorts listening_ports;
+      bool foreground_shell = true;
+      bool output_closed = false;
+      bool exit_observed = false;
+      bool write_interest = false;
+      bool read_paused = false;
+      bool close_requested = false;
+      bool process_recheck_requested = false;
+      bool process_recheck_running = false;
+      ds::Array<Byte, history_session_bytes> history_session{};
+
+      // The state of the kind the pane is. Last, so that a body is made in a pane whose every
+      // other member is.
+      std::variant<TerminalBody, NvimBody> body;
+    };
+
+    // A pane a request works on as one kind: what every pane has and the state of that kind. A
+    // const Body borrows a pane that is not changed.
+    template <typename Body>
+    struct PaneRef {
+      std::conditional_t<std::is_const_v<Body>, const Pane, Pane>& core;
+      Body& body;
+
+      // As a reference to a value is also one to the value unchanged.
+      TBC_HOT_PATH [[nodiscard]] inline operator PaneRef<const Body>() const noexcept // NOLINT(cppcoreguidelines-explicit-constructor,misc-explicit-constructor): as T& is a const T&
+        requires(!std::is_const_v<Body>)
+      {
+        return {.core = core, .body = body};
+      }
+    };
+
+    // Calls `visitor` with the body of the kind the pane is. A kind the visitor has no overload
+    // for does not compile, so a new kind is decided at every visit; the assertion says where to
+    // add one.
     template <typename Visitor>
     TBC_GENERIC inline void visitPane(Pane& pane, Visitor&& visitor) {
-      switch (pane.kind) {
-      case PaneKind::terminal:
-        std::forward<Visitor>(visitor)(*pane.asMut<TerminalPane>());
-        return;
-      case PaneKind::nvim:
-        std::forward<Visitor>(visitor)(*pane.asMut<NvimPane>());
+      static_assert(std::variant_size_v<decltype(pane.body)> == 2, "a new kind of pane is visited here");
+
+      if (auto* terminal = std::get_if<TerminalBody>(&pane.body)) {
+        std::forward<Visitor>(visitor)(*terminal);
         return;
       }
+
+      std::forward<Visitor>(visitor)(*std::get_if<NvimBody>(&pane.body));
     }
 
     template <typename Visitor>
     TBC_GENERIC inline void visitPane(const Pane& pane, Visitor&& visitor) {
-      switch (pane.kind) {
-      case PaneKind::terminal:
-        std::forward<Visitor>(visitor)(*pane.as<TerminalPane>());
-        return;
-      case PaneKind::nvim:
-        std::forward<Visitor>(visitor)(*pane.as<NvimPane>());
+      static_assert(std::variant_size_v<decltype(pane.body)> == 2, "a new kind of pane is visited here");
+
+      if (const auto* terminal = std::get_if<TerminalBody>(&pane.body)) {
+        std::forward<Visitor>(visitor)(*terminal);
         return;
       }
+
+      std::forward<Visitor>(visitor)(*std::get_if<NvimBody>(&pane.body));
     }
 
-    // The terminal a pane is; null for no pane and for a pane of another kind.
-    TBC_HOT_PATH [[nodiscard]] inline tbc::val_a<TerminalPane*> asTerminal(tbc::val_a<Pane*> pane) noexcept {
-      return pane == nullptr ? nullptr : pane->asMut<TerminalPane>();
+    // Calls `visitor` with the pane as the kind it is, for what works on a kind's state and on
+    // the pane's.
+    template <typename Visitor>
+    TBC_GENERIC inline void visitPaneAs(Pane& pane, Visitor&& visitor) {
+      visitPane(pane, [&]<typename Body>(Body& body) {
+        std::forward<Visitor>(visitor)(PaneRef<Body>{.core = pane, .body = body});
+      });
     }
 
-    TBC_HOT_PATH [[nodiscard]] inline tbc::val_a<const TerminalPane*> asTerminal(tbc::val_a<const Pane*> pane) noexcept {
-      return pane == nullptr ? nullptr : pane->as<TerminalPane>();
+    // The pane as the kind `Body` names; none for no pane and for a pane of another kind.
+    template <typename Body>
+    TBC_HOT_PATH [[nodiscard]] inline tbc::val_a<ds::Option<PaneRef<Body>>> paneAs(tbc::val_a<Pane*> pane) noexcept {
+      auto* const body = pane == nullptr ? nullptr : pane->asMut<Body>();
+
+      return body == nullptr ? ds::Option<PaneRef<Body>>{} : ds::Option<PaneRef<Body>>{PaneRef<Body>{.core = *pane, .body = *body}};
     }
 
-    // The editor a pane is; null for no pane and for a pane of another kind.
-    TBC_HOT_PATH [[nodiscard]] inline tbc::val_a<NvimPane*> asNvim(tbc::val_a<Pane*> pane) noexcept {
-      return pane == nullptr ? nullptr : pane->asMut<NvimPane>();
+    template <typename Body>
+    TBC_HOT_PATH [[nodiscard]] inline tbc::val_a<ds::Option<PaneRef<const Body>>> paneAs(tbc::val_a<const Pane*> pane) noexcept {
+      const auto* const body = pane == nullptr ? nullptr : pane->template as<Body>();
+
+      return body == nullptr ? ds::Option<PaneRef<const Body>>{} : ds::Option<PaneRef<const Body>>{PaneRef<const Body>{.core = *pane, .body = *body}};
     }
 
-    TBC_HOT_PATH [[nodiscard]] inline tbc::val_a<const NvimPane*> asNvim(tbc::val_a<const Pane*> pane) noexcept {
-      return pane == nullptr ? nullptr : pane->as<NvimPane>();
+    // The terminal a pane is; none for no pane and for a pane of another kind.
+    TBC_HOT_PATH [[nodiscard]] inline tbc::val_a<ds::Option<PaneRef<TerminalBody>>> asTerminal(tbc::val_a<Pane*> pane) noexcept {
+      return paneAs<TerminalBody>(pane);
     }
+
+    TBC_HOT_PATH [[nodiscard]] inline tbc::val_a<ds::Option<PaneRef<const TerminalBody>>> asTerminal(tbc::val_a<const Pane*> pane) noexcept {
+      return paneAs<TerminalBody>(pane);
+    }
+
+    // The editor a pane is; none for no pane and for a pane of another kind.
+    TBC_HOT_PATH [[nodiscard]] inline tbc::val_a<ds::Option<PaneRef<NvimBody>>> asNvim(tbc::val_a<Pane*> pane) noexcept {
+      return paneAs<NvimBody>(pane);
+    }
+
+    TBC_HOT_PATH [[nodiscard]] inline tbc::val_a<ds::Option<PaneRef<const NvimBody>>> asNvim(tbc::val_a<const Pane*> pane) noexcept {
+      return paneAs<NvimBody>(pane);
+    }
+
+    // What changes a kind's state and the pane's with it.
+
+    // Reads what the terminal's program wrote; false once its output closed.
+    bool read(PaneRef<TerminalBody> pane, TerminalBody::ReadMode mode = TerminalBody::ReadMode::once);
+
+    // Reads what Neovim wrote and applies it to the editor's screen. False once Neovim closed its
+    // output, or wrote what the editor refuses: the pane is then to be closed.
+    bool read(PaneRef<NvimBody> pane);
+
+    // Queues bytes for the terminal's program, as input a client typed.
+    void enqueueInput(PaneRef<TerminalBody> pane, std::span<const Byte> bytes);
+
+    void resize(PaneRef<TerminalBody> pane, TerminalSize size);
+
+    void resize(PaneRef<NvimBody> pane, TerminalSize size);
 
     // Asks a pane's program to end, as closing the pane does, whatever its kind.
     void requestClose(Pane& pane) noexcept;
@@ -604,11 +685,6 @@ export {
     };
 
     ProgramTitle programTitle(const Pane& pane) noexcept;
-
-    // Frees a pane as the kind it was made as.
-    struct PaneDisposal {
-      static void dispose(Pane* pane, ConcurrentMemory& memory) noexcept;
-    };
 
   }
 }
@@ -745,7 +821,7 @@ export {
 
     // The runtime's tables. Functions take the ones they read or change, so the borrows they keep of one
     // table are not disturbed by another, as Rust's disjoint field borrows are.
-    using PaneStore = SlotStore<Pane, pane_capacity, ConcurrentMemory, PaneDisposal>;
+    using PaneStore = SlotStore<Pane, pane_capacity, ConcurrentMemory>;
     using ClientStore = SlotStore<ClientSession, client_capacity, ConcurrentMemory>;
     using WorkspaceStore = SlotStore<Workspace, workspace_capacity, ConcurrentMemory>;
 
@@ -800,13 +876,13 @@ export {
 
     // The terminal a request names by id: a request that only a terminal answers is refused for
     // a pane of another kind, and for an id that names none.
-    tbc::mut_a<TerminalPane> requireTerminal(tbc::mut_a<PaneStore> panes, std::uint64_t identity);
+    tbc::val_a<PaneRef<TerminalBody>> requireTerminal(tbc::mut_a<PaneStore> panes, std::uint64_t identity);
 
     // The terminal `pane` is, as a request that only a terminal answers needs it.
-    tbc::mut_a<TerminalPane> requireTerminal(tbc::mut_a<Pane> pane);
+    tbc::val_a<PaneRef<TerminalBody>> requireTerminal(tbc::mut_a<Pane> pane);
 
     // The editor a request names by id, refused as requireTerminal refuses.
-    tbc::mut_a<NvimPane> requireNvim(tbc::mut_a<PaneStore> panes, std::uint64_t identity);
+    tbc::val_a<PaneRef<NvimBody>> requireNvim(tbc::mut_a<PaneStore> panes, std::uint64_t identity);
 
     // The pane an agent's report names, which must still run the generation it names and be the one
     // the runtime verified the reporting client inside.

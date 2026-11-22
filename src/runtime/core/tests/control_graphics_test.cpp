@@ -732,30 +732,30 @@ namespace {
         const ds::Array<std::string_view, 1> arguments{"/bin/cat"};
         const Launch launch{.cwd = "/tmp", .arguments = arguments};
         const TabLocation location{.workspace = {.id = 7}, .tab_id = 1};
-        auto& failed = panes.launch(model, {.location = location, .size = {80, 24, 9, 18}}, launch);
-        auto& healthy = panes.launch(model, {.location = location, .size = {80, 24, 9, 18}}, launch);
+        const auto failed = panes.launch(model, {.location = location, .size = {80, 24, 9, 18}}, launch);
+        const auto healthy = panes.launch(model, {.location = location, .size = {80, 24, 9, 18}}, launch);
 
-        failed.media->resize({80, 25, 9, 18});
+        failed.body.media->resize({80, 25, 9, 18});
         for (unsigned index = 0; index < MediaBatch::event_capacity / 2; ++index) {
-          failed.media->output(bytes("x"));
+          failed.body.media->output(bytes("x"));
           if (index + 1 < MediaBatch::event_capacity / 2) {
-            failed.media->resize({80, 25, 9, 18});
+            failed.body.media->resize({80, 25, 9, 18});
           }
         }
 
-        failed.resize({80, 26, 9, 18});
+        telar::runtime::resize(failed, {80, 26, 9, 18});
         if (start_worker) {
           service.start(model, clients, panes);
         } else {
           panes.flushInput(failed);
         }
 
-        check(failed.output_closed && failed.close_requested && !failed.terminal.hasPendingControl());
-        healthy.terminal.feed(bytes("\x1b[5n"), *healthy.media);
-        check(!healthy.output_closed && healthy.terminal.responses().size() == 4);
+        check(failed.core.output_closed && failed.core.close_requested && !failed.body.terminal.hasPendingControl());
+        healthy.body.terminal.feed(bytes("\x1b[5n"), *healthy.body.media);
+        check(!healthy.core.output_closed && healthy.body.terminal.responses().size() == 4);
         service.finish(model);
-        const auto failed_id = failed.id;
-        const auto healthy_id = healthy.id;
+        const auto failed_id = failed.core.id;
+        const auto healthy_id = healthy.core.id;
 
         panes.remove(model, clients, failed_id);
         panes.remove(model, clients, healthy_id);
@@ -778,33 +778,33 @@ namespace {
         const ds::Array<std::string_view, 1> arguments{"/bin/cat"};
         const Launch launch{.cwd = "/tmp", .arguments = arguments};
         const TabLocation location{.workspace = {.id = 7}, .tab_id = 1};
-        auto& failed = panes.launch(model, {.location = location, .size = {80, 24, 9, 18}}, launch);
-        auto& healthy = panes.launch(model, {.location = location, .size = {80, 24, 9, 18}}, launch);
+        const auto failed = panes.launch(model, {.location = location, .size = {80, 24, 9, 18}}, launch);
+        const auto healthy = panes.launch(model, {.location = location, .size = {80, 24, 9, 18}}, launch);
 
         for (std::size_t index = 0; index < PtyResponseQueue::message_capacity; ++index) {
-          failed.terminal.feed(bytes("\x1b[5n"), *failed.media);
+          failed.body.terminal.feed(bytes("\x1b[5n"), *failed.body.media);
         }
 
-        failed.terminal.feed(bytes("\x1b[5n\x1b]2;unavailable\x1b\\\x1b[5n"), *failed.media);
-        check(failed.terminal.hasPendingControl() && !failed.pty_responses->hasCapacityFor(1));
+        failed.body.terminal.feed(bytes("\x1b[5n\x1b]2;unavailable\x1b\\\x1b[5n"), *failed.body.media);
+        check(failed.body.terminal.hasPendingControl() && !failed.body.pty_responses->hasCapacityFor(1));
 
         upstream.failNext();
         panes.flushInput(failed);
         bool processing_error = false;
 
-        checkGhostty(ghostty_terminal_get(failed.terminal.handle(), GHOSTTY_TERMINAL_DATA_VT_PROCESSING_ERROR, &processing_error));
+        checkGhostty(ghostty_terminal_get(failed.body.terminal.handle(), GHOSTTY_TERMINAL_DATA_VT_PROCESSING_ERROR, &processing_error));
         check(processing_error && upstream.failures() == 1);
-        check(failed.output_closed && failed.close_requested && !failed.terminal.hasPendingControl());
-        check(failed.pty_responses->closed() && failed.pty_responses->empty());
+        check(failed.core.output_closed && failed.core.close_requested && !failed.body.terminal.hasPendingControl());
+        check(failed.body.pty_responses->closed() && failed.body.pty_responses->empty());
         panes.flushInput(failed);
-        check(failed.pty_responses->empty() && !failed.terminal.hasPendingControl());
+        check(failed.body.pty_responses->empty() && !failed.body.terminal.hasPendingControl());
 
-        healthy.terminal.feed(bytes("\x1b[5n"), *healthy.media);
-        const auto reply = healthy.terminal.responses();
+        healthy.body.terminal.feed(bytes("\x1b[5n"), *healthy.body.media);
+        const auto reply = healthy.body.terminal.responses();
 
-        check(!healthy.output_closed && std::string_view{reinterpret_cast<const char*>(reply.data()), reply.size()} == "\x1b[0n");
-        const auto failed_id = failed.id;
-        const auto healthy_id = healthy.id;
+        check(!healthy.core.output_closed && std::string_view{reinterpret_cast<const char*>(reply.data()), reply.size()} == "\x1b[0n");
+        const auto failed_id = failed.core.id;
+        const auto healthy_id = healthy.core.id;
 
         panes.remove(model, clients, failed_id);
         panes.remove(model, clients, healthy_id);

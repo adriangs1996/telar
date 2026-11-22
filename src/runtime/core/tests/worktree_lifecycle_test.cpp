@@ -101,12 +101,12 @@ namespace {
 
     workspaces.open(model, panes, clients, owner.session().id, OpenPane{.request_id = 1, .size = size, .launch = Launch{.cwd = "/", .arguments = arguments}});
     const auto opened = owner.receive<PaneOpened>();
-    auto& pane = panes.requireTerminal(model.panes, opened.pane_id);
+    const auto pane = panes.requireTerminal(model.panes, opened.pane_id);
 
-    panes.attach(model, observer.session(), pane.id, size);
+    panes.attach(model, observer.session(), pane.core.id, size);
     constexpr std::string_view final_output = "retained final output";
 
-    pane.terminal.feed({reinterpret_cast<const Byte*>(final_output.data()), final_output.size()}, *pane.media);
+    pane.body.terminal.feed({reinterpret_cast<const Byte*>(final_output.data()), final_output.size()}, *pane.body.media);
 
     if (worktree) {
       workspaces.closeWorkspace(model, clients, opened.location.workspace.id);
@@ -122,12 +122,12 @@ namespace {
 
     check(response.workspace_closed && response.location.tab_id == opened.location.tab_id);
     check(model.workspaces.find(opened.location.workspace.id) == nullptr);
-    check(model.panes.find(opened.pane_id) == &pane && pane.close_requested);
+    check(model.panes.find(opened.pane_id) == &pane.core && pane.core.close_requested);
     check(!owner.session().attachments.empty() && !observer.session().attachments.empty());
     check(owner.session().workspace == opened.location.workspace.id);
 
-    pane.output_closed = true;
-    pane.exit_status = SIGKILL;
+    pane.core.output_closed = true;
+    pane.core.exit_status = SIGKILL;
     workspaces.collectExited(model, panes, clients);
     check(model.panes.find(opened.pane_id) != nullptr);
     panes.release(model, clients, {.client = owner.session().id, .pane = opened.pane_id});

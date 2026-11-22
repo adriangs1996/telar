@@ -38,13 +38,13 @@ export {
     // Desktop clipboard routing between panes and their attached clients.
     class ClipboardService {
     public:
-      static bool eligible(const ClientSession& client, const TerminalPane& pane) noexcept;
+      static bool eligible(const ClientSession& client, PaneRef<const TerminalBody> pane) noexcept;
 
-      static void configure(const ClientStore& clients, TerminalPane& pane);
+      static void configure(const ClientStore& clients, PaneRef<TerminalBody> pane);
 
-      static bool advance(ClientStore& clients, TerminalPane& pane, std::chrono::steady_clock::time_point now);
+      static bool advance(ClientStore& clients, PaneRef<TerminalBody> pane, std::chrono::steady_clock::time_point now);
 
-      static tbc::val_a<TerminalPane*> complete(tbc::mut_a<PaneStore> panes, ClientSession& sender, const CompleteClipboardDesktop& completion);
+      static tbc::val_a<ds::Option<PaneRef<TerminalBody>>> complete(tbc::mut_a<PaneStore> panes, ClientSession& sender, const CompleteClipboardDesktop& completion);
 
     private:
       static bool precedes(const ClientSession& candidate, const ClientSession& current, std::uint64_t pane) noexcept;
@@ -85,42 +85,42 @@ export {
         std::chrono::nanoseconds& timeout;
       };
 
-      bool prepare(Output& output, Attachment& attachment, TerminalPane& pane, DeliveryLane lane);
+      bool prepare(Output& output, Attachment& attachment, PaneRef<TerminalBody> pane, DeliveryLane lane);
 
       // An editor's lanes: its frames, and what every pane says of its program.
-      bool prepare(Output& output, Attachment& attachment, NvimPane& pane, DeliveryLane lane);
+      bool prepare(Output& output, Attachment& attachment, PaneRef<NvimBody> pane, DeliveryLane lane);
 
       // What the client lacks of an editor's screen, as the grids of one frame and its end.
-      bool editorFrame(Output& output, Attachment& attachment, const NvimPane& pane);
+      bool editorFrame(Output& output, Attachment& attachment, PaneRef<const NvimBody> pane);
 
       template <typename Message>
       static bool metadata(Connection<ConcurrentMemory>& connection, std::uint64_t& observed, std::uint64_t revision, const Message& message);
 
       // The pane's document, one chunk per delivery; a newer revision restarts from its start, so
       // a client never assembles parts of two documents.
-      static bool document(Connection<ConcurrentMemory>& connection, Attachment& attachment, const TerminalPane& pane);
+      static bool document(Connection<ConcurrentMemory>& connection, Attachment& attachment, PaneRef<const TerminalBody> pane);
 
       // The documents that stand for rows of the pane's scrollback: one a client has that the pane
       // let go of is withdrawn first, then each one's parts go in order, then rows that moved.
-      static bool inlineDocuments(Connection<ConcurrentMemory>& connection, Attachment& attachment, const TerminalPane& pane);
+      static bool inlineDocuments(Connection<ConcurrentMemory>& connection, Attachment& attachment, PaneRef<const TerminalBody> pane);
 
-      static bool blocks(Connection<ConcurrentMemory>& connection, Attachment& attachment, const TerminalPane& pane);
+      static bool blocks(Connection<ConcurrentMemory>& connection, Attachment& attachment, PaneRef<const TerminalBody> pane);
 
       // How the scrollback numbers its rows, before a frame numbered so. A viewport held above the
       // bottom keeps showing the same rows when the scrollback drops rows above them.
-      static bool scrollback(Connection<ConcurrentMemory>& connection, Attachment& attachment, TerminalPane& pane);
+      static bool scrollback(Connection<ConcurrentMemory>& connection, Attachment& attachment, PaneRef<TerminalBody> pane);
 
-      bool cells(Output& output, Attachment& attachment, TerminalPane& pane, Clock::time_point now, std::chrono::nanoseconds& timeout);
+      bool cells(Output& output, Attachment& attachment, PaneRef<TerminalBody> pane, Clock::time_point now, std::chrono::nanoseconds& timeout);
 
       // What something in the editor asks the user, or that it stopped asking, told once.
-      static bool editorPrompt(Connection<ConcurrentMemory>& connection, Attachment& attachment, const NvimPane& pane);
+      static bool editorPrompt(Connection<ConcurrentMemory>& connection, Attachment& attachment, PaneRef<const NvimBody> pane);
 
       // Tells the client its pane ended, once it was `delivered` all the pane had to show.
       bool exit(Output& output, Attachment& attachment, const Pane& pane, bool delivered);
 
-      static bool graphics(Output& output, Attachment& attachment, TerminalPane& pane, std::chrono::nanoseconds& timeout);
+      static bool graphics(Output& output, Attachment& attachment, PaneRef<TerminalBody> pane, std::chrono::nanoseconds& timeout);
 
-      static bool publishGraphics(Connection<ConcurrentMemory>& connection, Attachment& attachment, TerminalPane& pane, std::chrono::nanoseconds& timeout);
+      static bool publishGraphics(Connection<ConcurrentMemory>& connection, Attachment& attachment, PaneRef<TerminalBody> pane, std::chrono::nanoseconds& timeout);
 
       ds::Array<Slot, ClientSession::attachment_capacity> slots_;
       std::uint64_t occupied_ = 0;
@@ -171,24 +171,24 @@ export {
         constexpr std::size_t maximum_text_bytes = 262144;
 
         // An editor's text is what its screen shows: its windows and floats over its grid.
-        if (const auto* editor = pane->as<NvimPane>()) {
+        if (const auto editor = asNvim(pane)) {
           ds::String<ConcurrentMemory> text{memory_};
-          const bool whole = composeText(editor->editor.screen(), request.rows, text, maximum_text_bytes);
+          const bool whole = composeText(editor->body.editor.screen(), request.rows, text, maximum_text_bytes);
 
-          send(PaneText{.request_id = request.request_id, .pane_id = editor->id, .truncated = !whole, .text = text.view()});
+          send(PaneText{.request_id = request.request_id, .pane_id = pane->id, .truncated = !whole, .text = text.view()});
           return;
         }
 
-        auto* terminal = pane->asMut<TerminalPane>();
-        if (terminal == nullptr) {
+        auto terminal = asTerminal(pane);
+        if (!terminal) {
           send(RequestFailed{.request_id = request.request_id, .code = FailureCode::unsupported_pane_kind, .message = "This pane is not a terminal"});
           return;
         }
 
         // Read before the reader borrows the pane's terminal for as long as its text is sent.
-        const auto pane_id = terminal->id;
-        const auto exit_code = terminal->exitCode();
-        TextReader reader{memory_, terminal->terminal, maximum_text_bytes};
+        const auto pane_id = pane->id;
+        const auto exit_code = pane->exitCode();
+        TextReader reader{memory_, terminal.getMut().body.terminal, maximum_text_bytes};
 
         reader.read(request.source, request.rows);
         send(PaneText{.request_id = request.request_id, .pane_id = pane_id, .truncated = reader.truncated(), .text = reader.text(), .exit_code = exit_code});
@@ -207,8 +207,8 @@ export {
 
         // A pane that is not a terminal says so before the snapshot names it.
         for (const auto* pane : model_.panes.items()) {
-          if (pane != nullptr && pane->kind != PaneKind::terminal && matchesSnapshot(*pane, request.location)) {
-            send(PaneKindNotice{.pane_id = pane->id, .kind = pane->kind});
+          if (pane != nullptr && pane->kind() != PaneKind::terminal && matchesSnapshot(*pane, request.location)) {
+            send(PaneKindNotice{.pane_id = pane->id, .kind = pane->kind()});
           }
         }
 

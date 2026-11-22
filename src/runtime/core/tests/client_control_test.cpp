@@ -285,14 +285,14 @@ namespace {
     const ds::Array<std::string_view, 1> arguments{"/bin/cat"};
     Command command{memory, Launch{.cwd = "/tmp", .arguments = arguments}};
     const auto pane_id = model.panes.nextId();
-    auto pane = ds::makeBox<TerminalPane>(memory, memory, pane_id, location, command, PaneLaunch{TerminalSize{80, 24, 0, 0}, model.media_budget, model.graphics_limits});
+    auto pane = ds::makeBox<Pane>(memory, memory, pane_id, location, command, PaneLaunch{TerminalSize{80, 24, 0, 0}, model.media_budget, model.graphics_limits});
     constexpr std::uint64_t pane_generation = 34;
 
     pane.getMut().generation = pane_generation;
     workspace.getMut().tabs.atMut(0).panes.push(pane_id);
     model.workspaces.insert(workspace_id, std::move(workspace));
     model.panes.insert(pane_id, std::move(pane));
-    target.session().attachments.push(ds::makeBox<Attachment>(memory, memory, target.session().graphics_credit, pane_id, requireTerminal(model.panes, pane_id).media));
+    target.session().attachments.push(ds::makeBox<Attachment>(memory, memory, target.session().graphics_credit, pane_id, requireTerminal(model.panes, pane_id).body.media));
     target.session().last_input_pane = pane_id;
     target.session().last_input_sequence = 7;
 

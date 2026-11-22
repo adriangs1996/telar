@@ -271,16 +271,16 @@ export {
       }
 
       // The terminal a request names: a request only a terminal answers is refused for another kind.
-      inline static TerminalPane& requireTerminal(PaneStore& panes, std::uint64_t identity) {
+      inline static PaneRef<TerminalBody> requireTerminal(PaneStore& panes, std::uint64_t identity) {
         return telar::runtime::requireTerminal(require(panes, identity));
       }
 
-      inline static TerminalPane& requireTerminalGeneration(PaneStore& panes, std::uint64_t identity, std::uint64_t generation) {
+      inline static PaneRef<TerminalBody> requireTerminalGeneration(PaneStore& panes, std::uint64_t identity, std::uint64_t generation) {
         return telar::runtime::requireTerminal(requireGeneration(panes, identity, generation));
       }
 
       // A new pane in a tab, in the colors of the workspace's geometry owner when there is one.
-      inline tbc::mut_a<TerminalPane> launch(tbc::mut_a<RuntimeModel> model, const PanePlacement& placement, const Launch& launch) {
+      inline tbc::val_a<PaneRef<TerminalBody>> launch(tbc::mut_a<RuntimeModel> model, const PanePlacement& placement, const Launch& launch) {
         const auto identity = allocateIdentity(model);
 
         if (launch.environment_mode != EnvironmentMode::inherit_runtime || !launch.environment.empty()) {
@@ -292,44 +292,44 @@ export {
         return launchPrepared(model, placement, command, identity);
       }
 
-      inline tbc::mut_a<TerminalPane> launch(tbc::mut_a<RuntimeModel> model, const PanePlacement& placement, Command<ConcurrentMemory>& command, std::uint64_t restored_identity = 0) {
+      inline tbc::val_a<PaneRef<TerminalBody>> launch(tbc::mut_a<RuntimeModel> model, const PanePlacement& placement, Command<ConcurrentMemory>& command, std::uint64_t restored_identity = 0) {
         return launchPrepared(model, placement, command, allocateIdentity(model, restored_identity));
       }
 
       // A new editor pane in a tab: `launch` starts a Neovim with --embed, which the pane is the
       // only UI of. Its output, its errors and its input are three descriptors of one pane.
-      inline tbc::mut_a<NvimPane> launchEditor(tbc::mut_a<RuntimeModel> model, const PanePlacement& placement, const Launch& launch, std::uint64_t restored_identity = 0) {
+      inline tbc::val_a<PaneRef<NvimBody>> launchEditor(tbc::mut_a<RuntimeModel> model, const PanePlacement& placement, const Launch& launch, std::uint64_t restored_identity = 0) {
         const auto identity = allocateIdentity(model, restored_identity);
         Command command{memory_, launch, CommandPurpose::configured_helper};
 
         identify(command, model, placement, identity);
         proxy_.apply(command);
-        auto pane = ds::makeBox<NvimPane>(memory_, memory_, identity.id, placement.location, command, placement.size);
+        auto pane = ds::makeBox<Pane>(memory_, memory_, identity.id, placement.location, command, placement.size);
 
         pane.getMut().generation = identity.generation;
         const auto handle = model.panes.insert(identity.id, std::move(pane));
 
         ++model.pane_revision;
         try {
-          auto& inserted = requireNvim(model.panes, identity.id);
+          auto inserted = requireNvim(model.panes, identity.id);
 
-          inserted.event_identity = handle;
+          inserted.core.event_identity = handle;
           if (handle > maximum_event_identity) {
             throw RequestError{FailureCode::resource_limit, "Pane event identity space exhausted"};
           }
 
           const auto token = eventToken(EventSource::pane, handle);
 
-          poller_.watch(inserted.process->output(), token);
-          poller_.watch(inserted.process->error(), token);
+          poller_.watch(inserted.body.process->output(), token);
+          poller_.watch(inserted.body.process->error(), token);
           // The editor's colorscheme is its owner's theme, as a terminal's palette is.
           if (placement.owner_colors != nullptr) {
-            inserted.editor.theme(*placement.owner_colors);
+            inserted.body.editor.theme(*placement.owner_colors);
           }
 
           flushEditor(inserted);
         } catch (...) {
-          if (auto* failed = asNvim(model.panes.find(identity.id))) {
+          if (const auto failed = asNvim(model.panes.find(identity.id))) {
             release(*failed);
           }
 
@@ -342,16 +342,16 @@ export {
       }
 
       // Writes what an editor queued for its Neovim, and asks to be woken while some is left.
-      inline void flushEditor(NvimPane& pane) {
-        if (pane.close_requested || pane.process->input() < 0) {
+      inline void flushEditor(PaneRef<NvimBody> pane) {
+        if (pane.core.close_requested || pane.body.process->input() < 0) {
           return;
         }
 
-        pane.write();
-        const bool waiting = pane.hasInput();
-        if (waiting != pane.write_interest) {
-          pane.write_interest = waiting;
-          poller_.writeInterest(pane.process->input(), eventToken(EventSource::pane, pane.event_identity), waiting);
+        pane.body.write();
+        const bool waiting = pane.body.hasInput();
+        if (waiting != pane.core.write_interest) {
+          pane.core.write_interest = waiting;
+          poller_.writeInterest(pane.body.process->input(), eventToken(EventSource::pane, pane.core.event_identity), waiting);
         }
       }
 
@@ -364,14 +364,14 @@ export {
           return;
         }
 
-        auto& pane = requireNvim(model.panes, pane_id);
-        if (pane.close_requested || pane.output_closed) {
+        auto pane = requireNvim(model.panes, pane_id);
+        if (pane.core.close_requested || pane.core.output_closed) {
           return;
         }
 
-        pane.driver = client.id;
+        pane.body.driver = client.id;
         try {
-          if (!std::forward<Request>(request)(pane.editor)) {
+          if (!std::forward<Request>(request)(pane.body.editor)) {
             return;
           }
 
@@ -382,34 +382,34 @@ export {
       }
 
       // Stops watching a descriptor of an editor that reached its end, and closes it.
-      inline void closeEditorOutput(NvimPane& pane) noexcept {
-        poller_.remove(pane.process->output());
-        pane.process.getMut().closeOutput();
+      inline void closeEditorOutput(PaneRef<NvimBody> pane) noexcept {
+        poller_.remove(pane.body.process->output());
+        pane.body.process.getMut().closeOutput();
       }
 
-      inline void closeEditorErrors(NvimPane& pane) noexcept {
-        poller_.remove(pane.process->error());
-        pane.process.getMut().closeError();
+      inline void closeEditorErrors(PaneRef<NvimBody> pane) noexcept {
+        poller_.remove(pane.body.process->error());
+        pane.body.process.getMut().closeError();
       }
 
       // An editor that cannot go on: what it wrote was refused, or its input broke.
-      inline void failEditor(NvimPane& pane) noexcept {
-        if (pane.process->output() >= 0) {
+      inline void failEditor(PaneRef<NvimBody> pane) noexcept {
+        if (pane.body.process->output() >= 0) {
           closeEditorOutput(pane);
         }
 
-        pane.output_closed = true;
+        pane.core.output_closed = true;
         endEditor(pane);
       }
 
       // Asks an editor's Neovim to leave, as closing its pane does.
-      inline void endEditor(NvimPane& pane) noexcept {
-        if (pane.process->input() >= 0) {
-          poller_.remove(pane.process->input());
+      inline void endEditor(PaneRef<NvimBody> pane) noexcept {
+        if (pane.body.process->input() >= 0) {
+          poller_.remove(pane.body.process->input());
         }
 
-        pane.write_interest = false;
-        pane.requestClose();
+        pane.core.write_interest = false;
+        requestClose(pane.core);
       }
 
       inline tbc::mut_a<Attachment> attach(RuntimeModel& model, tbc::mut_a<ClientSession> client, std::uint64_t pane_id, TerminalSize size) {
@@ -435,14 +435,14 @@ export {
 
         const auto slot = client.availableAttachmentSlot();
         // The attachment shares a terminal's media through its own handle; an editor has none.
-        const auto* terminal = pane.as<TerminalPane>();
-        auto media = terminal == nullptr ? decltype(terminal->media){} : terminal->media;
-        const auto clipboard_revision = terminal == nullptr ? std::uint64_t{0} : terminal->terminal.effects().clipboard_revision;
+        const auto terminal = asTerminal(&pane);
+        auto media = !terminal ? decltype(terminal->body.media){} : terminal->body.media;
+        const auto clipboard_revision = !terminal ? std::uint64_t{0} : terminal->body.terminal.effects().clipboard_revision;
 
         auto attachment = ds::makeBox<Attachment>(memory_, memory_, client.graphics_credit, pane.id, std::move(media));
 
         attachment.getMut().slot = slot;
-        attachment.getMut().kind = pane.kind;
+        attachment.getMut().kind = pane.kind();
         attachment.getMut().graphics.configure(client.shared_graphics);
         attachment.getMut().clipboard_revision = clipboard_revision;
 
@@ -456,10 +456,10 @@ export {
 
       // Gives a pane the size its client shows it at, whatever its kind.
       inline void resizeTo(Pane& pane, TerminalSize size) {
-        if (auto* terminal = pane.asMut<TerminalPane>()) {
-          terminal->resize(size);
-        } else if (auto* editor = pane.asMut<NvimPane>()) {
-          editor->resize(size);
+        if (const auto terminal = asTerminal(&pane)) {
+          telar::runtime::resize(*terminal, size);
+        } else if (const auto editor = asNvim(&pane)) {
+          telar::runtime::resize(*editor, size);
           flushEditor(*editor);
         }
       }
@@ -556,18 +556,18 @@ export {
           std::abort();
         }
 
-        visitPane(*found, [&](auto& kind) {
+        visitPaneAs(*found, [&](auto kind) {
           release(kind);
         });
 
         // A worker may still be reading a terminal's observer and media: each is kept until the
         // worker is done with it.
-        if (auto* terminal = found->asMut<TerminalPane>()) { // NOLINT(misc-const-correctness): its observer and media are retired through their shared handles, a mutation tbc sees through the pane
-          terminal->observer->retiredNextMut() = std::move(model.retired_observers);
-          model.retired_observers = terminal->observer;
+        if (const auto terminal = asTerminal(found)) { // NOLINT(misc-const-correctness): its observer and media are retired through their shared handles, a mutation tbc sees through the pane
+          terminal->body.observer->retiredNextMut() = std::move(model.retired_observers);
+          model.retired_observers = terminal->body.observer;
           ++model.retired_observer_count;
-          terminal->media->retiredNextMut() = std::move(model.retired_media);
-          model.retired_media = terminal->media;
+          terminal->body.media->retiredNextMut() = std::move(model.retired_media);
+          model.retired_media = terminal->body.media;
           ++model.retired_media_count;
         }
 
@@ -577,20 +577,20 @@ export {
 
       // Lets go of what a terminal holds outside its pane before the pane is erased: its
       // descriptor, the session its observer records and the transfers its media has under way.
-      inline void release(TerminalPane& removed) noexcept {
-        poller_.remove(removed.process->descriptor());
-        if (removed.exit_status && !removed.exit_observed) {
-          removed.observer->shellExit(*removed.exitCode());
-          removed.exit_observed = true;
+      inline void release(PaneRef<TerminalBody> removed) noexcept {
+        poller_.remove(removed.body.process->descriptor());
+        if (removed.core.exit_status && !removed.core.exit_observed) {
+          removed.body.observer->shellExit(*removed.core.exitCode());
+          removed.core.exit_observed = true;
         }
 
-        removed.observer->finishSession();
-        removed.media->cancel();
+        removed.body.observer->finishSession();
+        removed.body.media->cancel();
       }
 
       // An editor holds only its Neovim's three descriptors outside its pane.
-      inline void release(NvimPane& removed) noexcept {
-        for (const auto descriptor : {removed.process->output(), removed.process->error(), removed.process->input()}) {
+      inline void release(PaneRef<NvimBody> removed) noexcept {
+        for (const auto descriptor : {removed.body.process->output(), removed.body.process->error(), removed.body.process->input()}) {
           if (descriptor >= 0) {
             poller_.remove(descriptor);
           }
@@ -603,15 +603,15 @@ export {
           return;
         }
 
-        auto& pane = requireTerminal(model.panes, request.pane_id);
-        if (pane.output_closed) {
+        auto pane = requireTerminal(model.panes, request.pane_id);
+        if (pane.core.output_closed) {
           return;
         }
 
         if (admitInput(pane, request.bytes.size())) {
-          pane.enqueueInput(request.bytes);
-          observe(pane, request.bytes);
-          pane.last_input = std::chrono::steady_clock::now();
+          enqueueInput(pane, request.bytes);
+          observe(pane.core, request.bytes);
+          pane.core.last_input = std::chrono::steady_clock::now();
           flushInput(pane);
         }
 
@@ -633,10 +633,10 @@ export {
       };
 
       template <typename Observer>
-      inline static void type(TerminalPane& pane, const TypedLine& line, const Observer& observe) {
+      inline static void type(PaneRef<TerminalBody> pane, const TypedLine& line, const Observer& observe) {
         const auto forward = [&](std::span<const Byte> bytes) {
-          pane.enqueueInput(bytes);
-          observe(pane, bytes);
+          enqueueInput(pane, bytes);
+          observe(pane.core, bytes);
         };
 
         if (!line.paste) {
@@ -659,19 +659,19 @@ export {
       }
 
       // Writes a paste to a pane's input queue, framed when its program asked for bracketed paste.
-      inline static void paste(TerminalPane& pane, std::span<const Byte> text, bool bracketed) {
+      inline static void paste(PaneRef<TerminalBody> pane, std::span<const Byte> text, bool bracketed) {
         BracketedPaste::encode(textView(text), bracketed, [&](std::string_view bytes) {
-          pane.enqueueInput(byteView(bytes));
+          enqueueInput(pane, byteView(bytes));
         });
       }
 
-      inline bool admitInput(TerminalPane& pane, std::size_t bytes) {
-        if (bytes <= TerminalPane::input_limit - pane.input.size()) {
+      inline bool admitInput(PaneRef<TerminalBody> pane, std::size_t bytes) {
+        if (bytes <= TerminalBody::input_limit - pane.body.input.size()) {
           return true;
         }
 
-        TELAR_DIAGNOSTIC(diagnostics::accumulate(pane.input_dropped_bytes, bytes));
-        limits_.report(LimitReach{.name = "panes.input_queue_capacity", .noun = "queued input bytes", .value = TerminalPane::input_limit, .requested = saturatedAdd(pane.input.size(), bytes)});
+        TELAR_DIAGNOSTIC(diagnostics::accumulate(pane.body.input_dropped_bytes, bytes));
+        limits_.report(LimitReach{.name = "panes.input_queue_capacity", .noun = "queued input bytes", .value = TerminalBody::input_limit, .requested = saturatedAdd(pane.body.input.size(), bytes)});
         return false;
       }
 
@@ -688,39 +688,39 @@ export {
         resizeTo(require(model.panes, request.pane_id), request.size);
       }
 
-      inline void flushInput(TerminalPane& pane) {
-        if (pane.output_closed) {
+      inline void flushInput(PaneRef<TerminalBody> pane) {
+        if (pane.core.output_closed) {
           return;
         }
 
-        if (pane.media->failed()) {
+        if (pane.body.media->failed()) {
           failOutput(pane);
           return;
         }
 
         try {
-          pane.resumeControl();
-          pane.write();
-          const bool needs_write = pane.hasInput();
-          if (needs_write != pane.write_interest) {
-            poller_.writeInterest(pane.process->descriptor(), eventToken(EventSource::pane, pane.event_identity), needs_write);
-            pane.write_interest = needs_write;
+          pane.body.resumeControl();
+          pane.body.write();
+          const bool needs_write = pane.body.hasInput();
+          if (needs_write != pane.core.write_interest) {
+            poller_.writeInterest(pane.body.process->descriptor(), eventToken(EventSource::pane, pane.core.event_identity), needs_write);
+            pane.core.write_interest = needs_write;
           }
         } catch (const std::exception&) {
           failOutput(pane);
         }
       }
 
-      inline void failOutput(TerminalPane& pane) noexcept {
-        pane.terminal.abortControl();
-        pane.media->cancel();
-        pane.requestClose();
-        pane.output_closed = true;
-        poller_.remove(pane.process->descriptor());
+      inline void failOutput(PaneRef<TerminalBody> pane) noexcept {
+        pane.body.terminal.abortControl();
+        pane.body.media->cancel();
+        requestClose(pane.core);
+        pane.core.output_closed = true;
+        poller_.remove(pane.body.process->descriptor());
       }
 
       inline void configureDesktop(RuntimeModel& model, ClientStore& clients, std::uint64_t client_id, const ConfigurePaneDesktop& request) {
-        const auto pane = requireTerminalGeneration(model.panes, request.pane_id, request.pane_generation).id;
+        const auto pane = requireTerminalGeneration(model.panes, request.pane_id, request.pane_generation).core.id;
         auto* client = clients.find(client_id);
         auto* attachment = client == nullptr ? nullptr : client->attachmentMut(pane);
         if (attachment == nullptr || client->connection.flags().closing) {
@@ -749,9 +749,9 @@ export {
         client.colors = request;
         // An editor shows the syntax and chrome colors too, which a terminal does not.
         for (auto* stored : model.panes.items()) {
-          auto* editor = asNvim(stored);
-          const auto* workspace = editor == nullptr ? nullptr : model.workspaces.find(editor->location.workspace.id);
-          if (workspace != nullptr && workspace->geometry_client == client.id && !editor->close_requested && editor->editor.theme(request)) {
+          auto editor = asNvim(stored);
+          const auto* workspace = !editor ? nullptr : model.workspaces.find(editor->core.location.workspace.id);
+          if (workspace != nullptr && workspace->geometry_client == client.id && !editor.getMut().core.close_requested && editor.getMut().body.editor.theme(request)) {
             flushEditor(*editor);
           }
         }
@@ -761,10 +761,10 @@ export {
         }
 
         for (auto* stored : model.panes.items()) {
-          auto* pane = asTerminal(stored);
-          const auto* workspace = pane == nullptr ? nullptr : model.workspaces.find(pane->location.workspace.id);
-          if (workspace != nullptr && workspace->geometry_client == client.id && !pane->desktop_theme) {
-            pane->terminal.configureColors(request);
+          auto pane = asTerminal(stored);
+          const auto* workspace = !pane ? nullptr : model.workspaces.find(pane->core.location.workspace.id);
+          if (workspace != nullptr && workspace->geometry_client == client.id && !pane->core.desktop_theme) {
+            pane.getMut().body.terminal.configureColors(request);
             flushInput(*pane);
           }
         }
@@ -779,16 +779,16 @@ export {
           return;
         }
 
-        auto& pane = requireTerminal(panes, request.pane_id);
+        auto pane = requireTerminal(panes, request.pane_id);
         constexpr std::size_t clipboard_limit = std::size_t{1024} * 1024;
-        TextReader reader{memory_, pane.terminal, clipboard_limit};
+        TextReader reader{memory_, pane.body.terminal, clipboard_limit};
 
         reader.copy(request);
         if (reader.truncated()) {
           throw RequestError{FailureCode::resource_limit, "Selection exceeds the clipboard limit"};
         }
 
-        client.clipboard.replace(pane.id, reader.bytes());
+        client.clipboard.replace(pane.core.id, reader.bytes());
       }
 
       // A command a client runs at the prompt of a pane it shows. Its text is recorded for the
@@ -799,18 +799,18 @@ export {
           return;
         }
 
-        auto& pane = requireTerminal(model.panes, request.pane_id);
-        if (pane.output_closed) {
+        auto pane = requireTerminal(model.panes, request.pane_id);
+        if (pane.core.output_closed) {
           return;
         }
 
-        const bool paste = pane.terminal.mode(GHOSTTY_MODE_BRACKETED_PASTE);
+        const bool paste = pane.body.terminal.mode(GHOSTTY_MODE_BRACKETED_PASTE);
         ds::Array<Byte, encoded_key_bytes> encoded_enter{};
-        const auto enter = pane.terminal.encodeKey(GHOSTTY_KEY_ENTER, 0, encoded_enter.viewMut());
+        const auto enter = pane.body.terminal.encodeKey(GHOSTTY_KEY_ENTER, 0, encoded_enter.viewMut());
         if (admitInput(pane, typedSize(paste, request.text, enter))) {
-          pane.submitCommand(request.text);
+          pane.body.submitCommand(request.text);
           type(pane, {.paste = paste, .text = request.text, .enter = enter}, observe);
-          pane.last_input = std::chrono::steady_clock::now();
+          pane.core.last_input = std::chrono::steady_clock::now();
           flushInput(pane);
         }
 
@@ -820,20 +820,20 @@ export {
 
       template <typename Observer = IgnorePaneInput>
       inline void sendText(PaneStore& panes, ClientSession& client, const SendPaneText& request, std::string_view prefix = {}, const Observer& observe = {}) {
-        auto& pane = requireTerminalGeneration(panes, request.pane_id, request.pane_generation);
-        if (pane.output_closed) {
+        auto pane = requireTerminalGeneration(panes, request.pane_id, request.pane_generation);
+        if (pane.core.output_closed) {
           throw RequestError{FailureCode::pane_exited, "Pane process has exited"};
         }
 
         const auto text = byteView(request.text);
-        const bool paste = request.mode == PaneTextMode::prompt && pane.terminal.mode(GHOSTTY_MODE_BRACKETED_PASTE);
+        const bool paste = request.mode == PaneTextMode::prompt && pane.body.terminal.mode(GHOSTTY_MODE_BRACKETED_PASTE);
         ds::Array<Byte, encoded_key_bytes> encoded_enter{};
-        const auto enter = request.mode == PaneTextMode::raw ? std::span<const Byte>{} : pane.terminal.encodeKey(GHOSTTY_KEY_ENTER, 0, encoded_enter.viewMut());
+        const auto enter = request.mode == PaneTextMode::raw ? std::span<const Byte>{} : pane.body.terminal.encodeKey(GHOSTTY_KEY_ENTER, 0, encoded_enter.viewMut());
         const auto required = prefix.size() + typedSize(paste, text, enter);
         if (!admitInput(pane, required)) {
           constexpr std::size_t message_bytes = 160;
           ds::Array<char, message_bytes> message{};
-          const auto written = std::format_to_n(message.dataMut(), static_cast<std::ptrdiff_t>(message.size()), "the pane's input queue holds its limit of {} bytes; the program in it is not reading input", TerminalPane::input_limit);
+          const auto written = std::format_to_n(message.dataMut(), static_cast<std::ptrdiff_t>(message.size()), "the pane's input queue holds its limit of {} bytes; the program in it is not reading input", TerminalBody::input_limit);
           const auto length = std::min(static_cast<std::size_t>(written.size), message.size());
 
           client.connection.send(RequestFailed{.request_id = request.request_id, .code = FailureCode::resource_limit, .message = {message.data(), length}});
@@ -842,32 +842,32 @@ export {
 
         type(pane, {.paste = paste, .prefix = byteView(prefix), .text = text, .enter = enter}, observe);
         if (request.mode != PaneTextMode::raw || request.text.contains('\r')) {
-          pane.observer->noteInjectedSubmission();
+          pane.body.observer->noteInjectedSubmission();
         }
 
-        pane.last_input = std::chrono::steady_clock::now();
+        pane.core.last_input = std::chrono::steady_clock::now();
         flushInput(pane);
         client.connection.send(RequestCompleted{.request_id = request.request_id});
       }
 
       inline void pasteClipboard(RuntimeModel& model, ClientStore& clients, std::uint64_t client_id, const PastePaneClipboard& request) {
-        auto& pane = requireTerminalGeneration(model.panes, request.pane_id, request.pane_generation);
+        auto pane = requireTerminalGeneration(model.panes, request.pane_id, request.pane_generation);
         const auto* client = clients.find(client_id);
-        if (client == nullptr || !ClipboardService::eligible(*client, pane) || pane.output_closed) {
+        if (client == nullptr || !ClipboardService::eligible(*client, pane) || pane.core.output_closed) {
           throw RequestError{FailureCode::invalid_request, "Clipboard paste requires a live visible attachment"};
         }
 
         if (request.listing_only) {
           // A listing begun before a mode reset completes without reading text.
-          if (pane.terminal.pasteEvents()) {
-            if (!pane.terminal.clipboardControl().paste({.client = client->id, .generation = client->generation}, request.primary, request.available)) {
+          if (pane.body.terminal.pasteEvents()) {
+            if (!pane.body.terminal.clipboardControl().paste({.client = client->id, .generation = client->generation}, request.primary, request.available)) {
               throw RequestError{FailureCode::resource_limit, "Clipboard response is pending"};
             }
 
-            pane.resumeControl();
+            pane.body.resumeControl();
           }
         } else if (!request.text.empty()) {
-          const bool bracketed = pane.terminal.mode(GHOSTTY_MODE_BRACKETED_PASTE);
+          const bool bracketed = pane.body.terminal.mode(GHOSTTY_MODE_BRACKETED_PASTE);
           if (!admitInput(pane, typedSize(bracketed, request.text, {}))) {
             throw RequestError{FailureCode::resource_limit, "Paste exceeds available pane input capacity"};
           }
@@ -886,8 +886,8 @@ export {
       template <typename Request>
         requires std::same_as<Request, SearchPane> || std::same_as<Request, SearchPaneRows>
       inline static void search(PaneStore& panes, ClientSession& client, const Request& request) {
-        auto& pane = requireTerminal(panes, request.pane_id);
-        if (client.role == ClientRole::interactive && client.attachment(pane.id) == nullptr) {
+        const auto pane = requireTerminal(panes, request.pane_id);
+        if (client.role == ClientRole::interactive && client.attachment(pane.core.id) == nullptr) {
           throw RequestError{FailureCode::pane_not_found, "Pane is not attached"};
         }
 
@@ -895,7 +895,7 @@ export {
           client.connection.send(RequestFailed{.request_id = client.search->requestId(), .code = FailureCode::resource_limit, .message = "Pane search superseded"});
         }
 
-        client.search.emplace(request, pane.terminal.contentRevision());
+        client.search.emplace(request, pane.body.terminal.contentRevision());
       }
 
       // The theme a pane's programs read their colors from: that of the client owning its
@@ -928,12 +928,12 @@ export {
 
       // Rows of an attached pane's scrollback, which its client draws while it scrolls.
       inline static void readRows(PaneStore& panes, ClientSession& client, const ReadPaneRows& request) {
-        auto& pane = requireTerminal(panes, request.pane_id);
-        if (client.attachment(pane.id) == nullptr) {
+        auto pane = requireTerminal(panes, request.pane_id);
+        if (client.attachment(pane.core.id) == nullptr) {
           throw RequestError{FailureCode::pane_not_found, "Pane is not attached"};
         }
 
-        client.connection.send(pane.scrollback_rows.read(pane.terminal, request));
+        client.connection.send(pane.body.scrollback_rows.read(pane.body.terminal, request));
       }
 
       inline static bool advanceSearch(PaneStore& panes, ClientSession& client) {
@@ -942,8 +942,8 @@ export {
         }
 
         try {
-          auto& pane = requireTerminal(panes, client.search->paneId());
-          if (client.search.getMut().advance(pane.terminal.handle(), pane.terminal.contentRevision())) {
+          const auto pane = requireTerminal(panes, client.search->paneId());
+          if (client.search.getMut().advance(pane.body.terminal.handle(), pane.body.terminal.contentRevision())) {
             client.connection.send(client.search.getMut().result());
             client.search.reset();
           }
@@ -985,7 +985,7 @@ export {
       // Visibility is the union of explicit live reports. The oldest visible
       // reporter supplies theme facts; focus and the geometry lease cannot steal it.
       inline static void refreshDesktop(RuntimeModel& model, const ClientStore& clients, std::uint64_t identity) {
-        auto& pane = requireTerminal(model.panes, identity);
+        auto pane = requireTerminal(model.panes, identity);
         control::ClientFacts facts;
         const ConfigurePaneDesktop* theme = nullptr;
         std::uint64_t theme_client = std::numeric_limits<std::uint64_t>::max();
@@ -995,8 +995,8 @@ export {
             continue;
           }
 
-          const auto* attachment = client->attachment(pane.id);
-          if (attachment == nullptr || !attachment->desktop || attachment->desktop->pane_generation != pane.generation) {
+          const auto* attachment = client->attachment(pane.core.id);
+          if (attachment == nullptr || !attachment->desktop || attachment->desktop->pane_generation != pane.core.generation) {
             continue;
           }
 
@@ -1012,21 +1012,21 @@ export {
 
         if (theme != nullptr) {
           facts.light = theme->light;
-          const auto& previous = pane.desktop_theme;
+          const auto& previous = pane.core.desktop_theme;
           if (!previous || previous->foreground != theme->foreground || previous->background != theme->background || previous->palette != theme->palette || previous->cursor != theme->cursor) {
-            pane.terminal.configureColors({.foreground = theme->foreground, .background = theme->background, .palette = theme->palette, .cursor = theme->cursor});
+            pane.body.terminal.configureColors({.foreground = theme->foreground, .background = theme->background, .palette = theme->palette, .cursor = theme->cursor});
           }
 
-          pane.desktop_theme = *theme;
-        } else if (pane.desktop_theme) {
-          pane.desktop_theme.reset();
-          const auto* workspace = model.workspaces.find(pane.location.workspace.id);
+          pane.core.desktop_theme = *theme;
+        } else if (pane.core.desktop_theme) {
+          pane.core.desktop_theme.reset();
+          const auto* workspace = model.workspaces.find(pane.core.location.workspace.id);
           const auto* owner = workspace != nullptr && workspace->geometry_client ? clients.find(*workspace->geometry_client) : nullptr;
 
-          pane.terminal.configureColors(owner != nullptr && !owner->connection.flags().closing ? owner->colors : ConfigureTerminalColors{});
+          pane.body.terminal.configureColors(owner != nullptr && !owner->connection.flags().closing ? owner->colors : ConfigureTerminalColors{});
         }
 
-        pane.terminal.configureClientFacts(facts);
+        pane.body.terminal.configureClientFacts(facts);
         ClipboardService::configure(clients, pane);
       }
 
@@ -1065,45 +1065,47 @@ export {
         }
       }
 
-      inline tbc::mut_a<TerminalPane> launchPrepared(tbc::mut_a<RuntimeModel> model, const PanePlacement& placement, Command<ConcurrentMemory>& command, PaneKey identity) {
+      inline tbc::val_a<PaneRef<TerminalBody>> launchPrepared(tbc::mut_a<RuntimeModel> model, const PanePlacement& placement, Command<ConcurrentMemory>& command, PaneKey identity) {
         identify(command, model, placement, identity);
         proxy_.apply(command);
         const auto shell = shell_integration_.apply(command, placement.bare_prompt);
-        auto pane = ds::makeBox<TerminalPane>(memory_, memory_, identity.id, placement.location, command, PaneLaunch{.size = placement.size, .media_budget = model.media_budget, .graphics = model.graphics_limits, .shell = shell});
+        const PaneLaunch settings{.size = placement.size, .media_budget = model.media_budget, .graphics = model.graphics_limits, .shell = shell};
+        auto pane = ds::makeBox<Pane>(memory_, memory_, identity.id, placement.location, command, settings);
 
-        TELAR_DIAGNOSTIC(pane.getMut().counters = &model.metrics.panes);
         pane.getMut().generation = identity.generation;
-        pane.getMut().terminal.controlPolicy() = control_policy_;
         const auto* workspace = model.workspaces.find(placement.location.workspace.id);
         const HistorySession session{.id = pane->history_session, .pane = pane->id, .location = placement.location, .started_at_ms = ObservationTime::now().milliseconds, .workspace_path = workspace == nullptr ? std::string_view{} : std::string_view{workspace->path}, .shell = command.arguments().front()};
+
+        TELAR_DIAGNOSTIC(std::get<TerminalBody>(pane.getMut().body).counters = &model.metrics.panes);
+        std::get<TerminalBody>(pane.getMut().body).terminal.controlPolicy() = control_policy_;
         auto phase = LaunchPhase::pane_registration;
         bool registered = false;
 
         try {
           if (placement.owner_colors != nullptr) {
-            pane.getMut().terminal.configureColors(*placement.owner_colors);
+            std::get<TerminalBody>(pane.getMut().body).terminal.configureColors(*placement.owner_colors);
           }
 
-          pane->observer->configureHistory(session, model.capture_output);
+          std::get<TerminalBody>(pane->body).observer->configureHistory(session, model.capture_output);
           const auto handle = model.panes.insert(identity.id, std::move(pane));
 
           registered = true;
           ++model.pane_revision;
           // The pane now lives in the table, where it is found again.
-          auto& inserted = requireTerminal(model.panes, identity.id);
+          auto inserted = requireTerminal(model.panes, identity.id);
 
-          inserted.event_identity = handle;
+          inserted.core.event_identity = handle;
           if (handle > maximum_event_identity) {
             throw RequestError{FailureCode::resource_limit, "Pane event identity space exhausted"};
           }
 
           phase = LaunchPhase::output_actor;
-          poller_.watch(inserted.process->descriptor(), eventToken(EventSource::pane, handle));
+          poller_.watch(inserted.body.process->descriptor(), eventToken(EventSource::pane, handle));
         } catch (const std::exception& error) {
           history_.recordHistory(HistoryEventView{.kind = HistoryEventKind::launch_failed, .session = session, .finished_at_ms = ObservationTime::now().milliseconds, .failure = {.generation = identity.generation, .phase = phase, .cause = launchFailureCause(error)}});
           if (registered) {
-            if (const auto* failed = asTerminal(model.panes.find(identity.id))) {
-              poller_.remove(failed->process->descriptor());
+            if (const auto failed = asTerminal(model.panes.find(identity.id))) {
+              poller_.remove(failed->body.process->descriptor());
             }
 
             model.panes.erase(identity.id);
@@ -1118,7 +1120,7 @@ export {
 
       inline void refreshAfterDetach(RuntimeModel& model, const ClientStore& clients, std::uint64_t identity) noexcept {
         // What a client's leaving changes is a terminal's: who it reports focus and colors for.
-        if (asTerminal(model.panes.find(identity)) == nullptr) {
+        if (!asTerminal(model.panes.find(identity))) {
           return;
         }
 

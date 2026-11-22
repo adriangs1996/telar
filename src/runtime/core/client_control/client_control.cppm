@@ -965,8 +965,8 @@ export {
         for (std::size_t visited = 0; visited < panes.size() && request.count < request.entries.size(); ++visited) {
           const auto slot = next_slot_++ % panes.size();
           // What a terminal prints is read for the agent in it; another kind of pane prints nothing.
-          auto* pane = asTerminal(panes[slot]);
-          if (pane == nullptr) {
+          auto* const pane = panes[slot];
+          if (!asTerminal(pane)) {
             continue;
           }
 
@@ -984,14 +984,13 @@ export {
       inline void observe(RuntimeModel& model, Agents& agents, std::uint64_t pane_id) {
         collect(model, agents);
         auto* found = model.panes.find(pane_id);
-        auto* pane = asTerminal(found);
-        if (pending_ || pane == nullptr) {
+        if (pending_ || !asTerminal(found)) {
           return;
         }
 
         typename Processor::Request request;
 
-        enqueue(request, agents, *pane, model.panes.size() == 1, std::chrono::steady_clock::now());
+        enqueue(request, agents, *found, model.panes.size() == 1, std::chrono::steady_clock::now());
         if (request.count != 0) {
           pending_ = worker_.submit(request);
         }
@@ -1019,12 +1018,12 @@ export {
           typename Processor::Request request;
 
           for (auto* stored : model.panes.items()) {
-            auto* pane = asTerminal(stored);
-            if (pane == nullptr || !pane->observer->seal()) {
+            const auto pane = asTerminal(stored);
+            if (!pane || !pane->body.observer->seal()) {
               continue;
             }
 
-            request.entries.atMut(request.count++).observer = pane->observer;
+            request.entries.atMut(request.count++).observer = pane->body.observer;
             if (request.count == request.entries.size()) {
               break;
             }
@@ -1063,25 +1062,25 @@ export {
       // Applies one pane's observation, unless the pane is gone or exited since it was taken.
       inline static void applyEntry(RuntimeModel& model, Agents& agents, const Processor::ResultEntry& entry) {
         auto* found = findPane(model.panes, {.id = entry.pane, .generation = entry.generation});
-        auto* pane = asTerminal(found);
-        if (pane == nullptr || pane->exit_status) {
+        auto pane = asTerminal(found);
+        if (!pane || pane->core.exit_status) {
           return;
         }
 
         if (entry.process_recheck) {
-          pane->process_recheck_running = false;
-          ++pane->process_rechecks;
+          pane.getMut().core.process_recheck_running = false;
+          ++pane.getMut().core.process_rechecks;
         }
 
-        pane->shell_markers = entry.screen.shell_markers && !entry.screen.failed;
-        if (pane->input_revision == entry.input_revision) {
-          pane->needs_foreground_observation = entry.screen.needs_foreground;
+        pane.getMut().body.shell_markers = entry.screen.shell_markers && !entry.screen.failed;
+        if (pane->core.input_revision == entry.input_revision) {
+          pane.getMut().body.needs_foreground_observation = entry.screen.needs_foreground;
         }
 
         const auto directory = entry.observer->observedDirectory();
-        if (pane->cwd_revision == entry.cwd_revision && !directory.empty() && pane->cwd != directory) {
-          pane->cwd.assign(directory);
-          ++pane->cwd_revision;
+        if (pane->core.cwd_revision == entry.cwd_revision && !directory.empty() && pane->core.cwd != directory) {
+          pane.getMut().core.cwd.assign(directory);
+          ++pane.getMut().core.cwd_revision;
         }
 
         // Whether the observation still describes the pane's process, asked once: it reads the
@@ -1091,15 +1090,15 @@ export {
         if (entry.process_result && entry.process_result->inspected) {
           TELAR_DIAGNOSTIC(diagnostics::accumulate(model.metrics.agent_process_inspections));
           TELAR_DIAGNOSTIC(diagnostics::accumulate(model.metrics.agent_process_misses, entry.process_result->provider == AgentProvider::unknown));
-          model.pane_revision += current && applyProcess(agents, *pane, *entry.process_result);
+          model.pane_revision += current && applyProcess(agents, pane.getMut().core, *entry.process_result);
         }
 
         if (entry.process_result && entry.process_result->ports_inspected) {
-          model.pane_revision += current && applyPorts(*pane, *entry.process_result);
+          model.pane_revision += current && applyPorts(pane.getMut().core, *entry.process_result);
         }
 
         if (entry.screen.signal) {
-          agents.observeScreen(*pane, *entry.screen.signal, entry.screen.time);
+          agents.observeScreen(pane.getMut().core, *entry.screen.signal, entry.screen.time);
         }
       }
 
@@ -1127,25 +1126,27 @@ export {
 
       // A sole pane discovers its foreground group on the worker; others read it here. A program's
       // listening ports are read again every `ports_interval`, output or not.
-      inline void enqueue(tbc::mut_a<typename Processor::Request> request, const Agents& agents, tbc::mut_a<TerminalPane> pane, bool sole, std::chrono::steady_clock::time_point now) {
-        if (const auto drop = pane.observer->takeDrop()) {
+      inline void enqueue(tbc::mut_a<typename Processor::Request> request, const Agents& agents, tbc::mut_a<Pane> core, bool sole, std::chrono::steady_clock::time_point now) {
+        PaneRef<TerminalBody> pane{.core = core, .body = *core.asMut<TerminalBody>()};
+
+        if (const auto drop = pane.body.observer->takeDrop()) {
           limits_.report(*drop);
         }
 
-        const bool probe_process = !pane.exit_status;
+        const bool probe_process = !pane.core.exit_status;
         // An agent's card shows no ports, so its pane is not read for them.
-        const auto* agent = agents.find(pane.id, pane.generation);
-        const bool ports_due = probe_process && agent == nullptr && !pane.foreground_shell && now - pane.ports_checked >= ports_interval;
-        if (!pane.observer->seal(probe_process && (pane.process_recheck_requested || ports_due))) {
+        const auto* agent = agents.find(pane.core.id, pane.core.generation);
+        const bool ports_due = probe_process && agent == nullptr && !pane.core.foreground_shell && now - pane.core.ports_checked >= ports_interval;
+        if (!pane.body.observer->seal(probe_process && (pane.core.process_recheck_requested || ports_due))) {
           return;
         }
 
-        request.entries.atMut(request.count++) = {.pane = pane.id, .generation = pane.generation, .provider = AgentProvider::unknown, .observer = pane.observer, .probe_process = probe_process};
+        request.entries.atMut(request.count++) = {.pane = pane.core.id, .generation = pane.core.generation, .provider = AgentProvider::unknown, .observer = pane.body.observer, .probe_process = probe_process};
         auto& entry = request.entries.atMut(request.count - 1);
 
-        entry.input_revision = pane.input_revision;
-        entry.process_request = {pane.id, pane.generation, pane.cwd_revision, pane.process_id, 0};
-        entry.process_request.cache = pane.process_cache;
+        entry.input_revision = pane.core.input_revision;
+        entry.process_request = {pane.core.id, pane.core.generation, pane.core.cwd_revision, pane.core.process_id, 0};
+        entry.process_request.cache = pane.core.process_cache;
         if (agent != nullptr) {
           entry.provider = agent->provider;
           entry.tracked_agent = true;
@@ -1154,21 +1155,21 @@ export {
         if (probe_process) {
           entry.process_request.discover_foreground = sole;
           if (!entry.process_request.discover_foreground) {
-            entry.process_request.foreground = pane.process->foregroundProcessGroup().valueOr(0);
+            entry.process_request.foreground = pane.body.process->foregroundProcessGroup().valueOr(0);
           }
 
-          entry.process_request.recheck = pane.process_recheck_requested;
+          entry.process_request.recheck = pane.core.process_recheck_requested;
           entry.process_request.ports = ports_due;
-          pane.process_recheck_running = pane.process_recheck_requested;
-          pane.process_recheck_requested = false;
+          pane.core.process_recheck_running = pane.core.process_recheck_requested;
+          pane.core.process_recheck_requested = false;
           if (ports_due) {
-            pane.ports_checked = now;
+            pane.core.ports_checked = now;
           }
         }
       }
 
-      inline static bool observes(const TerminalPane& pane, const ProcessProbeResult& observation) {
-        return pane.generation == observation.request.generation && !pane.exit_status && pane.process_id == observation.request.root && pane.process->foregroundProcessGroup().valueOr(0) == observation.request.foreground;
+      inline static bool observes(PaneRef<TerminalBody> pane, const ProcessProbeResult& observation) {
+        return pane.core.generation == observation.request.generation && !pane.core.exit_status && pane.core.process_id == observation.request.root && pane.body.process->foregroundProcessGroup().valueOr(0) == observation.request.foreground;
       }
 
       // Whether the pane list changed, for an observation of the pane's current process.

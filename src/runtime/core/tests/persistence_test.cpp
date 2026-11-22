@@ -245,7 +245,7 @@ namespace {
     check(model.panes.size() == 2);
     check(model.panes.find(1)->generation == 900);
     check(model.panes.find(257)->generation == 901);
-    check(requireTerminal(model.panes, 257).terminal.screen().cols == 90);
+    check(requireTerminal(model.panes, 257).body.terminal.screen().cols == 90);
     check(model.panes.find(257)->launch.bytes() == model.panes.find(1)->launch.bytes());
     check(model.panes.nextId() == 300);
     check(model.workspaces.nextId() == 70);
@@ -340,29 +340,29 @@ namespace {
 
     restore.apply(checkpointFixture(buffer.viewMut()));
     expect(true);
-    auto* pane = asTerminal(model.panes.find(257));
+    const auto pane = asTerminal(model.panes.find(257));
 
-    check(pane != nullptr);
-    ++pane->cwd_revision;
+    check(pane.hasValue());
+    ++pane->core.cwd_revision;
     expect(true);
-    pane->resize(TerminalSize{.cols = 91, .rows = 30, .cell_width_px = 0, .cell_height_px = 0});
+    telar::runtime::resize(*pane, TerminalSize{.cols = 91, .rows = 30, .cell_width_px = 0, .cell_height_px = 0});
     expect(true);
-    pane->resize(TerminalSize{.cols = 91, .rows = 31, .cell_width_px = 0, .cell_height_px = 0});
+    telar::runtime::resize(*pane, TerminalSize{.cols = 91, .rows = 31, .cell_width_px = 0, .cell_height_px = 0});
     expect(true);
 
     constexpr ds::Array<Byte, 4> output{'t', 'e', 's', 't'};
 
-    pane->terminal.feed(output, *pane->media);
+    pane->body.terminal.feed(output, *pane->body.media);
     expect(false);
-    pane->output_closed = true;
+    pane->core.output_closed = true;
     expect(true);
-    pane->exit_status = 0;
-    pane->output_closed = false;
-    pane->exit_status.reset();
+    pane->core.exit_status = 0;
+    pane->core.output_closed = false;
+    pane->core.exit_status.reset();
     expect(true);
-    pane->close_requested = true;
+    pane->core.close_requested = true;
     expect(true);
-    pane->close_requested = false;
+    pane->core.close_requested = false;
     expect(true);
     ++agents.version;
     expect(true);
@@ -371,20 +371,20 @@ namespace {
 
     model.panes.erase(1);
     expect(true);
-    ++pane->cwd_revision;
+    ++pane->core.cwd_revision;
     expect(true);
-    const auto location = pane->location;
+    const auto location = pane->core.location;
 
     model.panes.erase(257);
     expect(true);
 
     constexpr ds::Array<std::string_view, 3> arguments{"/bin/sh", "-c", "read value"};
     Command command{memory, Launch{.cwd = "/tmp", .arguments = arguments}};
-    const auto first = panes.launch(model, {.location = location, .size = TerminalSize{.cols = 80, .rows = 24, .cell_width_px = 0, .cell_height_px = 0}}, command).id;
+    const auto first = panes.launch(model, {.location = location, .size = TerminalSize{.cols = 80, .rows = 24, .cell_width_px = 0, .cell_height_px = 0}}, command).core.id;
 
     expect(true);
     model.panes.erase(first);
-    const auto replacement = panes.launch(model, {.location = location, .size = TerminalSize{.cols = 80, .rows = 24, .cell_width_px = 0, .cell_height_px = 0}}, command).id;
+    const auto replacement = panes.launch(model, {.location = location, .size = TerminalSize{.cols = 80, .rows = 24, .cell_width_px = 0, .cell_height_px = 0}}, command).core.id;
 
     check(replacement != first);
     expect(true);
@@ -410,16 +410,16 @@ namespace {
     checkpoint::Restore restore{memory, model, panes, layouts, false};
 
     restore.apply(writer.finish());
-    auto* pane = asTerminal(model.panes.find(identity));
+    const auto pane = asTerminal(model.panes.find(identity));
 
-    check(pane != nullptr && pane->id == identity);
+    check(pane && pane->core.id == identity);
     check(model.panes.nextId() == identity + 1);
 
     ds::Array<Event, decltype(poller)::event_capacity> ready{};
     const auto events = poller.wait(std::chrono::seconds{2}, ready.viewMut());
 
     check(!events.empty());
-    check(pane->read());
+    check(telar::runtime::read(*pane));
   }
 
   void testWorktreeRestore() {

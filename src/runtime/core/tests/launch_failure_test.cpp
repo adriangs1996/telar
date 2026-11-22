@@ -100,9 +100,9 @@ namespace {
       void watch(int descriptor, std::uint64_t token) {
         NativeEventLoop<ConcurrentMemory>::watch(descriptor, token);
         for (const auto* stored : model.panes.items()) {
-          const auto* pane = asTerminal(stored);
-          if (pane != nullptr && pane->process->descriptor() == descriptor) {
-            process = pane->process->processId();
+          const auto pane = asTerminal(stored);
+          if (pane && pane->body.process->descriptor() == descriptor) {
+            process = pane->body.process->processId();
             break;
           }
         }
@@ -160,22 +160,22 @@ namespace {
       check(history.submissions == 2 && model.next_pane_generation == 3);
       history.accepting = true;
       poller.fail = false;
-      auto& pane = panes.launch(model, {.location = location, .size = size}, launch);
+      const auto pane = panes.launch(model, {.location = location, .size = size}, launch);
 
-      check(model.panes.size() == 1 && pane.generation == 3 && history.submissions == 2);
-      const auto retained_process = pane.process->processId();
+      check(model.panes.size() == 1 && pane.core.generation == 3 && history.submissions == 2);
+      const auto retained_process = pane.body.process->processId();
       Command command{memory, launch};
       bool registration_failed = false;
 
       try {
-        panes.launch(model, {.location = location, .size = size}, command, pane.id);
+        panes.launch(model, {.location = location, .size = size}, command, pane.core.id);
       } catch (const std::bad_alloc&) {
         registration_failed = true;
       }
 
       check(registration_failed && history.submissions == 3 && model.panes.size() == 1);
-      check(panes.requireTerminal(model.panes, pane.id).process->processId() == retained_process && ::kill(retained_process, 0) == 0);
-      panes.remove(model, clients, pane.id);
+      check(panes.requireTerminal(model.panes, pane.core.id).body.process->processId() == retained_process && ::kill(retained_process, 0) == 0);
+      panes.remove(model, clients, pane.core.id);
 
       constexpr ds::Array<std::string_view, 1> missing{"/nonexistent/telar-launch-test"};
       bool missing_rejected = false;

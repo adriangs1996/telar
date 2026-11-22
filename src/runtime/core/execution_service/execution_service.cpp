@@ -322,16 +322,16 @@ namespace telar::runtime {
     workspace.geometry_client = client.id;
     for (auto* stored : panes.items()) {
       // An editor takes the theme as its colorscheme; what it queues is written with its next input.
-      if (auto* editor = asNvim(stored); editor != nullptr && editor->location.workspace.id == workspace.id && !editor->close_requested) {
-        editor->editor.theme(client.colors);
+      if (auto editor = asNvim(stored); editor && editor->core.location.workspace.id == workspace.id && !editor->core.close_requested) {
+        editor.getMut().body.editor.theme(client.colors);
         continue;
       }
 
-      auto* pane = asTerminal(stored);
-      if (pane != nullptr && pane->location.workspace.id == workspace.id) {
-        if (!pane->desktop_theme) {
-          pane->terminal.configureColors(client.colors);
-          pane->resumeControl();
+      auto pane = asTerminal(stored);
+      if (pane && pane->core.location.workspace.id == workspace.id) {
+        if (!pane->core.desktop_theme) {
+          pane.getMut().body.terminal.configureColors(client.colors);
+          pane.getMut().body.resumeControl();
         }
       }
     }

@@ -81,20 +81,20 @@ namespace {
 
     workspaces.open(model, panes, clients, owner.session().id, OpenPane{.request_id = 1, .size = {80, 24, 0, 0}, .launch = Launch{.cwd = "/tmp", .arguments = arguments}});
     const auto opened = owner.receive<PaneOpened>();
-    auto& pane = panes.requireTerminal(model.panes, opened.pane_id);
-    const auto location = pane.location;
+    const auto pane = panes.requireTerminal(model.panes, opened.pane_id);
+    const auto location = pane.core.location;
     auto& workspace = workspaces.require(model.workspaces, location.workspace);
-    const ReadPane read{.request_id = 2, .pane_id = pane.id, .pane_generation = pane.generation, .rows = 24, .source = PaneTextSource::screen};
+    const ReadPane read{.request_id = 2, .pane_id = pane.core.id, .pane_generation = pane.core.generation, .rows = 24, .source = PaneTextSource::screen};
 
     panes.readText(reader.session(), read);
     constexpr std::string_view changed = "Current text";
 
-    pane.terminal.feed({reinterpret_cast<const Byte*>(changed.data()), changed.size()}, *pane.media);
+    pane.body.terminal.feed({reinterpret_cast<const Byte*>(changed.data()), changed.size()}, *pane.body.media);
     check(reader.receive<PaneText>().text == changed);
 
     auto stale = read;
 
-    stale.pane_generation = pane.generation + 1;
+    stale.pane_generation = pane.core.generation + 1;
     panes.readText(reader.session(), stale);
     const auto missing = reader.receive<RequestFailed>();
 
@@ -104,31 +104,31 @@ namespace {
     workspaces.workspaceSnapshot(model, reader.session(), RequestWorkspaceSnapshot{4, location.workspace});
     workspace.name.assign("Current workspace");
     workspace.tabs.atMut(0).label.assign("Current tab");
-    pane.close_requested = true;
+    pane.core.close_requested = true;
     check(reader.receive<TabSnapshot>().panes.empty());
     const auto snapshot = reader.receive<WorkspaceSnapshot>();
 
     check(snapshot.name == "Current workspace" && snapshot.tabs.size() == 1);
     check(snapshot.tabs.front().label == "Current tab" && snapshot.tabs.front().pane_count == 0 && snapshot.tabs.front().panes.empty());
 
-    pane.close_requested = false;
-    pane.cwd.assign("/tmp/described");
+    pane.core.close_requested = false;
+    pane.core.cwd.assign("/tmp/described");
     workspaces.workspaceSnapshot(model, reader.session(), RequestWorkspaceSnapshot{10, location.workspace});
     const auto described = reader.receive<WorkspaceSnapshot>();
 
-    check(described.tabs.front().panes.size() == 1 && described.tabs.front().panes.front().pane_id == pane.id && described.tabs.front().panes.front().cwd == "/tmp/described");
-    pane.cwd.assign(std::string_view{"/tmp/\0hostile", 13});
+    check(described.tabs.front().panes.size() == 1 && described.tabs.front().panes.front().pane_id == pane.core.id && described.tabs.front().panes.front().cwd == "/tmp/described");
+    pane.core.cwd.assign(std::string_view{"/tmp/\0hostile", 13});
     workspaces.workspaceSnapshot(model, reader.session(), RequestWorkspaceSnapshot{11, location.workspace});
     const auto hostile = reader.receive<WorkspaceSnapshot>();
 
     check(hostile.tabs.front().panes.size() == 1 && hostile.tabs.front().panes.front().cwd.empty());
 
     workspaces.tabSnapshot(model, clients, reader.session().id, RequestTabSnapshot{5, location});
-    pane.exit_status = 7 << 8;
+    pane.core.exit_status = 7 << 8;
     check(reader.receive<TabSnapshot>().panes.empty());
     panes.readText(reader.session(), read);
     check(reader.receive<PaneText>().exit_code == 7);
-    pane.exit_status.reset();
+    pane.core.exit_status.reset();
     limits.query(reader.session(), QueryLimits{6});
     model.limits.runtime.record(LimitReach{.name = "deferred.capacity", .value = 10}, 4);
     model.limits.refused_reports = 9;
@@ -139,8 +139,8 @@ namespace {
     workspaces.workspaceSnapshot(model, reader.session(), RequestWorkspaceSnapshot{7, location.workspace});
     workspaces.tabSnapshot(model, clients, reader.session().id, RequestTabSnapshot{8, location});
     panes.readText(reader.session(), read);
-    model.exited_panes.record({.id = pane.id, .generation = pane.generation}, PaneText{.text = "Exited text", .exit_code = 17});
-    panes.remove(model, clients, pane.id);
+    model.exited_panes.record({.id = pane.core.id, .generation = pane.core.generation}, PaneText{.text = "Exited text", .exit_code = 17});
+    panes.remove(model, clients, pane.core.id);
     model.workspaces.erase(location.workspace.id);
     const auto closed = reader.receive<RequestFailed>();
 

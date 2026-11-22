@@ -365,7 +365,7 @@ namespace {
     ClientStore clients{memory};
     const ds::Array<std::string_view, 1> arguments{"/bin/cat"};
     Command command{memory, Launch{.cwd = "/tmp", .arguments = arguments}};
-    auto owned = ds::makeBox<TerminalPane>(memory, memory, 1, TabLocation{}, command, PaneLaunch{TerminalSize{20, 4, 8, 16}, model.media_budget, model.graphics_limits});
+    auto owned = ds::makeBox<Pane>(memory, memory, 1, TabLocation{}, command, PaneLaunch{TerminalSize{20, 4, 8, 16}, model.media_budget, model.graphics_limits});
     auto& pane = owned.getMut();
 
     model.panes.insert(1, std::move(owned));
@@ -377,9 +377,11 @@ namespace {
     const ds::Array<Byte, 1> editing{'x'};
     const ds::Array<Byte, 1> submitted{'\r'};
 
-    pane.enqueueInput(editing);
+    auto& terminal = *pane.asMut<TerminalBody>();
+
+    enqueueInput({.core = pane, .body = terminal}, editing);
     service.observe(model, agents, pane.id);
-    pane.enqueueInput(submitted);
+    enqueueInput({.core = pane, .body = terminal}, submitted);
 
     pollfd completion{service.descriptor(), POLLIN, 0};
     const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds{2};
@@ -389,7 +391,7 @@ namespace {
       service.collect(model, agents);
     }
 
-    check(pane.cwd == "/observed" && pane.needs_foreground_observation);
+    check(pane.cwd == "/observed" && terminal.needs_foreground_observation);
   }
 
   void testEmptyObservationRequiresExplicitRecheck(ConcurrentMemory& memory) {
@@ -397,7 +399,7 @@ namespace {
     ClientStore clients{memory};
     const ds::Array<std::string_view, 1> arguments{"/bin/cat"};
     Command command{memory, Launch{.cwd = "/tmp", .arguments = arguments}};
-    auto owned = ds::makeBox<TerminalPane>(memory, memory, 1, TabLocation{}, command, PaneLaunch{TerminalSize{20, 4, 8, 16}, model.media_budget, model.graphics_limits});
+    auto owned = ds::makeBox<Pane>(memory, memory, 1, TabLocation{}, command, PaneLaunch{TerminalSize{20, 4, 8, 16}, model.media_budget, model.graphics_limits});
     auto& pane = owned.getMut();
 
     model.panes.insert(1, std::move(owned));

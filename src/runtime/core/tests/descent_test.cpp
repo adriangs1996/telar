@@ -69,8 +69,8 @@ namespace {
     const ds::Array<std::string_view, 1> arguments{"/bin/cat"};
     Command command{memory, Launch{.cwd = "/tmp", .arguments = arguments}};
 
-    model.panes.insert(1, ds::makeBox<TerminalPane>(memory, memory, 1, TabLocation{}, command, PaneLaunch{TerminalSize{20, 4, 8, 16}, model.media_budget, model.graphics_limits}));
-    auto& pane = requireTerminal(model.panes, 1);
+    model.panes.insert(1, ds::makeBox<Pane>(memory, memory, 1, TabLocation{}, command, PaneLaunch{TerminalSize{20, 4, 8, 16}, model.media_budget, model.graphics_limits}));
+    const auto pane = requireTerminal(model.panes, 1);
     GatedLineageInspector inspector;
     DescentService<decltype(inspector)> service{inspector};
     ClientPeer first{memory, model, clients, ClientRole::control};
@@ -86,7 +86,7 @@ namespace {
 
     service.verify(model.panes, second.session(), VerifyPaneDescent{2, 1, 1});
     service.schedule(clients);
-    ++pane.generation;
+    ++pane.core.generation;
     inspector.released.store(true, std::memory_order_release);
     waitUntil([&] {
       service.collect(clients, model.panes);
@@ -99,14 +99,14 @@ namespace {
     check(!first.session().connection.flags().read_paused && !second.session().connection.flags().read_paused);
 
     inspector.released.store(false, std::memory_order_release);
-    service.verify(model.panes, first.session(), VerifyPaneDescent{3, 1, pane.generation});
+    service.verify(model.panes, first.session(), VerifyPaneDescent{3, 1, pane.core.generation});
     service.schedule(clients);
     waitUntil([&] {
       return inspector.calls.load(std::memory_order_acquire) == 3;
     });
 
     first.session().connection.flagsMut().closing = true;
-    service.verify(model.panes, second.session(), VerifyPaneDescent{4, 1, pane.generation});
+    service.verify(model.panes, second.session(), VerifyPaneDescent{4, 1, pane.core.generation});
     service.schedule(clients);
     inspector.released.store(true, std::memory_order_release);
     waitUntil([&] {
@@ -116,8 +116,8 @@ namespace {
 
     check(!first.session().connection.hasOutput() && first.session().verified_pane == 0);
     check(second.receive<RequestCompleted>().request_id == 4);
-    check(second.session().verified_generation == pane.generation);
-    check(second.session().verified_lineage.ancestors().front() == pane.process->processId());
+    check(second.session().verified_generation == pane.core.generation);
+    check(second.session().verified_lineage.ancestors().front() == pane.body.process->processId());
   }
 
   // Blocks the inspection of the first process it sees until released; any other answers at once.
@@ -143,7 +143,7 @@ namespace {
     const ds::Array<std::string_view, 1> arguments{"/bin/cat"};
     Command command{memory, Launch{.cwd = "/tmp", .arguments = arguments}};
 
-    model.panes.insert(1, ds::makeBox<TerminalPane>(memory, memory, 1, TabLocation{}, command, PaneLaunch{TerminalSize{20, 4, 8, 16}, model.media_budget, model.graphics_limits}));
+    model.panes.insert(1, ds::makeBox<Pane>(memory, memory, 1, TabLocation{}, command, PaneLaunch{TerminalSize{20, 4, 8, 16}, model.media_budget, model.graphics_limits}));
     const auto generation = model.panes.find(1)->generation;
     FirstGatedInspector inspector;
     DescentService<decltype(inspector)> service{inspector};

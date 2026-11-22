@@ -251,19 +251,19 @@ namespace {
       const ds::Array<std::string_view, 1> arguments{"/bin/cat"};
 
       workspaces.open(model, panes, clients, client.id, OpenPane{.request_id = 1, .size = {80, 24, 0, 0}, .launch = Launch{.cwd = "/tmp", .arguments = arguments}});
-      auto& pane = panes.requireTerminal(model.panes, peer.receive<PaneOpened>().pane_id);
+      const auto pane = panes.requireTerminal(model.panes, peer.receive<PaneOpened>().pane_id);
       const auto now = std::chrono::steady_clock::now();
       auto timeout = std::chrono::nanoseconds::max();
 
       check(!AttachmentDelivery{model, client}.prepare(model, client, DeliveryLane::shell, now, timeout));
 
-      pane.shell_state.shell = IntegratedShell::zsh;
-      pane.shell_state.phase = ShellPhase::prompt;
-      ++pane.shell_revision;
+      pane.body.shell_state.shell = IntegratedShell::zsh;
+      pane.body.shell_state.phase = ShellPhase::prompt;
+      ++pane.body.shell_revision;
       check(AttachmentDelivery{model, client}.prepare(model, client, DeliveryLane::shell, now, timeout));
       const auto state = peer.receive<PaneShell>();
 
-      check(state.pane_id == pane.id && state.shell == IntegratedShell::zsh && state.phase == ShellPhase::prompt);
+      check(state.pane_id == pane.core.id && state.shell == IntegratedShell::zsh && state.phase == ShellPhase::prompt);
       check(!AttachmentDelivery{model, client}.prepare(model, client, DeliveryLane::shell, now, timeout));
     }
 
@@ -284,42 +284,42 @@ namespace {
       const ds::Array<std::string_view, 1> arguments{"/bin/cat"};
 
       workspaces.open(model, panes, clients, client.id, OpenPane{.request_id = 1, .size = {40, 5, 0, 0}, .launch = Launch{.cwd = "/tmp", .arguments = arguments}});
-      auto& pane = panes.requireTerminal(model.panes, peer.receive<PaneOpened>().pane_id);
+      const auto pane = panes.requireTerminal(model.panes, peer.receive<PaneOpened>().pane_id);
       const auto now = std::chrono::steady_clock::now();
       auto timeout = std::chrono::nanoseconds::max();
 
       check(AttachmentDelivery{model, client}.prepare(model, client, DeliveryLane::scrollback, now, timeout));
       const auto first = peer.receive<PaneScrollback>();
 
-      check(first.pane_id == pane.id && first.generation == pane.terminal.scrollbackGeneration() && first.trimmed == 0);
+      check(first.pane_id == pane.core.id && first.generation == pane.body.terminal.scrollbackGeneration() && first.trimmed == 0);
       check(!AttachmentDelivery{model, client}.prepare(model, client, DeliveryLane::scrollback, now, timeout));
 
       const std::size_t limit = 1;
 
-      checkGhostty(ghostty_terminal_set(pane.terminal.handle(), GHOSTTY_TERMINAL_OPT_SCROLLBACK_MAX_BYTES, &limit));
-      pane.terminal.followScrollback();
-      client.attachmentMut(pane.id)->viewport = 50'000;
+      checkGhostty(ghostty_terminal_set(pane.body.terminal.handle(), GHOSTTY_TERMINAL_OPT_SCROLLBACK_MAX_BYTES, &limit));
+      pane.body.terminal.followScrollback();
+      client.attachmentMut(pane.core.id)->viewport = 50'000;
       std::string lines;
 
       for (std::size_t line = 0; line < 8; ++line) {
         lines += "scrollback line\r\n";
       }
 
-      for (std::size_t batch = 0; batch < 4000 && pane.terminal.scrollbackTrimmed() == 0; ++batch) {
-        pane.terminal.feed({reinterpret_cast<const Byte*>(lines.data()), lines.size()}, *pane.media);
-        pane.terminal.followScrollback();
+      for (std::size_t batch = 0; batch < 4000 && pane.body.terminal.scrollbackTrimmed() == 0; ++batch) {
+        pane.body.terminal.feed({reinterpret_cast<const Byte*>(lines.data()), lines.size()}, *pane.body.media);
+        pane.body.terminal.followScrollback();
       }
 
-      const auto trimmed = pane.terminal.scrollbackTrimmed();
+      const auto trimmed = pane.body.terminal.scrollbackTrimmed();
 
       check(trimmed > 0);
       check(AttachmentDelivery{model, client}.prepare(model, client, DeliveryLane::scrollback, now, timeout));
       const auto dropped = peer.receive<PaneScrollback>();
 
       check(dropped.trimmed == trimmed && dropped.generation == first.generation);
-      check(client.attachmentMut(pane.id)->viewport == 50'000 - trimmed);
+      check(client.attachmentMut(pane.core.id)->viewport == 50'000 - trimmed);
       panes.detachAll(model, clients, client.id);
-      panes.remove(model, clients, pane.id);
+      panes.remove(model, clients, pane.core.id);
     }
 
     // A program on the alternate screen hands its pane a document: it reaches the client in
@@ -339,7 +339,7 @@ namespace {
       const ds::Array<std::string_view, 1> arguments{"/bin/cat"};
 
       workspaces.open(model, panes, clients, client.id, OpenPane{.request_id = 1, .size = {40, 5, 0, 0}, .launch = Launch{.cwd = "/tmp", .arguments = arguments}});
-      auto& pane = panes.requireTerminal(model.panes, peer.receive<PaneOpened>().pane_id);
+      const auto pane = panes.requireTerminal(model.panes, peer.receive<PaneOpened>().pane_id);
       const auto now = std::chrono::steady_clock::now();
       auto timeout = std::chrono::nanoseconds::max();
       const auto deliver = [&] {
@@ -351,24 +351,24 @@ namespace {
       ObservationWorker<decltype(processor)&> worker{std::in_place, processor};
       const auto feed = [&](std::string_view bytes) {
         while (!bytes.empty()) {
-          const auto take = std::min(bytes.size(), TerminalPane::read_buffer_size);
+          const auto take = std::min(bytes.size(), TerminalBody::read_buffer_size);
 
-          while (pane.media->holdsRead(take)) {
-            check(pane.media->seal());
+          while (pane.body.media->holdsRead(take)) {
+            check(pane.body.media->seal());
             MediaProcessor::Request request;
 
-            request.entries.atMut(request.count++).media = pane.media;
+            request.entries.atMut(request.count++).media = pane.body.media;
             check(worker.submit(request));
             worker.wait([&](const auto&) {
-              pane.media->complete();
+              pane.body.media->complete();
             });
           }
 
-          pane.terminal.feed({reinterpret_cast<const Byte*>(bytes.data()), take}, *pane.media);
+          pane.body.terminal.feed({reinterpret_cast<const Byte*>(bytes.data()), take}, *pane.body.media);
           bytes.remove_prefix(take);
         }
 
-        pane.terminal.refresh();
+        pane.body.terminal.refresh();
       };
 
       check(!deliver());
@@ -388,7 +388,7 @@ namespace {
 
       // On the primary screen a sequence alone opens a zone no end closed: nothing shows.
       feed(sequence);
-      check(pane.terminal.effects().document.empty() && pane.terminal.effects().inline_documents.empty() && !deliver());
+      check(pane.body.terminal.effects().document.empty() && pane.body.terminal.effects().inline_documents.empty() && !deliver());
 
       feed("\x1b[?1049h");
       feed(sequence);
@@ -396,7 +396,7 @@ namespace {
       {
         const auto first = peer.receive<PaneDocument>();
 
-        check(first.pane_id == pane.id && first.size == document.size() && first.offset == 0 && first.bytes.size() == PaneDocument::chunk_bytes);
+        check(first.pane_id == pane.core.id && first.size == document.size() && first.offset == 0 && first.bytes.size() == PaneDocument::chunk_bytes);
         check(std::ranges::equal(first.bytes, std::span{document}.first(PaneDocument::chunk_bytes)));
       }
 
@@ -410,10 +410,10 @@ namespace {
 
       check(!deliver());
       // Nothing of the sequence reached the screen.
-      check(pane.terminal.outputSettled());
+      check(pane.body.terminal.outputSettled());
 
       feed("\x1b[?1049l");
-      check(pane.terminal.effects().document.empty());
+      check(pane.body.terminal.effects().document.empty());
       check(deliver());
       const auto closed = peer.receive<PaneDocument>();
 
@@ -425,17 +425,17 @@ namespace {
       const std::string small = "\x1b]7780;begin;AAECAw==\x1b\\";
 
       feed("\r\n" + small + "first\r\nsecond\r\n\x1b]7780;end\x1b\\");
-      check(pane.terminal.effects().inline_documents.size() == 1);
+      check(pane.body.terminal.effects().inline_documents.size() == 1);
       check(deliver());
       const auto zone = peer.receive<PaneDocument>();
 
       check(zone.id != 0 && zone.rows == 2 && zone.size == 4 && zone.offset == 0 && zone.bytes.size() == 4);
-      check(zone.generation == pane.terminal.scrollbackGeneration() && zone.first_row == pane.terminal.scrollbackTrimmed() + pane.terminal.effects().inline_documents.front().row);
+      check(zone.generation == pane.body.terminal.scrollbackGeneration() && zone.first_row == pane.body.terminal.scrollbackTrimmed() + pane.body.terminal.effects().inline_documents.front().row);
       check(!deliver());
 
       // A reflow numbers the rows anew: the client hears where the rows went, without the bytes.
-      pane.terminal.resize({30, 5, 0, 0}, *pane.media);
-      pane.terminal.refresh();
+      pane.body.terminal.resize({30, 5, 0, 0}, *pane.body.media);
+      pane.body.terminal.refresh();
       check(deliver());
       const auto moved = peer.receive<PaneDocument>();
 
@@ -447,19 +447,19 @@ namespace {
         feed(small + "more\r\n\x1b]7780;end\x1b\\");
       }
 
-      check(pane.terminal.effects().inline_documents.size() == ::telar::render::max_pane_documents);
+      check(pane.body.terminal.effects().inline_documents.size() == ::telar::render::max_pane_documents);
       check(deliver());
       const auto withdrawn = peer.receive<PaneDocument>();
 
       check(withdrawn.id == zone.id && withdrawn.size == 0);
 
       // A document stands for the text its rows held: erasing that text lets the document go.
-      const auto kept = pane.terminal.effects().inline_documents.size();
+      const auto kept = pane.body.terminal.effects().inline_documents.size();
 
       feed("\x1b[H\x1b[2J");
-      check(pane.terminal.effects().inline_documents.size() < kept);
+      check(pane.body.terminal.effects().inline_documents.size() < kept);
       panes.detachAll(model, clients, client.id);
-      panes.remove(model, clients, pane.id);
+      panes.remove(model, clients, pane.core.id);
     }
 
     void attachmentRotation() {
@@ -518,13 +518,13 @@ namespace {
       check(peer.receive<PaneCwd>().pane_id == ids[1] && client.next_attachment == 2);
 
       for (auto& attachment : client.attachments.viewMut()) {
-        auto& pane = panes.requireTerminal(model.panes, attachment->pane_id);
+        const auto pane = panes.requireTerminal(model.panes, attachment->pane_id);
 
-        attachment.getMut().foreground_revision = pane.foreground_revision;
-        attachment.getMut().scrollback_generation = pane.terminal.scrollbackGeneration();
-        attachment.getMut().scrollback_trimmed = pane.terminal.scrollbackTrimmed();
-        pane.terminal.refresh();
-        const auto payload = attachment.getMut().frames.prepare(pane.terminal.screen());
+        attachment.getMut().foreground_revision = pane.core.foreground_revision;
+        attachment.getMut().scrollback_generation = pane.body.terminal.scrollbackGeneration();
+        attachment.getMut().scrollback_trimmed = pane.body.terminal.scrollbackTrimmed();
+        pane.body.terminal.refresh();
+        const auto payload = attachment.getMut().frames.prepare(pane.body.terminal.screen());
         if (!payload.empty()) {
           std::vector<Byte> storage(128 * 1024);
           DecodeStorage decoded{storage};
@@ -538,42 +538,42 @@ namespace {
 
       ClientDelivery delivery{memory, model};
       NoState state;
-      auto& pane = panes.requireTerminal(model.panes, ids[0]);
+      const auto pane = panes.requireTerminal(model.panes, ids[0]);
       const auto blocked_bytes = fillSocket(client.connection.descriptor());
 
       client.connection.send(RequestCompleted{55});
       delivery.write(client, state, now);
       check(client.connection.writing());
-      pane.terminal.effectsMut().setProgress(PaneProgressState::set, Byte{20});
+      pane.body.terminal.effectsMut().setProgress(PaneProgressState::set, Byte{20});
       delivery.write(client, state, now);
-      pane.terminal.effectsMut().setProgress(PaneProgressState::set, Byte{80});
+      pane.body.terminal.effectsMut().setProgress(PaneProgressState::set, Byte{80});
       delivery.write(client, state, now);
-      check(client.attachment(pane.id)->progress_revision == 1);
+      check(client.attachment(pane.core.id)->progress_revision == 1);
       drainSocket(peer.descriptor(), blocked_bytes);
       delivery.write(client, state, now);
       check(peer.receive<RequestCompleted>().request_id == 55);
       delivery.write(client, state, now);
       check(peer.receive<PaneProgress>().percent == 80);
 
-      client.attachmentMut(pane.id)->viewport = 0;
-      client.attachmentMut(pane.id)->frames.requestSnapshot();
+      client.attachmentMut(pane.core.id)->viewport = 0;
+      client.attachmentMut(pane.core.id)->frames.requestSnapshot();
       delivery.write(client, state, now);
       const auto viewport = peer.receive<PaneFrame>();
 
-      check(client.attachmentMut(pane.id)->frames.acknowledge(viewport.frame_id));
+      check(client.attachmentMut(pane.core.id)->frames.acknowledge(viewport.frame_id));
 
-      pane.output_closed = true;
-      pane.exit_status = 0;
+      pane.core.output_closed = true;
+      pane.core.exit_status = 0;
       const auto exit_blocked_bytes = fillSocket(client.connection.descriptor());
       const auto blocked = delivery.write(client, state, now);
 
-      check(!blocked.detach_pane && client.connection.writing() && client.attachment(pane.id)->exit_sent);
+      check(!blocked.detach_pane && client.connection.writing() && client.attachment(pane.core.id)->exit_sent);
       check(!delivery.write(client, state, now).detach_pane);
       drainSocket(peer.descriptor(), exit_blocked_bytes);
       const auto completed = delivery.write(client, state, now);
 
-      check(completed.detach_pane == pane.id && !client.connection.writing());
-      check(peer.receive<PaneExited>().pane_id == pane.id);
+      check(completed.detach_pane == pane.core.id && !client.connection.writing());
+      check(peer.receive<PaneExited>().pane_id == pane.core.id);
       check(!delivery.write(client, state, now).detach_pane);
       panes.detachAll(model, clients, client.id);
       for (const auto id : ids) {
@@ -597,7 +597,7 @@ namespace {
 
       workspaces.open(model, panes, clients, client.id, OpenPane{.request_id = 1, .size = {80, 24, 0, 0}, .launch = Launch{.cwd = "/tmp", .arguments = arguments}});
       const auto opened = peer.receive<PaneOpened>();
-      auto& pane = panes.requireTerminal(model.panes, opened.pane_id);
+      const auto pane = panes.requireTerminal(model.panes, opened.pane_id);
       auto timeout = std::chrono::nanoseconds::max();
       const auto start = std::chrono::steady_clock::now() + std::chrono::minutes{1};
       const auto frame = [&](std::chrono::steady_clock::time_point now) {
@@ -607,14 +607,14 @@ namespace {
           return false;
         }
 
-        check(client.attachmentMut(pane.id)->frames.acknowledge(peer.receive<PaneFrame>().frame_id));
+        check(client.attachmentMut(pane.core.id)->frames.acknowledge(peer.receive<PaneFrame>().frame_id));
         return true;
       };
 
       frame(start);
       constexpr std::string_view update = "\x1b[?2026hhalf-drawn";
 
-      pane.terminal.feed({reinterpret_cast<const Byte*>(update.data()), update.size()}, *pane.media);
+      pane.body.terminal.feed({reinterpret_cast<const Byte*>(update.data()), update.size()}, *pane.body.media);
       check(!frame(start + std::chrono::milliseconds{100}), "a frame went out in the middle of a synchronized update");
       check(frame(start + std::chrono::seconds{2}), "a synchronized update that never ends held the screen back");
     }

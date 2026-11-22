@@ -64,7 +64,7 @@ namespace {
       const ds::Array<std::string_view, 1> arguments{"/bin/cat"};
       Command command{memory, Launch{.cwd = "/tmp", .arguments = arguments}};
 
-      model.panes.insert(1, ds::makeBox<TerminalPane>(memory, memory, 1, TabLocation{}, command, PaneLaunch{TerminalSize{20, 4, 8, 16}, model.media_budget, model.graphics_limits}));
+      model.panes.insert(1, ds::makeBox<Pane>(memory, memory, 1, TabLocation{}, command, PaneLaunch{TerminalSize{20, 4, 8, 16}, model.media_budget, model.graphics_limits}));
       agents.current.observeProcess(ProcessIdentity{42, 1, 1, 0, 42}, AgentProvider::claude);
       agents.current.setProcessContext(SessionHost::pane, false, agents.current.process_identity);
       for (auto* client : {&first.session(), &second.session()}) {

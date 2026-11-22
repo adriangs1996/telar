@@ -304,7 +304,7 @@ export {
 
       void collect(RuntimeModel& model, ClientStore& clients, Panes& service);
 
-      void updateReadInterest(TerminalPane& pane);
+      void updateReadInterest(PaneRef<TerminalBody> pane);
 
       void finish(RuntimeModel& model) noexcept;
 

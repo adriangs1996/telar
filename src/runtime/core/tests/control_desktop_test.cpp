@@ -107,18 +107,18 @@ namespace {
       check(refused);
     }
 
-    void ptyReports(auto& pane, auto& panes, std::string_view expected) {
+    void ptyReports(PaneRef<TerminalBody> pane, auto& panes, std::string_view expected) {
       constexpr std::string_view marker = "\x1b[0n";
       constexpr std::string_view status = "\x1b[5n";
 
-      pane.terminal.feed({reinterpret_cast<const Byte*>(status.data()), status.size()}, *pane.media);
+      pane.body.terminal.feed({reinterpret_cast<const Byte*>(status.data()), status.size()}, *pane.body.media);
       panes.flushInput(pane);
       std::string actual;
       const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds{3};
 
       while (actual.size() < expected.size() + marker.size() || !actual.ends_with(marker)) {
         check(std::chrono::steady_clock::now() < deadline);
-        pollfd input{.fd = pane.process->descriptor(), .events = POLLIN, .revents = 0};
+        pollfd input{.fd = pane.body.process->descriptor(), .events = POLLIN, .revents = 0};
         const auto ready = ::poll(&input, 1, 10);
         if (ready < 0 && errno == EINTR) {
           continue;
@@ -163,25 +163,25 @@ namespace {
       const ds::Array<std::string_view, 1> arguments{"/bin/cat"};
 
       workspaces.open(model, panes, clients, client.session().id, OpenPane{.request_id = 1, .size = {80, 24, 9, 18}, .launch = Launch{.cwd = "/tmp", .arguments = arguments}});
-      auto& pane = panes.requireTerminal(model.panes, client.receive<PaneOpened>().pane_id);
+      const auto pane = panes.requireTerminal(model.panes, client.receive<PaneOpened>().pane_id);
       termios settings{};
 
-      check(::tcgetattr(pane.process->descriptor(), &settings) == 0);
+      check(::tcgetattr(pane.body.process->descriptor(), &settings) == 0);
       ::cfmakeraw(&settings);
-      check(::tcsetattr(pane.process->descriptor(), TCSANOW, &settings) == 0);
-      ConfigurePaneDesktop desktop{.pane_id = pane.id, .pane_generation = pane.generation, .visible = true, .light = true};
+      check(::tcsetattr(pane.body.process->descriptor(), TCSANOW, &settings) == 0);
+      ConfigurePaneDesktop desktop{.pane_id = pane.core.id, .pane_generation = pane.core.generation, .visible = true, .light = true};
 
       panes.configureDesktop(model, clients, client.session().id, desktop);
-      query(pane.terminal, "\x1b[?2031h", *pane.media);
+      query(pane.body.terminal, "\x1b[?2031h", *pane.body.media);
       ptyReports(pane, panes, "");
 
       desktop.palette = ds::Array<Byte, 48>{};
       (desktop.palette.getMut()).atMut(0) = 17;
       panes.configureDesktop(model, clients, client.session().id, desktop);
       ptyReports(pane, panes, "\x1b[?997;2n");
-      check(query(pane.terminal, "\x1b]4;0;#112233\x1b\\\x1b]10;#223344\x1b\\\x1b]21;foreground=#334455\x1b\\", *pane.media).empty());
+      check(query(pane.body.terminal, "\x1b]4;0;#112233\x1b\\\x1b]10;#223344\x1b\\\x1b]21;foreground=#334455\x1b\\", *pane.body.media).empty());
       ptyReports(pane, panes, "");
-      panes.remove(model, clients, pane.id);
+      panes.remove(model, clients, pane.core.id);
     }
 
     void notificationTransitions(ConcurrentMemory& memory) {
@@ -196,22 +196,22 @@ namespace {
       const ds::Array<std::string_view, 1> arguments{"/bin/cat"};
 
       workspaces.open(model, panes, clients, first.session().id, OpenPane{.request_id = 1, .size = {80, 24, 9, 18}, .launch = Launch{.cwd = "/tmp", .arguments = arguments}});
-      auto& pane = panes.requireTerminal(model.panes, first.receive<PaneOpened>().pane_id);
+      const auto pane = panes.requireTerminal(model.panes, first.receive<PaneOpened>().pane_id);
 
-      check(!pane.terminal.hasPendingControl());
+      check(!pane.body.terminal.hasPendingControl());
       termios settings{};
 
-      check(::tcgetattr(pane.process->descriptor(), &settings) == 0);
+      check(::tcgetattr(pane.body.process->descriptor(), &settings) == 0);
       ::cfmakeraw(&settings);
-      check(::tcsetattr(pane.process->descriptor(), TCSANOW, &settings) == 0);
-      ConfigurePaneDesktop one{.pane_id = pane.id, .pane_generation = pane.generation, .visible = true, .light = true};
+      check(::tcsetattr(pane.body.process->descriptor(), TCSANOW, &settings) == 0);
+      ConfigurePaneDesktop one{.pane_id = pane.core.id, .pane_generation = pane.core.generation, .visible = true, .light = true};
 
       panes.configureDesktop(model, clients, first.session().id, one);
       constexpr std::string_view subscriptions = "\x1b[?2031;2033;1004;2048h";
 
-      pane.terminal.feed({reinterpret_cast<const Byte*>(subscriptions.data()), subscriptions.size()}, *pane.media);
+      pane.body.terminal.feed({reinterpret_cast<const Byte*>(subscriptions.data()), subscriptions.size()}, *pane.body.media);
       ptyReports(pane, panes, "\x1b[?999;1n\x1b[O\x1b[48;24;80;432;720t");
-      panes.attach(model, second.session(), pane.id, {80, 24, 9, 18});
+      panes.attach(model, second.session(), pane.core.id, {80, 24, 9, 18});
       ptyReports(pane, panes, "");
 
       auto two = one;
@@ -220,9 +220,9 @@ namespace {
       two.focused = true;
       panes.configureDesktop(model, clients, second.session().id, two);
       ptyReports(pane, panes, "\x1b[I");
-      panes.resize(model, second.session(), PaneResize{.pane_id = pane.id, .size = {100, 30, 8, 16}});
+      panes.resize(model, second.session(), PaneResize{.pane_id = pane.core.id, .size = {100, 30, 8, 16}});
       ptyReports(pane, panes, "");
-      panes.resize(model, first.session(), PaneResize{.pane_id = pane.id, .size = {100, 30, 8, 16}});
+      panes.resize(model, first.session(), PaneResize{.pane_id = pane.core.id, .size = {100, 30, 8, 16}});
       ptyReports(pane, panes, "\x1b[48;30;100;480;800t");
 
       one.visible = false;
@@ -237,21 +237,21 @@ namespace {
       two.visible = true;
       panes.configureDesktop(model, clients, second.session().id, two);
       ptyReports(pane, panes, "\x1b[I");
-      panes.detach(model, clients, {.client = first.session().id, .pane = pane.id});
+      panes.detach(model, clients, {.client = first.session().id, .pane = pane.core.id});
       ptyReports(pane, panes, "\x1b[?997;1n");
-      panes.resize(model, second.session(), PaneResize{.pane_id = pane.id, .size = {100, 40, 8, 16}});
+      panes.resize(model, second.session(), PaneResize{.pane_id = pane.core.id, .size = {100, 40, 8, 16}});
       ptyReports(pane, panes, "\x1b[48;40;100;640;800t");
 
       second.session().connection.flagsMut().closing = true;
       panes.detachAll(model, clients, second.session().id);
       ptyReports(pane, panes, "\x1b[?997;1n\x1b[?999;2n\x1b[O");
-      check(query(pane.terminal, "\x1b[18t", *pane.media) == "\x1b[8;40;100t");
+      check(query(pane.body.terminal, "\x1b[18t", *pane.body.media) == "\x1b[8;40;100t");
       ClientPeer reconnected{memory, model, clients, ClientRole::interactive};
 
-      panes.attach(model, reconnected.session(), pane.id, {100, 40, 8, 16});
-      check(!pane.terminal.hasPendingControl());
+      panes.attach(model, reconnected.session(), pane.core.id, {100, 40, 8, 16});
+      check(!pane.body.terminal.hasPendingControl());
       ptyReports(pane, panes, "\x1b[?997;1n");
-      panes.resize(model, reconnected.session(), PaneResize{.pane_id = pane.id, .size = {120, 50, 8, 16}});
+      panes.resize(model, reconnected.session(), PaneResize{.pane_id = pane.core.id, .size = {120, 50, 8, 16}});
       ptyReports(pane, panes, "\x1b[48;50;120;800;960t");
       auto three = two;
 
@@ -259,12 +259,12 @@ namespace {
       panes.configureDesktop(model, clients, reconnected.session().id, three);
       ptyReports(pane, panes, "\x1b[?997;1n\x1b[?999;1n");
 
-      check(query(pane.terminal, "\x1b[?2031;2033;1004;2048l", *pane.media).empty());
+      check(query(pane.body.terminal, "\x1b[?2031;2033;1004;2048l", *pane.body.media).empty());
       three.visible = false;
       panes.configureDesktop(model, clients, reconnected.session().id, three);
-      panes.resize(model, reconnected.session(), PaneResize{.pane_id = pane.id, .size = {120, 60, 8, 16}});
+      panes.resize(model, reconnected.session(), PaneResize{.pane_id = pane.core.id, .size = {120, 60, 8, 16}});
       ptyReports(pane, panes, "");
-      check(query(pane.terminal, "\x1b[?2031h", *pane.media).empty());
+      check(query(pane.body.terminal, "\x1b[?2031h", *pane.body.media).empty());
       ConfigureTerminalColors colors{{.foreground = ds::Array<Byte, 3>{22, 33, 44}}};
 
       panes.configureColors(model, reconnected.session(), colors);
@@ -279,15 +279,15 @@ namespace {
       colors.syntax_italic = 0b10;
       panes.configureColors(model, reconnected.session(), colors);
       ptyReports(pane, panes, "");
-      reconnected.session().connection.send(panes.readTheme(model.panes, &reconnected.session().colors, ReadPaneTheme{.request_id = 9, .pane_id = pane.id, .pane_generation = pane.generation}));
+      reconnected.session().connection.send(panes.readTheme(model.panes, &reconnected.session().colors, ReadPaneTheme{.request_id = 9, .pane_id = pane.core.id, .pane_generation = pane.core.generation}));
 
       const auto theme = reconnected.receive<PaneTheme>();
 
-      check(theme.request_id == 9 && theme.pane_id == pane.id);
+      check(theme.request_id == 9 && theme.pane_id == pane.core.id);
       check(theme.theme.hasValue() && *theme.theme == static_cast<const TerminalTheme&>(colors));
-      reconnected.session().connection.send(panes.readTheme(model.panes, nullptr, ReadPaneTheme{.request_id = 10, .pane_id = pane.id, .pane_generation = pane.generation}));
+      reconnected.session().connection.send(panes.readTheme(model.panes, nullptr, ReadPaneTheme{.request_id = 10, .pane_id = pane.core.id, .pane_generation = pane.core.generation}));
       check(!reconnected.receive<PaneTheme>().theme.hasValue());
-      panes.remove(model, clients, pane.id);
+      panes.remove(model, clients, pane.core.id);
     }
 
     void interruptedResponseWrites(ConcurrentMemory& memory) {
@@ -301,34 +301,34 @@ namespace {
       const ds::Array<std::string_view, 1> arguments{"/bin/cat"};
 
       workspaces.open(model, panes, clients, client.session().id, OpenPane{.request_id = 1, .size = {80, 24, 9, 18}, .launch = Launch{.cwd = "/tmp", .arguments = arguments}});
-      auto& pane = panes.requireTerminal(model.panes, client.receive<PaneOpened>().pane_id);
+      const auto pane = panes.requireTerminal(model.panes, client.receive<PaneOpened>().pane_id);
       termios settings{};
 
-      check(::tcgetattr(pane.process->descriptor(), &settings) == 0);
+      check(::tcgetattr(pane.body.process->descriptor(), &settings) == 0);
       ::cfmakeraw(&settings);
-      check(::tcsetattr(pane.process->descriptor(), TCSANOW, &settings) == 0);
+      check(::tcsetattr(pane.body.process->descriptor(), TCSANOW, &settings) == 0);
       constexpr std::size_t owned_bytes = 2048;
       auto owned = std::make_shared<std::vector<Byte>>(owned_bytes, 'x');
       const std::weak_ptr lifetime{owned};
 
-      check(pane.pty_responses->tryPushOwned(*owned, owned));
+      check(pane.body.pty_responses->tryPushOwned(*owned, owned));
       std::string expected(owned_bytes, 'x');
 
       owned.reset();
       for (std::size_t index = 1; index < PtyResponseQueue::message_capacity; ++index) {
         const auto response = "\x1b[" + std::to_string(index) + "n";
 
-        check(pane.pty_responses->tryPush({reinterpret_cast<const Byte*>(response.data()), response.size()}));
+        check(pane.body.pty_responses->tryPush({reinterpret_cast<const Byte*>(response.data()), response.size()}));
         expected += response;
       }
 
       constexpr std::string_view status = "\x1b[5n";
 
-      pane.terminal.feed({reinterpret_cast<const Byte*>(status.data()), status.size()}, *pane.media);
-      check(pane.terminal.hasPendingControl());
+      pane.body.terminal.feed({reinterpret_cast<const Byte*>(status.data()), status.size()}, *pane.body.media);
+      check(pane.body.terminal.hasPendingControl());
       constexpr std::string_view user_input = "USER";
 
-      pane.input.append({reinterpret_cast<const Byte*>(user_input.data()), user_input.size()});
+      pane.body.input.append({reinterpret_cast<const Byte*>(user_input.data()), user_input.size()});
       expected += "\x1b[0n";
       expected += user_input;
       enum class Result {
@@ -377,32 +377,32 @@ namespace {
         return written;
       };
 
-      const auto original = pane.pty_responses->snapshot();
+      const auto original = pane.body.pty_responses->snapshot();
 
-      pane.write(writer);
-      check(calls == 1 && pane.pty_responses->snapshot().bytes == original.bytes && !lifetime.expired());
-      pane.write(writer);
-      check(calls == 2 && pane.pty_responses->snapshot().bytes == original.bytes - 2 && !lifetime.expired());
-      pane.write(writer);
-      check(calls == 3 && pane.pty_responses->snapshot().bytes == original.bytes - 2 && pane.terminal.hasPendingControl());
-      pane.write(writer);
-      check(calls == 4 && pane.pty_responses->snapshot().bytes < original.bytes - 2);
-      const auto retained = pane.pty_responses->snapshot();
+      pane.body.write(writer);
+      check(calls == 1 && pane.body.pty_responses->snapshot().bytes == original.bytes && !lifetime.expired());
+      pane.body.write(writer);
+      check(calls == 2 && pane.body.pty_responses->snapshot().bytes == original.bytes - 2 && !lifetime.expired());
+      pane.body.write(writer);
+      check(calls == 3 && pane.body.pty_responses->snapshot().bytes == original.bytes - 2 && pane.body.terminal.hasPendingControl());
+      pane.body.write(writer);
+      check(calls == 4 && pane.body.pty_responses->snapshot().bytes < original.bytes - 2);
+      const auto retained = pane.body.pty_responses->snapshot();
 
-      pane.write(writer);
-      check(calls == 5 && pane.pty_responses->snapshot().bytes == retained.bytes);
+      pane.body.write(writer);
+      check(calls == 5 && pane.body.pty_responses->snapshot().bytes == retained.bytes);
       const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds{3};
 
-      while (!pane.pty_responses->empty()) {
+      while (!pane.body.pty_responses->empty()) {
         check(std::chrono::steady_clock::now() < deadline);
-        pane.write(writer);
+        pane.body.write(writer);
       }
 
-      check(calls >= results.size() && crossed_message && lifetime.expired() && !pane.terminal.hasPendingControl() && !pane.input.empty());
-      pane.write();
-      check(!pane.hasInput() && pane.pty_responses->snapshot().dropped == 0);
+      check(calls >= results.size() && crossed_message && lifetime.expired() && !pane.body.terminal.hasPendingControl() && !pane.body.input.empty());
+      pane.body.write();
+      check(!pane.body.hasInput() && pane.body.pty_responses->snapshot().dropped == 0);
       ptyReports(pane, panes, expected);
-      panes.remove(model, clients, pane.id);
+      panes.remove(model, clients, pane.core.id);
     }
 
     void multipleClients(ConcurrentMemory& memory) {
@@ -420,16 +420,16 @@ namespace {
 
       workspaces.open(model, panes, clients, first.session().id, OpenPane{.request_id = 1, .size = {80, 24, 9, 18}, .launch = launch});
       const auto opened = first.receive<PaneOpened>();
-      auto& pane = panes.requireTerminal(model.panes, opened.pane_id);
+      const auto pane = panes.requireTerminal(model.panes, opened.pane_id);
 
-      panes.attach(model, second.session(), pane.id, {80, 24, 9, 18});
-      auto* workspace = model.workspaces.find(pane.location.workspace.id);
+      panes.attach(model, second.session(), pane.core.id, {80, 24, 9, 18});
+      auto* workspace = model.workspaces.find(pane.core.location.workspace.id);
 
       check(workspace != nullptr);
       workspace->geometry_client = second.session().id;
 
-      check(query(pane.terminal, "\x1b[?998n", *pane.media) == "\x1b[?999;2n");
-      ConfigurePaneDesktop one{.pane_id = pane.id, .pane_generation = pane.generation, .visible = true, .focused = false, .light = true, .foreground = ds::Array<Byte, 3>{0, 0, 0}, .background = ds::Array<Byte, 3>{255, 255, 255}, .cursor = ds::Array<Byte, 3>{1, 2, 3}};
+      check(query(pane.body.terminal, "\x1b[?998n", *pane.body.media) == "\x1b[?999;2n");
+      ConfigurePaneDesktop one{.pane_id = pane.core.id, .pane_generation = pane.core.generation, .visible = true, .focused = false, .light = true, .foreground = ds::Array<Byte, 3>{0, 0, 0}, .background = ds::Array<Byte, 3>{255, 255, 255}, .cursor = ds::Array<Byte, 3>{1, 2, 3}};
       ds::Array<Byte, 256> encoded;
       ds::Array<Byte, 512> arena;
       DecodeStorage storage{arena.viewMut()};
@@ -443,7 +443,7 @@ namespace {
       two.focused = true;
       two.cursor = ds::Array<Byte, 3>{4, 5, 6};
       panes.configureDesktop(model, clients, second.session().id, two);
-      check(query(pane.terminal, "\x1b[?996n\x1b[?998n\x1b]12;?\x1b\\", *pane.media) == "\x1b[?997;2n\x1b[?999;1n\x1b]12;rgb:0101/0202/0303\x1b\\");
+      check(query(pane.body.terminal, "\x1b[?996n\x1b[?998n\x1b]12;?\x1b\\", *pane.body.media) == "\x1b[?997;2n\x1b[?999;1n\x1b]12;rgb:0101/0202/0303\x1b\\");
 
       bool stale = false;
       auto old = one;
@@ -466,12 +466,12 @@ namespace {
 
       check(unattached);
 
-      panes.release(model, clients, {.client = first.session().id, .pane = pane.id});
-      check(query(pane.terminal, "\x1b[?996n\x1b[?998n\x1b]12;?\x1b\\", *pane.media) == "\x1b[?997;1n\x1b[?999;1n\x1b]12;rgb:0404/0505/0606\x1b\\");
+      panes.release(model, clients, {.client = first.session().id, .pane = pane.core.id});
+      check(query(pane.body.terminal, "\x1b[?996n\x1b[?998n\x1b]12;?\x1b\\", *pane.body.media) == "\x1b[?997;1n\x1b[?999;1n\x1b]12;rgb:0404/0505/0606\x1b\\");
       second.session().connection.flagsMut().closing = true;
       panes.detachAll(model, clients, second.session().id);
-      check(query(pane.terminal, "\x1b[?996n\x1b[?998n", *pane.media) == "\x1b[?997;1n\x1b[?999;2n");
-      panes.remove(model, clients, pane.id);
+      check(query(pane.body.terminal, "\x1b[?996n\x1b[?998n", *pane.body.media) == "\x1b[?997;1n\x1b[?999;2n");
+      panes.remove(model, clients, pane.core.id);
     }
   }
 
