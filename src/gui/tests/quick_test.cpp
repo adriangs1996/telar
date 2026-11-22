@@ -997,7 +997,7 @@ return {api_version = 2, client = {
       QVERIFY2(!kinds().contains(QString{}) && kinds().removeDuplicates() == 0, qPrintable(kinds().join(QLatin1Char(' '))));
       shoot(QStringLiteral("editor-completion-kinds"));
       press(Qt::Key_Escape, QString{});
-      view->send(QStringLiteral("u"));
+      view->send(QStringLiteral("<Cmd>silent undo<CR>"));
       QTRY_VERIFY_WITH_TIMEOUT(!view->popupMenu().value(QStringLiteral("visible")).toBool() && view->mode() == QStringLiteral("normal"), runtime_wait_ms);
 
       // What Neovim says arrives as a notice, and asks for no key to go away.

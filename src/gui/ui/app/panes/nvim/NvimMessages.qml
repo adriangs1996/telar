@@ -102,7 +102,7 @@ Item {
                         anchors.centerIn: parent
                         width: Math.round(root.typography.body * 1.05)
                         height: width
-                        glyph: notice.failure ? "\uea87" : notice.caution ? "\uea6c" : "\uea74"
+                        glyph: notice.failure ? "\uea87" : notice.caution ? "\uea6c" : "\ueab2"
                         pixelSize: width
                         color: notice.tone
                     }

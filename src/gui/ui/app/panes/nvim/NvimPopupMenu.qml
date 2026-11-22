@@ -30,9 +30,10 @@ Item {
     readonly property bool infoRight: x + width + 6 * ratio + infoWidth <= parent.width - 8 * ratio
     readonly property int visibleRows: Math.min(items.length, 10)
     readonly property real rowHeight: 26 * ratio
-    // The column of the kinds' icons, kept for every row once one item has a kind.
-    readonly property bool iconed: items.some(item => (item.icon ?? "").length > 0)
-    readonly property real iconSide: Math.round(typography.body * 1.15)
+    // The column of the kinds' chips, kept for every row once one item says its kind.
+    readonly property bool kinded: items.some(item => (item.kind ?? "").length > 0)
+    readonly property real iconSide: Math.round(typography.body * 1.05)
+    readonly property real chipWidth: 26 * ratio
     readonly property real padding: 4 * ratio
     // The first row shown: the selection is kept in view.
     readonly property int firstRow: Math.max(0, Math.min(items.length - visibleRows, selected - Math.floor(visibleRows / 2)))
@@ -93,61 +94,67 @@ Item {
                     onActivated: root.picked(row.itemIndex)
                 }
 
-                ChromeIcon {
-                    x: 8 * root.ratio
+                // What kind of thing the word is, first, as a chip in the kind's color: its icon, or
+                // its name when telar has no icon for it.
+                Item {
+                    id: kindChip
+                    readonly property string label: row.item.kind ?? ""
+                    readonly property bool iconed: (row.item.icon ?? "").length > 0
+                    x: 6 * root.ratio
                     y: Math.round((parent.height - height) / 2)
-                    width: root.iconSide
-                    height: root.iconSide
-                    glyph: row.item.icon ?? ""
-                    pixelSize: root.iconSide
-                    color: row.tone
-                    visible: root.iconed && (row.item.icon ?? "").length > 0
+                    width: root.chipWidth
+                    height: 18 * root.ratio
+                    visible: label.length > 0
+
+                    NativeRoundedRectangle {
+                        anchors.fill: parent
+                        radius: ChromeStyle.smallRadius * root.ratio
+                        color: Qt.alpha(row.tone, 0.16)
+                    }
+
+                    ChromeIcon {
+                        anchors.centerIn: parent
+                        width: root.iconSide
+                        height: root.iconSide
+                        glyph: row.item.icon ?? ""
+                        pixelSize: root.iconSide
+                        color: row.tone
+                        visible: kindChip.iconed
+                    }
+
+                    Text {
+                        anchors.centerIn: parent
+                        width: parent.width - 4 * root.ratio
+                        horizontalAlignment: Text.AlignHCenter
+                        text: kindChip.label
+                        color: row.tone
+                        font.pixelSize: root.typography.small
+                        textFormat: Text.PlainText
+                        elide: Text.ElideRight
+                        visible: !kindChip.iconed
+                    }
                 }
 
                 CellText {
                     id: word
-                    x: 8 * root.ratio + (root.iconed ? root.iconSide + 6 * root.ratio : 0)
+                    x: root.kinded ? 14 * root.ratio + root.chipWidth : 8 * root.ratio
                     height: parent.height
-                    width: Math.min(implicitWidth, Math.max(0, parent.width - x - kindChip.width - 16 * root.ratio))
+                    width: Math.min(implicitWidth, Math.max(0, parent.width - x - detail.implicitWidth - 20 * root.ratio))
                     text: row.item.word ?? ""
                     grid: root.typography.grid
                     color: row.chosen ? root.colors.text : root.colors.subtext0
                     clip: true
                 }
 
+                // What the item adds of itself, as its type, at the row's end.
                 ChromeText {
-                    x: word.x + word.width + 12 * root.ratio
-                    width: Math.max(0, kindChip.x - x - 8 * root.ratio)
+                    id: detail
+                    x: Math.max(word.x + word.width + 12 * root.ratio, parent.width - width - 10 * root.ratio)
+                    width: Math.min(implicitWidth, Math.max(0, parent.width - word.x - word.width - 22 * root.ratio))
                     height: parent.height
                     text: row.item.menu ?? ""
                     pixelSize: root.typography.small
                     color: Qt.alpha(root.colors.text, 0.5)
-                }
-
-                // What kind of thing the word is: a function, a field, a snippet.
-                Item {
-                    id: kindChip
-                    readonly property string label: row.item.kind ?? ""
-                    visible: label.length > 0
-                    width: visible ? kindLabel.implicitWidth + 12 * root.ratio : 0
-                    height: 18 * root.ratio
-                    x: parent.width - width - 6 * root.ratio
-                    y: Math.round((parent.height - height) / 2)
-
-                    NativeRoundedRectangle {
-                        anchors.fill: parent
-                        radius: ChromeStyle.smallRadius * root.ratio
-                        color: Qt.alpha(row.tone, 0.14)
-                    }
-
-                    Text {
-                        id: kindLabel
-                        anchors.centerIn: parent
-                        text: kindChip.label
-                        color: row.tone
-                        font.pixelSize: root.typography.small
-                        textFormat: Text.PlainText
-                    }
                 }
             }
         }
