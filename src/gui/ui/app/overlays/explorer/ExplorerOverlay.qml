@@ -336,14 +336,22 @@ FocusScope {
     // The lenses of the current window, and what it follows.
     Item {
         id: bar
+        // A line of the bar, and whether what the window follows goes on a second one: beside
+        // the panes the lenses leave it no room on theirs.
+        readonly property real line: Math.round(23.2 * root.ratio)
+        readonly property real inset: Math.round((root.barHeight - line) / 2)
+        readonly property bool wrapped: lensRow.width + scopeRow.width + 8 * root.ratio > width
+
         x: root.gutter
         // Inside the frame's line, as everything below it.
         y: root.edge
         width: root.width - 2 * root.gutter
-        height: root.barHeight
+        height: wrapped ? 2 * inset + 2 * line + Math.round(8 * root.ratio) : root.barHeight
 
         Row {
-            height: parent.height
+            id: lensRow
+            y: bar.inset
+            height: bar.line
             spacing: 2 * root.ratio
 
             Repeater {
@@ -358,7 +366,7 @@ FocusScope {
                     readonly property real pad: 8 * root.ratio
 
                     width: number.implicitWidth + 4 * root.ratio + name.implicitWidth + (count.visible ? 3 * root.ratio + count.implicitWidth : 0) + 2 * pad
-                    height: bar.height
+                    height: parent.height
 
                     NativeRoundedRectangle {
                         y: Math.round((parent.height - height) / 2)
@@ -412,8 +420,10 @@ FocusScope {
         }
 
         Row {
-            anchors.right: parent.right
-            height: parent.height
+            id: scopeRow
+            x: bar.wrapped ? 0 : parent.width - width
+            y: bar.wrapped ? bar.inset + bar.line + Math.round(8 * root.ratio) : bar.inset
+            height: bar.line
             spacing: 2 * root.ratio
 
             Repeater {
@@ -440,7 +450,7 @@ FocusScope {
                     readonly property real pad: 8 * root.ratio
 
                     width: scopeKeys.implicitWidth + 4 * root.ratio + scopeName.implicitWidth + 2 * pad
-                    height: bar.height
+                    height: parent.height
 
                     NativeRoundedRectangle {
                         y: Math.round((parent.height - height) / 2)

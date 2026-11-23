@@ -169,7 +169,7 @@ namespace telar::gui::qt {
 
     // What stands beside the panes is asked first when a key moves the focus between them, with
     // the action of that key: true when it took the key, and no pane is asked.
-    void setBeside(ds::Function<bool(window_actions::Action)> beside);
+    void setBeside(tbc::val_a<ds::Function<bool(window_actions::Action)>> beside);
 
   signals:
     // A command has something to tell the user that no dialog shows.
@@ -228,7 +228,7 @@ namespace telar::gui::qt {
     tbc::mut_a<CommandsHost> host_;
     // Where the pressed component action that is running was pressed, for a panel it opens.
     ds::Option<QPointF> component_action_anchor_;
-    ds::Function<bool(window_actions::Action)> beside_{[](window_actions::Action) {
+    tbc::val_a<ds::Function<bool(window_actions::Action)>> beside_{[](window_actions::Action) {
       return false;
     }};
   };

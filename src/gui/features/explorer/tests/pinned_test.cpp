@@ -17,6 +17,13 @@ namespace {
     explorer.type("<C-w>T");
     check(explorer.view.pinned && explorer.view.focused && explorer.view.open && explorer.view.message.view() == "beside the panes · <C-w>T puts it over them again");
 
+    const auto shown = hints(explorer.view, explorer.state, explorer.context());
+
+    check(std::ranges::any_of(shown.items.view().first(shown.count), [](const Hint& hint) {
+      return std::string_view{hint.keys} == "<C-w>T" && hint.label.view() == "over the panes";
+    }),
+        "its hints say the way back");
+
     // Beside the panes it leaves the keys and takes them; over them it always has them.
     focus(explorer.view, false);
     check(!explorer.view.focused);

@@ -553,6 +553,41 @@ namespace {
     check(fixture.view.message.view() == "No editor opens on box: its runtime has none, or no tab to put it in");
   }
 
+  void besideThePanesItStaysAndAPaneTakesWhatIsDroppedOnIt() {
+    Fixture fixture;
+    auto& transport = fixture.transport;
+
+    fixture.list();
+    fixture.settle();
+    static_cast<void>(fixture.press('j'));
+
+    // Over the panes a file handed over closes it; beside them it stays, with the keys.
+    static_cast<void>(fixture.run("pin"));
+    check(fixture.view.pinned && fixture.view.focused);
+
+    auto typed = transport.sent.size();
+
+    check(fixture.strike({.key = explorer::KeyChord::Key::enter}) == explorer::Effect::none && fixture.view.open, "what it hands a pane does not close it");
+    check(transport.inputSince(typed) == "README.md ");
+
+    // A row dragged out of it and let go over the pane is typed there as Enter types it.
+    fixture.observe();
+    typed = transport.sent.size();
+    {
+      const auto around = explorer::around(fixture.scene);
+      const auto context = explorer::contextOf(around, host.machine);
+
+      check(explorer::grab(fixture.view, fixture.client.explorer, context, {.window = 0, .row = 1}) == 1);
+      check(fixture.finish(explorer::hand(fixture.view, fixture.client.explorer, context, 1)) == explorer::Effect::none && fixture.view.open);
+    }
+
+    check(transport.inputSince(typed) == "README.md " && fixture.view.dragged.empty());
+
+    // Over the panes again, the next one closes it.
+    static_cast<void>(fixture.run("pin"));
+    check(!fixture.view.pinned && fixture.strike({.key = explorer::KeyChord::Key::enter}) == explorer::Effect::closed && !fixture.view.open);
+  }
+
   bool same(std::span<const Byte> left, std::span<const Byte> right) {
     return std::ranges::equal(left, right);
   }
@@ -715,6 +750,7 @@ namespace {
   const telar::testing::Case case_far{"explorer_session.a_window_on_another_machine_asks_that_machine_alone", aWindowOnAnotherMachineAsksThatMachineAlone};
   const telar::testing::Case case_plans{"explorer_session.one_plan_is_sent_to_each_machine_it_touches", onePlanIsSentToEachMachineItTouches};
   const telar::testing::Case case_hand{"explorer_session.a_file_of_another_machine_is_handed_only_there", aFileOfAnotherMachineIsHandedOnlyThere};
+  const telar::testing::Case case_beside{"explorer_session.beside_the_panes_it_stays_and_a_pane_takes_what_is_dropped_on_it", besideThePanesItStaysAndAPaneTakesWhatIsDroppedOnIt};
   const telar::testing::Case case_carried{"explorer_session.a_file_is_carried_from_one_machine_to_the_other", aFileIsCarriedFromOneMachineToTheOther};
   const telar::testing::Case case_moved{"explorer_session.a_move_trashes_its_original_once_the_copy_arrived_and_a_cancel_removes_it", aMoveTrashesItsOriginalOnceTheCopyArrivedAndACancelRemovesIt};
   const telar::testing::Case case_brought{"explorer_session.a_file_brought_is_typed_at_the_pane_once_it_is_whole", aFileBroughtIsTypedAtThePaneOnceItIsWhole};

@@ -133,7 +133,8 @@ pane again.
 | `s` | Opens a new shell in the row's directory, in a split. |
 | `yy` `yr` `yn` | Copy the path, the path from the root, or the name to the clipboard. |
 
-The explorer closes when a file goes to a pane. `Ctrl+w` `T` keeps it open instead.
+The explorer closes when a file goes to a pane, so what the pane did with it shows. [Beside
+the panes](#beside-the-panes) it stays.
 
 ## Change files as text
 
@@ -211,6 +212,28 @@ The explorer splits into three windows at most, each on its own directory.
 
 `yy` in one window and `p` in another copies between two directories; `dd` and `p` moves.
 
+## Beside the panes
+
+`Ctrl+w` `T`, or `:pin`, stands the explorer beside the panes of the tab, at their right, and
+not over them; the same key puts it over them again. The panes are laid out in the room that is
+left, as when the sidebar opens, so nothing of a pane is covered. It shows no preview there, and
+it is as wide as two windows need when it has two side by side, and never more than half the
+area.
+
+![The explorer beside a pane](images/telar-explorer-pinned.png)
+
+Beside the panes the explorer takes the keys only while it has the focus:
+
+- the prefix and `o` give it the focus, and return it to the pane; a click in it gives it too;
+- the keys that move the focus between panes enter it from the pane that has none at its right,
+  go from one of its windows to the other, and leave it at the left of the first;
+- `q` closes it, and it opens beside the panes again in that workspace, for as long as the
+  window lives. Another workspace has it where it was left there.
+
+It does not close when it hands a file to a pane. And rows can be dragged out of it onto a
+pane, which takes them as Enter would give them to it: a shell gets the paths typed, an agent a
+mention, an editor opens them. The pane that would take them is marked while they are over it.
+
 ## Machines
 
 Each window of the explorer is on one machine, and two windows can be on two. The head of a
@@ -282,5 +305,10 @@ other, 256 KiB at a time, and holds one such piece of it and no more.
   refused, and its files are carried one by one.
 - A transfer does not go on after its machine was disconnected and connected again: it
   fails, and is started again by hand.
-- Nothing is dragged onto a pane, out to the desktop, or in from it.
+- Nothing is dragged out to the desktop, or in from it.
+- Beside the panes the explorer is the window's own: the runtime does not know of it as a
+  pane, so it is not part of a tab's layout, is not split or moved with the panes, and does not
+  return when the window is opened again.
+- From an editor pane the keys that move the focus do not enter the explorer beside it: the
+  editor is asked for its own window on that side. The prefix and `o`, or a click, do.
 - `Tab` completes no path of another machine than the window's.

@@ -1014,7 +1014,7 @@ namespace telar::gui::qt {
     return true;
   }
 
-  void WindowCommands::setBeside(ds::Function<bool(window_actions::Action)> beside) {
+  void WindowCommands::setBeside(tbc::val_a<ds::Function<bool(window_actions::Action)>> beside) {
     beside_ = std::move(beside);
   }
 

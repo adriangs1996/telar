@@ -357,6 +357,36 @@ namespace telar::gui::qt {
     });
   }
 
+  void ApplicationController::settleExplorer() {
+    constexpr qreal design_cell = 7.2;
+    const auto& grid = display_.grid();
+    const bool keys = explorer_.showing() && explorer_.focused();
+
+    // It takes the keys of the panes while it has the focus, as a dialog does.
+    if (keys && store_.dialog().kind == Dialog::none) {
+      dialogs_.show(Dialog::explorer);
+    } else if (!keys && store_.dialog().kind == Dialog::explorer) {
+      dialogs_.show(Dialog::none);
+    }
+
+    // The room it stands in beside the panes is taken from their area, at the size of the font.
+    display_.setBeside(explorer_.besideWidth() * static_cast<qreal>(grid.cell_width_px) / static_cast<qreal>(grid.scale) / design_cell);
+  }
+
+  void ApplicationController::yieldExplorer() {
+    // Another dialog took the explorer's place: over the panes it closes, and beside them it
+    // leaves the keys.
+    if (store_.dialog().kind == Dialog::explorer || !explorer_.showing() || !explorer_.focused()) {
+      return;
+    }
+
+    if (explorer_.pinned()) {
+      explorer_.giveFocus(false);
+    } else {
+      explorer_.close();
+    }
+  }
+
   void ApplicationController::initializePeekAndMonitor() {
     connect(&peek_, &PeekController::closeRequested, this, [this] {
       dialogs_.show(Dialog::none);
@@ -401,20 +431,7 @@ namespace telar::gui::qt {
 
     // Beside the panes the explorer takes their keys only while it has the focus, and the room
     // it stands in is taken from their area, at the size of the terminal's font.
-    connect(&explorer_, &ExplorerController::changed, this, [this] {
-      constexpr qreal design_cell = 7.2;
-      const auto& grid = display_.grid();
-      const bool keys = explorer_.showing() && explorer_.focused();
-
-      if (keys && store_.dialog().kind == Dialog::none) {
-        dialogs_.show(Dialog::explorer);
-      } else if (!keys && store_.dialog().kind == Dialog::explorer) {
-        dialogs_.show(Dialog::none);
-      }
-
-      display_.setBeside(explorer_.besideWidth() * static_cast<qreal>(grid.cell_width_px) / static_cast<qreal>(grid.scale) / design_cell);
-    });
-
+    connect(&explorer_, &ExplorerController::changed, this, &ApplicationController::settleExplorer);
     commands_.setBeside([this](window_actions::Action action) {
       return explorer_.takes(explorerSide(action));
     });
@@ -432,15 +449,7 @@ namespace telar::gui::qt {
     // What the panes show moved: a window that follows the focused pane goes where it is.
     connect(&store_, &Store::changed, &explorer_, &ExplorerController::synchronize);
     connect(&dialogs_, &Dialogs::changed, &explorer_, [this] {
-      // Another dialog took the explorer's place: over the panes it closes, and beside them it
-      // leaves the keys.
-      if (store_.dialog().kind != Dialog::explorer && explorer_.showing() && explorer_.focused()) {
-        if (explorer_.pinned()) {
-          explorer_.giveFocus(false);
-        } else {
-          explorer_.close();
-        }
-      }
+      yieldExplorer();
     });
 
     connect(&commands_, &WindowCommands::monitorRequested, this, [this, open_monitor](window_actions::Action action) {

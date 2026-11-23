@@ -293,6 +293,9 @@ namespace telar::gui::qt {
     void initializeOverlays();
     void initializeMachineChrome();
     void initializePeekAndMonitor();
+    // The explorer changed: who takes the keys, and the room it stands in beside the panes.
+    void settleExplorer();
+    void yieldExplorer();
     void initializeConfigurationSource();
     // The mod content a record carries for its slots, keyed by slot name.
     void refreshElementBars();

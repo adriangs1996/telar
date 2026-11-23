@@ -1912,7 +1912,6 @@ return {api_version = 2, client = {
       constexpr qreal one_window = 380;
       constexpr qreal two_windows = 640;
 
-      press(QStringLiteral("u"));
       press(QStringLiteral("gg"));
       explorer->run(QStringLiteral("pin"));
       QVERIFY(explorer->pinned() && explorer->focused() && explorer->showing());

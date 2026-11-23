@@ -101,7 +101,7 @@ namespace telar::gui::qt {
       std::string_view label;
     };
 
-    constexpr ds::Array<HelpKey, 59> help_keys{
+    constexpr ds::Array<HelpKey, 62> help_keys{
         {
             {.group = "Moving", .keys = "j k", .label = "down, up; with a count"},
             {.group = "Moving", .keys = "gg G", .label = "first, last; 12G goes to row 12"},
@@ -129,6 +129,9 @@ namespace telar::gui::qt {
             {.group = "Windows", .keys = "<C-w>w <C-w>hjkl", .label = "the next window, the one that way"},
             {.group = "Windows", .keys = "<C-w>q <C-w>o", .label = "close this one, keep only this one"},
             {.group = "Windows", .keys = ":e PATH :vs PATH", .label = "this window, or a new one, at a path"},
+            {.group = "Windows", .keys = "<C-w>T :pin", .label = "beside the panes, or over them again"},
+            {.group = "Windows", .keys = "prefix o", .label = "beside them: to it, and back to the pane"},
+            {.group = "Windows", .keys = "focus keys", .label = "beside them: in from the last pane, out"},
             {.group = "Machines", .keys = "gm", .label = "this window on the next machine"},
             {.group = "Machines", .keys = ":machine LABEL", .label = "go to a machine; alone, list them"},
             {.group = "Machines", .keys = ":e LABEL:PATH", .label = "a path of another machine; :vs and :sp too"},
@@ -258,8 +261,8 @@ namespace telar::gui::qt {
       : QObject(parent),
         store_(store),
         view_(memory),
-        home_(QDir::homePath().toUtf8()),
         beside_(memory),
+        home_(QDir::homePath().toUtf8()),
         scene_(memory),
         away_(memory) {
     // A model an invokable hands to QML with no parent would be the engine's to delete.
@@ -1267,10 +1270,9 @@ namespace telar::gui::qt {
     // Another workspace shows: the explorer beside the panes belongs to the one it was put in.
     const auto now = here();
     if (last_ && (last_->machine != now.machine || last_->workspace != now.workspace || last_->directory != now.directory)) {
-      const auto kept = std::ranges::find_if(beside_, [&](const Beside& known) {
-        return known.machine == now.machine && known.workspace == now.workspace && known.directory == now.directory;
+      const bool wanted = std::ranges::any_of(beside_, [&](const Beside& known) {
+        return known.showing && known.machine == now.machine && known.workspace == now.workspace && known.directory == now.directory;
       });
-      const bool wanted = kept != beside_.end() && kept->showing;
 
       last_ = now;
       if (view_.open && view_.pinned && !wanted) {

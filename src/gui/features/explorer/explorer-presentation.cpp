@@ -1146,6 +1146,11 @@ namespace telar::gui::features::explorer {
     addHint(result, "yy", {.text = "copy", .enabled = entry});
     addHint(result, "o", {.text = "new", .enabled = tree});
     addHint(result, "<C-w>v", {.text = "window"});
+    // Beside the panes, the way back over them; over them the hints are the ones of the design.
+    if (view.pinned) {
+      addHint(result, "<C-w>T", {.text = "over the panes"});
+    }
+
     addHint(result, "=", {.text = "diff", .enabled = entry && !row->directory});
     addHint(result, "ga", {.text = "stage", .enabled = entry});
     addHint(result, "gu", {.text = "unstage", .enabled = entry});

@@ -47,13 +47,13 @@ Item {
         ratio: root.ratio
     }
 
-    // The pane at a point of the area, as its record; none where no pane is.
+    // The pane at a point of the area, as its key and its frame; none where no pane is.
     function paneAt(point) {
         for (let index = 0; index < shown.count; ++index) {
             const pane = shown.itemAt(index);
 
             if (pane && point.x >= pane.x && point.x < pane.x + pane.width && point.y >= pane.y && point.y < pane.y + pane.height)
-                return {key: pane.record.key, x: pane.x, y: pane.y, width: pane.width, height: pane.height};
+                return {key: pane.record.key, x: pane.x + pane.record.frame.x, y: pane.y + pane.record.frame.y, width: pane.frameWidth, height: pane.frameHeight};
         }
 
         return null;
