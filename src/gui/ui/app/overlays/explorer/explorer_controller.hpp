@@ -36,6 +36,8 @@ namespace telar::gui::qt {
     Q_PROPERTY(bool available READ available NOTIFY changed)
     Q_PROPERTY(bool showing READ showing NOTIFY changed)
     Q_PROPERTY(bool sideBySide READ sideBySide NOTIFY changed)
+    Q_PROPERTY(bool pinned READ pinned NOTIFY changed)
+    Q_PROPERTY(bool focused READ focused NOTIFY changed)
     Q_PROPERTY(QVariantList windows READ windows NOTIFY windowsChanged)
     Q_PROPERTY(QVariantList lenses READ lenses NOTIFY lensesChanged)
     Q_PROPERTY(QString scope READ scope NOTIFY changed)
@@ -58,6 +60,17 @@ namespace telar::gui::qt {
     [[nodiscard]] bool available() const;
     [[nodiscard]] bool showing() const;
     [[nodiscard]] bool sideBySide() const;
+    // Whether it stands beside the panes, not over them; and whether it takes the keys, which
+    // beside the panes it does only while it was given them.
+    [[nodiscard]] bool pinned() const;
+    [[nodiscard]] bool focused() const;
+    // The width it asks of the panes' area while it stands beside them, as the design measures
+    // it for a font of 12px: none over the panes, or closed.
+    [[nodiscard]] qreal besideWidth() const;
+    // A key that moves the focus between panes was pressed: the explorer beside them takes it
+    // to go to one of its windows, to give the keys back to the panes, or to take them from
+    // the pane next to it. False when it is the panes' to act on.
+    [[nodiscard]] bool takes(application::explorer::Side side);
     [[nodiscard]] const QVariantList& windows() const noexcept;
     [[nodiscard]] const QVariantList& lenses() const noexcept;
     [[nodiscard]] QString scope() const;
@@ -104,6 +117,10 @@ namespace telar::gui::qt {
     // Asks a file on its way between two machines to stop.
     Q_INVOKABLE void cancelTransfer(int id);
     Q_INVOKABLE void release();
+    // The rows dragged were let go over a pane, which takes them as Enter would give them.
+    Q_INVOKABLE void dropOnPane(qulonglong pane);
+    // Beside the panes it is given the keys, as a click in it asks, or leaves them to the panes.
+    Q_INVOKABLE void giveFocus(bool focused);
     // A window shows `rows` rows; the wheel moves what it shows.
     Q_INVOKABLE void setViewport(int window, int rows);
     Q_INVOKABLE void scroll(int window, int rows);
@@ -192,6 +209,21 @@ namespace telar::gui::qt {
     // Where the pointer asked for the menu; below zero when the keys did.
     QPointF menu_at_{-1, -1};
     std::uint64_t revision_ = 0;
+
+    // The workspaces where the explorer was put beside the panes, for the life of the window:
+    // it returns there when the workspace shows again, if it was showing when it left.
+    struct Beside {
+      std::size_t machine = 0;
+      std::uint64_t workspace = 0;
+      bool directory = false;
+      bool showing = false;
+    };
+
+    [[nodiscard]] Beside here() const noexcept;
+    // Keeps what the explorer is now for the workspace that shows.
+    void remember();
+    ds::Vec<Beside, ApplicationAllocator> beside_;
+    ds::Option<Beside> last_;
     // The home of the account the window runs as, which the local machine has before its
     // runtime says it.
     QByteArray home_;

@@ -13,14 +13,27 @@ FocusScope {
     required property ExplorerController controller
     required property var colors
     required property var typography
-    // The area of the panes, which the explorer takes whole.
+    // The area of the panes, which the explorer takes whole; or, beside the panes, the room
+    // their area left it at their right.
     required property rect area
+    // Where the panes are, to say which one is under rows the pointer drags out of the explorer.
+    property Item paneArea: null
+    // Beside the panes it shows no preview, is as wide as the room, and takes the keys only
+    // while it was given them.
+    readonly property bool pinned: controller.pinned
+    readonly property bool active: controller.focused
+    // The pane that would take the rows dragged over it, and its frame in the explorer's own
+    // coordinates; none while the pointer is over no pane.
+    property string dropPane: ""
+    property rect dropPaneFrame: Qt.rect(0, 0, 0, 0)
     // The design this is drawn from measures its boxes for a font of 12px, whose cell is 7.2px
     // wide. Each box takes the size of the terminal's font, as the text in it does, so the
     // explorer keeps its proportions whatever the font.
     readonly property real ratio: (grid.cellWidth ?? 7.2) / 7.2
     // How far inside the area it stands: that margin hides the panes too.
-    readonly property real inset: Math.round(6 * ratio)
+    readonly property real inset: pinned ? 0 : Math.round(6 * ratio)
+    // The room between the panes and the explorer beside them.
+    readonly property real gap: pinned ? Math.round(6 * ratio) : 0
 
     readonly property var windows: controller.windows
     readonly property var line: controller.line
@@ -68,7 +81,7 @@ FocusScope {
     readonly property real barHeight: Math.round(35.2 * ratio)
     readonly property real commandHeight: Math.round(24 * ratio)
     readonly property real hintsHeight: Math.round(30.4 * ratio)
-    readonly property real previewWidth: windows.length > 1 ? 0 : Math.round(Math.max(300 * ratio, body.width * 0.38))
+    readonly property real previewWidth: pinned || windows.length > 1 ? 0 : Math.round(Math.max(300 * ratio, body.width * 0.38))
     readonly property real indent: 14 * ratio
     readonly property real gutter: 10 * ratio
 
@@ -114,9 +127,9 @@ FocusScope {
     }
 
     objectName: "explorerOverlay"
-    x: area.x + inset
+    x: area.x + inset + gap
     y: area.y + inset
-    width: Math.max(0, area.width - 2 * inset)
+    width: Math.max(0, area.width - 2 * inset - gap)
     height: Math.max(0, area.height - 2 * inset)
     visible: controller.showing
     z: 40
@@ -196,6 +209,11 @@ FocusScope {
     function dragTo(x, y, copy, move) {
         const at = rowsAt(x, y);
         const aimed = at === null ? ({}) : controller.aim(at.window, at.row, copy, move);
+        // Out of the explorer, beside the panes, a pane takes the rows as Enter gives them.
+        const over = at === null && pinned && paneArea !== null ? paneArea.paneAt(paneArea.mapFromItem(root, x, y)) : null;
+
+        dropPane = over === null ? "" : String(over.key);
+        dropPaneFrame = over === null ? Qt.rect(0, 0, 0, 0) : root.mapFromItem(paneArea, over.x, over.y, over.width, over.height);
 
         dragX = x;
         dragY = y;
@@ -210,12 +228,16 @@ FocusScope {
     // The pointer lets the rows go where it is, or the drag ends with nothing to take them.
     function endDrag(letGo) {
         const at = letGo ? rowsAt(dragX, dragY) : null;
+        const pane = letGo ? dropPane : "";
 
         dragging = false;
         dropWindow = -1;
         dropRow = -1;
+        dropPane = "";
         if (at !== null)
             controller.drop(at.window, at.row, dragCopy, dragMove);
+        else if (pane.length > 0)
+            controller.dropOnPane(pane);
         else
             controller.release();
         settleFocus();
@@ -230,8 +252,14 @@ FocusScope {
     }
 
     // The field of the mode takes the keys while something is typed; the windows otherwise.
+    // A press in the explorer gives it the keys, which beside the panes it may not have.
+    function claim() {
+        controller.giveFocus(true);
+        settleFocus();
+    }
+
     function settleFocus() {
-        if (!visible)
+        if (!visible || !active)
             return;
         if (mode === "search" || mode === "command") {
             commandField.text = line.prefill ?? "";
@@ -247,6 +275,7 @@ FocusScope {
 
     onVisibleChanged: settleFocus()
     onModeChanged: settleFocus()
+    onActiveChanged: settleFocus()
 
     onCompletedChanged: {
         if (mode === "command")
@@ -259,7 +288,7 @@ FocusScope {
         acceptedButtons: Qt.AllButtons
         onPressed: mouse => {
             mouse.accepted = true;
-            root.settleFocus();
+            root.claim();
         }
         onWheel: wheel => wheel.accepted = true
     }
@@ -274,11 +303,13 @@ FocusScope {
     }
 
     // The panes and the frame of the focused one stay behind: the explorer takes their area.
+    // Beside the panes it covers none of them.
     NativeRoundedRectangle {
         x: -root.inset
         y: -root.inset
         width: root.width + 2 * root.inset
         height: root.height + 2 * root.inset
+        visible: !root.pinned
         color: root.colors.workbenchBackground
     }
 
@@ -297,7 +328,8 @@ FocusScope {
         radius: 8 * root.ratio
         color: root.colors.surface_dim
         borderWidth: root.edge
-        borderColor: root.colors.overlay0
+        // Beside the panes its frame is a pane's, lighter while it has the keys.
+        borderColor: root.pinned ? (root.active ? root.colors.overlay0 : root.colors.surface1) : root.colors.overlay0
         borderAlpha: 1
     }
 
@@ -479,7 +511,7 @@ FocusScope {
                 readonly property int count: root.windows.length
                 readonly property bool sideBySide: root.controller.sideBySide
                 readonly property real room: body.width - root.previewWidth
-                readonly property bool current: modelData.current
+                readonly property bool current: modelData.current && root.active
                 readonly property int visibleRows: Math.max(1, Math.floor((list.height - root.listPadding) / root.rowPitch))
                 readonly property Item rowsArea: list
 
@@ -1020,7 +1052,7 @@ FocusScope {
                                 const place = mapToItem(root, mouse.x, mouse.y);
 
                                 root.controller.openMenu(pane.index, at < pane.modelData.rows ? at : -1, Qt.point(place.x, place.y));
-                                root.settleFocus();
+                                root.claim();
                                 return;
                             }
 
@@ -1029,7 +1061,7 @@ FocusScope {
                             waiting = !extend && !pick && root.controller.isChosen(pane.index, at);
                             if (!waiting)
                                 root.controller.select(pane.index, at, extend, pick);
-                            root.settleFocus();
+                            root.claim();
                         }
                         onPositionChanged: mouse => {
                             if ((mouse.buttons & Qt.LeftButton) === 0 || pressedRow < 0)
@@ -2001,6 +2033,21 @@ FocusScope {
         }
     }
 
+    // The pane that would take the rows dragged over it.
+    NativeRoundedRectangle {
+        z: 8
+        visible: root.dragging && root.dropPane.length > 0
+        x: root.dropPaneFrame.x
+        y: root.dropPaneFrame.y
+        width: root.dropPaneFrame.width
+        height: root.dropPaneFrame.height
+        radius: 6 * root.ratio
+        color: Qt.alpha(root.colors.accent, 0.12)
+        borderWidth: root.edge
+        borderColor: root.colors.accent
+        borderAlpha: 1
+    }
+
     // What the pointer drags, said beside it: what letting go would do, and to how many rows.
     NativeRoundedRectangle {
         z: 9
@@ -2012,7 +2059,7 @@ FocusScope {
         radius: 4 * root.ratio
         color: root.colors.surface0
         borderWidth: root.edge
-        borderColor: root.dropWindow >= 0 ? root.colors.accent : root.colors.overlay0
+        borderColor: root.dropWindow >= 0 || root.dropPane.length > 0 ? root.colors.accent : root.colors.overlay0
         borderAlpha: 1
 
         CellText {
@@ -2020,9 +2067,9 @@ FocusScope {
             x: 9 * root.ratio
             width: implicitWidth
             height: parent.height
-            text: (root.dropCopy ? "copy " : "move ") + root.dragCount
+            text: (root.dropPane.length > 0 ? "to the pane · " : root.dropCopy ? "copy " : "move ") + root.dragCount
             grid: root.smallGrid
-            color: root.dropWindow >= 0 ? root.colors.text : root.colors.overlay1
+            color: root.dropWindow >= 0 || root.dropPane.length > 0 ? root.colors.text : root.colors.overlay1
         }
     }
 }

@@ -93,6 +93,10 @@ export namespace telar::gui::application::workbench {
   // Focuses the pane next to the focused one toward `direction`.
   void focusToward(Session& session, PaneDirection direction);
 
+  // The pane next to the focused one toward `direction`; 0 when there is none. What stands
+  // beside the panes asks it, to know the pane it is next to.
+  [[nodiscard]] std::uint64_t neighbor(Session& session, PaneDirection direction);
+
   // As focusToward, but a pane running nvim gets the keys that move between its windows.
   void navigate(Session& session, PaneDirection direction);
 
@@ -185,9 +189,6 @@ namespace telar::gui::application::workbench {
 
   // A split of pane `pane_id` in the tab at `location` failed: the pane takes back its size.
   void recoverSplit(Session& session, TabLocation location, std::uint64_t pane_id);
-
-  // The pane next to the focused one toward `direction`; 0 when there is none.
-  [[nodiscard]] std::uint64_t neighbor(Session& session, PaneDirection direction);
 
   // The active tab's layout as a token the CLI prints; it views the session's response to the
   // command, valid until the next one.

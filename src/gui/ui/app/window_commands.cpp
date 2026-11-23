@@ -77,6 +77,22 @@ namespace telar::gui::qt {
       };
     }
 
+    // The action of the key that moves the focus that way.
+    constexpr window_actions::Action focusAction(PaneDirection direction) noexcept {
+      switch (direction) {
+      case PaneDirection::left:
+        return window_actions::Action::focus_left;
+      case PaneDirection::right:
+        return window_actions::Action::focus_right;
+      case PaneDirection::up:
+        return window_actions::Action::focus_up;
+      case PaneDirection::down:
+        return window_actions::Action::focus_down;
+      }
+
+      return window_actions::Action::none;
+    }
+
     auto paneDirection(window_actions::Action action) noexcept -> PaneDirection {
       switch (action) {
       case window_actions::Action::focus_left:
@@ -516,7 +532,10 @@ namespace telar::gui::qt {
     }
 
     if (const auto direction = navigationDirection(action.kind)) {
-      application::workbench::navigate(store_.sessionMut(), *direction);
+      if (!besideTakes(focusAction(*direction))) {
+        application::workbench::navigate(store_.sessionMut(), *direction);
+      }
+
       return;
     }
 
@@ -995,9 +1014,19 @@ namespace telar::gui::qt {
     return true;
   }
 
+  void WindowCommands::setBeside(ds::Function<bool(window_actions::Action)> beside) {
+    beside_ = std::move(beside);
+  }
+
+  bool WindowCommands::besideTakes(window_actions::Action action) {
+    return beside_(action);
+  }
+
   bool WindowCommands::executePane(window_actions::Action action, std::uint64_t identity) {
     if (action == window_actions::Action::focus_left || action == window_actions::Action::focus_right || action == window_actions::Action::focus_up || action == window_actions::Action::focus_down) {
-      application::workbench::focusToward(store_.sessionMut(), paneDirection(action));
+      if (!besideTakes(action)) {
+        application::workbench::focusToward(store_.sessionMut(), paneDirection(action));
+      }
     } else if (action == window_actions::Action::resize_left || action == window_actions::Action::resize_right || action == window_actions::Action::resize_up || action == window_actions::Action::resize_down) {
       application::workbench::resizeToward(store_.sessionMut(), paneDirection(action));
     } else if (action == window_actions::Action::focus_pane) {

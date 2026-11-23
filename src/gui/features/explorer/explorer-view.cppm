@@ -513,9 +513,11 @@ export namespace telar::gui::features::explorer {
 
     Memory& memory;
     bool open = false;
-    // Whether the explorer stays open after it hands a file to a pane; and whether the windows
-    // stand side by side.
+    // Whether the explorer stands beside the panes, where it stays once it hands a file to one,
+    // and not over them; and whether it takes the keys, which over the panes it always does.
     bool pinned = false;
+    bool focused = true;
+    // Whether the windows stand side by side.
     bool side_by_side = true;
     ds::Vec<ds::Box<Window, Memory>, Memory> windows;
     std::size_t current = 0;

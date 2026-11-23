@@ -1902,6 +1902,76 @@ return {api_version = 2, client = {
       press(QStringLiteral("?"));
       shoot(QStringLiteral("explorer-help"));
       press(QStringLiteral("q"));
+
+      // `<C-w>T` stands the explorer beside the panes, which are laid out in the room it leaves.
+      const auto area = [&](const QString& part) {
+        return client_->display()->geometry().value(part).toRectF();
+      };
+      const auto whole = area(QStringLiteral("terminal"));
+      const auto ratio = overlay->property("ratio").toReal();
+      constexpr qreal one_window = 380;
+      constexpr qreal two_windows = 640;
+
+      press(QStringLiteral("u"));
+      press(QStringLiteral("gg"));
+      explorer->run(QStringLiteral("pin"));
+      QVERIFY(explorer->pinned() && explorer->focused() && explorer->showing());
+      QCOMPARE(client_->dialogs()->kind(), Store::Dialog::explorer);
+      QVERIFY(qAbs(area(QStringLiteral("beside")).width() - (one_window * ratio)) <= 1);
+      QVERIFY(qAbs(area(QStringLiteral("terminal")).width() - (whole.width() - area(QStringLiteral("beside")).width())) <= 1);
+      QCOMPARE(area(QStringLiteral("terminal")).right(), area(QStringLiteral("beside")).left());
+      QTRY_VERIFY(overlay->x() >= area(QStringLiteral("terminal")).right());
+      QVERIFY(!explorer->preview().value(QStringLiteral("shown")).toBool() || overlay->property("previewWidth").toReal() == 0);
+      shoot(QStringLiteral("explorer-pinned"));
+
+      // The key that opened it returns the keys to the pane: what is typed then is the pane's.
+      client_->commands()->execute(window_actions::Action::explorer);
+      QVERIFY(explorer->showing() && !explorer->focused());
+      QCOMPARE(client_->dialogs()->kind(), Store::Dialog::none);
+
+      const auto at_rest = selected();
+
+      QTest::keyClick(window_, Qt::Key_J);
+      QCOMPARE(selected(), at_rest);
+      QTRY_VERIFY(window_->activeFocusItem() != nullptr && !overlay->isAncestorOf(window_->activeFocusItem()));
+
+      // The key that moves the focus to the right of the last pane enters it; the one to the
+      // left, from its first window, returns to the pane.
+      client_->commands()->execute(window_actions::Action::focus_right);
+      QVERIFY(explorer->focused());
+      QCOMPARE(client_->dialogs()->kind(), Store::Dialog::explorer);
+      press(QStringLiteral("j"));
+      QVERIFY(selected() != at_rest);
+      client_->commands()->execute(window_actions::Action::focus_left);
+      QVERIFY(!explorer->focused() && explorer->showing());
+
+      // Rows dragged out of it onto the pane are given to the pane, which is marked meanwhile.
+      const auto* pane_frame = test::visualItems(*window_->contentItem(), QStringLiteral("paneFrame")).value(0);
+
+      QVERIFY(pane_frame != nullptr);
+
+      const auto on_pane = pane_frame->mapToScene({pane_frame->width() / 2, pane_frame->height() / 2}).toPoint();
+
+      QTest::mousePress(window_, Qt::LeftButton, Qt::NoModifier, over(QStringLiteral("cmake")));
+      QVERIFY(explorer->focused());
+      QTest::mouseMove(window_, over(QStringLiteral("dev")));
+      QTest::mouseMove(window_, on_pane);
+      QTRY_VERIFY(overlay->property("dragging").toBool());
+      QCOMPARE(overlay->property("dropPane").toString(), QString::number(firstPane()->id));
+      shoot(QStringLiteral("explorer-pinned-drop"));
+      QTest::mouseRelease(window_, Qt::LeftButton, Qt::NoModifier, on_pane);
+      QVERIFY(!overlay->property("dragging").toBool() && explorer->showing());
+      QCOMPARE(explorer->line().value(QStringLiteral("edits")).toInt(), 0);
+
+      // Two windows side by side ask for more room, and over the panes it gives it all back.
+      press(QStringLiteral("<C-w>v"));
+      // Half the area stays the panes', whatever it asks for.
+      QVERIFY(qAbs(area(QStringLiteral("beside")).width() - std::min(two_windows * ratio, whole.width() / 2)) <= 1);
+      shoot(QStringLiteral("explorer-pinned-two"));
+      press(QStringLiteral("<C-w>q"));
+      explorer->run(QStringLiteral("pin"));
+      QVERIFY(!explorer->pinned() && explorer->focused());
+      QVERIFY(qAbs(area(QStringLiteral("terminal")).width() - whole.width()) <= 1);
       press(QStringLiteral("q"));
       QVERIFY(!explorer->showing());
       QCOMPARE(client_->dialogs()->kind(), Store::Dialog::none);

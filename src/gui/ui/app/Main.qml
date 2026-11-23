@@ -191,7 +191,8 @@ Window {
 
     ExplorerOverlay {
         // Over the panes of the tab, with the sidebar and the bars left in view.
-        area: root.geometry.terminal
+        area: telar.explorer.pinned ? root.geometry.beside : root.geometry.terminal
+        paneArea: paneArea
         controller: telar.explorer
         colors: telar.colors
         typography: root.geometry.typography

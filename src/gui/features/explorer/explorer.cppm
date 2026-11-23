@@ -89,6 +89,28 @@ export namespace telar::gui::features::explorer {
   void drop(View& view, const State& state, const Context& context, const Drop& drop);
   void release(View& view) noexcept;
 
+  // The rows dragged were let go over the pane `pane`, which takes them as Enter would give
+  // them to it: paths typed at a shell, a mention to an agent, files opened in an editor.
+  [[nodiscard]] Action hand(View& view, const State& state, const Context& context, std::uint64_t pane);
+
+  // The explorer stands beside the panes or over them, as `<C-w>T` asks; and beside them it
+  // takes the keys or leaves them to the panes.
+  void pin(View& view, bool pinned) noexcept;
+  void focus(View& view, bool focused) noexcept;
+
+  // A side of the explorer, as the keys that move between panes name one.
+  enum class Side : std::uint8_t {
+    left,
+    right,
+    up,
+    down,
+  };
+
+  // The key that moves between panes was pressed in the explorer, which stands to the right of
+  // them: it goes to the explorer's window on that side. False when the panes are what is on
+  // that side, and they take the keys.
+  bool toward(View& view, Side side) noexcept;
+
   // A window shows `rows` rows; and the wheel moves what it shows by `rows` rows.
   void resize(View& view, const WindowRows& shown) noexcept;
   void scroll(View& view, const WindowRows& moved) noexcept;

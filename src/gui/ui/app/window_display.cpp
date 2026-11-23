@@ -60,7 +60,23 @@ namespace telar::gui::qt {
   }
 
   application::window::DisplayMetrics WindowDisplay::metrics(qreal density) const {
-    return application::window::DisplayMetrics::resolve(configuration(), viewport_, cell_metrics_, density);
+    auto display = application::window::DisplayMetrics::resolve(configuration(), viewport_, cell_metrics_, density);
+
+    if (beside_ > 0) {
+      const auto asked = static_cast<float>(std::round(beside_ * density));
+
+      display.geometry.terminal.width -= std::min(asked, std::floor(display.geometry.terminal.width / 2));
+    }
+
+    return display;
+  }
+
+  void WindowDisplay::setBeside(qreal width) {
+    const auto beside = std::isfinite(width) && width > 0 ? width : qreal{0};
+    if (!std::equal_to<>{}(beside, beside_)) {
+      beside_ = beside;
+      publish();
+    }
   }
 
   qreal WindowDisplay::chromeRatio() {
@@ -77,6 +93,9 @@ namespace telar::gui::qt {
     const auto display = metrics(density);
     const auto& geometry = display.geometry;
     const auto& chrome = display.chrome;
+    // What the panes left at their right, to what stands beside them.
+    const auto whole = application::window::DisplayMetrics::resolve(configuration(), viewport_, cell_metrics_, density).geometry.terminal;
+    const Rect beside{.x = geometry.terminal.right(), .y = geometry.terminal.y, .width = whole.width - geometry.terminal.width, .height = geometry.terminal.height};
     auto typography = chromeTypographyRecord(display, font);
 
     typography.insert(QStringLiteral("grid"), QVariantMap{
@@ -92,6 +111,7 @@ namespace telar::gui::qt {
         {QStringLiteral("navigation"), toQRectF(geometry.navigation, density)},
         {QStringLiteral("sidebar"), toQRectF(geometry.sidebar, density)},
         {QStringLiteral("terminal"), toQRectF(geometry.terminal, density)},
+        {QStringLiteral("beside"), toQRectF(beside, density)},
         {QStringLiteral("status"), toQRectF(geometry.status, density)},
         {QStringLiteral("rail"), geometry.rail},
         {QStringLiteral("paneHeader"), static_cast<qreal>(chrome.pane_header) / density},

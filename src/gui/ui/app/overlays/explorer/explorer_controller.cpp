@@ -259,6 +259,7 @@ namespace telar::gui::qt {
         store_(store),
         view_(memory),
         home_(QDir::homePath().toUtf8()),
+        beside_(memory),
         scene_(memory),
         away_(memory) {
     // A model an invokable hands to QML with no parent would be the engine's to delete.
@@ -339,6 +340,92 @@ namespace telar::gui::qt {
 
   bool ExplorerController::showing() const {
     return view_.open;
+  }
+
+  bool ExplorerController::pinned() const {
+    return view_.pinned;
+  }
+
+  bool ExplorerController::focused() const {
+    return view_.open && view_.focused;
+  }
+
+  qreal ExplorerController::besideWidth() const {
+    // What the design gives one window beside the panes, and two side by side.
+    constexpr qreal one_window = 380;
+    constexpr qreal two_windows = 640;
+
+    if (!view_.open || !view_.pinned) {
+      return 0;
+    }
+
+    return view_.windows.size() > 1 && view_.side_by_side ? two_windows : one_window;
+  }
+
+  bool ExplorerController::takes(explorer::Side side) {
+    if (!view_.open || !view_.pinned) {
+      return false;
+    }
+
+    if (view_.focused) {
+      // Past its first window to the left the panes take the keys back.
+      if (!explorer::toward(view_, side)) {
+        explorer::focus(view_, false);
+      }
+    } else {
+      const auto* pane = store_.session().focusedPane();
+
+      // It stands at the right of the panes: the pane with none at its right is next to it. An
+      // editor is asked for its own window on that side, which the explorer does not know of.
+      if (side != explorer::Side::right || pane == nullptr || application::nvim::editor(store_.session(), pane->id) != nullptr || application::workbench::neighbor(store_.sessionMut(), PaneDirection::right) != 0) {
+        return false;
+      }
+
+      explorer::focus(view_, true);
+    }
+
+    revision_ = view_.revision;
+    publish();
+    emit changed();
+    return true;
+  }
+
+  void ExplorerController::giveFocus(bool focused) {
+    if (view_.open && view_.pinned && view_.focused != focused) {
+      explorer::focus(view_, focused);
+      revision_ = view_.revision;
+      publish();
+      emit changed();
+    }
+  }
+
+  ExplorerController::Beside ExplorerController::here() const noexcept {
+    const auto& active = store_.session().active_tab;
+
+    return {
+        .machine = static_cast<std::size_t>(store_.machines().active()),
+        .workspace = active ? active->workspace.id : 0,
+        .directory = active && active->workspace.kind != WorkspaceLocation::Kind::workspace,
+        .showing = view_.open,
+    };
+  }
+
+  void ExplorerController::remember() {
+    const auto now = here();
+    const auto same = [&](const Beside& kept) {
+      return kept.machine == now.machine && kept.workspace == now.workspace && kept.directory == now.directory;
+    };
+
+    beside_.retain([&](const Beside& kept) {
+      return !same(kept);
+    });
+
+    // A workspace where it stands over the panes is not kept: there it opens as it always did.
+    if (view_.pinned) {
+      beside_.push(now);
+    }
+
+    last_ = now;
   }
 
   bool ExplorerController::sideBySide() const {
@@ -835,6 +922,7 @@ namespace telar::gui::qt {
     // What a plan sends between machines starts at once.
     static_cast<void>(carry());
     store_.touch();
+    remember();
     revision_ = view_.revision;
     publish();
     emit changed();
@@ -1036,6 +1124,20 @@ namespace telar::gui::qt {
     explorer::release(view_);
   }
 
+  void ExplorerController::dropOnPane(qulonglong pane) {
+    if (!view_.open) {
+      release();
+      return;
+    }
+
+    observe();
+
+    const auto around = explorer::around(scene_);
+    const auto machine = machineOf(view_.current);
+
+    finish(explorer::hand(view_, cacheOf(machine), explorer::contextOf(around, machine), static_cast<std::uint64_t>(pane)));
+  }
+
   void ExplorerController::activate(int window, int row) {
     if (window < 0 || row < 0) {
       return;
@@ -1120,6 +1222,15 @@ namespace telar::gui::qt {
   }
 
   void ExplorerController::toggle() {
+    // Beside the panes the key gives it the keys, or returns them to the pane; `q` closes it.
+    if (view_.open && view_.pinned) {
+      explorer::focus(view_, !view_.focused);
+      revision_ = view_.revision;
+      publish();
+      emit changed();
+      return;
+    }
+
     if (view_.open) {
       close();
       return;
@@ -1137,7 +1248,15 @@ namespace telar::gui::qt {
       explorer::open(view_, cacheOf(scene_.shown), explorer::contextOf(around, scene_.shown), scene_.shown);
     }
 
+    // It opens where this workspace last had it: beside the panes, or over them.
+    const auto now = here();
+
+    explorer::pin(view_, std::ranges::any_of(beside_, [&](const Beside& kept) {
+      return kept.machine == now.machine && kept.workspace == now.workspace && kept.directory == now.directory;
+    }));
+
     static_cast<void>(refresh());
+    remember();
     revision_ = view_.revision;
     publish();
     emit changed();
@@ -1145,6 +1264,40 @@ namespace telar::gui::qt {
   }
 
   void ExplorerController::synchronize() {
+    // Another workspace shows: the explorer beside the panes belongs to the one it was put in.
+    const auto now = here();
+    if (last_ && (last_->machine != now.machine || last_->workspace != now.workspace || last_->directory != now.directory)) {
+      const auto kept = std::ranges::find_if(beside_, [&](const Beside& known) {
+        return known.machine == now.machine && known.workspace == now.workspace && known.directory == now.directory;
+      });
+      const bool wanted = kept != beside_.end() && kept->showing;
+
+      last_ = now;
+      if (view_.open && view_.pinned && !wanted) {
+        // It stays in the list of the workspace it left, which finds it again.
+        explorer::close(view_);
+        static_cast<void>(refresh());
+        revision_ = view_.revision;
+        publish();
+        emit changed();
+        emit closed();
+        return;
+      }
+
+      if (!view_.open && wanted && explorer::available(store_.session())) {
+        observe();
+        {
+          const auto around = explorer::around(scene_);
+
+          explorer::open(view_, cacheOf(scene_.shown), explorer::contextOf(around, scene_.shown), scene_.shown);
+        }
+
+        explorer::pin(view_, true);
+        // The pane that had the keys keeps them.
+        explorer::focus(view_, false);
+      }
+    }
+
     // A file on its way between two machines goes on while the explorer is closed.
     if (!view_.open && view_.transfers.empty()) {
       return;

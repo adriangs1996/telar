@@ -63,6 +63,7 @@ export namespace telar::gui::application::explorer {
   using features::explorer::MachineFact;
   using features::explorer::PaneFact;
   using features::explorer::Reach;
+  using features::explorer::Side;
 
   // The use cases, which ui runs with the cache of the machine of the window they act on: the
   // session of that machine holds it, and ui keeps one of its own for a machine that is away.
@@ -74,7 +75,9 @@ export namespace telar::gui::application::explorer {
   using features::explorer::close;
   using features::explorer::complete;
   using features::explorer::drop;
+  using features::explorer::focus;
   using features::explorer::grab;
+  using features::explorer::hand;
   using features::explorer::header;
   using features::explorer::hints;
   using features::explorer::lenses;
@@ -82,6 +85,7 @@ export namespace telar::gui::application::explorer {
   using features::explorer::menu;
   using features::explorer::open;
   using features::explorer::openMenu;
+  using features::explorer::pin;
   using features::explorer::press;
   using features::explorer::preview;
   using features::explorer::previewText;
@@ -92,6 +96,7 @@ export namespace telar::gui::application::explorer {
   using features::explorer::status;
   using features::explorer::submit;
   using features::explorer::toggle;
+  using features::explorer::toward;
   using features::explorer::typed;
 
   // A machine the window keeps, as only ui knows it: the number the explorer's windows on it

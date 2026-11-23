@@ -2388,11 +2388,10 @@ namespace telar::gui::features::explorer {
       ++view.revision;
     }
 
-    // `<C-w>T`: whether the explorer stays open after it hands a file to a pane.
+    // `<C-w>T`: the explorer stands beside the panes, or over them again.
     void togglePin(View& view) {
-      view.pinned = !view.pinned;
-      say(view, view.pinned ? "stays open when a file goes to a pane" : "closes when a file goes to a pane");
-      ++view.revision;
+      pin(view, !view.pinned);
+      say(view, view.pinned ? "beside the panes · <C-w>T puts it over them again" : "over the panes");
     }
 
     // `gf`: the files chosen open in the editor of the tab.
@@ -4215,6 +4214,74 @@ namespace telar::gui::features::explorer {
 
   void release(View& view) noexcept {
     view.dragged.clear();
+  }
+
+  Action hand(View& view, const State& state, const Context& context, std::uint64_t pane) {
+    const bool dragging = !view.dragged.empty();
+    const auto taker = std::ranges::find(context.panes, pane, &PaneFact::id);
+
+    view.dragged.clear();
+    if (!dragging || taker == context.panes.end() || view.windows.empty()) {
+      return {};
+    }
+
+    // A path of this machine names nothing where the pane is.
+    if (windowAt(view.windows, view.current).machine != context.shown) {
+      report(view, Tone::error, "It is on {} and the pane on {}: Enter asks to bring a copy there", context.machine, labelOf(context, context.shown));
+      return {};
+    }
+
+    gather(view, state, context, taker->kind == PaneKind::editor);
+    leaveVisual(view);
+    ++view.revision;
+    if (view.paths.empty()) {
+      return {};
+    }
+
+    if (taker->kind == PaneKind::editor) {
+      return {.kind = ActionKind::open, .pane = taker->id, .machine = windowAt(view.windows, view.current).machine};
+    }
+
+    typeFor(view, context, *taker, taker->kind == PaneKind::agent ? std::string_view{"@"} : std::string_view{});
+    return {.kind = taker->kind == PaneKind::agent ? ActionKind::mention : ActionKind::insert, .pane = taker->id};
+  }
+
+  void pin(View& view, bool pinned) noexcept {
+    view.pinned = pinned;
+    // It takes the keys as it moves: the one who moved it is in it.
+    view.focused = true;
+    ++view.revision;
+  }
+
+  void focus(View& view, bool focused) noexcept {
+    // Over the panes it has the keys while it shows.
+    view.focused = focused || !view.pinned;
+    ++view.revision;
+  }
+
+  bool toward(View& view, Side side) noexcept {
+    if (view.windows.empty()) {
+      return false;
+    }
+
+    // Its windows stand in a row or in a column; the panes are to the left of them all.
+    const bool along = view.side_by_side ? side == Side::left || side == Side::right : side == Side::up || side == Side::down;
+    const bool back = side == Side::left || side == Side::up;
+
+    if (along && back && view.current > 0) {
+      --view.current;
+      ++view.revision;
+      return true;
+    }
+
+    if (along && !back && view.current + 1 < view.windows.size()) {
+      ++view.current;
+      ++view.revision;
+      return true;
+    }
+
+    // Past its first window to the left are the panes; any other way there is nothing.
+    return side != Side::left;
   }
 
   void resize(View& view, const WindowRows& shown) noexcept {
