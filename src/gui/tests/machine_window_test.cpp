@@ -2715,6 +2715,10 @@ namespace {
       QVERIFY(listed_transfers != nullptr && listed_transfers->isVisible() && listed_transfers->height() > 0);
       shoot(QStringLiteral("explorer-transfer"));
 
+      // It goes on with the explorer closed, and the sidebar still lists it.
+      explorer->close();
+      QVERIFY(!explorer->showing());
+
       const auto next = fixture.remote_runtime->last<ReadFile>();
 
       QCOMPARE(next.offset, std::uint64_t{200});
@@ -2736,12 +2740,12 @@ namespace {
       QVERIFY(ended.keep && ended.partial == arriving_partial && ended.target == "/work/project/deploy.sh");
       fixture.local_runtime->send(FileWriteEnded{.request_id = ended.request_id, .outcome = FileOutcome::done, .path = "/work/project/deploy.sh"});
       QVERIFY(shows([&] {
-        return explorer->line().value(QStringLiteral("said")).toString() == QStringLiteral("deploy.sh arrived");
+        return explorer->transfers().value(0).toMap().value(QStringLiteral("ended")).toBool();
       }));
-      QVERIFY(explorer->transfers().value(0).toMap().value(QStringLiteral("ended")).toBool());
-      QCOMPARE(pane(0).value(QStringLiteral("carried")).toInt(), 0);
+      QCOMPARE(explorer->transfers().value(0).toMap().value(QStringLiteral("phase")).toString(), QStringLiteral("arrived"));
+      QVERIFY(listed_transfers->isVisible());
+      // A copy leaves its original: nothing more was asked of its machine.
       QCOMPARE(fixture.remote_runtime->count(ClientTag::change_files), 1);
-      explorer->close();
     }
   };
 
