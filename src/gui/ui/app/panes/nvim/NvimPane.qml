@@ -246,9 +246,11 @@ FocusScope {
 
         // The status line of the whole editor, natively, over the row Neovim draws it on.
         NvimStatusLine {
+            id: bar
             objectName: "editorStatusLine"
             z: 0.6
             width: view.width
+            reserved: status.visible ? status.width : 0
             status: view.statusLine
             mode: view.mode
             colors: root.colors
@@ -372,36 +374,58 @@ FocusScope {
             }
         }
 
-        // What Neovim shows of its mode, of a command half typed and of the ruler, on the row it
-        // leaves empty under the windows.
+        // What Neovim shows of its mode, of a command half typed and of the ruler. Neovim keeps
+        // no row for them under the windows: they go on the status line of the whole editor,
+        // in the room it leaves before its last side, and without that line at the end of the
+        // last row, over the cells there, on a ground of their own.
         Item {
             id: status
 
+            objectName: "editorSaid"
             readonly property var shown: view.messages
-            z: 5
-            x: 8 * root.ratio
-            y: view.height - height
-            width: view.width - 16 * root.ratio
-            height: view.cellHeight
-            visible: !line.shown
+            readonly property bool docked: bar.visible
 
-            ChromeText {
-                width: parent.width / 2
+            z: 5
+            x: docked ? bar.reservedX : view.width - width - 8 * root.ratio
+            y: docked ? bar.y : view.height - height
+            width: words.width
+            height: view.cellHeight
+            visible: !line.shown && width > 0
+
+            Rectangle {
+                readonly property color base: root.colors.terminalBackground
+
+                visible: !status.docked
+                x: -8 * root.ratio
+                width: parent.width + 16 * root.ratio
                 height: parent.height
-                text: status.shown.mode ?? ""
-                pixelSize: root.typography.small
-                emphasized: true
-                color: root.colors.accent
+                color: Qt.rgba(base.r, base.g, base.b, 1)
             }
 
-            ChromeText {
-                x: parent.width / 2
-                width: parent.width / 2
+            Row {
+                id: words
+
                 height: parent.height
-                horizontalAlignment: Text.AlignRight
-                text: [status.shown.command ?? "", status.shown.ruler ?? ""].filter(part => part.length > 0).join("   ")
-                pixelSize: root.typography.small
-                color: Qt.alpha(root.colors.text, 0.6)
+                spacing: 14 * root.ratio
+
+                ChromeText {
+                    visible: text.length > 0
+                    width: implicitWidth
+                    height: parent.height
+                    text: status.shown.mode ?? ""
+                    pixelSize: root.typography.small
+                    emphasized: true
+                    color: root.colors.accent
+                }
+
+                ChromeText {
+                    visible: text.length > 0
+                    width: implicitWidth
+                    height: parent.height
+                    text: [status.shown.command ?? "", status.shown.ruler ?? ""].filter(part => part.length > 0).join("   ")
+                    pixelSize: root.typography.small
+                    color: Qt.alpha(root.colors.text, 0.6)
+                }
             }
         }
 

@@ -1975,6 +1975,73 @@ return {api_version = 2, client = {
       QTRY_VERIFY2_WITH_TIMEOUT(editorView()->hasActiveFocus(), keysWith().constData(), runtime_wait_ms);
     }
 
+    // What Neovim says of its mode has no row of its own under the windows: it is written on the
+    // status line of the whole editor, apart from both of its sides, and without that line at
+    // the end of the last row.
+    Q_SLOT void editorSaysItsModeApartFromTheStatusLine() {
+      if (QStandardPaths::findExecutable(QStringLiteral("nvim")).isEmpty()) {
+        QSKIP("Neovim is not installed on this host");
+      }
+
+      QTRY_VERIFY_WITH_TIMEOUT(terminalReady(), runtime_wait_ms);
+      const auto original_id = firstPane()->id;
+      const auto tab_count = client_->tabs()->rows()->rowCount();
+      bool opened = false;
+      const auto restore = qScopeGuard([&] {
+        if (opened) {
+          closeTemporaryTab({.count = tab_count, .pane_id = original_id});
+        }
+      });
+      const auto editorView = [&] {
+        const auto views = test::visualItems(*window_->contentItem(), QStringLiteral("paneEditor"));
+
+        return views.empty() ? nullptr : qobject_cast<NvimItem*>(views.front());
+      };
+      // Where an item of the editor is in the window; nowhere while it does not show.
+      const auto place = [&](const QString& name, bool parent = false) {
+        const auto items = test::visualItems(*window_->contentItem(), name);
+        const auto* item = items.empty() ? nullptr : parent ? items.front()->parentItem() : items.front();
+
+        return item == nullptr ? QRectF{} : item->mapRectToScene(item->boundingRect());
+      };
+      const auto lineShown = [&] {
+        return editorView()->statusLine().value(QStringLiteral("visible")).toBool();
+      };
+
+      client_->commands()->execute(window_actions::Action::new_editor_tab);
+      QTRY_VERIFY_WITH_TIMEOUT(client_->tabs()->rows()->rowCount() == tab_count + 1, runtime_wait_ms);
+      opened = true;
+      QTRY_VERIFY_WITH_TIMEOUT(editorView() != nullptr && editorView()->ready(), runtime_wait_ms);
+      editorView()->send(QStringLiteral("<Cmd>lua vim.o.laststatus = 3; vim.o.statusline = ' left %= right '<CR>"));
+      QTRY_VERIFY_WITH_TIMEOUT(lineShown() && place(QStringLiteral("editorStatusRight")).width() > 0, runtime_wait_ms);
+
+      // Recording a macro is said whatever 'showmode' is.
+      editorView()->send(QStringLiteral("qq"));
+      QTRY_COMPARE_WITH_TIMEOUT(editorView()->messages().value(QStringLiteral("mode")).toString(), QStringLiteral("recording @q"), runtime_wait_ms);
+      QTRY_VERIFY_WITH_TIMEOUT(place(QStringLiteral("editorSaid")).width() > 0, runtime_wait_ms);
+      QVERIFY(test::waitForSynchronizedFrame(*window_, runtime_wait_ms));
+
+      const auto said = place(QStringLiteral("editorSaid"));
+      const auto line = place(QStringLiteral("editorStatusLine"));
+
+      QVERIFY2(line.contains(said), "what Neovim says is not on the status line");
+      QVERIFY2(!said.intersects(place(QStringLiteral("editorStatusRight"))), "what Neovim says is over the line's last side");
+      QVERIFY2(!said.intersects(place(QStringLiteral("editorStatusLeft"), true)), "what Neovim says is over the line's first side");
+
+      // Without the line it is at the end of the editor's last row.
+      editorView()->send(QStringLiteral("<Cmd>set laststatus=0<CR>"));
+      QTRY_VERIFY_WITH_TIMEOUT(!lineShown(), runtime_wait_ms);
+      QVERIFY(test::waitForSynchronizedFrame(*window_, runtime_wait_ms));
+
+      const auto view = editorView()->mapRectToScene(editorView()->boundingRect());
+      const auto alone = place(QStringLiteral("editorSaid"));
+
+      QVERIFY(alone.width() > 0 && view.contains(alone));
+      QCOMPARE(alone.bottom(), view.bottom());
+      QVERIFY(alone.left() > view.center().x());
+      editorView()->send(QStringLiteral("q<Cmd>enew!<CR>"));
+    }
+
     Q_SLOT void tabSwitchKeepsTerminalViewport() {
       QTRY_VERIFY_WITH_TIMEOUT(terminalReady(), runtime_wait_ms);
       QVERIFY(test::waitForSynchronizedFrame(*window_, runtime_wait_ms));
