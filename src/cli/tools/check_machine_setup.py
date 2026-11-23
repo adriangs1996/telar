@@ -122,12 +122,19 @@ else:
 '''.replace('0.0.0', VERSION).replace('@NOT_PAIRED@', NOT_PAIRED)
 
 
+# A login shell that answers nothing: setup asks one for the PATH it sets, and a real one reads
+# the system's profile, which names the agents of whoever runs these checks. Outside the
+# directories a check records.
+QUIET_LOGIN_SHELL = shutil.which('false')
+
+
 def run(binary, provider, seed, login=False, prepare=None):
     """Runs setup twice; `prepare(root, env)`, when given, changes either side before."""
     with tempfile.TemporaryDirectory(prefix='telar-sync-',dir='/tmp') as temporary:
         root=Path(temporary).resolve();env=environment(root)
         home=Path(env['HOME']);remote=root/'remote';remote.mkdir(mode=0o700)
         bindir=root/'bin';bindir.mkdir();install_gateway(bindir,env,SHIM)
+        env['SHELL']=QUIET_LOGIN_SHELL
         command='cursor-agent' if provider=='cursor' else provider
         (bindir/command).write_text('#!/bin/sh\nexit 0\n');(bindir/command).chmod(0o700)
         env['PATH']=str(bindir)+':/usr/bin:/bin'
@@ -192,6 +199,7 @@ def machine(binary, agents=('claude',), **fixture):
         bindir = root / 'bin'
         bindir.mkdir()
         install_gateway(bindir, env, SHIM)
+        env['SHELL'] = QUIET_LOGIN_SHELL
         for agent in agents:
             (bindir / agent).write_text('#!/bin/sh\nexit 0\n')
             (bindir / agent).chmod(0o700)
@@ -311,6 +319,27 @@ def configuration_sync(binary):
         assert (sent / 'hooks/run.sh').exists() and (sent / 'hooks/other.sh').exists(), output
         settings = (sent / 'settings.json').read_text()
         assert 'hooks/run.sh' in settings and 'hooks/other.sh' in settings and 'missing.sh' not in settings, settings
+
+
+def agents_from_login_shell(binary):
+    """An agent this process's PATH misses, as a window started from the desktop runs setup,
+    is found in the PATH the person's login shell sets, and setup brings its settings there."""
+    with machine(binary, agents=()) as fixture:
+        installed = fixture.home / 'agents'
+        installed.mkdir()
+        (installed / 'claude').write_text('#!/bin/sh\nexit 0\n')
+        (installed / 'claude').chmod(0o700)
+        (fixture.home / '.profile').write_text('echo a greeting from the startup files\nPATH="$HOME/agents:$PATH"\nexport PATH\n')
+        # A login shell that reads the person's profile alone, not the system's.
+        shell = fixture.root / 'login-shell'
+        shell.write_text('#!/bin/sh\n[ "$1 $2" = "-l -c" ] || exit 2\n. "$HOME/.profile"\nexec /bin/sh -c "$3"\n')
+        shell.chmod(0o700)
+        fixture.env['SHELL'] = str(shell)
+        (fixture.home / '.claude').mkdir()
+        (fixture.home / '.claude/settings.json').write_text('{"theme":"dark"}')
+        status, output = fixture.run('machine', 'setup', FIXTURE, *SKIP_ALL_BUT_CONFIG, '--json')
+        assert status == 0 and steps(output)['configuration'] == 'changed', output
+        assert (fixture.remote / '.claude/settings.json').exists(), output
 
 
 def telar_skill_kept_there(binary):
@@ -517,9 +546,40 @@ def runtime_failure_keeps_telar(binary):
         assert [row.get('telar_path') for row in saved] == [str(fixture.remote / '.local/share/telar/versions' / VERSION / 'telar')], saved
 
 
+def events(binary):
+    """--events writes one JSON line per step, note and question as it happens, and a done event
+    with the report --json prints. A question is answered with one JSON line on standard input;
+    an answer to another question, or none, is no."""
+    with machine(binary) as fixture:
+        child = subprocess.run([str(binary), 'machine', 'setup', FIXTURE, *SKIP_ALL, '--events'], env=fixture.env, cwd=fixture.root, stdin=subprocess.DEVNULL, capture_output=True, text=True, timeout=90)
+        lines = [json.loads(line) for line in child.stdout.splitlines()]
+        assert child.returncode == 0 and lines[-1]['event'] == 'done' and lines[-1]['report']['ready'], child.stdout
+        streamed = [line['step'] for line in lines if line['event'] == 'step']
+        assert streamed[:2] == ['gateway', 'platform'] and streamed == [step['step'] for step in lines[-1]['report']['steps']], streamed
+    answers = (
+        ('{"answer":"stop_runtime","value":true}\n', True),
+        ('{"answer":"stop_runtime","value":false}\n', False),
+        ('{"answer":"confirm","value":true}\n', False),
+        ('', False),
+    )
+    for answer, stopped in answers:
+        with machine(binary, endpoint='mismatch', scripts='real') as fixture:
+            telar = fixture.remote / '.local/bin/telar'
+            telar.parent.mkdir(parents=True)
+            telar.write_text(f'#!/bin/sh\n[ "$1 $2" = "server stop" ] && touch "{fixture.remote}/stopped" && echo "telar runtime is stopping"\n')
+            telar.chmod(0o700)
+            child = subprocess.run([str(binary), 'machine', 'setup', FIXTURE, *SKIP_ALL, '--events'], env=fixture.env, cwd=fixture.root, input=answer, capture_output=True, text=True, timeout=90)
+            lines = [json.loads(line) for line in child.stdout.splitlines()]
+            questions = [line for line in lines if line['event'] == 'question']
+            assert [question['kind'] for question in questions] == ['stop_runtime'], child.stdout
+            assert (fixture.remote / 'stopped').exists() == stopped and (child.returncode == 0) == stopped, (answer, child.stdout)
+
+
 def contracts(binary):
     """Setup contracts asserted on their effects alone, beside the recorded outputs."""
+    events(binary)
     spent_pairing_codes(binary)
+    agents_from_login_shell(binary)
     runtime_failure_keeps_telar(binary)
     probe_failures(binary)
     editor_is_provisioned(binary)
@@ -543,4 +603,4 @@ def contracts(binary):
     commands=[json.loads(line) for line in first['files']['remote-argv.jsonl']['text'].splitlines()]
     assert ['tab','close','12','--workspace','11','--json'] not in commands, commands
     assert [words[:2] for words in commands].count(['workspace','create'])==1, commands
-    return 16
+    return 18

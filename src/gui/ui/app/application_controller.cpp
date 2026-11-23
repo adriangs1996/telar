@@ -77,6 +77,7 @@ namespace telar::gui::qt {
         palette_(store_, PaletteAction{.value = static_cast<int>(window_actions::Action::suggest_command)}),
         paths_(store_),
         machine_prompt_(store_, machine_profiles_),
+        machine_wizard_(store_),
         machine_chrome_(store_),
         peek_(store_),
         monitor_(store_),
@@ -133,6 +134,7 @@ namespace telar::gui::qt {
             .store = store_,
             .peek = peek_,
             .machine_prompt = machine_prompt_,
+            .machine_wizard = machine_wizard_,
             .palette = palette_,
             .paths = paths_,
             .history = history_,
@@ -302,6 +304,23 @@ namespace telar::gui::qt {
     connect(&paths_, &PathPickerController::failed, &status_, &WindowStatus::report);
     connect(&machine_prompt_, &MachinePromptController::closeRequested, this, [this] {
       dialogs_.show(Dialog::none);
+    });
+
+    connect(&machine_wizard_, &MachineWizardController::closeRequested, this, [this] {
+      dialogs_.show(Dialog::none);
+    });
+
+    connect(&machine_wizard_, &MachineWizardController::machineOpened, this, [this](const QString& label) {
+      const auto bytes = label.toUtf8();
+      const std::string_view wanted{bytes.constData(), static_cast<std::size_t>(bytes.size())};
+      const auto rows = store_.machines().rows();
+
+      // The profile the wizard saved reaches the window on the next read of machines.json.
+      for (std::size_t slot = 0; slot < rows.size(); ++slot) {
+        if (rows[slot].label.view() == wanted && slot != application::machines::Machines::local_slot) {
+          machines_.select(store_.machines().token(static_cast<application::machines::Machines::Slot>(slot)));
+        }
+      }
     });
   }
 

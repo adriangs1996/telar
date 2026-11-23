@@ -2104,6 +2104,8 @@ namespace telar::runtime::cli {
         result.setup = true;
       } else if (word == "--confirm" && action == Action::setup) {
         result.confirm = true;
+      } else if (word == "--events" && action == Action::setup) {
+        result.events = true;
       } else if (word == "--label" && action == Action::setup) {
         result.new_label = cursor.take("MissingMachineArgument");
       } else if (word == "--binary" && takes_setup) {

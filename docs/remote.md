@@ -75,6 +75,19 @@ tools/cpp build release -B .dev/runtime-headless -- --target telar telar-runtime
 `telar server disable` removes the service. The gateway's key and the machines
 it admits survive it.
 
+## Add it from a window
+
+**Add machine** in the machine picker (or the `add_machine` action) opens a
+wizard that does the steps below: it pairs the machine by the address its
+gateway printed, chooses the telar it runs, what setup brings there, applies it
+and signs its agents in. Without an address yet, **Prepare the machine** asks
+how this Mac reaches it and gives the command to run there, with the host and
+port that address needs. **Set up** on a machine the picker marks as needing it
+opens the same wizard at the telar step.
+
+The wizard runs `telar machine add` and `telar machine setup --events`, so a
+terminal and a window set machines up the same way.
+
 ## Pair and save the machine
 
 On your machine, with the address the other one printed:
