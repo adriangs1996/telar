@@ -39,6 +39,7 @@ import telar.wire.clipboard;
 import telar.wire.content;
 import telar.wire.editor;
 import telar.wire.execution;
+import telar.wire.files;
 import telar.wire.graphics;
 import telar.wire.history;
 import telar.wire.layout;
@@ -733,6 +734,14 @@ export {
       void handle(std::uint64_t identity, const NvimList& message);
       void handle(std::uint64_t identity, const NvimConfiguration& message);
       void handle(std::uint64_t identity, const FindText& message);
+      // The explorer's requests on files, each answered on the files worker.
+      void handle(std::uint64_t identity, const ListDirectory& message);
+      void handle(std::uint64_t identity, const MeasureDirectory& message);
+      void handle(std::uint64_t identity, const QueryChanges& message);
+      void handle(std::uint64_t identity, const InspectFile& message);
+      void handle(std::uint64_t identity, const ChangeFiles& message);
+      void handle(std::uint64_t identity, const UndoFileChanges& message);
+      void handle(std::uint64_t identity, const CommitChanges& message);
       // What an editor told the runtime besides what it drew, to the client that drives it.
       void relay(PaneRef<NvimBody> pane);
       // Answers a client's question about an editor's buffers with the ones its query matches.

@@ -262,6 +262,12 @@ export {
       case ServerTag::editor_opened:
       case ServerTag::path_results:
       case ServerTag::text_results:
+      case ServerTag::directory_listing:
+      case ServerTag::directory_sizes:
+      case ServerTag::repository_changes:
+      case ServerTag::file_inspection:
+      case ServerTag::files_changed:
+      case ServerTag::changes_committed:
       case ServerTag::nvim_navigated:
       case ServerTag::nvim_pick:
       case ServerTag::nvim_link:

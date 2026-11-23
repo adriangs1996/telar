@@ -128,6 +128,7 @@
       "workspaces",
       "workspaces/worktrees",
       "paths",
+      "files",
       "nvim",
       "metrics",
       "terminal",
@@ -305,6 +306,11 @@
     "src/runtime/core/media_service/media_service.cppm": "telar.runtime.core.media_service",
     "src/runtime/workers/background_executor/background_executor.cppm": "telar.runtime.workers.background_executor",
     "src/runtime/core/delivery/client_delivery/client_delivery.cppm": "telar.runtime.core.delivery.client_delivery",
+    "src/runtime/files/directory/directory.cppm": "telar.runtime.files.directory",
+    "src/runtime/files/entry/entry.cppm": "telar.runtime.files.entry",
+    "src/runtime/files/operations/operations.cppm": "telar.runtime.files.operations",
+    "src/runtime/files/repository/repository.cppm": "telar.runtime.files.repository",
+    "src/runtime/files/service/service.cppm": "telar.runtime.files.service",
     "src/runtime/paths/query_task/query_task.cppm": "telar.runtime.paths.query_task",
     "src/runtime/paths/text_search/text_search.cppm": "telar.runtime.paths.text_search",
     "src/runtime/nvim/screen/screen.cppm": "telar.runtime.nvim.screen",
@@ -451,6 +457,7 @@
     "lib/wire/clipboard/clipboard.cppm": "telar.wire.clipboard",
     "lib/wire/content/content.cppm": "telar.wire.content",
     "lib/wire/editor/editor.cppm": "telar.wire.editor",
+    "lib/wire/files/files.cppm": "telar.wire.files",
     "lib/wire/execution/execution.cppm": "telar.wire.execution",
     "lib/wire/graphics/graphics.cppm": "telar.wire.graphics",
     "lib/wire/history/history.cppm": "telar.wire.history",
@@ -1241,6 +1248,7 @@
       "telar.wire.clipboard",
       "telar.wire.content",
       "telar.wire.editor",
+      "telar.wire.files",
       "telar.wire.execution",
       "telar.wire.graphics",
       "telar.wire.history",
@@ -1427,6 +1435,9 @@
       "telar.runtime.diagnostics.line",
       "telar.runtime.diagnostics.operation",
       "telar.runtime.diagnostics.runtime_counters"
+    ],
+    "src/runtime/files": [
+      "telar.runtime.files.service"
     ],
     "src/runtime/history": [
       "telar.runtime.history.command",

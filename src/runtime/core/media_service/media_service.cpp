@@ -36,12 +36,14 @@ namespace telar::runtime {
         history_(memory, history),
         editor_(memory, editor),
         suggestions_(memory, suggestions),
+        file_service_(memory),
+        files_(memory, file_service_),
         worktrees_(std::in_place, memory) {
   }
 
   template <typename History, typename Paths, typename Editor, typename Suggestions, typename Worktrees>
   ds::Array<int, background_worker_count> BackgroundPool<History, Paths, Editor, Suggestions, Worktrees>::descriptors() const noexcept {
-    return {history_.descriptor(), path_service_.descriptor(), editor_.descriptor(), suggestions_.descriptor(), worktrees_.descriptor()};
+    return {history_.descriptor(), path_service_.descriptor(), editor_.descriptor(), suggestions_.descriptor(), files_.descriptor(), worktrees_.descriptor()};
   }
 
   template <typename History, typename Paths, typename Editor, typename Suggestions, typename Worktrees>
@@ -81,6 +83,7 @@ namespace telar::runtime {
     path_service_.cancel(client);
     editor_.cancel(client);
     suggestions_.cancel(client);
+    files_.cancel(client);
   }
 
 #if TELAR_DIAGNOSTICS

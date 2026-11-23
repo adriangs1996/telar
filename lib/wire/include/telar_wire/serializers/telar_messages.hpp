@@ -105,6 +105,13 @@ namespace telar {
     nvim_preview = 0x61,
     nvim_list = 0x62,
     nvim_configuration = 0x63,
+    list_directory = 0x64,
+    measure_directory = 0x65,
+    query_changes = 0x66,
+    inspect_file = 0x67,
+    change_files = 0x68,
+    undo_file_changes = 0x69,
+    commit_changes = 0x6a,
   };
 
   enum class ServerTag : Byte {
@@ -186,6 +193,12 @@ namespace telar {
     text_results = 0xd0,
     nvim_pick = 0xd1,
     nvim_link = 0xd2,
+    directory_listing = 0xd3,
+    directory_sizes = 0xd4,
+    repository_changes = 0xd5,
+    file_inspection = 0xd6,
+    files_changed = 0xd7,
+    changes_committed = 0xd8,
   };
 
   struct RequestRuntimeState {
@@ -505,6 +518,20 @@ namespace telar {
       return "nvim_list";
     case ClientTag::nvim_configuration:
       return "nvim_configuration";
+    case ClientTag::list_directory:
+      return "list_directory";
+    case ClientTag::measure_directory:
+      return "measure_directory";
+    case ClientTag::query_changes:
+      return "query_changes";
+    case ClientTag::inspect_file:
+      return "inspect_file";
+    case ClientTag::change_files:
+      return "change_files";
+    case ClientTag::undo_file_changes:
+      return "undo_file_changes";
+    case ClientTag::commit_changes:
+      return "commit_changes";
     }
 
     return {};
@@ -666,6 +693,18 @@ namespace telar {
       return "nvim_pick";
     case ServerTag::nvim_link:
       return "nvim_link";
+    case ServerTag::directory_listing:
+      return "directory_listing";
+    case ServerTag::directory_sizes:
+      return "directory_sizes";
+    case ServerTag::repository_changes:
+      return "repository_changes";
+    case ServerTag::file_inspection:
+      return "file_inspection";
+    case ServerTag::files_changed:
+      return "files_changed";
+    case ServerTag::changes_committed:
+      return "changes_committed";
     case ServerTag::pane_theme:
       return "pane_theme";
     }

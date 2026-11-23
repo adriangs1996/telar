@@ -13,6 +13,7 @@ import telar.wire.clipboard;
 import telar.wire.content;
 import telar.wire.editor;
 import telar.wire.execution;
+import telar.wire.files;
 import telar.wire.graphics;
 import telar.wire.history;
 import telar.wire.layout;
@@ -227,6 +228,13 @@ export {
         ClientRequest<RequestCommandSpec>,
         ClientRequest<OpenEditor, ClientRole::interactive, RequestLane::worker>,
         ClientRequest<FindText, ClientRole::interactive, RequestLane::worker>,
+        ClientRequest<ListDirectory, ClientRole::interactive, RequestLane::worker>,
+        ClientRequest<MeasureDirectory, ClientRole::interactive, RequestLane::worker>,
+        ClientRequest<QueryChanges, ClientRole::interactive, RequestLane::worker>,
+        ClientRequest<InspectFile, ClientRole::interactive, RequestLane::worker>,
+        ClientRequest<ChangeFiles, ClientRole::interactive, RequestLane::worker>,
+        ClientRequest<UndoFileChanges, ClientRole::interactive, RequestLane::worker>,
+        ClientRequest<CommitChanges, ClientRole::interactive, RequestLane::worker>,
         ClientRequest<SuggestCommand, ClientRole::interactive, RequestLane::worker>>;
 
     ClientRole classifyRequest(ClientTag tag) noexcept;
