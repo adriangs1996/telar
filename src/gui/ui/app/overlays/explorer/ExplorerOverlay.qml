@@ -166,12 +166,19 @@ FocusScope {
         return text.length <= cells ? text : "…" + text.slice(text.length - cells + 1);
     }
 
-    // `text` on two lines of `width` in cells of `grid`, broken at a space where one is near, the
-    // second cut with a mark when it does not fit either.
+    // `text` in `width` of cells of `grid`: what does not fit is left out at its end, with a mark.
+    function cut(text, width, grid) {
+        const cells = Math.max(1, Math.floor(width / Math.max(1, grid.cellWidth ?? 8)));
+
+        return text.length <= cells ? text : text.slice(0, cells - 1) + "…";
+    }
+
     function actorColor(tone) {
         return tone === "you" ? colors.teal : tone === "claude" ? colors.peach : tone === "codex" ? colors.mauve : colors.subtext0;
     }
 
+    // `text` on two lines of `width` in cells of `grid`, broken at a space where one is near, the
+    // second cut with a mark when it does not fit either.
     function folded(text, width, grid) {
         const cells = Math.max(1, Math.floor(width / Math.max(1, grid.cellWidth ?? 8)));
         if (text.length <= cells)
@@ -600,12 +607,17 @@ FocusScope {
                     // What git says of the repository, at the head's end.
                     Row {
                         id: git
+                        // What the branch's name may take: a narrow window keeps the machine's
+                        // chip and the counts whole, and cuts the name.
+                        readonly property real room: head.width - chip.width - 8 * root.ratio - gitIcon.width - (upstream.visible ? upstream.width + spacing : 0) - staged.width - unstaged.width - untracked.width - 4 * spacing
+
                         anchors.right: parent.right
                         height: parent.height
                         spacing: 6 * root.ratio
                         visible: pane.modelData.repository
 
                         ChromeIcon {
+                            id: gitIcon
                             anchors.verticalCenter: parent.verticalCenter
                             width: Math.round((root.smallGrid.cellHeight ?? 16) * 0.9)
                             height: width
@@ -617,13 +629,14 @@ FocusScope {
                         CellText {
                             width: implicitWidth
                             height: parent.height
-                            text: pane.modelData.branch
+                            text: root.cut(pane.modelData.branch ?? "", git.room, root.smallGrid)
                             grid: root.smallGrid
                             color: root.colors.text
                             bold: true
                         }
 
                         CellText {
+                            id: upstream
                             width: implicitWidth
                             height: parent.height
                             visible: pane.modelData.upstream && (pane.modelData.ahead > 0 || pane.modelData.behind > 0)
@@ -633,6 +646,7 @@ FocusScope {
                         }
 
                         CellText {
+                            id: staged
                             width: implicitWidth
                             height: parent.height
                             text: String(pane.modelData.staged)
@@ -642,6 +656,7 @@ FocusScope {
                         }
 
                         CellText {
+                            id: unstaged
                             width: implicitWidth
                             height: parent.height
                             text: String(pane.modelData.unstaged)
@@ -651,6 +666,7 @@ FocusScope {
                         }
 
                         CellText {
+                            id: untracked
                             width: implicitWidth
                             height: parent.height
                             text: String(pane.modelData.untracked)
@@ -986,6 +1002,7 @@ FocusScope {
                                 visible: !row.record.editing
 
                                 CellText {
+                                    id: lead
                                     width: implicitWidth
                                     height: parent.height
                                     visible: (row.record.lead ?? "").length > 0
@@ -997,7 +1014,7 @@ FocusScope {
                                 CellText {
                                     width: implicitWidth
                                     height: parent.height
-                                    text: (row.record.name ?? "") + (row.record.directory && row.entry && row.record.kind !== "pane" && !(row.record.name ?? "").endsWith("/") ? "/" : "")
+                                    text: root.cut((row.record.name ?? "") + (row.record.directory && row.entry && row.record.kind !== "pane" && !(row.record.name ?? "").endsWith("/") ? "/" : ""), label.width - (lead.visible ? lead.width : 0), grid)
                                     grid: row.record.kind === "diff" || row.record.kind === "note" || row.record.kind === "header" ? root.smallGrid : root.grid
                                     color: row.record.kind === "diff" ? root.toneColor(row.record.tone) : row.record.kind === "header" ? root.colors.subtext0 : row.record.kind === "note" ? root.colors.overlay1 : row.nameColor
                                     bold: row.record.kind === "header"

@@ -1932,6 +1932,7 @@ return {api_version = 2, client = {
 
       QTest::keyClick(window_, Qt::Key_J);
       QCOMPARE(selected(), at_rest);
+      shoot(QStringLiteral("explorer-pinned-unfocused"));
       QTRY_VERIFY(window_->activeFocusItem() != nullptr && !overlay->isAncestorOf(window_->activeFocusItem()));
 
       // The key that moves the focus to the right of the last pane enters it; the one to the
@@ -1961,6 +1962,9 @@ return {api_version = 2, client = {
       QTest::mouseRelease(window_, Qt::LeftButton, Qt::NoModifier, on_pane);
       QVERIFY(!overlay->property("dragging").toBool() && explorer->showing());
       QCOMPARE(explorer->line().value(QStringLiteral("edits")).toInt(), 0);
+      // What the pane was given, and the key typed before it, stay on its line: the line is
+      // cleared, so the agent ends with its input when this case does.
+      client_->terminals()->input(firstPane()->id, QByteArrayLiteral("\x15"));
 
       // Two windows side by side ask for more room, and over the panes it gives it all back.
       press(QStringLiteral("<C-w>v"));
@@ -4994,7 +4998,7 @@ return {api_version=2, client={keybindings={
     Q_SLOT void paletteActionsUseOriginalLabelsAndReorderExistingTabs() {
       const auto commands = client_->commands()->list();
 
-      QCOMPARE(commands.size(), qsizetype{46});
+      QCOMPARE(commands.size(), qsizetype{47});
       QCOMPARE(commands.front().toMap().value(QStringLiteral("label")).toString(), QStringLiteral("Split right"));
       const QStringList tail{QStringLiteral("Copy process command"), QStringLiteral("Go to process pane"), QStringLiteral("Review process stack"), QStringLiteral("Review process open files"), QStringLiteral("Review process logs")};
 
