@@ -1905,6 +1905,76 @@ return {api_version = 2, client = {
       editorView()->send(QStringLiteral("<Esc><Cmd>enew!<CR>"));
     }
 
+    // A picker left open while another tab is shown is still the one with the keys when its tab
+    // comes back: Escape closes it, and the keys return to the editor.
+    Q_SLOT void editorPickerKeepsTheKeysAcrossTabs() {
+      if (QStandardPaths::findExecutable(QStringLiteral("nvim")).isEmpty()) {
+        QSKIP("Neovim is not installed on this host");
+      }
+
+      QTRY_VERIFY_WITH_TIMEOUT(terminalReady(), runtime_wait_ms);
+      const auto original_id = firstPane()->id;
+      const auto original_tab = QString::number(firstPane()->location.tab_id);
+      const auto tab_count = client_->tabs()->rows()->rowCount();
+      QString editor_tab;
+      const auto restore = qScopeGuard([&] {
+        if (!editor_tab.isEmpty()) {
+          client_->commands()->execute(window_actions::Action::select_tab, editor_tab);
+          closeTemporaryTab({.count = tab_count, .pane_id = original_id});
+        }
+      });
+      const auto editorView = [&] {
+        const auto views = test::visualItems(*window_->contentItem(), QStringLiteral("paneEditor"));
+
+        return views.empty() ? nullptr : qobject_cast<NvimItem*>(views.front());
+      };
+      const auto pickerOpen = [&] {
+        return editorView() != nullptr && editorView()->picker().value(QStringLiteral("open")).toBool();
+      };
+      // The keys are the picker's while they are its query's: typed, they search.
+      const auto pickerHasKeys = [&] {
+        const auto fields = test::visualItems(*window_->contentItem(), QStringLiteral("editorPickerSearch"));
+
+        return !fields.empty() && fields.front()->hasActiveFocus();
+      };
+      const auto query = [&] {
+        return editorView()->picker().value(QStringLiteral("query")).toString();
+      };
+      const auto keysWith = [&] {
+        const auto* owner = window_->activeFocusItem();
+
+        return (QStringLiteral("the keys are with %1").arg(owner == nullptr ? QStringLiteral("nobody") : QString::fromUtf8(owner->metaObject()->className()) + QLatin1Char(' ') + owner->objectName())).toUtf8();
+      };
+
+      client_->commands()->execute(window_actions::Action::new_editor_tab);
+      QTRY_VERIFY_WITH_TIMEOUT(client_->tabs()->rows()->rowCount() == tab_count + 1, runtime_wait_ms);
+      QTRY_VERIFY_WITH_TIMEOUT(editorView() != nullptr && editorView()->ready(), runtime_wait_ms);
+      editor_tab = QString::number(client_->pane(firstPane()->id)->location.tab_id);
+      QTRY_VERIFY_WITH_TIMEOUT(editorView()->hasActiveFocus(), runtime_wait_ms);
+
+      editorView()->send(QStringLiteral("<Cmd>Telar files<CR>"));
+      QTRY_VERIFY_WITH_TIMEOUT(pickerOpen(), runtime_wait_ms);
+      QTRY_VERIFY2_WITH_TIMEOUT(pickerHasKeys(), keysWith().constData(), runtime_wait_ms);
+      sendTextKeys(QLatin1StringView{"ab"});
+      QTRY_COMPARE_WITH_TIMEOUT(query(), QStringLiteral("ab"), runtime_wait_ms);
+
+      client_->commands()->execute(window_actions::Action::select_tab, original_tab);
+      QTRY_VERIFY_WITH_TIMEOUT(terminalReady() && firstPane()->id == original_id, runtime_wait_ms);
+      QVERIFY(test::waitForSynchronizedFrame(*window_, runtime_wait_ms));
+      client_->commands()->execute(window_actions::Action::select_tab, editor_tab);
+      QTRY_VERIFY_WITH_TIMEOUT(editorView() != nullptr && editorView()->ready(), runtime_wait_ms);
+      QVERIFY(test::waitForSynchronizedFrame(*window_, runtime_wait_ms));
+
+      QVERIFY2(pickerOpen(), "the picker closed with its tab");
+      QTRY_VERIFY2_WITH_TIMEOUT(pickerHasKeys(), keysWith().constData(), runtime_wait_ms);
+      sendTextKeys(QLatin1StringView{"c"});
+      QTRY_COMPARE_WITH_TIMEOUT(query(), QStringLiteral("abc"), runtime_wait_ms);
+
+      QTest::keyClick(window_, Qt::Key_Escape);
+      QTRY_VERIFY2_WITH_TIMEOUT(!pickerOpen(), keysWith().constData(), runtime_wait_ms);
+      QTRY_VERIFY2_WITH_TIMEOUT(editorView()->hasActiveFocus(), keysWith().constData(), runtime_wait_ms);
+    }
+
     Q_SLOT void tabSwitchKeepsTerminalViewport() {
       QTRY_VERIFY_WITH_TIMEOUT(terminalReady(), runtime_wait_ms);
       QVERIFY(test::waitForSynchronizedFrame(*window_, runtime_wait_ms));
