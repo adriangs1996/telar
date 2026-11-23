@@ -1184,8 +1184,15 @@ return {api_version = 2, client = {
         return status().value(QStringLiteral("tokens")).toList().value(index).toMap();
       };
 
-      // Neovim may say where the line is a frame before it draws it there.
-      QTRY_VERIFY_WITH_TIMEOUT(status().value(QStringLiteral("visible")).toBool() && token(0).value(QStringLiteral("text")).toString() == QStringLiteral("NORMAL") && status().value(QStringLiteral("right")).toList().size() == 1, runtime_wait_ms);
+      // Neovim may say where the line is a frame before it draws it there, and the line telar's
+      // configuration gives opens with the mode too: this one is drawn once it says its branch.
+      const auto branched = [&] {
+        return std::ranges::any_of(status().value(QStringLiteral("tokens")).toList(), [](const QVariant& word) {
+          return word.toMap().value(QStringLiteral("text")).toString() == QStringLiteral("main");
+        });
+      };
+
+      QTRY_VERIFY_WITH_TIMEOUT(status().value(QStringLiteral("visible")).toBool() && token(0).value(QStringLiteral("text")).toString() == QStringLiteral("NORMAL") && branched() && status().value(QStringLiteral("right")).toList().size() == 1, runtime_wait_ms);
       // The row it is drawn over is the one Neovim drew it on.
       QString drawn;
 
@@ -2040,6 +2047,54 @@ return {api_version = 2, client = {
       QCOMPARE(alone.bottom(), view.bottom());
       QVERIFY(alone.left() > view.center().x());
       editorView()->send(QStringLiteral("q<Cmd>enew!<CR>"));
+    }
+
+    // The status line telar's configuration gives the editor opens with the mode, which the
+    // window writes in the theme's color for it, and follows the mode as it changes.
+    Q_SLOT void editorStatusLineOpensWithTheMode() {
+      if (QStandardPaths::findExecutable(QStringLiteral("nvim")).isEmpty()) {
+        QSKIP("Neovim is not installed on this host");
+      }
+
+      QTRY_VERIFY_WITH_TIMEOUT(terminalReady(), runtime_wait_ms);
+      const auto original_id = firstPane()->id;
+      const auto tab_count = client_->tabs()->rows()->rowCount();
+      bool opened = false;
+      const auto restore = qScopeGuard([&] {
+        if (opened) {
+          closeTemporaryTab({.count = tab_count, .pane_id = original_id});
+        }
+      });
+      const auto editorView = [&] {
+        const auto views = test::visualItems(*window_->contentItem(), QStringLiteral("paneEditor"));
+
+        return views.empty() ? nullptr : qobject_cast<NvimItem*>(views.front());
+      };
+      // The line's first word, while the window takes it for the mode's name.
+      const auto mode = [&] {
+        const auto lines = test::visualItems(*window_->contentItem(), QStringLiteral("editorStatusLine"));
+        const auto status = editorView()->statusLine();
+
+        if (lines.empty() || !status.value(QStringLiteral("visible")).toBool() || lines.front()->property("modeToken").toInt() != 0) {
+          return QString{};
+        }
+
+        return status.value(QStringLiteral("tokens")).toList().value(0).toMap().value(QStringLiteral("text")).toString();
+      };
+
+      client_->commands()->execute(window_actions::Action::new_editor_tab);
+      QTRY_VERIFY_WITH_TIMEOUT(client_->tabs()->rows()->rowCount() == tab_count + 1, runtime_wait_ms);
+      opened = true;
+      QTRY_VERIFY_WITH_TIMEOUT(editorView() != nullptr && editorView()->ready(), runtime_wait_ms);
+      QTRY_COMPARE_WITH_TIMEOUT(mode(), QStringLiteral("NORMAL"), runtime_wait_ms);
+      editorView()->send(QStringLiteral("i"));
+      QTRY_COMPARE_WITH_TIMEOUT(mode(), QStringLiteral("INSERT"), runtime_wait_ms);
+      editorView()->send(QStringLiteral("<Esc>v"));
+      QTRY_COMPARE_WITH_TIMEOUT(mode(), QStringLiteral("VISUAL"), runtime_wait_ms);
+      editorView()->send(QStringLiteral("<Esc>d"));
+      QTRY_COMPARE_WITH_TIMEOUT(mode(), QStringLiteral("O-PENDING"), runtime_wait_ms);
+      editorView()->send(QStringLiteral("<Esc>"));
+      QTRY_COMPARE_WITH_TIMEOUT(mode(), QStringLiteral("NORMAL"), runtime_wait_ms);
     }
 
     Q_SLOT void tabSwitchKeepsTerminalViewport() {

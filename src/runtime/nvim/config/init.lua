@@ -37,6 +37,43 @@ for name, value in pairs(options) do
   vim.o[name] = value
 end
 
+-- The status line opens with the mode, where an editor's users look for it: the window writes
+-- it in the theme's color for the mode. The rest is the line Neovim has by default, and a line
+-- the user's layer sets takes the place of both.
+local modes = {
+  n = "NORMAL",
+  i = "INSERT",
+  v = "VISUAL",
+  V = "V-LINE",
+  ["\22"] = "V-BLOCK",
+  s = "SELECT",
+  S = "S-LINE",
+  ["\19"] = "S-BLOCK",
+  R = "REPLACE",
+  c = "COMMAND",
+  t = "TERMINAL",
+}
+
+function _G.TelarMode()
+  local mode = vim.fn.mode(1)
+  if mode:sub(1, 2) == "no" then
+    return "O-PENDING"
+  end
+
+  return modes[mode:sub(1, 1)] or ""
+end
+
+-- Before 0.12 the default line is Neovim's own code, not an option's text.
+local line = vim.o.statusline ~= "" and vim.o.statusline or "%<%f %h%w%m%r %=%-14.(%l,%c%V%) %P"
+vim.o.statusline = " %{v:lua.TelarMode()}  " .. line
+
+-- Neovim draws the line again for some changes of mode and not for others, as an operator
+-- that waits for its motion.
+vim.api.nvim_create_autocmd("ModeChanged", {
+  group = vim.api.nvim_create_augroup("TelarMode", { clear = true }),
+  command = "redrawstatus",
+})
+
 -- The window draws the completion menu: "match 1 of 3" would only come as one more notice.
 vim.opt.shortmess:append("c")
 

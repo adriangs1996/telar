@@ -11,7 +11,7 @@ on its screen crosses the connection.
 Open one from the palette with **New editor** or **New editor tab**, or with the prefix and
 `e` or `E`. In a configuration the actions are `telar.action.new_editor()` and
 `telar.action.new_editor_tab()`. The editor starts in the directory of the focused pane. The
-pane's header says the file it shows and the mode it is in.
+pane's header says the file it shows, and its status line the mode it is in.
 
 ## Open a file in it
 
@@ -49,6 +49,10 @@ Neovim leaves these to its UI, and the window draws each as one of its own surfa
   and flat, on the editor's own background. Its sections on a background of their own keep
   their color and are parted by space, their icons are drawn with the bundled symbols, and a
   line that opens with the name of the mode writes it in the theme's color for that mode.
+  telar's configuration opens the line with the mode, before what Neovim's own line says;
+  a `statusline` your layer sets takes its place. What Neovim says of a macro being
+  recorded, of a command half typed and of the ruler is written on the line too, before its
+  last side.
 
   ![lualine's status line, drawn natively](images/telar-editor-status.png)
 
