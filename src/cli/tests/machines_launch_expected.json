@@ -696,13 +696,13 @@
     "name": "check-missing",
     "status": 1,
     "stdout": "",
-    "stderr": "telar machine: box (telar://host:8352#00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff) is not reachable: RemoteTelarMissing\ntelar is not on the PATH of the gateway there: sh: telar: command not found\n",
+    "stderr": "telar machine: box (telar://host:8352#00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff) is not reachable: RemoteTelarMissing\nthe gateway there finds no telar to run; keep telar, telar-runtime, telar-config-check and telar-gateway in one directory there, or run `telar machine setup`: sh: telar: command not found\n",
     "files_sha256": "e1df697cab1db0fccf00610f72a75cf0b09451c661c5af2dda50faff290f0b46"
   },
   {
     "name": "check-json-missing",
     "status": 1,
-    "stdout": "{\"label\":\"box\",\"reachable\":false,\"error\":\"RemoteTelarMissing\",\"detail\":\"telar is not on the PATH of the gateway there: sh: telar: command not found\"}\n",
+    "stdout": "{\"label\":\"box\",\"reachable\":false,\"error\":\"RemoteTelarMissing\",\"detail\":\"the gateway there finds no telar to run; keep telar, telar-runtime, telar-config-check and telar-gateway in one directory there, or run `telar machine setup`: sh: telar: command not found\"}\n",
     "stderr": "",
     "files_sha256": "e1df697cab1db0fccf00610f72a75cf0b09451c661c5af2dda50faff290f0b46"
   },
@@ -738,13 +738,13 @@
     "name": "check-runtime-mismatch",
     "status": 1,
     "stdout": "",
-    "stderr": "telar machine: box (telar://host:8352#00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff) is not reachable: RemoteRuntimeIncompatible\nthe runtime there is another telar build; run `telar server stop` there: telar protocol mismatch\n",
+    "stderr": "telar machine: box (telar://host:8352#00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff) is not reachable: RemoteRuntimeIncompatible\nthe runtime there runs another telar build; `telar machine setup` stops it, once you agree, and starts this one: telar protocol mismatch\n",
     "files_sha256": "e1df697cab1db0fccf00610f72a75cf0b09451c661c5af2dda50faff290f0b46"
   },
   {
     "name": "check-json-runtime-mismatch",
     "status": 1,
-    "stdout": "{\"label\":\"box\",\"reachable\":false,\"error\":\"RemoteRuntimeIncompatible\",\"detail\":\"the runtime there is another telar build; run `telar server stop` there: telar protocol mismatch\"}\n",
+    "stdout": "{\"label\":\"box\",\"reachable\":false,\"error\":\"RemoteRuntimeIncompatible\",\"detail\":\"the runtime there runs another telar build; `telar machine setup` stops it, once you agree, and starts this one: telar protocol mismatch\"}\n",
     "stderr": "",
     "files_sha256": "e1df697cab1db0fccf00610f72a75cf0b09451c661c5af2dda50faff290f0b46"
   },

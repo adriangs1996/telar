@@ -975,13 +975,14 @@ namespace telar::runtime::cli::machine {
 
   namespace {
 
-    // What the person needs to know of a failed discovery: a hint at the cause, then what the gateway said
-    // of it.
+    // What the person needs to know of a failed discovery: what to do about its cause, then what the
+    // gateway said of it. A gateway that holds another key, or does not admit this machine, says
+    // what to do in its own words.
     void describeFailure(Text& detail, const launch::Output& output, MachineError failure) {
-      if (failure == MachineError::remote_program_missing) {
-        detail.assign("telar is not on the PATH of the gateway there: ");
-      } else if (failure == MachineError::remote_runtime_incompatible) {
-        detail.assign("the runtime there is another telar build; run `telar server stop` there: ");
+      const bool told = failure == MachineError::host_key_rejected || failure == MachineError::authentication_failed;
+      if (const auto hint = MachineFailure::description(failure); hint && !told) {
+        detail.assign(*hint);
+        detail.append(": ");
       }
 
       detail.append(output.err);
