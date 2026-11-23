@@ -20,10 +20,10 @@ import telar.base.ds;
 
 namespace telar::gui::qt {
 
-  // The prompt that adds a machine, its label and then its gateway's pairing address, or renames one.
+  // The prompt that renames a machine; the machine wizard adds them.
   //
   // It reads the store and the display the window pushes, and writes the machine profiles. The
-  // window opens the prompt; submitting its last step asks it to close.
+  // window opens the prompt; submitting it asks it to close.
   class MachinePromptController final : public QObject {
     Q_OBJECT
     QML_NAMED_ELEMENT(MachinePromptController)
@@ -45,8 +45,8 @@ namespace telar::gui::qt {
     Q_INVOKABLE void submit(const QString& revision);
     Q_INVOKABLE void reportLimit(qulonglong requested_bytes);
 
-    // Starts adding a machine, or renaming one; false when the machine cannot be renamed.
-    bool open(ds::Option<application::machines::MachineToken> renamed);
+    // Starts renaming a machine; false when it cannot be renamed.
+    bool open(application::machines::MachineToken renamed);
     // The dialog closed: nothing typed belongs to the next prompt.
     void forget() noexcept;
     void setDisplay(const application::window::DisplayMetrics& display);
@@ -56,21 +56,13 @@ namespace telar::gui::qt {
     void closeRequested();
 
   private:
-    enum class Mode : std::uint8_t {
-      add_label,
-      add_destination,
-      rename,
-    };
-
     struct Prompt {
-      Mode mode = Mode::add_label;
       QString text;
-      QString label;
-      ds::Option<application::machines::MachineToken> renamed;
+      application::machines::MachineToken renamed;
     };
 
     [[nodiscard]] bool isOpen() const noexcept;
-    [[nodiscard]] std::size_t limit() const noexcept;
+    [[nodiscard]] static std::size_t limit() noexcept;
 
     Store& store_;
     MachineProfilesSource& profiles_;

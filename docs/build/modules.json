@@ -936,6 +936,7 @@
     "src/gui/ui/app/overlays/workspace_form/workspace_form_controller.hpp": "Qt moc/QML integration",
     "src/gui/ui/kit/paths/path_picker_controller.hpp": "Qt moc/QML integration",
     "src/gui/ui/app/overlays/machine_prompt/machine_prompt_controller.hpp": "Qt moc/QML integration",
+    "src/gui/ui/app/overlays/machine_wizard/machine_wizard_controller.hpp": "Qt moc/QML integration",
     "src/gui/ui/app/overlays/peek/peek_controller.hpp": "Qt moc/QML integration",
     "src/gui/ui/app/panes/terminal/copy_controller.hpp": "Qt moc/QML integration",
     "src/gui/ui/app/panes/attachments/attachments_controller.hpp": "Qt moc/QML integration",

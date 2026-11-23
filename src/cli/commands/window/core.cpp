@@ -205,8 +205,9 @@ namespace telar::runtime::cli::machine {
 
   }
 
-  SetupReport::SetupReport(Memory& memory, bool json_output)
-      : json(json_output),
+  SetupReport::SetupReport(Memory& memory, bool json_output, bool events_output)
+      : json(json_output || events_output),
+        events(events_output),
         notes(memory) {}
 
   SetupReport::Line SetupReport::bounded(std::string_view text) {
@@ -239,7 +240,10 @@ namespace telar::runtime::cli::machine {
 
     result.status = status;
     result.detail = detail;
-    if (!json) {
+    if (events) {
+      std::print("{{\"event\":\"step\",\"step\":\"{}\",\"status\":\"{}\",\"detail\":{}}}\n", steps[index], statuses[static_cast<std::size_t>(status)], JsonQuoted{.text = detail.view(), .escapes = JsonEscapes::control});
+      static_cast<void>(std::fflush(stdout));
+    } else if (!json) {
       std::print("{:2}. {:<14} {:<10} {}\n", index + 1, titles[index], statuses[static_cast<std::size_t>(status)], detail.view());
       printNotes(step);
       static_cast<void>(std::fflush(stdout));
@@ -253,14 +257,20 @@ namespace telar::runtime::cli::machine {
     }
 
     notes.push(Note{.step = step, .text = text});
-    if (!json && results.atCheckedMut(static_cast<std::size_t>(step)).status) {
+    if (events) {
+      std::print("{{\"event\":\"note\",\"step\":\"{}\",\"text\":{}}}\n", steps[static_cast<std::size_t>(step)], JsonQuoted{.text = text.view(), .escapes = JsonEscapes::control});
+      static_cast<void>(std::fflush(stdout));
+    } else if (!json && results.atCheckedMut(static_cast<std::size_t>(step)).status) {
       std::print("      {}\n", text.view());
       static_cast<void>(std::fflush(stdout));
     }
   }
 
   void SetupReport::progressLine(const Line& text) const {
-    if (!json) {
+    if (events) {
+      std::print("{{\"event\":\"progress\",\"text\":{}}}\n", JsonQuoted{.text = text.view(), .escapes = JsonEscapes::control});
+      static_cast<void>(std::fflush(stdout));
+    } else if (!json) {
       std::print("    ... {}\n", text.view());
       static_cast<void>(std::fflush(stdout));
     }
@@ -305,6 +315,10 @@ namespace telar::runtime::cli::machine {
 
     ds::String<Memory> output{memory};
 
+    if (events) {
+      output.append(R"({"event":"done","report":)");
+    }
+
     output.append("{\"label\":");
     appendJsonText(output, target.label, JsonEscapes::control);
     output.append(",\"destination\":");
@@ -335,9 +349,108 @@ namespace telar::runtime::cli::machine {
       appendStepJson(output, *this, index);
     }
 
-    output.append("]}\n");
+    output.append(events ? "]}}\n" : "]}\n");
     std::print("{}", output.view());
+    static_cast<void>(std::fflush(stdout));
     return outcome.failed ? 1 : 0;
+  }
+
+  namespace {
+
+    // One line of standard input, read a byte at a time so that nothing past it is taken from
+    // the window's next answer; none at its end, when it does not come in time, or when it is too
+    // long to be an answer.
+    ds::Option<SetupReport::Line> answerLine(std::chrono::steady_clock::time_point deadline) {
+      ds::Array<char, SetupReport::max_text_bytes> bytes{};
+      std::size_t size = 0;
+
+      for (;;) {
+        const auto left = std::chrono::duration_cast<std::chrono::milliseconds>(deadline - std::chrono::steady_clock::now()).count();
+        if (left <= 0) {
+          return ds::none;
+        }
+
+        pollfd input{.fd = STDIN_FILENO, .events = POLLIN, .revents = 0};
+        const int ready = ::poll(&input, 1, static_cast<int>(std::min<long long>(left, std::numeric_limits<int>::max())));
+        if (ready < 0 && sys::lastError() == EINTR) {
+          continue;
+        }
+
+        if (ready <= 0) {
+          return ds::none;
+        }
+
+        char byte = 0;
+        const auto count = ::read(STDIN_FILENO, &byte, 1);
+        if (count < 0 && sys::lastError() == EINTR) {
+          continue;
+        }
+
+        if (count <= 0) {
+          return ds::none;
+        }
+
+        if (byte == '\n') {
+          SetupReport::Line line;
+
+          line.assign({bytes.data(), size});
+          return line;
+        }
+
+        if (size == bytes.size()) {
+          return ds::none;
+        }
+
+        bytes.atMut(size++) = byte;
+      }
+    }
+
+  }
+
+  ds::Option<SetupReport::Line> SetupReport::ask(Memory& memory, std::string_view kind, std::string_view text, std::string_view agent) const {
+    if (!events) {
+      return ds::none;
+    }
+
+    std::print("{{\"event\":\"question\",\"kind\":\"{}\",\"agent\":{},\"text\":{}}}\n", kind, JsonQuoted{.text = agent, .escapes = JsonEscapes::control}, JsonQuoted{.text = text, .escapes = JsonEscapes::control});
+    static_cast<void>(std::fflush(stdout));
+
+    // The answer to this question: `{"answer":KIND,"value":true|false|"text"}`. Another line, a
+    // window that answers what was not asked, is no answer.
+    const auto deadline = std::chrono::steady_clock::now() + answer_timeout;
+
+    while (const auto line = answerLine(deadline)) {
+      try {
+        const auto answer = JsonValue::parse(line->view());
+        const auto asked = answer.field("answer");
+        const auto value = answer.field("value");
+        if (!asked || !asked->equals(kind) || !value) {
+          continue;
+        }
+
+        if (value->encoded() == "true" || value->encoded() == "false") {
+          return bounded(value->encoded());
+        }
+
+        ds::String<Memory> given{memory};
+
+        value->string(given);
+        return bounded(given.view());
+      } catch (const std::exception&) {
+        continue;
+      }
+    }
+
+    return ds::none;
+  }
+
+  void SetupReport::login(std::string_view agent, std::string_view url, std::string_view code) const {
+    if (!events) {
+      return;
+    }
+
+    std::print("{{\"event\":\"login\",\"agent\":{},\"url\":{},\"code\":{}}}\n", JsonQuoted{.text = agent, .escapes = JsonEscapes::control}, JsonQuoted{.text = url, .escapes = JsonEscapes::control}, JsonQuoted{.text = code, .escapes = JsonEscapes::control});
+    static_cast<void>(std::fflush(stdout));
   }
 
 }

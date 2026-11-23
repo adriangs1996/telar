@@ -244,7 +244,7 @@ namespace telar::gui::qt {
   void MachineRoster::choose(application::machines::MachinePickerTarget target, bool alternate) {
     const auto intent = application::machines::MachinePicker::choose(store_.machines(), target.machine, alternate);
     if (intent == application::machines::MachinePicker::Intent::add) {
-      dialogs_.showMachinePrompt();
+      dialogs_.showMachineWizard();
 
       return;
     }
@@ -284,20 +284,8 @@ namespace telar::gui::qt {
       return;
     }
 
-    const auto& row = store_.machines().row(target.slot);
-    const auto program = system::runtime_endpoint::program();
-    constexpr std::string_view title_prefix = "Set up ";
-    BoundedText<title_prefix.size() + application::machines::MachineLimits::label_bytes> title;
-
-    title.append(title_prefix);
-    title.append(row.label.view());
-    const auto name = row.id.value() == 0 ? row.destination.view() : row.label.view();
-    const ds::Array<std::string_view, 5> arguments{program.view(), "machine", "setup", name, "--confirm"};
-    runtime::config::CommandTabView command{.count = arguments.size(), .configured_label = title.view()};
-
-    std::ranges::copy(arguments, command.arguments.viewMut().begin());
-    machines_.select(store_.machines().token(application::machines::Machines::local_slot));
-    static_cast<void>(application::workbench::createCommandTab(store_.sessionMut(), command));
+    // The wizard sets it up where it failed, without switching the window to another machine.
+    dialogs_.showMachineWizard(target);
   }
 
   void MachineRoster::configureRemoteLaunch(const QString& destination, const QStringList& arguments) {

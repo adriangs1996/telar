@@ -1,6 +1,6 @@
 telar machine setup: Make a machine ready: this telar build, the agents, their integration, configuration and logins
 
-Usage: telar machine setup LABEL|ADDRESS [--label LABEL] [--binary PATH] [--skip agents,config,login,editor] [--confirm] [--json]
+Usage: telar machine setup LABEL|ADDRESS [--label LABEL] [--binary PATH] [--skip agents,config,login,editor] [--confirm] [--json|--events]
 
 Arguments:
   LABEL|ADDRESS    A saved machine, or the address `telar server pair` printed on a
@@ -12,6 +12,14 @@ Arguments:
   --skip STEPS     Leave out `agents`, `config`, `login` and/or `editor`.
   --confirm        Ask on the terminal before changing anything (refused without
                    a terminal or with --json).
+  --events         For a program that runs setup, as the window's machine wizard
+                   does: one JSON line per event as it happens, on stdout. `step`
+                   (step, status, detail), `note` (step, text), `progress` (text),
+                   `login` (agent, url, code), `question` (kind, agent, text) and
+                   last `done` (report, the --json document). A question waits up
+                   to ten minutes for one line on stdin, {"answer":KIND,"value":
+                   true|false|"text"}; none, or stdin closed, is no. KIND is
+                   `confirm`, `stop_runtime` or `login_code`.
 
 The machine needs telar and a running gateway before setup can reach it: install it
 there with `install.sh --serve`, which prints the address. Setup then brings the
