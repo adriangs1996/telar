@@ -1984,6 +1984,66 @@ return {api_version = 2, client = {
       QTRY_VERIFY2_WITH_TIMEOUT(editorView()->hasActiveFocus(), keysWith().constData(), runtime_wait_ms);
     }
 
+    // A file chosen in the picker is shown in the window the keys were in, though the picker's
+    // preview, a window of Neovim's too, already shows it.
+    Q_SLOT void editorPickerShowsTheFileItOpens() {
+      if (QStandardPaths::findExecutable(QStringLiteral("nvim")).isEmpty()) {
+        QSKIP("Neovim is not installed on this host");
+      }
+
+      QTRY_VERIFY_WITH_TIMEOUT(terminalReady(), runtime_wait_ms);
+      const auto original_id = firstPane()->id;
+      const auto tab_count = client_->tabs()->rows()->rowCount();
+      const QTemporaryDir files;
+      bool opened = false;
+      const auto restore = qScopeGuard([&] {
+        if (opened) {
+          closeTemporaryTab({.count = tab_count, .pane_id = original_id});
+        }
+      });
+      const auto editorView = [&] {
+        const auto views = test::visualItems(*window_->contentItem(), QStringLiteral("paneEditor"));
+
+        return views.empty() ? nullptr : qobject_cast<NvimItem*>(views.front());
+      };
+      // The text of the editor's grids of one placement, a grid per line.
+      const auto shown = [&](application::nvim::NvimPlacement placement) {
+        QString text;
+
+        for (const auto& grid : editorView()->editorState()->grids) {
+          if (grid->id != 1 && grid->placement == placement) {
+            text += screenText(grid->screen) + QLatin1Char('\n');
+          }
+        }
+
+        return text;
+      };
+      const auto rows = [&] {
+        return editorView()->picker().value(QStringLiteral("rows")).toList();
+      };
+
+      writeTestFile(files.filePath(QStringLiteral("one.txt")), "the first file\n");
+      writeTestFile(files.filePath(QStringLiteral("two.txt")), "the second file\n");
+      client_->commands()->execute(window_actions::Action::new_editor_tab);
+      QTRY_VERIFY_WITH_TIMEOUT(client_->tabs()->rows()->rowCount() == tab_count + 1, runtime_wait_ms);
+      opened = true;
+      QTRY_VERIFY_WITH_TIMEOUT(editorView() != nullptr && editorView()->ready(), runtime_wait_ms);
+      editorView()->send(QStringLiteral("<Cmd>cd %1 | edit one.txt<CR>").arg(files.path()));
+      QTRY_VERIFY_WITH_TIMEOUT(shown(application::nvim::NvimPlacement::window).contains(QStringLiteral("the first file")), runtime_wait_ms);
+
+      editorView()->send(QStringLiteral("<Cmd>Telar files<CR>"));
+      QTRY_VERIFY_WITH_TIMEOUT(editorView()->picker().value(QStringLiteral("open")).toBool(), runtime_wait_ms);
+      editorView()->searchPicker(QStringLiteral("two"));
+      QTRY_VERIFY_WITH_TIMEOUT(rows().size() == 1, runtime_wait_ms);
+      // The preview shows the file before it is chosen.
+      QTRY_VERIFY_WITH_TIMEOUT(shown(application::nvim::NvimPlacement::floating).contains(QStringLiteral("the second file")), runtime_wait_ms);
+
+      editorView()->acceptPicker(0);
+      QTRY_VERIFY_WITH_TIMEOUT(!editorView()->picker().value(QStringLiteral("open")).toBool(), runtime_wait_ms);
+      QTRY_VERIFY_WITH_TIMEOUT(shown(application::nvim::NvimPlacement::floating).isEmpty(), runtime_wait_ms);
+      QTRY_VERIFY2_WITH_TIMEOUT(shown(application::nvim::NvimPlacement::window).contains(QStringLiteral("the second file")), qPrintable(shown(application::nvim::NvimPlacement::window)), runtime_wait_ms);
+    }
+
     // What Neovim says of its mode has no row of its own under the windows: it is written on the
     // status line of the whole editor, apart from both of its sides, and without that line at
     // the end of the last row.

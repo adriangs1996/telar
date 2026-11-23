@@ -85,7 +85,10 @@ namespace telar::runtime {
 
     constexpr std::string_view answer_script = "__telar_prompt_answer(...)";
 
-    // Shows a file where it is asked to, then moves the cursor.
+    // Shows a file where it is asked to, then moves the cursor. In place, a window of the tab
+    // page that already shows the file takes the focus. A float is not such a window: the
+    // picker's preview shows the file too, and is gone as soon as the file is chosen, which
+    // `:drop` would move to.
     constexpr std::string_view open_script = R"lua(
 local path, line, column, where = ...
 local name = vim.fn.fnameescape(path)
@@ -96,7 +99,20 @@ elseif where == 2 then
 elseif where == 3 then
   vim.cmd.tabedit(name)
 else
-  vim.cmd.drop(name)
+  local buffer = vim.fn.bufadd(path)
+  local showing = nil
+  for _, window in ipairs(vim.api.nvim_tabpage_list_wins(0)) do
+    if vim.api.nvim_win_get_buf(window) == buffer and vim.api.nvim_win_get_config(window).relative == "" then
+      showing = window
+      break
+    end
+  end
+
+  if showing then
+    vim.api.nvim_set_current_win(showing)
+  else
+    vim.cmd.edit(name)
+  end
 end
 if line > 0 then
   pcall(vim.api.nvim_win_set_cursor, 0, { line, math.max(column - 1, 0) })
