@@ -28,10 +28,11 @@ FocusScope {
         colors: root.colors
         typography: root.typography
         ratio: root.ratio
-        // Without entering the command line, which would flash its surface.
-        onChosen: index => view.send("<Cmd>tabnext " + index + "<CR>")
-        onClosed: index => view.send("<Cmd>" + index + "tabclose<CR>")
-        onAdded: view.send("<Cmd>tabnew<CR>")
+        // Without entering the command line, which would flash its surface. A buffer with
+        // changes is not closed without asking: Neovim says why, or asks, as 'confirm' has it.
+        onChosen: (index, handle) => view.send(tabs.paged ? "<Cmd>tabnext " + index + "<CR>" : "<Cmd>buffer " + handle + "<CR>")
+        onClosed: (index, handle) => view.send(tabs.paged ? "<Cmd>" + index + "tabclose<CR>" : "<Cmd>bdelete " + handle + "<CR>")
+        onAdded: view.send(tabs.paged ? "<Cmd>tabnew<CR>" : "<Cmd>enew<CR>")
     }
 
     NvimEditor {

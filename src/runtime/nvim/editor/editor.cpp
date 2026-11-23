@@ -409,7 +409,9 @@ end
     } else if (method == "telar_float") {
       framed(reader);
     } else if (method == "telar_tabs") {
-      changed(reader);
+      changed(reader, false);
+    } else if (method == "telar_buffer_marks") {
+      changed(reader, true);
     } else if (method == "telar_status") {
       placedStatus(reader);
     } else if (method == "telar_buffers") {
@@ -488,8 +490,9 @@ end
     publish(settled);
   }
 
-  // `[[tab, modified, diagnostics]...]`: what is marked on each tab page that has something.
-  void NvimEditor::changed(msgpack::Reader& reader) {
+  // `[[handle, modified, diagnostics]...]`: what is marked on each tab page that has something,
+  // or on each listed buffer.
+  void NvimEditor::changed(msgpack::Reader& reader, bool buffers) {
     constexpr std::uint32_t fields = 3;
     ds::Array<NvimTabs::Mark, max_nvim_tabs> marks{};
     std::uint32_t count = 0;
@@ -511,7 +514,7 @@ end
 
     const bool settled = screen_.settled();
 
-    if (screen_.markTabs(marks.view().first(count))) {
+    if (screen_.markTabs(marks.view().first(count), buffers)) {
       publish(settled);
     }
   }

@@ -58,7 +58,10 @@ Neovim leaves these to its UI, and the window draws each as one of its own surfa
 
 - Messages, as notices that go away by themselves. An error stays longer, and none waits for
   a key.
-- Tab pages, as a strip over the editor once there is more than one.
+- Tab pages, as a strip over the editor once there is more than one. With a single tab page
+  the strip lists the buffers instead, once there is more than one: a click shows a buffer in
+  the window in use, and its mark closes it. Either way an entry says the type of its file,
+  whether it has changes not written, and how many warnings and errors.
 
   ![Two tab pages](images/telar-editor-tabs.png)
 

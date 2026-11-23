@@ -196,29 +196,47 @@ vim.api.nvim_create_autocmd({ "DirChanged", "WinEnter", "TabEnter", "VimEnter" }
 -- Command and a click follows the link under the pointer, as it does in a terminal of telar.
 vim.keymap.set("n", "<D-LeftMouse>", "<LeftMouse>gx", { remap = true, silent = true, desc = "Open the link under the pointer" })
 
--- What Neovim's own tab line does not say of a tab page: whether the buffer of its window in
--- use has changes not written, and how many warnings and errors its diagnostics have.
-local marked = nil
-local function tell_tabs()
-  local tabs, key = {}, {}
-  for _, tab in ipairs(vim.api.nvim_list_tabpages()) do
-    local found, window = pcall(vim.api.nvim_tabpage_get_win, tab)
-    if found then
-      local buffer = vim.api.nvim_win_get_buf(window)
-      local modified = vim.bo[buffer].modified
-      local diagnostics = #vim.diagnostic.get(buffer, { severity = { min = vim.diagnostic.severity.WARN } })
-      if modified or diagnostics > 0 then
-        tabs[#tabs + 1] = { tab, modified, diagnostics }
-        key[#key + 1] = tab .. (modified and "+" or "-") .. diagnostics
-      end
+-- What Neovim's own tab line does not say of a tab page, by the buffer of its window in use,
+-- nor of a listed buffer: whether it has changes not written, and how many warnings and
+-- errors its diagnostics have. Each list is told when it changes, and holds no more than the
+-- runtime takes.
+local most_marks = 128
+local marked = {}
+local function tell_marks(method, entries)
+  local marks, key = {}, {}
+  for _, entry in ipairs(entries) do
+    local modified = vim.bo[entry[2]].modified
+    local diagnostics = #vim.diagnostic.get(entry[2], { severity = { min = vim.diagnostic.severity.WARN } })
+    if (modified or diagnostics > 0) and #marks < most_marks then
+      marks[#marks + 1] = { entry[1], modified, diagnostics }
+      key[#key + 1] = entry[1] .. (modified and "+" or "-") .. diagnostics
     end
   end
 
   local now = table.concat(key, ",")
-  if now ~= marked then
-    marked = now
-    vim.rpcnotify(channel, "telar_tabs", tabs)
+  if now ~= marked[method] then
+    marked[method] = now
+    vim.rpcnotify(channel, method, marks)
   end
+end
+
+local function tell_tabs()
+  local pages, buffers = {}, {}
+  for _, tab in ipairs(vim.api.nvim_list_tabpages()) do
+    local found, window = pcall(vim.api.nvim_tabpage_get_win, tab)
+    if found then
+      pages[#pages + 1] = { tab, vim.api.nvim_win_get_buf(window) }
+    end
+  end
+
+  for _, buffer in ipairs(vim.api.nvim_list_bufs()) do
+    if vim.bo[buffer].buflisted then
+      buffers[#buffers + 1] = { buffer, buffer }
+    end
+  end
+
+  tell_marks("telar_tabs", pages)
+  tell_marks("telar_buffer_marks", buffers)
 end
 
 vim.api.nvim_create_autocmd({ "BufModifiedSet", "BufEnter", "BufWritePost", "WinEnter", "TabEnter", "TabClosed", "DiagnosticChanged" }, {

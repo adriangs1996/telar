@@ -2044,6 +2044,88 @@ return {api_version = 2, client = {
       QTRY_VERIFY2_WITH_TIMEOUT(shown(application::nvim::NvimPlacement::window).contains(QStringLiteral("the second file")), qPrintable(shown(application::nvim::NvimPlacement::window)), runtime_wait_ms);
     }
 
+    // With a single tab page the strip over the editor lists Neovim's buffers: the one shown is
+    // lit, one with changes is marked, and a click goes to another. Tab pages take the strip
+    // once there is more than one.
+    Q_SLOT void editorTabStripListsBuffers() {
+      if (QStandardPaths::findExecutable(QStringLiteral("nvim")).isEmpty()) {
+        QSKIP("Neovim is not installed on this host");
+      }
+
+      QTRY_VERIFY_WITH_TIMEOUT(terminalReady(), runtime_wait_ms);
+      const auto original_id = firstPane()->id;
+      const auto tab_count = client_->tabs()->rows()->rowCount();
+      const QTemporaryDir files;
+      bool opened = false;
+      const auto restore = qScopeGuard([&] {
+        if (opened) {
+          closeTemporaryTab({.count = tab_count, .pane_id = original_id});
+        }
+      });
+      const auto editorView = [&] {
+        const auto views = test::visualItems(*window_->contentItem(), QStringLiteral("paneEditor"));
+
+        return views.empty() ? nullptr : qobject_cast<NvimItem*>(views.front());
+      };
+      // The strip, and the entries it lists.
+      const auto strip = [&]() -> QQuickItem* {
+        const auto strips = test::visualItems(*window_->contentItem(), QStringLiteral("editorTabs"));
+
+        return strips.empty() ? nullptr : strips.front();
+      };
+      const auto entries = [&] {
+        return strip() == nullptr ? QVariantList{} : strip()->property("tabs").toList();
+      };
+      const auto entry = [&](int index) {
+        return entries().value(index).toMap();
+      };
+      const auto windowText = [&] {
+        QString text;
+
+        for (const auto& grid : editorView()->editorState()->grids) {
+          if (grid->placement == application::nvim::NvimPlacement::window) {
+            text += screenText(grid->screen);
+          }
+        }
+
+        return text;
+      };
+
+      writeTestFile(files.filePath(QStringLiteral("one.txt")), "the first file\n");
+      writeTestFile(files.filePath(QStringLiteral("two.txt")), "the second file\n");
+      client_->commands()->execute(window_actions::Action::new_editor_tab);
+      QTRY_VERIFY_WITH_TIMEOUT(client_->tabs()->rows()->rowCount() == tab_count + 1, runtime_wait_ms);
+      opened = true;
+      QTRY_VERIFY_WITH_TIMEOUT(editorView() != nullptr && editorView()->ready(), runtime_wait_ms);
+      editorView()->send(QStringLiteral("<Cmd>cd %1 | edit one.txt<CR>").arg(files.path()));
+      QTRY_VERIFY_WITH_TIMEOUT(windowText().contains(QStringLiteral("the first file")), runtime_wait_ms);
+      QVERIFY(strip() != nullptr);
+      QVERIFY2(!strip()->property("shown").toBool() && strip()->height() == 0, "a single buffer needs no strip");
+
+      editorView()->send(QStringLiteral("<Cmd>edit two.txt<CR>"));
+      QTRY_COMPARE_WITH_TIMEOUT(entries().size(), 2, runtime_wait_ms);
+      QVERIFY(strip()->property("shown").toBool() && !strip()->property("paged").toBool());
+      QTRY_VERIFY_WITH_TIMEOUT(entry(0).value(QStringLiteral("name")).toString().endsWith(QStringLiteral("one.txt")) && entry(1).value(QStringLiteral("name")).toString().endsWith(QStringLiteral("two.txt")), runtime_wait_ms);
+      QTRY_COMPARE_WITH_TIMEOUT(strip()->property("currentHandle").toULongLong(), entry(1).value(QStringLiteral("handle")).toULongLong(), runtime_wait_ms);
+
+      // Changes not written are marked on the buffer that has them, until they are undone.
+      editorView()->send(QStringLiteral("<Cmd>normal! ix<CR>"));
+      QTRY_VERIFY_WITH_TIMEOUT(entry(1).value(QStringLiteral("modified")).toBool() && !entry(0).value(QStringLiteral("modified")).toBool(), runtime_wait_ms);
+      editorView()->send(QStringLiteral("<Cmd>undo<CR>"));
+      QTRY_VERIFY_WITH_TIMEOUT(!entry(1).value(QStringLiteral("modified")).toBool(), runtime_wait_ms);
+
+      // A click on an entry is the strip's `chosen`: the window shows that buffer.
+      QVERIFY(QMetaObject::invokeMethod(strip(), "chosen", Q_ARG(int, 1), Q_ARG(QVariant, entry(0).value(QStringLiteral("handle")))));
+      QTRY_VERIFY_WITH_TIMEOUT(windowText().contains(QStringLiteral("the first file")), runtime_wait_ms);
+      QTRY_COMPARE_WITH_TIMEOUT(strip()->property("currentHandle").toULongLong(), entry(0).value(QStringLiteral("handle")).toULongLong(), runtime_wait_ms);
+
+      // A second tab page: the strip is the tab pages'.
+      editorView()->send(QStringLiteral("<Cmd>tabnew<CR>"));
+      QTRY_VERIFY_WITH_TIMEOUT(strip()->property("paged").toBool() && entries().size() == 2, runtime_wait_ms);
+      editorView()->send(QStringLiteral("<Cmd>tabclose<CR>"));
+      QTRY_VERIFY_WITH_TIMEOUT(!strip()->property("paged").toBool(), runtime_wait_ms);
+    }
+
     // What Neovim says of its mode has no row of its own under the windows: it is written on the
     // status line of the whole editor, apart from both of its sides, and without that line at
     // the end of the last row.

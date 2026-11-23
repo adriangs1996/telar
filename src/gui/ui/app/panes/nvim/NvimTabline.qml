@@ -4,21 +4,29 @@ import QtQuick
 import Telar.Gui
 
 // Neovim's tab pages as a strip of telar's own over the editor: the current one lit, a click
-// to go to another, each with the icon of the type of the file it shows. It takes no room
-// while Neovim has a single tab.
+// to go to another, each with the icon of the type of the file it shows. While Neovim has a
+// single tab page the strip lists its buffers instead, as the buffer line of a configuration
+// does. It takes no room while there is one of either.
 Item {
     id: root
+    objectName: "editorTabs"
 
-    // The editor's tabs: currentTab, tabs [{handle, name, icon, iconTone, modified, diagnostics}].
+    // The editor's tabs: currentTab, currentBuffer, and tabs and buffers, each
+    // [{handle, name, icon, iconTone, modified, diagnostics}].
     required property var tabline
     required property var colors
     required property var typography
     property real ratio: 1
-    readonly property var tabs: tabline.tabs ?? []
+    readonly property var pages: tabline.tabs ?? []
+    // Tab pages once there is more than one; with one, the buffers Neovim lists.
+    readonly property bool paged: pages.length > 1
+    readonly property var tabs: paged ? pages : (tabline.buffers ?? [])
+    readonly property var currentHandle: paged ? tabline.currentTab : tabline.currentBuffer
     readonly property bool shown: tabs.length > 1
-    // A click on the tab at `index`, counted from one as Neovim counts its tab pages.
-    signal chosen(int index)
-    signal closed(int index)
+    // A click on an entry: its place, counted from one as Neovim counts its tab pages, and its
+    // handle, the number Neovim knows a buffer by.
+    signal chosen(int index, var handle)
+    signal closed(int index, var handle)
     signal added()
 
     height: shown ? 30 * ratio : 0
@@ -39,7 +47,9 @@ Item {
 
                 required property var modelData
                 required property int index
-                readonly property bool current: modelData.handle === root.tabline.currentTab
+                readonly property bool current: modelData.handle === root.currentHandle
+                // A file is named by the last part of its path.
+                readonly property string name: (modelData.name ?? "").split("/").pop()
 
                 // The room of the mark that closes it is kept, so the names do not move.
                 readonly property int diagnostics: modelData.diagnostics ?? 0
@@ -54,7 +64,7 @@ Item {
                 }
 
                 TapHandler {
-                    onTapped: root.chosen(tab.index + 1)
+                    onTapped: root.chosen(tab.index + 1, tab.modelData.handle)
                 }
 
                 NativeRoundedRectangle {
@@ -83,7 +93,7 @@ Item {
                     height: parent.height
                     verticalAlignment: Text.AlignVCenter
                     width: Math.min(implicitWidth, parent.width - x - tab.noted - 26 * root.ratio)
-                    text: tab.modelData.name.length > 0 ? tab.modelData.name : "[No Name]"
+                    text: tab.name.length > 0 ? tab.name : "[No Name]"
                     color: tab.current ? root.colors.text : Qt.alpha(root.colors.text, 0.6)
                     font.pixelSize: root.typography.small
                     textFormat: Text.PlainText
@@ -127,7 +137,8 @@ Item {
                     visible: (tab.modelData.modified ?? false) && !hover.hovered
                 }
 
-                // Closes the tab page: shown on the one in use and on the one pointed at.
+                // Closes the tab page or the buffer: shown on the one in use and on the one
+                // pointed at.
                 ChromeIcon {
                     x: parent.width - width - 9 * root.ratio
                     y: Math.round((parent.height - height) / 2)
@@ -144,14 +155,14 @@ Item {
                     }
 
                     TapHandler {
-                        onTapped: root.closed(tab.index + 1)
+                        onTapped: root.closed(tab.index + 1, tab.modelData.handle)
                     }
                 }
             }
         }
     }
 
-    // Another tab page.
+    // Another tab page, or another buffer.
     ChromeIcon {
         x: strip.x + strip.width + 10 * root.ratio
         y: Math.round((parent.height - height) / 2)

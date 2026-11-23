@@ -726,7 +726,7 @@ namespace telar::gui::features::nvim {
     for (const auto& buffer : message.buffers) {
       const auto name = append(tabs.text, buffer.name);
 
-      tabs.buffers.push({.handle = buffer.handle, .name = name});
+      tabs.buffers.push({.handle = buffer.handle, .name = name, .modified = buffer.modified, .diagnostics = buffer.diagnostics});
     }
 
     ++editor->tabs_revision;
