@@ -35,13 +35,13 @@ namespace telar::gui::qt {
     constexpr ds::Array<const char*, 4> diff_tones{"context", "added", "removed", "hunk"};
     constexpr ds::Array<const char*, 7> mode_names{"normal", "visual", "insert", "search", "command", "plan", "help"};
     constexpr ds::Array<const char*, 3> tone_names{"info", "error", "ask"};
-    constexpr ds::Array<const char*, 3> scope_names{"pane", "workspace", "machine"};
+    constexpr ds::Array<const char*, 3> follow_scopes{"pane", "workspace", "machine"};
     // The lines of a preview's text the window draws.
     constexpr qsizetype preview_lines = 200;
     constexpr double whole_share = 1000;
 
     template <std::size_t Capacity>
-    QString text(const runtime::FixedText<Capacity>& value) {
+    QString fixedText(const runtime::FixedText<Capacity>& value) {
       return toQString(value.view());
     }
 
@@ -244,12 +244,12 @@ namespace telar::gui::qt {
       result.push_back(QVariantMap{
           {QStringLiteral("index"), static_cast<int>(index)},
           {QStringLiteral("current"), status.current},
-          {QStringLiteral("machine"), text(header.machine)},
+          {QStringLiteral("machine"), fixedText(header.machine)},
           {QStringLiteral("local"), header.local},
-          {QStringLiteral("lead"), text(header.lead)},
-          {QStringLiteral("last"), text(header.last)},
+          {QStringLiteral("lead"), fixedText(header.lead)},
+          {QStringLiteral("last"), fixedText(header.last)},
           {QStringLiteral("repository"), header.repository},
-          {QStringLiteral("branch"), text(header.branch)},
+          {QStringLiteral("branch"), fixedText(header.branch)},
           {QStringLiteral("upstream"), header.upstream},
           {QStringLiteral("ahead"), header.ahead},
           {QStringLiteral("behind"), header.behind},
@@ -258,13 +258,13 @@ namespace telar::gui::qt {
           {QStringLiteral("untracked"), header.untracked},
           {QStringLiteral("mode"), toQString(status.mode)},
           {QStringLiteral("modeKind"), QString::fromLatin1(mode_names[static_cast<std::size_t>(status.kind)])},
-          {QStringLiteral("following"), text(status.following)},
+          {QStringLiteral("following"), fixedText(status.following)},
           {QStringLiteral("follows"), status.follows},
-          {QStringLiteral("root"), text(status.root)},
+          {QStringLiteral("root"), fixedText(status.root)},
           {QStringLiteral("pending"), status.pending},
-          {QStringLiteral("flags"), text(status.flags)},
-          {QStringLiteral("total"), text(status.total)},
-          {QStringLiteral("keys"), text(status.keys)},
+          {QStringLiteral("flags"), fixedText(status.flags)},
+          {QStringLiteral("total"), fixedText(status.total)},
+          {QStringLiteral("keys"), fixedText(status.keys)},
           {QStringLiteral("chosen"), status.chosen},
           {QStringLiteral("position"), status.position},
           {QStringLiteral("count"), status.count},
@@ -307,13 +307,13 @@ namespace telar::gui::qt {
 
     const auto& window = *view_.windows[view_.current];
 
-    return window.follow ? QString::fromLatin1(scope_names[static_cast<std::size_t>(window.scope)]) : QString{};
+    return window.follow ? QString::fromLatin1(follow_scopes[static_cast<std::size_t>(window.scope)]) : QString{};
   }
 
   QVariantMap ExplorerController::describeLine() const {
     QVariantMap result{
         {QStringLiteral("mode"), QString::fromLatin1(mode_names[static_cast<std::size_t>(view_.mode)])},
-        {QStringLiteral("message"), view_.message.view().empty() ? toQString(explorer::idle_message) : text(view_.message)},
+        {QStringLiteral("message"), view_.message.view().empty() ? toQString(explorer::idle_message) : fixedText(view_.message)},
         {QStringLiteral("tone"), QString::fromLatin1(tone_names[static_cast<std::size_t>(view_.tone)])},
         {QStringLiteral("prefill"), toQString(view_.mode == Mode::insert ? view_.draft.view() : view_.prefill.view())},
         {QStringLiteral("overwrite"), view_.overwrite},
@@ -344,7 +344,7 @@ namespace telar::gui::qt {
     for (std::size_t index = 0; index < hints.count; ++index) {
       const auto& hint = hints.items[index];
 
-      result.push_back(QVariantMap{{QStringLiteral("keys"), toQString(hint.keys)}, {QStringLiteral("label"), text(hint.label)}, {QStringLiteral("enabled"), hint.enabled}});
+      result.push_back(QVariantMap{{QStringLiteral("keys"), toQString(hint.keys)}, {QStringLiteral("label"), fixedText(hint.label)}, {QStringLiteral("enabled"), hint.enabled}});
     }
 
     return result;
@@ -367,8 +367,8 @@ namespace telar::gui::qt {
 
       facts.push_back(QVariantMap{
           {QStringLiteral("label"), toQString(fact.label)},
-          {QStringLiteral("value"), text(fact.value)},
-          {QStringLiteral("detail"), text(fact.detail)},
+          {QStringLiteral("value"), fixedText(fact.value)},
+          {QStringLiteral("detail"), fixedText(fact.detail)},
           {QStringLiteral("added"), fact.added},
           {QStringLiteral("removed"), fact.removed},
       });
@@ -390,8 +390,8 @@ namespace telar::gui::qt {
     QVariantMap result{
         {QStringLiteral("shown"), true},
         {QStringLiteral("directory"), look.directory},
-        {QStringLiteral("name"), text(look.name)},
-        {QStringLiteral("path"), text(look.path)},
+        {QStringLiteral("name"), fixedText(look.name)},
+        {QStringLiteral("path"), fixedText(look.path)},
         {QStringLiteral("facts"), facts},
         {QStringLiteral("panes"), numbers(look.panes.view().first(look.pane_count))},
         {QStringLiteral("title"), toQString(look.title)},
@@ -473,21 +473,21 @@ namespace telar::gui::qt {
         {QStringLiteral("removed"), look.removed},
         {QStringLiteral("renamed"), look.renamed},
         {QStringLiteral("added"), look.added},
-        {QStringLiteral("lead"), text(look.lead)},
-        {QStringLiteral("name"), text(look.name)},
+        {QStringLiteral("lead"), fixedText(look.lead)},
+        {QStringLiteral("name"), fixedText(look.name)},
         {QStringLiteral("tone"), QString::fromLatin1(diff_tones[static_cast<std::size_t>(look.tone)])},
         {QStringLiteral("staged"), letter(look.staged)},
         {QStringLiteral("unstaged"), letter(look.unstaged)},
         {QStringLiteral("below"), look.below},
         {QStringLiteral("linesAdded"), look.lines_added},
         {QStringLiteral("linesRemoved"), look.lines_removed},
-        {QStringLiteral("size"), text(look.size)},
+        {QStringLiteral("size"), fixedText(look.size)},
         {QStringLiteral("share"), static_cast<double>(look.share) / whole_share},
         {QStringLiteral("measured"), look.measured},
         {QStringLiteral("partial"), look.partial},
-        {QStringLiteral("marks"), text(look.marks)},
+        {QStringLiteral("marks"), fixedText(look.marks)},
         {QStringLiteral("panes"), numbers(look.panes.view().first(look.pane_count))},
-        {QStringLiteral("note"), text(look.note)},
+        {QStringLiteral("note"), fixedText(look.note)},
         {QStringLiteral("editing"), view_.mode == Mode::insert && window == view_.current && look.selected},
     };
 
