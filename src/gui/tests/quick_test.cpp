@@ -1710,6 +1710,45 @@ return {api_version = 2, client = {
       QVERIFY(!explorer->preview().value(QStringLiteral("lines")).toList().isEmpty());
       shoot(QStringLiteral("explorer-tree"));
 
+      // The pointer asks for the menu of the row: what applies to it, each line with its keys.
+      const auto listed = [&](const QString& name) {
+        for (int row = 0; row < explorer->rows(0)->rowCount(); ++row) {
+          if (record(row).value(QStringLiteral("name")) == name) {
+            return window().value(QStringLiteral("top")).toInt() + row;
+          }
+        }
+
+        return -1;
+      };
+      constexpr QPointF menu_place{330, 250};
+
+      explorer->openMenu(0, listed(QStringLiteral("usage.md")), menu_place);
+      QCOMPARE(explorer->line().value(QStringLiteral("mode")).toString(), QStringLiteral("menu"));
+
+      auto menu_lines = explorer->menu().value(QStringLiteral("lines")).toList();
+
+      QVERIFY(menu_lines.size() > 16);
+      QVERIFY(menu_lines.value(0).toMap().value(QStringLiteral("current")).toBool());
+      QCOMPARE(menu_lines.value(0).toMap().value(QStringLiteral("keys")).toString(), QStringLiteral("<CR>"));
+      QVERIFY(menu_lines.value(0).toMap().value(QStringLiteral("label")).toString().startsWith(QStringLiteral("Insert")));
+      QVERIFY(menu_lines.value(3).toMap().value(QStringLiteral("rule")).toBool());
+      QCOMPARE(menu_lines.value(4).toMap().value(QStringLiteral("label")).toString(), QStringLiteral("Rename"));
+      shoot(QStringLiteral("explorer-menu"));
+      // The keys move in it, and a line runs what its key runs: here `cw`.
+      press(QStringLiteral("j"));
+      menu_lines = explorer->menu().value(QStringLiteral("lines")).toList();
+      QVERIFY(!menu_lines.value(0).toMap().value(QStringLiteral("current")).toBool() && menu_lines.value(1).toMap().value(QStringLiteral("current")).toBool());
+      explorer->chooseMenu(4);
+      QCOMPARE(explorer->line().value(QStringLiteral("mode")).toString(), QStringLiteral("insert"));
+      QVERIFY(explorer->menu().isEmpty());
+      explorer->cancel();
+      // Shift+F10 asks for it on the selected row, and Escape closes it.
+      QVERIFY(explorer->key(Qt::Key_F10, QString{}, Qt::ShiftModifier));
+      QCOMPARE(explorer->line().value(QStringLiteral("mode")).toString(), QStringLiteral("menu"));
+      QVERIFY(explorer->key(Qt::Key_Escape, QString{}, Qt::NoModifier));
+      QCOMPARE(explorer->line().value(QStringLiteral("mode")).toString(), QStringLiteral("normal"));
+      QCOMPARE(selected(), QStringLiteral("usage.md"));
+
       // A rename is a change typed, not written: the plan shows it, and `y` applies it.
       press(QStringLiteral("cw"));
       QCOMPARE(explorer->line().value(QStringLiteral("mode")).toString(), QStringLiteral("insert"));
@@ -1743,6 +1782,52 @@ return {api_version = 2, client = {
       QTRY_VERIFY_WITH_TIMEOUT(QFile::exists(root + QStringLiteral("/docs/usage.md")) && QFile::exists(root + QStringLiteral("/docs/sidebar.md")), runtime_wait_ms);
       QVERIFY(!QFile::exists(root + QStringLiteral("/docs/guide.md")));
       QTRY_VERIFY_WITH_TIMEOUT(!named(QStringLiteral("usage.md")).isEmpty(), runtime_wait_ms);
+
+      // A row dragged onto a directory is a change to write, as `dd` and `p` there: nothing moves
+      // on the disk, and `u` takes it back. The directory a row is in does not take it.
+      QCOMPARE(explorer->grab(0, listed(QStringLiteral("usage.md"))), 1);
+      QCOMPARE(explorer->aim(0, listed(QStringLiteral("docs")), false).value(QStringLiteral("count")).toInt(), 0);
+      QCOMPARE(explorer->aim(0, listed(QStringLiteral("assets")), false).value(QStringLiteral("row")).toInt(), listed(QStringLiteral("assets")));
+      explorer->drop(0, listed(QStringLiteral("assets")), false);
+      QCOMPARE(explorer->line().value(QStringLiteral("edits")).toInt(), 1);
+      QVERIFY(explorer->line().value(QStringLiteral("message")).toString().startsWith(QStringLiteral("1 to move into assets")));
+      QVERIFY(QFile::exists(root + QStringLiteral("/docs/usage.md")) && !QFile::exists(root + QStringLiteral("/assets/usage.md")));
+      press(QStringLiteral("u"));
+      QCOMPARE(explorer->line().value(QStringLiteral("edits")).toInt(), 0);
+
+      // The pointer itself: a right click asks for the menu where it is, a click elsewhere closes
+      // it, and a press, a move and a release drag the row under it.
+      const auto* overlay = test::visualItems(*window_->contentItem(), QStringLiteral("explorerOverlay")).value(0);
+      const auto* rows_area = test::visualItems(*window_->contentItem(), QStringLiteral("explorerRows")).value(0);
+
+      QVERIFY(overlay != nullptr && rows_area != nullptr);
+
+      const auto over = [&](const QString& name) {
+        constexpr qreal rows_inset = 4;
+        constexpr qreal half_row = 0.5;
+        const auto shown_row = listed(name) - window().value(QStringLiteral("top")).toInt();
+
+        return rows_area->mapToScene({rows_area->width() / 3, (rows_inset * overlay->property("ratio").toReal()) + ((shown_row + half_row) * overlay->property("rowHeight").toReal())}).toPoint();
+      };
+
+      QTest::mouseClick(window_, Qt::RightButton, Qt::NoModifier, over(QStringLiteral("agents.md")));
+      QCOMPARE(explorer->line().value(QStringLiteral("mode")).toString(), QStringLiteral("menu"));
+      QCOMPARE(selected(), QStringLiteral("agents.md"));
+      QTest::mouseClick(window_, Qt::LeftButton, Qt::NoModifier, over(QStringLiteral("assets")));
+      QCOMPARE(explorer->line().value(QStringLiteral("mode")).toString(), QStringLiteral("normal"));
+      QTest::mousePress(window_, Qt::LeftButton, Qt::NoModifier, over(QStringLiteral("usage.md")));
+      QTest::mouseMove(window_, over(QStringLiteral("sidebar.md")));
+      QTest::mouseMove(window_, over(QStringLiteral("assets")));
+      QTRY_VERIFY(overlay->property("dragging").toBool());
+      QCOMPARE(overlay->property("dragCount").toInt(), 1);
+      QCOMPARE(overlay->property("dropRow").toInt(), listed(QStringLiteral("assets")));
+      shoot(QStringLiteral("explorer-drag"));
+      QTest::mouseRelease(window_, Qt::LeftButton, Qt::NoModifier, over(QStringLiteral("assets")));
+      QVERIFY(!overlay->property("dragging").toBool());
+      QCOMPARE(explorer->line().value(QStringLiteral("edits")).toInt(), 1);
+      QVERIFY(QFile::exists(root + QStringLiteral("/docs/usage.md")));
+      press(QStringLiteral("u"));
+      QCOMPARE(explorer->line().value(QStringLiteral("edits")).toInt(), 0);
 
       // The changes lens lists what git says; a filter narrows a listing; `q` closes the explorer.
       explorer->run(QStringLiteral("changes"));

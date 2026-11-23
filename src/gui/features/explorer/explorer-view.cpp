@@ -688,6 +688,7 @@ namespace telar::gui::features::explorer {
         edits(memory),
         history(memory),
         yanked(memory),
+        dragged(memory),
         marks(memory),
         jumps(memory),
         draft(memory),
@@ -736,8 +737,12 @@ namespace telar::gui::features::explorer {
     return nullptr;
   }
 
+  bool selecting(const View& view) noexcept {
+    return view.mode == Mode::visual || (view.mode == Mode::menu && view.menu.over == Mode::visual);
+  }
+
   Range range(const View& view, const Window& window) noexcept {
-    if (view.mode == Mode::visual && window.anchor && &window == &explorer::window(view)) {
+    if (selecting(view) && window.anchor && &window == &explorer::window(view)) {
       return {.first = std::min(*window.anchor, window.cursor), .last = std::max(*window.anchor, window.cursor), .visual = true};
     }
 
@@ -967,19 +972,18 @@ namespace telar::gui::features::explorer {
       window.selected.assign(cwd);
     }
 
-    void yank(View& view, const State& state, const Context& context, PasteKind kind) {
-      const auto& window = windowAt(view.windows, view.current);
+    // The rows a command acts on in the current window, as what `p` or a drop puts elsewhere.
+    void take(ds::Vec<Yanked, Memory>& taken, const View& view, const State& state, const Context& context) {
+      const auto& window = explorer::window(view);
       const auto rows = range(view, window);
 
-      view.yanked.clear();
-      view.yank = kind;
       for (std::size_t index = rows.first; index <= rows.last && index < window.rows.size(); ++index) {
         const auto& row = window.rows[index];
         if (!chosen(view, window, index) || (row.kind != RowKind::entry && row.kind != RowKind::change)) {
           continue;
         }
 
-        auto& kept = view.yanked.push(Yanked{view.memory});
+        auto& kept = taken.push(Yanked{taken.memory()});
 
         kept.machine = window.machine;
         kept.directory = row.directory;
@@ -991,6 +995,14 @@ namespace telar::gui::features::explorer {
           kept.size = entry.size;
         }
       }
+    }
+
+    void yank(View& view, const State& state, const Context& context, PasteKind kind) {
+      ds::Vec<Yanked, Memory> taken{view.memory};
+
+      take(taken, view, state, context);
+      view.yanked = std::move(taken);
+      view.yank = kind;
     }
 
     // `dd`: the rows leave the listing. A row a change added is that change undone; any other is
@@ -1050,6 +1062,29 @@ namespace telar::gui::features::explorer {
       report(view, Tone::info, "{} cut · :w sends {} to the trash · p elsewhere moves {}", count, count == 1 ? "it" : "them", count == 1 ? "it" : "them");
     }
 
+    // What a paste or a drop puts in a directory of a machine, moved there or copied.
+    struct Put {
+      std::span<const Yanked> items;
+      PasteKind kind = PasteKind::copy;
+      std::uint64_t machine = 0;
+      std::string_view directory;
+    };
+
+    // The changes to write that put them there.
+    void put(Edits& edits, std::uint32_t& next, const Put& what) {
+      for (const auto& item : what.items) {
+        auto& edit = addEdit(edits, next, EditKind::paste, what.machine, what.directory);
+
+        edit.paste = what.kind;
+        edit.directory = item.directory;
+        edit.name.assign(baseOf(item.path.view()));
+        edit.source.assign(item.path.view());
+        edit.source_machine = item.machine;
+        edit.identity = item.identity;
+        edit.size = item.size;
+      }
+    }
+
     // `p`: what was yanked or cut goes in the directory of the selection, as a change to write.
     void paste(View& view, const State& state, const Context& context) {
       const auto& window = windowAt(view.windows, view.current);
@@ -1068,18 +1103,7 @@ namespace telar::gui::features::explorer {
 
       targetDirectory(directory, window, state, context);
       remember(view.history, view.edits, view.memory);
-      for (const auto& item : view.yanked) {
-        auto& edit = addEdit(view.edits, view.next_edit, EditKind::paste, window.machine, directory.view());
-
-        edit.paste = view.yank;
-        edit.directory = item.directory;
-        edit.name.assign(baseOf(item.path.view()));
-        edit.source.assign(item.path.view());
-        edit.source_machine = item.machine;
-        edit.identity = item.identity;
-        edit.size = item.size;
-      }
-
+      put(view.edits, view.next_edit, {.items = view.yanked.view(), .kind = view.yank, .machine = window.machine, .directory = directory.view()});
       report(view, Tone::info, "{} to {} into {} · :w shows the plan", view.yanked.size(), view.yank == PasteKind::move ? "move" : "copy", baseOf(directory.view()));
       // What was cut is moved once; another `p` copies it.
       view.yank = PasteKind::copy;
@@ -1229,7 +1253,7 @@ namespace telar::gui::features::explorer {
       ++view.revision;
     }
 
-    void startCreate(View& view, const State& state, const Context& context) {
+    void startCreate(View& view, const State& state, const Context& context, bool directory_asked) {
       auto& window = windowAt(view.windows, view.current);
       if (window.lens != Lens::tree) {
         say(view, "A new entry is typed in the tree", Tone::error);
@@ -1246,8 +1270,10 @@ namespace telar::gui::features::explorer {
       targetDirectory(directory, window, state, context);
       remember(view.history, view.edits, view.memory);
 
-      const auto id = addEdit(view.edits, view.next_edit, EditKind::create, window.machine, directory.view()).id;
+      auto& added = addEdit(view.edits, view.next_edit, EditKind::create, window.machine, directory.view());
+      const auto id = added.id;
 
+      added.directory = directory_asked;
       view.inserting = id;
       view.draft.clear();
       rebuildCurrent(view, state, context);
@@ -1294,8 +1320,8 @@ namespace telar::gui::features::explorer {
 
       if (acceptable(name)) {
         found->name.assign(name);
-        // A name that ends in a slash is a directory's.
-        found->directory = found->kind == EditKind::create ? typed.ends_with('/') : found->directory;
+        // A name that ends in a slash is a directory's, as is one asked for as a directory.
+        found->directory = found->directory || (found->kind == EditKind::create && typed.ends_with('/'));
         return true;
       }
 
@@ -1740,23 +1766,42 @@ namespace telar::gui::features::explorer {
 
     // `cd`, `s`: the directory of the row, for the focused shell to go to or for a new one to
     // start in.
-    Action toDirectory(View& view, const State& state, const Context& context, bool split) {
-      const auto& window = windowAt(view.windows, view.current);
+    // The directory of the selected row: its own, the one a file is in, or the window's root.
+    void rowDirectory(Text& directory, const Window& window, const State& state, const Context& context) {
+      directory.clear();
       if (window.rows.empty()) {
-        return {};
+        return;
       }
 
       const auto& row = window.rows[window.cursor];
 
-      pathOf(view.text, window, state, context, row);
-      if (view.text.empty()) {
-        return {};
+      pathOf(directory, window, state, context, row);
+      if (!directory.empty() && !row.directory) {
+        const Text parent{window.root.memory(), parentOf(directory.view())};
+
+        directory.assign(parent.view());
+      }
+    }
+
+    // Another window, on the directory of the selected row.
+    void splitHere(View& view, const State& state, const Context& context) {
+      const auto before = view.windows.size();
+      Text directory{view.memory};
+
+      rowDirectory(directory, windowAt(view.windows, view.current), state, context);
+      split(view, state, context, true);
+      if (view.windows.size() == before || directory.empty()) {
+        return;
       }
 
-      if (!row.directory) {
-        const Text parent{view.memory, parentOf(view.text.view())};
+      go(view, {.root = directory.view(), .jump = false});
+      rebuildCurrent(view, state, context);
+    }
 
-        view.text.assign(parent.view());
+    Action toDirectory(View& view, const State& state, const Context& context, bool split) {
+      rowDirectory(view.text, windowAt(view.windows, view.current), state, context);
+      if (view.text.empty()) {
+        return {};
       }
 
       if (split) {
@@ -1990,7 +2035,10 @@ namespace telar::gui::features::explorer {
         startRename(view, state);
         break;
       case Command::create:
-        startCreate(view, state, context);
+        startCreate(view, state, context, false);
+        break;
+      case Command::create_directory:
+        startCreate(view, state, context, true);
         break;
       case Command::cut:
         cut(view, state, context);
@@ -2027,6 +2075,9 @@ namespace telar::gui::features::explorer {
         return quit(view, false, false);
       case Command::only_window:
         onlyWindow(view);
+        break;
+      case Command::split_here:
+        splitHere(view, state, context);
         break;
       case Command::pin:
         togglePin(view);
@@ -2481,6 +2532,246 @@ namespace telar::gui::features::explorer {
     return treeNeed(view, state, machine, true);
   }
 
+  namespace {
+
+    // The command a line of the menu runs: the one its key runs.
+    constexpr Command commandOf(MenuEntry entry) noexcept {
+      switch (entry) {
+      case MenuEntry::rule:
+        return Command::none;
+      case MenuEntry::hand:
+        return Command::enter;
+      case MenuEntry::open:
+        return Command::open;
+      case MenuEntry::mention:
+        return Command::mention;
+      case MenuEntry::rename:
+        return Command::rename;
+      case MenuEntry::new_file:
+        return Command::create;
+      case MenuEntry::new_directory:
+        return Command::create_directory;
+      case MenuEntry::cut:
+      case MenuEntry::trash:
+      case MenuEntry::drop_change:
+        return Command::cut;
+      case MenuEntry::copy:
+        return Command::yank;
+      case MenuEntry::paste:
+        return Command::paste;
+      case MenuEntry::copy_relative:
+        return Command::yank_relative;
+      case MenuEntry::shell_here:
+        return Command::split_shell;
+      case MenuEntry::change_directory:
+        return Command::change_directory;
+      case MenuEntry::window_here:
+        return Command::split_here;
+      case MenuEntry::diff:
+        return Command::toggle_diff;
+      case MenuEntry::stage:
+        return Command::stage;
+      case MenuEntry::unstage:
+        return Command::unstage;
+      case MenuEntry::discard:
+        return Command::discard;
+      case MenuEntry::new_window:
+        return Command::split_vertical;
+      case MenuEntry::write:
+        return Command::write;
+      }
+
+      return Command::none;
+    }
+
+    void addLine(Menu& menu, MenuEntry entry, bool enabled = true) {
+      if (menu.count < menu.items.size()) {
+        menu.items.atMut(menu.count++) = {.entry = entry, .enabled = enabled};
+      }
+    }
+
+    // The menu of a window, where no row is: what is added or put in its root.
+    void fillWindow(Menu& menu, const View& view) {
+      const bool tree = explorer::window(view).lens == Lens::tree;
+
+      addLine(menu, MenuEntry::new_file, tree);
+      addLine(menu, MenuEntry::new_directory, tree);
+      addLine(menu, MenuEntry::paste, !view.yanked.empty());
+      addLine(menu, MenuEntry::rule);
+      addLine(menu, MenuEntry::new_window, view.windows.size() < ViewLimits::windows);
+      addLine(menu, MenuEntry::write, !view.edits.empty());
+    }
+
+    // The menu of a row a change adds.
+    void fillAdded(Menu& menu) {
+      addLine(menu, MenuEntry::rename);
+      addLine(menu, MenuEntry::drop_change);
+      addLine(menu, MenuEntry::rule);
+      addLine(menu, MenuEntry::write);
+    }
+
+    // The menu of an entry or of a changed path: toward the panes, the changes typed, where it
+    // is, and what git does with it when it has changes.
+    void fillRow(Menu& menu, const View& view, const State& state, const Context& context) {
+      const auto& window = explorer::window(view);
+      const auto& row = window.rows[window.cursor];
+      const auto rows = range(view, window);
+      const bool single = rows.first == rows.last;
+      const bool tree = window.lens == Lens::tree;
+      const auto* pane = focusedPane(context);
+      const auto held = standing(state.repository, window.selected.view(), row.directory);
+
+      addLine(menu, MenuEntry::hand);
+      addLine(menu, MenuEntry::open, !row.directory);
+      addLine(menu, MenuEntry::mention, std::ranges::contains(context.panes, PaneKind::agent, &PaneFact::kind));
+      addLine(menu, MenuEntry::rule);
+      addLine(menu, MenuEntry::rename, single && tree && row.kind == RowKind::entry);
+      addLine(menu, MenuEntry::new_file, tree);
+      addLine(menu, MenuEntry::new_directory, tree);
+      addLine(menu, MenuEntry::rule);
+      addLine(menu, MenuEntry::cut);
+      addLine(menu, MenuEntry::copy);
+      addLine(menu, MenuEntry::paste, !view.yanked.empty());
+      addLine(menu, MenuEntry::copy_relative);
+      addLine(menu, MenuEntry::trash);
+      addLine(menu, MenuEntry::rule);
+      addLine(menu, MenuEntry::shell_here);
+      addLine(menu, MenuEntry::change_directory, pane != nullptr && pane->kind == PaneKind::shell);
+      addLine(menu, MenuEntry::window_here, view.windows.size() < ViewLimits::windows);
+      if (held.staged != FileState::unchanged || held.unstaged != FileState::unchanged || held.below != 0) {
+        addLine(menu, MenuEntry::rule);
+        addLine(menu, MenuEntry::diff, !row.directory);
+        addLine(menu, MenuEntry::stage);
+        addLine(menu, MenuEntry::unstage);
+        addLine(menu, MenuEntry::discard);
+      }
+
+      if (!view.edits.empty()) {
+        addLine(menu, MenuEntry::rule);
+        addLine(menu, MenuEntry::write);
+      }
+    }
+
+    void closeMenu(View& view) noexcept {
+      view.mode = view.menu.over;
+      view.menu = {};
+      ++view.revision;
+    }
+
+    // The line of the menu `step` lines from the current one that can be chosen, around its ends.
+    void stepMenu(View& view, std::size_t step) noexcept {
+      auto& menu = view.menu;
+
+      for (std::size_t tried = 0; tried < menu.count; ++tried) {
+        menu.current = (menu.current + step) % menu.count;
+        if (menu.items[menu.current].entry != MenuEntry::rule && menu.items[menu.current].enabled) {
+          break;
+        }
+      }
+
+      ++view.revision;
+    }
+
+    Action runMenu(View& view, State& state, const Context& context, std::size_t line) {
+      if (view.mode != Mode::menu || line >= view.menu.count) {
+        return {};
+      }
+
+      const auto item = view.menu.items[line];
+      if (item.entry == MenuEntry::rule || !item.enabled) {
+        return {};
+      }
+
+      closeMenu(view);
+      say(view, {});
+      return run(view, state, context, {.command = commandOf(item.entry)});
+    }
+
+    // A key while the menu shows: it moves in it, runs its line, or closes it.
+    Action menuKey(View& view, State& state, const Context& context, std::string_view key) {
+      if (key == "j" || key == "<C-n>") {
+        stepMenu(view, 1);
+      } else if (key == "k" || key == "<C-p>") {
+        stepMenu(view, view.menu.count - 1);
+      } else if (key == "<CR>" || key == "l") {
+        return runMenu(view, state, context, view.menu.current);
+      } else if (key == "<Esc>" || key == "q" || key == "h") {
+        closeMenu(view);
+      }
+
+      return {};
+    }
+
+    // Whether `item` can go to `directory` of `machine`: not where it already is, when it is
+    // moved, and never into itself.
+    bool lands(const Yanked& item, const Put& where) noexcept {
+      if (item.machine != where.machine) {
+        return true;
+      }
+
+      if (where.kind == PasteKind::move && parentOf(item.path.view()) == where.directory) {
+        return false;
+      }
+
+      return !within(where.directory, item.path.view());
+    }
+
+    // The directory that takes what is let go at `drop`: the row's own when it is one, the one a
+    // file or a row a change adds is in, and the window's root for any other row or none.
+    void dropDirectory(Text& directory, const View& view, const State& state, const Context& context, const Drop& drop) {
+      const auto& window = *view.windows[drop.window];
+
+      directory.assign(window.root.view());
+      if (window.lens != Lens::tree || drop.row >= window.rows.size()) {
+        return;
+      }
+
+      const auto& row = window.rows[drop.row];
+      if (row.kind == RowKind::added) {
+        if (const auto* edit = editOf(view, row)) {
+          directory.assign(edit->path.view());
+        }
+
+        return;
+      }
+
+      if (row.kind != RowKind::entry) {
+        return;
+      }
+
+      Text path{directory.memory()};
+
+      pathOf(path, window, state, context, row);
+      if (!path.empty()) {
+        directory.assign(row.directory ? path.view() : parentOf(path.view()));
+      }
+    }
+
+    // The row of the directory that holds the row `index`, in a tree.
+    ds::Option<std::size_t> holderRow(const Window& window, std::size_t index) noexcept {
+      const auto depth = window.rows[index].depth;
+
+      while (index-- > 0) {
+        const auto& row = window.rows[index];
+        if (row.kind == RowKind::entry && row.directory && row.depth < depth) {
+          return index;
+        }
+      }
+
+      return ds::none;
+    }
+
+    // What moves is neither removed nor renamed where it was.
+    void forget(Edits& edits, std::span<const Yanked> moved) {
+      for (const auto& item : moved) {
+        edits.retain([&](const Edit& edit) {
+          return (edit.kind != EditKind::remove && edit.kind != EditKind::rename) || edit.machine != item.machine || edit.path.view() != item.path.view();
+        });
+      }
+    }
+
+  }
+
   Action press(View& view, State& state, const Context& context, KeyChord chord) {
     if (!view.open || view.windows.empty()) {
       return {};
@@ -2508,6 +2799,10 @@ namespace telar::gui::features::explorer {
       view.mode = Mode::normal;
       ++view.revision;
       return {};
+    }
+
+    if (view.mode == Mode::menu) {
+      return menuKey(view, state, context, text);
     }
 
     if (view.mode != Mode::normal && view.mode != Mode::visual) {
@@ -2555,6 +2850,7 @@ namespace telar::gui::features::explorer {
     case Mode::visual:
     case Mode::plan:
     case Mode::help:
+    case Mode::menu:
       break;
     }
 
@@ -2563,6 +2859,12 @@ namespace telar::gui::features::explorer {
 
   void cancel(View& view, const State& state, const Context& context) {
     if (view.windows.empty()) {
+      return;
+    }
+
+    // A menu closes over what it opened on, selection and all.
+    if (view.mode == Mode::menu) {
+      closeMenu(view);
       return;
     }
 
@@ -2592,6 +2894,7 @@ namespace telar::gui::features::explorer {
       break;
     case Mode::command:
     case Mode::help:
+    case Mode::menu:
     case Mode::normal:
       break;
     }
@@ -2605,7 +2908,7 @@ namespace telar::gui::features::explorer {
     const auto window = pick.window;
     const auto row = pick.row;
 
-    if (window >= view.windows.size() || view.mode == Mode::plan || view.mode == Mode::help) {
+    if (window >= view.windows.size() || view.mode == Mode::plan || view.mode == Mode::help || view.mode == Mode::menu) {
       return;
     }
 
@@ -2658,6 +2961,158 @@ namespace telar::gui::features::explorer {
     if (pick.window < view.windows.size() && pick.row < windowAt(view.windows, view.current).rows.size()) {
       setExpanded(view, state, context, pick.row, !windowAt(view.windows, view.current).rows[pick.row].expanded);
     }
+  }
+
+  void openMenu(View& view, const State& state, const Context& context, const Pick& pick) {
+    if (view.mode == Mode::menu) {
+      closeMenu(view);
+    }
+
+    if (pick.window >= view.windows.size() || (view.mode != Mode::normal && view.mode != Mode::visual)) {
+      return;
+    }
+
+    const auto& asked = *view.windows[pick.window];
+    const bool on_row = pick.row < asked.rows.size() && selectable(asked.rows[pick.row].kind);
+
+    // A row outside the selection is selected first, as file managers do.
+    if (on_row && (pick.window != view.current || !chosen(view, asked, pick.row))) {
+      select(view, state, context, {.window = pick.window, .row = pick.row});
+    } else if (pick.window != view.current) {
+      leaveVisual(view);
+      view.current = pick.window;
+    }
+
+    Menu menu{.over = view.mode};
+    const auto& window = explorer::window(view);
+    const auto kind = on_row ? window.rows[window.cursor].kind : RowKind::header;
+
+    if (kind == RowKind::added) {
+      fillAdded(menu);
+    } else if (kind == RowKind::entry || kind == RowKind::change) {
+      fillRow(menu, view, state, context);
+    } else {
+      fillWindow(menu, view);
+    }
+
+    view.menu = menu;
+    view.mode = Mode::menu;
+    clear(view.keys);
+    // On the first line that can be chosen.
+    view.menu.current = view.menu.count - 1;
+    stepMenu(view, 1);
+  }
+
+  Action chooseMenu(View& view, State& state, const Context& context, std::size_t line) {
+    return runMenu(view, state, context, line);
+  }
+
+  std::size_t grab(View& view, const State& state, const Context& context, const Pick& pick) {
+    view.dragged.clear();
+    if (pick.window >= view.windows.size() || (view.mode != Mode::normal && view.mode != Mode::visual)) {
+      return 0;
+    }
+
+    const auto& grabbed = *view.windows[pick.window];
+    if (pick.row >= grabbed.rows.size()) {
+      return 0;
+    }
+
+    // A row outside the selection is dragged alone, as file managers do.
+    if (pick.window != view.current || !chosen(view, grabbed, pick.row)) {
+      select(view, state, context, {.window = pick.window, .row = pick.row});
+    }
+
+    ds::Vec<Yanked, Memory> taken{view.memory};
+
+    take(taken, view, state, context);
+    view.dragged = std::move(taken);
+    return view.dragged.size();
+  }
+
+  Aim aim(const View& view, const State& state, const Context& context, const Drop& drop) {
+    Aim result;
+
+    if (view.dragged.empty() || drop.window >= view.windows.size()) {
+      return result;
+    }
+
+    const auto& window = *view.windows[drop.window];
+    Text directory{view.memory};
+
+    dropDirectory(directory, view, state, context, drop);
+
+    const Put where{.kind = drop.copy ? PasteKind::copy : PasteKind::move, .machine = window.machine, .directory = directory.view()};
+
+    result.count = static_cast<std::size_t>(std::ranges::count_if(view.dragged, [&](const Yanked& item) {
+      return lands(item, where);
+    }));
+
+    if (window.lens == Lens::tree && drop.row < window.rows.size() && directory.view() != window.root.view()) {
+      const auto& row = window.rows[drop.row];
+
+      result.row = row.kind == RowKind::entry && row.directory ? ds::Option<std::size_t>{drop.row} : holderRow(window, drop.row);
+    }
+
+    return result;
+  }
+
+  void drop(View& view, const State& state, const Context& context, const Drop& drop) {
+    ds::Vec<Yanked, Memory> landing{view.memory};
+
+    if (drop.window >= view.windows.size()) {
+      view.dragged.clear();
+      return;
+    }
+
+    Text directory{view.memory};
+
+    dropDirectory(directory, view, state, context, drop);
+
+    const Put where{.kind = drop.copy ? PasteKind::copy : PasteKind::move, .machine = view.windows[drop.window]->machine, .directory = directory.view()};
+
+    for (auto& item : view.dragged.viewMut()) {
+      if (lands(item, where)) {
+        landing.push(std::move(item));
+      }
+    }
+
+    view.dragged.clear();
+    ++view.revision;
+    if (landing.empty()) {
+      say(view, "It is there already, or a directory would go into itself: nothing dropped", Tone::error);
+      return;
+    }
+
+    if (view.edits.size() + landing.size() > ViewLimits::edits) {
+      say(view, "Too many changes not written: :w first", Tone::error);
+      return;
+    }
+
+    remember(view.history, view.edits, view.memory);
+    leaveVisual(view);
+    view.current = drop.window;
+    if (where.kind == PasteKind::move) {
+      forget(view.edits, landing.view());
+    }
+
+    put(view.edits, view.next_edit, {.items = landing.view(), .kind = where.kind, .machine = where.machine, .directory = directory.view()});
+
+    auto& window = windowAt(view.windows, view.current);
+
+    window.lens = Lens::tree;
+    window.filter.clear();
+    if (directory.view() != window.root.view()) {
+      add(window.expanded, directory.view());
+    }
+
+    report(view, Tone::info, "{} to {} into {} · :w shows the plan", landing.size(), where.kind == PasteKind::move ? "move" : "copy", baseOf(directory.view()));
+    // The window the rows left shows what the one that took them does.
+    rebuild(view, state, context, where.machine);
+  }
+
+  void release(View& view) noexcept {
+    view.dragged.clear();
   }
 
   void resize(View& view, const WindowRows& shown) noexcept {

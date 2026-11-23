@@ -107,6 +107,12 @@ namespace telar::gui::features::explorer {
         bind("<D-v>", Command::paste),
         bind("<D-z>", Command::undo),
         bind("<D-s>", Command::write),
+        // And with Control, where that is the key a system gives its shortcuts.
+        bind("<C-c>", Command::yank),
+        bind("<C-x>", Command::cut),
+        bind("<C-v>", Command::paste),
+        bind("<C-z>", Command::undo),
+        bind("<C-s>", Command::write),
     };
 
     // The keys of visual mode: the motions, and the commands a selection takes.
@@ -132,6 +138,8 @@ namespace telar::gui::features::explorer {
         bind("q", Command::escape),
         bind("<D-c>", Command::yank),
         bind("<D-x>", Command::cut),
+        bind("<C-c>", Command::yank),
+        bind("<C-x>", Command::cut),
     };
 
     constexpr std::string_view named(KeyChord::Key key) noexcept {

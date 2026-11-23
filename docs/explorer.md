@@ -30,7 +30,8 @@ until `:w` shows the plan and you accept it. `?` lists every key.
 | `S`, `g.`, `gi` | Sort by name, size or time; show dotfiles; show what git ignores. |
 | `R` | Read the directories again. |
 
-A click selects a row, a double click acts as Enter, and the wheel scrolls.
+A click selects a row, a double click acts as Enter, and the wheel scrolls. Shift and a click
+selects up to that row, and Cmd or Ctrl and a click picks rows one by one.
 
 ## What a row says
 
@@ -94,6 +95,9 @@ The explorer closes when a file goes to a pane. `Ctrl+w` `T` keeps it open inste
 
 A count takes that many rows: `3dd`. `V` selects rows for `d`, `y`, `ga` and `gu`.
 
+The shortcuts of a file manager name the same commands: Cmd or Ctrl with `c`, `x`, `v`, `z` and
+`s` are `yy`, `dd`, `p`, `u` and `:w`, and F2 renames.
+
 ![Changes typed on the listing, not yet written](images/telar-explorer-pending.png)
 
 `:w` shows what the runtime will be asked to do, and `y` sends it:
@@ -110,6 +114,22 @@ A count takes that many rows: `3dd`. `V` selects rows for `d`, `y`, `ga` and `gu
 - A plan holds 64 operations at most.
 
 `q` and `:q` do not close the last window while changes wait; `:q!` and `:e!` discard them.
+
+## With the pointer
+
+A right click on a row opens its menu, as Shift+F10 or the menu key does on the selected row.
+It lists what applies to that row, each line with the keys that do the same, so the menu
+teaches them. `j` and `k` move in it, Enter runs the line, and Escape or a click elsewhere
+closes it. On a row of a selection it acts on the whole selection; on another row, on that one.
+
+![The menu of a row](images/telar-explorer-menu.png)
+
+Rows are dragged onto a directory, onto a window, or onto another window of the explorer. A
+drop is a change typed, the same `dd` or `yy` and then `p` leave there: it moves the rows, or
+copies them with Alt held, when `:w` writes it, and `u` takes it back. A row of a selection
+takes the selection with it. A label beside the pointer says what letting go would do and to
+how many rows, and the directory that would take them is marked. A drop that would leave a row
+where it is, or put a directory into itself, is refused.
 
 ## Git
 
@@ -140,6 +160,6 @@ The explorer splits into three windows at most, each on its own directory.
 
 - A window lists the machine the window shows: two windows cannot be on two machines, and
   nothing is copied from one machine to another.
-- Nothing is dragged in or out, and a row has no menu.
+- Nothing is dragged onto a pane, out to the desktop, or in from it.
 - The home of a remote machine's account is not known to the window, so its paths are
   written whole and `~` goes nowhere there.

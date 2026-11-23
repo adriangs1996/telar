@@ -12,13 +12,17 @@ import telar.wire.files;
 
 export namespace telar::gui::application::explorer {
 
+  using features::explorer::Aim;
   using features::explorer::DiffTone;
+  using features::explorer::Drop;
   using features::explorer::Fact;
   using features::explorer::HeaderLook;
   using features::explorer::Hint;
   using features::explorer::Hints;
   using features::explorer::Lens;
   using features::explorer::LensLook;
+  using features::explorer::MenuLine;
+  using features::explorer::MenuLook;
   using features::explorer::Mode;
   using features::explorer::Pick;
   using features::explorer::PlanStep;
@@ -33,6 +37,7 @@ export namespace telar::gui::application::explorer {
   using features::explorer::Window;
   using features::explorer::WindowRows;
 
+  using features::explorer::chosen;
   using features::explorer::idle_message;
   using features::explorer::lens_count;
   using features::explorer::modeText;
@@ -83,6 +88,18 @@ export namespace telar::gui::application::explorer {
   Effect activate(Session& session, View& view, const Host& host, const Pick& pick);
   void toggle(Session& session, View& view, const Host& host, const Pick& pick);
 
+  // The pointer asked for the menu of a row of a window, or of the window with a row past its
+  // last; and chose a line of it.
+  void openMenu(Session& session, View& view, const Host& host, const Pick& pick);
+  Effect chooseMenu(Session& session, View& view, const Host& host, std::size_t line);
+
+  // The pointer took hold of a row to drag it, which says how many rows go with it; where it
+  // is now would take them or not; and it let them go there, or where nothing takes them.
+  std::size_t grab(Session& session, View& view, const Host& host, const Pick& pick);
+  [[nodiscard]] Aim aim(const Session& session, const View& view, const Host& host, const Drop& drop);
+  void drop(Session& session, View& view, const Host& host, const Drop& drop);
+  void release(View& view) noexcept;
+
   // A window shows `rows` rows; and the wheel moves what it shows by `rows` rows.
   void resize(View& view, const WindowRows& shown) noexcept;
   void scroll(View& view, const WindowRows& moved) noexcept;
@@ -99,6 +116,7 @@ export namespace telar::gui::application::explorer {
   [[nodiscard]] Hints hints(const Session& session, const View& view, const Host& host);
   [[nodiscard]] ds::Array<LensLook, lens_count> lenses(const Session& session, const View& view, const Host& host);
   [[nodiscard]] PreviewLook preview(const Session& session, const View& view, const Host& host, std::uint64_t now_seconds);
+  [[nodiscard]] MenuLook menu(const Session& session, const View& view, const Host& host);
 
   // The text the preview shows, which is the session's own.
   [[nodiscard]] tbc::val_a<std::string_view> previewText(tbc::ref_a<Session> session, const View& view) noexcept;

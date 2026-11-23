@@ -45,6 +45,8 @@ export namespace telar::gui::features::explorer {
     rename,
     rename_whole,
     create,
+    // A new entry that is a directory, whatever its name ends in: no key names it, a row's menu does.
+    create_directory,
     cut,
     yank,
     yank_relative,
@@ -63,6 +65,8 @@ export namespace telar::gui::features::explorer {
     window_down,
     close_window,
     only_window,
+    // Another window on the directory of the selected row: what `:vs` does with its path.
+    split_here,
     pin,
     // Toward the panes.
     open,

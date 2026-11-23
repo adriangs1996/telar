@@ -20,6 +20,16 @@ FocusScope {
     readonly property var windows: controller.windows
     readonly property var line: controller.line
     readonly property var preview: controller.preview
+    readonly property var menu: controller.menu
+    // Rows the pointer drags: how many, where it is in the explorer, whether Alt asks for a
+    // copy, and the window and row whose directory would take them there, if one would.
+    property bool dragging: false
+    property int dragCount: 0
+    property real dragX: 0
+    property real dragY: 0
+    property bool dropCopy: false
+    property int dropWindow: -1
+    property int dropRow: -1
     readonly property string mode: line.mode ?? "normal"
     readonly property bool typing: mode === "insert" || mode === "search" || mode === "command"
     // The terminal's font, and the same a step smaller for what a row says beside its name.
@@ -75,6 +85,53 @@ FocusScope {
         const rest = text.slice(cut).trim();
 
         return [text.slice(0, cut), rest.length <= cells ? rest : rest.slice(0, cells - 1) + "…"];
+    }
+
+    // The window and the row of its listing under a point of the explorer; none outside the rows
+    // of every window, and row -1 below the last one.
+    function rowsAt(x, y) {
+        for (let index = 0; index < panes.count; ++index) {
+            const pane = panes.itemAt(index);
+            if (!pane)
+                continue;
+
+            const point = pane.rowsArea.mapFromItem(root, x, y);
+            if (point.x < 0 || point.y < 0 || point.x >= pane.rowsArea.width || point.y >= pane.rowsArea.height)
+                continue;
+
+            const row = pane.modelData.top + Math.floor((point.y - 4 * ratio) / rowHeight);
+
+            return {window: index, row: row >= 0 && row < pane.modelData.rows ? row : -1};
+        }
+
+        return null;
+    }
+
+    // The pointer drags the rows to a point of the explorer: what is there says whether it takes
+    // them, and which directory does.
+    function dragTo(x, y, copy) {
+        const at = rowsAt(x, y);
+        const aimed = at === null ? ({}) : controller.aim(at.window, at.row, copy);
+
+        dragX = x;
+        dragY = y;
+        dropCopy = copy;
+        dropWindow = (aimed.count ?? 0) > 0 ? at.window : -1;
+        dropRow = aimed.row ?? -1;
+    }
+
+    // The pointer lets the rows go where it is, or the drag ends with nothing to take them.
+    function endDrag(letGo) {
+        const at = letGo ? rowsAt(dragX, dragY) : null;
+
+        dragging = false;
+        dropWindow = -1;
+        dropRow = -1;
+        if (at !== null)
+            controller.drop(at.window, at.row, dropCopy);
+        else
+            controller.release();
+        settleFocus();
     }
 
     function toneColor(tone) {
@@ -316,6 +373,7 @@ FocusScope {
         height: Math.max(0, root.height - y - command.height - hints.height)
 
         Repeater {
+            id: panes
             // A window keeps its items while what it shows changes.
             model: root.windows.length
 
@@ -329,6 +387,7 @@ FocusScope {
                 readonly property real room: body.width - root.previewWidth
                 readonly property bool current: modelData.current
                 readonly property int visibleRows: Math.max(1, Math.floor(list.height / root.rowHeight))
+                readonly property Item rowsArea: list
 
                 x: sideBySide ? Math.round(index * room / count) : 0
                 y: sideBySide ? 0 : Math.round(index * body.height / count)
@@ -488,6 +547,7 @@ FocusScope {
                 // The rows the window shows, and nothing past them.
                 Item {
                     id: list
+                    objectName: "explorerRows"
                     y: head.height
                     width: parent.width
                     height: Math.max(0, parent.height - head.height - root.statusHeight)
@@ -508,6 +568,15 @@ FocusScope {
                             y: 4 * root.ratio + index * root.rowHeight
                             width: list.width - (scrollbar.visible ? scrollbar.width + 2 * root.ratio : 0)
                             height: root.rowHeight
+
+                            // The directory that would take the rows dragged.
+                            Rectangle {
+                                anchors.fill: parent
+                                visible: root.dragging && root.dropWindow === pane.index && root.dropRow === pane.modelData.top + row.index
+                                color: Qt.alpha(root.colors.accent, 0.16)
+                                border.width: Math.max(root.hairline, 1 * root.ratio)
+                                border.color: root.colors.accent
+                            }
 
                             // The selection: the row lit, and the accent at its edge.
                             Rectangle {
@@ -765,10 +834,24 @@ FocusScope {
                         color: root.colors.subtext0
                     }
 
+                    // The window's root would take the rows dragged.
+                    Rectangle {
+                        anchors.fill: parent
+                        visible: root.dragging && root.dropWindow === pane.index && root.dropRow < 0
+                        color: "transparent"
+                        border.width: Math.max(root.hairline, 1 * root.ratio)
+                        border.color: root.colors.accent
+                    }
+
                     MouseArea {
                         anchors.fill: parent
-                        acceptedButtons: Qt.LeftButton
-                        readonly property int rowAt: -1
+                        acceptedButtons: Qt.LeftButton | Qt.RightButton
+                        // The row the button went down on and where, to tell a click from a drag;
+                        // and whether choosing it waits for the button to come up, as it does on
+                        // a row of the selection, which a drag takes whole.
+                        property int pressedRow: -1
+                        property point pressedAt: Qt.point(0, 0)
+                        property bool waiting: false
 
                         function rowOf(mouse) {
                             return pane.modelData.top + Math.floor((mouse.y - 4 * root.ratio) / root.rowHeight);
@@ -779,12 +862,62 @@ FocusScope {
                             const extend = (mouse.modifiers & Qt.ShiftModifier) !== 0;
                             const pick = (mouse.modifiers & (Qt.ControlModifier | Qt.MetaModifier)) !== 0;
 
-                            if (root.typing)
+                            if (root.typing || root.mode === "menu")
                                 root.controller.cancel();
-                            root.controller.select(pane.index, at, extend, pick);
+                            if (mouse.button === Qt.RightButton) {
+                                const place = mapToItem(root, mouse.x, mouse.y);
+
+                                root.controller.openMenu(pane.index, at < pane.modelData.rows ? at : -1, Qt.point(place.x, place.y));
+                                root.settleFocus();
+                                return;
+                            }
+
+                            pressedRow = at;
+                            pressedAt = Qt.point(mouse.x, mouse.y);
+                            waiting = !extend && !pick && root.controller.isChosen(pane.index, at);
+                            if (!waiting)
+                                root.controller.select(pane.index, at, extend, pick);
                             root.settleFocus();
                         }
-                        onDoubleClicked: mouse => root.controller.activate(pane.index, rowOf(mouse))
+                        onPositionChanged: mouse => {
+                            if ((mouse.buttons & Qt.LeftButton) === 0 || pressedRow < 0)
+                                return;
+
+                            const place = mapToItem(root, mouse.x, mouse.y);
+
+                            if (!root.dragging) {
+                                if (Math.abs(mouse.x - pressedAt.x) + Math.abs(mouse.y - pressedAt.y) < 6 * root.ratio)
+                                    return;
+
+                                root.dragCount = root.controller.grab(pane.index, pressedRow);
+                                if (root.dragCount === 0) {
+                                    pressedRow = -1;
+                                    return;
+                                }
+
+                                root.dragging = true;
+                            }
+
+                            root.dragTo(place.x, place.y, (mouse.modifiers & Qt.AltModifier) !== 0);
+                        }
+                        onReleased: mouse => {
+                            if (root.dragging)
+                                root.endDrag(true);
+                            else if (waiting && mouse.button === Qt.LeftButton)
+                                root.controller.select(pane.index, pressedRow, false, false);
+                            waiting = false;
+                            pressedRow = -1;
+                        }
+                        onCanceled: {
+                            if (root.dragging)
+                                root.endDrag(false);
+                            waiting = false;
+                            pressedRow = -1;
+                        }
+                        onDoubleClicked: mouse => {
+                            if (mouse.button === Qt.LeftButton)
+                                root.controller.activate(pane.index, rowOf(mouse));
+                        }
                         onWheel: wheel => {
                             root.controller.scroll(pane.index, wheel.angleDelta.y > 0 ? -3 : 3);
                             wheel.accepted = true;
@@ -1464,6 +1597,150 @@ FocusScope {
                     }
                 }
             }
+        }
+    }
+    // A click anywhere but on the menu closes it.
+    MouseArea {
+        anchors.fill: parent
+        z: 7
+        visible: root.mode === "menu"
+        acceptedButtons: Qt.AllButtons
+        onPressed: root.controller.cancel()
+        onWheel: wheel => wheel.accepted = true
+    }
+
+    // The menu of a row: what applies to it, each line with the keys that do the same.
+    NativeRoundedRectangle {
+        id: menuBox
+
+        readonly property real pad: 4 * root.ratio
+        readonly property real lineHeight: Math.round(Math.max(root.typography.smallRow, (root.tinyGrid.cellHeight ?? 14) + 8 * root.ratio))
+        readonly property real ruleHeight: 9 * root.ratio
+        // Where the pointer asked for it, or below the selected row when the keys did.
+        readonly property point asked: {
+            if ((root.menu.x ?? -1) >= 0)
+                return Qt.point(root.menu.x, root.menu.y);
+
+            const pane = panes.itemAt(root.menu.window ?? 0);
+
+            return pane ? pane.rowsArea.mapToItem(root, root.gutter + 40 * root.ratio, 4 * root.ratio + ((root.menu.row ?? 0) + 1) * root.rowHeight) : Qt.point(0, 0);
+        }
+        readonly property real wanted: {
+            let widest = 250 * root.ratio;
+
+            for (let index = 0; index < menuLines.count; ++index) {
+                const line = menuLines.itemAt(index);
+                if (line)
+                    widest = Math.max(widest, line.wanted + 2 * pad);
+            }
+
+            return widest;
+        }
+
+        z: 8
+        visible: root.mode === "menu" && (root.menu.lines ?? []).length > 0
+        x: Math.round(Math.max(pad, Math.min(asked.x, root.width - width - pad)))
+        y: Math.round(Math.max(pad, Math.min(asked.y, root.height - height - pad)))
+        width: Math.min(wanted, root.width - 2 * pad)
+        height: menuColumn.height + 2 * pad
+        radius: 7 * root.ratio
+        color: root.colors.surface0
+        borderWidth: Math.max(root.hairline, 1 * root.ratio)
+        borderColor: root.colors.overlay0
+        borderAlpha: 1
+
+        Column {
+            id: menuColumn
+            x: menuBox.pad
+            y: menuBox.pad
+            width: parent.width - 2 * menuBox.pad
+
+            Repeater {
+                id: menuLines
+                model: root.menu.lines ?? []
+
+                delegate: Item {
+                    id: menuLine
+
+                    required property var modelData
+                    required property int index
+                    readonly property real wanted: modelData.rule ? 0 : menuLabel.implicitWidth + menuKeys.implicitWidth + 34 * root.ratio
+
+                    width: menuColumn.width
+                    height: modelData.rule ? menuBox.ruleHeight : menuBox.lineHeight
+
+                    Rectangle {
+                        x: 6 * root.ratio
+                        y: Math.round((parent.height - height) / 2)
+                        width: parent.width - 2 * x
+                        height: Math.max(root.hairline, 1 * root.ratio)
+                        visible: menuLine.modelData.rule
+                        color: root.colors.surface1
+                    }
+
+                    NativeRoundedRectangle {
+                        anchors.fill: parent
+                        visible: !menuLine.modelData.rule && menuLine.modelData.current
+                        radius: 4 * root.ratio
+                        color: root.colors.surface1
+                    }
+
+                    ChromeText {
+                        id: menuLabel
+                        x: 8 * root.ratio
+                        width: implicitWidth
+                        height: parent.height
+                        visible: !menuLine.modelData.rule
+                        text: menuLine.modelData.label ?? ""
+                        pixelSize: root.typography.small
+                        color: menuLine.modelData.enabled ? root.colors.text : root.colors.overlay0
+                        elide: Text.ElideNone
+                    }
+
+                    CellText {
+                        id: menuKeys
+                        x: parent.width - width - 8 * root.ratio
+                        width: implicitWidth
+                        height: parent.height
+                        visible: !menuLine.modelData.rule
+                        text: menuLine.modelData.keys ?? ""
+                        grid: root.tinyGrid
+                        color: menuLine.modelData.enabled ? root.colors.subtext0 : root.colors.overlay0
+                    }
+
+                    ActionPointer {
+                        anchors.fill: parent
+                        enabled: !menuLine.modelData.rule && menuLine.modelData.enabled
+                        identity: "menu:" + menuLine.index
+                        onActivated: root.controller.chooseMenu(menuLine.index)
+                    }
+                }
+            }
+        }
+    }
+
+    // What the pointer drags, said beside it: what letting go would do, and to how many rows.
+    NativeRoundedRectangle {
+        z: 9
+        visible: root.dragging
+        x: Math.round(Math.min(root.dragX + 12 * root.ratio, root.width - width - 4 * root.ratio))
+        y: Math.round(Math.min(root.dragY + 8 * root.ratio, root.height - height - 4 * root.ratio))
+        width: dragLabel.implicitWidth + 18 * root.ratio
+        height: Math.round((root.smallGrid.cellHeight ?? 16) + 8 * root.ratio)
+        radius: 4 * root.ratio
+        color: root.colors.surface0
+        borderWidth: Math.max(root.hairline, 1 * root.ratio)
+        borderColor: root.dropWindow >= 0 ? root.colors.accent : root.colors.overlay0
+        borderAlpha: 1
+
+        CellText {
+            id: dragLabel
+            x: 9 * root.ratio
+            width: implicitWidth
+            height: parent.height
+            text: (root.dropCopy ? "copy " : "move ") + root.dragCount
+            grid: root.smallGrid
+            color: root.dropWindow >= 0 ? root.colors.text : root.colors.overlay1
         }
     }
 }

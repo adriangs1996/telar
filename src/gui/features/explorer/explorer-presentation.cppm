@@ -200,6 +200,24 @@ export namespace telar::gui::features::explorer {
   // own, not copied: a diff is as long as a screen.
   [[nodiscard]] tbc::val_a<std::string_view> previewText(const View& view, tbc::ref_a<State> state) noexcept;
 
+  // A line of the menu that shows: what it does, the keys that do the same, and a rule in the
+  // place of one that parts two groups.
+  struct MenuLine {
+    LineText label;
+    Word keys;
+    bool enabled = true;
+    bool rule = false;
+    bool current = false;
+  };
+
+  struct MenuLook {
+    ds::Array<MenuLine, Menu::lines> lines{};
+    std::size_t count = 0;
+  };
+
+  // The menu of the row it opened on; no line while none shows.
+  [[nodiscard]] MenuLook menu(const View& view, const State& state, const Context& context);
+
   // The verb of a step of the plan, as it reads: CREATE, MOVE, COPY, DELETE, RESTORE.
   [[nodiscard]] std::string_view verbText(PlanVerb verb) noexcept;
 

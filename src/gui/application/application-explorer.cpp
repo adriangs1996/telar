@@ -345,6 +345,46 @@ namespace telar::gui::application::explorer {
     reconcile(session, view, host);
   }
 
+  void openMenu(Session& session, View& view, const Host& host, const Pick& pick) {
+    const auto facts = factsOf(session);
+
+    feature::openMenu(view, session.explorer, contextOf(facts, host), pick);
+    reconcile(session, view, host);
+  }
+
+  Effect chooseMenu(Session& session, View& view, const Host& host, std::size_t line) {
+    const auto action = act(session, host, [&](feature::State& state, const Context& context) {
+      return feature::chooseMenu(view, state, context, line);
+    });
+
+    return finish(session, view, host, action);
+  }
+
+  std::size_t grab(Session& session, View& view, const Host& host, const Pick& pick) {
+    const auto facts = factsOf(session);
+    const auto carried = feature::grab(view, session.explorer, contextOf(facts, host), pick);
+
+    reconcile(session, view, host);
+    return carried;
+  }
+
+  Aim aim(const Session& session, const View& view, const Host& host, const Drop& drop) {
+    const auto facts = factsOf(session);
+
+    return feature::aim(view, session.explorer, contextOf(facts, host), drop);
+  }
+
+  void drop(Session& session, View& view, const Host& host, const Drop& drop) {
+    const auto facts = factsOf(session);
+
+    feature::drop(view, session.explorer, contextOf(facts, host), drop);
+    reconcile(session, view, host);
+  }
+
+  void release(View& view) noexcept {
+    feature::release(view);
+  }
+
   void resize(View& view, const WindowRows& shown) noexcept {
     feature::resize(view, shown);
   }
@@ -411,6 +451,12 @@ namespace telar::gui::application::explorer {
     const auto facts = factsOf(session);
 
     return feature::preview(view, session.explorer, contextOf(facts, host), now_seconds);
+  }
+
+  MenuLook menu(const Session& session, const View& view, const Host& host) {
+    const auto facts = factsOf(session);
+
+    return feature::menu(view, session.explorer, contextOf(facts, host));
   }
 
 }

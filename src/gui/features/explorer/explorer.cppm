@@ -58,6 +58,26 @@ export namespace telar::gui::features::explorer {
   [[nodiscard]] Action activate(View& view, State& state, const Context& context, const Pick& pick);
   void toggle(View& view, const State& state, const Context& context, const Pick& pick);
 
+  // The pointer asked for the menu of a row of a window, or of the window itself with a row
+  // past its last. A row outside the selection is selected first. The keys then move in the
+  // menu, and Escape closes it.
+  void openMenu(View& view, const State& state, const Context& context, const Pick& pick);
+
+  // The pointer chose a line of the menu, which runs what its key runs.
+  [[nodiscard]] Action chooseMenu(View& view, State& state, const Context& context, std::size_t line);
+
+  // The pointer took hold of a row to drag it: the rows of the selection it is part of, or that
+  // row alone, which is then selected. How many rows the drag carries.
+  std::size_t grab(View& view, const State& state, const Context& context, const Pick& pick);
+
+  // What letting the rows go at `drop` would do.
+  [[nodiscard]] Aim aim(const View& view, const State& state, const Context& context, const Drop& drop);
+
+  // The rows dragged were let go at `drop`: they go in the directory there as `dd` or `yy` and
+  // then `p` would put them, a change to write. And let go where nothing takes them.
+  void drop(View& view, const State& state, const Context& context, const Drop& drop);
+  void release(View& view) noexcept;
+
   // A window shows `rows` rows; and the wheel moves what it shows by `rows` rows.
   void resize(View& view, const WindowRows& shown) noexcept;
   void scroll(View& view, const WindowRows& moved) noexcept;

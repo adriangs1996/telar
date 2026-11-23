@@ -33,7 +33,7 @@ namespace telar::gui::qt {
 
     constexpr ds::Array<const char*, 7> kind_names{"entry", "added", "header", "note", "diff", "change", "pane"};
     constexpr ds::Array<const char*, 4> diff_tones{"context", "added", "removed", "hunk"};
-    constexpr ds::Array<const char*, 7> mode_names{"normal", "visual", "insert", "search", "command", "plan", "help"};
+    constexpr ds::Array<const char*, 8> mode_names{"normal", "visual", "insert", "search", "command", "plan", "help", "menu"};
     constexpr ds::Array<const char*, 3> tone_names{"info", "error", "ask"};
     constexpr ds::Array<const char*, 3> follow_scopes{"pane", "workspace", "machine"};
     // The lines of a preview's text the window draws.
@@ -85,7 +85,7 @@ namespace telar::gui::qt {
       std::string_view label;
     };
 
-    constexpr ds::Array<HelpKey, 45> help_keys{
+    constexpr ds::Array<HelpKey, 50> help_keys{
         {
             {.group = "Moving", .keys = "j k", .label = "down, up; with a count"},
             {.group = "Moving", .keys = "gg G", .label = "first, last; 12G goes to row 12"},
@@ -132,6 +132,11 @@ namespace telar::gui::qt {
             {.group = "Modes", .keys = "F", .label = "follow the pane"},
             {.group = "Modes", .keys = "q", .label = "close"},
             {.group = "Modes", .keys = "?", .label = "this help"},
+            {.group = "Pointer and shortcuts", .keys = "right click", .label = "the row's menu, with the key of each"},
+            {.group = "Pointer and shortcuts", .keys = "Shift+F10", .label = "the menu, from the keys"},
+            {.group = "Pointer and shortcuts", .keys = "drag", .label = "moves there on :w; Alt copies"},
+            {.group = "Pointer and shortcuts", .keys = "<D-c> <D-x> <D-v>", .label = "copy, cut, paste; Control too"},
+            {.group = "Pointer and shortcuts", .keys = "<D-z> <D-s> F2", .label = "undo, write, rename"},
         },
     };
 
@@ -159,6 +164,11 @@ namespace telar::gui::qt {
       }
 
       return nullptr;
+    }
+
+    // A row of a window as QML names it; a row below zero is the window itself.
+    explorer::Pick pickOf(int window, int row) noexcept {
+      return {.window = static_cast<std::size_t>(window), .row = row < 0 ? std::numeric_limits<std::size_t>::max() : static_cast<std::size_t>(row)};
     }
 
     QVariantList helpGroups() {
@@ -404,6 +414,37 @@ namespace telar::gui::qt {
     return result;
   }
 
+  QVariantMap ExplorerController::describeMenu() const {
+    const auto look = explorer::menu(store_.session(), view_, host());
+    QVariantList lines;
+
+    for (std::size_t index = 0; index < look.count; ++index) {
+      const auto& line = look.lines[index];
+
+      lines.push_back(QVariantMap{
+          {QStringLiteral("label"), fixedText(line.label)},
+          {QStringLiteral("keys"), toQString(line.keys)},
+          {QStringLiteral("enabled"), line.enabled},
+          {QStringLiteral("rule"), line.rule},
+          {QStringLiteral("current"), line.current},
+      });
+    }
+
+    if (lines.isEmpty()) {
+      return {};
+    }
+
+    const auto& window = *view_.windows[view_.current];
+
+    return {
+        {QStringLiteral("lines"), lines},
+        {QStringLiteral("window"), static_cast<int>(view_.current)},
+        {QStringLiteral("row"), static_cast<int>(window.cursor) - static_cast<int>(window.top)},
+        {QStringLiteral("x"), menu_at_.x()},
+        {QStringLiteral("y"), menu_at_.y()},
+    };
+  }
+
   QVariantList ExplorerController::describePlan() const {
     QVariantList result;
     const auto home = host().home;
@@ -456,6 +497,10 @@ namespace telar::gui::qt {
 
   const QVariantList& ExplorerController::plan() const noexcept {
     return plan_;
+  }
+
+  const QVariantMap& ExplorerController::menu() const noexcept {
+    return menu_;
   }
 
   QVariantMap ExplorerController::record(std::size_t window, std::size_t row) const {
@@ -529,6 +574,7 @@ namespace telar::gui::qt {
     tell(hints_, describeHints(), &ExplorerController::hintsChanged);
     tell(preview_, describePreview(), &ExplorerController::previewChanged);
     tell(plan_, describePlan(), &ExplorerController::planChanged);
+    tell(menu_, describeMenu(), &ExplorerController::menuChanged);
   }
 
   void ExplorerController::finish(Effect effect) {
@@ -552,6 +598,22 @@ namespace telar::gui::qt {
       return false;
     }
 
+    // The keys a chord has no name for: F2 renames, as `cw` does, and the menu key or Shift+F10
+    // asks for the menu of the selected row.
+    if (key == Qt::Key_F2) {
+      type(QStringLiteral("cw"));
+      return true;
+    }
+
+    if (key == Qt::Key_Menu || (key == Qt::Key_F10 && Qt::KeyboardModifiers::fromInt(static_cast<Qt::KeyboardModifiers::Int>(modifiers)).testFlag(Qt::ShiftModifier))) {
+      openMenu(static_cast<int>(view_.current), view_.windows.empty() ? -1 : static_cast<int>(view_.windows[view_.current]->cursor), QPointF{-1, -1});
+      return true;
+    }
+
+    return strike(key, text, modifiers);
+  }
+
+  bool ExplorerController::strike(int key, const QString& text, int modifiers) {
     const QKeyEvent event{QEvent::KeyPress, key, Qt::KeyboardModifiers::fromInt(static_cast<Qt::KeyboardModifiers::Int>(modifiers)), text};
     const auto chord = NativeKeyAdapter::chord(event);
     if (chord.key == KeyChord::Key::character && chord.character == std::numeric_limits<std::uint32_t>::max()) {
@@ -596,6 +658,74 @@ namespace telar::gui::qt {
 
     explorer::select(store_.sessionMut(), view_, host(), {.window = static_cast<std::size_t>(window), .row = static_cast<std::size_t>(row), .extend = extend, .toggle = toggle});
     finish(Effect::none);
+  }
+
+  void ExplorerController::openMenu(int window, int row, const QPointF& place) {
+    if (window < 0 || !view_.open) {
+      return;
+    }
+
+    menu_at_ = place;
+    explorer::openMenu(store_.sessionMut(), view_, host(), pickOf(window, row));
+    finish(Effect::none);
+  }
+
+  void ExplorerController::chooseMenu(int line) {
+    if (line < 0) {
+      return;
+    }
+
+    try {
+      finish(explorer::chooseMenu(store_.sessionMut(), view_, host(), static_cast<std::size_t>(line)));
+    } catch (const std::exception& error) {
+      emit failed(QString::fromUtf8(error.what()));
+    }
+  }
+
+  bool ExplorerController::isChosen(int window, int row) const {
+    if (window < 0 || row < 0 || std::cmp_greater_equal(window, view_.windows.size())) {
+      return false;
+    }
+
+    return std::cmp_equal(window, view_.current) && explorer::chosen(view_, *view_.windows[static_cast<std::size_t>(window)], static_cast<std::size_t>(row));
+  }
+
+  int ExplorerController::grab(int window, int row) {
+    if (window < 0 || row < 0 || !view_.open) {
+      return 0;
+    }
+
+    const auto carried = explorer::grab(store_.sessionMut(), view_, host(), pickOf(window, row));
+
+    finish(Effect::none);
+    return static_cast<int>(carried);
+  }
+
+  QVariantMap ExplorerController::aim(int window, int row, bool copy) const {
+    if (window < 0 || !view_.open) {
+      return {};
+    }
+
+    const auto pick = pickOf(window, row);
+    const auto aimed = explorer::aim(store_.session(), view_, host(), {.window = pick.window, .row = pick.row, .copy = copy});
+
+    return {{QStringLiteral("count"), static_cast<int>(aimed.count)}, {QStringLiteral("row"), aimed.row ? static_cast<int>(*aimed.row) : -1}};
+  }
+
+  void ExplorerController::drop(int window, int row, bool copy) {
+    if (window < 0 || !view_.open) {
+      release();
+      return;
+    }
+
+    const auto pick = pickOf(window, row);
+
+    explorer::drop(store_.sessionMut(), view_, host(), {.window = pick.window, .row = pick.row, .copy = copy});
+    finish(Effect::none);
+  }
+
+  void ExplorerController::release() {
+    explorer::release(view_);
   }
 
   void ExplorerController::activate(int window, int row) {
@@ -647,7 +777,7 @@ namespace telar::gui::qt {
       const auto close = keys[index] == QLatin1Char('<') ? keys.indexOf(QLatin1Char('>'), index) : -1;
       if (close > index) {
         if (const auto* known = namedKey(QStringView{keys}.mid(index, close - index + 1))) {
-          key(known->key, QString{known->text}, known->modifiers);
+          strike(known->key, QString{known->text}, known->modifiers);
         }
 
         index = close + 1;
@@ -656,7 +786,7 @@ namespace telar::gui::qt {
 
       const auto character = keys[index];
 
-      key(character.toUpper().unicode(), QString{character}, character.isUpper() ? static_cast<int>(Qt::ShiftModifier) : 0);
+      strike(character.toUpper().unicode(), QString{character}, character.isUpper() ? static_cast<int>(Qt::ShiftModifier) : 0);
       ++index;
     }
   }

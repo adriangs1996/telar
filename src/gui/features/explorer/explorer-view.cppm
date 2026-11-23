@@ -57,6 +57,8 @@ export namespace telar::gui::features::explorer {
     // The plan of `:w` shows, and waits for a yes.
     plan,
     help,
+    // The menu of a row shows, and takes the keys.
+    menu,
   };
 
   enum class Sort : std::uint8_t {
@@ -268,6 +270,48 @@ export namespace telar::gui::features::explorer {
     ds::String<Memory> followed_cwd;
   };
 
+  // A line of the menu the pointer asks a row for. Each runs the command its key runs, so the
+  // menu teaches the keys; a rule parts two groups of them.
+  enum class MenuEntry : std::uint8_t {
+    rule,
+    hand,
+    open,
+    mention,
+    rename,
+    new_file,
+    new_directory,
+    cut,
+    copy,
+    paste,
+    copy_relative,
+    trash,
+    shell_here,
+    change_directory,
+    window_here,
+    diff,
+    stage,
+    unstage,
+    discard,
+    new_window,
+    drop_change,
+    write,
+  };
+
+  struct MenuItem {
+    MenuEntry entry = MenuEntry::rule;
+    bool enabled = true;
+  };
+
+  struct Menu {
+    static constexpr std::size_t lines = 28;
+
+    ds::Array<MenuItem, lines> items{};
+    std::size_t count = 0;
+    std::size_t current = 0;
+    // The mode it opened over, which closing it gives back.
+    Mode over = Mode::normal;
+  };
+
   // What the keys asked of the panes or of the runtime, for whoever drives the explorer to do.
   enum class ActionKind : std::uint8_t {
     none,
@@ -315,6 +359,9 @@ export namespace telar::gui::features::explorer {
     std::uint32_t next_edit = 1;
     ds::Vec<Yanked, Memory> yanked;
     PasteKind yank = PasteKind::copy;
+    // The rows the pointer drags, from when it took hold of one until it lets go.
+    ds::Vec<Yanked, Memory> dragged;
+    Menu menu;
     ds::Vec<Place, Memory> marks;
     ds::Vec<Place, Memory> jumps;
     std::size_t jump = 0;
@@ -361,6 +408,21 @@ export namespace telar::gui::features::explorer {
     bool toggle = false;
   };
 
+  // Where the rows dragged are let go: over a row of a window, or over the window itself with a
+  // row past its last, and whether they are copied there, not moved.
+  struct Drop {
+    std::size_t window = 0;
+    std::size_t row = 0;
+    bool copy = false;
+  };
+
+  // What letting go there would do: how many rows the directory takes, none when it refuses them
+  // all, and the row of that directory when the window shows one; none for its root.
+  struct Aim {
+    std::size_t count = 0;
+    ds::Option<std::size_t> row;
+  };
+
   // Rows of a window, counted: how many it shows, or by how many the wheel moves what it shows.
   struct WindowRows {
     std::size_t window = 0;
@@ -375,6 +437,8 @@ export namespace telar::gui::features::explorer {
     bool visual = false;
   };
 
+  // Whether a visual selection stands: in visual mode, and while a menu shows over it.
+  [[nodiscard]] bool selecting(const View& view) noexcept;
   [[nodiscard]] Range range(const View& view, const Window& window) noexcept;
   [[nodiscard]] bool chosen(const View& view, const Window& window, std::size_t row) noexcept;
 

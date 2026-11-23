@@ -8,6 +8,7 @@ static_assert(true);
 #include "ui/kit/store/store.hpp"
 #include <QAbstractItemModel>
 #include <QObject>
+#include <QPointF>
 #include <QString>
 #include <QVariantList>
 #include <QVariantMap>
@@ -39,6 +40,7 @@ namespace telar::gui::qt {
     Q_PROPERTY(QVariantList hints READ hints NOTIFY hintsChanged)
     Q_PROPERTY(QVariantMap preview READ preview NOTIFY previewChanged)
     Q_PROPERTY(QVariantList plan READ plan NOTIFY planChanged)
+    Q_PROPERTY(QVariantMap menu READ menu NOTIFY menuChanged)
     Q_PROPERTY(QVariantList help READ help CONSTANT)
 
   public:
@@ -62,6 +64,8 @@ namespace telar::gui::qt {
     [[nodiscard]] const QVariantMap& preview() const noexcept;
     // The steps of the plan `:w` shows.
     [[nodiscard]] const QVariantList& plan() const noexcept;
+    // The menu of a row while one shows: its lines, and where the pointer asked for it.
+    [[nodiscard]] const QVariantMap& menu() const noexcept;
     [[nodiscard]] static QVariantList help();
 
     // The rows window `window` shows.
@@ -76,6 +80,19 @@ namespace telar::gui::qt {
     Q_INVOKABLE void select(int window, int row, bool extend, bool toggle);
     Q_INVOKABLE void activate(int window, int row);
     Q_INVOKABLE void toggleRow(int window, int row);
+    // The pointer asked for the menu of a row, at a place of the explorer; a row below zero is
+    // the window itself, and a place below zero the selected row's. And chose a line of it.
+    Q_INVOKABLE void openMenu(int window, int row, const QPointF& place);
+    Q_INVOKABLE void chooseMenu(int line);
+    // Whether a row is part of the selection a drag or a menu would take.
+    Q_INVOKABLE bool isChosen(int window, int row) const;
+    // The pointer took hold of a row to drag it: how many rows go with it. Then where it is
+    // would take `count` of them, in the directory at `row` or in the window's root at -1; and
+    // it let them go there, or where nothing takes them.
+    Q_INVOKABLE int grab(int window, int row);
+    Q_INVOKABLE QVariantMap aim(int window, int row, bool copy) const;
+    Q_INVOKABLE void drop(int window, int row, bool copy);
+    Q_INVOKABLE void release();
     // A window shows `rows` rows; the wheel moves what it shows.
     Q_INVOKABLE void setViewport(int window, int rows);
     Q_INVOKABLE void scroll(int window, int rows);
@@ -101,6 +118,7 @@ namespace telar::gui::qt {
     void hintsChanged();
     void previewChanged();
     void planChanged();
+    void menuChanged();
     // The explorer opened, and closed: the panes give up the keys, and take them back.
     void opened();
     void closed();
@@ -109,6 +127,8 @@ namespace telar::gui::qt {
   private:
     // The machine the window shows, as the explorer names it.
     [[nodiscard]] application::explorer::Host host() const;
+    // A key a chord names, given to the explorer; false for one it has no use for.
+    bool strike(int key, const QString& text, int modifiers);
     // What a use case asks of the window once it returns.
     void finish(application::explorer::Effect effect);
     // What the explorer shows, from what the session holds: each part is told only when it is
@@ -120,6 +140,7 @@ namespace telar::gui::qt {
     [[nodiscard]] QVariantList describeHints() const;
     [[nodiscard]] QVariantMap describePreview() const;
     [[nodiscard]] QVariantList describePlan() const;
+    [[nodiscard]] QVariantMap describeMenu() const;
     [[nodiscard]] QVariantMap record(std::size_t window, std::size_t row) const;
 
     Store& store_;
@@ -131,6 +152,9 @@ namespace telar::gui::qt {
     QVariantList hints_;
     QVariantMap preview_;
     QVariantList plan_;
+    QVariantMap menu_;
+    // Where the pointer asked for the menu; below zero when the keys did.
+    QPointF menu_at_{-1, -1};
     std::uint64_t revision_ = 0;
     // The home of the account the window runs as, and the active machine's label.
     QByteArray home_;

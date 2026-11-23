@@ -194,6 +194,30 @@ namespace telar::gui::test {
       return {};
     }
 
+    // Where the row with `name` is in the listing of a window: the current one, or the one named.
+    [[nodiscard]] std::size_t at(std::string_view name) const {
+      return at(name, view.current);
+    }
+
+    [[nodiscard]] std::size_t at(std::string_view name, std::size_t window_index) const {
+      const auto& listed = *view.windows[window_index];
+
+      for (std::size_t index = 0; index < listed.rows.size(); ++index) {
+        if (look(view, state, context(), {.window = window_index, .row = index}).name.view() == name) {
+          return index;
+        }
+      }
+
+      telar::testing::check(false, "the row is listed");
+      return 0;
+    }
+
+    // The pointer chooses the row named, in the current window.
+    void click(std::string_view name) {
+      select(view, state, context(), {.window = view.current, .row = at(name)});
+      answer();
+    }
+
     SystemAllocator upstream;
     telar::MemoryAdapter<SystemAllocator> adapter{upstream};
     telar::Memory& memory = adapter;

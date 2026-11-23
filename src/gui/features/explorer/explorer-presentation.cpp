@@ -356,6 +356,106 @@ namespace telar::gui::features::explorer {
       }
     }
 
+    // The keys a line of the menu teaches, and what it says while it needs no more than that.
+    struct MenuText {
+      MenuEntry entry = MenuEntry::rule;
+      Word keys;
+      Word label;
+    };
+
+    constexpr ds::Array<MenuText, 22> menu_texts{
+        {
+            {.entry = MenuEntry::rule, .keys = "", .label = ""},
+            {.entry = MenuEntry::hand, .keys = "<CR>", .label = ""},
+            {.entry = MenuEntry::open, .keys = "gf", .label = "Open in the editor"},
+            {.entry = MenuEntry::mention, .keys = "@", .label = ""},
+            {.entry = MenuEntry::rename, .keys = "cw", .label = "Rename"},
+            {.entry = MenuEntry::new_file, .keys = "o", .label = "New file"},
+            {.entry = MenuEntry::new_directory, .keys = "o …/", .label = "New directory"},
+            {.entry = MenuEntry::cut, .keys = "dd", .label = "Cut"},
+            {.entry = MenuEntry::copy, .keys = "yy", .label = "Copy"},
+            {.entry = MenuEntry::paste, .keys = "p", .label = "Paste here"},
+            {.entry = MenuEntry::copy_relative, .keys = "yr", .label = "Copy the relative path"},
+            {.entry = MenuEntry::trash, .keys = "<Del>", .label = "Move to the trash"},
+            {.entry = MenuEntry::shell_here, .keys = "s", .label = "Open a shell here"},
+            {.entry = MenuEntry::change_directory, .keys = "cd", .label = ""},
+            {.entry = MenuEntry::window_here, .keys = ":vs", .label = "Open in a new window"},
+            {.entry = MenuEntry::diff, .keys = "=", .label = "Show the diff"},
+            {.entry = MenuEntry::stage, .keys = "ga", .label = "Stage (git add)"},
+            {.entry = MenuEntry::unstage, .keys = "gu", .label = "Unstage"},
+            {.entry = MenuEntry::discard, .keys = "gX", .label = "Discard changes…"},
+            {.entry = MenuEntry::new_window, .keys = "<C-w>v", .label = "New window"},
+            {.entry = MenuEntry::drop_change, .keys = "dd", .label = "Remove from the changes"},
+            {.entry = MenuEntry::write, .keys = ":w", .label = ""},
+        },
+    };
+
+    // Whether a line's label counts the rows of the selection it acts on.
+    constexpr bool countsRows(MenuEntry entry) noexcept {
+      constexpr ds::Array<MenuEntry, 6> counted{MenuEntry::hand, MenuEntry::open, MenuEntry::mention, MenuEntry::cut, MenuEntry::copy, MenuEntry::trash};
+
+      return std::ranges::contains(counted, entry);
+    }
+
+    // What a line says that depends on where the menu is: the pane a file goes to, the agent,
+    // how many changes wait.
+    void writeMenuLabel(LineText& label, const MenuText& text, const View& view, const Context& context) {
+      const auto& window = explorer::window(view);
+      const auto* row = window.rows.empty() ? nullptr : &window.rows[window.cursor];
+      const auto* pane = focusedPane(context);
+
+      switch (text.entry) {
+      case MenuEntry::hand: {
+        LineText verb;
+
+        writeEnter(verb, row, pane);
+        // The verbs are the explorer's own words, in lower case.
+        constexpr char to_upper = 'A' - 'a';
+        const auto first = verb.view().front();
+
+        write(label, "{}{}", first >= 'a' && first <= 'z' ? static_cast<char>(first + to_upper) : first, verb.view().substr(1));
+        break;
+      }
+      case MenuEntry::mention: {
+        const auto agent = std::ranges::find(context.panes, PaneKind::agent, &PaneFact::kind);
+
+        write(label, "Mention to {}", agent == context.panes.end() ? std::string_view{"the agent"} : agent->title);
+        break;
+      }
+      case MenuEntry::change_directory:
+        if (pane != nullptr) {
+          write(label, "cd pane {} here", pane->number);
+        } else {
+          put(label, "cd the pane here");
+        }
+
+        break;
+      case MenuEntry::write:
+        write(label, "Apply {} change{}…", view.edits.size(), view.edits.size() == 1 ? "" : "s");
+        break;
+      case MenuEntry::rule:
+      case MenuEntry::open:
+      case MenuEntry::rename:
+      case MenuEntry::new_file:
+      case MenuEntry::new_directory:
+      case MenuEntry::cut:
+      case MenuEntry::copy:
+      case MenuEntry::paste:
+      case MenuEntry::copy_relative:
+      case MenuEntry::trash:
+      case MenuEntry::shell_here:
+      case MenuEntry::window_here:
+      case MenuEntry::diff:
+      case MenuEntry::stage:
+      case MenuEntry::unstage:
+      case MenuEntry::discard:
+      case MenuEntry::new_window:
+      case MenuEntry::drop_change:
+        put(label, text.label);
+        break;
+      }
+    }
+
     tbc::mut_a<Fact> addFact(tbc::mut_a<PreviewLook> look, Word label) noexcept {
       auto& added = look.facts.atMut(std::min(look.fact_count, look.facts.size() - 1));
 
@@ -593,7 +693,7 @@ namespace telar::gui::features::explorer {
     result.directory = row.directory;
     result.expanded = row.expanded;
     result.selected = row_index == window.cursor;
-    result.marked = window_index == view.current && (view.mode == Mode::visual || !window.picked.empty()) && chosen(view, window, row_index);
+    result.marked = window_index == view.current && (selecting(view) || !window.picked.empty()) && chosen(view, window, row_index);
     put(result.name, nameOf(window, state, row));
     result.share = row.share;
 
@@ -654,6 +754,7 @@ namespace telar::gui::features::explorer {
     case Mode::normal:
     case Mode::help:
     case Mode::plan:
+    case Mode::menu:
       return "NORMAL";
     case Mode::visual:
       return "VISUAL";
@@ -682,7 +783,13 @@ namespace telar::gui::features::explorer {
     const auto below = withoutHome(window.root.view(), context.home, tilde);
 
     result.current = window_index == view.current;
+    // A menu leaves the mode it shows over on the status line.
     result.kind = result.current ? view.mode : Mode::normal;
+    if (result.kind == Mode::menu) {
+      // A menu leaves the mode it shows over on the status line.
+      result.kind = view.menu.over;
+    }
+
     result.mode = modeText(result.kind);
     result.follows = window.follow;
     if (const auto* pane = focusedPane(context); window.follow && pane != nullptr) {
@@ -724,6 +831,13 @@ namespace telar::gui::features::explorer {
     if (view.mode == Mode::plan) {
       addHint(result, "y", {.text = "apply"});
       addHint(result, "n", {.text = "cancel"});
+      return result;
+    }
+
+    if (view.mode == Mode::menu) {
+      addHint(result, "j k", {.text = "move"});
+      addHint(result, "<CR>", {.text = "run"});
+      addHint(result, "<Esc>", {.text = "close"});
       return result;
     }
 
@@ -844,6 +958,38 @@ namespace telar::gui::features::explorer {
     }
 
     return inspection->diff.empty() ? inspection->text.view() : inspection->diff.view();
+  }
+
+  MenuLook menu(const View& view, const State& state, const Context& context) {
+    MenuLook result;
+
+    static_cast<void>(state);
+    if (view.mode != Mode::menu || view.windows.empty()) {
+      return result;
+    }
+
+    const auto chosen_rows = chosenRows(view, explorer::window(view));
+
+    result.count = view.menu.count;
+    for (std::size_t index = 0; index < view.menu.count; ++index) {
+      const auto item = view.menu.items[index];
+      const auto& text = menu_texts[static_cast<std::size_t>(item.entry)];
+      auto& line = result.lines.atMut(index);
+
+      line.rule = item.entry == MenuEntry::rule;
+      line.enabled = item.enabled;
+      line.current = index == view.menu.current;
+      line.keys = text.keys;
+      writeMenuLabel(line.label, text, view, context);
+      if (chosen_rows > 1 && countsRows(item.entry)) {
+        LineText counted;
+
+        write(counted, "{} ({})", line.label.view(), chosen_rows);
+        line.label = counted;
+      }
+    }
+
+    return result;
   }
 
   std::string_view verbText(PlanVerb verb) noexcept {
