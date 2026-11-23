@@ -6,6 +6,7 @@ telar_add_domain(runtime files
     operations/operations.cpp
     repository/repository.cpp
     service/service.cpp
+    touches/touches.cpp
   DEPS transport workers workspaces)
 
 if(BUILD_TESTING)

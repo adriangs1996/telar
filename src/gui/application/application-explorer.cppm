@@ -13,6 +13,8 @@ import telar.wire.files;
 
 export namespace telar::gui::application::explorer {
 
+  using features::explorer::ActorLook;
+  using features::explorer::ActorTone;
   using features::explorer::Aim;
   using features::explorer::DiffTone;
   using features::explorer::Drop;
@@ -142,6 +144,8 @@ export namespace telar::gui::application::explorer {
     std::uint64_t focused = 0;
     std::uint64_t shown = 0;
     ds::String<Memory> workspace;
+    // The time of the observation, in seconds: what a row says how long ago against.
+    std::uint64_t now = 0;
   };
 
   // Forgets the machines, before each is observed again.
@@ -166,6 +170,7 @@ export namespace telar::gui::application::explorer {
     std::uint64_t focused = 0;
     std::uint64_t shown = 0;
     std::string_view workspace;
+    std::uint64_t now = 0;
   };
 
   [[nodiscard]] tbc::val_a<Around> around(tbc::ref_a<Scene> scene) noexcept;

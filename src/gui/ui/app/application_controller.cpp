@@ -883,6 +883,11 @@ namespace telar::gui::qt {
   void ApplicationController::refresh() {
     synchronize();
     peek_.synchronize();
+    // A pane did something: the explorer asks its machine who touched what, while it shows.
+    if (explorer_.showing()) {
+      explorer_.synchronize();
+    }
+
     refreshElementBars();
     if (store_.dialog().kind == Dialog::paths) {
       paths_.publishGeometry();

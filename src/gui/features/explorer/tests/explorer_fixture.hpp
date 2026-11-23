@@ -44,6 +44,8 @@ namespace telar::gui::test {
     std::map<std::string, std::vector<Listed>> files;
     std::map<std::string, std::vector<std::pair<std::string, std::uint64_t>>> sizes;
     std::vector<FileChange> changes;
+    // Who touched what there, the newest first, as its runtime tells it.
+    std::vector<FileTouch> touches;
     bool repository = true;
     std::string root;
     std::string branch;
@@ -123,6 +125,7 @@ namespace telar::gui::test {
           .home = of == box ? std::string_view{far.home} : std::string_view{disk.home},
           .machine = known.label,
           .local = known.local,
+          .now = now,
           .reach = known.reach,
           .host = of,
           .shown = shown,
@@ -202,6 +205,9 @@ namespace telar::gui::test {
           break;
         case NeedKind::home:
           telar::testing::check(receive(state, HomeLocated{.request_id = request, .path = disk.home}));
+          break;
+        case NeedKind::touches:
+          telar::testing::check(receive(state, FileTouches{.request_id = request, .path = "/", .touches = disk.touches}));
           break;
         }
 
@@ -414,6 +420,8 @@ namespace telar::gui::test {
     std::uint64_t inspected_inode = 4242;
     std::vector<PaneFact> panes;
     std::uint64_t focused = 13;
+    // The time the rows say how long ago against.
+    std::uint64_t now = 1'000'000;
     std::uint64_t requests = 0;
   };
 

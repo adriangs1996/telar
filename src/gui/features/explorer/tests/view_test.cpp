@@ -145,6 +145,8 @@ namespace {
     check(window(explorer.view).lens == Lens::changes && explorer.names() == Names{"Staged", "docs/remote.md", "Unstaged", "docs/usage.md", "Untracked", ".github/"}, "what git says, in three groups");
     check(explorer.row("usage.md").lines_added == 12 && explorer.row("usage.md").lines_removed == 7);
     explorer.type("gt");
+    check(window(explorer.view).lens == Lens::touched, "who touched what, which a case of its own looks at");
+    explorer.type("gt");
     check(window(explorer.view).lens == Lens::panes && explorer.names().size() == 3, "the panes of the tab");
     explorer.type("1gt");
     check(window(explorer.view).lens == Lens::tree);

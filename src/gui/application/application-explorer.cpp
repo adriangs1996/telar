@@ -83,7 +83,9 @@ namespace telar::gui::application::explorer {
       while (session.ready()) {
         const auto need = feature::need(view, session.explorer, machine);
         // A search follows what is typed, and waits for no answer on files to be asked.
-        if (!need || (need->kind != feature::NeedKind::search && !feature::mayAsk(session.explorer))) {
+        const bool beside = need && (need->kind == feature::NeedKind::search || need->kind == feature::NeedKind::touches);
+
+        if (!need || (!beside && !feature::mayAsk(session.explorer))) {
           return;
         }
 
@@ -107,6 +109,10 @@ namespace telar::gui::application::explorer {
           break;
         case feature::NeedKind::home:
           request = session.link.ask(LocateHome{});
+          break;
+        case feature::NeedKind::touches:
+          // Every touch the runtime keeps: a window shows the ones below its own root.
+          request = session.link.ask(QueryTouches{.path = "/"});
           break;
         }
 
@@ -251,6 +257,7 @@ namespace telar::gui::application::explorer {
 
     result.focused = scene.focused;
     result.shown = scene.shown;
+    result.now = scene.now;
     result.workspace = scene.workspace.view();
     result.pane_count = scene.pane_count;
     for (std::size_t index = 0; index < scene.pane_count; ++index) {
@@ -275,6 +282,7 @@ namespace telar::gui::application::explorer {
         .panes = around.panes.view().first(around.pane_count),
         .focused = around.focused,
         .workspace = around.workspace,
+        .now = around.now,
         .reach = Reach::away,
         .host = machine,
         .shown = around.shown,

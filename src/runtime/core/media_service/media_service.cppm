@@ -35,6 +35,7 @@ import telar.runtime.core.execution_service;
 import telar.runtime.paths.query_task;
 
 import telar.runtime.files.service;
+import telar.runtime.files.touches;
 
 import telar.runtime.workspaces.git_probe;
 
@@ -65,7 +66,7 @@ export {
     template <typename Message>
     concept FileRequest = std::same_as<Message, ListDirectory> || std::same_as<Message, MeasureDirectory> || std::same_as<Message, QueryChanges> || std::same_as<Message, InspectFile> || std::same_as<Message, ChangeFiles> ||
                           std::same_as<Message, UndoFileChanges> || std::same_as<Message, CommitChanges> || std::same_as<Message, LocateHome> ||
-                          std::same_as<Message, ReadFile> || std::same_as<Message, WriteFile> || std::same_as<Message, EndFileWrite>;
+                          std::same_as<Message, ReadFile> || std::same_as<Message, WriteFile> || std::same_as<Message, EndFileWrite> || std::same_as<Message, QueryTouches>;
 
     // The workers behind history, paths, editors, suggestions, files and worktrees, which the runtime's
     // services and their own workers share: each queue it holds is synchronized, and what it hands a
@@ -123,6 +124,8 @@ export {
       }
 
       bool recordHistory(const HistoryEventView& event) noexcept;
+      // Something a pane did that may have touched files, for the explorer's files to keep.
+      void noteTouch(const TouchNote& note) noexcept;
 
       std::uint64_t takeHistoryFailures() noexcept;
 

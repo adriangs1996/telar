@@ -323,6 +323,39 @@ namespace {
     check(fixture.box_transport.count(ClientTag::locate_home) == 0 && fixture.box_transport.count(ClientTag::list_directory) == 0, "a machine with no window is asked for nothing");
   }
 
+  void whoTouchedWhatIsAskedOfAMachineWithAWindowAndAgainWhenAPaneStirs() {
+    Fixture fixture;
+    auto& transport = fixture.transport;
+
+    check(transport.count(ClientTag::query_touches) == 1 && transport.last<QueryTouches>().path == "/", "every touch the runtime keeps, asked once the window lists files");
+    check(fixture.box_transport.count(ClientTag::query_touches) == 0, "a machine with no window is not asked");
+    fixture.list();
+
+    const ds::Array<FileTouch, 1> touches{{{.path = "/work/project/README.md", .actor = TouchActor::agent, .provider = AgentProvider::claude, .pane_id = 1, .verb = "Edit", .seconds = 10}}};
+
+    check(deliver(fixture.client, FileTouches{.request_id = transport.last<QueryTouches>().request_id, .path = "/", .touches = touches.view()}) == application::Change::explorer);
+    check(fixture.refresh(), "the chips show");
+    check(fixture.row(1).actor_count == 1 && fixture.row(1).actors[0].tone == explorer::ActorTone::claude);
+    static_cast<void>(fixture.refresh());
+    check(transport.count(ClientTag::query_touches) == 1, "what was answered is not asked again while no pane does anything");
+
+    // The pane's shell runs a command: what it touched is asked of the runtime again.
+    check(deliver(fixture.client, PaneForeground{.pane_id = 1, .name = "rg"}) == application::Change::model);
+    static_cast<void>(fixture.refresh());
+    check(transport.count(ClientTag::query_touches) == 2);
+    check(fixture.box_transport.count(ClientTag::query_touches) == 0);
+  }
+
+  void aSessionWithNoExplorerAsksNothingOfWhoTouchedWhat() {
+    SystemAllocator memory;
+    Transport transport;
+    TestSession client{memory, transport};
+
+    openFirstPane(client, transport);
+    static_cast<void>(deliver(client, PaneForeground{.pane_id = 1, .name = "rg"}));
+    check(transport.count(ClientTag::query_touches) == 0 && !client.explorer.touches.stale, "a pane that stirs with no explorer asks nothing, and marks nothing to ask");
+  }
+
   void aDirectoryTheRuntimeRefusesIsNotAskedForAgain() {
     Fixture fixture;
     auto& transport = fixture.transport;
@@ -675,6 +708,8 @@ namespace {
 
   const telar::testing::Case case_asks{"explorer_session.the_window_asks_for_what_it_shows_and_keeps_the_answers", theWindowAsksForWhatItShowsAndKeepsTheAnswers};
   const telar::testing::Case case_filter{"explorer_session.a_filter_asks_the_runtime_for_the_paths_below_the_root", aFilterAsksTheRuntimeForThePathsBelowTheRoot};
+  const telar::testing::Case case_touches{"explorer_session.who_touched_what_is_asked_of_a_machine_with_a_window_and_again_when_a_pane_stirs", whoTouchedWhatIsAskedOfAMachineWithAWindowAndAgainWhenAPaneStirs};
+  const telar::testing::Case case_quiet{"explorer_session.a_session_with_no_explorer_asks_nothing_of_who_touched_what", aSessionWithNoExplorerAsksNothingOfWhoTouchedWhat};
   const telar::testing::Case case_refused{"explorer_session.a_directory_the_runtime_refuses_is_not_asked_for_again", aDirectoryTheRuntimeRefusesIsNotAskedForAgain};
   const telar::testing::Case case_plan{"explorer_session.a_plan_is_sent_whole_and_taken_back", aPlanIsSentWholeAndTakenBack};
   const telar::testing::Case case_far{"explorer_session.a_window_on_another_machine_asks_that_machine_alone", aWindowOnAnotherMachineAsksThatMachineAlone};

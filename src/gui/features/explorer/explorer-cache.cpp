@@ -171,6 +171,16 @@ namespace telar::gui::features::explorer {
     return {part.data(), part.size()};
   }
 
+  Touches::Touches(Memory& memory)
+      : text(memory),
+        items(memory) {}
+
+  std::string_view Touches::path(const Touch& touch) const noexcept {
+    const auto part = text.view().subspan(touch.path, touch.path_size);
+
+    return {part.data(), part.size()};
+  }
+
   Search::Search(Memory& memory)
       : root(memory),
         query(memory),
@@ -201,6 +211,7 @@ namespace telar::gui::features::explorer {
         repository(made_in),
         inspections(made_in),
         search(made_in),
+        touches(made_in),
         home(made_in),
         outcomes(made_in),
         committed(made_in),
@@ -313,6 +324,8 @@ namespace telar::gui::features::explorer {
       return !state.search.of(need.path, need.text);
     case NeedKind::home:
       return !state.located && state.locating == 0;
+    case NeedKind::touches:
+      return state.touches.waiting == 0 && (!state.touches.known || state.touches.stale);
     }
 
     return false;
@@ -352,6 +365,13 @@ namespace telar::gui::features::explorer {
       return;
     }
 
+    if (need.kind == NeedKind::touches) {
+      // Who touched what is asked beside what a window lists, and holds none of it back.
+      state.touches.waiting = request_id;
+      state.touches.stale = false;
+      return;
+    }
+
     switch (need.kind) {
     case NeedKind::listing:
       keep(state, need.path).listing = request_id;
@@ -373,6 +393,8 @@ namespace telar::gui::features::explorer {
       break;
     case NeedKind::home:
       state.locating = request_id;
+      break;
+    case NeedKind::touches:
       break;
     }
 
@@ -669,6 +691,38 @@ namespace telar::gui::features::explorer {
     return true;
   }
 
+  bool receive(State& state, const FileTouches& answer) {
+    auto& touches = state.touches;
+    if (touches.waiting == 0 || touches.waiting != answer.request_id) {
+      return false;
+    }
+
+    // An answer that says what the last one said changes nothing a window shows.
+    const bool same = touches.known && touches.truncated == answer.truncated && std::ranges::equal(touches.items, answer.touches, [&](const Touch& held, const FileTouch& told) {
+      return held.seconds == told.seconds && held.pane == told.pane_id && held.actor == told.actor && held.provider == told.provider && held.verb.view() == told.verb && touches.path(held) == told.path;
+    });
+
+    touches.waiting = 0;
+    touches.known = true;
+    if (same) {
+      return true;
+    }
+
+    touches.text.clear();
+    touches.items.clear();
+    touches.truncated = answer.truncated;
+    for (const auto& told : answer.touches) {
+      Touch touch{.path = static_cast<std::uint32_t>(touches.text.size()), .path_size = static_cast<std::uint16_t>(told.path.size()), .actor = told.actor, .provider = told.provider, .pane = told.pane_id, .seconds = told.seconds};
+
+      touch.verb.assign(told.verb);
+      touches.items.push(touch);
+      touches.text.extend(std::span<const char>{told.path});
+    }
+
+    ++touches.revision;
+    return true;
+  }
+
   bool receive(State& state, const PathResults& results) {
     auto& search = state.search;
     if (results.request_id == 0 || results.request_id != search.waiting || results.root != search.root.view()) {
@@ -706,6 +760,13 @@ namespace telar::gui::features::explorer {
 
     if (auto* kept = keepCarried(state, request, CarriedKind::failed)) {
       kept->text.assign(runtime::utf8Prefix(failure.message, ExplorerLimits::error_bytes));
+      return true;
+    }
+
+    // Touches the runtime refused are none, and are not asked again until a pane stirs.
+    if (request != 0 && state.touches.waiting == request) {
+      state.touches.waiting = 0;
+      state.touches.known = true;
       return true;
     }
 
@@ -795,13 +856,20 @@ namespace telar::gui::features::explorer {
       state.search.stale = true;
     }
 
+    stir(state);
     // A preview in flight is still answered; the ones kept are asked for again.
     state.inspections.retain([&](const ds::Box<Inspection, Memory>& inspection) {
       return inspection->waiting != 0 || (!path.empty() && !inspection->asked.view().starts_with(path));
     });
   }
 
+  void stir(State& state) noexcept {
+    state.touches.stale = state.touches.known;
+  }
+
   void reset(State& state) noexcept {
+    state.touches.waiting = 0;
+    state.touches.stale = state.touches.known;
     for (auto& directory : state.directories.viewMut()) {
       directory.getMut().listing = 0;
       directory.getMut().measuring = 0;

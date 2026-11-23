@@ -57,6 +57,23 @@ export namespace telar::gui::features::explorer {
   void appendTyped(ds::String<Memory>& text, std::string_view path, const Reader& reader);
 
   // What a row shows beside its name.
+  // Whose hand a touch is by, for the color of its chip: the person at a pane, the agents the
+  // window has a color for, and any other agent.
+  enum class ActorTone : std::uint8_t {
+    you,
+    claude,
+    codex,
+    agent,
+  };
+
+  // The chip of who touched a file: `you`, or the place in the tab of the pane its agent runs in.
+  struct ActorLook {
+    ActorTone tone = ActorTone::you;
+    ShortText chip;
+  };
+
+  inline constexpr std::size_t actor_capacity = 3;
+
   struct RowLook {
     RowKind kind = RowKind::entry;
     std::uint8_t depth = 0;
@@ -95,6 +112,12 @@ export namespace telar::gui::features::explorer {
     std::uint8_t pane_count = 0;
     // What a change not written says of it.
     LineText note;
+    // Who touched it lately, the last one first.
+    ds::Array<ActorLook, actor_capacity> actors{};
+    std::uint8_t actor_count = 0;
+    // In the lens of touches: with which command or tool, and how long ago.
+    ShortText verb;
+    ShortText ago;
   };
 
   [[nodiscard]] RowLook look(const View& view, const State& state, const Context& context, const Pick& pick);
@@ -184,6 +207,16 @@ export namespace telar::gui::features::explorer {
 
   inline constexpr std::size_t fact_capacity = 6;
 
+  // A touch of the selected file, in the preview: who, from which pane, how and how long ago.
+  struct ActivityLook {
+    ActorLook actor;
+    LineText who;
+    ShortText verb;
+    ShortText ago;
+  };
+
+  inline constexpr std::size_t activity_capacity = 4;
+
   // The preview of the selected row: its name and path, what is known of it, the panes that are
   // in it, and its diff or the head of its text.
   struct PreviewLook {
@@ -195,6 +228,9 @@ export namespace telar::gui::features::explorer {
     std::size_t fact_count = 0;
     ds::Array<std::uint16_t, 4> panes{};
     std::uint8_t pane_count = 0;
+    // The last touches of the file, the newest first.
+    ds::Array<ActivityLook, activity_capacity> activity{};
+    std::uint8_t activity_count = 0;
     // The title over the text, and whether the text is a diff or the file's head.
     Word title;
     bool diff = false;

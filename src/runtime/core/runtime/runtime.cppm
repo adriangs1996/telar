@@ -125,7 +125,8 @@ export {
 
       ds::Option<HistorySessionTitle> completeDescription(const DescriptionResult& result);
 
-      void report(RuntimeModel& model, ClientSession& client, const ReportAgent& request);
+      // Returns what the pane's agent is known as once the report is taken: a report need not say.
+      AgentProvider report(RuntimeModel& model, ClientSession& client, const ReportAgent& request);
 
       void reportSession(RuntimeModel& model, ClientSession& client, const ReportAgentSession& request);
 
@@ -746,6 +747,7 @@ export {
       void handle(std::uint64_t identity, const ReadFile& message);
       void handle(std::uint64_t identity, const WriteFile& message);
       void handle(std::uint64_t identity, const EndFileWrite& message);
+      void handle(std::uint64_t identity, const QueryTouches& message);
       // What an editor told the runtime besides what it drew, to the client that drives it.
       void relay(PaneRef<NvimBody> pane);
       // Answers a client's question about an editor's buffers with the ones its query matches.

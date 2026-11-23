@@ -648,6 +648,7 @@ export {
       Change apply(const FileChunk& message);
       Change apply(const FileWritten& message);
       Change apply(const FileWriteEnded& message);
+      Change apply(const FileTouches& message);
 
       Change apply(const PaneKindNotice& message);
       Change apply(const NvimGrid& message);

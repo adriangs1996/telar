@@ -27,6 +27,8 @@ export namespace telar::gui::features::explorer {
     // What a filter found below a window's root, and whether this machine's runtime searches
     // paths at all: the session says so when the explorer opens.
     Search search;
+    // Who touched the files of the machine, asked once a window shows them.
+    Touches touches;
     bool finds = false;
     // The home of the machine's account, which `~` stands for there: empty until its runtime
     // says it, which it is asked once. `located` once it answered, or refused to.
@@ -78,6 +80,8 @@ export namespace telar::gui::features::explorer {
     search,
     // Where the home of the machine's account is.
     home,
+    // Who touched the files of the machine lately.
+    touches,
   };
 
   struct Need {
@@ -113,6 +117,7 @@ export namespace telar::gui::features::explorer {
   bool receive(State& state, const FilesChanged& changed);
   bool receive(State& state, const ChangesCommitted& committed);
   bool receive(State& state, const HomeLocated& located);
+  bool receive(State& state, const FileTouches& answer);
 
   // A request of a transfer left under `request_id`: its answer is kept for the transfer.
   void carrying(State& state, std::uint64_t request_id);
@@ -130,6 +135,9 @@ export namespace telar::gui::features::explorer {
   // What `path` holds changed on disk: the directory is read again, and the repository asked
   // again. An empty path says all of it did.
   void invalidate(State& state, std::string_view path) noexcept;
+
+  // A pane of the machine did something: who touched what is asked again, if it was asked before.
+  void stir(State& state) noexcept;
 
   // Forgets what was asked: a new connection answers none of it.
   void reset(State& state) noexcept;

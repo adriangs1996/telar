@@ -314,6 +314,7 @@
     "src/runtime/files/operations/operations.cppm": "telar.runtime.files.operations",
     "src/runtime/files/repository/repository.cppm": "telar.runtime.files.repository",
     "src/runtime/files/service/service.cppm": "telar.runtime.files.service",
+    "src/runtime/files/touches/touches.cppm": "telar.runtime.files.touches",
     "src/runtime/paths/query_task/query_task.cppm": "telar.runtime.paths.query_task",
     "src/runtime/paths/text_search/text_search.cppm": "telar.runtime.paths.text_search",
     "src/runtime/nvim/screen/screen.cppm": "telar.runtime.nvim.screen",
@@ -1453,7 +1454,8 @@
       "telar.runtime.diagnostics.runtime_counters"
     ],
     "src/runtime/files": [
-      "telar.runtime.files.service"
+      "telar.runtime.files.service",
+      "telar.runtime.files.touches"
     ],
     "src/runtime/history": [
       "telar.runtime.history.command",

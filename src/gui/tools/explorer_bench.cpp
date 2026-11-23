@@ -114,6 +114,10 @@ namespace {
           asked(state, *wanted, request);
           static_cast<void>(receive(state, HomeLocated{.request_id = request, .path = "/home/dev"}));
           break;
+        case NeedKind::touches:
+          asked(state, *wanted, request);
+          static_cast<void>(receive(state, FileTouches{.request_id = request, .path = "/"}));
+          break;
         }
       }
 

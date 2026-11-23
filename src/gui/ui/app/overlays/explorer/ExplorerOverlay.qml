@@ -70,6 +70,28 @@ FocusScope {
     readonly property real indent: 14 * ratio
     readonly property real gutter: 10 * ratio
 
+    // The chip of who touched a file: `you`, or the place in the tab of its agent's pane, in the
+    // color of whose hand it was.
+    component ActorChip: Rectangle {
+        property var actor: ({})
+
+        width: Math.max(Math.round(16 * root.ratio), chipText.implicitWidth + Math.round(6 * root.ratio))
+        height: Math.round(15 * root.ratio)
+        radius: 3 * root.ratio
+        color: root.actorColor(actor.tone ?? "agent")
+
+        ChromeText {
+            id: chipText
+            x: Math.round((parent.width - width) / 2)
+            width: implicitWidth
+            height: parent.height
+            text: actor.chip ?? ""
+            pixelSize: root.headingSize
+            emphasized: true
+            color: root.colors.panel_bg
+        }
+    }
+
     objectName: "explorerOverlay"
     x: area.x + inset
     y: area.y + inset
@@ -112,6 +134,10 @@ FocusScope {
 
     // `text` on two lines of `width` in cells of `grid`, broken at a space where one is near, the
     // second cut with a mark when it does not fit either.
+    function actorColor(tone) {
+        return tone === "you" ? colors.teal : tone === "claude" ? colors.peach : tone === "codex" ? colors.mauve : colors.subtext0;
+    }
+
     function folded(text, width, grid) {
         const cells = Math.max(1, Math.floor(width / Math.max(1, grid.cellWidth ?? 8)));
         if (text.length <= cells)
@@ -769,6 +795,38 @@ FocusScope {
                                     color: root.colors.red
                                 }
 
+                                // In the lens of touches: how the file was touched last.
+                                CellText {
+                                    width: implicitWidth
+                                    height: parent.height
+                                    visible: (row.record.verb ?? "").length > 0
+                                    text: row.record.verb ?? ""
+                                    grid: root.smallGrid
+                                    color: root.colors.subtext0
+                                }
+
+                                // Who touched it, the last one first.
+                                Repeater {
+                                    model: row.record.actors ?? []
+
+                                    delegate: ActorChip {
+                                        required property var modelData
+
+                                        y: Math.round(((parent?.height ?? height) - height) / 2)
+                                        actor: modelData
+                                    }
+                                }
+
+                                // And how long ago, where a number of its width always fits.
+                                CellText {
+                                    width: Math.round(5 * (root.tinyGrid.cellWidth ?? 8))
+                                    height: parent.height
+                                    visible: (row.record.ago ?? "").length > 0
+                                    text: " ".repeat(Math.max(0, 5 - (row.record.ago ?? "").length)) + (row.record.ago ?? "")
+                                    grid: root.tinyGrid
+                                    color: root.colors.overlay1
+                                }
+
                                 // What git says: the index's column, then the working tree's, as
                                 // `git status -s`; of a directory, how many paths changed below it.
                                 Item {
@@ -1292,6 +1350,64 @@ FocusScope {
                                 grid: root.smallGrid
                                 color: root.colors.overlay1
                                 clip: true
+                            }
+                        }
+                    }
+                }
+
+                // Who touched it lately.
+                Column {
+                    width: parent.width
+                    spacing: 4 * root.ratio
+                    visible: (root.preview.activity ?? []).length > 0
+
+                    ChromeText {
+                        width: parent.width
+                        height: root.typography.smallRow
+                        text: "ACTIVITY"
+                        pixelSize: root.headingSize
+                        emphasized: true
+                        color: root.colors.subtext0
+                    }
+
+                    Repeater {
+                        model: root.preview.activity ?? []
+
+                        delegate: Row {
+                            id: touch
+
+                            required property var modelData
+
+                            height: Math.round(17.6 * root.ratio)
+                            spacing: 6 * root.ratio
+
+                            ActorChip {
+                                y: Math.round((touch.height - height) / 2)
+                                actor: (touch.modelData.actors ?? [])[0] ?? ({})
+                            }
+
+                            ChromeText {
+                                width: implicitWidth
+                                height: parent.height
+                                text: touch.modelData.who ?? ""
+                                pixelSize: root.labelSize
+                                color: root.colors.text
+                            }
+
+                            CellText {
+                                width: implicitWidth
+                                height: parent.height
+                                text: touch.modelData.verb ?? ""
+                                grid: root.smallGrid
+                                color: root.colors.subtext0
+                            }
+
+                            CellText {
+                                width: implicitWidth
+                                height: parent.height
+                                text: touch.modelData.ago ?? ""
+                                grid: root.tinyGrid
+                                color: root.colors.overlay1
                             }
                         }
                     }

@@ -39,10 +39,12 @@ export namespace telar::gui::features::explorer {
   enum class Lens : std::uint8_t {
     tree,
     changes,
+    // The files the panes touched lately, the newest first.
+    touched,
     panes,
   };
 
-  inline constexpr std::size_t lens_count = 3;
+  inline constexpr std::size_t lens_count = 4;
 
   // Where a window that follows the focused pane roots itself: at the pane's directory, at the
   // workspace's, or at the home of the machine.
@@ -124,6 +126,8 @@ export namespace telar::gui::features::explorer {
     std::string_view home;
     std::string_view machine;
     bool local = true;
+    // The time, in seconds, a row says how long ago something was against.
+    std::uint64_t now = 0;
     Reach reach = Reach::answers;
     std::uint64_t host = 0;
     std::uint64_t shown = 0;
@@ -381,6 +385,8 @@ export namespace telar::gui::features::explorer {
     // The first row the window shows: it draws `page` rows from there.
     std::size_t top = 0;
     ds::String<Memory> selected;
+    // A path the selection goes to once its directory is listed: where `]a` is headed.
+    ds::String<Memory> wanted;
     // Where a visual selection started.
     ds::Option<std::size_t> anchor;
     // The rows picked one by one with the pointer.
@@ -405,6 +411,8 @@ export namespace telar::gui::features::explorer {
     static constexpr std::uint64_t unbuilt = std::numeric_limits<std::uint64_t>::max();
     std::uint64_t built = unbuilt;
     std::uint64_t previewed = 0;
+    // The touches of its machine the rows and their chips were last drawn from.
+    std::uint64_t touched = 0;
     // Whether its machine answered when the rows were built: one that comes or goes builds them again.
     Reach reached = Reach::answers;
   };

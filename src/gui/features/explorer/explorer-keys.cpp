@@ -37,6 +37,8 @@ namespace telar::gui::features::explorer {
         bind("zR", Command::unfold_all),
         bind("]c", Command::next_change),
         bind("[c", Command::previous_change),
+        bind("]a", Command::next_touch),
+        bind("[a", Command::previous_touch),
         bind("<CR>", Command::enter),
         bind("-", Command::parent),
         bind("_", Command::workspace_root),

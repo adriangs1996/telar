@@ -10,6 +10,8 @@ import telar.wire.pane_io;
 namespace telar::gui::application {
 
   Change Session::apply(const AgentSnapshot& message) {
+    // An agent went on to another tool: what it touched is asked of the runtime again.
+    features::explorer::stir(explorer);
     return activity::receive(*this, message);
   }
 

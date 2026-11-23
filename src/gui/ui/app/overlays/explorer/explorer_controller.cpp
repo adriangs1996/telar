@@ -39,6 +39,8 @@ namespace telar::gui::qt {
     constexpr int transfers_tick_ms = 250;
     constexpr ds::Array<const char*, 3> tone_names{"info", "error", "ask"};
     constexpr ds::Array<const char*, 3> follow_scopes{"pane", "workspace", "machine"};
+    constexpr ds::Array<const char*, 4> actor_tones{"you", "claude", "codex", "agent"};
+
     // The lines of a preview's text the window draws.
     constexpr qsizetype preview_lines = 200;
     constexpr double whole_share = 1000;
@@ -46,6 +48,17 @@ namespace telar::gui::qt {
     template <std::size_t Capacity>
     QString fixedText(const runtime::FixedText<Capacity>& value) {
       return toQString(value.view());
+    }
+
+    // The chips of who touched a file: what each says, and whose color it has.
+    QVariantList actorChips(std::span<const explorer::ActorLook> actors) {
+      QVariantList result;
+
+      for (const auto& actor : actors) {
+        result.push_back(QVariantMap{{QStringLiteral("chip"), fixedText(actor.chip)}, {QStringLiteral("tone"), QString::fromLatin1(actor_tones[static_cast<std::size_t>(actor.tone)])}});
+      }
+
+      return result;
     }
 
     // The letter git's short status gives a state, as the pickers write it.
@@ -262,6 +275,7 @@ namespace telar::gui::qt {
 
     shown_ = machines.active();
     explorer::clear(scene_);
+    scene_.now = static_cast<std::uint64_t>(QDateTime::currentSecsSinceEpoch());
     explorer::observe(scene_, store_.session(), explorerMachine(shown_));
     for (std::size_t slot = 0; slot < rows.size(); ++slot) {
       if (!rows[slot].used) {
@@ -503,8 +517,21 @@ namespace telar::gui::qt {
       rest.remove_prefix(end == std::string_view::npos ? rest.size() : end + 1);
     }
 
+    // Who touched the file lately.
+    QVariantList activity;
+
+    for (const auto& touch : look.activity.view().first(look.activity_count)) {
+      activity.push_back(QVariantMap{
+          {QStringLiteral("actors"), actorChips({&touch.actor, 1})},
+          {QStringLiteral("who"), fixedText(touch.who)},
+          {QStringLiteral("verb"), fixedText(touch.verb)},
+          {QStringLiteral("ago"), fixedText(touch.ago)},
+      });
+    }
+
     QVariantMap result{
         {QStringLiteral("shown"), true},
+        {QStringLiteral("activity"), activity},
         {QStringLiteral("directory"), look.directory},
         {QStringLiteral("name"), fixedText(look.name)},
         {QStringLiteral("path"), fixedText(look.path)},
@@ -654,6 +681,9 @@ namespace telar::gui::qt {
         {QStringLiteral("marks"), fixedText(look.marks)},
         {QStringLiteral("panes"), numbers(look.panes.view().first(look.pane_count))},
         {QStringLiteral("note"), fixedText(look.note)},
+        {QStringLiteral("actors"), actorChips(look.actors.view().first(look.actor_count))},
+        {QStringLiteral("verb"), fixedText(look.verb)},
+        {QStringLiteral("ago"), fixedText(look.ago)},
         {QStringLiteral("editing"), view_.mode == Mode::insert && pick.window == view_.current && look.selected},
     };
 

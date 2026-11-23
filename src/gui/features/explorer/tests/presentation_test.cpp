@@ -89,7 +89,7 @@ namespace {
 
     const auto listed = lenses(explorer.view, explorer.state, explorer.context());
 
-    check(listed[0].current && listed[1].name == "changes" && listed[1].count == 3 && listed[2].name == "panes" && listed[2].count == 3);
+    check(listed[0].current && listed[1].name == "changes" && listed[1].count == 3 && listed[2].name == "touched" && listed[2].counted && listed[2].count == 0 && listed[3].name == "panes" && listed[3].count == 3);
     explorer.type("gt");
     line = status(explorer.view, explorer.state, explorer.context(), 0);
     check(line.total.view().empty() && line.count == 3, "the list of changes says no size");

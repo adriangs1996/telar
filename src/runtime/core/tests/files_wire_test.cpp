@@ -85,6 +85,11 @@ namespace {
     const auto back = explorer.exchange<FileChunk>(ReadFile{.request_id = 12, .path = arriving, .identity = arrived, .offset = 0, .limit = FileLimits::chunk_bytes});
 
     check(back.end && back.size == sent.size() && std::ranges::equal(back.bytes, crossing), "what was written in chunks reads back whole");
+
+    // Nothing touched a file yet: the answer names the directory asked and holds no touch.
+    const auto touches = explorer.exchange<FileTouches>(QueryTouches{.request_id = 13, .path = work});
+
+    check(touches.path == work && touches.touches.empty() && !touches.truncated, "who touched what is asked of the runtime too");
   }
 
   const telar::testing::Case case_a_client_lists_and_changes_files{"files_wire.a_client_lists_and_changes_files", testAClientListsAndChangesFiles};

@@ -272,6 +272,7 @@ export {
       case ServerTag::file_chunk:
       case ServerTag::file_written:
       case ServerTag::file_write_ended:
+      case ServerTag::file_touches:
       case ServerTag::nvim_navigated:
       case ServerTag::nvim_pick:
       case ServerTag::nvim_link:

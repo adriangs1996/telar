@@ -1594,8 +1594,16 @@ return {api_version = 2, client = {
       };
 
       // A repository with a directory of documents, one of them changed since its commit.
-      const QTemporaryDir fixture;
-      const auto root = QDir{fixture.path()}.canonicalPath() + QStringLiteral("/telar");
+      // Below where the pane is, so what its agent touches there is the pane's to tell.
+      QTRY_VERIFY_WITH_TIMEOUT(!firstPane()->cwd.empty(), runtime_wait_ms);
+      const auto fixture = toQString(firstPane()->cwd) + QStringLiteral("/explorer-fixture");
+      const auto root = fixture + QStringLiteral("/telar");
+      const auto discard = qScopeGuard([&] {
+        static_cast<void>(QDir{fixture}.removeRecursively());
+        // The agent of the pane ends with its input, and its shell echoes again.
+        client_->terminals()->input(firstPane()->id, QByteArrayLiteral("\x04stty echo\r"));
+      });
+
       const auto write = [&](const QString& relative, int lines) {
         const auto path = root + QLatin1Char('/') + relative;
         QByteArray text;
@@ -1708,6 +1716,28 @@ return {api_version = 2, client = {
       QCOMPARE(selected(), QStringLiteral("usage.md"));
       QTRY_VERIFY_WITH_TIMEOUT(explorer->preview().value(QStringLiteral("diff")).toBool(), runtime_wait_ms);
       QVERIFY(!explorer->preview().value(QStringLiteral("lines")).toList().isEmpty());
+
+      // An agent runs in the pane, and reports the tool it runs as its hooks do: the file it names
+      // is touched, which its row and its preview say.
+      {
+        const auto pane_id = firstPane()->id;
+        const auto agent = QStringLiteral("stty -echo; %1 --report-blocked %2 %3 %4\r").arg(shellLiteral(QCoreApplication::applicationFilePath()), shellLiteral(socket_)).arg(pane_id).arg(firstPane()->generation);
+
+        client_->terminals()->input(pane_id, agent.toUtf8());
+        QTRY_VERIFY2_WITH_TIMEOUT(screenText(client_->pane(pane_id)->screen, ScreenTextLayout::logical).contains(QStringLiteral("GUI_ATTENTION_READY")), qPrintable(screenText(client_->pane(pane_id)->screen)), runtime_wait_ms);
+
+        QProcess report;
+
+        report.start(runtime_.program(), {QStringLiteral("agent"), QStringLiteral("report-state"), QString::number(pane_id), QStringLiteral("working"), QStringLiteral("--event"), QStringLiteral("» Edit explorer-fixture/telar/docs/usage.md"), QStringLiteral("--socket"), socket_});
+        QVERIFY(report.waitForFinished(runtime_wait_ms));
+        QVERIFY2(report.exitCode() == 0, report.readAllStandardError().constData());
+      }
+
+      QTRY_COMPARE_WITH_TIMEOUT(named(QStringLiteral("usage.md")).value(QStringLiteral("actors")).toList().size(), 1, runtime_wait_ms);
+      QCOMPARE(named(QStringLiteral("usage.md")).value(QStringLiteral("actors")).toList().first().toMap().value(QStringLiteral("chip")).toString(), QStringLiteral("1"));
+      QVERIFY(named(QStringLiteral("agents.md")).value(QStringLiteral("actors")).toList().isEmpty());
+      QTRY_COMPARE_WITH_TIMEOUT(explorer->preview().value(QStringLiteral("activity")).toList().size(), 1, runtime_wait_ms);
+      QCOMPARE(explorer->preview().value(QStringLiteral("activity")).toList().first().toMap().value(QStringLiteral("verb")).toString(), QStringLiteral("Edit"));
       shoot(QStringLiteral("explorer-tree"));
 
       // The pointer asks for the menu of the row: what applies to it, each line with its keys.
@@ -1730,7 +1760,8 @@ return {api_version = 2, client = {
       QVERIFY(menu_lines.size() > 16);
       QVERIFY(menu_lines.value(0).toMap().value(QStringLiteral("current")).toBool());
       QCOMPARE(menu_lines.value(0).toMap().value(QStringLiteral("keys")).toString(), QStringLiteral("<CR>"));
-      QVERIFY(menu_lines.value(0).toMap().value(QStringLiteral("label")).toString().startsWith(QStringLiteral("Insert")));
+      // An agent runs in the pane now: Enter mentions the file to it.
+      QVERIFY2(menu_lines.value(0).toMap().value(QStringLiteral("label")).toString().startsWith(QStringLiteral("Mention")), qPrintable(menu_lines.value(0).toMap().value(QStringLiteral("label")).toString()));
       QVERIFY(menu_lines.value(3).toMap().value(QStringLiteral("rule")).toBool());
       QCOMPARE(menu_lines.value(4).toMap().value(QStringLiteral("label")).toString(), QStringLiteral("Rename"));
       shoot(QStringLiteral("explorer-menu"));
@@ -1834,6 +1865,13 @@ return {api_version = 2, client = {
       QTRY_VERIFY_WITH_TIMEOUT(!named(QStringLiteral("usage.md")).isEmpty(), runtime_wait_ms);
       QCOMPARE(record(0).value(QStringLiteral("kind")).toString(), QStringLiteral("header"));
       shoot(QStringLiteral("explorer-changes"));
+      // The lens of touches lists the file the agent touched, with how and who.
+      explorer->run(QStringLiteral("touched"));
+      QTRY_VERIFY_WITH_TIMEOUT(!named(QStringLiteral("usage.md")).isEmpty(), runtime_wait_ms);
+      QCOMPARE(named(QStringLiteral("usage.md")).value(QStringLiteral("verb")).toString(), QStringLiteral("Edit"));
+      QCOMPARE(named(QStringLiteral("usage.md")).value(QStringLiteral("lead")).toString(), QStringLiteral("docs/"));
+      QVERIFY(!named(QStringLiteral("usage.md")).value(QStringLiteral("ago")).toString().isEmpty());
+      shoot(QStringLiteral("explorer-touched"));
       explorer->run(QStringLiteral("tree"));
       // The filter asks the runtime for every path below the root: a file of a directory the
       // window never unfolded shows, with the path that leads to it.

@@ -223,6 +223,106 @@ namespace telar::gui::features::explorer {
       look.marks.assign({letters.data(), length});
     }
 
+    // The chip of the one a touch is by: `you` for the person, and for an agent the place in the
+    // tab of its pane, which is how the status line names a pane too.
+    ActorLook actorOf(const Touch& touch, const Context& context) {
+      ActorLook look;
+
+      if (touch.actor == TouchActor::user) {
+        put(look.chip, "you");
+        return look;
+      }
+
+      look.tone = touch.provider == AgentProvider::claude ? ActorTone::claude : ActorTone::agent;
+      if (touch.provider == AgentProvider::codex) {
+        look.tone = ActorTone::codex;
+      }
+
+      if (const auto pane = std::ranges::find(context.panes, touch.pane, &PaneFact::id); pane != context.panes.end()) {
+        write(look.chip, "{}", pane->number);
+      } else {
+        put(look.chip, "·");
+      }
+
+      return look;
+    }
+
+    // The name a person knows the one a touch is by: the agent of the pane where the tab shows
+    // it, else what its provider is called.
+    tbc::val_a<std::string_view> whoOf(const Touch& touch, tbc::ref_a<Context> context) noexcept {
+      if (touch.actor == TouchActor::user) {
+        return "You";
+      }
+
+      if (const auto pane = std::ranges::find(context.panes, touch.pane, &PaneFact::id); pane != context.panes.end() && pane->kind == PaneKind::agent) {
+        return pane->title;
+      }
+
+      switch (touch.provider) {
+      case AgentProvider::claude:
+        return "Claude Code";
+      case AgentProvider::codex:
+        return "Codex";
+      case AgentProvider::pi:
+        return "Pi";
+      case AgentProvider::cursor:
+        return "Cursor";
+      case AgentProvider::opencode:
+        return "OpenCode";
+      case AgentProvider::unknown:
+      case AgentProvider::last_custom:
+        return "Agent";
+      }
+
+      return "Agent";
+    }
+
+    // Who touched the file at `path`: one chip for each hand and pane, the last first.
+    void noteActors(RowLook& look, const Seen& seen, std::string_view path) {
+      const auto& touches = seen.state.touches;
+      ds::Array<const Touch*, actor_capacity> shown{};
+
+      for (const auto& touch : touches.items) {
+        if (look.actor_count == look.actors.size()) {
+          return;
+        }
+
+        const bool again = std::ranges::any_of(shown.view().first(look.actor_count), [&](const Touch* earlier) {
+          return earlier->actor == touch.actor && earlier->pane == touch.pane;
+        });
+
+        if (!again && touches.path(touch) == path) {
+          shown.atMut(look.actor_count) = &touch;
+          look.actors.atMut(look.actor_count++) = actorOf(touch, seen.context);
+        }
+      }
+    }
+
+    // The last touches of the file at `path`, for its preview: the newest first.
+    void noteActivity(PreviewLook& look, const State& state, const Context& context, std::string_view path) {
+      for (const auto& touch : state.touches.items) {
+        if (look.activity_count == look.activity.size()) {
+          return;
+        }
+
+        if (state.touches.path(touch) != path) {
+          continue;
+        }
+
+        auto& line = look.activity.atMut(look.activity_count++);
+
+        line.actor = actorOf(touch, context);
+        if (const auto pane = std::ranges::find(context.panes, touch.pane, &PaneFact::id); pane != context.panes.end()) {
+          write(line.who, "{} · pane {}", whoOf(touch, context), pane->number);
+        } else {
+          put(line.who, whoOf(touch, context));
+        }
+
+        line.verb.assign(touch.verb.view());
+        line.ago = age(touch.seconds, context.now);
+      }
+    }
+
     void entryLook(RowLook& look, const Seen& seen) {
       const auto& row = seen.row;
       if (row.holder >= seen.state.directories.size() || row.entry >= seen.state.directories[row.holder]->entries.size()) {
@@ -258,6 +358,10 @@ namespace telar::gui::features::explorer {
 
       noteRemoval(look, seen.view, machine, path.view());
       noteMarks(look, seen.view, machine, path.view());
+      if (!row.directory) {
+        noteActors(look, seen, path.view());
+      }
+
       if (row.directory) {
         notePanes(look, seen.context, path.view());
       }
@@ -359,10 +463,22 @@ namespace telar::gui::features::explorer {
       look.ignored = held.ignored;
       look.lines_added = held.added;
       look.lines_removed = held.removed;
+      const bool touch = seen.window.lens == Lens::touched;
+
       // Outside the repository the window asked about, the search still says what git holds.
-      if (look.staged == FileState::unchanged && look.unstaged == FileState::unchanged && row.item < search.matches.size()) {
+      if (!touch && look.staged == FileState::unchanged && look.unstaged == FileState::unchanged && row.item < search.matches.size()) {
         look.unstaged = search.matches[row.item].state;
       }
+
+      // A row of the touches says how its file was touched last, and how long ago.
+      if (touch && row.item < seen.state.touches.items.size()) {
+        const auto& last = seen.state.touches.items[row.item];
+
+        look.verb.assign(last.verb.view());
+        look.ago = age(last.seconds, seen.context.now);
+      }
+
+      noteActors(look, seen, path.view());
 
       if (const auto* renamed = editOn(seen.view, EditKind::rename, machine, path.view())) {
         look.renamed = true;
@@ -1033,7 +1149,22 @@ namespace telar::gui::features::explorer {
 
     result.atMut(0) = {.name = "tree", .current = current == Lens::tree};
     result.atMut(1) = {.name = "changes", .count = changes, .counted = state.repository.known && !state.repository.root.empty(), .current = current == Lens::changes};
-    result.atMut(2) = {.name = "panes", .count = static_cast<std::uint32_t>(context.panes.size()), .counted = true, .current = current == Lens::panes};
+    // The files touched below the root of the window that takes the keys, each once.
+    const auto& touches = state.touches;
+    const auto root = view.windows.empty() ? std::string_view{} : explorer::window(view).root.view();
+    std::uint32_t touched = 0;
+
+    for (std::size_t index = 0; index < touches.items.size(); ++index) {
+      const auto path = touches.path(touches.items[index]);
+      const bool named = std::ranges::any_of(touches.items.view().first(index), [&](const Touch& earlier) {
+        return touches.path(earlier) == path;
+      });
+
+      touched += !named && path != root && within(path, root) ? 1 : 0;
+    }
+
+    result.atMut(2) = {.name = "touched", .count = touched, .counted = touches.known, .current = current == Lens::touched};
+    result.atMut(3) = {.name = "panes", .count = static_cast<std::uint32_t>(context.panes.size()), .counted = true, .current = current == Lens::panes};
     return result;
   }
 
@@ -1070,6 +1201,8 @@ namespace telar::gui::features::explorer {
     put(addFact(result, "Machine").value, context.machine);
     if (row.directory) {
       notePanes(result, context, path);
+    } else {
+      noteActivity(result, state, context, path);
     }
 
     result.waiting = inspection == nullptr;

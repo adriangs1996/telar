@@ -10,6 +10,7 @@ import telar.runtime.core.tests.protocol_peer;
 import telar.runtime.core.tests.runtime_host;
 import telar.runtime.core.tests.wire_session;
 import telar.wire.agents;
+import telar.wire.files;
 import telar.wire.clients;
 import telar.wire.layout;
 import telar.wire.pane_io;
@@ -54,6 +55,16 @@ namespace {
       if (workload == "report-exit") {
         peer.exchange<RequestCompleted>(VerifyPaneDescent{1, pane, generation});
         peer.exchange<RequestCompleted>(ReportAgent{.request_id = 2, .pane_id = pane, .pane_generation = generation, .provider = AgentProvider::codex, .state = AgentReportState::working, .event = "Fixture"});
+        std::ofstream{result} << "seen";
+        return 0;
+      }
+
+      // An agent whose hook reports the tool it runs, on the file `argument` names.
+      if (workload == "touch") {
+        const std::string event = "» Edit " + argument;
+
+        peer.exchange<RequestCompleted>(VerifyPaneDescent{1, pane, generation});
+        peer.exchange<RequestCompleted>(ReportAgent{.request_id = 2, .pane_id = pane, .pane_generation = generation, .provider = AgentProvider::codex, .state = AgentReportState::working, .event = event});
         std::ofstream{result} << "seen";
         return 0;
       }
@@ -373,11 +384,48 @@ namespace {
     }
   }
 
+  // The line of a tool an agent's hook reports names a file below its pane's directory: who asks
+  // the runtime what was touched is told the file, the pane, the agent and the tool.
+  void testAToolAnAgentReportsTouchesTheFileItNames() {
+    RuntimeHost host;
+    ProtocolPeer control{host.socket()};
+    const auto helper = agentExecutable(host, "helper");
+    const auto result = host.directory() + "/agent-report";
+    const auto command = "'" + helper + "' --wire-agent '" + host.socket() + "' '" + result + "' touch touched.md\r";
+    const ds::Array<std::string_view, 2> shell{"/bin/sh", "-i"};
+
+    std::ofstream{host.directory() + "/touched.md"} << "text\n";
+
+    const auto opened = control.exchange<PaneOpened>(OpenPane{.request_id = 1, .size = size, .launch = Launch{.cwd = host.directory(), .arguments = shell}});
+
+    check(control.exchange<FileTouches>(QueryTouches{.request_id = 2, .path = "/"}).touches.empty(), "nothing was touched yet");
+    control.send(PaneInput{opened.pane_id, {reinterpret_cast<const Byte*>(command.data()), command.size()}});
+    const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds{10};
+
+    while (readFile(result) != "seen") {
+      check(std::chrono::steady_clock::now() < deadline, "the agent never reported");
+      std::this_thread::sleep_for(std::chrono::milliseconds{10});
+    }
+
+    const auto told = control.exchange<FileTouches>(QueryTouches{.request_id = 3, .path = "/"});
+
+    check(told.touches.size() == 1 && !told.truncated);
+
+    const auto& touch = told.touches[0];
+
+    check(std::filesystem::equivalent(touch.path, host.directory() + "/touched.md"), "the file the tool named, from the pane's directory");
+    check(touch.actor == TouchActor::agent && touch.provider == AgentProvider::codex && touch.pane_id == opened.pane_id && touch.verb == "Edit" && touch.seconds != 0);
+
+    // Below another directory nothing was.
+    check(control.exchange<FileTouches>(QueryTouches{.request_id = 4, .path = "/usr"}).touches.empty());
+  }
+
   const telar::testing::Case case_sound_on_done_and_blocked{"agent_wire.sound_on_done_and_blocked", testSoundOnDoneAndBlocked};
   const telar::testing::Case case_progress_registers_external_worktree{"agent_wire.progress_registers_external_worktree", testProgressRegistersExternalWorktree};
   const telar::testing::Case case_register_by_verified_creator{"agent_wire.register_by_verified_creator", testRegisterByVerifiedCreator};
   const telar::testing::Case case_interrupt_refusals_and_debounce{"agent_wire.interrupt_refusals_and_debounce", testInterruptRefusalsAndDebounce};
   const telar::testing::Case case_send_text_prompt_budget{"agent_wire.send_text_prompt_budget", testSendTextPromptBudget};
+  const telar::testing::Case case_tool_touches{"agent_wire.a_tool_an_agent_reports_touches_the_file_it_names", testAToolAnAgentReportsTouchesTheFileItNames};
   const telar::testing::Case case_shell_foreground_removes_agent{"agent_wire.shell_foreground_removes_agent", testShellForegroundRemovesAgent};
   const telar::testing::Case case_report_session_and_restored_agent{"agent_wire.report_session_and_restored_agent", testReportSessionAndRestoredAgent};
 

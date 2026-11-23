@@ -319,6 +319,41 @@ namespace telar::gui::features::explorer {
       }
     }
 
+    // The files the panes of the machine touched below the root, the newest first and each once:
+    // a flat list of paths from the root, as what a filter finds.
+    void buildTouched(Window& window, const State& state) {
+      const auto& touches = state.touches;
+
+      window.loading = false;
+      if (!touches.known) {
+        pushText(window, {.kind = RowKind::note}, "asking who touched what…");
+        return;
+      }
+
+      for (std::size_t index = 0; index < touches.items.size(); ++index) {
+        const auto path = touches.path(touches.items[index]);
+        const auto root = window.root.view();
+        if (path == root || !within(path, root)) {
+          continue;
+        }
+
+        const auto below = path.substr(root == "/" ? 1 : root.size() + 1);
+
+        // The newest touch of a file names it; the ones before it show in its preview.
+        const bool named = std::ranges::any_of(touches.items.view().first(index), [&](const Touch& earlier) {
+          return touches.path(earlier) == path;
+        });
+
+        if (!named) {
+          pushText(window, {.kind = RowKind::match, .item = static_cast<std::uint32_t>(index)}, below);
+        }
+      }
+
+      if (window.rows.empty()) {
+        pushText(window, {.kind = RowKind::note}, "no pane touched a file below this directory lately");
+      }
+    }
+
     // The paths the runtime found below the root for the window's filter, in the order it ranks
     // them: a flat list, built from its answer alone.
     void buildMatches(Window& window, const State& state) {
@@ -472,6 +507,7 @@ namespace telar::gui::features::explorer {
 
       window.built = state.revision;
       window.previewed = state.previews;
+      window.touched = state.touches.revision;
       window.reached = context.reach;
       if (context.reach != Reach::answers) {
         window.loading = false;
@@ -493,6 +529,28 @@ namespace telar::gui::features::explorer {
       }
 
       return false;
+    }
+
+    // Where `]a` is headed takes the selection once its directory is listed.
+    void arrive(Window& window, const State& state, const Context& context) {
+      if (window.wanted.empty()) {
+        return;
+      }
+
+      Text listed{window.rows.memory()};
+
+      for (const auto& row : window.rows) {
+        if (row.kind != RowKind::entry) {
+          continue;
+        }
+
+        pathOf(listed, window, state, context, row);
+        if (listed.view() == window.wanted.view()) {
+          window.selected.assign(window.wanted.view());
+          window.wanted.clear();
+          return;
+        }
+      }
     }
 
     void buildWindow(Window& window, const Pending& pending, const State& state, const Context& context) {
@@ -525,10 +583,15 @@ namespace telar::gui::features::explorer {
       case Lens::changes:
         buildChanges(window, state);
         break;
+      case Lens::touched:
+        buildTouched(window, state);
+        break;
       case Lens::panes:
         buildPanes(window, context);
         break;
       }
+
+      arrive(window, state, context);
 
       // The selection stays on its path; where the path is gone, near where it was.
       Text path{window.rows.memory()};
@@ -969,6 +1032,7 @@ namespace telar::gui::features::explorer {
         rows(memory),
         text(memory),
         selected(memory),
+        wanted(memory),
         picked(memory),
         followed_cwd(memory) {}
 
@@ -1263,6 +1327,92 @@ namespace telar::gui::features::explorer {
       }
 
       say(view, "Nothing changed here", Tone::error);
+    }
+
+    // Whether the name `left` lists before `right`: without regard to case, then as written.
+    constexpr bool nameBefore(std::string_view left, std::string_view right) noexcept {
+      const auto folded = std::lexicographical_compare_three_way(left.begin(), left.end(), right.begin(), right.end(), [](char one, char other) {
+        return lowered(one) <=> lowered(other);
+      });
+
+      return folded != 0 ? folded < 0 : left < right;
+    }
+
+    // Whether `left` lists before `right` in a tree: at the first name they differ in, a directory
+    // before a file, then by name without regard to case.
+    constexpr bool treeBefore(std::string_view left, std::string_view right) noexcept {
+      while (!left.empty() && !right.empty()) {
+        const auto left_end = std::min(left.find('/'), left.size());
+        const auto right_end = std::min(right.find('/'), right.size());
+        const std::string_view left_name{left.data(), left_end};
+        const std::string_view right_name{right.data(), right_end};
+        const bool left_directory = left_end < left.size();
+        const bool right_directory = right_end < right.size();
+
+        if (left_name != right_name) {
+          if (left_directory != right_directory) {
+            return left_directory;
+          }
+
+          return nameBefore(left_name, right_name);
+        }
+
+        left.remove_prefix(std::min(left.size(), left_end + 1));
+        right.remove_prefix(std::min(right.size(), right_end + 1));
+      }
+
+      return left.empty() && !right.empty();
+    }
+
+    // `]a`, `[a`: the next or the previous file an agent touched below the root, in the tree's
+    // order, with the directories that lead to it unfolded as their listings come.
+    void nextTouch(View& view, const State& state, const Context& context, int direction) {
+      auto& window = windowAt(view.windows, view.current);
+      const auto& touches = state.touches;
+      const auto root = window.root.view();
+      const auto from = window.wanted.empty() ? window.selected.view() : window.wanted.view();
+      std::string_view next;
+      std::string_view wrapped;
+
+      for (const auto& touch : touches.items) {
+        const auto path = touches.path(touch);
+        if (touch.actor != TouchActor::agent || path == root || !within(path, root)) {
+          continue;
+        }
+
+        // The nearest one past the selection that way, and the one to wrap around to.
+        const bool past = direction > 0 ? treeBefore(from, path) : treeBefore(path, from);
+        const auto nearer = [&](std::string_view held) {
+          return held.empty() || (direction > 0 ? treeBefore(path, held) : treeBefore(held, path));
+        };
+
+        if (past && nearer(next)) {
+          next = path;
+        }
+
+        if (nearer(wrapped)) {
+          wrapped = path;
+        }
+      }
+
+      const auto target = next.empty() ? wrapped : next;
+      if (target.empty()) {
+        say(view, touches.known ? "No agent touched a file below this directory lately" : "Asking who touched what: try again", Tone::error);
+        return;
+      }
+
+      const Text path{view.memory, target};
+
+      window.lens = Lens::tree;
+      window.filter.clear();
+      window.anchor = ds::none;
+      for (auto slash = path.view().find('/', root == "/" ? 1 : root.size() + 1); slash != std::string_view::npos; slash = path.view().find('/', slash + 1)) {
+        add(window.expanded, path.view().substr(0, slash));
+      }
+
+      window.selected.assign(path.view());
+      window.wanted.assign(path.view());
+      rebuildCurrent(view, state, context);
     }
 
     void setLens(View& view, const State& state, const Context& context, Lens lens) {
@@ -2470,6 +2620,11 @@ namespace telar::gui::features::explorer {
       const auto count = static_cast<std::int64_t>(stroke.count);
       const auto half = std::max<std::int64_t>(1, window.page / 2);
 
+      // Where `]a` was going is forgotten by any other command: the selection is the person's.
+      if (stroke.command != Command::next_touch && stroke.command != Command::previous_touch) {
+        window.wanted.clear();
+      }
+
       switch (stroke.command) {
       case Command::none:
       case Command::repeat:
@@ -2518,6 +2673,12 @@ namespace telar::gui::features::explorer {
         break;
       case Command::previous_change:
         nextChange(view, state, context, -1);
+        break;
+      case Command::next_touch:
+        nextTouch(view, state, context, 1);
+        break;
+      case Command::previous_touch:
+        nextTouch(view, state, context, -1);
         break;
       case Command::enter:
         return enter(view, state, context);
@@ -2832,6 +2993,10 @@ namespace telar::gui::features::explorer {
         return Lens::changes;
       }
 
+      if (name == "touched") {
+        return Lens::touched;
+      }
+
       if (name == "panes") {
         return Lens::panes;
       }
@@ -3101,14 +3266,18 @@ namespace telar::gui::features::explorer {
         continue;
       }
 
-      // A preview that arrived changes no row but the ones a diff is unfolded below.
+      // A preview that arrived changes no row but the ones a diff is unfolded below, and who
+      // touched what changes the rows of its own lens alone: the chips of the others are read
+      // again with what shows.
       const bool previewed = window->previewed != state.previews;
+      const bool touched = window->touched != state.touches.revision;
 
-      if (window->built != state.revision || window->reached != context.reach || (previewed && !window->diffs.empty())) {
+      if (window->built != state.revision || window->reached != context.reach || (previewed && !window->diffs.empty()) || (touched && window->lens == Lens::touched)) {
         buildWindow(window.getMut(), {.edits = view.edits, .transfers = view.transfers}, state, context);
         changed = true;
-      } else if (previewed) {
+      } else if (previewed || touched) {
         window.getMut().previewed = state.previews;
+        window.getMut().touched = state.touches.revision;
         changed = true;
       }
     }
@@ -3289,7 +3458,20 @@ namespace telar::gui::features::explorer {
       return wanted;
     }
 
-    return treeNeed(view, state, machine, true);
+    if (auto wanted = treeNeed(view, state, machine, true)) {
+      return wanted;
+    }
+
+    // Last, who touched what: for the lens of it, and for the chips of the rows that list files.
+    const bool lists = std::ranges::any_of(view.windows, [&](const ds::Box<Window, Memory>& window) {
+      return window->machine == machine && window->lens != Lens::panes;
+    });
+
+    if (lists && lacks(state, {.kind = NeedKind::touches})) {
+      return Need{.kind = NeedKind::touches};
+    }
+
+    return ds::none;
   }
 
   namespace {

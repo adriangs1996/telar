@@ -27,6 +27,9 @@ export namespace telar::gui::features::explorer {
     unfold_all,
     next_change,
     previous_change,
+    // `]a`, `[a`: the next or the previous file an agent touched.
+    next_touch,
+    previous_touch,
     // Roots and jumps.
     enter,
     parent,

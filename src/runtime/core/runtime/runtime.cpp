@@ -4,6 +4,7 @@ module;
 
 module telar.runtime.core.runtime;
 
+import telar.runtime.files.touches;
 import telar.runtime.nvim.editor;
 import telar.runtime.nvim.provision;
 import telar.runtime.paths.query_task;
@@ -25,6 +26,13 @@ import telar.base.ds;
 namespace telar::runtime {
 
   namespace {
+
+    // What an agent's line starts with when it names the tool it runs.
+    constexpr std::string_view agent_tool_mark = "» ";
+
+    std::uint64_t secondsNow() noexcept {
+      return static_cast<std::uint64_t>(std::chrono::duration_cast<std::chrono::seconds>(std::chrono::system_clock::now().time_since_epoch()).count());
+    }
 
     // The socket to listen on, once a fresh start has set the previous session aside: the listener
     // makes the runtime reachable, so a client that finds the socket finds the session set aside.
@@ -204,12 +212,12 @@ namespace telar::runtime {
   }
 
   template <EventLoop Poller, HistoryEventSink History>
-  void AgentService<Poller, History>::report(RuntimeModel& model, ClientSession& client, const ReportAgent& request) {
+  AgentProvider AgentService<Poller, History>::report(RuntimeModel& model, ClientSession& client, const ReportAgent& request) {
     auto& pane = authorize(model.panes, client, request.pane_id, request.pane_generation, request.provider);
     auto* existing = agents_.findMut(pane.id, pane.generation);
     if (existing == nullptr && request.state == AgentReportState::continuing) {
       client.connection.send(RequestCompleted{.request_id = request.request_id});
-      return;
+      return request.provider;
     }
 
     if (existing == nullptr) {
@@ -235,6 +243,7 @@ namespace telar::runtime {
     }
 
     client.connection.send(RequestCompleted{.request_id = request.request_id});
+    return request.provider == AgentProvider::unknown ? agent.provider : request.provider;
   }
 
   template <EventLoop Poller, HistoryEventSink History>
@@ -2294,7 +2303,14 @@ namespace telar::runtime {
   template <EventLoop Poller, typename Background>
     requires BackgroundExecutor<Background, ConcurrentMemory>
   void Runtime<Poller, Background>::handle(std::uint64_t identity, const ReportAgent& message) {
-    agents_.report(model_, requireClient(clients_, identity), message);
+    const auto provider = agents_.report(model_, requireClient(clients_, identity), message);
+
+    // The line of a tool names what the agent touches: the explorer's files keep it for who asks.
+    if constexpr (requires(Background& background, const TouchNote& note) { background.noteTouch(note); }) {
+      if (const auto pane = asTerminal(model_.panes.find(message.pane_id)); pane && message.event.starts_with(agent_tool_mark)) {
+        background_.noteTouch({.pane = message.pane_id, .actor = TouchActor::agent, .provider = provider, .text = message.event, .directory = std::string_view{pane->core.cwd}, .seconds = secondsNow()});
+      }
+    }
   }
 
   template <EventLoop Poller, typename Background>
@@ -2726,6 +2742,12 @@ namespace telar::runtime {
   template <EventLoop Poller, typename Background>
     requires BackgroundExecutor<Background, ConcurrentMemory>
   void Runtime<Poller, Background>::handle(std::uint64_t identity, const EndFileWrite& message) {
+    submitBackground(background_, requireClient(clients_, identity), message);
+  }
+
+  template <EventLoop Poller, typename Background>
+    requires BackgroundExecutor<Background, ConcurrentMemory>
+  void Runtime<Poller, Background>::handle(std::uint64_t identity, const QueryTouches& message) {
     submitBackground(background_, requireClient(clients_, identity), message);
   }
 

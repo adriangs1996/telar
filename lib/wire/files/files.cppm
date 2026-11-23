@@ -56,6 +56,9 @@ export extern "C++" {
       static constexpr std::size_t message_bytes = 4096;
       // The bytes of a file one message carries, from one machine to another through a window.
       static constexpr std::uint32_t chunk_bytes = std::uint32_t{256} * 1024;
+      // The touches one answer carries, and the verb of one: the name of a program or a tool.
+      static constexpr std::uint8_t maximum_touches = 128;
+      static constexpr std::size_t verb_bytes = 32;
       // A file's modification time holds this many nanoseconds past its second.
       static constexpr std::uint32_t maximum_nanoseconds = 999'999'999;
     };
@@ -567,6 +570,61 @@ export extern "C++" {
               Field<&FileWriteEnded::request_id, NonzeroU64, "request_id">,
               Field<&FileWriteEnded::outcome, EnumByte<FileOutcome, static_cast<Byte>(FileOutcome::failed)>, "outcome">,
               Field<&FileWriteEnded::path, Text16<FileLimits::path_bytes, true>, "path">> {};
+
+    // Who a touch is by: the person at the pane, or the agent it runs.
+    enum class TouchActor : Byte {
+      user = 0,
+      agent = 1,
+    };
+
+    // Asks who touched the files below a directory lately.
+    struct QueryTouches {
+      std::uint64_t request_id{};
+      std::string_view path;
+    };
+
+    template <>
+    struct MessageSchema<QueryTouches>
+        : Schema<Direction::client, ClientTag::query_touches, Field<&QueryTouches::request_id, NonzeroU64, "request_id">, Field<&QueryTouches::path, Text16<FileLimits::path_bytes, false>, "path">> {};
+
+    // A file a pane touched: with which command or tool, and when. `provider` says whose agent,
+    // where the runtime knows; `unknown` for the person at the pane and for an agent's own shell.
+    struct FileTouch {
+      std::string_view path;
+      TouchActor actor{};
+      AgentProvider provider{};
+      std::uint64_t pane_id{};
+      std::string_view verb;
+      std::uint64_t seconds{};
+    };
+
+    template <>
+    struct BodySchema<FileTouch>
+        : Serializer<
+              Field<&FileTouch::path, Text16<FileLimits::path_bytes, false>, "path">,
+              Field<&FileTouch::actor, EnumByte<TouchActor, static_cast<Byte>(TouchActor::agent)>, "actor">,
+              Field<&FileTouch::provider, EnumByte<AgentProvider, max_agent_provider_index>, "provider">,
+              Field<&FileTouch::pane_id, u64, "pane_id">,
+              Field<&FileTouch::verb, Text16<FileLimits::verb_bytes, false>, "verb">,
+              Field<&FileTouch::seconds, u64, "seconds">> {};
+
+    // The touches below `path`, the newest first; `truncated` when there are more than these.
+    struct FileTouches {
+      std::uint64_t request_id{};
+      std::string_view path;
+      bool truncated{};
+      std::span<const FileTouch> touches;
+    };
+
+    template <>
+    struct MessageSchema<FileTouches>
+        : Schema<
+              Direction::server,
+              ServerTag::file_touches,
+              Field<&FileTouches::request_id, NonzeroU64, "request_id">,
+              Field<&FileTouches::path, Text16<FileLimits::path_bytes, false>, "path">,
+              Field<&FileTouches::truncated, BoolByte, "truncated">,
+              Field<&FileTouches::touches, CountedSpan<u8, ValueCodec<FileTouch>, FileLimits::maximum_touches>, "touches">> {};
 
   }
 }

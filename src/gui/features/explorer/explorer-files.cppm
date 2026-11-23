@@ -172,6 +172,36 @@ export namespace telar::gui::features::explorer {
     [[nodiscard]] bool of(std::string_view directory, std::string_view text_asked) const noexcept;
   };
 
+  // A file a pane touched, as the runtime told it: where its path is in the touches' text, who
+  // did it, with which command or tool, and when.
+  struct Touch {
+    std::uint32_t path = 0;
+    std::uint16_t path_size = 0;
+    TouchActor actor = TouchActor::user;
+    AgentProvider provider = AgentProvider::unknown;
+    std::uint64_t pane = 0;
+    runtime::FixedText<FileLimits::verb_bytes> verb;
+    std::uint64_t seconds = 0;
+  };
+
+  // Who touched the files of a machine lately, the newest first: what its runtime last answered.
+  struct Touches {
+    explicit Touches(Memory& memory);
+
+    ds::Vec<char, Memory> text;
+    ds::Vec<Touch, Memory> items;
+    // The request its answer comes under.
+    std::uint64_t waiting = 0;
+    bool known = false;
+    bool truncated = false;
+    // A pane did something since the answer: it is asked again.
+    bool stale = false;
+    // Grows with every answer that says something else than the one before it.
+    std::uint64_t revision = 0;
+
+    [[nodiscard]] std::string_view path(const Touch& touch) const noexcept;
+  };
+
   // What became of one operation of the plan last applied.
   struct Outcome {
     FileOutcome outcome = FileOutcome::done;

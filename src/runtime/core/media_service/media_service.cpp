@@ -58,6 +58,19 @@ namespace telar::runtime {
 
   template <typename History, typename Paths, typename Editor, typename Suggestions, typename Worktrees>
   bool BackgroundPool<History, Paths, Editor, Suggestions, Worktrees>::recordHistory(const HistoryEventView& event) noexcept {
+    // A command a pane finished names the files it touched.
+    if (event.kind == HistoryEventKind::command_finished) {
+      constexpr std::int64_t second_ms = 1000;
+
+      noteTouch({
+          .pane = event.session.pane,
+          .actor = event.command.author == HistoryAuthor::agent ? TouchActor::agent : TouchActor::user,
+          .text = event.command.command,
+          .directory = event.command.directory,
+          .seconds = static_cast<std::uint64_t>(std::max<std::int64_t>(0, event.finished_at_ms) / second_ms),
+      });
+    }
+
     try {
       history_.submitInternal(event);
       return true;
@@ -65,6 +78,11 @@ namespace telar::runtime {
       history_submission_failures_.fetch_add(1, std::memory_order_relaxed);
       return false;
     }
+  }
+
+  template <typename History, typename Paths, typename Editor, typename Suggestions, typename Worktrees>
+  void BackgroundPool<History, Paths, Editor, Suggestions, Worktrees>::noteTouch(const TouchNote& note) noexcept {
+    file_service_.touches().note(note);
   }
 
   template <typename History, typename Paths, typename Editor, typename Suggestions, typename Worktrees>

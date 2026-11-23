@@ -22,8 +22,13 @@ namespace telar::runtime {
         content_(memory),
         repository_(memory),
         changer_(memory),
+        touches_(memory),
         decode_(memory) {
     decode_.resize(decode_bytes);
+  }
+
+  TouchIndex& FileService::touches() noexcept {
+    return touches_;
   }
 
   void FileService::process(std::span<const Byte> payload, EncodedReply<ConcurrentMemory>& reply, const RequestContext& context) {
@@ -58,6 +63,8 @@ namespace telar::runtime {
       changer_.write(Codec::decode<WriteFile>(payload, storage), reply);
     } else if (tag == ClientTag::end_file_write) {
       changer_.end(Codec::decode<EndFileWrite>(payload, storage), reply);
+    } else if (tag == ClientTag::query_touches) {
+      touches_.answer(Codec::decode<QueryTouches>(payload, storage), reply);
     } else if (tag == ClientTag::locate_home) {
       reply.send(HomeLocated{.request_id = Codec::decode<LocateHome>(payload, storage).request_id, .path = accountHome()});
     } else {
