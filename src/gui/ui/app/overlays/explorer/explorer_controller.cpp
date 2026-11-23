@@ -624,9 +624,22 @@ namespace telar::gui::qt {
       });
     }
 
+    // The heaviest of what a directory holds.
+    QVariantList heavy;
+    constexpr double hundredths = 100;
+
+    for (const auto& entry : look.heavy.view().first(look.heavy_count)) {
+      heavy.push_back(QVariantMap{
+          {QStringLiteral("name"), fixedText(entry.name) + (entry.directory ? QStringLiteral("/") : QString{})},
+          {QStringLiteral("size"), fixedText(entry.size)},
+          {QStringLiteral("share"), entry.share / hundredths},
+      });
+    }
+
     QVariantMap result{
         {QStringLiteral("shown"), true},
         {QStringLiteral("activity"), activity},
+        {QStringLiteral("heavy"), heavy},
         {QStringLiteral("directory"), look.directory},
         {QStringLiteral("name"), fixedText(look.name)},
         {QStringLiteral("path"), fixedText(look.path)},
@@ -696,6 +709,8 @@ namespace telar::gui::qt {
         return home.size() > 1 && path.starts_with(home) && path.size() > home.size() && path[home.size()] == '/' ? QStringLiteral("~") + toQString(path.substr(home.size())) : toQString(path);
       };
 
+      const auto note = explorer::planNote(view_, cacheOf(step.machine), step, explorer::touchedSince(cacheOf(step.source_machine != 0 ? step.source_machine : step.machine), step));
+
       result.push_back(QVariantMap{
           {QStringLiteral("verb"), toQString(explorer::verbText(step.verb))},
           // What comes from another machine says which, as scp writes it.
@@ -703,6 +718,8 @@ namespace telar::gui::qt {
           {QStringLiteral("target"), shown(step.target.view())},
           {QStringLiteral("directory"), step.directory},
           {QStringLiteral("machine"), several ? toQString(context.machine) : QString{}},
+          {QStringLiteral("size"), fixedText(note.size)},
+          {QStringLiteral("warning"), fixedText(note.warning)},
       });
     }
 

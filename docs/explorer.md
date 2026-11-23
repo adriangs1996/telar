@@ -69,6 +69,13 @@ The preview beside the listing says the size, the time of the last change, what 
 the last commit of the selection, and shows its diff when it has changes not committed, or the
 head of its text.
 
+Of a directory it lists the five entries that weigh the most under **Heaviest**, each with its
+size and its part of all the directory holds. It does so from what the window already holds: a
+directory it lists whole, as an unfolded one, with every directory in it measured. Until then
+it lists none, since the heaviest of a part is not the heaviest.
+
+![The preview of a directory, with its heaviest entries](images/telar-explorer-heaviest.png)
+
 ## Four lenses
 
 `gt` and `gT` go from one to the next, and `1gt` to `4gt` go to one, as `:tree`, `:changes`,
@@ -164,6 +171,13 @@ The shortcuts of a file manager name the same commands: Cmd or Ctrl with `c`, `x
   trash of the XDG specification on Linux, and the trash of the volume for a file on another
   one.
 - Without `:w!`, a move or a copy onto a name that exists takes another name beside it.
+- A line says the size of what it changes, when the window knows it, and in yellow what to
+  know before a yes: that the name it goes to is taken, and so it takes another or, with
+  `:w!`, replaces what is there; that an agent named the file after the time its listing
+  gave it, so the runtime may find another file and skip it; that a directory goes to the
+  trash with all it holds; that a directory carried to [another machine](#between-machines)
+  leaves its links behind. A name is known as taken from the listings the window holds: one
+  in a directory it never listed is found by the runtime, which gives the file another.
 - `u` with nothing typed takes the last plan back.
 - A plan holds 64 operations at most.
 

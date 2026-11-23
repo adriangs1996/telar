@@ -1710,6 +1710,10 @@ return {api_version = 2, client = {
       // The selection goes to the changed document, whose preview shows its diff.
       press(QStringLiteral("]c"));
       QCOMPARE(selected(), QStringLiteral("docs"));
+      // The preview of a directory the window lists whole says what weighs the most in it.
+      QTRY_VERIFY_WITH_TIMEOUT(!explorer->preview().value(QStringLiteral("heavy")).toList().isEmpty(), runtime_wait_ms);
+      QVERIFY(explorer->preview().value(QStringLiteral("heavy")).toList().size() <= 5);
+      shoot(QStringLiteral("explorer-heaviest"));
       for (int step = 0; step < 40 && selected() != QStringLiteral("usage.md"); ++step) {
         press(QStringLiteral("j"));
       }
@@ -1800,6 +1804,11 @@ return {api_version = 2, client = {
       QCOMPARE(explorer->plan().value(0).toMap().value(QStringLiteral("verb")).toString(), QStringLiteral("CREATE"));
       QCOMPARE(explorer->plan().value(1).toMap().value(QStringLiteral("verb")).toString(), QStringLiteral("MOVE"));
       QCOMPARE(explorer->plan().value(2).toMap().value(QStringLiteral("verb")).toString(), QStringLiteral("DELETE"));
+      // A line says the size of what it changes, and that an agent named the file since.
+      QVERIFY(explorer->plan().value(0).toMap().value(QStringLiteral("size")).toString().isEmpty());
+      QVERIFY(!explorer->plan().value(2).toMap().value(QStringLiteral("size")).toString().isEmpty());
+      QCOMPARE(explorer->plan().value(1).toMap().value(QStringLiteral("warning")).toString(), QStringLiteral("an agent touched it since it was listed"));
+      QVERIFY(explorer->plan().value(2).toMap().value(QStringLiteral("warning")).toString().isEmpty());
       shoot(QStringLiteral("explorer-plan"));
       press(QStringLiteral("y"));
       QTRY_VERIFY_WITH_TIMEOUT(QFile::exists(root + QStringLiteral("/docs/guide.md")), runtime_wait_ms);

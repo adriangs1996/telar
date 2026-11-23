@@ -76,6 +76,8 @@ FocusScope {
     // The cells the longest machine's label takes in a plan that goes to more than one, so the
     // paths of its lines start in one column.
     readonly property int planMachineCells: controller.plan.reduce((longest, step) => Math.max(longest, (step.machine ?? "").length), 0)
+    // The cells the longest size of the plan takes, none in a plan that knows no size.
+    readonly property int planSizeCells: controller.plan.reduce((longest, step) => Math.max(longest, (step.size ?? "").length), 0)
     readonly property real listPadding: 4 * ratio
     // With the line above it.
     readonly property real statusHeight: Math.round(20 * ratio)
@@ -1607,6 +1609,71 @@ FocusScope {
                     }
                 }
 
+                // The heaviest of what a directory holds, each with its part of the whole.
+                Column {
+                    width: parent.width
+                    spacing: 4 * root.ratio
+                    visible: (root.preview.heavy ?? []).length > 0
+
+                    ChromeText {
+                        width: parent.width
+                        height: root.typography.smallRow
+                        text: "HEAVIEST"
+                        pixelSize: root.headingSize
+                        emphasized: true
+                        color: root.colors.subtext0
+                    }
+
+                    Repeater {
+                        model: root.preview.heavy ?? []
+
+                        delegate: Item {
+                            id: heavy
+
+                            required property var modelData
+
+                            width: parent.width
+                            height: Math.round(root.smallGrid.cellHeight ?? 16)
+
+                            CellText {
+                                width: heavyTrack.x - 8 * root.ratio
+                                height: parent.height
+                                text: heavy.modelData.name ?? ""
+                                grid: root.smallGrid
+                                color: root.colors.text
+                                clip: true
+                            }
+
+                            // As the bar of a row, and beside the size as it is there.
+                            Rectangle {
+                                id: heavyTrack
+                                x: Math.round(parent.width - (30.4 + 6 + 32) * root.ratio)
+                                y: Math.round((parent.height - height) / 2)
+                                width: 32 * root.ratio
+                                height: 4 * root.ratio
+                                radius: height / 2
+                                color: root.colors.surface0
+
+                                Rectangle {
+                                    width: Math.round(parent.width * Math.min(1, heavy.modelData.share ?? 0))
+                                    height: parent.height
+                                    radius: parent.radius
+                                    color: Qt.alpha(root.colors.peach, 0.7)
+                                }
+                            }
+
+                            CellText {
+                                x: parent.width - width
+                                width: implicitWidth
+                                height: parent.height
+                                text: heavy.modelData.size ?? ""
+                                grid: root.smallGrid
+                                color: root.colors.subtext0
+                            }
+                        }
+                    }
+                }
+
                 ChromeText {
                     width: parent.width
                     height: root.typography.smallRow
@@ -1914,13 +1981,43 @@ FocusScope {
                     }
 
                     CellText {
+                        id: stepPaths
+                        // What the line says after its paths keeps its place: the paths are cut first.
+                        readonly property real room: stepSize.x - x - (stepWarning.visible ? stepWarning.width + 2 * (root.smallGrid.cellWidth ?? 8) : 0)
+
                         x: verb.width + stepMachine.width
-                        width: parent.width - x
+                        width: Math.max(0, Math.min(implicitWidth, room))
                         height: parent.height
                         text: (step.modelData.source ?? "") + ((step.modelData.source ?? "").length > 0 && (step.modelData.target ?? "").length > 0 ? " → " : "") + (step.modelData.target ?? "") + (step.modelData.directory && (step.modelData.source ?? "").length === 0 ? "/" : "")
                         grid: root.smallGrid
                         color: root.colors.text
                         clip: true
+                    }
+
+                    // What to know before a yes: a name taken, an agent that touched it, what a
+                    // directory takes with it.
+                    CellText {
+                        id: stepWarning
+                        x: stepPaths.x + stepPaths.width + 2 * (root.smallGrid.cellWidth ?? 8)
+                        width: Math.min(implicitWidth, Math.max(0, (stepSize.x - verb.width - stepMachine.width) / 2))
+                        height: parent.height
+                        visible: (step.modelData.warning ?? "").length > 0
+                        text: step.modelData.warning ?? ""
+                        grid: root.smallGrid
+                        color: root.colors.yellow
+                        clip: true
+                    }
+
+                    // The size of what it changes, when the window knows it.
+                    CellText {
+                        id: stepSize
+                        x: parent.width - width
+                        width: root.planSizeCells > 0 ? Math.round((root.planSizeCells + 2) * (root.smallGrid.cellWidth ?? 8)) : 0
+                        height: parent.height
+                        visible: width > 0
+                        text: (step.modelData.size ?? "").padStart(root.planSizeCells + 2, " ")
+                        grid: root.smallGrid
+                        color: root.colors.subtext0
                     }
                 }
             }

@@ -91,6 +91,26 @@ namespace {
     check(preview(explorer.view, explorer.state, explorer.context(), explorer.now).activity_count == 0);
   }
 
+  void testThePlanKnowsWhatAnAgentTouchedSinceItWasListed() {
+    Explorer explorer;
+
+    touch(explorer);
+    explorer.start();
+    explorer.type("l4j");
+    check(explorer.selected() == "/home/dev/telar/docs/usage.md");
+    explorer.type("dd");
+    explorer.type("kkdd");
+    explorer.type(":");
+    explorer.enter("w");
+    check(explorer.view.mode == Mode::plan && explorer.view.plan.size() == 2);
+
+    const auto& touched = explorer.view.plan[0].source.view().ends_with("usage.md") ? explorer.view.plan[0] : explorer.view.plan[1];
+    const auto& other = explorer.view.plan[0].source.view().ends_with("usage.md") ? explorer.view.plan[1] : explorer.view.plan[0];
+
+    check(touchedSince(explorer.state, touched), "an agent named it after the time its listing gave it");
+    check(!touchedSince(explorer.state, other), "and a file nobody touched says nothing");
+  }
+
   void testTheKeysGoToWhatAnAgentTouched() {
     Explorer explorer;
 
@@ -163,6 +183,7 @@ namespace {
 
   const telar::testing::Case case_lens{"touched.the_lens_lists_what_was_touched_below_the_root", testTheLensListsWhatWasTouchedBelowTheRoot};
   const telar::testing::Case case_row{"touched.a_row_says_who_touched_it_and_the_preview_how", testARowSaysWhoTouchedItAndThePreviewHow};
+  const telar::testing::Case case_plan_touched{"touched.the_plan_knows_what_an_agent_touched_since_it_was_listed", testThePlanKnowsWhatAnAgentTouchedSinceItWasListed};
   const telar::testing::Case case_keys{"touched.the_keys_go_to_what_an_agent_touched", testTheKeysGoToWhatAnAgentTouched};
   const telar::testing::Case case_asked{"touched.touches_are_asked_again_when_a_pane_stirs", testTouchesAreAskedAgainWhenAPaneStirs};
 

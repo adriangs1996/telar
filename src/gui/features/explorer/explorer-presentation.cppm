@@ -219,6 +219,17 @@ export namespace telar::gui::features::explorer {
 
   // The preview of the selected row: its name and path, what is known of it, the panes that are
   // in it, and its diff or the head of its text.
+  // One of the heaviest entries of the directory the preview shows: its name, its size, and its
+  // part of what the directory holds, in hundredths.
+  struct HeavyLook {
+    LineText name;
+    ShortText size;
+    std::uint8_t share = 0;
+    bool directory = false;
+  };
+
+  inline constexpr std::size_t heavy_capacity = 5;
+
   struct PreviewLook {
     bool shown = false;
     bool directory = false;
@@ -231,6 +242,10 @@ export namespace telar::gui::features::explorer {
     // The last touches of the file, the newest first.
     ds::Array<ActivityLook, activity_capacity> activity{};
     std::uint8_t activity_count = 0;
+    // The heaviest of what a directory holds, the heaviest first: none until all of it is
+    // measured, since a list made before would name the wrong ones.
+    ds::Array<HeavyLook, heavy_capacity> heavy{};
+    std::uint8_t heavy_count = 0;
     // The title over the text, and whether the text is a diff or the file's head.
     Word title;
     bool diff = false;
@@ -291,6 +306,21 @@ export namespace telar::gui::features::explorer {
 
   // The verb of a step of the plan, as it reads: CREATE, MOVE, COPY, DELETE, RESTORE.
   [[nodiscard]] std::string_view verbText(PlanVerb verb) noexcept;
+
+  // What a line of the plan says after its paths: the size of what it changes, when the window
+  // knows it, and what the person should know before a yes.
+  struct PlanNote {
+    ShortText size;
+    LineText warning;
+  };
+
+  // Whether an agent touched the file a step reads after the time its listing gave it. `state`
+  // is the cache of the machine that file is on.
+  [[nodiscard]] bool touchedSince(const State& state, const PlanStep& step) noexcept;
+
+  // `state` is the cache of the machine the step changes, whose listings say whether the name
+  // it goes to is taken; `touched` what `touchedSince` said of its source.
+  [[nodiscard]] PlanNote planNote(const View& view, const State& state, const PlanStep& step, bool touched);
 
   // The name of a mode on the status line.
   [[nodiscard]] std::string_view modeText(Mode mode) noexcept;

@@ -50,6 +50,7 @@ export namespace telar::gui::application::explorer {
   using features::explorer::stopTransfer;
   using features::explorer::strand;
   using features::explorer::toneOf;
+  using features::explorer::touchedSince;
   using features::explorer::transferring;
   using features::explorer::transfers;
   using features::explorer::verbText;
@@ -87,6 +88,7 @@ export namespace telar::gui::application::explorer {
   using features::explorer::open;
   using features::explorer::openMenu;
   using features::explorer::pin;
+  using features::explorer::planNote;
   using features::explorer::press;
   using features::explorer::preview;
   using features::explorer::previewText;

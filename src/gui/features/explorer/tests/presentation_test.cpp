@@ -127,6 +127,69 @@ namespace {
     check(preview(explorer.view, explorer.state, explorer.context(), now).facts[1].value.view() == "2 changed below" && preview(explorer.view, explorer.state, explorer.context(), now).pane_count == 1);
   }
 
+  void testThePreviewOfADirectoryListsItsHeaviest() {
+    Explorer explorer;
+
+    explorer.start();
+    explorer.type("l");
+    check(explorer.selected() == "/home/dev/telar/docs");
+    check(preview(explorer.view, explorer.state, explorer.context(), 0).heavy_count == 0, "a directory in it is not measured: a list would name the wrong ones");
+    explorer.type("gg");
+    check(preview(explorer.view, explorer.state, explorer.context(), 0).heavy_count == 0, "nor is one the window does not list");
+
+    Explorer measured;
+
+    measured.sizes["/home/dev/telar/docs"] = {{"images", 2500000}};
+    measured.start();
+    measured.type("l");
+
+    const auto shown = preview(measured.view, measured.state, measured.context(), 0);
+
+    check(shown.heavy_count == 4, "what it holds, the heaviest first, and no more than a handful");
+    check(shown.heavy[0].name.view() == "images" && shown.heavy[0].directory && shown.heavy[0].size.view() == "2.4M" && shown.heavy[0].share == 99);
+    check(shown.heavy[1].name.view() == "usage.md" && !shown.heavy[1].directory && shown.heavy[1].size.view() == "7.6K" && shown.heavy[1].share == 0);
+    check(shown.heavy[2].name.view() == "agents.md" && shown.heavy[3].name.view() == "remote.md");
+  }
+
+  void testALineOfThePlanSaysItsSizeAndWhatToKnow() {
+    Explorer explorer;
+
+    explorer.start();
+    explorer.type("l4j");
+    check(explorer.selected() == "/home/dev/telar/docs/usage.md");
+
+    // A copy onto a name that is taken takes another, or replaces it when `:w!` says so.
+    explorer.type("yyp");
+    explorer.type(":");
+    explorer.enter("w");
+    check(explorer.view.mode == Mode::plan && explorer.view.plan.size() == 1 && explorer.view.plan[0].verb == PlanVerb::copy);
+
+    const auto copied = planNote(explorer.view, explorer.state, explorer.view.plan[0], false);
+
+    check(copied.size.view() == "7.6K" && copied.warning.view() == "its name is taken: it takes another");
+    explorer.type("n");
+    explorer.type(":");
+    explorer.enter("w!");
+    check(planNote(explorer.view, explorer.state, explorer.view.plan[0], true).warning.view() == "replaces what is there, which goes to the trash · an agent touched it since it was listed");
+    explorer.type("n");
+    explorer.type("u");
+
+    // A directory goes to the trash with what it holds, and a file alone says nothing.
+    explorer.type("ggjdd");
+    explorer.type("jjjjdd");
+    explorer.type(":");
+    explorer.enter("w");
+    check(explorer.view.plan.size() == 2 && explorer.view.plan[0].verb == PlanVerb::remove);
+
+    const auto& tree = explorer.view.plan[0].directory ? explorer.view.plan[0] : explorer.view.plan[1];
+    const auto& file = explorer.view.plan[0].directory ? explorer.view.plan[1] : explorer.view.plan[0];
+
+    check(planNote(explorer.view, explorer.state, tree, false).warning.view() == "with all it holds" && planNote(explorer.view, explorer.state, tree, false).size.view() == "3.6M");
+    check(planNote(explorer.view, explorer.state, file, false).warning.view().empty() && !planNote(explorer.view, explorer.state, file, false).size.view().empty());
+  }
+
+  const telar::testing::Case case_heaviest{"presentation.the_preview_of_a_directory_lists_its_heaviest", testThePreviewOfADirectoryListsItsHeaviest};
+  const telar::testing::Case case_plan_note{"presentation.a_line_of_the_plan_says_its_size_and_what_to_know", testALineOfThePlanSaysItsSizeAndWhatToKnow};
   const telar::testing::Case case_sizes{"presentation.sizes_and_ages_read_as_a_person_says_them", testSizesAndAgesReadAsAPersonSaysThem};
   const telar::testing::Case case_typed{"presentation.a_path_is_typed_as_a_person_would", testAPathIsTypedAsAPersonWould};
   const telar::testing::Case case_window{"presentation.the_window_says_where_it_is_and_what_applies_now", testTheWindowSaysWhereItIsAndWhatAppliesNow};

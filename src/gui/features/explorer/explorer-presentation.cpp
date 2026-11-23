@@ -795,6 +795,76 @@ namespace telar::gui::features::explorer {
       }
     }
 
+    // The heaviest of what the directory at `path` holds. A directory not listed whole, or with a
+    // directory in it not measured yet, has none: the window asks for no size to show them.
+    void noteHeaviest(PreviewLook& look, const State& state, std::string_view path) {
+      const auto* directory = find(state, path);
+      if (directory == nullptr || !directory->listed || directory->total > directory->entries.size()) {
+        return;
+      }
+
+      const auto& entries = directory->entries;
+      ds::Array<std::uint32_t, heavy_capacity> heaviest{};
+      std::size_t count = 0;
+      std::uint64_t whole = 0;
+
+      for (std::uint32_t index = 0; index < entries.size(); ++index) {
+        const auto& entry = entries[index];
+        if (entry.directory && !entry.measured) {
+          return;
+        }
+
+        std::size_t place = count;
+
+        whole += entry.size;
+        while (place > 0 && entries[heaviest[place - 1]].size < entry.size) {
+          --place;
+        }
+
+        if (place == heavy_capacity || entry.size == 0) {
+          continue;
+        }
+
+        count = std::min(count + 1, heavy_capacity);
+        for (std::size_t moved = count - 1; moved > place; --moved) {
+          heaviest.atMut(moved) = heaviest[moved - 1];
+        }
+
+        heaviest.atMut(place) = index;
+      }
+
+      constexpr std::uint64_t hundredths = 100;
+
+      for (const auto index : heaviest.view().first(count)) {
+        const auto& entry = entries[index];
+        auto& line = look.heavy.atMut(look.heavy_count++);
+
+        put(line.name, directory->name(entry));
+        line.size = bytes(entry.size);
+        // Of a sum as large as this a hundredth is taken first, so that the product fits.
+        line.share = static_cast<std::uint8_t>(whole < hundredths ? entry.size * hundredths / whole : entry.size / (whole / hundredths));
+        line.directory = entry.directory;
+      }
+    }
+
+    // Whether a listing the window holds has the name a move or a copy goes to.
+    bool taken(const State& state, const PlanStep& step) noexcept {
+      if ((step.verb != PlanVerb::move && step.verb != PlanVerb::copy) || step.target.empty()) {
+        return false;
+      }
+
+      const auto* directory = find(state, parentOf(step.target.view()));
+      const auto name = baseOf(step.target.view());
+
+      return directory != nullptr && std::ranges::any_of(directory->entries, [&](const Entry& entry) {
+        return directory->name(entry) == name;
+      });
+    }
+
+    void warn(PlanNote& note, std::string_view text) {
+      write(note.warning, "{}{}{}", note.warning.view(), note.warning.view().empty() ? "" : " · ", text);
+    }
+
     void addGit(PreviewLook& look, const Repository& repository, std::string_view path) {
       if (!repository.known || repository.root.empty() || !within(path, repository.root.view())) {
         return;
@@ -1232,6 +1302,7 @@ namespace telar::gui::features::explorer {
     put(addFact(result, "Machine").value, context.machine);
     if (row.directory) {
       notePanes(result, context, path);
+      noteHeaviest(result, state, path);
     } else {
       noteActivity(result, state, context, path);
     }
@@ -1293,6 +1364,43 @@ namespace telar::gui::features::explorer {
     }
 
     return result;
+  }
+
+  bool touchedSince(const State& state, const PlanStep& step) noexcept {
+    if (step.source.empty() || step.identity.inode == 0) {
+      return false;
+    }
+
+    return std::ranges::any_of(state.touches.items, [&](const Touch& touch) {
+      return touch.actor == TouchActor::agent && touch.seconds > step.identity.modified_seconds && state.touches.path(touch) == step.source.view();
+    });
+  }
+
+  PlanNote planNote(const View& view, const State& state, const PlanStep& step, bool touched) {
+    PlanNote note;
+
+    if (step.size != 0) {
+      note.size = bytes(step.size);
+    }
+
+    if (taken(state, step)) {
+      warn(note, view.overwrite ? "replaces what is there, which goes to the trash" : "its name is taken: it takes another");
+    }
+
+    if (touched) {
+      warn(note, "an agent touched it since it was listed");
+    }
+
+    if (step.verb == PlanVerb::remove && step.directory) {
+      warn(note, "with all it holds");
+    }
+
+    // A tree that goes to another machine: the window carries its files and makes its directories.
+    if (step.directory && step.source_machine != 0) {
+      warn(note, "its links are left out");
+    }
+
+    return note;
   }
 
   std::string_view verbText(PlanVerb verb) noexcept {
