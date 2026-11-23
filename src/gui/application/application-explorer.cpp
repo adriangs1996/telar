@@ -85,9 +85,9 @@ namespace telar::gui::application::explorer {
       }
 
       facts.focused = tab->focused_pane;
-      for (const auto& member : tab->members) {
-        const auto* pane = findPane(sources.panes, member.pane_id);
-        if (pane == nullptr || pane->exited || facts.count == facts.panes.size()) {
+      // The panes the session holds of the tab, which it knows before the runtime lists them.
+      for (const auto& pane : sources.panes) {
+        if (!sameTab(pane->location, tab->location) || pane->exited || facts.count == facts.panes.size()) {
           continue;
         }
 
@@ -363,8 +363,10 @@ namespace telar::gui::application::explorer {
     const auto context = contextOf(facts, host);
 
     feature::settle(view, session.explorer, context, host.machine);
-    if (feature::follow(view, context, host.machine) || view.built != session.explorer.revision) {
+    if (feature::follow(view, context, host.machine)) {
       feature::rebuild(view, session.explorer, context, host.machine);
+    } else {
+      feature::absorb(view, session.explorer, context, host.machine);
     }
 
     reconcile(session, view, host);

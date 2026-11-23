@@ -339,6 +339,8 @@ export namespace telar::gui::features::explorer {
     std::uint64_t revision = 0;
     // The cache's revision and settled count the rows were last built from.
     std::uint64_t built = 0;
+    // The previews of the cache the explorer last showed.
+    std::uint64_t previewed = 0;
     std::uint64_t settled = 0;
   };
 

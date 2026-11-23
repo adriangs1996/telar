@@ -27,7 +27,6 @@ namespace {
 
     // Another pane takes the focus: the window goes with it.
     explorer.focused = 12;
-    check(follow(explorer.view, explorer.context(), Explorer::machine));
     explorer.answer();
     check(explorer.selected() == "/home/dev/telar/src" && explorer.row("src").pane_count == 0, "an editor is in the directory, with no shell there to mark");
     check(!follow(explorer.view, explorer.context(), Explorer::machine), "a pane that did not move leaves the window where it is");
@@ -37,6 +36,15 @@ namespace {
     Explorer explorer;
 
     explorer.start();
+
+    // The preview of the row a key moved to arrives: what shows beside the rows reads it, and the
+    // rows are not built again for it.
+    const auto built = explorer.state.revision;
+    const auto previews = explorer.state.previews;
+
+    explorer.type("j");
+    check(explorer.state.previews == previews + 1 && explorer.state.revision == built && explorer.view.built == built && explorer.view.previewed == explorer.state.previews);
+    explorer.type("k");
     explorer.type("l");
     check(explorer.row("docs").expanded, "l unfolds the directory of the selection");
     explorer.type("gg");
@@ -146,6 +154,9 @@ namespace {
     Explorer explorer;
 
     explorer.start();
+    // The window stays where it is while the test gives the focus to one pane and another.
+    explorer.type("F");
+    check(!window(explorer.view).follow);
     explorer.type("l4j");
 
     auto action = explorer.type("<CR>");

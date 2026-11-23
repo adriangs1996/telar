@@ -2368,7 +2368,22 @@ namespace telar::gui::features::explorer {
     }
 
     view.built = state.revision;
+    view.previewed = state.previews;
     ++view.revision;
+  }
+
+  void absorb(View& view, const State& state, const Context& context, std::uint64_t machine) {
+    const bool previewed = view.previewed != state.previews;
+    const bool unfolded = std::ranges::any_of(view.windows, [](const ds::Box<Window, Memory>& window) {
+      return !window->diffs.empty();
+    });
+
+    if (view.built != state.revision || (previewed && unfolded)) {
+      rebuild(view, state, context, machine);
+    } else if (previewed) {
+      view.previewed = state.previews;
+      ++view.revision;
+    }
   }
 
   namespace {

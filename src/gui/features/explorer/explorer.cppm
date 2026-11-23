@@ -30,6 +30,11 @@ export namespace telar::gui::features::explorer {
   // selection on its path.
   void rebuild(View& view, const State& state, const Context& context, std::uint64_t machine);
 
+  // Takes in what the cache of `machine` holds since the rows were built: they are built again
+  // when what they list changed, and left as they are when a preview arrived that no window
+  // unfolds as a diff, which what shows beside them reads again.
+  void absorb(View& view, const State& state, const Context& context, std::uint64_t machine);
+
   // What the windows of `machine` show that its cache lacks; none when it holds it all or has
   // asked for it.
   [[nodiscard]] tbc::val_a<ds::Option<Need>> need(tbc::ref_a<View> view, const State& state, std::uint64_t machine);

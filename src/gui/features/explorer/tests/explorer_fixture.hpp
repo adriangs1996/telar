@@ -108,7 +108,13 @@ namespace telar::gui::test {
         }
       }
 
-      rebuild(view, state, context(), machine);
+      // As the window does when its session changed: a pane followed moves the windows, and the
+      // rows take in what was answered.
+      if (follow(view, context(), machine)) {
+        rebuild(view, state, context(), machine);
+      } else {
+        absorb(view, state, context(), machine);
+      }
     }
 
     void start() {

@@ -110,7 +110,7 @@ namespace {
         }
       }
 
-      rebuild(view, state, context(), machine);
+      absorb(view, state, context(), machine);
     }
 
     Action key(char character) {

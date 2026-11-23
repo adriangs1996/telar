@@ -32,8 +32,11 @@ export namespace telar::gui::features::explorer {
     // The commit in flight, and the last one git made.
     std::uint64_t committing = 0;
     ds::String<Memory> committed;
-    // Grows with every answer the window keeps, and with every plan or commit that ended.
+    // Grows with every answer the rows are built from, and with every plan or commit that ended.
     std::uint64_t revision = 0;
+    // Grows with every preview kept: one changes what shows beside the rows, and no row but the
+    // ones a diff is unfolded below.
+    std::uint64_t previews = 0;
     std::uint64_t settled = 0;
     // The requests on files in flight.
     std::uint8_t in_flight = 0;

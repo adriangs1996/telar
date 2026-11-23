@@ -453,7 +453,11 @@ namespace telar::gui::features::explorer {
     kept.diff.assign(inspection.diff);
     kept.known = true;
     kept.waiting = 0;
-    settle(state);
+    if (state.in_flight != 0) {
+      --state.in_flight;
+    }
+
+    ++state.previews;
     return true;
   }
 
