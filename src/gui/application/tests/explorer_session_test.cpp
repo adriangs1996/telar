@@ -647,6 +647,80 @@ namespace {
     check(transport.count(ClientTag::undo_file_changes) == 1 && box_transport.count(ClientTag::undo_file_changes) == 0, "u takes it back where it arrived");
   }
 
+  void aDirectoryIsCarriedAsItsTreeADirectoryAndAFileAtATime() {
+    Fixture fixture;
+    auto& transport = fixture.transport;
+    auto& box_transport = fixture.box_transport;
+
+    fixture.list();
+    fixture.settle();
+    static_cast<void>(fixture.run("vs box:~"));
+    check(deliver(fixture.box, HomeLocated{.request_id = box_transport.last<LocateHome>().request_id, .path = "/home/ops"}) == application::Change::explorer);
+    static_cast<void>(fixture.refresh());
+
+    const ds::Array<DirectoryEntry, 1> home{{{.name = "logs", .kind = FileKind::directory, .directory = true, .identity = {.inode = 7, .modified_seconds = 3}}}};
+
+    check(deliver(fixture.box, DirectoryContents{.request_id = box_transport.last<ListDirectory>().request_id, .path = "/home/ops", .total = 1, .entries = home.view()}) == application::Change::explorer);
+    check(deliver(fixture.box, RepositoryChanges{.request_id = box_transport.last<QueryChanges>().request_id, .path = "/home/ops"}) == application::Change::explorer);
+    static_cast<void>(fixture.refresh());
+    static_cast<void>(fixture.press('y'));
+    static_cast<void>(fixture.press('y'));
+    static_cast<void>(fixture.strike(control('w')));
+    static_cast<void>(fixture.press('h'));
+    static_cast<void>(fixture.press('p'));
+    static_cast<void>(fixture.run("w"));
+    check(fixture.view.plan.size() == 1 && fixture.view.plan[0].directory && fixture.view.plan[0].source_machine == far.machine);
+    static_cast<void>(fixture.press('y'));
+    check(fixture.view.transfers.size() == 1 && fixture.view.transfers[0].tree);
+
+    const std::string target{fixture.view.transfers[0].directory.view()};
+    const auto listings = box_transport.count(ClientTag::list_directory);
+
+    // Its directory is made where it goes, before anything of it is read.
+    static_cast<void>(fixture.carry());
+
+    const auto made = transport.last<ChangeFiles>();
+
+    check(made.operations.size() == 1 && made.operations[0].kind == FileOperationKind::create_directory && made.operations[0].target == target + "/logs" && !made.joins);
+    check(box_transport.count(ClientTag::list_directory) == listings && box_transport.count(ClientTag::read_file) == 0);
+
+    const std::string root = target + "/logs";
+    const ds::Array<FileResult, 1> created{{{.outcome = FileOutcome::done, .path = root}}};
+
+    check(deliver(fixture.client, FilesChanged{.request_id = made.request_id, .undoable = true, .results = created.view()}) == application::Change::explorer);
+    static_cast<void>(fixture.carry());
+
+    // Then the machine it comes from lists it, as it is now.
+    const auto listed = box_transport.last<ListDirectory>();
+    const ds::Array<DirectoryEntry, 1> logs{{{.name = "a.log", .kind = FileKind::file, .size = 5, .identity = {.inode = 8, .modified_seconds = 4}}}};
+
+    check(box_transport.count(ClientTag::list_directory) == listings + 1 && listed.path == "/home/ops/logs" && listed.skip == 0);
+    check(deliver(fixture.box, DirectoryContents{.request_id = listed.request_id, .path = "/home/ops/logs", .total = 1, .entries = logs.view()}) == application::Change::explorer);
+    static_cast<void>(fixture.carry());
+
+    // A file of it is read with the identity that listing gave it, and written below the tree.
+    const auto read = box_transport.last<ReadFile>();
+    const std::vector<Byte> bytes(5, Byte{'l'});
+    const std::string partial = root + "/.telar-partial-0011223344556677";
+
+    check(read.path == "/home/ops/logs/a.log" && read.identity.inode == 8 && read.offset == 0);
+    check(deliver(fixture.box, FileChunk{.request_id = read.request_id, .offset = 0, .size = 5, .end = true, .bytes = bytes}) == application::Change::explorer);
+    static_cast<void>(fixture.carry());
+
+    const auto write = transport.last<WriteFile>();
+
+    check(write.target == root + "/a.log" && same(write.bytes, bytes));
+    check(deliver(fixture.client, FileWritten{.request_id = write.request_id, .partial = partial, .size = 5}) == application::Change::explorer);
+    static_cast<void>(fixture.carry());
+
+    const auto end = transport.last<EndFileWrite>();
+
+    check(end.keep && end.joins && end.target == root + "/a.log", "its name joins the change that made the directory, so u takes the tree back whole");
+    check(deliver(fixture.client, FileWriteEnded{.request_id = end.request_id, .outcome = FileOutcome::done, .path = root + "/a.log"}) == application::Change::explorer);
+    check(fixture.carry() && fixture.view.transfers[0].phase == explorer::TransferPhase::arrived && fixture.view.message.view() == "logs arrived · 1 file");
+    check(box_transport.count(ClientTag::change_files) == 0, "a copy leaves its original");
+  }
+
   void aMoveTrashesItsOriginalOnceTheCopyArrivedAndACancelRemovesIt() {
     Fixture fixture;
     auto& transport = fixture.transport;
@@ -752,6 +826,7 @@ namespace {
   const telar::testing::Case case_hand{"explorer_session.a_file_of_another_machine_is_handed_only_there", aFileOfAnotherMachineIsHandedOnlyThere};
   const telar::testing::Case case_beside{"explorer_session.beside_the_panes_it_stays_and_a_pane_takes_what_is_dropped_on_it", besideThePanesItStaysAndAPaneTakesWhatIsDroppedOnIt};
   const telar::testing::Case case_carried{"explorer_session.a_file_is_carried_from_one_machine_to_the_other", aFileIsCarriedFromOneMachineToTheOther};
+  const telar::testing::Case case_tree{"explorer_session.a_directory_is_carried_as_its_tree_a_directory_and_a_file_at_a_time", aDirectoryIsCarriedAsItsTreeADirectoryAndAFileAtATime};
   const telar::testing::Case case_moved{"explorer_session.a_move_trashes_its_original_once_the_copy_arrived_and_a_cancel_removes_it", aMoveTrashesItsOriginalOnceTheCopyArrivedAndACancelRemovesIt};
   const telar::testing::Case case_brought{"explorer_session.a_file_brought_is_typed_at_the_pane_once_it_is_whole", aFileBroughtIsTypedAtThePaneOnceItIsWhole};
 

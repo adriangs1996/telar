@@ -167,7 +167,7 @@ namespace telar::gui::features::explorer {
       // A file that arrives shows where it will be, until its directory is read again.
       for (const auto& transfer : build.transfers) {
         if (transfer.to == build.window.machine && !ended(transfer.phase) && transfer.directory.view() == directory) {
-          pushText(build.window, {.kind = RowKind::added, .depth = depth, .item = transfer.id | arriving_item}, transfer.name.view());
+          pushText(build.window, {.kind = RowKind::added, .depth = depth, .directory = transfer.tree, .item = transfer.id | arriving_item}, transfer.name.view());
         }
       }
     }
@@ -1598,14 +1598,6 @@ namespace telar::gui::features::explorer {
 
       if (view.edits.size() + view.yanked.size() > ViewLimits::edits) {
         say(view, "Too many changes not written: :w first", Tone::error);
-        return;
-      }
-
-      // From another machine the window carries files one by one, and no directory yet.
-      if (std::ranges::any_of(view.yanked, [&](const Yanked& item) {
-            return item.machine != window.machine && item.directory;
-          })) {
-        say(view, "A directory is not carried between machines yet: yank its files", Tone::error);
         return;
       }
 
@@ -3652,11 +3644,10 @@ namespace telar::gui::features::explorer {
     }
 
     // Whether `item` can go to `directory` of `machine`: not where it already is, when it is
-    // moved, never into itself, and to another machine only a file.
+    // moved, and never into itself. To another machine the window carries it, whatever it is.
     bool lands(const Yanked& item, const Put& where) noexcept {
-      // To another machine the window carries a file, and no directory yet.
       if (item.machine != where.machine) {
-        return !item.directory;
+        return true;
       }
 
       if (where.kind == PasteKind::move && parentOf(item.path.view()) == where.directory) {
@@ -4174,14 +4165,10 @@ namespace telar::gui::features::explorer {
       }
     }
 
-    const bool elsewhere = std::ranges::any_of(view.dragged, [&](const Yanked& item) {
-      return item.machine != where.machine;
-    });
-
     view.dragged.clear();
     ++view.revision;
     if (landing.empty()) {
-      say(view, elsewhere ? std::string_view{"A directory is not carried between machines yet: drop its files"} : std::string_view{"It is there already, or a directory would go into itself: nothing dropped"}, Tone::error);
+      say(view, "It is there already, or a directory would go into itself: nothing dropped", Tone::error);
       return;
     }
 

@@ -287,12 +287,22 @@ other, 256 KiB at a time, and holds one such piece of it and no more.
   arrived, the rate, and a control that cancels one.
 - Two files travel at once and the rest wait their turn. A transfer goes on while the
   explorer is closed.
+- A directory is carried as its tree, as one transfer. Its own directory is made where it
+  goes, under a free name when the name is taken; then each directory of it is listed as it is
+  now where it comes from, made where it goes, and its files carried one at a time. Its row
+  and the sidebar say how many files and bytes arrived, of the ones its walk has seen so far.
+  A link and a special file are not carried: the line that says it arrived counts the ones
+  left out. A tree of more than 50000 entries, deeper than 32 directories, or with a
+  directory of more entries than a window lists, is refused. A tree that moves sends the
+  directory it came from to the trash once all of it arrived.
 - While it arrives a file has a name of the runtime's own beside its target,
   `.telar-partial-` and sixteen digits, which no listing shows. Where the target exists, the
   file takes a free name beside it, or with `:w!` what was there goes to the trash.
 - A transfer that is cancelled or that fails removes what had arrived, and the line under
   the windows says why: the file changed since it was listed, its machine stopped answering,
-  the directory did not take it. The original is never touched before the copy is whole.
+  the directory did not take it. Of a tree, one file that fails does that for all of it, and
+  the directory the tree had made goes to the trash of its machine with what had arrived in
+  it. The original is never touched before the copy is whole.
 - `u` takes back what the last plan brought: the copies go to the trash of the machine they
   arrived on, and the originals of a move come out of the trash of theirs.
 - A window that closes ends its transfers. What had arrived stays under its hidden name
@@ -301,8 +311,8 @@ other, 256 KiB at a time, and holds one such piece of it and no more.
 
 ## What it does not do yet
 
-- A directory is not carried from one machine to another: a paste or a drop of one is
-  refused, and its files are carried one by one.
+- A link is not carried from one machine to another, in a tree or alone: the runtime has no
+  operation that makes one.
 - A transfer does not go on after its machine was disconnected and connected again: it
   fails, and is started again by hand.
 - Nothing is dragged out to the desktop, or in from it.

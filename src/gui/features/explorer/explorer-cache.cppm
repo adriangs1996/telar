@@ -136,6 +136,10 @@ export namespace telar::gui::features::explorer {
   // again. An empty path says all of it did.
   void invalidate(State& state, std::string_view path) noexcept;
 
+  // The directory `path` is read again the next time its listing is asked for, and nothing
+  // else of the machine is: a tree that is carried walks what its directories hold now.
+  void relist(State& state, std::string_view path) noexcept;
+
   // A pane of the machine did something: who touched what is asked again, if it was asked before.
   void stir(State& state) noexcept;
 

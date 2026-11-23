@@ -641,6 +641,11 @@ namespace telar::gui::features::explorer {
     // The source of a file that moved to another machine, sent to the trash once it arrived.
     if (auto* kept = keepCarried(state, changed.request_id, CarriedKind::trashed)) {
       kept->outcome = changed.results.empty() ? FileOutcome::failed : changed.results.front().outcome;
+      // The path the runtime gave what it made: a directory that takes another name says which.
+      if (!changed.results.empty()) {
+        kept->text.assign(changed.results.front().path);
+      }
+
       invalidate(state, {});
       ++state.revision;
       return true;
@@ -838,6 +843,15 @@ namespace telar::gui::features::explorer {
     ++state.settled;
     ++state.revision;
     return true;
+  }
+
+  void relist(State& state, std::string_view path) noexcept {
+    for (auto& directory : state.directories.viewMut()) {
+      if (directory->path.view() == path && directory->listing == 0) {
+        directory.getMut().stale = true;
+        directory.getMut().failed = false;
+      }
+    }
   }
 
   void invalidate(State& state, std::string_view path) noexcept {

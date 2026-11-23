@@ -210,7 +210,7 @@ namespace {
     check(explorer.type("u").kind == ActionKind::undo && explorer.view.awaited.size() == 2 && std::ranges::contains(explorer.view.wrote, Explorer::box) && std::ranges::contains(explorer.view.wrote, Explorer::machine));
   }
 
-  void testADirectoryIsNotCarriedToAnotherMachine() {
+  void testADirectoryGoesToAnotherMachineAsAnyRow() {
     Explorer explorer;
 
     splitToBox(explorer);
@@ -218,7 +218,8 @@ namespace {
     explorer.type("yy");
     explorer.type("<C-w>h");
     explorer.type("p");
-    check(explorer.view.edits.empty() && explorer.view.tone == Tone::error && explorer.view.message.view() == "A directory is not carried between machines yet: yank its files");
+    check(explorer.view.edits.size() == 1 && explorer.view.edits[0].directory && explorer.view.edits[0].source_machine == Explorer::box && explorer.view.edits[0].source.view() == "/home/ops/logs", "a directory yanked on one machine is pasted on another, to be carried as its tree");
+    explorer.type("u");
 
     // A file dragged to a window of another machine is copied there, and moved with Shift.
     check(grab(explorer.view, explorer.state, explorer.context(), {.window = 0, .row = explorer.at("justfile")}) == 1);
@@ -232,11 +233,11 @@ namespace {
     check(aim(explorer.view, explorer.state, explorer.context(Explorer::machine), {.window = 0, .row = explorer.at("docs"), .copy = true}).copy);
     release(explorer.view);
 
-    // A directory is not.
+    // So is a directory.
     check(grab(explorer.view, explorer.state, explorer.context(), {.window = 0, .row = explorer.at("docs")}) == 1);
-    check(aim(explorer.view, explorer.remote, explorer.context(Explorer::box), {.window = 1, .row = 0}).count == 0);
+    check(aim(explorer.view, explorer.remote, explorer.context(Explorer::box), {.window = 1, .row = 0}).count == 1);
     drop(explorer.view, explorer.remote, explorer.context(Explorer::box), {.window = 1, .row = 0});
-    check(explorer.view.edits.empty() && explorer.view.message.view().starts_with("A directory is not carried between machines yet"));
+    check(explorer.view.edits.size() == 1 && explorer.view.edits[0].directory && explorer.view.edits[0].machine == Explorer::box && explorer.view.edits[0].source_machine == Explorer::machine);
   }
 
   void testAFileIsHandedOnlyToItsOwnMachine() {
@@ -277,7 +278,7 @@ namespace {
   const telar::testing::Case case_tab{"machines.tab_completes_the_label_of_a_machine", testTabCompletesTheLabelOfAMachine};
   const telar::testing::Case case_marks{"machines.marks_and_jumps_keep_their_machine", testMarksAndJumpsKeepTheirMachine};
   const telar::testing::Case case_plan{"machines.one_plan_goes_to_each_machine_its_part", testOnePlanGoesToEachMachineItsPart};
-  const telar::testing::Case case_paste{"machines.a_directory_is_not_carried_to_another_machine", testADirectoryIsNotCarriedToAnotherMachine};
+  const telar::testing::Case case_paste{"machines.a_directory_goes_to_another_machine_as_any_row", testADirectoryGoesToAnotherMachineAsAnyRow};
   const telar::testing::Case case_hand{"machines.a_file_is_handed_only_to_its_own_machine", testAFileIsHandedOnlyToItsOwnMachine};
 
 }

@@ -269,21 +269,44 @@ export namespace telar::gui::features::explorer {
   enum class TransferPhase : std::uint8_t {
     // More transfers run than the window carries at once.
     waiting,
+    // Of a tree: a directory of it is made where it goes, then its listing is read where it
+    // comes from.
+    making,
+    walking,
     // A chunk is read from the source, then written to the partial of the target.
     reading,
     writing,
     // The partial takes the target's name; the source of a move goes to the trash.
     placing,
     trashing,
-    // What arrived is removed, after a failure or a cancel.
+    // What arrived is removed, after a failure or a cancel: the partial of a file, and of a
+    // tree the directory it had made.
     dropping,
+    clearing,
     arrived,
     failed,
     cancelled,
   };
 
+  struct TreeLimits {
+    // How deep a tree the window carries is, and how many entries it holds: past either it is
+    // refused, with nothing of it left where it was going.
+    static constexpr std::size_t depth = 32;
+    static constexpr std::uint32_t entries = 50000;
+  };
+
+  // A file of the directory a tree's walk is in, still to carry.
+  struct TreeFile {
+    explicit TreeFile(Memory& memory);
+
+    ds::String<Memory> name;
+    FileIdentity identity{};
+    std::uint64_t size = 0;
+  };
+
   // A file the window carries from one machine to another, a chunk at a time: the runtimes do
-  // not talk to each other. It goes on while the explorer is closed.
+  // not talk to each other. It goes on while the explorer is closed. A directory is carried as
+  // its tree, a directory at a time and a file at a time, as one transfer.
   struct Transfer {
     explicit Transfer(Memory& memory);
 
@@ -327,6 +350,27 @@ export namespace telar::gui::features::explorer {
     std::uint64_t started_ms = 0;
     std::uint64_t shown_ms = 0;
     std::uint64_t ended_ms = 0;
+    // Of a tree. Its paths are from the tree's own directory: the directories still to walk,
+    // the one the walk is in, the files of that one still to carry, and the one being carried,
+    // for which `done`, `size`, `partial` and `chunk` above then stand.
+    bool tree = false;
+    ds::Vec<ds::String<Memory>, Memory> walk;
+    ds::String<Memory> walked;
+    ds::Vec<TreeFile, Memory> files;
+    ds::String<Memory> file;
+    FileIdentity file_identity{};
+    // Whether the listing of the directory the walk is in was asked for anew.
+    bool fresh = false;
+    // The directory the tree made where it goes, as the runtime named it; empty before.
+    ds::String<Memory> root;
+    // The bytes and the files that arrived whole, of the ones the walk has seen so far, and the
+    // links and special files it left out.
+    std::uint64_t carried = 0;
+    std::uint64_t seen = 0;
+    std::uint32_t files_done = 0;
+    std::uint32_t files_seen = 0;
+    std::uint32_t entries_seen = 0;
+    std::uint32_t left_out = 0;
   };
 
   // A file of another machine the keys asked to hand to a pane: the question waits for a yes.

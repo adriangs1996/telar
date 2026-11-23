@@ -387,7 +387,7 @@ namespace telar::gui::features::explorer {
     constexpr std::uint16_t shareOf(const Transfer& transfer) noexcept {
       constexpr std::uint64_t whole = 1000;
 
-      return transfer.size == 0 ? 0 : static_cast<std::uint16_t>(std::min(whole, transfer.done * whole / transfer.size));
+      return wholeBytes(transfer) == 0 ? 0 : static_cast<std::uint16_t>(std::min(whole, arrivedBytes(transfer) * whole / wholeBytes(transfer)));
     }
 
     // What a transfer does now, or how it ended.
@@ -395,6 +395,8 @@ namespace telar::gui::features::explorer {
       switch (phase) {
       case TransferPhase::waiting:
         return "waits";
+      case TransferPhase::making:
+      case TransferPhase::walking:
       case TransferPhase::reading:
       case TransferPhase::writing:
         return "on the way";
@@ -402,6 +404,7 @@ namespace telar::gui::features::explorer {
       case TransferPhase::trashing:
         return "arriving";
       case TransferPhase::dropping:
+      case TransferPhase::clearing:
         return "stopping";
       case TransferPhase::arrived:
         return "arrived";
@@ -423,8 +426,14 @@ namespace telar::gui::features::explorer {
         if (const auto* transfer = transferOf(seen.view, seen.row)) {
           look.arriving = true;
           put(look.name, transfer->name.view());
-          write(look.note, "arriving from {} · {} of {}", labelOf(seen.context, transfer->from), bytes(transfer->done).view(), bytes(transfer->size).view());
-          look.size = bytes(transfer->done);
+          if (transfer->tree) {
+            // Of a tree, of what its walk has seen so far.
+            write(look.note, "arriving from {} · {} of {} files · {} of {}", labelOf(seen.context, transfer->from), transfer->files_done, transfer->files_seen, bytes(arrivedBytes(*transfer)).view(), bytes(wholeBytes(*transfer)).view());
+          } else {
+            write(look.note, "arriving from {} · {} of {}", labelOf(seen.context, transfer->from), bytes(transfer->done).view(), bytes(transfer->size).view());
+          }
+
+          look.size = bytes(arrivedBytes(*transfer));
           look.share = shareOf(*transfer);
         }
 
@@ -1367,10 +1376,15 @@ namespace telar::gui::features::explorer {
         look.id = transfer.id;
         put(look.name, transfer.name.view());
         write(look.route, "{} → {}", labelOf(context, transfer.from), labelOf(context, transfer.to));
-        write(look.progress, "{} of {}", bytes(transfer.done).view(), bytes(transfer.size).view());
+        if (transfer.tree) {
+          write(look.progress, "{}/{} · {}", transfer.files_done, transfer.files_seen, bytes(arrivedBytes(transfer)).view());
+        } else {
+          write(look.progress, "{} of {}", bytes(transfer.done).view(), bytes(transfer.size).view());
+        }
+
         look.share = shareOf(transfer);
-        if (active && elapsed >= second_ms / 2 && transfer.done != 0) {
-          write(look.rate, "{}/s", bytes(transfer.done * second_ms / elapsed).view());
+        if (active && elapsed >= second_ms / 2 && arrivedBytes(transfer) != 0) {
+          write(look.rate, "{}/s", bytes(arrivedBytes(transfer) * second_ms / elapsed).view());
         }
 
         look.phase = phaseText(transfer.phase);

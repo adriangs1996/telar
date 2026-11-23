@@ -14,6 +14,14 @@ namespace telar::gui::features::explorer {
 
     using Text = ds::String<Memory>;
 
+    // One whose file already has its name is past stopping: only its original is left to go. A
+    // tree stops between two of its files, so only what removes or ends it is too late.
+    constexpr bool pastStopping(const Transfer& transfer) noexcept {
+      const bool ending = transfer.phase == TransferPhase::trashing || transfer.phase == TransferPhase::dropping || transfer.phase == TransferPhase::clearing;
+
+      return ending || (transfer.phase == TransferPhase::placing && !transfer.tree);
+    }
+
     // The transfers that hold a turn: started, and not ended.
     std::size_t runningOf(const View& view) noexcept {
       return static_cast<std::size_t>(std::ranges::count_if(view.transfers, [](const Transfer& transfer) {
@@ -36,7 +44,7 @@ namespace telar::gui::features::explorer {
         return 0;
       }
 
-      if (transfer.phase == TransferPhase::placing) {
+      if (transfer.phase == TransferPhase::placing || transfer.phase == TransferPhase::making || transfer.phase == TransferPhase::clearing) {
         return transfer.to;
       }
 
@@ -76,6 +84,20 @@ namespace telar::gui::features::explorer {
         transfer.request = 0;
         transfer.ended_ms = now_ms;
         transfer.chunk.clear();
+        transfer.walk.clear();
+        transfer.files.clear();
+        if (transfer.tree && phase == TransferPhase::arrived && transfer.said.view().empty()) {
+          // A tree says what of it arrived, and what the window does not carry.
+          Text counted{view.memory};
+
+          ds::formatTo(counted, "{} file{}", transfer.files_done, transfer.files_done == 1 ? "" : "s");
+          if (transfer.left_out != 0) {
+            ds::formatTo(counted, ", {} link{} and special file{} left out", transfer.left_out, transfer.left_out == 1 ? "" : "s", transfer.left_out == 1 ? "" : "s");
+          }
+
+          transfer.said.assign(runtime::utf8Prefix(counted.view(), ViewLimits::message_bytes));
+        }
+
         target = transfer.to;
         source = transfer.kind == TransferKind::move ? transfer.from : 0;
         if (phase == TransferPhase::arrived) {
@@ -96,10 +118,23 @@ namespace telar::gui::features::explorer {
       ++view.revision;
     }
 
+    // Ends a transfer that did not arrive, once nothing of it is left to remove: of a tree, the
+    // directory it made goes first, with what had arrived in it.
+    void endBadly(View& view, std::size_t index, std::uint64_t now_ms) {
+      const bool stopped = view.transfers[index].stop;
+      const bool made = view.transfers[index].tree && !view.transfers[index].root.empty();
+
+      if (made && view.transfers[index].phase != TransferPhase::clearing) {
+        view.transfers.atMut(index).phase = TransferPhase::clearing;
+        ++view.revision;
+      } else {
+        finish(view, index, stopped ? TransferPhase::cancelled : TransferPhase::failed, now_ms);
+      }
+    }
+
     // Stops carrying: what had arrived is removed first, when something had.
     void abandon(View& view, std::size_t index, std::uint64_t now_ms) {
       bool arrived_some = false;
-      bool stopped = false;
 
       {
         auto& transfer = view.transfers.atMut(index);
@@ -107,7 +142,6 @@ namespace telar::gui::features::explorer {
         transfer.request = 0;
         transfer.chunk.clear();
         arrived_some = !transfer.partial.empty();
-        stopped = transfer.stop;
         if (arrived_some) {
           transfer.phase = TransferPhase::dropping;
         }
@@ -116,7 +150,87 @@ namespace telar::gui::features::explorer {
       if (arrived_some) {
         ++view.revision;
       } else {
-        finish(view, index, stopped ? TransferPhase::cancelled : TransferPhase::failed, now_ms);
+        endBadly(view, index, now_ms);
+      }
+    }
+
+    // Takes an entry of the directory a tree's walk is in: a file waits its turn, a directory is
+    // walked after, and what is neither is left out. Says why when the tree is more than the
+    // window carries.
+    tbc::val_static<std::string_view> keep(Transfer& transfer, std::string_view name, const Entry& entry) {
+      const auto depth = static_cast<std::size_t>(std::ranges::count(transfer.walked.view(), '/')) + (transfer.walked.empty() ? 0 : 1);
+
+      if (++transfer.entries_seen > TreeLimits::entries) {
+        return "it holds more entries than the window carries at once";
+      }
+
+      if (entry.kind == FileKind::directory) {
+        if (depth + 1 > TreeLimits::depth) {
+          return "it is deeper than the window carries";
+        }
+
+        auto& below = transfer.walk.push(ds::String<Memory>{transfer.walk.memory(), transfer.walked.view()});
+
+        if (!below.empty()) {
+          below.append("/");
+        }
+
+        below.append(name);
+      } else if (entry.kind == FileKind::file) {
+        auto& file = transfer.files.push(TreeFile{transfer.files.memory()});
+
+        file.name.assign(name);
+        file.identity = entry.identity;
+        file.size = entry.size;
+        transfer.seen += entry.size;
+        ++transfer.files_seen;
+      } else {
+        // A link or a special file: the window carries neither, and says how many it left.
+        ++transfer.left_out;
+      }
+
+      return {};
+    }
+
+    // What a tree carries next: a file of the directory its walk is in, else the next directory,
+    // else it arrived whole and, of a move, its original goes to the trash.
+    void advance(View& view, std::size_t index, std::uint64_t now_ms) {
+      bool whole = false;
+      bool moves = false;
+
+      {
+        auto& transfer = view.transfers.atMut(index);
+
+        transfer.partial.clear();
+        transfer.done = 0;
+        transfer.size = 0;
+        moves = transfer.kind == TransferKind::move;
+        if (!transfer.files.empty()) {
+          const auto next = transfer.files.remove(transfer.files.size() - 1);
+
+          transfer.file.assign(transfer.walked.view());
+          if (!transfer.file.empty()) {
+            transfer.file.append("/");
+          }
+
+          transfer.file.append(next.name.view());
+          transfer.file_identity = next.identity;
+          transfer.size = next.size;
+          transfer.phase = TransferPhase::reading;
+        } else if (!transfer.walk.empty()) {
+          transfer.walked = transfer.walk.remove(transfer.walk.size() - 1);
+          transfer.fresh = false;
+          transfer.phase = TransferPhase::making;
+        } else {
+          whole = true;
+          transfer.phase = moves ? TransferPhase::trashing : transfer.phase;
+        }
+      }
+
+      if (whole && !moves) {
+        finish(view, index, TransferPhase::arrived, now_ms);
+      } else {
+        ++view.revision;
       }
     }
 
@@ -144,9 +258,9 @@ namespace telar::gui::features::explorer {
         if (!stopped) {
           transfer.phase = transfer.last ? TransferPhase::placing : TransferPhase::reading;
           // Progress shows a few times a second, however many chunks arrive in one.
-          shows = transfer.last || now_ms - transfer.shown_ms >= TransferLimits::shown_every_ms;
+          shows = (transfer.last && !transfer.tree) || now_ms - transfer.shown_ms >= TransferLimits::shown_every_ms;
           transfer.shown_ms = shows ? now_ms : transfer.shown_ms;
-          transfer.shown = shows ? transfer.done : transfer.shown;
+          transfer.shown = shows ? arrivedBytes(transfer) : transfer.shown;
         }
       }
 
@@ -165,13 +279,29 @@ namespace telar::gui::features::explorer {
 
       if (phase == TransferPhase::dropping) {
         view.transfers.atMut(index).partial.clear();
-        finish(view, index, stopped ? TransferPhase::cancelled : TransferPhase::failed, now_ms);
+        endBadly(view, index, now_ms);
         return;
       }
 
       if (answer.outcome != FileOutcome::done && answer.outcome != FileOutcome::renamed) {
         view.transfers.atMut(index).said.assign("its directory did not take it");
         abandon(view, index, now_ms);
+        return;
+      }
+
+      if (view.transfers[index].tree) {
+        // One file of the tree has its name: the next takes its turn, unless it was asked to stop.
+        auto& transfer = view.transfers.atMut(index);
+
+        transfer.carried += transfer.size;
+        ++transfer.files_done;
+        transfer.partial.clear();
+        if (stopped) {
+          abandon(view, index, now_ms);
+        } else {
+          advance(view, index, now_ms);
+        }
+
         return;
       }
 
@@ -186,6 +316,45 @@ namespace telar::gui::features::explorer {
       }
     }
 
+    // A runtime changed a directory for the transfer: the one a tree's walk is in was made, the
+    // one a tree had made was removed, or the original of a move went to the trash.
+    void changed(View& view, std::size_t index, const Carried& answer, std::uint64_t now_ms) {
+      const auto phase = view.transfers[index].phase;
+      const bool took = answer.outcome == FileOutcome::done || answer.outcome == FileOutcome::renamed;
+
+      if (phase == TransferPhase::clearing) {
+        finish(view, index, view.transfers[index].stop ? TransferPhase::cancelled : TransferPhase::failed, now_ms);
+      } else if (phase == TransferPhase::making) {
+        if (!took) {
+          view.transfers.atMut(index).said.assign("a directory of it could not be made where it goes");
+          abandon(view, index, now_ms);
+          return;
+        }
+
+        if (view.transfers[index].root.empty()) {
+          // The tree's own directory, under the name its runtime gave it.
+          view.transfers.atMut(index).root.assign(answer.text.view());
+          view.transfers.atMut(index).placed.assign(answer.text.view());
+          began(view, view.transfers[index].batch, view.transfers[index].to);
+        }
+
+        if (view.transfers[index].stop) {
+          abandon(view, index, now_ms);
+        } else {
+          view.transfers.atMut(index).phase = TransferPhase::walking;
+          ++view.revision;
+        }
+      } else {
+        if (answer.outcome != FileOutcome::done) {
+          view.transfers.atMut(index).said.assign("its original changed since it was listed, and stays");
+        } else {
+          began(view, view.transfers[index].batch, view.transfers[index].from);
+        }
+
+        finish(view, index, TransferPhase::arrived, now_ms);
+      }
+    }
+
     // What the runtime refused: the copy, or only the last of it.
     void refused(View& view, std::size_t index, const Carried& answer, std::uint64_t now_ms) {
       const auto phase = view.transfers[index].phase;
@@ -196,6 +365,10 @@ namespace telar::gui::features::explorer {
         view.transfers.atMut(index).said.assign("its original stays where it was");
         finish(view, index, TransferPhase::arrived, now_ms);
       } else if (phase == TransferPhase::dropping) {
+        endBadly(view, index, now_ms);
+      } else if (phase == TransferPhase::clearing) {
+        // What had arrived could not be removed: it stays, and the line says where.
+        view.transfers.atMut(index).said.assign("what had arrived of it stays where it was going");
         finish(view, index, stopped ? TransferPhase::cancelled : TransferPhase::failed, now_ms);
       } else {
         view.transfers.atMut(index).said.assign(runtime::utf8Prefix(answer.text.view(), ViewLimits::message_bytes));
@@ -205,13 +378,21 @@ namespace telar::gui::features::explorer {
 
   }
 
+  TreeFile::TreeFile(Memory& memory)
+      : name(memory) {}
+
   Transfer::Transfer(Memory& memory)
       : source(memory),
         directory(memory),
         name(memory),
         partial(memory),
         placed(memory),
-        chunk(memory) {}
+        chunk(memory),
+        walk(memory),
+        walked(memory),
+        files(memory),
+        file(memory),
+        root(memory) {}
 
   Bringing::Bringing(Memory& memory)
       : path(memory) {}
@@ -232,8 +413,18 @@ namespace telar::gui::features::explorer {
       // The first that waits takes the turn that is free.
       const auto* const first = std::ranges::find(view.transfers, TransferPhase::waiting, &Transfer::phase);
 
-      return runningOf(view) < TransferLimits::running && first == &transfer ? Asking{.ask = TransferAsk::read, .machine = transfer.from} : Asking{};
+      if (runningOf(view) >= TransferLimits::running || first != &transfer) {
+        return {};
+      }
+
+      return transfer.tree ? Asking{.ask = TransferAsk::make, .machine = transfer.to} : Asking{.ask = TransferAsk::read, .machine = transfer.from};
     }
+    case TransferPhase::making:
+      return begins(view, transfer, transfer.to) ? Asking{} : Asking{.ask = TransferAsk::make, .machine = transfer.to};
+    case TransferPhase::walking:
+      return {.ask = TransferAsk::list, .machine = transfer.from};
+    case TransferPhase::clearing:
+      return {.ask = TransferAsk::clear, .machine = transfer.to};
     case TransferPhase::reading:
       return {.ask = TransferAsk::read, .machine = transfer.from};
     case TransferPhase::writing:
@@ -253,6 +444,88 @@ namespace telar::gui::features::explorer {
     return {};
   }
 
+  void pathOf(ds::String<Memory>& path, const Transfer& transfer, TransferAsk ask) {
+    const auto below = [&](std::string_view directory, std::string_view relative) {
+      path.assign(directory);
+      if (!relative.empty()) {
+        path.append("/");
+        path.append(relative);
+      }
+    };
+
+    switch (ask) {
+    case TransferAsk::none:
+      path.clear();
+      break;
+    case TransferAsk::read:
+      below(transfer.source.view(), transfer.tree ? transfer.file.view() : std::string_view{});
+      break;
+    case TransferAsk::list:
+      below(transfer.source.view(), transfer.walked.view());
+      break;
+    case TransferAsk::trash:
+      path.assign(transfer.source.view());
+      break;
+    case TransferAsk::clear:
+      path.assign(transfer.root.view());
+      break;
+    case TransferAsk::make:
+      if (transfer.root.empty()) {
+        below(transfer.directory.view(), transfer.name.view());
+      } else {
+        below(transfer.root.view(), transfer.walked.view());
+      }
+
+      break;
+    case TransferAsk::write:
+    case TransferAsk::keep:
+    case TransferAsk::drop:
+      if (transfer.tree) {
+        below(transfer.root.view(), transfer.file.view());
+      } else {
+        below(transfer.directory.view(), transfer.name.view());
+      }
+
+      break;
+    }
+  }
+
+  FileIdentity readIdentity(const Transfer& transfer) noexcept {
+    return transfer.tree ? transfer.file_identity : transfer.identity;
+  }
+
+  std::uint64_t arrivedBytes(const Transfer& transfer) noexcept {
+    return transfer.tree ? transfer.carried + transfer.done : transfer.done;
+  }
+
+  std::uint64_t wholeBytes(const Transfer& transfer) noexcept {
+    return transfer.tree ? std::max(transfer.seen, transfer.carried + transfer.done) : transfer.size;
+  }
+
+  void walked(View& view, std::size_t index, const Directory& directory, std::uint64_t now_ms) {
+    if (index >= view.transfers.size() || view.transfers[index].phase != TransferPhase::walking) {
+      return;
+    }
+
+    std::string_view refusal;
+
+    if (directory.total > directory.entries.size()) {
+      refusal = "a directory of it holds more entries than the window lists";
+    }
+
+    for (std::size_t entry = 0; entry < directory.entries.size() && refusal.empty(); ++entry) {
+      refusal = keep(view.transfers.atMut(index), directory.name(directory.entries[entry]), directory.entries[entry]);
+    }
+
+    if (!refusal.empty()) {
+      giveUp(view, index, refusal, now_ms);
+    } else if (view.transfers[index].stop) {
+      abandon(view, index, now_ms);
+    } else {
+      advance(view, index, now_ms);
+    }
+  }
+
   bool joins(const ds::Vec<Begun, Memory>& begun, std::uint32_t batch, std::uint64_t machine) noexcept {
     return std::ranges::contains(begun, Begun{.batch = batch, .machine = machine});
   }
@@ -261,7 +534,7 @@ namespace telar::gui::features::explorer {
     transfer.request = sent.request;
     transfer.epoch = sent.epoch;
     if (transfer.phase == TransferPhase::waiting) {
-      transfer.phase = TransferPhase::reading;
+      transfer.phase = transfer.tree ? TransferPhase::making : TransferPhase::reading;
       transfer.started_ms = sent.now_ms;
       transfer.shown_ms = sent.now_ms;
     }
@@ -275,11 +548,14 @@ namespace telar::gui::features::explorer {
     switch (transfer.phase) {
     case TransferPhase::waiting:
     case TransferPhase::reading:
+    case TransferPhase::walking:
     case TransferPhase::trashing:
       return transfer.from;
+    case TransferPhase::making:
     case TransferPhase::writing:
     case TransferPhase::placing:
     case TransferPhase::dropping:
+    case TransferPhase::clearing:
       return transfer.to;
     case TransferPhase::arrived:
     case TransferPhase::failed:
@@ -322,13 +598,7 @@ namespace telar::gui::features::explorer {
       placed(view, index, answer, now_ms);
       break;
     case CarriedKind::trashed:
-      if (answer.outcome != FileOutcome::done) {
-        view.transfers.atMut(index).said.assign("its original changed since it was listed, and stays");
-      } else {
-        began(view, view.transfers[index].batch, view.transfers[index].from);
-      }
-
-      finish(view, index, TransferPhase::arrived, now_ms);
+      changed(view, index, answer, now_ms);
       break;
     }
   }
@@ -394,6 +664,7 @@ namespace telar::gui::features::explorer {
       transfer.name.assign(baseOf(step.target.view()));
       transfer.overwrite = view.overwrite;
       transfer.batch = view.next_batch;
+      transfer.tree = step.directory;
       ++started;
     }
 
@@ -454,8 +725,7 @@ namespace telar::gui::features::explorer {
     std::size_t stopped = 0;
 
     for (auto& transfer : view.transfers.viewMut()) {
-      // One whose file already has its name is past stopping: only its original is left to go.
-      const bool late = transfer.phase == TransferPhase::placing || transfer.phase == TransferPhase::trashing || transfer.phase == TransferPhase::dropping;
+      const bool late = pastStopping(transfer);
 
       if (ended(transfer.phase) || late || transfer.stop || (machine != 0 && transfer.from != machine && transfer.to != machine)) {
         continue;
@@ -474,7 +744,7 @@ namespace telar::gui::features::explorer {
 
   bool stopTransfer(View& view, std::uint32_t id) {
     for (auto& transfer : view.transfers.viewMut()) {
-      const bool late = transfer.phase == TransferPhase::placing || transfer.phase == TransferPhase::trashing || transfer.phase == TransferPhase::dropping;
+      const bool late = pastStopping(transfer);
 
       if (transfer.id == id && !ended(transfer.phase) && !late && !transfer.stop) {
         transfer.stop = true;
@@ -492,7 +762,8 @@ namespace telar::gui::features::explorer {
     }
 
     const auto& transfer = view.transfers[index];
-    const bool running = transfer.phase == TransferPhase::waiting || transfer.phase == TransferPhase::reading || transfer.phase == TransferPhase::writing;
+    const bool walking = transfer.phase == TransferPhase::making || transfer.phase == TransferPhase::walking;
+    const bool running = walking || transfer.phase == TransferPhase::waiting || transfer.phase == TransferPhase::reading || transfer.phase == TransferPhase::writing;
     if (!transfer.stop || transfer.request != 0 || !running) {
       return false;
     }
@@ -506,8 +777,8 @@ namespace telar::gui::features::explorer {
 
     // What arrived since progress was last shown shows once its turn comes.
     for (auto& transfer : view.transfers.viewMut()) {
-      if (transfer.shown != transfer.done && !ended(transfer.phase) && now_ms - transfer.shown_ms >= TransferLimits::shown_every_ms) {
-        transfer.shown = transfer.done;
+      if (transfer.shown != arrivedBytes(transfer) && !ended(transfer.phase) && now_ms - transfer.shown_ms >= TransferLimits::shown_every_ms) {
+        transfer.shown = arrivedBytes(transfer);
         transfer.shown_ms = now_ms;
         ++view.revision;
       }

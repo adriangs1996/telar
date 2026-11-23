@@ -39,6 +39,12 @@ export namespace telar::gui::features::explorer {
     drop,
     // The source of a move sent to the trash of its machine.
     trash,
+    // Of a tree: the directory its walk is in made where it goes; that directory's listing,
+    // which the cache of its machine reads and no request of the transfer's own; and the
+    // directory the tree had made sent to the trash, after a failure or a cancel.
+    make,
+    list,
+    clear,
   };
 
   // A request that left for a transfer: its number, the connection it left on, and when.
@@ -58,6 +64,21 @@ export namespace telar::gui::features::explorer {
   // What `transfer` asks now: nothing while a request of its is in flight, while it waits its
   // turn, and once it ended.
   [[nodiscard]] Asking asks(const View& view, std::size_t index) noexcept;
+
+  // The path `ask` is about: what is read, listed or sent to the trash where it comes from, or
+  // what is made, written or named where it goes.
+  void pathOf(ds::String<Memory>& path, const Transfer& transfer, TransferAsk ask);
+
+  // The identity its runtime checks before it reads: the file's, of a tree the one being carried.
+  [[nodiscard]] FileIdentity readIdentity(const Transfer& transfer) noexcept;
+
+  // How much of it arrived, and of how much: of a tree, of what its walk has seen so far.
+  [[nodiscard]] std::uint64_t arrivedBytes(const Transfer& transfer) noexcept;
+  [[nodiscard]] std::uint64_t wholeBytes(const Transfer& transfer) noexcept;
+
+  // The listing of the directory a tree's walk is in, whole: its files wait their turn, its
+  // directories are walked after, and what is neither is left out.
+  void walked(View& view, std::size_t index, const Directory& directory, std::uint64_t now_ms);
 
   // Whether what the transfer changes next on `machine` joins the change its plan already made
   // there, and is no change of its own.

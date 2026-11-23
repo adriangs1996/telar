@@ -369,29 +369,67 @@ namespace telar::gui::application::explorer {
     // Sends what the transfer asks of this session's runtime. Nothing when the queue is full:
     // the next time asks again.
     ds::Option<std::uint64_t> request(Session& session, const feature::Transfer& transfer, TransferAsk ask, bool joined) {
-      ds::String<Memory> target{session.memory, transfer.directory.view()};
+      ds::String<Memory> path{session.memory};
 
-      target.append("/");
-      target.append(transfer.name.view());
+      feature::pathOf(path, transfer, ask);
       switch (ask) {
       case TransferAsk::none:
+      case TransferAsk::list:
+        // A listing is the cache's to ask for, as any directory a window shows.
         return ds::none;
       case TransferAsk::read:
-        return session.link.ask(ReadFile{.path = transfer.source.view(), .identity = transfer.identity, .offset = transfer.done, .limit = FileLimits::chunk_bytes});
+        return session.link.ask(ReadFile{.path = path.view(), .identity = feature::readIdentity(transfer), .offset = transfer.done, .limit = FileLimits::chunk_bytes});
       case TransferAsk::write:
-        return session.link.ask(WriteFile{.target = target.view(), .partial = transfer.partial.view(), .offset = transfer.done, .parents = transfer.kind == feature::TransferKind::bring, .bytes = transfer.chunk.view()});
+        return session.link.ask(WriteFile{.target = path.view(), .partial = transfer.partial.view(), .offset = transfer.done, .parents = transfer.kind == feature::TransferKind::bring, .bytes = transfer.chunk.view()});
       case TransferAsk::keep:
-        return session.link.ask(EndFileWrite{.partial = transfer.partial.view(), .target = target.view(), .keep = true, .overwrite = transfer.overwrite, .joins = joined});
+        return session.link.ask(EndFileWrite{.partial = transfer.partial.view(), .target = path.view(), .keep = true, .overwrite = transfer.overwrite, .joins = joined});
       case TransferAsk::drop:
-        return session.link.ask(EndFileWrite{.partial = transfer.partial.view(), .target = target.view(), .keep = false});
+        return session.link.ask(EndFileWrite{.partial = transfer.partial.view(), .target = path.view(), .keep = false});
+      case TransferAsk::make: {
+        const ds::Array<FileOperation, 1> made{{{.kind = FileOperationKind::create_directory, .target = path.view()}}};
+
+        return session.link.ask(ChangeFiles{.operations = made.view(), .joins = joined});
+      }
+      case TransferAsk::clear: {
+        const ds::Array<FileOperation, 1> cleared{{{.kind = FileOperationKind::trash, .source = path.view()}}};
+
+        return session.link.ask(ChangeFiles{.operations = cleared.view(), .joins = joined});
+      }
       case TransferAsk::trash: {
-        const ds::Array<FileOperation, 1> original{{{.kind = FileOperationKind::trash, .source = transfer.source.view(), .identity = transfer.identity}}};
+        const ds::Array<FileOperation, 1> original{{{.kind = FileOperationKind::trash, .source = path.view(), .identity = transfer.identity}}};
 
         return session.link.ask(ChangeFiles{.operations = original.view(), .joins = joined});
       }
       }
 
       return ds::none;
+    }
+
+    // Reads the directory a tree's walk is in, as it is now, through the cache of its machine: a
+    // page at a time, and once it is whole the walk takes it.
+    void list(Session& session, View& view, std::size_t index, std::uint64_t now_ms) {
+      ds::String<Memory> path{session.memory};
+
+      feature::pathOf(path, view.transfers[index], TransferAsk::list);
+      if (!view.transfers[index].fresh) {
+        feature::relist(session.explorer, path.view());
+        view.transfers.atMut(index).fresh = true;
+      }
+
+      const feature::Need wanted{.kind = feature::NeedKind::listing, .path = path.view()};
+      const auto* directory = feature::find(session.explorer, path.view());
+
+      if (directory != nullptr && directory->failed) {
+        feature::giveUp(view, index, "a directory of it cannot be read", now_ms);
+      } else if (feature::lacks(session.explorer, wanted)) {
+        if (feature::mayAsk(session.explorer)) {
+          if (const auto request = session.link.ask(feature::listing(session.explorer, path.view()))) {
+            feature::asked(session.explorer, wanted, *request);
+          }
+        }
+      } else if (directory != nullptr && directory->listing == 0 && !directory->stale) {
+        feature::walked(view, index, *directory, now_ms);
+      }
     }
 
     // Types the path of a file that was brought at the pane that waited for it.
@@ -456,6 +494,11 @@ namespace telar::gui::application::explorer {
       }
 
       if (asking.ask == TransferAsk::write && !place(session, view, index, context, now_ms)) {
+        continue;
+      }
+
+      if (asking.ask == TransferAsk::list) {
+        list(session, view, index, now_ms);
         continue;
       }
 
