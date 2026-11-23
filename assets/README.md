@@ -7,12 +7,27 @@ The font is distributed under the SIL Open Font License 1.1; the complete
 license is in `JetBrainsMono-OFL.txt`.
 
 `TelarForma-Regular.ttf` is the GUI's default terminal face, Telar Forma Regular,
-version 0.106. Its SHA-256 is
-`d459bdd9aa152480f7bdb66a97945f08df9ddf186c691f8b1c94fe7549a81567`.
+version 0.107. Its SHA-256 is
+`1b2c344d978a7e0e94fc0070be71c7b5fb2ef44d15fc8207f7dd1f77282af85b`.
 It uses the approved 50/50 design with a slashed zero and the `1`, `f`, `w`,
 `t`, `o` and `y` drawings retained from version 0.103. Its `l` is JetBrains
 Mono's, scaled by 710/730 and centred in the 575-unit cell, the ratio at which
 Telar Forma draws JetBrains Mono's stems and ascenders.
+Version 0.107 draws again from JetBrains Mono the glyphs whose blend was
+malformed in 0.106, scaled as every glyph Telar Forma does not blend: `*`, `½`,
+`¼`, `¾`, `±`, `‰`, `¶`, `‽`, `⁴`, `₄`, `Ţ`, `ţ`, `į` and `Į`. `ĺ`, `ľ`, `ļ`,
+`ŀ` and `ł` had kept an earlier `l` and take the one above.
+It draws every outline 8 units heavier than 0.106, of a 1000-unit
+em. An 88-unit stem is now 96, the step JetBrains Mono takes from Regular to
+Medium. A part as tall as a letter keeps its height, so the x-height, the cap
+height and the baseline did not move. Box drawing, block elements and Powerline
+glyphs are as they were.
+It also heals its texture through `calt`, as Monaspace does. Beside an `m`,
+`w`, `M` or `W`, the letters `i`, `l`, `t`, `f`, `j`, `I` and `1` give up the
+serif that faces it, and the wide letter is drawn wider into that room. A wide
+letter also grows towards a period, a comma or a bracket. The alternates are
+named `.left`, `.right` and `.both` and keep the 575-unit advance, so the grid
+does not move.
 Selecting `client.gui.font.family = "Telar Forma"` loads the embedded file,
 without requiring a system installation. Only `Regular` is available;
 bold and italic terminal attributes use the existing synthesized styles.

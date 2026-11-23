@@ -153,6 +153,38 @@ namespace {
     }
   }
 
+  // Telar Forma heals its texture through `calt`: a narrow letter beside a wide one gives up
+  // the serif that faces it and the wide one is drawn wider, so the row shapes them together.
+  void telarFormaHealsTextureAcrossCells() {
+    telar::testing::TestMemory adapter;
+    telar::ConcurrentMemory& memory = adapter;
+    FontFixture fonts{memory, std::filesystem::path{TELAR_GUI_ASSETS_DIR}, "TelarForma-Regular.ttf"};
+    RowTextLayout layout{memory};
+    constexpr std::string_view text = "mia";
+    telar::ds::Array<CellValue, text.size()> cells;
+
+    for (std::size_t column = 0; column < cells.size(); ++column) {
+      cells.atMut(column).text.atMut(0) = static_cast<unsigned char>(text[column]);
+    }
+
+    auto& face = fonts.face(FontRole::primary);
+    const auto wide = face.shape("m", pixel_height).glyph(0);
+    const auto narrow = face.shape("i", pixel_height).glyph(0);
+    const auto plain = face.shape("a", pixel_height).glyph(0);
+    RowTextRequest request{.pixel_height = pixel_height, .cell_width = cell_width};
+
+    layout.shape(fonts, cells, request);
+    check(layout.glyphs().size() == cells.size(), "each cell keeps one glyph");
+    check(layout.glyphs()[0].index != wide.index && layout.glyphs()[1].index != narrow.index, "a wide letter and the narrow one beside it take their healed glyphs");
+    check(layout.glyphs()[0].x_advance == wide.x_advance && layout.glyphs()[1].x_advance == narrow.x_advance, "a healed glyph keeps the cell's advance");
+    check(layout.glyphs()[2].index == plain.index, "a letter that neither gives nor takes room keeps its glyph");
+
+    // The cell under the cursor is drawn alone, so its neighbour has no one to heal with.
+    request.cursor = 1;
+    layout.shape(fonts, cells, request);
+    check(layout.glyphs()[0].index == wide.index && layout.glyphs()[1].index == narrow.index, "the cell under the cursor and its neighbour take their own glyphs");
+  }
+
   void failedStorageCanBeRetried(FontFixture<telar::ConcurrentMemory>& fonts) {
     SystemAllocator upstream;
     AllocationGate gate{upstream};
@@ -200,5 +232,6 @@ namespace {
   const telar::testing::Case case_font_and_grid_changes_retire_cached_positions{"row_text.font_and_grid_changes_retire_cached_positions", fontAndGridChanges};
   const telar::testing::Case case_failed_storage_can_be_retried{"row_text.failed_storage_can_be_retried", withFonts<failedStorageCanBeRetried>};
   const telar::testing::Case case_kept_clusters_lay_out_as_shaped{"row_text.kept_clusters_lay_out_as_shaped", withFonts<keptClustersLayOutAsShaped>};
+  const telar::testing::Case case_telar_forma_heals_texture_across_cells{"row_text.telar_forma_heals_texture_across_cells", telarFormaHealsTextureAcrossCells};
 
 }
