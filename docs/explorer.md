@@ -183,6 +183,8 @@ window says which: its label, and `local` for the machine the window runs on or 
 another one. What a window lists, measures, previews and searches, and what git says there,
 comes from the runtime of its own machine; a machine with no window is asked for nothing.
 
+![Two windows, one on each of two machines](images/telar-explorer-machines.png)
+
 | Keys | What they do |
 | --- | --- |
 | `:e LABEL:PATH`, `:vs LABEL:PATH`, `:sp LABEL:PATH` | Take this window, or a new one, to a path of the machine with that label: `:vs box:~/logs`. `~` is the home of the account there, which its runtime says. |
