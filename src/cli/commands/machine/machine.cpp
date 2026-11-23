@@ -3065,6 +3065,7 @@ exit 1
         change(profiles, add);
         saved = profiles.rows()[*profiles.find(target.label)];
       });
+
       report.note(Step::gateway, "{} is saved, as its pairing code is spent: `telar machine setup {}` goes on from here", target.label, target.label);
       return saved.unwrap();
     }
