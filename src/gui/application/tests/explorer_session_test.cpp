@@ -721,6 +721,56 @@ namespace {
     check(box_transport.count(ClientTag::change_files) == 0, "a copy leaves its original");
   }
 
+  void aFileDraggedInIsCarriedToTheMachineOfTheWindowThatTakesIt() {
+    Fixture fixture;
+    auto& transport = fixture.transport;
+    auto& box_transport = fixture.box_transport;
+
+    fixture.list();
+    fixture.settle();
+    fixture.splitToBox();
+
+    // A file of the machine the window runs on, let go on the window of the other one.
+    const ds::Array<std::string_view, 1> paths{{"/home/dev/Desktop/notes.md"}};
+
+    fixture.observe();
+    {
+      const auto around = explorer::around(fixture.scene);
+      const auto context = explorer::contextOf(around, far.machine);
+
+      check(explorer::bringIn(fixture.view, context, paths.view()) == 1 && fixture.view.dragged[0].machine == host.machine);
+      explorer::drop(fixture.view, fixture.box.explorer, context, {.window = fixture.view.current, .row = 0, .copy = true});
+    }
+
+    check(fixture.view.edits.size() == 1 && fixture.view.edits[0].unidentified && fixture.view.edits[0].machine == far.machine && fixture.view.edits[0].path.view() == "/home/ops");
+    static_cast<void>(fixture.refresh());
+
+    // The runtime it is on says what it is: the one of the window that takes it knows nothing of it.
+    const auto asked = transport.last<InspectFile>();
+
+    check(asked.path == "/home/dev/Desktop/notes.md");
+    check(box_transport.count(ClientTag::inspect_file) == 0 || box_transport.last<InspectFile>().path != asked.path);
+    check(deliver(fixture.client, FileInspection{.request_id = asked.request_id, .path = "/home/dev/Desktop/notes.md", .size = 4, .identity = {.inode = 31, .modified_seconds = 6}}) == application::Change::explorer);
+    static_cast<void>(fixture.refresh());
+    static_cast<void>(fixture.run("w"));
+    check(fixture.view.mode == explorer::Mode::plan && fixture.view.plan.size() == 1 && fixture.view.plan[0].source_machine == host.machine && fixture.view.plan[0].machine == far.machine);
+    static_cast<void>(fixture.press('y'));
+    check(fixture.view.transfers.size() == 1 && !fixture.view.transfers[0].tree);
+    static_cast<void>(fixture.carry());
+
+    // It is read where it is, as its runtime said it was, and written on the other.
+    const auto read = transport.last<ReadFile>();
+    const std::vector<Byte> bytes(4, Byte{'n'});
+
+    check(read.path == "/home/dev/Desktop/notes.md" && read.identity.inode == 31 && box_transport.count(ClientTag::read_file) == 0);
+    check(deliver(fixture.client, FileChunk{.request_id = read.request_id, .offset = 0, .size = 4, .end = true, .bytes = bytes}) == application::Change::explorer);
+    static_cast<void>(fixture.carry());
+
+    const auto write = box_transport.last<WriteFile>();
+
+    check(write.target == "/home/ops/notes.md" && same(write.bytes, bytes) && transport.count(ClientTag::write_file) == 0);
+  }
+
   void aMoveTrashesItsOriginalOnceTheCopyArrivedAndACancelRemovesIt() {
     Fixture fixture;
     auto& transport = fixture.transport;
@@ -827,6 +877,7 @@ namespace {
   const telar::testing::Case case_beside{"explorer_session.beside_the_panes_it_stays_and_a_pane_takes_what_is_dropped_on_it", besideThePanesItStaysAndAPaneTakesWhatIsDroppedOnIt};
   const telar::testing::Case case_carried{"explorer_session.a_file_is_carried_from_one_machine_to_the_other", aFileIsCarriedFromOneMachineToTheOther};
   const telar::testing::Case case_tree{"explorer_session.a_directory_is_carried_as_its_tree_a_directory_and_a_file_at_a_time", aDirectoryIsCarriedAsItsTreeADirectoryAndAFileAtATime};
+  const telar::testing::Case case_dragged_in{"explorer_session.a_file_dragged_in_is_carried_to_the_machine_of_the_window_that_takes_it", aFileDraggedInIsCarriedToTheMachineOfTheWindowThatTakesIt};
   const telar::testing::Case case_moved{"explorer_session.a_move_trashes_its_original_once_the_copy_arrived_and_a_cancel_removes_it", aMoveTrashesItsOriginalOnceTheCopyArrivedAndACancelRemovesIt};
   const telar::testing::Case case_brought{"explorer_session.a_file_brought_is_typed_at_the_pane_once_it_is_whole", aFileBroughtIsTypedAtThePaneOnceItIsWhole};
 

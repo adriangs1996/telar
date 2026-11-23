@@ -12,6 +12,7 @@ static_assert(true);
 #include <QDir>
 #include <QGuiApplication>
 #include <QKeyEvent>
+#include <QVarLengthArray>
 #include <QVariantList>
 #include <algorithm>
 #include <chrono>
@@ -101,7 +102,7 @@ namespace telar::gui::qt {
       std::string_view label;
     };
 
-    constexpr ds::Array<HelpKey, 62> help_keys{
+    constexpr ds::Array<HelpKey, 63> help_keys{
         {
             {.group = "Moving", .keys = "j k", .label = "down, up; with a count"},
             {.group = "Moving", .keys = "gg G", .label = "first, last; 12G goes to row 12"},
@@ -163,6 +164,7 @@ namespace telar::gui::qt {
             {.group = "Pointer and shortcuts", .keys = "Shift+F10", .label = "the menu, from the keys"},
             {.group = "Pointer and shortcuts", .keys = "drag", .label = "moves there on :w; Alt copies"},
             {.group = "Pointer and shortcuts", .keys = "drag to a machine", .label = "copies there on :w; Shift moves"},
+            {.group = "Pointer and shortcuts", .keys = "drop files", .label = "from the desktop: copies there on :w"},
             {.group = "Pointer and shortcuts", .keys = "<D-c> <D-x> <D-v>", .label = "copy, cut, paste; Control too"},
             {.group = "Pointer and shortcuts", .keys = "<D-z> <D-s> F2", .label = "undo, write, rename"},
         },
@@ -1091,6 +1093,40 @@ namespace telar::gui::qt {
 
     finish(Effect::none);
     return static_cast<int>(carried);
+  }
+
+  int ExplorerController::grabFiles(const QList<QUrl>& urls) {
+    if (!view_.open || urls.isEmpty()) {
+      return 0;
+    }
+
+    QList<QByteArray> local;
+    // As many paths as a drag most often brings stay on the stack.
+    constexpr qsizetype usual_paths = 16;
+    QVarLengthArray<std::string_view, usual_paths> paths;
+
+    for (const auto& url : urls) {
+      if (!url.isLocalFile()) {
+        // A link to a page or a file of somewhere else names nothing the runtime can copy.
+        explorer::say(view_, "Only files of this machine are dropped here", explorer::Tone::error);
+        finish(Effect::none);
+        return 0;
+      }
+
+      local.push_back(url.toLocalFile().toUtf8());
+    }
+
+    for (const auto& path : local) {
+      paths.push_back(std::string_view{path.constData(), static_cast<std::size_t>(path.size())});
+    }
+
+    observe();
+
+    const auto around = explorer::around(scene_);
+    const auto held = explorer::bringIn(view_, explorer::contextOf(around, scene_.shown), std::span<const std::string_view>{paths});
+
+    finish(Effect::none);
+    return static_cast<int>(held);
   }
 
   QVariantMap ExplorerController::aim(int window, int row, bool copy, bool move) const {

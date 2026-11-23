@@ -1,4 +1,6 @@
 #include "explorer_fixture.hpp"
+#include <string_view>
+#include <vector>
 
 namespace {
 
@@ -349,12 +351,53 @@ namespace {
     check(explorer.view.edits.empty());
   }
 
+  void testFilesDraggedInAreCopiedByThePlan() {
+    Explorer explorer;
+
+    explorer.start();
+    explorer.type("l");
+
+    // Files of the machine the window runs on, from outside it: held as rows dragged are.
+    const std::vector<std::string_view> paths{"/Users/dev/Desktop/notes.md", "/Users/dev/Desktop/shots/", "relative.txt"};
+
+    check(bringIn(explorer.view, explorer.context(), paths) == 2 && explorer.view.dragged.size() == 2, "a path that is not absolute names nothing");
+    check(explorer.view.dragged[0].machine == Explorer::machine && explorer.view.dragged[1].path.view() == "/Users/dev/Desktop/shots", "a slash at the end is no part of a name");
+
+    const auto aimed = aim(explorer.view, explorer.state, explorer.context(), {.window = 0, .row = explorer.at("assets"), .copy = true});
+
+    check(aimed.count == 2 && aimed.copy && aimed.row && *aimed.row == explorer.at("assets"));
+    drop(explorer.view, explorer.state, explorer.context(), {.window = 0, .row = explorer.at("assets"), .copy = true});
+    check(explorer.view.edits.size() == 2 && explorer.view.edits[0].kind == EditKind::paste && explorer.view.edits[0].paste == PasteKind::copy && explorer.view.edits[0].unidentified, "nothing is known of them but their paths");
+    check(explorer.view.edits[0].source.view() == "/Users/dev/Desktop/notes.md" && explorer.view.edits[0].path.view() == "/home/dev/telar/assets" && explorer.view.edits[0].name.view() == "notes.md");
+
+    // Their runtime is asked what each is, and the plan names what it read.
+    explorer.answer();
+    check(!explorer.view.edits[0].unidentified && explorer.view.edits[0].identity.inode == explorer.inspected_inode && explorer.view.edits[0].size == 7739, "then a copy names the file its runtime read");
+    explorer.type(":");
+    explorer.enter("w");
+    check(explorer.view.mode == Mode::plan && explorer.view.plan.size() == 2 && explorer.view.plan[0].verb == PlanVerb::copy && explorer.view.plan[0].source_machine == 0 && explorer.view.plan[0].target.view() == "/home/dev/telar/assets/notes.md");
+    explorer.type("n");
+    explorer.type("uu");
+
+    // On a window of another machine they are carried there, from this one.
+    explorer.type(":");
+    explorer.enter("vs box:~");
+    check(bringIn(explorer.view, explorer.context(Explorer::box), paths) == 2 && explorer.view.dragged[0].machine == Explorer::machine, "they are of the machine the window runs on, whatever window takes them");
+    drop(explorer.view, explorer.remote, explorer.context(Explorer::box), {.window = 1, .row = 0, .copy = true});
+    check(explorer.view.edits.size() == 2 && explorer.view.edits[0].machine == Explorer::box && explorer.view.edits[0].source_machine == Explorer::machine && explorer.view.edits[0].path.view() == "/home/ops/logs");
+    explorer.answer();
+    explorer.type(":");
+    explorer.enter("w");
+    check(explorer.view.mode == Mode::plan && explorer.view.plan[0].source_machine == Explorer::machine && explorer.view.plan[0].machine == Explorer::box, "the plan carries them between the two");
+  }
+
   const telar::testing::Case case_menu{"pointer.the_menu_of_a_row_lists_what_applies_to_it", testTheMenuOfARowListsWhatAppliesToIt};
   const telar::testing::Case case_menu_keys{"pointer.the_keys_move_in_the_menu_and_a_line_runs_what_its_key_runs", testTheKeysMoveInTheMenuAndALineRunsWhatItsKeyRuns};
   const telar::testing::Case case_menu_selection{"pointer.the_menu_acts_on_the_selection_it_opens_on", testTheMenuActsOnTheSelectionItOpensOn};
   const telar::testing::Case case_drop{"pointer.rows_dropped_are_a_change_to_write", testRowsDroppedAreAChangeToWrite};
   const telar::testing::Case case_refused{"pointer.a_drop_that_moves_nothing_is_refused", testADropThatMovesNothingIsRefused};
   const telar::testing::Case case_selection{"pointer.a_drag_takes_the_selection_and_crosses_windows", testADragTakesTheSelectionAndCrossesWindows};
+  const telar::testing::Case case_in{"pointer.files_dragged_in_are_copied_by_the_plan", testFilesDraggedInAreCopiedByThePlan};
   const telar::testing::Case case_shortcuts{"pointer.the_shortcuts_of_every_file_manager", testTheShortcutsOfEveryFileManager};
 
 }

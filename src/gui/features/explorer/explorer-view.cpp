@@ -704,6 +704,8 @@ namespace telar::gui::features::explorer {
         if (!inspection->path.empty()) {
           edit.identity = inspection->identity;
           edit.size = inspection->size;
+          // What was dragged in from outside is known as a directory only now.
+          edit.directory = edit.kind == EditKind::paste ? inspection->kind == FileKind::directory : edit.directory;
         }
       }
 
@@ -4114,6 +4116,29 @@ namespace telar::gui::features::explorer {
 
     take(taken, view, state, context);
     view.dragged = std::move(taken);
+    return view.dragged.size();
+  }
+
+  std::size_t bringIn(View& view, const Context& context, std::span<const std::string_view> paths) {
+    const auto own = std::ranges::find(context.machines, true, &MachineFact::local);
+
+    view.dragged.clear();
+    if (own == context.machines.end() || (view.mode != Mode::normal && view.mode != Mode::visual)) {
+      return 0;
+    }
+
+    for (const auto path : paths) {
+      if (!path.starts_with('/') || path.size() > FileLimits::path_bytes || view.dragged.size() == ViewLimits::edits) {
+        continue;
+      }
+
+      auto& item = view.dragged.push(Yanked{view.memory});
+
+      item.machine = own->id;
+      // A directory dragged in may end in a slash, which is no part of its name.
+      item.path.assign(path.size() > 1 && path.ends_with('/') ? path.substr(0, path.size() - 1) : path);
+    }
+
     return view.dragged.size();
   }
 

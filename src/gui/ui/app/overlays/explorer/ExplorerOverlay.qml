@@ -45,6 +45,8 @@ FocusScope {
     property bool dragCopy: false
     property bool dragMove: false
     property bool dragging: false
+    // Whether what is dragged came from outside the window: files, which a pane takes none of.
+    property bool draggingIn: false
     property int dragCount: 0
     property real dragX: 0
     property real dragY: 0
@@ -217,7 +219,7 @@ FocusScope {
         const at = rowsAt(x, y);
         const aimed = at === null ? ({}) : controller.aim(at.window, at.row, copy, move);
         // Out of the explorer, beside the panes, a pane takes the rows as Enter gives them.
-        const over = at === null && pinned && paneArea !== null ? paneArea.paneAt(paneArea.mapFromItem(root, x, y)) : null;
+        const over = at === null && pinned && !draggingIn && paneArea !== null ? paneArea.paneAt(paneArea.mapFromItem(root, x, y)) : null;
 
         dropPane = over === null ? "" : String(over.key);
         dropPaneFrame = over === null ? Qt.rect(0, 0, 0, 0) : root.mapFromItem(paneArea, over.x, over.y, over.width, over.height);
@@ -238,6 +240,7 @@ FocusScope {
         const pane = letGo ? dropPane : "";
 
         dragging = false;
+        draggingIn = false;
         dropWindow = -1;
         dropRow = -1;
         dropPane = "";
@@ -298,6 +301,39 @@ FocusScope {
             root.claim();
         }
         onWheel: wheel => wheel.accepted = true
+    }
+
+    // Files dragged in from the desktop or a file manager: they are let go on a directory as rows
+    // are, and are copied there by the plan.
+    DropArea {
+        anchors.fill: parent
+        onEntered: drag => {
+            const held = drag.hasUrls ? root.controller.grabFiles(drag.urls) : 0;
+
+            drag.accepted = held > 0;
+            if (held === 0)
+                return;
+
+            root.dragCount = held;
+            root.draggingIn = true;
+            root.dragging = true;
+            root.dragTo(drag.x, drag.y, true, false);
+        }
+        onPositionChanged: drag => {
+            if (root.draggingIn)
+                root.dragTo(drag.x, drag.y, true, false);
+        }
+        onExited: {
+            if (root.draggingIn)
+                root.endDrag(false);
+        }
+        onDropped: drop => {
+            if (!root.draggingIn)
+                return;
+
+            drop.accept(Qt.CopyAction);
+            root.endDrag(true);
+        }
     }
 
     Item {

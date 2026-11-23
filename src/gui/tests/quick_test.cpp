@@ -52,6 +52,7 @@ static_assert(true);
 #include <QDateTime>
 #include <QDebug>
 #include <QDir>
+#include <QDragEnterEvent>
 #include <QFile>
 #include <QFileInfo>
 #include <QInputMethodEvent>
@@ -1859,6 +1860,40 @@ return {api_version = 2, client = {
       QVERIFY(QFile::exists(root + QStringLiteral("/docs/usage.md")));
       press(QStringLiteral("u"));
       QCOMPARE(explorer->line().value(QStringLiteral("edits")).toInt(), 0);
+
+      // A file dragged in from outside the window is held as rows dragged are, and let go on a
+      // directory it is a copy to write: nothing is written by the drop.
+      {
+        QMimeData files;
+
+        files.setUrls({QUrl::fromLocalFile(root + QStringLiteral("/justfile"))});
+
+        const auto target = over(QStringLiteral("docs"));
+        QDragEnterEvent enter{target, Qt::CopyAction, &files, Qt::LeftButton, Qt::NoModifier};
+
+        QCoreApplication::sendEvent(window_, &enter);
+
+        QDragMoveEvent move{target, Qt::CopyAction, &files, Qt::LeftButton, Qt::NoModifier};
+
+        QCoreApplication::sendEvent(window_, &move);
+        QTRY_VERIFY(overlay->property("draggingIn").toBool());
+        QCOMPARE(overlay->property("dragCount").toInt(), 1);
+        QVERIFY(listed(QStringLiteral("docs")) >= 0);
+        QCOMPARE(overlay->property("dropRow").toInt(), listed(QStringLiteral("docs")));
+
+        QDropEvent let_go{QPointF{target}, Qt::CopyAction, &files, Qt::LeftButton, Qt::NoModifier};
+
+        QCoreApplication::sendEvent(window_, &let_go);
+        QVERIFY(!overlay->property("dragging").toBool());
+        QCOMPARE(explorer->line().value(QStringLiteral("edits")).toInt(), 1);
+        QVERIFY(explorer->line().value(QStringLiteral("message")).toString().startsWith(QStringLiteral("1 to copy into docs")));
+        QVERIFY(!QFile::exists(root + QStringLiteral("/docs/justfile")));
+        press(QStringLiteral("u"));
+        QCOMPARE(explorer->line().value(QStringLiteral("edits")).toInt(), 0);
+        // What is no file of this machine is not taken.
+        QCOMPARE(explorer->grabFiles({QUrl{QStringLiteral("https://example.invalid/page")}}), 0);
+        QVERIFY(explorer->line().value(QStringLiteral("message")).toString().startsWith(QStringLiteral("Only files of this machine")));
+      }
 
       // The changes lens lists what git says; a filter narrows a listing; `q` closes the explorer.
       explorer->run(QStringLiteral("changes"));

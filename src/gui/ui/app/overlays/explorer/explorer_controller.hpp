@@ -7,10 +7,12 @@ static_assert(true);
 #include "ui/kit/models/list_model.hpp"
 #include "ui/kit/store/store.hpp"
 #include <QAbstractItemModel>
+#include <QList>
 #include <QObject>
 #include <QPointF>
 #include <QString>
 #include <QTimer>
+#include <QUrl>
 #include <QVariantList>
 #include <QVariantMap>
 #include <QtQml/qqmlregistration.h>
@@ -110,6 +112,9 @@ namespace telar::gui::qt {
     // would take `count` of them, in the directory at `row` or in the window's root at -1; and
     // it let them go there, or where nothing takes them.
     Q_INVOKABLE int grab(int window, int row);
+    // Files dragged in from outside the window: how many the explorer holds to be dropped, none
+    // when one of them is no file of this machine.
+    Q_INVOKABLE int grabFiles(const QList<QUrl>& urls);
     // `copy` and `move` are what the person holds to ask for one: rows move on their machine and
     // are copied to another unless one of them says otherwise.
     [[nodiscard]] Q_INVOKABLE QVariantMap aim(int window, int row, bool copy, bool move) const;

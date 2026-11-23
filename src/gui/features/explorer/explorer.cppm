@@ -81,6 +81,12 @@ export namespace telar::gui::features::explorer {
   // row alone, which is then selected. How many rows the drag carries.
   std::size_t grab(View& view, const State& state, const Context& context, const Pick& pick);
 
+  // Files of the machine the window runs on are dragged in from outside the explorer: they are
+  // held as rows dragged are, to be let go on a directory, where they are copied. Nothing is
+  // known of them but their paths, so their runtime is asked what each is before a plan shows.
+  // How many it holds: none when the mode takes no drag, or the window names no machine as its own.
+  std::size_t bringIn(View& view, const Context& context, std::span<const std::string_view> paths);
+
   // What letting the rows go at `drop` would do.
   [[nodiscard]] Aim aim(const View& view, const State& state, const Context& context, const Drop& drop);
 

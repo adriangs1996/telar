@@ -186,6 +186,12 @@ how many rows, and the directory that would take them is marked. A drop that wou
 where it is, or put a directory into itself, is refused. Onto a window of
 [another machine](#between-machines) a drop copies, and moves with Shift held.
 
+Files and directories dragged in from the desktop or a file manager are let go on a directory
+the same way, and are copied there when `:w` writes it: the drop itself writes nothing. They
+are files of the machine the window runs on, so on a window of another machine the plan
+carries them [between the two](#between-machines). The runtime is asked what each is before
+the plan shows. What is no file of this machine, as a link to a page, is refused.
+
 ## Git
 
 | Keys | What they do |
@@ -315,7 +321,7 @@ other, 256 KiB at a time, and holds one such piece of it and no more.
   operation that makes one.
 - A transfer does not go on after its machine was disconnected and connected again: it
   fails, and is started again by hand.
-- Nothing is dragged out to the desktop, or in from it.
+- Nothing is dragged out to the desktop.
 - Beside the panes the explorer is the window's own: the runtime does not know of it as a
   pane, so it is not part of a tab's layout, is not split or moved with the panes, and does not
   return when the window is opened again.
