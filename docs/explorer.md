@@ -41,8 +41,8 @@ Each row has the icon of its type, the same the editor's surfaces use. To its ri
 - the panes whose shell is in that directory, by their number in the tab;
 - the marks set on it;
 - its size, with a bar that says its share of the largest entry beside it. The runtime
-  measures a directory after it lists it, for two seconds at most, and a size it did not
-  finish shows as a lower bound.
+  measures a directory after it lists it, for two seconds at most: a size still to come shows
+  as `…`, and one it did not finish ends in `+`.
 
 The preview beside the listing says the size, the time of the last change, what git says and
 the last commit of the selection, and shows its diff when it has changes not committed, or the
