@@ -1054,7 +1054,7 @@ namespace telar::runtime {
     const auto client_id = asked.client_id;
     const auto& request = asked.request;
     // The program, the flag that makes it speak its UI protocol on its pipes, telar's own
-    // configuration where the host has none, where the cursor starts and then the files.
+    // configuration, where the cursor starts and then the files.
     constexpr std::size_t cursor_capacity = 48;
     constexpr std::size_t fixed_arguments = 5;
     ds::Array<std::string_view, max_nvim_files + fixed_arguments> arguments;
@@ -1063,10 +1063,9 @@ namespace telar::runtime {
 
     arguments.atMut(count++) = provision.program();
     arguments.atMut(count++) = "--embed";
-    if (!provision.ownInit().empty()) {
-      arguments.atMut(count++) = "-u";
-      arguments.atMut(count++) = provision.ownInit();
-    }
+    // Never the user's configuration: telar's own, or none when it could not be written.
+    arguments.atMut(count++) = "-u";
+    arguments.atMut(count++) = provision.ownInit().empty() ? std::string_view{"NONE"} : provision.ownInit();
 
     if (request.line != 0 && !request.files.empty()) {
       // Two numbers the runtime writes itself: nothing a client sent is run as a command.
@@ -1850,6 +1849,7 @@ namespace telar::runtime {
         shell_git_(memory),
         data_home_(memory, options.data_home),
         editor_provision_(memory),
+        editor_configuration_(memory, options.editor_configuration),
         words_(memory, options.configuration_directory),
         agent_files_(memory),
         descriptions_(memory, background_, options.descriptions),
@@ -2520,23 +2520,6 @@ namespace telar::runtime {
     };
 
     const auto configured = variable("TELAR_NVIM");
-    // $XDG_CONFIG_HOME, or ~/.config: where the user's own configuration of Neovim would be.
-    auto config_home = variable("XDG_CONFIG_HOME");
-
-    if (!config_home.view().starts_with('/')) {
-      config_home = variable("HOME");
-      if (config_home.view().starts_with('/')) {
-        config_home.append("/.config");
-      } else {
-        config_home.clear();
-      }
-    }
-
-    // A runtime started with NVIM_APPNAME already names the configuration its editors load:
-    // telar's own is for a host that chose none.
-    if (!variable("NVIM_APPNAME").empty()) {
-      config_home.clear();
-    }
 
     // A Neovim that came in telar's own package: under share/, beside the directory of its
     // programs.
@@ -2547,7 +2530,7 @@ namespace telar::runtime {
 
     const auto shipped = ExecutablePath::sibling({packaged.view()});
 
-    editor_provision_.resolve({.data_home = data_home_.view(), .config_home = config_home.view(), .configured = configured.view(), .shipped = shipped ? shipped->view() : std::string_view{}});
+    editor_provision_.resolve({.data_home = data_home_.view(), .configured = configured.view(), .shipped = shipped ? shipped->view() : std::string_view{}});
     workspaces_.createEditor(model_, panes_, clients_, {.client_id = identity, .request = message}, editor_provision_);
   }
 
@@ -2652,6 +2635,25 @@ namespace telar::runtime {
     panes_.editorRequest(model_, requireClient(clients_, identity), message.pane_id, [&](NvimEditor& editor) {
       return editor.list(message.places);
     });
+  }
+
+  // A client's editor configuration replaces this machine's: the window brings its own to each
+  // machine it connects to. It is small and comes once a connection, so it is written here.
+  template <EventLoop Poller, typename Background>
+    requires BackgroundExecutor<Background, ConcurrentMemory>
+  void Runtime<Poller, Background>::handle(std::uint64_t identity, const NvimConfiguration& message) {
+    auto& client = requireClient(clients_, identity);
+    if (editor_configuration_.empty()) {
+      throw RequestError{FailureCode::invalid_request, "This runtime has no directory for the editor's configuration"};
+    }
+
+    try {
+      static_cast<void>(mirrorNvimConfiguration(memory_, editor_configuration_.view(), message.files));
+    } catch (const std::invalid_argument&) {
+      throw RequestError{FailureCode::invalid_request, "A path of the editor's configuration is not one it may hold"};
+    }
+
+    client.connection.send(RequestCompleted{.request_id = message.request_id});
   }
 
   template <EventLoop Poller, typename Background>

@@ -70,6 +70,7 @@ namespace {
     const auto socket = directory + "/runtime.sock";
     const auto session_path = session ? directory + "/session.ckpt" : std::string{};
     const auto data_home = data ? directory + "/data" : std::string{};
+    const auto editor_configuration = directory + "/config/telar/editor";
 
     ::fcntl(guard, F_SETFD, FD_CLOEXEC);
     std::thread{[guard] {
@@ -105,6 +106,7 @@ namespace {
         .cli_executable = cli.view(),
         .session = {.path = session_path, .resume_agents = resume},
         .data_home = data_home,
+        .editor_configuration = editor_configuration,
     };
 
     options.control_policy.clipboard_write = clipboard_write == "deny" ? control::Access::deny : clipboard_write == "ask" ? control::Access::ask

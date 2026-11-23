@@ -135,6 +135,10 @@ def main():
     editor = prefix / 'share/telar/nvim'
     if editor.is_dir():
         shutil.copytree(editor, resources / 'share/telar/nvim', symlinks=True)
+    # The tree-sitter parsers and queries the editor brings, beside it.
+    parsers = prefix / 'share/telar/editor'
+    if parsers.is_dir():
+        shutil.copytree(parsers, resources / 'share/telar/editor')
     shutil.copytree(qt_licenses, resources / 'licenses/qt')
     shutil.copy2(root / 'assets/JetBrainsMono-OFL.txt', resources / 'licenses/JetBrainsMono-OFL.txt')
     shutil.copy2(root / 'assets/TelarForma-OFL.txt', resources / 'licenses/TelarForma-OFL.txt')

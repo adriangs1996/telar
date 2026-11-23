@@ -66,8 +66,8 @@ socket, including in the server's environment for nested executions.
 ## Native schema
 
 `api schema` derives the handshake identifier from `handshake::schema_id`:
-`schema_version` is `cqp00009`; `fingerprint` is the hexadecimal encoding of those
-eight bytes, `6371703030303037`. It prints the names the wire gives its tags, including
+`schema_version` is `cqp00010`; `fingerprint` is the hexadecimal encoding of those
+eight bytes, `6371703030303130`. It prints the names the wire gives its tags, including
 the three native clipboard requests and three clipboard server messages. CTest
 compares it with the contract of that schema published in `tests/contracts/`. `runtime status`
 reports the same native identifier.

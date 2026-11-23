@@ -678,6 +678,36 @@ export extern "C++" {
               Field<&NvimPrompt::choices, CountedSpan<u16, NvimText<max_nvim_label_bytes>, max_nvim_choices>, "choices">,
               Field<&NvimPrompt::origin, NvimText<max_nvim_label_bytes>, "origin">> {};
 
+    // A file of the editor's configuration: its path under the configuration's directory, as
+    // `lua/plugins/ui.lua`, and its bytes.
+    struct NvimConfigurationFile {
+      std::string_view path;
+      std::span<const Byte> content;
+    };
+
+    template <>
+    struct BodySchema<NvimConfigurationFile>
+        : Serializer<Field<&NvimConfigurationFile::path, Utf8Text16<max_nvim_path_bytes>, "path">, Field<&NvimConfigurationFile::content, SizedBytes<u32, max_payload_size>, "content">> {};
+
+    // The client's editor configuration, which the runtime's machine takes in place of its own:
+    // the runtime writes the files it names under telar/editor of its configuration directory and
+    // removes the others there. Every file goes in one message, so a configuration is as large
+    // as a message is. Answered by RequestCompleted, or refused whole.
+    struct NvimConfiguration {
+      static constexpr std::size_t maximum_files = 1024;
+
+      std::uint64_t request_id{};
+      std::span<const NvimConfigurationFile> files;
+    };
+
+    template <>
+    struct MessageSchema<NvimConfiguration>
+        : Schema<
+              Direction::client,
+              ClientTag::nvim_configuration,
+              Field<&NvimConfiguration::request_id, NonzeroU64, "request_id">,
+              Field<&NvimConfiguration::files, CountedSpan<u16, ValueCodec<NvimConfigurationFile>, NvimConfiguration::maximum_files>, "files">> {};
+
   }
 }
 // NOLINTEND(misc-use-internal-linkage)

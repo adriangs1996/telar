@@ -236,6 +236,43 @@ namespace {
     check(receive(state, NvimCmdline{.pane_id = pane_id, .frame_id = 1, .visible = false}) == Received::ignored && editor.cmdline.visible, "a surface of a frame already shown changes nothing");
   }
 
+  // A detached pane is attached again with the screen whole, which the runtime numbers by its
+  // screen: a frame of the number the editor last applied is taken.
+  void detachedEditorTakesTheScreenAgain() {
+    Fixture fixture;
+    auto& state = fixture.state;
+    const Rows rows{4, 0, {"uno", "dos", "tres"}};
+
+    showFirstFrame(state);
+    check(receive(state, NvimGrid{.pane_id = pane_id, .frame_id = 1, .grid = 1, .columns = 4, .rows = 3, .full = true, .spans = {&rows.span, 1}}) == Received::ignored, "attached, a frame already shown is passed by");
+    detach(state, pane_id);
+    check(receive(state, NvimGrid{.pane_id = pane_id, .frame_id = 1, .grid = 1, .columns = 4, .rows = 3, .full = true, .spans = {&rows.span, 1}}) == Received::staged);
+    check(receive(state, NvimFrame{.pane_id = pane_id, .frame_id = 1, .cursor_grid = 1, .cursor_visible = true, .mode = "normal"}) == Received::presented, "attached again, it is shown");
+  }
+
+  // A message the person saw go stays gone while Neovim shows it, and is new when it comes back.
+  void dismissedMessageStaysGone() {
+    Fixture fixture;
+    auto& state = fixture.state;
+    const ds::Array both{NvimMessageItem{.id = 1, .text = "\"init.lua\" 3L, 40B"}, NvimMessageItem{.id = 2, .kind = NvimMessageKind::error, .text = "E492"}};
+    const ds::Array last{NvimMessageItem{.id = 2, .kind = NvimMessageKind::error, .text = "E492"}};
+
+    showFirstFrame(state);
+    check(receive(state, NvimMessageList{.pane_id = pane_id, .frame_id = 2, .messages = both}) == Received::staged);
+    const auto& messages = find(state, pane_id)->messages;
+    const auto first = messages.items[0].key;
+
+    check(first != messages.items[1].key, "each message has a key of its own");
+    check(dismissMessage(state, pane_id, first) && !dismissMessage(state, pane_id, first), "a message goes once");
+    check(!dismissMessage(state, pane_id, 99), "a message not shown does not go");
+    check(receive(state, NvimMessageList{.pane_id = pane_id, .frame_id = 3, .messages = both}) == Received::staged);
+    check(messages.items[0].key == first && messages.dismissed.size() == 1 && messages.dismissed[0] == first, "sent again, the same message stays gone");
+    check(receive(state, NvimMessageList{.pane_id = pane_id, .frame_id = 4, .messages = last}) == Received::staged);
+    check(messages.dismissed.empty(), "one Neovim no longer shows is forgotten");
+    check(receive(state, NvimMessageList{.pane_id = pane_id, .frame_id = 5, .messages = both}) == Received::staged);
+    check(messages.dismissed.empty(), "and is new when it comes back");
+  }
+
   void promptIsAnsweredOnce() {
     Fixture fixture;
     auto& state = fixture.state;
@@ -365,5 +402,7 @@ namespace {
   const telar::testing::Case case_grids{"nvim.grids_come_and_go", gridsComeAndGo};
   const telar::testing::Case case_surfaces{"nvim.surfaces_take_the_frame", surfacesTakeTheFrame};
   const telar::testing::Case case_prompt{"nvim.prompt_is_answered_once", promptIsAnsweredOnce};
+  const telar::testing::Case case_detached{"nvim.detached_editor_takes_the_screen_again", detachedEditorTakesTheScreenAgain};
+  const telar::testing::Case case_dismissed{"nvim.dismissed_message_stays_gone", dismissedMessageStaysGone};
 
 }

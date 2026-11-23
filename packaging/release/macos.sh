@@ -91,6 +91,9 @@ package() {
     if [ -d "$app/Contents/Resources/share/telar/nvim" ]; then
         cp -R "$app/Contents/Resources/share/telar/nvim" "$tree/share/telar/nvim"
     fi
+    if [ -d "$app/Contents/Resources/share/telar/editor" ]; then
+        cp -R "$app/Contents/Resources/share/telar/editor" "$tree/share/telar/editor"
+    fi
     # Leave out Finder metadata and extended attributes such as provenance.
     tar --no-xattrs --no-mac-metadata -czf "$out/$name.tar.gz" -C "$stage" "$name"
 

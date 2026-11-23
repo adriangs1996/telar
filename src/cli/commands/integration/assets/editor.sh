@@ -15,16 +15,6 @@ ships() {
     [ -n "$shipped" ] && [ "$shipped" != "$target" ] && [ -x "$shipped/bin/nvim" ] && "$shipped/bin/nvim" --version >/dev/null 2>&1
 }
 
-# What telar's own configuration needs of a host that has none of its own: git to fetch its
-# plugins, and a C compiler for the parsers Neovim does not ship. The editor starts without them.
-needs() {
-    [ -d "${XDG_CONFIG_HOME:-$HOME/.config}/nvim" ] && return 0
-    command -v git >/dev/null 2>&1 || echo "editor: needs git, to fetch the plugins of telar's configuration"
-    command -v cc >/dev/null 2>&1 || command -v gcc >/dev/null 2>&1 || command -v clang >/dev/null 2>&1 ||
-        echo "editor: needs a C compiler, to build parsers beyond the ones Neovim ships"
-    return 0
-}
-
 case "$action" in
 status)
     if [ -x "$target/bin/nvim" ]; then
@@ -35,7 +25,6 @@ status)
         echo "editor: absent"
     fi
 
-    needs
     exit 0
     ;;
 uninstall)
@@ -51,13 +40,11 @@ esac
 
 if [ -x "$target/bin/nvim" ]; then
     echo "editor: already present at $target/bin/nvim"
-    needs
     exit 0
 fi
 
 if ships; then
     echo "editor: shipped with this telar at $shipped/bin/nvim"
-    needs
     exit 0
 fi
 
@@ -154,7 +141,6 @@ held=1
 
 if [ -x "$target/bin/nvim" ]; then
     echo "editor: already present at $target/bin/nvim"
-    needs
     exit 0
 fi
 
@@ -165,4 +151,3 @@ rm -rf "$target"
 mv "$incoming/$name" "$target"
 rmdir "$incoming"
 echo "editor: installed at $target/bin/nvim"
-needs

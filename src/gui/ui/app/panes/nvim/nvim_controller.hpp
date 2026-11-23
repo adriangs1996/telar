@@ -74,6 +74,8 @@ namespace telar::gui::qt {
     void preview(std::uint64_t pane_id, ds::Option<std::size_t> index, application::nvim::PreviewArea area);
     void list(std::uint64_t pane_id, std::span<const std::uint32_t> indices);
     void dismiss(std::uint64_t pane_id);
+    // A message of the editor, by its key, went from sight.
+    void dismissMessage(std::uint64_t pane_id, std::uint64_t key);
 
   signals:
     // The pane's editor shows another frame, or asks something else.

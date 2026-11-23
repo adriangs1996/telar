@@ -117,6 +117,15 @@ namespace telar::gui::qt {
     emit editorChanged(pane_id);
   }
 
+  void NvimController::dismissMessage(std::uint64_t pane_id, std::uint64_t key) {
+    attempt([&](GuiSession& session) {
+      application::nvim::dismissMessage(session, pane_id, key);
+    });
+
+    // The messages changed here, not by a message of the runtime: its views are told.
+    emit editorChanged(pane_id);
+  }
+
   void NvimController::answer(std::uint64_t pane_id, bool accepted, std::uint32_t index, const QString& text) {
     const auto bytes = text.toUtf8();
 

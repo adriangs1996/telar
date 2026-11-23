@@ -8,29 +8,20 @@ import Telar.Gui
 Item {
     id: root
 
-    // The editor's messages: items [{id, kind, text}], oldest first.
+    // The editor's messages not yet gone from sight: items [{key, kind, text}], oldest first.
     required property var messages
     required property var colors
     required property var typography
     property real ratio: 1
     readonly property var items: messages.items ?? []
-    // The notices shown: a message Neovim keeps is shown until its time is up.
-    property var dismissed: ({})
     // The person asked for everything that was said.
     signal history()
+    // A notice's time is up, or the person closed it: the editor keeps it gone, for every view
+    // its pane makes.
+    signal dismissed(string key)
 
-    readonly property var shown: items.filter(item => item.text.length > 0 && !(root.stamp(item) in dismissed)).slice(-4)
-
-    function stamp(item) {
-        return item.id + ":" + item.text.length + ":" + item.kind;
-    }
-
-    // Fewer messages than before means Neovim cleared them: the next ones are new again.
-    onItemsChanged: {
-        if (items.length === 0) {
-            dismissed = ({});
-        }
-    }
+    // The notices shown: a message Neovim keeps is shown until its time is up.
+    readonly property var shown: items.filter(item => item.text.length > 0).slice(-4)
 
     width: Math.min(parent.width - 24 * ratio, 300 * ratio)
     height: stack.height
@@ -60,9 +51,7 @@ Item {
                 property real reveal: 0
 
                 function dismiss() {
-                    const next = Object.assign({}, root.dismissed);
-                    next[root.stamp(notice.modelData)] = true;
-                    root.dismissed = next;
+                    root.dismissed(notice.modelData.key);
                 }
 
                 width: stack.width

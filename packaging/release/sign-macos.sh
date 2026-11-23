@@ -45,6 +45,14 @@ done
 
 # The Neovim of the editor panes: its parsers as any library, then the program, which under
 # the hardened runtime needs leave to run the code LuaJIT writes.
+# The tree-sitter parsers telar brings the editor, which its Neovim loads as libraries.
+parsers=$contents/Resources/share/telar/editor
+if [ -d "$parsers" ]; then
+    find "$parsers" -type f -name '*.so' | while read -r parser; do
+        sign "$parser"
+    done
+fi
+
 nvim=$contents/Resources/share/telar/nvim
 if [ -d "$nvim" ]; then
     find "$nvim" -type f -name '*.so' | while read -r parser; do

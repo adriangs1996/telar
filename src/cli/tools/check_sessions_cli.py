@@ -590,8 +590,8 @@ def probe_clients(path):
     with socket.socket(socket.AF_UNIX) as connection:
         connection.settimeout(5)
         connection.connect(str(path))
-        send(connection, b'TELARIPC\x01cqp00009')
-        assert frame(connection) == b'TELARIPC\x02cqp00009'
+        send(connection, b'TELARIPC\x01cqp00010')
+        assert frame(connection) == b'TELARIPC\x02cqp00010'
         send(connection, b'\x33' + struct.pack('<Q', 1))
         payload = frame(connection)
         assert payload[0] == 0xad

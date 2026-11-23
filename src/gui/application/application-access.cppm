@@ -26,6 +26,11 @@ namespace telar::gui::application {
 
     // ---- what the session keeps for every feature -------------------------------------------
 
+    // What the window says went wrong with the session, which a use case may set.
+    [[nodiscard]] static constexpr ds::String<Memory>& error(Session& session) noexcept {
+      return session.error_;
+    }
+
     // The refresh rate of the display the session's window shows on.
     [[nodiscard]] static constexpr std::uint16_t& displayFps(Session& session) noexcept {
       return session.display_fps_;

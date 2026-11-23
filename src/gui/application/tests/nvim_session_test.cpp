@@ -9,8 +9,14 @@ static_assert(true);
 #include "telar_wire/serializers/telar_messages.hpp"
 #include <cstddef>
 #include <cstdint>
+#include <cstdlib>
+#include <filesystem>
+#include <fstream>
+#include <map>
 #include <span>
+#include <string>
 #include <string_view>
+#include <unistd.h>
 #include <vector>
 
 import telar.testing;
@@ -325,6 +331,49 @@ namespace {
     check(client.tabs.size() == tabs + 1 && client.findPane(editor_pane) != nullptr && client.findPane(editor_pane)->attached && application::nvim::editor(client, editor_pane) != nullptr, "the tab's pane is an editor the session is attached to");
   }
 
+  // The window brings a machine its editor configuration, file by file; one it does not have
+  // leaves the machine's alone, and one larger than a message is not brought, which it says.
+  void configurationIsBroughtToTheMachine() {
+    SystemAllocator memory;
+    Transport transport;
+    TestSession client{memory, transport};
+    std::string pattern = (std::filesystem::temp_directory_path() / "telar-editor-XXXXXX").string();
+
+    check(::mkdtemp(pattern.data()) != nullptr, "temporary directory");
+    const std::filesystem::path editor{pattern};
+
+    struct Removed {
+      std::filesystem::path path;
+
+      ~Removed() {
+        std::error_code ignored;
+
+        std::filesystem::remove_all(path, ignored);
+      }
+    } removed{editor};
+
+    openFirstPane(client, transport);
+    check(application::nvim::bringConfiguration(client, (editor / "missing").native()) == application::nvim::ConfigurationBrought::absent && transport.count(ClientTag::nvim_configuration) == 0, "without one, the machine keeps its own");
+
+    std::filesystem::create_directories(editor / "lua/plugins");
+    std::ofstream{editor / "init.lua"} << "require('plugins')\n";
+    std::ofstream{editor / "lua/plugins/init.lua"} << "return {}\n";
+    check(application::nvim::bringConfiguration(client, editor.native()) == application::nvim::ConfigurationBrought::sent, "the configuration is sent");
+
+    const auto sent = transport.last<NvimConfiguration>();
+    std::map<std::string, std::string> files;
+
+    for (const auto& file : sent.files) {
+      files.emplace(std::string{file.path}, std::string{textView(file.content)});
+    }
+
+    check(sent.request_id != 0 && files == std::map<std::string, std::string>{{"init.lua", "require('plugins')\n"}, {"lua/plugins/init.lua", "return {}\n"}}, "every file, by its path from the directory");
+
+    std::ofstream{editor / "huge.bin"} << std::string(max_payload_size, 'x');
+    check(application::nvim::bringConfiguration(client, editor.native()) == application::nvim::ConfigurationBrought::too_large && transport.count(ClientTag::nvim_configuration) == 1, "one larger than a message is not sent");
+    check(client.error().contains("larger than a machine takes"), "and the window says so");
+  }
+
   const telar::testing::Case case_opens{"nvim_session.editor_opens_beside_and_is_drawn", editorOpensBesideAndIsDrawn};
   const telar::testing::Case case_input{"nvim_session.what_a_person_does_reaches_neovim", whatAPersonDoesReachesNeovim};
   const telar::testing::Case case_picker{"nvim_session.picker_searches_through_the_runtime", pickerSearchesThroughTheRuntime};
@@ -334,5 +383,6 @@ namespace {
   const telar::testing::Case case_lost{"nvim_session.lost_frame_asks_for_the_screen_once", lostFrameAsksForTheScreenOnce};
   const telar::testing::Case case_prompt{"nvim_session.prompt_is_answered_through_the_session", promptIsAnsweredThroughTheSession};
   const telar::testing::Case case_tab{"nvim_session.editor_tab_is_a_tab_like_any_other", editorTabIsATabLikeAnyOther};
+  const telar::testing::Case case_configuration{"nvim_session.configuration_is_brought_to_the_machine", configurationIsBroughtToTheMachine};
 
 }

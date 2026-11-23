@@ -176,6 +176,8 @@ namespace telar::gui::qt {
     Q_INVOKABLE void previewPicker(int index, const QRectF& area);
     Q_INVOKABLE void listPicker(const QVariantList& indices);
     Q_INVOKABLE void closePicker();
+    // A message, by the key its item carries, went from sight: no view of the pane shows it again.
+    Q_INVOKABLE void dismissMessage(const QString& key);
 
     // What a grid's item reads to draw: the editor as last shown, and how its cells are drawn.
     [[nodiscard]] const application::nvim::Editor* editorState() const noexcept;

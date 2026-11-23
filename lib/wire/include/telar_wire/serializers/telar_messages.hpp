@@ -104,6 +104,7 @@ namespace telar {
     nvim_buffers = 0x60,
     nvim_preview = 0x61,
     nvim_list = 0x62,
+    nvim_configuration = 0x63,
   };
 
   enum class ServerTag : Byte {
@@ -502,6 +503,8 @@ namespace telar {
       return "nvim_preview";
     case ClientTag::nvim_list:
       return "nvim_list";
+    case ClientTag::nvim_configuration:
+      return "nvim_configuration";
     }
 
     return {};

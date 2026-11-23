@@ -363,6 +363,14 @@ namespace telar::runtime::cli {
     // Without a configuration file, completion specs still come from the configuration directory.
     const auto config_home = RuntimePaths<ConcurrentMemory>::configHome(memory, process_environment);
     const auto configuration_directory = configuration.configuration_directory.view();
+    // The editor's configuration is where its Neovim reads it, whatever file configured telar.
+    ds::String<ConcurrentMemory> editor_configuration{memory};
+
+    if (!config_home.empty()) {
+      editor_configuration.assign(config_home.view());
+      editor_configuration.append("/editor");
+    }
+
     // The runtime keeps views of these options, so they live as long as it does.
     const RuntimeOptions runtime_options{
         .socket = paths.socket,
@@ -378,6 +386,7 @@ namespace telar::runtime::cli {
         .data_home = paths.data_home,
         .ssh_integration = configuration.ssh_integration,
         .configuration_directory = configuration_directory.empty() ? std::string_view{config_home} : configuration_directory,
+        .editor_configuration = editor_configuration.view(),
     };
 
     Runtime runtime{memory, poller, background, runtime_options, proxy.clientConfiguration()};

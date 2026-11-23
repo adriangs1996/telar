@@ -507,9 +507,10 @@ export {
 
       void synchronizeAttachments();
 
-      // Detaches pane `pane_id` from the runtime, closing copy mode when it reads that pane. Static,
-      // with the fields it changes, so a loop over the panes may call it.
-      static void detachPane(features::terminal::copy_mode::State& copy_mode, Link& link, std::uint64_t pane_id);
+      // Detaches pane `pane_id` from the runtime, closing copy mode when it reads that pane, and
+      // leaving its editor, if it is one, to take the next frame whole. Static, with the fields
+      // it changes, so a loop over the panes may call it.
+      static void detachPane(features::terminal::copy_mode::State& copy_mode, features::nvim::State& nvim, Link& link, std::uint64_t pane_id);
 
     public:
       // Gives pane `pane_id` `size`, telling the runtime through `link` while it is attached. Static,

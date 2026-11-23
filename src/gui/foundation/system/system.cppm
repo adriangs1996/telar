@@ -9,6 +9,7 @@ export import :directory_completion;
 export import :background_effect;
 #endif
 export import :file_stamp;
+export import :file_tree;
 export import :keyboard;
 export import :login_shell;
 export import :path_limits;

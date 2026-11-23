@@ -145,6 +145,8 @@ export namespace telar::gui::features::nvim {
     std::uint64_t id = 0;
     NvimMessageKind kind = NvimMessageKind::plain;
     Slice text;
+    // Its id, kind and text as one value: the same message, sent again, has the same key.
+    std::uint64_t key = 0;
   };
 
   struct Messages {
@@ -157,6 +159,8 @@ export namespace telar::gui::features::nvim {
     ds::Vec<char, Memory> text;
     // The messages shown now, oldest first.
     ds::Vec<Message, Memory> items;
+    // The keys of the items the person saw go: the pane's next view shows them no more.
+    ds::Vec<std::uint64_t, Memory> dismissed;
   };
 
   struct Tab {
@@ -382,6 +386,11 @@ export namespace telar::gui::features::nvim {
   // The connection was lost: each editor's next frame stands alone.
   void detach(State& state) noexcept;
 
+  // The pane was detached: its editor's next frame stands alone. The runtime numbers frames
+  // by its screen, so the one it sends on the next attach may have the number of the last one
+  // this editor applied.
+  void detach(State& state, std::uint64_t pane_id) noexcept;
+
   // The editor a pane is; null for a pane that is a terminal.
   [[nodiscard]] const Editor* find(const State& state, std::uint64_t pane_id) noexcept;
 
@@ -414,6 +423,10 @@ export namespace telar::gui::features::nvim {
 
   // Closes an editor's picker. False when it had none open.
   bool dismiss(State& state, std::uint64_t pane_id) noexcept;
+
+  // The message of an editor with `key` went from sight. False when it shows none such, or
+  // that one already went.
+  bool dismissMessage(State& state, std::uint64_t pane_id, std::uint64_t key);
 
   // What the runtime found for a picker: the pane whose picker waited for it, or zero.
   [[nodiscard]] std::uint64_t receive(State& state, const PathResults& message);

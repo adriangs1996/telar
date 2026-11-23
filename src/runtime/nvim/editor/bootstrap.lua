@@ -10,6 +10,44 @@ for name, source in pairs(modules) do
   end
 end
 
+-- Plugins that cannot work in telar's window, by the module they are required by: each draws
+-- what the window already draws natively. A configuration that loads one, as LazyVim does
+-- noice.nvim, gets an inert module in its place, which takes any call and does nothing, and the
+-- person is told once. package.preload is where require looks first, before the loaders
+-- lazy.nvim and vim.loader put ahead of the runtimepath's.
+local incompatible = {
+  noice = { plugin = "noice.nvim", reason = "telar draws the command line, the messages and the completion menu itself" },
+}
+
+local inert
+inert = setmetatable({}, {
+  __index = function()
+    return inert
+  end,
+  __call = function() end,
+})
+
+local told = {}
+setmetatable(package.preload, {
+  __index = function(_, name)
+    local known = incompatible[name:match("^[^.]+")]
+    if not known then
+      return nil
+    end
+
+    return function()
+      if not told[known.plugin] then
+        told[known.plugin] = true
+        vim.schedule(function()
+          vim.notify(known.plugin .. " is off in telar: " .. known.reason .. ".", vim.log.levels.WARN)
+        end)
+      end
+
+      return inert
+    end
+  end,
+})
+
 -- vim.ui.select and vim.ui.input ask the runtime, which shows them natively, and nothing loaded
 -- later can put its own in their place, nor in the place of vim.ui.open below. The answer comes
 -- back through __telar_prompt_answer.

@@ -592,9 +592,9 @@ return {api_version = 2, client = {
       environment.insert(QStringLiteral("TELAR_HISTORY"), directory_.filePath(QStringLiteral("history.db")));
       environment.insert(QStringLiteral("HISTFILE"), directory_.filePath(QStringLiteral("shell-history")));
       environment.insert(QStringLiteral("XDG_DATA_HOME"), directory_.filePath(QStringLiteral("data")));
-      // An editor pane's Neovim reads no configuration of whoever runs the tests, unless a run
-      // names one to show.
-      environment.insert(QStringLiteral("NVIM_APPNAME"), qEnvironmentVariable("TELAR_GUI_TEST_NVIM_APPNAME", QStringLiteral("telar-gui-test")));
+      // An editor pane's Neovim reads the layer under telar's configuration directory: never
+      // the one of whoever runs the tests.
+      environment.insert(QStringLiteral("XDG_CONFIG_HOME"), directory_.filePath(QStringLiteral("config")));
       runtime_.setProcessEnvironment(environment);
       runtime_.start();
       QVERIFY(runtime_.waitForStarted());
@@ -1733,6 +1733,176 @@ return {api_version = 2, client = {
       };
 
       QVERIFY2(telar::gui::test::waitForGuiCondition(fits_framed_content, runtime_wait_ms), qPrintable(QStringLiteral("window=%1x%2 terminal=%3x%4").arg(window_->width()).arg(window_->height()).arg(terminal->width()).arg(terminal->height())));
+    }
+
+    // The user's layer, ~/.config/telar/editor/init.lua, loads over telar's own configuration,
+    // and a plugin that cannot work in the window is inert there, which the person is told.
+    Q_SLOT void editorPaneLoadsTheUserLayer() {
+      if (QStandardPaths::findExecutable(QStringLiteral("nvim")).isEmpty()) {
+        QSKIP("Neovim is not installed on this host");
+      }
+
+      QTRY_VERIFY_WITH_TIMEOUT(terminalReady(), runtime_wait_ms);
+      const auto original_id = firstPane()->id;
+      const auto tab_count = client_->tabs()->rows()->rowCount();
+      const QDir layer{directory_.filePath(QStringLiteral("config/telar/editor"))};
+      bool opened = false;
+      const auto restore = qScopeGuard([&] {
+        if (opened) {
+          closeTemporaryTab({.count = tab_count, .pane_id = original_id});
+        }
+
+        QDir{layer}.removeRecursively();
+      });
+
+      QVERIFY(layer.mkpath(QStringLiteral("lua/layer")));
+      // A module of its own, and noice.nvim as LazyVim calls it.
+      writeTestFile(layer.filePath(QStringLiteral("lua/layer/init.lua")), "return { said = 'user layer loaded' }\n");
+      writeTestFile(layer.filePath(QStringLiteral("init.lua")), "require('noice').setup({ lsp = { progress = { enabled = true } } })\n"
+                                                                "if require('noice.lsp').scroll(4) == nil then vim.g.telar_noice_inert = true end\n"
+                                                                "vim.api.nvim_create_autocmd('VimEnter', { callback = function() vim.cmd.echomsg(vim.fn.string(require('layer').said)) end })\n");
+
+      const auto editorView = [&] {
+        const auto views = test::visualItems(*window_->contentItem(), QStringLiteral("paneEditor"));
+
+        return views.empty() ? nullptr : qobject_cast<NvimItem*>(views.front());
+      };
+      const auto said = [&](const QString& text) {
+        const auto* view = editorView();
+        const auto items = view == nullptr ? QVariantList{} : view->messages().value(QStringLiteral("items")).toList();
+
+        return std::ranges::any_of(items, [&](const QVariant& item) {
+          return item.toMap().value(QStringLiteral("text")).toString().contains(text);
+        });
+      };
+
+      client_->commands()->execute(window_actions::Action::new_editor_tab);
+      QTRY_VERIFY_WITH_TIMEOUT(client_->tabs()->rows()->rowCount() == tab_count + 1, runtime_wait_ms);
+      opened = true;
+      QTRY_VERIFY_WITH_TIMEOUT(editorView() != nullptr && editorView()->ready(), runtime_wait_ms);
+      QTRY_VERIFY2_WITH_TIMEOUT(said(QStringLiteral("user layer loaded")), "the user's layer did not load", runtime_wait_ms);
+      QTRY_VERIFY2_WITH_TIMEOUT(said(QStringLiteral("noice.nvim is off in telar")), "the person is not told noice.nvim is off", runtime_wait_ms);
+      QVERIFY2(!said(QStringLiteral("failed")), "the user's layer failed");
+      editorView()->send(QStringLiteral("<Cmd>lua vim.cmd.echomsg(vim.fn.string('inert ' .. tostring(vim.g.telar_noice_inert)))<CR>"));
+      QTRY_VERIFY2_WITH_TIMEOUT(said(QStringLiteral("inert true")), "noice.nvim's calls did not reach an inert module", runtime_wait_ms);
+    }
+
+    // A language Neovim ships no parser for is highlighted by the one telar brings beside its
+    // programs, with nothing installed by the person.
+    Q_SLOT void editorPaneHighlightsWithTheParsersTelarBrings() {
+      if (QStandardPaths::findExecutable(QStringLiteral("nvim")).isEmpty()) {
+        QSKIP("Neovim is not installed on this host");
+      }
+
+      QTRY_VERIFY_WITH_TIMEOUT(terminalReady(), runtime_wait_ms);
+      const auto original_id = firstPane()->id;
+      const auto tab_count = client_->tabs()->rows()->rowCount();
+      const QTemporaryDir files;
+      bool opened = false;
+      const auto restore = qScopeGuard([&] {
+        if (opened) {
+          closeTemporaryTab({.count = tab_count, .pane_id = original_id});
+        }
+      });
+      const auto editorView = [&] {
+        const auto views = test::visualItems(*window_->contentItem(), QStringLiteral("paneEditor"));
+
+        return views.empty() ? nullptr : qobject_cast<NvimItem*>(views.front());
+      };
+      const auto said = [&](const QString& text) {
+        const auto* view = editorView();
+        const auto items = view == nullptr ? QVariantList{} : view->messages().value(QStringLiteral("items")).toList();
+
+        return std::ranges::any_of(items, [&](const QVariant& item) {
+          return item.toMap().value(QStringLiteral("text")).toString().contains(text);
+        });
+      };
+
+      writeTestFile(files.filePath(QStringLiteral("example.py")), "def greet(name):\n    return f'hello {name}'\n");
+      client_->commands()->execute(window_actions::Action::new_editor_tab);
+      QTRY_VERIFY_WITH_TIMEOUT(client_->tabs()->rows()->rowCount() == tab_count + 1, runtime_wait_ms);
+      opened = true;
+      QTRY_VERIFY_WITH_TIMEOUT(editorView() != nullptr && editorView()->ready(), runtime_wait_ms);
+      editorView()->send(QStringLiteral("<Cmd>edit %1<CR>").arg(files.filePath(QStringLiteral("example.py"))));
+      editorView()->send(QStringLiteral("<Cmd>lua vim.cmd.echomsg(vim.fn.string('highlighted ' .. tostring(vim.treesitter.highlighter.active[vim.api.nvim_get_current_buf()] ~= nil) .. ' ' .. vim.bo.filetype))<CR>"));
+      QTRY_VERIFY2_WITH_TIMEOUT(said(QStringLiteral("highlighted true python")), "a Python file is not highlighted by a parser", runtime_wait_ms);
+    }
+
+    // Away to another tab and back, an editor's view is made again: it takes the keys at once,
+    // and a notice already gone from sight does not come back.
+    Q_SLOT void editorPaneTakesKeysBackFromAnotherTab() {
+      if (QStandardPaths::findExecutable(QStringLiteral("nvim")).isEmpty()) {
+        QSKIP("Neovim is not installed on this host");
+      }
+
+      QTRY_VERIFY_WITH_TIMEOUT(terminalReady(), runtime_wait_ms);
+      const auto original_id = firstPane()->id;
+      const auto original_tab = QString::number(firstPane()->location.tab_id);
+      const auto tab_count = client_->tabs()->rows()->rowCount();
+      QString editor_tab;
+      const auto restore = qScopeGuard([&] {
+        if (!editor_tab.isEmpty()) {
+          client_->commands()->execute(window_actions::Action::select_tab, editor_tab);
+          closeTemporaryTab({.count = tab_count, .pane_id = original_id});
+        }
+      });
+      const auto editorView = [&] {
+        const auto views = test::visualItems(*window_->contentItem(), QStringLiteral("paneEditor"));
+
+        return views.empty() ? nullptr : qobject_cast<NvimItem*>(views.front());
+      };
+      const auto shown = [&] {
+        QString text;
+        const auto* view = editorView();
+        const auto* editor = view == nullptr ? nullptr : view->editorState();
+
+        if (editor != nullptr) {
+          for (const auto& grid : editor->grids) {
+            text += screenText(grid->screen) + QLatin1Char('\n');
+          }
+        }
+
+        return text;
+      };
+
+      client_->commands()->execute(window_actions::Action::new_editor_tab);
+      QTRY_VERIFY_WITH_TIMEOUT(client_->tabs()->rows()->rowCount() == tab_count + 1, runtime_wait_ms);
+      QTRY_VERIFY_WITH_TIMEOUT(editorView() != nullptr && editorView()->ready(), runtime_wait_ms);
+      editor_tab = QString::number(client_->pane(firstPane()->id)->location.tab_id);
+      QTRY_VERIFY_WITH_TIMEOUT(editorView()->hasActiveFocus(), runtime_wait_ms);
+      editorView()->send(QStringLiteral("<Cmd>set noswapfile<CR>"));
+
+      // A notice the editor keeps showing, which the person closes.
+      const auto notice = [&] {
+        const auto items = editorView()->messages().value(QStringLiteral("items")).toList();
+        const auto found = std::ranges::find_if(items, [](const QVariant& item) {
+          return item.toMap().value(QStringLiteral("text")).toString().contains(QStringLiteral("seen once"));
+        });
+
+        return found == items.end() ? QString{} : found->toMap().value(QStringLiteral("key")).toString();
+      };
+
+      editorView()->send(QStringLiteral(":echomsg 'seen once'<CR>"));
+      QTRY_VERIFY_WITH_TIMEOUT(!notice().isEmpty(), runtime_wait_ms);
+      editorView()->dismissMessage(notice());
+      QTRY_VERIFY_WITH_TIMEOUT(notice().isEmpty(), runtime_wait_ms);
+
+      client_->commands()->execute(window_actions::Action::select_tab, original_tab);
+      QTRY_VERIFY_WITH_TIMEOUT(terminalReady() && firstPane()->id == original_id, runtime_wait_ms);
+      QVERIFY(test::waitForSynchronizedFrame(*window_, runtime_wait_ms));
+      client_->commands()->execute(window_actions::Action::select_tab, editor_tab);
+      QTRY_VERIFY_WITH_TIMEOUT(editorView() != nullptr && editorView()->ready(), runtime_wait_ms);
+      QVERIFY(test::waitForSynchronizedFrame(*window_, runtime_wait_ms));
+      QTRY_VERIFY2_WITH_TIMEOUT(editorView()->hasActiveFocus(), qPrintable(QStringLiteral("the keys are with %1").arg(window_->activeFocusItem() == nullptr ? QStringLiteral("nobody") : QString::fromUtf8(window_->activeFocusItem()->metaObject()->className()) + QLatin1Char(' ') + window_->activeFocusItem()->objectName())), runtime_wait_ms);
+
+      // The screen whole came again, and the notice with it, which stays gone.
+      QTRY_VERIFY_WITH_TIMEOUT(editorView()->editorState() != nullptr && editorView()->editorState()->frame != 0, runtime_wait_ms);
+      QVERIFY2(notice().isEmpty(), "a notice closed in the pane's last view shows again");
+
+      // Typed into the window, as a person types: the keys reach the editor.
+      sendTextKeys(QLatin1StringView{"iback"});
+      QTRY_VERIFY2_WITH_TIMEOUT(shown().contains(QStringLiteral("back")), qPrintable(shown()), runtime_wait_ms);
+      editorView()->send(QStringLiteral("<Esc><Cmd>enew!<CR>"));
     }
 
     Q_SLOT void tabSwitchKeepsTerminalViewport() {

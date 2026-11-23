@@ -455,6 +455,12 @@ namespace telar::gui::qt {
     }
   }
 
+  void NvimItem::dismissMessage(const QString& key) {
+    if (controller_ != nullptr) {
+      controller_->dismissMessage(pane_id_, key.toULongLong());
+    }
+  }
+
   void NvimItem::projectPicker(const nvim::Editor& editor) {
     if (picker_revision_ == editor.picker_revision) {
       return;
@@ -958,8 +964,14 @@ namespace telar::gui::qt {
 
     messages_revision_ = editor.messages_revision;
     for (const auto& message : messages.items) {
+      // What the person saw go stays gone, in this view and in the next the pane makes.
+      if (std::ranges::find(messages.dismissed, message.key) != messages.dismissed.end()) {
+        continue;
+      }
+
       items.append(QVariantMap{
-          {QStringLiteral("id"), static_cast<qulonglong>(message.id)},
+          // A string: a number of QML holds 53 bits.
+          {QStringLiteral("key"), QString::number(message.key)},
           {QStringLiteral("kind"), messageKind(message.kind)},
           {QStringLiteral("text"), shown(message.text.of(text)).trimmed()},
       });

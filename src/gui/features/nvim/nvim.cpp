@@ -4,6 +4,7 @@ import std;
 
 import telar.base.ds;
 import telar.base.memory.allocators;
+import telar.base.text;
 import telar.tbc;
 import telar.gui.foundation.core;
 import telar.gui.foundation.terminal;
@@ -29,6 +30,13 @@ namespace telar::gui::features::nvim {
 
       text.extend(std::span<const char>{added});
       return slice;
+    }
+
+    std::uint64_t messageKey(const NvimMessageItem& item) noexcept {
+      const auto id = std::bit_cast<std::array<char, sizeof(item.id)>>(item.id);
+      const auto kind = static_cast<char>(std::to_underlying(item.kind));
+
+      return runtime::fnv1a64(std::string_view{item.text}, runtime::fnv1a64(std::string_view{&kind, 1}, runtime::fnv1a64(std::string_view{id.data(), id.size()})));
     }
 
     Grid* gridOf(Editor& editor, std::uint32_t id) noexcept {
@@ -286,7 +294,8 @@ namespace telar::gui::features::nvim {
         command(memory),
         ruler(memory),
         text(memory),
-        items(memory) {}
+        items(memory),
+        dismissed(memory) {}
 
   TabLine::TabLine(Memory& memory)
       : text(memory),
@@ -530,6 +539,13 @@ namespace telar::gui::features::nvim {
     }
   }
 
+  void detach(State& state, std::uint64_t pane_id) noexcept {
+    if (auto* editor = Access::find(state, pane_id)) {
+      editor->frame = 0;
+      editor->resyncing = false;
+    }
+  }
+
   const Editor* find(const State& state, std::uint64_t pane_id) noexcept {
     for (const auto& editor : Access::editors(state)) {
       if (editor->pane_id == pane_id) {
@@ -673,8 +689,15 @@ namespace telar::gui::features::nvim {
     for (const auto& item : message.messages) {
       const auto text = append(messages.text, item.text);
 
-      messages.items.push({.id = item.id, .kind = item.kind, .text = text});
+      messages.items.push({.id = item.id, .kind = item.kind, .text = text, .key = messageKey(item)});
     }
+
+    // A message Neovim no longer shows is new again when it comes back.
+    static_cast<void>(messages.dismissed.retain([&](std::uint64_t key) {
+      return std::ranges::any_of(messages.items, [key](const Message& item) {
+        return item.key == key;
+      });
+    }));
 
     ++editor->messages_revision;
     return Received::staged;
@@ -834,6 +857,26 @@ namespace telar::gui::features::nvim {
     }
 
     editor->link.assign(uri);
+    return true;
+  }
+
+  bool dismissMessage(State& state, std::uint64_t pane_id, std::uint64_t key) {
+    auto* editor = Access::find(state, pane_id);
+    if (editor == nullptr) {
+      return false;
+    }
+
+    auto& messages = editor->messages;
+    const auto shown = std::ranges::any_of(messages.items, [key](const Message& item) {
+      return item.key == key;
+    });
+
+    if (!shown || std::ranges::find(messages.dismissed, key) != messages.dismissed.end()) {
+      return false;
+    }
+
+    messages.dismissed.push(key);
+    ++editor->messages_revision;
     return true;
   }
 

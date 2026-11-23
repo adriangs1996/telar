@@ -409,8 +409,10 @@ FocusScope {
             z: 950
             // A picker has the pane: notices wait behind it, out of sight.
             visible: !(view.picker.open ?? false)
+            objectName: "editorMessages"
             messages: view.messages
             onHistory: view.send("<Cmd>messages<CR>")
+            onDismissed: key => view.dismissMessage(key)
             colors: root.colors
             typography: root.typography
             ratio: root.ratio

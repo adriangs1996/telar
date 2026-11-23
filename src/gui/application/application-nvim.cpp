@@ -6,6 +6,8 @@ import :access;
 import telar.gui.features.nvim;
 import telar.gui.features.terminal.links;
 import telar.base.text;
+import telar.base.memory.allocators;
+import telar.gui.foundation.system;
 import telar.wire.editor;
 import telar.wire.nvim;
 import telar.wire.pane_io;
@@ -345,6 +347,55 @@ namespace telar::gui::application::nvim {
         session.link.send(NvimPreview{.pane_id = pane_id});
       }
     }
+  }
+
+  void dismissMessage(Session& session, std::uint64_t pane_id, std::uint64_t key) {
+    if (feature::dismissMessage(session.nvim, pane_id, key)) {
+      Access::changedPane(session) = pane_id;
+    }
+  }
+
+  ConfigurationBrought bringConfiguration(Session& session, std::string_view directory) {
+    if (!session.ready() || !session.speaks(ClientTag::nvim_configuration)) {
+      return ConfigurationBrought::refused;
+    }
+
+    SystemAllocator system;
+    MemoryAdapter adapter{system};
+    Memory& memory = adapter;
+    ds::Vec<FileTreeFile, Memory> tree{memory};
+    // What a message carries besides the files' bytes: each file's path and the lengths of both.
+    constexpr std::size_t message_room = 64;
+    constexpr std::size_t file_room = 6;
+    FileTreeRead read = FileTreeRead::absent;
+
+    try {
+      read = readFileTree(memory, directory, {.files = NvimConfiguration::maximum_files, .bytes = max_payload_size - message_room, .depth = 32}, tree);
+    } catch (const std::exception& error) {
+      Access::error(session).assign("The editor's configuration could not be read, so it was not brought to the machine: ");
+      Access::error(session).append(error.what());
+      return ConfigurationBrought::unreadable;
+    }
+
+    if (read == FileTreeRead::absent) {
+      return ConfigurationBrought::absent;
+    }
+
+    ds::Vec<NvimConfigurationFile, Memory> files{memory};
+    std::size_t size = message_room;
+
+    files.reserve(tree.size());
+    for (const auto& file : tree) {
+      files.push({.path = file.path.view(), .content = file.content.view()});
+      size += file_room + file.path.size() + file.content.size();
+    }
+
+    if (read == FileTreeRead::too_large || size > max_payload_size) {
+      Access::error(session).assign("The editor's configuration is larger than a machine takes: it was not brought there");
+      return ConfigurationBrought::too_large;
+    }
+
+    return session.link.ask(NvimConfiguration{.files = files.view()}) ? ConfigurationBrought::sent : ConfigurationBrought::refused;
   }
 
   Change receive(Session& session, const NvimLink& message) {

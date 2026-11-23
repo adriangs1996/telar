@@ -169,15 +169,49 @@ first, and the machine fetches nothing. On a machine without a
 network, `TELAR_NVIM_ARCHIVE=/path/to/archive` takes an archive that is already there; it is
 checked the same.
 
-Neovim reads its usual configuration. A machine without `~/.config/nvim` gets telar's own
-instead: lazy.nvim with a lockfile, the language servers found on its `PATH`, git signs and
-completion, with `<leader>f`, `<leader>/` and `<leader>b` on the picker. Its plugins are
-fetched the first time through the pane's proxy and need git; without a network the editor
-starts all the same with the parsers Neovim ships. `telar integration status editor`,
-`telar machine setup` and `telar machine check` say when the host lacks git or a C compiler
-for them. They are kept under the name `telar-nvim`,
-so nothing of a Neovim of your own is touched, and a configuration you make later takes its
-place. A runtime started with `NVIM_APPNAME` uses the configuration that names.
+Neovim always starts on telar's own configuration, never on the one of your own Neovim:
+neither `~/.config/nvim` nor the one `NVIM_APPNAME` names is read. telar's is small and
+installs nothing: no plugins and no language servers, and it fetches nothing. `<leader>f`,
+`<leader>/` and `<leader>b` open the picker.
+
+Text is highlighted with tree-sitter. Neovim ships parsers for C, Lua, Markdown, Vim script
+and its help; telar brings the ones for Bash, C++, CSS, a diff, a Dockerfile, Go, HTML, Java,
+JavaScript, JSON, Make, Python, regular expressions, Ruby, Rust, TOML, TypeScript, TSX, YAML
+and Zig, built with telar for its system and kept in `share/telar/editor` beside its programs,
+with the queries of nvim-treesitter that highlight with them. Any other language is highlighted
+by the syntax files Neovim ships. A parser your layer installs, as nvim-treesitter does, takes
+the place of telar's. Another machine has them when the telar installed there is a package of
+telar's; a development build installed with `machine setup --binary` brings only its program.
+
+### Your layer: `~/.config/telar/editor`
+
+What you add goes in `~/.config/telar/editor/init.lua` (under `$XDG_CONFIG_HOME` when it is
+set). It loads after telar's own configuration, so what it sets wins. The directory is a
+configuration of Neovim's like any other: Neovim runs under `NVIM_APPNAME=telar/editor`, so
+its `lua/` and `plugin/` load, and what it installs is kept under `telar/editor` of Neovim's
+data and state directories, apart from a Neovim of your own. A layer that fails to load is
+reported as a notice, and telar's configuration keeps working.
+
+Plugins are yours to declare there, with `vim.pack` or with a manager such as lazy.nvim;
+LazyVim works this way too. Keep the manager's lockfile in the directory (`nvim-pack-lock.json`,
+`lazy-lock.json`): it travels with the rest, so every machine installs the same versions. A
+machine fetches the plugins itself the first time, so it needs git and a network.
+
+A plugin that cannot work in telar's window is turned off whatever loads it, and a notice
+says so once. The window already draws natively what such a plugin would replace. Today
+that is noice.nvim, which needs to draw the command line, the messages and the completion
+menu itself: its module is replaced by an inert one that takes any call, so a configuration
+that sets it up, as LazyVim does, still loads.
+
+### On other machines
+
+Each time the window connects to another machine, it brings that machine its editor
+configuration: the files of `~/.config/telar/editor` replace the ones the machine has there,
+and the files the window does not have are removed, so every machine runs the same editor. A
+name that starts with a dot (`.git`, `.luarc.json`) is neither sent nor removed. Without that
+directory here, a machine keeps its own. A configuration larger than one message (4 MiB, or
+1024 files) is not sent, and the window says so. An editor already running there takes the
+new configuration when it starts again.
 
 ## Over a slow connection
 

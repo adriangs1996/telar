@@ -14,6 +14,7 @@ import telar.wire.editor;
 import telar.wire.layout;
 import telar.wire.nvim;
 import telar.wire.pane_io;
+import telar.wire.runtime;
 import telar.wire.vocabulary;
 import telar.base.ds;
 
@@ -138,7 +139,7 @@ namespace {
           std::ifstream file{configuration};
           const std::string text{std::istreambuf_iterator<char>{file}, std::istreambuf_iterator<char>{}};
 
-          draw(std::string{text.contains("lazy-lock.json") ? "telar's" : "own"} + " as " + (name == nullptr ? "nvim" : name), false);
+          draw(std::string{text.contains("telar's own Neovim configuration") ? "telar's" : "own"} + " as " + (name == nullptr ? "nvim" : name), false);
           return;
         }
 
@@ -753,9 +754,9 @@ namespace {
     editor.until(peer, "themes 2");
   }
 
-  // A host without a configuration of Neovim gets telar's own, kept under a name of its own;
-  // one that has a configuration keeps it.
-  void testHostWithoutConfigurationGetsTelars() {
+  // An editor starts on telar's own configuration, kept under a name of its own, whether the
+  // host has a configuration of Neovim or not, and whatever NVIM_APPNAME the runtime has.
+  void testEditorStartsOnTelarsConfiguration() {
     runtime::TemporaryDirectory home{"/tmp/telar-nvim-home-XXXXXX"};
     const std::string root{home.path()};
 
@@ -771,10 +772,11 @@ namespace {
 
       editor.until(peer, "ready");
       peer.send(NvimInput{.pane_id = editor.pane, .keys = bytes("<F9>")});
-      editor.until(peer, "telar's as telar-nvim");
+      editor.until(peer, "telar's as telar/editor");
     }
 
     std::filesystem::create_directories(root + "/.config/nvim");
+    ::setenv("NVIM_APPNAME", "mine", 1);
 
     EditorHost editor_host{true, {.data_home = true}};
     ProtocolPeer peer{editor_host.host->socket()};
@@ -783,7 +785,8 @@ namespace {
 
     editor.until(peer, "ready");
     peer.send(NvimInput{.pane_id = editor.pane, .keys = bytes("<F9>")});
-    editor.until(peer, "own as nvim");
+    editor.until(peer, "telar's as telar/editor");
+    ::unsetenv("NVIM_APPNAME");
   }
 
   void testPromptIsShownAndAnswered() {
@@ -833,7 +836,7 @@ namespace {
 
       editor.until(peer, "ready");
       peer.send(NvimInput{.pane_id = editor.pane, .keys = bytes("<F9>")});
-      editor.until(peer, "telar's as telar-nvim");
+      editor.until(peer, "telar's as telar/editor");
       pane = editor.pane;
     }
 
@@ -853,7 +856,38 @@ namespace {
 
     restored.until(peer, "ready");
     peer.send(NvimInput{.pane_id = pane, .keys = bytes("<F9>")});
-    restored.until(peer, "telar's as telar-nvim");
+    restored.until(peer, "telar's as telar/editor");
+  }
+
+  // A client's editor configuration takes the place of the runtime's machine's, where its Neovim
+  // reads it; one that names a path outside it is refused whole.
+  void testConfigurationReplacesTheMachines() {
+    RuntimeHost host;
+    ProtocolPeer peer{host.socket()};
+    const std::filesystem::path editor = host.directory() + "/config/telar/editor";
+    const ds::Array files{
+        NvimConfigurationFile{.path = "init.lua", .content = bytes("require('plugins')\n")},
+        NvimConfigurationFile{.path = "lua/plugins/init.lua", .content = bytes("return {}\n")},
+    };
+
+    std::filesystem::create_directories(editor);
+    std::ofstream{editor / "old.lua"} << "-- the machine's\n";
+    peer.send(NvimConfiguration{.request_id = 7, .files = files});
+    peer.deadline(std::chrono::seconds{10});
+    check(peer.receive<RequestCompleted>().request_id == 7, "the configuration is taken");
+
+    std::ifstream written{editor / "lua/plugins/init.lua"};
+    const std::string text{std::istreambuf_iterator<char>{written}, std::istreambuf_iterator<char>{}};
+
+    check(text == "return {}\n" && !std::filesystem::exists(editor / "old.lua"), "the machine holds the client's files and no others");
+
+    const ds::Array escaping{NvimConfigurationFile{.path = "../config.lua", .content = bytes("os.exit()\n")}};
+
+    peer.send(NvimConfiguration{.request_id = 8, .files = escaping});
+    const auto refused = peer.receive<RequestFailed>();
+
+    check(refused.request_id == 8 && refused.code == FailureCode::invalid_request, "a path outside the directory is refused");
+    check(!std::filesystem::exists(editor.parent_path() / "config.lua") && std::filesystem::exists(editor / "init.lua"), "and nothing is touched");
   }
 
   void testClosingEndsTheEditor() {
@@ -900,12 +934,13 @@ namespace {
   const telar::testing::Case case_prompt{"nvim_pane_wire.prompt_is_shown_and_answered", testPromptIsShownAndAnswered};
   const telar::testing::Case case_snapshot{"nvim_pane_wire.tab_snapshot_announces_the_editor", testTabSnapshotAnnouncesTheEditor};
   const telar::testing::Case case_text{"nvim_pane_wire.editor_text_is_read", testEditorTextIsRead};
-  const telar::testing::Case case_configuration{"nvim_pane_wire.host_without_configuration_gets_telars", testHostWithoutConfigurationGetsTelars};
+  const telar::testing::Case case_configuration{"nvim_pane_wire.editor_starts_on_telars_configuration", testEditorStartsOnTelarsConfiguration};
   const telar::testing::Case case_tells{"nvim_pane_wire.editor_tells_its_client", testEditorTellsItsClient};
   const telar::testing::Case case_newest{"nvim_pane_wire.newest_buffers_query_is_answered", testNewestBuffersQueryIsAnswered};
   const telar::testing::Case case_policy{"nvim_pane_wire.yank_follows_the_clipboard_policy", testYankFollowsTheClipboardPolicy};
   const telar::testing::Case case_theme{"nvim_pane_wire.editor_takes_the_windows_theme", testEditorTakesTheWindowsTheme};
   const telar::testing::Case case_session{"nvim_pane_wire.editor_returns_with_the_session", testEditorReturnsWithTheSession};
+  const telar::testing::Case case_configuration_replaces{"nvim_pane_wire.configuration_replaces_the_machines", testConfigurationReplacesTheMachines};
   const telar::testing::Case case_close{"nvim_pane_wire.closing_ends_the_editor", testClosingEndsTheEditor};
   const telar::testing::Case case_missing{"nvim_pane_wire.missing_neovim_fails_the_request", testMissingNeovimFailsTheRequest};
 

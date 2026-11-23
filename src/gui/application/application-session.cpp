@@ -231,7 +231,7 @@ namespace telar::gui::application {
       workbench::retainLayout(*this);
       for (auto& pane : panes.viewMut()) {
         if (pane->attached || pane->attaching) {
-          detachPane(copy_mode, link, pane->id);
+          detachPane(copy_mode, nvim, link, pane->id);
           pane.getMut().attached = false;
           pane.getMut().attaching = false;
         }
@@ -837,6 +837,7 @@ namespace telar::gui::application {
   template bool Session::Link::offer<CompleteWords>(const CompleteWords& request);
   template bool Session::Link::offer<FindPaths>(const FindPaths& request);
   template bool Session::Link::offer<QueryHistory>(const QueryHistory& request);
+  template ds::Option<std::uint64_t> Session::Link::ask<NvimConfiguration>(NvimConfiguration request);
   template ds::Option<std::uint64_t> Session::Link::ask<QueryMonitor>(QueryMonitor request);
   template ds::Option<std::uint64_t> Session::Link::ask<RequestProcessPriority>(RequestProcessPriority request);
   template ds::Option<std::uint64_t> Session::Link::ask<RequestProcessSignal>(RequestProcessSignal request);

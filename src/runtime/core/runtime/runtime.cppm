@@ -260,6 +260,9 @@ export {
       bool ssh_integration = false;
       // Where the user's completion specs live: the configuration's own directory.
       std::string_view configuration_directory;
+      // The editor's configuration, $XDG_CONFIG_HOME/telar/editor: the directory its Neovim
+      // reads, which a client's NvimConfiguration replaces. Empty refuses one.
+      std::string_view editor_configuration;
     };
 
   }
@@ -728,6 +731,7 @@ export {
       void handle(std::uint64_t identity, const NvimBuffers& message);
       void handle(std::uint64_t identity, const NvimPreview& message);
       void handle(std::uint64_t identity, const NvimList& message);
+      void handle(std::uint64_t identity, const NvimConfiguration& message);
       void handle(std::uint64_t identity, const FindText& message);
       // What an editor told the runtime besides what it drew, to the client that drives it.
       void relay(PaneRef<NvimBody> pane);
@@ -914,6 +918,7 @@ export {
       // editor pane being made.
       ds::String<ConcurrentMemory> data_home_;
       NvimProvision editor_provision_;
+      ds::String<ConcurrentMemory> editor_configuration_;
       WordService words_;
       // This runtime's PATH, read once: nothing in the runtime changes it.
       std::string_view runtime_path_ = runtimePath();

@@ -138,6 +138,7 @@ import telar.wire.agents;
 import telar.wire.content;
 import telar.wire.layout;
 import telar.wire.monitor;
+import telar.wire.nvim;
 import telar.base.ds;
 
 namespace telar::gui::test {
@@ -2309,6 +2310,36 @@ namespace {
 
     // The monitor's list of machines shows another one in the monitor, with that machine's filter in
     // the filter's field; on a machine of many cores the table keeps its rows with the detail open.
+    // Another machine runs the window's editor configuration: the window brings it there when it
+    // connects, and keeps it from the machine it runs on, whose runtime reads the same directory.
+    Q_SLOT static void editorConfigurationIsBroughtToAnotherMachine() {
+      const QDir editor{qEnvironmentVariable("XDG_CONFIG_HOME") + QStringLiteral("/telar/editor")};
+      const auto removed = qScopeGuard([&] {
+        QDir{editor}.removeRecursively();
+      });
+
+      QVERIFY(editor.mkpath(QStringLiteral(".")));
+      {
+        QFile init{editor.filePath(QStringLiteral("init.lua"))};
+
+        QVERIFY(init.open(QIODevice::WriteOnly));
+        init.write("vim.o.number = true\n");
+      }
+
+      MachineFixture fixture;
+      QQuickWindow window;
+
+      fixture.application.setWindow(window);
+      QVERIFY(fixture.start());
+      QTRY_COMPARE_WITH_TIMEOUT(fixture.remote_runtime->count(ClientTag::nvim_configuration), std::size_t{1}, wait_ms);
+
+      const auto brought = fixture.remote_runtime->last<NvimConfiguration>();
+
+      QCOMPARE(brought.files.size(), std::size_t{1});
+      QCOMPARE(brought.files[0].path, std::string_view{"init.lua"});
+      QCOMPARE(fixture.local_runtime->count(ClientTag::nvim_configuration), std::size_t{0});
+    }
+
     Q_SLOT static void monitorShowsAnotherMachineWithItsFilter() {
       MachineFixture fixture;
       auto& application = fixture.application;
@@ -2433,6 +2464,11 @@ namespace {
 }
 
 int main(int argc, char** argv) {
+  // What a window reads of its configuration directory, as the editor's it brings another
+  // machine, is the test's: never that of whoever runs it.
+  const QTemporaryDir configuration;
+
+  qputenv("XDG_CONFIG_HOME", configuration.path().toUtf8());
   const QGuiApplication application{argc, argv};
 
   QQuickStyle::setStyle(QStringLiteral("Basic"));

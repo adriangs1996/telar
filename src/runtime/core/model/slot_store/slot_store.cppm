@@ -154,6 +154,7 @@ export {
         ClientRequest<NvimBuffers>,
         ClientRequest<NvimPreview>,
         ClientRequest<NvimList>,
+        ClientRequest<NvimConfiguration>,
         ClientRequest<ClosePane>,
         ClientRequest<PaneInput>,
         ClientRequest<PaneCommand>,

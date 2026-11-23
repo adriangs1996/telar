@@ -144,6 +144,26 @@ export namespace telar::gui::application::nvim {
   // Closes the pane's picker and its preview.
   void dismiss(Session& session, std::uint64_t pane_id);
 
+  // What became of the editor configuration a window brings a machine.
+  enum class ConfigurationBrought : std::uint8_t {
+    sent,
+    // The window has none: the machine keeps its own.
+    absent,
+    // It is larger than one message carries, or a file of it could not be read; the session
+    // says so.
+    too_large,
+    unreadable,
+    // The runtime does not take one, or the connection could not take the request now.
+    refused,
+  };
+
+  // Brings the machine of the session the editor configuration in `directory`, which its runtime
+  // takes in place of its own: the window's is the one every machine it connects to runs.
+  ConfigurationBrought bringConfiguration(Session& session, std::string_view directory);
+
+  // A message of the pane's editor, by its key, went from sight: its next view shows it no more.
+  void dismissMessage(Session& session, std::uint64_t pane_id, std::uint64_t key);
+
   // Moves to the editor's window on a side of its current one. When it has none there, the
   // runtime says so and the pane on that side takes the focus.
   void navigate(Session& session, std::uint64_t pane_id, PaneDirection direction);

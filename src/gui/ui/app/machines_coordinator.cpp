@@ -34,6 +34,7 @@ static_assert(true);
 #include <string_view>
 #include <utility>
 
+import telar.platform.paths;
 import telar.platform.process;
 import telar.gui.application;
 import telar.client;
@@ -43,6 +44,21 @@ import telar.base.ds;
 namespace telar::gui::qt {
 
   namespace {
+
+    // A machine runs the window's editor configuration, $XDG_CONFIG_HOME/telar/editor here: it is
+    // brought each time the window connects, and the machine's runtime takes it in place of its own.
+    void bringEditorConfiguration(MachineClient& client) {
+      SystemAllocator memory;
+      const auto home = runtime::cli::RuntimePaths<SystemAllocator>::configHome(memory, runtime::process_environment);
+      if (home.empty()) {
+        return;
+      }
+
+      ds::String<SystemAllocator> directory{memory, home.view()};
+
+      directory.append("/editor");
+      static_cast<void>(application::nvim::bringConfiguration(client.session, directory.view()));
+    }
 
     // A remote's discovery names the shell and home a new pane starts in, unless the window was
     // launched with a command of its own, which only takes the home.
@@ -222,6 +238,10 @@ namespace telar::gui::qt {
 
         // The connection accepted only a schema the window speaks.
         source->session.connected(source->identity, handshake::dialectOf(schema).valueOr(handshake::current_dialect));
+        if (key.machine.slot != application::machines::Machines::local_slot) {
+          bringEditorConfiguration(*source);
+        }
+
         summarize(source->key);
         if (key.machine.slot == store_.machines().active()) {
           status_.publish();

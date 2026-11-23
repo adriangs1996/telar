@@ -50,8 +50,9 @@ export {
       // and the detail's lineage; cqp00009 adds the editor pane: CreateNvimPane, NvimInput, NvimPaste,
       // NvimMouse, NvimFocus, NvimPromptReply, NvimOpen, PaneKindNotice, NvimGrid, NvimFrame,
       // NvimCmdline, NvimPopupMenu, NvimMessageList, NvimTabLine and NvimPrompt, and the failure a
-      // request answers for a pane of another kind. Peers without them reject the messages.
-      inline constexpr SchemaId schema_id{'c', 'q', 'p', '0', '0', '0', '0', '9'};
+      // request answers for a pane of another kind; cqp00010 adds NvimConfiguration, the editor
+      // configuration a window brings a machine. Peers without them reject the messages.
+      inline constexpr SchemaId schema_id{'c', 'q', 'p', '0', '0', '0', '1', '0'};
 
       // The schemas a client of this build can speak with a runtime, oldest first. Each added
       // messages to the one before it and left the layouts of the others alone, so a client that
@@ -67,11 +68,12 @@ export {
         cqp00007,
         cqp00008,
         cqp00009,
+        cqp00010,
       };
 
-      inline constexpr Dialect current_dialect = Dialect::cqp00009;
+      inline constexpr Dialect current_dialect = Dialect::cqp00010;
 
-      inline constexpr ds::Array<SchemaId, 9> dialect_schemas{
+      inline constexpr ds::Array<SchemaId, 10> dialect_schemas{
           SchemaId{'8', '7', '6', 'b', '4', '8', '0', 'd'},
           SchemaId{'c', 'q', 'p', '0', '0', '0', '0', '2'},
           SchemaId{'c', 'q', 'p', '0', '0', '0', '0', '3'},
@@ -80,6 +82,7 @@ export {
           SchemaId{'c', 'q', 'p', '0', '0', '0', '0', '6'},
           SchemaId{'c', 'q', 'p', '0', '0', '0', '0', '7'},
           SchemaId{'c', 'q', 'p', '0', '0', '0', '0', '8'},
+          SchemaId{'c', 'q', 'p', '0', '0', '0', '0', '9'},
           schema_id,
       };
 
@@ -132,6 +135,7 @@ export {
           Addition{.tag = ClientTag::nvim_buffers, .dialect = Dialect::cqp00009},
           Addition{.tag = ClientTag::nvim_preview, .dialect = Dialect::cqp00009},
           Addition{.tag = ClientTag::nvim_list, .dialect = Dialect::cqp00009},
+          Addition{.tag = ClientTag::nvim_configuration, .dialect = Dialect::cqp00010},
       };
 
       // The first dialect whose runtime understands `tag`.

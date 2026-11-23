@@ -270,7 +270,7 @@ namespace telar::gui::application {
       workbench::retainLayout(*this);
       for (auto& pane : panes.viewMut()) {
         if (pane->attached || pane->attaching) {
-          detachPane(copy_mode, link, pane->id);
+          detachPane(copy_mode, nvim, link, pane->id);
           pane.getMut().attached = false;
           pane.getMut().attaching = false;
         }
@@ -393,7 +393,7 @@ namespace telar::gui::application {
           throw;
         }
       } else if (!visible && pane->attached) {
-        detachPane(copy_mode, link, pane->id);
+        detachPane(copy_mode, nvim, link, pane->id);
         pane.getMut().attached = false;
         pane.getMut().acknowledged_frame = 0;
         pane.getMut().screen.detach();
@@ -402,10 +402,12 @@ namespace telar::gui::application {
     }
   }
 
-  void Session::detachPane(features::terminal::copy_mode::State& copy_mode, Link& link, std::uint64_t pane_id) {
+  void Session::detachPane(features::terminal::copy_mode::State& copy_mode, features::nvim::State& nvim, Link& link, std::uint64_t pane_id) {
     if (const auto& copy = features::terminal::copy_mode::view(copy_mode).state(); copy && copy->pane_id == pane_id) {
       features::terminal::copy_mode::close(copy_mode);
     }
+
+    features::nvim::detach(nvim, pane_id);
 
     link.transport.willDetach(pane_id);
     link.send(DetachPane{pane_id});
@@ -734,7 +736,7 @@ namespace telar::gui::application {
       }
 
       if (pane->attached) {
-        detachPane(copy_mode, link, pane->id);
+        detachPane(copy_mode, nvim, link, pane->id);
       }
     }
 

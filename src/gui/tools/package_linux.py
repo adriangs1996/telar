@@ -122,6 +122,10 @@ def main():
     (share / 'icons/hicolor/512x512/apps').mkdir(parents=True)
     shutil.copy2(root / 'packaging/linux/telar.desktop', share / 'applications/telar.desktop')
     shutil.copy2(root / 'packaging/linux/telar.png', share / 'icons/hicolor/512x512/apps/telar.png')
+    # The tree-sitter parsers and queries the editor brings, where its runtime finds them.
+    parsers = args.headless / 'share/telar/editor'
+    if parsers.is_dir():
+        shutil.copytree(parsers, share / 'telar/editor')
     licenses = share / 'telar/licenses'
     for source, name in ((args.headless / 'share/telar/licenses', 'runtime'),
                          (root / 'tools/diagram-renderer/licenses', 'diagram-renderer'),
