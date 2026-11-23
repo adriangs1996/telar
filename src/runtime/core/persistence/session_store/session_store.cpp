@@ -193,6 +193,15 @@ namespace telar::runtime::checkpoint {
     return record;
   }
 
+  PlacesRecord Reader::places() {
+    const PlacesRecord record{.payload = bytes32()};
+    if (record.payload.empty() || record.payload.size() > maximum_places_bytes) {
+      throw EncodingError{"Invalid checkpoint places size"};
+    }
+
+    return record;
+  }
+
   LayoutRecord Reader::layout() {
     const LayoutRecord record{.identity = u64::decode(input_), .last_used = u64::decode(input_), .payload = bytes32()};
     if (record.payload.empty() || record.payload.size() > maximum_layout_bytes) {
@@ -466,6 +475,15 @@ namespace telar::runtime::checkpoint {
     }
   }
 
+  void Writer::write(const PlacesRecord& record) {
+    if (record.payload.empty() || record.payload.size() > maximum_places_bytes) {
+      throw EncodingError{"Invalid checkpoint places size"};
+    }
+
+    kind(Kind::places);
+    text32(textView(record.payload));
+  }
+
   void Writer::write(const LayoutRecord& record) {
     if (record.payload.empty() || record.payload.size() > maximum_layout_bytes) {
       throw EncodingError{"Invalid checkpoint layout size"};
@@ -482,5 +500,6 @@ namespace telar::runtime::checkpoint {
   template void Writer::append<PaneRecord>(const PaneRecord& record);
   template void Writer::append<WorktreeRecord>(const WorktreeRecord& record);
   template void Writer::append<LayoutRecord>(const LayoutRecord& record);
+  template void Writer::append<PlacesRecord>(const PlacesRecord& record);
 
 }

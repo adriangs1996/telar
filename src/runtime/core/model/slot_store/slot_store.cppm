@@ -240,6 +240,8 @@ export {
         ClientRequest<WriteFile, ClientRole::interactive, RequestLane::worker>,
         ClientRequest<EndFileWrite, ClientRole::interactive, RequestLane::worker>,
         ClientRequest<QueryTouches, ClientRole::interactive, RequestLane::worker>,
+        ClientRequest<KeepPlaces>,
+        ClientRequest<QueryPlaces>,
         ClientRequest<SuggestCommand, ClientRole::interactive, RequestLane::worker>>;
 
     ClientRole classifyRequest(ClientTag tag) noexcept;

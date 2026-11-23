@@ -53,7 +53,7 @@ export {
       // request answers for a pane of another kind; cqp00010 adds NvimConfiguration, the editor
       // configuration a window brings a machine; cqp00011 adds the explorer's files: ListDirectory,
       // MeasureDirectory, QueryChanges, InspectFile, ChangeFiles, UndoFileChanges, CommitChanges,
-      // LocateHome, ReadFile, WriteFile, EndFileWrite and QueryTouches, with their answers. Peers
+      // LocateHome, ReadFile, WriteFile, EndFileWrite, QueryTouches, KeepPlaces and QueryPlaces, with their answers. Peers
       // without them reject the messages.
       inline constexpr SchemaId schema_id{'c', 'q', 'p', '0', '0', '0', '1', '1'};
 
@@ -153,6 +153,8 @@ export {
           Addition{.tag = ClientTag::write_file, .dialect = Dialect::cqp00011},
           Addition{.tag = ClientTag::end_file_write, .dialect = Dialect::cqp00011},
           Addition{.tag = ClientTag::query_touches, .dialect = Dialect::cqp00011},
+          Addition{.tag = ClientTag::keep_places, .dialect = Dialect::cqp00011},
+          Addition{.tag = ClientTag::query_places, .dialect = Dialect::cqp00011},
       };
 
       // The first dialect whose runtime understands `tag`.

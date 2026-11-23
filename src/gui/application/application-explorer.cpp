@@ -306,6 +306,40 @@ namespace telar::gui::application::explorer {
     return session.ready() && session.explores();
   }
 
+  namespace {
+
+    // The marks and the jump list outlive the window in the runtime of the machine it runs on:
+    // it is asked for them once, they are taken when it answers, and it is given them again
+    // when they changed, which no key does that only moves the cursor.
+    void remember(Session& session, View& view, const Context& context) {
+      auto& state = session.explorer;
+
+      if (!context.local || !available(session)) {
+        return;
+      }
+
+      if (state.recall == feature::Recall::unasked) {
+        if (const auto request = session.link.ask(QueryPlaces{})) {
+          feature::recalling(state, *request);
+        }
+
+        return;
+      }
+
+      feature::recall(view, state, context);
+      if (state.recall != feature::Recall::taken || !feature::unkept(view)) {
+        return;
+      }
+
+      ds::Vec<KeptPlace, Memory> places{view.memory};
+      const auto jump = feature::keeping(places, view, context);
+
+      session.link.send(KeepPlaces{.places = places.view(), .jump = jump});
+      view.places_kept = view.places;
+    }
+
+  }
+
   bool refresh(Session& session, View& view, const Context& context) {
     if (!view.open) {
       return false;
@@ -321,6 +355,7 @@ namespace telar::gui::application::explorer {
       feature::absorb(view, session.explorer, context, context.host);
     }
 
+    remember(session, view, context);
     reconcile(session, view, context.host);
     return view.revision != before;
   }

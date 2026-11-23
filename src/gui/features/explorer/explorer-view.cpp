@@ -749,6 +749,7 @@ namespace telar::gui::features::explorer {
       }
 
       view.jump = view.jumps.size();
+      ++view.places;
     }
 
     // Where a window goes: the directory it roots itself at, what it selects there, and whether
@@ -1034,7 +1035,8 @@ namespace telar::gui::features::explorer {
 
   Place::Place(Memory& memory)
       : root(memory),
-        selected(memory) {}
+        selected(memory),
+        away(memory) {}
 
   Window::Window(Memory& memory)
       : root(memory),
@@ -2216,8 +2218,10 @@ namespace telar::gui::features::explorer {
 
       mark->letter = letter;
       mark->machine = window.machine;
+      mark->away.clear();
       mark->root.assign(window.root.view());
       mark->selected.assign(window.selected.view());
+      ++view.places;
       report(view, Tone::info, "mark {} set", letter.view());
       ++view.revision;
     }
@@ -2248,10 +2252,18 @@ namespace telar::gui::features::explorer {
 
         if (other == view.marks.end()) {
           report(view, Tone::error, "E20: Mark not set: {}", letter);
+        } else if (other->machine == 0) {
+          report(view, Tone::error, "Mark {} is of {}, which is no machine of this window", letter, other->away.view());
         } else {
           report(view, Tone::error, "Mark {} is of {}: a mark in upper case keeps its machine", letter, labelOf(context, other->machine));
         }
 
+        return;
+      }
+
+      // One the runtime kept from a window that had a machine this one has not.
+      if (mark->machine == 0) {
+        report(view, Tone::error, "Mark {} is of {}, which is no machine of this window", letter, mark->away.view());
         return;
       }
 
@@ -2279,6 +2291,13 @@ namespace telar::gui::features::explorer {
       }
 
       view.jump = back ? view.jump - 1 : view.jump + 1;
+      ++view.places;
+      // A step the runtime kept from a window that had a machine this one has not is stepped
+      // over: the next one goes on from it.
+      if (view.jumps[view.jump].machine == 0) {
+        report(view, Tone::error, "That place is of {}, which is no machine of this window", view.jumps[view.jump].away.view());
+        return;
+      }
 
       const Text root{view.memory, view.jumps[view.jump].root.view()};
       const Text selected{view.memory, view.jumps[view.jump].selected.view()};
@@ -3016,7 +3035,7 @@ namespace telar::gui::features::explorer {
 
       for (const auto& mark : view.marks) {
         if (marksMachine(mark.letter.view())) {
-          ds::formatTo(listed, "{}'{} {}:{}", listed.empty() ? "" : " · ", mark.letter.view(), labelOf(context, mark.machine), mark.root.view());
+          ds::formatTo(listed, "{}'{} {}:{}", listed.empty() ? "" : " · ", mark.letter.view(), mark.machine == 0 ? mark.away.view() : labelOf(context, mark.machine), mark.root.view());
         } else if (mark.machine == context.host) {
           ds::formatTo(listed, "{}'{} {}", listed.empty() ? "" : " · ", mark.letter.view(), mark.root.view());
         }
@@ -3215,6 +3234,145 @@ namespace telar::gui::features::explorer {
     }
 
     return id == context.host ? context.machine : std::string_view{"another machine"};
+  }
+
+  namespace {
+
+    // The number the window keeps the machine labelled `label` by: the one it runs on for no
+    // label, and 0 for a machine it does not keep.
+    std::uint64_t machineLabelled(const Context& context, std::string_view label) noexcept {
+      for (const auto& machine : context.machines) {
+        if (label.empty() ? machine.local : !machine.local && machine.label == label) {
+          return machine.id;
+        }
+      }
+
+      return 0;
+    }
+
+    // Whether the explorer has the mark `kept` is: of a letter in upper case there is one, and of
+    // one in lower case one for each machine.
+    bool hasMark(const View& view, const Place& kept) noexcept {
+      return std::ranges::any_of(view.marks, [&](const Place& mark) {
+        const bool there = mark.machine == kept.machine && mark.away.view() == kept.away.view();
+
+        return mark.letter.view() == kept.letter.view() && (marksMachine(kept.letter.view()) || there);
+      });
+    }
+
+    // The label a runtime keeps a place's machine by: none for the machine the window runs on.
+    // Nothing for a machine the window no longer keeps, whose label it cannot say.
+    tbc::val_a<ds::Option<std::string_view>> keptLabel(tbc::ref_a<Context> context, tbc::ref_a<Place> place) noexcept {
+      if (place.machine == 0) {
+        return place.away.view();
+      }
+
+      for (const auto& machine : context.machines) {
+        if (machine.id == place.machine) {
+          return machine.local ? std::string_view{} : machine.label;
+        }
+      }
+
+      return ds::none;
+    }
+
+    // Whether a runtime takes the place, with `used` bytes of texts taken before it.
+    bool keepable(const Place& place, std::string_view label, std::size_t used) noexcept {
+      const auto bytes = label.size() + place.root.size() + place.selected.size();
+      const bool sized = label.size() <= FileLimits::name_bytes && place.root.size() <= FileLimits::path_bytes && place.selected.size() <= FileLimits::path_bytes;
+
+      return sized && !place.root.empty() && used + bytes <= FileLimits::places_bytes;
+    }
+
+  }
+
+  void recall(View& view, State& state, const Context& context) {
+    if (state.recall != Recall::answered) {
+      return;
+    }
+
+    const bool had = !view.marks.empty() || !view.jumps.empty();
+    const bool steps = view.jumps.empty();
+
+    state.recall = Recall::taken;
+    for (const auto& remembered : state.remembered) {
+      Place place{view.memory};
+
+      place.machine = machineLabelled(context, remembered.machine.view());
+      if (place.machine == 0) {
+        place.away.assign(remembered.machine.view());
+      }
+
+      place.root.assign(remembered.root.view());
+      place.selected.assign(remembered.selected.view());
+      if (remembered.letter == 0) {
+        if (steps && view.jumps.size() < ViewLimits::jumps) {
+          view.jumps.push(std::move(place));
+        }
+
+        continue;
+      }
+
+      place.letter.assign(std::string_view{&remembered.letter, 1});
+      if (view.marks.size() < ViewLimits::marks && !hasMark(view, place)) {
+        view.marks.push(std::move(place));
+      }
+    }
+
+    if (steps) {
+      view.jump = std::min<std::size_t>(state.remembered_jump, view.jumps.size());
+    }
+
+    state.remembered.clear();
+    // What the explorer had before it read them is given to the runtime with them; what it
+    // only read is what the runtime keeps already.
+    ++view.places;
+    if (!had) {
+      view.places_kept = view.places;
+    }
+
+    ++view.revision;
+  }
+
+  bool unkept(const View& view) noexcept {
+    return view.places != view.places_kept;
+  }
+
+  std::uint16_t keeping(tbc::mut_a<ds::Vec<KeptPlace, Memory>> places, tbc::ref_a<View> view, tbc::ref_a<Context> context) {
+    std::size_t used = 0;
+
+    places.clear();
+    for (const auto& mark : view.marks) {
+      const auto label = keptLabel(context, mark);
+      if (!label || !keepable(mark, *label, used)) {
+        continue;
+      }
+
+      used += label->size() + mark.root.size() + mark.selected.size();
+      places.push({.letter = static_cast<Byte>(mark.letter.view().front()), .machine = *label, .root = mark.root.view(), .selected = mark.selected.view()});
+    }
+
+    // The newest steps that fit, counted back from the last.
+    std::size_t first = view.jumps.size();
+
+    while (first > 0) {
+      const auto& step = view.jumps[first - 1];
+      const auto label = keptLabel(context, step);
+      if (!label || !keepable(step, *label, used)) {
+        break;
+      }
+
+      used += label->size() + step.root.size() + step.selected.size();
+      --first;
+    }
+
+    for (std::size_t index = first; index < view.jumps.size(); ++index) {
+      const auto& step = view.jumps[index];
+
+      places.push({.machine = keptLabel(context, step).valueOr({}), .root = step.root.view(), .selected = step.selected.view()});
+    }
+
+    return static_cast<std::uint16_t>(view.jump > first ? view.jump - first : 0);
   }
 
   void say(View& view, std::string_view text, Tone tone) {

@@ -899,6 +899,44 @@ namespace {
   const telar::testing::Case case_hand{"explorer_session.a_file_of_another_machine_is_handed_only_there", aFileOfAnotherMachineIsHandedOnlyThere};
   const telar::testing::Case case_beside{"explorer_session.beside_the_panes_it_stays_and_a_pane_takes_what_is_dropped_on_it", besideThePanesItStaysAndAPaneTakesWhatIsDroppedOnIt};
   const telar::testing::Case case_carried{"explorer_session.a_file_is_carried_from_one_machine_to_the_other", aFileIsCarriedFromOneMachineToTheOther};
+
+  void theMarksAreKeptByTheRuntimeOfTheMachineTheWindowRunsOn() {
+    Fixture fixture;
+    auto& transport = fixture.transport;
+    auto& box_transport = fixture.box_transport;
+
+    fixture.list();
+    fixture.settle();
+    check(transport.count(ClientTag::query_places) == 1 && box_transport.count(ClientTag::query_places) == 0, "the explorer that opens asks the runtime of its machine, once");
+    static_cast<void>(fixture.press('m'));
+    static_cast<void>(fixture.press('a'));
+    check(transport.count(ClientTag::keep_places) == 0, "nothing is given before what is kept was read: it would replace it");
+
+    // The window before this one left a mark and a step.
+    const ds::Array<KeptPlace, 2> places{{{.letter = Byte{'Q'}, .root = "/srv/site", .selected = "/srv/site/index.html"}, {.root = "/srv"}}};
+
+    check(deliver(fixture.client, PlacesKept{.request_id = transport.last<QueryPlaces>().request_id, .places = places.view(), .jump = 1}) == application::Change::explorer);
+    static_cast<void>(fixture.refresh());
+    check(fixture.view.marks.size() == 2 && fixture.view.jumps.size() == 1 && fixture.view.jump == 1);
+
+    // The mark set meanwhile goes to the runtime with what it kept.
+    const auto kept = transport.last<KeepPlaces>();
+
+    check(transport.count(ClientTag::keep_places) == 1 && kept.places.size() == 3 && kept.jump == 1);
+    check(kept.places[0].letter == Byte{'a'} && kept.places[0].machine.empty() && kept.places[1].letter == Byte{'Q'} && kept.places[1].root == "/srv/site" && kept.places[2].letter == Byte{0});
+
+    // A key that only moves the cursor writes nothing; a mark does, once.
+    static_cast<void>(fixture.press('j'));
+    static_cast<void>(fixture.press('k'));
+    static_cast<void>(fixture.refresh());
+    check(transport.count(ClientTag::keep_places) == 1 && transport.count(ClientTag::query_places) == 1);
+    static_cast<void>(fixture.press('m'));
+    static_cast<void>(fixture.press('b'));
+    static_cast<void>(fixture.refresh());
+    check(transport.count(ClientTag::keep_places) == 2 && transport.last<KeepPlaces>().places.size() == 4 && box_transport.count(ClientTag::keep_places) == 0);
+  }
+
+  const telar::testing::Case case_places{"explorer_session.the_marks_are_kept_by_the_runtime_of_the_machine_the_window_runs_on", theMarksAreKeptByTheRuntimeOfTheMachineTheWindowRunsOn};
   const telar::testing::Case case_tree{"explorer_session.a_directory_is_carried_as_its_tree_a_directory_and_a_file_at_a_time", aDirectoryIsCarriedAsItsTreeADirectoryAndAFileAtATime};
   const telar::testing::Case case_dragged_in{"explorer_session.a_file_dragged_in_is_carried_to_the_machine_of_the_window_that_takes_it", aFileDraggedInIsCarriedToTheMachineOfTheWindowThatTakesIt};
   const telar::testing::Case case_moved{"explorer_session.a_move_trashes_its_original_once_the_copy_arrived_and_a_cancel_removes_it", aMoveTrashesItsOriginalOnceTheCopyArrivedAndACancelRemovesIt};

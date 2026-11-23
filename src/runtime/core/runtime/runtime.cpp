@@ -2758,6 +2758,19 @@ namespace telar::runtime {
 
   template <EventLoop Poller, typename Background>
     requires BackgroundExecutor<Background, ConcurrentMemory>
+  void Runtime<Poller, Background>::handle(std::uint64_t identity, const KeepPlaces& message) {
+    static_cast<void>(requireClient(clients_, identity));
+    client_layouts_.keepPlaces(message);
+  }
+
+  template <EventLoop Poller, typename Background>
+    requires BackgroundExecutor<Background, ConcurrentMemory>
+  void Runtime<Poller, Background>::handle(std::uint64_t identity, const QueryPlaces& message) {
+    client_layouts_.publishPlaces(message.request_id, requireClient(clients_, identity));
+  }
+
+  template <EventLoop Poller, typename Background>
+    requires BackgroundExecutor<Background, ConcurrentMemory>
   void Runtime<Poller, Background>::relay(PaneRef<NvimBody> pane) {
     const auto pulse = pane.body.editor.takePulse();
     if (pulse.listed) {

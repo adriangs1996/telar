@@ -282,6 +282,12 @@ comes from the runtime of its own machine; a machine with no window is asked for
 - A mark in lower case belongs to the machine it was set on; from another one, `'a` says so
   and goes nowhere. A mark in upper case keeps its machine: `'B` takes the window there in
   one jump, which `Ctrl+o` takes back. The jumps go back and forward across machines.
+- The marks and the jump list outlive the window. The runtime of the machine the window runs
+  on keeps them: the explorer gives them to it when a mark is set or the window goes to
+  another place, and the next window reads them back when its explorer first opens. A mark
+  set before they were read stays as it was set. A runtime that restores its session
+  restores them with it. A place of a machine the next window does not keep is kept all the
+  same: `:marks` lists it, and going to it says its machine is none of the window's.
 - A path names a file on its own machine alone. With the file on one machine and the
   focused pane on another, Enter and `@` type nothing and ask whether to
   [bring a copy](#between-machines); `cd` is refused. `gf` opens the file in an editor of its

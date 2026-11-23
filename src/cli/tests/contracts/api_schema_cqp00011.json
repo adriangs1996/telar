@@ -122,7 +122,9 @@
     "read_file": 108,
     "write_file": 109,
     "end_file_write": 110,
-    "query_touches": 111
+    "query_touches": 111,
+    "keep_places": 112,
+    "query_places": 113
   },
   "fingerprint": "6371703030303131",
   "schema_version": "cqp00011",
@@ -215,6 +217,7 @@
     "file_chunk": 218,
     "file_written": 219,
     "file_write_ended": 220,
-    "file_touches": 221
+    "file_touches": 221,
+    "places_kept": 222
   }
 }

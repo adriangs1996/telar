@@ -253,6 +253,35 @@ namespace {
     check(rejected(unknown.finish()), "an unknown record kind");
   }
 
+  void testPlacesRoundTrip() {
+    ds::Array<Byte, 4096> buffer;
+    checkpoint::Writer writer{buffer.viewMut(), checkpoint::Counters{}};
+    const std::string_view payload = "places";
+    std::vector<Byte> read;
+
+    writer.append(checkpoint::PlacesRecord{.payload = {reinterpret_cast<const Byte*>(payload.data()), payload.size()}}); // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast): the bytes of a text
+    writer.append(checkpoint::WorkspaceRecord{5, "/tmp", "After", 6, "Shell"});
+
+    const auto bytes = writer.finish();
+    checkpoint::Reader reader{bytes};
+    std::size_t after = 0;
+
+    reader.read([&]<typename Record>(const Record& record) {
+      if constexpr (std::same_as<Record, checkpoint::PlacesRecord>) {
+        read.assign(record.payload.begin(), record.payload.end());
+      } else if constexpr (std::same_as<Record, checkpoint::WorkspaceRecord>) {
+        ++after;
+      }
+    });
+
+    check(read.size() == payload.size() && std::ranges::equal(read, payload, {}, [](Byte byte) {
+      return static_cast<char>(byte);
+    }),
+        "the places read back as they were written");
+    check(after == 1, "and the record after them reads");
+  }
+
+  const telar::testing::Case case_places_round_trip{"checkpoint_format.places_round_trip", testPlacesRoundTrip};
   const telar::testing::Case case_worktree_round_trip{"checkpoint_format.worktree_round_trip", testWorktreeRoundTrip};
   const telar::testing::Case case_older_versions_decode{"checkpoint_format.older_versions_decode", testOlderVersionsDecode};
   const telar::testing::Case case_pane_kinds{"checkpoint_format.pane_kinds", testPaneKinds};

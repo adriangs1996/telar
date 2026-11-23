@@ -16,6 +16,26 @@ export namespace telar::gui::features::explorer {
 
   // What a machine's runtime answered about its files. A field of the session of that machine:
   // an explorer window on another machine reads that machine's.
+  // A place the explorer of a window before this one was, as the runtime of the machine the
+  // window runs on kept it: a mark, with its letter, or a step of the jump list, with none.
+  // `machine` is the label of its machine, empty for the one the window runs on.
+  struct Remembered {
+    explicit Remembered(Memory& memory);
+
+    char letter = 0;
+    ds::String<Memory> machine;
+    ds::String<Memory> root;
+    ds::String<Memory> selected;
+  };
+
+  // Whether the runtime was asked for the places it keeps, and what became of its answer.
+  enum class Recall : std::uint8_t {
+    unasked,
+    asked,
+    answered,
+    taken,
+  };
+
   struct State {
     explicit State(Memory& made_in);
 
@@ -35,6 +55,12 @@ export namespace telar::gui::features::explorer {
     ds::String<Memory> home;
     bool located = false;
     std::uint64_t locating = 0;
+    // The places the runtime keeps of the explorers before this one: asked once the explorer
+    // opens on the machine the window runs on, and held here until the view takes them.
+    ds::Vec<Remembered, Memory> remembered;
+    std::uint16_t remembered_jump = 0;
+    Recall recall = Recall::unasked;
+    std::uint64_t recalling = 0;
     // The plan in flight, 0 when none; what the last one did, and whether it can be taken back.
     std::uint64_t applying = 0;
     ds::Vec<Outcome, Memory> outcomes;
@@ -118,6 +144,10 @@ export namespace telar::gui::features::explorer {
   bool receive(State& state, const ChangesCommitted& committed);
   bool receive(State& state, const HomeLocated& located);
   bool receive(State& state, const FileTouches& answer);
+
+  // The runtime was asked for the places it keeps, under `request_id`.
+  void recalling(State& state, std::uint64_t request_id) noexcept;
+  bool receive(State& state, const PlacesKept& kept);
 
   // A request of a transfer left under `request_id`: its answer is kept for the transfer.
   void carrying(State& state, std::uint64_t request_id);

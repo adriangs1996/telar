@@ -14,6 +14,7 @@ import telar.runtime.core.model.client_layouts;
 import telar.runtime.workers.request_worker;
 import telar.wire.vocabulary;
 import telar.wire.layout;
+import telar.wire.files;
 import telar.wire.worktrees;
 import telar.platform.primitives;
 import telar.runtime.terminal.control;
@@ -29,7 +30,8 @@ export {
   namespace telar::runtime::checkpoint {
 
     inline constexpr std::string_view magic = "TELARCKP";
-    inline constexpr std::uint16_t current_version = 11;
+    // 12 added the places of the explorer.
+    inline constexpr std::uint16_t current_version = 12;
     inline constexpr std::size_t maximum_bytes = std::size_t{4} * 1024 * 1024;
 
     enum class Kind : Byte {
@@ -39,6 +41,7 @@ export {
       pane,
       layout,
       worktree,
+      places,
     };
 
     struct Counters {
@@ -92,6 +95,12 @@ export {
       RegisterWorktree registration;
     };
 
+    // The places of the explorer the runtime keeps for its windows, as the message that gave them
+    // encodes.
+    struct PlacesRecord {
+      std::span<const Byte> payload;
+    };
+
     void validatePath(std::string_view path);
 
     void validateTitle(std::string_view title, AgentTitleSource source);
@@ -111,6 +120,7 @@ namespace telar::runtime::checkpoint {
   inline constexpr std::size_t maximum_argument_bytes = std::size_t{128} * 1024;
   inline constexpr std::size_t maximum_session_bytes = 64;
   inline constexpr std::size_t maximum_layout_bytes = std::size_t{16} * 1024;
+  inline constexpr std::size_t maximum_places_bytes = std::size_t{128} * 1024;
 }
 
 // Interface: persistence/file_store.cppm
@@ -176,7 +186,7 @@ export {
       TBC_GENERIC inline void read(Consumer consume) {
         for (;;) {
           const auto kind = u8::decode(input_);
-          if (kind > static_cast<Byte>(Kind::worktree)) {
+          if (kind > static_cast<Byte>(Kind::places)) {
             throw EncodingError{"Unknown checkpoint record"};
           }
 
@@ -208,6 +218,9 @@ export {
             }
 
             break;
+          case Kind::places:
+            consume(places());
+            break;
           }
         }
       }
@@ -234,6 +247,8 @@ export {
       LayoutRecord layout();
 
       WorktreeRecord worktree();
+
+      PlacesRecord places();
 
       // Whether a worktree record is one to restore; one that is not is counted as skipped.
       bool accepted(const WorktreeRecord& record);
@@ -280,7 +295,7 @@ export {
         reader.read([&]<typename Record>(const Record& record) {
           if constexpr (std::same_as<Record, PaneRecord>) {
             records.atMut(count++) = record;
-          } else if constexpr (!std::same_as<Record, LayoutRecord>) {
+          } else if constexpr (!std::same_as<Record, LayoutRecord> && !std::same_as<Record, PlacesRecord>) {
             try {
               restore(record);
             } catch (const std::exception&) { // NOLINT(bugprone-empty-catch): a record that cannot be restored is left out, and the rest restore
@@ -314,6 +329,14 @@ export {
 
               layouts_.retain(model_, record.identity, Codec::decode<UpdateClientLayout>(record.payload, storage));
             } catch (const std::exception&) { // NOLINT(bugprone-empty-catch): a layout that cannot be decoded is left out, as one never saved
+            }
+          } else if constexpr (std::same_as<Record, PlacesRecord>) {
+            try {
+              ds::Array<Byte, FileLimits::maximum_places * sizeof(KeptPlace)> scratch; // NOLINT(cppcoreguidelines-pro-type-member-init): the decoder writes the places it hands back, so zeroing them first would be waste
+              DecodeStorage storage{scratch.viewMut()};
+
+              layouts_.keepPlaces(Codec::decode<KeepPlaces>(record.payload, storage));
+            } catch (const std::exception&) { // NOLINT(bugprone-empty-catch): places that cannot be decoded are left out, as ones never kept
             }
           }
         });
@@ -537,6 +560,8 @@ export {
 
       void write(const LayoutRecord& record);
 
+      void write(const PlacesRecord& record);
+
       tbc::val_a<std::span<Byte>> buffer_;
       tbc::val_a<std::span<Byte>> remaining_;
       std::size_t dropped_ = 0;
@@ -547,6 +572,7 @@ export {
     extern template void Writer::append<PaneRecord>(const PaneRecord& record);
     extern template void Writer::append<WorktreeRecord>(const WorktreeRecord& record);
     extern template void Writer::append<LayoutRecord>(const LayoutRecord& record);
+    extern template void Writer::append<PlacesRecord>(const PlacesRecord& record);
 
   }
 }
@@ -630,6 +656,10 @@ export {
         layouts.exportRecords(model, [&](std::uint64_t identity, std::uint64_t last_used, const UpdateClientLayout& layout) {
           writer.append(LayoutRecord{.identity = identity, .last_used = last_used, .payload = Codec::encode(layout, payload.viewMut())});
         });
+
+        if (const auto places = layouts.places(); !places.empty()) {
+          writer.append(PlacesRecord{.payload = places});
+        }
 
         dropped = writer.dropped();
         return writer.finish();

@@ -59,6 +59,10 @@ export extern "C++" {
       // The touches one answer carries, and the verb of one: the name of a program or a tool.
       static constexpr std::uint8_t maximum_touches = 128;
       static constexpr std::size_t verb_bytes = 32;
+      // The places of an explorer a runtime keeps for the next window, and the bytes their texts
+      // take together.
+      static constexpr std::uint8_t maximum_places = 84;
+      static constexpr std::size_t places_bytes = std::size_t{64} * 1024;
       // A file's modification time holds this many nanoseconds past its second.
       static constexpr std::uint32_t maximum_nanoseconds = 999'999'999;
     };
@@ -633,6 +637,60 @@ export extern "C++" {
               Field<&FileTouches::path, Text16<FileLimits::path_bytes, false>, "path">,
               Field<&FileTouches::truncated, BoolByte, "truncated">,
               Field<&FileTouches::touches, CountedSpan<u8, ValueCodec<FileTouch>, FileLimits::maximum_touches>, "touches">> {};
+
+    // A place the explorer of a window was: a mark, with its letter, or a step of its jump list,
+    // with 0. `machine` is the label the window knows the place's machine by, and empty for the
+    // machine of the runtime that keeps it.
+    struct KeptPlace {
+      Byte letter{};
+      std::string_view machine;
+      std::string_view root;
+      std::string_view selected;
+    };
+
+    template <>
+    struct BodySchema<KeptPlace>
+        : Serializer<
+              Field<&KeptPlace::letter, u8, "letter">,
+              Field<&KeptPlace::machine, Text16<FileLimits::name_bytes>, "machine">,
+              Field<&KeptPlace::root, Text16<FileLimits::path_bytes, false>, "root">,
+              Field<&KeptPlace::selected, Text16<FileLimits::path_bytes>, "selected">> {};
+
+    // Gives the runtime the marks and the jump list of a window's explorer, to keep for the window
+    // that comes after it: the marks first, then the steps from the oldest, and `jump` the step
+    // the explorer is at. It answers nothing, and what it gives replaces what was kept.
+    struct KeepPlaces {
+      std::span<const KeptPlace> places;
+      std::uint16_t jump{};
+    };
+
+    template <>
+    struct MessageSchema<KeepPlaces>
+        : Schema<Direction::client, ClientTag::keep_places, Field<&KeepPlaces::places, CountedSpan<u8, ValueCodec<KeptPlace>, FileLimits::maximum_places>, "places">, Field<&KeepPlaces::jump, u16, "jump">> {};
+
+    // Asks for the places the runtime keeps.
+    struct QueryPlaces {
+      std::uint64_t request_id{};
+    };
+
+    template <>
+    struct MessageSchema<QueryPlaces> : Schema<Direction::client, ClientTag::query_places, Field<&QueryPlaces::request_id, NonzeroU64, "request_id">> {};
+
+    // The places it keeps, as the last window gave them; none when no window gave any.
+    struct PlacesKept {
+      std::uint64_t request_id{};
+      std::span<const KeptPlace> places;
+      std::uint16_t jump{};
+    };
+
+    template <>
+    struct MessageSchema<PlacesKept>
+        : Schema<
+              Direction::server,
+              ServerTag::places_kept,
+              Field<&PlacesKept::request_id, NonzeroU64, "request_id">,
+              Field<&PlacesKept::places, CountedSpan<u8, ValueCodec<KeptPlace>, FileLimits::maximum_places>, "places">,
+              Field<&PlacesKept::jump, u16, "jump">> {};
 
   }
 }

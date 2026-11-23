@@ -748,6 +748,10 @@ export {
       void handle(std::uint64_t identity, const WriteFile& message);
       void handle(std::uint64_t identity, const EndFileWrite& message);
       void handle(std::uint64_t identity, const QueryTouches& message);
+
+      void handle(std::uint64_t identity, const KeepPlaces& message);
+
+      void handle(std::uint64_t identity, const QueryPlaces& message);
       // What an editor told the runtime besides what it drew, to the client that drives it.
       void relay(PaneRef<NvimBody> pane);
       // Answers a client's question about an editor's buffers with the ones its query matches.

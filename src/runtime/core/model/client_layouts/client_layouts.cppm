@@ -35,6 +35,7 @@ import telar.wire.vocabulary;
 import telar.wire.clipboard;
 import telar.wire.editor;
 import telar.wire.layout;
+import telar.wire.files;
 import telar.wire.pane_io;
 import telar.wire.worktrees;
 import telar.platform.primitives;
@@ -936,6 +937,17 @@ export {
 
       [[nodiscard]] ds::Option<std::uint64_t> focusedPane(std::uint64_t identity) const noexcept;
 
+      // The marks and the jump list of a window's explorer, kept for the windows that come after
+      // it: one set for the runtime, which the last window to give one replaces. Places that say
+      // more than the runtime keeps are not taken, and what was kept stays.
+      void keepPlaces(const KeepPlaces& places);
+
+      // Answers a window what is kept.
+      void publishPlaces(std::uint64_t request, ClientSession& client) const;
+
+      // What is kept, as the message that gave it encodes; empty when nothing is.
+      [[nodiscard]] std::span<const Byte> places() const noexcept;
+
       [[nodiscard]] std::uint64_t revision() const noexcept;
 
       // Generic over the caller's consumer, which each record is handed to. Takes the consumer itself, as
@@ -1006,6 +1018,7 @@ export {
       Record* find(std::uint64_t identity) noexcept;
 
       ds::Vec<Record, ConcurrentMemory> records_;
+      ds::Vec<Byte, ConcurrentMemory> places_;
       std::uint64_t clock_ = 0;
     };
 

@@ -105,6 +105,37 @@ namespace {
     check(listed.kind == FileKind::link && said.end && text == "arrived.bin", "a link crosses as its text");
   }
 
+  void testTheExplorersPlacesOutliveTheWindowThatGaveThem() {
+    RuntimeHost host;
+    const ds::Array<KeptPlace, 3> places{{
+        {.letter = Byte{'a'}, .root = "/srv/site", .selected = "/srv/site/index.html"},
+        {.letter = Byte{'B'}, .machine = "box", .root = "/var/log"},
+        {.root = "/srv", .selected = "/srv/site"},
+    }};
+
+    {
+      ProtocolPeer window{host.socket()};
+
+      check(window.exchange<PlacesKept>(QueryPlaces{.request_id = 1}).places.empty(), "a runtime no window gave places keeps none");
+      window.send(KeepPlaces{.places = places.view(), .jump = 1});
+      // What says more than the runtime keeps is not taken, and what it kept stays.
+      const ds::Array<KeptPlace, 1> wrong{{{.letter = Byte{'!'}, .root = "/srv"}}};
+
+      window.send(KeepPlaces{.places = wrong.view()});
+      check(window.exchange<PlacesKept>(QueryPlaces{.request_id = 2}).places.size() == 3);
+    }
+
+    // The window is gone: the one that comes after it reads them back.
+    ProtocolPeer next{host.socket()};
+    const auto kept = next.exchange<PlacesKept>(QueryPlaces{.request_id = 3});
+
+    check(kept.places.size() == 3 && kept.jump == 1);
+    check(kept.places[0].letter == Byte{'a'} && kept.places[0].machine.empty() && kept.places[0].root == "/srv/site" && kept.places[0].selected == "/srv/site/index.html");
+    check(kept.places[1].letter == Byte{'B'} && kept.places[1].machine == "box" && kept.places[1].root == "/var/log" && kept.places[1].selected.empty(), "a mark keeps the label of its machine");
+    check(kept.places[2].letter == Byte{0} && kept.places[2].root == "/srv", "and a step of the jump list has no letter");
+  }
+
+  const telar::testing::Case case_places{"files_wire.the_explorers_places_outlive_the_window_that_gave_them", testTheExplorersPlacesOutliveTheWindowThatGaveThem};
   const telar::testing::Case case_a_client_lists_and_changes_files{"files_wire.a_client_lists_and_changes_files", testAClientListsAndChangesFiles};
 
 }

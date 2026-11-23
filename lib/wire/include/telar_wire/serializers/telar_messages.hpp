@@ -117,6 +117,8 @@ namespace telar {
     write_file = 0x6d,
     end_file_write = 0x6e,
     query_touches = 0x6f,
+    keep_places = 0x70,
+    query_places = 0x71,
   };
 
   enum class ServerTag : Byte {
@@ -209,6 +211,7 @@ namespace telar {
     file_written = 0xdb,
     file_write_ended = 0xdc,
     file_touches = 0xdd,
+    places_kept = 0xde,
   };
 
   struct RequestRuntimeState {
@@ -552,6 +555,10 @@ namespace telar {
       return "end_file_write";
     case ClientTag::query_touches:
       return "query_touches";
+    case ClientTag::keep_places:
+      return "keep_places";
+    case ClientTag::query_places:
+      return "query_places";
     }
 
     return {};
@@ -735,6 +742,8 @@ namespace telar {
       return "file_write_ended";
     case ServerTag::file_touches:
       return "file_touches";
+    case ServerTag::places_kept:
+      return "places_kept";
     case ServerTag::pane_theme:
       return "pane_theme";
     }

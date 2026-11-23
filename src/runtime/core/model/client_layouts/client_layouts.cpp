@@ -874,8 +874,48 @@ namespace telar::runtime {
         worktrees(memory) {}
 
   ClientLayouts::ClientLayouts(ConcurrentMemory& memory)
-      : records_(memory) {
+      : records_(memory),
+        places_(memory) {
     records_.reserve(maximum_identities);
+  }
+
+  void ClientLayouts::keepPlaces(const KeepPlaces& places) {
+    std::size_t bytes = 0;
+
+    for (const auto& place : places.places) {
+      const auto letter = static_cast<char>(place.letter);
+      const bool marks = (letter >= 'a' && letter <= 'z') || (letter >= 'A' && letter <= 'Z');
+      if (!marks && place.letter != 0) {
+        return;
+      }
+
+      bytes += place.machine.size() + place.root.size() + place.selected.size();
+    }
+
+    if (bytes > FileLimits::places_bytes || places.jump > places.places.size()) {
+      return;
+    }
+
+    places_.resize(Codec::encodedSize(places));
+    static_cast<void>(Codec::encode(places, places_.viewMut()));
+    ++clock_;
+  }
+
+  void ClientLayouts::publishPlaces(std::uint64_t request, ClientSession& client) const {
+    if (places_.empty()) {
+      client.connection.send(PlacesKept{.request_id = request});
+      return;
+    }
+
+    ds::Array<Byte, FileLimits::maximum_places * sizeof(KeptPlace)> scratch; // NOLINT(cppcoreguidelines-pro-type-member-init): the decoder writes the places it hands back, so zeroing them first would be waste
+    DecodeStorage storage{scratch.viewMut()};
+    const auto kept = Codec::decode<KeepPlaces>(places_.view(), storage);
+
+    client.connection.send(PlacesKept{.request_id = request, .places = kept.places, .jump = kept.jump});
+  }
+
+  std::span<const Byte> ClientLayouts::places() const noexcept {
+    return places_.view();
   }
 
   void ClientLayouts::retain(const RuntimeModel& model, std::uint64_t identity, const UpdateClientLayout& update) {

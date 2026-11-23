@@ -417,6 +417,9 @@ export namespace telar::gui::features::explorer {
     std::uint64_t machine = 0;
     ds::String<Memory> root;
     ds::String<Memory> selected;
+    // The label of its machine, for a place the runtime kept from another window whose machine
+    // this window does not keep: `machine` is then 0, and the place goes nowhere.
+    ds::String<Memory> away;
   };
 
   // One window of the explorer: a directory of a machine, what it lists and how.
@@ -593,6 +596,10 @@ export namespace telar::gui::features::explorer {
     ds::Vec<Place, Memory> marks;
     ds::Vec<Place, Memory> jumps;
     std::size_t jump = 0;
+    // Grows with every change to the marks or the jump list, and what it was when the runtime
+    // was last given them: they outlive the window there.
+    std::uint64_t places = 0;
+    std::uint64_t places_kept = 0;
     // The name being typed in insert mode: of the change `inserting`, or a rename of the row
     // selected when it is 0; and what the field starts with.
     std::uint32_t inserting = 0;
@@ -639,6 +646,20 @@ export namespace telar::gui::features::explorer {
 
   // The label of the machine `id`, as the window names it.
   [[nodiscard]] tbc::val_a<std::string_view> labelOf(tbc::ref_a<Context> context, std::uint64_t id) noexcept;
+
+  // Takes the marks and the jump list the runtime kept from the windows before this one, once it
+  // answered `state`, the cache of the machine the window runs on: a mark the explorer already
+  // has stays as it is, and the jump list is taken when the explorer has none. A place of a
+  // machine the window does not keep is kept, with the label of its machine.
+  void recall(View& view, State& state, const Context& context);
+
+  // Whether the marks or the jump list changed since the runtime was last given them.
+  [[nodiscard]] bool unkept(const View& view) noexcept;
+
+  // The marks and the jump list as the runtime keeps them, in `places`: the marks, then the
+  // newest steps of the jump list that fit what a runtime keeps, from the oldest of them. They
+  // view the texts of `view` and of `context`. Returns the step the explorer is at, among those.
+  [[nodiscard]] std::uint16_t keeping(tbc::mut_a<ds::Vec<KeptPlace, Memory>> places, tbc::ref_a<View> view, tbc::ref_a<Context> context);
 
   // Says `text` on the line under the windows.
   void say(View& view, std::string_view text, Tone tone = Tone::info);

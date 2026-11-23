@@ -213,6 +213,7 @@ namespace telar::gui::features::explorer {
         search(made_in),
         touches(made_in),
         home(made_in),
+        remembered(made_in),
         outcomes(made_in),
         committed(made_in),
         carrying(made_in),
@@ -221,6 +222,11 @@ namespace telar::gui::features::explorer {
   Carried::Carried(Memory& memory)
       : bytes(memory),
         text(memory) {}
+
+  Remembered::Remembered(Memory& memory)
+      : machine(memory),
+        root(memory),
+        selected(memory) {}
 
   Standing standing(const Repository& repository, std::string_view path, bool directory) noexcept {
     const auto root = repository.root.view();
@@ -696,6 +702,32 @@ namespace telar::gui::features::explorer {
     return true;
   }
 
+  void recalling(State& state, std::uint64_t request_id) noexcept {
+    state.recalling = request_id;
+    state.recall = Recall::asked;
+  }
+
+  bool receive(State& state, const PlacesKept& kept) {
+    if (state.recalling == 0 || state.recalling != kept.request_id) {
+      return false;
+    }
+
+    state.remembered.clear();
+    for (const auto& place : kept.places) {
+      auto& remembered = state.remembered.push(Remembered{state.memory});
+
+      remembered.letter = static_cast<char>(place.letter);
+      remembered.machine.assign(place.machine);
+      remembered.root.assign(place.root);
+      remembered.selected.assign(place.selected);
+    }
+
+    state.remembered_jump = kept.jump;
+    state.recalling = 0;
+    state.recall = Recall::answered;
+    return true;
+  }
+
   bool receive(State& state, const FileTouches& answer) {
     auto& touches = state.touches;
     if (touches.waiting == 0 || touches.waiting != answer.request_id) {
@@ -765,6 +797,15 @@ namespace telar::gui::features::explorer {
 
     if (auto* kept = keepCarried(state, request, CarriedKind::failed)) {
       kept->text.assign(runtime::utf8Prefix(failure.message, ExplorerLimits::error_bytes));
+      return true;
+    }
+
+    // A runtime that refused to say what it keeps keeps nothing to take.
+    if (request != 0 && state.recalling == request) {
+      state.recalling = 0;
+      state.recall = Recall::answered;
+      state.remembered.clear();
+      state.remembered_jump = 0;
       return true;
     }
 
@@ -895,6 +936,10 @@ namespace telar::gui::features::explorer {
     state.search.waiting = 0;
     state.search.known = false;
     state.locating = 0;
+    // The runtime that answers next may keep other places, or none: it is asked again, and what
+    // an answer not yet taken said stays to take.
+    state.recalling = 0;
+    state.recall = state.recall == Recall::answered ? Recall::answered : Recall::unasked;
     state.inspections.clear();
     state.applying = 0;
     state.committing = 0;

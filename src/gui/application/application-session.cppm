@@ -650,6 +650,8 @@ export {
       Change apply(const FileWriteEnded& message);
       Change apply(const FileTouches& message);
 
+      Change apply(const PlacesKept& message);
+
       Change apply(const PaneKindNotice& message);
       Change apply(const NvimGrid& message);
       Change apply(const NvimFrame& message);
