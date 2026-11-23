@@ -51,6 +51,19 @@ namespace {
     return cells;
   }
 
+  using LaidOut = std::pair<std::vector<ShapedGlyph>, std::vector<std::tuple<std::size_t, std::size_t, int, std::int32_t, std::uint32_t>>>;
+
+  // What a row laid out: its glyphs and its spans.
+  LaidOut laidOut(const RowTextLayout<telar::ConcurrentMemory>& layout) {
+    LaidOut result{{layout.glyphs().begin(), layout.glyphs().end()}, {}};
+
+    for (const auto& span : layout.spans()) {
+      result.second.emplace_back(span.first, span.count, static_cast<int>(span.role), span.offset, span.columns);
+    }
+
+    return result;
+  }
+
   void storageIsReusedAcrossCursorAndSelectionChanges(FontFixture<telar::ConcurrentMemory>& fonts) {
     SystemAllocator upstream;
     BudgetAllocator budget{upstream, std::numeric_limits<std::size_t>::max()};
@@ -120,32 +133,23 @@ namespace {
     }
 
     const RowTextRequest request{.pixel_height = pixel_height, .cell_width = cell_width};
-    const auto snapshot = [&] {
-      std::vector<std::tuple<std::size_t, std::size_t, int, std::int32_t, std::uint32_t>> spans;
-
-      for (const auto& span : layout.spans()) {
-        spans.emplace_back(span.first, span.count, static_cast<int>(span.role), span.offset, span.columns);
-      }
-
-      return std::pair{std::vector<ShapedGlyph>{layout.glyphs().begin(), layout.glyphs().end()}, spans};
-    };
 
     layout.shape(fonts, cells, request);
-    const auto shaped = snapshot();
+    const auto shaped = laidOut(layout);
 
     check(!shaped.first.empty(), "the row shapes its cells");
     layout.shape(fonts, cells, request);
-    check(snapshot() == shaped, "a row recalled from what it kept lays out as it was shaped");
+    check(laidOut(layout) == shaped, "a row recalled from what it kept lays out as it was shaped");
     layout.resetFont();
     layout.shape(fonts, cells, request);
-    check(snapshot() == shaped, "a row shaped again after a font change lays out the same");
+    check(laidOut(layout) == shaped, "a row shaped again after a font change lays out the same");
 
     // What a row kept belongs to the pixel height it was shaped at.
     for (const std::uint16_t height : {std::uint16_t{39}, pixel_height, std::uint16_t{39}}) {
       const RowTextRequest sized{.pixel_height = height, .cell_width = cell_width};
 
       layout.shape(fonts, cells, sized);
-      const auto kept = snapshot();
+      const auto kept = laidOut(layout);
       RowTextLayout fresh{memory};
 
       fresh.shape(fonts, cells, sized);
@@ -183,6 +187,60 @@ namespace {
     request.cursor = 1;
     layout.shape(fonts, cells, request);
     check(layout.glyphs()[0].index == wide.index && layout.glyphs()[1].index == narrow.index, "the cell under the cursor and its neighbour take their own glyphs");
+  }
+
+  // A short run lays out the same whether the row asks the shaper or recalls what it kept of
+  // the run. A row that has laid out every row before and a fresh one agree on ligatures, healed
+  // letters, runs too long to keep and cells of more than one byte, through cursor moves and
+  // pixel height changes, with a face that heals its texture and one that does not.
+  void keptRunsLayOutAsShaped() {
+    telar::testing::TestMemory adapter;
+    telar::ConcurrentMemory& memory = adapter;
+    const std::filesystem::path assets{TELAR_GUI_ASSETS_DIR};
+    constexpr std::string_view letters = "mwMWiltfjI1.,()[]{}=-><!:/|&*a e";
+    constexpr std::string_view accented = "í";
+    constexpr std::size_t rows = 600;
+    constexpr std::size_t row_cells = 48;
+    constexpr std::size_t rows_per_height = 150;
+    constexpr std::uint16_t larger_height = 39;
+
+    for (const auto* primary : {"JetBrainsMono-Regular.ttf", "TelarForma-Regular.ttf"}) {
+      FontFixture fonts{memory, assets, primary};
+      RowTextLayout warm{memory};
+      std::uint32_t seed = 1;
+      const auto next = [&seed] {
+        constexpr std::uint32_t multiplier = 1664525;
+        constexpr std::uint32_t increment = 1013904223;
+        constexpr unsigned high_bits = 16;
+
+        seed = (seed * multiplier) + increment;
+
+        return seed >> high_bits;
+      };
+
+      for (std::size_t row = 0; row < rows; ++row) {
+        telar::ds::Array<CellValue, row_cells> cells;
+
+        for (auto& cell : cells.viewMut()) {
+          const auto pick = next();
+          const auto text = pick % (letters.size() + 1) == letters.size() ? accented : letters.substr(pick % (letters.size() + 1), 1);
+
+          std::ranges::copy(text, cell.text.viewMut().begin());
+          cell.length = static_cast<telar::Byte>(text.size());
+        }
+
+        RowTextRequest request{.pixel_height = (row / rows_per_height) % 2 == 0 ? pixel_height : larger_height, .cell_width = cell_width};
+        if (row % 3 == 0) {
+          request.cursor = next() % row_cells;
+        }
+
+        RowTextLayout fresh{memory};
+
+        warm.shape(fonts, cells, request);
+        fresh.shape(fonts, cells, request);
+        check(laidOut(warm) == laidOut(fresh), "a row that kept runs lays out as one that shapes them all");
+      }
+    }
   }
 
   void failedStorageCanBeRetried(FontFixture<telar::ConcurrentMemory>& fonts) {
@@ -232,6 +290,7 @@ namespace {
   const telar::testing::Case case_font_and_grid_changes_retire_cached_positions{"row_text.font_and_grid_changes_retire_cached_positions", fontAndGridChanges};
   const telar::testing::Case case_failed_storage_can_be_retried{"row_text.failed_storage_can_be_retried", withFonts<failedStorageCanBeRetried>};
   const telar::testing::Case case_kept_clusters_lay_out_as_shaped{"row_text.kept_clusters_lay_out_as_shaped", withFonts<keptClustersLayOutAsShaped>};
+  const telar::testing::Case case_kept_runs_lay_out_as_shaped{"row_text.kept_runs_lay_out_as_shaped", keptRunsLayOutAsShaped};
   const telar::testing::Case case_telar_forma_heals_texture_across_cells{"row_text.telar_forma_heals_texture_across_cells", telarFormaHealsTextureAcrossCells};
 
 }

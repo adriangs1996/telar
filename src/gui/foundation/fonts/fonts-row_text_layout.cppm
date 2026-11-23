@@ -486,6 +486,7 @@ export {
         if (cached_face_ != &primary || cached_height_ != request.pixel_height) {
           ascii_ = {};
           clusters_ = {};
+          run_keys_ = {};
           // Only the face's identity is kept, never dereferenced.
           cached_face_ = tbc::raw(&primary);
           cached_height_ = request.pixel_height;
@@ -595,6 +596,10 @@ export {
       // Fibonacci hashing: the top bits of the key times 2^64 over the golden ratio.
       [[nodiscard]] static std::size_t clusterSlot(std::uint64_t key) noexcept;
 
+      // The bytes of a run of up to six cells of one byte each, with its count in the top byte:
+      // zero for any other run.
+      [[nodiscard]] static std::uint64_t runKey(std::span<const CellValue> cells) noexcept;
+
       // What TextLayout makes of a text the primary face covers: one span of its glyphs, starting
       // at the cell, with no columns of a fitted face.
       void appendCluster(ShapedGlyph glyph, std::size_t column, RowTextRequest request);
@@ -609,6 +614,7 @@ export {
       static constexpr unsigned cluster_bits = 8;
       static constexpr unsigned cluster_length_shift = 56U;
       static constexpr std::uint64_t golden_ratio_multiplier = 0x9e3779b97f4a7c15ULL;
+      static constexpr std::size_t run_cells = 6;
 
       TextRuns<Memory> runs_;
       TextLayout<Memory> cell_;
@@ -617,6 +623,11 @@ export {
       ds::Vec<CellTextRange, Memory> cells_;
       ds::Array<ds::Option<ShapedGlyph>, LigatureCoverage::ascii_count> ascii_{};
       ds::Array<Cluster, std::size_t{1} << cluster_bits> clusters_{};
+      // A short run the primary face shapes into one glyph a cell is kept as those glyphs, so a
+      // row that repeats it does not ask the shaper again. The keys are apart from the glyphs,
+      // so a probe reads eight bytes.
+      ds::Array<std::uint64_t, std::size_t{1} << cluster_bits> run_keys_{};
+      ds::Array<ds::Array<ShapedGlyph, run_cells>, std::size_t{1} << cluster_bits> run_glyphs_{};
       const Face* cached_face_ = nullptr;
       std::uint16_t cached_height_ = 0;
     };

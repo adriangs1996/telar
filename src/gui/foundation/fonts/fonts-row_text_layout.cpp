@@ -174,6 +174,7 @@ namespace telar::gui::inline foundation::inline fonts {
   void RowTextLayout<Memory>::resetFont() noexcept {
     ascii_ = {};
     clusters_ = {};
+    run_keys_ = {};
     cached_face_ = nullptr;
   }
 
@@ -213,6 +214,16 @@ namespace telar::gui::inline foundation::inline fonts {
 
   template <Allocator Memory>
   bool RowTextLayout<Memory>::appendTogether(Face& face, std::span<const CellValue> cells, std::size_t column, RowTextRequest request) {
+    const auto key = runKey(cells);
+    const auto slot = clusterSlot(key);
+    if (key != 0 && run_keys_[slot] == key) {
+      for (std::size_t index = 0; index < cells.size(); ++index) {
+        appendPrimary(std::span{run_glyphs_[slot]}.subspan(index, 1), column + index, request);
+      }
+
+      return true;
+    }
+
     ds::Array<char, TextRuns<Memory>::maximum_bytes> bytes{};
     ds::Array<std::uint32_t, TextRuns<Memory>::maximum_cells> ends{};
     std::size_t length = 0;
@@ -240,6 +251,8 @@ namespace telar::gui::inline foundation::inline fonts {
     }
 
     std::size_t first = 0;
+    // A run is kept when each of its cells takes one glyph.
+    bool kept = key != 0 && run.size() == cells.size();
 
     for (std::size_t index = 0; index < cells.size(); ++index) {
       auto end = first;
@@ -250,12 +263,37 @@ namespace telar::gui::inline foundation::inline fonts {
 
       const auto share = std::span{saved}.subspan(first, end - first);
 
+      kept = kept && share.size() == 1;
       appendPrimary(share, column + index, request);
 
       first = end;
     }
 
+    if (kept) {
+      run_keys_.atMut(slot) = key;
+      std::ranges::copy(std::span{saved}.first(cells.size()), run_glyphs_.atMut(slot).viewMut().begin());
+    }
+
     return true;
+  }
+
+  template <Allocator Memory>
+  std::uint64_t RowTextLayout<Memory>::runKey(std::span<const CellValue> cells) noexcept {
+    if (cells.size() > run_cells) {
+      return 0;
+    }
+
+    std::uint64_t key = static_cast<std::uint64_t>(cells.size()) << cluster_length_shift;
+
+    for (std::size_t index = 0; index < cells.size(); ++index) {
+      if (cells[index].length != 1) {
+        return 0;
+      }
+
+      key |= static_cast<std::uint64_t>(cells[index].text[0]) << (std::size_t{std::numeric_limits<unsigned char>::digits} * index);
+    }
+
+    return key;
   }
 
   template <Allocator Memory>
