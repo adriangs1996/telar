@@ -185,7 +185,8 @@ To publish a version:
 3. Watch the workflow. It publishes the release once every platform built.
 
 Every pull request and push to `main` runs [`ci.yml`](../.github/workflows/ci.yml),
-the rules of the UI layers and of the module graph. The C++ workflows (`runtime-cpp.yml`,
+the rules of the UI layers and of the module graph, and that the files of `src/` tbc's spec
+names exist. The C++ workflows (`runtime-cpp.yml`,
 `gui-cpp.yml`, `tbc.yml`) build and test the projects whose paths changed.
 
 ### Assets

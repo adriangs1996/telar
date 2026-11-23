@@ -65,23 +65,23 @@ jobs:
         run: |
           python3 tools/check-cpp-modules.py
           python3 -m unittest discover -s tools/tests -p 'test_cpp_*.py' -v
-          tools/cpp build ci -- --target lib/all src/gateway/all --parallel 3
-          tools/cpp test ci -- -L '^lib\.'
+          tools/cpp build ci -- --target lib/all src/gateway/all --parallel "$CPP_JOBS"
+          tools/cpp test ci -- --timeout 300 -L '^lib\.' --parallel "$CPP_JOBS"
           python3 tools/check-cpp-package.py --build out/ci
           python3 tools/check-cpp-editor.py --build out/ci --file lib/base/tests/base_test.cpp
 
       - name: Build and test
         run: |
           ulimit -n 8192
-          tools/cpp build ci -- --target src/runtime/all src/cli/all checkpoint-probe --parallel 3
+          tools/cpp build ci -- --target src/runtime/all src/cli/all checkpoint-probe --parallel "$CPP_JOBS"
           # Every case of the runtime and CLI domains, and their integration tests; of the
           # end-to-end checks, the server's and those of the wire contract `api schema` prints.
-          tools/cpp test ci -- -L '^(runtime|cli)\.' -LE '\.e2e$' --parallel 3
-          tools/cpp test ci -- -R '^(server-cli-tests|exec-runtime-(offline|cli)-tests)$'
+          tools/cpp test ci -- --timeout 300 -L '^(runtime|cli)\.' -LE '\.e2e$' --parallel "$CPP_JOBS"
+          tools/cpp test ci -- --timeout 300 -R '^(server-cli-tests|exec-runtime-(offline|cli)-tests)$'
 
       - name: Check distributable linkage
         if: matrix.distributable == 'ON'
-        run: tools/cpp build ci -- --target distributable-linkage --parallel 3
+        run: tools/cpp build ci -- --target distributable-linkage --parallel "$CPP_JOBS"
 
       # A cached tbc-lint is used as it is: its build tree would rebuild anyway, as the checkout gives every
       # source a new time. It is saved as soon as it is built, whatever the check then finds.
@@ -97,7 +97,7 @@ jobs:
         if: matrix.configuration == 'Release' && steps.tbc-lint.outputs.cache-hit != 'true'
         run: |
           tools/cpp configure tbc -B lib/tbc/out/release --config Release -- -DBUILD_TESTING=OFF
-          tools/cpp build tbc -B lib/tbc/out/release -- --target tbc-lint --parallel 3
+          tools/cpp build tbc -B lib/tbc/out/release -- --target tbc-lint --parallel "$CPP_JOBS"
 
       - name: Save tbc-lint
         if: matrix.configuration == 'Release' && steps.tbc-lint.outputs.cache-hit != 'true'
@@ -111,7 +111,7 @@ jobs:
         if: matrix.configuration == 'Release'
         run: |
           tools/cpp exec -- cmake -DCHECK=lifetime+interface_bodies+blank_lines \
-            -DBUILD_DIRECTORY=out/ci -DJOBS=3 -P cmake/scripts/check.cmake
+            -DBUILD_DIRECTORY=out/ci -DJOBS="$CPP_JOBS" -P cmake/scripts/check.cmake
 
       # clang-tidy over the units of this tree, in the configuration `just lint` checks, with tbc's
       # plugin, which keeps each unit from walking what it imports.
@@ -120,7 +120,7 @@ jobs:
         run: |
           tools/cpp configure tbc -B lib/tbc/out/release --config Release -- -DBUILD_TESTING=OFF
           tools/cpp build tbc -B lib/tbc/out/release -- --target tbc-tidy-scope
-          tools/cpp exec -- cmake -DCHECK=lint -DBUILD_DIRECTORY=out/ci -DJOBS=3 -P cmake/scripts/check.cmake
+          tools/cpp exec -- cmake -DCHECK=lint -DBUILD_DIRECTORY=out/ci -DJOBS="$CPP_JOBS" -P cmake/scripts/check.cmake
 
       - name: Retain validation reports
         if: always()
@@ -173,19 +173,19 @@ jobs:
         run: |
           python3 tools/check-cpp-modules.py
           python3 -m unittest discover -s tools/tests -p 'test_cpp_*.py' -v
-          tools/cpp build ci -- --target lib/all src/gateway/all --parallel 3
-          tools/cpp test ci -- -L '^lib\.'
+          tools/cpp build ci -- --target lib/all src/gateway/all --parallel "$CPP_JOBS"
+          tools/cpp test ci -- --timeout 300 -L '^lib\.' --parallel "$CPP_JOBS"
           python3 tools/check-cpp-package.py --build out/ci
           python3 tools/check-cpp-editor.py --build out/ci --file lib/base/tests/base_test.cpp
 
       - name: Build and test
         run: |
           ulimit -n 8192
-          tools/cpp build ci -- --target src/runtime/all src/cli/all checkpoint-probe --parallel 3
+          tools/cpp build ci -- --target src/runtime/all src/cli/all checkpoint-probe --parallel "$CPP_JOBS"
           # Every case of the runtime and CLI domains, and their integration tests; of the
           # end-to-end checks, the server's.
-          tools/cpp test ci -- -L '^(runtime|cli)\.' -LE '\.e2e$' --parallel 3
-          tools/cpp test ci -- -R '^server-cli-tests$'
+          tools/cpp test ci -- --timeout 300 -L '^(runtime|cli)\.' -LE '\.e2e$' --parallel "$CPP_JOBS"
+          tools/cpp test ci -- --timeout 300 -R '^server-cli-tests$'
 
       # tbc's plugin, which keeps each unit of the lint from walking what it imports. It fails the job
       # when it does not build, as the lint below does not.
@@ -200,4 +200,4 @@ jobs:
       - name: Lint
         if: matrix.os == 'ubuntu-24.04' && matrix.configuration == 'Debug'
         continue-on-error: true
-        run: tools/cpp exec -- cmake -DCHECK=lint -DBUILD_DIRECTORY=out/ci -DJOBS=3 -P cmake/scripts/check.cmake
+        run: tools/cpp exec -- cmake -DCHECK=lint -DBUILD_DIRECTORY=out/ci -DJOBS="$CPP_JOBS" -P cmake/scripts/check.cmake
