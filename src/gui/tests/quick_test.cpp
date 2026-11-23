@@ -1804,10 +1804,15 @@ return {api_version = 2, client = {
       QCOMPARE(explorer->plan().value(0).toMap().value(QStringLiteral("verb")).toString(), QStringLiteral("CREATE"));
       QCOMPARE(explorer->plan().value(1).toMap().value(QStringLiteral("verb")).toString(), QStringLiteral("MOVE"));
       QCOMPARE(explorer->plan().value(2).toMap().value(QStringLiteral("verb")).toString(), QStringLiteral("DELETE"));
-      // A line says the size of what it changes, and that an agent named the file since.
+      // A line says the size of what it changes. That an agent named the file since it changed
+      // is said when its report came a second or more after the fixture was written, so only
+      // what the line may say is checked here; the feature's tests check when.
       QVERIFY(explorer->plan().value(0).toMap().value(QStringLiteral("size")).toString().isEmpty());
       QVERIFY(!explorer->plan().value(2).toMap().value(QStringLiteral("size")).toString().isEmpty());
-      QCOMPARE(explorer->plan().value(1).toMap().value(QStringLiteral("warning")).toString(), QStringLiteral("an agent touched it since it was listed"));
+
+      const auto touched_note = explorer->plan().value(1).toMap().value(QStringLiteral("warning")).toString();
+
+      QVERIFY2(touched_note.isEmpty() || touched_note == QStringLiteral("an agent touched it since it was listed"), qPrintable(touched_note));
       QVERIFY(explorer->plan().value(2).toMap().value(QStringLiteral("warning")).toString().isEmpty());
       shoot(QStringLiteral("explorer-plan"));
       press(QStringLiteral("y"));
