@@ -2617,6 +2617,18 @@ namespace {
       }));
       shoot(QStringLiteral("explorer-two-machines"));
 
+      // A row of the other machine dragged out of the window is text that says its machine, and
+      // no file URL: nothing of it is on this one.
+      QCOMPARE(explorer->grab(1, 0), 1);
+      {
+        const auto outside = explorer->draggedData();
+
+        QCOMPARE(outside->text(), QStringLiteral("Build:/home/ops/logs"));
+        QVERIFY(!outside->hasUrls());
+      }
+
+      explorer->release();
+
       // A file removed on each machine, and one plan that says the machine of each line.
       explorer->type(QStringLiteral("jdd"));
       explorer->type(QStringLiteral("<C-w>h"));

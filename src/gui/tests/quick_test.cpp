@@ -1818,6 +1818,14 @@ return {api_version = 2, client = {
       // A row dragged onto a directory is a change to write, as `dd` and `p` there: nothing moves
       // on the disk, and `u` takes it back. The directory a row is in does not take it.
       QCOMPARE(explorer->grab(0, listed(QStringLiteral("usage.md"))), 1);
+      // Out of the window the row is its path, and a file of this machine a file URL as well.
+      {
+        const auto outside = explorer->draggedData();
+
+        QCOMPARE(outside->text(), root + QStringLiteral("/docs/usage.md"));
+        QCOMPARE(outside->urls(), QList<QUrl>{QUrl::fromLocalFile(root + QStringLiteral("/docs/usage.md"))});
+      }
+
       QCOMPARE(explorer->aim(0, listed(QStringLiteral("docs")), false, false).value(QStringLiteral("count")).toInt(), 0);
       QCOMPARE(explorer->aim(0, listed(QStringLiteral("assets")), false, false).value(QStringLiteral("row")).toInt(), listed(QStringLiteral("assets")));
       explorer->drop(0, listed(QStringLiteral("assets")), false, false);

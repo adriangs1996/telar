@@ -8,6 +8,7 @@ static_assert(true);
 #include "ui/kit/store/store.hpp"
 #include <QAbstractItemModel>
 #include <QList>
+#include <QMimeData>
 #include <QObject>
 #include <QPointF>
 #include <QString>
@@ -18,6 +19,7 @@ static_assert(true);
 #include <QtQml/qqmlregistration.h>
 #include <cstddef>
 #include <cstdint>
+#include <memory>
 
 #pragma once
 
@@ -119,6 +121,13 @@ namespace telar::gui::qt {
     // are copied to another unless one of them says otherwise.
     [[nodiscard]] Q_INVOKABLE QVariantMap aim(int window, int row, bool copy, bool move) const;
     Q_INVOKABLE void drop(int window, int row, bool copy, bool move);
+    // The rows dragged left the window: another program takes them from here on, as what
+    // `draggedData` says they are, and the explorer holds them no more.
+    Q_INVOKABLE void dragOut();
+    // What a program outside the window is given of the rows dragged: a line of text each, the
+    // path of a file of the machine the window runs on and `label:/path` of another's; and of
+    // the first kind a file URL as well.
+    [[nodiscard]] std::unique_ptr<QMimeData> draggedData();
     // Asks a file on its way between two machines to stop.
     Q_INVOKABLE void cancelTransfer(int id);
     Q_INVOKABLE void release();

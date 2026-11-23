@@ -10,6 +10,7 @@ static_assert(true);
 #include <QClipboard>
 #include <QDateTime>
 #include <QDir>
+#include <QDrag>
 #include <QGuiApplication>
 #include <QKeyEvent>
 #include <QVarLengthArray>
@@ -102,7 +103,7 @@ namespace telar::gui::qt {
       std::string_view label;
     };
 
-    constexpr ds::Array<HelpKey, 63> help_keys{
+    constexpr ds::Array<HelpKey, 64> help_keys{
         {
             {.group = "Moving", .keys = "j k", .label = "down, up; with a count"},
             {.group = "Moving", .keys = "gg G", .label = "first, last; 12G goes to row 12"},
@@ -165,6 +166,7 @@ namespace telar::gui::qt {
             {.group = "Pointer and shortcuts", .keys = "drag", .label = "moves there on :w; Alt copies"},
             {.group = "Pointer and shortcuts", .keys = "drag to a machine", .label = "copies there on :w; Shift moves"},
             {.group = "Pointer and shortcuts", .keys = "drop files", .label = "from the desktop: copies there on :w"},
+            {.group = "Pointer and shortcuts", .keys = "drag out", .label = "gives another program the paths"},
             {.group = "Pointer and shortcuts", .keys = "<D-c> <D-x> <D-v>", .label = "copy, cut, paste; Control too"},
             {.group = "Pointer and shortcuts", .keys = "<D-z> <D-s> F2", .label = "undo, write, rename"},
         },
@@ -1157,6 +1159,61 @@ namespace telar::gui::qt {
 
     explorer::drop(view_, cacheOf(machine), explorer::contextOf(around, machine), {.window = pick.window, .row = pick.row, .copy = copy, .move = move});
     finish(Effect::none);
+  }
+
+  std::unique_ptr<QMimeData> ExplorerController::draggedData() {
+    observe();
+
+    const auto around = explorer::around(scene_);
+    auto data = std::make_unique<QMimeData>();
+    QString text;
+    QList<QUrl> urls;
+
+    for (const auto& item : view_.dragged) {
+      const auto context = explorer::contextOf(around, item.machine);
+      const auto path = toQString(item.path.view());
+
+      if (!text.isEmpty()) {
+        text += QLatin1Char{'\n'};
+      }
+
+      if (context.local) {
+        urls.push_back(QUrl::fromLocalFile(path));
+      } else {
+        // A path of another machine says which, as scp and rsync read it and as `yy` writes it.
+        text += toQString(context.machine) + QLatin1Char{':'};
+      }
+
+      text += path;
+    }
+
+    if (!text.isEmpty()) {
+      data->setText(text);
+    }
+
+    if (!urls.isEmpty()) {
+      data->setUrls(urls);
+    }
+
+    return data;
+  }
+
+  void ExplorerController::dragOut() {
+    auto data = draggedData();
+
+    explorer::release(view_);
+    if (!data->hasText()) {
+      return;
+    }
+
+    // Qt owns the drag from here and deletes it when it ends. It starts once the handler that
+    // asked for it returned, since it runs its own loop until the rows are let go.
+    auto* drag = new QDrag{this}; // NOLINT(cppcoreguidelines-owning-memory): its parent, this controller, owns it until Qt deletes it when the drag ends.
+
+    drag->setMimeData(data.release());
+    QTimer::singleShot(0, drag, [drag] {
+      drag->exec(Qt::CopyAction);
+    });
   }
 
   void ExplorerController::release() {

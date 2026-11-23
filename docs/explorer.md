@@ -192,6 +192,12 @@ are files of the machine the window runs on, so on a window of another machine t
 carries them [between the two](#between-machines). The runtime is asked what each is before
 the plan shows. What is no file of this machine, as a link to a page, is refused.
 
+Rows dragged past the frame of the window go to the program under the pointer as their paths,
+a line each: a file of the machine the window runs on as its path and as a file, which an
+editor opens and a file manager copies, and a file of another machine as `LABEL:/absolute/path`,
+the text `yy` copies. The explorer holds them no more once they leave: dragged back in, they
+are files dropped as any other program's are.
+
 ## Git
 
 | Keys | What they do |
@@ -321,7 +327,9 @@ other, 256 KiB at a time, and holds one such piece of it and no more.
   operation that makes one.
 - A transfer does not go on after its machine was disconnected and connected again: it
   fails, and is started again by hand.
-- Nothing is dragged out to the desktop.
+- A file of another machine is not downloaded by dragging it out to the desktop or to another
+  program: that takes a promise of a file the window would fill on the drop, and what leaves
+  is its path as text. [Bring a copy](#between-machines) with a paste or a drop in a window.
 - Beside the panes the explorer is the window's own: the runtime does not know of it as a
   pane, so it is not part of a tab's layout, is not split or moved with the panes, and does not
   return when the window is opened again.

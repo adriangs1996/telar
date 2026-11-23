@@ -253,6 +253,17 @@ FocusScope {
         settleFocus();
     }
 
+    // The pointer took the rows out of the window: another program takes them from there, as
+    // paths, and the explorer shows no drag of its own.
+    function leaveWindow() {
+        dragging = false;
+        dropWindow = -1;
+        dropRow = -1;
+        dropPane = "";
+        controller.dragOut();
+        settleFocus();
+    }
+
     function toneColor(tone) {
         return tone === "added" ? colors.green : tone === "removed" ? colors.red : tone === "hunk" ? colors.blue : colors.subtext0;
     }
@@ -1143,6 +1154,15 @@ FocusScope {
                                 }
 
                                 root.dragging = true;
+                            }
+
+                            const scene = mapToItem(null, mouse.x, mouse.y);
+
+                            if (scene.x < 0 || scene.y < 0 || scene.x >= root.Window.width || scene.y >= root.Window.height) {
+                                waiting = false;
+                                pressedRow = -1;
+                                root.leaveWindow();
+                                return;
                             }
 
                             root.dragTo(place.x, place.y, (mouse.modifiers & Qt.AltModifier) !== 0, (mouse.modifiers & Qt.ShiftModifier) !== 0);
