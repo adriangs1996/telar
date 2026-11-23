@@ -354,11 +354,13 @@ namespace telar::gui::qt {
     connect(&explorer_, &ExplorerController::opened, this, [this] {
       dialogs_.show(Dialog::explorer);
     });
+
     connect(&explorer_, &ExplorerController::closed, this, [this] {
       if (store_.dialog().kind == Dialog::explorer) {
         dialogs_.show(Dialog::none);
       }
     });
+
     connect(&explorer_, &ExplorerController::failed, &status_, &WindowStatus::report);
     connect(&commands_, &WindowCommands::explorerRequested, &explorer_, &ExplorerController::toggle);
     connect(&machines_, &MachinesCoordinator::changed, &explorer_, &ExplorerController::machineChanged);
@@ -370,6 +372,7 @@ namespace telar::gui::qt {
         explorer_.close();
       }
     });
+
     connect(&commands_, &WindowCommands::monitorRequested, this, [this, open_monitor](window_actions::Action action) {
       const auto showing = store_.dialog().kind == Dialog::monitor;
       if (!showing) {

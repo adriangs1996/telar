@@ -7,6 +7,7 @@ import :files;
 import telar.base.memory.allocators;
 import telar.base.memory.containers;
 import telar.base.ds;
+import telar.tbc;
 import telar.wire.files;
 import telar.wire.runtime;
 
@@ -43,10 +44,10 @@ export namespace telar::gui::features::explorer {
   };
 
   // The directory `path` as the window holds it; none when it never asked for it.
-  [[nodiscard]] const Directory* find(const State& state, std::string_view path) noexcept;
+  [[nodiscard]] tbc::val_a<const Directory*> find(tbc::ref_a<State> state, std::string_view path) noexcept;
 
   // What the runtime said of `path`; none before it answered.
-  [[nodiscard]] const Inspection* inspected(const State& state, std::string_view path) noexcept;
+  [[nodiscard]] tbc::val_a<const Inspection*> inspected(tbc::ref_a<State> state, std::string_view path) noexcept;
 
   // What the window needs of a machine that it does not hold: a page of a directory, the sizes
   // of one, the repository's changes, or a preview.
@@ -69,8 +70,8 @@ export namespace telar::gui::features::explorer {
   [[nodiscard]] bool lacks(const State& state, const Need& need) noexcept;
 
   // The requests for a need. Whoever sends one gives it its id, and says so with `asked`.
-  [[nodiscard]] ListDirectory listing(const State& state, std::string_view path) noexcept;
-  [[nodiscard]] MeasureDirectory measure(const State& state, std::string_view path) noexcept;
+  [[nodiscard]] tbc::val_a<ListDirectory> listing(const State& state, tbc::val_a<std::string_view> path) noexcept;
+  [[nodiscard]] tbc::val_a<MeasureDirectory> measure(const State& state, tbc::val_a<std::string_view> path) noexcept;
 
   // The request for `need` left under `request_id`.
   void asked(State& state, const Need& need, std::uint64_t request_id);

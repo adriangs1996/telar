@@ -100,6 +100,7 @@ namespace telar::runtime {
           .size = kind == FileKind::directory ? 0 : static_cast<std::uint64_t>(std::max<off_t>(0, status.st_size)),
           .identity = identityOf(status),
       });
+
       names_.extend(std::span<const char>{name});
     }
 

@@ -192,6 +192,7 @@ namespace telar::gui::features::explorer {
     using Modifier = KeyChord::Modifier;
 
     Notation result;
+
     if (chord.key != KeyChord::Key::character) {
       result.assign(named(chord.key));
       return result;

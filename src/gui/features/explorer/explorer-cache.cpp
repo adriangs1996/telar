@@ -5,6 +5,7 @@ import std;
 import telar.base.memory.allocators;
 import telar.base.text.utf8;
 import telar.base.ds;
+import telar.tbc;
 import telar.wire.files;
 import telar.wire.runtime;
 
@@ -12,7 +13,7 @@ namespace telar::gui::features::explorer {
 
   namespace {
 
-    Directory* findMut(State& state, std::string_view path) noexcept {
+    tbc::val_a<Directory*> findMut(tbc::mut_a<State> state, std::string_view path) noexcept {
       for (auto& directory : state.directories.viewMut()) {
         if (directory->path.view() == path) {
           return &directory.getMut();
@@ -24,7 +25,7 @@ namespace telar::gui::features::explorer {
 
     // The directory `path`, kept from now on. With the cache full, the one read longest ago that
     // waits for nothing gives it its place.
-    Directory& keep(State& state, std::string_view path) {
+    tbc::mut_a<Directory> keep(tbc::mut_a<State> state, std::string_view path) {
       if (auto* known = findMut(state, path)) {
         return *known;
       }
@@ -67,7 +68,7 @@ namespace telar::gui::features::explorer {
     }
 
     // The entry of `changes` for exactly `path`.
-    const Change* exact(const Repository& repository, std::string_view path) noexcept {
+    tbc::val_a<const Change*> exact(tbc::ref_a<Repository> repository, std::string_view path) noexcept {
       const auto changes = repository.changes.view();
       const auto found = std::ranges::lower_bound(changes, path, {}, [&](const Change& change) {
         return repository.path(change);
@@ -81,7 +82,7 @@ namespace telar::gui::features::explorer {
     }
 
     // The inspection of `path`, in flight or answered.
-    const Inspection* inspectionOf(const State& state, std::string_view path) noexcept {
+    tbc::val_a<const Inspection*> inspectionOf(tbc::ref_a<State> state, std::string_view path) noexcept {
       for (const auto& inspection : state.inspections) {
         if (inspection->asked.view() == path) {
           return &inspection.get();
@@ -93,7 +94,7 @@ namespace telar::gui::features::explorer {
 
     // A place for the inspection of `path`: with all of them taken, the one read longest ago that
     // waits for nothing gives it its own.
-    Inspection& keepInspection(State& state, std::string_view path) {
+    tbc::mut_a<Inspection> keepInspection(tbc::mut_a<State> state, std::string_view path) {
       if (state.inspections.size() >= ExplorerLimits::inspections) {
         std::size_t oldest = state.inspections.size();
 
@@ -215,7 +216,7 @@ namespace telar::gui::features::explorer {
     return result;
   }
 
-  const Directory* find(const State& state, std::string_view path) noexcept {
+  tbc::val_a<const Directory*> find(tbc::ref_a<State> state, std::string_view path) noexcept {
     for (const auto& directory : state.directories) {
       if (directory->path.view() == path) {
         return &directory.get();
@@ -225,7 +226,7 @@ namespace telar::gui::features::explorer {
     return nullptr;
   }
 
-  const Inspection* inspected(const State& state, std::string_view path) noexcept {
+  tbc::val_a<const Inspection*> inspected(tbc::ref_a<State> state, std::string_view path) noexcept {
     const auto* inspection = inspectionOf(state, path);
 
     return inspection != nullptr && inspection->known ? inspection : nullptr;
@@ -256,14 +257,14 @@ namespace telar::gui::features::explorer {
     return false;
   }
 
-  ListDirectory listing(const State& state, std::string_view path) noexcept {
+  tbc::val_a<ListDirectory> listing(const State& state, tbc::val_a<std::string_view> path) noexcept {
     const auto* directory = find(state, path);
     const auto held = directory == nullptr || directory->stale || !directory->listed ? 0 : directory->entries.size();
 
     return {.path = path, .skip = static_cast<std::uint32_t>(held), .limit = FileLimits::maximum_entries};
   }
 
-  MeasureDirectory measure(const State& state, std::string_view path) noexcept {
+  tbc::val_a<MeasureDirectory> measure(const State& state, tbc::val_a<std::string_view> path) noexcept {
     const auto* directory = find(state, path);
 
     return {.path = path, .skip = directory == nullptr ? 0 : directory->measured, .limit = FileLimits::maximum_entries};
@@ -327,6 +328,7 @@ namespace telar::gui::features::explorer {
           .size = entry.size,
           .identity = entry.identity,
       });
+
       directory->names.extend(std::span<const char>{entry.name});
     }
 
@@ -396,6 +398,7 @@ namespace telar::gui::features::explorer {
           .added = change.added,
           .removed = change.removed,
       });
+
       repository.text.extend(std::span<const char>{change.path});
       repository.staged += changed(change.staged) ? 1 : 0;
       repository.untracked += change.unstaged == FileState::untracked ? 1 : 0;
@@ -405,6 +408,7 @@ namespace telar::gui::features::explorer {
     std::ranges::sort(repository.changes.viewMut(), {}, [&](const Change& change) {
       return repository.path(change);
     });
+
     repository.known = true;
     repository.stale = false;
     repository.waiting = 0;

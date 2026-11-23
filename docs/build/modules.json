@@ -983,6 +983,7 @@
     "src/gui/ui/kit/timing/window_frame_pacer.hpp": "Qt moc/QML integration",
     "src/gui/ui/kit/machines/window_identity.hpp": "Qt moc/QML integration",
     "src/gui/ui/kit/cell_scene/window_images.hpp": "Qt moc/QML integration",
+    "src/gui/features/explorer/tests/explorer_fixture.hpp": "Test or tool support (local textual fixture)",
     "src/gui/tests/agent_report_fixture.hpp": "Test or tool support (local textual fixture)",
     "src/gui/tests/appearance_fixture.hpp": "Qt adapter dependency",
     "src/gui/tests/assertions.hpp": "Objective-C++ ABI",

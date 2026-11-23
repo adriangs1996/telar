@@ -5,6 +5,7 @@ export module telar.gui.application:explorer;
 import std;
 
 import :session;
+import telar.tbc;
 import telar.gui.features.explorer;
 import telar.config.client;
 import telar.wire.files;
@@ -95,5 +96,8 @@ export namespace telar::gui::application::explorer {
   [[nodiscard]] Hints hints(const Session& session, const View& view, const Host& host);
   [[nodiscard]] ds::Array<LensLook, lens_count> lenses(const Session& session, const View& view, const Host& host);
   [[nodiscard]] PreviewLook preview(const Session& session, const View& view, const Host& host, std::uint64_t now_seconds);
+
+  // The text the preview shows, which is the session's own.
+  [[nodiscard]] tbc::val_a<std::string_view> previewText(tbc::ref_a<Session> session, const View& view) noexcept;
 
 }

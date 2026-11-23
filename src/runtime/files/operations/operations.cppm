@@ -70,13 +70,13 @@ export namespace telar::runtime {
     [[nodiscard]] Applied transfer(const FileOperation& operation, bool overwrite);
     [[nodiscard]] Applied discard(const FileOperation& operation, const std::atomic<bool>& cancelled);
     [[nodiscard]] Applied index(const FileOperation& operation, const std::atomic<bool>& cancelled);
-    [[nodiscard]] FileOutcome revert(const Record& record);
+    [[nodiscard]] FileOutcome revert(const Record& record) const;
 
     // Makes room at `target`, which exists: sends it to the trash when `overwrite`, or picks a
     // free name beside it, which `target` then holds. False when neither could be done.
     [[nodiscard]] bool clear(Path& target, bool overwrite, bool& renamed);
     // Sends `path` to the trash and returns where it is there; nothing when no trash takes it.
-    [[nodiscard]] ds::Option<Path> trash(std::string_view path, bool copy);
+    [[nodiscard]] ds::Option<Path> trash(std::string_view path, bool copy) const;
     // Runs the account's git in `directory`; its exit status, or -1 when it could not run.
     [[nodiscard]] int git(std::string_view directory, std::span<const std::string_view> arguments, const std::atomic<bool>& cancelled);
     void remember(Step step, std::string_view first, std::string_view second, std::uint64_t inode);

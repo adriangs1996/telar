@@ -9,6 +9,7 @@ import :keys;
 import telar.base.memory.allocators;
 import telar.base.memory.containers;
 import telar.base.ds;
+import telar.tbc;
 import telar.wire.files;
 
 export namespace telar::gui::features::explorer {
@@ -170,7 +171,8 @@ export namespace telar::gui::features::explorer {
     FileIdentity identity{};
     std::uint64_t size = 0;
 
-    [[nodiscard]] Edit clone() const;
+    // A copy that keeps its texts in `memory`, and borrows nothing of this one.
+    [[nodiscard]] tbc::val_a<Edit> clone(tbc::mut_a<Memory> memory) const;
   };
 
   // What `yy` or `dd` took, for `p` to put.
@@ -246,6 +248,8 @@ export namespace telar::gui::features::explorer {
     ds::Option<std::size_t> anchor;
     // The rows picked one by one with the pointer.
     ds::Vec<std::uint32_t, Memory> picked;
+    // How many rows, from the selected one, the command that runs takes: the count of `3dd`.
+    std::uint32_t reach = 1;
     // The entries of the root the listing leaves out, and what the root holds.
     std::uint32_t hidden_entries = 0;
     std::uint32_t ignored_entries = 0;
@@ -337,12 +341,13 @@ export namespace telar::gui::features::explorer {
   [[nodiscard]] const Window& window(const View& view) noexcept;
 
   // The change of `kind` typed on `path` of `machine`, if there is one.
-  [[nodiscard]] const Edit* editOn(const View& view, EditKind kind, std::uint64_t machine, std::string_view path) noexcept;
+  [[nodiscard]] tbc::val_a<const Edit*> editOn(tbc::ref_a<View> view, EditKind kind, std::uint64_t machine, std::string_view path) noexcept;
 
   // The change that adds the row, for a row a change adds.
-  [[nodiscard]] const Edit* editOf(const View& view, const Row& row) noexcept;
+  [[nodiscard]] tbc::val_a<const Edit*> editOf(tbc::ref_a<View> view, const Row& row) noexcept;
 
-  // The rows a command acts on: the visual selection, else the ones picked, else the selected one.
+  // The rows a command acts on: the visual selection, else the ones picked, else the selected one
+  // and as many after it as the command's count says.
   struct Range {
     std::size_t first = 0;
     std::size_t last = 0;
@@ -356,6 +361,6 @@ export namespace telar::gui::features::explorer {
   void pathOf(ds::String<Memory>& path, const Window& window, const State& state, const Context& context, const Row& row);
 
   // The row's name as it lists: the entry's, the one a change gives it, or the row's own text.
-  [[nodiscard]] std::string_view nameOf(const Window& window, const State& state, const Row& row) noexcept;
+  [[nodiscard]] tbc::val_a<std::string_view> nameOf(tbc::ref_a<Window> window, tbc::ref_a<State> state, const Row& row) noexcept;
 
 }

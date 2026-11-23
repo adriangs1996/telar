@@ -198,6 +198,7 @@ namespace telar::runtime {
         .staged = parsed->staged,
         .unstaged = parsed->unstaged,
     });
+
     text_.extend(std::span<const char>{parsed->path});
     return true;
   }
@@ -213,6 +214,7 @@ namespace telar::runtime {
     const auto added = parseExact<std::uint32_t>(record.substr(0, first));
     const auto removed = parseExact<std::uint32_t>(record.substr(first + 1, second - first - 1));
     const auto path = record.substr(second + 1);
+
     if (!added || !removed) {
       return;
     }

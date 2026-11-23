@@ -1,6 +1,7 @@
 module telar.runtime.files.operations;
 
 import std;
+import telar.tbc;
 import telar.sys.posix;
 import telar.platform.error;
 import telar.platform.fs;
@@ -254,7 +255,7 @@ namespace telar::runtime {
 
     // Where this account's trash keeps files: the one of its home, or the one of the volume
     // `top` is the root of, as macOS and the XDG trash specification place them.
-    Path trashFiles(ConcurrentMemory& memory, std::string_view top) {
+    tbc::val_a<Path> trashFiles(tbc::mut_a<ConcurrentMemory> memory, std::string_view top) {
       Path directory{memory};
 
 #ifdef __APPLE__
@@ -285,7 +286,7 @@ namespace telar::runtime {
     }
 
     // The root of the volume `path` is on: the highest directory above it on the same device.
-    Path volumeOf(ConcurrentMemory& memory, std::string_view path, dev_t device) {
+    tbc::val_a<Path> volumeOf(tbc::mut_a<ConcurrentMemory> memory, std::string_view path, dev_t device) {
       Path top{memory, parentOf(path)};
 
       while (top.view() != "/") {
@@ -303,7 +304,7 @@ namespace telar::runtime {
 
 #ifndef __APPLE__
     // Where the XDG trash keeps what it knows of a file it holds at `kept`.
-    Path trashInfo(ConcurrentMemory& memory, std::string_view kept) {
+    tbc::val_a<Path> trashInfo(tbc::mut_a<ConcurrentMemory> memory, std::string_view kept) {
       constexpr std::string_view files = "/files/";
       Path info{memory};
       const auto at = kept.rfind(files);
@@ -383,7 +384,7 @@ namespace telar::runtime {
     journal_.push({.step = step, .first = Path{memory_, first}, .second = Path{memory_, second}, .inode = inode});
   }
 
-  ds::Option<FileChanger::Path> FileChanger::trash(std::string_view path, bool copy) {
+  ds::Option<FileChanger::Path> FileChanger::trash(std::string_view path, bool copy) const {
     const Path source{memory_, path};
     const auto status = statOf(source);
     if (!status || home().empty()) {
@@ -628,6 +629,7 @@ namespace telar::runtime {
 
   FileChanger::Applied FileChanger::index(const FileOperation& operation, const std::atomic<bool>& cancelled) {
     Applied applied{.path = Path{memory_, trimmed(operation.source)}};
+
     if (!acceptable(operation.source)) {
       applied.outcome = FileOutcome::refused;
       return applied;
@@ -690,21 +692,24 @@ namespace telar::runtime {
   void FileChanger::change(const ChangeFiles& request, const std::atomic<bool>& cancelled, EncodedReply<ConcurrentMemory>& reply) {
     journal_.clear();
 
-    // Reserved whole: a result views its path, which must not move when the next one is kept.
+    // Every operation first, then the results: a result views its path, which stays where it is
+    // once nothing more is kept.
     ds::Vec<Applied, ConcurrentMemory> applied{memory_};
     ds::Array<FileResult, FileLimits::maximum_results> results{};
 
     applied.reserve(request.operations.size());
     for (const auto& operation : request.operations) {
-      const auto& kept = applied.push(apply(operation, request.overwrite, cancelled));
+      applied.push(apply(operation, request.overwrite, cancelled));
+    }
 
-      results.atMut(applied.size() - 1) = {.outcome = kept.outcome, .path = kept.path.view()};
+    for (std::size_t index = 0; index < applied.size(); ++index) {
+      results.atMut(index) = {.outcome = applied[index].outcome, .path = applied[index].path.view()};
     }
 
     reply.send(FilesChanged{.request_id = request.request_id, .undoable = !journal_.empty(), .results = results.view().first(applied.size())});
   }
 
-  FileOutcome FileChanger::revert(const Record& record) {
+  FileOutcome FileChanger::revert(const Record& record) const {
     const auto first = statOf(record.first);
     const auto second = record.second.empty() ? ds::none : statOf(record.second);
 

@@ -94,6 +94,7 @@ namespace telar::gui::qt {
           {"Git, sizes and what shows", {{"=", "the diff below the row"}, {"ga gu", "stage, unstage"}, {"gX", "discard changes, through the plan"}, {"gc", ":commit with a message"}, {"S", "sort by name, size, time"}, {"g. gi", "dotfiles, what git ignores"}, {"R", "read again"}}},
           {"Modes", {{"V", "visual: y d <CR> @ ga gu"}, {"/", "filter the listing"}, {":", "e w vs sp cd commit marks q"}, {"F", "follow the pane"}, {"q", "close"}, {"?", "this help"}}},
       };
+
       QVariantList result;
 
       for (const auto& group : groups) {
@@ -167,12 +168,12 @@ namespace telar::gui::qt {
       result.push_back(QVariantMap{
           {QStringLiteral("index"), static_cast<int>(index)},
           {QStringLiteral("current"), status.current},
-          {QStringLiteral("machine"), toQString(header.machine)},
+          {QStringLiteral("machine"), text(header.machine)},
           {QStringLiteral("local"), header.local},
           {QStringLiteral("lead"), text(header.lead)},
-          {QStringLiteral("last"), toQString(header.last)},
+          {QStringLiteral("last"), text(header.last)},
           {QStringLiteral("repository"), header.repository},
-          {QStringLiteral("branch"), toQString(header.branch)},
+          {QStringLiteral("branch"), text(header.branch)},
           {QStringLiteral("upstream"), header.upstream},
           {QStringLiteral("ahead"), header.ahead},
           {QStringLiteral("behind"), header.behind},
@@ -299,7 +300,7 @@ namespace telar::gui::qt {
 
     // The text a line at a time, each with what it is in a diff.
     QVariantList lines;
-    auto rest = look.text;
+    auto rest = explorer::previewText(store_.session(), view_);
 
     while (!rest.empty() && lines.size() < preview_lines) {
       const auto end = rest.find('\n');
@@ -316,7 +317,7 @@ namespace telar::gui::qt {
     QVariantMap result{
         {QStringLiteral("shown"), true},
         {QStringLiteral("directory"), look.directory},
-        {QStringLiteral("name"), toQString(look.name)},
+        {QStringLiteral("name"), text(look.name)},
         {QStringLiteral("path"), text(look.path)},
         {QStringLiteral("facts"), facts},
         {QStringLiteral("panes"), numbers(look.panes.view().first(look.pane_count))},
@@ -326,7 +327,7 @@ namespace telar::gui::qt {
         {QStringLiteral("waiting"), look.waiting},
     };
 
-    putIcon(result, look.directory ? directoryIcon() : fileIcon(look.name));
+    putIcon(result, look.directory ? directoryIcon() : fileIcon(look.name.view()));
     return result;
   }
 
@@ -399,8 +400,8 @@ namespace telar::gui::qt {
         {QStringLiteral("removed"), look.removed},
         {QStringLiteral("renamed"), look.renamed},
         {QStringLiteral("added"), look.added},
-        {QStringLiteral("lead"), toQString(look.lead)},
-        {QStringLiteral("name"), toQString(look.name)},
+        {QStringLiteral("lead"), text(look.lead)},
+        {QStringLiteral("name"), text(look.name)},
         {QStringLiteral("tone"), QString::fromLatin1(diff_tones[static_cast<std::size_t>(look.tone)])},
         {QStringLiteral("staged"), letter(look.staged)},
         {QStringLiteral("unstaged"), letter(look.unstaged)},
@@ -418,7 +419,7 @@ namespace telar::gui::qt {
     };
 
     if (entry) {
-      putIcon(result, look.directory ? directoryIcon() : fileIcon(look.name));
+      putIcon(result, look.directory ? directoryIcon() : fileIcon(look.name.view()));
     }
 
     return result;

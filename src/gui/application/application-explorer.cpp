@@ -3,6 +3,7 @@ module telar.gui.application;
 import std;
 
 import telar.base.ds;
+import telar.tbc;
 import telar.config.client;
 import telar.gui.features.explorer;
 import telar.gui.features.nvim;
@@ -29,72 +30,74 @@ namespace telar::gui::application::explorer {
       return std::ranges::contains(shells, program);
     }
 
-    // The agent the pane runs, if the runtime reports one there.
-    const Agent<Memory>* agentOf(const Session& session, std::uint64_t pane_id) noexcept {
-      for (const auto& agent : session.agent_list.entries()) {
-        if (agent.pane_id == pane_id) {
-          return &agent;
-        }
-      }
-
-      return nullptr;
-    }
-
-    // Hands `use` what the explorer reads of the session: the panes of the tab that shows, the
-    // one focused, the directory of the workspace and the machine. The context views the session,
-    // so it lives for the call.
-    template <typename Use>
-    auto with(const Session& session, const Host& host, Use&& use) {
+    // What the explorer reads of the session: the panes of the tab that shows, the one focused,
+    // and the directory of the workspace. It views the session's panes, agents and workspaces.
+    struct Facts {
       ds::Array<PaneFact, tab_panes> panes{};
       std::size_t count = 0;
-      Context context{.home = host.home, .machine = host.name, .local = host.local};
+      std::uint64_t focused = 0;
+      std::string_view workspace;
+    };
 
-      if (const auto* tab = activeTab(session.tabs, session.active_tab)) {
-        context.focused = tab->focused_pane;
-        for (const auto& member : tab->members) {
-          const auto* pane = findPane(session.panes, member.pane_id);
-          if (pane == nullptr || pane->exited || count == panes.size()) {
-            continue;
-          }
-
-          const auto* agent = agentOf(session, pane->id);
-          auto& fact = panes.atMut(count);
-
-          fact = {.id = pane->id, .number = static_cast<std::uint16_t>(count + 1), .title = pane->foreground.view(), .cwd = pane->cwd.view()};
-          if (features::nvim::find(session.nvim, pane->id) != nullptr) {
-            fact.kind = PaneKind::editor;
-            fact.title = "nvim";
-          } else if (agent != nullptr) {
-            fact.kind = PaneKind::agent;
-            fact.title = !agent->display_name.view().empty() ? agent->display_name.view() : agent->provider_name.view();
-          } else {
-            fact.kind = isShell(fact.title) ? PaneKind::shell : PaneKind::program;
-          }
-
-          if (fact.title.empty()) {
-            fact.title = "shell";
-          }
-
-          ++count;
-        }
-
-        for (const auto& workspace : session.workspaces()) {
-          if (workspace.location.kind == tab->location.workspace.kind && workspace.location.id == tab->location.workspace.id) {
-            context.workspace = workspace.path.view();
-          }
-        }
+    // Reads the facts from the fields of the session that hold them, each lent on its own so a
+    // use case can change the explorer's state while it reads them.
+    void gather(
+        tbc::mut_a<Facts> facts,
+        tbc::ref_a<Panes> panes,
+        tbc::ref_a<Tabs> tabs,
+        ds::Option<TabLocation> active,
+        tbc::ref_a<ds::Vec<Agent<Memory>, Memory>> agents,
+        const features::nvim::State& editors,
+        tbc::ref_a<ds::Vec<Workspace<Memory>, Memory>> workspaces
+    ) {
+      const auto* tab = activeTab(tabs, active);
+      if (tab == nullptr) {
+        return;
       }
 
-      context.panes = panes.view().first(count);
-      return std::forward<Use>(use)(context);
+      facts.focused = tab->focused_pane;
+      for (const auto& member : tab->members) {
+        const auto* pane = findPane(panes, member.pane_id);
+        if (pane == nullptr || pane->exited || facts.count == facts.panes.size()) {
+          continue;
+        }
+
+        auto& fact = facts.panes.atMut(facts.count);
+
+        fact = {.id = pane->id, .number = static_cast<std::uint16_t>(facts.count + 1), .title = pane->foreground.view(), .cwd = pane->cwd.view()};
+        if (features::nvim::find(editors, pane->id) != nullptr) {
+          fact.kind = PaneKind::editor;
+          fact.title = "nvim";
+        } else if (const auto agent = std::ranges::find(agents, pane->id, &Agent<Memory>::pane_id); agent != agents.end()) {
+          fact.kind = PaneKind::agent;
+          fact.title = !agent->display_name.view().empty() ? agent->display_name.view() : agent->provider_name.view();
+        } else {
+          fact.kind = isShell(fact.title) ? PaneKind::shell : PaneKind::program;
+        }
+
+        if (fact.title.empty()) {
+          fact.title = "shell";
+        }
+
+        ++facts.count;
+      }
+
+      for (const auto& workspace : workspaces) {
+        if (workspace.location.kind == tab->location.workspace.kind && workspace.location.id == tab->location.workspace.id) {
+          facts.workspace = workspace.path.view();
+        }
+      }
+    }
+
+    // The context of the facts and of the machine: it views both.
+    tbc::val_a<Context> contextOf(tbc::ref_a<Facts> facts, tbc::ref_a<Host> host) noexcept {
+      return {.panes = facts.panes.view().first(facts.count), .focused = facts.focused, .workspace = facts.workspace, .home = host.home, .machine = host.name, .local = host.local};
     }
 
     // Asks the runtime for what the windows of the machine lack, while it may ask for more.
-    void reconcile(Session& session, View& view, const Host& host) {
-      auto& state = session.explorer;
-
-      while (session.ready() && feature::mayAsk(state)) {
-        const auto need = feature::need(view, state, host.machine);
+    void reconcile(Session& session, const View& view, const Host& host) {
+      while (session.ready() && feature::mayAsk(session.explorer)) {
+        const auto need = feature::need(view, session.explorer, host.machine);
         if (!need) {
           return;
         }
@@ -103,10 +106,10 @@ namespace telar::gui::application::explorer {
 
         switch (need->kind) {
         case feature::NeedKind::listing:
-          request = session.link.ask(feature::listing(state, need->path));
+          request = session.link.ask(feature::listing(session.explorer, need->path));
           break;
         case feature::NeedKind::sizes:
-          request = session.link.ask(feature::measure(state, need->path));
+          request = session.link.ask(feature::measure(session.explorer, need->path));
           break;
         case feature::NeedKind::changes:
           request = session.link.ask(QueryChanges{.path = need->path});
@@ -121,7 +124,7 @@ namespace telar::gui::application::explorer {
           return;
         }
 
-        feature::asked(state, *need, *request);
+        feature::asked(session.explorer, *need, *request);
       }
     }
 
@@ -145,8 +148,6 @@ namespace telar::gui::application::explorer {
     }
 
     Effect perform(Session& session, View& view, const Host& host, const Action& action) {
-      auto& state = session.explorer;
-
       switch (action.kind) {
       case ActionKind::none:
       case ActionKind::pin:
@@ -189,30 +190,30 @@ namespace telar::gui::application::explorer {
         workbench::focusPane(session, action.pane);
         return leave(view);
       case ActionKind::apply: {
-        ds::Array<FileOperation, FileLimits::maximum_operations> operations{};
-        const auto count = feature::operations(view, host.machine, operations.viewMut());
-        if (count == 0 || state.applying != 0) {
+        feature::Operations operations{};
+        const auto count = feature::operations(view, host.machine, operations);
+        if (count == 0 || session.explorer.applying != 0) {
           return Effect::none;
         }
 
         if (const auto request = session.link.ask(ChangeFiles{.overwrite = action.overwrite, .operations = operations.view().first(count)})) {
-          feature::applying(state, *request, false);
+          feature::applying(session.explorer, *request, false);
         }
 
         return Effect::none;
       }
       case ActionKind::undo:
-        if (state.applying == 0) {
+        if (session.explorer.applying == 0) {
           if (const auto request = session.link.ask(UndoFileChanges{})) {
-            feature::applying(state, *request, true);
+            feature::applying(session.explorer, *request, true);
           }
         }
 
         return Effect::none;
       case ActionKind::commit:
-        if (state.committing == 0 && !view.windows.empty()) {
+        if (session.explorer.committing == 0 && !view.windows.empty()) {
           if (const auto request = session.link.ask(CommitChanges{.path = feature::window(view).root.view(), .message = view.text.view()})) {
-            feature::committing(state, *request);
+            feature::committing(session.explorer, *request);
           }
         }
 
@@ -241,9 +242,10 @@ namespace telar::gui::application::explorer {
       return false;
     }
 
-    with(session, host, [&](const Context& context) {
-      feature::open(view, session.explorer, context, host.machine);
-    });
+    Facts facts;
+
+    gather(facts, session.panes, session.tabs, session.active_tab, session.agent_list.entries(), session.nvim, session.workspace_list.entries());
+    feature::open(view, session.explorer, contextOf(facts, host), host.machine);
     reconcile(session, view, host);
     return true;
   }
@@ -253,54 +255,64 @@ namespace telar::gui::application::explorer {
   }
 
   Effect press(Session& session, View& view, const Host& host, KeyChord chord) {
-    const auto action = with(session, host, [&](const Context& context) {
-      return feature::press(view, session.explorer, context, chord);
-    });
+    Facts facts;
+
+    gather(facts, session.panes, session.tabs, session.active_tab, session.agent_list.entries(), session.nvim, session.workspace_list.entries());
+
+    const auto action = feature::press(view, session.explorer, contextOf(facts, host), chord);
 
     return finish(session, view, host, action);
   }
 
   void typed(Session& session, View& view, const Host& host, std::string_view text) {
-    with(session, host, [&](const Context& context) {
-      feature::typed(view, session.explorer, context, text);
-    });
+    Facts facts;
+
+    gather(facts, session.panes, session.tabs, session.active_tab, session.agent_list.entries(), session.nvim, session.workspace_list.entries());
+    feature::typed(view, session.explorer, contextOf(facts, host), text);
     reconcile(session, view, host);
   }
 
   Effect submit(Session& session, View& view, const Host& host, std::string_view text) {
-    const auto action = with(session, host, [&](const Context& context) {
-      return feature::submit(view, session.explorer, context, text);
-    });
+    Facts facts;
+
+    gather(facts, session.panes, session.tabs, session.active_tab, session.agent_list.entries(), session.nvim, session.workspace_list.entries());
+
+    const auto action = feature::submit(view, session.explorer, contextOf(facts, host), text);
 
     return finish(session, view, host, action);
   }
 
   void cancel(Session& session, View& view, const Host& host) {
-    with(session, host, [&](const Context& context) {
-      feature::cancel(view, session.explorer, context);
-    });
+    Facts facts;
+
+    gather(facts, session.panes, session.tabs, session.active_tab, session.agent_list.entries(), session.nvim, session.workspace_list.entries());
+    feature::cancel(view, session.explorer, contextOf(facts, host));
     reconcile(session, view, host);
   }
 
   void select(Session& session, View& view, const Host& host, std::size_t window, std::size_t row, bool extend, bool toggle) {
-    with(session, host, [&](const Context& context) {
-      feature::select(view, session.explorer, context, window, row, extend, toggle);
-    });
+    Facts facts;
+
+    gather(facts, session.panes, session.tabs, session.active_tab, session.agent_list.entries(), session.nvim, session.workspace_list.entries());
+    feature::select(view, session.explorer, contextOf(facts, host), window, row, extend, toggle);
     reconcile(session, view, host);
   }
 
   Effect activate(Session& session, View& view, const Host& host, std::size_t window, std::size_t row) {
-    const auto action = with(session, host, [&](const Context& context) {
-      return feature::activate(view, session.explorer, context, window, row);
-    });
+    Facts facts;
+
+    gather(facts, session.panes, session.tabs, session.active_tab, session.agent_list.entries(), session.nvim, session.workspace_list.entries());
+
+    const auto action = feature::activate(view, session.explorer, contextOf(facts, host), window, row);
 
     return finish(session, view, host, action);
   }
 
   void toggle(Session& session, View& view, const Host& host, std::size_t window, std::size_t row) {
-    with(session, host, [&](const Context& context) {
-      feature::toggle(view, session.explorer, context, window, row);
-    });
+    Facts facts;
+
+    gather(facts, session.panes, session.tabs, session.active_tab, session.agent_list.entries(), session.nvim, session.workspace_list.entries());
+    feature::toggle(view, session.explorer, contextOf(facts, host), window, row);
     reconcile(session, view, host);
   }
 
@@ -318,53 +330,65 @@ namespace telar::gui::application::explorer {
     }
 
     const auto before = view.revision;
+    Facts facts;
 
-    with(session, host, [&](const Context& context) {
-      const auto& state = session.explorer;
+    gather(facts, session.panes, session.tabs, session.active_tab, session.agent_list.entries(), session.nvim, session.workspace_list.entries());
 
-      feature::settle(view, state, context, host.machine);
-      if (feature::follow(view, context, host.machine) || view.built != state.revision) {
-        feature::rebuild(view, state, context, host.machine);
-      }
-    });
+    const auto context = contextOf(facts, host);
+
+    feature::settle(view, session.explorer, context, host.machine);
+    if (feature::follow(view, context, host.machine) || view.built != session.explorer.revision) {
+      feature::rebuild(view, session.explorer, context, host.machine);
+    }
+
     reconcile(session, view, host);
     return view.revision != before;
   }
 
   RowLook look(const Session& session, const View& view, const Host& host, std::size_t window, std::size_t row) {
-    return with(session, host, [&](const Context& context) {
-      return feature::look(view, session.explorer, context, window, row);
-    });
+    Facts facts;
+
+    gather(facts, session.panes, session.tabs, session.active_tab, session.agent_list.entries(), session.nvim, session.workspace_list.entries());
+    return feature::look(view, session.explorer, contextOf(facts, host), window, row);
   }
 
   HeaderLook header(const Session& session, const View& view, const Host& host, std::size_t window) {
-    return with(session, host, [&](const Context& context) {
-      return feature::header(view, session.explorer, context, window);
-    });
+    Facts facts;
+
+    gather(facts, session.panes, session.tabs, session.active_tab, session.agent_list.entries(), session.nvim, session.workspace_list.entries());
+    return feature::header(view, session.explorer, contextOf(facts, host), window);
   }
 
   StatusLook status(const Session& session, const View& view, const Host& host, std::size_t window) {
-    return with(session, host, [&](const Context& context) {
-      return feature::status(view, session.explorer, context, window);
-    });
+    Facts facts;
+
+    gather(facts, session.panes, session.tabs, session.active_tab, session.agent_list.entries(), session.nvim, session.workspace_list.entries());
+    return feature::status(view, session.explorer, contextOf(facts, host), window);
   }
 
   Hints hints(const Session& session, const View& view, const Host& host) {
-    return with(session, host, [&](const Context& context) {
-      return feature::hints(view, session.explorer, context);
-    });
+    Facts facts;
+
+    gather(facts, session.panes, session.tabs, session.active_tab, session.agent_list.entries(), session.nvim, session.workspace_list.entries());
+    return feature::hints(view, session.explorer, contextOf(facts, host));
   }
 
   ds::Array<LensLook, lens_count> lenses(const Session& session, const View& view, const Host& host) {
-    return with(session, host, [&](const Context& context) {
-      return feature::lenses(view, session.explorer, context);
-    });
+    Facts facts;
+
+    gather(facts, session.panes, session.tabs, session.active_tab, session.agent_list.entries(), session.nvim, session.workspace_list.entries());
+    return feature::lenses(view, session.explorer, contextOf(facts, host));
+  }
+
+  tbc::val_a<std::string_view> previewText(tbc::ref_a<Session> session, const View& view) noexcept {
+    return feature::previewText(view, session.explorer);
   }
 
   PreviewLook preview(const Session& session, const View& view, const Host& host, std::uint64_t now_seconds) {
-    return with(session, host, [&](const Context& context) {
-      return feature::preview(view, session.explorer, context, now_seconds);
-    });
+    Facts facts;
+
+    gather(facts, session.panes, session.tabs, session.active_tab, session.agent_list.entries(), session.nvim, session.workspace_list.entries());
+    return feature::preview(view, session.explorer, contextOf(facts, host), now_seconds);
   }
 
 }

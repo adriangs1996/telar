@@ -12,6 +12,7 @@ export import :view;
 import std;
 
 import telar.base.ds;
+import telar.tbc;
 import telar.wire.files;
 
 export namespace telar::gui::features::explorer {
@@ -31,7 +32,7 @@ export namespace telar::gui::features::explorer {
 
   // What the windows of `machine` show that its cache lacks; none when it holds it all or has
   // asked for it.
-  [[nodiscard]] ds::Option<Need> need(const View& view, const State& state, std::uint64_t machine);
+  [[nodiscard]] tbc::val_a<ds::Option<Need>> need(tbc::ref_a<View> view, const State& state, std::uint64_t machine);
 
   // A key in normal or visual mode, or over the plan and the help.
   [[nodiscard]] Action press(View& view, State& state, const Context& context, KeyChord chord);
@@ -60,7 +61,10 @@ export namespace telar::gui::features::explorer {
   // and the changes that were written are no longer pending.
   void settle(View& view, const State& state, const Context& context, std::uint64_t machine);
 
-  // The operations of the plan that shows, for the runtime of `machine`.
-  [[nodiscard]] std::size_t operations(const View& view, std::uint64_t machine, std::span<FileOperation> output) noexcept;
+  // The operations of the plan that shows, for the runtime of `machine`: how many `output` now
+  // holds. They view the plan.
+  using Operations = ds::Array<FileOperation, FileLimits::maximum_operations>;
+
+  [[nodiscard]] std::size_t operations(tbc::ref_a<View> view, std::uint64_t machine, tbc::mut_a<Operations> output) noexcept;
 
 }

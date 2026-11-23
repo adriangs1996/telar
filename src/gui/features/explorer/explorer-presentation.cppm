@@ -10,14 +10,19 @@ import :view;
 import telar.base.memory.allocators;
 import telar.base.memory.containers;
 import telar.base.ds;
+import telar.tbc;
 import telar.wire.files;
 
 export namespace telar::gui::features::explorer {
 
+  // What the window writes is copied out of what the session and the view hold, so nothing it
+  // was given has to outlive the call: a name or a line is cut to what a row shows.
   inline constexpr std::size_t short_text_bytes = 48;
   inline constexpr std::size_t line_text_bytes = 512;
   using ShortText = runtime::FixedText<short_text_bytes>;
   using LineText = runtime::FixedText<line_text_bytes>;
+  // A word the explorer itself spells: the name of a mode, the keys of a hint.
+  using Word = tbc::val_static<std::string_view>;
 
   // An amount of bytes in at most five cells, in powers of 1024: 512B, 7.6K, 108K, 2.5M, 100G.
   [[nodiscard]] ShortText bytes(std::uint64_t value);
@@ -29,7 +34,7 @@ export namespace telar::gui::features::explorer {
   [[nodiscard]] ShortText day(std::uint64_t seconds);
 
   // `path` with the home directory written as `~`.
-  [[nodiscard]] std::string_view withoutHome(std::string_view path, std::string_view home, bool& shortened) noexcept;
+  [[nodiscard]] tbc::val_a<std::string_view> withoutHome(tbc::val_a<std::string_view> path, std::string_view home, bool& shortened) noexcept;
 
   // The directory a path is in, and its name there.
   [[nodiscard]] std::string_view parentOf(std::string_view path) noexcept;
@@ -59,8 +64,8 @@ export namespace telar::gui::features::explorer {
     bool renamed = false;
     bool added = false;
     // The name, and before it, in a flat list, the path that leads to it.
-    std::string_view lead;
-    std::string_view name;
+    LineText lead;
+    LineText name;
     // What git's index holds of it, and what the working tree does.
     FileState staged = FileState::unchanged;
     FileState unstaged = FileState::unchanged;
@@ -86,13 +91,13 @@ export namespace telar::gui::features::explorer {
 
   // The head of a window: the machine, the root with its last directory apart, and the branch.
   struct HeaderLook {
-    std::string_view machine;
+    LineText machine;
     bool local = true;
     // The root up to its last directory, with the home written as `~`, and that directory.
     LineText lead;
-    std::string_view last;
+    LineText last;
     bool repository = false;
-    std::string_view branch;
+    LineText branch;
     bool upstream = false;
     std::uint32_t ahead = 0;
     std::uint32_t behind = 0;
@@ -106,7 +111,7 @@ export namespace telar::gui::features::explorer {
   // The status line of a window, as Neovim's: the mode, what it follows, the root, what it
   // leaves out, what the root holds and where the selection is.
   struct StatusLook {
-    std::string_view mode;
+    Word mode;
     Mode kind = Mode::normal;
     bool current = false;
     // `[3 zsh]` while it follows the focused pane, `[pinned]` otherwise.
@@ -128,7 +133,7 @@ export namespace telar::gui::features::explorer {
 
   // A key and what it does now, for the line of hints.
   struct Hint {
-    std::string_view keys;
+    Word keys;
     LineText label;
     bool enabled = true;
   };
@@ -144,7 +149,7 @@ export namespace telar::gui::features::explorer {
 
   // The lenses of the current window, each with how many rows it would list.
   struct LensLook {
-    std::string_view name;
+    Word name;
     std::uint32_t count = 0;
     bool counted = false;
     bool current = false;
@@ -154,7 +159,7 @@ export namespace telar::gui::features::explorer {
 
   // A fact of the preview: what it is, and its value in two parts, the second one dimmer.
   struct Fact {
-    std::string_view label;
+    Word label;
     LineText value;
     LineText detail;
     // The lines a change adds and removes, shown after the value.
@@ -169,20 +174,23 @@ export namespace telar::gui::features::explorer {
   struct PreviewLook {
     bool shown = false;
     bool directory = false;
-    std::string_view name;
+    LineText name;
     LineText path;
     ds::Array<Fact, fact_capacity> facts{};
     std::size_t fact_count = 0;
     ds::Array<std::uint16_t, 4> panes{};
     std::uint8_t pane_count = 0;
-    // The title over the text, and the text: a diff when `diff`, else the file's head.
-    std::string_view title;
-    std::string_view text;
+    // The title over the text, and whether the text is a diff or the file's head.
+    Word title;
     bool diff = false;
     bool waiting = false;
   };
 
   [[nodiscard]] PreviewLook preview(const View& view, const State& state, const Context& context, std::uint64_t now_seconds);
+
+  // The text the preview shows: the diff of the selected file, or its head. It is the session's
+  // own, not copied: a diff is as long as a screen.
+  [[nodiscard]] tbc::val_a<std::string_view> previewText(const View& view, tbc::ref_a<State> state) noexcept;
 
   // The verb of a step of the plan, as it reads: CREATE, MOVE, COPY, DELETE, RESTORE.
   [[nodiscard]] std::string_view verbText(PlanVerb verb) noexcept;

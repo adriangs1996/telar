@@ -6,6 +6,7 @@ import telar.base.memory.allocators;
 import telar.base.memory.containers;
 import telar.base.text.utf8;
 import telar.base.ds;
+import telar.tbc;
 import telar.wire.files;
 
 namespace telar::gui::features::explorer {
@@ -132,7 +133,7 @@ namespace telar::gui::features::explorer {
       return found == context.panes.end() ? nullptr : std::to_address(found);
     }
 
-    void addHint(Hints& hints, std::string_view keys, std::string_view label, bool enabled = true) {
+    void addHint(Hints& hints, Word keys, std::string_view label, bool enabled = true) {
       if (hints.count == hints.items.size()) {
         return;
       }
@@ -197,7 +198,7 @@ namespace telar::gui::features::explorer {
     return text;
   }
 
-  std::string_view withoutHome(std::string_view path, std::string_view home, bool& shortened) noexcept {
+  tbc::val_a<std::string_view> withoutHome(tbc::val_a<std::string_view> path, std::string_view home, bool& shortened) noexcept {
     shortened = home.size() > 1 && within(path, home);
     return shortened ? path.substr(home.size()) : path;
   }
@@ -259,6 +260,7 @@ namespace telar::gui::features::explorer {
 
   RowLook look(const View& view, const State& state, const Context& context, std::size_t window_index, std::size_t row_index) {
     RowLook result;
+
     if (window_index >= view.windows.size() || row_index >= view.windows[window_index]->rows.size()) {
       return result;
     }
@@ -273,7 +275,7 @@ namespace telar::gui::features::explorer {
     result.expanded = row.expanded;
     result.selected = row_index == window.cursor;
     result.marked = window_index == view.current && (view.mode == Mode::visual || !window.picked.empty()) && chosen(view, window, row_index);
-    result.name = nameOf(window, state, row);
+    put(result.name, nameOf(window, state, row));
     result.share = row.share;
 
     switch (row.kind) {
@@ -304,7 +306,7 @@ namespace telar::gui::features::explorer {
 
       if (const auto* renamed = editOn(view, EditKind::rename, window.machine, path.view())) {
         result.renamed = true;
-        result.name = renamed->name.view();
+        put(result.name, renamed->name.view());
         write(result.note, "was {}", directory.name(entry));
       }
 
@@ -341,7 +343,7 @@ namespace telar::gui::features::explorer {
     case RowKind::added: {
       result.added = true;
       if (const auto* edit = editOf(view, row)) {
-        result.name = edit->name.view();
+        put(result.name, edit->name.view());
         if (edit->kind == EditKind::paste) {
           bool tilde = false;
           const auto source = withoutHome(edit->source.view(), context.home, tilde);
@@ -358,16 +360,20 @@ namespace telar::gui::features::explorer {
     case RowKind::change:
       if (row.item < state.repository.changes.size()) {
         const auto& change = state.repository.changes[row.item];
-        auto path = result.name;
+        auto path = nameOf(window, state, row);
 
+        // A directory's path ends in a slash, which is no part of its name.
         if (path.ends_with('/')) {
           path.remove_suffix(1);
         }
 
         const auto slash = path.find_last_of('/');
 
-        result.lead = slash == std::string_view::npos ? std::string_view{} : result.name.substr(0, slash + 1);
-        result.name = slash == std::string_view::npos ? result.name : result.name.substr(slash + 1);
+        if (slash != std::string_view::npos) {
+          put(result.lead, path.substr(0, slash + 1));
+        }
+
+        put(result.name, slash == std::string_view::npos ? path : path.substr(slash + 1));
         result.staged = change.staged;
         result.unstaged = change.unstaged;
         result.lines_added = change.added;
@@ -379,7 +385,7 @@ namespace telar::gui::features::explorer {
       if (row.item < context.panes.size()) {
         const auto& pane = context.panes[row.item];
 
-        result.name = pane.title;
+        put(result.name, pane.title);
         result.panes.atMut(0) = pane.number;
         result.pane_count = 1;
         put(result.note, pane.cwd);
@@ -397,6 +403,7 @@ namespace telar::gui::features::explorer {
 
   HeaderLook header(const View& view, const State& state, const Context& context, std::size_t window_index) {
     HeaderLook result;
+
     if (window_index >= view.windows.size()) {
       return result;
     }
@@ -407,12 +414,12 @@ namespace telar::gui::features::explorer {
     const auto below = withoutHome(root, context.home, tilde);
     const auto last = baseOf(below);
 
-    result.machine = context.machine;
+    put(result.machine, context.machine);
     result.local = context.local;
-    result.last = last;
+    put(result.last, last);
     write(result.lead, "{}{}", tilde ? "~" : "", below.substr(0, below.size() - last.size()));
     result.repository = state.repository.known && !state.repository.root.empty();
-    result.branch = state.repository.branch.view();
+    put(result.branch, state.repository.branch.view());
     result.upstream = state.repository.upstream;
     result.ahead = state.repository.ahead;
     result.behind = state.repository.behind;
@@ -445,6 +452,7 @@ namespace telar::gui::features::explorer {
     static_cast<void>(state);
 
     StatusLook result;
+
     if (window_index >= view.windows.size()) {
       return result;
     }
@@ -494,6 +502,7 @@ namespace telar::gui::features::explorer {
 
   Hints hints(const View& view, const State& state, const Context& context) {
     Hints result;
+
     if (view.windows.empty()) {
       return result;
     }
@@ -576,6 +585,7 @@ namespace telar::gui::features::explorer {
 
   PreviewLook preview(const View& view, const State& state, const Context& context, std::uint64_t now_seconds) {
     PreviewLook result;
+
     if (view.windows.empty()) {
       return result;
     }
@@ -591,7 +601,7 @@ namespace telar::gui::features::explorer {
     }
 
     const auto path = window.selected.view();
-    const auto fact = [&](std::string_view label) -> Fact& {
+    const auto fact = [&](Word label) -> Fact& {
       auto& added = result.facts.atMut(std::min(result.fact_count, result.facts.size() - 1));
 
       result.fact_count = std::min(result.fact_count + 1, result.facts.size());
@@ -602,7 +612,7 @@ namespace telar::gui::features::explorer {
 
     result.shown = true;
     result.directory = row.directory;
-    result.name = baseOf(path);
+    put(result.name, baseOf(path));
     put(result.path, path);
 
     const auto held = standing(state.repository, path, row.directory);
@@ -673,16 +683,32 @@ namespace telar::gui::features::explorer {
 
     if (!inspection->diff.empty()) {
       result.title = "DIFF · = UNFOLDS IT IN THE LIST";
-      result.text = inspection->diff.view();
       result.diff = true;
     } else if (inspection->binary) {
       result.title = "BINARY FILE";
     } else if (!inspection->text.empty()) {
       result.title = inspection->truncated ? "HEAD OF THE FILE" : "CONTENTS";
-      result.text = inspection->text.view();
     }
 
     return result;
+  }
+
+  tbc::val_a<std::string_view> previewText(const View& view, tbc::ref_a<State> state) noexcept {
+    if (view.windows.empty()) {
+      return {};
+    }
+
+    const auto& window = explorer::window(view);
+    if (window.rows.empty() || window.rows[window.cursor].directory) {
+      return {};
+    }
+
+    const auto* inspection = inspected(state, window.selected.view());
+    if (inspection == nullptr) {
+      return {};
+    }
+
+    return inspection->diff.empty() ? inspection->text.view() : inspection->diff.view();
   }
 
   std::string_view verbText(PlanVerb verb) noexcept {
@@ -737,19 +763,21 @@ namespace telar::gui::features::explorer {
     }
 
     ds::Array<char, line_text_bytes> buffer{};
-    auto output = buffer.viewMut().begin();
-    const auto end = buffer.viewMut().end();
+    std::size_t length = 0;
     const auto append = [&](std::string_view part) {
-      const auto room = static_cast<std::size_t>(end - output);
+      const auto taken = std::min(part.size(), buffer.size() - length);
 
-      output = std::ranges::copy(part.substr(0, room), output).out;
+      std::ranges::copy(part.substr(0, taken), buffer.viewMut().subspan(length).begin());
+      length += taken;
     };
+
     const auto count = [&](std::size_t value, std::string_view what) {
       if (value != 0) {
-        ds::Array<char, short_text_bytes> number{};
-        const auto written = std::format_to_n(number.viewMut().begin(), static_cast<std::ptrdiff_t>(number.size()), " · {} {}", value, what);
+        ShortText number;
 
-        append({number.data(), static_cast<std::size_t>(written.out - number.viewMut().begin())});
+        write(number, " · {} ", value);
+        append(number.view());
+        append(what);
       }
     };
 
@@ -763,7 +791,7 @@ namespace telar::gui::features::explorer {
       append(" · u takes it back");
     }
 
-    text.assign(runtime::utf8Prefix({buffer.data(), static_cast<std::size_t>(output - buffer.viewMut().begin())}, line_text_bytes));
+    text.assign(runtime::utf8Prefix({buffer.data(), length}, line_text_bytes));
     return text;
   }
 
