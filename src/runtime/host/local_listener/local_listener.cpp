@@ -32,8 +32,7 @@ namespace telar::runtime {
       return error == EAGAIN || (distinct_would_block && error == EWOULDBLOCK) || error == EINTR;
     }
 
-    // Readies an accepted connection for the event loop; false when its peer may not connect, or
-    // when it closed during admission.
+    // Readies an accepted connection for the event loop; false when its peer may not connect.
     bool admit(int connection, LocalPeerPolicy policy) {
       const auto peer = peerCredentials(connection);
       if (!peer || (peer->user != ::geteuid() && (policy != LocalPeerPolicy::same_user_or_root || peer->user != 0))) {
@@ -45,12 +44,15 @@ namespace telar::runtime {
       try {
         suppressSocketSignals(connection);
       } catch (const SystemError& error) {
-        // A peer closing during admission can invalidate its socket options on macOS.
+        // macOS takes no socket option on a connection whose peer closed before it was accepted,
+        // though what the peer sent is still there to read: a helper that writes its capture and
+        // goes. The connection keeps the SO_NOSIGPIPE it inherited from the listener, so it is
+        // read, and a write to it fails with EPIPE.
         if (error.code() != EINVAL) {
           throw;
         }
 
-        return false;
+        return socketSignalsSuppressed(connection);
       }
 
       return true;
@@ -100,6 +102,9 @@ namespace telar::runtime {
 
     setCloseOnExec(socket_.get());
     setNonblocking(socket_.get());
+    // Each connection accepted inherits it from the listener on macOS, one whose peer has closed
+    // among them, which takes no option of its own.
+    suppressSocketSignals(socket_.get());
     if (::bind(socket_.get(), genericAddress(address), sizeof(address)) != 0) {
       throw SystemError{"bind runtime socket"};
     }
