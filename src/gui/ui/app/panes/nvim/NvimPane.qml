@@ -297,9 +297,10 @@ FocusScope {
         }
 
         // The cursor, in a layer of its own over the cells, in the shape the mode Neovim is in
-        // gives it. It slides to where it goes with telar's curve; a step to the next cell, as
-        // typing makes, is taken at once, so the cursor is never behind what is typed. Moving or
-        // blinking it draws none of the cells again. Without the keyboard it is hollow.
+        // gives it. It slides along its row to where a jump takes it, with telar's curve; a step
+        // to the next cell, as typing makes, and a change of row are taken at once, so the cursor
+        // is never behind what is typed nor behind the row Neovim highlights. Moving or blinking
+        // it draws none of the cells again. Without the keyboard it is hollow.
         Item {
             id: caret
 
@@ -317,28 +318,35 @@ FocusScope {
             visible: (look.visible ?? false) && target.width > 0 && ((look.on ?? true) || !focused)
 
             onTargetChanged: {
-                // A step along a row or to the next one is typing's; anything else is a jump.
-                const step = Math.abs(target.y - y) < 0.5 * target.height && Math.abs(target.x - x) <= 1.5 * target.width;
-                if (!step && width > 0 && glide.ready) {
-                    glide.stop();
-                    glide.from = Qt.point(x, y);
+                // A change of row is taken at once, with the row Neovim highlights under the
+                // cursor, which the cursor would otherwise chase; so is a step to the next cell,
+                // which is typing's. Only a jump along its row slides.
+                const along = Math.abs(target.y - y) < 0.5 * target.height;
+                const step = Math.abs(target.x - x) <= 1.5 * target.width;
+
+                glide.stop();
+                y = target.y;
+                if (along && !step && width > 0 && glide.ready) {
+                    // Both ends are set here: a binding to the target may not have been read
+                    // again when this runs.
+                    glide.from = x;
+                    glide.to = target.x;
                     glide.start();
                 } else {
-                    glide.stop();
                     x = target.x;
-                    y = target.y;
                 }
             }
 
-            ParallelAnimation {
+            NumberAnimation {
                 id: glide
 
-                property point from
                 // The first place it takes has nowhere to come from.
                 property bool ready: false
 
-                NumberAnimation { target: caret; property: "x"; from: glide.from.x; to: caret.target.x; duration: 90; easing.type: Easing.OutCubic }
-                NumberAnimation { target: caret; property: "y"; from: glide.from.y; to: caret.target.y; duration: 90; easing.type: Easing.OutCubic }
+                target: caret
+                property: "x"
+                duration: 60
+                easing.type: Easing.OutCubic
             }
 
             Component.onCompleted: {

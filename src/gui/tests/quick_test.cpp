@@ -856,7 +856,7 @@ return {api_version = 2, client = {
       QTRY_VERIFY2_WITH_TIMEOUT(shown().contains(QStringLiteral("TELAR <EDITOR> OK")), qPrintable(shown()), runtime_wait_ms);
 
       // The cursor is a layer of its own: a step to the next cell is taken at once, a jump
-      // slides there, and both end on the cell Neovim's cursor is on.
+      // along its row slides there, and both end on the cell Neovim's cursor is on.
       {
         const auto carets = test::visualItems(*window_->contentItem(), QStringLiteral("editorCaret"));
 
@@ -2124,6 +2124,66 @@ return {api_version = 2, client = {
       QTRY_VERIFY_WITH_TIMEOUT(strip()->property("paged").toBool() && entries().size() == 2, runtime_wait_ms);
       editorView()->send(QStringLiteral("<Cmd>tabclose<CR>"));
       QTRY_VERIFY_WITH_TIMEOUT(!strip()->property("paged").toBool(), runtime_wait_ms);
+    }
+
+    // The cursor takes another row at once, as the row Neovim highlights under it does: it never
+    // slides after that row, however far the jump.
+    Q_SLOT void editorCursorTakesAnotherRowAtOnce() {
+      if (QStandardPaths::findExecutable(QStringLiteral("nvim")).isEmpty()) {
+        QSKIP("Neovim is not installed on this host");
+      }
+
+      QTRY_VERIFY_WITH_TIMEOUT(terminalReady(), runtime_wait_ms);
+      const auto original_id = firstPane()->id;
+      const auto tab_count = client_->tabs()->rows()->rowCount();
+      bool opened = false;
+      const auto restore = qScopeGuard([&] {
+        if (opened) {
+          closeTemporaryTab({.count = tab_count, .pane_id = original_id});
+        }
+      });
+      const auto editorView = [&] {
+        const auto views = test::visualItems(*window_->contentItem(), QStringLiteral("paneEditor"));
+
+        return views.empty() ? nullptr : qobject_cast<NvimItem*>(views.front());
+      };
+
+      client_->commands()->execute(window_actions::Action::new_editor_tab);
+      QTRY_VERIFY_WITH_TIMEOUT(client_->tabs()->rows()->rowCount() == tab_count + 1, runtime_wait_ms);
+      opened = true;
+      QTRY_VERIFY_WITH_TIMEOUT(editorView() != nullptr && editorView()->ready(), runtime_wait_ms);
+      auto* view = editorView();
+
+      view->send(QStringLiteral("<Cmd>call setline(1, ['a first line', 'b', 'c', 'd', 'the last line'])<CR>"));
+      const auto carets = test::visualItems(*window_->contentItem(), QStringLiteral("editorCaret"));
+
+      QVERIFY(!carets.empty());
+      auto* caret = carets.front();
+      const auto on = [&] {
+        const auto cell = view->cursorRect();
+
+        return qFuzzyCompare(caret->x() + 1, cell.x() + 1) && qFuzzyCompare(caret->y() + 1, cell.y() + 1);
+      };
+
+      QTRY_VERIFY_WITH_TIMEOUT(view->cursorRect().width() > 0 && on(), runtime_wait_ms);
+      // Whether the cursor was ever away from Neovim's cell as that cell changed.
+      bool behind = false;
+      const QMetaObject::Connection watch = connect(view, &NvimItem::cursorChanged, this, [&] {
+        behind = behind || !on();
+      });
+
+      // To the next row, and in one move to the middle of the last one: another row and
+      // another column.
+      for (const auto* keys : {"j", "<Cmd>call cursor(5, 9)<CR>"}) {
+        const auto from = view->cursorRect();
+
+        view->send(QString::fromUtf8(keys));
+        QTRY_VERIFY_WITH_TIMEOUT(view->cursorRect().y() != from.y(), runtime_wait_ms);
+        QVERIFY2(!behind && on(), "the cursor slid after its row");
+      }
+
+      QObject::disconnect(watch);
+      view->send(QStringLiteral("<Cmd>enew!<CR>"));
     }
 
     // What Neovim says of its mode has no row of its own under the windows: it is written on the

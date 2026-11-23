@@ -90,8 +90,9 @@ it to resize them.
 
 A scroll slides the rows to their places with the motion a terminal's rows have, and follows
 the same `scroll.smooth` setting. The cursor is drawn in a layer of its own, in the shape the
-mode gives it: it slides to where a jump takes it, takes a step to the next cell at once, as
-typing does, and moving or blinking it draws none of the text again. Keys reach Neovim as what
+mode gives it: it slides along its row to where a jump takes it, takes a step to the next cell
+or to another row at once, so it is never behind the row Neovim highlights, and moving or
+blinking it draws none of the text again. Keys reach Neovim as what
 was pressed: Command and Option are told apart from Control, and every combination with Shift
 arrives, which a terminal cannot always tell Neovim.
 
