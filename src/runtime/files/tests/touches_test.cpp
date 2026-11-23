@@ -114,6 +114,16 @@ namespace {
     check(seen.touches.size() == 2, "a tool's path with a blank in it is one file; a path the line cut is none");
     check(seen.touches[1].path == root + "/src/main one.cpp" && seen.touches[1].verb == "Edit" && seen.touches[1].actor == TouchActor::agent && seen.touches[1].provider == AgentProvider::claude);
     check(seen.touches[0].path == root + "/src/query.cpp" && seen.touches[0].verb == "Bash", "a tool that runs a command touches the files the command names");
+
+    // The history records the command an agent ran, and not which agent: it is the one whose
+    // tools the pane reported. In a pane no tool was reported from, nobody knows.
+    index.note({.pane = 1, .actor = TouchActor::agent, .text = "rg split src/query.cpp", .directory = root, .seconds = now()});
+    index.note({.pane = 2, .actor = TouchActor::agent, .text = "rg split src/query.cpp", .directory = root, .seconds = now()});
+
+    const auto ran = ask(memory, index, root);
+
+    check(ran.touches.size() == 4 && ran.touches[1].verb == "rg" && ran.touches[1].pane == 1 && ran.touches[1].provider == AgentProvider::claude);
+    check(ran.touches[0].pane == 2 && ran.touches[0].provider == AgentProvider::unknown);
   }
 
   void testTheIndexIsBounded() {

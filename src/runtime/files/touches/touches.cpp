@@ -183,9 +183,20 @@ namespace telar::runtime {
       return false;
     }
 
+    // A command the history records names no agent: it is by the one whose tools the pane last
+    // reported, where one did.
+    auto provider = note.provider;
+    if (note.actor == TouchActor::agent && provider == AgentProvider::unknown) {
+      for (const auto& touch : touches_) {
+        if (touch.pane == note.pane && touch.provider != AgentProvider::unknown) {
+          provider = touch.provider;
+        }
+      }
+    }
+
     // One touch of a file by the same hand and verb: the last time it happened.
     touches_.retain([&](const Touch& touch) {
-      return !(touch.pane == note.pane && touch.actor == note.actor && touch.provider == note.provider && touch.verb.view() == verb && touch.path.view() == path_.view());
+      return !(touch.pane == note.pane && touch.actor == note.actor && touch.provider == provider && touch.verb.view() == verb && touch.path.view() == path_.view());
     });
 
     if (touches_.size() == kept_touches) {
@@ -198,7 +209,7 @@ namespace telar::runtime {
     touch.verb.assign(verb);
     touch.pane = note.pane;
     touch.actor = note.actor;
-    touch.provider = note.provider;
+    touch.provider = provider;
     touch.seconds = note.seconds;
     touch.size = static_cast<std::uint64_t>(std::max<std::int64_t>(0, status.st_size));
     return true;

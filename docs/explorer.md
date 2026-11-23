@@ -107,6 +107,8 @@ What it does not know:
 - The index lives in the memory of the runtime: it keeps 512 touches for a day and answers the
   newest 128, and it starts empty when the runtime does.
 - An agent with no hooks reports no tool, so only the commands its shell records count.
+- The history records that an agent ran a command and not which agent: the touch takes the
+  agent whose tools the pane reported, and has a chip of no agent's color when none did.
 
 The window asks a machine who touched what when it shows files of it, and again when a pane of
 that machine starts or ends a program or its agent reports. A machine with no window is asked nothing.
