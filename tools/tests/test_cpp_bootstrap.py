@@ -2,6 +2,7 @@ import hashlib
 import importlib.util
 import io
 from pathlib import Path
+import shutil
 import tarfile
 import tempfile
 import unittest
@@ -14,9 +15,9 @@ bootstrap = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(bootstrap)
 
 
-def archive(name='package/bin/tool', link=None):
+def archive(name='package/bin/tool', link=None, compression='gz'):
     output = io.BytesIO()
-    with tarfile.open(fileobj=output, mode='w:gz') as package:
+    with tarfile.open(fileobj=output, mode=f'w:{compression}') as package:
         entry = tarfile.TarInfo(name)
         if link:
             entry.type = tarfile.SYMTYPE
@@ -43,8 +44,8 @@ class BootstrapIntegrity(unittest.TestCase):
             self.assertEqual((target / 'ninja').read_bytes(), b'verified executable')
             self.assertTrue((target / 'ninja').stat().st_mode & 0o111)
 
-    def prepare(self, directory, data, digest=None):
-        pin = {'url': 'https://example.invalid/tool.tar.gz',
+    def prepare(self, directory, data, digest=None, suffix='.tar.gz'):
+        pin = {'url': f'https://example.invalid/tool{suffix}',
                'sha256': digest or hashlib.sha256(data).hexdigest()}
         with patch.object(bootstrap.urllib.request, 'urlopen', return_value=io.BytesIO(data)):
             return bootstrap.prepare('test', pin, Path(directory))
@@ -86,6 +87,29 @@ class BootstrapIntegrity(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             with self.assertRaisesRegex(RuntimeError, 'Unsafe archive link'):
                 self.prepare(directory, archive('package/link', '/tmp/escape'))
+
+    def test_xz_archive_unpacks_with_each_decompressor(self):
+        data = archive(compression='xz')
+        for xz in (shutil.which('xz'), None):
+            with self.subTest(xz=xz), tempfile.TemporaryDirectory() as directory:
+                with patch.object(bootstrap.shutil, 'which', return_value=xz):
+                    target = self.prepare(directory, data, suffix='.tar.xz')
+                self.assertEqual((target / 'bin/tool').read_bytes(), b'verified tool\n')
+
+    @unittest.skipUnless(shutil.which('xz'), 'needs the system xz')
+    def test_xz_archive_path_cannot_escape_cache(self):
+        with tempfile.TemporaryDirectory() as directory:
+            with self.assertRaisesRegex(RuntimeError, 'Unsafe archive'):
+                self.prepare(directory, archive('../../escape', compression='xz'), suffix='.tar.xz')
+            self.assertFalse(list(Path(directory).glob('test-*/.complete')))
+
+    @unittest.skipUnless(shutil.which('xz'), 'needs the system xz')
+    def test_truncated_xz_archive_is_not_published(self):
+        data = archive(compression='xz')[:-12]
+        with tempfile.TemporaryDirectory() as directory:
+            with self.assertRaises((RuntimeError, tarfile.TarError)):
+                self.prepare(directory, data, suffix='.tar.xz')
+            self.assertFalse(list(Path(directory).glob('test-*/.complete')))
 
 
 if __name__ == '__main__':
