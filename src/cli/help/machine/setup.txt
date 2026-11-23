@@ -5,7 +5,8 @@ Usage: telar machine setup LABEL|ADDRESS [--label LABEL] [--binary PATH] [--skip
 Arguments:
   LABEL|ADDRESS    A saved machine, or the address `telar server pair` printed on a
                    new one, which is paired and saved under --label (default:
-                   derived from its host name).
+                   derived from its host name) before any other step, so a setup
+                   that fails later goes on by that label.
   --binary PATH    A telar executable built for the machine; development builds
                    need one.
   --skip STEPS     Leave out `agents`, `config`, `login` and/or `editor`.
@@ -20,7 +21,8 @@ Effects, in order, each idempotent: gateway (the machine's gateway admits this
 one), platform, telar (this exact build installed under
 ~/.local/share/telar/versions on the machine, no sudo), runtime (a runtime of
 another build is stopped only after a `y` on the terminal, then ~/.local/bin/telar
-is linked), profile (saved and enabled), agents (installed), integrations (each
+is linked), profile (saved and enabled, also when the runtime did not start, with the
+telar installed), agents (installed), integrations (each
 agent's, then the Neovim telar provisions for its editor panes, which the machine
 fetches itself and keeps only if its checksum is the one this build expects; a note
 says when it could not), configuration (allowlisted sync, no secrets), logins (each

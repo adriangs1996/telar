@@ -3054,6 +3054,21 @@ exit 1
       }
     }
 
+    // Saves a machine setup has just paired, before any later step can fail: its pairing code is
+    // spent, so the next `telar machine setup LABEL` must find it saved.
+    tbc::val_a<MachineProfile> savePaired(Memory& memory, SetupReport& report, const MachineOptions& options, const Target& target, std::string_view path) {
+      ds::Option<MachineProfile> saved;
+
+      update(memory, path, [&](MachineProfiles& profiles) {
+        const MachineOptions add{.action = MachineOptions::Action::add, .label = target.label, .value = target.destination, .disabled = options.disabled};
+
+        change(profiles, add);
+        saved = profiles.rows()[*profiles.find(target.label)];
+      });
+      report.note(Step::gateway, "{} is saved, as its pairing code is spent: `telar machine setup {}` goes on from here", target.label, target.label);
+      return std::move(*saved);
+    }
+
     void printSetupFailure(const MachineOptions& options, const std::exception& error) {
       if (std::string_view{error.what()} == "DuplicateMachineLabel") {
         std::println(stderr, "telar machine setup: the label for {} is taken by another machine; name it with --label", options.label);
@@ -3084,7 +3099,8 @@ exit 1
       return ds::none;
     }
 
-    // Links ~/.local/bin/telar there to the telar setup installed, where nothing else is there.
+    // Links ~/.local/bin/telar there to the telar setup installed, where nothing else is there. A
+    // link that fails is a note: the steps after it do not need it.
     void linkProgram(SetupRun& run, const Platform& platform) {
       Text link_script{run.memory};
 
@@ -3094,7 +3110,15 @@ if [ -L "$link" ] && [ "$(readlink "$link")" = "$telar" ]; then exit 0; fi
 if [ -e "$link" ] && [ ! -L "$link" ]; then echo 'it is a file telar did not link, so it stays; remove it to let setup link it' >&2; exit 1; fi
 mkdir -p "$HOME/.local/bin" && "$telar" cli install --dir "$HOME/.local/bin" >/dev/null && echo linked
 )Link");
-      const auto link = runScript(run.memory, run.target.destination, link_script);
+      launch::Output link{run.memory};
+
+      try {
+        link = runScript(run.memory, run.target.destination, link_script);
+      } catch (const std::exception& error) {
+        run.report.note(Step::runtime, "~/.local/bin/telar left as it was: the link did not run to the end: {}", error.what());
+        return;
+      }
+
       if (link.status != 0) {
         run.report.note(Step::runtime, "~/.local/bin/telar left as it was: {}", link.errorLine());
       } else if (link.out.view().contains("linked")) {
@@ -3225,11 +3249,19 @@ mkdir -p "$HOME/.local/bin" && "$telar" cli install --dir "$HOME/.local/bin" >/d
       Install build{.binary = ds::none, .digest = ds::none, .directory = Text{memory}};
 
       try {
-        resolved = resolve(memory, profiles, options);
+        // The build is read first: a --binary without its companions refuses before resolve
+        // spends a pairing code.
         build.directory.assign(version);
         if (options.binary) {
           digestBinary(memory, build, *options.binary);
         }
+
+        auto found = resolve(memory, profiles, options);
+        if (!found.saved && MachineAddress::pairing(options.label)) {
+          found.saved.emplace(savePaired(memory, report, options, found, path));
+        }
+
+        resolved.emplace(std::move(found));
       } catch (const std::exception& error) {
         printSetupFailure(options, error);
         return 1;
@@ -3260,6 +3292,9 @@ mkdir -p "$HOME/.local/bin" && "$telar" cli install --dir "$HOME/.local/bin" >/d
       const auto remote = MachineProfile::create(MachineId::generate(random), {.label = target.label, .destination = target.destination, .program = platform->target.view()});
 
       if (!startRuntime(memory, report, target, remote, interactive)) {
+        // The build is in place there though no runtime of it runs: the profile names it, so the
+        // next setup or check reaches that telar.
+        saveProfile(run, *platform);
         return report.finish(memory, {.label = target.label, .destination = target.destination});
       }
 
