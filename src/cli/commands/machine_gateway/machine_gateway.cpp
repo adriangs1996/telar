@@ -2419,11 +2419,25 @@ namespace telar::runtime::cli::gateway_commands {
       return colon == std::string_view::npos ? ds::format(memory, ":{}", text) : Text{memory, text};
     }
 
-    // What `listen` and `enable` take: where to listen, and the runtime to serve.
+    // A port another machine dials, 1 to 65535 in decimal.
+    std::string_view dialedPort(std::string_view text) {
+      const auto port = unsignedDecimal<std::uint16_t>(text);
+      if (!port || *port == 0) {
+        throw std::invalid_argument{"ExpectedPort"};
+      }
+
+      return text;
+    }
+
+    // What `listen` and `enable` take: where to listen, and the runtime to serve. `enable` and
+    // `pair` also take the host and port the pairing address names, where another machine reaches
+    // the gateway by others than its host name and the port it listens on: a published container
+    // port, a router's forwarded port.
     struct ListenOptions {
       std::string_view address = default_address;
       std::string_view socket;
       std::string_view host;
+      std::string_view port;
 
       static ListenOptions parse(std::span<char* const> arguments, bool pairing) {
         ListenOptions options;
@@ -2431,13 +2445,15 @@ namespace telar::runtime::cli::gateway_commands {
 
         for (std::size_t index = 0; index < arguments.size(); ++index) {
           const std::string_view argument{arguments[index]};
-          const bool valued = argument == "--socket" || (pairing && argument == "--host");
+          const bool valued = argument == "--socket" || (pairing && (argument == "--host" || argument == "--port"));
           if (valued && index + 1 == arguments.size()) {
             throw std::invalid_argument{"MissingOptionValue"};
           }
 
           if (argument == "--socket") {
             options.socket = arguments[++index];
+          } else if (argument == "--port" && valued) {
+            options.port = dialedPort(arguments[++index]);
           } else if (valued) {
             options.host = arguments[++index];
           } else if (!addressed && !argument.starts_with('-')) {
@@ -2493,7 +2509,7 @@ namespace telar::runtime::cli::gateway_commands {
 
       // The address alone goes to stdout, for a script; what to do with it goes to the person.
       std::println(stdout, "{}", address);
-      std::println(stderr, "\nOn the machine that will connect, within ten minutes:\n\n  telar machine add LABEL '{}'\n\nThe address names this machine as `{}`. When the other machine reaches it under another\nname or address, print one with `telar server pair --host NAME`.", address, address.substr(0, address.find('#')));
+      std::println(stderr, "\nOn the machine that will connect, within ten minutes:\n\n  telar machine add LABEL '{}'\n\nThe address names this machine as `{}`. When the other machine reaches it under another\nname, address or port, print one with `telar server pair --host NAME --port PORT`.", address, address.substr(0, address.find('#')));
       return 0;
     }
 
@@ -2710,7 +2726,8 @@ namespace telar::runtime::cli::gateway_commands {
         return status;
       }
 
-      return pair(memory, options.host, address.view().substr(address.view().rfind(':') + 1));
+      // The address names the port the gateway listens on, unless another is dialed to reach it.
+      return pair(memory, options.host, options.port.empty() ? address.view().substr(address.view().rfind(':') + 1) : options.port);
     }
 
   }
@@ -2734,7 +2751,7 @@ namespace telar::runtime::cli::gateway_commands {
         throw std::invalid_argument{"UnknownOption"};
       }
 
-      return pair(memory, options.host, {});
+      return pair(memory, options.host, options.port);
     }
 
     if (verb == "access") {

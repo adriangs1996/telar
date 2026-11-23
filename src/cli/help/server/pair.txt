@@ -1,11 +1,14 @@
 telar server pair: Print an address that pairs one other machine with this gateway
 
-Usage: telar server pair [--host HOST]
+Usage: telar server pair [--host HOST] [--port PORT]
 
 Arguments:
   --host HOST      The name or address the other machine reaches this one by, when
                    it is not this machine's host name: a public address, a VPN
                    name, `127.0.0.1` behind a published port.
+  --port PORT      The port the other machine dials, when it is not the one the
+                   gateway listens on: a container port published as another, a
+                   router's forwarded port. Default: the gateway's own.
 
 Effects: adds a pairing code to this account's gateway. The code enrolls the first
 machine that presents it, once, and expires after ten minutes; at most eight wait at
