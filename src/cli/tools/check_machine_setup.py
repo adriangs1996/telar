@@ -487,8 +487,40 @@ def pairing(binary):
         assert [(row['label'], row['destination']) for row in saved] == [('box', FIXTURE)], saved
 
 
+def spent_pairing_codes(binary):
+    """A code is spent only on a machine setup goes on to save: a --binary without its
+    companions refuses before it pairs, and a machine paired before a later step fails is
+    saved, so setting it up again by its label goes on from there."""
+    with machine(binary, auth='once') as fixture:
+        build = fixture.root / 'build'
+        build.mkdir()
+        shutil.copy2(binary, build / 'telar')
+        status, _ = fixture.run('machine', 'setup', PAIRING, '--binary', str(build / 'telar'), *SKIP_ALL, '--json')
+        assert status == 1 and not [call for call in fixture.calls() if call['argv'][0] == 'enroll'], fixture.calls()
+    with machine(binary, auth='once', probe='exit3') as fixture:
+        status, output = fixture.run('machine', 'setup', PAIRING, *SKIP_ALL, '--json')
+        gateway = next(step for step in json.loads(output)['steps'] if step['step'] == 'gateway')
+        assert status == 1 and steps(output)['platform'] == 'failed' and any('pairing code is spent' in note for note in gateway['notes']), output
+        saved = json.loads(fixture.run('machine', 'list', '--json')[1])['machines']
+        assert [(row['label'], row['destination']) for row in saved] == [('fixture', FIXTURE)], saved
+        status, output = fixture.run('machine', 'setup', 'fixture', *SKIP_ALL, '--json')
+        assert steps(output)['gateway'] == 'ok', output
+
+
+def runtime_failure_keeps_telar(binary):
+    """A runtime that does not start there leaves the build it was to run saved: the profile
+    names the telar setup placed."""
+    with machine(binary, endpoint='mismatch') as fixture:
+        status, output = fixture.run('machine', 'setup', FIXTURE, *SKIP_ALL, '--json')
+        assert status == 1 and steps(output)['runtime'] == 'failed' and steps(output)['profile'] == 'changed', output
+        saved = json.loads(fixture.run('machine', 'list', '--json')[1])['machines']
+        assert [row.get('telar_path') for row in saved] == [str(fixture.remote / '.local/share/telar/versions' / VERSION / 'telar')], saved
+
+
 def contracts(binary):
     """Setup contracts asserted on their effects alone, beside the recorded outputs."""
+    spent_pairing_codes(binary)
+    runtime_failure_keeps_telar(binary)
     probe_failures(binary)
     editor_is_provisioned(binary)
     editor_is_sent(binary)
@@ -511,4 +543,4 @@ def contracts(binary):
     commands=[json.loads(line) for line in first['files']['remote-argv.jsonl']['text'].splitlines()]
     assert ['tab','close','12','--workspace','11','--json'] not in commands, commands
     assert [words[:2] for words in commands].count(['workspace','create'])==1, commands
-    return 14
+    return 16

@@ -391,10 +391,38 @@ def dispatch_refusals(binary):
             subprocess.run([str(telar), 'server', 'stop'], env=env, cwd=root, capture_output=True, timeout=15)
 
 
+def pairing_addresses(binary):
+    """`server pair` prints the address another machine dials: the host and port it is given,
+    else this machine's host name and the port the gateway listens on. A port outside 1 to
+    65535 is refused before a code is made, and `listen`, which prints no address, takes none."""
+    with tempfile.TemporaryDirectory(prefix='telar-pair-', dir='/tmp') as temporary:
+        root = Path(temporary).resolve()
+        env = environment(root)
+        env['TELAR_GATEWAY_STATE'] = str(root / 'gateway')
+
+        def server(*words):
+            return subprocess.run([str(binary), 'server', *words], env=env, capture_output=True, text=True, timeout=30)
+
+        code = r'#[0-9a-f]{64}\.[0-9a-f]{32}\n'
+        result = server('pair', '--host', 'box.example', '--port', '9000')
+        assert result.returncode == 0 and re.fullmatch(r'telar://box\.example:9000' + code, result.stdout), result
+        assert '--port PORT' in result.stderr, result
+        result = server('pair', '--host', 'box.example')
+        assert result.returncode == 0 and re.fullmatch(r'telar://box\.example:8352' + code, result.stdout), result
+        for port in ('0', '65536', 'http', '', '-1'):
+            result = server('pair', '--port', port)
+            assert result.returncode == 1 and not result.stdout and 'ExpectedPort' in result.stderr, (port, result)
+        pending = (root / 'gateway' / 'pairing').read_text().splitlines()
+        assert len(pending) == 2, pending
+        result = server('listen', '--port', '9000')
+        assert result.returncode == 1 and 'UnknownOption' in result.stderr, result
+
+
 def contracts(binary):
     """Machine contracts asserted on their effects alone, beside the recorded outputs."""
     incompatible_runtime_kept(binary)
     concurrent_edits(binary)
     receive_config_bounds(binary)
     dispatch_refusals(binary)
-    return 5
+    pairing_addresses(binary)
+    return 6

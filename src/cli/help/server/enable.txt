@@ -1,6 +1,6 @@
 telar server enable: Keep a gateway running for this account and print an address to pair with
 
-Usage: telar server enable [[HOST]:PORT] [--socket PATH] [--host HOST]
+Usage: telar server enable [[HOST]:PORT] [--socket PATH] [--host HOST] [--port PORT]
 
 Arguments:
   [HOST]:PORT      Where the gateway listens, as `telar server listen` takes it.
@@ -8,6 +8,8 @@ Arguments:
   --socket PATH    Serve the runtime at PATH instead of this account's own.
   --host HOST      The name the pairing address gives this machine, as `telar server
                    pair` takes it.
+  --port PORT      The port the pairing address names, as `telar server pair` takes
+                   it. Default: the one the gateway listens on.
 
 Effects: installs and starts a service of this account, without root, that runs
 `telar server listen`: a systemd user unit (`telar-gateway.service`) on Linux, a

@@ -38,6 +38,14 @@ address that is not its host name:
 telar server enable 9000 --host 203.0.113.7
 ```
 
+When the port other machines dial is not the one the gateway listens on, such
+as a container port published as another or a port a router forwards, name it
+with `--port`. The gateway still listens on 8352 here:
+
+```sh
+telar server enable --host 203.0.113.7 --port 9000
+```
+
 The port must be reachable from your machine: open it in the firewall, or
 publish it from the container. A machine behind NAT needs a forwarded port or
 a VPN, as it would for any server.
@@ -262,7 +270,7 @@ for a window, a command or a forwarded port.
 
 | Symptom | Check |
 | --- | --- |
-| `the gateway does not answer at its address` | The gateway runs there (`telar server enable`), the port is open and published, and the host in the address is how your machine reaches it (`telar server pair --host NAME`). |
+| `the gateway does not answer at its address` | The gateway runs there (`telar server enable`), the port is open and published, and the host and port in the address are how your machine reaches it (`telar server pair --host NAME --port PORT`). |
 | `this machine is not paired with that gateway` | It was revoked, or the gateway's state was reset. Print a new address there and run `telar machine setup ADDRESS --label box`. |
 | `the gateway holds another key` | The address names a gateway that is no longer the one answering there. Do not work around it: confirm the machine, then pair again with a new address. |
 | The pairing code is refused | It was used, mistyped, or older than ten minutes. Print a new one. |

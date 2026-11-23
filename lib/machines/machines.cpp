@@ -160,17 +160,28 @@ namespace telar::runtime::machines {
     case MachineError::incompatible_profiles:
       return "machines.json was written by a newer telar; update this one to read it";
     case MachineError::invalid_id:
+      return "machines.json holds an id that is not m- and 12 hexadecimal digits; remove that machine and add it again";
     case MachineError::duplicate_id:
+      return "two machines in machines.json share one id; remove one of them and add it again";
     case MachineError::discovery_unreadable:
+      return "telar there answered with something this telar cannot read; install this build there with `telar machine setup`, and keep the shell startup files there quiet";
     case MachineError::host_key_rejected:
+      return "the gateway at that address holds another key than the address names; confirm it is the machine you paired, then pair again with an address `telar server pair` prints there";
     case MachineError::authentication_failed:
+      return "that machine's gateway does not admit this one; run `telar server pair` there, then `telar machine setup ADDRESS --label LABEL` here";
     case MachineError::remote_program_missing:
+      return "the gateway there finds no telar to run; keep telar, telar-runtime, telar-config-check and telar-gateway in one directory there, or run `telar machine setup`";
     case MachineError::remote_program_incompatible:
+      return "the telar there is another build; `telar machine setup` installs this one";
     case MachineError::remote_runtime_incompatible:
+      return "the runtime there runs another telar build; `telar machine setup` stops it, once you agree, and starts this one";
     case MachineError::endpoint_unavailable:
+      return "the runtime there did not answer; check that its gateway runs (`telar server enable` there) and that its port is reachable from here";
     case MachineError::incompatible_schema:
-    case MachineError::runtime_already_running:
+      return "the runtime there speaks another wire schema; `telar machine setup` installs this build there";
     case MachineError::invalid_runtime_directory:
+      return "this user's runtime directory is not one telar can use: it must be a private directory of this user";
+    case MachineError::runtime_already_running:
       break;
     }
 
