@@ -145,10 +145,25 @@ namespace telar::runtime::cli {
 
   namespace {
 
+    // Whether a runtime answers at `socket`. One of another build is a failure of its own: the
+    // machines that run this command through a gateway read "telar protocol mismatch" on stderr
+    // as a runtime they cannot attach to until it stops, never as one that is still starting.
+    bool connectCompatible(ds::Option<RuntimeConnection>& connection, const char* socket) {
+      try {
+        return connectExisting(connection, socket);
+      } catch (const SocketError& error) {
+        if (error.cause() == SocketError::Cause::schema_rejected) {
+          throw std::runtime_error{"the runtime at this socket runs another telar build (telar protocol mismatch); stop it with the telar that started it"};
+        }
+
+        throw;
+      }
+    }
+
     template <Allocator Memory>
     void printEndpoint(Memory& memory, const ServerOptions& options, const RuntimePaths<Memory>& paths) {
       ds::Option<RuntimeConnection> connection;
-      if (!connectExisting(connection, paths.socket.data())) {
+      if (!connectCompatible(connection, paths.socket.data())) {
         const auto started = startRuntime(memory, options, paths);
         if (started == RuntimeStart::exited) {
           throw SystemError{"Runtime failed to start; inspect its .runtime.start.log", ECHILD};

@@ -7,6 +7,7 @@ static_assert(true);
 #include "key_bindings.hpp"
 #include "pointer_dispatcher.hpp"
 #include "ui/app/overlays/machine_prompt/machine_prompt_controller.hpp"
+#include "ui/app/overlays/machine_wizard/machine_wizard_controller.hpp"
 #include "ui/app/overlays/palette/palette_controller.hpp"
 #include "ui/app/overlays/peek/peek_controller.hpp"
 #include "ui/app/overlays/workspace_form/workspace_form_controller.hpp"
@@ -26,6 +27,7 @@ namespace telar::gui::qt {
         store_(parts.store),
         peek_(parts.peek),
         machine_prompt_(parts.machine_prompt),
+        machine_wizard_(parts.machine_wizard),
         palette_(parts.palette),
         paths_(parts.paths),
         history_(parts.history),
@@ -40,6 +42,10 @@ namespace telar::gui::qt {
 
     if (kind != Dialog::machine) {
       machine_prompt_.forget();
+    }
+
+    if (kind != Dialog::machine_wizard) {
+      machine_wizard_.forget();
     }
 
     if (kind != Dialog::palette) {
@@ -101,9 +107,15 @@ namespace telar::gui::qt {
     show(Dialog::palette);
   }
 
-  void Dialogs::showMachinePrompt(ds::Option<application::machines::MachineToken> renamed) {
+  void Dialogs::showMachinePrompt(application::machines::MachineToken renamed) {
     if (machine_prompt_.open(renamed)) {
       show(Dialog::machine);
+    }
+  }
+
+  void Dialogs::showMachineWizard(ds::Option<application::machines::MachineToken> machine) {
+    if (machine_wizard_.open(machine)) {
+      show(Dialog::machine_wizard);
     }
   }
 

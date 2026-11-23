@@ -1102,7 +1102,7 @@ namespace telar::gui::qt {
       machines_.move(-1);
       return true;
     case window_actions::Action::add_machine:
-      dialogs_.showMachinePrompt();
+      dialogs_.showMachineWizard();
       return true;
     case window_actions::Action::none:
     case window_actions::Action::new_tab:

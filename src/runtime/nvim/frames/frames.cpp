@@ -519,20 +519,25 @@ namespace telar::runtime {
     const auto page_count = std::min(tabs.tabs.size(), max_nvim_tabs);
     const auto buffer_count = std::min(tabs.buffers.size(), max_nvim_tabs);
 
-    for (std::size_t index = 0; index < page_count; ++index) {
-      const auto* const mark = std::ranges::find(tabs.marks, tabs.tabs[index].handle, &NvimTabs::Mark::handle);
-      const bool marked = mark != tabs.marks.end();
+    // An entry of the tab line with what is marked on it.
+    const auto marked = [&](const NvimTabs::Entry& entry, const auto& marks) {
+      const auto* const mark = std::ranges::find(marks, entry.handle, &NvimTabs::Mark::handle);
+      const bool found = mark != marks.end();
 
-      pages.atMut(index) = {
-          .handle = tabs.tabs[index].handle,
-          .name = clipped(tabs.tabs[index].name.of(text), max_nvim_label_bytes),
-          .modified = marked && mark->modified,
-          .diagnostics = marked ? mark->diagnostics : std::uint16_t{0},
+      return NvimTab{
+          .handle = entry.handle,
+          .name = clipped(entry.name.of(text), max_nvim_label_bytes),
+          .modified = found && mark->modified,
+          .diagnostics = found ? mark->diagnostics : std::uint16_t{0},
       };
+    };
+
+    for (std::size_t index = 0; index < page_count; ++index) {
+      pages.atMut(index) = marked(tabs.tabs[index], tabs.marks);
     }
 
     for (std::size_t index = 0; index < buffer_count; ++index) {
-      buffers.atMut(index) = {.handle = tabs.buffers[index].handle, .name = clipped(tabs.buffers[index].name.of(text), max_nvim_label_bytes)};
+      buffers.atMut(index) = marked(tabs.buffers[index], tabs.buffer_marks);
     }
 
     write(

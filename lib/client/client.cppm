@@ -291,12 +291,21 @@ export {
   namespace telar {
 
     struct SocketError final : std::exception {
-      explicit SocketError(const char* message);
+      // What a caller may act on; anything else is `other`.
+      enum class Cause : std::uint8_t {
+        other,
+        // The runtime speaks another wire schema: it runs another telar build.
+        schema_rejected,
+      };
+
+      explicit SocketError(const char* message, Cause cause = Cause::other);
 
       [[nodiscard]] const char* what() const noexcept override;
+      [[nodiscard]] Cause cause() const noexcept;
 
     private:
       const char* message_;
+      Cause cause_;
     };
 
     // Owns its socket: closed when the client goes, moved but never copied, and never inherited

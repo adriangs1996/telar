@@ -40,6 +40,10 @@ export {
       static constexpr std::uint16_t ratio_maximum_split = 9000;
       static constexpr std::uint16_t resize_step = ratio_maximum / 20;
 
+      // A pane's frame, in cells: a column at each side, the header's rows over its content and
+      // the gap's row between it and the next. Under its last row a pane keeps no row: its frame
+      // takes room from the gap's row, or the room the workbench keeps at its foot.
+      // Without gaps a pane has neither, and keeps a row of its own there.
       struct Metrics {
         std::uint8_t border = 1;
         std::uint8_t gap = 1;
@@ -47,6 +51,8 @@ export {
 
         [[nodiscard]] std::uint16_t minimumPaneExtent(ClientLayoutAxis axis = ClientLayoutAxis::horizontal) const noexcept;
         [[nodiscard]] CellRectangle content(CellRectangle bounds) const noexcept;
+        // The rows a pane keeps under its content.
+        [[nodiscard]] std::uint16_t footRows() const noexcept;
 
         bool operator==(const Metrics&) const = default;
       };
@@ -153,6 +159,10 @@ export {
       // A new pane opens alone in its tab, framed like any other pane.
       [[nodiscard]] ds::Option<TerminalSize> launchSize() const noexcept;
       [[nodiscard]] CellRectangle cellArea() const noexcept;
+      // The least room the area keeps under its last row, in its own units, for the frames of
+      // the panes at its foot: half a column, so a row is given up for it as seldom as can be.
+      // What the area has beyond its whole rows goes there too.
+      [[nodiscard]] float foot() const noexcept;
       [[nodiscard]] ds::Option<TerminalSize> contentSize(CellRectangle content) const noexcept;
       [[nodiscard]] Rect pixels(CellRectangle cells) const noexcept;
     };

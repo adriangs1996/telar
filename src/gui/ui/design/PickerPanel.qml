@@ -13,7 +13,11 @@ import Telar.Gui
 // `detail` is a second line under it; `icon` is the glyph of what it is, a file's type or a
 // folder, drawn in `iconTone`, a role of the window's colors; `badge` is a letter at its end,
 // what git says of it, drawn in `badgeTone`.
-Item {
+//
+// A focus scope: the keys given to the panel are its query's. A host that sets `focus` on the
+// panel names the panel in its own scope, never an item that would hold the keys in the
+// query's place.
+FocusScope {
     id: root
 
     required property var colors

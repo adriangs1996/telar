@@ -39,3 +39,8 @@ jobs:
         run: |
           python3 -m unittest discover -s tools/tests -p test_cpp_modules.py -v
           python3 tools/check-cpp-modules.py
+
+      # Each case of tbc's spec names the file of src/ it comes from, which a rename or a deletion there
+      # leaves behind. Loading the corpus checks that every one exists; it needs no build of tbc.
+      - name: Check the provenance of tbc's spec
+        run: python3 -c 'import sys; sys.path.insert(0, "lib/tbc/tests"); import spec_runner; spec_runner.load_cases()'

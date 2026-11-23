@@ -106,6 +106,8 @@ export {
       bool disabled = false;
       bool check = false;
       bool json = false;
+      // setup only: each step, note and question as one JSON line as it happens.
+      bool events = false;
       bool setup = false;
       bool confirm = false;
       ds::Array<bool, 4> skip{};

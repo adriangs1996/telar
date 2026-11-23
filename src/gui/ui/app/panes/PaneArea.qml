@@ -157,15 +157,11 @@ Item {
                 height: pane.framed ? Math.min(pane.frameHeight, pane.record.content.y - y, root.headerHeight) : 0
                 visible: pane.framed && !pane.drawnHeader
                 record: pane.record.chrome
-                // An editor says which file it shows and the mode it is in.
+                // An editor says which file it shows; its mode is on its status line.
                 detail: {
                     const shown = editorView.item?.editor;
-                    if (!shown || !shown.ready) {
-                        return "";
-                    }
 
-                    const file = pane.record.title === pane.record.chrome.program ? "" : pane.record.title;
-                    return [file, shown.mode.toUpperCase()].filter(part => part.length > 0).join(" · ");
+                    return !shown || !shown.ready || pane.record.title === pane.record.chrome.program ? "" : pane.record.title;
                 }
                 onElementActivated: (slot, key, revision, element) => root.elementActivated(slot, key, revision, element)
                 colors: root.colors

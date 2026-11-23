@@ -396,7 +396,7 @@ namespace {
       QVERIFY(machines.row(Machines::local_slot).enabled);
     }
 
-    Q_SLOT static void twoStepAddRenameAndRemoveFromPicker() {
+    Q_SLOT static void pickerAddsThroughTheWizardThenRenamesAndRemoves() {
       ProfileFixture fixture;
 
       QVERIFY(fixture.start(R"({"version":1,"machines":[]})"));
@@ -406,21 +406,14 @@ namespace {
       application.palette()->search(QStringLiteral(":unmatched"));
       QCOMPARE(application.palette()->state().value(QStringLiteral("count")).toInt(), 1);
       application.palette()->activate(machineChoice(application, QStringLiteral("Add machine…")));
-      QCOMPARE(application.dialogs()->kind(), telar::gui::qt::ApplicationController::Dialog::machine);
-      const auto first_revision = application.machinePrompt()->state().value(QStringLiteral("revision")).toString();
-
-      application.machinePrompt()->search(QStringLiteral("Added"));
-      application.machinePrompt()->submit(first_revision);
-      QCOMPARE(application.machinePrompt()->state().value(QStringLiteral("title")).toString(), QStringLiteral("The address `telar server pair` prints there"));
-      const auto second_revision = application.machinePrompt()->state().value(QStringLiteral("revision")).toString();
-
-      QVERIFY(first_revision != second_revision);
-      application.machinePrompt()->search(QStringLiteral("telar://window-added.fixture#0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef.fedcba9876543210fedcba9876543210"));
-      application.machinePrompt()->submit(first_revision);
-      QVERIFY(!MachineProfileWindow::profiles(application).editing());
-      QCOMPARE(application.dialogs()->kind(), telar::gui::qt::ApplicationController::Dialog::machine);
-      application.machinePrompt()->submit(second_revision);
+      QCOMPARE(application.dialogs()->kind(), telar::gui::qt::ApplicationController::Dialog::machine_wizard);
+      QCOMPARE(application.machineWizard()->state().value(QStringLiteral("step")).toInt(), static_cast<int>(telar::gui::qt::MachineWizardController::Step::pair));
+      application.commands()->execute(window_actions::Action::cancel);
       QVERIFY((application.dialogs()->kind() == telar::gui::qt::ApplicationController::Dialog::none));
+      QVERIFY(!application.machineWizard()->state().value(QStringLiteral("open")).toBool());
+      // The wizard saves through `telar machine add`; the window reads the profile it leaves.
+      // A plain literal: moc reads a hash inside a raw string as the start of a directive.
+      fixture.replace("{\"version\":1,\"machines\":[{\"id\":\"m-000000000003\",\"label\":\"Added\",\"destination\":\"telar://window-added.fixture#0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef\",\"enabled\":true}]}");
       const auto& machines = MachineProfileWindow::machines(application);
 
       QTRY_VERIFY(machines.findDestination("telar://window-added.fixture#0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef").hasValue());
@@ -454,17 +447,16 @@ namespace {
       application.commands()->editMachineResult(stale, window_actions::MachineEditAction::remove);
       QVERIFY(!MachineProfileWindow::profiles(application).editing());
       QVERIFY(MachineProfileWindow::machines(application).row(slot).used);
-      application.commands()->execute(window_actions::Action::add_machine);
+      application.commands()->execute(window_actions::Action::machine_picker);
+      application.commands()->editMachineResult(machineChoice(application, QStringLiteral("Renamed")), window_actions::MachineEditAction::rename);
       application.machinePrompt()->search(QStringLiteral("invalid label"));
-      application.machinePrompt()->submit(application.machinePrompt()->state().value(QStringLiteral("revision")).toString());
-      application.machinePrompt()->search(QStringLiteral("telar://window-invalid.fixture#0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef.fedcba9876543210fedcba9876543210"));
       application.machinePrompt()->submit(application.machinePrompt()->state().value(QStringLiteral("revision")).toString());
       QTRY_VERIFY(!application.notifications()->center().items().empty());
       QCOMPARE(application.notifications()->center().items().front().title.view(), std::string_view{"Machine not saved"});
-      QVERIFY(!MachineProfileWindow::machines(application).findDestination("telar://window-invalid.fixture#0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"));
+      QCOMPARE(MachineProfileWindow::machines(application).row(slot).label.view(), std::string_view{"Renamed"});
     }
 
-    Q_SLOT static void setupOpensOriginalCommandOnTheLocalMachine() {
+    Q_SLOT static void setupOpensTheWizardOnThatMachine() {
       ProfileFixture fixture;
 
       QVERIFY(fixture.start(R"({"version":1,"machines":[{"id":"m-000000000001","label":"Missing","destination":"missing","enabled":true}]})"));
@@ -474,20 +466,17 @@ namespace {
 
       QTRY_VERIFY(MachineProfileWindow::machines(application).row(slot).needs_setup);
       application.commands()->execute(window_actions::Action::machine_picker);
+      const auto active = MachineProfileWindow::machines(application).active();
+
       application.palette()->activate(machineChoice(application, QStringLiteral("Missing")));
-      QTRY_COMPARE(fixture.runtime->count(ClientTag::create_tab), std::size_t{1});
-      const auto request = fixture.runtime->last<CreateTab>();
+      QCOMPARE(application.dialogs()->kind(), telar::gui::qt::ApplicationController::Dialog::machine_wizard);
+      const auto wizard = application.machineWizard()->state();
 
-      QCOMPARE(request.label, std::string_view{"Set up Missing"});
-      constexpr std::size_t setup_arguments = 5;
-
-      QCOMPARE(request.launch.arguments.size(), setup_arguments);
-      QVERIFY(!request.launch.arguments.front().empty());
-      QCOMPARE(request.launch.arguments[1], std::string_view{"machine"});
-      QCOMPARE(request.launch.arguments[2], std::string_view{"setup"});
-      QCOMPARE(request.launch.arguments[3], std::string_view{"Missing"});
-      QCOMPARE(request.launch.arguments[4], std::string_view{"--confirm"});
-      QCOMPARE(MachineProfileWindow::machines(application).active(), Machines::local_slot);
+      QVERIFY(wizard.value(QStringLiteral("existing")).toBool());
+      QCOMPARE(wizard.value(QStringLiteral("label")).toString(), QStringLiteral("Missing"));
+      QCOMPARE(wizard.value(QStringLiteral("step")).toInt(), static_cast<int>(telar::gui::qt::MachineWizardController::Step::telar));
+      QCOMPARE(fixture.runtime->count(ClientTag::create_tab), std::size_t{0});
+      QCOMPARE(MachineProfileWindow::machines(application).active(), active);
     }
 
     Q_SLOT static void hiddenAdmissionAndVisibleDisable() {

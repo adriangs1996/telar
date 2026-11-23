@@ -22,7 +22,8 @@ Popup {
     readonly property bool monitorMode: telar.dialogs.kind === Store.Dialog.monitor || telar.dialogs.kind === Store.Dialog.explorer
     readonly property bool promptMode: telar.dialogs.kind !== Store.Dialog.none && !customMode && !monitorMode
     readonly property bool workspaceMode: telar.dialogs.kind === Store.Dialog.new_workspace
-    readonly property var standardField: workspaceMode ? workspaceForm.field.input : prompt.field.input
+    readonly property bool wizardMode: telar.dialogs.kind === Store.Dialog.machine_wizard
+    readonly property var standardField: wizardMode ? (machineWizard.item?.field.input ?? prompt.field.input) : workspaceMode ? workspaceForm.field.input : prompt.field.input
     readonly property real dimmingAlpha: 0.25
     readonly property real historyEntranceOffset: Math.min(12 * root.ratio, Math.max(0, root.parent.height - historyBounds.y - historyBounds.height))
     readonly property real promptEntranceOffset: 10 * root.ratio
@@ -85,7 +86,7 @@ Popup {
     y: peekMode ? peekBounds.y : machineMode ? machineBounds.y : pathMode ? pathBounds.y : historyMode ? historyBounds.y + historyEntranceOffset * (1 - historyMotion.reveal) : paletteMode ? paletteBounds.y : (parent.height - height) / 2 + promptEntranceOffset * (1 - promptMotion.reveal)
     opacity: reveal
     scale: promptMode ? promptEntranceScale + (1 - promptEntranceScale) * promptMotion.reveal : 1
-    width: peekMode ? peekBounds.width : machineMode ? machineBounds.width : pathMode ? pathBounds.width : historyMode ? historyBounds.width : paletteMode ? paletteBounds.width : Math.min(parent.width - 32, (workspaceMode ? 520 : 480) * ratio)
+    width: peekMode ? peekBounds.width : machineMode ? machineBounds.width : pathMode ? pathBounds.width : historyMode ? historyBounds.width : paletteMode ? paletteBounds.width : Math.min(parent.width - 32, (wizardMode ? 640 : workspaceMode ? 520 : 480) * ratio)
     height: peekMode ? peekBounds.height : machineMode ? machineBounds.height : pathMode ? pathBounds.height : historyMode ? historyBounds.height : paletteMode ? paletteBounds.height : contentItem.implicitHeight + topPadding + bottomPadding
     modal: true
     focus: true
@@ -130,7 +131,7 @@ Popup {
             if (root.monitorMode) {
                 root.close();
             } else if (telar.dialogs.kind !== Store.Dialog.none) {
-                if (!root.paletteMode && !root.pathMode && !root.machineMode && !root.peekMode) {
+                if (!root.paletteMode && !root.pathMode && !root.machineMode && !root.peekMode && !root.wizardMode) {
                     root.activeSearch.text = "";
                 }
                 if (root.promptMode) {
@@ -168,7 +169,7 @@ Popup {
     }
 
     contentItem: Item {
-        implicitHeight: root.workspaceMode ? workspaceForm.implicitHeight : prompt.implicitHeight
+        implicitHeight: root.wizardMode ? (machineWizard.item?.implicitHeight ?? 0) : root.workspaceMode ? workspaceForm.implicitHeight : prompt.implicitHeight
 
         Loader {
             id: peekBrowser
@@ -272,7 +273,7 @@ Popup {
         PromptPanel {
             id: prompt
             anchors.fill: parent
-            visible: !root.customMode && !root.workspaceMode
+            visible: !root.customMode && !root.workspaceMode && !root.wizardMode
             colors: telar.colors
             typography: telar.display.geometry.typography
             dialog: telar.dialogs.kind
@@ -282,6 +283,20 @@ Popup {
             onSubmitted: input => telar.commands.submitDialog(input)
             onCancelled: telar.commands.execute(WindowActions.Action.cancel)
             onSearchScopeToggled: telar.copy.toggleSearchScope()
+        }
+
+        Loader {
+            id: machineWizard
+            anchors.left: parent.left
+            anchors.right: parent.right
+            active: root.wizardMode
+            sourceComponent: MachineWizardPanel {
+                controller: telar.machineWizard
+                colors: telar.colors
+                typography: telar.display.geometry.typography
+                ratio: root.ratio
+                onCancelled: telar.commands.execute(WindowActions.Action.cancel)
+            }
         }
 
         WorkspaceFormPanel {

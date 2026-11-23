@@ -34,6 +34,7 @@ use_sudo=false
 serve=false
 listen=
 host=
+port=
 pinned=
 binary=
 
@@ -64,6 +65,9 @@ Usage: install.sh [options]
                     With --serve, where the gateway listens (default :8352).
   --host NAME       With --serve, the name or address other machines reach
                     this one by, when it is not its host name.
+  --port PORT       With --serve, the port other machines dial, when it is
+                    not the one the gateway listens on (a published or
+                    forwarded port).
   --sha256 HEX      The archive, disk image or --binary must have this
                     SHA-256, besides matching the release's SHA256SUMS.
                     telar machine setup passes the hash this machine's
@@ -153,6 +157,11 @@ while [ $# -gt 0 ]; do
         --host)
             [ $# -ge 2 ] || fail "--host needs a value"
             host=$2
+            shift 2
+            ;;
+        --port)
+            [ $# -ge 2 ] || fail "--port needs a value"
+            port=$2
             shift 2
             ;;
         --sha256)
@@ -542,6 +551,10 @@ if [ "$serve" = true ]; then
 
     if [ -n "$host" ]; then
         set -- "$@" --host "$host"
+    fi
+
+    if [ -n "$port" ]; then
+        set -- "$@" --port "$port"
     fi
 
     "$bin_dir/telar" "$@" || fail "telar is installed, but its gateway could not be started; run telar server enable"

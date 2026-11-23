@@ -1,16 +1,25 @@
 telar machine setup: Make a machine ready: this telar build, the agents, their integration, configuration and logins
 
-Usage: telar machine setup LABEL|ADDRESS [--label LABEL] [--binary PATH] [--skip agents,config,login,editor] [--confirm] [--json]
+Usage: telar machine setup LABEL|ADDRESS [--label LABEL] [--binary PATH] [--skip agents,config,login,editor] [--confirm] [--json|--events]
 
 Arguments:
   LABEL|ADDRESS    A saved machine, or the address `telar server pair` printed on a
                    new one, which is paired and saved under --label (default:
-                   derived from its host name).
+                   derived from its host name) before any other step, so a setup
+                   that fails later goes on by that label.
   --binary PATH    A telar executable built for the machine; development builds
                    need one.
   --skip STEPS     Leave out `agents`, `config`, `login` and/or `editor`.
   --confirm        Ask on the terminal before changing anything (refused without
                    a terminal or with --json).
+  --events         For a program that runs setup, as the window's machine wizard
+                   does: one JSON line per event as it happens, on stdout. `step`
+                   (step, status, detail), `note` (step, text), `progress` (text),
+                   `login` (agent, url, code), `question` (kind, agent, text) and
+                   last `done` (report, the --json document). A question waits up
+                   to ten minutes for one line on stdin, {"answer":KIND,"value":
+                   true|false|"text"}; none, or stdin closed, is no. KIND is
+                   `confirm`, `stop_runtime` or `login_code`.
 
 The machine needs telar and a running gateway before setup can reach it: install it
 there with `install.sh --serve`, which prints the address. Setup then brings the
@@ -20,7 +29,8 @@ Effects, in order, each idempotent: gateway (the machine's gateway admits this
 one), platform, telar (this exact build installed under
 ~/.local/share/telar/versions on the machine, no sudo), runtime (a runtime of
 another build is stopped only after a `y` on the terminal, then ~/.local/bin/telar
-is linked), profile (saved and enabled), agents (installed), integrations (each
+is linked), profile (saved and enabled, also when the runtime did not start, with the
+telar installed), agents (installed), integrations (each
 agent's, then the Neovim telar provisions for its editor panes, which the machine
 fetches itself and keeps only if its checksum is the one this build expects; a note
 says when it could not), configuration (allowlisted sync, no secrets), logins (each

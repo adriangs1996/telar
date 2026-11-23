@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Install verified C++ build tools in a repository-local, immutable cache."""
 import argparse
+import contextlib
 import fcntl
 import hashlib
 import json
@@ -28,6 +29,34 @@ def sha256(path):
     return digest.hexdigest()
 
 
+@contextlib.contextmanager
+def tar_stream(tool, archive, url):
+    """The entries of a verified tar archive, decompressed in one pass.
+
+    A stream, not a seekable file: getmembers() and then extract() would rewind a compressed
+    archive and decompress it twice. An .xz goes through the system's xz when there is one, whose
+    threads decompress the blocks of a multi-block archive, as LLVM's, in parallel.
+    """
+    xz = shutil.which('xz') if url.endswith('.tar.xz') else None
+    print(f'Unpacking {tool} with {xz or "Python"}', flush=True)
+    if xz is None:
+        with tarfile.open(archive, mode='r|*') as package:
+            yield package
+        return
+    with subprocess.Popen([xz, '--decompress', '--stdout', '--threads=0', '--', str(archive)], stdout=subprocess.PIPE) as process:
+        try:
+            with tarfile.open(fileobj=process.stdout, mode='r|') as package:
+                yield package
+            # The padding after the end-of-archive blocks: xz checks the stream's integrity at its end.
+            while process.stdout.read(1024 * 1024):
+                pass
+        except BaseException:
+            process.kill()
+            raise
+    if process.returncode != 0:
+        raise RuntimeError(f'{tool}: xz failed with status {process.returncode}')
+
+
 def prepare(tool, artifact, cache):
     digest = artifact['sha256']
     destination = cache / f'{tool}-{digest[:16]}'
@@ -39,13 +68,17 @@ def prepare(tool, artifact, cache):
     if not archive.exists():
         temporary = archive.with_suffix('.part')
         print(f'Downloading {artifact["url"]}', flush=True)
+        # Hashed as it arrives: the archive is read once, not once to write and again to verify.
+        received = hashlib.sha256()
         with urllib.request.urlopen(artifact['url']) as response, temporary.open('wb') as output:
-            shutil.copyfileobj(response, output)
-        if sha256(temporary) != digest:
+            for chunk in iter(lambda: response.read(1024 * 1024), b''):
+                received.update(chunk)
+                output.write(chunk)
+        if received.hexdigest() != digest:
             temporary.unlink()
             raise RuntimeError(f'{tool}: SHA-256 mismatch')
         temporary.rename(archive)
-    if sha256(archive) != digest:
+    elif sha256(archive) != digest:
         raise RuntimeError(f'{tool}: corrupt cached archive {archive}')
     with tempfile.TemporaryDirectory(dir=cache) as scratch:
         unpacked = Path(scratch).resolve()
@@ -58,8 +91,8 @@ def prepare(tool, artifact, cache):
                 package.extractall(unpacked)
             (unpacked / 'ninja').chmod(0o755)
         else:
-            with tarfile.open(archive) as package:
-                for member in package.getmembers():
+            with tar_stream(tool, archive, artifact['url']) as package:
+                for member in package:
                     target = (unpacked / member.name).resolve()
                     if not target.is_relative_to(unpacked) or not (member.isfile() or member.isdir() or member.issym() or member.islnk()):
                         raise RuntimeError('Unsafe archive entry')

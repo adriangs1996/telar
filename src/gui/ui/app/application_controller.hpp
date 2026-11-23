@@ -22,6 +22,7 @@ static_assert(true);
 #include "ui/app/overlays/link_status/link_status_controller.hpp"
 #include "ui/app/overlays/machine_prompt/machine_profiles_source.hpp"
 #include "ui/app/overlays/machine_prompt/machine_prompt_controller.hpp"
+#include "ui/app/overlays/machine_wizard/machine_wizard_controller.hpp"
 #include "ui/app/overlays/monitor/monitor_controller.hpp"
 #include "ui/app/overlays/notifications/notifications_controller.hpp"
 #include "ui/app/overlays/notifications/sound_player.hpp"
@@ -123,6 +124,7 @@ namespace telar::gui::qt {
     Q_PROPERTY(telar::gui::qt::NvimController* editors READ editors CONSTANT)
     Q_PROPERTY(telar::gui::qt::NotificationsController* notifications READ notifications CONSTANT)
     Q_PROPERTY(telar::gui::qt::MachinePromptController* machinePrompt READ machinePrompt CONSTANT)
+    Q_PROPERTY(telar::gui::qt::MachineWizardController* machineWizard READ machineWizard CONSTANT)
     Q_PROPERTY(telar::gui::qt::MachineChromeController* machineChrome READ machineChrome CONSTANT)
     Q_PROPERTY(telar::gui::qt::PeekController* peek READ peek CONSTANT)
     Q_PROPERTY(telar::gui::qt::MonitorController* monitor READ monitor CONSTANT)
@@ -213,6 +215,10 @@ namespace telar::gui::qt {
 
     MachinePromptController* machinePrompt() noexcept {
       return &machine_prompt_;
+    }
+
+    MachineWizardController* machineWizard() noexcept {
+      return &machine_wizard_;
     }
 
     MachineChromeController* machineChrome() noexcept {
@@ -373,6 +379,7 @@ namespace telar::gui::qt {
     tbc::val_self<PaletteController> palette_;
     tbc::val_self<PathPickerController> paths_;
     tbc::val_self<MachinePromptController> machine_prompt_;
+    tbc::val_self<MachineWizardController> machine_wizard_;
     tbc::val_self<MachineChromeController> machine_chrome_;
     tbc::val_self<PeekController> peek_;
     tbc::val_self<MonitorController> monitor_;

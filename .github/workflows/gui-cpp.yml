@@ -101,7 +101,7 @@ jobs:
       - name: Configure with managed Qt
         run: |
           tools/cpp configure ci -- -DCMAKE_BUILD_TYPE=${{ matrix.configuration }} \
-            -DTELAR_BUILD_RUNTIME=OFF -DTELAR_BUILD_CLI=OFF -DTELAR_BUILD_GATEWAY=OFF -DTELAR_GUI_QT_JOBS=3
+            -DTELAR_BUILD_RUNTIME=OFF -DTELAR_BUILD_CLI=OFF -DTELAR_BUILD_GATEWAY=OFF -DTELAR_GUI_QT_JOBS="$CPP_JOBS"
 
       - name: Save native dependency builds
         uses: ./.github/actions/cpp-toolchain/save
@@ -120,23 +120,23 @@ jobs:
 
       - name: Build GUI and focused regression tests
         run: |
-          tools/cpp build ci -- --parallel 3 \
+          tools/cpp build ci -- --parallel "$CPP_JOBS" \
             --target telar-gui gui-status-bar-test gui-ui-kit-tests
-          tools/cpp test ci -- -R '^(gui-(qt-dependency|status-bar)$|gui\.ui\.kit\.native_pointer_events\.)'
+          tools/cpp test ci -- --timeout 300 -R '^(gui-(qt-dependency|status-bar)$|gui\.ui\.kit\.native_pointer_events\.)'
 
       # The domains below ui: the value types, the features and the application. Their tests open
       # no window, and the session's are where the negotiation with an older runtime is checked.
       - name: Test the domains below the UI
         run: |
-          tools/cpp build ci -- --parallel 3 \
+          tools/cpp build ci -- --parallel "$CPP_JOBS" \
             --target src/gui/foundation/all src/gui/features/all src/gui/application/all
-          tools/cpp test ci -- -R '^gui\.(foundation|features|application)\.' --parallel 3
+          tools/cpp test ci -- --timeout 300 -R '^gui\.(foundation|features|application)\.' --parallel "$CPP_JOBS"
 
       - name: Test native macOS navigation
         if: runner.os == 'macOS'
         run: |
-          tools/cpp build ci -- --parallel 3 --target gui-platform-tests
-          QT_QUICK_BACKEND=software tools/cpp test ci -- -R '^gui\.platform\.native_window_appearance\.'
+          tools/cpp build ci -- --parallel "$CPP_JOBS" --target gui-platform-tests
+          QT_QUICK_BACKEND=software tools/cpp test ci -- --timeout 300 -R '^gui\.platform\.native_window_appearance\.'
 
       # A cached tbc-lint is used as it is: its build tree would rebuild anyway, as the checkout gives every
       # source a new time. It is saved as soon as it is built, whatever the check then finds.
@@ -152,7 +152,7 @@ jobs:
         if: matrix.configuration == 'Release' && steps.tbc-lint.outputs.cache-hit != 'true'
         run: |
           tools/cpp configure tbc -B lib/tbc/out/release --config Release -- -DBUILD_TESTING=OFF
-          tools/cpp build tbc -B lib/tbc/out/release -- --target tbc-lint --parallel 3
+          tools/cpp build tbc -B lib/tbc/out/release -- --target tbc-lint --parallel "$CPP_JOBS"
 
       - name: Save tbc-lint
         if: matrix.configuration == 'Release' && steps.tbc-lint.outputs.cache-hit != 'true'
@@ -167,7 +167,7 @@ jobs:
         if: matrix.configuration == 'Release'
         run: |
           tools/cpp exec -- cmake -DCHECK=lifetime+interface_bodies${{ runner.os == 'macOS' && '+blank_lines' || '' }} \
-            -DBUILD_DIRECTORY=out/ci -DJOBS=3 -P cmake/scripts/check.cmake
+            -DBUILD_DIRECTORY=out/ci -DJOBS="$CPP_JOBS" -P cmake/scripts/check.cmake
 
       # tbc's plugin, which keeps each unit of the lint from walking what it imports. It fails the job
       # on every system when it does not build, as the lint below does not on Linux.
@@ -183,7 +183,7 @@ jobs:
       - name: Lint
         if: matrix.configuration == 'Debug'
         continue-on-error: ${{ runner.os == 'Linux' }}
-        run: tools/cpp exec -- cmake -DCHECK=lint -DBUILD_DIRECTORY=out/ci -DJOBS=3 -P cmake/scripts/check.cmake
+        run: tools/cpp exec -- cmake -DCHECK=lint -DBUILD_DIRECTORY=out/ci -DJOBS="$CPP_JOBS" -P cmake/scripts/check.cmake
 
   # The window with a runtime beside it and a real Neovim: the editor pane's case, the path
   # search and the links, which no other job opens a window for. The link tests need a build
@@ -232,11 +232,11 @@ jobs:
       # on macOS, where the window opens links through the system.
       - name: Configure the window, the runtime and the recording link host
         run: |
-          tools/cpp configure ci -- -DCMAKE_BUILD_TYPE=Debug -DTELAR_BUILD_AUTH=OFF -DTELAR_GUI_QT_JOBS=3 \
+          tools/cpp configure ci -- -DCMAKE_BUILD_TYPE=Debug -DTELAR_BUILD_AUTH=OFF -DTELAR_GUI_QT_JOBS="$CPP_JOBS" \
             ${{ runner.os == 'macOS' && '-DTELAR_GUI_LINK_HOST_HEADER="$PWD/src/gui/tests/fixtures/recording_link_host.hpp"' || '' }}
 
       - name: Build the window test and the runtime
-        run: tools/cpp build ci -- --parallel 3 --target gui-quick-test telar telar-runtime
+        run: tools/cpp build ci -- --parallel "$CPP_JOBS" --target gui-quick-test telar telar-runtime
 
       # The Neovim this telar is built for, fetched and checked by telar's own installer.
       - name: Provision Neovim

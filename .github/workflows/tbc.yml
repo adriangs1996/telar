@@ -1,11 +1,13 @@
 name: tbc
 
+# The standalone project reads nothing of the tree outside lib/tbc but its toolchain and .clang-format.
+# Its spec names the files of src/ each case comes from; ci.yml checks they exist on every change.
 on:
   push:
     branches: [main]
-    paths: [".clang-format", "lib/tbc/**", "src/**/*.cppm", "src/**/*.cpp", "src/**/*.hpp", "tools/cpp", "tools/bootstrap-cpp.py", "tools/toolchain/**", "cmake/**", ".github/actions/cpp-toolchain/**", ".github/workflows/tbc.yml"]
+    paths: [".clang-format", "lib/tbc/**", "tools/cpp", "tools/bootstrap-cpp.py", "tools/toolchain/**", ".github/actions/cpp-toolchain/**", ".github/workflows/tbc.yml"]
   pull_request:
-    paths: [".clang-format", "lib/tbc/**", "src/**/*.cppm", "src/**/*.cpp", "src/**/*.hpp", "tools/cpp", "tools/bootstrap-cpp.py", "tools/toolchain/**", "cmake/**", ".github/actions/cpp-toolchain/**", ".github/workflows/tbc.yml"]
+    paths: [".clang-format", "lib/tbc/**", "tools/cpp", "tools/bootstrap-cpp.py", "tools/toolchain/**", ".github/actions/cpp-toolchain/**", ".github/workflows/tbc.yml"]
   workflow_dispatch:
 
 permissions:

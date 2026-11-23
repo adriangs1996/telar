@@ -350,8 +350,10 @@ export {
         constexpr bool operator==(const Mark&) const noexcept = default;
       };
 
-      // The tab pages that have something to say, in Neovim's order.
+      // The tab pages that have something to say, in Neovim's order, and the listed buffers
+      // that do, each by its own handle.
       ds::Vec<Mark, ConcurrentMemory> marks;
+      ds::Vec<Mark, ConcurrentMemory> buffer_marks;
       std::uint64_t current_tab = 0;
       std::uint64_t current_buffer = 0;
       std::uint64_t changed_at = 0;
@@ -393,7 +395,8 @@ export {
       bool decorate(std::uint64_t window, const NvimFloatFrame& frame);
       // What is marked on the tab pages, which Neovim's tab line does not say. False when it
       // is what they had.
-      bool markTabs(std::span<const NvimTabs::Mark> marks);
+      // What is marked on the tab pages, or on the listed buffers; false when nothing changed.
+      bool markTabs(std::span<const NvimTabs::Mark> marks, bool buffers = false);
       // A float placed since its frame was last asked for: its window, which then counts as
       // asked, or zero when there is none.
       [[nodiscard]] std::uint64_t nextUnframed() noexcept;

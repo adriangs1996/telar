@@ -298,6 +298,20 @@ namespace telar::runtime::cli::machine {
       return asciiEqualIgnoreCase(text, "y") || asciiEqualIgnoreCase(text, "yes");
     }
 
+    // Whether the person agrees: a `y` on the terminal, or `true` from the window that runs setup
+    // with --events.
+    bool agrees(Memory& memory, const SetupReport& report, std::string_view kind, std::string_view question) {
+      if (report.events) {
+        const auto answer = report.ask(memory, kind, question);
+
+        return answer && answer->view() == "true";
+      }
+
+      std::print(stdout, "{} [y/N] ", question);
+      static_cast<void>(std::fflush(stdout));
+      return answeredYes();
+    }
+
     constexpr auto agent_names = ds::Array<std::string_view, 5>{"claude", "codex", "pi", "opencode", "cursor"};
     constexpr auto agent_commands = ds::Array<std::string_view, 5>{"claude", "codex", "pi", "opencode", "cursor-agent"};
 
@@ -330,20 +344,54 @@ namespace telar::runtime::cli::machine {
       }
     };
 
+    // The PATH the person's login shell sets. A window started from the desktop runs setup with a
+    // bare PATH, where agents installed under the home are not found. The shell may print what its
+    // startup files say, so the PATH comes after a mark; none where the shell does not answer.
+    ds::Option<Text> loginPath(Memory& memory) {
+      constexpr std::string_view mark = "telar-login-path:";
+      constexpr auto login_timeout = std::chrono::seconds{5};
+      // SHELL, or the account's own where the desktop started this without one.
+      const auto shell = loginShell();
+      const Text program{memory, shell.view()};
+
+      try {
+        const auto output = launch::capture(memory, launch::words(memory, {program.view(), "-l", "-c", R"(printf '\ntelar-login-path:%s\n' "$PATH")"}).view(), {}, login_timeout);
+        const auto text = output.out.view();
+        const auto marked = text.rfind(mark);
+        if (output.status != 0 || output.dropped != 0 || marked == std::string_view::npos) {
+          return ds::none;
+        }
+
+        const auto rest = text.substr(marked + mark.size());
+
+        return Text{memory, rest.substr(0, rest.find('\n'))};
+      } catch (const std::exception&) {
+        return ds::none;
+      }
+    }
+
     AgentSet localAgents(Memory& memory) {
       AgentSet found;
       const auto* variable = std::getenv("PATH"); // NOLINT(concurrency-mt-unsafe): POSIX has no thread-safe read of the environment
-      if (variable == nullptr) {
-        return found;
-      }
-
       // Copied out of the environment, as std::env::var does: a call into the project may change it.
-      const Text path{memory, variable};
-
+      const Text path{memory, variable != nullptr ? std::string_view{variable} : std::string_view{}};
+      ds::Option<Text> login;
+      bool asked = false;
       ds::Array<char, PATH_MAX> executable{};
 
       for (std::size_t agent = 0; agent < agent_names.size(); ++agent) {
         if (findExecutable({.path = path.view(), .program = agent_commands[agent]}, executable.viewMut())) {
+          found.insert(agent_names[agent]);
+          continue;
+        }
+
+        // Only an agent this PATH misses asks the login shell, once.
+        if (!asked) {
+          login = loginPath(memory);
+          asked = true;
+        }
+
+        if (login && findExecutable({.path = login->view(), .program = agent_commands[agent]}, executable.viewMut())) {
           found.insert(agent_names[agent]);
         }
       }
@@ -2262,6 +2310,7 @@ fetch() {
         }
 
         report_.progress("{} on {}: {}", plan.title, profile_.label(), found->url);
+        report_.login(request.agent.name, found->url.view(), found->code ? found->code->view() : std::string_view{});
         if (found->code) {
           report_.progress("one-time code: {}", *found->code);
         }
@@ -2276,6 +2325,16 @@ fetch() {
       // Asks the person here for what the login pane there waits for, and types it there.
       void askPaste(const Request& request, LoginPane pane) {
         constexpr std::size_t answer_bytes = max_notification_message_bytes * 8;
+
+        if (report_.events) {
+          const auto question = ds::format(memory_, "Paste {} for {}", *request.plan.paste, request.agent.name);
+
+          if (const auto answer = report_.ask(memory_, "login_code", question.view(), request.agent.name); answer && !answer->view().empty()) {
+            send(pane, answer->view());
+          }
+
+          return;
+        }
 
         std::print(stdout, "Paste {} for {} (Enter to finish in the pane instead): ", *request.plan.paste, request.agent.name);
         static_cast<void>(std::fflush(stdout));
@@ -2972,9 +3031,9 @@ cat > "$temporary" && [ "$(hash "$temporary")" = "$expected" ] && chmod 755 "$te
       bool agreed = false;
 
       if (interactive) {
-        std::print(stdout, "A telar runtime of another build runs on {}. Stopping it ends every pane and agent it runs. Stop it now? [y/N] ", target.label.data());
-        static_cast<void>(std::fflush(stdout));
-        agreed = answeredYes();
+        const auto question = ds::format(memory, "A telar runtime of another build runs on {}. Stopping it ends every pane and agent it runs. Stop it now?", target.label.data());
+
+        agreed = agrees(memory, report, "stop_runtime", question.view());
       }
 
       if (!agreed) {
@@ -3054,6 +3113,22 @@ exit 1
       }
     }
 
+    // Saves a machine setup has just paired, before any later step can fail: its pairing code is
+    // spent, so the next `telar machine setup LABEL` must find it saved.
+    tbc::val_a<MachineProfile> savePaired(Memory& memory, SetupReport& report, const MachineOptions& options, const Target& target, std::string_view path) {
+      ds::Option<MachineProfile> saved;
+
+      update(memory, path, [&](MachineProfiles& profiles) {
+        const MachineOptions add{.action = MachineOptions::Action::add, .label = target.label, .value = target.destination, .disabled = options.disabled};
+
+        change(profiles, add);
+        saved = profiles.rows()[*profiles.find(target.label)];
+      });
+
+      report.note(Step::gateway, "{} is saved, as its pairing code is spent: `telar machine setup {}` goes on from here", target.label, target.label);
+      return saved.unwrap();
+    }
+
     void printSetupFailure(const MachineOptions& options, const std::exception& error) {
       if (std::string_view{error.what()} == "DuplicateMachineLabel") {
         std::println(stderr, "telar machine setup: the label for {} is taken by another machine; name it with --label", options.label);
@@ -3074,17 +3149,21 @@ exit 1
         return run.report.refuse(run.memory, {.label = target.label, .destination = target.destination}, "--confirm needs a terminal to ask on; nothing was changed");
       }
 
-      std::print(stdout, "This installs telar {} on {} ({}), and the agents you have here with their official installers; it copies their configuration, never a credential, and opens their logins there. Set it up? [y/N] ", version, target.label.data(), target.destination.data());
-      static_cast<void>(std::fflush(stdout));
-      if (!answeredYes()) {
-        std::println(stdout, "Nothing was changed on {}.", target.label.data());
-        return 0;
+      const auto question = ds::format(run.memory, "This installs telar {} on {} ({}), and the agents you have here with their official installers; it copies their configuration, never a credential, and opens their logins there. Set it up?", version, target.label.data(), target.destination.data());
+
+      if (!agrees(run.memory, run.report, "confirm", question.view())) {
+        if (!run.report.json) {
+          std::println(stdout, "Nothing was changed on {}.", target.label.data());
+        }
+
+        return run.report.json ? run.report.refuse(run.memory, {.label = target.label, .destination = target.destination}, "not confirmed; nothing was changed") : 0;
       }
 
       return ds::none;
     }
 
-    // Links ~/.local/bin/telar there to the telar setup installed, where nothing else is there.
+    // Links ~/.local/bin/telar there to the telar setup installed, where nothing else is there. A
+    // link that fails is a note: the steps after it do not need it.
     void linkProgram(SetupRun& run, const Platform& platform) {
       Text link_script{run.memory};
 
@@ -3094,7 +3173,15 @@ if [ -L "$link" ] && [ "$(readlink "$link")" = "$telar" ]; then exit 0; fi
 if [ -e "$link" ] && [ ! -L "$link" ]; then echo 'it is a file telar did not link, so it stays; remove it to let setup link it' >&2; exit 1; fi
 mkdir -p "$HOME/.local/bin" && "$telar" cli install --dir "$HOME/.local/bin" >/dev/null && echo linked
 )Link");
-      const auto link = runScript(run.memory, run.target.destination, link_script);
+      launch::Output link{run.memory};
+
+      try {
+        link = runScript(run.memory, run.target.destination, link_script);
+      } catch (const std::exception& error) {
+        run.report.note(Step::runtime, "~/.local/bin/telar left as it was: the link did not run to the end: {}", error.what());
+        return;
+      }
+
       if (link.status != 0) {
         run.report.note(Step::runtime, "~/.local/bin/telar left as it was: {}", link.errorLine());
       } else if (link.out.view().contains("linked")) {
@@ -3218,18 +3305,26 @@ mkdir -p "$HOME/.local/bin" && "$telar" cli install --dir "$HOME/.local/bin" >/d
     }
 
     int setup(Memory& memory, const MachineOptions& options) {
-      SetupReport report{memory, options.json};
+      SetupReport report{memory, options.json, options.events};
       const auto path = profilesPath(memory);
       const auto profiles = load(memory, path);
       ds::Option<Target> resolved;
       Install build{.binary = ds::none, .digest = ds::none, .directory = Text{memory}};
 
       try {
-        resolved = resolve(memory, profiles, options);
+        // The build is read first: a --binary without its companions refuses before resolve
+        // spends a pairing code.
         build.directory.assign(version);
         if (options.binary) {
           digestBinary(memory, build, *options.binary);
         }
+
+        auto found = resolve(memory, profiles, options);
+        if (!found.saved && MachineAddress::pairing(options.label)) {
+          found.saved.emplace(savePaired(memory, report, options, found, path));
+        }
+
+        resolved.emplace(std::move(found));
       } catch (const std::exception& error) {
         printSetupFailure(options, error);
         return 1;
@@ -3238,12 +3333,13 @@ mkdir -p "$HOME/.local/bin" && "$telar" cli install --dir "$HOME/.local/bin" >/d
       const auto& target = *resolved;
       SetupRun run{.memory = memory, .report = report, .options = options, .target = target, .path = path};
 
-      if (!options.json) {
+      if (!report.json) {
         std::println(stdout, "Setting up {} ({}) with telar {}", target.label.data(), target.destination.data(), version);
         static_cast<void>(std::fflush(stdout));
       }
 
-      const bool interactive = !options.json && (::isatty(STDIN_FILENO) != 0);
+      // A terminal, or the window that runs setup with --events, answers its questions.
+      const bool interactive = options.events || (!options.json && (::isatty(STDIN_FILENO) != 0));
 
       if (options.confirm) {
         if (const auto status = confirm(run, interactive)) {
@@ -3260,6 +3356,9 @@ mkdir -p "$HOME/.local/bin" && "$telar" cli install --dir "$HOME/.local/bin" >/d
       const auto remote = MachineProfile::create(MachineId::generate(random), {.label = target.label, .destination = target.destination, .program = platform->target.view()});
 
       if (!startRuntime(memory, report, target, remote, interactive)) {
+        // The build is in place there though no runtime of it runs: the profile names it, so the
+        // next setup or check reaches that telar.
+        saveProfile(run, *platform);
         return report.finish(memory, {.label = target.label, .destination = target.destination});
       }
 

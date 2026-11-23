@@ -38,6 +38,14 @@ address that is not its host name:
 telar server enable 9000 --host 203.0.113.7
 ```
 
+When the port other machines dial is not the one the gateway listens on, such
+as a container port published as another or a port a router forwards, name it
+with `--port`. The gateway still listens on 8352 here:
+
+```sh
+telar server enable --host 203.0.113.7 --port 9000
+```
+
 The port must be reachable from your machine: open it in the firewall, or
 publish it from the container. A machine behind NAT needs a forwarded port or
 a VPN, as it would for any server.
@@ -66,6 +74,19 @@ tools/cpp build release -B .dev/runtime-headless -- --target telar telar-runtime
 
 `telar server disable` removes the service. The gateway's key and the machines
 it admits survive it.
+
+## Add it from a window
+
+**Add machine** in the machine picker (or the `add_machine` action) opens a
+wizard that does the steps below: it pairs the machine by the address its
+gateway printed, chooses the telar it runs, what setup brings there, applies it
+and signs its agents in. Without an address yet, **Prepare the machine** asks
+how this Mac reaches it and gives the command to run there, with the host and
+port that address needs. **Set up** on a machine the picker marks as needing it
+opens the same wizard at the telar step.
+
+The wizard runs `telar machine add` and `telar machine setup --events`, so a
+terminal and a window set machines up the same way.
 
 ## Pair and save the machine
 
@@ -262,7 +283,7 @@ for a window, a command or a forwarded port.
 
 | Symptom | Check |
 | --- | --- |
-| `the gateway does not answer at its address` | The gateway runs there (`telar server enable`), the port is open and published, and the host in the address is how your machine reaches it (`telar server pair --host NAME`). |
+| `the gateway does not answer at its address` | The gateway runs there (`telar server enable`), the port is open and published, and the host and port in the address are how your machine reaches it (`telar server pair --host NAME --port PORT`). |
 | `this machine is not paired with that gateway` | It was revoked, or the gateway's state was reset. Print a new address there and run `telar machine setup ADDRESS --label box`. |
 | `the gateway holds another key` | The address names a gateway that is no longer the one answering there. Do not work around it: confirm the machine, then pair again with a new address. |
 | The pairing code is refused | It was used, mistyped, or older than ten minutes. Print a new one. |

@@ -208,6 +208,8 @@ namespace telar::gui::features::workbench {
       frame.width += static_cast<float>(gap * (grid.cell_width_px - minimum_cell) / grid.scale);
     }
 
+    // Over a gap the frame takes what the gap's row has beyond a gap as wide as a column: the
+    // room under the pane's last row.
     if (placement.bounds.bottom() < area.bottom()) {
       frame.height += static_cast<float>(gap * (grid.cell_height_px - minimum_cell) / grid.scale);
     }

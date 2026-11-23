@@ -230,7 +230,7 @@ namespace {
         if (held_ != 0) {
           listBuffers(std::exchange(held_, 0));
         }
-      } else if (source.contains("vim.cmd.drop")) {
+      } else if (source.contains("vim.cmd.tabedit")) {
         std::uint64_t line = 0;
         const auto path = std::string{reader.string().valueOr("")};
 

@@ -28,10 +28,11 @@ FocusScope {
         colors: root.colors
         typography: root.typography
         ratio: root.ratio
-        // Without entering the command line, which would flash its surface.
-        onChosen: index => view.send("<Cmd>tabnext " + index + "<CR>")
-        onClosed: index => view.send("<Cmd>" + index + "tabclose<CR>")
-        onAdded: view.send("<Cmd>tabnew<CR>")
+        // Without entering the command line, which would flash its surface. A buffer with
+        // changes is not closed without asking: Neovim says why, or asks, as 'confirm' has it.
+        onChosen: (index, handle) => view.send(tabs.paged ? "<Cmd>tabnext " + index + "<CR>" : "<Cmd>buffer " + handle + "<CR>")
+        onClosed: (index, handle) => view.send(tabs.paged ? "<Cmd>" + index + "tabclose<CR>" : "<Cmd>bdelete " + handle + "<CR>")
+        onAdded: view.send(tabs.paged ? "<Cmd>tabnew<CR>" : "<Cmd>enew<CR>")
     }
 
     NvimEditor {
@@ -246,9 +247,11 @@ FocusScope {
 
         // The status line of the whole editor, natively, over the row Neovim draws it on.
         NvimStatusLine {
+            id: bar
             objectName: "editorStatusLine"
             z: 0.6
             width: view.width
+            reserved: status.visible ? status.width : 0
             status: view.statusLine
             mode: view.mode
             colors: root.colors
@@ -294,9 +297,10 @@ FocusScope {
         }
 
         // The cursor, in a layer of its own over the cells, in the shape the mode Neovim is in
-        // gives it. It slides to where it goes with telar's curve; a step to the next cell, as
-        // typing makes, is taken at once, so the cursor is never behind what is typed. Moving or
-        // blinking it draws none of the cells again. Without the keyboard it is hollow.
+        // gives it. It slides along its row to where a jump takes it, with telar's curve; a step
+        // to the next cell, as typing makes, and a change of row are taken at once, so the cursor
+        // is never behind what is typed nor behind the row Neovim highlights. Moving or blinking
+        // it draws none of the cells again. Without the keyboard it is hollow.
         Item {
             id: caret
 
@@ -314,28 +318,35 @@ FocusScope {
             visible: (look.visible ?? false) && target.width > 0 && ((look.on ?? true) || !focused)
 
             onTargetChanged: {
-                // A step along a row or to the next one is typing's; anything else is a jump.
-                const step = Math.abs(target.y - y) < 0.5 * target.height && Math.abs(target.x - x) <= 1.5 * target.width;
-                if (!step && width > 0 && glide.ready) {
-                    glide.stop();
-                    glide.from = Qt.point(x, y);
+                // A change of row is taken at once, with the row Neovim highlights under the
+                // cursor, which the cursor would otherwise chase; so is a step to the next cell,
+                // which is typing's. Only a jump along its row slides.
+                const along = Math.abs(target.y - y) < 0.5 * target.height;
+                const step = Math.abs(target.x - x) <= 1.5 * target.width;
+
+                glide.stop();
+                y = target.y;
+                if (along && !step && width > 0 && glide.ready) {
+                    // Both ends are set here: a binding to the target may not have been read
+                    // again when this runs.
+                    glide.from = x;
+                    glide.to = target.x;
                     glide.start();
                 } else {
-                    glide.stop();
                     x = target.x;
-                    y = target.y;
                 }
             }
 
-            ParallelAnimation {
+            NumberAnimation {
                 id: glide
 
-                property point from
                 // The first place it takes has nowhere to come from.
                 property bool ready: false
 
-                NumberAnimation { target: caret; property: "x"; from: glide.from.x; to: caret.target.x; duration: 90; easing.type: Easing.OutCubic }
-                NumberAnimation { target: caret; property: "y"; from: glide.from.y; to: caret.target.y; duration: 90; easing.type: Easing.OutCubic }
+                target: caret
+                property: "x"
+                duration: 60
+                easing.type: Easing.OutCubic
             }
 
             Component.onCompleted: {
@@ -372,36 +383,58 @@ FocusScope {
             }
         }
 
-        // What Neovim shows of its mode, of a command half typed and of the ruler, on the row it
-        // leaves empty under the windows.
+        // What Neovim shows of its mode, of a command half typed and of the ruler. Neovim keeps
+        // no row for them under the windows: they go on the status line of the whole editor,
+        // in the room it leaves before its last side, and without that line at the end of the
+        // last row, over the cells there, on a ground of their own.
         Item {
             id: status
 
+            objectName: "editorSaid"
             readonly property var shown: view.messages
-            z: 5
-            x: 8 * root.ratio
-            y: view.height - height
-            width: view.width - 16 * root.ratio
-            height: view.cellHeight
-            visible: !line.shown
+            readonly property bool docked: bar.visible
 
-            ChromeText {
-                width: parent.width / 2
+            z: 5
+            x: docked ? bar.reservedX : view.width - width - 8 * root.ratio
+            y: docked ? bar.y : view.height - height
+            width: words.width
+            height: view.cellHeight
+            visible: !line.shown && width > 0
+
+            Rectangle {
+                readonly property color base: root.colors.terminalBackground
+
+                visible: !status.docked
+                x: -8 * root.ratio
+                width: parent.width + 16 * root.ratio
                 height: parent.height
-                text: status.shown.mode ?? ""
-                pixelSize: root.typography.small
-                emphasized: true
-                color: root.colors.accent
+                color: Qt.rgba(base.r, base.g, base.b, 1)
             }
 
-            ChromeText {
-                x: parent.width / 2
-                width: parent.width / 2
+            Row {
+                id: words
+
                 height: parent.height
-                horizontalAlignment: Text.AlignRight
-                text: [status.shown.command ?? "", status.shown.ruler ?? ""].filter(part => part.length > 0).join("   ")
-                pixelSize: root.typography.small
-                color: Qt.alpha(root.colors.text, 0.6)
+                spacing: 14 * root.ratio
+
+                ChromeText {
+                    visible: text.length > 0
+                    width: implicitWidth
+                    height: parent.height
+                    text: status.shown.mode ?? ""
+                    pixelSize: root.typography.small
+                    emphasized: true
+                    color: root.colors.accent
+                }
+
+                ChromeText {
+                    visible: text.length > 0
+                    width: implicitWidth
+                    height: parent.height
+                    text: [status.shown.command ?? "", status.shown.ruler ?? ""].filter(part => part.length > 0).join("   ")
+                    pixelSize: root.typography.small
+                    color: Qt.alpha(root.colors.text, 0.6)
+                }
             }
         }
 

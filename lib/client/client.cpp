@@ -143,11 +143,16 @@ namespace telar {
   template void HandshakeSchema<ServerReject>::HandshakeLayout::prettyPrint(const ServerReject&, std::FILE*);
 #endif
 
-  SocketError::SocketError(const char* message)
-      : message_{message} {}
+  SocketError::SocketError(const char* message, Cause cause)
+      : message_{message},
+        cause_{cause} {}
 
   const char* SocketError::what() const noexcept {
     return message_;
+  }
+
+  SocketError::Cause SocketError::cause() const noexcept {
+    return cause_;
   }
 
   Client::Client(Client&& other) noexcept
@@ -256,7 +261,7 @@ namespace telar {
 
       switch (std::get<ServerReject>(response).reason) {
       case HandshakeRejectReason::incompatible_schema:
-        throw SocketError{"Runtime rejected the wire schema"};
+        throw SocketError{"Runtime rejected the wire schema", SocketError::Cause::schema_rejected};
       case HandshakeRejectReason::client_limit_reached:
         throw SocketError{"Runtime client limit reached"};
       }

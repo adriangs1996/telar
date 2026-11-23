@@ -375,6 +375,9 @@ namespace {
       check(editor.takePulse().flushed && std::ranges::equal(editor.screen().tabs().marks, told), "is kept for the tab strip, and shown at once");
       check(tell(editor, "telar_tabs", 1, marks));
       check(!editor.takePulse().flushed, "the same again changes nothing");
+      // And on the listed buffers, by their own handles, apart from the tab pages'.
+      check(tell(editor, "telar_buffer_marks", 1, marks));
+      check(editor.takePulse().flushed && std::ranges::equal(editor.screen().tabs().buffer_marks, told) && std::ranges::equal(editor.screen().tabs().marks, told), "what is marked on the buffers is kept beside the tab pages' marks");
 
       // A link opens for something the person did, once, and only one of the web or of mail.
       const auto open = [&](std::string_view uri) {

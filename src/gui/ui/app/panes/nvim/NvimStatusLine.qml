@@ -26,6 +26,10 @@ Item {
     // Between the line's edges and its words, and between two of its sections.
     readonly property real margin: 10 * ratio
     readonly property real sectionGap: 14 * ratio
+    // Room the pane keeps on the line, before its last side, for what it writes there itself;
+    // `reservedX` is where that room starts. The first side is cut before it.
+    property real reserved: 0
+    readonly property real reservedX: trailing.x - (trailing.width > 0 ? sectionGap : 0) - reserved
     // The first letter of the names statuslines give each mode, and the theme's color for it.
     readonly property var family: ({
             "normal": ["N", colors.accent],
@@ -146,10 +150,10 @@ Item {
         }
     }
 
-    // The first side, cut where it would run under the other.
+    // The first side, cut where it would run under the other, or under the room kept before it.
     Item {
         x: root.margin
-        width: Math.max(0, trailing.x - x - root.sectionGap)
+        width: Math.max(0, (root.reserved > 0 ? root.reservedX : trailing.x) - x - root.sectionGap)
         height: root.height
         clip: true
 
