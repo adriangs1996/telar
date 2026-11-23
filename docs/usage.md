@@ -103,6 +103,14 @@ tabs and agents, `>` for actions and `:` for machines. For example, `>split`
 searches actions only.
 See [remote machines](remote.md) to pair another machine.
 
+## Explore the files
+
+Press `Ctrl+b`, then `o`, to list the files of the window's machine over the
+panes. The listing moves with Neovim's keys, says what git changed and how much
+each directory holds, and hands a file to the focused pane with Enter. A rename,
+a new entry or a cut is typed on the listing and written by `:w`, which shows
+the plan first. See [the explorer](explorer.md).
+
 ## Watch the machine
 
 `Open monitor` in the palette (`telar.action.monitor()` to bind it) shows what

@@ -125,7 +125,9 @@ namespace telar::gui::features::explorer {
         entries(memory) {}
 
   std::string_view Directory::name(const Entry& entry) const noexcept {
-    return std::string_view{names.data(), names.size()}.substr(entry.name, entry.name_size);
+    const auto part = names.view().subspan(entry.name, entry.name_size);
+
+    return {part.data(), part.size()};
   }
 
   bool Directory::whole() const noexcept {
@@ -140,7 +142,9 @@ namespace telar::gui::features::explorer {
         changes(memory) {}
 
   std::string_view Repository::path(const Change& change) const noexcept {
-    return std::string_view{text.data(), text.size()}.substr(change.path, change.path_size);
+    const auto part = text.view().subspan(change.path, change.path_size);
+
+    return {part.data(), part.size()};
   }
 
   Inspection::Inspection(Memory& memory)
@@ -151,13 +155,13 @@ namespace telar::gui::features::explorer {
         subject(memory),
         diff(memory) {}
 
-  State::State(Memory& memory)
-      : memory(memory),
-        directories(memory),
-        repository(memory),
-        inspections(memory),
-        outcomes(memory),
-        committed(memory) {}
+  State::State(Memory& made_in)
+      : memory(made_in),
+        directories(made_in),
+        repository(made_in),
+        inspections(made_in),
+        outcomes(made_in),
+        committed(made_in) {}
 
   Standing standing(const Repository& repository, std::string_view path, bool directory) noexcept {
     const auto root = repository.root.view();
@@ -165,13 +169,17 @@ namespace telar::gui::features::explorer {
       return {};
     }
 
-    const auto relative = path.substr(root.size() + 1);
+    // Past the root and its slash, which the test above found there.
+    auto relative = path;
+
+    relative.remove_prefix(root.size() + 1);
+
     Standing result;
 
     // A directory git ignores or does not track is named once, with a slash: what is below it
     // stands as it does.
     for (auto slash = relative.find('/'); slash != std::string_view::npos; slash = relative.find('/', slash + 1)) {
-      if (const auto* above = exact(repository, relative.substr(0, slash + 1))) {
+      if (const auto* above = exact(repository, {relative.data(), slash + 1})) {
         result.ignored = above->unstaged == FileState::ignored;
         result.unstaged = above->unstaged;
         return result;

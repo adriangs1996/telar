@@ -62,7 +62,7 @@ namespace telar::gui::qt {
     [[nodiscard]] const QVariantMap& preview() const noexcept;
     // The steps of the plan `:w` shows.
     [[nodiscard]] const QVariantList& plan() const noexcept;
-    [[nodiscard]] QVariantList help() const;
+    [[nodiscard]] static QVariantList help();
 
     // The rows window `window` shows.
     Q_INVOKABLE QAbstractItemModel* rows(int window);

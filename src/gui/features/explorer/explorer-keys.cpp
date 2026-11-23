@@ -186,11 +186,24 @@ namespace telar::gui::features::explorer {
       pending.assign({joined.data(), held.size() + text.size()});
     }
 
+    // The letter Neovim writes for the modifier of a chord, or NUL for a key pressed alone.
+    constexpr char modifierOf(KeyChord chord) noexcept {
+      using Modifier = KeyChord::Modifier;
+
+      if (chord.has(Modifier::control)) {
+        return 'C';
+      }
+
+      if (chord.has(Modifier::super)) {
+        return 'D';
+      }
+
+      return chord.has(Modifier::alt) ? 'M' : '\0';
+    }
+
   }
 
   Notation notation(KeyChord chord) {
-    using Modifier = KeyChord::Modifier;
-
     Notation result;
 
     if (chord.key != KeyChord::Key::character) {
@@ -204,9 +217,7 @@ namespace telar::gui::features::explorer {
       return result;
     }
 
-    const char modifier = chord.has(Modifier::control) ? 'C' : chord.has(Modifier::super) ? 'D'
-                                                           : chord.has(Modifier::alt)     ? 'M'
-                                                                                          : '\0';
+    const char modifier = modifierOf(chord);
     if (modifier == '\0') {
       result.assign(text == "<" ? std::string_view{"<lt>"} : text);
       return result;
@@ -226,7 +237,7 @@ namespace telar::gui::features::explorer {
   }
 
   void clear(Keys& keys) noexcept {
-    keys.pending.assign({});
+    keys.pending = {};
     keys.count = 0;
     keys.counted = false;
   }
@@ -242,7 +253,7 @@ namespace telar::gui::features::explorer {
 
     // A digit is part of the count, unless a sequence has started; a count never starts with 0.
     if (keys.pending.view().empty() && text.size() == 1 && text.front() >= '0' && text.front() <= '9' && (keys.counted || text.front() != '0')) {
-      keys.count = std::min(largest_count, keys.count * decimal + static_cast<std::uint32_t>(text.front() - '0'));
+      keys.count = std::min(largest_count, (keys.count * decimal) + static_cast<std::uint32_t>(text.front() - '0'));
       keys.counted = true;
       return {};
     }

@@ -532,7 +532,7 @@ namespace telar::gui::qt {
     }
   }
 
-  void WindowCommands::executeWindowBinding(BindingAction action, const ConfigurationSource::Actions* resolved) {
+  void WindowCommands::executeWindowBinding(BindingAction action, const ConfigurationSource::Actions* resolved) { // NOLINT(readability-function-size): one case per kind, in one switch, is what makes a kind without its case an error
     switch (action.kind) {
     case BindingActionKind::select_tab:
       application::workbench::selectTabAt(store_.sessionMut(), static_cast<std::size_t>(action.parameter));

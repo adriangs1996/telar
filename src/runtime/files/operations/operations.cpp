@@ -29,7 +29,7 @@ namespace telar::runtime {
     constexpr std::size_t git_output_bytes = std::size_t{16} * 1024;
 
     // An absolute path with no `..` in it, which is not the root.
-    constexpr bool acceptable(std::string_view path) noexcept {
+    constexpr bool acceptable(std::string_view path) {
       if (!path.starts_with('/') || path.size() < 2 || path.size() > FileLimits::path_bytes || path.contains('\0')) {
         return false;
       }
@@ -55,7 +55,7 @@ namespace telar::runtime {
       return path;
     }
 
-    constexpr std::string_view parentOf(std::string_view path) noexcept {
+    constexpr std::string_view parentOf(std::string_view path) {
       path = trimmed(path);
 
       const auto slash = path.find_last_of('/');
@@ -63,7 +63,7 @@ namespace telar::runtime {
       return slash == 0 || slash == std::string_view::npos ? std::string_view{"/"} : path.substr(0, slash);
     }
 
-    constexpr std::string_view nameOf(std::string_view path) noexcept {
+    constexpr std::string_view nameOf(std::string_view path) {
       path = trimmed(path);
       return path.substr(path.find_last_of('/') + 1);
     }
@@ -86,7 +86,7 @@ namespace telar::runtime {
     }
 
     // Removes what a copy that failed left behind: only what this runtime just wrote.
-    void removeCopy(int directory, const char* name, std::size_t depth) noexcept {
+    void removeCopy(int directory, const char* name, std::size_t depth) noexcept { // NOLINT(misc-no-recursion): a copy is copy_depth directories deep at most
       if (::unlinkat(directory, name, 0) == 0 || depth == copy_depth) {
         return;
       }
@@ -114,73 +114,80 @@ namespace telar::runtime {
       const std::atomic<bool>& cancelled;
     };
 
-    // Copies the file, link or directory `name` of `source` as `to` of `target`, where nothing has
-    // that name. Returns 0, or the error that stopped it; what it wrote by then stays for the
-    // caller to remove.
-    int copyEntry(int source, const char* name, int target, const char* to, std::size_t depth, const Copy& copy) noexcept {
-      struct stat status{};
-      if (::fstatat(source, name, &status, AT_SYMLINK_NOFOLLOW) != 0) {
-        return sys::lastError();
-      }
+    // One entry to copy: `name` of the directory `source`, as `made` of the directory `target`.
+    struct EntryCopy {
+      int source;
+      const char* name;
+      int target;
+      const char* made;
+    };
 
-      const auto kind = kindOf(status.st_mode);
-      const auto permissions = static_cast<mode_t>(status.st_mode & permission_bits);
+    int copyEntry(const EntryCopy& entry, std::size_t depth, const Copy& copy) noexcept;
 
-      if (kind == FileKind::link) {
-        ds::Array<char, PATH_MAX> destination{};
-        const auto length = ::readlinkat(source, name, destination.viewMut().data(), destination.size() - 1);
+    int copyLink(const EntryCopy& entry) noexcept {
+      ds::Array<char, PATH_MAX> destination{};
+      const auto length = ::readlinkat(entry.source, entry.name, destination.viewMut().data(), destination.size() - 1);
 
-        return length < 0 || ::symlinkat(destination.data(), target, to) != 0 ? sys::lastError() : 0;
-      }
+      return length < 0 || ::symlinkat(destination.data(), entry.target, entry.made) != 0 ? sys::lastError() : 0;
+    }
 
-      if (kind == FileKind::file) {
-        const FileDescriptor input{::openat(source, name, combineFlags(O_RDONLY, O_NOFOLLOW, O_CLOEXEC))};                              // NOLINT(cppcoreguidelines-pro-type-vararg): openat's C signature is variadic
-        const FileDescriptor output{::openat(target, to, combineFlags(O_WRONLY, O_CREAT, O_EXCL, O_NOFOLLOW, O_CLOEXEC), permissions)}; // NOLINT(cppcoreguidelines-pro-type-vararg): openat's C signature is variadic
-        if (!input || !output) {
+    // Writes all of `bytes` to `output`. Returns 0, or the error that stopped it.
+    int writeAll(int output, std::span<const Byte> bytes) noexcept {
+      while (!bytes.empty()) {
+        const auto count = ::write(output, bytes.data(), bytes.size());
+        if (count < 0 && sys::lastError() != EINTR) {
           return sys::lastError();
         }
 
-        for (;;) {
-          if (copy.cancelled.load(std::memory_order_relaxed)) {
-            return ECANCELED;
-          }
+        bytes = bytes.subspan(count < 0 ? 0 : static_cast<std::size_t>(count));
+      }
 
-          const auto read = ::read(input.get(), copy.buffer.data(), copy.buffer.size());
-          if (read < 0 && sys::lastError() == EINTR) {
-            continue;
-          }
+      return 0;
+    }
 
-          if (read <= 0) {
-            return read < 0 ? sys::lastError() : 0;
-          }
+    constexpr mode_t permissionsOf(const struct stat& status) noexcept {
+      return static_cast<mode_t>(status.st_mode & permission_bits);
+    }
 
-          for (std::size_t written = 0; written < static_cast<std::size_t>(read);) {
-            const auto count = ::write(output.get(), copy.buffer.data() + written, static_cast<std::size_t>(read) - written);
-            if (count < 0 && sys::lastError() != EINTR) {
-              return sys::lastError();
-            }
+    int copyFile(const EntryCopy& entry, const struct stat& status, const Copy& copy) noexcept {
+      const FileDescriptor input{::openat(entry.source, entry.name, combineFlags(O_RDONLY, O_NOFOLLOW, O_CLOEXEC))};                                          // NOLINT(cppcoreguidelines-pro-type-vararg): openat's C signature is variadic
+      const FileDescriptor output{::openat(entry.target, entry.made, combineFlags(O_WRONLY, O_CREAT, O_EXCL, O_NOFOLLOW, O_CLOEXEC), permissionsOf(status))}; // NOLINT(cppcoreguidelines-pro-type-vararg): openat's C signature is variadic
+      if (!input || !output) {
+        return sys::lastError();
+      }
 
-            written += count < 0 ? 0 : static_cast<std::size_t>(count);
-          }
+      for (;;) {
+        if (copy.cancelled.load(std::memory_order_relaxed)) {
+          return ECANCELED;
+        }
+
+        const auto read = ::read(input.get(), copy.buffer.data(), copy.buffer.size());
+        if (read < 0 && sys::lastError() == EINTR) {
+          continue;
+        }
+
+        if (read <= 0) {
+          return read < 0 ? sys::lastError() : 0;
+        }
+
+        if (const int failure = writeAll(output.get(), copy.buffer.first(static_cast<std::size_t>(read))); failure != 0) {
+          return failure;
         }
       }
+    }
 
-      if (kind != FileKind::directory) {
-        // A socket, a pipe or a device is not copied.
-        return 0;
-      }
-
+    int copyDirectory(const EntryCopy& entry, const struct stat& status, std::size_t depth, const Copy& copy) noexcept { // NOLINT(misc-no-recursion): a copy is copy_depth directories deep at most
       if (depth == copy_depth) {
         return ELOOP;
       }
 
       // Writable while it is filled, whatever the source's own permissions.
-      if (::mkdirat(target, to, permissions | private_directory) != 0) {
+      if (::mkdirat(entry.target, entry.made, permissionsOf(status) | private_directory) != 0) {
         return sys::lastError();
       }
 
-      FileDescriptor from{::openat(source, name, combineFlags(O_RDONLY, O_DIRECTORY, O_NOFOLLOW, O_CLOEXEC))};     // NOLINT(cppcoreguidelines-pro-type-vararg): openat's C signature is variadic
-      const FileDescriptor into{::openat(target, to, combineFlags(O_RDONLY, O_DIRECTORY, O_NOFOLLOW, O_CLOEXEC))}; // NOLINT(cppcoreguidelines-pro-type-vararg): openat's C signature is variadic
+      FileDescriptor from{::openat(entry.source, entry.name, combineFlags(O_RDONLY, O_DIRECTORY, O_NOFOLLOW, O_CLOEXEC))};       // NOLINT(cppcoreguidelines-pro-type-vararg): openat's C signature is variadic
+      const FileDescriptor into{::openat(entry.target, entry.made, combineFlags(O_RDONLY, O_DIRECTORY, O_NOFOLLOW, O_CLOEXEC))}; // NOLINT(cppcoreguidelines-pro-type-vararg): openat's C signature is variadic
       if (!from || !into) {
         return sys::lastError();
       }
@@ -188,14 +195,37 @@ namespace telar::runtime {
       try {
         DirectoryStream stream{std::move(from)};
 
-        while (const auto* entry = stream.next()) {
-          const auto* const child = std::data(entry->d_name);
-          if (const int failure = copyEntry(stream.descriptor(), child, into.get(), child, depth + 1, copy); failure != 0) {
+        while (const auto* listed = stream.next()) {
+          const auto* const child = std::data(listed->d_name);
+          if (const int failure = copyEntry({.source = stream.descriptor(), .name = child, .target = into.get(), .made = child}, depth + 1, copy); failure != 0) {
             return failure;
           }
         }
       } catch (const SystemError&) {
         return EIO;
+      }
+
+      return 0;
+    }
+
+    // Copies the file, link or directory of `entry`, where nothing has the name it makes. Returns
+    // 0, or the error that stopped it; what it wrote by then stays for the caller to remove.
+    int copyEntry(const EntryCopy& entry, std::size_t depth, const Copy& copy) noexcept { // NOLINT(misc-no-recursion): a copy is copy_depth directories deep at most
+      struct stat status{};
+      if (::fstatat(entry.source, entry.name, &status, AT_SYMLINK_NOFOLLOW) != 0) {
+        return sys::lastError();
+      }
+
+      switch (kindOf(status.st_mode)) {
+      case FileKind::link:
+        return copyLink(entry);
+      case FileKind::file:
+        return copyFile(entry, status, copy);
+      case FileKind::directory:
+        return copyDirectory(entry, status, depth, copy);
+      case FileKind::other:
+        // A socket, a pipe or a device is not copied.
+        return 0;
       }
 
       return 0;
@@ -217,7 +247,7 @@ namespace telar::runtime {
 
       buffer.resize(copy_bytes);
 
-      const int failure = copyEntry(from.get(), source_name.data(), into.get(), target_name.data(), 0, {.buffer = buffer.viewMut(), .cancelled = cancelled});
+      const int failure = copyEntry({.source = from.get(), .name = source_name.data(), .target = into.get(), .made = target_name.data()}, 0, {.buffer = buffer.viewMut(), .cancelled = cancelled});
       if (failure != 0 && failure != EEXIST) {
         removeCopy(into.get(), target_name.data(), 0);
       }
@@ -375,6 +405,38 @@ namespace telar::runtime {
     ds::formatTo(candidate, "{}{}-{}{}", path.substr(0, path.size() - name.size()), name.substr(0, stem), attempt, name.substr(stem));
   }
 
+  namespace {
+
+    // Moves `source` to `kept`, or copies it there, under another name beside it while the name
+    // is taken: `kept` ends as the name it took. Returns 0, or the error that stopped it.
+    int intoTrash(ConcurrentMemory& memory, const Path& source, Path& kept, bool copy) {
+      const Path wanted{memory, kept.view()};
+      const std::atomic<bool> never{false};
+
+      for (unsigned attempt = 0; attempt <= FileChanger::beside_attempts; ++attempt) {
+        if (attempt != 0) {
+          besideName(kept, wanted.view(), attempt);
+        }
+
+        int failure = 0;
+
+        if (copy) {
+          failure = copyPath(memory, source, kept, never);
+        } else if (renameAt(AT_FDCWD, source.data(), AT_FDCWD, kept.data(), RenameMode::create_only) != 0) {
+          failure = sys::lastError();
+        }
+
+        // A name that is taken is the one failure another name mends.
+        if (failure != EEXIST && failure != ENOTEMPTY) {
+          return failure;
+        }
+      }
+
+      return EEXIST;
+    }
+
+  }
+
   FileChanger::FileChanger(ConcurrentMemory& memory)
       : memory_(memory),
         journal_(memory),
@@ -391,7 +453,6 @@ namespace telar::runtime {
       return ds::none;
     }
 
-    const std::atomic<bool> never{false};
     // The trash of the home first; a file of another volume goes to that volume's.
     Path top{memory_};
 
@@ -405,33 +466,15 @@ namespace telar::runtime {
 
       ds::formatTo(kept, "{}/{}", files.view(), nameOf(path));
 
-      const Path wanted{memory_, kept.view()};
-      bool other_volume = false;
-
-      for (unsigned attempt = 0; attempt <= beside_attempts; ++attempt) {
-        if (attempt != 0) {
-          besideName(kept, wanted.view(), attempt);
-        }
-
-        const int failure = copy ? copyPath(memory_, source, kept, never) : (renameAt(AT_FDCWD, source.data(), AT_FDCWD, kept.data(), RenameMode::create_only) == 0 ? 0 : sys::lastError());
-        if (failure == 0) {
+      const int failure = intoTrash(memory_, source, kept, copy);
+      if (failure == 0) {
 #ifndef __APPLE__
-          writeTrashInfo(memory_, kept.view(), path);
+        writeTrashInfo(memory_, kept.view(), path);
 #endif
-          return kept;
-        }
-
-        if (failure == EXDEV) {
-          other_volume = true;
-          break;
-        }
-
-        if (failure != EEXIST && failure != ENOTEMPTY) {
-          return ds::none;
-        }
+        return kept;
       }
 
-      if (!other_volume) {
+      if (failure != EXDEV) {
         return ds::none;
       }
 
@@ -443,7 +486,7 @@ namespace telar::runtime {
 
   bool FileChanger::clear(Path& target, bool overwrite, bool& renamed) {
     if (overwrite) {
-      auto kept = trash(target.view(), false);
+      const auto kept = trash(target.view(), false);
       if (!kept) {
         return false;
       }
@@ -585,7 +628,7 @@ namespace telar::runtime {
 
       remember(Step::created, applied.path.view(), {}, made ? static_cast<std::uint64_t>(made->st_ino) : 0);
       if (operation.kind == FileOperationKind::move) {
-        if (auto kept = trash(source.view(), false)) {
+        if (const auto kept = trash(source.view(), false)) {
           remember(Step::trashed, source.view(), kept->view(), 0);
         }
       }
@@ -610,7 +653,7 @@ namespace telar::runtime {
     }
 
     // What git is about to discard is kept in the trash first.
-    auto kept = trash(applied.path.view(), true);
+    const auto kept = trash(applied.path.view(), true);
     if (!kept) {
       applied.outcome = FileOutcome::refused;
       return applied;
@@ -678,7 +721,7 @@ namespace telar::runtime {
       return applied;
     }
 
-    auto kept = trash(applied.path.view(), false);
+    const auto kept = trash(applied.path.view(), false);
     if (!kept) {
       applied.outcome = FileOutcome::refused;
       return applied;
@@ -794,7 +837,8 @@ namespace telar::runtime {
       line = line.substr(0, line.find('\n'));
 
       const auto tab = line.find('\t');
-      if (tab != std::string_view::npos && tab <= FileLimits::commit_bytes) {
+      // No tab is past any commit's name too.
+      if (tab <= FileLimits::commit_bytes) {
         name = line.substr(0, tab);
         subject = line.substr(tab + 1, FileLimits::subject_bytes);
       }

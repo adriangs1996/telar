@@ -16,7 +16,7 @@ export namespace telar::gui::features::explorer {
   // What a machine's runtime answered about its files. A field of the session of that machine:
   // an explorer window on another machine reads that machine's.
   struct State {
-    explicit State(Memory& memory);
+    explicit State(Memory& made_in);
 
     Memory& memory;
     ds::Vec<ds::Box<Directory, Memory>, Memory> directories;

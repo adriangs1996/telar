@@ -56,13 +56,18 @@ export namespace telar::runtime {
       bool complete = true;
     };
 
-    // Reads `path` into `items_`, in a listing's order.
-    void read(std::string_view path);
-    [[nodiscard]] std::string_view nameOf(const Item& item) const noexcept;
+    // Reads `path` into `items_`, in a listing's order. `continued` says the request goes on with
+    // a directory already asked for, its next page or its sizes: the listing held of it is kept
+    // while the directory is the same and no entry came or went, by its inode and the time of its
+    // last change, so a long directory is read and sorted once and not once a page.
+    void read(std::string_view path, bool continued);
+    [[nodiscard]] std::string_view nameOf(const Item& item) const;
     // Adds to `measure` what the directory `name` of `parent` holds on disk, `depth` levels down.
     void add(int parent, const char* name, std::size_t depth, Measure& measure);
 
     ds::String<ConcurrentMemory> path_;
+    // What the directory was when `items_` was read from it; none while no listing is held whole.
+    ds::Option<FileIdentity> read_;
     ds::Vec<char, ConcurrentMemory> names_;
     ds::Vec<Item, ConcurrentMemory> items_;
     // Every entry the directory holds, the ones past `kept_entries` included.

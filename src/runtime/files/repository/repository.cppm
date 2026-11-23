@@ -17,7 +17,7 @@ export namespace telar::runtime {
     FileState staged = FileState::unchanged;
     FileState unstaged = FileState::unchanged;
 
-    [[nodiscard]] static ds::Option<StatusRecord> parse(std::string_view record) noexcept;
+    [[nodiscard]] static ds::Option<StatusRecord> parse(std::string_view record);
   };
 
   // Reads what git holds of a repository and of one of its paths, with the git the path index
@@ -51,12 +51,12 @@ export namespace telar::runtime {
     // Takes what a git command wrote, a record at a time, each ended by a NUL; false once
     // `record` asks for no more.
     template <typename Record>
-    bool feed(std::span<const Byte> bytes, Record&& record);
+    bool feed(std::span<const Byte> bytes, const Record& record);
     // Keeps what a status record says; false once the changes are as many as a reply carries.
     bool keep(std::string_view record);
     // Adds the lines a numstat record counts to the change of its path.
     void count(std::string_view record);
-    [[nodiscard]] std::string_view pathOf(const Change& change) const noexcept;
+    [[nodiscard]] std::string_view pathOf(const Change& change) const;
 
     ConcurrentMemory& memory_;
     // The record being read, and whether it grew past what a path can be.

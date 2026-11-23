@@ -47,15 +47,15 @@ export namespace telar::gui::features::explorer {
 
   // The pointer chose a row of a window: alone, up to it from the selection, or beside the ones
   // picked.
-  void select(View& view, const State& state, const Context& context, std::size_t window, std::size_t row, bool extend, bool toggle);
+  void select(View& view, const State& state, const Context& context, const Pick& pick);
 
   // The pointer asked for what Enter does on a row; and to fold or unfold a directory.
-  [[nodiscard]] Action activate(View& view, State& state, const Context& context, std::size_t window, std::size_t row);
-  void toggle(View& view, const State& state, const Context& context, std::size_t window, std::size_t row);
+  [[nodiscard]] Action activate(View& view, State& state, const Context& context, const Pick& pick);
+  void toggle(View& view, const State& state, const Context& context, const Pick& pick);
 
   // A window shows `rows` rows; and the wheel moves what it shows by `rows` rows.
-  void resize(View& view, std::size_t window, std::uint16_t rows) noexcept;
-  void scroll(View& view, std::size_t window, std::int64_t rows) noexcept;
+  void resize(View& view, const WindowRows& shown) noexcept;
+  void scroll(View& view, const WindowRows& moved) noexcept;
 
   // The runtime of `machine` ended a plan, an undo or a commit: what the status line says of it,
   // and the changes that were written are no longer pending.

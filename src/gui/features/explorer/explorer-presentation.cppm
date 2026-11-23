@@ -46,7 +46,15 @@ export namespace telar::gui::features::explorer {
   // Appends to `text` the path a person would type at a shell in `cwd`: relative when it is no
   // more than two directories up, with `~` under the home otherwise, and quoted when the shell
   // would split or expand it.
-  void appendTyped(ds::String<Memory>& text, std::string_view path, std::string_view cwd, std::string_view home, bool quote);
+  // Who reads a path that is typed: the directory it reads it from, the home of its account,
+  // and whether it is a shell, which splits a word at a space unless it is quoted.
+  struct Reader {
+    std::string_view cwd;
+    std::string_view home;
+    bool shell = true;
+  };
+
+  void appendTyped(ds::String<Memory>& text, std::string_view path, const Reader& reader);
 
   // What a row shows beside its name.
   struct RowLook {
@@ -87,7 +95,7 @@ export namespace telar::gui::features::explorer {
     LineText note;
   };
 
-  [[nodiscard]] RowLook look(const View& view, const State& state, const Context& context, std::size_t window, std::size_t row);
+  [[nodiscard]] RowLook look(const View& view, const State& state, const Context& context, const Pick& pick);
 
   // The head of a window: the machine, the root with its last directory apart, and the branch.
   struct HeaderLook {
@@ -114,7 +122,7 @@ export namespace telar::gui::features::explorer {
     Word mode;
     Mode kind = Mode::normal;
     bool current = false;
-    // `[3 zsh]` while it follows the focused pane, `[pinned]` otherwise.
+    // `[3 zsh]` while it follows the focused pane, `[fixed]` otherwise.
     ShortText following;
     bool follows = false;
     LineText root;

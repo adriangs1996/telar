@@ -17,7 +17,7 @@ namespace {
     telar::Memory& memory = adapter;
     ds::String<Memory> text{memory};
 
-    appendTyped(text, path, cwd, "/home/dev", quote);
+    appendTyped(text, path, {.cwd = cwd, .home = "/home/dev", .shell = quote});
     return std::string{text.view()};
   }
 

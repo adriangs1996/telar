@@ -1317,6 +1317,10 @@ removes it. `telar.action.add_machine()` asks for a new machine's label and
 the address its gateway pairs with. Each change is written to `machines.json`. They have no
 default binding, and plugins cannot run them.
 
+`telar.action.explorer()` opens [the explorer](explorer.md) over the panes of
+the tab, on the files of the window's machine, and closes it when it shows. Its
+default binding is the prefix and `o`.
+
 `telar.action.monitor()` opens the monitor over the window: the processors,
 memory, disks and network of the window's machine, and every process it runs.
 `telar.action.process_picker()` opens it with its filter focused. These act on

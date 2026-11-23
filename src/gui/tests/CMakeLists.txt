@@ -14,6 +14,8 @@ telar_add_test(gui-display-metrics-test SOURCES display_metrics_test.cpp LIBRARI
 target_compile_options(gui-display-metrics-test PRIVATE -ffp-contract=off)
 
 telar_add_test(gui-glyph-ink-probe PROBE SOURCES ${TELAR_PROCESS_SOURCE_DIR}/tools/glyph_ink_probe.cpp LIBRARIES gui-foundation-core gui-foundation-fonts)
+# What a key and a page drawn cost the explorer, without a window or a runtime.
+telar_add_test(gui-explorer-bench PROBE SOURCES ${TELAR_PROCESS_SOURCE_DIR}/tools/explorer_bench.cpp LIBRARIES gui-features-explorer)
 
 telar_add_test(gui-suggestion-state-test SOURCES suggestion_state_test.cpp LIBRARIES gui-foundation-keys gui-foundation-model gui-foundation-forms gui-foundation-core gui-foundation-terminal gui-features-palette deps::ghostty_vt
   TEST gui-suggestion-state LABELS gui.features.palette)

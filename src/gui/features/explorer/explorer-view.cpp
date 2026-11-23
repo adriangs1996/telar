@@ -36,13 +36,19 @@ namespace telar::gui::features::explorer {
       return windows.atMut(index).getMut();
     }
 
-    void join(Text& path, std::string_view directory, std::string_view name) {
-      path.assign(directory);
-      if (!directory.ends_with('/')) {
+    // A name in a directory.
+    struct Child {
+      std::string_view directory;
+      std::string_view name;
+    };
+
+    void join(Text& path, const Child& child) {
+      path.assign(child.directory);
+      if (!child.directory.ends_with('/')) {
         path.push('/');
       }
 
-      path.append(name);
+      path.append(child.name);
     }
 
     bool holds(const ds::Vec<Text, Memory>& paths, std::string_view path) noexcept {
@@ -111,16 +117,17 @@ namespace telar::gui::features::explorer {
     };
 
     std::uint32_t keepText(Window& window, std::string_view text) {
-      const auto at = static_cast<std::uint32_t>(window.text.size());
+      const auto offset = static_cast<std::uint32_t>(window.text.size());
 
       window.text.extend(std::span<const char>{text});
-      return at;
+      return offset;
     }
 
-    void pushText(Window& window, RowKind kind, std::uint8_t depth, std::string_view text, std::uint32_t item = 0, DiffTone tone = DiffTone::context) {
-      const auto at = keepText(window, text);
-
-      window.rows.push({.kind = kind, .depth = depth, .tone = tone, .text = at, .text_size = static_cast<std::uint32_t>(text.size()), .item = item});
+    // A row of `window` that shows `text`: `row` says its kind, its depth and what it stands for.
+    void pushText(Window& window, Row row, std::string_view text) {
+      row.text = keepText(window, text);
+      row.text_size = static_cast<std::uint32_t>(text.size());
+      window.rows.push(row);
     }
 
     // The lines of a file's diff, below its row.
@@ -130,17 +137,14 @@ namespace telar::gui::features::explorer {
       while (!diff.empty() && lines < ViewLimits::diff_lines) {
         const auto end = diff.find('\n');
         const auto line = diff.substr(0, end);
-        const auto tone = line.starts_with("@@") ? DiffTone::hunk : line.starts_with('+') ? DiffTone::added
-                                                                : line.starts_with('-')   ? DiffTone::removed
-                                                                                          : DiffTone::context;
 
-        pushText(window, RowKind::diff, depth, line, 0, tone);
+        pushText(window, {.kind = RowKind::diff, .depth = depth, .tone = toneOf(line)}, line);
         diff.remove_prefix(end == std::string_view::npos ? diff.size() : end + 1);
         ++lines;
       }
 
       if (!diff.empty()) {
-        pushText(window, RowKind::note, depth, "… the preview shows the rest");
+        pushText(window, {.kind = RowKind::note, .depth = depth}, "… the preview shows the rest");
       }
     }
 
@@ -148,14 +152,119 @@ namespace telar::gui::features::explorer {
     void pushAdded(Build& build, std::string_view directory, std::uint8_t depth) {
       for (const auto& edit : build.edits) {
         if ((edit.kind == EditKind::create || edit.kind == EditKind::paste) && edit.machine == build.window.machine && edit.path.view() == directory) {
-          const auto at = keepText(build.window, edit.name.view());
-
-          build.window.rows.push({.kind = RowKind::added, .depth = depth, .directory = edit.directory, .text = at, .text_size = static_cast<std::uint32_t>(edit.name.size()), .item = edit.id});
+          pushText(build.window, {.kind = RowKind::added, .depth = depth, .directory = edit.directory, .item = edit.id}, edit.name.view());
         }
       }
     }
 
-    void walk(Build& build, std::string_view path, std::uint8_t depth) {
+    // A directory being listed: its place among the machine's, its path, how deep it is below
+    // the window's root, and the size of the largest entry it lists.
+    struct Level {
+      std::uint32_t holder = 0;
+      std::string_view path;
+      std::uint8_t depth = 0;
+      std::uint64_t largest = 1;
+    };
+
+    // Keeps in `build.order` the entries of the level that the window lists, and counts at its
+    // root what it leaves out. Returns the size of the largest one kept.
+    std::uint64_t keepListed(Build& build, const Directory& directory, const Level& level) {
+      auto& window = build.window;
+      std::uint64_t largest = 1;
+      Text child{window.rows.memory()};
+
+      for (std::size_t index = 0; index < directory.entries.size(); ++index) {
+        const auto& entry = directory.entries[index];
+        const auto name = directory.name(entry);
+
+        join(child, {.directory = level.path, .name = name});
+
+        const bool hidden = !window.hidden && name.starts_with('.');
+        const bool ignored = !window.ignored && standing(build.state.repository, child.view(), entry.directory).ignored;
+
+        if (level.depth == 0) {
+          window.bytes += entry.size;
+          window.hidden_entries += hidden ? 1 : 0;
+          window.ignored_entries += ignored && !hidden ? 1 : 0;
+        }
+
+        // A filter keeps an unfolded directory to look below it, and drops it later if nothing
+        // there matched.
+        const bool unfolded = entry.directory && !window.filter.empty() && holds(window.expanded, child.view());
+
+        if (hidden || ignored || (!unfolded && !holdsFolded(name, window.filter.view()))) {
+          continue;
+        }
+
+        build.order.push(static_cast<std::uint32_t>(index));
+        largest = std::max(largest, entry.size);
+      }
+
+      return largest;
+    }
+
+    // Orders the entries a level lists as the window sorts them: the runtime listed them by name.
+    void sortListed(std::span<std::uint32_t> listed, const Directory& directory, Sort sort) {
+      if (sort == Sort::name) {
+        return;
+      }
+
+      std::ranges::stable_sort(listed, [&](std::uint32_t left, std::uint32_t right) {
+        const auto& first = directory.entries[left];
+        const auto& second = directory.entries[right];
+
+        if (sort == Sort::size) {
+          return first.size > second.size;
+        }
+
+        return std::pair{first.identity.modified_seconds, first.identity.modified_nanoseconds} > std::pair{second.identity.modified_seconds, second.identity.modified_nanoseconds};
+      });
+    }
+
+    void walk(Build& build, std::string_view path, std::uint8_t depth);
+
+    // The row of the entry `index` of a level, the diff it unfolds and, for a directory unfolded,
+    // what is below it.
+    void pushEntry(Build& build, const Level& level, std::uint32_t index) { // NOLINT(misc-no-recursion): a tree unfolds ViewLimits::depth directories deep at most
+      constexpr std::uint64_t whole = 1000;
+      auto& window = build.window;
+      const auto& directory = *build.state.directories[level.holder];
+      const auto& entry = directory.entries[index];
+      Text child{build.order.memory()};
+
+      join(child, {.directory = level.path, .name = directory.name(entry)});
+
+      const bool expanded = entry.directory && holds(window.expanded, child.view());
+
+      window.rows.push({
+          .kind = RowKind::entry,
+          .depth = level.depth,
+          .directory = entry.directory,
+          .expanded = expanded,
+          .holder = level.holder,
+          .entry = index,
+          .share = static_cast<std::uint16_t>(entry.size * whole / level.largest),
+      });
+
+      if (!entry.directory && holds(window.diffs, child.view())) {
+        if (const auto* inspection = inspected(build.state, child.view())) {
+          pushDiff(window, inspection->diff.view(), static_cast<std::uint8_t>(level.depth + 1));
+        }
+      }
+
+      const auto own = window.rows.size();
+
+      if (expanded && std::cmp_less(level.depth + 1, ViewLimits::depth)) {
+        walk(build, child.view(), static_cast<std::uint8_t>(level.depth + 1));
+      }
+
+      // An unfolded directory the filter kept only to look below it, where nothing matched.
+      if (expanded && window.rows.size() == own && !holdsFolded(directory.name(entry), window.filter.view())) {
+        window.rows.truncate(own - 1);
+      }
+    }
+
+    void walk(Build& build, std::string_view path, std::uint8_t depth) { // NOLINT(misc-no-recursion): a tree unfolds ViewLimits::depth directories deep at most
       auto& window = build.window;
       const auto holder = holderOf(build.state, path);
       if (!holder) {
@@ -164,106 +273,34 @@ namespace telar::gui::features::explorer {
 
       const auto& directory = *build.state.directories[*holder];
       if (!directory.listed) {
-        pushText(window, RowKind::note, depth, "reading…");
+        pushText(window, {.kind = RowKind::note, .depth = depth}, "reading…");
         return;
       }
 
       if (directory.failed) {
-        pushText(window, RowKind::note, depth, "this account may not read it, or it is gone");
+        pushText(window, {.kind = RowKind::note, .depth = depth}, "this account may not read it, or it is gone");
         return;
       }
 
       // The entries this level lists, in the window's order.
       const auto first = build.order.size();
-      std::uint64_t largest = 1;
+      Level level{.holder = *holder, .path = path, .depth = depth};
 
-      for (std::size_t index = 0; index < directory.entries.size(); ++index) {
-        const auto& entry = directory.entries[index];
-        const auto name = directory.name(entry);
-        Text child{build.order.memory()};
-
-        join(child, path, name);
-
-        const bool hidden = name.starts_with('.');
-        const bool ignored = standing(build.state.repository, child.view(), entry.directory).ignored;
-
-        if (depth == 0) {
-          window.bytes += entry.size;
-          window.hidden_entries += hidden && !window.hidden ? 1 : 0;
-          window.ignored_entries += ignored && !window.ignored && !(hidden && !window.hidden) ? 1 : 0;
-        }
-
-        // A filter keeps an unfolded directory to look below it, and drops it later if nothing
-        // there matched.
-        const bool unfolded = entry.directory && !window.filter.empty() && holds(window.expanded, child.view());
-
-        if ((hidden && !window.hidden) || (ignored && !window.ignored) || (!unfolded && !holdsFolded(name, window.filter.view()))) {
-          continue;
-        }
-
-        build.order.push(static_cast<std::uint32_t>(index));
-        largest = std::max(largest, entry.size);
-      }
-
-      const auto listed = build.order.viewMut().subspan(first);
-
-      if (window.sort != Sort::name) {
-        std::ranges::stable_sort(listed, [&](std::uint32_t left, std::uint32_t right) {
-          const auto& a = directory.entries[left];
-          const auto& b = directory.entries[right];
-
-          return window.sort == Sort::size ? a.size > b.size : std::pair{a.identity.modified_seconds, a.identity.modified_nanoseconds} > std::pair{b.identity.modified_seconds, b.identity.modified_nanoseconds};
-        });
-      }
-
-      constexpr std::uint64_t whole = 1000;
-
+      level.largest = keepListed(build, directory, level);
+      sortListed(build.order.viewMut().subspan(first), directory, window.sort);
       for (std::size_t place = first; place < build.order.size(); ++place) {
-        const auto index = build.order[place];
-        const auto& entry = directory.entries[index];
-        Text child{build.order.memory()};
-
-        join(child, path, directory.name(entry));
-
-        const bool expanded = entry.directory && holds(window.expanded, child.view());
-
-        window.rows.push({
-            .kind = RowKind::entry,
-            .depth = depth,
-            .directory = entry.directory,
-            .expanded = expanded,
-            .holder = *holder,
-            .entry = index,
-            .share = static_cast<std::uint16_t>(entry.size * whole / largest),
-        });
-
-        if (!entry.directory && holds(window.diffs, child.view())) {
-          if (const auto* inspection = inspected(build.state, child.view())) {
-            pushDiff(window, inspection->diff.view(), static_cast<std::uint8_t>(depth + 1));
-          }
-        }
-
-        const auto own = window.rows.size();
-
-        if (expanded && depth + 1 < ViewLimits::depth) {
-          walk(build, child.view(), static_cast<std::uint8_t>(depth + 1));
-        }
-
-        // An unfolded directory the filter kept only to look below it, where nothing matched.
-        if (expanded && window.rows.size() == own && !holdsFolded(directory.name(entry), window.filter.view())) {
-          window.rows.truncate(own - 1);
-        }
+        pushEntry(build, level, build.order[place]);
       }
 
       build.order.truncate(first);
       pushAdded(build, path, depth);
       if (!directory.whole()) {
-        pushText(window, RowKind::note, depth, "reading more…");
+        pushText(window, {.kind = RowKind::note, .depth = depth}, "reading more…");
       } else if (directory.total > directory.entries.size()) {
         Text more{build.order.memory()};
 
         ds::formatTo(more, "… {} more entries are not listed", directory.total - directory.entries.size());
-        pushText(window, RowKind::note, depth, more.view());
+        pushText(window, {.kind = RowKind::note, .depth = depth}, more.view());
       }
     }
 
@@ -277,6 +314,18 @@ namespace telar::gui::features::explorer {
       }
     }
 
+    constexpr bool isStaged(const Change& change) noexcept {
+      return change.staged != FileState::unchanged && change.staged != FileState::ignored;
+    }
+
+    constexpr bool isUnstaged(const Change& change) noexcept {
+      return change.unstaged != FileState::unchanged && change.unstaged != FileState::ignored && change.unstaged != FileState::untracked;
+    }
+
+    constexpr bool isUntracked(const Change& change) noexcept {
+      return change.unstaged == FileState::untracked;
+    }
+
     // The changed paths of the repository in three groups, as `git status` lists them.
     void buildChanges(Window& window, const State& state) {
       const auto& repository = state.repository;
@@ -287,15 +336,9 @@ namespace telar::gui::features::explorer {
       };
 
       const ds::Array<Group, 3> groups{
-          Group{.title = "Staged", .belongs = [](const Change& change) noexcept {
-                  return change.staged != FileState::unchanged && change.staged != FileState::ignored;
-                }},
-          Group{.title = "Unstaged", .belongs = [](const Change& change) noexcept {
-                  return change.unstaged != FileState::unchanged && change.unstaged != FileState::ignored && change.unstaged != FileState::untracked;
-                }},
-          Group{.title = "Untracked", .belongs = [](const Change& change) noexcept {
-                  return change.unstaged == FileState::untracked;
-                }},
+          Group{.title = "Staged", .belongs = isStaged},
+          Group{.title = "Unstaged", .belongs = isUnstaged},
+          Group{.title = "Untracked", .belongs = isUntracked},
       };
 
       window.loading = !repository.known;
@@ -310,12 +353,11 @@ namespace telar::gui::features::explorer {
           }
 
           if (!titled) {
-            pushText(window, RowKind::header, 0, group.title);
+            pushText(window, {.kind = RowKind::header}, group.title);
             titled = true;
           }
 
-          pushText(window, RowKind::change, 0, path, static_cast<std::uint32_t>(index));
-          window.rows.backMut().directory = path.ends_with('/');
+          pushText(window, {.kind = RowKind::change, .directory = path.ends_with('/'), .item = static_cast<std::uint32_t>(index)}, path);
         }
       }
     }
@@ -325,7 +367,7 @@ namespace telar::gui::features::explorer {
       for (std::size_t index = 0; index < context.panes.size(); ++index) {
         const auto& pane = context.panes[index];
         if (holdsFolded(pane.title, window.filter.view()) || holdsFolded(pane.cwd, window.filter.view())) {
-          pushText(window, RowKind::pane, 0, pane.cwd, static_cast<std::uint32_t>(index));
+          pushText(window, {.kind = RowKind::pane, .item = static_cast<std::uint32_t>(index)}, pane.cwd);
         }
       }
     }
@@ -468,7 +510,7 @@ namespace telar::gui::features::explorer {
       pathOf(directory, window, state, context, row);
       if (directory.empty()) {
         directory.assign(window.root.view());
-      } else if (!(row.kind == RowKind::entry && row.directory && row.expanded)) {
+      } else if (row.kind != RowKind::entry || !row.directory || !row.expanded) {
         const Text parent{window.root.memory(), parentOf(directory.view())};
 
         directory.assign(parent.view());
@@ -492,17 +534,25 @@ namespace telar::gui::features::explorer {
       view.jump = view.jumps.size();
     }
 
-    // Roots the current window at `root`, with `selected` chosen there.
-    void go(View& view, std::string_view root, std::string_view selected, bool jump) {
-      auto& window = windowAt(view.windows, view.current);
-      const Text target{view.memory, root};
-      const Text chosen{view.memory, selected};
+    // Where a window goes: the directory it roots itself at, what it selects there, and whether
+    // the place it leaves is one to jump back to.
+    struct Target {
+      std::string_view root;
+      std::string_view selected;
+      bool jump = true;
+    };
 
-      if (jump) {
+    // Roots the current window at the target.
+    void go(View& view, const Target& target) {
+      auto& window = windowAt(view.windows, view.current);
+      const Text root{view.memory, target.root};
+      const Text chosen{view.memory, target.selected};
+
+      if (target.jump) {
         pushJump(view);
       }
 
-      window.root.assign(target.view());
+      window.root.assign(root.view());
       window.selected.assign(chosen.view());
       window.follow = false;
       window.filter.clear();
@@ -522,7 +572,7 @@ namespace telar::gui::features::explorer {
       } else if (argument.starts_with('/')) {
         joined.assign(argument);
       } else {
-        join(joined, window.root.view(), argument);
+        join(joined, {.directory = window.root.view(), .name = argument});
       }
 
       resolved.clear();
@@ -581,7 +631,7 @@ namespace telar::gui::features::explorer {
       view.text.clear();
       for (const auto& path : view.paths) {
         view.text.append(prefix);
-        appendTyped(view.text, path.view(), pane.cwd, context.home, prefix.empty());
+        appendTyped(view.text, path.view(), {.cwd = pane.cwd, .home = context.home, .shell = prefix.empty()});
         view.text.push(' ');
       }
     }
@@ -632,8 +682,8 @@ namespace telar::gui::features::explorer {
         picked(memory),
         followed_cwd(memory) {}
 
-  View::View(Memory& memory)
-      : memory(memory),
+  View::View(Memory& made_in)
+      : memory(made_in),
         windows(memory),
         edits(memory),
         history(memory),
@@ -645,6 +695,18 @@ namespace telar::gui::features::explorer {
         plan(memory),
         text(memory),
         paths(memory) {}
+
+  DiffTone toneOf(std::string_view line) noexcept {
+    if (line.starts_with("@@")) {
+      return DiffTone::hunk;
+    }
+
+    if (line.starts_with('+')) {
+      return DiffTone::added;
+    }
+
+    return line.starts_with('-') ? DiffTone::removed : DiffTone::context;
+  }
 
   const Window& window(const View& view) noexcept {
     return *view.windows[view.current];
@@ -665,9 +727,13 @@ namespace telar::gui::features::explorer {
       return nullptr;
     }
 
-    const auto found = std::ranges::find(view.edits, row.item, &Edit::id);
+    for (const auto& edit : view.edits) {
+      if (edit.id == row.item) {
+        return &edit;
+      }
+    }
 
-    return found == view.edits.end() ? nullptr : std::to_address(found);
+    return nullptr;
   }
 
   Range range(const View& view, const Window& window) noexcept {
@@ -704,7 +770,9 @@ namespace telar::gui::features::explorer {
       return directory.name(directory.entries[row.entry]);
     }
 
-    return std::string_view{window.text.data(), window.text.size()}.substr(row.text, row.text_size);
+    const auto text = window.text.view().subspan(row.text, row.text_size);
+
+    return {text.data(), text.size()};
   }
 
   void pathOf(ds::String<Memory>& path, const Window& window, const State& state, const Context& context, const Row& row) {
@@ -712,7 +780,7 @@ namespace telar::gui::features::explorer {
     switch (row.kind) {
     case RowKind::entry:
       if (row.holder < state.directories.size()) {
-        join(path, state.directories[row.holder]->path.view(), nameOf(window, state, row));
+        join(path, {.directory = state.directories[row.holder]->path.view(), .name = nameOf(window, state, row)});
       }
 
       break;
@@ -723,7 +791,7 @@ namespace telar::gui::features::explorer {
         relative.remove_suffix(1);
       }
 
-      join(path, state.repository.root.view(), relative);
+      join(path, {.directory = state.repository.root.view(), .name = relative});
       break;
     }
     case RowKind::pane:
@@ -753,7 +821,7 @@ namespace telar::gui::features::explorer {
 
       for (auto left = delta < 0 ? -delta : delta; left > 0;) {
         const auto next = static_cast<std::int64_t>(index) + step;
-        if (next < 0 || next >= static_cast<std::int64_t>(window.rows.size())) {
+        if (next < 0 || std::cmp_greater_equal(next, window.rows.size())) {
           break;
         }
 
@@ -868,8 +936,11 @@ namespace telar::gui::features::explorer {
     void followPane(Window& window, const Context& context) {
       const auto* pane = focusedPane(context);
       const auto cwd = pane == nullptr ? std::string_view{} : pane->cwd;
-      std::string_view root = window.scope == Scope::machine ? context.home : window.scope == Scope::workspace ? context.workspace
-                                                                                                               : cwd;
+      auto root = cwd;
+
+      if (window.scope != Scope::pane) {
+        root = window.scope == Scope::machine ? context.home : context.workspace;
+      }
 
       window.followed = context.focused;
       window.followed_cwd.assign(cwd);
@@ -958,7 +1029,7 @@ namespace telar::gui::features::explorer {
 
         // A rename or a restore of what goes away is moot.
         view.edits.retain([&](const Edit& edit) {
-          return !((edit.kind == EditKind::rename || edit.kind == EditKind::restore) && edit.machine == window.machine && edit.path.view() == path.view());
+          return (edit.kind != EditKind::rename && edit.kind != EditKind::restore) || edit.machine != window.machine || edit.path.view() != path.view();
         });
 
         if (editOn(view, EditKind::remove, window.machine, path.view()) == nullptr) {
@@ -981,7 +1052,7 @@ namespace telar::gui::features::explorer {
 
     // `p`: what was yanked or cut goes in the directory of the selection, as a change to write.
     void paste(View& view, const State& state, const Context& context) {
-      auto& window = windowAt(view.windows, view.current);
+      const auto& window = windowAt(view.windows, view.current);
 
       if (view.yanked.empty()) {
         say(view, "Nothing yanked: yy or dd first", Tone::error);
@@ -1033,7 +1104,7 @@ namespace telar::gui::features::explorer {
 
       for (const auto& edit : view.edits) {
         if (edit.kind == EditKind::create && !edit.name.empty()) {
-          join(step(PlanVerb::create, edit).target, edit.path.view(), edit.name.view());
+          join(step(PlanVerb::create, edit).target, {.directory = edit.path.view(), .name = edit.name.view()});
         }
       }
 
@@ -1042,12 +1113,12 @@ namespace telar::gui::features::explorer {
           auto& made = step(PlanVerb::move, edit);
 
           made.source.assign(edit.path.view());
-          join(made.target, parentOf(edit.path.view()), edit.name.view());
+          join(made.target, {.directory = parentOf(edit.path.view()), .name = edit.name.view()});
         } else if (edit.kind == EditKind::paste) {
           auto& made = step(edit.paste == PasteKind::move ? PlanVerb::move : PlanVerb::copy, edit);
 
           made.source.assign(edit.source.view());
-          join(made.target, edit.path.view(), edit.name.view());
+          join(made.target, {.directory = edit.path.view(), .name = edit.name.view()});
         }
       }
 
@@ -1148,7 +1219,7 @@ namespace telar::gui::features::explorer {
         const auto& directory = *state.directories[row.holder];
         Text path{view.memory};
 
-        join(path, directory.path.view(), view.draft.view());
+        join(path, {.directory = directory.path.view(), .name = view.draft.view()});
         if (const auto* edit = editOn(view, EditKind::rename, window.machine, path.view())) {
           view.draft.assign(edit->name.view());
         }
@@ -1191,64 +1262,74 @@ namespace telar::gui::features::explorer {
       view.mode = Mode::insert;
     }
 
-    // Enter ends insert mode: the name typed is the change.
-    void endInsert(View& view, const State& state, const Context& context, std::string_view typed) {
-      auto& window = windowAt(view.windows, view.current);
-      const auto name = typed.ends_with('/') ? typed.substr(0, typed.size() - 1) : typed;
-      const bool acceptable = !name.empty() && !name.contains('/') && name != "." && name != ".." && name.size() <= FileLimits::name_bytes;
+    // A name an entry can take: one component of a path, no longer than a file system allows.
+    constexpr bool acceptable(std::string_view name) noexcept {
+      return !name.empty() && !name.contains('/') && name != "." && name != ".." && name.size() <= FileLimits::name_bytes;
+    }
 
-      view.mode = Mode::normal;
-      if (view.inserting != 0) {
-        const auto id = view.inserting;
-        Edit* found = nullptr;
-
-        for (auto& edit : view.edits.viewMut()) {
-          if (edit.id == id) {
-            found = &edit;
-          }
-        }
-
-        view.inserting = 0;
-        if (found == nullptr) {
-          return;
-        }
-
-        if (!acceptable) {
-          view.edits.retain([&](const Edit& edit) {
-            return edit.id != id;
-          });
-
-          say(view, typed.empty() ? "No name: nothing added" : "A name holds no slash: nothing added", typed.empty() ? Tone::info : Tone::error);
-        } else {
-          found->name.assign(name);
-          // A name that ends in a slash is a directory's.
-          found->directory = found->kind == EditKind::create ? typed.ends_with('/') : found->directory;
-        }
-
-        rebuildCurrent(view, state, context);
-        return;
+    // What was typed for a name, without the slash that says it is a directory's.
+    constexpr std::string_view nameTyped(std::string_view typed) noexcept {
+      if (typed.ends_with('/')) {
+        typed.remove_suffix(1);
       }
 
+      return typed;
+    }
+
+    // The name typed for the row the change `id` adds: the change takes it, or goes with a name
+    // an entry cannot take. False when no such change is left.
+    bool nameAdded(View& view, std::uint32_t id, std::string_view typed) {
+      const auto name = nameTyped(typed);
+      Edit* found = nullptr;
+
+      for (auto& edit : view.edits.viewMut()) {
+        if (edit.id == id) {
+          found = &edit;
+        }
+      }
+
+      if (found == nullptr) {
+        return false;
+      }
+
+      if (acceptable(name)) {
+        found->name.assign(name);
+        // A name that ends in a slash is a directory's.
+        found->directory = found->kind == EditKind::create ? typed.ends_with('/') : found->directory;
+        return true;
+      }
+
+      view.edits.retain([&](const Edit& edit) {
+        return edit.id != id;
+      });
+
+      say(view, typed.empty() ? "No name: nothing added" : "A name holds no slash: nothing added", typed.empty() ? Tone::info : Tone::error);
+      return true;
+    }
+
+    // The name typed on the selected entry: a rename of it, unless it is the name it has.
+    void renameSelected(View& view, const State& state, const Context& context, std::string_view typed) {
+      const auto& window = windowAt(view.windows, view.current);
       if (window.rows.empty() || window.rows[window.cursor].kind != RowKind::entry) {
         return;
       }
 
       const auto& row = window.rows[window.cursor];
-      const auto current_name = nameOf(window, state, row);
+      const auto name = nameTyped(typed);
       Text path{view.memory};
 
       pathOf(path, window, state, context, row);
-      if (!acceptable) {
+      if (!acceptable(name)) {
         say(view, "A name holds no slash and is not empty: nothing renamed", Tone::error);
         return;
       }
 
       remember(view.history, view.edits, view.memory);
       view.edits.retain([&](const Edit& edit) {
-        return !(edit.kind == EditKind::rename && edit.machine == window.machine && edit.path.view() == path.view());
+        return edit.kind != EditKind::rename || edit.machine != window.machine || edit.path.view() != path.view();
       });
 
-      if (name != current_name) {
+      if (name != nameOf(window, state, row)) {
         auto& edit = addEdit(view.edits, view.next_edit, EditKind::rename, window.machine, path.view());
 
         edit.name.assign(name);
@@ -1258,6 +1339,22 @@ namespace telar::gui::features::explorer {
       }
 
       ++view.revision;
+    }
+
+    // Enter ends insert mode: the name typed is the change.
+    void endInsert(View& view, const State& state, const Context& context, std::string_view typed) {
+      view.mode = Mode::normal;
+      if (view.inserting == 0) {
+        renameSelected(view, state, context, typed);
+        return;
+      }
+
+      const auto id = view.inserting;
+
+      view.inserting = 0;
+      if (nameAdded(view, id, typed)) {
+        rebuildCurrent(view, state, context);
+      }
     }
 
     // A window more after the others, on what the window `index` shows.
@@ -1335,8 +1432,8 @@ namespace telar::gui::features::explorer {
 
     // Enter on the rows chosen: a directory alone is entered; files go to the focused pane as its
     // kind takes them.
-    Action enter(View& view, State& state, const Context& context) {
-      auto& window = windowAt(view.windows, view.current);
+    Action enter(View& view, const State& state, const Context& context) {
+      const auto& window = windowAt(view.windows, view.current);
       if (window.rows.empty()) {
         return {};
       }
@@ -1358,7 +1455,7 @@ namespace telar::gui::features::explorer {
         Text path{view.memory};
 
         pathOf(path, window, state, context, row);
-        go(view, path.view(), {}, true);
+        go(view, {.root = path.view()});
         rebuildCurrent(view, state, context);
         return {};
       }
@@ -1383,481 +1480,637 @@ namespace telar::gui::features::explorer {
       return {.kind = pane->kind == PaneKind::agent ? ActionKind::mention : ActionKind::insert, .pane = pane->id};
     }
 
-    Action run(View& view, State& state, const Context& context, const Stroke& stroke);
-
-    Action runCommand(View& view, State& state, const Context& context, const Stroke& stroke) {
+    // `h`: folds the selected directory, or goes to the one that holds the row.
+    void collapse(View& view, const State& state, const Context& context) {
       auto& window = windowAt(view.windows, view.current);
-      const auto count = static_cast<std::int64_t>(stroke.count);
-      const auto half = std::max<std::int64_t>(1, window.page / 2);
 
-      switch (stroke.command) {
-      case Command::none:
-        return {};
-      case Command::down:
-        moveBy(window, state, context, count);
-        return {};
-      case Command::up:
-        moveBy(window, state, context, -count);
-        return {};
-      case Command::top:
-        goToNumber(window, state, context, stroke.counted ? stroke.count : 1);
-        return {};
-      case Command::bottom:
-        goToNumber(window, state, context, stroke.counted ? stroke.count : std::numeric_limits<std::uint32_t>::max());
-        return {};
-      case Command::half_page_down:
-        moveBy(window, state, context, half * count);
-        return {};
-      case Command::half_page_up:
-        moveBy(window, state, context, -half * count);
-        return {};
-      case Command::collapse:
-        if (!window.rows.empty() && window.rows[window.cursor].expanded) {
-          setExpanded(view, state, context, window.cursor, false);
-        } else if (const auto parent = parentRow(window)) {
-          choose(window, state, context, *parent);
-        }
-
-        return {};
-      case Command::expand:
-        if (window.rows.empty()) {
-          return {};
-        }
-
-        if (window.rows[window.cursor].kind == RowKind::entry && window.rows[window.cursor].directory) {
-          if (!window.rows[window.cursor].expanded) {
-            setExpanded(view, state, context, window.cursor, true);
-          } else {
-            moveBy(window, state, context, 1);
-          }
-
-          return {};
-        }
-
-        // `l` on a file opens it, as it does in a tree of Neovim.
-        return run(view, state, context, {.command = Command::open});
-      case Command::toggle_fold:
-        if (!window.rows.empty()) {
-          setExpanded(view, state, context, window.cursor, !window.rows[window.cursor].expanded);
-        }
-
-        return {};
-      case Command::fold_all:
-        window.expanded.clear();
-        rebuildCurrent(view, state, context);
-        return {};
-      case Command::unfold_all: {
-        // One more level each time: every directory that shows unfolds.
-        Text path{view.memory};
-
-        for (const auto& row : window.rows) {
-          if (row.kind == RowKind::entry && row.directory && !row.expanded) {
-            pathOf(path, window, state, context, row);
-            add(window.expanded, path.view());
-          }
-        }
-
-        rebuildCurrent(view, state, context);
-        return {};
+      if (!window.rows.empty() && window.rows[window.cursor].expanded) {
+        setExpanded(view, state, context, window.cursor, false);
+      } else if (const auto parent = parentRow(window)) {
+        choose(window, state, context, *parent);
       }
-      case Command::next_change:
-        nextChange(view, state, context, 1);
-        return {};
-      case Command::previous_change:
-        nextChange(view, state, context, -1);
-        return {};
-      case Command::enter:
-        return enter(view, state, context);
-      case Command::parent: {
-        if (window.root.view() == "/") {
-          return {};
+    }
+
+    void toggleFold(View& view, const State& state, const Context& context) {
+      const auto& window = windowAt(view.windows, view.current);
+
+      if (!window.rows.empty()) {
+        setExpanded(view, state, context, window.cursor, !window.rows[window.cursor].expanded);
+      }
+    }
+
+    void foldAll(View& view, const State& state, const Context& context) {
+      windowAt(view.windows, view.current).expanded.clear();
+      rebuildCurrent(view, state, context);
+    }
+
+    // `zR`, one more level each time: every directory that shows unfolds.
+    void unfoldAll(View& view, const State& state, const Context& context) {
+      auto& window = windowAt(view.windows, view.current);
+      Text path{view.memory};
+
+      for (const auto& row : window.rows) {
+        if (row.kind == RowKind::entry && row.directory && !row.expanded) {
+          pathOf(path, window, state, context, row);
+          add(window.expanded, path.view());
+        }
+      }
+
+      rebuildCurrent(view, state, context);
+    }
+
+    // `-`: the directory above, with the one it came from selected.
+    void goUp(View& view, const State& state, const Context& context) {
+      if (windowAt(view.windows, view.current).root.view() == "/") {
+        return;
+      }
+
+      const Text child{view.memory, windowAt(view.windows, view.current).root.view()};
+
+      go(view, {.root = parentOf(child.view()), .selected = child.view()});
+      rebuildCurrent(view, state, context);
+    }
+
+    void rootAt(View& view, const State& state, const Context& context, std::string_view root) {
+      go(view, {.root = root});
+      rebuildCurrent(view, state, context);
+    }
+
+    // `gp`, `gw`, `gh`: the window follows the focused pane, rooted where `scope` says.
+    void setScope(View& view, const State& state, const Context& context, Scope scope) {
+      pushJump(view);
+
+      auto& window = windowAt(view.windows, view.current);
+
+      window.scope = scope;
+      window.follow = true;
+      window.lens = Lens::tree;
+      followPane(window, context);
+      rebuildCurrent(view, state, context);
+    }
+
+    void setMark(View& view, const Notation& letter) {
+      const auto& window = windowAt(view.windows, view.current);
+
+      if (!isLetter(letter.view())) {
+        say(view, "A mark is a letter", Tone::error);
+        return;
+      }
+
+      auto* mark = markOf(view.marks, letter.view());
+      if (mark == nullptr) {
+        if (view.marks.size() == ViewLimits::marks) {
+          return;
         }
 
-        const Text child{view.memory, window.root.view()};
-
-        go(view, parentOf(child.view()), child.view(), true);
-        rebuildCurrent(view, state, context);
-        return {};
+        mark = &view.marks.push(Place{view.memory});
       }
-      case Command::workspace_root:
-        go(view, context.workspace.starts_with('/') ? context.workspace : context.home, {}, true);
-        rebuildCurrent(view, state, context);
-        return {};
-      case Command::home:
-        go(view, context.home.starts_with('/') ? context.home : std::string_view{"/"}, {}, true);
-        rebuildCurrent(view, state, context);
-        return {};
-      case Command::scope_pane:
-      case Command::scope_workspace:
-      case Command::scope_machine:
+
+      mark->letter = letter;
+      mark->machine = window.machine;
+      mark->root.assign(window.root.view());
+      mark->selected.assign(window.selected.view());
+      report(view, Tone::info, "mark {} set", letter.view());
+      ++view.revision;
+    }
+
+    void jumpToMark(View& view, const State& state, const Context& context, std::string_view letter) {
+      const auto* mark = markOf(view.marks, letter);
+      if (mark == nullptr) {
+        report(view, Tone::error, "E20: Mark not set: {}", letter);
+        return;
+      }
+
+      const Text root{view.memory, mark->root.view()};
+      const Text selected{view.memory, mark->selected.view()};
+      const auto machine = mark->machine;
+
+      pushJump(view);
+      windowAt(view.windows, view.current).machine = machine;
+      go(view, {.root = root.view(), .selected = selected.view(), .jump = false});
+      rebuildCurrent(view, state, context);
+    }
+
+    // `<C-o>`, `<C-i>`: back and forward through the places the window was rooted at.
+    void jump(View& view, const State& state, const Context& context, bool back) {
+      const bool ended = back ? view.jump == 0 : view.jump + 1 >= view.jumps.size();
+      if (ended) {
+        say(view, back ? "At the oldest place" : "At the newest place");
+        return;
+      }
+
+      // Going back from the newest place keeps where it was, to come forward to.
+      if (back && view.jump == view.jumps.size()) {
         pushJump(view);
-        window.scope = stroke.command == Command::scope_pane ? Scope::pane : stroke.command == Command::scope_workspace ? Scope::workspace
-                                                                                                                        : Scope::machine;
-        window.follow = true;
-        window.lens = Lens::tree;
-        followPane(window, context);
-        rebuildCurrent(view, state, context);
-        return {};
-      case Command::mark: {
-        const auto letter = stroke.argument.view();
-        if (!isLetter(letter)) {
-          say(view, "A mark is a letter", Tone::error);
-          return {};
-        }
-
-        auto* mark = markOf(view.marks, letter);
-        if (mark == nullptr) {
-          if (view.marks.size() == ViewLimits::marks) {
-            return {};
-          }
-
-          mark = &view.marks.push(Place{view.memory});
-        }
-
-        mark->letter = stroke.argument;
-        mark->machine = window.machine;
-        mark->root.assign(window.root.view());
-        mark->selected.assign(window.selected.view());
-        report(view, Tone::info, "mark {} set", letter);
-        ++view.revision;
-        return {};
+        --view.jump;
       }
-      case Command::jump_to_mark: {
-        const auto* mark = markOf(view.marks, stroke.argument.view());
-        if (mark == nullptr) {
-          report(view, Tone::error, "E20: Mark not set: {}", stroke.argument.view());
-          return {};
-        }
 
-        const Text root{view.memory, mark->root.view()};
-        const Text selected{view.memory, mark->selected.view()};
-        const auto machine = mark->machine;
+      view.jump = back ? view.jump - 1 : view.jump + 1;
 
-        pushJump(view);
-        windowAt(view.windows, view.current).machine = machine;
-        go(view, root.view(), selected.view(), false);
-        rebuildCurrent(view, state, context);
-        return {};
+      const Text root{view.memory, view.jumps[view.jump].root.view()};
+      const Text selected{view.memory, view.jumps[view.jump].selected.view()};
+
+      windowAt(view.windows, view.current).machine = view.jumps[view.jump].machine;
+      go(view, {.root = root.view(), .selected = selected.view(), .jump = false});
+      rebuildCurrent(view, state, context);
+    }
+
+    // `gt`, `gT`: the next or the previous lens, or the one a count names.
+    void cycleLens(View& view, const State& state, const Context& context, const Stroke& stroke) {
+      const auto lens = static_cast<std::size_t>(windowAt(view.windows, view.current).lens);
+      auto next = (lens + (stroke.command == Command::next_lens ? 1 : lens_count - 1)) % lens_count;
+
+      if (stroke.counted) {
+        next = (stroke.count - 1) % lens_count;
       }
-      case Command::jump_back:
-      case Command::jump_forward: {
-        const bool back = stroke.command == Command::jump_back;
-        if (back ? view.jump == 0 : view.jump + 1 >= view.jumps.size()) {
-          say(view, back ? "At the oldest place" : "At the newest place");
-          return {};
+
+      setLens(view, state, context, static_cast<Lens>(next));
+    }
+
+    // `yy`, `yr`, `yn`: the rows are yanked, and their paths, as `command` writes them, are what
+    // the clipboard takes.
+    Action yankPaths(View& view, const State& state, const Context& context, Command command) {
+      yank(view, state, context, PasteKind::copy);
+      gather(view, state, context, false);
+      view.text.clear();
+      for (const auto& path : view.paths) {
+        if (!view.text.empty()) {
+          view.text.push('\n');
         }
 
-        // Going back from the newest place keeps where it was, to come forward to.
-        if (back && view.jump == view.jumps.size()) {
-          pushJump(view);
-          --view.jump;
-        }
-
-        view.jump = back ? view.jump - 1 : view.jump + 1;
-
-        const Text root{view.memory, view.jumps[view.jump].root.view()};
-        const Text selected{view.memory, view.jumps[view.jump].selected.view()};
-
-        window.machine = view.jumps[view.jump].machine;
-        go(view, root.view(), selected.view(), false);
-        rebuildCurrent(view, state, context);
-        return {};
-      }
-      case Command::next_lens:
-      case Command::previous_lens: {
-        const auto lens = static_cast<std::size_t>(window.lens);
-        const auto next = stroke.counted ? (stroke.count - 1) % lens_count : stroke.command == Command::next_lens ? (lens + 1) % lens_count
-                                                                                                                  : (lens + lens_count - 1) % lens_count;
-
-        setLens(view, state, context, static_cast<Lens>(next));
-        return {};
-      }
-      case Command::rename:
-      case Command::rename_whole:
-        startRename(view, state);
-        return {};
-      case Command::create:
-        startCreate(view, state, context);
-        return {};
-      case Command::cut:
-        cut(view, state, context);
-        return {};
-      case Command::yank:
-      case Command::yank_relative:
-      case Command::yank_name: {
-        yank(view, state, context, PasteKind::copy);
-        gather(view, state, context, false);
-        view.text.clear();
-        for (const auto& path : view.paths) {
-          if (!view.text.empty()) {
-            view.text.push('\n');
-          }
-
-          if (stroke.command == Command::yank_name) {
-            view.text.append(baseOf(path.view()));
-          } else if (const auto* pane = focusedPane(context); stroke.command == Command::yank_relative && pane != nullptr) {
-            appendTyped(view.text, path.view(), pane->cwd, context.home, false);
-          } else {
-            view.text.append(path.view());
-          }
-        }
-
-        leaveVisual(view);
-        ++view.revision;
-        if (view.paths.empty()) {
-          return {};
-        }
-
-        if (view.paths.size() == 1) {
-          report(view, Tone::info, "yanked: {} · p copies it here or in another window", view.text.view());
+        if (command == Command::yank_name) {
+          view.text.append(baseOf(path.view()));
+        } else if (const auto* pane = focusedPane(context); command == Command::yank_relative && pane != nullptr) {
+          appendTyped(view.text, path.view(), {.cwd = pane->cwd, .home = context.home, .shell = false});
         } else {
-          report(view, Tone::info, "{} paths yanked · p copies them here or in another window", view.paths.size());
+          view.text.append(path.view());
         }
-
-        return {.kind = ActionKind::copy};
       }
-      case Command::paste:
-        paste(view, state, context);
+
+      leaveVisual(view);
+      ++view.revision;
+      if (view.paths.empty()) {
         return {};
-      case Command::undo:
-        if (!view.history.empty()) {
-          if (auto previous = view.history.pop()) {
-            view.edits = std::move(previous.getMut());
-          }
+      }
 
-          rebuildCurrent(view, state, context);
-          report(view, Tone::info, "undone · {} change{} not written", view.edits.size(), view.edits.size() == 1 ? "" : "s");
-          return {};
-        }
+      if (view.paths.size() == 1) {
+        report(view, Tone::info, "yanked: {} · p copies it here or in another window", view.text.view());
+      } else {
+        report(view, Tone::info, "{} paths yanked · p copies them here or in another window", view.paths.size());
+      }
 
+      return {.kind = ActionKind::copy};
+    }
+
+    // `u`: the last change typed is taken back; with none, the last plan the runtime applied.
+    Action undo(View& view, const State& state, const Context& context) {
+      if (view.history.empty()) {
         if (state.undoable) {
           return {.kind = ActionKind::undo};
         }
 
         say(view, "Already at the oldest change");
         return {};
+      }
+
+      if (auto previous = view.history.pop()) {
+        view.edits = std::move(previous.getMut());
+      }
+
+      rebuildCurrent(view, state, context);
+      report(view, Tone::info, "undone · {} change{} not written", view.edits.size(), view.edits.size() == 1 ? "" : "s");
+      return {};
+    }
+
+    void otherWindow(View& view, bool next) noexcept {
+      view.current = (view.current + (next ? 1 : view.windows.size() - 1)) % view.windows.size();
+      ++view.revision;
+    }
+
+    void onlyWindow(View& view) {
+      auto kept = std::move(view.windows.atMut(view.current));
+
+      view.windows.clear();
+      view.windows.push(std::move(kept));
+      view.current = 0;
+      ++view.revision;
+    }
+
+    // `<C-w>T`: whether the explorer stays open after it hands a file to a pane.
+    void togglePin(View& view) {
+      view.pinned = !view.pinned;
+      say(view, view.pinned ? "stays open when a file goes to a pane" : "closes when a file goes to a pane");
+      ++view.revision;
+    }
+
+    // `gf`: the files chosen open in the editor of the tab.
+    Action openFiles(View& view, const State& state, const Context& context) {
+      gather(view, state, context, true);
+      leaveVisual(view);
+      if (view.paths.empty()) {
+        say(view, "gf opens files; on a directory use <CR>, cd or s", Tone::error);
+        return {};
+      }
+
+      return {.kind = ActionKind::open};
+    }
+
+    // `l`: unfolds a directory, then moves into it; on a file it opens it, as in a tree of Neovim.
+    Action expand(View& view, const State& state, const Context& context) {
+      auto& window = windowAt(view.windows, view.current);
+      if (window.rows.empty()) {
+        return {};
+      }
+
+      const auto& row = window.rows[window.cursor];
+      if (row.kind != RowKind::entry || !row.directory) {
+        // What `.` repeats then is the opening.
+        view.last = Command::open;
+        return openFiles(view, state, context);
+      }
+
+      if (!row.expanded) {
+        setExpanded(view, state, context, window.cursor, true);
+      } else {
+        moveBy(window, state, context, 1);
+      }
+
+      return {};
+    }
+
+    // `cd`, `s`: the directory of the row, for the focused shell to go to or for a new one to
+    // start in.
+    Action toDirectory(View& view, const State& state, const Context& context, bool split) {
+      const auto& window = windowAt(view.windows, view.current);
+      if (window.rows.empty()) {
+        return {};
+      }
+
+      const auto& row = window.rows[window.cursor];
+
+      pathOf(view.text, window, state, context, row);
+      if (view.text.empty()) {
+        return {};
+      }
+
+      if (!row.directory) {
+        const Text parent{view.memory, parentOf(view.text.view())};
+
+        view.text.assign(parent.view());
+      }
+
+      if (split) {
+        return {.kind = ActionKind::split};
+      }
+
+      const auto* pane = focusedPane(context);
+      if (pane == nullptr || pane->kind != PaneKind::shell) {
+        say(view, "cd is for a shell's pane; s opens one here", Tone::error);
+        return {};
+      }
+
+      return {.kind = ActionKind::change_directory, .pane = pane->id};
+    }
+
+    // `@`: the rows chosen, mentioned to the agent of the tab.
+    Action mention(View& view, const State& state, const Context& context) {
+      const auto agent = std::ranges::find(context.panes, PaneKind::agent, &PaneFact::kind);
+      if (agent == context.panes.end()) {
+        say(view, "No agent in this tab to mention it to", Tone::error);
+        return {};
+      }
+
+      gather(view, state, context, false);
+      leaveVisual(view);
+      if (view.paths.empty()) {
+        return {};
+      }
+
+      typeFor(view, context, *agent, "@");
+      return {.kind = ActionKind::mention, .pane = agent->id};
+    }
+
+    // `=`: the diff of each file chosen unfolds below its row, or folds.
+    void toggleDiff(View& view, const State& state, const Context& context) {
+      auto& window = windowAt(view.windows, view.current);
+
+      gather(view, state, context, true);
+      for (const auto& path : view.paths) {
+        if (holds(window.diffs, path.view())) {
+          drop(window.diffs, path.view());
+        } else {
+          add(window.diffs, path.view());
+        }
+      }
+
+      leaveVisual(view);
+      rebuildCurrent(view, state, context);
+    }
+
+    // The command line opens with `prefill` typed.
+    void startCommand(View& view, std::string_view prefill) {
+      view.prefill.assign(prefill);
+      view.mode = Mode::command;
+      ++view.revision;
+    }
+
+    void startSearch(View& view) {
+      view.prefill.assign(windowAt(view.windows, view.current).filter.view());
+      view.mode = Mode::search;
+      ++view.revision;
+    }
+
+    constexpr Sort sortAfter(Sort sort) noexcept {
+      switch (sort) {
+      case Sort::name:
+        return Sort::size;
+      case Sort::size:
+        return Sort::modified;
+      case Sort::modified:
+        return Sort::name;
+      }
+
+      return Sort::name;
+    }
+
+    void cycleSort(View& view, const State& state, const Context& context) {
+      auto& window = windowAt(view.windows, view.current);
+
+      window.sort = sortAfter(window.sort);
+      rebuildCurrent(view, state, context);
+    }
+
+    void toggleHidden(View& view, const State& state, const Context& context) {
+      auto& window = windowAt(view.windows, view.current);
+
+      window.hidden = !window.hidden;
+      rebuildCurrent(view, state, context);
+    }
+
+    void toggleIgnored(View& view, const State& state, const Context& context) {
+      auto& window = windowAt(view.windows, view.current);
+
+      window.ignored = !window.ignored;
+      rebuildCurrent(view, state, context);
+    }
+
+    void refresh(View& view, State& state) {
+      invalidate(state, {});
+      say(view, "reading again");
+      ++view.revision;
+    }
+
+    void toggleFollow(View& view, const State& state, const Context& context) {
+      auto& window = windowAt(view.windows, view.current);
+
+      window.follow = !window.follow;
+      if (window.follow) {
+        followPane(window, context);
+      }
+
+      rebuildCurrent(view, state, context);
+    }
+
+    void startVisual(View& view) {
+      auto& window = windowAt(view.windows, view.current);
+
+      view.mode = Mode::visual;
+      window.anchor = window.cursor;
+      window.picked.clear();
+      ++view.revision;
+    }
+
+    void showHelp(View& view) noexcept {
+      view.mode = Mode::help;
+      ++view.revision;
+    }
+
+    // Escape leaves the selection, or else drops the filter.
+    void escape(View& view, const State& state, const Context& context) {
+      auto& window = windowAt(view.windows, view.current);
+
+      if (view.mode == Mode::visual || !window.picked.empty()) {
+        leaveVisual(view);
+      } else if (!window.filter.empty()) {
+        window.filter.clear();
+        rebuildCurrent(view, state, context);
+      }
+
+      ++view.revision;
+    }
+
+    Action runCommand(View& view, State& state, const Context& context, const Stroke& stroke) { // NOLINT(readability-function-size): one case per command, in one switch, is what makes a command without its case an error
+      auto& window = windowAt(view.windows, view.current);
+      const auto count = static_cast<std::int64_t>(stroke.count);
+      const auto half = std::max<std::int64_t>(1, window.page / 2);
+
+      switch (stroke.command) {
+      case Command::none:
+      case Command::repeat:
+        // `.` is another command by the time it gets here: `run` names the one it repeats.
+        break;
+      case Command::down:
+      case Command::next_match:
+        moveBy(window, state, context, count);
+        break;
+      case Command::up:
+      case Command::previous_match:
+        moveBy(window, state, context, -count);
+        break;
+      case Command::top:
+        goToNumber(window, state, context, stroke.counted ? stroke.count : 1);
+        break;
+      case Command::bottom:
+        goToNumber(window, state, context, stroke.counted ? stroke.count : std::numeric_limits<std::uint32_t>::max());
+        break;
+      case Command::half_page_down:
+        moveBy(window, state, context, half * count);
+        break;
+      case Command::half_page_up:
+        moveBy(window, state, context, -half * count);
+        break;
+      case Command::collapse:
+        collapse(view, state, context);
+        break;
+      case Command::expand:
+        return expand(view, state, context);
+      case Command::toggle_fold:
+        toggleFold(view, state, context);
+        break;
+      case Command::fold_all:
+        foldAll(view, state, context);
+        break;
+      case Command::unfold_all:
+        unfoldAll(view, state, context);
+        break;
+      case Command::next_change:
+        nextChange(view, state, context, 1);
+        break;
+      case Command::previous_change:
+        nextChange(view, state, context, -1);
+        break;
+      case Command::enter:
+        return enter(view, state, context);
+      case Command::parent:
+        goUp(view, state, context);
+        break;
+      case Command::workspace_root:
+        rootAt(view, state, context, context.workspace.starts_with('/') ? context.workspace : context.home);
+        break;
+      case Command::home:
+        rootAt(view, state, context, context.home.starts_with('/') ? context.home : std::string_view{"/"});
+        break;
+      case Command::scope_pane:
+        setScope(view, state, context, Scope::pane);
+        break;
+      case Command::scope_workspace:
+        setScope(view, state, context, Scope::workspace);
+        break;
+      case Command::scope_machine:
+        setScope(view, state, context, Scope::machine);
+        break;
+      case Command::mark:
+        setMark(view, stroke.argument);
+        break;
+      case Command::jump_to_mark:
+        jumpToMark(view, state, context, stroke.argument.view());
+        break;
+      case Command::jump_back:
+        jump(view, state, context, true);
+        break;
+      case Command::jump_forward:
+        jump(view, state, context, false);
+        break;
+      case Command::next_lens:
+      case Command::previous_lens:
+        cycleLens(view, state, context, stroke);
+        break;
+      case Command::rename:
+      case Command::rename_whole:
+        startRename(view, state);
+        break;
+      case Command::create:
+        startCreate(view, state, context);
+        break;
+      case Command::cut:
+        cut(view, state, context);
+        break;
+      case Command::yank:
+      case Command::yank_relative:
+      case Command::yank_name:
+        return yankPaths(view, state, context, stroke.command);
+      case Command::paste:
+        paste(view, state, context);
+        break;
+      case Command::undo:
+        return undo(view, state, context);
       case Command::write:
         write(view, false);
-        return {};
+        break;
       case Command::split_vertical:
         split(view, state, context, true);
-        return {};
+        break;
       case Command::split_horizontal:
         split(view, state, context, false);
-        return {};
+        break;
       case Command::next_window:
       case Command::window_right:
       case Command::window_down:
-        view.current = (view.current + 1) % view.windows.size();
-        ++view.revision;
-        return {};
+        otherWindow(view, true);
+        break;
       case Command::previous_window:
       case Command::window_left:
       case Command::window_up:
-        view.current = (view.current + view.windows.size() - 1) % view.windows.size();
-        ++view.revision;
-        return {};
+        otherWindow(view, false);
+        break;
       case Command::close_window:
         return quit(view, false, false);
-      case Command::only_window: {
-        auto kept = std::move(view.windows.atMut(view.current));
-
-        view.windows.clear();
-        view.windows.push(std::move(kept));
-        view.current = 0;
-        ++view.revision;
-        return {};
-      }
+      case Command::only_window:
+        onlyWindow(view);
+        break;
       case Command::pin:
-        view.pinned = !view.pinned;
-        say(view, view.pinned ? "pinned beside the panes" : "back over the panes");
-        ++view.revision;
-        return {.kind = ActionKind::pin};
+        togglePin(view);
+        break;
       case Command::open:
-        gather(view, state, context, true);
-        leaveVisual(view);
-        if (view.paths.empty()) {
-          say(view, "gf opens files; on a directory use <CR>, cd or s", Tone::error);
-          return {};
-        }
-
-        return {.kind = ActionKind::open};
+        return openFiles(view, state, context);
       case Command::change_directory:
-      case Command::split_shell: {
-        if (window.rows.empty()) {
-          return {};
-        }
-
-        const auto& row = window.rows[window.cursor];
-
-        pathOf(view.text, window, state, context, row);
-        if (view.text.empty()) {
-          return {};
-        }
-
-        if (!row.directory) {
-          const Text parent{view.memory, parentOf(view.text.view())};
-
-          view.text.assign(parent.view());
-        }
-
-        if (stroke.command == Command::split_shell) {
-          return {.kind = ActionKind::split};
-        }
-
-        const auto* pane = focusedPane(context);
-        if (pane == nullptr || pane->kind != PaneKind::shell) {
-          say(view, "cd is for a shell's pane; s opens one here", Tone::error);
-          return {};
-        }
-
-        return {.kind = ActionKind::change_directory, .pane = pane->id};
-      }
-      case Command::mention: {
-        const auto agent = std::ranges::find(context.panes, PaneKind::agent, &PaneFact::kind);
-        if (agent == context.panes.end()) {
-          say(view, "No agent in this tab to mention it to", Tone::error);
-          return {};
-        }
-
-        gather(view, state, context, false);
-        leaveVisual(view);
-        if (view.paths.empty()) {
-          return {};
-        }
-
-        typeFor(view, context, *agent, "@");
-        return {.kind = ActionKind::mention, .pane = agent->id};
-      }
-      case Command::repeat:
-        if (view.last == Command::none) {
-          return {};
-        }
-
-        return run(view, state, context, {.command = view.last, .count = stroke.count, .counted = stroke.counted});
-      case Command::toggle_diff: {
-        gather(view, state, context, true);
-        for (const auto& path : view.paths) {
-          if (holds(window.diffs, path.view())) {
-            drop(window.diffs, path.view());
-          } else {
-            add(window.diffs, path.view());
-          }
-        }
-
-        leaveVisual(view);
-        rebuildCurrent(view, state, context);
-        return {};
-      }
+        return toDirectory(view, state, context, false);
+      case Command::split_shell:
+        return toDirectory(view, state, context, true);
+      case Command::mention:
+        return mention(view, state, context);
+      case Command::toggle_diff:
+        toggleDiff(view, state, context);
+        break;
       case Command::stage:
         return index(view, state, context, PlanVerb::stage);
       case Command::unstage:
         return index(view, state, context, PlanVerb::unstage);
       case Command::discard:
         discard(view, state, context);
-        return {};
+        break;
       case Command::commit:
-        view.prefill.assign("commit ");
-        view.mode = Mode::command;
-        ++view.revision;
-        return {};
+        startCommand(view, "commit ");
+        break;
       case Command::cycle_sort:
-        window.sort = window.sort == Sort::name ? Sort::size : window.sort == Sort::size ? Sort::modified
-                                                                                         : Sort::name;
-        rebuildCurrent(view, state, context);
-        return {};
+        cycleSort(view, state, context);
+        break;
       case Command::toggle_hidden:
-        window.hidden = !window.hidden;
-        rebuildCurrent(view, state, context);
-        return {};
+        toggleHidden(view, state, context);
+        break;
       case Command::toggle_ignored:
-        window.ignored = !window.ignored;
-        rebuildCurrent(view, state, context);
-        return {};
+        toggleIgnored(view, state, context);
+        break;
       case Command::refresh:
-        invalidate(state, {});
-        say(view, "reading again");
-        ++view.revision;
-        return {};
+        refresh(view, state);
+        break;
       case Command::toggle_follow:
-        window.follow = !window.follow;
-        if (window.follow) {
-          followPane(window, context);
-        }
-
-        rebuildCurrent(view, state, context);
-        return {};
+        toggleFollow(view, state, context);
+        break;
       case Command::visual:
-        view.mode = Mode::visual;
-        window.anchor = window.cursor;
-        window.picked.clear();
-        ++view.revision;
-        return {};
+        startVisual(view);
+        break;
       case Command::search:
-        view.prefill.assign(window.filter.view());
-        view.mode = Mode::search;
-        ++view.revision;
-        return {};
-      case Command::next_match:
-      case Command::previous_match:
-        moveBy(window, state, context, stroke.command == Command::next_match ? count : -count);
-        return {};
+        startSearch(view);
+        break;
       case Command::command_line:
-        view.prefill.clear();
-        view.mode = Mode::command;
-        ++view.revision;
-        return {};
+        startCommand(view, {});
+        break;
       case Command::help:
-        view.mode = Mode::help;
-        ++view.revision;
-        return {};
+        showHelp(view);
+        break;
       case Command::quit:
         return quit(view, false, true);
       case Command::escape:
-        if (view.mode == Mode::visual || !window.picked.empty()) {
-          leaveVisual(view);
-        } else if (!window.filter.empty()) {
-          window.filter.clear();
-          rebuildCurrent(view, state, context);
-        }
-
-        ++view.revision;
-        return {};
+        escape(view, state, context);
+        break;
       }
 
       return {};
     }
 
-    Action run(View& view, State& state, const Context& context, const Stroke& stroke) {
-      // The commands `.` repeats: the ones that change something or hand something over.
-      switch (stroke.command) {
-      case Command::cut:
-      case Command::paste:
-      case Command::open:
-      case Command::mention:
-      case Command::stage:
-      case Command::unstage:
-      case Command::toggle_diff:
-      case Command::enter:
+    // The commands `.` repeats: the ones that change something or hand something over.
+    constexpr bool repeats(Command command) noexcept {
+      constexpr ds::Array<Command, 8> repeated{Command::cut, Command::paste, Command::open, Command::mention, Command::stage, Command::unstage, Command::toggle_diff, Command::enter};
+
+      return std::ranges::contains(repeated, command);
+    }
+
+    // The commands a count gives that many rows to, from the selected one.
+    constexpr bool takesRows(Command command) noexcept {
+      constexpr ds::Array<Command, 7> counted{Command::cut, Command::yank, Command::yank_relative, Command::yank_name, Command::stage, Command::unstage, Command::discard};
+
+      return std::ranges::contains(counted, command);
+    }
+
+    // Runs a command that is not `.`, which `.` then repeats if it is one of those.
+    Action dispatch(View& view, State& state, const Context& context, const Stroke& stroke) {
+      if (repeats(stroke.command)) {
         view.last = stroke.command;
-        break;
-      default:
-        break;
       }
 
-      // A count before a command that acts on rows takes that many, from the selected one.
-      switch (stroke.command) {
-      case Command::cut:
-      case Command::yank:
-      case Command::yank_relative:
-      case Command::yank_name:
-      case Command::stage:
-      case Command::unstage:
-      case Command::discard:
+      if (takesRows(stroke.command)) {
         windowAt(view.windows, view.current).reach = stroke.counted ? std::max<std::uint32_t>(stroke.count, 1) : 1;
-        break;
-      default:
-        break;
       }
 
       const auto action = runCommand(view, state, context, stroke);
@@ -1868,6 +2121,19 @@ namespace telar::gui::features::explorer {
       }
 
       return action;
+    }
+
+    Action run(View& view, State& state, const Context& context, const Stroke& stroke) {
+      if (stroke.command != Command::repeat) {
+        return dispatch(view, state, context, stroke);
+      }
+
+      // `.`: the last command it repeats, with the count typed now. That one is never `.`.
+      if (view.last == Command::none) {
+        return {};
+      }
+
+      return dispatch(view, state, context, {.command = view.last, .count = stroke.count, .counted = stroke.counted});
     }
 
     // What follows the command's name on the command line.
@@ -1882,84 +2148,172 @@ namespace telar::gui::features::explorer {
       return line;
     }
 
-    Action command(View& view, State& state, const Context& context, std::string_view line) {
-      auto& window = windowAt(view.windows, view.current);
+    // A line of the command line: the name of the command, and what follows it.
+    struct Typed {
+      std::string_view name;
+      std::string_view argument;
+    };
 
-      line.remove_prefix(std::min(line.find_first_not_of(" :"), line.size()));
-      while (line.ends_with(' ')) {
-        line.remove_suffix(1);
-      }
+    // What a command that changed what shows ends with.
+    Action changed(View& view) noexcept {
+      ++view.revision;
+      return {};
+    }
 
-      const auto name = line.substr(0, line.find(' '));
-      const auto argument = argumentOf(line);
-
-      if (name.empty()) {
-        return {};
-      }
-
+    // The commands that take no argument and say themselves what they changed: `:w` and `:q`
+    // with their marks, `:only` and `:pin`. None for another name.
+    ds::Option<Action> plainCommand(View& view, std::string_view name) {
       if (name == "w" || name == "write" || name == "wa") {
         write(view, false);
-      } else if (name == "w!") {
+        return changed(view);
+      }
+
+      if (name == "w!") {
         write(view, true);
-      } else if (name == "q" || name == "quit" || name == "close") {
+        return changed(view);
+      }
+
+      if (name == "q" || name == "quit" || name == "close") {
         return quit(view, false, false);
-      } else if (name == "q!") {
+      }
+
+      if (name == "q!") {
         return quit(view, true, true);
-      } else if (name == "qa") {
+      }
+
+      if (name == "qa") {
         return quit(view, false, true);
-      } else if (name == "e!" && argument.empty()) {
+      }
+
+      if (name == "only") {
+        onlyWindow(view);
+        return Action{};
+      }
+
+      if (name == "pin") {
+        togglePin(view);
+        return Action{};
+      }
+
+      return ds::none;
+    }
+
+    // `:e!`, and `:e`, `:cd`, `:vs` and `:sp`, which take this window or a new one to a path; none
+    // for another name.
+    ds::Option<Action> goCommand(View& view, State& state, const Context& context, const Typed& typed) {
+      const auto name = typed.name;
+
+      if (name == "e!" && typed.argument.empty()) {
         view.edits.clear();
         view.history.clear();
         invalidate(state, {});
         say(view, "changes discarded · reading again");
         rebuildCurrent(view, state, context);
-      } else if (name == "e" || name == "edit" || name == "cd" || name == "vs" || name == "vsplit" || name == "sp" || name == "split") {
-        if (name != "e" && name != "edit" && name != "cd") {
-          split(view, state, context, name.starts_with('v'));
-        }
+        return changed(view);
+      }
 
-        if (!argument.empty()) {
-          Text target{view.memory};
+      const bool splits = name == "vs" || name == "vsplit" || name == "sp" || name == "split";
+      if (!splits && name != "e" && name != "edit" && name != "cd") {
+        return ds::none;
+      }
 
-          resolve(target, argument, windowAt(view.windows, view.current), context);
-          go(view, target.view(), {}, true);
-          rebuildCurrent(view, state, context);
-        }
-      } else if (name == "only") {
-        return runCommand(view, state, context, {.command = Command::only_window});
-      } else if (name == "commit") {
-        if (argument.empty()) {
+      if (splits) {
+        split(view, state, context, name.starts_with('v'));
+      }
+
+      if (!typed.argument.empty()) {
+        Text target{view.memory};
+
+        resolve(target, typed.argument, windowAt(view.windows, view.current), context);
+        go(view, {.root = target.view()});
+        rebuildCurrent(view, state, context);
+      }
+
+      return changed(view);
+    }
+
+    constexpr ds::Option<Lens> lensNamed(std::string_view name) noexcept {
+      if (name == "tree") {
+        return Lens::tree;
+      }
+
+      if (name == "changes") {
+        return Lens::changes;
+      }
+
+      if (name == "panes") {
+        return Lens::panes;
+      }
+
+      return ds::none;
+    }
+
+    void listMarks(View& view) {
+      Text listed{view.memory};
+
+      for (const auto& mark : view.marks) {
+        ds::formatTo(listed, "{}'{} {}", listed.empty() ? "" : " · ", mark.letter.view(), mark.root.view());
+      }
+
+      say(view, listed.empty() ? std::string_view{"No marks set"} : listed.view());
+    }
+
+    // The commands that change what the windows show; false for another name.
+    bool showCommand(View& view, const State& state, const Context& context, std::string_view name) {
+      if (const auto lens = lensNamed(name)) {
+        setLens(view, state, context, *lens);
+      } else if (name == "follow") {
+        auto& window = windowAt(view.windows, view.current);
+
+        window.follow = true;
+        followPane(window, context);
+        rebuildCurrent(view, state, context);
+      } else if (name == "marks") {
+        listMarks(view);
+      } else if (name == "help") {
+        view.mode = Mode::help;
+      } else {
+        return false;
+      }
+
+      return true;
+    }
+
+    Action command(View& view, State& state, const Context& context, std::string_view line) {
+      line.remove_prefix(std::min(line.find_first_not_of(" :"), line.size()));
+      while (line.ends_with(' ')) {
+        line.remove_suffix(1);
+      }
+
+      const Typed typed{.name = line.substr(0, line.find(' ')), .argument = argumentOf(line)};
+
+      if (typed.name.empty()) {
+        return {};
+      }
+
+      if (const auto done = plainCommand(view, typed.name)) {
+        return *done;
+      }
+
+      if (const auto done = goCommand(view, state, context, typed)) {
+        return *done;
+      }
+
+      if (typed.name == "commit") {
+        if (typed.argument.empty()) {
           say(view, "A commit needs a message: :commit Describe the change", Tone::error);
           return {};
         }
 
-        view.text.assign(argument);
+        view.text.assign(typed.argument);
         return {.kind = ActionKind::commit};
-      } else if (name == "tree" || name == "changes" || name == "panes") {
-        setLens(view, state, context, name == "tree" ? Lens::tree : name == "changes" ? Lens::changes
-                                                                                      : Lens::panes);
-      } else if (name == "follow") {
-        window.follow = true;
-        followPane(window, context);
-        rebuildCurrent(view, state, context);
-      } else if (name == "pin") {
-        return runCommand(view, state, context, {.command = Command::pin});
-      } else if (name == "marks") {
-        Text listed{view.memory};
-
-        for (const auto& mark : view.marks) {
-          ds::formatTo(listed, "{}'{} {}", listed.empty() ? "" : " · ", mark.letter.view(), mark.root.view());
-        }
-
-        say(view, listed.empty() ? std::string_view{"No marks set"} : listed.view());
-      } else if (name == "help") {
-        view.mode = Mode::help;
-      } else {
-        report(view, Tone::error, "E492: Not an editor command: {}", name);
       }
 
-      ++view.revision;
-      return {};
+      if (!showCommand(view, state, context, typed.name)) {
+        report(view, Tone::error, "E492: Not an editor command: {}", typed.name);
+      }
+
+      return changed(view);
     }
 
   }
@@ -2017,80 +2371,99 @@ namespace telar::gui::features::explorer {
     ++view.revision;
   }
 
-  tbc::val_a<ds::Option<Need>> need(tbc::ref_a<View> view, const State& state, std::uint64_t machine) {
-    const auto lacking = [&](NeedKind kind, std::string_view path) -> ds::Option<Need> {
+  namespace {
+
+    // `kind` of `path`, when the cache of the machine lacks it and has not asked for it.
+    tbc::val_a<ds::Option<Need>> lacking(const State& state, NeedKind kind, tbc::val_a<std::string_view> path) {
       const Need wanted{.kind = kind, .path = path};
       if (path.starts_with('/') && lacks(state, wanted)) {
         return wanted;
       }
 
       return ds::none;
-    };
+    }
 
-    // What each window lists first; then what git says, the preview, and the sizes last.
-    for (const auto& window : view.windows) {
-      if (window->machine != machine || window->lens == Lens::panes) {
-        continue;
-      }
-
-      if (auto wanted = lacking(NeedKind::listing, window->root.view())) {
+    // The listing, or the sizes, that the tree of a window lacks: of its root first, then of each
+    // directory it unfolds below it.
+    tbc::val_a<ds::Option<Need>> lackingBelow(tbc::ref_a<Window> window, const State& state, NeedKind kind) {
+      if (auto wanted = lacking(state, kind, window.root.view())) {
         return wanted;
       }
 
-      for (const auto& path : window->expanded) {
-        if (within(path.view(), window->root.view())) {
-          if (auto wanted = lacking(NeedKind::listing, path.view())) {
+      for (const auto& path : window.expanded) {
+        if (!within(path.view(), window.root.view())) {
+          continue;
+        }
+
+        if (auto wanted = lacking(state, kind, path.view())) {
+          return wanted;
+        }
+      }
+
+      return ds::none;
+    }
+
+    // The listings the windows of `machine` lack, or with `sizes` the sizes their trees do.
+    tbc::val_a<ds::Option<Need>> treeNeed(tbc::ref_a<View> view, const State& state, std::uint64_t machine, bool sizes) {
+      for (const auto& window : view.windows) {
+        // Every lens but the panes' reads the directories; the tree alone shows their sizes.
+        const bool reads = sizes ? window->lens == Lens::tree : window->lens != Lens::panes;
+        if (window->machine != machine || !reads) {
+          continue;
+        }
+
+        if (auto wanted = lackingBelow(*window, state, sizes ? NeedKind::sizes : NeedKind::listing)) {
+          return wanted;
+        }
+      }
+
+      return ds::none;
+    }
+
+    // The previews the windows of `machine` lack: of each selection, and of each diff unfolded.
+    tbc::val_a<ds::Option<Need>> previewNeed(tbc::ref_a<View> view, const State& state, std::uint64_t machine) {
+      for (const auto& window : view.windows) {
+        if (window->machine != machine) {
+          continue;
+        }
+
+        if (window->lens != Lens::panes && !window->rows.empty() && window->rows[window->cursor].kind != RowKind::added) {
+          if (auto wanted = lacking(state, NeedKind::inspection, window->selected.view())) {
+            return wanted;
+          }
+        }
+
+        for (const auto& path : window->diffs) {
+          if (auto wanted = lacking(state, NeedKind::inspection, path.view())) {
             return wanted;
           }
         }
       }
+
+      return ds::none;
+    }
+
+  }
+
+  tbc::val_a<ds::Option<Need>> need(tbc::ref_a<View> view, const State& state, std::uint64_t machine) {
+    // What each window lists first; then what git says, the preview, and the sizes last.
+    if (auto wanted = treeNeed(view, state, machine, false)) {
+      return wanted;
     }
 
     // What git says is asked for the window that takes the keys alone. One answer is kept: two
     // windows in two repositories would ask for theirs in turns, without end.
     if (view.current < view.windows.size() && view.windows[view.current]->machine == machine) {
-      if (auto wanted = lacking(NeedKind::changes, view.windows[view.current]->root.view())) {
+      if (auto wanted = lacking(state, NeedKind::changes, view.windows[view.current]->root.view())) {
         return wanted;
       }
     }
 
-    for (const auto& window : view.windows) {
-      if (window->machine != machine) {
-        continue;
-      }
-
-      if (window->lens != Lens::panes && !window->rows.empty() && window->rows[window->cursor].kind != RowKind::added) {
-        if (auto wanted = lacking(NeedKind::inspection, window->selected.view())) {
-          return wanted;
-        }
-      }
-
-      for (const auto& path : window->diffs) {
-        if (auto wanted = lacking(NeedKind::inspection, path.view())) {
-          return wanted;
-        }
-      }
+    if (auto wanted = previewNeed(view, state, machine)) {
+      return wanted;
     }
 
-    for (const auto& window : view.windows) {
-      if (window->machine != machine || window->lens != Lens::tree) {
-        continue;
-      }
-
-      if (auto wanted = lacking(NeedKind::sizes, window->root.view())) {
-        return wanted;
-      }
-
-      for (const auto& path : window->expanded) {
-        if (within(path.view(), window->root.view())) {
-          if (auto wanted = lacking(NeedKind::sizes, path.view())) {
-            return wanted;
-          }
-        }
-      }
-    }
-
-    return ds::none;
+    return treeNeed(view, state, machine, true);
   }
 
   Action press(View& view, State& state, const Context& context, KeyChord chord) {
@@ -2213,7 +2586,10 @@ namespace telar::gui::features::explorer {
     rebuildCurrent(view, state, context);
   }
 
-  void select(View& view, const State& state, const Context& context, std::size_t window, std::size_t row, bool extend, bool toggle) {
+  void select(View& view, const State& state, const Context& context, const Pick& pick) {
+    const auto window = pick.window;
+    const auto row = pick.row;
+
     if (window >= view.windows.size() || view.mode == Mode::plan || view.mode == Mode::help) {
       return;
     }
@@ -2226,12 +2602,12 @@ namespace telar::gui::features::explorer {
       return;
     }
 
-    if (extend) {
+    if (pick.extend) {
       // From the selection up to the row, as a visual selection.
       chosen_window.anchor = chosen_window.anchor.valueOr(chosen_window.cursor);
       chosen_window.picked.clear();
       view.mode = Mode::visual;
-    } else if (toggle) {
+    } else if (pick.toggle) {
       const auto picked = static_cast<std::uint32_t>(row);
 
       if (chosen_window.picked.empty()) {
@@ -2253,42 +2629,42 @@ namespace telar::gui::features::explorer {
     ++view.revision;
   }
 
-  Action activate(View& view, State& state, const Context& context, std::size_t window, std::size_t row) {
-    select(view, state, context, window, row, false, false);
-    if (window >= view.windows.size() || row >= windowAt(view.windows, view.current).rows.size() || view.mode != Mode::normal) {
+  Action activate(View& view, State& state, const Context& context, const Pick& pick) {
+    select(view, state, context, {.window = pick.window, .row = pick.row});
+    if (pick.window >= view.windows.size() || pick.row >= windowAt(view.windows, view.current).rows.size() || view.mode != Mode::normal) {
       return {};
     }
 
     return run(view, state, context, {.command = Command::enter});
   }
 
-  void toggle(View& view, const State& state, const Context& context, std::size_t window, std::size_t row) {
-    select(view, state, context, window, row, false, false);
-    if (window < view.windows.size() && row < windowAt(view.windows, view.current).rows.size()) {
-      setExpanded(view, state, context, row, !windowAt(view.windows, view.current).rows[row].expanded);
+  void toggle(View& view, const State& state, const Context& context, const Pick& pick) {
+    select(view, state, context, {.window = pick.window, .row = pick.row});
+    if (pick.window < view.windows.size() && pick.row < windowAt(view.windows, view.current).rows.size()) {
+      setExpanded(view, state, context, pick.row, !windowAt(view.windows, view.current).rows[pick.row].expanded);
     }
   }
 
-  void resize(View& view, std::size_t window, std::uint16_t rows) noexcept {
-    if (window < view.windows.size()) {
-      auto& resized = view.windows.atMut(window).getMut();
+  void resize(View& view, const WindowRows& shown) noexcept {
+    if (shown.window < view.windows.size()) {
+      auto& resized = view.windows.atMut(shown.window).getMut();
 
-      resized.page = std::max<std::uint16_t>(1, rows);
+      resized.page = static_cast<std::uint16_t>(std::clamp<std::int64_t>(shown.count, 1, std::numeric_limits<std::uint16_t>::max()));
       reveal(resized);
       ++view.revision;
     }
   }
 
-  void scroll(View& view, std::size_t window, std::int64_t rows) noexcept {
-    if (window >= view.windows.size()) {
+  void scroll(View& view, const WindowRows& moved) noexcept {
+    if (moved.window >= view.windows.size()) {
       return;
     }
 
-    auto& scrolled = view.windows.atMut(window).getMut();
+    auto& scrolled = view.windows.atMut(moved.window).getMut();
     const auto page = std::max<std::size_t>(1, scrolled.page);
     const auto last = static_cast<std::int64_t>(scrolled.rows.size() > page ? scrolled.rows.size() - page : 0);
 
-    scrolled.top = static_cast<std::size_t>(std::clamp<std::int64_t>(static_cast<std::int64_t>(scrolled.top) + rows, 0, last));
+    scrolled.top = static_cast<std::size_t>(std::clamp<std::int64_t>(static_cast<std::int64_t>(scrolled.top) + moved.count, 0, last));
     ++view.revision;
   }
 

@@ -66,7 +66,7 @@ namespace telar::runtime {
       std::string_view name;
     };
 
-    constexpr Place placeOf(std::string_view path) noexcept {
+    constexpr Place placeOf(std::string_view path) {
       const auto slash = path.find_last_of('/');
       if (slash == 0) {
         return {.directory = "/", .name = path.substr(1)};
@@ -75,9 +75,91 @@ namespace telar::runtime {
       return {.directory = path.substr(0, slash), .name = path.substr(slash + 1)};
     }
 
+    // What was read of a file's head: whether it is no text, and whether the file is longer.
+    struct Head {
+      bool binary = false;
+      bool truncated = false;
+    };
+
+    // Reads the head of the file at `path`, `size` bytes long, into `head`: the text a preview
+    // shows, cut at a whole character, or nothing of a file that is no text.
+    Head readHead(ds::Vec<char, ConcurrentMemory>& head, const char* path, std::uint64_t size) {
+      const FileDescriptor file{::open(path, combineFlags(O_RDONLY, O_NOFOLLOW, O_NONBLOCK, O_CLOEXEC))}; // NOLINT(cppcoreguidelines-pro-type-vararg): open's C signature is variadic
+
+      head.resize(FileLimits::text_bytes);
+
+      const auto read = file ? ::read(file.get(), head.dataMut(), head.size()) : 0;
+
+      head.truncate(read < 0 ? 0 : static_cast<std::size_t>(read));
+
+      const bool truncated = size > head.size();
+      // A character cut at the end of what is read is no reason to call the file binary.
+      const auto text = runtime::utf8Prefix(std::string_view{head.data(), head.size()}, truncated ? head.size() - 1 : head.size());
+      const bool binary = text.contains('\0') || !valid(text);
+
+      head.truncate(binary ? 0 : text.size());
+      return {.binary = binary, .truncated = truncated};
+    }
+
+    // The last commit that changed a file.
+    struct Commit {
+      ds::Array<char, FileLimits::commit_bytes> hash{};
+      std::size_t size = 0;
+      std::uint64_t seconds = 0;
+    };
+
+    // Asks `git` for the last commit that changed `name`, and keeps its subject in `subject`.
+    Commit lastCommit(GitRepository& git, std::string_view name, ds::String<ConcurrentMemory>& subject) {
+      Commit commit;
+      const auto logged = git.run({"log", "-1", "--format=%H%x09%ct%x09%s", "--", name});
+      const auto first = logged.find('\t');
+      const auto second = first == std::string_view::npos ? first : logged.find('\t', first + 1);
+
+      if (second != std::string_view::npos && first == commit.hash.size()) {
+        std::ranges::copy(logged.substr(0, first), commit.hash.viewMut().begin());
+        commit.size = first;
+        commit.seconds = parseExact<std::uint64_t>(logged.substr(first + 1, second - first - 1)).valueOr(0);
+        subject.assign(runtime::utf8Prefix(logged.substr(second + 1), FileLimits::subject_bytes));
+      }
+
+      return commit;
+    }
+
+    // Keeps in `diff` what `git` says `name` differs from its commit by; true when it is longer
+    // than a preview carries.
+    bool readDiff(GitRepository& git, std::string_view name, Clock::time_point deadline, ds::Vec<char, ConcurrentMemory>& diff) {
+      bool truncated = false;
+
+      static_cast<void>(git.stream({"diff", "HEAD", "--no-color", "--no-ext-diff", "--", name}, [&](std::span<const Byte> bytes) {
+        const auto room = FileLimits::diff_bytes - std::min(diff.size(), FileLimits::diff_bytes);
+        const auto taken = bytes.first(std::min(room, bytes.size()));
+        const std::string_view text{reinterpret_cast<const char*>(taken.data()), taken.size()}; // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast): char may alias the bytes, and no cast-free view reads them as text
+
+        diff.extend(std::span<const char>{text});
+        truncated = taken.size() < bytes.size();
+        return !truncated;
+      },
+          deadline));
+
+      return truncated;
+    }
+
+    // The hunks of a diff, without the header that names the file: whole lines, where the diff
+    // was cut at what a preview carries.
+    std::string_view hunksOf(std::string_view diff) {
+      const bool full = diff.size() == FileLimits::diff_bytes;
+      const auto hunk = diff.starts_with("@@") ? 0 : diff.find("\n@@");
+      if (hunk == std::string_view::npos) {
+        return {};
+      }
+
+      diff = diff.substr(hunk == 0 ? 0 : hunk + 1);
+      return full ? diff.substr(0, diff.find_last_of('\n') + 1) : diff;
+    }
+
   }
 
-  ds::Option<StatusRecord> StatusRecord::parse(std::string_view record) noexcept {
+  ds::Option<StatusRecord> StatusRecord::parse(std::string_view record) {
     // The records of a changed path and of one in conflict: their letters, then six or eight
     // fields, then the path.
     constexpr std::size_t ordinary_fields = 8;
@@ -124,13 +206,14 @@ namespace telar::runtime {
         head_(memory),
         diff_(memory) {}
 
-  std::string_view RepositoryReader::pathOf(const Change& change) const noexcept {
+  std::string_view RepositoryReader::pathOf(const Change& change) const {
     return std::string_view{text_.data(), text_.size()}.substr(change.path, change.path_size);
   }
 
   template <typename Record>
-  bool RepositoryReader::feed(std::span<const Byte> bytes, Record&& record) {
-    for (const auto byte : bytes) {
+  bool RepositoryReader::feed(std::span<const Byte> bytes, const Record& record) {
+    // Every byte is taken unless a record asks for no more.
+    return std::ranges::all_of(bytes, [&](Byte byte) {
       const auto character = static_cast<char>(byte);
       if (character != '\0') {
         // A record longer than any path is passed over whole.
@@ -140,19 +223,15 @@ namespace telar::runtime {
           oversized_ = true;
         }
 
-        continue;
+        return true;
       }
 
       const bool more = oversized_ || record(std::string_view{record_.data(), record_.size()});
 
       record_.clear();
       oversized_ = false;
-      if (!more) {
-        return false;
-      }
-    }
-
-    return true;
+      return more;
+    });
   }
 
   bool RepositoryReader::keep(std::string_view record) {
@@ -319,10 +398,9 @@ namespace telar::runtime {
     }
 
     const auto kind = kindOf(status.st_mode);
+    const auto size = static_cast<std::uint64_t>(std::max<off_t>(0, status.st_size));
     ds::Array<char, FileLimits::path_bytes> target{};
     std::size_t target_size = 0;
-    bool binary = false;
-    bool truncated = false;
 
     if (kind == FileKind::link) {
       const auto read = ::readlink(path.data(), target.viewMut().data(), target.size());
@@ -331,26 +409,11 @@ namespace telar::runtime {
     }
 
     head_.clear();
-    if (kind == FileKind::file) {
-      const FileDescriptor file{::open(path.data(), combineFlags(O_RDONLY, O_NOFOLLOW, O_NONBLOCK, O_CLOEXEC))}; // NOLINT(cppcoreguidelines-pro-type-vararg): open's C signature is variadic
 
-      // A character cut at the end of what is read is no reason to call the file binary.
-      head_.resize(FileLimits::text_bytes);
-      const auto read = file ? ::read(file.get(), head_.dataMut(), head_.size()) : 0;
-
-      head_.truncate(read < 0 ? 0 : static_cast<std::size_t>(read));
-      truncated = static_cast<std::uint64_t>(std::max<off_t>(0, status.st_size)) > head_.size();
-
-      const auto text = runtime::utf8Prefix(std::string_view{head_.data(), head_.size()}, truncated ? head_.size() - 1 : head_.size());
-
-      binary = text.contains('\0') || !valid(text);
-      head_.truncate(binary ? 0 : text.size());
-    }
+    auto head = kind == FileKind::file ? readHead(head_, path.data(), size) : Head{};
 
     // The last commit that changed it, and the diff of what is not committed.
-    ds::Array<char, FileLimits::commit_bytes> commit{};
-    std::size_t commit_size = 0;
-    std::uint64_t committed = 0;
+    Commit commit;
     ds::String<ConcurrentMemory> subject{memory_};
 
     diff_.clear();
@@ -360,57 +423,30 @@ namespace telar::runtime {
 
     try {
       GitRepository git{memory_, place.directory, deadline, cancelled};
-      const auto logged = git.run({"log", "-1", "--format=%H%x09%ct%x09%s", "--", place.name});
-      const auto first = logged.find('\t');
-      const auto second = first == std::string_view::npos ? first : logged.find('\t', first + 1);
 
-      if (second != std::string_view::npos && first == FileLimits::commit_bytes) {
-        std::ranges::copy(logged.substr(0, first), commit.viewMut().begin());
-        commit_size = first;
-        committed = parseExact<std::uint64_t>(logged.substr(first + 1, second - first - 1)).valueOr(0);
-        subject.assign(runtime::utf8Prefix(logged.substr(second + 1), FileLimits::subject_bytes));
-      }
-
+      commit = lastCommit(git, place.name, subject);
       if (kind == FileKind::file) {
-        static_cast<void>(git.stream({"diff", "HEAD", "--no-color", "--no-ext-diff", "--", place.name}, [&](std::span<const Byte> bytes) {
-          const auto room = FileLimits::diff_bytes - std::min(diff_.size(), FileLimits::diff_bytes);
-          const auto taken = std::min(room, bytes.size());
-
-          diff_.extend(std::span<const char>{reinterpret_cast<const char*>(bytes.data()), taken}); // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast): the program's bytes are the diff's text
-          if (taken < bytes.size()) {
-            truncated = true;
-            return false;
-          }
-
-          return true;
-        },
-            deadline));
+        head.truncated = readDiff(git, place.name, deadline, diff_) || head.truncated;
       }
     } catch (const SystemError&) {  // NOLINT(bugprone-empty-catch): without git a preview shows the file alone
     } catch (const RequestError&) { // NOLINT(bugprone-empty-catch): outside a repository a preview shows the file alone
     }
 
-    // Its hunks, without the header that names the file; whole lines, and text a client can show.
-    auto diff = std::string_view{diff_.data(), diff_.size()};
-    const auto hunk = diff.starts_with("@@") ? 0 : diff.find("\n@@");
-
-    diff = hunk == std::string_view::npos ? std::string_view{} : diff.substr(hunk == 0 ? 0 : hunk + 1);
-    if (diff_.size() == FileLimits::diff_bytes) {
-      diff = diff.substr(0, diff.find_last_of('\n') + 1);
-    }
+    const auto diff = hunksOf(std::string_view{diff_.data(), diff_.size()});
+    const std::string_view link{target.data(), target_size};
 
     reply.send(FileInspection{
         .request_id = request.request_id,
         .path = request.path,
         .kind = kind,
-        .size = static_cast<std::uint64_t>(std::max<off_t>(0, status.st_size)),
+        .size = size,
         .identity = identityOf(status),
-        .target = std::string_view{target.data(), target_size}.contains('\0') ? std::string_view{} : std::string_view{target.data(), target_size},
-        .binary = binary,
-        .truncated = truncated,
+        .target = link.contains('\0') ? std::string_view{} : link,
+        .binary = head.binary,
+        .truncated = head.truncated,
         .text = std::string_view{head_.data(), head_.size()},
-        .commit = std::string_view{commit.data(), commit_size},
-        .committed_seconds = committed,
+        .commit = std::string_view{commit.hash.data(), commit.size},
+        .committed_seconds = commit.seconds,
         .subject = valid(subject.view()) ? subject.view() : std::string_view{},
         .diff = valid(diff) ? diff : std::string_view{},
     });

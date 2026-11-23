@@ -23,4 +23,6 @@ telar_add_test(traffic-interface-probe SOURCES traffic_interface_probe.cpp LIBRA
 telar_add_test(nvim-embed-probe PROBE SOURCES nvim_embed_probe.cpp LIBRARIES runtime-nvim runtime-tools-support)
 # What decoding a redraw and writing a client its frame cost, without a Neovim.
 telar_add_test(nvim-redraw-bench PROBE SOURCES nvim_redraw_bench.cpp LIBRARIES runtime-nvim runtime-tools-support)
+# What the explorer's requests cost the file service, on directories and a repository it makes.
+telar_add_test(files-bench PROBE SOURCES files_bench.cpp LIBRARIES runtime-files runtime-tools-support)
 telar_add_probes(runtime-probes)

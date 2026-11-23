@@ -1558,12 +1558,21 @@ return {api_version = 2, client = {
       auto* explorer = client_->explorer();
       const auto shots = qEnvironmentVariable("TELAR_EXPLORER_SHOTS");
       const auto original_size = window_->size();
+      // The machine has the name its user gave it, whatever the host that runs the test is called.
+      const auto profiles_path = directory_.filePath(QStringLiteral("machines.json"));
+
+      writeTestFile(profiles_path, R"({"version":1,"local_label":"macbook","machines":[]})");
+      QVERIFY(QFile::setPermissions(profiles_path, QFile::ReadOwner | QFile::WriteOwner));
+      client_->roster()->openProfiles(profiles_path);
+
       const auto restore = qScopeGuard([&] {
         if (explorer->showing()) {
           explorer->close();
         }
 
         window_->resize(original_size);
+        static_cast<void>(QFile::remove(profiles_path));
+        client_->roster()->openProfiles(profiles_path);
       });
       const auto shoot = [&](const QString& name) {
         if (shots.isEmpty()) {
@@ -1664,6 +1673,8 @@ return {api_version = 2, client = {
       QVERIFY(named(QStringLiteral("out")).isEmpty());
       QCOMPARE(window().value(QStringLiteral("ignoredEntries")).toInt(), 1);
       QCOMPARE(window().value(QStringLiteral("branch")).toString(), QStringLiteral("lifetime-speed"));
+      QCOMPARE(window().value(QStringLiteral("machine")).toString(), QStringLiteral("macbook"));
+      QVERIFY(window().value(QStringLiteral("local")).toBool());
       QTRY_COMPARE_WITH_TIMEOUT(named(QStringLiteral("docs")).value(QStringLiteral("below")).toInt(), 3, runtime_wait_ms);
       // The runtime measures each directory after it listed them.
       QTRY_VERIFY_WITH_TIMEOUT(named(QStringLiteral("docs")).value(QStringLiteral("measured")).toBool(), runtime_wait_ms);

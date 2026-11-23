@@ -33,29 +33,24 @@ namespace telar::runtime {
       throw RequestError{FailureCode::invalid_request, "An empty request names no file"};
     }
 
-    switch (static_cast<ClientTag>(payload.front())) {
-    case ClientTag::list_directory:
+    // The tag says which of the three takes the request.
+    const auto tag = static_cast<ClientTag>(payload.front());
+
+    if (tag == ClientTag::list_directory) {
       directory_.list(Codec::decode<ListDirectory>(payload, storage), reply);
-      return;
-    case ClientTag::measure_directory:
+    } else if (tag == ClientTag::measure_directory) {
       directory_.measure(Codec::decode<MeasureDirectory>(payload, storage), cancelled, reply);
-      return;
-    case ClientTag::query_changes:
+    } else if (tag == ClientTag::query_changes) {
       repository_.changes(Codec::decode<QueryChanges>(payload, storage), cancelled, reply);
-      return;
-    case ClientTag::inspect_file:
+    } else if (tag == ClientTag::inspect_file) {
       repository_.inspect(Codec::decode<InspectFile>(payload, storage), cancelled, reply);
-      return;
-    case ClientTag::change_files:
+    } else if (tag == ClientTag::change_files) {
       changer_.change(Codec::decode<ChangeFiles>(payload, storage), cancelled, reply);
-      return;
-    case ClientTag::undo_file_changes:
+    } else if (tag == ClientTag::undo_file_changes) {
       changer_.undo(Codec::decode<UndoFileChanges>(payload, storage), reply);
-      return;
-    case ClientTag::commit_changes:
+    } else if (tag == ClientTag::commit_changes) {
       changer_.commit(Codec::decode<CommitChanges>(payload, storage), cancelled, reply);
-      return;
-    default:
+    } else {
       throw RequestError{FailureCode::invalid_request, "Not a request on files"};
     }
   }

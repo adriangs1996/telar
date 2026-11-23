@@ -20,6 +20,7 @@ export namespace telar::gui::application::explorer {
   using features::explorer::Lens;
   using features::explorer::LensLook;
   using features::explorer::Mode;
+  using features::explorer::Pick;
   using features::explorer::PlanStep;
   using features::explorer::PlanVerb;
   using features::explorer::PreviewLook;
@@ -30,10 +31,12 @@ export namespace telar::gui::application::explorer {
   using features::explorer::Tone;
   using features::explorer::View;
   using features::explorer::Window;
+  using features::explorer::WindowRows;
 
   using features::explorer::idle_message;
   using features::explorer::lens_count;
   using features::explorer::modeText;
+  using features::explorer::toneOf;
   using features::explorer::verbText;
 
   using runtime::config::KeyChord;
@@ -76,13 +79,13 @@ export namespace telar::gui::application::explorer {
   void cancel(Session& session, View& view, const Host& host);
 
   // The pointer chose, asked for or unfolded a row of a window.
-  void select(Session& session, View& view, const Host& host, std::size_t window, std::size_t row, bool extend, bool toggle);
-  Effect activate(Session& session, View& view, const Host& host, std::size_t window, std::size_t row);
-  void toggle(Session& session, View& view, const Host& host, std::size_t window, std::size_t row);
+  void select(Session& session, View& view, const Host& host, const Pick& pick);
+  Effect activate(Session& session, View& view, const Host& host, const Pick& pick);
+  void toggle(Session& session, View& view, const Host& host, const Pick& pick);
 
   // A window shows `rows` rows; and the wheel moves what it shows by `rows` rows.
-  void resize(View& view, std::size_t window, std::uint16_t rows) noexcept;
-  void scroll(View& view, std::size_t window, std::int64_t rows) noexcept;
+  void resize(View& view, const WindowRows& shown) noexcept;
+  void scroll(View& view, const WindowRows& moved) noexcept;
 
   // Brings the windows of the session's machine up to date with what its runtime answered and
   // with the focused pane, and asks the runtime for what they still lack. True when what the
@@ -90,7 +93,7 @@ export namespace telar::gui::application::explorer {
   bool refresh(Session& session, View& view, const Host& host);
 
   // What ui reads to draw a window, a row, the hints and the preview.
-  [[nodiscard]] RowLook look(const Session& session, const View& view, const Host& host, std::size_t window, std::size_t row);
+  [[nodiscard]] RowLook look(const Session& session, const View& view, const Host& host, const Pick& pick);
   [[nodiscard]] HeaderLook header(const Session& session, const View& view, const Host& host, std::size_t window);
   [[nodiscard]] StatusLook status(const Session& session, const View& view, const Host& host, std::size_t window);
   [[nodiscard]] Hints hints(const Session& session, const View& view, const Host& host);

@@ -96,6 +96,51 @@ namespace {
     check(past.names.empty() && past.skip == 10 && past.total == 10, "past the end there is nothing, and the total still says how many there are");
   }
 
+  void testTheNextPageGoesOnWithWhatTheFirstRead() {
+    telar::testing::TestMemory adapter;
+    ConcurrentMemory& memory = adapter;
+    TemporaryDirectory directory{"/tmp/telar-files-XXXXXX"};
+    const std::string root{directory.path()};
+    DirectoryReader reader{memory};
+    const auto page = [&](std::uint32_t skip) {
+      EncodedReply reply{memory};
+      std::vector<Byte> scratch(64 * 1024);
+      DecodeStorage storage{scratch};
+
+      reader.list(ListDirectory{.request_id = 9, .path = root, .skip = skip, .limit = 2}, reply);
+
+      const auto listing = Codec::decode<DirectoryContents>(reply.payload(), storage);
+      Listed listed{.total = listing.total, .skip = listing.skip};
+
+      for (const auto& entry : listing.entries) {
+        listed.names.emplace_back(entry.name);
+        listed.entries.push_back(entry);
+      }
+
+      return listed;
+    };
+
+    write(root + "/a.md", "a\n");
+    write(root + "/b.md", "b\n");
+    write(root + "/c.md", "c\n");
+    check(page(0).names == std::vector<std::string>{"a.md", "b.md"});
+
+    // A file grows, which leaves the directory as it was: the page that follows is of the
+    // listing the first one read, and the first page reads the directory again.
+    write(root + "/c.md", "longer\n");
+    check(page(2).entries.at(0).size == 2, "a later page is of the same reading");
+    check(page(0).total == 3);
+    check(page(2).entries.at(0).size == 7, "the first page reads the directory as it is");
+
+    // An entry comes: the directory changed, and a later page reads it again.
+    write(root + "/d.md", "d\n");
+    std::filesystem::last_write_time(root, std::filesystem::last_write_time(root) + std::chrono::seconds{2});
+
+    const auto after = page(2);
+
+    check(after.total == 4 && after.names == std::vector<std::string>{"c.md", "d.md"}, "a directory that changed is read again");
+  }
+
   void testAListingRefusesWhatIsNoDirectory() {
     telar::testing::TestMemory adapter;
     ConcurrentMemory& memory = adapter;
@@ -166,6 +211,7 @@ namespace {
   const telar::testing::Case case_order{"directory.the_order_of_a_listing", testTheOrderOfAListing};
   const telar::testing::Case case_listing{"directory.a_listing_puts_directories_first_and_folds_case", testAListingPutsDirectoriesFirstAndFoldsCase};
   const telar::testing::Case case_pages{"directory.a_listing_is_read_a_page_at_a_time", testAListingIsReadAPageAtATime};
+  const telar::testing::Case case_continued{"directory.the_next_page_goes_on_with_what_the_first_read", testTheNextPageGoesOnWithWhatTheFirstRead};
   const telar::testing::Case case_refused{"directory.a_listing_refuses_what_is_no_directory", testAListingRefusesWhatIsNoDirectory};
   const telar::testing::Case case_measured{"directory.directories_are_measured_with_what_is_below_them", testDirectoriesAreMeasuredWithWhatIsBelowThem};
 

@@ -27,6 +27,8 @@ export namespace telar::gui::features::explorer {
     static constexpr std::size_t diff_lines = 40;
     // How deep a tree unfolds.
     static constexpr std::size_t depth = 48;
+    // The rows of a window before the client says how many fit.
+    static constexpr std::uint16_t page = 20;
   };
 
   enum class Lens : std::uint8_t {
@@ -119,6 +121,9 @@ export namespace telar::gui::features::explorer {
     removed,
     hunk,
   };
+
+  // What a line of a diff is, by how it starts.
+  [[nodiscard]] DiffTone toneOf(std::string_view line) noexcept;
 
   struct Row {
     RowKind kind = RowKind::entry;
@@ -255,7 +260,7 @@ export namespace telar::gui::features::explorer {
     std::uint32_t ignored_entries = 0;
     std::uint64_t bytes = 0;
     // The rows that fit, for half a page.
-    std::uint16_t page = 20;
+    std::uint16_t page = ViewLimits::page;
     // Whether the root's listing is yet to arrive.
     bool loading = false;
     // The pane it last followed and where that pane was, to follow again only when either moves.
@@ -283,8 +288,6 @@ export namespace telar::gui::features::explorer {
     apply,
     undo,
     commit,
-    // Show the machine the window names.
-    pin,
   };
 
   struct Action {
@@ -294,11 +297,12 @@ export namespace telar::gui::features::explorer {
   };
 
   struct View {
-    explicit View(Memory& memory);
+    explicit View(Memory& made_in);
 
     Memory& memory;
     bool open = false;
-    // Beside the panes instead of over them; and whether the windows stand side by side.
+    // Whether the explorer stays open after it hands a file to a pane; and whether the windows
+    // stand side by side.
     bool pinned = false;
     bool side_by_side = true;
     ds::Vec<ds::Box<Window, Memory>, Memory> windows;
@@ -345,6 +349,21 @@ export namespace telar::gui::features::explorer {
 
   // The change that adds the row, for a row a change adds.
   [[nodiscard]] tbc::val_a<const Edit*> editOf(tbc::ref_a<View> view, const Row& row) noexcept;
+
+  // A row of a window, as the pointer or the client names it, and how choosing it adds to the
+  // selection: up to it from the selected one, or beside the ones picked.
+  struct Pick {
+    std::size_t window = 0;
+    std::size_t row = 0;
+    bool extend = false;
+    bool toggle = false;
+  };
+
+  // Rows of a window, counted: how many it shows, or by how many the wheel moves what it shows.
+  struct WindowRows {
+    std::size_t window = 0;
+    std::int64_t count = 0;
+  };
 
   // The rows a command acts on: the visual selection, else the ones picked, else the selected one
   // and as many after it as the command's count says.

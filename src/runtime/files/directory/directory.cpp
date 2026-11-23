@@ -52,24 +52,36 @@ namespace telar::runtime {
         items_(memory),
         counted_(memory) {}
 
-  std::string_view DirectoryReader::nameOf(const Item& item) const noexcept {
+  std::string_view DirectoryReader::nameOf(const Item& item) const {
     return std::string_view{names_.data(), names_.size()}.substr(item.name, item.name_size);
   }
 
-  void DirectoryReader::read(std::string_view path) {
+  void DirectoryReader::read(std::string_view path, bool continued) {
     if (!path.starts_with('/')) {
       throw RequestError{FailureCode::invalid_request, "A listing needs an absolute directory"};
     }
 
+    const auto held = continued && path_.view() == path ? read_ : ds::Option<FileIdentity>{};
+
+    // Nothing is held until the directory is read whole: a read that fails leaves no half of one.
+    read_ = ds::none;
     path_.assign(path);
+
+    FileDescriptor directory{::open(path_.data(), combineFlags(O_RDONLY, O_DIRECTORY, O_CLOEXEC))}; // NOLINT(cppcoreguidelines-pro-type-vararg): open's C signature is variadic
+    struct stat opened{};
+    if (!directory || ::fstat(directory.get(), &opened) != 0) {
+      refuse(sys::lastError());
+    }
+
+    const auto identity = identityOf(opened);
+    if (held && *held == identity) {
+      read_ = identity;
+      return;
+    }
+
     names_.clear();
     items_.clear();
     total_ = 0;
-
-    FileDescriptor directory{::open(path_.data(), combineFlags(O_RDONLY, O_DIRECTORY, O_CLOEXEC))}; // NOLINT(cppcoreguidelines-pro-type-vararg): open's C signature is variadic
-    if (!directory) {
-      refuse(sys::lastError());
-    }
 
     DirectoryStream stream{std::move(directory)};
     const int descriptor = stream.descriptor();
@@ -107,10 +119,13 @@ namespace telar::runtime {
     std::ranges::sort(items_.viewMut(), [&](const Item& left, const Item& right) {
       return listsBefore(nameOf(left), left.directory, nameOf(right), right.directory);
     });
+
+    read_ = identity;
   }
 
   void DirectoryReader::list(const ListDirectory& request, EncodedReply<ConcurrentMemory>& reply) {
-    read(request.path);
+    // The first page reads the directory as it is now, which is what reading it again asks for.
+    read(request.path, request.skip != 0);
 
     ds::Array<DirectoryEntry, FileLimits::maximum_entries> entries{};
     const auto first = std::min<std::size_t>(request.skip, items_.size());
@@ -125,7 +140,7 @@ namespace telar::runtime {
     reply.send(DirectoryContents{.request_id = request.request_id, .path = request.path, .skip = static_cast<std::uint32_t>(first), .total = total_, .entries = entries.view().first(count)});
   }
 
-  void DirectoryReader::add(int parent, const char* name, std::size_t depth, Measure& measure) {
+  void DirectoryReader::add(int parent, const char* name, std::size_t depth, Measure& measure) {                  // NOLINT(misc-no-recursion): a tree is walked measured_depth directories deep at most
     FileDescriptor directory{::openat(parent, name, combineFlags(O_RDONLY, O_DIRECTORY, O_NOFOLLOW, O_CLOEXEC))}; // NOLINT(cppcoreguidelines-pro-type-vararg): openat's C signature is variadic
     if (!directory) {
       // One this account may not open is counted as what its entry takes, which its parent added.
@@ -172,7 +187,7 @@ namespace telar::runtime {
   }
 
   void DirectoryReader::measure(const MeasureDirectory& request, const std::atomic<bool>& cancelled, EncodedReply<ConcurrentMemory>& reply) {
-    read(request.path);
+    read(request.path, true);
 
     const FileDescriptor directory{::open(path_.data(), combineFlags(O_RDONLY, O_DIRECTORY, O_CLOEXEC))}; // NOLINT(cppcoreguidelines-pro-type-vararg): open's C signature is variadic
     if (!directory) {

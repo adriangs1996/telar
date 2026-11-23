@@ -50,7 +50,7 @@ namespace {
     explorer.type("l");
     explorer.type("p");
     check(explorer.view.edits.size() == 3 && explorer.names()[2] == "remote.md" && explorer.names()[6] == "remote.md");
-    check(look(explorer.view, explorer.state, explorer.context(), 0, 2).added && look(explorer.view, explorer.state, explorer.context(), 0, 6).removed, "what a paste moves away still shows where it was");
+    check(look(explorer.view, explorer.state, explorer.context(), {.window = 0, .row = 2}).added && look(explorer.view, explorer.state, explorer.context(), {.window = 0, .row = 6}).removed, "what a paste moves away still shows where it was");
 
     // o adds: a name that ends in a slash is a directory's.
     explorer.type("o");

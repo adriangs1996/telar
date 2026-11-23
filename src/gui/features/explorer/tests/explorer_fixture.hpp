@@ -162,7 +162,7 @@ namespace telar::gui::test {
       const auto& listed = window(view);
 
       for (std::size_t index = 0; index < listed.rows.size(); ++index) {
-        const auto seen = look(view, state, context(), view.current, index);
+        const auto seen = look(view, state, context(), {.window = view.current, .row = index});
 
         result.push_back(std::string{seen.lead.view()} + std::string{seen.name.view()} + (seen.directory ? "/" : ""));
       }
@@ -178,7 +178,7 @@ namespace telar::gui::test {
       const auto& listed = window(view);
 
       for (std::size_t index = 0; index < listed.rows.size(); ++index) {
-        const auto seen = look(view, state, context(), view.current, index);
+        const auto seen = look(view, state, context(), {.window = view.current, .row = index});
         if (seen.name.view() == name) {
           return seen;
         }

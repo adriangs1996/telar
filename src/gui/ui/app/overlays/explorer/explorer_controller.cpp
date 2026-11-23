@@ -30,7 +30,6 @@ namespace telar::gui::qt {
     using explorer::FileState;
     using explorer::Mode;
     using explorer::RowKind;
-    using explorer::Tone;
 
     constexpr ds::Array<const char*, 7> kind_names{"entry", "added", "header", "note", "diff", "change", "pane"};
     constexpr ds::Array<const char*, 4> diff_tones{"context", "added", "removed", "hunk"};
@@ -79,34 +78,111 @@ namespace telar::gui::qt {
       return result;
     }
 
-    struct HelpGroup {
-      const char* title;
-      std::initializer_list<std::pair<const char*, const char*>> keys;
+    // A line of the help: the keys, what they do, and the group it is listed under.
+    struct HelpKey {
+      std::string_view group;
+      std::string_view keys;
+      std::string_view label;
     };
 
-    QVariantList helpGroups() {
-      const std::initializer_list<HelpGroup> groups{
-          {"Moving", {{"j k", "down, up; with a count"}, {"gg G", "first, last; 12G goes to row 12"}, {"<C-d> <C-u>", "half a page"}, {"h l", "fold, unfold; l on a file opens it"}, {"za zM zR", "toggle a fold, fold all, unfold a level"}, {"]c [c", "next, previous change of git"}}},
-          {"Roots and jumps", {{"<CR>", "enter a directory"}, {"-", "the directory above"}, {"_ ~", "the workspace's root, the home"}, {"gp gw gh", "follow pane, workspace, machine"}, {"ma 'a", "set a mark, jump to it"}, {"<C-o> <C-i>", "back, forward in the jumps"}, {"gt gT", "next, previous lens"}}},
-          {"Editing as text", {{"cw i a", "rename on the row"}, {"o", "new entry; name/ is a directory"}, {"dd", "cut: deletes, or with p moves"}, {"yy", "copy, and its path to the clipboard"}, {"p", "paste into the row's directory"}, {"u", "undo a change, else the last :w"}, {":w :w!", "show the plan; overwrite what exists"}, {":e! :q!", "discard the changes"}}},
-          {"Windows", {{"<C-w>v <C-w>s", "another window beside, below"}, {"<C-w>w <C-w>hjkl", "the next window, the one that way"}, {"<C-w>q <C-w>o", "close this one, keep only this one"}, {":e PATH :vs PATH", "this window, or a new one, at a path"}}},
-          {"Toward the panes", {{"<CR>", "as the focused pane takes it"}, {"V <CR>", "insert several, directories too"}, {"gf", "open in the tab's editor"}, {"cd s", "cd the shell here, a new shell here"}, {"@", "mention to the agent"}, {"yr yn", "copy the relative path, the name"}, {".", "repeat"}}},
-          {"Git, sizes and what shows", {{"=", "the diff below the row"}, {"ga gu", "stage, unstage"}, {"gX", "discard changes, through the plan"}, {"gc", ":commit with a message"}, {"S", "sort by name, size, time"}, {"g. gi", "dotfiles, what git ignores"}, {"R", "read again"}}},
-          {"Modes", {{"V", "visual: y d <CR> @ ga gu"}, {"/", "filter the listing"}, {":", "e w vs sp cd commit marks q"}, {"F", "follow the pane"}, {"q", "close"}, {"?", "this help"}}},
-      };
+    constexpr ds::Array<HelpKey, 45> help_keys{
+        {
+            {.group = "Moving", .keys = "j k", .label = "down, up; with a count"},
+            {.group = "Moving", .keys = "gg G", .label = "first, last; 12G goes to row 12"},
+            {.group = "Moving", .keys = "<C-d> <C-u>", .label = "half a page"},
+            {.group = "Moving", .keys = "h l", .label = "fold, unfold; l on a file opens it"},
+            {.group = "Moving", .keys = "za zM zR", .label = "toggle a fold, fold all, unfold a level"},
+            {.group = "Moving", .keys = "]c [c", .label = "next, previous change of git"},
+            {.group = "Roots and jumps", .keys = "<CR>", .label = "enter a directory"},
+            {.group = "Roots and jumps", .keys = "-", .label = "the directory above"},
+            {.group = "Roots and jumps", .keys = "_ ~", .label = "the workspace's root, the home"},
+            {.group = "Roots and jumps", .keys = "gp gw gh", .label = "follow pane, workspace, machine"},
+            {.group = "Roots and jumps", .keys = "ma 'a", .label = "set a mark, jump to it"},
+            {.group = "Roots and jumps", .keys = "<C-o> <C-i>", .label = "back, forward in the jumps"},
+            {.group = "Roots and jumps", .keys = "gt gT", .label = "next, previous lens"},
+            {.group = "Editing as text", .keys = "cw i a", .label = "rename on the row"},
+            {.group = "Editing as text", .keys = "o", .label = "new entry; name/ is a directory"},
+            {.group = "Editing as text", .keys = "dd", .label = "cut: deletes, or with p moves"},
+            {.group = "Editing as text", .keys = "yy", .label = "copy, and its path to the clipboard"},
+            {.group = "Editing as text", .keys = "p", .label = "paste into the row's directory"},
+            {.group = "Editing as text", .keys = "u", .label = "undo a change, else the last :w"},
+            {.group = "Editing as text", .keys = ":w :w!", .label = "show the plan; overwrite what exists"},
+            {.group = "Editing as text", .keys = ":e! :q!", .label = "discard the changes"},
+            {.group = "Windows", .keys = "<C-w>v <C-w>s", .label = "another window beside, below"},
+            {.group = "Windows", .keys = "<C-w>w <C-w>hjkl", .label = "the next window, the one that way"},
+            {.group = "Windows", .keys = "<C-w>q <C-w>o", .label = "close this one, keep only this one"},
+            {.group = "Windows", .keys = ":e PATH :vs PATH", .label = "this window, or a new one, at a path"},
+            {.group = "Toward the panes", .keys = "<CR>", .label = "as the focused pane takes it"},
+            {.group = "Toward the panes", .keys = "V <CR>", .label = "insert several, directories too"},
+            {.group = "Toward the panes", .keys = "gf", .label = "open in the tab's editor"},
+            {.group = "Toward the panes", .keys = "cd s", .label = "cd the shell here, a new shell here"},
+            {.group = "Toward the panes", .keys = "@", .label = "mention to the agent"},
+            {.group = "Toward the panes", .keys = "yr yn", .label = "copy the relative path, the name"},
+            {.group = "Toward the panes", .keys = ".", .label = "repeat"},
+            {.group = "Git, sizes and what shows", .keys = "=", .label = "the diff below the row"},
+            {.group = "Git, sizes and what shows", .keys = "ga gu", .label = "stage, unstage"},
+            {.group = "Git, sizes and what shows", .keys = "gX", .label = "discard changes, through the plan"},
+            {.group = "Git, sizes and what shows", .keys = "gc", .label = ":commit with a message"},
+            {.group = "Git, sizes and what shows", .keys = "S", .label = "sort by name, size, time"},
+            {.group = "Git, sizes and what shows", .keys = "g. gi", .label = "dotfiles, what git ignores"},
+            {.group = "Git, sizes and what shows", .keys = "R", .label = "read again"},
+            {.group = "Modes", .keys = "V", .label = "visual: y d <CR> @ ga gu"},
+            {.group = "Modes", .keys = "/", .label = "filter the listing"},
+            {.group = "Modes", .keys = ":", .label = "e w vs sp cd commit marks q"},
+            {.group = "Modes", .keys = "F", .label = "follow the pane"},
+            {.group = "Modes", .keys = "q", .label = "close"},
+            {.group = "Modes", .keys = "?", .label = "this help"},
+        },
+    };
 
-      QVariantList result;
+    // A key a hint spells by its name, as the help does: `<CR>`, `<Esc>`, `<C-w>`.
+    struct NamedKey {
+      QLatin1StringView name;
+      int key = 0;
+      int modifiers = 0;
+      QLatin1StringView text;
+    };
 
-      for (const auto& group : groups) {
-        QVariantList keys;
+    constexpr ds::Array<NamedKey, 3> named_keys{
+        {
+            {.name = QLatin1StringView{"<CR>"}, .key = Qt::Key_Return},
+            {.name = QLatin1StringView{"<Esc>"}, .key = Qt::Key_Escape},
+            {.name = QLatin1StringView{"<C-w>"}, .key = Qt::Key_W, .modifiers = static_cast<int>(NativeKeyAdapter::control_modifier), .text = QLatin1StringView{"w"}},
+        },
+    };
 
-        for (const auto& [sequence, meaning] : group.keys) {
-          keys.push_back(QVariantMap{{QStringLiteral("keys"), QString::fromUtf8(sequence)}, {QStringLiteral("label"), QString::fromUtf8(meaning)}});
+    const NamedKey* namedKey(QStringView spelled) noexcept {
+      for (const auto& known : named_keys) {
+        if (spelled == known.name) {
+          return &known;
         }
-
-        result.push_back(QVariantMap{{QStringLiteral("title"), QString::fromUtf8(group.title)}, {QStringLiteral("keys"), keys}});
       }
 
+      return nullptr;
+    }
+
+    QVariantList helpGroups() {
+      QVariantList result;
+      QVariantList keys;
+      std::string_view group;
+      const auto close = [&] {
+        if (!keys.isEmpty()) {
+          result.push_back(QVariantMap{{QStringLiteral("title"), toQString(group)}, {QStringLiteral("keys"), keys}});
+          keys.clear();
+        }
+      };
+
+      // The lines of a group follow one another.
+      for (const auto& line : help_keys) {
+        if (line.group != group) {
+          close();
+          group = line.group;
+        }
+
+        keys.push_back(QVariantMap{{QStringLiteral("keys"), toQString(line.keys)}, {QStringLiteral("label"), toQString(line.label)}});
+      }
+
+      close();
       return result;
     }
 
@@ -305,10 +381,7 @@ namespace telar::gui::qt {
     while (!rest.empty() && lines.size() < preview_lines) {
       const auto end = rest.find('\n');
       const auto line = rest.substr(0, end);
-      const auto tone = !look.diff ? DiffTone::context : line.starts_with("@@") ? DiffTone::hunk
-                                                     : line.starts_with('+')    ? DiffTone::added
-                                                     : line.starts_with('-')    ? DiffTone::removed
-                                                                                : DiffTone::context;
+      const auto tone = look.diff ? explorer::toneOf(line) : DiffTone::context;
 
       lines.push_back(QVariantMap{{QStringLiteral("text"), toQString(line)}, {QStringLiteral("tone"), QString::fromLatin1(diff_tones[static_cast<std::size_t>(tone)])}});
       rest.remove_prefix(end == std::string_view::npos ? rest.size() : end + 1);
@@ -357,7 +430,7 @@ namespace telar::gui::qt {
     return result;
   }
 
-  QVariantList ExplorerController::help() const {
+  QVariantList ExplorerController::help() {
     return helpGroups();
   }
 
@@ -386,7 +459,7 @@ namespace telar::gui::qt {
   }
 
   QVariantMap ExplorerController::record(std::size_t window, std::size_t row) const {
-    const auto look = explorer::look(store_.session(), view_, host(), window, row);
+    const auto look = explorer::look(store_.session(), view_, host(), {.window = window, .row = row});
     const bool entry = look.kind == RowKind::entry || look.kind == RowKind::added || look.kind == RowKind::change;
     QVariantMap result{
         {QStringLiteral("kind"), QString::fromLatin1(kind_names[static_cast<std::size_t>(look.kind)])},
@@ -479,7 +552,7 @@ namespace telar::gui::qt {
       return false;
     }
 
-    const QKeyEvent event{QEvent::KeyPress, key, Qt::KeyboardModifiers::fromInt(modifiers), text};
+    const QKeyEvent event{QEvent::KeyPress, key, Qt::KeyboardModifiers::fromInt(static_cast<Qt::KeyboardModifiers::Int>(modifiers)), text};
     const auto chord = NativeKeyAdapter::chord(event);
     if (chord.key == KeyChord::Key::character && chord.character == std::numeric_limits<std::uint32_t>::max()) {
       return false;
@@ -521,7 +594,7 @@ namespace telar::gui::qt {
       return;
     }
 
-    explorer::select(store_.sessionMut(), view_, host(), static_cast<std::size_t>(window), static_cast<std::size_t>(row), extend, toggle);
+    explorer::select(store_.sessionMut(), view_, host(), {.window = static_cast<std::size_t>(window), .row = static_cast<std::size_t>(row), .extend = extend, .toggle = toggle});
     finish(Effect::none);
   }
 
@@ -531,7 +604,7 @@ namespace telar::gui::qt {
     }
 
     try {
-      finish(explorer::activate(store_.sessionMut(), view_, host(), static_cast<std::size_t>(window), static_cast<std::size_t>(row)));
+      finish(explorer::activate(store_.sessionMut(), view_, host(), {.window = static_cast<std::size_t>(window), .row = static_cast<std::size_t>(row)}));
     } catch (const std::exception& error) {
       emit failed(QString::fromUtf8(error.what()));
     }
@@ -542,16 +615,19 @@ namespace telar::gui::qt {
       return;
     }
 
-    explorer::toggle(store_.sessionMut(), view_, host(), static_cast<std::size_t>(window), static_cast<std::size_t>(row));
+    explorer::toggle(store_.sessionMut(), view_, host(), {.window = static_cast<std::size_t>(window), .row = static_cast<std::size_t>(row)});
     finish(Effect::none);
   }
 
   void ExplorerController::setViewport(int window, int rows) {
-    if (window < 0 || static_cast<std::size_t>(window) >= view_.windows.size() || rows == view_.windows[static_cast<std::size_t>(window)]->page) {
+    // More rows than any screen shows.
+    constexpr int most_rows = 1000;
+
+    if (window < 0 || static_cast<std::size_t>(window) >= view_.windows.size() || std::cmp_equal(rows, view_.windows[static_cast<std::size_t>(window)]->page)) {
       return;
     }
 
-    explorer::resize(view_, static_cast<std::size_t>(window), static_cast<std::uint16_t>(std::clamp(rows, 1, 1000)));
+    explorer::resize(view_, {.window = static_cast<std::size_t>(window), .count = std::clamp(rows, 1, most_rows)});
     publish();
     emit changed();
   }
@@ -561,26 +637,17 @@ namespace telar::gui::qt {
       return;
     }
 
-    explorer::scroll(view_, static_cast<std::size_t>(window), rows);
+    explorer::scroll(view_, {.window = static_cast<std::size_t>(window), .count = rows});
     publish();
     emit changed();
   }
 
   void ExplorerController::type(const QString& keys) {
-    // A hint spells its keys as the help does: `<CR>`, `<C-w>v`, `dd`.
-    static const QHash<QString, std::pair<int, int>> named{
-        {QStringLiteral("<CR>"), {Qt::Key_Return, 0}},
-        {QStringLiteral("<Esc>"), {Qt::Key_Escape, 0}},
-        {QStringLiteral("<C-w>"), {Qt::Key_W, static_cast<int>(NativeKeyAdapter::control_modifier)}},
-    };
-
     for (qsizetype index = 0; index < keys.size();) {
       const auto close = keys[index] == QLatin1Char('<') ? keys.indexOf(QLatin1Char('>'), index) : -1;
       if (close > index) {
-        const auto found = named.constFind(keys.mid(index, close - index + 1));
-
-        if (found != named.constEnd()) {
-          key(found->first, found->first == Qt::Key_W ? QStringLiteral("w") : QString{}, found->second);
+        if (const auto* known = namedKey(QStringView{keys}.mid(index, close - index + 1))) {
+          key(known->key, QString{known->text}, known->modifiers);
         }
 
         index = close + 1;
