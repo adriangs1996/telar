@@ -1,6 +1,7 @@
 module telar.runtime.files.service;
 
 import std;
+import telar.runtime.files.entry;
 import telar.runtime.transport.connection;
 import telar.runtime.workers.background_executor;
 import telar.wire.files;
@@ -50,6 +51,8 @@ namespace telar::runtime {
       changer_.undo(Codec::decode<UndoFileChanges>(payload, storage), reply);
     } else if (tag == ClientTag::commit_changes) {
       changer_.commit(Codec::decode<CommitChanges>(payload, storage), cancelled, reply);
+    } else if (tag == ClientTag::locate_home) {
+      reply.send(HomeLocated{.request_id = Codec::decode<LocateHome>(payload, storage).request_id, .path = accountHome()});
     } else {
       throw RequestError{FailureCode::invalid_request, "Not a request on files"};
     }

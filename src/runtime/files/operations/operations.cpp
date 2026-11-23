@@ -276,13 +276,6 @@ namespace telar::runtime {
       }
     }
 
-    // The home of the account, as the runtime's environment names it; empty when it names none.
-    std::string_view home() noexcept {
-      const char* value = std::getenv("HOME"); // NOLINT(concurrency-mt-unsafe): the runtime does not change its environment once it started
-
-      return value == nullptr || value[0] != '/' ? std::string_view{} : std::string_view{value};
-    }
-
     // Where this account's trash keeps files: the one of its home, or the one of the volume
     // `top` is the root of, as macOS and the XDG trash specification place them.
     tbc::val_a<Path> trashFiles(tbc::mut_a<ConcurrentMemory> memory, std::string_view top) {
@@ -290,7 +283,7 @@ namespace telar::runtime {
 
 #ifdef __APPLE__
       if (top.empty()) {
-        directory.assign(home());
+        directory.assign(accountHome());
         directory.append("/.Trash");
       } else {
         ds::formatTo(directory, "{}/.Trashes/{}", top == "/" ? std::string_view{} : top, ::getuid());
@@ -302,7 +295,7 @@ namespace telar::runtime {
         if (data != nullptr && data[0] == '/') {
           directory.assign(data);
         } else {
-          directory.assign(home());
+          directory.assign(accountHome());
           directory.append("/.local/share");
         }
 
@@ -449,7 +442,7 @@ namespace telar::runtime {
   ds::Option<FileChanger::Path> FileChanger::trash(std::string_view path, bool copy) const {
     const Path source{memory_, path};
     const auto status = statOf(source);
-    if (!status || home().empty()) {
+    if (!status || accountHome().empty()) {
       return ds::none;
     }
 

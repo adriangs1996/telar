@@ -422,6 +422,24 @@ export extern "C++" {
               Field<&ChangesCommitted::commit, DisplayText16<FileLimits::commit_bytes>, "commit">,
               Field<&ChangesCommitted::subject, Utf8Text16<FileLimits::subject_bytes>, "subject">> {};
 
+    // Asks where the home of the runtime's account is: what `~` stands for on its machine.
+    struct LocateHome {
+      std::uint64_t request_id{};
+    };
+
+    template <>
+    struct MessageSchema<LocateHome> : Schema<Direction::client, ClientTag::locate_home, Field<&LocateHome::request_id, NonzeroU64, "request_id">> {};
+
+    // The home of the runtime's account; empty when its environment names none.
+    struct HomeLocated {
+      std::uint64_t request_id{};
+      std::string_view path;
+    };
+
+    template <>
+    struct MessageSchema<HomeLocated>
+        : Schema<Direction::server, ServerTag::home_located, Field<&HomeLocated::request_id, NonzeroU64, "request_id">, Field<&HomeLocated::path, Text16<FileLimits::path_bytes, true>, "path">> {};
+
   }
 }
 // NOLINTEND(misc-use-internal-linkage)

@@ -70,6 +70,7 @@ namespace {
     }
 
     check(refused, "a directory that does not exist is refused, not answered empty");
+    check(explorer.exchange<HomeLocated>(LocateHome{.request_id = 8}).path == root, "and it says where the home of its account is");
   }
 
   const telar::testing::Case case_a_client_lists_and_changes_files{"files_wire.a_client_lists_and_changes_files", testAClientListsAndChangesFiles};

@@ -117,7 +117,8 @@
     "inspect_file": 103,
     "change_files": 104,
     "undo_file_changes": 105,
-    "commit_changes": 106
+    "commit_changes": 106,
+    "locate_home": 107
   },
   "fingerprint": "6371703030303131",
   "schema_version": "cqp00011",
@@ -205,6 +206,7 @@
     "repository_changes": 213,
     "file_inspection": 214,
     "files_changed": 215,
-    "changes_committed": 216
+    "changes_committed": 216,
+    "home_located": 217
   }
 }

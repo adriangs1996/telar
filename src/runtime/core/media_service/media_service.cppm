@@ -64,7 +64,7 @@ export {
     // A request on the files of the machine, which the files worker answers.
     template <typename Message>
     concept FileRequest = std::same_as<Message, ListDirectory> || std::same_as<Message, MeasureDirectory> || std::same_as<Message, QueryChanges> || std::same_as<Message, InspectFile> || std::same_as<Message, ChangeFiles> ||
-                          std::same_as<Message, UndoFileChanges> || std::same_as<Message, CommitChanges>;
+                          std::same_as<Message, UndoFileChanges> || std::same_as<Message, CommitChanges> || std::same_as<Message, LocateHome>;
 
     // The workers behind history, paths, editors, suggestions, files and worktrees, which the runtime's
     // services and their own workers share: each queue it holds is synchronized, and what it hands a

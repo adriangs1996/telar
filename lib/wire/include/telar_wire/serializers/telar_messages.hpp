@@ -112,6 +112,7 @@ namespace telar {
     change_files = 0x68,
     undo_file_changes = 0x69,
     commit_changes = 0x6a,
+    locate_home = 0x6b,
   };
 
   enum class ServerTag : Byte {
@@ -199,6 +200,7 @@ namespace telar {
     file_inspection = 0xd6,
     files_changed = 0xd7,
     changes_committed = 0xd8,
+    home_located = 0xd9,
   };
 
   struct RequestRuntimeState {
@@ -532,6 +534,8 @@ namespace telar {
       return "undo_file_changes";
     case ClientTag::commit_changes:
       return "commit_changes";
+    case ClientTag::locate_home:
+      return "locate_home";
     }
 
     return {};
@@ -705,6 +709,8 @@ namespace telar {
       return "files_changed";
     case ServerTag::changes_committed:
       return "changes_committed";
+    case ServerTag::home_located:
+      return "home_located";
     case ServerTag::pane_theme:
       return "pane_theme";
     }

@@ -15,4 +15,7 @@ export namespace telar::runtime {
   // Whether `path` still names the file `identity` does; an identity of zeros names any.
   [[nodiscard]] bool names(const struct stat& status, const FileIdentity& identity) noexcept;
 
+  // The home of the runtime's account, as its environment names it; empty when it names none.
+  [[nodiscard]] std::string_view accountHome() noexcept;
+
 }
