@@ -193,6 +193,7 @@ Window {
         y: root.geometry.terminal.y + 6 * root.ratio
         width: Math.max(0, root.geometry.terminal.width - 12 * root.ratio)
         height: Math.max(0, root.geometry.terminal.height - 12 * root.ratio)
+        inset: 6 * root.ratio
         controller: telar.explorer
         colors: telar.colors
         typography: root.geometry.typography

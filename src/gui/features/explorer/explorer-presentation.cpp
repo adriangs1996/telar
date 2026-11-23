@@ -480,7 +480,11 @@ namespace telar::gui::features::explorer {
           window.ignored ? " !" : "");
     }
 
-    result.total = bytes(window.bytes);
+    // What the root holds is known of the tree alone.
+    if (window.lens == Lens::tree) {
+      result.total = bytes(window.bytes);
+    }
+
     if (result.current) {
       if (view.keys.counted) {
         write(result.keys, "{}{}", view.keys.count, view.keys.pending.view());

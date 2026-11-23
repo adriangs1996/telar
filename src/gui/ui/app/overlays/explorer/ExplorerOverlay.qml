@@ -14,6 +14,8 @@ FocusScope {
     required property var colors
     required property var typography
     property real ratio: 1
+    // How far inside the area of the panes it stands: that margin hides them too.
+    property real inset: 0
 
     readonly property var windows: controller.windows
     readonly property var line: controller.line
@@ -38,13 +40,18 @@ FocusScope {
     visible: controller.showing
     z: 40
 
+    // `grid` at `factor` of its size. A cell is a whole number of the screen's pixels, as the text
+    // drawn in it takes: what is measured in cells here then fits what is drawn.
     function scaled(grid, factor) {
+        const pixels = Screen.devicePixelRatio;
+        const snapped = value => Math.max(1, Math.round(value * factor * pixels)) / pixels;
+
         return {
             family: grid.family ?? "",
             style: grid.style ?? "",
             pixelHeight: Math.max(1, (grid.pixelHeight ?? 13) * factor),
-            cellWidth: Math.max(1, (grid.cellWidth ?? 8) * factor),
-            cellHeight: Math.max(1, (grid.cellHeight ?? 16) * factor),
+            cellWidth: snapped(grid.cellWidth ?? 8),
+            cellHeight: snapped(grid.cellHeight ?? 16),
             baseline: (grid.baseline ?? 12) * factor
         };
     }
@@ -54,6 +61,20 @@ FocusScope {
         const cells = Math.max(1, Math.floor(width / Math.max(1, grid.cellWidth ?? 8)));
 
         return text.length <= cells ? text : "…" + text.slice(text.length - cells + 1);
+    }
+
+    // `text` on two lines of `width` in cells of `grid`, broken at a space where one is near, the
+    // second cut with a mark when it does not fit either.
+    function folded(text, width, grid) {
+        const cells = Math.max(1, Math.floor(width / Math.max(1, grid.cellWidth ?? 8)));
+        if (text.length <= cells)
+            return [text, ""];
+
+        const space = text.lastIndexOf(" ", cells);
+        const cut = space > cells / 2 ? space : cells;
+        const rest = text.slice(cut).trim();
+
+        return [text.slice(0, cut), rest.length <= cells ? rest : rest.slice(0, cells - 1) + "…"];
     }
 
     function toneColor(tone) {
@@ -101,6 +122,15 @@ FocusScope {
         Keys.onPressed: event => {
             event.accepted = root.controller.key(event.key, event.text, event.modifiers);
         }
+    }
+
+    // The panes and the frame of the focused one stay behind: the explorer takes their area.
+    NativeRoundedRectangle {
+        x: -root.inset
+        y: -root.inset
+        width: root.width + 2 * root.inset
+        height: root.height + 2 * root.inset
+        color: root.colors.workbenchBackground
     }
 
     NativeRoundedRectangle {
@@ -279,8 +309,10 @@ FocusScope {
     // The windows, each on a directory of a machine, and beside them the preview.
     Item {
         id: body
+        // Inside the frame: a row's mark stands beside its line, not on it.
+        x: surface.borderWidth
         y: bar.height + root.hairline
-        width: root.width
+        width: root.width - 2 * x
         height: Math.max(0, root.height - y - command.height - hints.height)
 
         Repeater {
@@ -938,7 +970,7 @@ FocusScope {
                 CellText {
                     width: parent.width
                     height: Math.round(root.tinyGrid.cellHeight ?? 14)
-                    text: root.preview.path ?? ""
+                    text: root.tail(root.preview.path ?? "", width, root.tinyGrid)
                     grid: root.tinyGrid
                     color: root.colors.overlay1
                     clip: true
@@ -959,9 +991,11 @@ FocusScope {
                             readonly property real labelWidth: 96 * root.ratio
                             readonly property real line: Math.round(Math.max(root.typography.smallRow, (root.smallGrid.cellHeight ?? 16) + 2 * root.ratio))
                             readonly property bool detailed: (modelData.detail ?? "").length > 0 && modelData.label === "Last commit"
+                            // The subject of a commit takes a second line when it is long.
+                            readonly property var subject: detailed ? root.folded(modelData.detail ?? "", width - labelWidth, root.smallGrid) : ["", ""]
 
                             width: parent.width
-                            height: detailed ? 2 * line : line
+                            height: detailed ? (subject[1].length > 0 ? 3 : 2) * line : line
 
                             ChromeText {
                                 width: fact.labelWidth
@@ -1021,7 +1055,19 @@ FocusScope {
                                 width: parent.width - x
                                 height: fact.line
                                 visible: fact.detailed
-                                text: fact.modelData.detail ?? ""
+                                text: fact.subject[0]
+                                grid: root.smallGrid
+                                color: root.colors.overlay1
+                                clip: true
+                            }
+
+                            CellText {
+                                x: fact.labelWidth
+                                y: 2 * fact.line
+                                width: parent.width - x
+                                height: fact.line
+                                visible: fact.detailed && fact.subject[1].length > 0
+                                text: fact.subject[1]
                                 grid: root.smallGrid
                                 color: root.colors.overlay1
                                 clip: true
@@ -1289,16 +1335,14 @@ FocusScope {
     // The plan `:w` shows before anything is touched, and the help.
     Rectangle {
         id: sheet
-        x: root.gutter
-        y: bar.height + 14 * root.ratio
+        // Over the windows and the preview, whole: nothing of them shows beside it.
+        x: body.x
+        y: body.y
         z: 6
-        width: root.width - 2 * root.gutter
-        height: Math.max(0, root.height - y - command.height - hints.height - 8 * root.ratio)
+        width: body.width
+        height: body.height
         visible: root.mode === "plan" || root.mode === "help"
-        radius: 6 * root.ratio
         color: root.colors.surface_dim
-        border.width: Math.max(root.hairline, 1 * root.ratio)
-        border.color: root.colors.overlay0
         clip: true
 
         Column {
@@ -1400,7 +1444,7 @@ FocusScope {
 
                             CellText {
                                 id: bindingKeys
-                                width: Math.round(16 * (root.smallGrid.cellWidth ?? 8))
+                                width: Math.round(17 * (root.smallGrid.cellWidth ?? 8))
                                 height: parent.height
                                 text: binding.modelData.keys
                                 grid: root.smallGrid
