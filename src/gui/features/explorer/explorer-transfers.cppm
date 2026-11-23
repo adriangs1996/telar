@@ -37,6 +37,8 @@ export namespace telar::gui::features::explorer {
     // The partial given the target's name, or removed.
     keep,
     drop,
+    // Of a tree: a link made where it goes, that says what the chunk it holds does.
+    link,
     // The source of a move sent to the trash of its machine.
     trash,
     // Of a tree: the directory its walk is in made where it goes; that directory's listing,
@@ -77,7 +79,7 @@ export namespace telar::gui::features::explorer {
   [[nodiscard]] std::uint64_t wholeBytes(const Transfer& transfer) noexcept;
 
   // The listing of the directory a tree's walk is in, whole: its files wait their turn, its
-  // directories are walked after, and what is neither is left out.
+  // directories are walked after, a link is read as what it says, and what is none is left out.
   void walked(View& view, std::size_t index, const Directory& directory, std::uint64_t now_ms);
 
   // Whether what the transfer changes next on `machine` joins the change its plan already made

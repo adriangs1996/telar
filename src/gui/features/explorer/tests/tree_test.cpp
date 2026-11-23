@@ -130,10 +130,21 @@ namespace {
 
     const auto& transfer = explorer.view.transfers[0];
 
-    check(transfer.phase == TransferPhase::reading && transfer.files_seen == 1 && transfer.seen == 9000 && transfer.left_out == 1 && transfer.walk.size() == 1, "its files wait their turn, its directories are walked after, a link is left out");
+    check(transfer.phase == TransferPhase::reading && transfer.files_seen == 1 && transfer.seen == 9000 && transfer.left_out == 0 && transfer.walk.size() == 1, "its files and its links wait their turn, its directories are walked after");
     check(readIdentity(transfer).inode == 3 && readIdentity(transfer).modified_seconds == 25, "a file is read as the listing named it");
     carryFile(explorer, "/home/ops/logs/app.log", "/home/dev/telar/logs/app.log", 9000, 1100);
     check(transfer.carried == 9000 && transfer.files_done == 1 && arrivedBytes(transfer) == 9000 && wholeBytes(transfer) == 9000);
+
+    // Its link: what it says is read where it is, and a link that says it is made where the tree
+    // goes. No file is written for it.
+    sent = send(explorer, 30, 1110);
+    check(sent.ask == TransferAsk::read && sent.machine == Explorer::box && sent.path == "/home/ops/logs/current" && transfer.link && readIdentity(transfer).inode == 2, "a link is read as the listing named it");
+    answer(explorer, {.kind = CarriedKind::chunk, .size = 11, .bytes = 11, .end = true}, 1120);
+    check(transfer.phase == TransferPhase::linking && transfer.chunk.size() == 11);
+    sent = send(explorer, 31, 1130);
+    check(sent.ask == TransferAsk::link && sent.machine == Explorer::machine && sent.path == "/home/dev/telar/logs/current" && joins(explorer.view.begun, transfer.batch, Explorer::machine), "it joins the change that made the directory, so u takes it back with it");
+    answer(explorer, {.kind = CarriedKind::trashed, .text = "/home/dev/telar/logs/current"}, 1140);
+    check(transfer.links_done == 1 && transfer.chunk.empty() && transfer.carried == 9000, "a link weighs nothing of what it points to");
 
     // The next directory: made where the tree goes, then listed where it comes from.
     sent = send(explorer, 3, 1200);
@@ -149,7 +160,7 @@ namespace {
 
     check(arriving.arriving && arriving.directory && arriving.note.view() == "arriving from box · 1 of 2 files · 8.8K of 8.9K", "its row says how much of what the walk has seen arrived");
     carryFile(explorer, "/home/ops/logs/old/jan.log", "/home/dev/telar/logs/old/jan.log", 100, 1300);
-    check(transfer.phase == TransferPhase::arrived && explorer.view.message.view() == "logs arrived · 2 files, 1 link and special file left out", "whole, it says what of it the window does not carry");
+    check(transfer.phase == TransferPhase::arrived && explorer.view.message.view() == "logs arrived · 2 files, 1 link", "whole, it says what of it arrived");
     check(asks(explorer.view, 0).ask == TransferAsk::none && explorer.view.wrote.size() == 1 && explorer.view.wrote[0] == Explorer::machine);
   }
 
@@ -243,7 +254,37 @@ namespace {
     check(deep.view.transfers[0].phase == TransferPhase::clearing && deep.view.transfers[0].said.view() == "it is deeper than the window carries");
   }
 
+  void testALinkAloneIsCarriedAsWhatItSays() {
+    Explorer explorer;
+
+    explorer.start();
+    explorer.type(":");
+    explorer.enter("vs box:~/site");
+    explorer.type("j");
+    check(explorer.selected() == "/home/ops/site/latest");
+    explorer.type("yy");
+    explorer.type("<C-w>h");
+    explorer.type("p");
+    explorer.type(":");
+    explorer.enter("w");
+    check(explorer.view.plan.size() == 1 && explorer.view.plan[0].link && explorer.view.plan[0].source_machine == Explorer::box);
+    explorer.type("y");
+    check(explorer.view.transfers.size() == 1 && !explorer.view.transfers[0].tree && explorer.view.transfers[0].link);
+
+    // What it says is read where it is; no partial is written, and a link is made where it goes.
+    auto sent = send(explorer, 1, 1000);
+
+    check(sent.ask == TransferAsk::read && sent.machine == Explorer::box && sent.path == "/home/ops/site/latest");
+    answer(explorer, {.kind = CarriedKind::chunk, .size = 10, .bytes = 10, .end = true}, 1010);
+    sent = send(explorer, 2, 1020);
+    check(sent.ask == TransferAsk::link && sent.machine == Explorer::machine && sent.path.ends_with("/latest") && sent.path.starts_with("/home/dev/telar"));
+    answer(explorer, {.kind = CarriedKind::trashed, .text = sent.path}, 1030);
+    check(explorer.view.transfers[0].phase == TransferPhase::arrived && explorer.view.message.view() == "latest arrived" && asks(explorer.view, 0).ask == TransferAsk::none);
+    check(explorer.view.wrote.size() == 1 && explorer.view.wrote[0] == Explorer::machine, "u reaches the link it made");
+  }
+
   const telar::testing::Case case_tree{"tree.a_directory_is_carried_as_its_tree", testADirectoryIsCarriedAsItsTree};
+  const telar::testing::Case case_link{"tree.a_link_alone_is_carried_as_what_it_says", testALinkAloneIsCarriedAsWhatItSays};
   const telar::testing::Case case_move{"tree.a_tree_that_moves_trashes_its_original_at_the_end", testATreeThatMovesTrashesItsOriginalAtTheEnd};
   const telar::testing::Case case_stop{"tree.a_tree_that_stops_removes_what_had_arrived", testATreeThatStopsRemovesWhatHadArrived};
   const telar::testing::Case case_bounds{"tree.a_tree_too_large_is_refused", testATreeTooLargeIsRefused};

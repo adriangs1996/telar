@@ -706,6 +706,7 @@ namespace telar::gui::features::explorer {
           edit.size = inspection->size;
           // What was dragged in from outside is known as a directory only now.
           edit.directory = edit.kind == EditKind::paste ? inspection->kind == FileKind::directory : edit.directory;
+          edit.link = edit.kind == EditKind::paste && inspection->kind == FileKind::link;
         }
       }
 
@@ -1019,6 +1020,7 @@ namespace telar::gui::features::explorer {
     copy.source_machine = source_machine;
     copy.identity = identity;
     copy.size = size;
+    copy.link = link;
     copy.unidentified = unidentified;
     return copy;
   }
@@ -1498,6 +1500,7 @@ namespace telar::gui::features::explorer {
 
           kept.identity = entry.identity;
           kept.size = entry.size;
+          kept.link = entry.kind == FileKind::link;
         }
       }
     }
@@ -1584,6 +1587,7 @@ namespace telar::gui::features::explorer {
         edit.source_machine = item.machine;
         edit.identity = item.identity;
         edit.size = item.size;
+        edit.link = item.link;
         // What was taken from a row no listing holds is read before the plan shows.
         edit.unidentified = item.identity.inode == 0;
       }
@@ -1642,6 +1646,7 @@ namespace telar::gui::features::explorer {
         made.machine = edit.machine;
         made.identity = edit.identity;
         made.size = edit.size;
+        made.link = edit.link;
         return made;
       };
 

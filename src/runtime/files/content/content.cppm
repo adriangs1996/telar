@@ -21,6 +21,9 @@ export namespace telar::runtime {
     void read(const ReadFile& request, EncodedReply<ConcurrentMemory>& reply);
 
   private:
+    // Sends what the link at `path_` says, as one chunk that ends it.
+    void readLink(const ReadFile& request, EncodedReply<ConcurrentMemory>& reply);
+
     // The chunk being read, kept from one request to the next.
     ds::Vec<Byte, ConcurrentMemory> chunk_;
     ds::String<ConcurrentMemory> path_;

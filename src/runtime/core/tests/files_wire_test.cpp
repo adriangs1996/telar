@@ -90,6 +90,19 @@ namespace {
     const auto touches = explorer.exchange<FileTouches>(QueryTouches{.request_id = 13, .path = work});
 
     check(touches.path == work && touches.touches.empty() && !touches.truncated, "who touched what is asked of the runtime too");
+
+    // A link is made as it is said, and read back as what it says, not as what it points to.
+    const auto link = work + "/latest";
+    const ds::Array<FileOperation, 1> linked{{{.kind = FileOperationKind::link, .source = "arrived.bin", .target = link}}};
+    const auto made = explorer.exchange<FilesChanged>(ChangeFiles{.request_id = 14, .operations = linked.view(), .joins = true});
+
+    check(made.results.size() == 1 && made.results[0].outcome == FileOutcome::done && made.results[0].path == link);
+
+    const auto listed = explorer.exchange<FileInspection>(InspectFile{.request_id = 15, .path = link});
+    const auto said = explorer.exchange<FileChunk>(ReadFile{.request_id = 16, .path = link, .identity = listed.identity, .link = true});
+    const std::string_view text{reinterpret_cast<const char*>(said.bytes.data()), said.bytes.size()}; // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast): the bytes of a text
+
+    check(listed.kind == FileKind::link && said.end && text == "arrived.bin", "a link crosses as its text");
   }
 
   const telar::testing::Case case_a_client_lists_and_changes_files{"files_wire.a_client_lists_and_changes_files", testAClientListsAndChangesFiles};

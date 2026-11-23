@@ -175,8 +175,7 @@ The shortcuts of a file manager name the same commands: Cmd or Ctrl with `c`, `x
   know before a yes: that the name it goes to is taken, and so it takes another or, with
   `:w!`, replaces what is there; that an agent named the file after the time its listing
   gave it, so the runtime may find another file and skip it; that a directory goes to the
-  trash with all it holds; that a directory carried to [another machine](#between-machines)
-  leaves its links behind. A name is known as taken from the listings the window holds: one
+  trash with all it holds. A name is known as taken from the listings the window holds: one
   in a directory it never listed is found by the runtime, which gives the file another.
 - `u` with nothing typed takes the last plan back.
 - A plan holds 64 operations at most.
@@ -317,8 +316,10 @@ other, 256 KiB at a time, and holds one such piece of it and no more.
   goes, under a free name when the name is taken; then each directory of it is listed as it is
   now where it comes from, made where it goes, and its files carried one at a time. Its row
   and the sidebar say how many files and bytes arrived, of the ones its walk has seen so far.
-  A link and a special file are not carried: the line that says it arrived counts the ones
-  left out. A tree of more than 50000 entries, deeper than 32 directories, or with a
+  A symbolic link is carried as what it says: a link with the same text is made where it
+  goes, relative when it was relative, whether or not it leads anywhere there. A socket, a
+  pipe or a device is not carried: the line that says the tree arrived counts the ones left
+  out. A tree of more than 50000 entries, deeper than 32 directories, or with a
   directory of more entries than a window lists, is refused. A tree that moves sends the
   directory it came from to the trash once all of it arrived.
 - While it arrives a file has a name of the runtime's own beside its target,
@@ -337,8 +338,6 @@ other, 256 KiB at a time, and holds one such piece of it and no more.
 
 ## What it does not do yet
 
-- A link is not carried from one machine to another, in a tree or alone: the runtime has no
-  operation that makes one.
 - A transfer does not go on after its machine was disconnected and connected again: it
   fails, and is started again by hand.
 - A file of another machine is not downloaded by dragging it out to the desktop or to another

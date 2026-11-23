@@ -308,6 +308,9 @@ export extern "C++" {
       // git adds `source` to its index, or takes it out.
       stage = 6,
       unstage = 7,
+      // A symbolic link at `target` that says `source`, which is the link's text and no path the
+      // runtime reads: it is written as it is, and not followed.
+      link = 8,
     };
 
     // One change to the files of the machine. With an identity that is not zeros, the runtime
@@ -322,7 +325,7 @@ export extern "C++" {
     template <>
     struct BodySchema<FileOperation>
         : Serializer<
-              Field<&FileOperation::kind, EnumByte<FileOperationKind, static_cast<Byte>(FileOperationKind::unstage)>, "kind">,
+              Field<&FileOperation::kind, EnumByte<FileOperationKind, static_cast<Byte>(FileOperationKind::link)>, "kind">,
               Field<&FileOperation::source, Text16<FileLimits::path_bytes>, "source">,
               Field<&FileOperation::target, Text16<FileLimits::path_bytes>, "target">,
               Field<&FileOperation::identity, ValueCodec<FileIdentity>, "identity">> {};
@@ -451,13 +454,14 @@ export extern "C++" {
     // Reads the bytes of the file at `path` from `offset`, `limit` of them at most and never more
     // than a chunk, while it still is the file `identity` names: one that was written since is
     // refused, so a file read in several chunks arrives as one file or not at all. A link is
-    // not followed.
+    // not followed: with `link`, the path is one, and what it says is what is read, whole.
     struct ReadFile {
       std::uint64_t request_id{};
       std::string_view path;
       FileIdentity identity{};
       std::uint64_t offset{};
       std::uint32_t limit{};
+      bool link{};
     };
 
     template <>
@@ -469,7 +473,8 @@ export extern "C++" {
               Field<&ReadFile::path, Text16<FileLimits::path_bytes>, "path">,
               Field<&ReadFile::identity, ValueCodec<FileIdentity>, "identity">,
               Field<&ReadFile::offset, u64, "offset">,
-              Field<&ReadFile::limit, u32, "limit">> {};
+              Field<&ReadFile::limit, u32, "limit">,
+              Field<&ReadFile::link, BoolByte, "link">> {};
 
     // The bytes read at `offset` of a file `size` bytes long; `end` once they reach its end.
     struct FileChunk {

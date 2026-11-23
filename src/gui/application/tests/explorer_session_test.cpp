@@ -692,10 +692,33 @@ namespace {
 
     // Then the machine it comes from lists it, as it is now.
     const auto listed = box_transport.last<ListDirectory>();
-    const ds::Array<DirectoryEntry, 1> logs{{{.name = "a.log", .kind = FileKind::file, .size = 5, .identity = {.inode = 8, .modified_seconds = 4}}}};
+    const ds::Array<DirectoryEntry, 2> logs{{
+        {.name = "a.log", .kind = FileKind::file, .size = 5, .identity = {.inode = 8, .modified_seconds = 4}},
+        {.name = "latest", .kind = FileKind::link, .identity = {.inode = 9, .modified_seconds = 4}},
+    }};
 
     check(box_transport.count(ClientTag::list_directory) == listings + 1 && listed.path == "/home/ops/logs" && listed.skip == 0);
-    check(deliver(fixture.box, DirectoryContents{.request_id = listed.request_id, .path = "/home/ops/logs", .total = 1, .entries = logs.view()}) == application::Change::explorer);
+    check(deliver(fixture.box, DirectoryContents{.request_id = listed.request_id, .path = "/home/ops/logs", .total = 2, .entries = logs.view()}) == application::Change::explorer);
+    static_cast<void>(fixture.carry());
+
+    // A link of it is read as what it says, and a link that says it is made below the tree: no
+    // file is written for it.
+    const auto says = box_transport.last<ReadFile>();
+    const std::string_view text = "a.log";
+    const std::vector<Byte> said(text.begin(), text.end());
+    const auto writes = transport.count(ClientTag::write_file);
+
+    check(says.path == "/home/ops/logs/latest" && says.link && says.identity.inode == 9);
+    check(deliver(fixture.box, FileChunk{.request_id = says.request_id, .offset = 0, .size = said.size(), .end = true, .bytes = said}) == application::Change::explorer);
+    static_cast<void>(fixture.carry());
+
+    const auto linked = transport.last<ChangeFiles>();
+    const std::string latest = root + "/latest";
+    const ds::Array<FileResult, 1> link_made{{{.outcome = FileOutcome::done, .path = latest}}};
+
+    check(linked.operations.size() == 1 && linked.operations[0].kind == FileOperationKind::link && linked.operations[0].source == text && linked.operations[0].target == latest && linked.joins, "it joins the change that made the directory");
+    check(transport.count(ClientTag::write_file) == writes);
+    check(deliver(fixture.client, FilesChanged{.request_id = linked.request_id, .undoable = true, .results = link_made.view()}) == application::Change::explorer);
     static_cast<void>(fixture.carry());
 
     // A file of it is read with the identity that listing gave it, and written below the tree.
@@ -703,7 +726,7 @@ namespace {
     const std::vector<Byte> bytes(5, Byte{'l'});
     const std::string partial = root + "/.telar-partial-0011223344556677";
 
-    check(read.path == "/home/ops/logs/a.log" && read.identity.inode == 8 && read.offset == 0);
+    check(read.path == "/home/ops/logs/a.log" && read.identity.inode == 8 && read.offset == 0 && !read.link);
     check(deliver(fixture.box, FileChunk{.request_id = read.request_id, .offset = 0, .size = 5, .end = true, .bytes = bytes}) == application::Change::explorer);
     static_cast<void>(fixture.carry());
 
@@ -717,7 +740,7 @@ namespace {
 
     check(end.keep && end.joins && end.target == root + "/a.log", "its name joins the change that made the directory, so u takes the tree back whole");
     check(deliver(fixture.client, FileWriteEnded{.request_id = end.request_id, .outcome = FileOutcome::done, .path = root + "/a.log"}) == application::Change::explorer);
-    check(fixture.carry() && fixture.view.transfers[0].phase == explorer::TransferPhase::arrived && fixture.view.message.view() == "logs arrived · 1 file");
+    check(fixture.carry() && fixture.view.transfers[0].phase == explorer::TransferPhase::arrived && fixture.view.message.view() == "logs arrived · 1 file, 1 link");
     check(box_transport.count(ClientTag::change_files) == 0, "a copy leaves its original");
   }
 

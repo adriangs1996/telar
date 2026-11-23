@@ -91,8 +91,12 @@ namespace telar::gui::features::explorer {
           Text counted{view.memory};
 
           ds::formatTo(counted, "{} file{}", transfer.files_done, transfer.files_done == 1 ? "" : "s");
+          if (transfer.links_done != 0) {
+            ds::formatTo(counted, ", {} link{}", transfer.links_done, transfer.links_done == 1 ? "" : "s");
+          }
+
           if (transfer.left_out != 0) {
-            ds::formatTo(counted, ", {} link{} and special file{} left out", transfer.left_out, transfer.left_out == 1 ? "" : "s", transfer.left_out == 1 ? "" : "s");
+            ds::formatTo(counted, ", {} special file{} left out", transfer.left_out, transfer.left_out == 1 ? "" : "s");
           }
 
           transfer.said.assign(runtime::utf8Prefix(counted.view(), ViewLimits::message_bytes));
@@ -155,7 +159,7 @@ namespace telar::gui::features::explorer {
     }
 
     // Takes an entry of the directory a tree's walk is in: a file waits its turn, a directory is
-    // walked after, and what is neither is left out. Says why when the tree is more than the
+    // walked after, a link is read as what it says, and what is none is left out. Says why when the tree is more than the
     // window carries.
     tbc::val_static<std::string_view> keep(Transfer& transfer, std::string_view name, const Entry& entry) {
       const auto depth = static_cast<std::size_t>(std::ranges::count(transfer.walked.view(), '/')) + (transfer.walked.empty() ? 0 : 1);
@@ -176,16 +180,19 @@ namespace telar::gui::features::explorer {
         }
 
         below.append(name);
-      } else if (entry.kind == FileKind::file) {
+      } else if (entry.kind == FileKind::file || entry.kind == FileKind::link) {
         auto& file = transfer.files.push(TreeFile{transfer.files.memory()});
+        const bool link = entry.kind == FileKind::link;
 
         file.name.assign(name);
         file.identity = entry.identity;
-        file.size = entry.size;
-        transfer.seen += entry.size;
-        ++transfer.files_seen;
+        // A link weighs nothing of what it points to.
+        file.size = link ? 0 : entry.size;
+        file.link = link;
+        transfer.seen += file.size;
+        transfer.files_seen += link ? 0 : 1;
       } else {
-        // A link or a special file: the window carries neither, and says how many it left.
+        // A socket, a pipe or a device: the window carries none, and says how many it left.
         ++transfer.left_out;
       }
 
@@ -215,6 +222,7 @@ namespace telar::gui::features::explorer {
 
           transfer.file.append(next.name.view());
           transfer.file_identity = next.identity;
+          transfer.link = next.link;
           transfer.size = next.size;
           transfer.phase = TransferPhase::reading;
         } else if (!transfer.walk.empty()) {
@@ -316,6 +324,18 @@ namespace telar::gui::features::explorer {
       }
     }
 
+    // A link carried alone has its name: of a move, its original goes to the trash next.
+    void linked(View& view, std::size_t index, const Carried& answer, std::uint64_t now_ms) {
+      view.transfers.atMut(index).placed.assign(answer.text.view());
+      began(view, view.transfers[index].batch, view.transfers[index].to);
+      if (view.transfers[index].kind == TransferKind::move) {
+        view.transfers.atMut(index).phase = TransferPhase::trashing;
+        ++view.revision;
+      } else {
+        finish(view, index, TransferPhase::arrived, now_ms);
+      }
+    }
+
     // A runtime changed a directory for the transfer: the one a tree's walk is in was made, the
     // one a tree had made was removed, or the original of a move went to the trash.
     void changed(View& view, std::size_t index, const Carried& answer, std::uint64_t now_ms) {
@@ -324,6 +344,21 @@ namespace telar::gui::features::explorer {
 
       if (phase == TransferPhase::clearing) {
         finish(view, index, view.transfers[index].stop ? TransferPhase::cancelled : TransferPhase::failed, now_ms);
+      } else if (phase == TransferPhase::linking) {
+        // A link of the tree is where it goes: the next entry takes its turn.
+        view.transfers.atMut(index).chunk.clear();
+        if (!took) {
+          view.transfers.atMut(index).said.assign("a link of it could not be made where it goes");
+          abandon(view, index, now_ms);
+        } else if (!view.transfers[index].tree) {
+          // A link carried alone is whole once it is made.
+          linked(view, index, answer, now_ms);
+        } else if (view.transfers[index].stop) {
+          abandon(view, index, now_ms);
+        } else {
+          ++view.transfers.atMut(index).links_done;
+          advance(view, index, now_ms);
+        }
       } else if (phase == TransferPhase::making) {
         if (!took) {
           view.transfers.atMut(index).said.assign("a directory of it could not be made where it goes");
@@ -429,6 +464,8 @@ namespace telar::gui::features::explorer {
       return {.ask = TransferAsk::read, .machine = transfer.from};
     case TransferPhase::writing:
       return {.ask = TransferAsk::write, .machine = transfer.to};
+    case TransferPhase::linking:
+      return begins(view, transfer, transfer.to) ? Asking{} : Asking{.ask = TransferAsk::link, .machine = transfer.to};
     case TransferPhase::placing:
       return begins(view, transfer, transfer.to) ? Asking{} : Asking{.ask = TransferAsk::keep, .machine = transfer.to};
     case TransferPhase::trashing:
@@ -480,6 +517,7 @@ namespace telar::gui::features::explorer {
     case TransferAsk::write:
     case TransferAsk::keep:
     case TransferAsk::drop:
+    case TransferAsk::link:
       if (transfer.tree) {
         below(transfer.root.view(), transfer.file.view());
       } else {
@@ -553,6 +591,7 @@ namespace telar::gui::features::explorer {
       return transfer.from;
     case TransferPhase::making:
     case TransferPhase::writing:
+    case TransferPhase::linking:
     case TransferPhase::placing:
     case TransferPhase::dropping:
     case TransferPhase::clearing:
@@ -586,7 +625,8 @@ namespace telar::gui::features::explorer {
       if (stopped) {
         abandon(view, index, now_ms);
       } else {
-        view.transfers.atMut(index).phase = TransferPhase::writing;
+        // What a link says is no file to write: a link that says it is made instead.
+        view.transfers.atMut(index).phase = view.transfers[index].link ? TransferPhase::linking : TransferPhase::writing;
       }
 
       break;
@@ -664,7 +704,9 @@ namespace telar::gui::features::explorer {
       transfer.name.assign(baseOf(step.target.view()));
       transfer.overwrite = view.overwrite;
       transfer.batch = view.next_batch;
-      transfer.tree = step.directory;
+      // A link goes as what it says, whether it shows a directory or a file.
+      transfer.tree = step.directory && !step.link;
+      transfer.link = step.link;
       ++started;
     }
 

@@ -212,6 +212,8 @@ export namespace telar::gui::features::explorer {
     std::uint64_t source_machine = 0;
     FileIdentity identity{};
     std::uint64_t size = 0;
+    // What a paste brings is a symbolic link: between machines it goes as what it says.
+    bool link = false;
     // The file it changes is one no listing the window holds names, so the runtime is asked
     // what it is before the plan shows: the identity a plan carries is always one it read.
     bool unidentified = false;
@@ -227,6 +229,8 @@ export namespace telar::gui::features::explorer {
     std::uint64_t machine = 0;
     ds::String<Memory> path;
     bool directory = false;
+    // A symbolic link, whatever it points to: it is taken as a link, and not as what it shows.
+    bool link = false;
     FileIdentity identity{};
     std::uint64_t size = 0;
   };
@@ -256,6 +260,8 @@ export namespace telar::gui::features::explorer {
     // The machine a copy or a move comes from, when it is another than the one it goes to: the
     // window carries it there, and no runtime is asked for it as an operation. 0 otherwise.
     std::uint64_t source_machine = 0;
+    // What it carries from that machine is a symbolic link.
+    bool link = false;
   };
 
   // How a file goes from one machine to another: copied, moved, which sends the original to the
@@ -276,6 +282,8 @@ export namespace telar::gui::features::explorer {
     // A chunk is read from the source, then written to the partial of the target.
     reading,
     writing,
+    // Of a tree: a link of it, whose text was read, is made where it goes.
+    linking,
     // The partial takes the target's name; the source of a move goes to the trash.
     placing,
     trashing,
@@ -302,6 +310,8 @@ export namespace telar::gui::features::explorer {
     ds::String<Memory> name;
     FileIdentity identity{};
     std::uint64_t size = 0;
+    // A symbolic link: what it says is read, and a link that says it is made where it goes.
+    bool link = false;
   };
 
   // A file the window carries from one machine to another, a chunk at a time: the runtimes do
@@ -359,16 +369,20 @@ export namespace telar::gui::features::explorer {
     ds::Vec<TreeFile, Memory> files;
     ds::String<Memory> file;
     FileIdentity file_identity{};
+    // Whether what is read now is a symbolic link, of a tree or carried alone: it goes as what
+    // it says.
+    bool link = false;
     // Whether the listing of the directory the walk is in was asked for anew.
     bool fresh = false;
     // The directory the tree made where it goes, as the runtime named it; empty before.
     ds::String<Memory> root;
-    // The bytes and the files that arrived whole, of the ones the walk has seen so far, and the
-    // links and special files it left out.
+    // The bytes, the files and the links that arrived whole, of the ones the walk has seen so
+    // far, and the special files it left out: a socket, a pipe or a device is not carried.
     std::uint64_t carried = 0;
     std::uint64_t seen = 0;
     std::uint32_t files_done = 0;
     std::uint32_t files_seen = 0;
+    std::uint32_t links_done = 0;
     std::uint32_t entries_seen = 0;
     std::uint32_t left_out = 0;
   };

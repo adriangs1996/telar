@@ -22,6 +22,10 @@ namespace telar::runtime {
     }
 
     path_.assign(request.path);
+    if (request.link) {
+      readLink(request, reply);
+      return;
+    }
 
     // Without following a link, and without waiting on a pipe that took the file's name.
     const FileDescriptor file{::open(path_.data(), combineFlags(O_RDONLY, O_NOFOLLOW, O_NONBLOCK, O_CLOEXEC))}; // NOLINT(cppcoreguidelines-pro-type-vararg): open's C signature is variadic
@@ -67,6 +71,35 @@ namespace telar::runtime {
         .offset = request.offset,
         .size = size,
         .end = request.offset + held >= size,
+        .bytes = chunk_.view().first(held),
+    });
+  }
+
+  void FileContent::readLink(const ReadFile& request, EncodedReply<ConcurrentMemory>& reply) {
+    struct stat status{};
+    if (::lstat(path_.data(), &status) != 0 || kindOf(status.st_mode) != FileKind::link) {
+      throw RequestError{FailureCode::invalid_request, "The path is no link this account may read"};
+    }
+
+    if (!names(status, request.identity)) {
+      throw RequestError{FailureCode::invalid_request, "The link changed since it was listed"};
+    }
+
+    chunk_.resize(FileLimits::path_bytes);
+
+    const auto length = ::readlink(path_.data(), reinterpret_cast<char*>(chunk_.dataMut()), chunk_.size()); // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast): readlink writes the link's text as char, which may alias the bytes
+    // One that fills the room may be longer than it: a text cut short is another link.
+    if (length <= 0 || static_cast<std::size_t>(length) >= chunk_.size()) {
+      throw RequestError{FailureCode::invalid_request, "The link says more than a path holds"};
+    }
+
+    const auto held = static_cast<std::size_t>(length);
+
+    reply.send(FileChunk{
+        .request_id = request.request_id,
+        .offset = 0,
+        .size = held,
+        .end = true,
         .bytes = chunk_.view().first(held),
     });
   }

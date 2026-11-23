@@ -399,6 +399,7 @@ namespace telar::gui::features::explorer {
       case TransferPhase::walking:
       case TransferPhase::reading:
       case TransferPhase::writing:
+      case TransferPhase::linking:
         return "on the way";
       case TransferPhase::placing:
       case TransferPhase::trashing:
@@ -1393,11 +1394,6 @@ namespace telar::gui::features::explorer {
 
     if (step.verb == PlanVerb::remove && step.directory) {
       warn(note, "with all it holds");
-    }
-
-    // A tree that goes to another machine: the window carries its files and makes its directories.
-    if (step.directory && step.source_machine != 0) {
-      warn(note, "its links are left out");
     }
 
     return note;

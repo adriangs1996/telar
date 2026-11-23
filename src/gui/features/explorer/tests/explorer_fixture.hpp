@@ -36,6 +36,7 @@ namespace telar::gui::test {
     bool directory = false;
     std::uint64_t size = 0;
     std::uint64_t modified = 0;
+    bool link = false;
   };
 
   // What the runtime of a machine answers from: the directories it lists, what they weigh, and
@@ -54,6 +55,15 @@ namespace telar::gui::test {
 
   // An explorer in a window that keeps two machines, whose runtimes the fixture answers for: the
   // one it runs on and shows, `machine`, with the panes of its tab; and `box`, another one.
+  // What the runtime says an entry of the fixture is.
+  constexpr FileKind kindOf(const Listed& listed) noexcept {
+    if (listed.link) {
+      return FileKind::link;
+    }
+
+    return listed.directory ? FileKind::directory : FileKind::file;
+  }
+
   struct Explorer {
     static constexpr std::uint64_t machine = 1;
     static constexpr std::uint64_t box = 2;
@@ -73,7 +83,7 @@ namespace telar::gui::test {
       far.home = "/home/ops";
       far.files["/home/ops"] = {{"logs", true}, {"site", true}, {"deploy.sh", false, 300, 15}};
       far.files["/home/ops/logs"] = {{"app.log", false, 9000, 25}, {"db.log", false, 4000, 35}};
-      far.files["/home/ops/site"] = {{"index.html", false, 700, 45}};
+      far.files["/home/ops/site"] = {{"index.html", false, 700, 45}, {"latest", false, 0, 55, true}};
       far.files["/var/log"] = {{"syslog", false, 80000, 55}};
       far.changes = {{.path = "index.html", .unstaged = FileState::modified, .added = 3, .removed = 1}};
       // In the order the runtime lists: directories first, each group by name.
@@ -173,7 +183,7 @@ namespace telar::gui::test {
           std::vector<DirectoryEntry> entries;
 
           for (const auto& listed : found->second) {
-            entries.push_back({.name = listed.name, .kind = listed.directory ? FileKind::directory : FileKind::file, .directory = listed.directory, .size = listed.size, .identity = {.inode = 100 + entries.size(), .modified_seconds = listed.modified}});
+            entries.push_back({.name = listed.name, .kind = kindOf(listed), .directory = listed.directory, .size = listed.size, .identity = {.inode = 100 + entries.size(), .modified_seconds = listed.modified}});
           }
 
           telar::testing::check(receive(state, DirectoryContents{.request_id = request, .path = path, .total = static_cast<std::uint32_t>(entries.size()), .entries = entries}));

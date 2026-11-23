@@ -378,7 +378,7 @@ namespace telar::gui::application::explorer {
         // A listing is the cache's to ask for, as any directory a window shows.
         return ds::none;
       case TransferAsk::read:
-        return session.link.ask(ReadFile{.path = path.view(), .identity = feature::readIdentity(transfer), .offset = transfer.done, .limit = FileLimits::chunk_bytes});
+        return session.link.ask(ReadFile{.path = path.view(), .identity = feature::readIdentity(transfer), .offset = transfer.done, .limit = FileLimits::chunk_bytes, .link = transfer.link});
       case TransferAsk::write:
         return session.link.ask(WriteFile{.target = path.view(), .partial = transfer.partial.view(), .offset = transfer.done, .parents = transfer.kind == feature::TransferKind::bring, .bytes = transfer.chunk.view()});
       case TransferAsk::keep:
@@ -389,6 +389,14 @@ namespace telar::gui::application::explorer {
         const ds::Array<FileOperation, 1> made{{{.kind = FileOperationKind::create_directory, .target = path.view()}}};
 
         return session.link.ask(ChangeFiles{.operations = made.view(), .joins = joined});
+      }
+      case TransferAsk::link: {
+        // What the link says is the chunk that was read of it, as text.
+        const auto said = transfer.chunk.view();
+        const std::string_view text{reinterpret_cast<const char*>(said.data()), said.size()}; // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast): char may alias the bytes, and no cast-free view reads them as text
+        const ds::Array<FileOperation, 1> linked{{{.kind = FileOperationKind::link, .source = text, .target = path.view()}}};
+
+        return session.link.ask(ChangeFiles{.operations = linked.view(), .joins = joined});
       }
       case TransferAsk::clear: {
         const ds::Array<FileOperation, 1> cleared{{{.kind = FileOperationKind::trash, .source = path.view()}}};

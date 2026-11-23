@@ -545,6 +545,11 @@ namespace telar::runtime {
 
     if (operation.kind == FileOperationKind::create_directory) {
       made = ::mkdir(applied.path.data(), permission_bits) == 0;
+    } else if (operation.kind == FileOperationKind::link) {
+      // What the link says is written as it is: no path of this machine is read for it.
+      const Path said{memory_, operation.source};
+
+      made = !said.empty() && !operation.source.contains('\0') && ::symlinkat(said.data(), AT_FDCWD, applied.path.data()) == 0;
     } else {
       const FileDescriptor file{::open(applied.path.data(), combineFlags(O_WRONLY, O_CREAT, O_EXCL, O_NOFOLLOW, O_CLOEXEC), new_file)}; // NOLINT(cppcoreguidelines-pro-type-vararg): open's C signature is variadic
 
@@ -683,12 +688,16 @@ namespace telar::runtime {
 
   FileChanger::Applied FileChanger::apply(const FileOperation& operation, bool overwrite, const std::atomic<bool>& cancelled) {
     if (cancelled.load(std::memory_order_relaxed)) {
-      return {.outcome = FileOutcome::failed, .path = Path{memory_, operation.source.empty() ? operation.target : operation.source}};
+      // A link's source is what it says, and no path: its result is of its target.
+      const bool made = operation.source.empty() || operation.kind == FileOperationKind::link;
+
+      return {.outcome = FileOutcome::failed, .path = Path{memory_, made ? operation.target : operation.source}};
     }
 
     switch (operation.kind) {
     case FileOperationKind::create_file:
     case FileOperationKind::create_directory:
+    case FileOperationKind::link:
       return create(operation, overwrite);
     case FileOperationKind::move:
     case FileOperationKind::copy:

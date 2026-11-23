@@ -234,7 +234,33 @@ namespace {
     check(candidate.view() == "/a/folder-3");
   }
 
+  void testALinkIsMadeAsItIsSaidAndTakenBack() {
+    telar::testing::TestMemory adapter;
+    ConcurrentMemory& memory = adapter;
+    const Home home;
+    FileChanger changer{memory};
+    const auto link = home.work("current");
+
+    write(home.work("notes.txt"), "notes\n");
+
+    // What it says is written as it is, whether it resolves or not.
+    auto changed = change(changer, memory, {{.kind = FileOperationKind::link, .source = "notes.txt", .target = link}, {.kind = FileOperationKind::link, .source = "/nowhere/at/all", .target = home.work("broken")}});
+
+    check(changed.results.size() == 2 && changed.results[0].outcome == FileOutcome::done && changed.results[0].path == link && changed.undoable);
+    check(std::filesystem::is_symlink(link) && std::filesystem::read_symlink(link) == "notes.txt" && read(link) == "notes\n", "a relative text stays relative");
+    check(std::filesystem::read_symlink(home.work("broken")) == "/nowhere/at/all");
+    check(undo(changer, memory).results.size() == 2 && !std::filesystem::is_symlink(link) && !std::filesystem::is_symlink(home.work("broken")) && read(home.work("notes.txt")) == "notes\n", "u takes the links back, and nothing of what they pointed to");
+
+    // A name that is taken is not written over, nor written through when it is itself a link.
+    std::filesystem::create_symlink("notes.txt", link);
+    changed = change(changer, memory, {{.kind = FileOperationKind::link, .source = "elsewhere", .target = link}});
+    check(changed.results[0].outcome == FileOutcome::renamed && changed.results[0].path == home.work("current-1") && std::filesystem::read_symlink(link) == "notes.txt" && std::filesystem::read_symlink(home.work("current-1")) == "elsewhere" && read(home.work("notes.txt")) == "notes\n", "it takes a name beside the one that is taken");
+    changed = change(changer, memory, {{.kind = FileOperationKind::link, .source = "", .target = home.work("empty")}});
+    check(changed.results[0].outcome != FileOutcome::done && !std::filesystem::is_symlink(home.work("empty")), "a link that says nothing is not made");
+  }
+
   const telar::testing::Case case_plan{"operations.a_plan_creates_moves_copies_and_trashes", testAPlanCreatesMovesCopiesAndTrashes};
+  const telar::testing::Case case_link{"operations.a_link_is_made_as_it_is_said_and_taken_back", testALinkIsMadeAsItIsSaidAndTakenBack};
   const telar::testing::Case case_stale{"operations.a_file_changed_since_it_was_listed_is_left_alone", testAFileChangedSinceItWasListedIsLeftAlone};
   const telar::testing::Case case_exists{"operations.a_target_that_exists_is_kept_or_goes_to_the_trash", testATargetThatExistsIsKeptOrGoesToTheTrash};
   const telar::testing::Case case_beside{"operations.the_name_beside_a_target", testTheNameBesideATarget};

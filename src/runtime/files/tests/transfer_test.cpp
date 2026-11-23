@@ -283,7 +283,35 @@ namespace {
     check(changer.abandon(std::chrono::milliseconds{0}) == 0 && std::filesystem::exists(target));
   }
 
+  void testALinkIsReadAsWhatItSays() {
+    telar::testing::TestMemory adapter;
+    ConcurrentMemory& memory = adapter;
+    const TemporaryDirectory directory{"/tmp/telar-transfer-XXXXXX"};
+    const std::string root{directory.path()};
+    const auto link = root + "/current";
+    FileContent content{memory};
+
+    write(root + "/notes.txt", "0123456789");
+    // What it says is kept as it is: a relative text, and one that points nowhere.
+    std::filesystem::create_symlink("old/../notes.txt", link);
+    std::filesystem::create_symlink("/nowhere/at/all", root + "/broken");
+
+    const auto said = chunk(content, memory, {.request_id = 1, .path = link, .identity = identityOf(link), .link = true});
+
+    check(said.text == "old/../notes.txt" && said.size == 16 && said.end, "its text, whole, and not the file it points to");
+    check(chunk(content, memory, {.request_id = 2, .path = root + "/broken", .identity = identityOf(root + "/broken"), .link = true}).text == "/nowhere/at/all", "whether it resolves is not asked");
+    check(refused([&] {
+      static_cast<void>(chunk(content, memory, {.request_id = 3, .path = root + "/notes.txt", .identity = identityOf(root + "/notes.txt"), .link = true}));
+    }),
+        "a file is no link");
+    check(refused([&] {
+      static_cast<void>(chunk(content, memory, {.request_id = 4, .path = link, .identity = {.inode = 1}, .link = true}));
+    }),
+        "nor is one that is no longer the link the window listed");
+  }
+
   const telar::testing::Case case_abandoned{"transfer.a_file_no_chunk_reaches_any_more_is_removed", testAFileNoChunkReachesAnyMoreIsRemoved};
+  const telar::testing::Case case_link{"transfer.a_link_is_read_as_what_it_says", testALinkIsReadAsWhatItSays};
   const telar::testing::Case case_read{"transfer.a_file_is_read_a_chunk_at_a_time_while_it_is_the_one_listed", testAFileIsReadAChunkAtATimeWhileItIsTheOneListed};
   const telar::testing::Case case_arrives{"transfer.a_file_arrives_under_a_name_of_its_own_and_then_takes_its_target", testAFileArrivesUnderANameOfItsOwnAndThenTakesItsTarget};
   const telar::testing::Case case_undone{"transfer.an_arrival_is_part_of_the_last_change_and_goes_back_with_it", testAnArrivalIsPartOfTheLastChangeAndGoesBackWithIt};
