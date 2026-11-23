@@ -76,6 +76,8 @@ namespace telar::gui::qt {
     Q_INVOKABLE void typed(const QString& text);
     Q_INVOKABLE void submit(const QString& text);
     Q_INVOKABLE void cancel();
+    // `<Tab>` on the command line `text`: what it completes arrives in `line`.
+    Q_INVOKABLE void complete(const QString& text);
     // The pointer on row `row` of a window, counted from the first row of its listing.
     Q_INVOKABLE void select(int window, int row, bool extend, bool toggle);
     Q_INVOKABLE void activate(int window, int row);

@@ -3,6 +3,7 @@
 static_assert(true);
 #endif
 
+#include <cctype>
 #include <cstddef>
 #include <cstdint>
 #include <initializer_list>
@@ -19,6 +20,7 @@ import telar.base.memory.allocators;
 import telar.config.client;
 import telar.gui.features.explorer;
 import telar.gui.foundation.keys;
+import telar.wire.editor;
 import telar.wire.files;
 import telar.wire.runtime;
 import telar.wire.vocabulary;
@@ -103,18 +105,87 @@ namespace telar::gui::test {
           telar::testing::check(receive(state, RepositoryChanges{.request_id = request, .path = path, .root = repository ? std::string_view{"/home/dev/telar"} : std::string_view{}, .branch = "lifetime-speed", .changes = repository ? std::span<const FileChange>{changes} : std::span<const FileChange>{}}));
           break;
         case NeedKind::inspection:
-          telar::testing::check(receive(state, FileInspection{.request_id = request, .path = path, .size = 7739, .text = "# Usage\n", .commit = "31d2299b4000000000000000000000000000000f", .committed_seconds = 1794096000, .subject = "Describe the usage", .diff = path.ends_with("usage.md") ? std::string_view{"@@ -1,2 +1,2 @@\n-old\n+new\n context\n"} : std::string_view{}}));
+          telar::testing::check(receive(state, FileInspection{.request_id = request, .path = path, .size = 7739, .identity = {.inode = inspected_inode, .modified_seconds = 77}, .text = "# Usage\n", .commit = "31d2299b4000000000000000000000000000000f", .committed_seconds = 1794096000, .subject = "Describe the usage", .diff = path.ends_with("usage.md") ? std::string_view{"@@ -1,2 +1,2 @@\n-old\n+new\n context\n"} : std::string_view{}}));
+          break;
+        case NeedKind::search:
+          telar::testing::check(receive(state, found(request, path, std::string{wanted->text}, true)));
           break;
         }
+
+        settle();
       }
 
-      // As the window does when its session changed: a pane followed moves the windows, and the
-      // rows take in what was answered.
+      settle();
+    }
+
+    // As the window does after each answer and when its session changed: a pane followed moves
+    // the windows, and the rows take in what was answered.
+    void settle() {
       if (follow(view, context(), machine)) {
         rebuild(view, state, context(), machine);
       } else {
         absorb(view, state, context(), machine);
       }
+    }
+
+    // Whether the letters of `query` are in `path` in their order, whatever their case: what the
+    // runtime's path search takes for a match.
+    [[nodiscard]] static bool matches(std::string_view path, std::string_view query) {
+      std::size_t next = 0;
+
+      for (const char letter : path) {
+        if (next < query.size() && std::tolower(static_cast<unsigned char>(letter)) == std::tolower(static_cast<unsigned char>(query[next]))) {
+          ++next;
+        }
+      }
+
+      return next == query.size();
+    }
+
+    // The paths below `directory` that match, from it, in the order of their names.
+    void gather(std::vector<std::pair<std::string, bool>>& paths, const std::string& directory, const std::string& prefix, std::string_view query) const {
+      const auto listed = files.find(directory);
+      if (listed == files.end()) {
+        return;
+      }
+
+      for (const auto& entry : listed->second) {
+        const auto relative = prefix + entry.name;
+
+        if (matches(relative, query)) {
+          paths.emplace_back(relative, entry.directory);
+        }
+
+        if (entry.directory) {
+          gather(paths, directory + "/" + entry.name, relative + "/", query);
+        }
+      }
+    }
+
+    // What the runtime's path search answers under `request`: the paths below `root` that match
+    // `query`, `search_limit` of them at most, and the first half of those alone while it still
+    // reads its index, when not `complete`.
+    [[nodiscard]] PathResults found(std::uint64_t request, const std::string& root, const std::string& query, bool complete) {
+      std::vector<std::pair<std::string, bool>> paths;
+
+      gather(paths, root, {}, query);
+      std::ranges::sort(paths);
+      found_root = root;
+      found_paths.clear();
+      found_matches.clear();
+
+      const auto whole = std::min(paths.size(), search_limit);
+      const auto count = complete ? whole : whole / 2;
+
+      for (std::size_t index = 0; index < count; ++index) {
+        found_paths.push_back(paths[index].first);
+      }
+
+      for (std::size_t index = 0; index < count; ++index) {
+        found_matches.push_back({.path = found_paths[index], .kind = paths[index].second ? PathKind::directory : PathKind::file});
+      }
+
+      return {.request_id = request, .root = found_root, .scanned = static_cast<std::uint32_t>(paths.size()), .complete = complete, .truncated = paths.size() > whole, .matches = found_matches};
     }
 
     void start() {
@@ -231,6 +302,13 @@ namespace telar::gui::test {
         {.path = "docs/usage.md", .unstaged = FileState::modified, .added = 12, .removed = 7},
         {.path = "out/", .unstaged = FileState::ignored},
     };
+    // What the last answer of the path search views, and how many matches one carries.
+    std::string found_root;
+    std::vector<std::string> found_paths;
+    std::vector<PathMatch> found_matches;
+    std::size_t search_limit = FindPaths::maximum_limit;
+    // The inode the runtime says a file it inspects has.
+    std::uint64_t inspected_inode = 4242;
     bool repository = true;
     std::vector<PaneFact> panes;
     std::uint64_t focused = 13;

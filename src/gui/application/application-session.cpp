@@ -879,6 +879,7 @@ namespace telar::gui::application {
   template bool Session::Link::offer<QueryHistory>(const QueryHistory& request);
   template ds::Option<std::uint64_t> Session::Link::ask<NvimConfiguration>(NvimConfiguration request);
   template ds::Option<std::uint64_t> Session::Link::ask<QueryMonitor>(QueryMonitor request);
+  template ds::Option<std::uint64_t> Session::Link::ask<FindPaths>(FindPaths request);
   template ds::Option<std::uint64_t> Session::Link::ask<ListDirectory>(ListDirectory request);
   template ds::Option<std::uint64_t> Session::Link::ask<MeasureDirectory>(MeasureDirectory request);
   template ds::Option<std::uint64_t> Session::Link::ask<QueryChanges>(QueryChanges request);

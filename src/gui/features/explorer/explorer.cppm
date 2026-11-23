@@ -47,6 +47,12 @@ export namespace telar::gui::features::explorer {
   void typed(View& view, const State& state, const Context& context, std::string_view text);
   [[nodiscard]] Action submit(View& view, State& state, const Context& context, std::string_view text);
 
+  // `<Tab>` on the command line `line`: completes the directory a command that goes somewhere
+  // names, as far as one name or the start that several share reaches, and lists those. What it
+  // completed is `view.completion`, and `view.completed` counts it; a directory not yet listed
+  // is asked for, and the line is completed when it arrives.
+  void complete(View& view, const State& state, const Context& context, std::string_view line);
+
   // Escape: leaves the mode, the selection or the filter.
   void cancel(View& view, const State& state, const Context& context);
 

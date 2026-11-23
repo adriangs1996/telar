@@ -31,7 +31,7 @@ namespace telar::gui::qt {
     using explorer::Mode;
     using explorer::RowKind;
 
-    constexpr ds::Array<const char*, 7> kind_names{"entry", "added", "header", "note", "diff", "change", "pane"};
+    constexpr ds::Array<const char*, 8> kind_names{"entry", "added", "header", "note", "diff", "change", "pane", "match"};
     constexpr ds::Array<const char*, 4> diff_tones{"context", "added", "removed", "hunk"};
     constexpr ds::Array<const char*, 8> mode_names{"normal", "visual", "insert", "search", "command", "plan", "help", "menu"};
     constexpr ds::Array<const char*, 3> tone_names{"info", "error", "ask"};
@@ -85,7 +85,7 @@ namespace telar::gui::qt {
       std::string_view label;
     };
 
-    constexpr ds::Array<HelpKey, 50> help_keys{
+    constexpr ds::Array<HelpKey, 51> help_keys{
         {
             {.group = "Moving", .keys = "j k", .label = "down, up; with a count"},
             {.group = "Moving", .keys = "gg G", .label = "first, last; 12G goes to row 12"},
@@ -127,8 +127,9 @@ namespace telar::gui::qt {
             {.group = "Git, sizes and what shows", .keys = "g. gi", .label = "dotfiles, what git ignores"},
             {.group = "Git, sizes and what shows", .keys = "R", .label = "read again"},
             {.group = "Modes", .keys = "V", .label = "visual: y d <CR> @ ga gu"},
-            {.group = "Modes", .keys = "/", .label = "filter the listing"},
+            {.group = "Modes", .keys = "/ n N", .label = "filter every path below; next, previous"},
             {.group = "Modes", .keys = ":", .label = "e w vs sp cd commit marks q"},
+            {.group = "Modes", .keys = "<Tab>", .label = "on a line of :, complete a directory"},
             {.group = "Modes", .keys = "F", .label = "follow the pane"},
             {.group = "Modes", .keys = "q", .label = "close"},
             {.group = "Modes", .keys = "?", .label = "this help"},
@@ -273,6 +274,7 @@ namespace telar::gui::qt {
           {QStringLiteral("root"), fixedText(status.root)},
           {QStringLiteral("pending"), status.pending},
           {QStringLiteral("flags"), fixedText(status.flags)},
+          {QStringLiteral("filter"), fixedText(status.filter)},
           {QStringLiteral("total"), fixedText(status.total)},
           {QStringLiteral("keys"), fixedText(status.keys)},
           {QStringLiteral("chosen"), status.chosen},
@@ -324,11 +326,17 @@ namespace telar::gui::qt {
     QVariantMap result{
         {QStringLiteral("mode"), QString::fromLatin1(mode_names[static_cast<std::size_t>(view_.mode)])},
         {QStringLiteral("message"), view_.message.view().empty() ? toQString(explorer::idle_message) : fixedText(view_.message)},
+        // What it says now, and nothing when it says nothing: a line being typed shows it beside itself.
+        {QStringLiteral("said"), fixedText(view_.message)},
         {QStringLiteral("tone"), QString::fromLatin1(tone_names[static_cast<std::size_t>(view_.tone)])},
         {QStringLiteral("prefill"), toQString(view_.mode == Mode::insert ? view_.draft.view() : view_.prefill.view())},
         {QStringLiteral("overwrite"), view_.overwrite},
         {QStringLiteral("edits"), static_cast<int>(view_.edits.size())},
         {QStringLiteral("revision"), static_cast<qulonglong>(view_.revision)},
+        // The command line `<Tab>` completed, and how many times it did: the field takes it when
+        // the count grows.
+        {QStringLiteral("completion"), toQString(view_.completion.view())},
+        {QStringLiteral("completed"), static_cast<int>(view_.completed)},
     };
 
     if (!view_.windows.empty()) {
@@ -505,7 +513,7 @@ namespace telar::gui::qt {
 
   QVariantMap ExplorerController::record(std::size_t window, std::size_t row) const {
     const auto look = explorer::look(store_.session(), view_, host(), {.window = window, .row = row});
-    const bool entry = look.kind == RowKind::entry || look.kind == RowKind::added || look.kind == RowKind::change;
+    const bool entry = look.kind == RowKind::entry || look.kind == RowKind::added || look.kind == RowKind::change || look.kind == RowKind::match;
     QVariantMap result{
         {QStringLiteral("kind"), QString::fromLatin1(kind_names[static_cast<std::size_t>(look.kind)])},
         {QStringLiteral("index"), static_cast<int>(row)},
@@ -648,6 +656,13 @@ namespace telar::gui::qt {
 
   void ExplorerController::cancel() {
     explorer::cancel(store_.sessionMut(), view_, host());
+    finish(Effect::none);
+  }
+
+  void ExplorerController::complete(const QString& text) {
+    const auto bytes = text.toUtf8();
+
+    explorer::complete(store_.sessionMut(), view_, host(), {bytes.constData(), static_cast<std::size_t>(bytes.size())});
     finish(Effect::none);
   }
 

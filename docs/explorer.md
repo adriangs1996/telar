@@ -25,13 +25,31 @@ until `:w` shows the plan and you accept it. `?` lists every key.
 | `-` `_` `~` | Go to the directory above, to the workspace's, to the home. |
 | `Ctrl+o` `Ctrl+i` | Go back and forward through the roots visited. |
 | `ma` `'a` | Set a mark on the selection, and return to it. `:marks` lists them. |
-| `/` | Filter the listing as you type; Enter keeps the filter, Escape drops it. |
+| `/` | Filter as you type; Enter keeps the filter, Escape drops it. `n` and `N` go to the next and the previous match, around the ends. |
 | `]c` `[c` | Go to the next or the previous row git says changed. |
 | `S`, `g.`, `gi` | Sort by name, size or time; show dotfiles; show what git ignores. |
 | `R` | Read the directories again. |
 
 A click selects a row, a double click acts as Enter, and the wheel scrolls. Shift and a click
 selects up to that row, and Cmd or Ctrl and a click picks rows one by one.
+
+## Filter every path below the root
+
+`/` asks the runtime of the machine for the paths below the window's root that match what you
+type, with the search the path picker of `Ctrl+b` `f` uses: the letters in their order, wherever
+they are in the path. It reaches what the window never unfolded.
+
+![A filter that found a file in a directory the window never unfolded](images/telar-explorer-filter.png)
+
+The matches show as a flat list, best first, each with the path that leads to it, and the status
+line says how many there are: `/base 3`, `50+` when more match than the fifty a list holds, and
+`…` while the runtime still reads its index. A match is a row as any other: Enter hands it to the
+pane, `cw` renames it, `dd` cuts it, the preview shows it. The window did not list its directory,
+so before the plan of `:w` shows, the runtime says which file each one is, and that is the file
+it then checks.
+
+In the changes and the panes, and with a runtime that has no path search, `/` narrows the rows
+the window already lists.
 
 ## What a row says
 
@@ -153,6 +171,7 @@ The explorer splits into three windows at most, each on its own directory.
 | `Ctrl+w` `w`, `Ctrl+w` `h` `j` `k` `l` | Go to the next window, or to the one that way. |
 | `Ctrl+w` `q`, `Ctrl+w` `o` | Close this window, or every other one. |
 | `:e PATH`, `:vs PATH`, `:sp PATH` | Take this window, or a new one, to a path. `~` is the home, and a relative path starts at the window's root. |
+| `Tab` | On one of those lines and on `:cd`, complete the directory being typed: the one that matches, or the start that several share, which it lists beside the line. |
 
 `yy` in one window and `p` in another copies between two directories; `dd` and `p` moves.
 

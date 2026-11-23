@@ -130,9 +130,11 @@ namespace telar::gui::application::explorer {
 
     // Asks the runtime for what the windows of the machine lack, while it may ask for more.
     void reconcile(Session& session, const View& view, const Host& host) {
-      while (session.ready() && feature::mayAsk(session.explorer)) {
+      session.explorer.finds = session.speaks(ClientTag::find_paths);
+      while (session.ready()) {
         const auto need = feature::need(view, session.explorer, host.machine);
-        if (!need) {
+        // A search follows what is typed, and waits for no answer on files to be asked.
+        if (!need || (need->kind != feature::NeedKind::search && !feature::mayAsk(session.explorer))) {
           return;
         }
 
@@ -150,6 +152,9 @@ namespace telar::gui::application::explorer {
           break;
         case feature::NeedKind::inspection:
           request = session.link.ask(InspectFile{.path = need->path});
+          break;
+        case feature::NeedKind::search:
+          request = session.link.ask(feature::search(session.explorer, *need));
           break;
         }
 
@@ -284,6 +289,7 @@ namespace telar::gui::application::explorer {
 
     const auto facts = factsOf(session);
 
+    session.explorer.finds = session.speaks(ClientTag::find_paths);
     feature::open(view, session.explorer, contextOf(facts, host), host.machine);
     reconcile(session, view, host);
     return true;
@@ -314,6 +320,13 @@ namespace telar::gui::application::explorer {
     });
 
     return finish(session, view, host, action);
+  }
+
+  void complete(Session& session, View& view, const Host& host, std::string_view line) {
+    const auto facts = factsOf(session);
+
+    feature::complete(view, session.explorer, contextOf(facts, host), line);
+    reconcile(session, view, host);
   }
 
   void cancel(Session& session, View& view, const Host& host) {

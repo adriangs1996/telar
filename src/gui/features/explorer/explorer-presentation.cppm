@@ -129,6 +129,9 @@ export namespace telar::gui::features::explorer {
     bool pending = false;
     // `[size↓ . !]`: the sort, and the hidden and ignored entries it lists.
     ShortText flags;
+    // `/usage 3`: the filter, and how many paths below the root match it; `50+` when more match
+    // than are listed, and `…` while the runtime still searches.
+    LineText filter;
     ShortText total;
     // The keys typed toward a command, as `showcmd` shows them.
     ShortText keys;

@@ -13,6 +13,7 @@ import telar.testing;
 import telar.gui.application.tests.session_fixture;
 import telar.gui.application;
 import telar.gui.foundation.keys;
+import telar.wire.editor;
 import telar.wire.files;
 import telar.wire.pane_io;
 import telar.wire.runtime;
@@ -146,7 +147,54 @@ namespace {
     check(transport.count(ClientTag::undo_file_changes) == 1, "u with nothing typed takes the plan back");
   }
 
+  void aFilterAsksTheRuntimeForThePathsBelowTheRoot() {
+    Fixture fixture;
+    auto& transport = fixture.transport;
+
+    fixture.list();
+    // The runtime answers what else the window asked, so it may ask for more.
+    check(deliver(fixture.client, RepositoryChanges{.request_id = transport.last<QueryChanges>().request_id, .path = root}) == application::Change::explorer);
+    check(deliver(fixture.client, DirectorySizes{.request_id = transport.last<MeasureDirectory>().request_id, .path = root}) == application::Change::explorer);
+    static_cast<void>(explorer::refresh(fixture.client, fixture.view, host));
+    static_cast<void>(explorer::press(fixture.client, fixture.view, host, key('/')));
+    check(transport.count(ClientTag::find_paths) == 0, "an empty filter asks for nothing");
+    explorer::typed(fixture.client, fixture.view, host, "read");
+
+    const auto first = transport.last<FindPaths>();
+
+    check(first.root == root && first.query == "read" && first.kind == PathKindFilter::any && first.limit == FindPaths::maximum_limit && !first.refresh, "with the window's root, and for files and directories");
+    explorer::typed(fixture.client, fixture.view, host, "read");
+    check(transport.count(ClientTag::find_paths) == 1, "the same text is not asked for twice");
+    explorer::typed(fixture.client, fixture.view, host, "readm");
+
+    const auto second = transport.last<FindPaths>();
+
+    check(transport.count(ClientTag::find_paths) == 2 && second.query == "readm" && second.request_id != first.request_id, "a letter more replaces the query in flight");
+
+    const ds::Array<PathMatch, 1> found{{{.path = "README.md", .kind = PathKind::file, .change = PathChange::modified}}};
+
+    check(deliver(fixture.client, PathResults{.request_id = first.request_id, .root = root, .scanned = 2, .complete = true, .matches = found.view()}) != application::Change::explorer, "the answer to the older query is not the explorer's");
+    static_cast<void>(explorer::refresh(fixture.client, fixture.view, host));
+    check(fixture.row(0).kind == explorer::RowKind::note, "and nothing of it shows");
+    check(deliver(fixture.client, PathResults{.request_id = second.request_id, .root = root, .scanned = 2, .complete = false, .matches = found.view()}) == application::Change::explorer);
+    check(explorer::refresh(fixture.client, fixture.view, host));
+    check(fixture.row(0).kind == explorer::RowKind::match && fixture.row(0).name.view() == "README.md" && fixture.row(0).unstaged == FileState::modified);
+    check(explorer::status(fixture.client, fixture.view, host, 0).filter.view() == "/readm 1 …", "what it found so far, while the runtime still searches");
+    check(deliver(fixture.client, PathResults{.request_id = second.request_id, .root = root, .scanned = 2, .complete = true, .matches = found.view()}) == application::Change::explorer);
+    check(explorer::refresh(fixture.client, fixture.view, host) && explorer::status(fixture.client, fixture.view, host, 0).filter.view() == "/readm 1");
+
+    // `<Tab>` on a directory the window does not hold asks the runtime for it.
+    explorer::cancel(fixture.client, fixture.view, host);
+    static_cast<void>(explorer::press(fixture.client, fixture.view, host, key(':')));
+
+    const auto listings = transport.count(ClientTag::list_directory);
+
+    explorer::complete(fixture.client, fixture.view, host, "e src/c");
+    check(transport.count(ClientTag::list_directory) == listings + 1 && transport.last<ListDirectory>().path == "/work/project/src");
+  }
+
   const telar::testing::Case case_asks{"explorer_session.the_window_asks_for_what_it_shows_and_keeps_the_answers", theWindowAsksForWhatItShowsAndKeepsTheAnswers};
+  const telar::testing::Case case_filter{"explorer_session.a_filter_asks_the_runtime_for_the_paths_below_the_root", aFilterAsksTheRuntimeForThePathsBelowTheRoot};
   const telar::testing::Case case_refused{"explorer_session.a_directory_the_runtime_refuses_is_not_asked_for_again", aDirectoryTheRuntimeRefusesIsNotAskedForAgain};
   const telar::testing::Case case_plan{"explorer_session.a_plan_is_sent_whole_and_taken_back", aPlanIsSentWholeAndTakenBack};
 

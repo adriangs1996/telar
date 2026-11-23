@@ -82,6 +82,8 @@ export namespace telar::gui::application::explorer {
   void typed(Session& session, View& view, const Host& host, std::string_view text);
   Effect submit(Session& session, View& view, const Host& host, std::string_view text);
   void cancel(Session& session, View& view, const Host& host);
+  // `<Tab>` on the command line: completes the directory it names, or asks for it to.
+  void complete(Session& session, View& view, const Host& host, std::string_view line);
 
   // The pointer chose, asked for or unfolded a row of a window.
   void select(Session& session, View& view, const Host& host, const Pick& pick);

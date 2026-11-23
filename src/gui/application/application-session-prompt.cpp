@@ -14,6 +14,11 @@ namespace telar::gui::application {
   }
 
   Change Session::apply(const PathResults& message) {
+    // What the filter of an explorer window found.
+    if (features::explorer::receive(explorer, message)) {
+      return Change::explorer;
+    }
+
     if (const auto change = prompt::receive(*this, message)) {
       return *change;
     }

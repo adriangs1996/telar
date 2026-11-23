@@ -29,6 +29,10 @@ export namespace telar::gui::features::explorer {
     static constexpr std::size_t depth = 48;
     // The rows of a window before the client says how many fit.
     static constexpr std::uint16_t page = 20;
+    // The bytes of a filter the runtime searches for: what its path search takes.
+    static constexpr std::size_t query_bytes = 64;
+    // The names `<Tab>` lists when several complete a path.
+    static constexpr std::size_t candidates = 12;
   };
 
   enum class Lens : std::uint8_t {
@@ -115,6 +119,8 @@ export namespace telar::gui::features::explorer {
     change,
     // A pane of the tab, in the panes lens.
     pane,
+    // A path the runtime found below the root for the window's filter.
+    match,
   };
 
   enum class DiffTone : std::uint8_t {
@@ -177,6 +183,9 @@ export namespace telar::gui::features::explorer {
     std::uint64_t source_machine = 0;
     FileIdentity identity{};
     std::uint64_t size = 0;
+    // The file it changes is one no listing the window holds names, so the runtime is asked
+    // what it is before the plan shows: the identity a plan carries is always one it read.
+    bool unidentified = false;
 
     // A copy that keeps its texts in `memory`, and borrows nothing of this one.
     [[nodiscard]] tbc::val_a<Edit> clone(tbc::mut_a<Memory> memory) const;
@@ -265,6 +274,8 @@ export namespace telar::gui::features::explorer {
     std::uint16_t page = ViewLimits::page;
     // Whether the root's listing is yet to arrive.
     bool loading = false;
+    // Whether the rows are what the runtime found for the filter, not the tree.
+    bool matching = false;
     // The pane it last followed and where that pane was, to follow again only when either moves.
     std::uint64_t followed = 0;
     ds::String<Memory> followed_cwd;
@@ -371,6 +382,12 @@ export namespace telar::gui::features::explorer {
     ds::String<Memory> draft;
     // What the command line starts with.
     ds::String<Memory> prefill;
+    // The command line `<Tab>` completed last, and how many times it did: whoever shows the
+    // line takes it when the count grows. And the line that waits for a directory to be listed.
+    ds::String<Memory> completion;
+    std::uint32_t completed = 0;
+    ds::String<Memory> completing;
+    ds::String<Memory> completing_in;
     ds::Vec<PlanStep, Memory> plan;
     bool overwrite = false;
     // Whether the plan in flight is the one of the changes typed, which end with it.
@@ -392,6 +409,10 @@ export namespace telar::gui::features::explorer {
   };
 
   [[nodiscard]] const Window& window(const View& view) noexcept;
+
+  // The filter of a window as the runtime searches for it: without the spaces around it, cut to
+  // what a search takes.
+  [[nodiscard]] tbc::val_a<std::string_view> queryOf(tbc::ref_a<Window> window) noexcept;
 
   // The change of `kind` typed on `path` of `machine`, if there is one.
   [[nodiscard]] tbc::val_a<const Edit*> editOn(tbc::ref_a<View> view, EditKind kind, std::uint64_t machine, std::string_view path) noexcept;

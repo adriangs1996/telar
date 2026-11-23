@@ -37,6 +37,8 @@ FocusScope {
     property int dropRow: -1
     readonly property string mode: line.mode ?? "normal"
     readonly property bool typing: mode === "insert" || mode === "search" || mode === "command"
+    // How many times `<Tab>` completed the command line: the field takes what it completed.
+    readonly property int completed: line.completed ?? 0
     // The terminal's font, and the same a step smaller for what a row says beside its name.
     readonly property var grid: typography.grid ?? ({})
     readonly property var smallGrid: scaled(grid, 0.92)
@@ -189,6 +191,11 @@ FocusScope {
 
     onVisibleChanged: settleFocus()
     onModeChanged: settleFocus()
+
+    onCompletedChanged: {
+        if (mode === "command")
+            commandField.text = line.completion ?? "";
+    }
 
     // What is behind the explorer takes no pointer while it shows.
     MouseArea {
@@ -592,7 +599,7 @@ FocusScope {
 
                             required property var record
                             required property int index
-                            readonly property bool entry: record.kind === "entry" || record.kind === "added" || record.kind === "change" || record.kind === "pane"
+                            readonly property bool entry: record.kind === "entry" || record.kind === "added" || record.kind === "change" || record.kind === "pane" || record.kind === "match"
                             readonly property real leading: root.gutter + record.depth * root.indent
                             readonly property color nameColor: record.removed ? root.colors.red : record.added ? root.colors.green : record.renamed ? root.colors.yellow : record.ignored ? root.colors.overlay1 : record.directory ? root.colors.accent : root.colors.text
 
@@ -635,7 +642,7 @@ FocusScope {
                                 width: 10 * root.ratio
                                 height: parent.height
                                 visible: row.entry
-                                text: row.record.kind === "added" ? "+" : !row.record.directory ? "" : row.record.expanded ? "▾" : "▸"
+                                text: row.record.kind === "added" ? "+" : !row.record.directory || row.record.kind === "match" ? "" : row.record.expanded ? "▾" : "▸"
                                 grid: root.grid
                                 color: row.record.kind === "added" ? root.colors.green : root.colors.overlay1
                             }
@@ -1028,6 +1035,16 @@ FocusScope {
                             color: root.colors.accent
                         }
 
+                        // The filter, and how many paths below the root it found.
+                        CellText {
+                            width: implicitWidth
+                            height: parent.height
+                            visible: (pane.modelData.filter ?? "").length > 0
+                            text: pane.modelData.filter ?? ""
+                            grid: root.smallGrid
+                            color: root.colors.accent
+                        }
+
                         CellText {
                             width: implicitWidth
                             height: parent.height
@@ -1352,7 +1369,7 @@ FocusScope {
             objectName: "explorerCommand"
             x: prompt.x + prompt.width + 1 * root.ratio
             y: Math.round((parent.height - height) / 2)
-            width: parent.width - x - root.gutter
+            width: parent.width - x - root.gutter - (said.visible ? said.width + root.gutter : 0)
             height: Math.max(root.grid.cellHeight ?? 0, 18 * root.ratio)
             visible: prompt.visible
             colors: root.colors
@@ -1372,8 +1389,25 @@ FocusScope {
                 } else if (event.key === Qt.Key_Escape) {
                     root.controller.cancel();
                     event.accepted = true;
+                } else if (event.key === Qt.Key_Tab && root.mode === "command") {
+                    // The path a command goes to is completed; what it completes arrives in `line`.
+                    root.controller.complete(text);
+                    event.accepted = true;
                 }
             }
+        }
+
+        // What the explorer says while a line is typed: the names `<Tab>` found.
+        CellText {
+            id: said
+            x: parent.width - width - root.gutter
+            width: Math.min(implicitWidth, parent.width * 0.6)
+            height: parent.height
+            visible: prompt.visible && (root.line.said ?? "").length > 0
+            text: root.line.said ?? ""
+            grid: root.smallGrid
+            color: root.line.tone === "error" ? root.colors.red : root.colors.overlay1
+            clip: true
         }
 
         CellText {

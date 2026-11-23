@@ -8,6 +8,7 @@ import telar.base.memory.allocators;
 import telar.base.memory.containers;
 import telar.base.ds;
 import telar.tbc;
+import telar.wire.editor;
 import telar.wire.files;
 import telar.wire.runtime;
 
@@ -23,6 +24,10 @@ export namespace telar::gui::features::explorer {
     Repository repository;
     // The paths inspected: the selected one's preview, and each file whose diff a row unfolds.
     ds::Vec<ds::Box<Inspection, Memory>, Memory> inspections;
+    // What a filter found below a window's root, and whether this machine's runtime searches
+    // paths at all: the session says so when the explorer opens.
+    Search search;
+    bool finds = false;
     // The plan in flight, 0 when none; what the last one did, and whether it can be taken back.
     std::uint64_t applying = 0;
     ds::Vec<Outcome, Memory> outcomes;
@@ -59,11 +64,14 @@ export namespace telar::gui::features::explorer {
     sizes,
     changes,
     inspection,
+    // The paths below `path` that match `text`.
+    search,
   };
 
   struct Need {
     NeedKind kind = NeedKind::listing;
     std::string_view path;
+    std::string_view text;
   };
 
   // Whether the window may ask the machine's runtime for more now.
@@ -75,6 +83,7 @@ export namespace telar::gui::features::explorer {
   // The requests for a need. Whoever sends one gives it its id, and says so with `asked`.
   [[nodiscard]] tbc::val_a<ListDirectory> listing(const State& state, tbc::val_a<std::string_view> path) noexcept;
   [[nodiscard]] tbc::val_a<MeasureDirectory> measure(const State& state, tbc::val_a<std::string_view> path) noexcept;
+  [[nodiscard]] tbc::val_a<FindPaths> search(const State& state, tbc::val_a<Need> need) noexcept;
 
   // The request for `need` left under `request_id`.
   void asked(State& state, const Need& need, std::uint64_t request_id);
@@ -91,6 +100,8 @@ export namespace telar::gui::features::explorer {
   bool receive(State& state, const FileInspection& inspection);
   bool receive(State& state, const FilesChanged& changed);
   bool receive(State& state, const ChangesCommitted& committed);
+  // The matches of the search asked last; false for an answer to one that a later query replaced.
+  bool receive(State& state, const PathResults& results);
 
   // The runtime refused a request; false when it is none of the explorer's.
   bool fail(State& state, const RequestFailed& failure);

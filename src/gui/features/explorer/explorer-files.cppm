@@ -138,6 +138,39 @@ export namespace telar::gui::features::explorer {
     std::uint64_t used = 0;
   };
 
+  // A path the runtime found below a root for a query: where it is in the search's text, from
+  // that root.
+  struct Match {
+    std::uint32_t path = 0;
+    std::uint16_t path_size = 0;
+    bool directory = false;
+    // What the search says git holds of it: nothing when it is as committed.
+    FileState state = FileState::unchanged;
+  };
+
+  // What the runtime's path index found below `root` for `query`: the best matches of its last
+  // answer, in its order. An answer replaces the one before it while the index is still read.
+  struct Search {
+    explicit Search(Memory& memory);
+
+    ds::String<Memory> root;
+    ds::String<Memory> query;
+    ds::Vec<char, Memory> text;
+    ds::Vec<Match, Memory> matches;
+    // The request the answers come under; 0 once the index was read whole, or it failed.
+    std::uint64_t waiting = 0;
+    // Whether an answer for this root and query is held.
+    bool known = false;
+    // More paths match than an answer carries.
+    bool truncated = false;
+    // The files changed since it was answered: it is asked again, of an index read again.
+    bool stale = false;
+
+    [[nodiscard]] std::string_view path(const Match& match) const noexcept;
+    // Whether this is the search of `query` below `root`, answered or still asked.
+    [[nodiscard]] bool of(std::string_view directory, std::string_view text_asked) const noexcept;
+  };
+
   // What became of one operation of the plan last applied.
   struct Outcome {
     FileOutcome outcome = FileOutcome::done;

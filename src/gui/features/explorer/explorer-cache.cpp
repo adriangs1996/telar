@@ -6,12 +6,36 @@ import telar.base.memory.allocators;
 import telar.base.text.utf8;
 import telar.base.ds;
 import telar.tbc;
+import telar.wire.editor;
 import telar.wire.files;
 import telar.wire.runtime;
+import telar.wire.vocabulary;
 
 namespace telar::gui::features::explorer {
 
   namespace {
+
+    // What the path search says git holds of a match, as the explorer names it.
+    constexpr FileState stateOf(PathChange change) noexcept {
+      switch (change) {
+      case PathChange::none:
+        return FileState::unchanged;
+      case PathChange::modified:
+        return FileState::modified;
+      case PathChange::added:
+        return FileState::added;
+      case PathChange::deleted:
+        return FileState::deleted;
+      case PathChange::renamed:
+        return FileState::renamed;
+      case PathChange::untracked:
+        return FileState::untracked;
+      case PathChange::conflicted:
+        return FileState::conflicted;
+      }
+
+      return FileState::unchanged;
+    }
 
     tbc::val_a<Directory*> findMut(tbc::mut_a<State> state, std::string_view path) noexcept {
       for (auto& directory : state.directories.viewMut()) {
@@ -147,6 +171,22 @@ namespace telar::gui::features::explorer {
     return {part.data(), part.size()};
   }
 
+  Search::Search(Memory& memory)
+      : root(memory),
+        query(memory),
+        text(memory),
+        matches(memory) {}
+
+  std::string_view Search::path(const Match& match) const noexcept {
+    const auto part = text.view().subspan(match.path, match.path_size);
+
+    return {part.data(), part.size()};
+  }
+
+  bool Search::of(std::string_view directory, std::string_view text_asked) const noexcept {
+    return (known || waiting != 0) && root.view() == directory && query.view() == text_asked;
+  }
+
   Inspection::Inspection(Memory& memory)
       : asked(memory),
         path(memory),
@@ -160,6 +200,7 @@ namespace telar::gui::features::explorer {
         directories(made_in),
         repository(made_in),
         inspections(made_in),
+        search(made_in),
         outcomes(made_in),
         committed(made_in) {}
 
@@ -260,6 +301,9 @@ namespace telar::gui::features::explorer {
       return state.repository.waiting == 0 && (!state.repository.known || state.repository.stale || state.repository.asked.view() != need.path);
     case NeedKind::inspection:
       return inspectionOf(state, need.path) == nullptr;
+    case NeedKind::search:
+      // One search at a time: another root or query replaces it, the same one is not asked twice.
+      return !state.search.of(need.path, need.text);
     }
 
     return false;
@@ -278,7 +322,27 @@ namespace telar::gui::features::explorer {
     return {.path = path, .skip = directory == nullptr ? 0 : directory->measured, .limit = FileLimits::maximum_entries};
   }
 
+  tbc::val_a<FindPaths> search(const State& state, tbc::val_a<Need> need) noexcept {
+    return {.root = need.path, .query = need.text, .kind = PathKindFilter::any, .limit = FindPaths::maximum_limit, .refresh = state.search.stale};
+  }
+
   void asked(State& state, const Need& need, std::uint64_t request_id) {
+    if (need.kind == NeedKind::search) {
+      // Its answers keep coming while the index is read, and a later query ends it: it is no
+      // request to wait for before asking for more. What the query before it found goes now,
+      // so nothing of another query shows under this one.
+      state.search.root.assign(need.path);
+      state.search.query.assign(need.text);
+      state.search.text.clear();
+      state.search.matches.clear();
+      state.search.waiting = request_id;
+      state.search.known = false;
+      state.search.truncated = false;
+      state.search.stale = false;
+      ++state.revision;
+      return;
+    }
+
     switch (need.kind) {
     case NeedKind::listing:
       keep(state, need.path).listing = request_id;
@@ -296,6 +360,8 @@ namespace telar::gui::features::explorer {
       inspection.waiting = request_id;
       break;
     }
+    case NeedKind::search:
+      break;
     }
 
     ++state.in_flight;
@@ -495,9 +561,50 @@ namespace telar::gui::features::explorer {
     return true;
   }
 
+  bool receive(State& state, const PathResults& results) {
+    auto& search = state.search;
+    if (results.request_id == 0 || results.request_id != search.waiting || results.root != search.root.view()) {
+      return false;
+    }
+
+    search.text.clear();
+    search.matches.clear();
+    for (const auto& match : results.matches) {
+      // A path too long for a row's text is left out; the runtime sends none that long.
+      if (match.path.empty() || match.path.size() > std::numeric_limits<std::uint16_t>::max()) {
+        continue;
+      }
+
+      search.matches.push({
+          .path = static_cast<std::uint32_t>(search.text.size()),
+          .path_size = static_cast<std::uint16_t>(match.path.size()),
+          .directory = match.kind == PathKind::directory,
+          .state = stateOf(match.change),
+      });
+
+      search.text.extend(std::span<const char>{match.path});
+    }
+
+    search.known = true;
+    search.truncated = results.truncated;
+    search.waiting = results.complete ? 0 : search.waiting;
+    ++state.revision;
+    return true;
+  }
+
   bool fail(State& state, const RequestFailed& failure) {
     const auto request = failure.request_id;
     bool ours = false;
+
+    // A search the runtime refused found nothing, and is not asked again as it is.
+    if (request != 0 && state.search.waiting == request) {
+      state.search.waiting = 0;
+      state.search.known = true;
+      state.search.text.clear();
+      state.search.matches.clear();
+      ++state.revision;
+      return true;
+    }
 
     for (auto& directory : state.directories.viewMut()) {
       if (directory->listing == request) {
@@ -561,6 +668,13 @@ namespace telar::gui::features::explorer {
     }
 
     state.repository.stale = true;
+    // What a filter found may name what is gone: it is asked again.
+    if (state.search.known || state.search.waiting != 0) {
+      state.search.known = false;
+      state.search.waiting = 0;
+      state.search.stale = true;
+    }
+
     // A preview in flight is still answered; the ones kept are asked for again.
     state.inspections.retain([&](const ds::Box<Inspection, Memory>& inspection) {
       return inspection->waiting != 0 || (!path.empty() && !inspection->asked.view().starts_with(path));
@@ -576,6 +690,8 @@ namespace telar::gui::features::explorer {
 
     state.repository.waiting = 0;
     state.repository.stale = true;
+    state.search.waiting = 0;
+    state.search.known = false;
     state.inspections.clear();
     state.applying = 0;
     state.committing = 0;

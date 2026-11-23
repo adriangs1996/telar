@@ -121,7 +121,7 @@ namespace telar::gui::features::explorer {
       for (std::size_t index = 0; index < until && index < window.rows.size(); ++index) {
         const auto kind = window.rows[index].kind;
 
-        count += kind == RowKind::entry || kind == RowKind::added || kind == RowKind::change || kind == RowKind::pane ? 1 : 0;
+        count += kind == RowKind::entry || kind == RowKind::added || kind == RowKind::change || kind == RowKind::pane || kind == RowKind::match ? 1 : 0;
       }
 
       return count;
@@ -279,15 +279,9 @@ namespace telar::gui::features::explorer {
       look.size = bytes(edit->size);
     }
 
-    void changeLook(RowLook& look, const Seen& seen) {
-      if (seen.row.item >= seen.state.repository.changes.size()) {
-        return;
-      }
-
-      const auto& change = seen.state.repository.changes[seen.row.item];
-      auto path = nameOf(seen.window, seen.state, seen.row);
-
-      // A directory's path ends in a slash, which is no part of its name.
+    // A row of a flat list names a path from a root: what leads to its name, and its name.
+    void putPath(RowLook& look, std::string_view path) {
+      // A directory's path may end in a slash, which is no part of its name.
       if (path.ends_with('/')) {
         path.remove_suffix(1);
       }
@@ -299,6 +293,53 @@ namespace telar::gui::features::explorer {
       }
 
       put(look.name, slash == std::string_view::npos ? path : path.substr(slash + 1));
+    }
+
+    // A path the filter found: what git says of it, and the changes typed on it, as of an entry.
+    void matchLook(RowLook& look, const Seen& seen) {
+      const auto& row = seen.row;
+      const auto& search = seen.state.search;
+      const auto machine = seen.window.machine;
+      const auto relative = nameOf(seen.window, seen.state, row);
+      ds::String<Memory> path{seen.view.memory};
+
+      putPath(look, relative);
+      pathOf(path, seen.window, seen.state, seen.context, row);
+
+      const auto held = standing(seen.state.repository, path.view(), row.directory);
+
+      look.staged = held.staged;
+      look.unstaged = held.unstaged;
+      look.below = held.below;
+      look.ignored = held.ignored;
+      look.lines_added = held.added;
+      look.lines_removed = held.removed;
+      // Outside the repository the window asked about, the search still says what git holds.
+      if (look.staged == FileState::unchanged && look.unstaged == FileState::unchanged && row.item < search.matches.size()) {
+        look.unstaged = search.matches[row.item].state;
+      }
+
+      if (const auto* renamed = editOn(seen.view, EditKind::rename, machine, path.view())) {
+        look.renamed = true;
+        put(look.name, renamed->name.view());
+        write(look.note, "was {}", baseOf(relative));
+      }
+
+      noteRemoval(look, seen.view, machine, path.view());
+      noteMarks(look, seen.view, machine, path.view());
+      if (row.directory) {
+        notePanes(look, seen.context, path.view());
+      }
+    }
+
+    void changeLook(RowLook& look, const Seen& seen) {
+      if (seen.row.item >= seen.state.repository.changes.size()) {
+        return;
+      }
+
+      const auto& change = seen.state.repository.changes[seen.row.item];
+
+      putPath(look, nameOf(seen.window, seen.state, seen.row));
       look.staged = change.staged;
       look.unstaged = change.unstaged;
       look.lines_added = change.added;
@@ -327,6 +368,24 @@ namespace telar::gui::features::explorer {
       write(look.flags, "[{}{}{}{}]", sortName(window.sort), window.sort == Sort::name ? "" : "↓", window.hidden ? " ." : "", window.ignored ? " !" : "");
     }
 
+    // The filter of a window and, where the runtime searches for it, how many paths it found.
+    void writeFilter(StatusLook& look, const Window& window, const State& state) {
+      if (window.filter.empty()) {
+        return;
+      }
+
+      const auto& search = state.search;
+      const auto query = queryOf(window);
+
+      if (!window.matching || !search.of(window.root.view(), query)) {
+        write(look.filter, "/{}", window.matching ? query : window.filter.view());
+      } else if (!search.known) {
+        write(look.filter, "/{} …", query);
+      } else {
+        write(look.filter, "/{} {}{}{}", query, search.matches.size(), search.truncated ? "+" : "", search.waiting != 0 ? " …" : "");
+      }
+    }
+
     // How many rows a selection holds; none while nothing is selected.
     std::uint32_t chosenRows(const View& view, const Window& window) noexcept {
       const auto rows = range(view, window);
@@ -341,6 +400,48 @@ namespace telar::gui::features::explorer {
       }
 
       return count;
+    }
+
+    // The hints of a mode whose keys do not depend on the selected row; false for a mode whose
+    // hints do.
+    bool fixedHints(Hints& hints, Mode mode) {
+      switch (mode) {
+      case Mode::plan:
+        addHint(hints, "y", {.text = "apply"});
+        addHint(hints, "n", {.text = "cancel"});
+        return true;
+      case Mode::menu:
+        addHint(hints, "j k", {.text = "move"});
+        addHint(hints, "<CR>", {.text = "run"});
+        addHint(hints, "<Esc>", {.text = "close"});
+        return true;
+      case Mode::visual:
+        addHint(hints, "y", {.text = "copy"});
+        addHint(hints, "d", {.text = "cut"});
+        addHint(hints, "<CR>", {.text = "insert"});
+        addHint(hints, "@", {.text = "mention"});
+        addHint(hints, "ga", {.text = "stage"});
+        addHint(hints, "gu", {.text = "unstage"});
+        addHint(hints, "<Esc>", {.text = "leave"});
+        return true;
+      case Mode::search:
+        addHint(hints, "<CR>", {.text = "keep the filter"});
+        addHint(hints, "<Esc>", {.text = "drop it"});
+        return true;
+      case Mode::command:
+        addHint(hints, ":w", {.text = "plan"});
+        addHint(hints, ":e", {.text = "path"});
+        addHint(hints, ":vs", {.text = "window"});
+        addHint(hints, ":commit", {.text = "message"});
+        addHint(hints, "<Tab>", {.text = "complete a path"});
+        return true;
+      case Mode::normal:
+      case Mode::insert:
+      case Mode::help:
+        return false;
+      }
+
+      return false;
     }
 
     // What Enter does on the selected row, for the hint that says it.
@@ -712,6 +813,9 @@ namespace telar::gui::features::explorer {
     case RowKind::pane:
       paneLook(result, seen);
       break;
+    case RowKind::match:
+      matchLook(result, seen);
+      break;
     case RowKind::header:
     case RowKind::note:
     case RowKind::diff:
@@ -770,8 +874,6 @@ namespace telar::gui::features::explorer {
   }
 
   StatusLook status(const View& view, const State& state, const Context& context, std::size_t window_index) {
-    static_cast<void>(state);
-
     StatusLook result;
 
     if (window_index >= view.windows.size()) {
@@ -801,9 +903,10 @@ namespace telar::gui::features::explorer {
     write(result.root, "{}{}", tilde ? "~" : "", below);
     result.pending = !view.edits.empty();
     writeFlags(result, window);
+    writeFilter(result, window, state);
 
-    // What the root holds is known of the tree alone.
-    if (window.lens == Lens::tree) {
+    // What the root holds is known of the tree alone, not of what a filter found in it.
+    if (window.lens == Lens::tree && !window.matching) {
       result.total = bytes(window.bytes);
     }
 
@@ -828,33 +931,13 @@ namespace telar::gui::features::explorer {
       return result;
     }
 
-    if (view.mode == Mode::plan) {
-      addHint(result, "y", {.text = "apply"});
-      addHint(result, "n", {.text = "cancel"});
-      return result;
-    }
-
-    if (view.mode == Mode::menu) {
-      addHint(result, "j k", {.text = "move"});
-      addHint(result, "<CR>", {.text = "run"});
-      addHint(result, "<Esc>", {.text = "close"});
-      return result;
-    }
-
-    if (view.mode == Mode::visual) {
-      addHint(result, "y", {.text = "copy"});
-      addHint(result, "d", {.text = "cut"});
-      addHint(result, "<CR>", {.text = "insert"});
-      addHint(result, "@", {.text = "mention"});
-      addHint(result, "ga", {.text = "stage"});
-      addHint(result, "gu", {.text = "unstage"});
-      addHint(result, "<Esc>", {.text = "leave"});
+    if (fixedHints(result, view.mode)) {
       return result;
     }
 
     const auto& window = explorer::window(view);
     const auto* row = window.rows.empty() ? nullptr : &window.rows[window.cursor];
-    const bool entry = row != nullptr && (row->kind == RowKind::entry || row->kind == RowKind::change);
+    const bool entry = row != nullptr && (row->kind == RowKind::entry || row->kind == RowKind::change || row->kind == RowKind::match);
     const bool tree = window.lens == Lens::tree;
     LineText verb;
 
@@ -911,7 +994,7 @@ namespace telar::gui::features::explorer {
     }
 
     const auto& row = window.rows[window.cursor];
-    if (row.kind != RowKind::entry && row.kind != RowKind::change) {
+    if (row.kind != RowKind::entry && row.kind != RowKind::change && row.kind != RowKind::match) {
       return result;
     }
 

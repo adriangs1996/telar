@@ -1835,11 +1835,32 @@ return {api_version = 2, client = {
       QCOMPARE(record(0).value(QStringLiteral("kind")).toString(), QStringLiteral("header"));
       shoot(QStringLiteral("explorer-changes"));
       explorer->run(QStringLiteral("tree"));
+      // The filter asks the runtime for every path below the root: a file of a directory the
+      // window never unfolded shows, with the path that leads to it.
       press(QStringLiteral("/"));
+      explorer->typed(QStringLiteral("base.cpp"));
+      QTRY_VERIFY_WITH_TIMEOUT(!named(QStringLiteral("base.cppm")).isEmpty(), runtime_wait_ms);
+      QCOMPARE(named(QStringLiteral("base.cppm")).value(QStringLiteral("kind")).toString(), QStringLiteral("match"));
+      QCOMPARE(named(QStringLiteral("base.cppm")).value(QStringLiteral("lead")).toString(), QStringLiteral("lib/base/"));
+      QVERIFY(named(QStringLiteral("agents.md")).isEmpty());
+      QTRY_VERIFY_WITH_TIMEOUT(window().value(QStringLiteral("filter")).toString().startsWith(QStringLiteral("/base.cpp 1")), runtime_wait_ms);
+      QTRY_COMPARE_WITH_TIMEOUT(explorer->preview().value(QStringLiteral("name")).toString(), QStringLiteral("base.cppm"), runtime_wait_ms);
+      // The picture shows the filter in its field, as when it is typed there.
+      if (auto* field = window_->findChild<QQuickItem*>(QStringLiteral("explorerCommand"))) {
+        field->setProperty("text", QStringLiteral("base.cpp"));
+      }
+
+      shoot(QStringLiteral("explorer-filter"));
       explorer->typed(QStringLiteral("USAGE"));
-      QTRY_VERIFY_WITH_TIMEOUT(!named(QStringLiteral("usage.md")).isEmpty() && named(QStringLiteral("agents.md")).isEmpty(), runtime_wait_ms);
+      QTRY_VERIFY_WITH_TIMEOUT(!named(QStringLiteral("usage.md")).isEmpty() && named(QStringLiteral("base.cppm")).isEmpty(), runtime_wait_ms);
       explorer->cancel();
-      QVERIFY(!named(QStringLiteral("agents.md")).isEmpty());
+      QTRY_VERIFY_WITH_TIMEOUT(!named(QStringLiteral("agents.md")).isEmpty(), runtime_wait_ms);
+
+      // `<Tab>` completes the directory a command goes to.
+      press(QStringLiteral(":"));
+      explorer->complete(QStringLiteral("e exa"));
+      QTRY_COMPARE_WITH_TIMEOUT(explorer->line().value(QStringLiteral("completion")).toString(), QStringLiteral("e examples/"), runtime_wait_ms);
+      explorer->cancel();
       press(QStringLiteral("?"));
       shoot(QStringLiteral("explorer-help"));
       press(QStringLiteral("q"));

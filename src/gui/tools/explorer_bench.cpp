@@ -107,6 +107,9 @@ namespace {
           asked(state, *wanted, request);
           static_cast<void>(receive(state, FileInspection{.request_id = request, .path = path, .size = 4096, .text = "A line of a file.\n", .diff = "@@ -1 +1 @@\n-old\n+new\n"}));
           break;
+        case NeedKind::search:
+          // The bench's runtime searches no paths: its explorer never asks.
+          break;
         }
       }
 

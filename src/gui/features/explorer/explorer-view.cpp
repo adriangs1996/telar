@@ -70,7 +70,12 @@ namespace telar::gui::features::explorer {
     }
 
     constexpr bool selectable(RowKind kind) noexcept {
-      return kind == RowKind::entry || kind == RowKind::added || kind == RowKind::change || kind == RowKind::pane;
+      return kind == RowKind::entry || kind == RowKind::added || kind == RowKind::change || kind == RowKind::pane || kind == RowKind::match;
+    }
+
+    // A row that names a file or a directory of the machine by its path.
+    constexpr bool namesPath(RowKind kind) noexcept {
+      return kind == RowKind::entry || kind == RowKind::change || kind == RowKind::match;
     }
 
     constexpr char lowered(char character) noexcept {
@@ -304,6 +309,31 @@ namespace telar::gui::features::explorer {
       }
     }
 
+    // The paths the runtime found below the root for the window's filter, in the order it ranks
+    // them: a flat list, built from its answer alone.
+    void buildMatches(Window& window, const State& state) {
+      const auto& search = state.search;
+
+      window.matching = true;
+      window.loading = false;
+      if (!search.known || !search.of(window.root.view(), queryOf(window))) {
+        pushText(window, {.kind = RowKind::note}, "searching…");
+        return;
+      }
+
+      for (std::size_t index = 0; index < search.matches.size(); ++index) {
+        const auto& match = search.matches[index];
+
+        pushText(window, {.kind = RowKind::match, .directory = match.directory, .item = static_cast<std::uint32_t>(index)}, search.path(match));
+      }
+
+      if (search.matches.empty()) {
+        pushText(window, {.kind = RowKind::note}, search.waiting != 0 ? "searching…" : "nothing below this directory matches");
+      } else if (search.truncated) {
+        pushText(window, {.kind = RowKind::note}, "… more match: a longer filter narrows them");
+      }
+    }
+
     void buildTree(Window& window, const Edits& edits, const State& state) {
       Build build{.window = window, .edits = edits, .state = state, .order = ds::Vec<std::uint32_t, Memory>{window.rows.memory()}};
       const auto* root = find(state, window.root.view());
@@ -428,9 +458,17 @@ namespace telar::gui::features::explorer {
       window.bytes = 0;
       window.hidden_entries = 0;
       window.ignored_entries = 0;
+      window.matching = false;
       switch (window.lens) {
       case Lens::tree:
-        buildTree(window, edits, state);
+        // A runtime that searches paths answers the filter; with one that does not, the filter
+        // narrows what the window lists.
+        if (state.finds && !queryOf(window).empty()) {
+          buildMatches(window, state);
+        } else {
+          buildTree(window, edits, state);
+        }
+
         break;
       case Lens::changes:
         buildChanges(window, state);
@@ -456,7 +494,8 @@ namespace telar::gui::features::explorer {
       if (found != window.rows.size()) {
         window.cursor = found;
       } else if (!window.loading) {
-        choose(window, state, context, nearest(window, before));
+        // What a filter found is ranked: the best of it takes the selection.
+        choose(window, state, context, nearest(window, window.matching ? 0 : before));
       }
 
       if (window.anchor && *window.anchor >= window.rows.size()) {
@@ -497,6 +536,51 @@ namespace telar::gui::features::explorer {
       return edit;
     }
 
+    // What the listing says of the row's file, for the runtime to know it by. A row no listing
+    // holds has none: the runtime is asked what the file is before the plan shows.
+    void know(Edit& edit, const State& state, const Row& row) noexcept {
+      if (row.kind == RowKind::entry && row.holder < state.directories.size() && row.entry < state.directories[row.holder]->entries.size()) {
+        const auto& entry = state.directories[row.holder]->entries[row.entry];
+
+        edit.identity = entry.identity;
+        edit.size = entry.size;
+      } else {
+        edit.unidentified = true;
+      }
+    }
+
+    // The path whose file a change needs known: what a paste brings, or what it changes.
+    constexpr std::string_view subjectOf(const Edit& edit) noexcept {
+      return edit.kind == EditKind::paste ? edit.source.view() : edit.path.view();
+    }
+
+    // Gives each change that waits for it what the runtime said its file is. A path the runtime
+    // could not read stays without: the runtime says it is missing when the plan is applied.
+    // Returns how many still wait.
+    std::size_t identify(Edits& edits, const State& state) noexcept {
+      std::size_t waiting = 0;
+
+      for (auto& edit : edits.viewMut()) {
+        if (!edit.unidentified) {
+          continue;
+        }
+
+        const auto* inspection = inspected(state, subjectOf(edit));
+        if (inspection == nullptr) {
+          ++waiting;
+          continue;
+        }
+
+        edit.unidentified = false;
+        if (!inspection->path.empty()) {
+          edit.identity = inspection->identity;
+          edit.size = inspection->size;
+        }
+      }
+
+      return waiting;
+    }
+
     // The directory a new entry or a paste goes in: the selected one when it is unfolded, else the
     // one the selection is in.
     void targetDirectory(Text& directory, const Window& window, const State& state, const Context& context) {
@@ -510,7 +594,8 @@ namespace telar::gui::features::explorer {
       pathOf(directory, window, state, context, row);
       if (directory.empty()) {
         directory.assign(window.root.view());
-      } else if (row.kind != RowKind::entry || !row.directory || !row.expanded) {
+      } else if (!row.directory || (row.kind == RowKind::entry && !row.expanded) || (row.kind != RowKind::entry && row.kind != RowKind::match)) {
+        // A directory the filter found takes what is put on it, as an unfolded one does.
         const Text parent{window.root.memory(), parentOf(directory.view())};
 
         directory.assign(parent.view());
@@ -657,6 +742,7 @@ namespace telar::gui::features::explorer {
     copy.source_machine = source_machine;
     copy.identity = identity;
     copy.size = size;
+    copy.unidentified = unidentified;
     return copy;
   }
 
@@ -693,6 +779,9 @@ namespace telar::gui::features::explorer {
         jumps(memory),
         draft(memory),
         prefill(memory),
+        completion(memory),
+        completing(memory),
+        completing_in(memory),
         plan(memory),
         text(memory),
         paths(memory) {}
@@ -764,6 +853,20 @@ namespace telar::gui::features::explorer {
     return rows.visual || window.picked.empty() || std::ranges::contains(window.picked, static_cast<std::uint32_t>(row));
   }
 
+  tbc::val_a<std::string_view> queryOf(tbc::ref_a<Window> window) noexcept {
+    auto text = window.filter.view();
+
+    while (text.starts_with(' ')) {
+      text.remove_prefix(1);
+    }
+
+    while (text.ends_with(' ')) {
+      text.remove_suffix(1);
+    }
+
+    return runtime::utf8Prefix(text, ViewLimits::query_bytes);
+  }
+
   tbc::val_a<std::string_view> nameOf(tbc::ref_a<Window> window, tbc::ref_a<State> state, const Row& row) noexcept {
     if (row.kind == RowKind::entry) {
       if (row.holder >= state.directories.size() || row.entry >= state.directories[row.holder]->entries.size()) {
@@ -799,6 +902,10 @@ namespace telar::gui::features::explorer {
       join(path, {.directory = state.repository.root.view(), .name = relative});
       break;
     }
+    case RowKind::match:
+      // A match is a path from the root its window searched below.
+      join(path, {.directory = window.root.view(), .name = nameOf(window, state, row)});
+      break;
     case RowKind::pane:
       if (row.item < context.panes.size()) {
         path.assign(context.panes[row.item].cwd);
@@ -835,6 +942,28 @@ namespace telar::gui::features::explorer {
           choose(window, state, context, index);
           --left;
         }
+      }
+    }
+
+    // Moves the selection `delta` selectable rows and goes on from the other end past the last
+    // or the first, as `n` and `N` go around the matches of a search.
+    void moveAround(Window& window, const State& state, const Context& context, std::int64_t delta) {
+      const auto count = static_cast<std::int64_t>(window.rows.size());
+      const std::int64_t step = delta < 0 ? -1 : 1;
+      auto index = static_cast<std::int64_t>(window.cursor);
+
+      // Each row is looked at once at most for each step, so a list with nothing to select ends.
+      for (auto left = delta < 0 ? -delta : delta; left > 0 && count > 0; --left) {
+        for (std::int64_t seen = 0; seen < count; ++seen) {
+          index = (index + step + count) % count;
+          if (selectable(window.rows[static_cast<std::size_t>(index)].kind)) {
+            break;
+          }
+        }
+      }
+
+      if (count > 0 && selectable(window.rows[static_cast<std::size_t>(index)].kind)) {
+        choose(window, state, context, static_cast<std::size_t>(index));
       }
     }
 
@@ -907,7 +1036,7 @@ namespace telar::gui::features::explorer {
       for (std::size_t step = 1; step <= count; ++step) {
         const auto index = (window.cursor + count + static_cast<std::size_t>(direction > 0 ? step : count - step)) % count;
         const auto& row = window.rows[index];
-        if (row.kind != RowKind::entry && row.kind != RowKind::change) {
+        if (!namesPath(row.kind)) {
           continue;
         }
 
@@ -979,7 +1108,7 @@ namespace telar::gui::features::explorer {
 
       for (std::size_t index = rows.first; index <= rows.last && index < window.rows.size(); ++index) {
         const auto& row = window.rows[index];
-        if (!chosen(view, window, index) || (row.kind != RowKind::entry && row.kind != RowKind::change)) {
+        if (!chosen(view, window, index) || !namesPath(row.kind)) {
           continue;
         }
 
@@ -1048,10 +1177,7 @@ namespace telar::gui::features::explorer {
           auto& edit = addEdit(view.edits, view.next_edit, EditKind::remove, window.machine, path.view());
 
           edit.directory = row.directory;
-          if (row.kind == RowKind::entry && row.holder < state.directories.size()) {
-            edit.identity = state.directories[row.holder]->entries[row.entry].identity;
-            edit.size = state.directories[row.holder]->entries[row.entry].size;
-          }
+          know(edit, state, row);
         }
 
         ++count;
@@ -1082,6 +1208,8 @@ namespace telar::gui::features::explorer {
         edit.source_machine = item.machine;
         edit.identity = item.identity;
         edit.size = item.size;
+        // What was taken from a row no listing holds is read before the plan shows.
+        edit.unidentified = item.identity.inode == 0;
       }
     }
 
@@ -1160,9 +1288,15 @@ namespace telar::gui::features::explorer {
       }
     }
 
-    void write(View& view, bool overwrite) {
+    void write(View& view, const State& state, bool overwrite) {
       if (view.edits.empty()) {
         say(view, "Nothing to write");
+        return;
+      }
+
+      // A plan names each file as the runtime last read it, so it waits for the ones still asked.
+      if (const auto waiting = identify(view.edits, state); waiting != 0) {
+        report(view, Tone::info, "Reading {} of the files to change · :w again shows the plan", waiting);
         return;
       }
 
@@ -1224,26 +1358,26 @@ namespace telar::gui::features::explorer {
       report(view, Tone::info, "git restore of {} pending · :w shows it before anything is touched", view.paths.size());
     }
 
-    void startRename(View& view, const State& state) {
+    void startRename(View& view, const State& state, const Context& context) {
       const auto& window = windowAt(view.windows, view.current);
       if (window.rows.empty()) {
         return;
       }
 
       const auto& row = window.rows[window.cursor];
-      if (row.kind != RowKind::entry && row.kind != RowKind::added) {
+      if (row.kind != RowKind::entry && row.kind != RowKind::added && row.kind != RowKind::match) {
         say(view, "Only an entry of a directory is renamed", Tone::error);
         return;
       }
 
       view.inserting = row.kind == RowKind::added ? row.item : 0;
-      view.draft.assign(nameOf(window, state, row));
-      if (row.kind == RowKind::entry) {
+      // A match is a path from the root: its name is what follows the last slash.
+      view.draft.assign(baseOf(nameOf(window, state, row)));
+      if (row.kind != RowKind::added) {
         // A name already changed starts from what it was changed to.
-        const auto& directory = *state.directories[row.holder];
         Text path{view.memory};
 
-        join(path, {.directory = directory.path.view(), .name = view.draft.view()});
+        pathOf(path, window, state, context, row);
         if (const auto* edit = editOn(view, EditKind::rename, window.machine, path.view())) {
           view.draft.assign(edit->name.view());
         }
@@ -1336,7 +1470,7 @@ namespace telar::gui::features::explorer {
     // The name typed on the selected entry: a rename of it, unless it is the name it has.
     void renameSelected(View& view, const State& state, const Context& context, std::string_view typed) {
       const auto& window = windowAt(view.windows, view.current);
-      if (window.rows.empty() || window.rows[window.cursor].kind != RowKind::entry) {
+      if (window.rows.empty() || (window.rows[window.cursor].kind != RowKind::entry && window.rows[window.cursor].kind != RowKind::match)) {
         return;
       }
 
@@ -1355,13 +1489,12 @@ namespace telar::gui::features::explorer {
         return edit.kind != EditKind::rename || edit.machine != window.machine || edit.path.view() != path.view();
       });
 
-      if (name != nameOf(window, state, row)) {
+      if (name != baseOf(nameOf(window, state, row))) {
         auto& edit = addEdit(view.edits, view.next_edit, EditKind::rename, window.machine, path.view());
 
         edit.name.assign(name);
         edit.directory = row.directory;
-        edit.identity = state.directories[row.holder]->entries[row.entry].identity;
-        edit.size = state.directories[row.holder]->entries[row.entry].size;
+        know(edit, state, row);
       }
 
       ++view.revision;
@@ -1955,12 +2088,16 @@ namespace telar::gui::features::explorer {
         // `.` is another command by the time it gets here: `run` names the one it repeats.
         break;
       case Command::down:
-      case Command::next_match:
         moveBy(window, state, context, count);
         break;
       case Command::up:
-      case Command::previous_match:
         moveBy(window, state, context, -count);
+        break;
+      case Command::next_match:
+        moveAround(window, state, context, count);
+        break;
+      case Command::previous_match:
+        moveAround(window, state, context, -count);
         break;
       case Command::top:
         goToNumber(window, state, context, stroke.counted ? stroke.count : 1);
@@ -2032,7 +2169,7 @@ namespace telar::gui::features::explorer {
         break;
       case Command::rename:
       case Command::rename_whole:
-        startRename(view, state);
+        startRename(view, state, context);
         break;
       case Command::create:
         startCreate(view, state, context, false);
@@ -2053,7 +2190,7 @@ namespace telar::gui::features::explorer {
       case Command::undo:
         return undo(view, state, context);
       case Command::write:
-        write(view, false);
+        write(view, state, false);
         break;
       case Command::split_vertical:
         split(view, state, context, true);
@@ -2213,14 +2350,14 @@ namespace telar::gui::features::explorer {
 
     // The commands that take no argument and say themselves what they changed: `:w` and `:q`
     // with their marks, `:only` and `:pin`. None for another name.
-    ds::Option<Action> plainCommand(View& view, std::string_view name) {
+    ds::Option<Action> plainCommand(View& view, const State& state, std::string_view name) {
       if (name == "w" || name == "write" || name == "wa") {
-        write(view, false);
+        write(view, state, false);
         return changed(view);
       }
 
       if (name == "w!") {
-        write(view, true);
+        write(view, state, true);
         return changed(view);
       }
 
@@ -2330,6 +2467,47 @@ namespace telar::gui::features::explorer {
       return true;
     }
 
+    // Whether the command `name` goes to the directory it is given.
+    constexpr bool takesPath(std::string_view name) noexcept {
+      constexpr ds::Array<std::string_view, 7> names{"e", "edit", "cd", "vs", "vsplit", "sp", "split"};
+
+      return std::ranges::contains(names, name);
+    }
+
+    // The directories of `listed` whose name starts with `stem`: how many, the start they all
+    // share, and the first of them for the line that lists them. One that starts with a dot is
+    // named only by a stem that does.
+    struct Candidates {
+      std::size_t count = 0;
+      std::string_view shared;
+      runtime::FixedText<ViewLimits::message_bytes> names;
+    };
+
+    void gatherCandidates(tbc::mut_a<Candidates> found, tbc::ref_a<Directory> listed, std::string_view stem) {
+      ds::Array<char, ViewLimits::message_bytes> text{};
+      std::size_t length = 0;
+
+      for (const auto& entry : listed.entries) {
+        const auto name = listed.name(entry);
+        if (!entry.directory || !name.starts_with(stem) || (name.starts_with('.') && !stem.starts_with('.'))) {
+          continue;
+        }
+
+        // What they share shrinks to what this one shares with the ones before it.
+        const auto same = std::ranges::mismatch(found.shared, name).in1 - found.shared.begin();
+
+        found.shared = found.count == 0 ? name : found.shared.substr(0, static_cast<std::size_t>(same));
+        if (found.count++ < ViewLimits::candidates && length + name.size() + 3 <= text.size()) {
+          std::ranges::copy(name, text.viewMut().subspan(length).begin());
+          length += name.size();
+          std::ranges::copy(std::string_view{"/  "}, text.viewMut().subspan(length).begin());
+          length += 3;
+        }
+      }
+
+      found.names.assign({text.data(), length});
+    }
+
     Action command(View& view, State& state, const Context& context, std::string_view line) {
       line.remove_prefix(std::min(line.find_first_not_of(" :"), line.size()));
       while (line.ends_with(' ')) {
@@ -2342,7 +2520,7 @@ namespace telar::gui::features::explorer {
         return {};
       }
 
-      if (const auto done = plainCommand(view, typed.name)) {
+      if (const auto done = plainCommand(view, state, typed.name)) {
         return *done;
       }
 
@@ -2425,6 +2603,15 @@ namespace telar::gui::features::explorer {
 
   void absorb(View& view, const State& state, const Context& context, std::uint64_t machine) {
     const bool previewed = view.previewed != state.previews;
+
+    // What the runtime said of a file a change waits to know, and the directory `<Tab>` waits for.
+    static_cast<void>(identify(view.edits, state));
+    if (!view.completing.empty()) {
+      const Text line{view.memory, view.completing.view()};
+
+      complete(view, state, context, line.view());
+    }
+
     const bool unfolded = std::ranges::any_of(view.windows, [](const ds::Box<Window, Memory>& window) {
       return !window->diffs.empty();
     });
@@ -2486,6 +2673,47 @@ namespace telar::gui::features::explorer {
       return ds::none;
     }
 
+    // The paths below the root that the filter of the window that takes the keys names, when its
+    // runtime searches them. One search is kept, as one answer of git is.
+    tbc::val_a<ds::Option<Need>> searchNeed(tbc::ref_a<View> view, const State& state, std::uint64_t machine) {
+      if (!state.finds || view.current >= view.windows.size()) {
+        return ds::none;
+      }
+
+      const auto& window = *view.windows[view.current];
+      const Need wanted{.kind = NeedKind::search, .path = window.root.view(), .text = queryOf(window)};
+
+      if (window.machine != machine || window.lens != Lens::tree || wanted.text.empty() || !lacks(state, wanted)) {
+        return ds::none;
+      }
+
+      return wanted;
+    }
+
+    // What the runtime is asked of the files that changes name without a listing to know them by.
+    tbc::val_a<ds::Option<Need>> identityNeed(tbc::ref_a<View> view, const State& state, std::uint64_t machine) {
+      for (const auto& edit : view.edits) {
+        if (!edit.unidentified || (edit.kind == EditKind::paste ? edit.source_machine : edit.machine) != machine) {
+          continue;
+        }
+
+        if (auto wanted = lacking(state, NeedKind::inspection, subjectOf(edit))) {
+          return wanted;
+        }
+      }
+
+      return ds::none;
+    }
+
+    // The directory a command line waits for to complete a path in it.
+    tbc::val_a<ds::Option<Need>> completionNeed(tbc::ref_a<View> view, const State& state) {
+      if (view.completing.empty()) {
+        return ds::none;
+      }
+
+      return lacking(state, NeedKind::listing, view.completing_in.view());
+    }
+
     // The previews the windows of `machine` lack: of each selection, and of each diff unfolded.
     tbc::val_a<ds::Option<Need>> previewNeed(tbc::ref_a<View> view, const State& state, std::uint64_t machine) {
       for (const auto& window : view.windows) {
@@ -2512,7 +2740,16 @@ namespace telar::gui::features::explorer {
   }
 
   tbc::val_a<ds::Option<Need>> need(tbc::ref_a<View> view, const State& state, std::uint64_t machine) {
-    // What each window lists first; then what git says, the preview, and the sizes last.
+    // What is typed is answered first: the filter, and the path a command line completes. Then
+    // what each window lists, what git says, the previews, and the sizes last.
+    if (auto wanted = searchNeed(view, state, machine)) {
+      return wanted;
+    }
+
+    if (auto wanted = completionNeed(view, state)) {
+      return wanted;
+    }
+
     if (auto wanted = treeNeed(view, state, machine, false)) {
       return wanted;
     }
@@ -2526,6 +2763,10 @@ namespace telar::gui::features::explorer {
     }
 
     if (auto wanted = previewNeed(view, state, machine)) {
+      return wanted;
+    }
+
+    if (auto wanted = identityNeed(view, state, machine)) {
       return wanted;
     }
 
@@ -2625,7 +2866,7 @@ namespace telar::gui::features::explorer {
       addLine(menu, MenuEntry::open, !row.directory);
       addLine(menu, MenuEntry::mention, std::ranges::contains(context.panes, PaneKind::agent, &PaneFact::kind));
       addLine(menu, MenuEntry::rule);
-      addLine(menu, MenuEntry::rename, single && tree && row.kind == RowKind::entry);
+      addLine(menu, MenuEntry::rename, single && tree && (row.kind == RowKind::entry || row.kind == RowKind::match));
       addLine(menu, MenuEntry::new_file, tree);
       addLine(menu, MenuEntry::new_directory, tree);
       addLine(menu, MenuEntry::rule);
@@ -2735,7 +2976,7 @@ namespace telar::gui::features::explorer {
         return;
       }
 
-      if (row.kind != RowKind::entry) {
+      if (row.kind != RowKind::entry && row.kind != RowKind::match) {
         return;
       }
 
@@ -2845,6 +3086,8 @@ namespace telar::gui::features::explorer {
       return {};
     case Mode::command:
       view.mode = Mode::normal;
+      view.completing.clear();
+      view.completing_in.clear();
       return command(view, state, context, text);
     case Mode::normal:
     case Mode::visual:
@@ -2855,6 +3098,59 @@ namespace telar::gui::features::explorer {
     }
 
     return {};
+  }
+
+  void complete(View& view, const State& state, const Context& context, std::string_view line) {
+    view.completing.clear();
+    view.completing_in.clear();
+    if (view.mode != Mode::command || view.windows.empty()) {
+      return;
+    }
+
+    line.remove_prefix(std::min(line.find_first_not_of(" :"), line.size()));
+
+    const auto argument = argumentOf(line);
+    const auto name = line.substr(0, line.find(' '));
+
+    if (!takesPath(name) || name.size() == line.size()) {
+      return;
+    }
+
+    // The line up to the last slash stays as it was typed; what follows it is completed.
+    const auto slash = argument.rfind('/');
+    const auto stem = argument.substr(slash == std::string_view::npos ? 0 : slash + 1);
+    const auto kept = line.substr(0, line.size() - stem.size());
+    Text directory{view.memory};
+
+    resolve(directory, slash == std::string_view::npos ? std::string_view{"."} : argument.substr(0, slash + 1), windowAt(view.windows, view.current), context);
+
+    const auto* listed = find(state, directory.view());
+    if (listed == nullptr || (!listed->failed && !listed->whole())) {
+      // The runtime is asked for the directory, and the line is completed when it answers.
+      view.completing.assign(line);
+      view.completing_in.assign(directory.view());
+      return;
+    }
+
+    Candidates found;
+
+    gatherCandidates(found, *listed, stem);
+    if (found.count == 0) {
+      say(view, "No directory there starts with that", Tone::error);
+      return;
+    }
+
+    view.completion.assign(kept);
+    view.completion.append(found.shared);
+    if (found.count == 1) {
+      view.completion.push('/');
+      say(view, {});
+    } else {
+      report(view, Tone::info, "{}{}", found.names.view(), found.count > ViewLimits::candidates ? "…" : "");
+    }
+
+    ++view.completed;
+    ++view.revision;
   }
 
   void cancel(View& view, const State& state, const Context& context) {
@@ -2893,6 +3189,9 @@ namespace telar::gui::features::explorer {
       leaveVisual(view);
       break;
     case Mode::command:
+      view.completing.clear();
+      view.completing_in.clear();
+      break;
     case Mode::help:
     case Mode::menu:
     case Mode::normal:
@@ -2989,7 +3288,7 @@ namespace telar::gui::features::explorer {
 
     if (kind == RowKind::added) {
       fillAdded(menu);
-    } else if (kind == RowKind::entry || kind == RowKind::change) {
+    } else if (namesPath(kind)) {
       fillRow(menu, view, state, context);
     } else {
       fillWindow(menu, view);
@@ -3051,7 +3350,7 @@ namespace telar::gui::features::explorer {
     if (window.lens == Lens::tree && drop.row < window.rows.size() && directory.view() != window.root.view()) {
       const auto& row = window.rows[drop.row];
 
-      result.row = row.kind == RowKind::entry && row.directory ? ds::Option<std::size_t>{drop.row} : holderRow(window, drop.row);
+      result.row = (row.kind == RowKind::entry || row.kind == RowKind::match) && row.directory ? ds::Option<std::size_t>{drop.row} : holderRow(window, drop.row);
     }
 
     return result;
