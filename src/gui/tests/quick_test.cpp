@@ -1727,7 +1727,9 @@ return {api_version = 2, client = {
         constexpr std::uint16_t border_cells = 2;
         const auto header_cells = static_cast<std::uint16_t>(std::ceil(ChromeMetrics::logical_pane_header * density / resolved.grid.height));
         const auto columns = static_cast<std::uint16_t>(std::floor(bounds.width() * density / resolved.grid.width) - border_cells);
-        const auto rows = static_cast<std::uint16_t>(std::floor(bounds.height() * density / resolved.grid.height) - header_cells - 1);
+        // Under its rows the pane keeps none: the workbench keeps half a column at its foot.
+        const auto foot = std::min(resolved.grid.width, resolved.grid.height) / 2.0;
+        const auto rows = static_cast<std::uint16_t>(std::floor((bounds.height() * density - foot) / resolved.grid.height) - header_cells);
         const QSizeF expected{columns * resolved.grid.width / density, rows * resolved.grid.height / density};
         const QRectF placed{terminal->mapToScene(QPointF{}), expected};
         if (terminal->size() != expected || placed.left() <= bounds.left() || placed.top() <= bounds.top() || !bounds.contains(placed)) {
@@ -6604,12 +6606,14 @@ return {api_version=2, client={keybindings={
       const auto bounds = client_->display()->geometry().value(QStringLiteral("terminal")).toRectF();
       const auto resolved = client_->display()->resolveFont(window_->devicePixelRatio());
       const TerminalGrid grid{.cell_width_px = resolved.grid.width, .cell_height_px = resolved.grid.height, .scale = window_->devicePixelRatio()};
-      const auto full = grid.fit(bounds.width(), bounds.height());
+      // The rows the workbench lays out: all but the half column it keeps at its foot.
+      const auto foot = std::min(resolved.grid.width, resolved.grid.height) / (2 * window_->devicePixelRatio());
+      const auto full = grid.fit(bounds.width(), bounds.height() - foot);
 
       QVERIFY(full.hasValue());
       constexpr std::uint16_t border_cells = 2;
-      const auto header_cells = static_cast<std::uint16_t>(std::ceil(ChromeMetrics::logical_pane_header * window_->devicePixelRatio() / resolved.grid.height));
-      const auto vertical_chrome = header_cells + 1;
+      // Over its rows a pane has its header, and under them no row of its own.
+      const auto vertical_chrome = static_cast<std::uint16_t>(std::ceil(ChromeMetrics::logical_pane_header * window_->devicePixelRatio() / resolved.grid.height));
       const auto single_columns = full->cols - border_cells;
       const auto single_rows = full->rows - vertical_chrome;
 

@@ -454,7 +454,7 @@ namespace {
     for (const auto& placement : layout.arrange(area, metrics)) {
       check(placement.content.y == placement.bounds.y + metrics.header, "a pane header must reserve complete terminal rows");
       check(placement.content.x == placement.bounds.x + metrics.border && placement.content.width + (2 * metrics.border) == placement.bounds.width, "header reservation must not change horizontal borders");
-      check(placement.content.bottom() + metrics.border == placement.bounds.bottom(), "independent headers must retain the bottom border");
+      check(placement.content.bottom() == placement.bounds.bottom(), "a pane beside gaps must give its content the rows under its header");
     }
 
     const auto fullscreen = layout.arrange(area, metrics, 1);
@@ -462,7 +462,7 @@ namespace {
     check(fullscreen.size() == 1 && fullscreen.front().content == metrics.content(area), "a fullscreen pane must reserve the same header as a tiled one");
     // The bounds pane 1 keeps after the split, and an area too short to split under two headers.
     constexpr CellRectangle existing_bounds{.width = 49, .height = 19};
-    constexpr CellRectangle cramped{.width = 20, .height = 10};
+    constexpr CellRectangle cramped{.width = 20, .height = 8};
 
     check(split->existing_content == metrics.content(existing_bounds), "prospective and committed split sizes must reserve the same header");
     check(!layout.prospectiveSplit(cramped, ClientLayoutAxis::vertical, 1, metrics), "a split must refuse to consume the last content row");

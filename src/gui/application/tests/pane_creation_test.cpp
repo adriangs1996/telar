@@ -166,8 +166,8 @@ namespace {
     };
 
     constexpr ds::Array cases{
-        SplitCase{.axis = ClientLayoutAxis::horizontal, .columns = 48, .rows = 40},
-        SplitCase{.axis = ClientLayoutAxis::vertical, .columns = 99, .rows = 19},
+        SplitCase{.axis = ClientLayoutAxis::horizontal, .columns = 48, .rows = 41},
+        SplitCase{.axis = ClientLayoutAxis::vertical, .columns = 99, .rows = 20},
     };
 
     for (const auto& entry : cases) {
@@ -178,7 +178,7 @@ namespace {
       application::workbench::setGeometry(client, framed_geometry);
       openFirstPane(client, transport);
       const auto opened = transport.last<OpenPane>();
-      constexpr TerminalSize initial_size{.cols = 99, .rows = 40, .cell_width_px = framed_geometry.grid.cell_width_px, .cell_height_px = framed_geometry.grid.cell_height_px};
+      constexpr TerminalSize initial_size{.cols = 99, .rows = 41, .cell_width_px = framed_geometry.grid.cell_width_px, .cell_height_px = framed_geometry.grid.cell_height_px};
 
       check(opened.size.cols == initial_size.cols && opened.size.rows == initial_size.rows, "first-pane launch must use the framed workbench content before a terminal delegate exists");
       const auto original_nodes = client.activeTab()->layout.nodes().size();

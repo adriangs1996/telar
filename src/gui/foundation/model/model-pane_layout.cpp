@@ -9,17 +9,37 @@ import telar.base.ds;
 namespace telar::gui::inline foundation::inline model {
 
   std::uint16_t PaneLayout::Metrics::minimumPaneExtent(ClientLayoutAxis axis) const noexcept {
-    return border == 0 ? 1 : 1 + static_cast<std::uint16_t>(border) + (axis == ClientLayoutAxis::vertical ? std::max(border, header) : border);
+    if (border == 0) {
+      return 1;
+    }
+
+    return static_cast<std::uint16_t>(1 + (axis == ClientLayoutAxis::vertical ? std::max(border, header) + footRows() : 2 * border));
+  }
+
+  std::uint16_t PaneLayout::Metrics::footRows() const noexcept {
+    return gap == 0 ? border : 0;
   }
 
   CellRectangle PaneLayout::Metrics::content(CellRectangle bounds) const noexcept {
-    auto result = bounds.inner(border);
-    const auto extra = border != 0 && header > border ? std::min<std::uint16_t>(header - border, result.height) : 0;
+    if (border == 0) {
+      return bounds;
+    }
 
-    result.y = static_cast<std::uint16_t>(result.y + extra);
-    result.height = static_cast<std::uint16_t>(result.height - extra);
+    const auto sides = static_cast<std::uint32_t>(border) * 2;
+    const auto top = static_cast<std::uint32_t>(std::max(border, header));
+    const auto rows = top + footRows();
+    if (bounds.width <= sides || bounds.height <= rows) {
+      return {.x = bounds.x, .y = bounds.y};
+    }
 
-    return result;
+    constexpr auto maximum = static_cast<std::uint32_t>(std::numeric_limits<std::uint16_t>::max());
+
+    return {
+        .x = static_cast<std::uint16_t>(std::min(static_cast<std::uint32_t>(bounds.x) + border, maximum)),
+        .y = static_cast<std::uint16_t>(std::min(static_cast<std::uint32_t>(bounds.y) + top, maximum)),
+        .width = static_cast<std::uint16_t>(bounds.width - sides),
+        .height = static_cast<std::uint16_t>(bounds.height - rows),
+    };
   }
 
   bool PaneLayout::hasBorders(Metrics metrics) noexcept {
@@ -513,9 +533,17 @@ namespace telar::gui::inline foundation::inline model {
   }
 
   CellRectangle WorkbenchGeometry::cellArea() const noexcept {
-    const auto size = grid.fit(static_cast<double>(area.width), static_cast<double>(area.height));
+    const auto size = grid.fit(static_cast<double>(area.width), static_cast<double>(area.height - foot()));
 
     return size ? CellRectangle{.width = size->cols, .height = size->rows} : CellRectangle{};
+  }
+
+  float WorkbenchGeometry::foot() const noexcept {
+    if (layout_metrics.border == 0 || layout_metrics.footRows() != 0) {
+      return 0;
+    }
+
+    return static_cast<float>(std::min(grid.cell_width_px, grid.cell_height_px) / (2 * grid.scale));
   }
 
   ds::Option<TerminalSize> WorkbenchGeometry::contentSize(CellRectangle content) const noexcept {
