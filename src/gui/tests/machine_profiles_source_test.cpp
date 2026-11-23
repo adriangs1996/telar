@@ -7,7 +7,9 @@ static_assert(true);
 #include "foundation/core/application_memory.hpp"
 #include "telar_wire/codecs/telar_wire.hpp"
 #include "ui/app/overlays/machine_prompt/machine_profiles_source.hpp"
+#include <QCoreApplication>
 #include <QElapsedTimer>
+#include <QFile>
 #include <QObject>
 #include <QSignalSpy>
 #include <QString>
@@ -62,6 +64,16 @@ namespace {
     Q_OBJECT
 
   private:
+    // A machine is added by pairing with its gateway, so the program that pairs is a stand-in
+    // found on PATH for the whole test.
+    QTemporaryDir programs_;
+
+    Q_SLOT void initTestCase() {
+      QVERIFY(programs_.isValid());
+      QVERIFY(QFile::link(QCoreApplication::applicationDirPath() + QStringLiteral("/gui-gateway-runtime-fixture"), programs_.filePath(QStringLiteral("telar-gateway"))));
+      QVERIFY(qputenv("PATH", programs_.path().toUtf8() + ":" + qgetenv("PATH")));
+    }
+
     Q_SLOT static void loadsMissingProfilesAndPollsExternalReplacements() {
       const QTemporaryDir directory;
 
@@ -106,7 +118,7 @@ namespace {
       const auto file = profileFile(path);
       telar::ds::Option<system::ProfileFileTransaction> held{file.lock()};
       std::string label = "build";
-      std::string destination = "dev@build";
+      std::string destination = "telar://build#0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef.fedcba9876543210fedcba9876543210";
       std::string color = "#a0B1c2";
 
       QVERIFY(source.edit({.kind = MachineEditKind::add, .label = label, .value = destination, .color = color, .enabled = false}));
@@ -116,7 +128,7 @@ namespace {
       color.assign(color.size(), 'z');
       QSignalSpy failures{&source, &MachineProfilesSource::failed};
 
-      QVERIFY(!source.edit({.kind = MachineEditKind::add, .label = "second", .value = "dev@second"}));
+      QVERIFY(!source.edit({.kind = MachineEditKind::add, .label = "second", .value = "telar://second#0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef.fedcba9876543210fedcba9876543210"}));
       QCOMPARE(failures.count(), 1);
       QVERIFY(failures.takeFirst().isEmpty());
       QCOMPARE(source.error(), fromText(MachineProfileMessages::edit_pending));
@@ -126,7 +138,7 @@ namespace {
       const auto& profile = source.profiles().rows().front();
 
       QCOMPARE(fromText(profile.label()), QStringLiteral("build"));
-      QCOMPARE(fromText(profile.destination()), QStringLiteral("dev@build"));
+      QCOMPARE(fromText(profile.destination()), QStringLiteral("telar://build#0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"));
       QCOMPARE(fromText(profile.color().valueOr("missing")), QStringLiteral("#a0B1c2"));
       QVERIFY(!profile.enabled());
       QVERIFY(source.loaded());
@@ -177,7 +189,7 @@ namespace {
 
       source.open(path, QStringLiteral("local"));
       QTRY_VERIFY_WITH_TIMEOUT(source.loaded(), wait_ms);
-      QVERIFY(source.edit({.kind = MachineEditKind::add, .label = "build", .value = "dev@build"}));
+      QVERIFY(source.edit({.kind = MachineEditKind::add, .label = "build", .value = "telar://build#0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef.fedcba9876543210fedcba9876543210"}));
       QTRY_VERIFY_WITH_TIMEOUT(!source.editing(), wait_ms);
       QCOMPARE(source.profiles().rows().size(), std::size_t{1});
       source.poll();

@@ -34,5 +34,13 @@ export {
     // Blocks until telar answers or a deadline passes; throws Failure when it fails.
     Path resolve();
     Path program();
+
+    // The gateway program in the application bundle that holds this executable, or installed
+    // beside it; otherwise the one on PATH. It reaches the runtimes of other machines.
+    Path gatewayProgram();
+
+    // Presents a pairing address to its gateway under `name`, and returns the address to save.
+    // Blocks until the gateway answers; throws Failure with what it said when it refuses.
+    Path pairMachine(std::string_view address, std::string_view name);
   }
 }

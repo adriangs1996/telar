@@ -69,6 +69,13 @@
       "sys",
       "tbc"
     ],
+    "remote": [
+      "base",
+      "platform",
+      "sys",
+      "tbc",
+      "tls"
+    ],
     "plugins": [
       "base",
       "client",
@@ -203,7 +210,7 @@
       "commands/project_setup",
       "commands/window",
       "commands/hook",
-      "commands/machine_ssh",
+      "commands/machine_gateway",
       "commands/tab",
       "commands/worktree",
       "commands/machine",
@@ -224,6 +231,12 @@
     "src/runtime/host/process_table/process_table.cppm": "telar.runtime.host.process_table",
     "lib/plugins/plugins.cppm": "telar.plugins",
     "lib/tls/tls.cppm": "telar.tls",
+    "lib/remote/identity/identity.cppm": "telar.remote.identity",
+    "lib/remote/channel/channel.cppm": "telar.remote.channel",
+    "lib/remote/streams/streams.cppm": "telar.remote.streams",
+    "lib/remote/serve/serve.cppm": "telar.remote.serve",
+    "lib/remote/link/link.cppm": "telar.remote.link",
+    "lib/remote/tests/fixture/fixture.cppm": "telar.remote.tests.fixture",
     "lib/base/memory/allocators/allocators.cppm": "telar.base.memory.allocators",
     "lib/base/memory/containers/containers.cppm": "telar.base.memory.containers",
     "lib/base/ds/ds.cppm": "telar.base.ds",
@@ -243,6 +256,7 @@
     "lib/platform/fs/fs.cppm": "telar.platform.fs",
     "lib/platform/graphics/graphics.cppm": "telar.platform.graphics",
     "lib/platform/net/net.cppm": "telar.platform.net",
+    "lib/platform/listening/listening.cppm": "telar.platform.listening",
     "lib/platform/paths/paths.cppm": "telar.platform.paths",
     "lib/platform/process/process.cppm": "telar.platform.process",
     "lib/platform/sha256/sha256.cppm": "telar.platform.sha256",
@@ -347,7 +361,7 @@
     "src/cli/commands/machine/machine.cppm": "telar.cli.commands.machine",
     "src/cli/commands/window/window.cppm": "telar.cli.commands.window",
     "src/cli/commands/launch_commands/launch_commands.cppm": "telar.cli.commands.launch_commands",
-    "src/cli/commands/machine_ssh/machine_ssh.cppm": "telar.cli.commands.machine_ssh",
+    "src/cli/commands/machine_gateway/machine_gateway.cppm": "telar.cli.commands.machine_gateway",
     "src/cli/commands/worktree/worktree.cppm": "telar.cli.commands.worktree",
     "src/cli/commands/project_setup/project_setup.cppm": "telar.cli.commands.project_setup",
     "src/cli/session/server/server.cppm": "telar.cli.session.server",
@@ -928,7 +942,6 @@
     "src/gui/ui/app/chrome/components/components_controller.hpp": "Qt moc/QML integration",
     "src/gui/ui/kit/plugins/plugin_runner.hpp": "Qt moc/QML integration",
     "src/gui/ui/kit/store/store.hpp": "Qt moc/QML integration",
-    "src/gui/ui/kit/machines/ssh_options.hpp": "Qt moc/QML integration",
     "src/gui/ui/app/chrome/components/surface_command.hpp": "Qt moc/QML integration",
     "src/gui/ui/app/overlays/notifications/system_notifier.hpp": "Qt moc/QML integration",
     "src/gui/ui/app/chrome/tabs/tab_strip_layout.hpp": "Qt moc/QML integration",
@@ -1176,6 +1189,7 @@
       "telar.platform.events",
       "telar.platform.fs",
       "telar.platform.graphics",
+      "telar.platform.listening",
       "telar.platform.net",
       "telar.platform.paths",
       "telar.platform.primitives",
@@ -1185,6 +1199,12 @@
     ],
     "lib/plugins": [
       "telar.plugins"
+    ],
+    "lib/remote": [
+      "telar.remote.channel",
+      "telar.remote.identity",
+      "telar.remote.link",
+      "telar.remote.serve"
     ],
     "lib/render": [
       "telar.render.document",
@@ -1250,8 +1270,8 @@
     "src/cli/commands/machine": [
       "telar.cli.commands.machine"
     ],
-    "src/cli/commands/machine_ssh": [
-      "telar.cli.commands.machine_ssh"
+    "src/cli/commands/machine_gateway": [
+      "telar.cli.commands.machine_gateway"
     ],
     "src/cli/commands/monitor": [
       "telar.cli.commands.monitor"

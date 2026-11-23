@@ -29,8 +29,8 @@ its sidebar shows which agents are working, waiting for input or done.
 
 Your agents keep their own interfaces: Telar runs their existing CLIs. The
 window is a client of a separate runtime that owns the processes. Close the
-window and the work keeps running; reopen it, or connect over SSH to a
-runtime on another machine.
+window and the work keeps running; reopen it, or connect to a runtime on
+another machine through the gateway that machine's account runs.
 
 Telar is written in C++23, with Ghostty's `libghostty-vt` for terminal
 emulation and its own Qt Quick window and multiplexer. The name is Spanish
@@ -47,7 +47,7 @@ for *loom*.
   process and terminal activity.
 - **A worktree per task.** Create a Git worktree, launch an agent in it, and
   follow its status and diff from the CLI, next to your shell and editor.
-- **Remote machines.** Save SSH hosts and switch between their workspaces in
+- **Remote machines.** Pair other machines and switch between their workspaces in
   the same window. Processes keep running on the remote host when the client
   disconnects.
 - **Searchable history.** Search shell and agent commands by workspace,
@@ -117,7 +117,7 @@ every CLI command.
 
 - [Using Telar](docs/usage.md): navigation, session lifetime, troubleshooting
 - [Working with agents](docs/agents.md): integrations, status and worktrees
-- [Remote machines](docs/remote.md): SSH hosts and reconnection
+- [Remote machines](docs/remote.md): pairing, reconnection and forwarded ports
 - [Configuration](docs/configuration.md): themes, fonts, keybindings, profiles
 - [Plugins](docs/plugins.md) and the [Neovim integration](integrations/nvim/README.md)
 - [Kitty graphics](docs/kitty-graphics.md)

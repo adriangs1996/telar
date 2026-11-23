@@ -126,7 +126,7 @@ namespace telar::gui::qt {
         title = QStringLiteral("New machine label");
         break;
       case Mode::add_destination:
-        title = QStringLiteral("Its SSH destination: user@host or an alias");
+        title = QStringLiteral("The address `telar server pair` prints there");
         break;
       case Mode::rename:
         title = QStringLiteral("Rename machine");

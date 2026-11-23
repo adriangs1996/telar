@@ -200,6 +200,43 @@ export {
   }
 }
 
+// Interface: links/local_port_link.cppm
+export {
+  namespace telar::gui::features::terminal::links {
+
+    // A link to a port of the machine that printed it: http or https to `localhost`,
+    // `127.0.0.1`, `[::1]` or `0.0.0.0`, as a development server announces itself. On a pane
+    // of another machine it names a port there, which a browser here reaches only once the
+    // port is forwarded.
+    class LocalPortLink {
+    public:
+      // None for a link to anywhere else, or one that carries credentials.
+      [[nodiscard]] static ds::Option<LocalPortLink> parse(const LinkTarget& target);
+
+      // The port the link names there, written or the scheme's own.
+      [[nodiscard]] std::uint16_t port() const noexcept;
+
+      // The same link through `local`, the port here that reaches the one there. An address
+      // that means every interface there becomes `localhost` here.
+      [[nodiscard]] ds::Option<LinkTarget> through(std::uint16_t local) const;
+
+    private:
+      // Where the host starts in the link's text, and where its authority ends.
+      struct Authority {
+        std::size_t host_begin = 0;
+        std::size_t end = 0;
+      };
+
+      LocalPortLink(LinkTarget target, std::uint16_t port, Authority authority) noexcept;
+
+      LinkTarget target_;
+      std::uint16_t port_;
+      Authority authority_;
+    };
+
+  }
+}
+
 // Interface: links/link_match.cppm
 export {
   namespace telar::gui::features::terminal::links {

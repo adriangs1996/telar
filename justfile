@@ -25,17 +25,17 @@ vt:
 # Build the runtime and the GUI.
 build: runtime-build gui-build
 
-# Build the runtime and its CLI in the tree of PRESET.
+# Build the runtime, its CLI and the gateway in the tree of PRESET.
 runtime-build preset="dev": (configure preset)
-    "{{ cpp }}" build {{ preset }} -- --target telar-runtime telar
+    "{{ cpp }}" build {{ preset }} -- --target telar-runtime telar telar-gateway
 
 # Build the GUI in the tree of PRESET.
 gui-build preset="dev": (configure preset)
     "{{ cpp }}" build {{ preset }} -- --target telar-gui telar-gui-command
 
-# Build the auth daemon in the tree of PRESET.
-auth-build preset="dev": (configure preset)
-    "{{ cpp }}" build {{ preset }} -- --target telar-auth-daemon
+# Build the gateway in the tree of PRESET.
+gateway-build preset="dev": (configure preset)
+    "{{ cpp }}" build {{ preset }} -- --target telar-gateway
 
 # Build the diagram renderer that the macOS bundle ships beside the runtime. It needs Cargo.
 renderer:

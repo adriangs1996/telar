@@ -1,5 +1,5 @@
 # The processes the TELAR_BUILD_* options select. The runtime comes before the CLI,
-# whose tests that start a runtime need it.
+# whose tests that start a runtime need it, and before the gateway, which builds beside it.
 
 if(TELAR_LINUX_DISTRIBUTABLE)
   # musl gives threads 128 KiB stacks unless the executable names a size;
@@ -13,6 +13,9 @@ endif()
 if(TELAR_BUILD_CLI)
   add_subdirectory(cli)
 endif()
+if(TELAR_BUILD_GATEWAY)
+  add_subdirectory(gateway)
+endif()
 
 # The installed executables may link only the base system (glibc on Linux);
 # every distributable build checks it.
@@ -22,13 +25,11 @@ if(TELAR_BUILD_RUNTIME AND TELAR_RUNTIME_DISTRIBUTABLE)
     COMMAND "${CMAKE_COMMAND}" -E env "TELAR_MACOS_MIN=${CMAKE_OSX_DEPLOYMENT_TARGET}"
             "${PROJECT_SOURCE_DIR}/packaging/release/check-linkage.sh" "${TELAR_LINKAGE_KIND}"
             "$<TARGET_FILE:telar-runtime>" "$<TARGET_FILE:telar>" "$<TARGET_FILE:telar-config-check>"
-    DEPENDS telar-runtime telar telar-config-check
+            "$<TARGET_FILE:telar-gateway>"
+    DEPENDS telar-runtime telar telar-config-check telar-gateway
     VERBATIM)
 endif()
 
 if(TELAR_BUILD_GUI)
   add_subdirectory(gui)
-endif()
-if(TELAR_BUILD_AUTH)
-  add_subdirectory(auth-daemon)
 endif()

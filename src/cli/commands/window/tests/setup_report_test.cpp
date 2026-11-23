@@ -46,9 +46,9 @@ namespace {
   // An interactive setup with a failed step exits non-zero, so a script that chains it stops;
   // a login still to do or a change is not a failure.
   void textVerdictExit() {
-    check(finished({{Step::ssh, Status::ok}, {Step::telar, Status::failed}}) == 1);
-    check(finished({{Step::ssh, Status::ok}, {Step::logins, Status::pending}}) == 0);
-    check(finished({{Step::ssh, Status::ok}, {Step::telar, Status::changed}}) == 0);
+    check(finished({{Step::gateway, Status::ok}, {Step::telar, Status::failed}}) == 1);
+    check(finished({{Step::gateway, Status::ok}, {Step::logins, Status::pending}}) == 0);
+    check(finished({{Step::gateway, Status::ok}, {Step::telar, Status::changed}}) == 0);
   }
 
   const telar::testing::Case case_bounded_strips_controls{"setup_report.bounded_strips_controls", boundedStripsControls};

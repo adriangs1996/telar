@@ -531,7 +531,7 @@ namespace telar::gui::qt {
       result.insert(QStringLiteral("key"), QStringLiteral("machine:add"));
       result.insert(QStringLiteral("icon"), QStringLiteral("+"));
       result.insert(QStringLiteral("primary"), QStringLiteral("Add machine…"));
-      result.insert(QStringLiteral("secondary"), QStringLiteral("a label and its SSH destination"));
+      result.insert(QStringLiteral("secondary"), QStringLiteral("a label and its pairing address"));
       result.insert(QStringLiteral("hint"), QString{});
 
       return result;

@@ -101,7 +101,7 @@ jobs:
       - name: Configure with managed Qt
         run: |
           tools/cpp configure ci -- -DCMAKE_BUILD_TYPE=${{ matrix.configuration }} \
-            -DTELAR_BUILD_RUNTIME=OFF -DTELAR_BUILD_CLI=OFF -DTELAR_BUILD_AUTH=OFF -DTELAR_GUI_QT_JOBS=3
+            -DTELAR_BUILD_RUNTIME=OFF -DTELAR_BUILD_CLI=OFF -DTELAR_BUILD_GATEWAY=OFF -DTELAR_GUI_QT_JOBS=3
 
       - name: Save native dependency builds
         uses: ./.github/actions/cpp-toolchain/save

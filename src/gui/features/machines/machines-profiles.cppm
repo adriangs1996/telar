@@ -19,6 +19,7 @@ import telar.base.ds;
 // Interface: machines/field_rules.cppm
 // Shared with the CLI: telar.machines defines it.
 export namespace telar::gui::features::machines {
+  using telar::runtime::machines::MachineAddress;
   using telar::runtime::machines::MachineFieldRules;
 }
 

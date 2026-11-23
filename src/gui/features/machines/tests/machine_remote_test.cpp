@@ -90,8 +90,7 @@ namespace {
   }
 
   void remoteCommandsKeepValidatedProgramsSeparateFromShellSyntax() {
-    check(MachineRemoteCommand::bridge().view() == "exec telar server bridge", "the default bridge must resolve telar through the remote PATH");
-    check(MachineRemoteCommand::bridge("/opt/bin/telar").view() == "exec /opt/bin/telar server bridge", "the bridge must use the saved validated absolute program path");
+    check(MachineRemoteCommand::discovery("/opt/bin/telar").view().ends_with("exec /opt/bin/telar server endpoint'"), "discovery must use the saved validated absolute program path");
     check(MachineRemoteCommand::discovery().view() == R"(/bin/sh -c 'printf "%s\n" "$HOME" "${SHELL:-/bin/sh}"; exec telar server endpoint')", "discovery must retain the original shell-independent home and shell report");
     for (const auto* const program : {"", "telar", "/a/../telar", "/a;exit", "/path/with space", "/path/'quote"}) {
       rejects(MachineError::invalid_program, [&] {
@@ -100,8 +99,8 @@ namespace {
     }
   }
 
-  void sshFailuresPreservePrecedenceAndRetryPolicy() {
-    constexpr std::uint8_t ssh_failed = 255;
+  void reachFailuresPreservePrecedenceAndRetryPolicy() {
+    constexpr std::uint8_t unreachable = 255;
     constexpr std::uint8_t program_missing = 127;
     const auto failed = [](telar::ds::Option<std::uint8_t> status, std::string_view text) {
       return MachineConnectionPolicy::failure({.exit_status = status, .standard_error = text});
@@ -109,11 +108,11 @@ namespace {
 
     check(failed(telar::ds::none, "telar protocol mismatch") == MachineError::endpoint_unavailable, "a signaled process must remain a transient endpoint failure");
     check(failed(program_missing, "telar protocol mismatch") == MachineError::remote_runtime_incompatible, "a reported runtime mismatch must precede shell exit classification");
-    check(failed(program_missing, "Host key verification failed") == MachineError::remote_program_missing, "shell command failure must precede SSH diagnostics");
-    check(failed(ssh_failed, "Permission denied (publickey). Host key verification failed") == MachineError::host_key_rejected, "host key refusal must precede authentication refusal");
-    check(failed(ssh_failed, "Permission denied (publickey).") == MachineError::authentication_failed, "an SSH credential refusal must remain permanent");
-    check(failed(ssh_failed, "Connection refused") == MachineError::endpoint_unavailable, "an endpoint outage must remain retryable");
-    check(MachineConnectionPolicy::permanent(MachineError::host_key_rejected) && !MachineConnectionPolicy::setupRepairs(MachineError::host_key_rejected), "setup must not claim to repair rejected host keys");
+    check(failed(program_missing, "The gateway holds another key than the one its address pins") == MachineError::remote_program_missing, "shell command failure must precede the gateway's diagnostics");
+    check(failed(unreachable, "this machine is not paired with that gateway. The gateway holds another key") == MachineError::host_key_rejected, "a gateway with another key must precede a refused pairing");
+    check(failed(unreachable, "telar gateway: this machine is not paired with that gateway") == MachineError::authentication_failed, "a gateway that does not admit this machine must remain permanent");
+    check(failed(unreachable, "telar gateway: The gateway does not answer at its address") == MachineError::endpoint_unavailable, "an endpoint outage must remain retryable");
+    check(MachineConnectionPolicy::permanent(MachineError::host_key_rejected) && !MachineConnectionPolicy::setupRepairs(MachineError::host_key_rejected), "setup must not claim to repair a gateway with another key");
     check(MachineConnectionPolicy::permanent(MachineError::remote_program_missing) && MachineConnectionPolicy::setupRepairs(MachineError::remote_program_missing), "setup must repair a missing remote program");
     check(!MachineConnectionPolicy::permanent(MachineError::endpoint_unavailable) && !MachineConnectionPolicy::setupRepairs(MachineError::endpoint_unavailable), "transient endpoint failures must retry without setup");
   }
@@ -121,6 +120,6 @@ namespace {
   const telar::testing::Case case_discovery_owns_paths_and_keeps_protocol_identity{"machine_remote.discovery_owns_paths_and_keeps_protocol_identity", discoveryOwnsPathsAndKeepsProtocolIdentity};
   const telar::testing::Case case_discovery_rejects_unframed_unsafe_and_oversized_replies{"machine_remote.discovery_rejects_unframed_unsafe_and_oversized_replies", discoveryRejectsUnframedUnsafeAndOversizedReplies};
   const telar::testing::Case case_remote_commands_keep_validated_programs_separate_from_shell_syntax{"machine_remote.remote_commands_keep_validated_programs_separate_from_shell_syntax", remoteCommandsKeepValidatedProgramsSeparateFromShellSyntax};
-  const telar::testing::Case case_ssh_failures_preserve_precedence_and_retry_policy{"machine_remote.ssh_failures_preserve_precedence_and_retry_policy", sshFailuresPreservePrecedenceAndRetryPolicy};
+  const telar::testing::Case case_reach_failures_preserve_precedence_and_retry_policy{"machine_remote.reach_failures_preserve_precedence_and_retry_policy", reachFailuresPreservePrecedenceAndRetryPolicy};
 
 }

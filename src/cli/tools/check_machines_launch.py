@@ -15,6 +15,52 @@ import tempfile
 # The version this checkout builds, which a fixture's remote reports as installed.
 VERSION = (Path(__file__).resolve().parents[3] / 'VERSION').read_text().split()[0]
 
+# The file that stands in for telar-gateway, the program telar runs to reach a machine. telar
+# finds it through TELAR_GATEWAY_PROGRAM, and no snapshot records it.
+GATEWAY = 'gateway-stand-in'
+KEY = '00112233445566778899aabbccddeeff' * 2
+
+# How a stand-in written in Python starts: with telar-gateway's command line as telar writes it,
+# `run [-t] [--to ADDRESS] ADDRESS COMMAND` or `enroll ADDRESS --name NAME`, read into `request`.
+# Any other is the usage error it is to the program.
+GATEWAY_ARGV = r'''#!/usr/bin/env python3
+import sys
+def gateway_request(words):
+ verb,rest=(words[0] if words else ''),words[1:]
+ if verb=='enroll' and len(rest)==3 and rest[1]=='--name':
+  return {'verb':verb,'destination':rest[0],'name':rest[2],'command':''}
+ terminal=rest[:1]==['-t']
+ rest=rest[terminal:]
+ named=rest[1] if rest[:1]==['--to'] and len(rest)>1 else None
+ if named:rest=rest[2:]
+ if verb!='run' or len(rest)!=2:
+  print('stand-in gateway: unexpected arguments',words,file=sys.stderr);sys.exit(2)
+ return {'verb':verb,'terminal':terminal,'destination':named or rest[0],'command':rest[1]}
+request=gateway_request(sys.argv[1:])
+command=request['command']
+'''
+
+# The same for a stand-in written for /bin/sh, which answers every `run` alike.
+GATEWAY_RUN = '#!/bin/sh\n[ "$1" = run ] || { echo "stand-in gateway: unexpected arguments: $*" >&2; exit 2; }\n'
+
+# What the program says, with status 255, of a gateway whose key is not the one its address pins,
+# and of one that does not admit this machine.
+ANOTHER_KEY = 'telar gateway: The gateway holds another key than the one its address pins'
+NOT_PAIRED = 'telar gateway: this machine is not paired with that gateway; pair it again with `telar machine add`'
+
+
+def address(host):
+    """The address the gateway of `host` is saved under."""
+    return f'telar://{host}:8352#{KEY}'
+
+
+def install_gateway(directory, env, text):
+    """Puts `text` in `directory` as the program every telar run with `env` reaches machines through."""
+    program = directory / GATEWAY
+    program.write_text(text)
+    program.chmod(0o700)
+    env['TELAR_GATEWAY_PROGRAM'] = str(program)
+
 
 def environment(root):
     result = {k: v for k, v in os.environ.items()
@@ -47,7 +93,7 @@ def snapshot(root, binary):
     for path in sorted(root.rglob('*')):
         if path.is_symlink():
             result[str(path.relative_to(root))] = {'link': normalize(os.readlink(path), root, binary)}
-        elif path.is_file() and path.name != 'ssh':
+        elif path.is_file() and path.name != GATEWAY:
             data = normalize(path.read_bytes().decode('utf-8', errors='backslashreplace'), root, binary)
             result[str(path.relative_to(root))] = {'text': data, 'mode': path.stat().st_mode & 0o777}
     return result
@@ -57,18 +103,6 @@ def invoke(binary, root, env, args, data=b''):
     result = subprocess.run([str(binary), *args], input=data, capture_output=True, env=env, cwd=root, timeout=15)
     return {'status': result.returncode, 'stdout': normalize(result.stdout.decode(errors='backslashreplace'), root, binary),
             'stderr': normalize(result.stderr.decode(errors='backslashreplace'), root, binary), 'files': snapshot(root, binary)}
-
-
-def ssh_contract(output):
-    """The argv the fake ssh printed, reduced to what dispatch promises: the terminal flag,
-    the set of options with the ControlPath name hash masked, and every word from `--` on,
-    in order. The order of the options and the naming of the control socket are free."""
-    words = output.splitlines()
-    end = words.index('--')
-    options = sorted(words[index + 1] for index in range(end) if words[index] == '-o')
-    flags = [word for index, word in enumerate(words[:end]) if word != '-o' and (index == 0 or words[index - 1] != '-o')]
-    options = [re.sub(r'^(ControlPath=.*/ssh-)[0-9a-f]+$', r'\1@HASH@', option) for option in options]
-    return '\n'.join(flags + ['-o ' + option for option in options] + words[end:]) + '\n'
 
 
 def encode(word):
@@ -103,9 +137,10 @@ def outcomes(binary):
                           'stdout': normalize(output.decode(errors='backslashreplace').replace('\r\n', '\n'), root, binary),
                           'stderr': normalize(result.stderr.decode(errors='backslashreplace'), root, binary),
                           'files': snapshot(root, binary)})
+        host, other = address('host'), address('other')
         for args in [[], ['wat'], ['add'], ['add', 'box'], ['check'], ['receive-config', 'extra'], ['list', '--socket', '/x'],
-                     ['add','box','host','--color'], ['add','box','host','--color','red','--color','blue'],
-                     ['add','box','host','--binary','x'], ['add','box','host','--skip','agents'],
+                     ['add','box',host,'--color'], ['add','box',host,'--color','red','--color','blue'],
+                     ['add','box',host,'--binary','x'], ['add','box',host,'--skip','agents'],
                      ['setup','box','--skip','wat'], ['setup','box','--binary'], ['remove','box','--json']]:
             run('validation-machine-' + repr(args), ['machine', *args])
         for args in [[], ['wat'], ['install','--dir'], ['status','--json'], ['status','--dir','a','--dir','b']]:
@@ -117,17 +152,19 @@ def outcomes(binary):
                      ['gui','--no-config','--config','x'], ['gui','--profile='], ['gui','--remote','x','--remote','y']]:
             run('validation-launch-' + repr(args), args)
         env['SSH_CONNECTION'] = 'fixture connection'
-        for words in [[], ['gui'], ['/bin/echo','literal'], ['--machine','box'], ['--remote','user@host']]:
+        for words in [[], ['gui'], ['/bin/echo','literal'], ['--machine','box'], ['--remote',host]]:
             run('no-display-'+repr(words), words)
         del env['SSH_CONNECTION']
         run('empty-list', ['machine','list'])
         run('empty-list-json', ['machine','list','--json'])
-        for label,destination,color in [('bad label','host',None), ('box','-option',None), ('box','bad host',None), ('box','host','not a color')]:
+        # What is not a gateway's address names no machine, an SSH destination included.
+        for label,destination,color in [('bad label',host,None), ('box','-option',None), ('box','bad host',None), ('box','dev@host',None),
+                                        ('box',host,'not a color')]:
             run('invalid-fields-' + label + destination, ['machine','add',label,destination] + (['--color',color] if color else []))
-        run('add', ['machine','add','box','dev@host','--color','#aBc123'])
-        run('duplicate-label', ['machine','add','box','other'])
-        run('duplicate-destination', ['machine','add','gpu','dev@host'])
-        run('second-machine', ['machine','add','gpu','other','--disabled'])
+        run('add', ['machine','add','box',host,'--color','#aBc123'])
+        run('duplicate-label', ['machine','add','box',other])
+        run('duplicate-destination', ['machine','add','gpu',host])
+        run('second-machine', ['machine','add','gpu',other,'--disabled'])
         run('list', ['machine','list'])
         run('list-json', ['machine','list','--json'])
         for action in ['disable','disable','enable','enable']:
@@ -140,12 +177,12 @@ def outcomes(binary):
         profiles.chmod(0o644)
         run('insecure-file', ['machine','list'])
         profiles.chmod(0o600)
-        fixture = {'version':2,'local_label':'local','machines':[{'id':'m-0123456789ab','label':'box','destination':'host',
+        fixture = {'version':2,'local_label':'local','machines':[{'id':'m-0123456789ab','label':'box','destination':host,
                    'telar_path':'/opt/telar','enabled':False,'logins':{'claude':'done','codex':'pending','pi':'failed'}}]}
         profiles.write_text(json.dumps(fixture))
         run('extended-list', ['machine','list'])
         run('extended-list-json', ['machine','list','--json'])
-        run('local-collision', ['machine','add','local','other'])
+        run('local-collision', ['machine','add','local',other])
         run('local-dispatch', ['--machine','local','--version'])
         run('local-dispatch-equals', ['--machine=local','machine','list','--json'])
         run('local-dispatch-validation', ['--machine','local','machine','wat'])
@@ -163,17 +200,16 @@ def outcomes(binary):
         for word in ['bad', '', 'aA', 'aAA', 'a====', 'aZh']:
             run('invalid-decode-'+word, ['dispatch-argv',word])
         bindir=root/'bin';bindir.mkdir()
-        (bindir/'ssh').write_text('#!/bin/sh\nprintf "%s\\n" "$@"\nexit 37\n')
-        (bindir/'ssh').chmod(0o755)
+        # The gateway program's whole command line is what dispatch promises: `run`, the terminal
+        # flag, the machine's address and the command there, in that order.
+        install_gateway(bindir, env, '#!/bin/sh\nprintf "%s\\n" "$@"\nexit 37\n')
         env['PATH']=str(bindir)+':/usr/bin:/bin'
         # The isolated profile is disabled: dispatch still explicitly selects it.
-        run('ssh-forward', ['--machine','box','cli','status','--dir',"space ' quote $(touch nope);\nline"])
+        run('gateway-forward', ['--machine','box','cli','status','--dir',"space ' quote $(touch nope);\nline"])
         # A person at a terminal gets one there, so a remote removal can ask them;
         # a terminal on stdin alone keeps stdout clean of the remote terminal's \r\n.
-        for name, streams in [('ssh-forward-terminal', ('stdin', 'stdout')), ('ssh-forward-terminal-stdin', ('stdin',))]:
+        for name, streams in [('gateway-forward-terminal', ('stdin', 'stdout')), ('gateway-forward-terminal-stdin', ('stdin',))]:
             run_terminal(name, ['--machine','box','worktree','remove','branch','--force'], streams)
-        for case in cases[-3:]:
-            case['stdout'] = ssh_contract(case['stdout'])
         schema = 'cqp00009' if b'cqp00009' in binary.read_bytes() else '886b480d'
         fixtures = [
             ('reachable', f'printf "%s\\n" "$HOME" /bin/sh "{root}/remote.sock" {schema}\n'),
@@ -182,29 +218,31 @@ def outcomes(binary):
             ('incompatible', f'printf "%s\\n" "$HOME" /bin/sh "{root}/remote.sock" deadbeef\n'),
             ('unreadable', 'printf "startup banner\\n"\n'),
             ('missing', 'echo "sh: telar: command not found" >&2\nexit 127\n'),
-            ('host-key', 'echo "No ED25519 host key is known and you have requested strict checking." >&2\necho "Host key verification failed." >&2\nexit 255\n'),
-            ('auth', 'echo "user@host: Permission denied (publickey)." >&2\nexit 255\n'),
+            ('host-key', f"echo '{ANOTHER_KEY}' >&2\nexit 255\n"),
+            ('auth', f"echo '{NOT_PAIRED}' >&2\nexit 255\n"),
             ('runtime-mismatch', 'echo "telar protocol mismatch" >&2\nexit 1\n')]
         for label, body in fixtures:
-            (bindir/'ssh').write_text('#!/bin/sh\n' + body)
+            install_gateway(bindir, env, GATEWAY_RUN + body)
             run('check-' + label, ['machine','check','box'])
             run('check-json-' + label, ['machine','check','box','--json'])
         run('check-unknown', ['machine','check','missing','--json'])
-        (bindir/'ssh').write_text('#!/bin/sh\necho "user@host: Permission denied (publickey)." >&2\nexit 255\n')
-        run('setup-ssh-failure', ['machine','setup','box','--json'])
-        run('add-check-failure', ['machine','add','new','newhost','--check','--json'])
-        for args in [['setup','host','--confirm','--json'], ['setup','ssh://dev@new:22','--label','fresh','--confirm'],
-                     ['setup','host','--binary',str(root/'missing')]]:
+        install_gateway(bindir, env, GATEWAY_RUN + f"echo '{NOT_PAIRED}' >&2\nexit 255\n")
+        run('setup-gateway-failure', ['machine','setup','box','--json'])
+        run('add-check-failure', ['machine','add','new',address('newhost'),'--check','--json'])
+        # A saved machine's address is that machine, a new address takes its name from --label,
+        # and an SSH destination is no machine to set up.
+        for args in [['setup',host,'--confirm','--json'], ['setup',address('new'),'--label','fresh','--confirm'],
+                     ['setup','ssh://dev@new:22','--label','fresh','--confirm'], ['setup',host,'--binary',str(root/'missing')]]:
             run('setup-'+repr(args), ['machine',*args])
-        # A deterministic SSH endpoint exercises setup effects without downloads
+        # A deterministic gateway exercises setup effects without downloads
         # or writes on a real remote account. Only the transport is substituted.
-        shim = "#!/usr/bin/env python3\nimport os,sys,shlex\ncommand=sys.argv[-1]\n"
+        shim = GATEWAY_ARGV + "import os,shlex\n"
         shim += "schema=" + repr(schema) + "\n"
         shim += "if command.endswith(\"server endpoint'\"):\n print(os.environ['HOME']);print('/bin/sh');print(os.environ['HOME']+'/remote.sock');print(schema)\n"
         shim += "else:\n script=sys.stdin.read()\n if script.startswith('dir='):\n  directory=shlex.split(script.splitlines()[0].split('=',1)[1])[0]\n  print('os=Darwin\\narch=arm64\\nlibc=gnu\\nhome='+os.environ['HOME'])\n  print('target='+os.environ['HOME']+'/.local/share/telar/versions/'+directory+'/telar')\n  print('installed=telar " + VERSION + "')\n elif 'link=$HOME/.local/bin/telar' in script:print('linked')\n"
-        (bindir/'ssh').write_text(shim)
+        install_gateway(bindir, env, shim)
         for words in [['setup','box','--json'], ['setup','box','--json'], ['setup','box','--skip','agents,config,login','--json'],
-                      ['setup','new-destination','--label','new-machine','--json']]:
+                      ['setup',address('new-destination'),'--label','new-machine','--json']]:
             run('setup-ready-'+repr(words), ['machine',*words])
         install_dir=root/'cli-bin';install_dir.mkdir()
         for action in ['status','uninstall','install','install','status','uninstall','status']:
@@ -239,9 +277,7 @@ def outcomes(binary):
     return cases
 
 
-INCOMPATIBLE_SHIM = r'''#!/usr/bin/env python3
-import os,subprocess,sys
-command=sys.argv[-1]
+INCOMPATIBLE_SHIM = GATEWAY_ARGV + r'''import os,subprocess
 home=os.environ['FIXTURE_REMOTE_HOME']
 if command.endswith("server endpoint'"):
  print('telar protocol mismatch',file=sys.stderr);sys.exit(1)
@@ -263,8 +299,7 @@ def incompatible_runtime_kept(binary):
         env = environment(root)
         bindir = root / 'bin'
         bindir.mkdir()
-        (bindir / 'ssh').write_text(INCOMPATIBLE_SHIM)
-        (bindir / 'ssh').chmod(0o700)
+        install_gateway(bindir, env, INCOMPATIBLE_SHIM)
         remote = root / 'remote'
         log = root / 'stopped'
         # The remote telar a stop would run; it logs what it was asked.
@@ -272,7 +307,7 @@ def incompatible_runtime_kept(binary):
         (remote / '.local/bin/telar').write_text(f'#!/bin/sh\necho "$@" >> "{log}"\necho "telar runtime is stopping"\n')
         (remote / '.local/bin/telar').chmod(0o700)
         env.update(PATH=f'{bindir}:/usr/bin:/bin', FIXTURE_REMOTE_HOME=str(remote))
-        subprocess.run([str(binary), 'machine', 'add', 'box', 'host'], env=env, cwd=root, check=True, capture_output=True, timeout=15)
+        subprocess.run([str(binary), 'machine', 'add', 'box', address('host')], env=env, cwd=root, check=True, capture_output=True, timeout=15)
         for flags in (['--json'], []):
             result = subprocess.run([str(binary), 'machine', 'setup', 'box', '--skip', 'agents,config,login', *flags], env=env, cwd=root,
                                     stdin=subprocess.DEVNULL, capture_output=True, timeout=30)
@@ -299,7 +334,7 @@ def concurrent_edits(binary):
             return {machine['label'] for machine in json.loads(listed.stdout)['machines']}
         for round in range(3):
             labels = {f'r{round}m{index}' for index in range(16)}
-            assert race([['add', label, label + '.host'] for label in labels]) == labels
+            assert race([['add', label, address(label + '.host')] for label in labels]) == labels
             assert race([['remove', label] for label in labels]) == set()
 
 
@@ -331,7 +366,7 @@ def receive_config_bounds(binary):
 
 
 def dispatch_refusals(binary):
-    """What dispatch refuses reaches neither SSH nor a window: a command too long for the
+    """What dispatch refuses reaches neither the gateway nor a window: a command too long for the
     remote shell, and a window asked to show a second machine."""
     with tempfile.TemporaryDirectory(prefix='telar-machines-', dir='/tmp') as temporary:
         root = Path(temporary).resolve()
@@ -342,14 +377,14 @@ def dispatch_refusals(binary):
         # A copy of telar beside its runtime and a window that records being opened.
         shutil.copy2(binary, bindir / 'telar')
         (bindir / 'telar-runtime').symlink_to(binary.resolve().parent / 'telar-runtime')
-        for name in ('ssh', 'telar-gui'):
-            (bindir / name).write_text(f'#!/bin/sh\necho {name} "$@" >> "{calls}"\nexit 0\n')
-            (bindir / name).chmod(0o700)
+        install_gateway(bindir, env, f'#!/bin/sh\necho gateway "$@" >> "{calls}"\nexit 0\n')
+        (bindir / 'telar-gui').write_text(f'#!/bin/sh\necho telar-gui "$@" >> "{calls}"\nexit 0\n')
+        (bindir / 'telar-gui').chmod(0o700)
         env['PATH'] = f'{bindir}:/usr/bin:/bin'
         telar = bindir / 'telar'
-        subprocess.run([str(telar), 'machine', 'add', 'box', 'host'], env=env, cwd=root, check=True, capture_output=True, timeout=15)
+        subprocess.run([str(telar), 'machine', 'add', 'box', address('host')], env=env, cwd=root, check=True, capture_output=True, timeout=15)
         try:
-            for words in (['pane', 'list', '--workspace', 'w' * 70 * 1024], ['--remote', 'user@host'], ['gui', '--machine', 'other']):
+            for words in (['pane', 'list', '--workspace', 'w' * 70 * 1024], ['--remote', address('other')], ['gui', '--machine', 'other']):
                 result = subprocess.run([str(telar), '--machine', 'box', *words], env=env, cwd=root, stdin=subprocess.DEVNULL, capture_output=True, timeout=15)
                 assert result.returncode == 1 and not calls.exists(), (words[0], result.returncode, result.stderr[-300:], calls.exists() and calls.read_text()[:300])
         finally:

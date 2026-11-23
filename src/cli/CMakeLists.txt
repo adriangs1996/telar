@@ -24,7 +24,7 @@ endif()
 foreach(domain IN ITEMS console/command_error console/output console/render console/command_limit
     session/control_session commands/monitor session/runtime_observer session/server
     commands/worktree_git commands/history commands/hooks commands/integration commands/plugin
-    commands/project_setup commands/window commands/hook commands/machine_ssh commands/tab
+    commands/project_setup commands/window commands/hook commands/machine_gateway commands/tab
     commands/worktree commands/machine commands/launch_commands)
   add_subdirectory(${domain})
 endforeach()
@@ -32,7 +32,7 @@ endforeach()
 # The launch commands' bodies, which only telar links.
 add_library(cli-launch STATIC commands/launch_commands/launch_commands.cpp commands/launch_commands/completions.cpp)
 target_link_libraries(cli-launch PUBLIC cli-console-output cli-session-server cli-commands-plugin
-  cli-commands-window cli-commands-machine_ssh cli-commands-machine cli-commands-launch_commands)
+  cli-commands-window cli-commands-machine_gateway cli-commands-machine cli-commands-launch_commands)
 # `completions check` compiles a spec with the matcher the runtime uses.
 target_link_libraries(cli-launch PRIVATE ebnf::ebnf)
 

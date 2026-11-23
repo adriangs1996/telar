@@ -49,28 +49,28 @@
     "files_sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a"
   },
   {
-    "name": "validation-machine-['add', 'box', 'host', '--color']",
+    "name": "validation-machine-['add', 'box', 'telar://host:8352#00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff', '--color']",
     "status": 1,
     "stdout": "",
     "stderr": "telar: MissingMachineColor; see `telar machine add --help`\n",
     "files_sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a"
   },
   {
-    "name": "validation-machine-['add', 'box', 'host', '--color', 'red', '--color', 'blue']",
+    "name": "validation-machine-['add', 'box', 'telar://host:8352#00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff', '--color', 'red', '--color', 'blue']",
     "status": 1,
     "stdout": "",
     "stderr": "telar: DuplicateColorOption; see `telar machine add --help`\n",
     "files_sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a"
   },
   {
-    "name": "validation-machine-['add', 'box', 'host', '--binary', 'x']",
+    "name": "validation-machine-['add', 'box', 'telar://host:8352#00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff', '--binary', 'x']",
     "status": 1,
     "stdout": "",
     "stderr": "telar: SetupOptionWithoutSetup; see `telar machine add --help`\n",
     "files_sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a"
   },
   {
-    "name": "validation-machine-['add', 'box', 'host', '--skip', 'agents']",
+    "name": "validation-machine-['add', 'box', 'telar://host:8352#00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff', '--skip', 'agents']",
     "status": 1,
     "stdout": "",
     "stderr": "telar: SetupOptionWithoutSetup; see `telar machine add --help`\n",
@@ -280,7 +280,7 @@
     "files_sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a"
   },
   {
-    "name": "no-display-['--remote', 'user@host']",
+    "name": "no-display-['--remote', 'telar://host:8352#00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff']",
     "status": 1,
     "stdout": "",
     "stderr": "telar: no display to open a window here (an SSH login, or Linux without WAYLAND_DISPLAY).\nFrom a terminal, reach the panes and agents through the CLI:\n  telar pane read|watch|send-keys, telar agent prompt, telar --machine LABEL COMMAND\n",
@@ -301,7 +301,7 @@
     "files_sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a"
   },
   {
-    "name": "invalid-fields-bad labelhost",
+    "name": "invalid-fields-bad labeltelar://host:8352#00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff",
     "status": 1,
     "stdout": "",
     "stderr": "telar machine: labels are 1 to 32 letters, digits, '.', '_' or '-', starting with a letter or a digit\n",
@@ -311,18 +311,25 @@
     "name": "invalid-fields-box-option",
     "status": 1,
     "stdout": "",
-    "stderr": "telar machine: destinations are an ssh host alias or user@host, without spaces or a leading '-'\n",
+    "stderr": "telar machine: a machine is named by the address `telar server pair` prints there, telar://HOST:PORT#KEY\n",
     "files_sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a"
   },
   {
     "name": "invalid-fields-boxbad host",
     "status": 1,
     "stdout": "",
-    "stderr": "telar machine: destinations are an ssh host alias or user@host, without spaces or a leading '-'\n",
+    "stderr": "telar machine: a machine is named by the address `telar server pair` prints there, telar://HOST:PORT#KEY\n",
     "files_sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a"
   },
   {
-    "name": "invalid-fields-boxhost",
+    "name": "invalid-fields-boxdev@host",
+    "status": 1,
+    "stdout": "",
+    "stderr": "telar machine: a machine is named by the address `telar server pair` prints there, telar://HOST:PORT#KEY\n",
+    "files_sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a"
+  },
+  {
+    "name": "invalid-fields-boxtelar://host:8352#00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff",
     "status": 1,
     "stdout": "",
     "stderr": "telar machine: colors are #RRGGBB or a theme role such as red or accent\n",
@@ -333,672 +340,679 @@
     "status": 0,
     "stdout": "",
     "stderr": "",
-    "files_sha256": "34d9b71bb296f97c264e13de8c098a942922f63e4695a78ecdc7f8376a3c4c26"
+    "files_sha256": "5b8afa78f65cc45bc7a371e66837cd6eb2c4842c635199f58099e03615b30034"
   },
   {
     "name": "duplicate-label",
     "status": 1,
     "stdout": "",
     "stderr": "telar machine: that label is already taken, by a saved machine or by this machine\n",
-    "files_sha256": "34d9b71bb296f97c264e13de8c098a942922f63e4695a78ecdc7f8376a3c4c26"
+    "files_sha256": "5b8afa78f65cc45bc7a371e66837cd6eb2c4842c635199f58099e03615b30034"
   },
   {
     "name": "duplicate-destination",
     "status": 1,
     "stdout": "",
-    "stderr": "telar machine: two saved machines cannot share one SSH destination\n",
-    "files_sha256": "34d9b71bb296f97c264e13de8c098a942922f63e4695a78ecdc7f8376a3c4c26"
+    "stderr": "telar machine: two saved machines cannot share one address\n",
+    "files_sha256": "5b8afa78f65cc45bc7a371e66837cd6eb2c4842c635199f58099e03615b30034"
   },
   {
     "name": "second-machine",
     "status": 0,
     "stdout": "",
     "stderr": "",
-    "files_sha256": "e6c02f28b639decae01fe36b64b14256401b7cef7ee87f617cedcde388e09abc"
+    "files_sha256": "987732e95244340540816a92ef50cc88e7ae3bc22cade816a791a4827bee441a"
   },
   {
     "name": "list",
     "status": 0,
-    "stdout": "@HOSTNAME@\tlocal\nbox\tdev@host\tenabled\t#aBc123\ngpu\tother\tdisabled\n",
+    "stdout": "@HOSTNAME@\tlocal\nbox\ttelar://host:8352#00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff\tenabled\t#aBc123\ngpu\ttelar://other:8352#00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff\tdisabled\n",
     "stderr": "",
-    "files_sha256": "e6c02f28b639decae01fe36b64b14256401b7cef7ee87f617cedcde388e09abc"
+    "files_sha256": "987732e95244340540816a92ef50cc88e7ae3bc22cade816a791a4827bee441a"
   },
   {
     "name": "list-json",
     "status": 0,
-    "stdout": "{\"local\":\"@HOSTNAME@\",\"machines\":[{\"id\":\"m-@ID@\",\"label\":\"box\",\"destination\":\"dev@host\",\"color\":\"#aBc123\",\"enabled\":true},{\"id\":\"m-@ID@\",\"label\":\"gpu\",\"destination\":\"other\",\"enabled\":false}]}\n",
+    "stdout": "{\"local\":\"@HOSTNAME@\",\"machines\":[{\"id\":\"m-@ID@\",\"label\":\"box\",\"destination\":\"telar://host:8352#00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff\",\"color\":\"#aBc123\",\"enabled\":true},{\"id\":\"m-@ID@\",\"label\":\"gpu\",\"destination\":\"telar://other:8352#00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff\",\"enabled\":false}]}\n",
     "stderr": "",
-    "files_sha256": "e6c02f28b639decae01fe36b64b14256401b7cef7ee87f617cedcde388e09abc"
+    "files_sha256": "987732e95244340540816a92ef50cc88e7ae3bc22cade816a791a4827bee441a"
   },
   {
     "name": "disable",
     "status": 0,
     "stdout": "",
     "stderr": "",
-    "files_sha256": "a1fd8d9ff9b86e788b2019af4a63ca82b22f399c2f5bea1e0a60298b9941f5d6"
+    "files_sha256": "bf62960352dd1196e6b25ce0c09a8ff37731615befa7fcbbcae81cf9b3a0b56d"
   },
   {
     "name": "disable",
     "status": 0,
     "stdout": "",
     "stderr": "",
-    "files_sha256": "a1fd8d9ff9b86e788b2019af4a63ca82b22f399c2f5bea1e0a60298b9941f5d6"
+    "files_sha256": "bf62960352dd1196e6b25ce0c09a8ff37731615befa7fcbbcae81cf9b3a0b56d"
   },
   {
     "name": "enable",
     "status": 0,
     "stdout": "",
     "stderr": "",
-    "files_sha256": "e6c02f28b639decae01fe36b64b14256401b7cef7ee87f617cedcde388e09abc"
+    "files_sha256": "987732e95244340540816a92ef50cc88e7ae3bc22cade816a791a4827bee441a"
   },
   {
     "name": "enable",
     "status": 0,
     "stdout": "",
     "stderr": "",
-    "files_sha256": "e6c02f28b639decae01fe36b64b14256401b7cef7ee87f617cedcde388e09abc"
+    "files_sha256": "987732e95244340540816a92ef50cc88e7ae3bc22cade816a791a4827bee441a"
   },
   {
     "name": "rename",
     "status": 0,
     "stdout": "",
     "stderr": "",
-    "files_sha256": "f731c2a405d8a4051970a1215d4b220e384eef26035043432205793a49105915"
+    "files_sha256": "276947ecdcad4a5ee0b0ba06c15ad79bcc14dc3a5ad0d66c07fb0d979a2c1f62"
   },
   {
     "name": "same-rename",
     "status": 0,
     "stdout": "",
     "stderr": "",
-    "files_sha256": "f731c2a405d8a4051970a1215d4b220e384eef26035043432205793a49105915"
+    "files_sha256": "276947ecdcad4a5ee0b0ba06c15ad79bcc14dc3a5ad0d66c07fb0d979a2c1f62"
   },
   {
     "name": "taken-rename",
     "status": 1,
     "stdout": "",
     "stderr": "telar machine: that label is already taken, by a saved machine or by this machine\n",
-    "files_sha256": "f731c2a405d8a4051970a1215d4b220e384eef26035043432205793a49105915"
+    "files_sha256": "276947ecdcad4a5ee0b0ba06c15ad79bcc14dc3a5ad0d66c07fb0d979a2c1f62"
   },
   {
     "name": "remove",
     "status": 0,
     "stdout": "",
     "stderr": "",
-    "files_sha256": "509dae12e45581ed503acb5d32818dd70d5d2350fc96e051e44edf8262da8bd9"
+    "files_sha256": "71154f27fbeabf5fdb63e106429062a6f6943cb8f645b72d805c549f1480f9f1"
   },
   {
     "name": "remove-missing",
     "status": 1,
     "stdout": "",
     "stderr": "telar machine: no saved machine has that label; see `telar machine list`\n",
-    "files_sha256": "509dae12e45581ed503acb5d32818dd70d5d2350fc96e051e44edf8262da8bd9"
+    "files_sha256": "71154f27fbeabf5fdb63e106429062a6f6943cb8f645b72d805c549f1480f9f1"
   },
   {
     "name": "insecure-file",
     "status": 1,
     "stdout": "",
     "stderr": "telar machine: machines.json must be a regular file only its owner can read and write (chmod 600)\n",
-    "files_sha256": "297084b4888342c470b811e9fd7b9d0bbce8518c62a7ab230cd220ad4c51c933"
+    "files_sha256": "6806b4a291711e5690239f77d5a7d17d196d2f5e05b2fb8426c39d8e69ec97e2"
   },
   {
     "name": "extended-list",
     "status": 0,
-    "stdout": "local\tlocal\nbox\thost\tdisabled\tlogins: claude done, codex pending, pi failed\n",
+    "stdout": "local\tlocal\nbox\ttelar://host:8352#00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff\tdisabled\tlogins: claude done, codex pending, pi failed\n",
     "stderr": "",
-    "files_sha256": "10bc6f3c48d2e51c201914d70d3c877405f118aa265686afba389b81700a3b9f"
+    "files_sha256": "e1df697cab1db0fccf00610f72a75cf0b09451c661c5af2dda50faff290f0b46"
   },
   {
     "name": "extended-list-json",
     "status": 0,
-    "stdout": "{\"local\":\"local\",\"machines\":[{\"id\":\"m-@ID@\",\"label\":\"box\",\"destination\":\"host\",\"enabled\":false,\"telar_path\":\"/opt/telar\",\"logins\":{\"claude\":\"done\",\"codex\":\"pending\",\"pi\":\"failed\"}}]}\n",
+    "stdout": "{\"local\":\"local\",\"machines\":[{\"id\":\"m-@ID@\",\"label\":\"box\",\"destination\":\"telar://host:8352#00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff\",\"enabled\":false,\"telar_path\":\"/opt/telar\",\"logins\":{\"claude\":\"done\",\"codex\":\"pending\",\"pi\":\"failed\"}}]}\n",
     "stderr": "",
-    "files_sha256": "10bc6f3c48d2e51c201914d70d3c877405f118aa265686afba389b81700a3b9f"
+    "files_sha256": "e1df697cab1db0fccf00610f72a75cf0b09451c661c5af2dda50faff290f0b46"
   },
   {
     "name": "local-collision",
     "status": 1,
     "stdout": "",
     "stderr": "telar machine: that label is already taken, by a saved machine or by this machine\n",
-    "files_sha256": "10bc6f3c48d2e51c201914d70d3c877405f118aa265686afba389b81700a3b9f"
+    "files_sha256": "e1df697cab1db0fccf00610f72a75cf0b09451c661c5af2dda50faff290f0b46"
   },
   {
     "name": "local-dispatch",
     "status": 0,
     "stdout": "telar @VERSION@\n",
     "stderr": "",
-    "files_sha256": "10bc6f3c48d2e51c201914d70d3c877405f118aa265686afba389b81700a3b9f"
+    "files_sha256": "e1df697cab1db0fccf00610f72a75cf0b09451c661c5af2dda50faff290f0b46"
   },
   {
     "name": "local-dispatch-equals",
     "status": 0,
-    "stdout": "{\"local\":\"local\",\"machines\":[{\"id\":\"m-@ID@\",\"label\":\"box\",\"destination\":\"host\",\"enabled\":false,\"telar_path\":\"/opt/telar\",\"logins\":{\"claude\":\"done\",\"codex\":\"pending\",\"pi\":\"failed\"}}]}\n",
+    "stdout": "{\"local\":\"local\",\"machines\":[{\"id\":\"m-@ID@\",\"label\":\"box\",\"destination\":\"telar://host:8352#00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff\",\"enabled\":false,\"telar_path\":\"/opt/telar\",\"logins\":{\"claude\":\"done\",\"codex\":\"pending\",\"pi\":\"failed\"}}]}\n",
     "stderr": "",
-    "files_sha256": "10bc6f3c48d2e51c201914d70d3c877405f118aa265686afba389b81700a3b9f"
+    "files_sha256": "e1df697cab1db0fccf00610f72a75cf0b09451c661c5af2dda50faff290f0b46"
   },
   {
     "name": "local-dispatch-validation",
     "status": 1,
     "stdout": "",
     "stderr": "telar: UnknownMachineAction; see `telar machine --help`\n",
-    "files_sha256": "10bc6f3c48d2e51c201914d70d3c877405f118aa265686afba389b81700a3b9f"
+    "files_sha256": "e1df697cab1db0fccf00610f72a75cf0b09451c661c5af2dda50faff290f0b46"
   },
   {
     "name": "decoded-validation",
     "status": 1,
     "stdout": "",
     "stderr": "telar: UnknownMachineAction; see `telar machine --help`\n",
-    "files_sha256": "10bc6f3c48d2e51c201914d70d3c877405f118aa265686afba389b81700a3b9f"
+    "files_sha256": "e1df697cab1db0fccf00610f72a75cf0b09451c661c5af2dda50faff290f0b46"
   },
   {
     "name": "unknown-dispatch-validation",
     "status": 1,
     "stdout": "",
     "stderr": "telar: UnknownMachineAction; see `telar machine --help`\n",
-    "files_sha256": "10bc6f3c48d2e51c201914d70d3c877405f118aa265686afba389b81700a3b9f"
+    "files_sha256": "e1df697cab1db0fccf00610f72a75cf0b09451c661c5af2dda50faff290f0b46"
   },
   {
     "name": "unknown-cli-validation",
     "status": 1,
     "stdout": "",
     "stderr": "telar: UnknownCliAction; see `telar cli --help`\n",
-    "files_sha256": "10bc6f3c48d2e51c201914d70d3c877405f118aa265686afba389b81700a3b9f"
+    "files_sha256": "e1df697cab1db0fccf00610f72a75cf0b09451c661c5af2dda50faff290f0b46"
   },
   {
     "name": "unknown-gui-validation",
     "status": 1,
     "stdout": "",
     "stderr": "telar: MissingProfileName; see `telar gui --help`\n",
-    "files_sha256": "10bc6f3c48d2e51c201914d70d3c877405f118aa265686afba389b81700a3b9f"
+    "files_sha256": "e1df697cab1db0fccf00610f72a75cf0b09451c661c5af2dda50faff290f0b46"
   },
   {
     "name": "unknown-window-machine",
     "status": 1,
     "stdout": "",
     "stderr": "telar gui: no saved machine or local label has that name; see telar machine list\n",
-    "files_sha256": "10bc6f3c48d2e51c201914d70d3c877405f118aa265686afba389b81700a3b9f"
+    "files_sha256": "e1df697cab1db0fccf00610f72a75cf0b09451c661c5af2dda50faff290f0b46"
   },
   {
     "name": "unknown-dispatch",
     "status": 1,
     "stdout": "",
     "stderr": "telar --machine: unknown: no saved machine or local label has that name; see `telar machine list`\n",
-    "files_sha256": "10bc6f3c48d2e51c201914d70d3c877405f118aa265686afba389b81700a3b9f"
+    "files_sha256": "e1df697cab1db0fccf00610f72a75cf0b09451c661c5af2dda50faff290f0b46"
   },
   {
     "name": "nested-dispatch",
     "status": 1,
     "stdout": "",
     "stderr": "telar --machine: runs one telar command there; it cannot name another machine\n",
-    "files_sha256": "10bc6f3c48d2e51c201914d70d3c877405f118aa265686afba389b81700a3b9f"
+    "files_sha256": "e1df697cab1db0fccf00610f72a75cf0b09451c661c5af2dda50faff290f0b46"
   },
   {
     "name": "nested-dispatch-argv",
     "status": 1,
     "stdout": "",
     "stderr": "telar --machine: runs one telar command there; it cannot name another machine\n",
-    "files_sha256": "10bc6f3c48d2e51c201914d70d3c877405f118aa265686afba389b81700a3b9f"
+    "files_sha256": "e1df697cab1db0fccf00610f72a75cf0b09451c661c5af2dda50faff290f0b46"
   },
   {
     "name": "machine-help-local",
     "status": 0,
     "stdout": "telar machine list: List the saved machines, and this one\n\nUsage: telar machine list [--json]\n\nEffects: reads machines.json. Contacts nothing.\n\nResults: `LOCAL\\tlocal` first, then `label\\tdestination\\tenabled|disabled[\\tcolor]\n[\\tlogins: ...]` per machine; JSON `local` and `machines` (id, label, destination,\ncolor, enabled, telar_path, logins). Exit 0.\n",
     "stderr": "",
-    "files_sha256": "10bc6f3c48d2e51c201914d70d3c877405f118aa265686afba389b81700a3b9f"
+    "files_sha256": "e1df697cab1db0fccf00610f72a75cf0b09451c661c5af2dda50faff290f0b46"
   },
   {
     "name": "decode-['--version']",
     "status": 0,
     "stdout": "telar @VERSION@\n",
     "stderr": "",
-    "files_sha256": "10bc6f3c48d2e51c201914d70d3c877405f118aa265686afba389b81700a3b9f"
+    "files_sha256": "e1df697cab1db0fccf00610f72a75cf0b09451c661c5af2dda50faff290f0b46"
   },
   {
     "name": "decode-['machine', 'list', '--json']",
     "status": 0,
-    "stdout": "{\"local\":\"local\",\"machines\":[{\"id\":\"m-@ID@\",\"label\":\"box\",\"destination\":\"host\",\"enabled\":false,\"telar_path\":\"/opt/telar\",\"logins\":{\"claude\":\"done\",\"codex\":\"pending\",\"pi\":\"failed\"}}]}\n",
+    "stdout": "{\"local\":\"local\",\"machines\":[{\"id\":\"m-@ID@\",\"label\":\"box\",\"destination\":\"telar://host:8352#00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff\",\"enabled\":false,\"telar_path\":\"/opt/telar\",\"logins\":{\"claude\":\"done\",\"codex\":\"pending\",\"pi\":\"failed\"}}]}\n",
     "stderr": "",
-    "files_sha256": "10bc6f3c48d2e51c201914d70d3c877405f118aa265686afba389b81700a3b9f"
+    "files_sha256": "e1df697cab1db0fccf00610f72a75cf0b09451c661c5af2dda50faff290f0b46"
   },
   {
     "name": "decode-['cli', 'status', '--dir', '@ROOT@/bin with spaces']",
     "status": 0,
     "stdout": "telar cli: @ROOT@/bin with spaces/telar is not installed\n",
     "stderr": "",
-    "files_sha256": "10bc6f3c48d2e51c201914d70d3c877405f118aa265686afba389b81700a3b9f"
+    "files_sha256": "e1df697cab1db0fccf00610f72a75cf0b09451c661c5af2dda50faff290f0b46"
   },
   {
     "name": "invalid-decode-bad",
     "status": 1,
     "stdout": "",
     "stderr": "error: InvalidDispatchArgument\n",
-    "files_sha256": "10bc6f3c48d2e51c201914d70d3c877405f118aa265686afba389b81700a3b9f"
+    "files_sha256": "e1df697cab1db0fccf00610f72a75cf0b09451c661c5af2dda50faff290f0b46"
   },
   {
     "name": "invalid-decode-",
     "status": 1,
     "stdout": "",
     "stderr": "error: InvalidDispatchArgument\n",
-    "files_sha256": "10bc6f3c48d2e51c201914d70d3c877405f118aa265686afba389b81700a3b9f"
+    "files_sha256": "e1df697cab1db0fccf00610f72a75cf0b09451c661c5af2dda50faff290f0b46"
   },
   {
     "name": "invalid-decode-aA",
     "status": 1,
     "stdout": "",
     "stderr": "error: InvalidDispatchArgument\n",
-    "files_sha256": "10bc6f3c48d2e51c201914d70d3c877405f118aa265686afba389b81700a3b9f"
+    "files_sha256": "e1df697cab1db0fccf00610f72a75cf0b09451c661c5af2dda50faff290f0b46"
   },
   {
     "name": "invalid-decode-aAA",
     "status": 1,
     "stdout": "",
     "stderr": "error: InvalidDispatchArgument\n",
-    "files_sha256": "10bc6f3c48d2e51c201914d70d3c877405f118aa265686afba389b81700a3b9f"
+    "files_sha256": "e1df697cab1db0fccf00610f72a75cf0b09451c661c5af2dda50faff290f0b46"
   },
   {
     "name": "invalid-decode-a====",
     "status": 1,
     "stdout": "",
     "stderr": "error: InvalidDispatchArgument\n",
-    "files_sha256": "10bc6f3c48d2e51c201914d70d3c877405f118aa265686afba389b81700a3b9f"
+    "files_sha256": "e1df697cab1db0fccf00610f72a75cf0b09451c661c5af2dda50faff290f0b46"
   },
   {
     "name": "invalid-decode-aZh",
     "status": 1,
     "stdout": "",
     "stderr": "error: InvalidDispatchArgument\n",
-    "files_sha256": "10bc6f3c48d2e51c201914d70d3c877405f118aa265686afba389b81700a3b9f"
+    "files_sha256": "e1df697cab1db0fccf00610f72a75cf0b09451c661c5af2dda50faff290f0b46"
   },
   {
-    "name": "ssh-forward",
+    "name": "gateway-forward",
     "status": 37,
-    "stdout": "-T\n-o BatchMode=yes\n-o ControlMaster=auto\n-o ControlPath=@ROOT@/ssh-@HASH@\n-o ControlPersist=600\n-o ForwardAgent=no\n-o ServerAliveCountMax=4\n-o ServerAliveInterval=15\n--\nhost\n/opt/telar dispatch-argv aY2xp ac3RhdHVz aLS1kaXI ac3BhY2UgJyBxdW90ZSAkKHRvdWNoIG5vcGUpOwpsaW5l\n",
+    "stdout": "run\ntelar://host:8352#00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff\n/opt/telar dispatch-argv aY2xp ac3RhdHVz aLS1kaXI ac3BhY2UgJyBxdW90ZSAkKHRvdWNoIG5vcGUpOwpsaW5l\n",
     "stderr": "",
-    "files_sha256": "10bc6f3c48d2e51c201914d70d3c877405f118aa265686afba389b81700a3b9f"
+    "files_sha256": "e1df697cab1db0fccf00610f72a75cf0b09451c661c5af2dda50faff290f0b46"
   },
   {
-    "name": "ssh-forward-terminal",
+    "name": "gateway-forward-terminal",
     "status": 37,
-    "stdout": "-t\n-o BatchMode=yes\n-o ControlMaster=auto\n-o ControlPath=@ROOT@/ssh-@HASH@\n-o ControlPersist=600\n-o ForwardAgent=no\n-o ServerAliveCountMax=4\n-o ServerAliveInterval=15\n--\nhost\n/opt/telar dispatch-argv ad29ya3RyZWU acmVtb3Zl aYnJhbmNo aLS1mb3JjZQ\n",
+    "stdout": "run\n-t\ntelar://host:8352#00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff\n/opt/telar dispatch-argv ad29ya3RyZWU acmVtb3Zl aYnJhbmNo aLS1mb3JjZQ\n",
     "stderr": "",
-    "files_sha256": "10bc6f3c48d2e51c201914d70d3c877405f118aa265686afba389b81700a3b9f"
+    "files_sha256": "e1df697cab1db0fccf00610f72a75cf0b09451c661c5af2dda50faff290f0b46"
   },
   {
-    "name": "ssh-forward-terminal-stdin",
+    "name": "gateway-forward-terminal-stdin",
     "status": 37,
-    "stdout": "-T\n-o BatchMode=yes\n-o ControlMaster=auto\n-o ControlPath=@ROOT@/ssh-@HASH@\n-o ControlPersist=600\n-o ForwardAgent=no\n-o ServerAliveCountMax=4\n-o ServerAliveInterval=15\n--\nhost\n/opt/telar dispatch-argv ad29ya3RyZWU acmVtb3Zl aYnJhbmNo aLS1mb3JjZQ\n",
+    "stdout": "run\ntelar://host:8352#00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff\n/opt/telar dispatch-argv ad29ya3RyZWU acmVtb3Zl aYnJhbmNo aLS1mb3JjZQ\n",
     "stderr": "",
-    "files_sha256": "10bc6f3c48d2e51c201914d70d3c877405f118aa265686afba389b81700a3b9f"
+    "files_sha256": "e1df697cab1db0fccf00610f72a75cf0b09451c661c5af2dda50faff290f0b46"
   },
   {
     "name": "check-reachable",
     "status": 0,
-    "stdout": "box\thost\treachable\n  home\t@ROOT@/home\n  shell\t/bin/sh\n  socket\t@ROOT@/remote.sock\n  schema\t@SCHEMA@ (matches this telar)\n",
+    "stdout": "box\ttelar://host:8352#00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff\treachable\n  home\t@ROOT@/home\n  shell\t/bin/sh\n  socket\t@ROOT@/remote.sock\n  schema\t@SCHEMA@ (matches this telar)\n",
     "stderr": "",
-    "files_sha256": "10bc6f3c48d2e51c201914d70d3c877405f118aa265686afba389b81700a3b9f"
+    "files_sha256": "e1df697cab1db0fccf00610f72a75cf0b09451c661c5af2dda50faff290f0b46"
   },
   {
     "name": "check-json-reachable",
     "status": 0,
     "stdout": "{\"label\":\"box\",\"reachable\":true,\"schema\":\"@SCHEMA@\",\"local_schema\":\"@SCHEMA@\",\"compatible\":true,\"home\":\"@ROOT@/home\",\"shell\":\"/bin/sh\",\"socket\":\"@ROOT@/remote.sock\"}\n",
     "stderr": "",
-    "files_sha256": "10bc6f3c48d2e51c201914d70d3c877405f118aa265686afba389b81700a3b9f"
+    "files_sha256": "e1df697cab1db0fccf00610f72a75cf0b09451c661c5af2dda50faff290f0b46"
   },
   {
     "name": "check-editor",
     "status": 0,
-    "stdout": "box\thost\treachable\n  home\t@ROOT@/home\n  shell\t/bin/sh\n  socket\t@ROOT@/remote.sock\n  schema\t@SCHEMA@ (matches this telar)\n  editor\tabsent\n  editor\tneeds git, to fetch the plugins\n",
+    "stdout": "box\ttelar://host:8352#00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff\treachable\n  home\t@ROOT@/home\n  shell\t/bin/sh\n  socket\t@ROOT@/remote.sock\n  schema\t@SCHEMA@ (matches this telar)\n  editor\tabsent\n  editor\tneeds git, to fetch the plugins\n",
     "stderr": "",
-    "files_sha256": "10bc6f3c48d2e51c201914d70d3c877405f118aa265686afba389b81700a3b9f"
+    "files_sha256": "e1df697cab1db0fccf00610f72a75cf0b09451c661c5af2dda50faff290f0b46"
   },
   {
     "name": "check-json-editor",
     "status": 0,
     "stdout": "{\"label\":\"box\",\"reachable\":true,\"schema\":\"@SCHEMA@\",\"local_schema\":\"@SCHEMA@\",\"compatible\":true,\"home\":\"@ROOT@/home\",\"shell\":\"/bin/sh\",\"socket\":\"@ROOT@/remote.sock\",\"editor\":[\"absent\",\"needs git, to fetch the plugins\"]}\n",
     "stderr": "",
-    "files_sha256": "10bc6f3c48d2e51c201914d70d3c877405f118aa265686afba389b81700a3b9f"
+    "files_sha256": "e1df697cab1db0fccf00610f72a75cf0b09451c661c5af2dda50faff290f0b46"
   },
   {
     "name": "check-incompatible",
     "status": 1,
-    "stdout": "box\thost\treachable\n  home\t@ROOT@/home\n  shell\t/bin/sh\n  socket\t@ROOT@/remote.sock\n  schema\tdeadbeef (does not match this telar @SCHEMA@; update telar on one side)\n",
+    "stdout": "box\ttelar://host:8352#00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff\treachable\n  home\t@ROOT@/home\n  shell\t/bin/sh\n  socket\t@ROOT@/remote.sock\n  schema\tdeadbeef (does not match this telar @SCHEMA@; update telar on one side)\n",
     "stderr": "",
-    "files_sha256": "10bc6f3c48d2e51c201914d70d3c877405f118aa265686afba389b81700a3b9f"
+    "files_sha256": "e1df697cab1db0fccf00610f72a75cf0b09451c661c5af2dda50faff290f0b46"
   },
   {
     "name": "check-json-incompatible",
     "status": 1,
     "stdout": "{\"label\":\"box\",\"reachable\":true,\"schema\":\"deadbeef\",\"local_schema\":\"@SCHEMA@\",\"compatible\":false,\"home\":\"@ROOT@/home\",\"shell\":\"/bin/sh\",\"socket\":\"@ROOT@/remote.sock\"}\n",
     "stderr": "",
-    "files_sha256": "10bc6f3c48d2e51c201914d70d3c877405f118aa265686afba389b81700a3b9f"
+    "files_sha256": "e1df697cab1db0fccf00610f72a75cf0b09451c661c5af2dda50faff290f0b46"
   },
   {
     "name": "check-unreadable",
     "status": 1,
     "stdout": "",
-    "stderr": "telar machine: box (host) is not reachable: RemoteDiscoveryUnreadable\n`telar server endpoint` there printed something this telar cannot read; install the same telar build on both machines and keep shell startup files quiet\n",
-    "files_sha256": "10bc6f3c48d2e51c201914d70d3c877405f118aa265686afba389b81700a3b9f"
+    "stderr": "telar machine: box (telar://host:8352#00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff) is not reachable: RemoteDiscoveryUnreadable\n`telar server endpoint` there printed something this telar cannot read; install the same telar build on both machines and keep shell startup files quiet\n",
+    "files_sha256": "e1df697cab1db0fccf00610f72a75cf0b09451c661c5af2dda50faff290f0b46"
   },
   {
     "name": "check-json-unreadable",
     "status": 1,
     "stdout": "{\"label\":\"box\",\"reachable\":false,\"error\":\"RemoteDiscoveryUnreadable\",\"detail\":\"`telar server endpoint` there printed something this telar cannot read; install the same telar build on both machines and keep shell startup files quiet\"}\n",
     "stderr": "",
-    "files_sha256": "10bc6f3c48d2e51c201914d70d3c877405f118aa265686afba389b81700a3b9f"
+    "files_sha256": "e1df697cab1db0fccf00610f72a75cf0b09451c661c5af2dda50faff290f0b46"
   },
   {
     "name": "check-missing",
     "status": 1,
     "stdout": "",
-    "stderr": "telar machine: box (host) is not reachable: RemoteTelarMissing\ntelar is not on the PATH of non-interactive SSH sessions there: sh: telar: command not found\n",
-    "files_sha256": "10bc6f3c48d2e51c201914d70d3c877405f118aa265686afba389b81700a3b9f"
+    "stderr": "telar machine: box (telar://host:8352#00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff) is not reachable: RemoteTelarMissing\ntelar is not on the PATH of the gateway there: sh: telar: command not found\n",
+    "files_sha256": "e1df697cab1db0fccf00610f72a75cf0b09451c661c5af2dda50faff290f0b46"
   },
   {
     "name": "check-json-missing",
     "status": 1,
-    "stdout": "{\"label\":\"box\",\"reachable\":false,\"error\":\"RemoteTelarMissing\",\"detail\":\"telar is not on the PATH of non-interactive SSH sessions there: sh: telar: command not found\"}\n",
+    "stdout": "{\"label\":\"box\",\"reachable\":false,\"error\":\"RemoteTelarMissing\",\"detail\":\"telar is not on the PATH of the gateway there: sh: telar: command not found\"}\n",
     "stderr": "",
-    "files_sha256": "10bc6f3c48d2e51c201914d70d3c877405f118aa265686afba389b81700a3b9f"
+    "files_sha256": "e1df697cab1db0fccf00610f72a75cf0b09451c661c5af2dda50faff290f0b46"
   },
   {
     "name": "check-host-key",
     "status": 1,
     "stdout": "",
-    "stderr": "telar machine: box (host) is not reachable: SshHostKeyRejected\nNo ED25519 host key is known and you have requested strict checking. Host key verification failed.\n",
-    "files_sha256": "10bc6f3c48d2e51c201914d70d3c877405f118aa265686afba389b81700a3b9f"
+    "stderr": "telar machine: box (telar://host:8352#00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff) is not reachable: GatewayKeyRejected\ntelar gateway: The gateway holds another key than the one its address pins\n",
+    "files_sha256": "e1df697cab1db0fccf00610f72a75cf0b09451c661c5af2dda50faff290f0b46"
   },
   {
     "name": "check-json-host-key",
     "status": 1,
-    "stdout": "{\"label\":\"box\",\"reachable\":false,\"error\":\"SshHostKeyRejected\",\"detail\":\"No ED25519 host key is known and you have requested strict checking. Host key verification failed.\"}\n",
+    "stdout": "{\"label\":\"box\",\"reachable\":false,\"error\":\"GatewayKeyRejected\",\"detail\":\"telar gateway: The gateway holds another key than the one its address pins\"}\n",
     "stderr": "",
-    "files_sha256": "10bc6f3c48d2e51c201914d70d3c877405f118aa265686afba389b81700a3b9f"
+    "files_sha256": "e1df697cab1db0fccf00610f72a75cf0b09451c661c5af2dda50faff290f0b46"
   },
   {
     "name": "check-auth",
     "status": 1,
     "stdout": "",
-    "stderr": "telar machine: box (host) is not reachable: SshAuthenticationFailed\nuser@host: Permission denied (publickey).\n",
-    "files_sha256": "10bc6f3c48d2e51c201914d70d3c877405f118aa265686afba389b81700a3b9f"
+    "stderr": "telar machine: box (telar://host:8352#00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff) is not reachable: GatewayPairingRefused\ntelar gateway: this machine is not paired with that gateway; pair it again with `telar machine add`\n",
+    "files_sha256": "e1df697cab1db0fccf00610f72a75cf0b09451c661c5af2dda50faff290f0b46"
   },
   {
     "name": "check-json-auth",
     "status": 1,
-    "stdout": "{\"label\":\"box\",\"reachable\":false,\"error\":\"SshAuthenticationFailed\",\"detail\":\"user@host: Permission denied (publickey).\"}\n",
+    "stdout": "{\"label\":\"box\",\"reachable\":false,\"error\":\"GatewayPairingRefused\",\"detail\":\"telar gateway: this machine is not paired with that gateway; pair it again with `telar machine add`\"}\n",
     "stderr": "",
-    "files_sha256": "10bc6f3c48d2e51c201914d70d3c877405f118aa265686afba389b81700a3b9f"
+    "files_sha256": "e1df697cab1db0fccf00610f72a75cf0b09451c661c5af2dda50faff290f0b46"
   },
   {
     "name": "check-runtime-mismatch",
     "status": 1,
     "stdout": "",
-    "stderr": "telar machine: box (host) is not reachable: RemoteRuntimeIncompatible\nthe runtime there is another telar build; run `telar server stop` there: telar protocol mismatch\n",
-    "files_sha256": "10bc6f3c48d2e51c201914d70d3c877405f118aa265686afba389b81700a3b9f"
+    "stderr": "telar machine: box (telar://host:8352#00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff) is not reachable: RemoteRuntimeIncompatible\nthe runtime there is another telar build; run `telar server stop` there: telar protocol mismatch\n",
+    "files_sha256": "e1df697cab1db0fccf00610f72a75cf0b09451c661c5af2dda50faff290f0b46"
   },
   {
     "name": "check-json-runtime-mismatch",
     "status": 1,
     "stdout": "{\"label\":\"box\",\"reachable\":false,\"error\":\"RemoteRuntimeIncompatible\",\"detail\":\"the runtime there is another telar build; run `telar server stop` there: telar protocol mismatch\"}\n",
     "stderr": "",
-    "files_sha256": "10bc6f3c48d2e51c201914d70d3c877405f118aa265686afba389b81700a3b9f"
+    "files_sha256": "e1df697cab1db0fccf00610f72a75cf0b09451c661c5af2dda50faff290f0b46"
   },
   {
     "name": "check-unknown",
     "status": 1,
     "stdout": "",
     "stderr": "telar machine: no saved machine has that label; see `telar machine list`\n",
-    "files_sha256": "10bc6f3c48d2e51c201914d70d3c877405f118aa265686afba389b81700a3b9f"
+    "files_sha256": "e1df697cab1db0fccf00610f72a75cf0b09451c661c5af2dda50faff290f0b46"
   },
   {
-    "name": "setup-ssh-failure",
+    "name": "setup-gateway-failure",
     "status": 1,
-    "stdout": "{\"label\":\"box\",\"destination\":\"host\",\"ready\":false,\"pending\":false,\"changed\":false,\"steps\":[{\"step\":\"ssh\",\"status\":\"failed\",\"detail\":\"host refused the login in batch mode; add a key with `ssh-copy-id host` or run setup from a terminal\",\"notes\":[]}]}\n",
+    "stdout": "{\"label\":\"box\",\"destination\":\"telar://host:8352#00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff\",\"ready\":false,\"pending\":false,\"changed\":false,\"steps\":[{\"step\":\"gateway\",\"status\":\"failed\",\"detail\":\"the gateway of box does not admit this machine; run `telar server pair` there and `telar machine setup` here with the address it prints\",\"notes\":[]}]}\n",
     "stderr": "",
-    "files_sha256": "10bc6f3c48d2e51c201914d70d3c877405f118aa265686afba389b81700a3b9f"
+    "files_sha256": "e1df697cab1db0fccf00610f72a75cf0b09451c661c5af2dda50faff290f0b46"
   },
   {
     "name": "add-check-failure",
     "status": 1,
-    "stdout": "{\"label\":\"new\",\"reachable\":false,\"error\":\"SshAuthenticationFailed\",\"detail\":\"user@host: Permission denied (publickey).\"}\n",
+    "stdout": "{\"label\":\"new\",\"reachable\":false,\"error\":\"GatewayPairingRefused\",\"detail\":\"telar gateway: this machine is not paired with that gateway; pair it again with `telar machine add`\"}\n",
     "stderr": "",
-    "files_sha256": "10bc6f3c48d2e51c201914d70d3c877405f118aa265686afba389b81700a3b9f"
+    "files_sha256": "e1df697cab1db0fccf00610f72a75cf0b09451c661c5af2dda50faff290f0b46"
   },
   {
-    "name": "setup-['setup', 'host', '--confirm', '--json']",
+    "name": "setup-['setup', 'telar://host:8352#00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff', '--confirm', '--json']",
     "status": 1,
-    "stdout": "{\"label\":\"box\",\"destination\":\"host\",\"ready\":false,\"pending\":false,\"changed\":false,\"refused\":\"--confirm needs a terminal to ask on; nothing was changed\",\"steps\":[]}\n",
+    "stdout": "{\"label\":\"box\",\"destination\":\"telar://host:8352#00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff\",\"ready\":false,\"pending\":false,\"changed\":false,\"refused\":\"--confirm needs a terminal to ask on; nothing was changed\",\"steps\":[]}\n",
     "stderr": "",
-    "files_sha256": "10bc6f3c48d2e51c201914d70d3c877405f118aa265686afba389b81700a3b9f"
+    "files_sha256": "e1df697cab1db0fccf00610f72a75cf0b09451c661c5af2dda50faff290f0b46"
+  },
+  {
+    "name": "setup-['setup', 'telar://new:8352#00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff', '--label', 'fresh', '--confirm']",
+    "status": 1,
+    "stdout": "Setting up fresh (telar://new:8352#00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff) with telar @VERSION@\ntelar machine setup fresh: --confirm needs a terminal to ask on; nothing was changed.\n",
+    "stderr": "",
+    "files_sha256": "e1df697cab1db0fccf00610f72a75cf0b09451c661c5af2dda50faff290f0b46"
   },
   {
     "name": "setup-['setup', 'ssh://dev@new:22', '--label', 'fresh', '--confirm']",
     "status": 1,
-    "stdout": "Setting up fresh (ssh://dev@new:22) with telar @VERSION@\ntelar machine setup fresh: --confirm needs a terminal to ask on; nothing was changed.\n",
-    "stderr": "",
-    "files_sha256": "10bc6f3c48d2e51c201914d70d3c877405f118aa265686afba389b81700a3b9f"
+    "stdout": "",
+    "stderr": "telar machine setup: a machine is named by the address `telar server pair` prints there, telar://HOST:PORT#KEY\n",
+    "files_sha256": "e1df697cab1db0fccf00610f72a75cf0b09451c661c5af2dda50faff290f0b46"
   },
   {
-    "name": "setup-['setup', 'host', '--binary', '@ROOT@/missing']",
+    "name": "setup-['setup', 'telar://host:8352#00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff', '--binary', '@ROOT@/missing']",
     "status": 1,
     "stdout": "",
     "stderr": "telar machine setup: SetupBinaryUnreadable\n",
-    "files_sha256": "10bc6f3c48d2e51c201914d70d3c877405f118aa265686afba389b81700a3b9f"
+    "files_sha256": "e1df697cab1db0fccf00610f72a75cf0b09451c661c5af2dda50faff290f0b46"
   },
   {
     "name": "setup-ready-['setup', 'box', '--json']",
     "status": 0,
-    "stdout": "{\"label\":\"box\",\"destination\":\"host\",\"ready\":true,\"pending\":false,\"changed\":true,\"steps\":[{\"step\":\"ssh\",\"status\":\"ok\",\"detail\":\"batch-mode SSH to host works\",\"notes\":[]},{\"step\":\"platform\",\"status\":\"ok\",\"detail\":\"macOS aarch64, telar-macos-aarch64.tar.gz\",\"notes\":[]},{\"step\":\"telar\",\"status\":\"ok\",\"detail\":\"telar @VERSION@ at @ROOT@/home/.local/share/telar/versions/@VERSION@/telar\",\"notes\":[]},{\"step\":\"runtime\",\"status\":\"ok\",\"detail\":\"running at @ROOT@/home/remote.sock\",\"notes\":[\"~/.local/bin/telar now links to @ROOT@/home/.local/share/telar/versions/@VERSION@/telar\"]},{\"step\":\"profile\",\"status\":\"changed\",\"detail\":\"box updated, enabled, telar at @ROOT@/home/.local/share/telar/versions/@VERSION@/telar\",\"notes\":[]},{\"step\":\"agents\",\"status\":\"skipped\",\"detail\":\"no agent on this machine's PATH to install there\",\"notes\":[]},{\"step\":\"integrations\",\"status\":\"skipped\",\"detail\":\"no agent there\",\"notes\":[\"editor: provisioned\"]},{\"step\":\"configuration\",\"status\":\"skipped\",\"detail\":\"no agent here to take configuration from\",\"notes\":[]},{\"step\":\"logins\",\"status\":\"skipped\",\"detail\":\"no agent there to log in\",\"notes\":[]},{\"step\":\"check\",\"status\":\"ok\",\"detail\":\"a window can attach: schema @SCHEMA@ on both sides\",\"notes\":[]}]}\n",
+    "stdout": "{\"label\":\"box\",\"destination\":\"telar://host:8352#00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff\",\"ready\":true,\"pending\":false,\"changed\":true,\"steps\":[{\"step\":\"gateway\",\"status\":\"ok\",\"detail\":\"the gateway of box admits this machine\",\"notes\":[]},{\"step\":\"platform\",\"status\":\"ok\",\"detail\":\"macOS aarch64, telar-macos-aarch64.tar.gz\",\"notes\":[]},{\"step\":\"telar\",\"status\":\"ok\",\"detail\":\"telar @VERSION@ at @ROOT@/home/.local/share/telar/versions/@VERSION@/telar\",\"notes\":[]},{\"step\":\"runtime\",\"status\":\"ok\",\"detail\":\"running at @ROOT@/home/remote.sock\",\"notes\":[\"~/.local/bin/telar now links to @ROOT@/home/.local/share/telar/versions/@VERSION@/telar\"]},{\"step\":\"profile\",\"status\":\"changed\",\"detail\":\"box updated, enabled, telar at @ROOT@/home/.local/share/telar/versions/@VERSION@/telar\",\"notes\":[]},{\"step\":\"agents\",\"status\":\"skipped\",\"detail\":\"no agent on this machine's PATH to install there\",\"notes\":[]},{\"step\":\"integrations\",\"status\":\"skipped\",\"detail\":\"no agent there\",\"notes\":[\"editor: provisioned\"]},{\"step\":\"configuration\",\"status\":\"skipped\",\"detail\":\"no agent here to take configuration from\",\"notes\":[]},{\"step\":\"logins\",\"status\":\"skipped\",\"detail\":\"no agent there to log in\",\"notes\":[]},{\"step\":\"check\",\"status\":\"ok\",\"detail\":\"a window can attach: schema @SCHEMA@ on both sides\",\"notes\":[]}]}\n",
     "stderr": "",
-    "files_sha256": "ec25b19bf767fa1f25f4f11978776f61aa6e6d04f28c3d8f4c3c8a8113028e4a"
+    "files_sha256": "82980b55a587641fe74a567de43af24e3528fd41218fa15d368cb534cfd2dc59"
   },
   {
     "name": "setup-ready-['setup', 'box', '--json']",
     "status": 0,
-    "stdout": "{\"label\":\"box\",\"destination\":\"host\",\"ready\":true,\"pending\":false,\"changed\":false,\"steps\":[{\"step\":\"ssh\",\"status\":\"ok\",\"detail\":\"batch-mode SSH to host works\",\"notes\":[]},{\"step\":\"platform\",\"status\":\"ok\",\"detail\":\"macOS aarch64, telar-macos-aarch64.tar.gz\",\"notes\":[]},{\"step\":\"telar\",\"status\":\"ok\",\"detail\":\"telar @VERSION@ at @ROOT@/home/.local/share/telar/versions/@VERSION@/telar\",\"notes\":[]},{\"step\":\"runtime\",\"status\":\"ok\",\"detail\":\"running at @ROOT@/home/remote.sock\",\"notes\":[\"~/.local/bin/telar now links to @ROOT@/home/.local/share/telar/versions/@VERSION@/telar\"]},{\"step\":\"profile\",\"status\":\"ok\",\"detail\":\"box is saved, enabled and names @ROOT@/home/.local/share/telar/versions/@VERSION@/telar\",\"notes\":[]},{\"step\":\"agents\",\"status\":\"skipped\",\"detail\":\"no agent on this machine's PATH to install there\",\"notes\":[]},{\"step\":\"integrations\",\"status\":\"skipped\",\"detail\":\"no agent there\",\"notes\":[\"editor: provisioned\"]},{\"step\":\"configuration\",\"status\":\"skipped\",\"detail\":\"no agent here to take configuration from\",\"notes\":[]},{\"step\":\"logins\",\"status\":\"skipped\",\"detail\":\"no agent there to log in\",\"notes\":[]},{\"step\":\"check\",\"status\":\"ok\",\"detail\":\"a window can attach: schema @SCHEMA@ on both sides\",\"notes\":[]}]}\n",
+    "stdout": "{\"label\":\"box\",\"destination\":\"telar://host:8352#00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff\",\"ready\":true,\"pending\":false,\"changed\":false,\"steps\":[{\"step\":\"gateway\",\"status\":\"ok\",\"detail\":\"the gateway of box admits this machine\",\"notes\":[]},{\"step\":\"platform\",\"status\":\"ok\",\"detail\":\"macOS aarch64, telar-macos-aarch64.tar.gz\",\"notes\":[]},{\"step\":\"telar\",\"status\":\"ok\",\"detail\":\"telar @VERSION@ at @ROOT@/home/.local/share/telar/versions/@VERSION@/telar\",\"notes\":[]},{\"step\":\"runtime\",\"status\":\"ok\",\"detail\":\"running at @ROOT@/home/remote.sock\",\"notes\":[\"~/.local/bin/telar now links to @ROOT@/home/.local/share/telar/versions/@VERSION@/telar\"]},{\"step\":\"profile\",\"status\":\"ok\",\"detail\":\"box is saved, enabled and names @ROOT@/home/.local/share/telar/versions/@VERSION@/telar\",\"notes\":[]},{\"step\":\"agents\",\"status\":\"skipped\",\"detail\":\"no agent on this machine's PATH to install there\",\"notes\":[]},{\"step\":\"integrations\",\"status\":\"skipped\",\"detail\":\"no agent there\",\"notes\":[\"editor: provisioned\"]},{\"step\":\"configuration\",\"status\":\"skipped\",\"detail\":\"no agent here to take configuration from\",\"notes\":[]},{\"step\":\"logins\",\"status\":\"skipped\",\"detail\":\"no agent there to log in\",\"notes\":[]},{\"step\":\"check\",\"status\":\"ok\",\"detail\":\"a window can attach: schema @SCHEMA@ on both sides\",\"notes\":[]}]}\n",
     "stderr": "",
-    "files_sha256": "ec25b19bf767fa1f25f4f11978776f61aa6e6d04f28c3d8f4c3c8a8113028e4a"
+    "files_sha256": "82980b55a587641fe74a567de43af24e3528fd41218fa15d368cb534cfd2dc59"
   },
   {
     "name": "setup-ready-['setup', 'box', '--skip', 'agents,config,login', '--json']",
     "status": 0,
-    "stdout": "{\"label\":\"box\",\"destination\":\"host\",\"ready\":true,\"pending\":false,\"changed\":false,\"steps\":[{\"step\":\"ssh\",\"status\":\"ok\",\"detail\":\"batch-mode SSH to host works\",\"notes\":[]},{\"step\":\"platform\",\"status\":\"ok\",\"detail\":\"macOS aarch64, telar-macos-aarch64.tar.gz\",\"notes\":[]},{\"step\":\"telar\",\"status\":\"ok\",\"detail\":\"telar @VERSION@ at @ROOT@/home/.local/share/telar/versions/@VERSION@/telar\",\"notes\":[]},{\"step\":\"runtime\",\"status\":\"ok\",\"detail\":\"running at @ROOT@/home/remote.sock\",\"notes\":[\"~/.local/bin/telar now links to @ROOT@/home/.local/share/telar/versions/@VERSION@/telar\"]},{\"step\":\"profile\",\"status\":\"ok\",\"detail\":\"box is saved, enabled and names @ROOT@/home/.local/share/telar/versions/@VERSION@/telar\",\"notes\":[]},{\"step\":\"agents\",\"status\":\"skipped\",\"detail\":\"--skip agents\",\"notes\":[]},{\"step\":\"integrations\",\"status\":\"skipped\",\"detail\":\"no agent there\",\"notes\":[\"editor: provisioned\"]},{\"step\":\"configuration\",\"status\":\"skipped\",\"detail\":\"--skip config\",\"notes\":[]},{\"step\":\"logins\",\"status\":\"skipped\",\"detail\":\"--skip login\",\"notes\":[]},{\"step\":\"check\",\"status\":\"ok\",\"detail\":\"a window can attach: schema @SCHEMA@ on both sides\",\"notes\":[]}]}\n",
+    "stdout": "{\"label\":\"box\",\"destination\":\"telar://host:8352#00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff\",\"ready\":true,\"pending\":false,\"changed\":false,\"steps\":[{\"step\":\"gateway\",\"status\":\"ok\",\"detail\":\"the gateway of box admits this machine\",\"notes\":[]},{\"step\":\"platform\",\"status\":\"ok\",\"detail\":\"macOS aarch64, telar-macos-aarch64.tar.gz\",\"notes\":[]},{\"step\":\"telar\",\"status\":\"ok\",\"detail\":\"telar @VERSION@ at @ROOT@/home/.local/share/telar/versions/@VERSION@/telar\",\"notes\":[]},{\"step\":\"runtime\",\"status\":\"ok\",\"detail\":\"running at @ROOT@/home/remote.sock\",\"notes\":[\"~/.local/bin/telar now links to @ROOT@/home/.local/share/telar/versions/@VERSION@/telar\"]},{\"step\":\"profile\",\"status\":\"ok\",\"detail\":\"box is saved, enabled and names @ROOT@/home/.local/share/telar/versions/@VERSION@/telar\",\"notes\":[]},{\"step\":\"agents\",\"status\":\"skipped\",\"detail\":\"--skip agents\",\"notes\":[]},{\"step\":\"integrations\",\"status\":\"skipped\",\"detail\":\"no agent there\",\"notes\":[\"editor: provisioned\"]},{\"step\":\"configuration\",\"status\":\"skipped\",\"detail\":\"--skip config\",\"notes\":[]},{\"step\":\"logins\",\"status\":\"skipped\",\"detail\":\"--skip login\",\"notes\":[]},{\"step\":\"check\",\"status\":\"ok\",\"detail\":\"a window can attach: schema @SCHEMA@ on both sides\",\"notes\":[]}]}\n",
     "stderr": "",
-    "files_sha256": "ec25b19bf767fa1f25f4f11978776f61aa6e6d04f28c3d8f4c3c8a8113028e4a"
+    "files_sha256": "82980b55a587641fe74a567de43af24e3528fd41218fa15d368cb534cfd2dc59"
   },
   {
-    "name": "setup-ready-['setup', 'new-destination', '--label', 'new-machine', '--json']",
+    "name": "setup-ready-['setup', 'telar://new-destination:8352#00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff', '--label', 'new-machine', '--json']",
     "status": 0,
-    "stdout": "{\"label\":\"new-machine\",\"destination\":\"new-destination\",\"ready\":true,\"pending\":false,\"changed\":true,\"steps\":[{\"step\":\"ssh\",\"status\":\"ok\",\"detail\":\"batch-mode SSH to new-destination works\",\"notes\":[]},{\"step\":\"platform\",\"status\":\"ok\",\"detail\":\"macOS aarch64, telar-macos-aarch64.tar.gz\",\"notes\":[]},{\"step\":\"telar\",\"status\":\"ok\",\"detail\":\"telar @VERSION@ at @ROOT@/home/.local/share/telar/versions/@VERSION@/telar\",\"notes\":[]},{\"step\":\"runtime\",\"status\":\"ok\",\"detail\":\"running at @ROOT@/home/remote.sock\",\"notes\":[\"~/.local/bin/telar now links to @ROOT@/home/.local/share/telar/versions/@VERSION@/telar\"]},{\"step\":\"profile\",\"status\":\"changed\",\"detail\":\"new-machine saved, enabled, telar at @ROOT@/home/.local/share/telar/versions/@VERSION@/telar\",\"notes\":[]},{\"step\":\"agents\",\"status\":\"skipped\",\"detail\":\"no agent on this machine's PATH to install there\",\"notes\":[]},{\"step\":\"integrations\",\"status\":\"skipped\",\"detail\":\"no agent there\",\"notes\":[\"editor: provisioned\"]},{\"step\":\"configuration\",\"status\":\"skipped\",\"detail\":\"no agent here to take configuration from\",\"notes\":[]},{\"step\":\"logins\",\"status\":\"skipped\",\"detail\":\"no agent there to log in\",\"notes\":[]},{\"step\":\"check\",\"status\":\"ok\",\"detail\":\"a window can attach: schema @SCHEMA@ on both sides\",\"notes\":[]}]}\n",
+    "stdout": "{\"label\":\"new-machine\",\"destination\":\"telar://new-destination:8352#00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff\",\"ready\":true,\"pending\":false,\"changed\":true,\"steps\":[{\"step\":\"gateway\",\"status\":\"ok\",\"detail\":\"the gateway of new-machine admits this machine\",\"notes\":[]},{\"step\":\"platform\",\"status\":\"ok\",\"detail\":\"macOS aarch64, telar-macos-aarch64.tar.gz\",\"notes\":[]},{\"step\":\"telar\",\"status\":\"ok\",\"detail\":\"telar @VERSION@ at @ROOT@/home/.local/share/telar/versions/@VERSION@/telar\",\"notes\":[]},{\"step\":\"runtime\",\"status\":\"ok\",\"detail\":\"running at @ROOT@/home/remote.sock\",\"notes\":[\"~/.local/bin/telar now links to @ROOT@/home/.local/share/telar/versions/@VERSION@/telar\"]},{\"step\":\"profile\",\"status\":\"changed\",\"detail\":\"new-machine saved, enabled, telar at @ROOT@/home/.local/share/telar/versions/@VERSION@/telar\",\"notes\":[]},{\"step\":\"agents\",\"status\":\"skipped\",\"detail\":\"no agent on this machine's PATH to install there\",\"notes\":[]},{\"step\":\"integrations\",\"status\":\"skipped\",\"detail\":\"no agent there\",\"notes\":[\"editor: provisioned\"]},{\"step\":\"configuration\",\"status\":\"skipped\",\"detail\":\"no agent here to take configuration from\",\"notes\":[]},{\"step\":\"logins\",\"status\":\"skipped\",\"detail\":\"no agent there to log in\",\"notes\":[]},{\"step\":\"check\",\"status\":\"ok\",\"detail\":\"a window can attach: schema @SCHEMA@ on both sides\",\"notes\":[]}]}\n",
     "stderr": "",
-    "files_sha256": "42335c763155cd98b935cd3551096f7fea1f1be076a64efbe8806730f2479800"
+    "files_sha256": "2969b6b315528a95ecd26d64a481f3211e7c776880c944ed33df6ffe89e75784"
   },
   {
     "name": "cli-status",
     "status": 0,
     "stdout": "telar cli: @ROOT@/cli-bin/telar is not installed\n",
     "stderr": "",
-    "files_sha256": "42335c763155cd98b935cd3551096f7fea1f1be076a64efbe8806730f2479800"
+    "files_sha256": "2969b6b315528a95ecd26d64a481f3211e7c776880c944ed33df6ffe89e75784"
   },
   {
     "name": "cli-uninstall",
     "status": 0,
     "stdout": "telar cli: removed @ROOT@/cli-bin/telar\n",
     "stderr": "",
-    "files_sha256": "42335c763155cd98b935cd3551096f7fea1f1be076a64efbe8806730f2479800"
+    "files_sha256": "2969b6b315528a95ecd26d64a481f3211e7c776880c944ed33df6ffe89e75784"
   },
   {
     "name": "cli-install",
     "status": 0,
     "stdout": "telar cli: installed @ROOT@/cli-bin/telar -> @EXECUTABLE@\n",
     "stderr": "",
-    "files_sha256": "6654b622c137b59e0cc10564b8eda9f912e6dae2c6461ab4ac6f1fbd32900d9f"
+    "files_sha256": "adc8a1a8338a8c9e139ef1b91b5ba16586e18cc576ea0f46c17a80bff67d4282"
   },
   {
     "name": "cli-install",
     "status": 0,
     "stdout": "telar cli: installed @ROOT@/cli-bin/telar -> @EXECUTABLE@\n",
     "stderr": "",
-    "files_sha256": "6654b622c137b59e0cc10564b8eda9f912e6dae2c6461ab4ac6f1fbd32900d9f"
+    "files_sha256": "adc8a1a8338a8c9e139ef1b91b5ba16586e18cc576ea0f46c17a80bff67d4282"
   },
   {
     "name": "cli-status",
     "status": 0,
     "stdout": "telar cli: @ROOT@/cli-bin/telar -> @EXECUTABLE@\n",
     "stderr": "",
-    "files_sha256": "6654b622c137b59e0cc10564b8eda9f912e6dae2c6461ab4ac6f1fbd32900d9f"
+    "files_sha256": "adc8a1a8338a8c9e139ef1b91b5ba16586e18cc576ea0f46c17a80bff67d4282"
   },
   {
     "name": "cli-uninstall",
     "status": 0,
     "stdout": "telar cli: removed @ROOT@/cli-bin/telar\n",
     "stderr": "",
-    "files_sha256": "42335c763155cd98b935cd3551096f7fea1f1be076a64efbe8806730f2479800"
+    "files_sha256": "2969b6b315528a95ecd26d64a481f3211e7c776880c944ed33df6ffe89e75784"
   },
   {
     "name": "cli-status",
     "status": 0,
     "stdout": "telar cli: @ROOT@/cli-bin/telar is not installed\n",
     "stderr": "",
-    "files_sha256": "42335c763155cd98b935cd3551096f7fea1f1be076a64efbe8806730f2479800"
+    "files_sha256": "2969b6b315528a95ecd26d64a481f3211e7c776880c944ed33df6ffe89e75784"
   },
   {
     "name": "cli-foreign-status",
     "status": 1,
     "stdout": "",
     "stderr": "error: NotLink\n",
-    "files_sha256": "8c19e0804a0881503c114f6e92b77799465f46b13087eb4fd1d5925d666aef9e"
+    "files_sha256": "2ae73ad980431f971908ebc5ccb1f2befd45b0cb09152b7ed1a25fd95cca6752"
   },
   {
     "name": "cli-foreign-install",
     "status": 1,
     "stdout": "",
     "stderr": "telar cli: @ROOT@/cli-bin/telar exists and is not a symlink; refusing to replace it\nerror: NotLink\n",
-    "files_sha256": "8c19e0804a0881503c114f6e92b77799465f46b13087eb4fd1d5925d666aef9e"
+    "files_sha256": "2ae73ad980431f971908ebc5ccb1f2befd45b0cb09152b7ed1a25fd95cca6752"
   },
   {
     "name": "cli-foreign-uninstall",
     "status": 1,
     "stdout": "",
     "stderr": "telar cli: @ROOT@/cli-bin/telar exists and is not a symlink; refusing to replace it\nerror: NotLink\n",
-    "files_sha256": "8c19e0804a0881503c114f6e92b77799465f46b13087eb4fd1d5925d666aef9e"
+    "files_sha256": "2ae73ad980431f971908ebc5ccb1f2befd45b0cb09152b7ed1a25fd95cca6752"
   },
   {
     "name": "cli-missing-parent",
     "status": 1,
     "stdout": "",
     "stderr": "error: FileNotFound\n",
-    "files_sha256": "42335c763155cd98b935cd3551096f7fea1f1be076a64efbe8806730f2479800"
+    "files_sha256": "2969b6b315528a95ecd26d64a481f3211e7c776880c944ed33df6ffe89e75784"
   },
   {
     "name": "receive-b'bad\\n'",
     "status": 1,
     "stdout": "",
     "stderr": "error: InvalidConfigStream\n",
-    "files_sha256": "42335c763155cd98b935cd3551096f7fea1f1be076a64efbe8806730f2479800"
+    "files_sha256": "2969b6b315528a95ecd26d64a481f3211e7c776880c944ed33df6ffe89e75784"
   },
   {
     "name": "receive-b'telar-config 1\\nend\\n'",
     "status": 0,
     "stdout": "",
     "stderr": "",
-    "files_sha256": "42335c763155cd98b935cd3551096f7fea1f1be076a64efbe8806730f2479800"
+    "files_sha256": "2969b6b315528a95ecd26d64a481f3211e7c776880c944ed33df6ffe89e75784"
   },
   {
     "name": "receive-b'telar-config 1\\nfile 600 1 .claude/a\\nx\\nend\\n'",
     "status": 1,
     "stdout": "",
     "stderr": "error: InvalidConfigStream\n",
-    "files_sha256": "42335c763155cd98b935cd3551096f7fea1f1be076a64efbe8806730f2479800"
+    "files_sha256": "2969b6b315528a95ecd26d64a481f3211e7c776880c944ed33df6ffe89e75784"
   },
   {
     "name": "receive-b'telar-config 1\\nfile 644 1048577 .claude/a\\n'",
     "status": 1,
     "stdout": "",
     "stderr": "error: ConfigStreamTooLarge\n",
-    "files_sha256": "42335c763155cd98b935cd3551096f7fea1f1be076a64efbe8806730f2479800"
+    "files_sha256": "2969b6b315528a95ecd26d64a481f3211e7c776880c944ed33df6ffe89e75784"
   },
   {
     "name": "receive-b'telar-config 1\\nfile 644 1 .claude/a\\nx!'",
     "status": 1,
     "stdout": "",
     "stderr": "error: InvalidConfigStream\n",
-    "files_sha256": "42335c763155cd98b935cd3551096f7fea1f1be076a64efbe8806730f2479800"
+    "files_sha256": "2969b6b315528a95ecd26d64a481f3211e7c776880c944ed33df6ffe89e75784"
   },
   {
     "name": "receive-b'telar-config 1\\nfile 644 0 .claude/a\\n\\nend\\n'",
     "status": 0,
     "stdout": "written .claude/a\n",
     "stderr": "",
-    "files_sha256": "bc1525771d4abc490c91421666ee7f65635a091b1b3bdb52e469cd37264c60f0"
+    "files_sha256": "c0ce311c03ccd8a572caf8515a9d4c0d76aea7b0ed167df21e2b261d9ed86e14"
   },
   {
     "name": "receive-number-0_0",
     "status": 0,
     "stdout": "written .claude/numeric\n",
     "stderr": "",
-    "files_sha256": "24800a06069ef2f3b151e9c3a994d7597ec3160894a1c8871c2fabe25a889e90"
+    "files_sha256": "e955e462b12f21ac233291138725a847993699f734b39a86e63d86ad711bc265"
   },
   {
     "name": "receive-number--0",
     "status": 0,
     "stdout": "unchanged .claude/numeric\n",
     "stderr": "",
-    "files_sha256": "24800a06069ef2f3b151e9c3a994d7597ec3160894a1c8871c2fabe25a889e90"
+    "files_sha256": "e955e462b12f21ac233291138725a847993699f734b39a86e63d86ad711bc265"
   },
   {
     "name": "receive-number-+0",
     "status": 0,
     "stdout": "unchanged .claude/numeric\n",
     "stderr": "",
-    "files_sha256": "24800a06069ef2f3b151e9c3a994d7597ec3160894a1c8871c2fabe25a889e90"
+    "files_sha256": "e955e462b12f21ac233291138725a847993699f734b39a86e63d86ad711bc265"
   },
   {
     "name": "receive-number-1__0",
     "status": 0,
     "stdout": "written .claude/numeric\n",
     "stderr": "",
-    "files_sha256": "e34b43475ad2a3457863961073521733232f103ac299c245ae73f4dac5c7fb19"
+    "files_sha256": "02d99b5437bac4344554da50876d1a321f4b1ab7486e13297cb21183be5f77fb"
   },
   {
     "name": "receive-number-_0",
     "status": 1,
     "stdout": "",
     "stderr": "error: InvalidConfigStream\n",
-    "files_sha256": "e34b43475ad2a3457863961073521733232f103ac299c245ae73f4dac5c7fb19"
+    "files_sha256": "02d99b5437bac4344554da50876d1a321f4b1ab7486e13297cb21183be5f77fb"
   },
   {
     "name": "receive-number-0_",
     "status": 1,
     "stdout": "",
     "stderr": "error: InvalidConfigStream\n",
-    "files_sha256": "e34b43475ad2a3457863961073521733232f103ac299c245ae73f4dac5c7fb19"
+    "files_sha256": "02d99b5437bac4344554da50876d1a321f4b1ab7486e13297cb21183be5f77fb"
   },
   {
     "name": "receive-number--1",
     "status": 1,
     "stdout": "",
     "stderr": "error: InvalidConfigStream\n",
-    "files_sha256": "e34b43475ad2a3457863961073521733232f103ac299c245ae73f4dac5c7fb19"
+    "files_sha256": "02d99b5437bac4344554da50876d1a321f4b1ab7486e13297cb21183be5f77fb"
   },
   {
     "name": "receive-files",
     "status": 0,
     "stdout": "written .claude/settings.json\nwritten .codex/tool.sh\nrefused .claude/../escape: not a path the sync may write\nrefused .codex/auth.json: not a path the sync may write\nwritten .agents/skills/skill/SKILL.md\nrefused .codex/sessions/a.txt: not a path the sync may write\nrefused .claude/keys.pem: not a path the sync may write\nrefused .cursor/.hidden: not a path the sync may write\nwritten .config/opencode/plugins/a.ts\n",
     "stderr": "",
-    "files_sha256": "25ea8644176e8cfbe34348f7c89d944bf68529602dbe1b55a44d44a1e75a18e1"
+    "files_sha256": "3d815a90b1a8c0c6c17fdd3094c421c3d057a3615f2b681885a50c7482bd9d5d"
   },
   {
     "name": "receive-unchanged",
     "status": 0,
     "stdout": "unchanged .claude/settings.json\nunchanged .codex/tool.sh\nrefused .claude/../escape: not a path the sync may write\nrefused .codex/auth.json: not a path the sync may write\nunchanged .agents/skills/skill/SKILL.md\nrefused .codex/sessions/a.txt: not a path the sync may write\nrefused .claude/keys.pem: not a path the sync may write\nrefused .cursor/.hidden: not a path the sync may write\nunchanged .config/opencode/plugins/a.ts\n",
     "stderr": "",
-    "files_sha256": "25ea8644176e8cfbe34348f7c89d944bf68529602dbe1b55a44d44a1e75a18e1"
+    "files_sha256": "3d815a90b1a8c0c6c17fdd3094c421c3d057a3615f2b681885a50c7482bd9d5d"
   },
   {
     "name": "receive-symlinks",
     "status": 0,
     "stdout": "refused .claude/link/a: SymlinkOnTheWay\nrefused .claude/symlink: NotARegularFile\n",
     "stderr": "",
-    "files_sha256": "62849c205683f0a8b69b6843eaf2e8ce5e343e2607d7797a8445207f1643b535"
+    "files_sha256": "a9c34802a15492fdc358b91041cc9d4a98d3cc28433928c0dc23a2079960db8e"
   },
   {
     "name": "profiles-invalid-{",

@@ -178,10 +178,42 @@ namespace {
     check(plain && plain->target.text() == label, "omitted metadata without hyperlinks must still permit visible text recognition");
   }
 
+  // A development server's link names a port of the machine that printed it, which a pane of
+  // another machine reaches through a port here.
+  void linksToAPortOfTheirMachineAreRewrittenThroughAForward() {
+    // A text the terminal would not take for a link at all names no port either.
+    const auto link = [](std::string_view text) -> telar::ds::Option<LocalPortLink> {
+      const auto target = LinkTarget::fromUri(text);
+
+      return target ? LocalPortLink::parse(*target) : telar::ds::none;
+    };
+    const auto through = [&](std::string_view text, std::uint16_t local) {
+      return std::string{link(text)->through(local)->text()};
+    };
+
+    for (const std::string_view local : {"http://localhost:3000/", "https://localhost/app", "http://127.0.0.1", "http://[::1]:5173/x?y#z", "https://LOCALHOST", "http://0.0.0.0:8000/docs"}) {
+      check(link(local).hasValue(), local);
+    }
+
+    check(link("http://localhost:3000/")->port() == 3000);
+    check(link("https://localhost/app")->port() == 443 && link("http://127.0.0.1")->port() == 80, "a link without a port names its scheme's own");
+    check(link("http://[::1]:5173/x?y#z")->port() == 5173);
+    check(through("http://localhost:3000/a/b?c=1#d", 3000) == "http://localhost:3000/a/b?c=1#d", "the same port here leaves the link as it was");
+    check(through("http://localhost:3000/a/b?c=1#d", 41234) == "http://localhost:41234/a/b?c=1#d");
+    check(through("https://LOCALHOST", 8443) == "https://LOCALHOST:8443");
+    check(through("http://[::1]:5173/", 6000) == "http://[::1]:6000/");
+    check(through("http://0.0.0.0:8000/docs", 8000) == "http://localhost:8000/docs", "every interface there is this machine's loopback here");
+    for (const std::string_view other : {"http://example.com:3000/", "http://localhost.example.com/", "http://user@localhost:3000/", "http://localhost:0/", "http://localhost:99999/", "http://192.168.1.5:3000/", "ssh://localhost:22"}) {
+      check(!link(other).hasValue(), "only a plain link to the machine's own loopback is forwarded");
+    }
+  }
+
   const telar::testing::Case case_text_recognition{"links.text_recognition", textRecognition};
   const telar::testing::Case case_owned_targets{"links.owned_targets", ownedTargets};
   const telar::testing::Case case_soft_wraps{"links.soft_wraps", softWraps};
   const telar::testing::Case case_wide_cells{"links.wide_cells", wideCells};
   const telar::testing::Case case_metadata_authority{"links.metadata_authority", metadataAuthority};
+
+  const telar::testing::Case case_links_to_a_port_of_their_machine_are_rewritten_through_a_forward{"links.links_to_a_port_of_their_machine_are_rewritten_through_a_forward", linksToAPortOfTheirMachineAreRewrittenThroughAForward};
 
 }

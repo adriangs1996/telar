@@ -111,6 +111,16 @@ namespace telar::runtime {
     return pair;
   }
 
+  CertificatePair CertificatePair::selfSigned(std::string_view name, std::chrono::seconds lifetime) {
+    auto pair = create(name, lifetime);
+
+    requireTls(X509_set_issuer_name(pair.certificate.get(), X509_get_subject_name(pair.certificate.get())) == 1, "Set self-signed issuer");
+    extension(pair.certificate.get(), NID_basic_constraints, "critical,CA:FALSE");
+    extension(pair.certificate.get(), NID_key_usage, "critical,digitalSignature");
+    sign(pair.certificate, pair.key.get());
+    return pair;
+  }
+
   CertificatePair CertificatePair::mint(std::string_view hostname) const {
     TELAR_TRACE("tls.mintCertificate");
     requireTls(TlsHostname::valid(hostname), "Invalid TLS certificate hostname");
@@ -237,6 +247,14 @@ namespace telar::runtime {
 
   int CertificatePair::refusePassword(char* /*buffer*/, int /*size*/, int /*writing*/, void* /*context*/) noexcept {
     return 0;
+  }
+
+  ds::Array<std::uint8_t, public_key_digest_bytes> publicKeyDigest(const X509* certificate) {
+    ds::Array<std::uint8_t, public_key_digest_bytes> digest{};
+    unsigned length = 0;
+
+    requireTls(certificate != nullptr && X509_pubkey_digest(certificate, EVP_sha256(), digest.dataMut(), &length) == 1 && length == digest.size(), "Compute TLS public key digest");
+    return digest;
   }
 
   TlsLibrary::TlsLibrary(ConcurrentMemory& memory) {
@@ -1003,6 +1021,10 @@ void(OPENSSL_free)(void* pointer) {
 
 long(SSL_CTX_set1_verify_cert_store)(SSL_CTX* context, X509_STORE* store) {
   return SSL_CTX_set1_verify_cert_store(context, store);
+}
+
+long(SSL_CTX_set_max_proto_version)(SSL_CTX* context, int version) {
+  return SSL_CTX_set_max_proto_version(context, version);
 }
 
 long(SSL_CTX_set_min_proto_version)(SSL_CTX* context, int version) {

@@ -1,0 +1,296 @@
+export module telar.remote.link;
+
+// The gateway of an account on the machine its clients run on: one process that calls the
+// gateways of other machines, and gives the windows and commands here a local socket for each
+// machine's runtime and a local port for each port a machine shares.
+import std;
+
+import telar.base.ds;
+import telar.base.memory.containers;
+import telar.platform.paths;
+import telar.platform.primitives;
+import telar.remote.channel;
+import telar.remote.identity;
+import telar.remote.streams;
+import telar.sys.posix;
+import telar.sys.socket;
+
+// Interface: telar_remote/link_paths.cppm
+export {
+  namespace telar::remote {
+
+    using SocketPath = runtime::FixedText<sizeof(sockaddr_un::sun_path)>;
+
+    // Where the link's sockets live: beside the runtime's socket, in the account's own directory.
+    struct LinkPaths {
+      runtime::FixedText<PATH_MAX> directory;
+
+      [[nodiscard]] static LinkPaths resolve(const runtime::EnvironmentSource& environment);
+
+      // The socket the link takes its requests on.
+      [[nodiscard]] SocketPath control() const;
+
+      // The socket that is the runtime of the machine at `destination`.
+      [[nodiscard]] SocketPath machine(std::string_view destination) const;
+    };
+
+  }
+}
+
+// Interface: telar_remote/link.cppm
+export {
+  namespace telar::remote {
+
+    class Link {
+    public:
+      static constexpr std::size_t maximum_machines = 16;
+      static constexpr std::size_t maximum_forwards = 64;
+      static constexpr std::size_t origin_bytes = PortNotice::origin_bytes;
+
+      // Binds the control socket; throws SystemError when another link already serves `paths`.
+      explicit Link(const State& state, LinkPaths paths);
+      ~Link();
+
+      Link(const Link&) = delete;
+      Link& operator=(const Link&) = delete;
+      Link(Link&&) = delete;
+      Link& operator=(Link&&) = delete;
+
+      // How long a link nobody uses stays: one with no connection, no forward and no held
+      // machine for this long ends, and the next program that needs it starts another.
+      static constexpr auto idle_lifetime = std::chrono::minutes{10};
+
+      // Serves requests and connections until `stop`, each on a thread of its own. It ends by
+      // itself once idle for `idle_lifetime`, or when its control socket is gone.
+      void run() noexcept;
+
+      // Ends `run` from another thread or a signal handler.
+      void stop() noexcept;
+
+    private:
+      // A machine the link reaches: its runtime on a local socket once one is asked for, and
+      // the programs here that hold it, for which its shared ports are forwarded.
+      struct Machine {
+        Endpoint endpoint;
+        runtime::FileDescriptor listener;
+        // When its ports may next be asked for, after the gateway could not be reached.
+        Clock::time_point retry_at;
+        unsigned holds = 0;
+        // A thread hears of its ports as they open and close.
+        bool watched = false;
+        bool used = false;
+        // A connection for the next command run there, made while the last one ran, so that the
+        // next spends no round trip connecting; when it was made, and whether one is being made.
+        ds::Option<Channel> ready;
+        Clock::time_point ready_since;
+        bool readying = false;
+      };
+
+      // A port of a machine offered on a port of this one.
+      struct Forward {
+        Endpoint endpoint;
+        runtime::FixedText<origin_bytes> origin;
+        runtime::FileDescriptor listener;
+        runtime::FileDescriptor listener_six;
+        std::uint16_t remote = 0;
+        std::uint16_t local = 0;
+        unsigned holders = 0;
+        unsigned connections = 0;
+        // Bumped each time the slot is given to another forward, so a holder knows its own.
+        unsigned generation = 0;
+        // Held for the machine's holders because the machine shares the port, not asked for.
+        bool automatic = false;
+        bool used = false;
+      };
+
+      enum class Role : std::uint8_t {
+        control,
+        machine,
+        forward,
+      };
+
+      struct Accepted {
+        Role role = Role::control;
+        std::size_t index = 0;
+        unsigned generation = 0;
+      };
+
+      // The descriptors one wait of `run` listens on, and what a connection on each is for.
+      struct Waits {
+        static constexpr std::size_t maximum = 2 + maximum_machines + (2 * maximum_forwards);
+
+        void add(int descriptor, Accepted role) noexcept;
+
+        ds::Array<pollfd, maximum> entries{};
+        ds::Array<Accepted, maximum> roles{};
+        std::size_t count = 0;
+      };
+
+      // Lists what the next wait listens on, closing the forwards nobody holds any more.
+      void gather(Waits& waits) noexcept;
+
+      // Hands each connection waiting on `listener` to a thread of its own; whether any waited.
+      [[nodiscard]] bool admit(int listener, Accepted role) noexcept;
+
+      // `attach` serves the machine and `carry` the forward a connection was accepted for.
+      void answer(runtime::FileDescriptor socket, Accepted accepted) noexcept;
+      void control(int socket);
+      void attach(int socket, const Accepted& accepted);
+      void carry(int socket, const Accepted& accepted);
+
+      void requestSocket(int socket, std::string_view destination);
+      void requestForward(int socket, std::string_view arguments);
+      void requestPorts(int socket, std::string_view destination);
+      void requestHold(int socket, std::string_view destination);
+      void requestRun(int socket, std::string_view destination);
+      void makeReady(std::size_t machine) noexcept;
+
+      // How a forward comes to be: asked for by a program here, after the gateway confirms the
+      // port listens, or shared by the machine, which already knows it does.
+      enum class Opening : std::uint8_t {
+        asked,
+        shared,
+      };
+
+      [[nodiscard]] ds::Option<std::size_t> openForward(const Endpoint& endpoint, std::uint16_t port, std::string_view origin, Opening opening);
+      void closeForward(const Endpoint& endpoint, std::uint16_t port) noexcept;
+
+      // The slot of the forward that listens here for `port` of a machine; none when none does.
+      // The caller holds the lock.
+      [[nodiscard]] ds::Option<std::size_t> listeningForward(const Endpoint& endpoint, std::uint16_t port) const noexcept;
+
+      // The slot of a machine, taken when it has none; none when every slot is taken. The
+      // caller holds the lock.
+      [[nodiscard]] ds::Option<std::size_t> machineSlot(const Endpoint& endpoint) noexcept;
+
+      // Starts the thread that hears of a machine's ports, unless one runs or the gateway was
+      // unreachable a moment ago. The caller holds the lock.
+      void watchMachine(std::size_t machine) noexcept;
+      void watch(std::size_t machine) noexcept;
+      [[nodiscard]] bool observe(Channel& channel, std::size_t machine, const Endpoint& endpoint);
+
+      // What a watch reads of its machine's forwards between two waits: whether anything still
+      // needs the watch, and the ports to ask the gateway about, which `asked` does not hold yet.
+      struct WatchNeeds {
+        // The ports of the machine that forwards asked for here still need watched there.
+        ds::Array<std::uint16_t, maximum_forwards> wanted{};
+        std::size_t wanted_count = 0;
+        bool needed = false;
+      };
+
+      [[nodiscard]] WatchNeeds watchNeeds(std::size_t machine, const Endpoint& endpoint) noexcept;
+
+      // A forward as its holder knows it: its slot, and the generation the slot had when taken.
+      struct HeldForward {
+        std::size_t index = 0;
+        unsigned generation = 0;
+      };
+
+      void releaseForward(HeldForward held, bool closed_there) noexcept;
+
+      // Whether a forward is still its holder's, with the port open there; one that is keeps
+      // its machine watched.
+      [[nodiscard]] bool stillOpen(HeldForward held) noexcept;
+      void wake() const noexcept;
+
+      // Whether anything uses the link now. The caller holds the lock.
+      [[nodiscard]] bool busy() const noexcept;
+
+      const State& state_;
+      LinkPaths paths_;
+      Identity identity_;
+      Contexts contexts_;
+      runtime::FileDescriptor control_;
+      // The control socket's path, with the terminator the system calls that name it need.
+      ds::Array<char, sizeof(sockaddr_un::sun_path)> control_file_{};
+      std::mutex mutex_;
+      ds::Array<Machine, maximum_machines> machines_;
+      ds::Array<Forward, maximum_forwards> forwards_;
+      ds::Array<int, 2> wake_{-1, -1};
+      std::atomic<unsigned> threads_{0};
+      std::atomic<bool> stopping_{false};
+    };
+
+  }
+}
+
+// Interface: telar_remote/link_client.cppm
+export {
+  namespace telar::remote {
+
+    // What a program on this machine asks of the link. Each call connects to the control socket
+    // of `paths`, which a link must already serve.
+    struct LinkClient {
+      static constexpr std::size_t line_bytes = 1024;
+
+      // Whether a link answers on `paths`.
+      [[nodiscard]] static bool running(const LinkPaths& paths) noexcept;
+
+      // The local socket that is the runtime of the machine at `destination`. Throws
+      // ChannelFailure with what the link said.
+      [[nodiscard]] static SocketPath socket(const LinkPaths& paths, std::string_view destination);
+
+      // Asks for a local port to a port of a machine, writes `PORT\n` to `output` and holds the
+      // forward until this process ends or the port closes there. Returns 0 when it closed
+      // there, 1 when the link refused or ended without saying so.
+      [[nodiscard]] static int forward(const LinkPaths& paths, std::string_view destination, std::uint16_t port, std::string_view origin, int output);
+
+      // Writes to `output` a line for each forward to the machine: its port there, its port
+      // here, its open connections, `asked` or `shared`, and what asked for it or shared it.
+      [[nodiscard]] static int ports(const LinkPaths& paths, std::string_view destination, int output);
+
+      // Holds the machine at `destination`: while the descriptor returned stays open, the ports
+      // that machine shares are forwarded here. None when no link answers.
+      [[nodiscard]] static runtime::FileDescriptor hold(const LinkPaths& paths, std::string_view destination) noexcept;
+
+      // A socket to the run service of the machine at `destination`, through a connection the
+      // link may already hold to its gateway. None when no link answers or it cannot reach the
+      // machine: the caller then connects by itself.
+      [[nodiscard]] static runtime::FileDescriptor run(const LinkPaths& paths, std::string_view destination) noexcept;
+
+      // Asks the link to end.
+      static void stop(const LinkPaths& paths) noexcept;
+    };
+
+  }
+}
+
+// Interface: telar_remote/remote_command.cppm
+export {
+  namespace telar::remote {
+
+    // What to run on another machine, and the descriptors its streams are carried on here.
+    struct RemoteCommand {
+      std::string_view destination;
+      std::string_view command;
+      bool terminal = false;
+      LocalStreams streams;
+      // The link to go through when it answers, which may hold a connection ready; none to
+      // always connect anew.
+      const LinkPaths* link = nullptr;
+    };
+
+    // Runs a command in the shell of the account at its destination and returns its exit status.
+    // A connection that fails says so on the error stream and returns 255, as ssh does.
+    [[nodiscard]] int runRemote(const State& state, const RemoteCommand& remote) noexcept;
+
+    // Carries the runtime of the account at `destination` on `socket`, a stream socket of this
+    // process such as the one a window hands it as its standard streams, until either side ends.
+    // Returns 0 for a connection that was made, and 255 or 1, saying why on the error stream,
+    // for a gateway that cannot be reached or a runtime that cannot be started.
+    [[nodiscard]] int attachRemote(const State& state, std::string_view destination, int socket) noexcept;
+
+    // What a client pairs with: the pairing address of a gateway, and the name that gateway
+    // lists the client under.
+    struct Enrollment {
+      std::string_view address;
+      std::string_view name;
+    };
+
+    // Presents a pairing address to its gateway under a name, and returns the address to save.
+    // Throws ChannelFailure when the gateway refuses, and std::invalid_argument for an address
+    // without a pairing code.
+    [[nodiscard]] Endpoint::Text enroll(const State& state, const Enrollment& enrollment);
+
+  }
+}

@@ -1,9 +1,8 @@
-module telar.cli.commands.machine_ssh;
+module telar.cli.commands.machine_gateway;
 
 import telar.tbc;
 import telar.cli.console.command_error;
 import telar.cli.session.control_session;
-import telar.platform.sha256;
 import telar.sys.posix;
 import telar.sys.process;
 import telar.base.memory.containers;
@@ -13,6 +12,8 @@ import telar.client;
 import telar.platform.daemon;
 import telar.platform.error;
 import telar.platform.fs;
+import telar.platform.listening;
+import telar.sys.socket;
 import telar.platform.primitives;
 import telar.wire.vocabulary;
 import telar.base.ds;
@@ -485,7 +486,7 @@ namespace telar::runtime::cli::launch {
       }
     }
 
-    return WIFEXITED(status) ? WEXITSTATUS(status) : ssh_failure;
+    return WIFEXITED(status) ? WEXITSTATUS(status) : unreachable_status;
   }
 
   Output::Output(Memory& memory)
@@ -670,7 +671,7 @@ namespace telar::runtime::cli::machine {
 
   const char* describe(std::string_view error) {
     if (error == "SetupBinaryCompanionsMissing") {
-      return "a C++ --binary needs telar-runtime and telar-config-check beside it";
+      return "a --binary needs telar-runtime, telar-config-check and telar-gateway beside it";
     }
 
     if (error == "InsecureFile") {
@@ -819,64 +820,65 @@ namespace telar::runtime::cli::machine {
     return result;
   }
 
-  namespace {
-
-    // The options every connection to `destination` shares, including the
-    // control master that keeps one SSH session per machine.
-    void appendSshOptions(tbc::mut_a<Memory> memory, tbc::mut_a<Argv> argv, std::string_view destination) {
-      MachineFieldRules::destination(destination);
-      const ServerOptions server_options{};
-      const RuntimePaths<Memory> paths{memory, server_options, process_environment};
-
-      paths.prepareSocket();
-      const auto directory = std::string_view{paths.socket}.substr(0, paths.socket.view().rfind('/'));
-      ds::Array<unsigned char, SHA256_DIGEST_LENGTH> digest{};
-
-      ::SHA256(byteView(destination).data(), destination.size(), digest.dataMut());
-      std::uint64_t hash = 0;
-      constexpr unsigned control_hash_shift = 16;
-      constexpr std::size_t control_name_bytes = 32;
-
-      for (std::size_t index = 0; index < sizeof(hash); ++index) {
-        hash |= static_cast<std::uint64_t>(digest[index]) << (index * bits_per_byte);
-      }
-
-      ds::Array<char, control_name_bytes> name{};
-
-      std::format_to_n(name.dataMut(), name.size() - 1, "/ssh-{:012x}", hash >> control_hash_shift);
-      for (const auto* const word : {"-o", "BatchMode=yes", "-o", "ServerAliveInterval=15", "-o", "ServerAliveCountMax=4", "-o", "ForwardAgent=no", "-o", "ControlMaster=auto", "-o", "ControlPersist=600", "-o"}) {
-        argv.emplace(memory, word);
-      }
-
-      argv.push(ds::format(memory, "ControlPath={}{}", directory, std::string_view{name.data()}));
+  tbc::val_a<Text> gatewayProgram(tbc::mut_a<Memory> memory) {
+    if (const auto named = process_environment.lookup("TELAR_GATEWAY_PROGRAM"); named.starts_with('/')) {
+      return Text{memory, named};
     }
 
+    const ExecutablePath program{"telar-gateway"};
+
+    return Text{memory, program.view()};
   }
 
-  tbc::val_a<Argv> ssh(tbc::mut_a<Memory> memory, std::string_view destination, std::string_view command, bool terminal) {
-    auto argv = launch::words(memory, {"ssh", terminal ? "-t" : "-T"});
+  tbc::val_a<Argv> gateway(tbc::mut_a<Memory> memory, std::string_view destination, std::string_view command, GatewayRun run) {
+    MachineFieldRules::destination(destination);
+    Argv argv{memory};
 
-    appendSshOptions(memory, argv, destination);
-    argv.emplace(memory, "--");
+    argv.push(gatewayProgram(memory));
+    argv.emplace(memory, "run");
+    if (run.terminal) {
+      argv.emplace(memory, "-t");
+    }
+
+    if (run.share) {
+      argv.emplace(memory, "--share");
+    }
+
     argv.emplace(memory, destination);
     argv.emplace(memory, command);
     return argv;
   }
 
-  tbc::val_a<Text> gitSshCommand(tbc::mut_a<Memory> memory, std::string_view destination) {
-    Argv options{memory};
-    Text command{memory, "ssh"};
+  tbc::val_a<Text> gitGatewayCommand(tbc::mut_a<Memory> memory, std::string_view destination) {
+    MachineFieldRules::destination(destination);
+    const auto program = gatewayProgram(memory);
 
-    appendSshOptions(memory, options, destination);
-    for (const auto& word : options) {
-      if (word.view().contains('\'')) {
-        throw CommandError{"UnquotableSshOption"};
-      }
-
-      ds::formatTo(command, " '{}'", word);
+    if (program.view().contains('\'') || destination.contains('\'')) {
+      throw CommandError{"UnquotableGatewayCommand"};
     }
 
-    return command;
+    // Git appends the host of its URL and the command to run there; `--to` names the machine,
+    // so the host is only a placeholder.
+    return ds::format(memory, "'{}' run --to '{}'", program, destination);
+  }
+
+  tbc::val_a<Text> pair(tbc::mut_a<Memory> memory, std::string_view address, std::string_view name) {
+    constexpr auto pairing_timeout = std::chrono::seconds{60};
+    Argv argv{memory};
+
+    argv.push(gatewayProgram(memory));
+    argv.emplace(memory, "enroll");
+    argv.emplace(memory, address);
+    argv.emplace(memory, "--name");
+    argv.emplace(memory, name);
+    const auto output = launch::capture(memory, argv.view(), {}, pairing_timeout);
+
+    if (output.status != 0) {
+      std::print(stderr, "{}", output.err.view());
+      throw CommandError{"PairingRefused"};
+    }
+
+    return Text{memory, trimText(output.out, " \t\r\n")};
   }
 
   template <typename Words>
@@ -900,14 +902,27 @@ namespace telar::runtime::cli::machine {
     // confirmation does. It merges stderr into stdout and writes \r\n, so it is only
     // given when both ends here are a terminal; anyone else gets none, as before.
     const bool terminal = ::isatty(STDIN_FILENO) && ::isatty(STDOUT_FILENO);
+    // `exec --autoshare` shares the ports its command opens there: they are forwarded here
+    // while it runs, window or no window.
+    bool share = false;
+    bool executes = false;
 
-    return launch::inherit(ssh(memory, profile.destination(), remoteCommand(memory, profile, words), terminal).view());
+    for (const std::string_view word : words) {
+      if (word == "--") {
+        break;
+      }
+
+      share = share || (executes && word == "--autoshare");
+      executes = executes || word == "exec";
+    }
+
+    return launch::inherit(gateway(memory, profile.destination(), remoteCommand(memory, profile, words), {.terminal = terminal, .share = share}).view());
   }
 
   template <typename Words>
   tbc::val_a<Text> capture(tbc::mut_a<Memory> memory, const MachineProfile& profile, const Words& words, const char* failure, int input) {
     constexpr auto capture_timeout = std::chrono::seconds{900};
-    auto result = launch::captureFile(memory, ssh(memory, profile.destination(), remoteCommand(memory, profile, words)).view(), input, capture_timeout);
+    auto result = launch::captureFile(memory, gateway(memory, profile.destination(), remoteCommand(memory, profile, words)).view(), input, capture_timeout);
 
     std::print(stderr, "{}", result.err.view());
     if (result.status != 0 || result.dropped != 0) {
@@ -930,7 +945,7 @@ namespace telar::runtime::cli::machine {
     return ds::none;
   }
 
-  MachineError sshFailure(const launch::Output& output) {
+  MachineError reachFailure(const launch::Output& output) {
     if (output.err.view().contains("telar protocol mismatch")) {
       return MachineError::remote_runtime_incompatible;
     }
@@ -943,12 +958,14 @@ namespace telar::runtime::cli::machine {
       return MachineError::remote_program_missing;
     }
 
-    if (output.status == launch::ssh_failure) {
-      if (output.err.view().contains("Host key verification failed") || output.err.view().contains("REMOTE HOST IDENTIFICATION HAS CHANGED")) {
+    if (output.status == launch::unreachable_status) {
+      // What the gateway program says of a machine that holds another key, and of one that does
+      // not admit this one.
+      if (output.err.view().contains("holds another key")) {
         return MachineError::host_key_rejected;
       }
 
-      if (output.err.view().contains("Permission denied (") || output.err.view().contains("Too many authentication failures")) {
+      if (output.err.view().contains("is not paired")) {
         return MachineError::authentication_failed;
       }
     }
@@ -958,35 +975,16 @@ namespace telar::runtime::cli::machine {
 
   namespace {
 
-    // What the person needs to know of a failed discovery: a hint at the cause, then what SSH said
+    // What the person needs to know of a failed discovery: a hint at the cause, then what the gateway said
     // of it.
     void describeFailure(Text& detail, const launch::Output& output, MachineError failure) {
       if (failure == MachineError::remote_program_missing) {
-        detail.assign("telar is not on the PATH of non-interactive SSH sessions there: ");
+        detail.assign("telar is not on the PATH of the gateway there: ");
       } else if (failure == MachineError::remote_runtime_incompatible) {
         detail.assign("the runtime there is another telar build; run `telar server stop` there: ");
       }
 
-      if (failure != MachineError::host_key_rejected) {
-        detail.append(output.err);
-        return;
-      }
-
-      std::string_view lines = output.err.view();
-
-      while (!lines.empty()) {
-        const auto end = lines.find('\n');
-        const auto line = lines.substr(0, end);
-        if (line.contains("you have requested strict checking") || line.contains("Host key verification failed")) {
-          ds::formatTo(detail, "{} ", trimText(line, " \t\r\n"));
-        }
-
-        if (end == std::string_view::npos) {
-          break;
-        }
-
-        lines.remove_prefix(end + 1);
-      }
+      detail.append(output.err);
     }
 
   }
@@ -995,7 +993,7 @@ namespace telar::runtime::cli::machine {
     launch::Output output{memory};
 
     try {
-      output = launch::capture(memory, ssh(memory, profile.destination(), MachineRemoteCommand::discovery(profile.program()).view()).view(), {}, endpoint_timeout);
+      output = launch::capture(memory, gateway(memory, profile.destination(), MachineRemoteCommand::discovery(profile.program()).view()).view(), {}, endpoint_timeout);
     } catch (const std::exception&) {
       throw MachineFailure{MachineError::endpoint_unavailable};
     }
@@ -1003,7 +1001,7 @@ namespace telar::runtime::cli::machine {
     constexpr std::size_t detail_limit = 1024;
 
     if (output.status != 0) {
-      const auto failure = sshFailure(output);
+      const auto failure = reachFailure(output);
 
       describeFailure(detail, output, failure);
       detail.truncate(std::min(detail.size(), detail_limit));
@@ -1033,7 +1031,7 @@ namespace telar::runtime::cli::machine {
       launch::Output output{memory};
 
       try {
-        output = launch::capture(memory, ssh(memory, profile.destination(), MachineRemoteCommand::editor(profile.program()).view()).view(), {}, endpoint_timeout);
+        output = launch::capture(memory, gateway(memory, profile.destination(), MachineRemoteCommand::editor(profile.program()).view()).view(), {}, endpoint_timeout);
       } catch (const std::exception&) {
         return;
       }
@@ -2392,6 +2390,561 @@ namespace telar::runtime::cli::machine {
 
   void Random::fill(std::span<std::uint8_t> bytes) {
     randomBytes(bytes.data(), bytes.size());
+  }
+
+}
+
+namespace telar::runtime::cli::gateway_commands {
+
+  namespace {
+
+    using launch::Argv;
+
+    constexpr std::string_view default_address = ":8352";
+    constexpr auto command_timeout = std::chrono::seconds{30};
+    constexpr auto start_grace = std::chrono::milliseconds{300};
+
+    // `[HOST]:PORT`, as the gateway listens on it; a bare port gets its colon.
+    tbc::val_a<Text> listenAddress(tbc::mut_a<Memory> memory, std::string_view text) {
+      const auto colon = text.rfind(':');
+      const auto port = text.substr(colon == std::string_view::npos ? 0 : colon + 1);
+
+      if (port.empty() || !std::ranges::all_of(port, [](char byte) {
+            return byte >= '0' && byte <= '9';
+          })) {
+        throw std::invalid_argument{"ExpectedListenAddress"};
+      }
+
+      return colon == std::string_view::npos ? ds::format(memory, ":{}", text) : Text{memory, text};
+    }
+
+    // What `listen` and `enable` take: where to listen, and the runtime to serve.
+    struct ListenOptions {
+      std::string_view address = default_address;
+      std::string_view socket;
+      std::string_view host;
+
+      static ListenOptions parse(std::span<char* const> arguments, bool pairing) {
+        ListenOptions options;
+        bool addressed = false;
+
+        for (std::size_t index = 0; index < arguments.size(); ++index) {
+          const std::string_view argument{arguments[index]};
+          const bool valued = argument == "--socket" || (pairing && argument == "--host");
+          if (valued && index + 1 == arguments.size()) {
+            throw std::invalid_argument{"MissingOptionValue"};
+          }
+
+          if (argument == "--socket") {
+            options.socket = arguments[++index];
+          } else if (valued) {
+            options.host = arguments[++index];
+          } else if (!addressed && !argument.starts_with('-')) {
+            options.address = argument;
+            addressed = true;
+          } else {
+            throw std::invalid_argument{"UnknownOption"};
+          }
+        }
+
+        return options;
+      }
+    };
+
+    // The gateway's own command line for these options.
+    tbc::val_a<Argv> serveCommand(tbc::mut_a<Memory> memory, const ListenOptions& options) {
+      Argv argv{memory};
+
+      argv.push(machine::gatewayProgram(memory));
+      argv.emplace(memory, "serve");
+      argv.emplace(memory, "--listen");
+      argv.push(listenAddress(memory, options.address));
+      if (!options.socket.empty()) {
+        argv.emplace(memory, "--runtime-socket");
+        argv.emplace(memory, options.socket);
+      }
+
+      return argv;
+    }
+
+    int pair(Memory& memory, std::string_view host, std::string_view port) {
+      Argv argv{memory};
+
+      argv.push(machine::gatewayProgram(memory));
+      argv.emplace(memory, "pair");
+      if (!host.empty()) {
+        argv.emplace(memory, "--host");
+        argv.emplace(memory, host);
+      }
+
+      if (!port.empty()) {
+        argv.emplace(memory, "--port");
+        argv.emplace(memory, port);
+      }
+
+      const auto output = launch::capture(memory, argv.view(), {}, command_timeout);
+      if (output.status != 0) {
+        std::print(stderr, "{}", output.err.view());
+        return 1;
+      }
+
+      const auto address = trimText(output.out, " \t\r\n");
+
+      // The address alone goes to stdout, for a script; what to do with it goes to the person.
+      std::println(stdout, "{}", address);
+      std::println(stderr, "\nOn the machine that will connect, within ten minutes:\n\n  telar machine add LABEL '{}'\n\nThe address names this machine as `{}`. When the other machine reaches it under another\nname or address, print one with `telar server pair --host NAME`.", address, address.substr(0, address.find('#')));
+      return 0;
+    }
+
+    int access(Memory& memory, std::span<char* const> arguments) {
+      Argv argv{memory};
+
+      argv.push(machine::gatewayProgram(memory));
+      if (arguments.empty() || (arguments.size() == 1 && std::string_view{arguments.front()} == "list")) {
+        argv.emplace(memory, "clients");
+      } else if (arguments.size() == 2 && std::string_view{arguments.front()} == "revoke") {
+        argv.emplace(memory, "revoke");
+        argv.emplace(memory, arguments[1]);
+      } else {
+        throw std::invalid_argument{"ExpectedAccessCommand"};
+      }
+
+      return launch::inherit(argv.view());
+    }
+
+    // Runs a service manager's command and says whether it succeeded; what it printed is kept
+    // for the report of a failure.
+    bool manage(Memory& memory, std::initializer_list<std::string_view> words, Text* said = nullptr) {
+      try {
+        const auto output = launch::capture(memory, launch::words(memory, words).view(), {}, command_timeout);
+
+        if (said != nullptr) {
+          said->assign(output.err.view());
+        }
+
+        return output.status == 0;
+      } catch (const std::exception&) {
+        return false;
+      }
+    }
+
+    void writeFile(const Text& path, std::string_view contents) {
+      constexpr mode_t file_mode = 0644;
+
+      std::filesystem::create_directories(std::filesystem::path{path.view()}.parent_path());
+      // The file is made anew, so that what a previous enable wrote does not outlast its end.
+      ::unlink(path.data());
+      const FileDescriptor file{::open(path.data(), combineFlags(O_WRONLY, O_CREAT, O_EXCL, O_CLOEXEC), file_mode)}; // NOLINT(cppcoreguidelines-pro-type-vararg): open's C signature is variadic
+
+      if (!file) {
+        throw SystemError{"Write the gateway's service file"};
+      }
+
+      if (const int error = writeDescriptor(file.get(), byteView(contents))) {
+        throw SystemError{"Write the gateway's service file", error};
+      }
+    }
+
+    // The gateway started by this command alone, for a machine without a service manager of the
+    // account: it lasts until the machine restarts.
+    int startForThisBoot(Memory& memory, const ListenOptions& options) {
+      const ServerOptions server_options{};
+      const RuntimePaths<Memory> paths{memory, server_options, process_environment};
+
+      paths.prepareSocket();
+      const auto directory = std::string_view{paths.socket}.substr(0, paths.socket.view().rfind('/'));
+      const auto log = ds::format(memory, "{}/gateway.serve.log", directory);
+      const auto command = serveCommand(memory, options);
+      ds::Vec<char*, Memory> arguments{memory};
+
+      for (const auto& word : command) {
+        arguments.push(const_cast<char*>(word.data())); // NOLINT(cppcoreguidelines-pro-type-const-cast): posix_spawn's C signature takes the arguments as char*, and does not write them
+      }
+
+      arguments.push(nullptr);
+      const auto child = spawnDaemon(command.view().front().data(), arguments.data(), log.data());
+      int status = 0;
+
+      std::this_thread::sleep_for(start_grace);
+      if (::waitpid(child, &status, WNOHANG) == child) {
+        std::println(stderr, "telar server enable: the gateway did not start; see {}", log.view());
+        return 1;
+      }
+
+      std::println(stderr, "telar server enable: no service manager of this account answers here, so the gateway was started for this boot only.\nTo keep it across restarts, run `telar server listen` under the supervisor this machine uses.");
+      return 0;
+    }
+
+#ifdef __APPLE__
+
+    constexpr std::string_view agent_label = "dev.telar.gateway";
+
+    tbc::val_a<Text> servicePath(tbc::mut_a<Memory> memory) {
+      return ds::format(memory, "{}/Library/LaunchAgents/{}.plist", processHome(), agent_label);
+    }
+
+    void appendXml(Text& output, std::string_view text) {
+      for (const char byte : text) {
+        if (byte == '&') {
+          output.append("&amp;");
+        } else if (byte == '<') {
+          output.append("&lt;");
+        } else if (byte == '>') {
+          output.append("&gt;");
+        } else {
+          output.push(byte);
+        }
+      }
+    }
+
+    int installService(Memory& memory, const ListenOptions& options) {
+      const auto path = servicePath(memory);
+      const auto command = serveCommand(memory, options);
+      const auto domain = ds::format(memory, "gui/{}", ::getuid());
+      const auto target = ds::format(memory, "{}/{}", domain, agent_label);
+      Text plist{memory, "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<!DOCTYPE plist PUBLIC \"-//Apple//DTD PLIST 1.0//EN\" \"http://www.apple.com/DTDs/PropertyList-1.0.dtd\">\n<plist version=\"1.0\">\n<dict>\n  <key>Label</key>\n  <string>"};
+      Text said{memory};
+
+      plist.append(agent_label);
+      plist.append("</string>\n  <key>ProgramArguments</key>\n  <array>\n");
+      for (const auto& word : command) {
+        plist.append("    <string>");
+        appendXml(plist, word);
+        plist.append("</string>\n");
+      }
+
+      plist.append("  </array>\n  <key>RunAtLoad</key>\n  <true/>\n  <key>KeepAlive</key>\n  <true/>\n</dict>\n</plist>\n");
+      writeFile(path, plist);
+      static_cast<void>(manage(memory, {"launchctl", "bootout", target}));
+      if (!manage(memory, {"launchctl", "bootstrap", domain, path}, &said)) {
+        // Outside a graphical login launchd has no session of this account to hold the agent.
+        std::filesystem::remove(std::filesystem::path{path.view()});
+        return startForThisBoot(memory, options);
+      }
+
+      std::println(stderr, "telar server enable: the gateway runs as the launch agent {}, while this account is logged in", agent_label);
+      return 0;
+    }
+
+    int removeService(Memory& memory) {
+      const auto path = servicePath(memory);
+      const auto target = ds::format(memory, "gui/{}/{}", ::getuid(), agent_label);
+
+      static_cast<void>(manage(memory, {"launchctl", "bootout", target}));
+      std::filesystem::remove(std::filesystem::path{path.view()});
+      return 0;
+    }
+
+#else
+
+    constexpr std::string_view unit_name = "telar-gateway.service";
+
+    tbc::val_a<Text> servicePath(tbc::mut_a<Memory> memory) {
+      auto path = xdgDirectory(memory, process_environment, "XDG_CONFIG_HOME", "/.config");
+
+      ds::formatTo(path, "/systemd/user/{}", unit_name);
+      return path;
+    }
+
+    // A word of a unit's command line: quoted, with what systemd would expand escaped.
+    void appendUnitWord(Text& output, std::string_view word) {
+      output.push('"');
+      for (const char byte : word) {
+        if (byte == '"' || byte == '\\') {
+          output.push('\\');
+        } else if (byte == '%' || byte == '$') {
+          output.push(byte);
+        }
+
+        output.push(byte);
+      }
+
+      output.push('"');
+    }
+
+    int installService(Memory& memory, const ListenOptions& options) {
+      const auto path = servicePath(memory);
+      const auto command = serveCommand(memory, options);
+      Text unit{memory, "[Unit]\nDescription=telar gateway, which lets paired machines reach this account's telar\n\n[Service]\nExecStart="};
+      Text said{memory};
+
+      for (const auto& word : command) {
+        appendUnitWord(unit, word);
+        unit.push(' ');
+      }
+
+      unit.append("\nRestart=on-failure\nRestartSec=2\n\n[Install]\nWantedBy=default.target\n");
+      writeFile(path, unit);
+      if (!manage(memory, {"systemctl", "--user", "daemon-reload"}) || !manage(memory, {"systemctl", "--user", "enable", "--now", unit_name}, &said)) {
+        std::filesystem::remove(std::filesystem::path{path.view()});
+        return startForThisBoot(memory, options);
+      }
+
+      // A service of the account runs only while the account has a session, unless it lingers.
+      if (manage(memory, {"loginctl", "enable-linger"})) {
+        std::println(stderr, "telar server enable: the gateway runs as the user service {}, from boot", unit_name);
+      } else {
+        std::println(stderr, "telar server enable: the gateway runs as the user service {}, while this account is logged in.\nTo start it at boot, an administrator runs `loginctl enable-linger {}`.", unit_name, process_environment.lookup("USER"));
+      }
+
+      return 0;
+    }
+
+    int removeService(Memory& memory) {
+      const auto path = servicePath(memory);
+
+      static_cast<void>(manage(memory, {"systemctl", "--user", "disable", "--now", unit_name}));
+      std::filesystem::remove(std::filesystem::path{path.view()});
+      static_cast<void>(manage(memory, {"systemctl", "--user", "daemon-reload"}));
+      return 0;
+    }
+
+#endif
+
+    int enable(Memory& memory, std::span<char* const> arguments) {
+      const auto options = ListenOptions::parse(arguments, true);
+      const auto address = listenAddress(memory, options.address);
+
+      if (const int status = installService(memory, options)) {
+        return status;
+      }
+
+      return pair(memory, options.host, address.view().substr(address.view().rfind(':') + 1));
+    }
+
+  }
+
+  bool handles(std::string_view verb) noexcept {
+    return verb == "listen" || verb == "pair" || verb == "access" || verb == "enable" || verb == "disable";
+  }
+
+  int run(Memory& memory, std::span<char* const> words) {
+    const std::string_view verb{words.front()};
+    const auto arguments = words.subspan(1);
+
+    if (verb == "listen") {
+      launch::replace(serveCommand(memory, ListenOptions::parse(arguments, false)).view());
+    }
+
+    if (verb == "pair") {
+      const auto options = ListenOptions::parse(arguments, true);
+
+      if (!options.socket.empty() || options.address != default_address) {
+        throw std::invalid_argument{"UnknownOption"};
+      }
+
+      return pair(memory, options.host, {});
+    }
+
+    if (verb == "access") {
+      return access(memory, arguments);
+    }
+
+    if (verb == "enable") {
+      return enable(memory, arguments);
+    }
+
+    if (!arguments.empty()) {
+      throw std::invalid_argument{"UnknownOption"};
+    }
+
+    return removeService(memory);
+  }
+
+}
+
+namespace telar::runtime::cli::port_sharing {
+
+  namespace {
+
+    constexpr std::string_view sharing_socket = "/gateway-ports.sock";
+    constexpr auto watch_interval = std::chrono::milliseconds{500};
+    constexpr auto answer_timeout_ms = 2000;
+    constexpr std::size_t maximum_ports = 64;
+    constexpr std::size_t line_bytes = 256;
+
+    // The child a signal meant for this process is passed on to.
+    std::atomic<pid_t> shared_child{0}; // NOLINT(cppcoreguidelines-avoid-non-const-global-variables): a signal handler reaches only a global
+
+    void passSignal(int number) noexcept {
+      if (const auto child = shared_child.load(); child > 0) {
+        ::kill(child, number);
+      }
+    }
+
+    // The gateway's socket for the programs of this machine, beside the runtime's; none when no
+    // gateway listens there.
+    FileDescriptor connectGateway(Memory& memory) {
+      const ServerOptions server_options{};
+      const RuntimePaths<Memory> paths{memory, server_options, process_environment};
+      const auto directory = std::string_view{paths.socket}.substr(0, paths.socket.view().rfind('/'));
+      sockaddr_un address{};
+      FileDescriptor socket;
+
+      if (directory.size() + sharing_socket.size() >= sizeof(address.sun_path)) {
+        return socket;
+      }
+
+      address.sun_family = AF_UNIX;
+      const auto end = std::ranges::copy(directory, std::span{address.sun_path}.begin()).out;
+
+      std::ranges::copy(sharing_socket, end);
+      socket.reset(::socket(AF_UNIX, SOCK_STREAM, 0));
+      if (socket && ::connect(socket.get(), reinterpret_cast<const sockaddr*>(&address), sizeof(address)) == 0) { // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast): the socket API passes every address family as a sockaddr
+        setCloseOnExec(socket.get());
+      } else {
+        socket.reset();
+      }
+
+      return socket;
+    }
+
+    // Asks the gateway to share or to stop sharing a port, and waits for its answer.
+    bool ask(int gateway, std::string_view verb, std::uint16_t port, std::string_view origin) {
+      ds::Array<char, line_bytes> line{};
+      const auto written = std::format_to_n(line.dataMut(), line.size() - 1, "{} {} {}\n", verb, port, origin);
+      pollfd entry{.fd = gateway, .events = POLLIN, .revents = 0};
+
+      if (writeDescriptor(gateway, byteView(std::string_view{line.data(), static_cast<std::size_t>(written.size)})) != 0 || ::poll(&entry, 1, answer_timeout_ms) <= 0) {
+        return false;
+      }
+
+      const auto count = ::read(gateway, line.dataMut(), line.size());
+
+      return count > 0 && std::string_view{line.data(), static_cast<std::size_t>(count)}.starts_with("ok");
+    }
+
+  }
+
+  int run(Memory& memory, std::span<char* const> words) {
+    if (words.size() < 2 || std::string_view{words.front()} != "--") {
+      throw std::invalid_argument{"ExpectedSharedCommand"};
+    }
+
+    const auto command = words.subspan(1);
+    launch::Argv argv{memory};
+
+    for (const std::string_view word : command) {
+      argv.emplace(memory, word);
+    }
+
+    const auto gateway = connectGateway(memory);
+    if (!gateway) {
+      // Nothing on this machine forwards ports to another: the program runs as it would alone.
+      launch::replace(argv.view());
+    }
+
+    ds::Vec<const char*, Memory> arguments{memory};
+
+    for (const auto& word : argv) {
+      arguments.push(word.data());
+    }
+
+    arguments.push(nullptr);
+    SpawnOptions spawn{0};
+    pid_t child = -1;
+
+    // The program stays in this process group, which is the execution's: what cancels the
+    // execution ends both, and the ports of the group are the program's.
+    spawn.keepStandardStreams();
+    if (const auto failure = ::posix_spawnp(&child, arguments.front(), &spawn.actions, &spawn.attributes, const_cast<char* const*>(arguments.data()), environ); failure != 0) { // NOLINT(cppcoreguidelines-pro-type-const-cast): posix_spawnp's C signature takes char* const[] and never writes through it
+      throw SystemError{"Start the shared command", failure};
+    }
+
+    shared_child.store(child);
+    for (const int number : {SIGTERM, SIGINT, SIGHUP}) {
+      static_cast<void>(::signal(number, &passSignal));
+    }
+
+    const auto program = std::string_view{command.front()};
+    const auto origin = ds::format(memory, "exec {}", program.substr(program.rfind('/') + 1));
+    ds::Array<std::uint16_t, maximum_ports> shared{};
+    std::size_t shared_count = 0;
+    int status = 0;
+
+    for (;;) {
+      const auto waited = ::waitpid(child, &status, WNOHANG);
+      if (waited == child || (waited < 0 && sys::lastError() != EINTR)) {
+        break;
+      }
+
+      ds::Array<std::uint16_t, maximum_ports> listening{};
+      const auto found = listening.viewMut().first(groupListeningPorts(::geteuid(), ::getpgrp(), listening.viewMut()));
+
+      // A port the group stopped listening on is withdrawn; one it opened is shared.
+      for (std::size_t index = shared_count; index > 0; --index) {
+        const auto port = shared[index - 1];
+        if (!std::ranges::contains(found, port)) {
+          static_cast<void>(ask(gateway.get(), "unshare", port, origin));
+          shared.atMut(index - 1) = shared[--shared_count];
+        }
+      }
+
+      for (const auto port : found) {
+        if (shared_count < shared.size() && !std::ranges::contains(std::span{shared}.first(shared_count), port) && ask(gateway.get(), "share", port, origin)) {
+          shared.atMut(shared_count++) = port;
+        }
+      }
+
+      std::this_thread::sleep_for(watch_interval);
+    }
+
+    return shellExitCode(status);
+  }
+
+  int list(Memory& memory, const machines::MachineProfile& profile, std::span<char* const> words) {
+    constexpr auto list_timeout = std::chrono::seconds{15};
+    const bool json = words.size() == 1 && std::string_view{words.front()} == "--json";
+
+    if (!words.empty() && !json) {
+      throw std::invalid_argument{"UnknownPortsOption"};
+    }
+
+    launch::Argv argv{memory};
+
+    argv.push(machine::gatewayProgram(memory));
+    argv.emplace(memory, "ports");
+    argv.emplace(memory, profile.destination());
+    const auto listed = launch::capture(memory, argv.view(), {}, list_timeout);
+
+    if (listed.status != 0) {
+      std::print(stderr, "{}", listed.err.view());
+      return 1;
+    }
+
+    // Each row is `THERE HERE CONNECTIONS asked|shared ORIGIN`, the origin running to its end.
+    TextFields rows{{.text = listed.out.view(), .delimiter = "\n"}};
+    ds::String<Memory> output{memory};
+    bool first = true;
+
+    output.append(json ? "[" : "");
+    while (const auto row = rows.next()) {
+      TextFields fields{{.text = *row, .delimiter = " "}};
+      const auto there = fields.next().valueOr(std::string_view{});
+      const auto here = fields.next().valueOr(std::string_view{});
+      const auto connections = fields.next().valueOr(std::string_view{});
+      const auto kind = fields.next().valueOr(std::string_view{});
+      const auto prefix = there.size() + here.size() + connections.size() + kind.size() + 4;
+      const auto origin = row->size() > prefix ? row->substr(prefix) : std::string_view{};
+
+      if (kind.empty()) {
+        continue;
+      }
+
+      if (json) {
+        ds::formatTo(output, R"({}{{"port":{},"local_port":{},"url":"http://localhost:{}","connections":{},"shared":{},"origin":)", first ? "" : ",", there, here, here, connections, kind == "shared");
+        appendJsonText(output, origin, JsonEscapes::control);
+        output.append("}");
+      } else {
+        ds::formatTo(output, "{}\tlocalhost:{}\t{}\t{}\t{}\n", there, here, connections, kind, origin);
+      }
+
+      first = false;
+    }
+
+    output.append(json ? "]\n" : "");
+    std::print(stdout, "{}", output.view());
+    return 0;
   }
 
 }

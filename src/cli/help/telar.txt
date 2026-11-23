@@ -66,7 +66,7 @@ Options before COMMAND:
   --theme NAME      UI theme: zenburn (default), shade, cybervenom, vesper,
                     catppuccin, tokyo-night, kanagawa, kanagawa-dragon,
                     pierre-dark, pierre-dark-soft, terminal
-  --remote DEST     Attach to the runtime on an SSH host (needs telar on the remote PATH)
+  --remote ADDRESS  Attach to the runtime behind a gateway this machine is paired with
   --machine LABEL   Show a saved machine first; the window still holds every enabled one
   --fresh           Start a runtime that sets the previous session aside instead of
                     restoring it; refused while a runtime is already running

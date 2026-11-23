@@ -31,12 +31,12 @@ namespace {
     std::span<const Byte> input{prefix};
     const auto length = u32::decode(input);
     if (length > max_payload_size) {
-      throw std::length_error{"SSH fixture input frame exceeds capacity"};
+      throw std::length_error{"Gateway fixture input frame exceeds capacity"};
     }
 
     std::vector<Byte> payload(length);
     if (!readExact(payload)) {
-      throw std::runtime_error{"Truncated SSH fixture input"};
+      throw std::runtime_error{"Truncated gateway fixture input"};
     }
 
     return payload;
@@ -48,7 +48,7 @@ namespace {
 
     u32::encode(static_cast<std::uint32_t>(payload.size()), output);
     if (std::fwrite(prefix.data(), 1, prefix.size(), stdout) != prefix.size() || std::fwrite(payload.data(), 1, payload.size(), stdout) != payload.size() || std::fflush(stdout) != 0) {
-      throw std::runtime_error{"Write SSH fixture frame"};
+      throw std::runtime_error{"Write gateway fixture frame"};
     }
   }
 
@@ -101,25 +101,41 @@ namespace {
     }
   }
 
-  int sshFixture(std::span<char*> arguments) {
-    const std::string_view destination{arguments[arguments.size() - 2]};
-    if (destination == "missing") {
+  // What `telar-gateway enroll ADDRESS --name NAME` prints: the address to save, which is the
+  // one it paired with less its code.
+  int enrollFixture(std::string_view address) {
+    const auto code = address.rfind('.');
+    if (!address.starts_with("telar://") || code == std::string_view::npos || address.contains("refused")) {
+      static_cast<void>(std::fputs("telar gateway: the pairing code was refused", stderr));
+      return 1;
+    }
+
+    const auto saved = address.substr(0, code);
+
+    static_cast<void>(std::fwrite(saved.data(), 1, saved.size(), stdout));
+    static_cast<void>(std::fputc('\n', stdout));
+    return 0;
+  }
+
+  // `telar-gateway run DESTINATION COMMAND` answers the discovery, and `telar-gateway attach
+  // DESTINATION` carries a runtime's bytes.
+  int gatewayFixture(std::string_view verb, std::string_view destination) {
+    if (destination.contains("missing")) {
       constexpr int command_missing = 127;
 
       return command_missing;
     }
 
-    if (destination == "denied") {
-      static_cast<void>(std::fputs("Permission denied (publickey).", stderr));
-      constexpr int ssh_failed = 255;
+    if (destination.contains("denied")) {
+      static_cast<void>(std::fputs("telar gateway: this machine is not paired with that gateway; pair it again with `telar machine add`", stderr));
+      constexpr int unreachable = 255;
 
-      return ssh_failed;
+      return unreachable;
     }
 
     constexpr SchemaId legacy_schema{'8', '7', '6', 'b', '4', '8', '0', 'd'};
-    const auto& selected_schema = destination == "legacy" ? legacy_schema : handshake::schema_id;
-    const std::string_view command{arguments.back()};
-    if (!command.starts_with("exec ")) {
+    const auto& selected_schema = destination.contains("legacy") ? legacy_schema : handshake::schema_id;
+    if (verb == "run") {
       const auto schema = textView(std::span{selected_schema});
 
       static_cast<void>(std::fputs("/home/remote\n/bin/sh\n/run/remote/runtime.sock\n", stdout));
@@ -131,7 +147,7 @@ namespace {
 
     const auto hello = readFrame();
     if (HandshakeCodec::decode<ClientHello>(hello).schema != selected_schema) {
-      throw std::runtime_error{"SSH client requested the wrong discovered schema"};
+      throw std::runtime_error{"The client requested the wrong discovered schema"};
     }
 
     writeFrame(HandshakeCodec::encode(ServerAccept{selected_schema}));
@@ -141,8 +157,8 @@ namespace {
         return 0;
       }
 
-      if (destination.starts_with("window")) {
-        windowMessage(payload, destination == "window-command@fixture");
+      if (destination.contains("window")) {
+        windowMessage(payload, destination.contains("window-command"));
       } else {
         writeFrame(payload);
       }
@@ -152,14 +168,21 @@ namespace {
 }
 
 int main(int argc, char** argv) {
-  constexpr int first_option = 1;
-  if (argc > first_option && std::string_view{argv[first_option]} == "-T") {
-    try {
-      return sshFixture(std::span{argv, static_cast<std::size_t>(argc)});
-    } catch (const std::exception&) {
-      return 1;
-    }
+  const std::span arguments{argv, static_cast<std::size_t>(argc)};
+  constexpr std::size_t named_destination = 3;
+  if (arguments.size() < named_destination) {
+    return 1;
   }
 
-  return 1;
+  const std::string_view verb{arguments[1]};
+
+  try {
+    if (verb == "enroll") {
+      return enrollFixture(arguments[2]);
+    }
+
+    return verb == "run" || verb == "attach" ? gatewayFixture(verb, arguments[2]) : 1;
+  } catch (const std::exception&) {
+    return 1;
+  }
 }

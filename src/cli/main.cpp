@@ -120,8 +120,7 @@ namespace telar::runtime::cli {
         return runProxyTrust(shared, ProxyTrustOptions::parse(options), process_environment);
       }
       case Family::server:
-        runServer(memory, words);
-        return 0;
+        return runServerCommand(memory, words);
       case Family::workspace: {
         const auto parsed = sessions::WorkspaceOptions::parse(options);
         if (parsed.worktree) {
@@ -219,6 +218,10 @@ namespace telar::runtime::cli {
       // The GUI runs plugin actions through `telar plugin-worker`; the worker lives in the runtime.
       if (first == "plugin-worker") {
         execRuntime(memory, words);
+      }
+
+      if (first == "share-ports") {
+        return runSharePorts(memory, words.subspan(1));
       }
 
       const auto family = parseFamily(first);

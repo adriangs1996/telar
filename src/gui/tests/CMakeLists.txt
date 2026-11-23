@@ -112,17 +112,17 @@ if(TELAR_GUI_NATIVE)
   include("${TELAR_ROOT}/cmake/openssl.cmake")
   telar_add_test(gui-plugin-packages-test SOURCES plugin_packages_test.cpp LIBRARIES gui-posix Qt6::Core OpenSSL::Crypto gui-test-fixtures
     TEST gui-plugin-packages LABELS gui.ui TIMEOUT 30)
-  telar_add_test(gui-ssh-runtime-fixture NO_TEST SOURCES ssh_runtime_fixture.cpp LIBRARIES gui-foundation-core)
+  telar_add_test(gui-gateway-runtime-fixture NO_TEST SOURCES gateway_runtime_fixture.cpp LIBRARIES gui-foundation-core)
   telar_add_test(gui-remote-connection-test QT SOURCES remote_connection_test.cpp ${TELAR_PROCESS_SOURCE_DIR}/ui/kit/machines/runtime_connection.cpp ${TELAR_PROCESS_SOURCE_DIR}/ui/kit/machines/runtime_connection.hpp LIBRARIES gui-foundation-system gui-posix Qt6::Concurrent Qt6::Network Qt6::Test gui-platform gui-features-machines gui-application gui-application
     TEST gui-remote-connection LABELS gui.ui TIMEOUT 30)
   target_include_directories(gui-remote-connection-test PRIVATE "${TELAR_PROCESS_SOURCE_DIR}")
-  add_dependencies(gui-remote-connection-test gui-ssh-runtime-fixture)
+  add_dependencies(gui-remote-connection-test gui-gateway-runtime-fixture)
   telar_add_test(gui-remote-bridge-test QT SOURCES remote_bridge_test.cpp LIBRARIES gui-foundation-system gui-posix Qt6::Concurrent Qt6::Network Qt6::Test gui-platform gui-features-machines gui-application
     TEST gui-remote-bridge LABELS gui.ui TIMEOUT 30)
   target_include_directories(gui-remote-bridge-test PRIVATE "${TELAR_PROCESS_SOURCE_DIR}")
   telar_add_test(gui-machine-profile-window-test QT SOURCES machine_profile_window_test.cpp LIBRARIES gui-quick gui-quickplugin Qt6::Test
     TEST gui-machine-profile-window LABELS gui.ui ENVIRONMENT QT_QUICK_BACKEND=software QT_QPA_PLATFORM=offscreen TIMEOUT 30)
-  add_dependencies(gui-machine-profile-window-test gui-ssh-runtime-fixture)
+  add_dependencies(gui-machine-profile-window-test gui-gateway-runtime-fixture)
   telar_add_test(gui-machine-window-test QT SOURCES machine_window_test.cpp LIBRARIES gui-quick gui-quickplugin Qt6::Test gui-test-fixtures
     TEST gui-machine-window LABELS gui.ui ENVIRONMENT QT_QUICK_BACKEND=software QT_QPA_PLATFORM=offscreen TIMEOUT 30)
   if(APPLE)
@@ -142,6 +142,7 @@ if(TELAR_GUI_NATIVE)
   target_include_directories(gui-prompt-window-test PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}")
   telar_add_test(gui-machine-profiles-source-test QT SOURCES machine_profiles_source_test.cpp LIBRARIES gui-foundation-system gui-machine-profiles Qt6::Test gui-platform gui-features-machines
     TEST gui-machine-profiles-source LABELS gui.ui TIMEOUT 30)
+  add_dependencies(gui-machine-profiles-source-test gui-gateway-runtime-fixture)
   telar_add_test(gui-window-frame-pacer-test QT SOURCES window_frame_pacer_test.cpp LIBRARIES gui-foundation-core gui-foundation-system gui-platform gui-application Qt6::Quick Qt6::Test
     TEST gui-window-frame-pacer LABELS gui.ui ENVIRONMENT QT_QUICK_BACKEND=software QT_QPA_PLATFORM=offscreen TIMEOUT 30)
   if(APPLE)

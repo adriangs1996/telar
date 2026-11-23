@@ -7,7 +7,7 @@ import telar.cli.commands.worktree_git;
 
 import telar.cli.console.command_limit;
 
-import telar.cli.commands.machine_ssh;
+import telar.cli.commands.machine_gateway;
 import telar.cli.commands.project_setup;
 import telar.cli.commands.history;
 import telar.platform.paths;

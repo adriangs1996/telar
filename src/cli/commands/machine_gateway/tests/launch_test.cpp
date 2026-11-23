@@ -12,8 +12,7 @@ import std;
 import telar.base.memory.allocators;
 import telar.testing;
 import telar.testing.test_memory;
-import telar.cli.commands.machine_ssh;
-import telar.cli.console.command_limit;
+import telar.cli.commands.machine_gateway;
 import telar.machines;
 import telar.base.ds;
 
@@ -93,51 +92,37 @@ namespace {
   }
 
   // A program killed by a signal is a failure: `telar --machine X cmd` does not exit 0 when
-  // ssh was killed.
+  // the gateway program was killed.
   void inheritSignalIsFailure() {
     telar::testing::TestMemory adapter;
     Memory& memory = adapter;
 
-    check(launch::inherit(launch::words(memory, {"/bin/sh", "-c", "kill -9 $$"}).view()) == launch::ssh_failure);
+    check(launch::inherit(launch::words(memory, {"/bin/sh", "-c", "kill -9 $$"}).view()) == launch::unreachable_status);
     check(launch::inherit(launch::words(memory, {"/bin/sh", "-c", "exit 3"}).view()) == 3);
   }
 
-  // Git reaches a machine over the same SSH options as the dispatch, each one a single word
-  // to the shell Git runs it with; an option the quoting cannot hold is refused.
-  void gitSshCommandQuotesOptions() {
-    ds::Array<char, 64> directory{};
-
-    std::strcpy(directory.dataMut(), "/tmp/telar-git-ssh-XXXXXX");
-    check(::mkdtemp(directory.dataMut()) != nullptr);
-    const std::string socket = std::string{directory.data()} + "/runtime.sock";
-
-    check(::setenv("TELAR_SOCKET", socket.c_str(), 1) == 0);
+  // Git reaches a machine through the gateway program the dispatch uses, with the machine's
+  // address as one word to the shell Git runs it with; a program the quoting cannot hold is
+  // refused.
+  void gitGatewayCommandNamesTheMachine() {
+    check(::setenv("TELAR_GATEWAY_PROGRAM", "/opt/telar bin/telar-gateway", 1) == 0);
     telar::testing::TestMemory adapter;
     Memory& memory = adapter;
-    const auto words = shellWords(std::string{machine::gitSshCommand(memory, "dev@host").view()});
-    auto dispatch = machine::ssh(memory, "dev@host", "x");
+    const std::string_view address = "telar://box.example:8352#00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff";
+    const auto words = shellWords(std::string{machine::gitGatewayCommand(memory, address).view()});
+    const auto dispatch = machine::gateway(memory, address, "x");
 
-    dispatch.retain([](const auto& word) {
-      return word != "-T";
-    });
+    expect(words == std::vector<std::string>{"/opt/telar bin/telar-gateway", "run", "--to", std::string{address}});
+    expect(dispatch.size() == 4 && dispatch.view()[0] == "/opt/telar bin/telar-gateway" && dispatch.view()[1] == "run" && dispatch.view()[2] == address && dispatch.view()[3] == "x");
+    expect(machine::gateway(memory, address, "x", {.terminal = true, .share = true}).view()[2] == "-t");
+    expect(machine::gateway(memory, address, "x", {.terminal = true, .share = true}).view()[3] == "--share");
 
-    dispatch.truncate(dispatch.size() - 3);
-    check(dispatch.back() != "--");
-    expect(std::ranges::equal(words, dispatch, [](const std::string& word, const Text& argument) {
-      return argument == std::string_view{word};
-    }));
-
-    expect(std::ranges::find(words, "ForwardAgent=no") != words.end());
-    expect(std::ranges::find(words, "BatchMode=yes") != words.end());
-
-    const std::string quoted = std::string{directory.data()} + "/it's/runtime.sock";
-
-    check(::setenv("TELAR_SOCKET", quoted.c_str(), 1) == 0);
+    check(::setenv("TELAR_GATEWAY_PROGRAM", "/opt/it's/telar-gateway", 1) == 0);
     expect(failure([&] {
-      machine::gitSshCommand(memory, "dev@host");
-    }) == "UnquotableSshOption");
+      machine::gitGatewayCommand(memory, address);
+    }) == "UnquotableGatewayCommand");
 
-    std::filesystem::remove_all(directory.data());
+    check(::unsetenv("TELAR_GATEWAY_PROGRAM") == 0);
   }
 
   // A remote command that fails, or whose output overflows what is kept, is the caller's
@@ -148,23 +133,23 @@ namespace {
     std::strcpy(directory.dataMut(), "/tmp/telar-remote-capture-XXXXXX");
     check(::mkdtemp(directory.dataMut()) != nullptr);
     const std::string root = directory.data();
-    const auto path = root + ":/usr/bin:/bin";
+    const auto program = root + "/gateway";
 
-    check(::setenv("PATH", path.c_str(), 1) == 0 && ::setenv("TELAR_SOCKET", (root + "/runtime.sock").c_str(), 1) == 0);
+    // A stand-in plays the gateway program: whatever it prints is what the machine answered.
+    check(::setenv("TELAR_GATEWAY_PROGRAM", program.c_str(), 1) == 0);
     telar::testing::TestMemory adapter;
     Memory& memory = adapter;
-    const auto profiles = machines::MachineProfileCodec::parse(memory, R"({"version":2,"local_label":"local","machines":[{"id":"m-0123456789ab","label":"box","destination":"dev@host","enabled":true}]})");
+    const auto profiles = machines::MachineProfileCodec::parse(memory, R"({"version":2,"local_label":"local","machines":[{"id":"m-0123456789ab","label":"box","destination":"telar://host:8352#00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff","enabled":true}]})");
     const auto& profile = profiles.rows().front();
     const ds::Array<std::string_view, 2> words{"worktree", "list"};
 
     const auto capture = [&](std::string_view body) {
-      const auto ssh = root + "/ssh";
-      FILE* script = std::fopen(ssh.c_str(), "w");
+      FILE* script = std::fopen(program.c_str(), "w");
 
       check(script != nullptr);
       std::fprintf(script, "#!/bin/sh\n%.*s\n", static_cast<int>(body.size()), body.data());
       std::fclose(script);
-      check(::chmod(ssh.c_str(), 0700) == 0);
+      check(::chmod(program.c_str(), 0700) == 0);
       return failure([&] {
         check(machine::capture(memory, profile, std::span<const std::string_view>{words.view()}, "RemoteFailed") == "listed\n");
       });
@@ -173,6 +158,7 @@ namespace {
     check(capture("echo listed") == "");
     check(capture("echo listed; exit 1") == "RemoteFailed");
     check(capture("head -c 300000 /dev/zero") == "RemoteFailed");
+    check(::unsetenv("TELAR_GATEWAY_PROGRAM") == 0);
     std::filesystem::remove_all(root);
   }
 
@@ -217,7 +203,7 @@ namespace {
   const telar::testing::Case case_capture_timeout{"launch.capture_timeout_throws", captureTimeoutThrows};
   const telar::testing::Case case_capture_tail{"launch.capture_keeps_tail_and_counts_dropped", captureKeepsTailAndCountsDropped};
   const telar::testing::Case case_inherit_signal{"launch.inherit_signal_is_failure", inheritSignalIsFailure};
-  const telar::testing::Case case_git_ssh{"launch.git_ssh_command_quotes_options", gitSshCommandQuotesOptions};
+  const telar::testing::Case case_git_gateway{"launch.git_gateway_command_names_the_machine", gitGatewayCommandNamesTheMachine};
   const telar::testing::Case case_remote_capture{"launch.remote_capture_fails_on_status_or_overflow", remoteCaptureFailsOnStatusOrOverflow};
   const telar::testing::Case case_window_options{"launch.window_options_command_after_separator", windowOptionsCommandAfterSeparator};
 

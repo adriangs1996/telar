@@ -10,7 +10,7 @@ agent, a plugin or a proxy to use Telar as a terminal.
 | Find an action or navigate from the command palette | [Command palette](usage.md#find-an-action) |
 | Change fonts, colors, shortcuts or profiles | [Configuration](configuration.md) |
 | Connect an agent and give a task its own worktree | [Working with agents](agents.md) |
-| Keep work on an SSH host | [Remote machines](remote.md) |
+| Keep work on another machine | [Remote machines](remote.md) |
 | Search and reuse a command | [Command history](usage.md#find-previous-commands) |
 | Install a plugin | [Plugins](plugins.md#try-the-example-plugin) |
 | Draw part of the window with Lua | [Mods](mods.md) |

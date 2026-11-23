@@ -1,0 +1,15 @@
+telar server access: List the machines this gateway admits, or stop admitting one
+
+Usage: telar server access [list]
+       telar server access revoke KEY|NAME
+
+Arguments:
+  KEY|NAME         A machine as `list` prints it: its key, or the name it gave when
+                   it paired.
+
+Effects: `list` reads, and `revoke` rewrites, the gateway's list of admitted
+machines. A revoked machine is refused from its next connection on; what it has
+open stays open until it closes. Nothing is contacted.
+
+Results: `list` prints `KEY\tNAME` per machine. `revoke` prints how many it removed;
+exit 0, 1 when none matched.

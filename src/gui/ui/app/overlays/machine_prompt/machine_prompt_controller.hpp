@@ -20,7 +20,7 @@ import telar.base.ds;
 
 namespace telar::gui::qt {
 
-  // The prompt that adds a machine, its label and then its SSH destination, or renames one.
+  // The prompt that adds a machine, its label and then its gateway's pairing address, or renames one.
   //
   // It reads the store and the display the window pushes, and writes the machine profiles. The
   // window opens the prompt; submitting its last step asks it to close.

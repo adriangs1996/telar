@@ -12,7 +12,7 @@ import subprocess
 
 ROOT = Path(__file__).resolve().parents[1]
 SCOPES = ('lib/', 'src/runtime/', 'src/cli/',
-          'src/gui/', 'src/auth-daemon/')
+          'src/gui/', 'src/gateway/')
 # The first segment after `telar.` that names a process tree in src/; any other module is a library.
 PROCESSES = {'runtime': 'src/runtime', 'gui': 'src/gui', 'cli': 'src/cli'}
 PLATFORMS = ('linux', 'macos')

@@ -13,7 +13,7 @@ endif()
 option(TELAR_BUILD_RUNTIME "Build the runtime and the CLI it ships with" ON)
 option(TELAR_BUILD_CLI "Build the CLI" ON)
 option(TELAR_BUILD_GUI "Build the GUI" ON)
-option(TELAR_BUILD_AUTH "Build the auth daemon" ON)
+option(TELAR_BUILD_GATEWAY "Build the gateway that connects telar on two machines" ON)
 if(TELAR_BUILD_RUNTIME AND NOT TELAR_BUILD_CLI)
   message(
     FATAL_ERROR
@@ -58,10 +58,10 @@ int main() {}"
         "The Linux distributable build links statically against musl; build it on Alpine"
     )
   endif()
-  if(TELAR_BUILD_GUI OR TELAR_BUILD_AUTH)
+  if(TELAR_BUILD_GUI)
     message(
       FATAL_ERROR
-        "The Linux distributable build is the runtime and the CLI only; configure it with the dist preset"
+        "The Linux distributable build is the runtime, the CLI and the gateway only; configure it with the dist preset"
     )
   endif()
 endif()

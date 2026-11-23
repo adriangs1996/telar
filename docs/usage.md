@@ -101,7 +101,7 @@ last row asks for a command suggestion for what you typed.
 To search one kind only, start the query with a prefix: `@` for workspaces,
 tabs and agents, `>` for actions and `:` for machines. For example, `>split`
 searches actions only.
-See [remote machines](remote.md) to configure an SSH destination.
+See [remote machines](remote.md) to pair another machine.
 
 ## Watch the machine
 

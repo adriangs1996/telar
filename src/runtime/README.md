@@ -277,7 +277,7 @@ configuration and compilation errors fail the command. No fixes are applied.
 
 | Component | Responsibility |
 | --- | --- |
-| `server/` | Endpoint resolution, startup, stop and the SSH bridge; `server/config/` loads the runtime configuration in a bounded Lua VM. |
+| `server/` | Endpoint resolution, startup and stop; `server/config/` loads the runtime configuration in a bounded Lua VM. |
 | `core/` | Service composition, request dispatch, event handling and bounded runtime telemetry. |
 | `core/delivery/` | Current-state selection, service projections, attachment rotation and write completion. |
 | `core/model/` | Generational stores, panes, workspaces, attachments and retained client layouts. |
@@ -480,7 +480,7 @@ Plugin completeness has low priority. Packaging, hosted CI and release work
 are deferred at the user's request.
 
 
-The runtime also accepts `server endpoint`, `server stop`, `server bridge`,
+The runtime also accepts `server endpoint`, `server stop`,
 `--background` and `--fresh`. Endpoint discovery starts the same C++ executable
 when needed. `--fresh` preserves the checkpoint as `.previous` after acquiring
 the listener. Configuration uses the vendored Lua 5.5.1 sources compiled directly

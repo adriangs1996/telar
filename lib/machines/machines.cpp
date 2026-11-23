@@ -110,8 +110,8 @@ namespace telar::runtime::machines {
         "DuplicateMachineDestination",
         "UnknownMachine",
         "RemoteDiscoveryUnreadable",
-        "SshHostKeyRejected",
-        "SshAuthenticationFailed",
+        "GatewayKeyRejected",
+        "GatewayPairingRefused",
         "RemoteTelarMissing",
         "RemoteTelarIncompatible",
         "RemoteRuntimeIncompatible",
@@ -144,7 +144,7 @@ namespace telar::runtime::machines {
     case MachineError::duplicate_label:
       return "that label is already taken, by a saved machine or by this machine";
     case MachineError::duplicate_destination:
-      return "two saved machines cannot share one SSH destination";
+      return "two saved machines cannot share one address";
     case MachineError::too_many:
       return "machines.json already holds the most machines it can";
     case MachineError::invalid_label:
@@ -152,7 +152,7 @@ namespace telar::runtime::machines {
     case MachineError::invalid_color:
       return "colors are #RRGGBB or a theme role such as red or accent";
     case MachineError::invalid_destination:
-      return "destinations are an ssh host alias or user@host, without spaces or a leading '-'";
+      return "a machine is named by the address `telar server pair` prints there, telar://HOST:PORT#KEY";
     case MachineError::invalid_program:
       return "telar paths are absolute and hold only letters, digits, '/', '.', '_', '+' or '-'";
     case MachineError::invalid_profiles:
@@ -332,6 +332,43 @@ namespace telar::runtime::machines {
 
   bool MachineFieldRules::alphanumeric(char byte) noexcept {
     return decimal(byte) || (byte >= 'a' && byte <= 'z') || (byte >= 'A' && byte <= 'Z');
+  }
+
+  bool MachineAddress::hexadecimal(std::string_view digits, std::size_t count) noexcept {
+    return digits.size() == count && std::ranges::all_of(digits, [](char byte) {
+      return (byte >= '0' && byte <= '9') || (byte >= 'a' && byte <= 'f') || (byte >= 'A' && byte <= 'F');
+    });
+  }
+
+  bool MachineAddress::valid(std::string_view text) noexcept {
+    if (!text.starts_with(scheme)) {
+      return false;
+    }
+
+    text.remove_prefix(scheme.size());
+    const auto fragment = text.find('#');
+    if (fragment == std::string_view::npos || fragment == 0) {
+      return false;
+    }
+
+    // The host is a name or an address, an IPv6 one in brackets, and may be followed by a port.
+    const auto authority = textPrefix(text, fragment);
+    const bool addressed = std::ranges::all_of(authority, [](char byte) {
+      return (byte >= 'a' && byte <= 'z') || (byte >= 'A' && byte <= 'Z') || (byte >= '0' && byte <= '9') || byte == '.' || byte == '-' || byte == '_' || byte == ':' || byte == '[' || byte == ']';
+    });
+
+    const auto keys = textAfter(text, fragment + 1);
+    const auto separator = keys.find('.');
+
+    return addressed && authority.front() != ':' && hexadecimal(textPrefix(keys, separator), key_digits) && (separator == std::string_view::npos || hexadecimal(textAfter(keys, separator + 1), code_digits));
+  }
+
+  bool MachineAddress::pairing(std::string_view text) noexcept {
+    return valid(text) && textAfter(text, text.find('#')).contains('.');
+  }
+
+  std::string_view MachineAddress::saved(std::string_view text) noexcept {
+    return pairing(text) ? textPrefix(text, text.rfind('.')) : text;
   }
 
   MachineId MachineId::fromRaw(std::uint64_t value) {
@@ -1126,12 +1163,8 @@ namespace telar::runtime::machines {
     return format(discovery_prefix, program, discovery_suffix);
   }
 
-  MachineRemoteCommand::Text MachineRemoteCommand::bridge(ds::Option<std::string_view> program) {
-    return format(bridge_prefix, program, bridge_suffix);
-  }
-
   MachineRemoteCommand::Text MachineRemoteCommand::editor(ds::Option<std::string_view> program) {
-    return format(bridge_prefix, program, editor_suffix);
+    return format(editor_prefix, program, editor_suffix);
   }
 
   MachineRemoteCommand::Text MachineRemoteCommand::format(std::string_view prefix, ds::Option<std::string_view> program, std::string_view suffix) {

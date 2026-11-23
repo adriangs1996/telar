@@ -110,7 +110,8 @@ def main():
     runtime = prefix / 'bin' / 'telar-runtime'
     helper = prefix / 'bin' / 'telar-diagram-renderer'
     config_check = prefix / 'bin' / 'telar-config-check'
-    for required in (binary, command_helper, launcher_binary, cli, runtime, helper, config_check):
+    gateway = prefix / 'bin' / 'telar-gateway'
+    for required in (binary, command_helper, launcher_binary, cli, runtime, helper, config_check, gateway):
         if not required.is_file():
             parser.error(f'missing executable: {required}')
     version = (root / 'VERSION').read_text().strip()
@@ -121,7 +122,7 @@ def main():
     (resources / 'bin').mkdir(parents=True)
     shutil.copy2(binary, macos / 'telar-gui')
     shutil.copy2(command_helper, macos / 'telar-gui-command')
-    for executable in (cli, runtime, helper, config_check):
+    for executable in (cli, runtime, helper, config_check, gateway):
         shutil.copy2(executable, resources / 'bin' / executable.name)
     shutil.copy2(root / 'packaging/macos/telar.icns', resources / 'telar.icns')
     for source, name in ((prefix / 'share/telar/licenses', 'runtime'),

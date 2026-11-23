@@ -258,7 +258,7 @@ namespace telar::runtime::cli::machine {
     };
 
     tbc::val_a<launch::Output> runScript(tbc::mut_a<Memory> memory, std::string_view destination, std::string_view script, std::chrono::seconds timeout = probe_timeout) {
-      return launch::capture(memory, ssh(memory, destination, "exec /bin/sh -s").view(), script, timeout);
+      return launch::capture(memory, gateway(memory, destination, "exec /bin/sh -s").view(), script, timeout);
     }
 
     // A shell variable and the value a script assigns it.
@@ -644,7 +644,7 @@ fetch() {
           version.view()
       );
 
-      const auto sent = launch::captureFile(memory, ssh(memory, destination, command).view(), archive.get(), install_timeout);
+      const auto sent = launch::captureFile(memory, gateway(memory, destination, command).view(), archive.get(), install_timeout);
 
       return sent.status == 0 && whole(sent).contains("sent");
     }
@@ -1618,7 +1618,7 @@ fetch() {
         pruneCommands(queryPaths(destination));
         const auto sent = streamText();
         constexpr auto send_timeout = std::chrono::seconds{600};
-        const auto output = launch::capture(memory_, ssh(memory_, destination, ds::format(memory_, "{} machine receive-config", platform.target)).view(), sent, send_timeout);
+        const auto output = launch::capture(memory_, gateway(memory_, destination, ds::format(memory_, "{} machine receive-config", platform.target)).view(), sent, send_timeout);
         if (output.status != 0) {
           report.end(Step::configuration, Status::failed, "the machine refused the sync: {}", output.errorLine());
           return;
@@ -1851,7 +1851,7 @@ fetch() {
       Text capture(std::span<const std::string_view> words, ds::Option<std::string_view> input = ds::none) {
         // The same encoded command, length limit included, as every dispatch.
         const auto command = remoteCommand(memory_, profile_, words);
-        auto output = launch::capture(memory_, ssh(memory_, profile_.destination(), command).view(), input.valueOr(std::string_view{}), status_timeout);
+        auto output = launch::capture(memory_, gateway(memory_, profile_.destination(), command).view(), input.valueOr(std::string_view{}), status_timeout);
 
         std::print(stderr, "{}", output.err.view());
         if (output.status != 0) {
@@ -1900,8 +1900,8 @@ fetch() {
         }
 
         std::print(stderr, "{}", output.err.view());
-        if (output.status == launch::ssh_failure) {
-          throw CommandError{"SshFailed"};
+        if (output.status == launch::unreachable_status) {
+          throw CommandError{"MachineUnreachable"};
         }
 
         if (output.status != 0) {
@@ -2138,8 +2138,8 @@ fetch() {
         bytes.append(check);
         bytes.push('\n');
         const auto output = script(bytes);
-        if (output.status == launch::ssh_failure) {
-          throw CommandError{"SshFailed"};
+        if (output.status == launch::unreachable_status) {
+          throw CommandError{"MachineUnreachable"};
         }
 
         return output.status == 0;
@@ -2523,27 +2523,33 @@ fetch() {
   }
 
   tbc::val_a<Target> resolve(tbc::mut_a<Memory> memory, const MachineProfiles& profiles, const MachineOptions& options) {
+    const auto address = MachineAddress::saved(options.label);
+
     for (const auto& profile : profiles.rows()) {
-      if (profile.label() == options.label || profile.destination() == options.label) {
+      if (profile.label() == options.label || profile.destination() == address) {
+        // A saved machine named by a new pairing address is paired again: its gateway stopped
+        // admitting this machine, and the code admits it once more.
+        if (MachineAddress::pairing(options.label)) {
+          static_cast<void>(pair(memory, options.label, localLabel(profiles).view()));
+        }
+
         return {.label = Text{memory, profile.label()}, .destination = Text{memory, profile.destination()}, .saved = profile};
       }
     }
 
     MachineFieldRules::profileDestination(options.label);
+    if (!MachineAddress::valid(options.label)) {
+      throw MachineFailure{MachineError::invalid_destination};
+    }
+
     auto host = options.label;
-    if (host.starts_with("ssh://")) {
-      host.remove_prefix(std::string_view{"ssh://"}.size());
-    }
 
-    if (const auto sign = host.rfind('@'); sign != std::string_view::npos) {
-      host.remove_prefix(sign + 1);
-    }
-
+    host.remove_prefix(std::string_view{"telar://"}.size());
     while (host.starts_with('[')) {
       host.remove_prefix(1);
     }
 
-    host = host.substr(0, host.find_first_of(":]/"));
+    host = host.substr(0, host.find_first_of(":]/#"));
     Text label{memory, host.substr(0, MachineLimits::label_bytes)};
 
     for (auto& byte : label.viewMut()) {
@@ -2566,11 +2572,15 @@ fetch() {
       throw;
     }
 
-    const MachineOptions trial{.action = MachineOptions::Action::add, .label = label, .value = options.label};
+    // The machine must be one this telar can save before a pairing code is spent on it. The code
+    // is then presented once, here, and the address it leaves is the one saved.
+    const MachineOptions trial{.action = MachineOptions::Action::add, .label = label, .value = address};
     auto copy = profiles;
 
     change(copy, trial);
-    return {.label = std::move(label), .destination = Text{memory, options.label}, .saved = ds::none};
+    Text destination = MachineAddress::pairing(options.label) ? pair(memory, options.label, localLabel(profiles).view()) : Text{memory, options.label};
+
+    return {.label = std::move(label), .destination = std::move(destination), .saved = ds::none};
   }
 
   namespace {
@@ -2626,52 +2636,35 @@ fetch() {
 
     tbc::val_a<ds::Option<Platform>> reach(tbc::mut_a<Memory> memory, SetupReport& report, const Target& target, std::string_view directory) {
       launch::Output probe{memory};
-      bool confirmed = false;
-      const auto run = [&] {
+
+      try {
         Text script{memory};
 
         appendAssign(script, {.name = "dir", .value = directory});
         script.append(assets::probe);
-        return runScript(memory, target.destination, script);
-      };
-
-      try {
-        probe = run();
-        const auto failure = sshFailure(probe);
-        if (probe.status != 0 && !report.json && (::isatty(STDIN_FILENO) != 0) && (failure == MachineError::host_key_rejected || failure == MachineError::authentication_failed)) {
-          std::println(stdout, "Batch-mode SSH to {} was refused. Connecting once with your terminal: OpenSSH asks, you answer; telar accepts nothing for you.", target.destination.data());
-          static_cast<void>(std::fflush(stdout));
-          confirmed = launch::inherit(launch::words(memory, {"ssh", "-o", "ControlPath=none", "-o", "ForwardAgent=no", "--", target.destination, "true"}).view()) == 0;
-          if (confirmed) {
-            probe = run();
-          }
-        }
+        probe = runScript(memory, target.destination, script);
       } catch (const std::exception& error) {
-        report.end(Step::ssh, Status::failed, "ssh did not run to the end: {}", error.what());
+        report.end(Step::gateway, Status::failed, "the gateway program did not run to the end: {}", error.what());
         return ds::none;
       }
 
       if (probe.status != 0) {
-        const auto failure = sshFailure(probe);
-        if (probe.status != launch::ssh_failure && failure != MachineError::remote_runtime_incompatible) {
-          report.end(Step::ssh, Status::ok, "batch-mode SSH to {} works", target.destination);
+        const auto failure = reachFailure(probe);
+        if (probe.status != launch::unreachable_status && failure != MachineError::remote_runtime_incompatible) {
+          report.end(Step::gateway, Status::ok, "the gateway of {} admits this machine", target.label);
           report.end(Step::platform, Status::failed, "the probe failed there: {}", probe.errorLine());
         } else if (failure == MachineError::authentication_failed) {
-          if (confirmed) {
-            report.end(Step::ssh, Status::failed, "{} accepts your login only interactively; windows need a key. Run `ssh-copy-id {}`, then setup again", target.destination, target.destination);
-          } else {
-            report.end(Step::ssh, Status::failed, "{} refused the login in batch mode; add a key with `ssh-copy-id {}` or run setup from a terminal", target.destination, target.destination);
-          }
+          report.end(Step::gateway, Status::failed, "the gateway of {} does not admit this machine; run `telar server pair` there and `telar machine setup` here with the address it prints", target.label);
         } else if (failure == MachineError::host_key_rejected) {
-          report.end(Step::ssh, Status::failed, "the host key of {} is not confirmed: {}", target.destination, probe.errorLine());
+          report.end(Step::gateway, Status::failed, "the gateway of {} holds another key than the saved address pins: {}", target.label, probe.errorLine());
         } else {
-          report.end(Step::ssh, Status::failed, "{}", probe.errorLine());
+          report.end(Step::gateway, Status::failed, "{}", probe.errorLine());
         }
 
         return ds::none;
       }
 
-      report.end(Step::ssh, confirmed ? Status::changed : Status::ok, "batch-mode SSH to {} works", target.destination);
+      report.end(Step::gateway, Status::ok, "the gateway of {} admits this machine", target.label);
       try {
         auto platform = Platform::parse(memory, whole(probe));
 
@@ -2764,7 +2757,7 @@ fetch() {
 
       bool changed = false;
 
-      for (const std::string_view tool : {"telar-runtime", "telar-config-check"}) {
+      for (const std::string_view tool : {"telar-runtime", "telar-config-check", "telar-gateway"}) {
         const auto sibling = ds::format(memory, "{}/{}", parentOf(*build.binary), tool);
         if (::access(sibling.data(), R_OK) != 0) {
           continue;
@@ -2787,8 +2780,8 @@ fetch() {
             continue;
           }
 
-          if (inspect.status == launch::ssh_failure) {
-            throw CommandError{"SshFailed"};
+          if (inspect.status == launch::unreachable_status) {
+            throw CommandError{"MachineUnreachable"};
           }
 
           FileDescriptor runtime{::open(sibling.data(), combineFlags(O_RDONLY, O_CLOEXEC))}; // NOLINT(cppcoreguidelines-pro-type-vararg): open's C signature is variadic
@@ -2809,7 +2802,7 @@ cat > "$temporary" && [ "$(hash "$temporary")" = "$expected" ] && chmod 755 "$te
           Text command{memory, "exec /bin/sh -c "};
 
           launch::appendQuoted(command, script);
-          const auto uploaded = launch::captureFile(memory, ssh(memory, target.destination, command).view(), runtime.get(), install_timeout);
+          const auto uploaded = launch::captureFile(memory, gateway(memory, target.destination, command).view(), runtime.get(), install_timeout);
           if (uploaded.status != 0) {
             report.end(Step::telar, Status::failed, "the runtime upload failed: {}", uploaded.errorLine());
             return ds::none;
@@ -2838,7 +2831,7 @@ cat > "$temporary" && [ "$(hash "$temporary")" = "$expected" ] && chmod 755 "$te
       }
 
       try {
-        const auto uploaded = launch::captureFile(memory, ssh(memory, target.destination, upload_command).view(), binary.get(), install_timeout);
+        const auto uploaded = launch::captureFile(memory, gateway(memory, target.destination, upload_command).view(), binary.get(), install_timeout);
         if (uploaded.status != 0) {
           report.end(Step::telar, Status::failed, "the upload failed: {}", uploaded.errorLine());
           return false;
@@ -3051,7 +3044,7 @@ exit 1
 
       build.digest = fileDigest(binary.data());
       ds::formatTo(build.directory, "-{}", build.digest->view().substr(0, MachineId::hex_digits));
-      for (const std::string_view tool : {"telar-runtime", "telar-config-check"}) {
+      for (const std::string_view tool : {"telar-runtime", "telar-config-check", "telar-gateway"}) {
         const auto companion = ds::format(memory, "{}/{}", parentOf(binary_path), tool);
         if (::access(companion.data(), R_OK) != 0) {
           throw CommandError{"SetupBinaryCompanionsMissing"};
@@ -3336,6 +3329,38 @@ namespace telar::runtime::cli {
 
   }
 
+  namespace {
+
+    // Saves a machine named by its gateway's address. A pairing address is presented to the
+    // gateway first, so that what is saved is an address this machine is already admitted at.
+    int addMachine(Memory& memory, const Text& path, const machines::MachineProfiles& profiles, const MachineOptions& options) {
+      if (!machines::MachineAddress::valid(options.value)) {
+        throw machines::MachineFailure{machines::MachineError::invalid_destination};
+      }
+
+      // A label or an address that cannot be saved, or that is saved already, is refused before
+      // any code is spent.
+      auto paired = options;
+      auto trial = profiles;
+
+      paired.value = machines::MachineAddress::saved(options.value);
+      machine::change(trial, paired);
+      const Text destination = machines::MachineAddress::pairing(options.value) ? machine::pair(memory, options.value, machine::localLabel(profiles).view()) : Text{memory, options.value};
+
+      paired.value = destination;
+      if (const auto status = checkBeforeAdd(memory, profiles, paired)) {
+        return *status;
+      }
+
+      machine::update(memory, path, [&](machines::MachineProfiles& saved) {
+        machine::change(saved, paired);
+      });
+
+      return paired.setup ? machine::setup(memory, paired) : 0;
+    }
+
+  }
+
   int runMachine(Memory& memory, const MachineOptions& options) {
     if (options.action == MachineOptions::Action::receive_config) {
       return config_receive::run(memory);
@@ -3354,11 +3379,7 @@ namespace telar::runtime::cli {
       case MachineOptions::Action::check:
         return checkSaved(memory, profiles, options);
       case MachineOptions::Action::add:
-        if (const auto status = checkBeforeAdd(memory, profiles, options)) {
-          return *status;
-        }
-
-        break;
+        return addMachine(memory, path, profiles, options);
       case MachineOptions::Action::remove:
       case MachineOptions::Action::rename:
       case MachineOptions::Action::enable:
@@ -3370,10 +3391,6 @@ namespace telar::runtime::cli {
       machine::update(memory, path, [&](machines::MachineProfiles& saved) {
         machine::change(saved, options);
       });
-
-      if (options.action == MachineOptions::Action::add && options.setup) {
-        return machine::setup(memory, options);
-      }
 
       return 0;
     } catch (const std::exception& error) {

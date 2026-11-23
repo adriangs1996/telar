@@ -1,4 +1,4 @@
-telar machine check: Reach a machine's runtime over SSH and compare wire schemas
+telar machine check: Reach a machine's runtime through its gateway and compare wire schemas
 
 Usage: telar machine check LABEL [--json]
 
@@ -11,3 +11,5 @@ of what the machine says of the Neovim of its editor panes (`present at PATH` or
 `absent`, then a `needs ...` for git or a C compiler telar's own configuration lacks
 there), when its telar says it. Exit 0; 1 when
 unreachable or the schemas differ (run `machine setup` to install this build there).
+A gateway that no longer admits this machine needs a new pairing: `telar server
+pair` there, `telar machine setup ADDRESS --label LABEL` here.

@@ -3,7 +3,6 @@
 static_assert(true);
 #endif
 
-#include "ssh_options.hpp"
 #include "telar_base/memory/fixed_text.hpp"
 #include "telar_platform/file_descriptor.hpp"
 #include "telar_wire/codecs/telar_codec.hpp"
@@ -42,6 +41,7 @@ static_assert(true);
 
 import telar.gui.foundation.system;
 import telar.gui.application;
+import telar.platform.fs;
 import telar.base.ds;
 
 namespace telar::gui::qt {
@@ -55,16 +55,19 @@ namespace telar::gui::qt {
     bool prepare_directory = false;
   };
 
-  struct NativeSshHost {
+  // The program that reaches another machine: telar-gateway, with the words of one of its commands.
+  struct NativeGatewayHost {
     static constexpr auto discovery_timeout = std::chrono::seconds{30};
 
     static void start(QProcess& process, const QStringList& arguments) {
-      process.start(QStringLiteral("ssh"), arguments, QIODevice::ReadWrite);
+      const auto program = system::runtime_endpoint::gatewayProgram();
+
+      process.start(QString::fromUtf8(program.view().data(), static_cast<qsizetype>(program.view().size())), arguments, QIODevice::ReadWrite);
     }
   };
 
   template <typename Host>
-  concept SshHost = requires(QProcess& process, const QStringList& arguments) {
+  concept GatewayHost = requires(QProcess& process, const QStringList& arguments) {
     { Host::start(process, arguments) } -> std::same_as<void>;
   };
 
@@ -75,7 +78,7 @@ namespace telar::gui::qt {
     { observer.remoteFailed(error, detail) } -> std::same_as<void>;
   };
 
-  template <SshHost Host, typename Observer>
+  template <GatewayHost Host, typename Observer>
   class RemoteBridge final {
   public:
     static constexpr auto discovery_timeout = Host::discovery_timeout;
@@ -163,7 +166,6 @@ namespace telar::gui::qt {
       discovery_.reset();
       output_.clear();
       errors_.clear();
-      options_.clear();
       program_bytes_.clear();
       if (process_.state() != QProcess::NotRunning) {
         process_.kill();
@@ -181,7 +183,6 @@ namespace telar::gui::qt {
     };
 
     struct OptionsResult {
-      QStringList arguments;
       ds::Option<application::machines::MachineError> error = ds::none;
       std::uint64_t generation = 0;
     };
@@ -200,7 +201,7 @@ namespace telar::gui::qt {
       const auto generation = generation_;
 
       options_task_.setFuture(QtConcurrent::run([request, generation] -> OptionsResult {
-        OptionsResult result{.arguments = {}, .generation = generation};
+        OptionsResult result{.generation = generation};
 
         try {
           if (request.prepare_directory) {
@@ -210,7 +211,10 @@ namespace telar::gui::qt {
             system::prepareManagedDirectory(directory);
           }
 
-          result.arguments = SshOptions::prepare(request.local_endpoint, request.destination.toUtf8());
+          // The link's sockets live beside this endpoint, in a directory of the user alone.
+          const auto endpoint = request.local_endpoint.toUtf8();
+
+          static_cast<void>(runtime::openPrivateParent(view(endpoint)));
         } catch (const application::machines::MachineFailure& failure) {
           result.error = failure.code();
         } catch (...) {
@@ -239,7 +243,6 @@ namespace telar::gui::qt {
         return;
       }
 
-      options_ = result.arguments;
       phase_ = Phase::discovery;
       output_.clear();
       errors_.clear();
@@ -248,7 +251,9 @@ namespace telar::gui::qt {
       process_.setInputChannelMode(QProcess::ManagedInputChannel);
       process_.setStandardInputFile(QProcess::nullDevice());
       deadline_.start(discovery_timeout);
-      launch(application::machines::MachineRemoteCommand::discovery(program()).view());
+      const auto command = application::machines::MachineRemoteCommand::discovery(program());
+
+      launch({QStringLiteral("run"), target_.destination, QString::fromUtf8(command.view().data(), static_cast<qsizetype>(command.view().size()))});
     }
 
     [[nodiscard]] ds::Option<std::string_view> program() {
@@ -257,13 +262,7 @@ namespace telar::gui::qt {
       return program_bytes_.isEmpty() ? ds::none : ds::Option{view(program_bytes_)};
     }
 
-    void launch(std::string_view command) {
-      auto arguments = options_;
-
-      arguments.prepend(QStringLiteral("-T"));
-      arguments.append(QStringLiteral("--"));
-      arguments.append(target_.destination);
-      arguments.append(QString::fromUtf8(command.data(), static_cast<qsizetype>(command.size())));
+    void launch(const QStringList& arguments) {
       running_ = true;
       try {
         Host::start(process_, arguments);
@@ -363,11 +362,11 @@ namespace telar::gui::qt {
         process_.setChildProcessModifier([this, descriptor] {
           const auto error = system::bindStandardIo(descriptor);
           if (error != 0) {
-            process_.failChildProcessModifier("Bind SSH bridge standard input/output", error);
+            process_.failChildProcessModifier("Bind the gateway's standard input/output", error);
           }
         });
 
-        launch(application::machines::MachineRemoteCommand::bridge(program()).view());
+        launch({QStringLiteral("attach"), target_.destination});
       } catch (const std::exception&) {
         fail(application::machines::MachineError::endpoint_unavailable);
       }
@@ -395,7 +394,6 @@ namespace telar::gui::qt {
     QTimer deadline_;
     QFutureWatcher<OptionsResult> options_task_;
     RemoteTarget target_;
-    QStringList options_;
     QByteArray output_;
     QByteArray errors_;
     QByteArray program_bytes_;

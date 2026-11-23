@@ -101,6 +101,7 @@ export {
       bool detach = false;
       bool json = false;
       bool stdin_open = true;
+      bool autoshare = false;
       std::uint32_t timeout_seconds = 0;
       std::uint64_t stdout_offset = 0;
       std::uint64_t stderr_offset = 0;

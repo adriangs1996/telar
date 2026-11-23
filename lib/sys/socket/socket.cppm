@@ -53,6 +53,7 @@ export {
   using ::addrinfo;
   using ::freeaddrinfo;
   using ::freeifaddrs;
+  using ::gai_strerror;
   using ::getaddrinfo;
   using ::getifaddrs;
   using ::getnameinfo;
@@ -88,6 +89,7 @@ export {
 // Internet addresses, TCP options, name resolution and interfaces.
 // NOLINTNEXTLINE(cppcoreguidelines-macro-usage): an X-macro lists the C macros to capture, which no template can name
 #define TELAR_SYS_ADDRESSES(X) \
+  X(AI_PASSIVE)                \
   X(EAI_MEMORY)                \
   X(EAI_SYSTEM)                \
   X(IFNAMSIZ)                  \
@@ -104,7 +106,8 @@ export {
   X(SIOCGIFFLAGS)              \
   X(SIOCSIFFLAGS)              \
   X(TCP_KEEPCNT)               \
-  X(TCP_KEEPINTVL)
+  X(TCP_KEEPINTVL)             \
+  X(TCP_NODELAY)
 
 // glibc declares these as enumerators and defines each macro as its own name.
 // NOLINTNEXTLINE(cppcoreguidelines-macro-usage): an X-macro lists the C macros to capture, which no template can name
@@ -139,6 +142,14 @@ namespace telar::sys::captured {
   TELAR_SYS_ENUMERATORS(TELAR_SYS_CAPTURE)
 #endif
 
+  // The option that sets how long a connection idles before its first keepalive probe, which
+  // Darwin and Linux name differently.
+#ifdef __APPLE__
+  inline constexpr int keepalive_idle = TCP_KEEPALIVE;
+#else
+  inline constexpr int keepalive_idle = TCP_KEEPIDLE;
+#endif
+
   // Control messages; the sizes bound buffers, so they stay constant expressions.
   inline constexpr size_t controlLength(size_t length) noexcept {
     return CMSG_LEN(length);
@@ -169,6 +180,7 @@ namespace telar::sys::captured {
 #undef SO_SNDBUF
 #undef SO_SNDTIMEO
 #undef SO_TYPE
+#undef AI_PASSIVE
 #undef EAI_MEMORY
 #undef EAI_SYSTEM
 #undef IFNAMSIZ
@@ -186,6 +198,7 @@ namespace telar::sys::captured {
 #undef SIOCSIFFLAGS
 #undef TCP_KEEPCNT
 #undef TCP_KEEPINTVL
+#undef TCP_NODELAY
 #undef IFF_LOOPBACK
 #undef IFF_UP
 #undef IPPROTO_AH
@@ -293,6 +306,10 @@ export {
 
 // Members that the headers reach through a macro have no name an importer can spell.
 export namespace telar::sys {
+
+  // The TCP option for the idle time before the first keepalive probe: TCP_KEEPALIVE on Darwin,
+  // TCP_KEEPIDLE on Linux.
+  inline constexpr int tcp_keepalive_idle = captured::keepalive_idle;
 
   // The interface name an ifreq carries.
   inline constexpr auto& interfaceName(ifreq& request) noexcept {

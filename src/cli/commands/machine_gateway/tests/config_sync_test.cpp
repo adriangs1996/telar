@@ -9,7 +9,7 @@ import std;
 import telar.testing;
 import telar.testing.test_memory;
 import telar.base.text.json;
-import telar.cli.commands.machine_ssh;
+import telar.cli.commands.machine_gateway;
 import telar.base.ds;
 import telar.base.memory.allocators;
 

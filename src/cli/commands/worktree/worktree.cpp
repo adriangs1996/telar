@@ -756,8 +756,7 @@ namespace telar::runtime::cli::sessions {
               {"UnknownRevision", "that revision names no commit here"},
               {"GitPushFailed", "git push to the machine failed; a branch with other history there is never overwritten"},
               {"GitFetchFailed", "git fetch from the machine failed"},
-              {"DestinationNotUsableByGit", "the machine's SSH destination has ':', '/' or brackets; save it as a host alias"},
-              {"UnquotableSshOption", "telar's runtime directory has a quote in its path, which git cannot be given safely"},
+              {"UnquotableGatewayCommand", "telar is installed in a path with a quote in it, which git cannot be given safely"},
               {"NotARepository", "not inside a git repository"},
           },
       };
@@ -901,20 +900,17 @@ namespace telar::runtime::cli::sessions {
         throw Failure{"UnexpectedResolveOutput"};
       }
 
-      // One push or fetch against the other machine's clone, through the control
-      // master the dispatch uses. A push never forces.
+      // One push or fetch against the other machine's clone, through the gateway
+      // the dispatch uses. A push never forces.
       void transfer(const GitTransfer& request) {
         const auto clone = request.clone;
         const auto refspec = request.refspec;
 
-        const auto destination = profile_.destination();
-        if (destination.find_first_of(":/[]") != std::string_view::npos) {
-          throw Failure{"DestinationNotUsableByGit"};
-        }
-
-        const auto url = ds::format(memory_, "ssh://{}{}", destination, clone);
-        const auto ssh = machine::gitSshCommand(memory_, destination);
-        const ds::Array<std::pair<std::string_view, std::string_view>, 2> environment{{{"GIT_SSH_COMMAND", ssh}, {"GIT_TERMINAL_PROMPT", "0"}}};
+        // Git speaks to the clone through the gateway program, which names the machine itself:
+        // the URL's host is a placeholder Git only passes along.
+        const auto url = ds::format(memory_, "ssh://telar{}", clone);
+        const auto command = machine::gitGatewayCommand(memory_, profile_.destination());
+        const ds::Array<std::pair<std::string_view, std::string_view>, 3> environment{{{"GIT_SSH_COMMAND", command}, {"GIT_SSH_VARIANT", "simple"}, {"GIT_TERMINAL_PROMPT", "0"}}};
 
         if (request.direction == GitDirection::push) {
           const ds::Array<std::string_view, 8> argv{"git", "-C", root_, "push", "--quiet", "--", url, refspec};

@@ -1,16 +1,31 @@
-telar server: Run the local runtime in the foreground, stop it, or print its endpoint
+telar server: Run the local runtime, stop it or print its endpoint, and let other machines reach it
 
 Usage: telar server [--fresh] [--socket PATH] [--graphics-pane-mib N] [--graphics-global-mib N] [--config PATH | --no-config] [--profile NAME]
        telar server stop|endpoint [--socket PATH]
+       telar server enable|listen [[HOST]:PORT] [--socket PATH]
+       telar server pair [--host HOST]
+       telar server access [list | revoke KEY|NAME]
+       telar server disable
 
 Commands:
   stop            Ask the local runtime to stop
   endpoint        Make sure a runtime runs and print its socket path and wire schema
+  enable          Keep a gateway running for this account and print an address to pair with
+  listen          Run this account's gateway in the foreground
+  pair            Print an address that pairs one other machine with this gateway
+  access          List the machines this gateway admits, or stop admitting one
+  disable         Stop this account's gateway and remove its service
 
 The runtime is one long-lived process per account that owns the panes, their
 children, the agents and the history, so a window may come and go. Commands that
 need it start it in the background on their own; `telar server` runs it in this
 process instead, until stopped.
+
+The gateway is what another machine connects to: it answers on a TCP port, over
+TLS 1.3 in which each side presents a key, and serves this account's runtime to the
+machines the account paired, and to no other. It runs as this account, without
+root, and starts the runtime when a machine asks for it. `telar machine add` on the
+other machine takes the address `pair` prints.
 
 Arguments:
   --fresh          Set the previous session checkpoint aside (`session.ckpt.previous`)

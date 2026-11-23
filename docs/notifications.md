@@ -78,7 +78,7 @@ links only from this machine's runtime: a notification from a remote
 machine's runtime arrives without its link, so a process on another machine
 cannot put a page of its choosing one click away in this machine's browser.
 Setup announces a login through the local runtime for that reason.
-"Remote" means a connection the client made over SSH itself (`--remote`, a
+"Remote" means a connection the client made through a gateway itself (`--remote`, a
 saved machine). A connection it believes local, or one with no machine,
 keeps its links even when its socket is forwarded from another machine by
 hand (`ssh -L` to a local path, then `--socket`): the client cannot tell,

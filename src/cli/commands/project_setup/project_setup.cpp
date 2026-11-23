@@ -10,6 +10,7 @@ import telar.platform.paths;
 import telar.base.text.utf8;
 import telar.cli.session.server;
 import telar.platform.primitives;
+import telar.platform.process;
 import telar.wire.layout;
 import telar.wire.pane_io;
 import telar.wire.runtime;
@@ -2119,9 +2120,33 @@ namespace telar::runtime::cli {
       }
 
       const bool id_wrong = self.action == Action::list ? self.id != 0 : self.id == 0;
-      if (id_wrong || self.argument_count != 0 || self.detach || !self.cwd.empty() || self.workspace != 0) {
+      if (id_wrong || self.argument_count != 0 || self.detach || self.autoshare || !self.cwd.empty() || self.workspace != 0) {
         throw std::invalid_argument{"InvalidExecutionOptions"};
       }
+    }
+
+  }
+
+  namespace {
+
+    // The command starts under `telar share-ports`, which runs it in the execution's own process
+    // group and tells this machine's gateway the ports that group listens on, so that the
+    // machines connected to it forward them. Its words go before the command's.
+    void shareExecutionPorts(tbc::mut_a<ExecutionOptions> self) {
+      static const ExecutablePath program;
+      constexpr ds::Array<std::string_view, 2> wrapper{"share-ports", "--"};
+      const auto added = wrapper.size() + 1;
+
+      if (self.argument_count + added > ExecutionOptions::max_arguments) {
+        throw std::invalid_argument{"InvalidExecutionArguments"};
+      }
+
+      const auto words = self.arguments.viewMut();
+
+      std::ranges::copy_backward(words.first(self.argument_count), words.first(self.argument_count + added).end());
+      words[0] = program.view();
+      std::ranges::copy(wrapper, words.subspan(1).begin());
+      self.argument_count += added;
     }
 
   }
@@ -2144,12 +2169,18 @@ namespace telar::runtime::cli {
         self.json = true;
       } else if (arg == "--no-stdin") {
         self.stdin_open = false;
+      } else if (arg == "--autoshare") {
+        self.autoshare = true;
       } else {
         executionValueOption(self, arg, cursor);
       }
     }
 
     validateExecution(self);
+    if (self.autoshare) {
+      shareExecutionPorts(self);
+    }
+
     return self;
   }
 

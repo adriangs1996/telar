@@ -6,7 +6,6 @@ static_assert(true);
 #include "telar_platform/file_descriptor.hpp"
 #include "telar_wire/codecs/telar_wire.hpp"
 #include "ui/kit/machines/remote_bridge.hpp"
-#include "ui/kit/machines/ssh_options.hpp"
 #include <QByteArray>
 #include <QCoreApplication>
 #include <QIODevice>
@@ -44,13 +43,19 @@ namespace {
   using namespace telar::gui::features::machines;
   using namespace telar::gui::qt;
 
-  struct TestSshHost {
+  struct TestGatewayHost {
     static constexpr auto discovery_timeout = std::chrono::seconds{2};
     inline static std::vector<QStringList> requests;
 
+    // The words the bridge gives the gateway program: `run DESTINATION COMMAND` to discover a
+    // machine, `attach DESTINATION` to carry its runtime. The fixture reads the destination as
+    // the case to play and tells the two commands apart by the second.
     static void start(QProcess& process, const QStringList& arguments) {
       requests.push_back(arguments);
-      if (arguments.at(arguments.size() - 2) == QStringLiteral("start-error")) {
+      const auto destination = arguments.at(1);
+      const auto command = arguments.front() == QStringLiteral("attach") ? QStringLiteral("exec attach") : arguments.back();
+
+      if (destination == QStringLiteral("start-error")) {
         process.start(QStringLiteral("/this-test-executable-does-not-exist"));
 
         return;
@@ -60,18 +65,18 @@ namespace {
 case "$1" in
   launch) exec /this-test-executable-does-not-exist ;;
   missing) exit 127 ;;
-  authentication) printf 'Permission denied (publickey).' >&2; exit 255 ;;
-  host-key) printf 'Host key verification failed.' >&2; exit 255 ;;
+  authentication) printf 'telar gateway: this machine is not paired with that gateway' >&2; exit 255 ;;
+  host-key) printf 'telar gateway: The gateway holds another key than the one its address pins' >&2; exit 255 ;;
   protocol) printf 'telar protocol mismatch' >&2; exit 1 ;;
   transient) exit 1 ;;
   crash) kill -KILL $$ ;;
-  stderr-tail) dd if=/dev/zero bs=32768 count=1 >&2 2>/dev/null; printf 'Permission denied (publickey).' >&2; exit 255 ;;
+  stderr-tail) dd if=/dev/zero bs=32768 count=1 >&2 2>/dev/null; printf 'telar gateway: this machine is not paired with that gateway' >&2; exit 255 ;;
   timeout) exec sleep 60 ;;
 esac
 case "$2" in
   'exec '*)
     case "$1" in
-      bridge-authentication) printf 'Permission denied (publickey).' >&2; exit 255 ;;
+      bridge-authentication) printf 'telar gateway: this machine is not paired with that gateway' >&2; exit 255 ;;
       bridge-closed) exit ;;
     esac
     exec cat ;;
@@ -92,11 +97,11 @@ printf '/home/test\n/bin/sh\n/run/test/socket\n%s\n' "$3"
       const auto legacy_text = telar::textView(std::span{telar::handshake::schemaOf(telar::handshake::Dialect::schema87)});
       const auto legacy = QString::fromLatin1(legacy_text.data(), static_cast<qsizetype>(legacy_text.size()));
 
-      process.start(QStringLiteral("/bin/sh"), {QStringLiteral("-c"), QString::fromLatin1(script), QStringLiteral("telar-ssh-fixture"), arguments.at(arguments.size() - 2), arguments.back(), expected, mismatch, legacy}, QIODevice::ReadWrite);
+      process.start(QStringLiteral("/bin/sh"), {QStringLiteral("-c"), QString::fromLatin1(script), QStringLiteral("telar-gateway-fixture"), destination, command, expected, mismatch, legacy}, QIODevice::ReadWrite);
     }
   };
 
-  struct ShortDeadlineHost : TestSshHost {
+  struct ShortDeadlineHost : TestGatewayHost {
     static constexpr auto discovery_timeout = std::chrono::milliseconds{100};
   };
 
@@ -120,7 +125,7 @@ printf '/home/test\n/bin/sh\n/run/test/socket\n%s\n' "$3"
 
     void remoteChannelReady(telar::runtime::FileDescriptor descriptor) {
       if (!channel.setSocketDescriptor(descriptor.get(), QLocalSocket::ConnectedState)) {
-        throw std::runtime_error{"Adopt SSH fixture channel"};
+        throw std::runtime_error{"Adopt the gateway fixture's channel"};
       }
 
       static_cast<void>(descriptor.release());
@@ -143,7 +148,7 @@ printf '/home/test\n/bin/sh\n/run/test/socket\n%s\n' "$3"
 
   private:
     Q_SLOT static void init() {
-      TestSshHost::requests.clear();
+      TestGatewayHost::requests.clear();
     }
 
     Q_SLOT static void discoveryAndDuplexTransport() {
@@ -151,26 +156,20 @@ printf '/home/test\n/bin/sh\n/run/test/socket\n%s\n' "$3"
 
       QVERIFY(directory.isValid());
       Observer observer;
-      RemoteBridge<TestSshHost, Observer> bridge{observer};
+      RemoteBridge<TestGatewayHost, Observer> bridge{observer};
 
       bridge.open(target(directory, QStringLiteral("dev@box")));
       QTRY_COMPARE(observer.channels, std::size_t{1});
       QCOMPARE(observer.discoveries, std::size_t{1});
       QVERIFY(observer.discovery && observer.discovery->home() == "/home/test");
-      QCOMPARE(TestSshHost::requests.size(), std::size_t{2});
-      const auto& arguments = TestSshHost::requests.front();
+      QCOMPARE(TestGatewayHost::requests.size(), std::size_t{2});
+      const auto& arguments = TestGatewayHost::requests.front();
 
-      QCOMPARE(arguments.front(), QStringLiteral("-T"));
-      QCOMPARE(arguments.at(arguments.size() - 3), QStringLiteral("--"));
-      QCOMPARE(arguments.at(arguments.size() - 2), QStringLiteral("dev@box"));
-      QCOMPARE(TestSshHost::requests.back().back(), QStringLiteral("exec telar server bridge"));
-      const auto interactive_control = QStringLiteral("ControlPath=") + directory.path() + QStringLiteral("/ssh-i-7d4a97d4fc1f");
-      const auto transfer_control = QStringLiteral("ControlPath=") + directory.path() + QStringLiteral("/ssh-7d4a97d4fc1f");
-
-      for (const auto& request : TestSshHost::requests) {
-        QVERIFY(request.contains(interactive_control));
-        QVERIFY(!request.contains(transfer_control));
-      }
+      QCOMPARE(arguments.size(), qsizetype{3});
+      QCOMPARE(arguments.front(), QStringLiteral("run"));
+      QCOMPARE(arguments.at(1), QStringLiteral("dev@box"));
+      QVERIFY(arguments.back().endsWith(QStringLiteral("server endpoint'")));
+      QCOMPARE(TestGatewayHost::requests.back(), (QStringList{QStringLiteral("attach"), QStringLiteral("dev@box")}));
 
       const QByteArray payload{"\0first\xfflast", 11};
 
@@ -189,7 +188,7 @@ printf '/home/test\n/bin/sh\n/run/test/socket\n%s\n' "$3"
 
       QVERIFY(directory.isValid());
       Observer observer;
-      RemoteBridge<TestSshHost, Observer> bridge{observer};
+      RemoteBridge<TestGatewayHost, Observer> bridge{observer};
 
       bridge.open(target(directory, QStringLiteral("legacy")));
       QTRY_COMPARE(observer.channels, std::size_t{1});
@@ -222,7 +221,7 @@ printf '/home/test\n/bin/sh\n/run/test/socket\n%s\n' "$3"
       for (const auto& [destination, expected] : cases) {
         const QTemporaryDir directory;
         Observer observer;
-        RemoteBridge<TestSshHost, Observer> bridge{observer};
+        RemoteBridge<TestGatewayHost, Observer> bridge{observer};
 
         bridge.open(target(directory, QString::fromLatin1(destination)));
         QTRY_VERIFY(observer.failure);
@@ -242,7 +241,7 @@ printf '/home/test\n/bin/sh\n/run/test/socket\n%s\n' "$3"
       QCOMPARE(observer.failure, telar::ds::Option{MachineError::endpoint_unavailable});
       observer.failure.reset();
       bridge.open(target(directory, QStringLiteral("timeout")));
-      QTRY_COMPARE(TestSshHost::requests.size(), std::size_t{2});
+      QTRY_COMPARE(TestGatewayHost::requests.size(), std::size_t{2});
       bridge.open(target(directory, QStringLiteral("replacement")));
       QTRY_COMPARE(observer.channels, std::size_t{1});
       QVERIFY(!observer.failure);
@@ -252,7 +251,7 @@ printf '/home/test\n/bin/sh\n/run/test/socket\n%s\n' "$3"
     Q_SLOT static void cancelledPreparationAndRawPaths() {
       const QTemporaryDir directory;
       Observer observer;
-      RemoteBridge<TestSshHost, Observer> bridge{observer};
+      RemoteBridge<TestGatewayHost, Observer> bridge{observer};
 
       bridge.open(target(directory, QStringLiteral("cancelled")));
       bridge.close();
@@ -260,14 +259,14 @@ printf '/home/test\n/bin/sh\n/run/test/socket\n%s\n' "$3"
       QTRY_COMPARE(observer.channels, std::size_t{1});
       QVERIFY(observer.discovery && observer.discovery->home() == "/home/\xff");
       QCOMPARE(observer.discoveries, std::size_t{1});
-      QCOMPARE(TestSshHost::requests.size(), std::size_t{2});
-      QCOMPARE(TestSshHost::requests.front().at(TestSshHost::requests.front().size() - 2), QStringLiteral("raw-path"));
+      QCOMPARE(TestGatewayHost::requests.size(), std::size_t{2});
+      QCOMPARE(TestGatewayHost::requests.front().at(1), QStringLiteral("raw-path"));
     }
 
     Q_SLOT static void discoveryReplacementCannotLaunchTheOldBridge() {
       const QTemporaryDir directory;
       Observer observer;
-      RemoteBridge<TestSshHost, Observer> bridge{observer};
+      RemoteBridge<TestGatewayHost, Observer> bridge{observer};
 
       observer.on_discovery = [&] {
         bridge.open(target(directory, QStringLiteral("replacement")));
@@ -276,42 +275,30 @@ printf '/home/test\n/bin/sh\n/run/test/socket\n%s\n' "$3"
       bridge.open(target(directory, QStringLiteral("original")));
       QTRY_COMPARE(observer.channels, std::size_t{1});
       QCOMPARE(observer.discoveries, std::size_t{2});
-      QCOMPARE(TestSshHost::requests.size(), std::size_t{3});
-      QCOMPARE(TestSshHost::requests.back().at(TestSshHost::requests.back().size() - 2), QStringLiteral("replacement"));
+      QCOMPARE(TestGatewayHost::requests.size(), std::size_t{3});
+      QCOMPARE(TestGatewayHost::requests.back().at(1), QStringLiteral("replacement"));
       QVERIFY(!observer.failure);
     }
 
-    Q_SLOT static void optionsAndValidation() {
+    Q_SLOT static void validation() {
       const QTemporaryDir directory;
       const auto request = target(directory, QStringLiteral("dev@box"));
-      const auto arguments = SshOptions::prepare(request.local_endpoint, request.destination.toUtf8());
-
-      QCOMPARE(SshOptions::controlName("dev@box"), QStringLiteral("ssh-i-7d4a97d4fc1f"));
-      QCOMPARE(SshOptions::controlName("dev@[2001:db8::1]"), QStringLiteral("ssh-i-46c899f86623"));
-      constexpr qsizetype managed_arguments = 14;
-
-      QCOMPARE(arguments.size(), managed_arguments);
-      QVERIFY(arguments.contains(QStringLiteral("BatchMode=yes")));
-      QVERIFY(arguments.contains(QStringLiteral("ForwardAgent=no")));
-      QVERIFY(arguments.contains(QStringLiteral("ControlMaster=auto")));
-      QVERIFY(arguments.contains(QStringLiteral("ControlPersist=600")));
-      QCOMPARE(arguments.back(), QStringLiteral("ControlPath=") + directory.path() + QLatin1Char('/') + SshOptions::controlName("dev@box"));
       Observer observer;
-      RemoteBridge<TestSshHost, Observer> bridge{observer};
+      RemoteBridge<TestGatewayHost, Observer> bridge{observer};
 
       QVERIFY_THROWS_EXCEPTION(MachineFailure, bridge.open(target(directory, QStringLiteral("-oProxyCommand=bad"))));
       auto invalid_program = request;
 
       invalid_program.program = QStringLiteral("telar;bad");
       QVERIFY_THROWS_EXCEPTION(MachineFailure, bridge.open(invalid_program));
-      QVERIFY(TestSshHost::requests.empty());
+      QVERIFY(TestGatewayHost::requests.empty());
       auto invalid_directory = request;
 
       invalid_directory.local_endpoint = directory.filePath(QStringLiteral("missing/runtime.sock"));
       bridge.open(invalid_directory);
       QTRY_VERIFY(observer.failure);
       QCOMPARE(*observer.failure, MachineError::invalid_runtime_directory);
-      QVERIFY(TestSshHost::requests.empty());
+      QVERIFY(TestGatewayHost::requests.empty());
     }
   };
 

@@ -10,7 +10,7 @@ namespace telar::gui::features::machines {
     enum class ExitStatus : std::uint8_t {
       command_not_executable = 126,
       command_not_found = 127,
-      ssh_failed = 255,
+      unreachable = 255,
     };
 
     template <std::size_t Count>
@@ -20,14 +20,16 @@ namespace telar::gui::features::machines {
       });
     }
 
-    MachineError sshFailure(std::string_view text) noexcept {
-      static constexpr ds::Array host_key_texts{"Host key verification failed", "REMOTE HOST IDENTIFICATION HAS CHANGED"};
-      if (mentionsAny(text, host_key_texts)) {
+    // What the gateway program says of a machine that holds another key than its address pins, and
+    // of one that does not admit this one.
+    MachineError reachFailure(std::string_view text) noexcept {
+      static constexpr ds::Array key_texts{"holds another key"};
+      if (mentionsAny(text, key_texts)) {
         return MachineError::host_key_rejected;
       }
 
-      static constexpr ds::Array authentication_texts{"Permission denied (", "Too many authentication failures"};
-      if (mentionsAny(text, authentication_texts)) {
+      static constexpr ds::Array pairing_texts{"is not paired"};
+      if (mentionsAny(text, pairing_texts)) {
         return MachineError::authentication_failed;
       }
 
@@ -45,7 +47,7 @@ namespace telar::gui::features::machines {
 
   }
 
-  MachineError MachineConnectionPolicy::failure(MachineSshResult result) noexcept {
+  MachineError MachineConnectionPolicy::failure(MachineReachResult result) noexcept {
     if (!result.exit_status) {
       return MachineError::endpoint_unavailable;
     }
@@ -58,8 +60,8 @@ namespace telar::gui::features::machines {
     case ExitStatus::command_not_executable:
     case ExitStatus::command_not_found:
       return MachineError::remote_program_missing;
-    case ExitStatus::ssh_failed:
-      return sshFailure(result.standard_error);
+    case ExitStatus::unreachable:
+      return reachFailure(result.standard_error);
     }
 
     return MachineError::endpoint_unavailable;

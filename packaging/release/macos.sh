@@ -24,7 +24,7 @@ if [ "$arch" = arm64 ]; then
 fi
 
 # The executables the archive ships, beside each other in bin/.
-tools="telar telar-runtime telar-config-check telar-diagram-renderer"
+tools="telar telar-runtime telar-config-check telar-gateway telar-diagram-renderer"
 
 build() {
     stage=$1
@@ -56,7 +56,7 @@ build() {
 
     # The release preset with only the GUI, which the runtime above ships beside.
     "$root/tools/cpp" configure release -B "$stage/gui" -- -DCMAKE_OSX_DEPLOYMENT_TARGET="$macos_min" \
-        -DTELAR_BUILD_RUNTIME=OFF -DTELAR_BUILD_CLI=OFF -DTELAR_BUILD_AUTH=OFF \
+        -DTELAR_BUILD_RUNTIME=OFF -DTELAR_BUILD_CLI=OFF -DTELAR_BUILD_GATEWAY=OFF \
         -DGHOSTTY_VT_ROOT="$ghostty" -DTELAR_GUI_QT_BUILD_DIR="${TELAR_QT_CACHE:-$stage/qt-cache}"
     "$root/tools/cpp" build release -B "$stage/gui" -- --target telar-gui telar-gui-command
 

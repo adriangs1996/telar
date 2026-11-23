@@ -45,6 +45,29 @@ namespace telar::gui::qt {
       return QString::fromUtf8(text.data(), static_cast<qsizetype>(text.size()));
     }
 
+    using MachineStore = application::machines::MachineProfileStore<ApplicationAllocator, system::ProfileFile>;
+
+    // Presents the pairing code of the address a machine is added by, and returns the address
+    // that leaves to save; none for an address that carries no code. The machine must be one
+    // that can be saved before a pairing code is spent on it.
+    ds::Option<system::runtime_endpoint::Path> pairAdded(MachineStore& store, const application::machines::MachineEdit& edit, system::SecureRandom& random, std::string_view local_label) {
+      const auto address = edit.value;
+      if (!application::machines::MachineAddress::valid(address)) {
+        throw application::machines::MachineFailure{application::machines::MachineError::invalid_destination};
+      }
+
+      auto trial = store.load();
+      auto saved = edit;
+
+      saved.value = application::machines::MachineAddress::saved(address);
+      application::machines::MachineProfileEdits::apply(trial, saved, random, local_label);
+      if (!application::machines::MachineAddress::pairing(address)) {
+        return ds::none;
+      }
+
+      return system::runtime_endpoint::pairMachine(address, local_label);
+    }
+
   }
 
   static_assert(ConcurrentAllocator<ApplicationAllocator>);
@@ -173,11 +196,19 @@ namespace telar::gui::qt {
       }
 
       system::ProfileFile file{textView(request.path), request.stop};
-      application::machines::MachineProfileStore<ApplicationAllocator, system::ProfileFile> store{memory, file};
+      MachineStore store{memory, file};
 
       if (request.edit) {
         system::SecureRandom random;
-        const ds::Array edits{request.edit->view()};
+        auto edit = request.edit->view();
+        // A machine is added by the address its gateway pairs with: the pairing code is
+        // presented once, here on the worker, and the address it leaves is what is saved.
+        const auto paired = edit.kind == application::machines::MachineEditKind::add ? pairAdded(store, edit, random, textView(request.local_label)) : ds::none;
+        if (paired) {
+          edit.value = paired->view();
+        }
+
+        const ds::Array edits{edit};
 
         result.profiles = store.change(edits, random, textView(request.local_label));
       } else {

@@ -152,7 +152,7 @@ namespace telar::gui::qt {
     bool schema_retry_pending_ = false;
     ds::Option<RemoteTarget> remote_target_;
     ds::Option<application::machines::MachineError> remote_error_;
-    ds::Option<RemoteBridge<NativeSshHost, RuntimeConnection>> remote_;
+    ds::Option<RemoteBridge<NativeGatewayHost, RuntimeConnection>> remote_;
   };
 
 }

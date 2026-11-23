@@ -387,14 +387,14 @@ namespace telar::runtime::cli {
 
   void runServer(ConcurrentMemory& memory, const ServerOptions& options) {
     if (options.action == ServerAction::help) {
-      std::puts("Usage: telar-runtime server [--socket PATH] [--no-config] [--fresh]\n       telar-runtime --socket PATH [--history PATH] [--session PATH | --no-session] [--no-resume]\n\n`telar server stop|endpoint|bridge` talks to a running runtime.");
+      std::puts("Usage: telar-runtime server [--socket PATH] [--no-config] [--fresh]\n       telar-runtime --socket PATH [--history PATH] [--session PATH | --no-session] [--no-resume]\n\n`telar server stop|endpoint` talks to a running runtime.");
       return;
     }
 
     requireTracingBuild(!options.trace.empty());
 
     if (options.action != ServerAction::run) {
-      throw std::invalid_argument{"telar-runtime only runs the runtime; use `telar server stop|endpoint|bridge`"};
+      throw std::invalid_argument{"telar-runtime only runs the runtime; use `telar server stop|endpoint`"};
     }
 
     const ProcessEnvironment environment;

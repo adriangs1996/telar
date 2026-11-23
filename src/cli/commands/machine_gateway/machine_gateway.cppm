@@ -1,4 +1,4 @@
-export module telar.cli.commands.machine_ssh;
+export module telar.cli.commands.machine_gateway;
 
 import std;
 import telar.tbc;
@@ -39,7 +39,8 @@ export {
 export {
   namespace telar::runtime::cli::launch {
 
-    inline constexpr int ssh_failure = 255;
+    // The status of a command that never ran because its machine could not be reached, as ssh's.
+    inline constexpr int unreachable_status = 255;
     inline constexpr std::size_t output_limit = 256 * std::size_t{1024};
 
     // A program and its arguments, each a NUL-terminated text, as exec takes them.
@@ -57,7 +58,7 @@ export {
     struct Output {
       explicit Output(Memory& memory);
 
-      int status = ssh_failure;
+      int status = unreachable_status;
       Text out;
       Text err;
       std::size_t dropped = 0;
@@ -148,7 +149,7 @@ export {
   }
 }
 
-// Interface: machine_ssh.cppm
+// Interface: machine_gateway.cppm
 export {
   namespace telar::runtime::cli::machine {
 
@@ -161,11 +162,28 @@ export {
 
     using launch::Argv;
 
-    // The SSH argv that runs `command` there, with a terminal there only when `terminal`.
-    tbc::val_a<Argv> ssh(tbc::mut_a<Memory> memory, std::string_view destination, std::string_view command, bool terminal = false);
+    // The program that reaches other machines: TELAR_GATEWAY_PROGRAM when it names one, else the
+    // gateway installed beside this telar.
+    tbc::val_a<Text> gatewayProgram(tbc::mut_a<Memory> memory);
 
-    // `GIT_SSH_COMMAND` for Git traffic to `destination` over the same options.
-    tbc::val_a<Text> gitSshCommand(tbc::mut_a<Memory> memory, std::string_view destination);
+    // The argv that runs `command` in the account's shell on the machine at `destination`, through
+    // the gateway program, with a terminal there only when `terminal`.
+    // What a command run on another machine needs of the way there.
+    struct GatewayRun {
+      // A terminal there, for a command that asks the person here.
+      bool terminal = false;
+      // The ports that machine shares are forwarded here while the command runs.
+      bool share = false;
+    };
+
+    tbc::val_a<Argv> gateway(tbc::mut_a<Memory> memory, std::string_view destination, std::string_view command, GatewayRun run = {});
+
+    // `GIT_SSH_COMMAND` for Git traffic to the machine at `destination` through the gateway
+    // program; Git must be told `GIT_SSH_VARIANT=simple`, so that it passes a host and a command.
+    tbc::val_a<Text> gitGatewayCommand(tbc::mut_a<Memory> memory, std::string_view destination);
+
+    // Presents a pairing address to its gateway under `name`, and returns the address to save.
+    tbc::val_a<Text> pair(tbc::mut_a<Memory> memory, std::string_view address, std::string_view name);
 
     // The shell command that runs `words` as one telar command there.
     template <typename Words>
@@ -189,11 +207,42 @@ export {
     // The saved machine `label` names, or nullopt for this machine's own label.
     tbc::val_a<ds::Option<MachineProfile>> resolve(tbc::mut_a<Memory> memory, std::string_view label);
 
-    MachineError sshFailure(const launch::Output& output);
+    // What kept a command from running there, read from what the gateway program said.
+    MachineError reachFailure(const launch::Output& output);
 
     Discovery discover(Memory& memory, const MachineProfile& profile, Text& detail);
 
     int check(Memory& memory, const MachineProfile& profile, bool json);
+
+  }
+}
+
+// Interface: port_sharing.cppm
+export {
+  namespace telar::runtime::cli::port_sharing {
+
+    // `telar share-ports -- PROGRAM ARGS...`: runs the program as its own child, in this process
+    // group, and tells this machine's gateway each port the group listens on while it runs, so
+    // that the machines connected to the gateway forward it. Without a gateway on this machine
+    // it becomes the program. Returns the program's exit status. `telar exec --autoshare`
+    // starts its command this way; it is not meant to be typed.
+    int run(Memory& memory, std::span<char* const> words);
+
+    // `telar --machine LABEL ports [--json]`: the ports of that machine forwarded here.
+    int list(Memory& memory, const machines::MachineProfile& profile, std::span<char* const> words);
+
+  }
+}
+
+// Interface: gateway_commands.cppm
+export {
+  namespace telar::runtime::cli::gateway_commands {
+
+    // Whether `telar server VERB` is a command of this machine's gateway.
+    [[nodiscard]] bool handles(std::string_view verb) noexcept;
+
+    // Runs `telar server listen|pair|access|enable|disable ...`; `words` start at the verb.
+    int run(Memory& memory, std::span<char* const> words);
 
   }
 }

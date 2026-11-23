@@ -4155,7 +4155,7 @@ return {api_version=2, client={keybindings={
 
       client_->notifications()->dismiss(client_->notifications()->identity(notice));
       QTest::keyClick(window_, Qt::Key_Return);
-      QCOMPARE(client_->machinePrompt()->state().value(QStringLiteral("title")).toString(), QStringLiteral("Its SSH destination: user@host or an alias"));
+      QCOMPARE(client_->machinePrompt()->state().value(QStringLiteral("title")).toString(), QStringLiteral("The address `telar server pair` prints there"));
       QCOMPARE(search->text(), QString{});
       QTest::keyClick(window_, Qt::Key_Escape);
       QVERIFY((client_->dialogs()->kind() == telar::gui::qt::ApplicationController::Dialog::none));

@@ -3,6 +3,6 @@ telar server endpoint: Make sure a runtime runs and print its socket path and wi
 Usage: telar server endpoint [--socket PATH]
 
 Effects: starts the runtime in the background when none runs. This is what
-`telar machine check` and `--remote` run over SSH to discover a machine.
+`telar machine check` and a window run through a machine's gateway to discover it.
 
 Results: two lines, the socket path and the schema id. Exit 0.
