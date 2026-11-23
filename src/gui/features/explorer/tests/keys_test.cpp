@@ -1,4 +1,7 @@
 #include "explorer_fixture.hpp"
+#include <initializer_list>
+#include <string_view>
+#include <tuple>
 
 namespace {
 
@@ -12,14 +15,42 @@ namespace {
     return {.key = KeyChord::Key::character, .character = KeyCharacter::pack(static_cast<std::uint32_t>(letter)), .modifiers = modifiers};
   }
 
-  Stroke typed(Keys& keys, std::string_view text, bool visual = false) {
+  // The keys of an explorer whose configuration changes none.
+  const Keymap& defaults() {
+    static const Keymap keymap;
+
+    return keymap;
+  }
+
+  Stroke typed(const Keymap& keymap, Keys& keys, std::string_view text, bool visual = false) {
     Stroke last;
 
     for (const char letter : text) {
-      last = feed(keys, character(letter), visual);
+      last = feed(keymap, keys, character(letter), visual);
     }
 
     return last;
+  }
+
+  Stroke typed(Keys& keys, std::string_view text, bool visual = false) {
+    return typed(defaults(), keys, text, visual);
+  }
+
+  Stroke feed(Keys& keys, KeyChord chord, bool visual) {
+    return feed(defaults(), keys, chord, visual);
+  }
+
+  ExplorerKeys changes(std::initializer_list<std::tuple<std::string_view, Command, bool>> listed) {
+    ExplorerKeys result;
+
+    for (const auto& [sequence, command, visual] : listed) {
+      telar::runtime::config::ExplorerKey key{.command = command, .visual = visual};
+
+      key.keys.assign(sequence);
+      check(result.put(key));
+    }
+
+    return result;
   }
 
   void testAKeyReadsAsNeovimSpellsIt() {
@@ -80,9 +111,40 @@ namespace {
     check(typed(keys, "d", true).command == Command::cut && typed(keys, "y", true).command == Command::yank, "one key where normal mode takes two");
     check(typed(keys, "j", true).command == Command::down && typed(keys, "V", true).command == Command::escape);
     check(typed(keys, "o", true).command == Command::none, "a command a selection does not take");
-    check(keysOf(Command::cut) == "dd" && keysOf(Command::split_vertical) == "<C-w>v" && keysOf(Command::none).empty());
+    check(keysOf(defaults(), Command::cut) == "dd" && keysOf(defaults(), Command::split_vertical) == "<C-w>v" && keysOf(defaults(), Command::none).empty());
   }
 
+  void testTheConfigurationBindsUnbindsAndRebinds() {
+    Keymap keymap;
+    Keys keys;
+
+    check(keysOf(keymap, Command::cut) == "dd" && keysOf(keymap, Command::cut, true) == "d" && keysOf(keymap, Command::create_directory).empty(), "by default the keys are the ones the explorer came with");
+    check(!rebind(keymap, ExplorerKeys{}), "a configuration that changes nothing builds nothing");
+
+    // `x` cuts, `dd` does nothing, `gs` stages; in a selection `x` cuts too.
+    check(rebind(keymap, changes({{"x", Command::cut, false}, {"dd", Command::none, false}, {"gs", Command::stage, false}, {"x", Command::cut, true}})));
+    check(typed(keymap, keys, "x").command == Command::cut && typed(keymap, keys, "dd").command == Command::none && typed(keymap, keys, "gs").command == Command::stage);
+    check(typed(keymap, keys, "ga").command == Command::stage && typed(keymap, keys, "3j").count == 3, "the keys it does not change stay");
+    check(typed(keymap, keys, "x", true).command == Command::cut && typed(keymap, keys, "d", true).command == Command::cut, "each mode has its own");
+    check(keysOf(keymap, Command::cut) == "x" && keysOf(keymap, Command::stage) == "gs", "the keys it binds are the first a command is known by");
+    check(names(keymap, "<Del>", Command::cut) && !names(keymap, "dd", Command::cut));
+
+    // A sequence it binds takes the place of the ones it starts, and of the one that starts it.
+    check(rebind(keymap, changes({{"g", Command::bottom, false}, {"cwx", Command::refresh, false}, {"M", Command::mark, false}})));
+    check(typed(keymap, keys, "g").command == Command::bottom && typed(keymap, keys, "gg").command == Command::bottom && keysOf(keymap, Command::top).empty(), "gg is two of it now");
+    check(typed(keymap, keys, "cwx").command == Command::refresh && keysOf(keymap, Command::rename) == "i");
+
+    const auto mark = typed(keymap, keys, "MQ");
+
+    check(mark.command == Command::mark && mark.argument.view() == "Q", "a command that takes a letter takes it after its new keys");
+    check(typed(keymap, keys, "dd").command == Command::cut, "what the configuration no longer changes is as it came");
+
+    // Unbinding every key of a command leaves it with none.
+    check(rebind(keymap, changes({{"?", Command::none, false}})) && keysOf(keymap, Command::help).empty() && typed(keymap, keys, "?").command == Command::none);
+    check(rebind(keymap, ExplorerKeys{}) && keysOf(keymap, Command::help) == "?");
+  }
+
+  const telar::testing::Case case_configured{"keys.the_configuration_binds_unbinds_and_rebinds", testTheConfigurationBindsUnbindsAndRebinds};
   const telar::testing::Case case_notation{"keys.a_key_reads_as_neovim_spells_it", testAKeyReadsAsNeovimSpellsIt};
   const telar::testing::Case case_sequences{"keys.a_count_then_a_sequence_names_a_command", testACountThenASequenceNamesACommand};
   const telar::testing::Case case_arguments{"keys.a_command_takes_the_next_key_as_its_argument", testACommandTakesTheNextKeyAsItsArgument};

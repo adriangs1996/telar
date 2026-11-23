@@ -16,6 +16,7 @@ static_assert(true);
 #include <climits>
 #include <exception>
 
+import telar.config.client;
 import telar.testing;
 import telar.testing.test_memory;
 import telar.gui.foundation.core;
@@ -399,6 +400,53 @@ namespace {
     check(invalid, "unknown profiles must be rejected");
   }
 
+  void explorerKeys() {
+    using telar::runtime::config::ExplorerCommand;
+
+    check(read({.source = "return {api_version = 2}", .profile = {}}).explorer_keys.count == 0, "by default the explorer's keys are the ones it came with");
+
+    const auto configuration = read({.source = R"(return {api_version = 2, client = {explorer = {keys = {normal = {x = "cut", dd = false, ["<C-j>"] = "half_page_down"}, visual = {x = "cut"}}}}, profiles = {vim = {client = {explorer = {keys = {normal = {x = "yank"}}}}}}})", .profile = {}});
+    const auto keys = configuration.explorer_keys.view();
+    const auto bound = [&](std::string_view sequence, bool visual) {
+      const auto found = std::ranges::find_if(keys, [&](const auto& key) {
+        return key.keys.view() == sequence && key.visual == visual;
+      });
+
+      check(found != keys.end(), "the change is read");
+      return found->command;
+    };
+
+    check(keys.size() == 4 && bound("x", false) == ExplorerCommand::cut && bound("dd", false) == ExplorerCommand::none && bound("<C-j>", false) == ExplorerCommand::half_page_down && bound("x", true) == ExplorerCommand::cut, "a sequence is bound to a command by its name, or to none by false, in its mode");
+
+    const auto profile = read({.source = R"(return {api_version = 2, client = {explorer = {keys = {normal = {x = "cut", dd = false}}}}, profiles = {vim = {client = {explorer = {keys = {normal = {x = "yank"}}}}}}})", .profile = "vim"});
+
+    check(profile.explorer_keys.count == 2 && profile.explorer_keys.view().back().keys.view() == "x" && profile.explorer_keys.view().back().command == ExplorerCommand::yank, "a profile binds again what it inherits");
+
+    // What is refused says what it is.
+    constexpr auto invalid = telar::ds::Array<std::pair<std::string_view, std::string_view>, 7>{{
+        {R"(return {api_version = 2, client = {explorer = {keys = {normal = {x = "explode"}}}}})", "\"explode\", which is no command of the explorer"},
+        {R"(return {api_version = 2, client = {explorer = {keys = {normal = {x = "none"}}}}})", "\"none\", which is no command of the explorer"},
+        {R"(return {api_version = 2, client = {explorer = {keys = {normal = {["<F13>"] = "cut"}}}}})", "\"<F13>\", which is no sequence of keys the explorer takes"},
+        {R"(return {api_version = 2, client = {explorer = {keys = {normal = {["3x"] = "cut"}}}}})", "\"3x\", which is no sequence of keys the explorer takes"},
+        {R"(return {api_version = 2, client = {explorer = {keys = {normal = {x = true}}}}})", "false to unbind the keys"},
+        {R"(return {api_version = 2, client = {explorer = {keys = {normal = {g = "bottom", gx = "cut"}}}}})", "binds \"g\", which starts \"gx\""},
+        {R"(return {api_version = 2, client = {explorer = {keys = {insert = {x = "cut"}}}}})", "insert"},
+    }};
+
+    for (const auto& [source, said] : invalid) {
+      std::string message;
+
+      try {
+        read({.source = source, .profile = {}});
+      } catch (const std::exception& error) {
+        message = error.what();
+      }
+
+      check(message.contains(said), "a change the explorer cannot take is refused, and the refusal names it");
+    }
+  }
+
+  const telar::testing::Case case_explorer_keys{"configuration.explorer_keys", explorerKeys};
   const telar::testing::Case case_history_preferences{"configuration.history_preferences", historyPreferences};
   const telar::testing::Case case_prompt_preferences{"configuration.prompt_preferences", promptPreferences};
   const telar::testing::Case case_prompt_bindings_value{"configuration.prompt_bindings_value", promptBindingsValue};

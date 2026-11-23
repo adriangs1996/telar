@@ -224,7 +224,7 @@ namespace {
 
     // Anything but a yes leaves it where it is.
     check(explorer.type("<CR>").kind == ActionKind::none && explorer.view.mode == Mode::question);
-    check(hints(explorer.view, explorer.remote, explorer.context()).items[0].keys == "y", "the hints say what answers it");
+    check(hints(explorer.view, explorer.remote, explorer.context()).items[0].keys.view() == "y", "the hints say what answers it");
     explorer.type("n");
     check(explorer.view.mode == Mode::normal && explorer.view.transfers.empty() && explorer.view.message.view() == "Not brought");
     explorer.type("@");

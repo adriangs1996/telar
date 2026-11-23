@@ -20,7 +20,7 @@ namespace {
     const auto shown = hints(explorer.view, explorer.state, explorer.context());
 
     check(std::ranges::any_of(shown.items.view().first(shown.count), [](const Hint& hint) {
-      return std::string_view{hint.keys} == "<C-w>T" && hint.label.view() == "over the panes";
+      return hint.keys.view() == "<C-w>T" && hint.label.view() == "over the panes";
     }),
         "its hints say the way back");
 

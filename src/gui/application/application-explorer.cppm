@@ -76,11 +76,14 @@ export namespace telar::gui::application::explorer {
   using features::explorer::chooseMenu;
   using features::explorer::close;
   using features::explorer::complete;
+  using features::explorer::configure;
   using features::explorer::drop;
   using features::explorer::focus;
   using features::explorer::grab;
   using features::explorer::hand;
   using features::explorer::header;
+  using features::explorer::Help;
+  using features::explorer::help;
   using features::explorer::hints;
   using features::explorer::lenses;
   using features::explorer::look;

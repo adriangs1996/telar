@@ -51,7 +51,7 @@ namespace telar::gui::qt {
     Q_PROPERTY(QVariantList plan READ plan NOTIFY planChanged)
     Q_PROPERTY(QVariantMap menu READ menu NOTIFY menuChanged)
     Q_PROPERTY(QVariantList transfers READ transfers NOTIFY transfersChanged)
-    Q_PROPERTY(QVariantList help READ help CONSTANT)
+    Q_PROPERTY(QVariantList help READ help NOTIFY helpChanged)
 
   public:
     explicit ExplorerController(Store& store, ApplicationAllocator& memory, QObject* parent = nullptr);
@@ -88,7 +88,7 @@ namespace telar::gui::qt {
     // The menu of a row while one shows: its lines, and where the pointer asked for it.
     [[nodiscard]] const QVariantMap& menu() const noexcept;
     [[nodiscard]] const QVariantList& transfers() const noexcept;
-    [[nodiscard]] static QVariantList help();
+    [[nodiscard]] QVariantList help() const;
 
     // The rows window `window` shows.
     Q_INVOKABLE QAbstractItemModel* rows(int window);
@@ -161,6 +161,7 @@ namespace telar::gui::qt {
     void lensesChanged();
     void lineChanged();
     void hintsChanged();
+    void helpChanged();
     void previewChanged();
     void planChanged();
     void menuChanged();

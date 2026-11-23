@@ -3334,6 +3334,16 @@ namespace telar::gui::features::explorer {
     ++view.revision;
   }
 
+  bool configure(View& view, const ExplorerKeys& changes) {
+    if (!rebind(view.keymap, changes)) {
+      return false;
+    }
+
+    clear(view.keys);
+    ++view.revision;
+    return true;
+  }
+
   bool unkept(const View& view) noexcept {
     return view.places != view.places_kept;
   }
@@ -3972,7 +3982,7 @@ namespace telar::gui::features::explorer {
       return {};
     }
 
-    const auto stroke = feed(view.keys, chord, view.mode == Mode::visual);
+    const auto stroke = feed(view.keymap, view.keys, chord, view.mode == Mode::visual);
 
     ++view.revision;
     if (stroke.command == Command::none) {

@@ -342,6 +342,12 @@ other, 256 KiB at a time, and holds one such piece of it and no more.
   until the next file arrives on that machine, which removes the ones no piece reached for a
   quarter of an hour.
 
+## Change its keys
+
+The keys of normal and visual mode are the ones above until a configuration changes them:
+[`client.explorer.keys`](configuration.md#explorer-keys) binds a sequence of keys to a command
+by its name, or to nothing. The help, the hints and the menus then show the keys you bound.
+
 ## What it does not do yet
 
 - A transfer does not go on after its machine was disconnected and connected again: it

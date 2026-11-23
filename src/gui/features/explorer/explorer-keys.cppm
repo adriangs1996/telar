@@ -5,101 +5,18 @@ export module telar.gui.features.explorer:keys;
 import std;
 
 import telar.base.memory.containers;
+import telar.base.ds;
 import telar.config.client;
+import telar.tbc;
 
 export namespace telar::gui::features::explorer {
 
+  using runtime::config::ExplorerKeys;
   using runtime::config::KeyChord;
 
-  enum class Command : std::uint8_t {
-    none,
-    // Moving the selection.
-    down,
-    up,
-    top,
-    bottom,
-    half_page_down,
-    half_page_up,
-    collapse,
-    expand,
-    toggle_fold,
-    fold_all,
-    unfold_all,
-    next_change,
-    previous_change,
-    // `]a`, `[a`: the next or the previous file an agent touched.
-    next_touch,
-    previous_touch,
-    // Roots and jumps.
-    enter,
-    parent,
-    workspace_root,
-    home,
-    scope_pane,
-    scope_workspace,
-    scope_machine,
-    // The window goes to the next machine whose runtime answers for files.
-    next_machine,
-    mark,
-    jump_to_mark,
-    jump_back,
-    jump_forward,
-    next_lens,
-    previous_lens,
-    // Editing the listing as text.
-    rename,
-    rename_whole,
-    create,
-    // A new entry that is a directory, whatever its name ends in: no key names it, a row's menu does.
-    create_directory,
-    cut,
-    yank,
-    yank_relative,
-    yank_name,
-    paste,
-    undo,
-    write,
-    // Windows.
-    split_vertical,
-    split_horizontal,
-    next_window,
-    previous_window,
-    window_left,
-    window_right,
-    window_up,
-    window_down,
-    close_window,
-    only_window,
-    // Another window on the directory of the selected row: what `:vs` does with its path.
-    split_here,
-    pin,
-    // Toward the panes.
-    open,
-    change_directory,
-    split_shell,
-    mention,
-    repeat,
-    // Git, sizes and what is listed.
-    toggle_diff,
-    stage,
-    unstage,
-    discard,
-    commit,
-    cycle_sort,
-    toggle_hidden,
-    toggle_ignored,
-    refresh,
-    // Modes.
-    toggle_follow,
-    visual,
-    search,
-    next_match,
-    previous_match,
-    command_line,
-    help,
-    quit,
-    escape,
-  };
+  // The commands of the explorer are named where the configuration reads them, which binds keys
+  // to them by name.
+  using Command = runtime::config::ExplorerCommand;
 
   // The text of a key in Neovim's notation: `j`, `G`, `<C-w>`, `<CR>`.
   inline constexpr std::size_t notation_bytes = 16;
@@ -110,7 +27,7 @@ export namespace telar::gui::features::explorer {
   [[nodiscard]] Notation notation(KeyChord chord);
 
   // The keys typed toward a command: the count, and the sequence so far.
-  inline constexpr std::size_t pending_bytes = 24;
+  inline constexpr std::size_t pending_bytes = runtime::config::explorer_keys_bytes;
 
   struct Keys {
     runtime::FixedText<pending_bytes> pending;
@@ -127,14 +44,50 @@ export namespace telar::gui::features::explorer {
     Notation argument;
   };
 
+  // A sequence of keys and the command it names.
+  struct Binding {
+    runtime::FixedText<pending_bytes> keys;
+    Command command = Command::none;
+    // Whether the key after the sequence is the command's argument, as the letter of a mark.
+    bool argument = false;
+  };
+
+  // The keys of the explorer: the default ones, with the changes of the configuration. It is
+  // built when the configuration loads, and a key that is typed only reads it. A sequence in it
+  // is never the start of another one.
+  struct Keymap {
+    static constexpr std::size_t normal_capacity = 256;
+    static constexpr std::size_t visual_capacity = 160;
+
+    // The default keys.
+    Keymap();
+
+    ds::Array<Binding, normal_capacity> normal;
+    std::size_t normal_count = 0;
+    ds::Array<Binding, visual_capacity> visual;
+    std::size_t visual_count = 0;
+    // The changes it was built with.
+    ExplorerKeys changes;
+  };
+
+  // Builds the map again when `changes` are others than the ones it was built with: the default
+  // keys, then each change in its order. A sequence that is bound takes the place of the ones
+  // it starts and of the ones that start it, and comes before the default ones of its command.
+  // True when the map changed.
+  bool rebind(Keymap& keymap, const ExplorerKeys& changes);
+
   // Takes one more key. A command when the keys so far name one, in `visual` among the ones a
   // selection takes; none while they start a longer sequence or name nothing, which forgets them.
-  [[nodiscard]] Stroke feed(Keys& keys, KeyChord chord, bool visual);
+  [[nodiscard]] Stroke feed(const Keymap& keymap, Keys& keys, KeyChord chord, bool visual);
 
   // Forgets the keys typed so far.
   void clear(Keys& keys) noexcept;
 
-  // The keys that name `command` by default, for the hints and the help; empty for none.
-  [[nodiscard]] std::string_view keysOf(Command command) noexcept;
+  // The first sequence that names `command`, for the hints, the menu and the help: the one the
+  // configuration bound, before the default ones. Empty for a command no key names.
+  [[nodiscard]] tbc::val_a<std::string_view> keysOf(tbc::ref_a<Keymap> keymap, Command command, bool visual = false) noexcept;
+
+  // Whether the sequence `keys` names `command`.
+  [[nodiscard]] bool names(const Keymap& keymap, std::string_view keys, Command command, bool visual = false) noexcept;
 
 }

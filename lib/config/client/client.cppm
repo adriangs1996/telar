@@ -12,6 +12,7 @@ import telar.base.text;
 import telar.base.text.utf8;
 import telar.wire.vocabulary;
 import telar.base.ds;
+import telar.base.memory.containers;
 
 // Interface: telar_config/named_definitions_validator.cppm
 namespace telar::runtime::config {
@@ -2174,6 +2175,212 @@ export {
       ds::Option<std::uint16_t> sequence_timeout_ms;
     };
 
+    // What a key of the explorer does: the commands `client.explorer.keys` binds by name.
+    enum class ExplorerCommand : std::uint8_t {
+      none,
+      // Moving the selection.
+      down,
+      up,
+      top,
+      bottom,
+      half_page_down,
+      half_page_up,
+      collapse,
+      expand,
+      toggle_fold,
+      fold_all,
+      unfold_all,
+      next_change,
+      previous_change,
+      // `]a`, `[a`: the next or the previous file an agent touched.
+      next_touch,
+      previous_touch,
+      // Roots and jumps.
+      enter,
+      parent,
+      workspace_root,
+      home,
+      scope_pane,
+      scope_workspace,
+      scope_machine,
+      // The window goes to the next machine whose runtime answers for files.
+      next_machine,
+      mark,
+      jump_to_mark,
+      jump_back,
+      jump_forward,
+      next_lens,
+      previous_lens,
+      // Editing the listing as text.
+      rename,
+      rename_whole,
+      create,
+      // A new entry that is a directory, whatever its name ends in: no key names it, a row's menu does.
+      create_directory,
+      cut,
+      yank,
+      yank_relative,
+      yank_name,
+      paste,
+      undo,
+      write,
+      // Windows.
+      split_vertical,
+      split_horizontal,
+      next_window,
+      previous_window,
+      window_left,
+      window_right,
+      window_up,
+      window_down,
+      close_window,
+      only_window,
+      // Another window on the directory of the selected row: what `:vs` does with its path.
+      split_here,
+      pin,
+      // Toward the panes.
+      open,
+      change_directory,
+      split_shell,
+      mention,
+      repeat,
+      // Git, sizes and what is listed.
+      toggle_diff,
+      stage,
+      unstage,
+      discard,
+      commit,
+      cycle_sort,
+      toggle_hidden,
+      toggle_ignored,
+      refresh,
+      // Modes.
+      toggle_follow,
+      visual,
+      search,
+      next_match,
+      previous_match,
+      command_line,
+      help,
+      quit,
+      escape,
+    };
+
+    // The name the configuration gives each command, in the order of the commands. `none` names
+    // no command a key can take.
+    inline constexpr ds::Array<std::string_view, 76> explorer_command_names{
+        "none",
+        "down",
+        "up",
+        "top",
+        "bottom",
+        "half_page_down",
+        "half_page_up",
+        "collapse",
+        "expand",
+        "toggle_fold",
+        "fold_all",
+        "unfold_all",
+        "next_change",
+        "previous_change",
+        "next_touch",
+        "previous_touch",
+        "enter",
+        "parent",
+        "workspace_root",
+        "home",
+        "scope_pane",
+        "scope_workspace",
+        "scope_machine",
+        "next_machine",
+        "mark",
+        "jump_to_mark",
+        "jump_back",
+        "jump_forward",
+        "next_lens",
+        "previous_lens",
+        "rename",
+        "rename_whole",
+        "create",
+        "create_directory",
+        "cut",
+        "yank",
+        "yank_relative",
+        "yank_name",
+        "paste",
+        "undo",
+        "write",
+        "split_vertical",
+        "split_horizontal",
+        "next_window",
+        "previous_window",
+        "window_left",
+        "window_right",
+        "window_up",
+        "window_down",
+        "close_window",
+        "only_window",
+        "split_here",
+        "pin",
+        "open",
+        "change_directory",
+        "split_shell",
+        "mention",
+        "repeat",
+        "toggle_diff",
+        "stage",
+        "unstage",
+        "discard",
+        "commit",
+        "cycle_sort",
+        "toggle_hidden",
+        "toggle_ignored",
+        "refresh",
+        "toggle_follow",
+        "visual",
+        "search",
+        "next_match",
+        "previous_match",
+        "command_line",
+        "help",
+        "quit",
+        "escape",
+    };
+
+    static_assert(explorer_command_names.size() == static_cast<std::size_t>(ExplorerCommand::escape) + 1);
+
+    // The bytes of a sequence of keys of the explorer, in Neovim's notation.
+    inline constexpr std::size_t explorer_keys_bytes = 24;
+
+    // Whether `keys` is a sequence a person can type in the explorer: keys spelled as Neovim
+    // spells them, `<CR>`, `<Esc>`, `<Tab>`, `<S-Tab>`, `<BS>`, `<Del>`, `<lt>`, and a character
+    // with Control, Command or Alt as `<C-x>`, `<D-x>`, `<M-x>`; none that starts with a digit,
+    // which a count takes.
+    [[nodiscard]] bool typeableExplorerKeys(std::string_view keys) noexcept;
+
+    // One change to the explorer's keys: the sequence, the mode it is typed in, and the command
+    // it names, or `none` for a sequence that names nothing any more.
+    struct ExplorerKey {
+      FixedText<explorer_keys_bytes> keys;
+      ExplorerCommand command = ExplorerCommand::none;
+      bool visual = false;
+
+      [[nodiscard]] bool operator==(const ExplorerKey& other) const noexcept;
+    };
+
+    // The changes a configuration makes to the explorer's keys, in the order they apply.
+    struct ExplorerKeys {
+      static constexpr std::size_t capacity = 128;
+
+      ds::Array<ExplorerKey, capacity> items{};
+      std::size_t count = 0;
+
+      [[nodiscard]] std::span<const ExplorerKey> view() const noexcept;
+      // Adds a change, in the place of one of the same sequence and mode; false when it is full.
+      bool put(const ExplorerKey& key) noexcept;
+      [[nodiscard]] bool operator==(const ExplorerKeys& other) const noexcept;
+    };
+
     // The settings of a `client` table, each one as the configuration sets it.
     struct ClientSettings {
       enum class Delivery : std::uint8_t {
@@ -2214,6 +2421,7 @@ export {
       ds::Option<Delivery> delivery;
       ClientInputSettings input;
       PromptSettings prompt;
+      ExplorerKeys explorer_keys;
     };
 
     class ClientReader {
@@ -2273,6 +2481,8 @@ export {
       static void sound(const lua::Value& table, ClientSettings::Sound& sound);
       static void notifications(const lua::Value& table, ClientSettings& settings);
       static void history(const lua::Value& table, ClientSettings::History& history);
+      static void explorer(const lua::Value& table, ExplorerKeys& keys);
+      static void explorerKeys(const lua::Value& table, bool visual, ExplorerKeys& keys);
     };
 
     class ClientValidator {

@@ -584,6 +584,8 @@ export namespace telar::gui::features::explorer {
     std::size_t current = 0;
     Mode mode = Mode::normal;
     Keys keys;
+    // The keys the configuration leaves the explorer with.
+    Keymap keymap;
     // The changes typed but not written, and what they were before each of the last ones.
     ds::Vec<Edit, Memory> edits;
     ds::Vec<ds::Vec<Edit, Memory>, Memory> history;
@@ -652,6 +654,10 @@ export namespace telar::gui::features::explorer {
   // has stays as it is, and the jump list is taken when the explorer has none. A place of a
   // machine the window does not keep is kept, with the label of its machine.
   void recall(View& view, State& state, const Context& context);
+
+  // Gives the explorer the keys of the configuration: the default ones with `changes`. The keys
+  // typed toward a command are forgotten when the map changed, which it then says.
+  bool configure(View& view, const ExplorerKeys& changes);
 
   // Whether the marks or the jump list changed since the runtime was last given them.
   [[nodiscard]] bool unkept(const View& view) noexcept;

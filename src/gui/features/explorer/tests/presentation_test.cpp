@@ -1,4 +1,6 @@
 #include "explorer_fixture.hpp"
+#include <string>
+#include <string_view>
 
 import telar.base.ds;
 
@@ -78,8 +80,8 @@ namespace {
 
     auto shown = hints(explorer.view, explorer.state, explorer.context());
 
-    check(shown.items[0].keys == "<CR>" && shown.items[0].label.view() == "insert → 3 zsh");
-    check(shown.items[1].keys == ":w" && shown.items[1].label.view() == "write 2");
+    check(shown.items[0].keys.view() == "<CR>" && shown.items[0].label.view() == "insert → 3 zsh");
+    check(shown.items[1].keys.view() == ":w" && shown.items[1].label.view() == "write 2");
     explorer.focused = 12;
     shown = hints(explorer.view, explorer.state, explorer.context());
     check(shown.items[0].label.view() == "open → 2 nvim");
@@ -187,6 +189,82 @@ namespace {
     check(planNote(explorer.view, explorer.state, tree, false).warning.view() == "with all it holds" && planNote(explorer.view, explorer.state, tree, false).size.view() == "3.6M");
     check(planNote(explorer.view, explorer.state, file, false).warning.view().empty() && !planNote(explorer.view, explorer.state, file, false).size.view().empty());
   }
+
+  // The texts of the help's lines, each `keys|label`, to find one by what it does.
+  std::string helpKeys(const View& view, std::string_view label) {
+    const auto shown = help(view);
+
+    for (const auto& line : shown.lines.view().first(shown.count)) {
+      if (std::string_view{line.label} == label) {
+        return std::string{line.keys.view()};
+      }
+    }
+
+    return "<no such line>";
+  }
+
+  std::string hintKeys(const Explorer& explorer, std::string_view label) {
+    const auto shown = hints(explorer.view, explorer.state, explorer.context());
+
+    for (const auto& hint : shown.items.view().first(shown.count)) {
+      if (hint.label.view() == label) {
+        return std::string{hint.keys.view()};
+      }
+    }
+
+    return "<no such hint>";
+  }
+
+  std::string menuKeys(const Explorer& explorer, std::string_view label) {
+    const auto shown = menu(explorer.view, explorer.state, explorer.context());
+
+    for (const auto& line : shown.lines.view().first(shown.count)) {
+      if (line.label.view() == label) {
+        return std::string{line.keys.view()};
+      }
+    }
+
+    return "<no such line>";
+  }
+
+  void testTheHelpTheHintsAndTheMenuShowTheKeysThatAreBound() {
+    Explorer explorer;
+
+    explorer.start();
+    check(helpKeys(explorer.view, "down, up; with a count") == "j k" && helpKeys(explorer.view, "rename on the row") == "cw i a" && helpKeys(explorer.view, "the next window, the one that way") == "<C-w>w <C-w>hjkl");
+    check(helpKeys(explorer.view, "set a mark, jump to it") == "ma 'a" && helpKeys(explorer.view, "copy, cut, paste; Control too") == "<D-c> <D-x> <D-v>" && helpKeys(explorer.view, "show the plan; overwrite what exists") == ":w :w!");
+    check(hintKeys(explorer, "cut") == "dd" && hintKeys(explorer, "help") == "?");
+
+    // `x` cuts and `dd` no longer does; staging has no key; `<D-c>` copies nothing; `K` goes up.
+    telar::runtime::config::ExplorerKeys changed;
+    const auto change = [&](std::string_view sequence, Command command) {
+      telar::runtime::config::ExplorerKey key{.command = command};
+
+      key.keys.assign(sequence);
+      check(changed.put(key));
+    };
+
+    change("x", Command::cut);
+    change("dd", Command::none);
+    change("ga", Command::none);
+    change("<D-c>", Command::none);
+    change("K", Command::up);
+    change("?", Command::none);
+    change("<C-w>j", Command::none);
+    check(configure(explorer.view, changed) && !configure(explorer.view, changed), "the keys are built when the configuration changes them, and not again");
+
+    check(helpKeys(explorer.view, "cut: deletes, or moves once pasted") == "x" && helpKeys(explorer.view, "down, up; with a count") == "j K");
+    check(helpKeys(explorer.view, "stage, unstage") == "gu" && helpKeys(explorer.view, "this help").empty(), "a command no key names shows none");
+    check(helpKeys(explorer.view, "copy, cut, paste; Control too") == "<D-x> <D-v>" && helpKeys(explorer.view, "the next window, the one that way") == "<C-w>w <C-w>hkl");
+    check(hintKeys(explorer, "cut") == "x" && hintKeys(explorer, "stage") == "<no such hint>" && hintKeys(explorer, "help") == "<no such hint>" && hintKeys(explorer, "unstage") == "gu");
+
+    // The menu of a row teaches the same keys.
+    openMenu(explorer.view, explorer.state, explorer.context(), {.window = explorer.view.current, .row = explorer.at("justfile")});
+    check(explorer.view.mode == Mode::menu);
+    check(menuKeys(explorer, "Cut") == "x" && menuKeys(explorer, "Move to the trash") == "<Del>" && menuKeys(explorer, "Open a shell here") == "s" && menuKeys(explorer, "Copy") == "yy" && menuKeys(explorer, "New directory") == "o …/");
+  }
+
+  const telar::testing::Case case_bound_keys{"presentation.the_help_the_hints_and_the_menu_show_the_keys_that_are_bound", testTheHelpTheHintsAndTheMenuShowTheKeysThatAreBound};
 
   const telar::testing::Case case_heaviest{"presentation.the_preview_of_a_directory_lists_its_heaviest", testThePreviewOfADirectoryListsItsHeaviest};
   const telar::testing::Case case_plan_note{"presentation.a_line_of_the_plan_says_its_size_and_what_to_know", testALineOfThePlanSaysItsSizeAndWhatToKnow};

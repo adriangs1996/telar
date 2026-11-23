@@ -96,82 +96,6 @@ namespace telar::gui::qt {
       return result;
     }
 
-    // A line of the help: the keys, what they do, and the group it is listed under.
-    struct HelpKey {
-      std::string_view group;
-      std::string_view keys;
-      std::string_view label;
-    };
-
-    constexpr ds::Array<HelpKey, 64> help_keys{
-        {
-            {.group = "Moving", .keys = "j k", .label = "down, up; with a count"},
-            {.group = "Moving", .keys = "gg G", .label = "first, last; 12G goes to row 12"},
-            {.group = "Moving", .keys = "<C-d> <C-u>", .label = "half a page"},
-            {.group = "Moving", .keys = "h l", .label = "fold, unfold; l on a file opens it"},
-            {.group = "Moving", .keys = "za zM zR", .label = "toggle a fold, fold all, unfold a level"},
-            {.group = "Moving", .keys = "]c [c", .label = "next, previous change of git"},
-            {.group = "Moving", .keys = "]a [a", .label = "next, previous file an agent touched"},
-            {.group = "Roots and jumps", .keys = "<CR>", .label = "enter a directory"},
-            {.group = "Roots and jumps", .keys = "-", .label = "the directory above"},
-            {.group = "Roots and jumps", .keys = "_ ~", .label = "the workspace's root, the home"},
-            {.group = "Roots and jumps", .keys = "gp gw gh", .label = "follow pane, workspace, machine"},
-            {.group = "Roots and jumps", .keys = "ma 'a", .label = "set a mark, jump to it"},
-            {.group = "Roots and jumps", .keys = "<C-o> <C-i>", .label = "back, forward in the jumps"},
-            {.group = "Roots and jumps", .keys = "gt gT", .label = "next, previous lens"},
-            {.group = "Editing as text", .keys = "cw i a", .label = "rename on the row"},
-            {.group = "Editing as text", .keys = "o", .label = "new entry; name/ is a directory"},
-            {.group = "Editing as text", .keys = "dd", .label = "cut: deletes, or with p moves"},
-            {.group = "Editing as text", .keys = "yy", .label = "copy, and its path to the clipboard"},
-            {.group = "Editing as text", .keys = "p", .label = "paste into the row's directory"},
-            {.group = "Editing as text", .keys = "u", .label = "undo a change, else the last :w"},
-            {.group = "Editing as text", .keys = ":w :w!", .label = "show the plan; overwrite what exists"},
-            {.group = "Editing as text", .keys = ":e! :q!", .label = "discard the changes"},
-            {.group = "Windows", .keys = "<C-w>v <C-w>s", .label = "another window beside, below"},
-            {.group = "Windows", .keys = "<C-w>w <C-w>hjkl", .label = "the next window, the one that way"},
-            {.group = "Windows", .keys = "<C-w>q <C-w>o", .label = "close this one, keep only this one"},
-            {.group = "Windows", .keys = ":e PATH :vs PATH", .label = "this window, or a new one, at a path"},
-            {.group = "Windows", .keys = "<C-w>T :pin", .label = "beside the panes, or over them again"},
-            {.group = "Windows", .keys = "prefix o", .label = "beside them: to it, and back to the pane"},
-            {.group = "Windows", .keys = "focus keys", .label = "beside them: in from the last pane, out"},
-            {.group = "Machines", .keys = "gm", .label = "this window on the next machine"},
-            {.group = "Machines", .keys = ":machine LABEL", .label = "go to a machine; alone, list them"},
-            {.group = "Machines", .keys = ":e LABEL:PATH", .label = "a path of another machine; :vs and :sp too"},
-            {.group = "Machines", .keys = "mA 'A", .label = "a mark in upper case keeps its machine"},
-            {.group = "Machines", .keys = "gf yy", .label = "open where the file is; copy LABEL:/path"},
-            {.group = "Toward the panes", .keys = "<CR>", .label = "as the focused pane takes it"},
-            {.group = "Toward the panes", .keys = "V <CR>", .label = "insert several, directories too"},
-            {.group = "Toward the panes", .keys = "gf", .label = "open in the tab's editor"},
-            {.group = "Toward the panes", .keys = "cd s", .label = "cd the shell here, a new shell here"},
-            {.group = "Toward the panes", .keys = "@", .label = "mention to the agent"},
-            {.group = "Toward the panes", .keys = "yr yn", .label = "copy the relative path, the name"},
-            {.group = "Toward the panes", .keys = ".", .label = "repeat"},
-            {.group = "Toward the panes", .keys = "<CR> @ y", .label = "from another machine: bring a copy"},
-            {.group = "Git, sizes and what shows", .keys = "=", .label = "the diff below the row"},
-            {.group = "Git, sizes and what shows", .keys = "ga gu", .label = "stage, unstage"},
-            {.group = "Git, sizes and what shows", .keys = "gX", .label = "discard changes, through the plan"},
-            {.group = "Git, sizes and what shows", .keys = "gc", .label = ":commit with a message"},
-            {.group = "Git, sizes and what shows", .keys = "S", .label = "sort by name, size, time"},
-            {.group = "Git, sizes and what shows", .keys = "g. gi", .label = "dotfiles, what git ignores"},
-            {.group = "Git, sizes and what shows", .keys = "R", .label = "read again"},
-            {.group = "Modes", .keys = "V", .label = "visual: y d <CR> @ ga gu"},
-            {.group = "Modes", .keys = "/ n N", .label = "filter every path below; next, previous"},
-            {.group = "Modes", .keys = ":", .label = "e w vs sp cd commit marks cancel q"},
-            {.group = "Modes", .keys = "<Tab>", .label = "on a line of :, complete a directory"},
-            {.group = "Modes", .keys = "F", .label = "follow the pane"},
-            {.group = "Modes", .keys = "q", .label = "close"},
-            {.group = "Modes", .keys = "?", .label = "this help"},
-            {.group = "Pointer and shortcuts", .keys = "right click", .label = "the row's menu, with the key of each"},
-            {.group = "Pointer and shortcuts", .keys = "Shift+F10", .label = "the menu, from the keys"},
-            {.group = "Pointer and shortcuts", .keys = "drag", .label = "moves there on :w; Alt copies"},
-            {.group = "Pointer and shortcuts", .keys = "drag to a machine", .label = "copies there on :w; Shift moves"},
-            {.group = "Pointer and shortcuts", .keys = "drop files", .label = "from the desktop: copies there on :w"},
-            {.group = "Pointer and shortcuts", .keys = "drag out", .label = "gives another program the paths"},
-            {.group = "Pointer and shortcuts", .keys = "<D-c> <D-x> <D-v>", .label = "copy, cut, paste; Control too"},
-            {.group = "Pointer and shortcuts", .keys = "<D-z> <D-s> F2", .label = "undo, write, rename"},
-        },
-    };
-
     // A key a hint spells by its name, as the help does: `<CR>`, `<Esc>`, `<C-w>`.
     struct NamedKey {
       QLatin1StringView name;
@@ -203,7 +127,7 @@ namespace telar::gui::qt {
       return {.window = static_cast<std::size_t>(window), .row = row < 0 ? std::numeric_limits<std::size_t>::max() : static_cast<std::size_t>(row)};
     }
 
-    QVariantList helpGroups() {
+    QVariantList helpGroups(const explorer::Help& help) {
       QVariantList result;
       QVariantList keys;
       std::string_view group;
@@ -215,13 +139,13 @@ namespace telar::gui::qt {
       };
 
       // The lines of a group follow one another.
-      for (const auto& line : help_keys) {
-        if (line.group != group) {
+      for (const auto& line : help.lines.view().first(help.count)) {
+        if (std::string_view{line.group} != group) {
           close();
           group = line.group;
         }
 
-        keys.push_back(QVariantMap{{QStringLiteral("keys"), toQString(line.keys)}, {QStringLiteral("label"), toQString(line.label)}});
+        keys.push_back(QVariantMap{{QStringLiteral("keys"), fixedText(line.keys)}, {QStringLiteral("label"), toQString(line.label)}});
       }
 
       close();
@@ -283,6 +207,11 @@ namespace telar::gui::qt {
     const auto rows = machines.rows();
 
     shown_ = machines.active();
+    // The keys are the ones of the configuration as it is now: a reload changes them here.
+    if (explorer::configure(view_, store_.session().configuration.explorer_keys)) {
+      emit helpChanged();
+    }
+
     explorer::clear(scene_);
     scene_.now = static_cast<std::uint64_t>(QDateTime::currentSecsSinceEpoch());
     explorer::observe(scene_, store_.session(), explorerMachine(shown_));
@@ -567,7 +496,7 @@ namespace telar::gui::qt {
     for (std::size_t index = 0; index < hints.count; ++index) {
       const auto& hint = hints.items[index];
 
-      result.push_back(QVariantMap{{QStringLiteral("keys"), toQString(hint.keys)}, {QStringLiteral("label"), fixedText(hint.label)}, {QStringLiteral("enabled"), hint.enabled}});
+      result.push_back(QVariantMap{{QStringLiteral("keys"), fixedText(hint.keys)}, {QStringLiteral("label"), fixedText(hint.label)}, {QStringLiteral("enabled"), hint.enabled}});
     }
 
     return result;
@@ -665,7 +594,7 @@ namespace telar::gui::qt {
 
       lines.push_back(QVariantMap{
           {QStringLiteral("label"), fixedText(line.label)},
-          {QStringLiteral("keys"), toQString(line.keys)},
+          {QStringLiteral("keys"), fixedText(line.keys)},
           {QStringLiteral("enabled"), line.enabled},
           {QStringLiteral("rule"), line.rule},
           {QStringLiteral("current"), line.current},
@@ -726,8 +655,8 @@ namespace telar::gui::qt {
     return result;
   }
 
-  QVariantList ExplorerController::help() {
-    return helpGroups();
+  QVariantList ExplorerController::help() const {
+    return helpGroups(explorer::help(view_));
   }
 
   const QVariantList& ExplorerController::windows() const noexcept {

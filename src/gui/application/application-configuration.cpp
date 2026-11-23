@@ -110,6 +110,13 @@ namespace telar::gui::application {
     }
 
     history(settings.history, configuration.history);
+    // A profile's changes to the explorer's keys apply after the ones it inherits.
+    for (const auto& key : settings.explorer_keys.view()) {
+      if (!configuration.explorer_keys.put(key)) {
+        throw std::length_error{"The explorer's keys take no more changes"};
+      }
+    }
+
     sound(settings.sound, configuration.sound);
     // Terminal delivery keeps the default the GUI chose.
     if (settings.delivery && *settings.delivery != ClientSettings::Delivery::terminal) {

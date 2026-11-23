@@ -6,24 +6,29 @@ import telar.base.memory.containers;
 import telar.base.ds;
 import telar.config.client;
 import telar.gui.foundation.keys;
+import telar.tbc;
 
 namespace telar::gui::features::explorer {
 
   namespace {
 
-    struct Binding {
+    // A default key: its sequence, and the command it names.
+    struct Default {
       std::string_view keys;
       Command command = Command::none;
-      // Whether the key after the sequence is the command's argument, as the letter of a mark.
-      bool argument = false;
     };
 
-    constexpr Binding bind(std::string_view keys, Command command, bool argument = false) noexcept {
-      return {.keys = keys, .command = command, .argument = argument};
+    constexpr Default bind(std::string_view keys, Command command) noexcept {
+      return {.keys = keys, .command = command};
+    }
+
+    // Whether the key after a command's sequence is its argument, as the letter of a mark.
+    constexpr bool takesArgument(Command command) noexcept {
+      return command == Command::mark || command == Command::jump_to_mark;
     }
 
     // The keys of normal mode. A sequence is never the start of another one.
-    constexpr ds::Array normal{
+    constexpr ds::Array normal_keys{
         bind("j", Command::down),
         bind("k", Command::up),
         bind("gg", Command::top),
@@ -47,8 +52,8 @@ namespace telar::gui::features::explorer {
         bind("gw", Command::scope_workspace),
         bind("gh", Command::scope_machine),
         bind("gm", Command::next_machine),
-        bind("m", Command::mark, true),
-        bind("'", Command::jump_to_mark, true),
+        bind("m", Command::mark),
+        bind("'", Command::jump_to_mark),
         bind("<C-o>", Command::jump_back),
         bind("<C-i>", Command::jump_forward),
         bind("<Tab>", Command::jump_forward),
@@ -247,13 +252,88 @@ namespace telar::gui::features::explorer {
     return result;
   }
 
+  namespace {
+
+    // The keys of a mode.
+    tbc::val_a<std::span<const Binding>> of(tbc::ref_a<Keymap> keymap, bool visual) noexcept {
+      return visual ? keymap.visual.view().first(keymap.visual_count) : keymap.normal.view().first(keymap.normal_count);
+    }
+
+    void fill(std::span<Binding> bindings, std::size_t& count, std::span<const Default> defaults) {
+      count = 0;
+      for (const auto& known : defaults) {
+        auto& binding = bindings[count++];
+
+        binding.keys.assign(known.keys);
+        binding.command = known.command;
+        binding.argument = takesArgument(known.command);
+      }
+    }
+
+    // One change of the configuration: the sequence leaves the map with the ones it starts and
+    // the ones that start it, and comes back first when it names a command.
+    void change(std::span<Binding> bindings, std::size_t& count, const runtime::config::ExplorerKey& key) noexcept {
+      const auto sequence = key.keys.view();
+      const bool bound = key.command != Command::none;
+      std::size_t kept = 0;
+
+      for (std::size_t index = 0; index < count; ++index) {
+        const auto held = bindings[index].keys.view();
+        const bool clashes = bound && (held.starts_with(sequence) || sequence.starts_with(held));
+        if (held == sequence || clashes) {
+          continue;
+        }
+
+        if (kept != index) {
+          bindings[kept] = bindings[index];
+        }
+
+        ++kept;
+      }
+
+      count = kept;
+      if (!bound || count == bindings.size()) {
+        return;
+      }
+
+      std::ranges::move_backward(bindings.first(count), bindings.begin() + static_cast<std::ptrdiff_t>(count) + 1);
+      bindings.front() = {.keys = key.keys, .command = key.command, .argument = takesArgument(key.command)};
+      ++count;
+    }
+
+  }
+
+  Keymap::Keymap() {
+    fill(normal.viewMut(), normal_count, normal_keys.view());
+    fill(visual.viewMut(), visual_count, visual_keys.view());
+  }
+
+  bool rebind(Keymap& keymap, const ExplorerKeys& changes) {
+    if (keymap.changes == changes) {
+      return false;
+    }
+
+    fill(keymap.normal.viewMut(), keymap.normal_count, normal_keys.view());
+    fill(keymap.visual.viewMut(), keymap.visual_count, visual_keys.view());
+    for (const auto& key : changes.view()) {
+      if (key.visual) {
+        change(keymap.visual.viewMut(), keymap.visual_count, key);
+      } else {
+        change(keymap.normal.viewMut(), keymap.normal_count, key);
+      }
+    }
+
+    keymap.changes = changes;
+    return true;
+  }
+
   void clear(Keys& keys) noexcept {
     keys.pending = {};
     keys.count = 0;
     keys.counted = false;
   }
 
-  Stroke feed(Keys& keys, KeyChord chord, bool visual) {
+  Stroke feed(const Keymap& keymap, Keys& keys, KeyChord chord, bool visual) {
     constexpr std::uint32_t decimal = 10;
     constexpr std::uint32_t largest_count = 100000;
     const auto key = notation(chord);
@@ -269,12 +349,12 @@ namespace telar::gui::features::explorer {
       return {};
     }
 
-    const std::span<const Binding> bindings = visual ? std::span<const Binding>{visual_keys.view()} : std::span<const Binding>{normal.view()};
+    const auto bindings = of(keymap, visual);
     const auto held = keys.pending.view();
 
     // The key after a command that takes an argument is that argument.
     for (const auto& binding : bindings) {
-      if (binding.argument && binding.keys == held) {
+      if (binding.argument && binding.keys.view() == held) {
         Stroke stroke{.command = binding.command, .count = keys.counted ? keys.count : 1, .counted = keys.counted, .argument = key};
 
         clear(keys);
@@ -288,14 +368,14 @@ namespace telar::gui::features::explorer {
     bool starts_longer = false;
 
     for (const auto& binding : bindings) {
-      if (binding.keys == sequence && !binding.argument) {
+      if (binding.keys.view() == sequence && !binding.argument) {
         Stroke stroke{.command = binding.command, .count = keys.counted ? keys.count : 1, .counted = keys.counted};
 
         clear(keys);
         return stroke;
       }
 
-      starts_longer = starts_longer || (binding.keys.starts_with(sequence) && (binding.argument || binding.keys.size() > sequence.size()));
+      starts_longer = starts_longer || (binding.keys.view().starts_with(sequence) && (binding.argument || binding.keys.view().size() > sequence.size()));
     }
 
     if (!starts_longer) {
@@ -305,14 +385,20 @@ namespace telar::gui::features::explorer {
     return {};
   }
 
-  std::string_view keysOf(Command command) noexcept {
-    for (const auto& binding : normal) {
+  tbc::val_a<std::string_view> keysOf(tbc::ref_a<Keymap> keymap, Command command, bool visual) noexcept {
+    for (const auto& binding : of(keymap, visual)) {
       if (binding.command == command) {
-        return binding.keys;
+        return binding.keys.view();
       }
     }
 
     return {};
+  }
+
+  bool names(const Keymap& keymap, std::string_view keys, Command command, bool visual) noexcept {
+    return std::ranges::any_of(of(keymap, visual), [&](const Binding& binding) {
+      return binding.command == command && binding.keys.view() == keys;
+    });
   }
 
 }

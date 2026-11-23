@@ -4,6 +4,7 @@ import std;
 
 import telar.base.memory.containers;
 import telar.wire.vocabulary;
+import telar.config.client;
 import :theme;
 import telar.base.ds;
 
@@ -166,6 +167,8 @@ export {
       runtime::FixedText<maximum_editor_bytes> editor;
       runtime::FixedText<maximum_window_title_bytes> window_title;
       HistoryConfiguration history;
+      // The changes the configuration makes to the explorer's keys.
+      runtime::config::ExplorerKeys explorer_keys;
       PromptConfiguration prompt;
       SoundPolicy sound;
       NotificationDelivery notification_delivery = NotificationDelivery::telar;

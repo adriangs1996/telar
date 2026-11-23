@@ -144,14 +144,15 @@ namespace telar::gui::features::explorer {
       bool enabled = true;
     };
 
-    void addHint(Hints& hints, Word keys, const HintLabel& label) {
-      if (hints.count == hints.items.size()) {
+    // A hint teaches keys: a command no key names has none.
+    void addHint(Hints& hints, std::string_view keys, const HintLabel& label) {
+      if (hints.count == hints.items.size() || keys.empty()) {
         return;
       }
 
       auto& hint = hints.items.atMut(hints.count++);
 
-      hint.keys = keys;
+      hint.keys.assign(keys);
       put(hint.label, label.text);
       hint.enabled = label.enabled;
     }
@@ -592,8 +593,10 @@ namespace telar::gui::features::explorer {
 
     // The hints of a mode whose keys do not depend on the selected row; false for a mode whose
     // hints do.
-    bool fixedHints(Hints& hints, Mode mode) {
-      switch (mode) {
+    bool fixedHints(Hints& hints, const View& view) {
+      const auto& keymap = view.keymap;
+
+      switch (view.mode) {
       case Mode::plan:
         addHint(hints, "y", {.text = "apply"});
         addHint(hints, "n", {.text = "cancel"});
@@ -608,13 +611,13 @@ namespace telar::gui::features::explorer {
         addHint(hints, "<Esc>", {.text = "close"});
         return true;
       case Mode::visual:
-        addHint(hints, "y", {.text = "copy"});
-        addHint(hints, "d", {.text = "cut"});
-        addHint(hints, "<CR>", {.text = "insert"});
-        addHint(hints, "@", {.text = "mention"});
-        addHint(hints, "ga", {.text = "stage"});
-        addHint(hints, "gu", {.text = "unstage"});
-        addHint(hints, "<Esc>", {.text = "leave"});
+        addHint(hints, keysOf(keymap, Command::yank, true), {.text = "copy"});
+        addHint(hints, keysOf(keymap, Command::cut, true), {.text = "cut"});
+        addHint(hints, keysOf(keymap, Command::enter, true), {.text = "insert"});
+        addHint(hints, keysOf(keymap, Command::mention, true), {.text = "mention"});
+        addHint(hints, keysOf(keymap, Command::stage, true), {.text = "stage"});
+        addHint(hints, keysOf(keymap, Command::unstage, true), {.text = "unstage"});
+        addHint(hints, names(keymap, "<Esc>", Command::escape, true) ? std::string_view{"<Esc>"} : keysOf(keymap, Command::escape, true), {.text = "leave"});
         return true;
       case Mode::search:
         addHint(hints, "<CR>", {.text = "keep the filter"});
@@ -654,36 +657,65 @@ namespace telar::gui::features::explorer {
     // The keys a line of the menu teaches, and what it says while it needs no more than that.
     struct MenuText {
       MenuEntry entry = MenuEntry::rule;
+      // The command whose first keys the line shows; `keys` alone when it has none, and when it
+      // has one, the one sequence shown, while it names the command, or what follows its keys.
+      Command command = Command::none;
       Word keys;
       Word label;
+      bool only = false;
     };
 
     constexpr ds::Array<MenuText, 22> menu_texts{
         {
             {.entry = MenuEntry::rule, .keys = "", .label = ""},
-            {.entry = MenuEntry::hand, .keys = "<CR>", .label = ""},
-            {.entry = MenuEntry::open, .keys = "gf", .label = "Open in the editor"},
-            {.entry = MenuEntry::mention, .keys = "@", .label = ""},
-            {.entry = MenuEntry::rename, .keys = "cw", .label = "Rename"},
-            {.entry = MenuEntry::new_file, .keys = "o", .label = "New file"},
-            {.entry = MenuEntry::new_directory, .keys = "o …/", .label = "New directory"},
-            {.entry = MenuEntry::cut, .keys = "dd", .label = "Cut"},
-            {.entry = MenuEntry::copy, .keys = "yy", .label = "Copy"},
-            {.entry = MenuEntry::paste, .keys = "p", .label = "Paste here"},
-            {.entry = MenuEntry::copy_relative, .keys = "yr", .label = "Copy the relative path"},
-            {.entry = MenuEntry::trash, .keys = "<Del>", .label = "Move to the trash"},
-            {.entry = MenuEntry::shell_here, .keys = "s", .label = "Open a shell here"},
-            {.entry = MenuEntry::change_directory, .keys = "cd", .label = ""},
+            {.entry = MenuEntry::hand, .command = Command::enter, .keys = "", .label = ""},
+            {.entry = MenuEntry::open, .command = Command::open, .keys = "", .label = "Open in the editor"},
+            {.entry = MenuEntry::mention, .command = Command::mention, .keys = "", .label = ""},
+            {.entry = MenuEntry::rename, .command = Command::rename, .keys = "", .label = "Rename"},
+            {.entry = MenuEntry::new_file, .command = Command::create, .keys = "", .label = "New file"},
+            {.entry = MenuEntry::new_directory, .command = Command::create, .keys = " …/", .label = "New directory"},
+            {.entry = MenuEntry::cut, .command = Command::cut, .keys = "", .label = "Cut"},
+            {.entry = MenuEntry::copy, .command = Command::yank, .keys = "", .label = "Copy"},
+            {.entry = MenuEntry::paste, .command = Command::paste, .keys = "", .label = "Paste here"},
+            {.entry = MenuEntry::copy_relative, .command = Command::yank_relative, .keys = "", .label = "Copy the relative path"},
+            {.entry = MenuEntry::trash, .command = Command::cut, .keys = "<Del>", .label = "Move to the trash", .only = true},
+            {.entry = MenuEntry::shell_here, .command = Command::split_shell, .keys = "", .label = "Open a shell here"},
+            {.entry = MenuEntry::change_directory, .command = Command::change_directory, .keys = "", .label = ""},
             {.entry = MenuEntry::window_here, .keys = ":vs", .label = "Open in a new window"},
-            {.entry = MenuEntry::diff, .keys = "=", .label = "Show the diff"},
-            {.entry = MenuEntry::stage, .keys = "ga", .label = "Stage (git add)"},
-            {.entry = MenuEntry::unstage, .keys = "gu", .label = "Unstage"},
-            {.entry = MenuEntry::discard, .keys = "gX", .label = "Discard changes…"},
-            {.entry = MenuEntry::new_window, .keys = "<C-w>v", .label = "New window"},
-            {.entry = MenuEntry::drop_change, .keys = "dd", .label = "Remove from the changes"},
+            {.entry = MenuEntry::diff, .command = Command::toggle_diff, .keys = "", .label = "Show the diff"},
+            {.entry = MenuEntry::stage, .command = Command::stage, .keys = "", .label = "Stage (git add)"},
+            {.entry = MenuEntry::unstage, .command = Command::unstage, .keys = "", .label = "Unstage"},
+            {.entry = MenuEntry::discard, .command = Command::discard, .keys = "", .label = "Discard changes…"},
+            {.entry = MenuEntry::new_window, .command = Command::split_vertical, .keys = "", .label = "New window"},
+            {.entry = MenuEntry::drop_change, .command = Command::cut, .keys = "", .label = "Remove from the changes"},
             {.entry = MenuEntry::write, .keys = ":w", .label = ""},
         },
     };
+
+    // The keys a line of the menu shows, as the map has them.
+    void writeMenuKeys(KeysText& keys, const MenuText& text, const Keymap& keymap) {
+      if (text.command == Command::none) {
+        keys.assign(text.keys);
+        return;
+      }
+
+      if (text.only) {
+        keys.assign(names(keymap, text.keys, text.command) ? std::string_view{text.keys} : std::string_view{});
+        return;
+      }
+
+      const auto bound = keysOf(keymap, text.command);
+      ds::Array<char, pending_bytes> joined{};
+      const std::string_view suffix = text.keys;
+      if (bound.empty() || bound.size() + suffix.size() > joined.size()) {
+        keys.assign(bound);
+        return;
+      }
+
+      std::ranges::copy(bound, joined.viewMut().begin());
+      std::ranges::copy(suffix, joined.viewMut().subspan(bound.size()).begin());
+      keys.assign({joined.data(), bound.size() + suffix.size()});
+    }
 
     // Whether a line's label counts the rows of the selection it acts on.
     constexpr bool countsRows(MenuEntry entry) noexcept {
@@ -1200,7 +1232,7 @@ namespace telar::gui::features::explorer {
       return result;
     }
 
-    if (fixedHints(result, view.mode)) {
+    if (fixedHints(result, view)) {
       return result;
     }
 
@@ -1212,35 +1244,218 @@ namespace telar::gui::features::explorer {
 
     static_cast<void>(state);
     writeEnter(verb, row, focusedPane(context));
-    addHint(result, "<CR>", {.text = verb.view(), .enabled = row != nullptr});
+    const auto& keymap = view.keymap;
+
+    addHint(result, keysOf(keymap, Command::enter), {.text = verb.view(), .enabled = row != nullptr});
     if (!view.edits.empty()) {
       LineText pending;
 
       write(pending, "write {}", view.edits.size());
       addHint(result, ":w", {.text = pending.view()});
-      addHint(result, "u", {.text = "undo"});
+      addHint(result, keysOf(keymap, Command::undo), {.text = "undo"});
     }
 
-    addHint(result, "cw", {.text = "rename", .enabled = entry && tree});
-    addHint(result, "dd", {.text = "cut", .enabled = entry});
-    addHint(result, "yy", {.text = "copy", .enabled = entry});
-    addHint(result, "o", {.text = "new", .enabled = tree});
-    addHint(result, "<C-w>v", {.text = "window"});
+    addHint(result, keysOf(keymap, Command::rename), {.text = "rename", .enabled = entry && tree});
+    addHint(result, keysOf(keymap, Command::cut), {.text = "cut", .enabled = entry});
+    addHint(result, keysOf(keymap, Command::yank), {.text = "copy", .enabled = entry});
+    addHint(result, keysOf(keymap, Command::create), {.text = "new", .enabled = tree});
+    addHint(result, keysOf(keymap, Command::split_vertical), {.text = "window"});
     // Beside the panes, the way back over them; over them the hints are the ones of the design.
     if (view.pinned) {
-      addHint(result, "<C-w>T", {.text = "over the panes"});
+      addHint(result, keysOf(keymap, Command::pin), {.text = "over the panes"});
     }
 
-    addHint(result, "=", {.text = "diff", .enabled = entry && !row->directory});
-    addHint(result, "ga", {.text = "stage", .enabled = entry});
-    addHint(result, "gu", {.text = "unstage", .enabled = entry});
+    addHint(result, keysOf(keymap, Command::toggle_diff), {.text = "diff", .enabled = entry && !row->directory});
+    addHint(result, keysOf(keymap, Command::stage), {.text = "stage", .enabled = entry});
+    addHint(result, keysOf(keymap, Command::unstage), {.text = "unstage", .enabled = entry});
 
     LineText sort;
 
     write(sort, "sort: {}", sortName(window.sort));
-    addHint(result, "S", {.text = sort.view()});
-    addHint(result, "g.", {.text = "dotfiles"});
-    addHint(result, "?", {.text = "help"});
+    addHint(result, keysOf(keymap, Command::cycle_sort), {.text = sort.view()});
+    addHint(result, keysOf(keymap, Command::toggle_hidden), {.text = "dotfiles"});
+    addHint(result, keysOf(keymap, Command::help), {.text = "help"});
+    return result;
+  }
+
+  namespace {
+
+    // What a line of the help shows for one of its keys: the first sequence that names a command;
+    // one sequence, while it names the command; or a text that is no key of the map.
+    struct HelpKey {
+      Command command = Command::none;
+      Word text;
+      bool visual = false;
+      // Its last character alone, after a key it differs from in no other: `<C-w>hjkl`.
+      bool joins = false;
+      // The letter a command that takes one is shown with.
+      char letter = '\0';
+    };
+
+    constexpr HelpKey key(Command command) noexcept {
+      return {.command = command};
+    }
+
+    constexpr HelpKey selecting(Command command) noexcept {
+      return {.command = command, .visual = true};
+    }
+
+    constexpr HelpKey joined(Command command) noexcept {
+      return {.command = command, .joins = true};
+    }
+
+    constexpr HelpKey lettered(Command command, char letter) noexcept {
+      return {.command = command, .letter = letter};
+    }
+
+    constexpr HelpKey only(Command command, Word text) noexcept {
+      return {.command = command, .text = text};
+    }
+
+    constexpr HelpKey said(Word text) noexcept {
+      return {.text = text};
+    }
+
+    inline constexpr std::size_t help_line_keys = 5;
+
+    struct HelpText {
+      Word group;
+      ds::Array<HelpKey, help_line_keys> keys{};
+      Word label;
+    };
+
+    constexpr ds::Array<HelpText, help_lines> help_texts{
+        {
+            {.group = "Moving", .keys = {{key(Command::down), key(Command::up)}}, .label = "down, up; with a count"},
+            {.group = "Moving", .keys = {{key(Command::top), key(Command::bottom)}}, .label = "first, last; with a count, that row"},
+            {.group = "Moving", .keys = {{key(Command::half_page_down), key(Command::half_page_up)}}, .label = "half a page"},
+            {.group = "Moving", .keys = {{key(Command::collapse), key(Command::expand)}}, .label = "fold, unfold; unfold on a file opens it"},
+            {.group = "Moving", .keys = {{key(Command::toggle_fold), key(Command::fold_all), key(Command::unfold_all)}}, .label = "toggle a fold, fold all, unfold a level"},
+            {.group = "Moving", .keys = {{key(Command::next_change), key(Command::previous_change)}}, .label = "next, previous change of git"},
+            {.group = "Moving", .keys = {{key(Command::next_touch), key(Command::previous_touch)}}, .label = "next, previous file an agent touched"},
+            {.group = "Roots and jumps", .keys = {{key(Command::enter)}}, .label = "enter a directory"},
+            {.group = "Roots and jumps", .keys = {{key(Command::parent)}}, .label = "the directory above"},
+            {.group = "Roots and jumps", .keys = {{key(Command::workspace_root), key(Command::home)}}, .label = "the workspace's root, the home"},
+            {.group = "Roots and jumps", .keys = {{key(Command::scope_pane), key(Command::scope_workspace), key(Command::scope_machine)}}, .label = "follow pane, workspace, machine"},
+            {.group = "Roots and jumps", .keys = {{lettered(Command::mark, 'a'), lettered(Command::jump_to_mark, 'a')}}, .label = "set a mark, jump to it"},
+            {.group = "Roots and jumps", .keys = {{key(Command::jump_back), key(Command::jump_forward)}}, .label = "back, forward in the jumps"},
+            {.group = "Roots and jumps", .keys = {{key(Command::next_lens), key(Command::previous_lens)}}, .label = "next, previous lens"},
+            {.group = "Editing as text", .keys = {{key(Command::rename), only(Command::rename, "i"), only(Command::rename, "a")}}, .label = "rename on the row"},
+            {.group = "Editing as text", .keys = {{key(Command::create)}}, .label = "new entry; name/ is a directory"},
+            {.group = "Editing as text", .keys = {{key(Command::cut)}}, .label = "cut: deletes, or moves once pasted"},
+            {.group = "Editing as text", .keys = {{key(Command::yank)}}, .label = "copy, and its path to the clipboard"},
+            {.group = "Editing as text", .keys = {{key(Command::paste)}}, .label = "paste into the row's directory"},
+            {.group = "Editing as text", .keys = {{key(Command::undo)}}, .label = "undo a change, else the last :w"},
+            {.group = "Editing as text", .keys = {{said(":w :w!")}}, .label = "show the plan; overwrite what exists"},
+            {.group = "Editing as text", .keys = {{said(":e! :q!")}}, .label = "discard the changes"},
+            {.group = "Windows", .keys = {{key(Command::split_vertical), key(Command::split_horizontal)}}, .label = "another window beside, below"},
+            {.group = "Windows", .keys = {{key(Command::next_window), key(Command::window_left), joined(Command::window_down), joined(Command::window_up), joined(Command::window_right)}}, .label = "the next window, the one that way"},
+            {.group = "Windows", .keys = {{key(Command::close_window), key(Command::only_window)}}, .label = "close this one, keep only this one"},
+            {.group = "Windows", .keys = {{said(":e PATH :vs PATH")}}, .label = "this window, or a new one, at a path"},
+            {.group = "Windows", .keys = {{key(Command::pin), said(":pin")}}, .label = "beside the panes, or over them again"},
+            {.group = "Windows", .keys = {{said("prefix o")}}, .label = "beside them: to it, and back to the pane"},
+            {.group = "Windows", .keys = {{said("focus keys")}}, .label = "beside them: in from the last pane, out"},
+            {.group = "Machines", .keys = {{key(Command::next_machine)}}, .label = "this window on the next machine"},
+            {.group = "Machines", .keys = {{said(":machine LABEL")}}, .label = "go to a machine; alone, list them"},
+            {.group = "Machines", .keys = {{said(":e LABEL:PATH")}}, .label = "a path of another machine; :vs and :sp too"},
+            {.group = "Machines", .keys = {{lettered(Command::mark, 'A'), lettered(Command::jump_to_mark, 'A')}}, .label = "a mark in upper case keeps its machine"},
+            {.group = "Machines", .keys = {{key(Command::open), key(Command::yank)}}, .label = "open where the file is; copy LABEL:/path"},
+            {.group = "Toward the panes", .keys = {{key(Command::enter)}}, .label = "as the focused pane takes it"},
+            {.group = "Toward the panes", .keys = {{key(Command::visual), selecting(Command::enter)}}, .label = "insert several, directories too"},
+            {.group = "Toward the panes", .keys = {{key(Command::open)}}, .label = "open in the tab's editor"},
+            {.group = "Toward the panes", .keys = {{key(Command::change_directory), key(Command::split_shell)}}, .label = "cd the shell here, a new shell here"},
+            {.group = "Toward the panes", .keys = {{key(Command::mention)}}, .label = "mention to the agent"},
+            {.group = "Toward the panes", .keys = {{key(Command::yank_relative), key(Command::yank_name)}}, .label = "copy the relative path, the name"},
+            {.group = "Toward the panes", .keys = {{key(Command::repeat)}}, .label = "repeat"},
+            {.group = "Toward the panes", .keys = {{key(Command::enter), key(Command::mention), said("y")}}, .label = "from another machine: bring a copy"},
+            {.group = "Git, sizes and what shows", .keys = {{key(Command::toggle_diff)}}, .label = "the diff below the row"},
+            {.group = "Git, sizes and what shows", .keys = {{key(Command::stage), key(Command::unstage)}}, .label = "stage, unstage"},
+            {.group = "Git, sizes and what shows", .keys = {{key(Command::discard)}}, .label = "discard changes, through the plan"},
+            {.group = "Git, sizes and what shows", .keys = {{key(Command::commit)}}, .label = ":commit with a message"},
+            {.group = "Git, sizes and what shows", .keys = {{key(Command::cycle_sort)}}, .label = "sort by name, size, time"},
+            {.group = "Git, sizes and what shows", .keys = {{key(Command::toggle_hidden), key(Command::toggle_ignored)}}, .label = "dotfiles, what git ignores"},
+            {.group = "Git, sizes and what shows", .keys = {{key(Command::refresh)}}, .label = "read again"},
+            {.group = "Modes", .keys = {{key(Command::visual)}}, .label = "visual: copy, cut, insert, mention"},
+            {.group = "Modes", .keys = {{key(Command::search), key(Command::next_match), key(Command::previous_match)}}, .label = "filter every path below; next, previous"},
+            {.group = "Modes", .keys = {{key(Command::command_line)}}, .label = "e w vs sp cd commit marks cancel q"},
+            {.group = "Modes", .keys = {{said("<Tab>")}}, .label = "on a line of :, complete a directory"},
+            {.group = "Modes", .keys = {{key(Command::toggle_follow)}}, .label = "follow the pane"},
+            {.group = "Modes", .keys = {{key(Command::quit)}}, .label = "close"},
+            {.group = "Modes", .keys = {{key(Command::help)}}, .label = "this help"},
+            {.group = "Pointer and shortcuts", .keys = {{said("right click")}}, .label = "the row's menu, with the key of each"},
+            {.group = "Pointer and shortcuts", .keys = {{said("Shift+F10")}}, .label = "the menu, from the keys"},
+            {.group = "Pointer and shortcuts", .keys = {{said("drag")}}, .label = "moves there on :w; Alt copies"},
+            {.group = "Pointer and shortcuts", .keys = {{said("drag to a machine")}}, .label = "copies there on :w; Shift moves"},
+            {.group = "Pointer and shortcuts", .keys = {{said("drop files")}}, .label = "from the desktop: copies there on :w"},
+            {.group = "Pointer and shortcuts", .keys = {{said("drag out")}}, .label = "gives another program the paths"},
+            {.group = "Pointer and shortcuts", .keys = {{only(Command::yank, "<D-c>"), only(Command::cut, "<D-x>"), only(Command::paste, "<D-v>")}}, .label = "copy, cut, paste; Control too"},
+            {.group = "Pointer and shortcuts", .keys = {{only(Command::undo, "<D-z>"), only(Command::write, "<D-s>"), said("F2")}}, .label = "undo, write, rename"},
+        },
+    };
+
+    // The sequence a key of the help shows now; empty for a command no key names.
+    tbc::val_a<std::string_view> shownKeys(tbc::ref_a<Keymap> keymap, tbc::ref_a<HelpKey> shown) noexcept {
+      if (shown.command == Command::none) {
+        return std::string_view{shown.text};
+      }
+
+      if (!std::string_view{shown.text}.empty()) {
+        return names(keymap, shown.text, shown.command, shown.visual) ? std::string_view{shown.text} : std::string_view{};
+      }
+
+      return keysOf(keymap, shown.command, shown.visual);
+    }
+
+    // Adds the keys of a line to its text, as far as they fit.
+    void writeHelpKeys(runtime::FixedText<help_keys_bytes>& keys, const HelpText& text, const Keymap& keymap) {
+      ds::Array<char, help_keys_bytes> written{};
+      std::size_t length = 0;
+      std::string_view last;
+      const auto add = [&](std::string_view piece) {
+        const auto fits = std::min(piece.size(), written.size() - length);
+
+        std::ranges::copy(piece.substr(0, fits), written.viewMut().subspan(length).begin());
+        length += fits;
+      };
+
+      for (const auto& shown : text.keys) {
+        const auto sequence = shownKeys(keymap, shown);
+        const bool repeated = !sequence.empty() && std::string_view{written.data(), length}.ends_with(sequence) && shown.command != Command::none && !std::string_view{shown.text}.empty();
+        if (sequence.empty() || repeated) {
+          continue;
+        }
+
+        // `<C-w>j` after `<C-w>h` is its `j` alone.
+        if (shown.joins && !last.empty() && sequence.size() == last.size() && sequence.substr(0, sequence.size() - 1) == last.substr(0, last.size() - 1)) {
+          add(sequence.substr(sequence.size() - 1));
+        } else {
+          add(length == 0 ? std::string_view{} : std::string_view{" "});
+          add(sequence);
+        }
+
+        if (shown.letter != '\0') {
+          add({&shown.letter, 1});
+        }
+
+        last = sequence;
+      }
+
+      keys.assign({written.data(), length});
+    }
+
+  }
+
+  Help help(const View& view) {
+    Help result;
+
+    for (const auto& text : help_texts) {
+      auto& line = result.lines.atMut(result.count++);
+
+      line.group = text.group;
+      line.label = text.label;
+      writeHelpKeys(line.keys, text, view.keymap);
+    }
+
     return result;
   }
 
@@ -1354,7 +1569,7 @@ namespace telar::gui::features::explorer {
       line.rule = item.entry == MenuEntry::rule;
       line.enabled = item.enabled;
       line.current = index == view.menu.current;
-      line.keys = text.keys;
+      writeMenuKeys(line.keys, text, view.keymap);
       writeMenuLabel(line.label, text, view, context);
       if (chosen_rows > 1 && countsRows(item.entry)) {
         LineText counted;

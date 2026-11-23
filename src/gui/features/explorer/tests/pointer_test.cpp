@@ -78,11 +78,11 @@ namespace {
 
     const auto shown = menu(explorer.view, explorer.state, explorer.context());
 
-    check(shown.count == explorer.view.menu.count && shown.lines[0].current && shown.lines[0].label.view() == "Insert → 3 zsh" && shown.lines[0].keys == "<CR>", "each line says what its key does here");
-    check(shown.lines[2].label.view() == "Mention to Claude Code" && shown.lines[2].keys == "@");
+    check(shown.count == explorer.view.menu.count && shown.lines[0].current && shown.lines[0].label.view() == "Insert → 3 zsh" && shown.lines[0].keys.view() == "<CR>", "each line says what its key does here");
+    check(shown.lines[2].label.view() == "Mention to Claude Code" && shown.lines[2].keys.view() == "@");
     check(shown.lines[3].rule && shown.lines[10].label.view() == "Paste here" && !shown.lines[10].enabled);
-    check(shown.lines[15].label.view() == "cd pane 3 here" && shown.lines[6].keys == "o …/");
-    check(status(explorer.view, explorer.state, explorer.context(), 0).mode == "NORMAL" && hints(explorer.view, explorer.state, explorer.context()).items[0].keys == "j k");
+    check(shown.lines[15].label.view() == "cd pane 3 here" && shown.lines[6].keys.view() == "o …/");
+    check(status(explorer.view, explorer.state, explorer.context(), 0).mode == "NORMAL" && hints(explorer.view, explorer.state, explorer.context()).items[0].keys.view() == "j k");
     cancel(explorer.view, explorer.state, explorer.context());
     check(explorer.view.mode == Mode::normal && menu(explorer.view, explorer.state, explorer.context()).count == 0, "Escape closes it");
 

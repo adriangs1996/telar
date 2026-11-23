@@ -170,8 +170,11 @@ export namespace telar::gui::features::explorer {
   [[nodiscard]] StatusLook status(const View& view, const State& state, const Context& context, std::size_t window);
 
   // A key and what it does now, for the line of hints.
+  // The keys a hint or a line of the menu teaches, as the map has them.
+  using KeysText = runtime::FixedText<pending_bytes>;
+
   struct Hint {
-    Word keys;
+    KeysText keys;
     LineText label;
     bool enabled = true;
   };
@@ -184,6 +187,24 @@ export namespace telar::gui::features::explorer {
   };
 
   [[nodiscard]] Hints hints(const View& view, const State& state, const Context& context);
+
+  // A line of the help: the group it is listed under, the keys that do it as the map has them,
+  // none for a command no key names, and what they do.
+  inline constexpr std::size_t help_keys_bytes = 64;
+  inline constexpr std::size_t help_lines = 64;
+
+  struct HelpLine {
+    Word group;
+    runtime::FixedText<help_keys_bytes> keys;
+    Word label;
+  };
+
+  struct Help {
+    ds::Array<HelpLine, help_lines> lines{};
+    std::size_t count = 0;
+  };
+
+  [[nodiscard]] Help help(const View& view);
 
   // The lenses of the current window, each with how many rows it would list.
   struct LensLook {
@@ -262,7 +283,7 @@ export namespace telar::gui::features::explorer {
   // place of one that parts two groups.
   struct MenuLine {
     LineText label;
-    Word keys;
+    KeysText keys;
     bool enabled = true;
     bool rule = false;
     bool current = false;
