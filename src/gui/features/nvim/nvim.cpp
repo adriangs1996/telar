@@ -33,7 +33,7 @@ namespace telar::gui::features::nvim {
     }
 
     std::uint64_t messageKey(const NvimMessageItem& item) noexcept {
-      const auto id = std::bit_cast<std::array<char, sizeof(item.id)>>(item.id);
+      const auto id = std::bit_cast<ds::Array<char, sizeof(item.id)>>(item.id);
       const auto kind = static_cast<char>(std::to_underlying(item.kind));
 
       return runtime::fnv1a64(std::string_view{item.text}, runtime::fnv1a64(std::string_view{&kind, 1}, runtime::fnv1a64(std::string_view{id.data(), id.size()})));
@@ -860,7 +860,7 @@ namespace telar::gui::features::nvim {
     return true;
   }
 
-  bool dismissMessage(State& state, std::uint64_t pane_id, std::uint64_t key) {
+  bool dismissMessage(State& state, std::uint64_t pane_id, std::uint64_t key) { // NOLINT(bugprone-easily-swappable-parameters): the pane, then what of it, as every use case of the feature takes them
     auto* editor = Access::find(state, pane_id);
     if (editor == nullptr) {
       return false;

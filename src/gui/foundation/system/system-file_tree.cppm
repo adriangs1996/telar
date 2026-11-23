@@ -19,7 +19,7 @@ export {
     };
 
     struct FileTreeFile {
-      FileTreeFile(Memory& memory, std::string_view path);
+      FileTreeFile(Memory& memory, std::string_view name);
 
       // From the tree's directory, its names joined by '/'.
       ds::String<Memory> path;

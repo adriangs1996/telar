@@ -148,7 +148,8 @@ namespace telar::runtime {
       try {
         const ExecutablePath self;
         const std::string_view own = self.view();
-        const auto directory = own.substr(0, own.rfind('/') + 1);
+        // Up to the last slash and with it; nothing of a path without one.
+        const std::string_view directory{own.data(), own.rfind('/') + 1};
         ds::Array<char, PATH_MAX> joined{};
         struct stat status{};
 
@@ -199,9 +200,11 @@ namespace telar::runtime {
       for (const auto part : std::views::split(path, '/')) {
         const std::string_view name{part};
         const bool printable = std::ranges::none_of(name, [](char character) {
+          constexpr unsigned char first_printable = 0x20;
+          constexpr unsigned char delete_character = 0x7f;
           const auto byte = static_cast<unsigned char>(character);
 
-          return byte < 0x20 || byte == 0x7f || byte == '\\';
+          return byte < first_printable || byte == delete_character || byte == '\\';
         });
 
         if (name.empty() || name.size() > NAME_MAX || name.front() == '.' || !printable || ++depth > max_configuration_depth) {
@@ -217,7 +220,7 @@ namespace telar::runtime {
     }
 
     // Removes `name` in `parent` and everything below it, without following a link.
-    void removeTree(int parent, const char* name) {
+    void removeTree(int parent, const char* name) { // NOLINT(misc-no-recursion): it goes as deep as the directories on disk, which the length of a path bounds
       if (::unlinkat(parent, name, 0) == 0) {
         return;
       }
@@ -231,7 +234,7 @@ namespace telar::runtime {
       ds::Array<char, NAME_MAX + 1> child{};
 
       for (const auto* entry = entries.next(); entry != nullptr; entry = entries.next()) {
-        const std::string_view child_name{entry->d_name};
+        const std::string_view child_name{std::data(entry->d_name)};
         if (child_name == "." || child_name == "..") {
           continue;
         }
@@ -309,14 +312,14 @@ namespace telar::runtime {
 
     // Removes what is below `directory`, at `prefix`, that the client did not send. False when
     // the directory is left holding nothing.
-    bool prune(const Pruning& pruning, int directory, ds::String<ConcurrentMemory>& prefix, std::size_t depth) {
+    bool prune(Pruning& pruning, int directory, ds::String<ConcurrentMemory>& prefix, std::size_t depth) { // NOLINT(misc-no-recursion): a configuration is max_configuration_depth directories deep at most
       ds::Vec<ds::String<ConcurrentMemory>, ConcurrentMemory> names{pruning.memory};
 
       {
         DirectoryStream entries{directory};
 
         for (const auto* entry = entries.next(); entry != nullptr; entry = entries.next()) {
-          names.emplace(pruning.memory, std::string_view{entry->d_name});
+          names.emplace(pruning.memory, std::string_view{std::data(entry->d_name)});
         }
       }
 
@@ -349,6 +352,7 @@ namespace telar::runtime {
 
           // A directory a kept file is below holds it; one left empty goes.
           const auto child = openDirectoryAt(directory, name.data());
+
           prefix.append("/");
           if ((child && prune(pruning, child.get(), prefix, depth + 1)) || ::unlinkat(directory, name.data(), AT_REMOVEDIR) != 0) {
             holding = true;
@@ -393,7 +397,7 @@ namespace telar::runtime {
     }
 
     createPrivateDirectory(directory);
-    ds::String<ConcurrentMemory> path{memory, directory};
+    const ds::String<ConcurrentMemory> path{memory, directory};
     const FileDescriptor root{::open(path.data(), combineFlags(O_RDONLY, O_DIRECTORY, O_NOFOLLOW, O_CLOEXEC))}; // NOLINT(cppcoreguidelines-pro-type-vararg): open's C signature is variadic
     if (!root) {
       throw SystemError{"Open the editor's configuration directory"};
@@ -405,10 +409,10 @@ namespace telar::runtime {
     for (const auto& file : files) {
       const auto slash = file.path.rfind('/');
       const auto parent = slash == std::string_view::npos ? FileDescriptor{} : openPath(root.get(), file.path.substr(0, slash), change);
-      const int at = parent ? parent.get() : root.get();
+      const int holder = parent ? parent.get() : root.get();
       const auto base = slash == std::string_view::npos ? file.path : file.path.substr(slash + 1);
 
-      if (holds(memory, at, base, file.content)) {
+      if (holds(memory, holder, base, file.content)) {
         continue;
       }
 
@@ -416,12 +420,12 @@ namespace telar::runtime {
       std::ranges::copy(base, name.viewMut().begin());
       struct stat state{};
       // A directory where the client has a file goes, with what it holds.
-      if (::fstatat(at, name.data(), &state, AT_SYMLINK_NOFOLLOW) == 0 && S_ISDIR(state.st_mode)) {
-        removeTree(at, name.data());
+      if (::fstatat(holder, name.data(), &state, AT_SYMLINK_NOFOLLOW) == 0 && S_ISDIR(state.st_mode)) {
+        removeTree(holder, name.data());
         ++change.removed;
       }
 
-      if (const int failure = writePrivateFile(at, base, file.content, PrivateFileMode::replace); failure != 0) {
+      if (const int failure = writePrivateFile(holder, base, file.content, PrivateFileMode::replace); failure != 0) {
         throw SystemError{"Write a file of the editor's configuration", failure};
       }
 
@@ -429,8 +433,9 @@ namespace telar::runtime {
     }
 
     ds::String<ConcurrentMemory> prefix{memory};
+    Pruning pruning{.memory = memory, .kept = kept.view(), .change = change};
 
-    static_cast<void>(prune({.memory = memory, .kept = kept.view(), .change = change}, root.get(), prefix, 0));
+    static_cast<void>(prune(pruning, root.get(), prefix, 0));
     return change;
   }
 
