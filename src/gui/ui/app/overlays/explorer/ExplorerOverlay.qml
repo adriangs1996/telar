@@ -13,9 +13,14 @@ FocusScope {
     required property ExplorerController controller
     required property var colors
     required property var typography
-    property real ratio: 1
-    // How far inside the area of the panes it stands: that margin hides them too.
-    property real inset: 0
+    // The area of the panes, which the explorer takes whole.
+    required property rect area
+    // The design this is drawn from measures its boxes for a font of 12px, whose cell is 7.2px
+    // wide. Each box takes the size of the terminal's font, as the text in it does, so the
+    // explorer keeps its proportions whatever the font.
+    readonly property real ratio: (grid.cellWidth ?? 7.2) / 7.2
+    // How far inside the area it stands: that margin hides the panes too.
+    readonly property real inset: Math.round(6 * ratio)
 
     readonly property var windows: controller.windows
     readonly property var line: controller.line
@@ -36,19 +41,43 @@ FocusScope {
     readonly property var grid: typography.grid ?? ({})
     readonly property var smallGrid: scaled(grid, 0.92)
     readonly property var tinyGrid: scaled(grid, 0.84)
+    // The sizes of what is written in the window's own font: a label, and a heading over a part.
+    readonly property real labelSize: 11.5 * ratio
+    readonly property real headingSize: 10 * ratio
     readonly property real hairline: 1 / Screen.devicePixelRatio
-    readonly property real rowHeight: Math.round(Math.max(22 * ratio, (grid.cellHeight ?? 16) + 3 * ratio))
-    readonly property real statusHeight: Math.round(Math.max(20 * ratio, (smallGrid.cellHeight ?? 16) + 3 * ratio))
-    readonly property real headHeight: Math.round(Math.max(34 * ratio, rowHeight + 10 * ratio))
-    readonly property real barHeight: Math.round(Math.max(30 * ratio, typography.smallRow + 12 * ratio))
-    readonly property real commandHeight: Math.round(Math.max(24 * ratio, (grid.cellHeight ?? 16) + 6 * ratio))
+    // A frame's line: whole pixels, so it is drawn sharp at any size of the font.
+    readonly property real edge: Math.max(hairline, Math.round(ratio))
+    // A row's pitch is seldom a whole number of pixels: each row starts on the pixel nearest
+    // its place, so a long list does not drift from the pitch.
+    readonly property real rowPitch: 22 * ratio
+    readonly property real rowHeight: Math.round(rowPitch)
+    readonly property real listPadding: 4 * ratio
+    // With the line above it.
+    readonly property real statusHeight: Math.round(20 * ratio)
+    readonly property real headHeight: Math.round(36 * ratio)
+    readonly property real barHeight: Math.round(35.2 * ratio)
+    readonly property real commandHeight: Math.round(24 * ratio)
+    readonly property real hintsHeight: Math.round(30.4 * ratio)
     readonly property real previewWidth: windows.length > 1 ? 0 : Math.round(Math.max(300 * ratio, body.width * 0.38))
     readonly property real indent: 14 * ratio
     readonly property real gutter: 10 * ratio
 
     objectName: "explorerOverlay"
+    x: area.x + inset
+    y: area.y + inset
+    width: Math.max(0, area.width - 2 * inset)
+    height: Math.max(0, area.height - 2 * inset)
     visible: controller.showing
     z: 40
+
+    // Where the row `index` of a window's list starts, and the row a place in the list is in.
+    function rowY(index) {
+        return Math.round(listPadding + index * rowPitch);
+    }
+
+    function rowAt(y) {
+        return Math.floor((y - listPadding) / rowPitch);
+    }
 
     // `grid` at `factor` of its size. A cell is a whole number of the screen's pixels, as the text
     // drawn in it takes: what is measured in cells here then fits what is drawn.
@@ -99,7 +128,7 @@ FocusScope {
             if (point.x < 0 || point.y < 0 || point.x >= pane.rowsArea.width || point.y >= pane.rowsArea.height)
                 continue;
 
-            const row = pane.modelData.top + Math.floor((point.y - 4 * ratio) / rowHeight);
+            const row = pane.modelData.top + rowAt(point.y);
 
             return {window: index, row: row >= 0 && row < pane.modelData.rows ? row : -1};
         }
@@ -196,7 +225,7 @@ FocusScope {
         width: root.width + 2 * root.hairline
         height: root.height + 2 * root.hairline
         radius: 8 * root.ratio + root.hairline
-        color: Qt.rgba(0, 0, 0, 0.45)
+        color: Qt.rgba(0, 0, 0, 0.27)
     }
 
     NativeRoundedRectangle {
@@ -204,7 +233,7 @@ FocusScope {
         anchors.fill: parent
         radius: 8 * root.ratio
         color: root.colors.surface_dim
-        borderWidth: Math.max(root.hairline, 1 * root.ratio)
+        borderWidth: root.edge
         borderColor: root.colors.overlay0
         borderAlpha: 1
     }
@@ -213,6 +242,8 @@ FocusScope {
     Item {
         id: bar
         x: root.gutter
+        // Inside the frame's line, as everything below it.
+        y: root.edge
         width: root.width - 2 * root.gutter
         height: root.barHeight
 
@@ -259,7 +290,7 @@ FocusScope {
                         width: implicitWidth
                         height: parent.height
                         text: lens.modelData.name
-                        pixelSize: root.typography.small
+                        pixelSize: root.labelSize
                         color: lens.on ? root.colors.text : root.colors.subtext0
                         elide: Text.ElideNone
                     }
@@ -341,7 +372,7 @@ FocusScope {
                         width: implicitWidth
                         height: parent.height
                         text: scope.modelData.name
-                        pixelSize: root.typography.small
+                        pixelSize: root.labelSize
                         color: scope.on ? root.colors.accent : root.colors.subtext0
                         elide: Text.ElideNone
                     }
@@ -357,7 +388,7 @@ FocusScope {
     }
 
     Rectangle {
-        y: bar.height
+        y: bar.y + bar.height
         width: root.width
         height: root.hairline
         color: root.colors.surface1
@@ -368,9 +399,9 @@ FocusScope {
         id: body
         // Inside the frame: a row's mark stands beside its line, not on it.
         x: surface.borderWidth
-        y: bar.height + root.hairline
+        y: bar.y + bar.height + root.hairline
         width: root.width - 2 * x
-        height: Math.max(0, root.height - y - command.height - hints.height)
+        height: Math.max(0, root.height - y - command.height - hints.height - root.edge)
 
         Repeater {
             id: panes
@@ -386,7 +417,7 @@ FocusScope {
                 readonly property bool sideBySide: root.controller.sideBySide
                 readonly property real room: body.width - root.previewWidth
                 readonly property bool current: modelData.current
-                readonly property int visibleRows: Math.max(1, Math.floor(list.height / root.rowHeight))
+                readonly property int visibleRows: Math.max(1, Math.floor((list.height - root.listPadding) / root.rowPitch))
                 readonly property Item rowsArea: list
 
                 x: sideBySide ? Math.round(index * room / count) : 0
@@ -402,8 +433,8 @@ FocusScope {
                 // Between two windows.
                 Rectangle {
                     visible: pane.index > 0
-                    width: pane.sideBySide ? Math.max(root.hairline, 1 * root.ratio) : parent.width
-                    height: pane.sideBySide ? parent.height : Math.max(root.hairline, 1 * root.ratio)
+                    width: pane.sideBySide ? root.edge : parent.width
+                    height: pane.sideBySide ? parent.height : root.edge
                     color: root.colors.overlay0
                     z: 2
                 }
@@ -565,16 +596,16 @@ FocusScope {
                             readonly property real leading: root.gutter + record.depth * root.indent
                             readonly property color nameColor: record.removed ? root.colors.red : record.added ? root.colors.green : record.renamed ? root.colors.yellow : record.ignored ? root.colors.overlay1 : record.directory ? root.colors.accent : root.colors.text
 
-                            y: 4 * root.ratio + index * root.rowHeight
+                            y: root.rowY(index)
                             width: list.width - (scrollbar.visible ? scrollbar.width + 2 * root.ratio : 0)
-                            height: root.rowHeight
+                            height: root.rowY(index + 1) - y
 
                             // The directory that would take the rows dragged.
                             Rectangle {
                                 anchors.fill: parent
                                 visible: root.dragging && root.dropWindow === pane.index && root.dropRow === pane.modelData.top + row.index
                                 color: Qt.alpha(root.colors.accent, 0.16)
-                                border.width: Math.max(root.hairline, 1 * root.ratio)
+                                border.width: root.edge
                                 border.color: root.colors.accent
                             }
 
@@ -613,11 +644,14 @@ FocusScope {
                                 id: icon
                                 x: row.leading + 16 * root.ratio
                                 y: Math.round((parent.height - height) / 2)
-                                width: Math.round((root.grid.cellHeight ?? 16) * 0.82)
+                                // The design's glyph of 13px, in a box 1.25 times as wide. The
+                                // window draws an icon a fifth smaller than a browser does at the
+                                // same size, so it asks for one that much larger.
+                                width: Math.round(1.25 * 13 * root.ratio)
                                 height: width
                                 visible: row.entry && (row.record.icon ?? "").length > 0
                                 glyph: row.record.icon ?? ""
-                                pixelSize: width
+                                pixelSize: 15.75 * root.ratio
                                 color: root.colors[row.record.iconTone ?? "subtext0"] ?? root.colors.subtext0
                                 opacity: row.record.removed || row.record.ignored ? 0.45 : 1
                             }
@@ -677,7 +711,7 @@ FocusScope {
                                             anchors.fill: parent
                                             radius: 3 * root.ratio
                                             color: "transparent"
-                                            borderWidth: Math.max(root.hairline, 1 * root.ratio)
+                                            borderWidth: root.edge
                                             borderColor: root.colors.overlay1
                                             borderAlpha: 1
                                         }
@@ -692,16 +726,6 @@ FocusScope {
                                             color: root.colors.accent
                                         }
                                     }
-                                }
-
-                                CellText {
-                                    width: implicitWidth
-                                    height: parent.height
-                                    visible: row.record.below > 0
-                                    text: "●" + row.record.below
-                                    grid: root.tinyGrid
-                                    color: root.colors.yellow
-                                    bold: true
                                 }
 
                                 CellText {
@@ -722,15 +746,29 @@ FocusScope {
                                     color: root.colors.red
                                 }
 
-                                // The index's column, then the working tree's, as `git status -s`.
+                                // What git says: the index's column, then the working tree's, as
+                                // `git status -s`; of a directory, how many paths changed below it.
                                 Item {
-                                    width: Math.round(2.4 * (root.smallGrid.cellWidth ?? 8))
+                                    width: Math.max(Math.round(2.4 * (root.smallGrid.cellWidth ?? 8)), below.visible ? below.implicitWidth : 0)
                                     height: parent.height
                                     visible: row.record.kind !== "pane"
 
                                     CellText {
+                                        id: below
+                                        x: parent.width - width
                                         width: implicitWidth
                                         height: parent.height
+                                        visible: row.record.below > 0
+                                        text: "●" + row.record.below
+                                        grid: root.tinyGrid
+                                        color: root.colors.yellow
+                                        bold: true
+                                    }
+
+                                    CellText {
+                                        width: implicitWidth
+                                        height: parent.height
+                                        visible: !below.visible
                                         text: row.record.staged ?? ""
                                         grid: root.smallGrid
                                         color: root.colors.green
@@ -741,6 +779,7 @@ FocusScope {
                                         x: Math.round(1.2 * (root.smallGrid.cellWidth ?? 8))
                                         width: implicitWidth
                                         height: parent.height
+                                        visible: !below.visible
                                         text: row.record.unstaged ?? ""
                                         grid: root.smallGrid
                                         color: row.record.unstaged === "U" ? root.colors.blue : row.record.unstaged === "!" ? root.colors.red : root.colors.yellow
@@ -756,6 +795,8 @@ FocusScope {
 
                                     Rectangle {
                                         id: track
+                                        // Beside the size, which is four letters wide at most.
+                                        x: Math.round(parent.width - (30.4 + 6 + 32) * root.ratio)
                                         y: Math.round((parent.height - height) / 2)
                                         width: 32 * root.ratio
                                         height: 4 * root.ratio
@@ -815,7 +856,7 @@ FocusScope {
                                 x: label.x
                                 y: Math.round(parent.height / 2)
                                 width: Math.min(label.width, label.implicitWidth)
-                                height: Math.max(root.hairline, 1 * root.ratio)
+                                height: root.edge
                                 visible: row.record.removed && !row.record.editing
                                 color: root.colors.red
                             }
@@ -830,7 +871,7 @@ FocusScope {
                         height: root.rowHeight
                         visible: pane.modelData.rows === 0
                         text: pane.modelData.loading ? "Reading…" : "Nothing listed here"
-                        pixelSize: root.typography.small
+                        pixelSize: root.labelSize
                         color: root.colors.subtext0
                     }
 
@@ -839,7 +880,7 @@ FocusScope {
                         anchors.fill: parent
                         visible: root.dragging && root.dropWindow === pane.index && root.dropRow < 0
                         color: "transparent"
-                        border.width: Math.max(root.hairline, 1 * root.ratio)
+                        border.width: root.edge
                         border.color: root.colors.accent
                     }
 
@@ -854,7 +895,7 @@ FocusScope {
                         property bool waiting: false
 
                         function rowOf(mouse) {
-                            return pane.modelData.top + Math.floor((mouse.y - 4 * root.ratio) / root.rowHeight);
+                            return pane.modelData.top + root.rowAt(mouse.y);
                         }
 
                         onPressed: mouse => {
@@ -1062,7 +1103,7 @@ FocusScope {
             clip: true
 
             Rectangle {
-                width: Math.max(root.hairline, 1 * root.ratio)
+                width: root.edge
                 height: parent.height
                 color: root.colors.surface1
             }
@@ -1076,7 +1117,7 @@ FocusScope {
 
                 Item {
                     width: parent.width
-                    height: Math.round((root.grid.cellHeight ?? 16) + 6 * root.ratio)
+                    height: Math.round((root.grid.cellHeight ?? 16) + 4 * root.ratio)
 
                     ChromeIcon {
                         id: previewIcon
@@ -1109,9 +1150,11 @@ FocusScope {
                     clip: true
                 }
 
-                // What is known of it.
+                // What is known of it, a line's height apart from what is above and below.
                 Column {
                     width: parent.width
+                    topPadding: root.labelSize + 1.6 * root.ratio
+                    bottomPadding: root.labelSize
                     spacing: 2 * root.ratio
 
                     Repeater {
@@ -1121,8 +1164,8 @@ FocusScope {
                             id: fact
 
                             required property var modelData
-                            readonly property real labelWidth: 96 * root.ratio
-                            readonly property real line: Math.round(Math.max(root.typography.smallRow, (root.smallGrid.cellHeight ?? 16) + 2 * root.ratio))
+                            readonly property real labelWidth: 87 * root.ratio
+                            readonly property real line: Math.round(17.6 * root.ratio)
                             readonly property bool detailed: (modelData.detail ?? "").length > 0 && modelData.label === "Last commit"
                             // The subject of a commit takes a second line when it is long.
                             readonly property var subject: detailed ? root.folded(modelData.detail ?? "", width - labelWidth, root.smallGrid) : ["", ""]
@@ -1134,7 +1177,7 @@ FocusScope {
                                 width: fact.labelWidth
                                 height: fact.line
                                 text: fact.modelData.label
-                                pixelSize: root.typography.small
+                                pixelSize: root.labelSize
                                 color: root.colors.subtext0
                             }
 
@@ -1219,7 +1262,7 @@ FocusScope {
                         width: parent.width
                         height: root.typography.smallRow
                         text: "PANES HERE"
-                        pixelSize: root.typography.small * 0.88
+                        pixelSize: root.headingSize
                         emphasized: true
                         color: root.colors.subtext0
                     }
@@ -1244,7 +1287,7 @@ FocusScope {
                     height: root.typography.smallRow
                     visible: (root.preview.title ?? "").length > 0
                     text: root.preview.title ?? ""
-                    pixelSize: root.typography.small * 0.88
+                    pixelSize: root.headingSize
                     emphasized: true
                     color: root.colors.subtext0
                 }
@@ -1260,7 +1303,7 @@ FocusScope {
                     visible: shown > 0
                     radius: 4 * root.ratio
                     color: root.colors.surface_dim
-                    border.width: Math.max(root.hairline, 1 * root.ratio)
+                    border.width: root.edge
                     border.color: root.colors.surface1
                     clip: true
 
@@ -1348,9 +1391,9 @@ FocusScope {
     // The keys that apply now.
     Item {
         id: hints
-        y: root.height - height
+        y: root.height - height - root.edge
         width: root.width
-        height: flow.implicitHeight + 12 * root.ratio
+        height: Math.max(root.hintsHeight, flow.implicitHeight + 12 * root.ratio)
 
         Rectangle {
             width: parent.width
@@ -1395,7 +1438,7 @@ FocusScope {
                         height: Math.round((root.tinyGrid.cellHeight ?? 14) + 4 * root.ratio)
                         radius: 4 * root.ratio
                         color: root.colors.surface_dim
-                        borderWidth: Math.max(root.hairline, 1 * root.ratio)
+                        borderWidth: root.edge
                         borderColor: root.colors.surface1
                         borderAlpha: 1
 
@@ -1416,7 +1459,7 @@ FocusScope {
                         width: implicitWidth
                         height: parent.height
                         text: hint.modelData.label
-                        pixelSize: root.typography.small
+                        pixelSize: root.labelSize
                         color: root.colors.subtext0
                         elide: Text.ElideNone
                     }
@@ -1443,7 +1486,7 @@ FocusScope {
         readonly property real paneY: (root.controller.sideBySide ? 0 : Math.round((root.line.window ?? 0) * body.height / Math.max(1, root.windows.length)))
 
         x: paneX + root.gutter + 38 * root.ratio
-        y: body.y + paneY + root.headHeight + 4 * root.ratio + place * root.rowHeight + Math.round((root.rowHeight - height) / 2)
+        y: body.y + paneY + root.headHeight + root.rowY(place) + Math.round((root.rowHeight - height) / 2)
         z: 5
         width: Math.max(120 * root.ratio, (body.width - root.previewWidth) / Math.max(1, root.windows.length) - 160 * root.ratio)
         height: Math.max(root.grid.cellHeight ?? 0, 18 * root.ratio)
@@ -1489,7 +1532,7 @@ FocusScope {
                 width: parent.width
                 height: root.typography.smallRow
                 text: "PLAN OF :w · " + root.controller.plan.length + (root.controller.plan.length === 1 ? " OPERATION" : " OPERATIONS") + ((root.line.overwrite ?? false) ? " · OVERWRITES WHAT EXISTS" : "")
-                pixelSize: root.typography.small * 0.88
+                pixelSize: root.headingSize
                 emphasized: true
                 color: root.colors.subtext0
             }
@@ -1532,7 +1575,7 @@ FocusScope {
                 width: parent.width
                 height: 2 * root.typography.smallRow
                 text: "Before each operation the runtime checks that its source still is the file it listed, by inode and modification time, and skips it otherwise. What is deleted or replaced goes to the trash."
-                pixelSize: root.typography.small
+                pixelSize: root.labelSize
                 color: root.colors.subtext0
             }
         }
@@ -1559,7 +1602,7 @@ FocusScope {
                         width: parent.width
                         height: root.typography.smallRow + 4 * root.ratio
                         text: group.modelData.title.toUpperCase()
-                        pixelSize: root.typography.small * 0.88
+                        pixelSize: root.headingSize
                         emphasized: true
                         color: root.colors.subtext0
                     }
@@ -1590,7 +1633,7 @@ FocusScope {
                                 width: parent.width - x
                                 height: parent.height
                                 text: binding.modelData.label
-                                pixelSize: root.typography.small
+                                pixelSize: root.labelSize
                                 color: root.colors.subtext0
                             }
                         }
@@ -1623,7 +1666,7 @@ FocusScope {
 
             const pane = panes.itemAt(root.menu.window ?? 0);
 
-            return pane ? pane.rowsArea.mapToItem(root, root.gutter + 40 * root.ratio, 4 * root.ratio + ((root.menu.row ?? 0) + 1) * root.rowHeight) : Qt.point(0, 0);
+            return pane ? pane.rowsArea.mapToItem(root, root.gutter + 40 * root.ratio, root.rowY((root.menu.row ?? 0) + 1)) : Qt.point(0, 0);
         }
         readonly property real wanted: {
             let widest = 250 * root.ratio;
@@ -1645,7 +1688,7 @@ FocusScope {
         height: menuColumn.height + 2 * pad
         radius: 7 * root.ratio
         color: root.colors.surface0
-        borderWidth: Math.max(root.hairline, 1 * root.ratio)
+        borderWidth: root.edge
         borderColor: root.colors.overlay0
         borderAlpha: 1
 
@@ -1673,7 +1716,7 @@ FocusScope {
                         x: 6 * root.ratio
                         y: Math.round((parent.height - height) / 2)
                         width: parent.width - 2 * x
-                        height: Math.max(root.hairline, 1 * root.ratio)
+                        height: root.edge
                         visible: menuLine.modelData.rule
                         color: root.colors.surface1
                     }
@@ -1692,7 +1735,7 @@ FocusScope {
                         height: parent.height
                         visible: !menuLine.modelData.rule
                         text: menuLine.modelData.label ?? ""
-                        pixelSize: root.typography.small
+                        pixelSize: root.labelSize
                         color: menuLine.modelData.enabled ? root.colors.text : root.colors.overlay0
                         elide: Text.ElideNone
                     }
@@ -1729,7 +1772,7 @@ FocusScope {
         height: Math.round((root.smallGrid.cellHeight ?? 16) + 8 * root.ratio)
         radius: 4 * root.ratio
         color: root.colors.surface0
-        borderWidth: Math.max(root.hairline, 1 * root.ratio)
+        borderWidth: root.edge
         borderColor: root.dropWindow >= 0 ? root.colors.accent : root.colors.overlay0
         borderAlpha: 1
 

@@ -189,15 +189,10 @@ Window {
 
     ExplorerOverlay {
         // Over the panes of the tab, with the sidebar and the bars left in view.
-        x: root.geometry.terminal.x + 6 * root.ratio
-        y: root.geometry.terminal.y + 6 * root.ratio
-        width: Math.max(0, root.geometry.terminal.width - 12 * root.ratio)
-        height: Math.max(0, root.geometry.terminal.height - 12 * root.ratio)
-        inset: 6 * root.ratio
+        area: root.geometry.terminal
         controller: telar.explorer
         colors: telar.colors
         typography: root.geometry.typography
-        ratio: root.ratio
     }
 
     AttachmentModal {

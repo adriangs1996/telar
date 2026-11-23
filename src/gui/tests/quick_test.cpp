@@ -1661,7 +1661,7 @@ return {api_version = 2, client = {
         return explorer->windows().value(0).toMap();
       };
 
-      window_->resize(1400, 900);
+      window_->resize(1492, 917);
       client_->commands()->execute(window_actions::Action::explorer);
       QCOMPARE(client_->dialogs()->kind(), Store::Dialog::explorer);
       QVERIFY(explorer->showing());
