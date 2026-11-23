@@ -283,6 +283,39 @@ namespace telar::runtime::cli {
 
 #endif
 
+  namespace {
+
+    // Installs the scripts of the shell integration when the configuration asks for it, and
+    // says where. Shells keep starting without the integration when they cannot be written.
+    tbc::val_a<ds::String<ConcurrentMemory>> installShellIntegration(tbc::mut_a<ConcurrentMemory> memory, const RuntimePaths<ConcurrentMemory>& paths, bool wanted) {
+      ds::String<ConcurrentMemory> installed{memory};
+
+      if (wanted && !paths.data_home.empty()) {
+        try {
+          installed = ShellIntegration<ConcurrentMemory>::install(memory, paths.data_home);
+        } catch (const SystemError& error) {
+          std::println(stderr, "telar runtime: shell integration disabled: {}", error.what());
+        }
+      }
+
+      return installed;
+    }
+
+    // Where the editor's Neovim reads its configuration, whatever file configured telar; empty
+    // without a home for configurations.
+    tbc::val_a<ds::String<ConcurrentMemory>> editorConfiguration(tbc::mut_a<ConcurrentMemory> memory, std::string_view config_home) {
+      ds::String<ConcurrentMemory> directory{memory};
+
+      if (!config_home.empty()) {
+        directory.assign(config_home);
+        directory.append("/editor");
+      }
+
+      return directory;
+    }
+
+  }
+
   void runRuntime(ConcurrentMemory& memory, const ServerOptions& options, const RuntimePaths<ConcurrentMemory>& paths, const config::RuntimeValues<ConcurrentMemory>& configuration) {
 #if TELAR_DEBUG
     const trace::Session tracing{memory, options.trace.empty() ? nullptr : options.trace.data()};
@@ -293,17 +326,7 @@ namespace telar::runtime::cli {
 
     installPngDecoder();
 
-    // Shells keep starting without the integration when its scripts cannot be written.
-    ds::String<ConcurrentMemory> shell_integration{memory};
-
-    if (configuration.shell_integration && !paths.data_home.empty()) {
-      try {
-        shell_integration = ShellIntegration<ConcurrentMemory>::install(memory, paths.data_home);
-      } catch (const SystemError& error) {
-        std::println(stderr, "telar runtime: shell integration disabled: {}", error.what());
-      }
-    }
-
+    const auto shell_integration = installShellIntegration(memory, paths, configuration.shell_integration);
     const SqliteAllocator sqlite_memory{memory};
     ds::Option<traffic::Service> traffic_service;
 
@@ -363,13 +386,7 @@ namespace telar::runtime::cli {
     // Without a configuration file, completion specs still come from the configuration directory.
     const auto config_home = RuntimePaths<ConcurrentMemory>::configHome(memory, process_environment);
     const auto configuration_directory = configuration.configuration_directory.view();
-    // The editor's configuration is where its Neovim reads it, whatever file configured telar.
-    ds::String<ConcurrentMemory> editor_configuration{memory};
-
-    if (!config_home.empty()) {
-      editor_configuration.assign(config_home.view());
-      editor_configuration.append("/editor");
-    }
+    const auto editor_configuration = editorConfiguration(memory, config_home.view());
 
     // The runtime keeps views of these options, so they live as long as it does.
     const RuntimeOptions runtime_options{

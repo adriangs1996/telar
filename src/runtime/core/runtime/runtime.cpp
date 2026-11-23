@@ -2643,6 +2643,7 @@ namespace telar::runtime {
     requires BackgroundExecutor<Background, ConcurrentMemory>
   void Runtime<Poller, Background>::handle(std::uint64_t identity, const NvimConfiguration& message) {
     auto& client = requireClient(clients_, identity);
+
     if (editor_configuration_.empty()) {
       throw RequestError{FailureCode::invalid_request, "This runtime has no directory for the editor's configuration"};
     }

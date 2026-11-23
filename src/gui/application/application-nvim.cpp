@@ -367,10 +367,12 @@ namespace telar::gui::application::nvim {
     // What a message carries besides the files' bytes: each file's path and the lengths of both.
     constexpr std::size_t message_room = 64;
     constexpr std::size_t file_room = 6;
+    // As deep as the runtime takes a configuration.
+    constexpr std::size_t tree_depth = 32;
     FileTreeRead read = FileTreeRead::absent;
 
     try {
-      read = readFileTree(memory, directory, {.files = NvimConfiguration::maximum_files, .bytes = max_payload_size - message_room, .depth = 32}, tree);
+      read = readFileTree(memory, directory, {.files = NvimConfiguration::maximum_files, .bytes = max_payload_size - message_room, .depth = tree_depth}, tree);
     } catch (const std::exception& error) {
       Access::error(session).assign("The editor's configuration could not be read, so it was not brought to the machine: ");
       Access::error(session).append(error.what());

@@ -25,7 +25,7 @@ namespace telar::gui::inline foundation::inline system {
     };
 
     // Reads what `directory` holds, below `prefix`; false once a limit is passed.
-    bool walk(Walk& state, int directory, ds::String<Memory>& prefix, std::size_t depth) {
+    bool walk(Walk& state, int directory, ds::String<Memory>& prefix, std::size_t depth) { // NOLINT(misc-no-recursion): a tree is read as deep as its limits say, and no deeper
       ds::Vec<ds::String<Memory>, Memory> names{state.memory};
 
       {
@@ -34,7 +34,7 @@ namespace telar::gui::inline foundation::inline system {
         for (const auto* entry = entries.next(); entry != nullptr; entry = entries.next()) {
           // What starts with a dot, "." and ".." among them, is the machine's own.
           if (entry->d_name[0] != '.') {
-            names.emplace(state.memory, std::string_view{entry->d_name});
+            names.emplace(state.memory, std::string_view{std::data(entry->d_name)});
           }
         }
       }
@@ -85,7 +85,10 @@ namespace telar::gui::inline foundation::inline system {
         auto& read = state.files.emplace(state.memory, prefix.view());
 
         read.content.resize(size);
-        runtime::readFileBytes(file.get(), {reinterpret_cast<char*>(read.content.dataMut()), size}); // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast): the file's bytes, read as the characters read takes
+
+        const auto bytes = read.content.viewMut();
+
+        runtime::readFileBytes(file.get(), std::span<char>{reinterpret_cast<char*>(bytes.data()), bytes.size()}); // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast,clang-diagnostic-unsafe-buffer-usage-in-container): the file's bytes, read as the characters read takes, and as many as the span they come from holds
         state.bytes += size;
       }
 
