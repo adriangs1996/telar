@@ -101,7 +101,7 @@ namespace telar::gui::qt {
       std::string_view label;
     };
 
-    constexpr ds::Array<HelpKey, 58> help_keys{
+    constexpr ds::Array<HelpKey, 59> help_keys{
         {
             {.group = "Moving", .keys = "j k", .label = "down, up; with a count"},
             {.group = "Moving", .keys = "gg G", .label = "first, last; 12G goes to row 12"},
@@ -109,6 +109,7 @@ namespace telar::gui::qt {
             {.group = "Moving", .keys = "h l", .label = "fold, unfold; l on a file opens it"},
             {.group = "Moving", .keys = "za zM zR", .label = "toggle a fold, fold all, unfold a level"},
             {.group = "Moving", .keys = "]c [c", .label = "next, previous change of git"},
+            {.group = "Moving", .keys = "]a [a", .label = "next, previous file an agent touched"},
             {.group = "Roots and jumps", .keys = "<CR>", .label = "enter a directory"},
             {.group = "Roots and jumps", .keys = "-", .label = "the directory above"},
             {.group = "Roots and jumps", .keys = "_ ~", .label = "the workspace's root, the home"},

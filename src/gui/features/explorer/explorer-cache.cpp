@@ -699,7 +699,7 @@ namespace telar::gui::features::explorer {
 
     // An answer that says what the last one said changes nothing a window shows.
     const bool same = touches.known && touches.truncated == answer.truncated && std::ranges::equal(touches.items, answer.touches, [&](const Touch& held, const FileTouch& told) {
-      return held.seconds == told.seconds && held.pane == told.pane_id && held.actor == told.actor && held.provider == told.provider && held.verb.view() == told.verb && touches.path(held) == told.path;
+      return held.seconds == told.seconds && held.size == told.size && held.pane == told.pane_id && held.actor == told.actor && held.provider == told.provider && held.verb.view() == told.verb && touches.path(held) == told.path;
     });
 
     touches.waiting = 0;
@@ -712,7 +712,7 @@ namespace telar::gui::features::explorer {
     touches.items.clear();
     touches.truncated = answer.truncated;
     for (const auto& told : answer.touches) {
-      Touch touch{.path = static_cast<std::uint32_t>(touches.text.size()), .path_size = static_cast<std::uint16_t>(told.path.size()), .actor = told.actor, .provider = told.provider, .pane = told.pane_id, .seconds = told.seconds};
+      Touch touch{.path = static_cast<std::uint32_t>(touches.text.size()), .path_size = static_cast<std::uint16_t>(told.path.size()), .actor = told.actor, .provider = told.provider, .pane = told.pane_id, .seconds = told.seconds, .size = told.size};
 
       touch.verb.assign(told.verb);
       touches.items.push(touch);

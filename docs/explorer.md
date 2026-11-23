@@ -28,6 +28,7 @@ until `:w` shows the plan and you accept it. `?` lists every key.
 | `ma` `'a` | Set a mark on the selection, and return to it. `:marks` lists them. |
 | `/` | Filter as you type; Enter keeps the filter, Escape drops it. `n` and `N` go to the next and the previous match, around the ends. |
 | `]c` `[c` | Go to the next or the previous row git says changed. |
+| `]a` `[a` | Go to the next or the previous file an agent touched, in the tree, unfolding the directories that lead to it. Past the last one it starts again. |
 | `S`, `g.`, `gi` | Sort by name, size or time; show dotfiles; show what git ignores. |
 | `R` | Read the directories again. |
 
@@ -68,16 +69,47 @@ The preview beside the listing says the size, the time of the last change, what 
 the last commit of the selection, and shows its diff when it has changes not committed, or the
 head of its text.
 
-## Three lenses
+## Four lenses
 
-`gt` and `gT` go from one to the next, and `1gt`, `2gt`, `3gt` go to one.
+`gt` and `gT` go from one to the next, and `1gt` to `4gt` go to one, as `:tree`, `:changes`,
+`:touched` and `:panes` do.
 
 - **tree**: the directories, unfolded as you ask.
 - **changes**: what git says changed, in three groups: staged, unstaged and untracked.
 
   ![The lens of changes](images/telar-explorer-changes.png)
 
+- **touched**: the files the panes of the machine touched below the root, the newest first.
+  Each row says the tool or the command that touched it, who did, how long ago, what git says
+  and its size. A row is a file as in any other lens: Enter, `@`, `gf`, `=`, the menu and the
+  preview work on it.
+
+  ![The lens of what the panes touched](images/telar-explorer-touched.png)
+
 - **panes**: the panes of the tab, each with its directory. Enter goes to the pane.
+
+## Who touched a file
+
+The runtime of a machine keeps the files its panes touched lately: the ones the tools of an
+agent name, as its hooks report them, and the ones the commands of a pane's history name. It
+keeps a file only when the name leads to a regular file below the directory of its pane, so a
+command that names no file, or one of another directory tree, leaves nothing.
+
+In every lens the row of a touched file shows a chip before what git says: `you` for a command
+you ran, and the place in the tab of the pane an agent runs in, in the agent's color. A pane the
+tab does not show has `·`. The preview lists the last four touches of the selection under
+**Activity**: who, from which pane, with which tool or command, and how long ago.
+
+What it does not know:
+
+- A touch is what a line names, not what a process did: a tool given a path that telar's line
+  of 96 bytes cuts, or a command that reaches a file through a glob or a script, is not seen.
+- The index lives in the memory of the runtime: it keeps 512 touches for a day and answers the
+  newest 128, and it starts empty when the runtime does.
+- An agent with no hooks reports no tool, so only the commands its shell records count.
+
+The window asks a machine who touched what when it shows files of it, and again when a pane of
+that machine starts or ends a program or its agent reports. A machine with no window is asked nothing.
 
 ## Follow a pane
 

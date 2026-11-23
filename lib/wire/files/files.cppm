@@ -596,6 +596,8 @@ export extern "C++" {
       std::uint64_t pane_id{};
       std::string_view verb;
       std::uint64_t seconds{};
+      // What the file weighed when the runtime looked it up.
+      std::uint64_t size{};
     };
 
     template <>
@@ -606,7 +608,8 @@ export extern "C++" {
               Field<&FileTouch::provider, EnumByte<AgentProvider, max_agent_provider_index>, "provider">,
               Field<&FileTouch::pane_id, u64, "pane_id">,
               Field<&FileTouch::verb, Text16<FileLimits::verb_bytes, false>, "verb">,
-              Field<&FileTouch::seconds, u64, "seconds">> {};
+              Field<&FileTouch::seconds, u64, "seconds">,
+              Field<&FileTouch::size, u64, "size">> {};
 
     // The touches below `path`, the newest first; `truncated` when there are more than these.
     struct FileTouches {

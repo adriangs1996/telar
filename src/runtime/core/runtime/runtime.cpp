@@ -243,7 +243,12 @@ namespace telar::runtime {
     }
 
     client.connection.send(RequestCompleted{.request_id = request.request_id});
-    return request.provider == AgentProvider::unknown ? agent.provider : request.provider;
+    if (request.provider != AgentProvider::unknown) {
+      return request.provider;
+    }
+
+    // A report that names no provider is by the one that claimed the pane.
+    return agent.provider != AgentProvider::unknown ? agent.provider : agent.evidence.reporter;
   }
 
   template <EventLoop Poller, HistoryEventSink History>

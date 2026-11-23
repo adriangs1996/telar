@@ -67,6 +67,7 @@ export namespace telar::runtime {
       TouchActor actor = TouchActor::user;
       AgentProvider provider = AgentProvider::unknown;
       std::uint64_t seconds = 0;
+      std::uint64_t size = 0;
     };
 
     // Looks up what the notes that wait name, and keeps the files among it.

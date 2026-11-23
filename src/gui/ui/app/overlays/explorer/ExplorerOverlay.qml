@@ -46,6 +46,8 @@ FocusScope {
     readonly property var grid: typography.grid ?? ({})
     readonly property var smallGrid: scaled(grid, 0.92)
     readonly property var tinyGrid: scaled(grid, 0.84)
+    // How long ago a file was touched, between the two.
+    readonly property var agoGrid: scaled(grid, 0.875)
     // The sizes of what is written in the window's own font: a label, and a heading over a part.
     readonly property real labelSize: 11.5 * ratio
     readonly property real headingSize: 10 * ratio
@@ -74,17 +76,36 @@ FocusScope {
     // color of whose hand it was.
     component ActorChip: Rectangle {
         property var actor: ({})
+        // In a row it is written in the terminal's font, as the row is; in the preview, in the
+        // window's own.
+        property bool cell: true
+        readonly property real written: cell ? cellText.implicitWidth : chromeText.implicitWidth
 
-        width: Math.max(Math.round(16 * root.ratio), chipText.implicitWidth + Math.round(6 * root.ratio))
-        height: Math.round(15 * root.ratio)
+        width: Math.max(Math.floor(16 * root.ratio), Math.floor(written + 6 * root.ratio))
+        height: Math.floor(15 * root.ratio)
         radius: 3 * root.ratio
         color: root.actorColor(actor.tone ?? "agent")
 
+        CellText {
+            id: cellText
+            x: Math.round((parent.width - width) / 2)
+            width: implicitWidth
+            // A pixel above the middle, where a browser sets it.
+            y: -Math.round(0.5 * root.ratio)
+            height: parent.height
+            visible: parent.cell
+            text: actor.chip ?? ""
+            grid: root.tinyGrid
+            color: root.colors.panel_bg
+            bold: true
+        }
+
         ChromeText {
-            id: chipText
+            id: chromeText
             x: Math.round((parent.width - width) / 2)
             width: implicitWidth
             height: parent.height
+            visible: !parent.cell
             text: actor.chip ?? ""
             pixelSize: root.headingSize
             emphasized: true
@@ -817,14 +838,20 @@ FocusScope {
                                     }
                                 }
 
-                                // And how long ago, where a number of its width always fits.
-                                CellText {
-                                    width: Math.round(5 * (root.tinyGrid.cellWidth ?? 8))
+                                // And how long ago, at the right of a column any of them fits.
+                                Item {
+                                    width: Math.round(33.6 * root.ratio)
                                     height: parent.height
                                     visible: (row.record.ago ?? "").length > 0
-                                    text: " ".repeat(Math.max(0, 5 - (row.record.ago ?? "").length)) + (row.record.ago ?? "")
-                                    grid: root.tinyGrid
-                                    color: root.colors.overlay1
+
+                                    CellText {
+                                        x: parent.width - width
+                                        width: implicitWidth
+                                        height: parent.height
+                                        text: row.record.ago ?? ""
+                                        grid: root.agoGrid
+                                        color: root.colors.overlay1
+                                    }
                                 }
 
                                 // What git says: the index's column, then the working tree's, as
@@ -872,7 +899,9 @@ FocusScope {
                                 Item {
                                     width: 82 * root.ratio
                                     height: parent.height
-                                    visible: row.record.kind === "entry" || row.record.kind === "added"
+                                    // A file a pane touched says its size too, as in its directory.
+                                    readonly property bool touched: (row.record.ago ?? "").length > 0
+                                    visible: row.record.kind === "entry" || row.record.kind === "added" || touched
 
                                     Rectangle {
                                         id: track
@@ -884,7 +913,7 @@ FocusScope {
                                         radius: height / 2
                                         color: root.colors.surface0
                                         // A file that arrives from another machine fills it as it does.
-                                        visible: row.record.kind === "entry" || (row.record.arriving ?? false)
+                                        visible: row.record.kind === "entry" || parent.touched || (row.record.arriving ?? false)
 
                                         Rectangle {
                                             width: Math.round(parent.width * Math.min(1, row.record.share ?? 0))
@@ -1273,8 +1302,13 @@ FocusScope {
                             // The subject of a commit takes a second line when it is long.
                             readonly property var subject: detailed ? root.folded(modelData.detail ?? "", width - labelWidth, root.smallGrid) : ["", ""]
 
+                            // The lines of the subject are set as close as a browser sets the
+                            // lines of one text, which is closer than two facts are.
+                            readonly property real subjectLine: Math.round(15.2 * root.ratio)
+                            readonly property real subjectTop: line - Math.round(0.8 * root.ratio)
+
                             width: parent.width
-                            height: detailed ? (subject[1].length > 0 ? 3 : 2) * line : line
+                            height: detailed ? subjectTop + (subject[1].length > 0 ? 2 : 1) * subjectLine + Math.round(3.2 * root.ratio) : line
 
                             ChromeText {
                                 width: fact.labelWidth
@@ -1330,9 +1364,9 @@ FocusScope {
 
                             CellText {
                                 x: fact.labelWidth
-                                y: fact.line
+                                y: fact.subjectTop
                                 width: parent.width - x
-                                height: fact.line
+                                height: fact.subjectLine
                                 visible: fact.detailed
                                 text: fact.subject[0]
                                 grid: root.smallGrid
@@ -1342,9 +1376,9 @@ FocusScope {
 
                             CellText {
                                 x: fact.labelWidth
-                                y: 2 * fact.line
+                                y: fact.subjectTop + fact.subjectLine
                                 width: parent.width - x
-                                height: fact.line
+                                height: fact.subjectLine
                                 visible: fact.detailed && fact.subject[1].length > 0
                                 text: fact.subject[1]
                                 grid: root.smallGrid
@@ -1370,44 +1404,59 @@ FocusScope {
                         color: root.colors.subtext0
                     }
 
-                    Repeater {
-                        model: root.preview.activity ?? []
+                    // A line for each, as tall as its chip and as far from the heading and from
+                    // what follows as a browser sets them.
+                    Column {
+                        width: parent.width
+                        topPadding: Math.round(1.6 * root.ratio)
+                        bottomPadding: Math.round(1.6 * root.ratio)
+                        spacing: 4 * root.ratio
 
-                        delegate: Row {
-                            id: touch
+                        Repeater {
+                            model: root.preview.activity ?? []
 
-                            required property var modelData
+                            delegate: Row {
+                                id: touch
 
-                            height: Math.round(17.6 * root.ratio)
-                            spacing: 6 * root.ratio
+                                required property var modelData
 
-                            ActorChip {
-                                y: Math.round((touch.height - height) / 2)
-                                actor: (touch.modelData.actors ?? [])[0] ?? ({})
-                            }
+                                height: Math.round(15 * root.ratio)
+                                spacing: 6 * root.ratio
 
-                            ChromeText {
-                                width: implicitWidth
-                                height: parent.height
-                                text: touch.modelData.who ?? ""
-                                pixelSize: root.labelSize
-                                color: root.colors.text
-                            }
+                                ActorChip {
+                                    actor: (touch.modelData.actors ?? [])[0] ?? ({})
+                                    cell: false
+                                }
 
-                            CellText {
-                                width: implicitWidth
-                                height: parent.height
-                                text: touch.modelData.verb ?? ""
-                                grid: root.smallGrid
-                                color: root.colors.subtext0
-                            }
+                                ChromeText {
+                                    width: implicitWidth
+                                    height: parent.height
+                                    text: touch.modelData.who ?? ""
+                                    pixelSize: root.labelSize
+                                    color: root.colors.text
+                                }
 
-                            CellText {
-                                width: implicitWidth
-                                height: parent.height
-                                text: touch.modelData.ago ?? ""
-                                grid: root.tinyGrid
-                                color: root.colors.overlay1
+                                ChromeText {
+                                    width: implicitWidth
+                                    height: parent.height
+                                    text: touch.modelData.verb ?? ""
+                                    pixelSize: 11 * root.ratio
+                                    color: root.colors.subtext0
+                                }
+
+                                Item {
+                                    width: Math.round(33.6 * root.ratio)
+                                    height: parent.height
+
+                                    ChromeText {
+                                        x: parent.width - width
+                                        width: implicitWidth
+                                        height: parent.height
+                                        text: touch.modelData.ago ?? ""
+                                        pixelSize: 10.5 * root.ratio
+                                        color: root.colors.overlay1
+                                    }
+                                }
                             }
                         }
                     }

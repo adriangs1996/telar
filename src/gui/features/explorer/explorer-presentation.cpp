@@ -223,6 +223,27 @@ namespace telar::gui::features::explorer {
       look.marks.assign({letters.data(), length});
     }
 
+    // How long ago a touch was, in the few characters a row has for it: `40s`, `6m`, `2h`, `3d`.
+    ShortText since(std::uint64_t then, std::uint64_t now) {
+      constexpr std::uint64_t minute = 60;
+      constexpr std::uint64_t hour = 60 * minute;
+      constexpr std::uint64_t day_seconds = 24 * hour;
+      ShortText text;
+      const auto elapsed = now > then ? now - then : 0;
+
+      if (elapsed < minute) {
+        write(text, "{}s", elapsed);
+      } else if (elapsed < hour) {
+        write(text, "{}m", elapsed / minute);
+      } else if (elapsed < day_seconds) {
+        write(text, "{}h", elapsed / hour);
+      } else {
+        write(text, "{}d", elapsed / day_seconds);
+      }
+
+      return text;
+    }
+
     // The chip of the one a touch is by: `you` for the person, and for an agent the place in the
     // tab of its pane, which is how the status line names a pane too.
     ActorLook actorOf(const Touch& touch, const Context& context) {
@@ -247,15 +268,10 @@ namespace telar::gui::features::explorer {
       return look;
     }
 
-    // The name a person knows the one a touch is by: the agent of the pane where the tab shows
-    // it, else what its provider is called.
-    tbc::val_a<std::string_view> whoOf(const Touch& touch, tbc::ref_a<Context> context) noexcept {
+    // The name a person knows the one a touch is by: themselves, or what the agent is called.
+    std::string_view whoOf(const Touch& touch) noexcept {
       if (touch.actor == TouchActor::user) {
         return "You";
-      }
-
-      if (const auto pane = std::ranges::find(context.panes, touch.pane, &PaneFact::id); pane != context.panes.end() && pane->kind == PaneKind::agent) {
-        return pane->title;
       }
 
       switch (touch.provider) {
@@ -313,13 +329,13 @@ namespace telar::gui::features::explorer {
 
         line.actor = actorOf(touch, context);
         if (const auto pane = std::ranges::find(context.panes, touch.pane, &PaneFact::id); pane != context.panes.end()) {
-          write(line.who, "{} · pane {}", whoOf(touch, context), pane->number);
+          write(line.who, "{} · pane {}", whoOf(touch), pane->number);
         } else {
-          put(line.who, whoOf(touch, context));
+          put(line.who, whoOf(touch));
         }
 
         line.verb.assign(touch.verb.view());
-        line.ago = age(touch.seconds, context.now);
+        line.ago = since(touch.seconds, context.now);
       }
     }
 
@@ -475,7 +491,8 @@ namespace telar::gui::features::explorer {
         const auto& last = seen.state.touches.items[row.item];
 
         look.verb.assign(last.verb.view());
-        look.ago = age(last.seconds, seen.context.now);
+        look.size = bytes(last.size);
+        look.ago = since(last.seconds, seen.context.now);
       }
 
       noteActors(look, seen, path.view());

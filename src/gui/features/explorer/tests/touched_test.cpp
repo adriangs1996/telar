@@ -17,9 +17,9 @@ namespace {
     const auto now = explorer.now;
 
     explorer.disk.touches = {
-        {.path = "/home/dev/telar/src/main.cpp", .actor = TouchActor::agent, .provider = AgentProvider::claude, .pane_id = 11, .verb = "Edit", .seconds = now - 40},
+        {.path = "/home/dev/telar/src/main.cpp", .actor = TouchActor::agent, .provider = AgentProvider::claude, .pane_id = 11, .verb = "Edit", .seconds = now - 40, .size = 2048},
         {.path = "/home/dev/telar/docs/images/window.png", .actor = TouchActor::agent, .provider = AgentProvider::codex, .pane_id = 77, .verb = "Read", .seconds = now - 300},
-        {.path = "/home/dev/telar/docs/usage.md", .actor = TouchActor::user, .pane_id = 13, .verb = "rg", .seconds = now - 360},
+        {.path = "/home/dev/telar/docs/usage.md", .actor = TouchActor::user, .pane_id = 13, .verb = "rg", .seconds = now - 360, .size = 512},
         {.path = "/home/dev/telar/docs/usage.md", .actor = TouchActor::agent, .provider = AgentProvider::claude, .pane_id = 11, .verb = "Edit", .seconds = now - 420},
         {.path = "/home/dev/notes.txt", .actor = TouchActor::user, .pane_id = 13, .verb = "cat", .seconds = now - 500},
     };
@@ -40,8 +40,9 @@ namespace {
 
     const auto edited = explorer.row("main.cpp");
 
-    check(edited.verb.view() == "Edit" && edited.ago.view() == "1 min" && edited.actor_count == 1);
+    check(edited.verb.view() == "Edit" && edited.ago.view() == "40s" && edited.actor_count == 1);
     check(edited.actors[0].tone == ActorTone::claude && edited.actors[0].chip.view() == "1", "an agent's chip says the place of its pane in the tab");
+    check(edited.size.view() == "2.0K" && edited.share == 1000 && explorer.row("usage.md").share == 250, "its size, against the largest of what was touched");
 
     const auto read = explorer.row("window.png");
 
@@ -49,7 +50,7 @@ namespace {
 
     const auto searched = explorer.row("usage.md");
 
-    check(searched.verb.view() == "rg" && searched.ago.view() == "6 min" && searched.actor_count == 2, "a file's row is its last touch, with a chip for each hand that touched it");
+    check(searched.verb.view() == "rg" && searched.ago.view() == "6m" && searched.actor_count == 2, "a file's row is its last touch, with a chip for each hand that touched it");
     check(searched.actors[0].tone == ActorTone::you && searched.actors[0].chip.view() == "you" && searched.actors[1].tone == ActorTone::claude);
     check(searched.unstaged == FileState::modified, "and what git says of it, as any row");
 
@@ -84,7 +85,7 @@ namespace {
     const auto shown = preview(explorer.view, explorer.state, explorer.context(), explorer.now);
 
     check(shown.activity_count == 2, "the preview lists its touches, the newest first");
-    check(shown.activity[0].who.view() == "You · pane 3" && shown.activity[0].verb.view() == "rg" && shown.activity[0].ago.view() == "6 min" && shown.activity[0].actor.chip.view() == "you");
+    check(shown.activity[0].who.view() == "You · pane 3" && shown.activity[0].verb.view() == "rg" && shown.activity[0].ago.view() == "6m" && shown.activity[0].actor.chip.view() == "you");
     check(shown.activity[1].who.view() == "Claude Code · pane 1" && shown.activity[1].verb.view() == "Edit" && shown.activity[1].actor.tone == ActorTone::claude);
     explorer.type("k");
     check(preview(explorer.view, explorer.state, explorer.context(), explorer.now).activity_count == 0);

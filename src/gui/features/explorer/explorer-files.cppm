@@ -182,6 +182,7 @@ export namespace telar::gui::features::explorer {
     std::uint64_t pane = 0;
     runtime::FixedText<FileLimits::verb_bytes> verb;
     std::uint64_t seconds = 0;
+    std::uint64_t size = 0;
   };
 
   // Who touched the files of a machine lately, the newest first: what its runtime last answered.

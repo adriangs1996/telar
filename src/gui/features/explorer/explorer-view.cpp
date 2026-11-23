@@ -323,6 +323,8 @@ namespace telar::gui::features::explorer {
     // a flat list of paths from the root, as what a filter finds.
     void buildTouched(Window& window, const State& state) {
       const auto& touches = state.touches;
+      constexpr std::uint64_t whole = 1000;
+      std::uint64_t largest = 1;
 
       window.loading = false;
       if (!touches.known) {
@@ -345,8 +347,14 @@ namespace telar::gui::features::explorer {
         });
 
         if (!named) {
+          largest = std::max(largest, touches.items[index].size);
           pushText(window, {.kind = RowKind::match, .item = static_cast<std::uint32_t>(index)}, below);
         }
+      }
+
+      // Each one's size against the largest of them, as the entries of a directory.
+      for (auto& row : window.rows.viewMut()) {
+        row.share = static_cast<std::uint16_t>(touches.items[row.item].size * whole / largest);
       }
 
       if (window.rows.empty()) {

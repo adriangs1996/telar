@@ -200,6 +200,7 @@ namespace telar::runtime {
     touch.actor = note.actor;
     touch.provider = note.provider;
     touch.seconds = note.seconds;
+    touch.size = static_cast<std::uint64_t>(std::max<std::int64_t>(0, status.st_size));
     return true;
   }
 
@@ -270,7 +271,7 @@ namespace telar::runtime {
         break;
       }
 
-      listed.atMut(count++) = {.path = touch.path.view(), .actor = touch.actor, .provider = touch.provider, .pane_id = touch.pane, .verb = touch.verb.view(), .seconds = touch.seconds};
+      listed.atMut(count++) = {.path = touch.path.view(), .actor = touch.actor, .provider = touch.provider, .pane_id = touch.pane, .verb = touch.verb.view(), .seconds = touch.seconds, .size = touch.size};
     }
 
     reply.send(FileTouches{.request_id = request.request_id, .path = request.path, .truncated = truncated, .touches = listed.view().first(count)});
