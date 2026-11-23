@@ -17,6 +17,8 @@ FRAME_PREFIX = struct.Struct("<I")
 HANDSHAKE_MAGIC = b"TELARIPC"
 CLIENT_HELLO = 1
 SERVER_ACCEPT = 2
+SERVER_REJECT = 3
+REJECT_INCOMPATIBLE_SCHEMA = 1
 
 
 def wait_socket(path, present):
@@ -121,6 +123,30 @@ def endpoint_reports_runtime_start_failure(binary, root, environment):
     assert result.returncode != 0 and time.monotonic() - started < 5, (result, time.monotonic() - started)
 
 
+def endpoint_reports_runtime_of_another_build(root, invoke):
+    """A runtime that rejects this build's wire schema is reported as another build, with the
+    words the machine commands and the window read as one they cannot attach to, and endpoint
+    neither prints the socket nor starts a runtime of its own over it."""
+    path = root / "other-build.sock"
+    reject = HANDSHAKE_MAGIC + bytes([SERVER_REJECT, REJECT_INCOMPATIBLE_SCHEMA]) + b"cqp00001"
+    with sockets.socket(sockets.AF_UNIX) as listener:
+        listener.bind(str(path))
+        listener.listen(1)
+
+        def answer():
+            connection, _ = listener.accept()
+            with connection:
+                connection.recv(64)
+                connection.sendall(FRAME_PREFIX.pack(len(reject)) + reject)
+
+        runtime = threading.Thread(target=answer, daemon=True)
+        runtime.start()
+        result = invoke("endpoint", "--socket", path, success=False)
+        runtime.join(timeout=5)
+    assert result.returncode == 1 and result.stdout == "", result
+    assert "telar protocol mismatch" in result.stderr, result
+
+
 def check_runtime(binary, checkpoint_probe):
     with tempfile.TemporaryDirectory(prefix="telar-cli-", dir="/tmp") as directory:
         root = Path(directory).resolve()
@@ -137,6 +163,7 @@ def check_runtime(binary, checkpoint_probe):
             assert stop(socket) == "telar runtime is not running\n"
             stale_socket_is_not_running(binary, root, invoke, stop)
             endpoint_reports_runtime_start_failure(binary, root, environment)
+            endpoint_reports_runtime_of_another_build(root, invoke)
             endpoint = invoke("endpoint", "--socket", socket).stdout
             lines = endpoint.splitlines()
             assert len(lines) == 2 and lines[0] == str(socket)
