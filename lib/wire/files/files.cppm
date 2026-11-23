@@ -114,7 +114,7 @@ export extern "C++" {
               Field<&DirectoryEntry::identity, ValueCodec<FileIdentity>, "identity">> {};
 
     // The entries of `path` from `skip` on, of the `total` it holds.
-    struct DirectoryListing {
+    struct DirectoryContents {
       std::uint64_t request_id{};
       std::string_view path;
       std::uint32_t skip{};
@@ -123,15 +123,15 @@ export extern "C++" {
     };
 
     template <>
-    struct MessageSchema<DirectoryListing>
+    struct MessageSchema<DirectoryContents>
         : Schema<
               Direction::server,
-              ServerTag::directory_listing,
-              Field<&DirectoryListing::request_id, NonzeroU64, "request_id">,
-              Field<&DirectoryListing::path, Text16<FileLimits::path_bytes, false>, "path">,
-              Field<&DirectoryListing::skip, u32, "skip">,
-              Field<&DirectoryListing::total, u32, "total">,
-              Field<&DirectoryListing::entries, CountedSpan<u16, ValueCodec<DirectoryEntry>, FileLimits::maximum_entries>, "entries">> {};
+              ServerTag::directory_contents,
+              Field<&DirectoryContents::request_id, NonzeroU64, "request_id">,
+              Field<&DirectoryContents::path, Text16<FileLimits::path_bytes, false>, "path">,
+              Field<&DirectoryContents::skip, u32, "skip">,
+              Field<&DirectoryContents::total, u32, "total">,
+              Field<&DirectoryContents::entries, CountedSpan<u16, ValueCodec<DirectoryEntry>, FileLimits::maximum_entries>, "entries">> {};
 
     // Measures what each directory of a listing's page holds, everything below it counted.
     struct MeasureDirectory {

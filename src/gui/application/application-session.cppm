@@ -20,6 +20,7 @@ import telar.gui.features.terminal.links;
 import telar.gui.features.paths;
 import telar.gui.features.peek;
 import telar.gui.features.monitor;
+import telar.gui.features.explorer;
 import telar.gui.features.nvim;
 import telar.gui.foundation.system;
 import :client_view_state;
@@ -36,6 +37,7 @@ import telar.wire.clients;
 import telar.wire.clipboard;
 import telar.wire.content;
 import telar.wire.editor;
+import telar.wire.files;
 import telar.wire.graphics;
 import telar.wire.history;
 import telar.wire.layout;
@@ -73,6 +75,8 @@ export {
       monitor,
       // An editor pane shows another frame, or asks something else of the person.
       editor,
+      // The runtime answered about its files, or ended a plan of the explorer.
+      explorer,
     };
 
     // The clock a session reads, monotonic and in nanoseconds.
@@ -229,6 +233,9 @@ export {
       [[nodiscard]] bool readsTheme() const noexcept;
 
       [[nodiscard]] bool monitors() const noexcept;
+
+      // Whether the runtime answers the explorer about its files.
+      [[nodiscard]] bool explores() const noexcept;
 
       // Whether the runtime the session is connected to understands `tag`.
       [[nodiscard]] bool speaks(ClientTag tag) const noexcept;
@@ -631,6 +638,12 @@ export {
 
       Change apply(const SystemMetrics& message);
       Change apply(const MonitorSnapshot& message);
+      Change apply(const DirectoryContents& message);
+      Change apply(const DirectorySizes& message);
+      Change apply(const RepositoryChanges& message);
+      Change apply(const FileInspection& message);
+      Change apply(const FilesChanged& message);
+      Change apply(const ChangesCommitted& message);
 
       Change apply(const PaneKindNotice& message);
       Change apply(const NvimGrid& message);
@@ -837,6 +850,8 @@ export {
       tbc::val_a<features::history::State> history;
       tbc::val_a<features::peek::State> peek;
       tbc::val_a<features::monitor::State> monitor;
+      // The files of the machine, as its runtime answered the explorer.
+      tbc::val_a<features::explorer::State> explorer;
       // The editor panes: what each Neovim shows, as the runtime last sent it.
       tbc::val_a<features::nvim::State> nvim;
       features::paths::State paths;

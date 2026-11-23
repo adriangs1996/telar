@@ -173,6 +173,7 @@
       "features/nvim",
       "features/palette",
       "features/paths",
+      "features/explorer",
       "features/history",
       "features/prompt",
       "features/terminal/input",
@@ -221,6 +222,7 @@
   },
   "upward_imports": [],
   "interfaces": {
+    "src/gui/application/application-explorer.cppm": "telar.gui.application:explorer",
     "src/gui/application/application-monitor.cppm": "telar.gui.application:monitor",
     "src/gui/application/application-nvim.cppm": "telar.gui.application:nvim",
     "src/gui/features/nvim/nvim.cppm": "telar.gui.features.nvim",
@@ -606,6 +608,12 @@
     "src/gui/features/paths/paths.cppm": "telar.gui.features.paths",
     "src/gui/application/application-paths.cppm": "telar.gui.application:paths",
     "src/gui/foundation/system/system-directory_completion.cppm": "telar.gui.foundation.system:directory_completion",
+    "src/gui/features/explorer/explorer-cache.cppm": "telar.gui.features.explorer:cache",
+    "src/gui/features/explorer/explorer-files.cppm": "telar.gui.features.explorer:files",
+    "src/gui/features/explorer/explorer-keys.cppm": "telar.gui.features.explorer:keys",
+    "src/gui/features/explorer/explorer-presentation.cppm": "telar.gui.features.explorer:presentation",
+    "src/gui/features/explorer/explorer-view.cppm": "telar.gui.features.explorer:view",
+    "src/gui/features/explorer/explorer.cppm": "telar.gui.features.explorer",
     "src/gui/features/history/history-browser.cppm": "telar.gui.features.history:browser",
     "src/gui/features/history/history-cards.cppm": "telar.gui.features.history:cards",
     "src/gui/features/history/history-entry.cppm": "telar.gui.features.history:entry",
@@ -724,6 +732,7 @@
   },
   "textual_boundaries": {
     "src/gui/ui/app/overlays/monitor/monitor_controller.hpp": "Qt moc/QML integration",
+    "src/gui/ui/app/overlays/explorer/explorer_controller.hpp": "Qt moc/QML integration",
     "lib/base/include/telar_base/diagnostics/config.hpp": "Project macro header: TELAR_DIAGNOSTIC, TELAR_DIAGNOSTICS and TELAR_ASSERT; includes nothing",
     "lib/base/include/telar_base/diagnostics/limit_reach.hpp": "Included by other textual headers and tests; module units import its owner module",
     "lib/base/include/telar_base/diagnostics/timing.hpp": "Objective-C++ ABI",
@@ -1328,6 +1337,9 @@
     ],
     "src/gui/features/configuration": [
       "telar.gui.features.configuration"
+    ],
+    "src/gui/features/explorer": [
+      "telar.gui.features.explorer"
     ],
     "src/gui/features/history": [
       "telar.gui.features.history"

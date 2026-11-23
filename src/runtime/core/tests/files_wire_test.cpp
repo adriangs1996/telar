@@ -31,7 +31,7 @@ namespace {
     RuntimeHost host;
     ProtocolPeer explorer{host.socket()};
     const std::string work = root + "/work";
-    const auto listing = explorer.exchange<DirectoryListing>(ListDirectory{.request_id = 1, .path = work, .skip = 0, .limit = FileLimits::maximum_entries});
+    const auto listing = explorer.exchange<DirectoryContents>(ListDirectory{.request_id = 1, .path = work, .skip = 0, .limit = FileLimits::maximum_entries});
 
     check(listing.path == work && listing.total == 2 && listing.entries.size() == 2);
     check(listing.entries[0].name == "src" && listing.entries[0].directory && listing.entries[1].name == "notes.md" && listing.entries[1].size == 6);
@@ -64,7 +64,7 @@ namespace {
     bool refused = false;
 
     try {
-      explorer.exchange<DirectoryListing>(ListDirectory{.request_id = 7, .path = work + "/missing", .skip = 0, .limit = 1});
+      explorer.exchange<DirectoryContents>(ListDirectory{.request_id = 7, .path = work + "/missing", .skip = 0, .limit = 1});
     } catch (const ProtocolFailure& failure) {
       refused = failure.code == FailureCode::invalid_request;
     }

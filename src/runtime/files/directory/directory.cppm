@@ -27,7 +27,7 @@ export namespace telar::runtime {
 
     explicit DirectoryReader(ConcurrentMemory& memory);
 
-    // Sends the DirectoryListing of `request`. Throws RequestError for a path that is not an
+    // Sends the DirectoryContents of `request`. Throws RequestError for a path that is not an
     // absolute directory this account may read.
     void list(const ListDirectory& request, EncodedReply<ConcurrentMemory>& reply);
 

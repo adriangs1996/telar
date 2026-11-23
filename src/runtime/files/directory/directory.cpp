@@ -121,7 +121,7 @@ namespace telar::runtime {
       entries.atMut(index) = {.name = nameOf(item), .kind = item.kind, .directory = item.directory, .size = item.size, .identity = item.identity};
     }
 
-    reply.send(DirectoryListing{.request_id = request.request_id, .path = request.path, .skip = static_cast<std::uint32_t>(first), .total = total_, .entries = entries.view().first(count)});
+    reply.send(DirectoryContents{.request_id = request.request_id, .path = request.path, .skip = static_cast<std::uint32_t>(first), .total = total_, .entries = entries.view().first(count)});
   }
 
   void DirectoryReader::add(int parent, const char* name, std::size_t depth, Measure& measure) {

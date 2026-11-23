@@ -14,7 +14,7 @@ export {
       BindingAction action;
     };
 
-    inline constexpr auto default_bindings = ds::Array<DefaultBinding, 45>{
+    inline constexpr auto default_bindings = ds::Array<DefaultBinding, 46>{
         {
             {.suffix = KeyChord{.key = KeyChord::Key::character, .character = '-'}, .action = BindingAction{.kind = BindingActionKind::scroll_pane_up}},
             {.suffix = KeyChord{.key = KeyChord::Key::character, .character = '='}, .action = BindingAction{.kind = BindingActionKind::scroll_pane_down}},
@@ -46,6 +46,7 @@ export {
             {.suffix = KeyChord{.key = KeyChord::Key::character, .character = 'c'}, .action = BindingAction{.kind = BindingActionKind::new_tab}},
             {.suffix = KeyChord{.key = KeyChord::Key::character, .character = 'e'}, .action = BindingAction{.kind = BindingActionKind::new_editor}},
             {.suffix = KeyChord{.key = KeyChord::Key::character, .character = 'E'}, .action = BindingAction{.kind = BindingActionKind::new_editor_tab}},
+            {.suffix = KeyChord{.key = KeyChord::Key::character, .character = 'o'}, .action = BindingAction{.kind = BindingActionKind::explorer}},
             {.suffix = KeyChord{.key = KeyChord::Key::character, .character = 'n'}, .action = BindingAction{.kind = BindingActionKind::next_tab}},
             {.suffix = KeyChord{.key = KeyChord::Key::character, .character = 'p'}, .action = BindingAction{.kind = BindingActionKind::previous_tab}},
             {.suffix = KeyChord{.key = KeyChord::Key::character, .character = '1'}, .action = BindingAction{.kind = BindingActionKind::select_tab}},

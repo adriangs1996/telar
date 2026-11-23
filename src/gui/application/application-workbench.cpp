@@ -42,6 +42,8 @@ namespace telar::gui::application::workbench {
       // Where an editor's cursor starts in its first file, counted from one.
       std::uint32_t line = 0;
       std::uint32_t column = 0;
+      // Where a terminal starts, instead of where the pane it splits works.
+      std::string_view directory;
     };
 
     // Splits pane `pane_id` along `axis`, the new pane being `added`.
@@ -69,6 +71,11 @@ namespace telar::gui::application::workbench {
       launch.cwd_source = pane_id;
       if (added.arguments) {
         launch.arguments = *added.arguments;
+      }
+
+      if (!added.directory.empty()) {
+        launch.cwd = added.directory;
+        launch.cwd_source = 0;
       }
 
       try {
@@ -398,6 +405,17 @@ namespace telar::gui::application::workbench {
     const auto focused = tab->focused_pane;
 
     return requestSplit(session, focused, axis, {});
+  }
+
+  bool splitAt(Session& session, ClientLayoutAxis axis, std::string_view directory) {
+    const auto* tab = activeTab(session.tabs, session.active_tab);
+    if (tab == nullptr || !directory.starts_with('/')) {
+      return false;
+    }
+
+    const auto focused = tab->focused_pane;
+
+    return requestSplit(session, focused, axis, {.directory = directory});
   }
 
   bool splitEditor(Session& session, ClientLayoutAxis axis, std::span<const std::string_view> files, EditorStart start) {

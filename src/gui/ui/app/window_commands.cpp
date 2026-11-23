@@ -130,6 +130,7 @@ namespace telar::gui::qt {
       case window_actions::Action::next_machine:
       case window_actions::Action::previous_machine:
       case window_actions::Action::add_machine:
+      case window_actions::Action::explorer:
       case window_actions::Action::monitor:
       case window_actions::Action::process_picker:
       case window_actions::Action::process_terminate:
@@ -205,6 +206,7 @@ namespace telar::gui::qt {
       case window_actions::Action::next_machine:
       case window_actions::Action::previous_machine:
       case window_actions::Action::add_machine:
+      case window_actions::Action::explorer:
       case window_actions::Action::monitor:
       case window_actions::Action::process_picker:
       case window_actions::Action::process_terminate:
@@ -227,7 +229,7 @@ namespace telar::gui::qt {
     ds::Option<window_actions::Action> nativeAction(BindingActionKind kind) noexcept {
       using Native = window_actions::Action;
       using Binding = BindingActionKind;
-      constexpr auto actions = ds::Array<std::pair<Binding, Native>, 53>{
+      constexpr auto actions = ds::Array<std::pair<Binding, Native>, 54>{
           {
               {Binding::new_tab, Native::new_tab},
               {Binding::new_editor, Native::new_editor},
@@ -270,6 +272,7 @@ namespace telar::gui::qt {
               {Binding::next_machine, Native::next_machine},
               {Binding::previous_machine, Native::previous_machine},
               {Binding::add_machine, Native::add_machine},
+              {Binding::explorer, Native::explorer},
               {Binding::monitor, Native::monitor},
               {Binding::process_picker, Native::process_picker},
               {Binding::process_terminate, Native::process_terminate},
@@ -609,6 +612,7 @@ namespace telar::gui::qt {
     case BindingActionKind::previous_machine:
     case BindingActionKind::machine_picker:
     case BindingActionKind::add_machine:
+    case BindingActionKind::explorer:
     case BindingActionKind::monitor:
     case BindingActionKind::process_picker:
     case BindingActionKind::process_terminate:
@@ -1028,6 +1032,11 @@ namespace telar::gui::qt {
       return;
     }
 
+    if (action == window_actions::Action::explorer) {
+      emit explorerRequested();
+      return;
+    }
+
     if (action == window_actions::Action::detach) {
       host_.closeWindow();
     } else if (action == window_actions::Action::toggle_sidebar) {
@@ -1139,6 +1148,7 @@ namespace telar::gui::qt {
     case window_actions::Action::copy_mode:
     case window_actions::Action::path_picker:
     case window_actions::Action::suggest_command:
+    case window_actions::Action::explorer:
     case window_actions::Action::monitor:
     case window_actions::Action::process_picker:
     case window_actions::Action::process_terminate:

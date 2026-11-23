@@ -33,7 +33,7 @@ namespace {
 
     reader.list(ListDirectory{.request_id = 7, .path = path, .skip = skip, .limit = limit}, reply);
 
-    const auto listing = Codec::decode<DirectoryListing>(reply.payload(), storage);
+    const auto listing = Codec::decode<DirectoryContents>(reply.payload(), storage);
     Listed listed{.total = listing.total, .skip = listing.skip};
 
     check(listing.request_id == 7 && listing.path == path);

@@ -80,6 +80,7 @@ namespace telar::gui::qt {
         machine_chrome_(store_),
         peek_(store_),
         monitor_(store_),
+        explorer_(store_, memory),
         prompt_(store_, memory),
         documents_(store_),
         link_status_(store_),
@@ -348,6 +349,27 @@ namespace telar::gui::qt {
     });
 
     connect(&machines_, &MachinesCoordinator::changed, &monitor_, &MonitorController::machineChanged);
+
+    // The explorer takes the keys of the panes while it shows, as a dialog does.
+    connect(&explorer_, &ExplorerController::opened, this, [this] {
+      dialogs_.show(Dialog::explorer);
+    });
+    connect(&explorer_, &ExplorerController::closed, this, [this] {
+      if (store_.dialog().kind == Dialog::explorer) {
+        dialogs_.show(Dialog::none);
+      }
+    });
+    connect(&explorer_, &ExplorerController::failed, &status_, &WindowStatus::report);
+    connect(&commands_, &WindowCommands::explorerRequested, &explorer_, &ExplorerController::toggle);
+    connect(&machines_, &MachinesCoordinator::changed, &explorer_, &ExplorerController::machineChanged);
+    // What the panes show moved: a window that follows the focused pane goes where it is.
+    connect(&store_, &Store::changed, &explorer_, &ExplorerController::synchronize);
+    connect(&dialogs_, &Dialogs::changed, &explorer_, [this] {
+      // Another dialog took the explorer's place.
+      if (store_.dialog().kind != Dialog::explorer && explorer_.showing()) {
+        explorer_.close();
+      }
+    });
     connect(&commands_, &WindowCommands::monitorRequested, this, [this, open_monitor](window_actions::Action action) {
       const auto showing = store_.dialog().kind == Dialog::monitor;
       if (!showing) {
@@ -742,6 +764,9 @@ namespace telar::gui::qt {
       break;
     case application::Change::monitor:
       monitor_.synchronize();
+      break;
+    case application::Change::explorer:
+      explorer_.synchronize();
       break;
     case application::Change::editor:
       // A link the editor opened is opened here, where the person is.

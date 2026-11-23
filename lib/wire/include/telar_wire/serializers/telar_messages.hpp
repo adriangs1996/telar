@@ -193,7 +193,7 @@ namespace telar {
     text_results = 0xd0,
     nvim_pick = 0xd1,
     nvim_link = 0xd2,
-    directory_listing = 0xd3,
+    directory_contents = 0xd3,
     directory_sizes = 0xd4,
     repository_changes = 0xd5,
     file_inspection = 0xd6,
@@ -693,8 +693,8 @@ namespace telar {
       return "nvim_pick";
     case ServerTag::nvim_link:
       return "nvim_link";
-    case ServerTag::directory_listing:
-      return "directory_listing";
+    case ServerTag::directory_contents:
+      return "directory_contents";
     case ServerTag::directory_sizes:
       return "directory_sizes";
     case ServerTag::repository_changes:

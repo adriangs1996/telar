@@ -92,6 +92,7 @@ namespace telar::gui::application {
         history(allocator),
         peek(allocator),
         monitor(allocator),
+        explorer(allocator),
         nvim(allocator),
         decode_(allocator),
         clipboard_(allocator),
@@ -260,6 +261,7 @@ namespace telar::gui::application {
     features::paths::close(paths);
     features::peek::close(peek);
     features::monitor::reset(monitor);
+    features::explorer::reset(explorer);
     features::nvim::detach(nvim);
     features::palette::discard(palette);
     link.forgetRequests();
@@ -389,6 +391,12 @@ namespace telar::gui::application {
         std::type_identity<CommandSuggestion>{},
         std::type_identity<SystemMetrics>{},
         std::type_identity<MonitorSnapshot>{},
+        std::type_identity<DirectoryContents>{},
+        std::type_identity<DirectorySizes>{},
+        std::type_identity<RepositoryChanges>{},
+        std::type_identity<FileInspection>{},
+        std::type_identity<FilesChanged>{},
+        std::type_identity<ChangesCommitted>{},
         std::type_identity<PaneKindNotice>{},
         std::type_identity<NvimGrid>{},
         std::type_identity<NvimFrame>{},
@@ -708,6 +716,34 @@ namespace telar::gui::application {
     return speaks(ClientTag::query_monitor);
   }
 
+  bool Session::explores() const noexcept {
+    return speaks(ClientTag::list_directory);
+  }
+
+  Change Session::apply(const DirectoryContents& message) {
+    return features::explorer::receive(explorer, message) ? Change::explorer : Change::none;
+  }
+
+  Change Session::apply(const DirectorySizes& message) {
+    return features::explorer::receive(explorer, message) ? Change::explorer : Change::none;
+  }
+
+  Change Session::apply(const RepositoryChanges& message) {
+    return features::explorer::receive(explorer, message) ? Change::explorer : Change::none;
+  }
+
+  Change Session::apply(const FileInspection& message) {
+    return features::explorer::receive(explorer, message) ? Change::explorer : Change::none;
+  }
+
+  Change Session::apply(const FilesChanged& message) {
+    return features::explorer::receive(explorer, message) ? Change::explorer : Change::none;
+  }
+
+  Change Session::apply(const ChangesCommitted& message) {
+    return features::explorer::receive(explorer, message) ? Change::explorer : Change::none;
+  }
+
   bool Session::speaks(ClientTag tag) const noexcept {
     return dialect_ && handshake::speaks(*dialect_, tag);
   }
@@ -720,6 +756,10 @@ namespace telar::gui::application {
   Change Session::apply(const RequestFailed& message) {
     if (features::monitor::fail(monitor, message.request_id, message.message)) {
       return Change::monitor;
+    }
+
+    if (features::explorer::fail(explorer, message)) {
+      return Change::explorer;
     }
 
     for (auto& pane : panes.viewMut()) {
@@ -839,6 +879,13 @@ namespace telar::gui::application {
   template bool Session::Link::offer<QueryHistory>(const QueryHistory& request);
   template ds::Option<std::uint64_t> Session::Link::ask<NvimConfiguration>(NvimConfiguration request);
   template ds::Option<std::uint64_t> Session::Link::ask<QueryMonitor>(QueryMonitor request);
+  template ds::Option<std::uint64_t> Session::Link::ask<ListDirectory>(ListDirectory request);
+  template ds::Option<std::uint64_t> Session::Link::ask<MeasureDirectory>(MeasureDirectory request);
+  template ds::Option<std::uint64_t> Session::Link::ask<QueryChanges>(QueryChanges request);
+  template ds::Option<std::uint64_t> Session::Link::ask<InspectFile>(InspectFile request);
+  template ds::Option<std::uint64_t> Session::Link::ask<ChangeFiles>(ChangeFiles request);
+  template ds::Option<std::uint64_t> Session::Link::ask<UndoFileChanges>(UndoFileChanges request);
+  template ds::Option<std::uint64_t> Session::Link::ask<CommitChanges>(CommitChanges request);
   template ds::Option<std::uint64_t> Session::Link::ask<RequestProcessPriority>(RequestProcessPriority request);
   template ds::Option<std::uint64_t> Session::Link::ask<RequestProcessSignal>(RequestProcessSignal request);
   template void Session::Link::send<CopySelection>(const CopySelection& message);

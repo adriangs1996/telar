@@ -64,6 +64,8 @@ export {
       previous_machine,
       machine_picker,
       add_machine,
+      // The explorer over the panes, on the files of the focused pane's machine.
+      explorer,
       monitor,
       process_picker,
       process_terminate,
@@ -92,7 +94,7 @@ export {
       bool operator==(const BindingAction&) const = default;
     };
 
-    inline constexpr auto builtin_binding_actions = ds::Array<std::pair<std::string_view, BindingActionKind>, 62>{
+    inline constexpr auto builtin_binding_actions = ds::Array<std::pair<std::string_view, BindingActionKind>, 63>{
         {
             {"scroll-pane-up", BindingActionKind::scroll_pane_up},
             {"scroll-pane-down", BindingActionKind::scroll_pane_down},
@@ -144,6 +146,7 @@ export {
             {"previous-machine", BindingActionKind::previous_machine},
             {"machine-picker", BindingActionKind::machine_picker},
             {"add-machine", BindingActionKind::add_machine},
+            {"explorer", BindingActionKind::explorer},
             {"monitor", BindingActionKind::monitor},
             {"process-picker", BindingActionKind::process_picker},
             {"process-terminate", BindingActionKind::process_terminate},

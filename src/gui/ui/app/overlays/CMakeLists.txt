@@ -1,6 +1,7 @@
 add_subdirectory(palette)
 add_subdirectory(peek)
 add_subdirectory(monitor)
+add_subdirectory(explorer)
 add_subdirectory(notifications)
 add_subdirectory(machine_prompt)
 add_subdirectory(workspace_form)

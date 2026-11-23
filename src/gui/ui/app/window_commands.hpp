@@ -172,6 +172,8 @@ namespace telar::gui::qt {
     void notified(const QString& message);
     // The monitor, or an action on the process selected in it.
     void monitorRequested(telar::gui::qt::window_actions::Action action);
+    // The explorer over the panes: to open it, or to close the one that shows.
+    void explorerRequested();
 
   private:
     [[nodiscard]] BindingContext context() const;

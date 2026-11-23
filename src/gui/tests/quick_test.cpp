@@ -1546,6 +1546,207 @@ return {api_version = 2, client = {
       QCOMPARE(client_->dialogs()->kind(), Store::Dialog::none);
     }
 
+    // The explorer lists a directory of the runtime's machine as a tree, says what git holds of it,
+    // and writes a rename as a plan the runtime applies and takes back; with TELAR_EXPLORER_SHOTS
+    // set to a directory, the window at each step is saved there.
+    Q_SLOT void explorerListsAndChangesFiles() {
+      if (QStandardPaths::findExecutable(QStringLiteral("git")).isEmpty()) {
+        QSKIP("git is not installed on this host");
+      }
+
+      QTRY_VERIFY_WITH_TIMEOUT(terminalReady(), runtime_wait_ms);
+      auto* explorer = client_->explorer();
+      const auto shots = qEnvironmentVariable("TELAR_EXPLORER_SHOTS");
+      const auto original_size = window_->size();
+      const auto restore = qScopeGuard([&] {
+        if (explorer->showing()) {
+          explorer->close();
+        }
+
+        window_->resize(original_size);
+      });
+      const auto shoot = [&](const QString& name) {
+        if (shots.isEmpty()) {
+          return;
+        }
+
+        // What the runtime still answers has settled before the picture is taken.
+        constexpr int settle_ms = 400;
+
+        QTest::qWait(settle_ms);
+        QVERIFY(window_->grabWindow().save(QDir{shots}.filePath(name + QStringLiteral(".png"))));
+      };
+
+      // A repository with a directory of documents, one of them changed since its commit.
+      const QTemporaryDir fixture;
+      const auto root = QDir{fixture.path()}.canonicalPath() + QStringLiteral("/telar");
+      const auto write = [&](const QString& relative, int lines) {
+        const auto path = root + QLatin1Char('/') + relative;
+        QByteArray text;
+
+        QVERIFY(QDir{}.mkpath(QFileInfo{path}.path()));
+        for (int line = 0; line < lines; ++line) {
+          text += QByteArrayLiteral("Press `Ctrl+b`, then `g` to open the command palette and type `split`.\n");
+        }
+
+        writeTestFile(path, text.constData());
+      };
+      const auto git = [&](const QStringList& arguments) {
+        QProcess process;
+        auto environment = QProcessEnvironment::systemEnvironment();
+
+        environment.insert(QStringLiteral("GIT_CONFIG_GLOBAL"), QStringLiteral("/dev/null"));
+        environment.insert(QStringLiteral("GIT_CONFIG_NOSYSTEM"), QStringLiteral("1"));
+        process.setProcessEnvironment(environment);
+        process.setWorkingDirectory(root);
+        process.start(QStringLiteral("git"), QStringList{QStringLiteral("-c"), QStringLiteral("user.name=telar"), QStringLiteral("-c"), QStringLiteral("user.email=telar@example.invalid"), QStringLiteral("-c"), QStringLiteral("commit.gpgsign=false")} + arguments);
+        return process.waitForFinished(runtime_wait_ms) && process.exitCode() == 0;
+      };
+
+      for (const auto& [name, lines] : std::initializer_list<std::pair<const char*, int>>{{"assets/logo.svg", 90}, {"cmake/toolchain.cmake", 14}, {"dev/config.lua", 40}, {"docs/build/modules.json", 120}, {"docs/examples/bar/usage.lua", 30}, {"docs/images/window.png", 400}, {"docs/agents.md", 90}, {"docs/clipboard.md", 52}, {"docs/code-style.md", 50}, {"docs/configuration.md", 1100}, {"docs/development.md", 32}, {"docs/kitty-graphics.md", 220}, {"docs/mods.md", 140}, {"docs/notifications.md", 115}, {"docs/packaging.md", 320}, {"docs/plugins.md", 100}, {"docs/README.md", 26}, {"docs/remote.md", 88}, {"docs/sidebar.md", 350}, {"docs/usage.md", 106}, {"examples/change.diff", 280}, {"integrations/nvim/init.lua", 280}, {"lib/base/base.cppm", 200}, {"src/gui/main.cpp", 300}, {".gitignore", 1}, {"CLAUDE.md", 60}, {"README.md", 80}, {"justfile", 120}}) {
+        write(QString::fromLatin1(name), lines);
+      }
+
+      writeTestFile(root + QStringLiteral("/.gitignore"), "out/\n");
+      QVERIFY(git({QStringLiteral("init"), QStringLiteral("-q"), QStringLiteral("-b"), QStringLiteral("lifetime-speed")}));
+      QVERIFY(git({QStringLiteral("add"), QStringLiteral(".")}));
+      QVERIFY(git({QStringLiteral("commit"), QStringLiteral("-q"), QStringLiteral("-m"), QStringLiteral("Describe the C++ behavior without the Zig reference")}));
+      write(QStringLiteral("docs/usage.md"), 111);
+      writeTestFile(root + QStringLiteral("/docs/usage.md"), (readTestFile(root + QStringLiteral("/docs/usage.md")) + QByteArrayLiteral("the split commands. Use Up/Down to select a result and Enter to run it.\n")).constData());
+      write(QStringLiteral("docs/configuration.md"), 1101);
+      write(QStringLiteral("docs/examples/notes.lua"), 3);
+      write(QStringLiteral("out/dev/telar"), 2000);
+
+      const auto record = [&](int row) {
+        return explorer->rows(0)->index(row, 0).data(ListModel::record_role).toMap();
+      };
+      const auto named = [&](const QString& name) {
+        for (int row = 0; row < explorer->rows(0)->rowCount(); ++row) {
+          if (record(row).value(QStringLiteral("name")) == name) {
+            return record(row);
+          }
+        }
+
+        return QVariantMap{};
+      };
+      const auto selected = [&] {
+        for (int row = 0; row < explorer->rows(0)->rowCount(); ++row) {
+          if (record(row).value(QStringLiteral("selected")).toBool()) {
+            return record(row).value(QStringLiteral("name")).toString();
+          }
+        }
+
+        return QString{};
+      };
+      const auto press = [&](const QString& keys) {
+        explorer->type(keys);
+      };
+      const auto window = [&] {
+        return explorer->windows().value(0).toMap();
+      };
+
+      window_->resize(1400, 900);
+      client_->commands()->execute(window_actions::Action::explorer);
+      QCOMPARE(client_->dialogs()->kind(), Store::Dialog::explorer);
+      QVERIFY(explorer->showing());
+
+      // The window goes to the repository, and the runtime lists it: directories first.
+      explorer->run(QStringLiteral("e ") + root);
+      QTRY_VERIFY_WITH_TIMEOUT(explorer->rows(0)->rowCount() > 6, runtime_wait_ms);
+      QCOMPARE(record(0).value(QStringLiteral("name")).toString(), QStringLiteral("assets"));
+      QVERIFY(record(0).value(QStringLiteral("directory")).toBool());
+      QVERIFY(named(QStringLiteral(".gitignore")).isEmpty());
+      QCOMPARE(window().value(QStringLiteral("hiddenEntries")).toInt(), 2);
+
+      // git says what changed, and a directory how many paths below it did; what it ignores
+      // leaves the listing.
+      QTRY_VERIFY_WITH_TIMEOUT(window().value(QStringLiteral("repository")).toBool(), runtime_wait_ms);
+      QVERIFY(named(QStringLiteral("out")).isEmpty());
+      QCOMPARE(window().value(QStringLiteral("ignoredEntries")).toInt(), 1);
+      QCOMPARE(window().value(QStringLiteral("branch")).toString(), QStringLiteral("lifetime-speed"));
+      QTRY_COMPARE_WITH_TIMEOUT(named(QStringLiteral("docs")).value(QStringLiteral("below")).toInt(), 3, runtime_wait_ms);
+      // The runtime measures each directory after it listed them.
+      QTRY_VERIFY_WITH_TIMEOUT(named(QStringLiteral("docs")).value(QStringLiteral("measured")).toBool(), runtime_wait_ms);
+
+      // `3j` then `l` unfolds the documents; the keys move as Neovim's.
+      press(QStringLiteral("3j"));
+      QCOMPARE(selected(), QStringLiteral("docs"));
+      press(QStringLiteral("l"));
+      QTRY_VERIFY_WITH_TIMEOUT(!named(QStringLiteral("usage.md")).isEmpty(), runtime_wait_ms);
+      QCOMPARE(named(QStringLiteral("usage.md")).value(QStringLiteral("unstaged")).toString(), QStringLiteral("M"));
+      QCOMPARE(named(QStringLiteral("usage.md")).value(QStringLiteral("depth")).toInt(), 1);
+      press(QStringLiteral("G"));
+      QCOMPARE(selected(), QStringLiteral("README.md"));
+      press(QStringLiteral("gg"));
+      QCOMPARE(selected(), QStringLiteral("assets"));
+
+      // The selection goes to the changed document, whose preview shows its diff.
+      press(QStringLiteral("]c"));
+      QCOMPARE(selected(), QStringLiteral("docs"));
+      for (int step = 0; step < 40 && selected() != QStringLiteral("usage.md"); ++step) {
+        press(QStringLiteral("j"));
+      }
+
+      QCOMPARE(selected(), QStringLiteral("usage.md"));
+      QTRY_VERIFY_WITH_TIMEOUT(explorer->preview().value(QStringLiteral("diff")).toBool(), runtime_wait_ms);
+      QVERIFY(!explorer->preview().value(QStringLiteral("lines")).toList().isEmpty());
+      shoot(QStringLiteral("explorer-tree"));
+
+      // A rename is a change typed, not written: the plan shows it, and `y` applies it.
+      press(QStringLiteral("cw"));
+      QCOMPARE(explorer->line().value(QStringLiteral("mode")).toString(), QStringLiteral("insert"));
+      QCOMPARE(explorer->line().value(QStringLiteral("prefill")).toString(), QStringLiteral("usage.md"));
+      explorer->submit(QStringLiteral("guide.md"));
+      QVERIFY(named(QStringLiteral("guide.md")).value(QStringLiteral("renamed")).toBool());
+      QVERIFY(QFile::exists(root + QStringLiteral("/docs/usage.md")));
+      press(QStringLiteral("k"));
+      press(QStringLiteral("dd"));
+      QVERIFY(named(QStringLiteral("sidebar.md")).value(QStringLiteral("removed")).toBool());
+      press(QStringLiteral("o"));
+      explorer->submit(QStringLiteral("notes/"));
+      shoot(QStringLiteral("explorer-pending"));
+      explorer->run(QStringLiteral("w"));
+      QCOMPARE(explorer->line().value(QStringLiteral("mode")).toString(), QStringLiteral("plan"));
+      QCOMPARE(explorer->plan().size(), 3);
+      QCOMPARE(explorer->plan().value(0).toMap().value(QStringLiteral("verb")).toString(), QStringLiteral("CREATE"));
+      QCOMPARE(explorer->plan().value(1).toMap().value(QStringLiteral("verb")).toString(), QStringLiteral("MOVE"));
+      QCOMPARE(explorer->plan().value(2).toMap().value(QStringLiteral("verb")).toString(), QStringLiteral("DELETE"));
+      shoot(QStringLiteral("explorer-plan"));
+      press(QStringLiteral("y"));
+      QTRY_VERIFY_WITH_TIMEOUT(QFile::exists(root + QStringLiteral("/docs/guide.md")), runtime_wait_ms);
+      QVERIFY(!QFile::exists(root + QStringLiteral("/docs/usage.md")));
+      QVERIFY(!QFile::exists(root + QStringLiteral("/docs/sidebar.md")));
+      QVERIFY(QFileInfo{root + QStringLiteral("/docs/notes")}.isDir());
+      QTRY_COMPARE_WITH_TIMEOUT(explorer->line().value(QStringLiteral("edits")).toInt(), 0, runtime_wait_ms);
+      QTRY_VERIFY_WITH_TIMEOUT(!named(QStringLiteral("guide.md")).isEmpty() && named(QStringLiteral("usage.md")).isEmpty(), runtime_wait_ms);
+
+      // `u` with nothing pending takes the plan back.
+      press(QStringLiteral("u"));
+      QTRY_VERIFY_WITH_TIMEOUT(QFile::exists(root + QStringLiteral("/docs/usage.md")) && QFile::exists(root + QStringLiteral("/docs/sidebar.md")), runtime_wait_ms);
+      QVERIFY(!QFile::exists(root + QStringLiteral("/docs/guide.md")));
+      QTRY_VERIFY_WITH_TIMEOUT(!named(QStringLiteral("usage.md")).isEmpty(), runtime_wait_ms);
+
+      // The changes lens lists what git says; a filter narrows a listing; `q` closes the explorer.
+      explorer->run(QStringLiteral("changes"));
+      QTRY_VERIFY_WITH_TIMEOUT(!named(QStringLiteral("usage.md")).isEmpty(), runtime_wait_ms);
+      QCOMPARE(record(0).value(QStringLiteral("kind")).toString(), QStringLiteral("header"));
+      shoot(QStringLiteral("explorer-changes"));
+      explorer->run(QStringLiteral("tree"));
+      press(QStringLiteral("/"));
+      explorer->typed(QStringLiteral("USAGE"));
+      QTRY_VERIFY_WITH_TIMEOUT(!named(QStringLiteral("usage.md")).isEmpty() && named(QStringLiteral("agents.md")).isEmpty(), runtime_wait_ms);
+      explorer->cancel();
+      QVERIFY(!named(QStringLiteral("agents.md")).isEmpty());
+      press(QStringLiteral("?"));
+      shoot(QStringLiteral("explorer-help"));
+      press(QStringLiteral("q"));
+      press(QStringLiteral("q"));
+      QVERIFY(!explorer->showing());
+      QCOMPARE(client_->dialogs()->kind(), Store::Dialog::none);
+      QCOMPARE(client_->status()->error(), QString{});
+      QCOMPARE(errors_, QString{});
+    }
+
     // A program in a pane hands the window a document: it covers the pane while the program
     // runs, scrolls by key, and goes away when the program quits.
     Q_SLOT void nativeDocumentCoversThePane() {

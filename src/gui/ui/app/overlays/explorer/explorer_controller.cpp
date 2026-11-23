@@ -1,0 +1,641 @@
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
+
+#include "explorer_controller.hpp"
+#include "ui/kit/input/key_adapter.hpp"
+#include "ui/kit/models/glyph_icon.hpp"
+#include "ui/kit/models/projection.hpp"
+#include <QClipboard>
+#include <QDateTime>
+#include <QDir>
+#include <QGuiApplication>
+#include <QKeyEvent>
+#include <QVariantList>
+#include <algorithm>
+#include <exception>
+#include <string_view>
+
+import telar.gui.application;
+import telar.gui.foundation.icons;
+
+namespace telar::gui::qt {
+  namespace {
+
+    namespace explorer = application::explorer;
+
+    using explorer::DiffTone;
+    using explorer::Effect;
+    using explorer::FileState;
+    using explorer::Mode;
+    using explorer::RowKind;
+    using explorer::Tone;
+
+    constexpr ds::Array<const char*, 7> kind_names{"entry", "added", "header", "note", "diff", "change", "pane"};
+    constexpr ds::Array<const char*, 4> diff_tones{"context", "added", "removed", "hunk"};
+    constexpr ds::Array<const char*, 7> mode_names{"normal", "visual", "insert", "search", "command", "plan", "help"};
+    constexpr ds::Array<const char*, 3> tone_names{"info", "error", "ask"};
+    constexpr ds::Array<const char*, 3> scope_names{"pane", "workspace", "machine"};
+    // The lines of a preview's text the window draws.
+    constexpr qsizetype preview_lines = 200;
+    constexpr double whole_share = 1000;
+
+    template <std::size_t Capacity>
+    QString text(const runtime::FixedText<Capacity>& value) {
+      return toQString(value.view());
+    }
+
+    // The letter git's short status gives a state, as the pickers write it.
+    QString letter(FileState state) {
+      switch (state) {
+      case FileState::modified:
+        return QStringLiteral("M");
+      case FileState::added:
+        return QStringLiteral("A");
+      case FileState::deleted:
+        return QStringLiteral("D");
+      case FileState::renamed:
+        return QStringLiteral("R");
+      case FileState::untracked:
+        return QStringLiteral("U");
+      case FileState::conflicted:
+        return QStringLiteral("!");
+      case FileState::unchanged:
+      case FileState::ignored:
+        break;
+      }
+
+      return {};
+    }
+
+    QVariantList numbers(std::span<const std::uint16_t> values) {
+      QVariantList result;
+
+      for (const auto value : values) {
+        result.push_back(static_cast<int>(value));
+      }
+
+      return result;
+    }
+
+    struct HelpGroup {
+      const char* title;
+      std::initializer_list<std::pair<const char*, const char*>> keys;
+    };
+
+    QVariantList helpGroups() {
+      const std::initializer_list<HelpGroup> groups{
+          {"Moving", {{"j k", "down, up; with a count"}, {"gg G", "first, last; 12G goes to row 12"}, {"<C-d> <C-u>", "half a page"}, {"h l", "fold, unfold; l on a file opens it"}, {"za zM zR", "toggle a fold, fold all, unfold a level"}, {"]c [c", "next, previous change of git"}}},
+          {"Roots and jumps", {{"<CR>", "enter a directory"}, {"-", "the directory above"}, {"_ ~", "the workspace's root, the home"}, {"gp gw gh", "follow the pane, the workspace, the machine"}, {"ma 'a", "set a mark, jump to it"}, {"<C-o> <C-i>", "back, forward in the jumps"}, {"gt gT", "next, previous lens"}}},
+          {"Editing as text", {{"cw i a", "rename on the row"}, {"o", "a new entry; end it with / for a directory"}, {"dd", "cut: deletes, or with p moves"}, {"yy", "copy, and its path to the clipboard"}, {"p", "paste into the row's directory"}, {"u", "undo; with nothing pending, the last :w"}, {":w :w!", "show the plan; overwrite what exists"}, {":e! :q!", "discard the changes"}}},
+          {"Windows", {{"<C-w>v <C-w>s", "another window beside, below"}, {"<C-w>w <C-w>hjkl", "the next window, the one that way"}, {"<C-w>q <C-w>o", "close this one, keep only this one"}, {":e PATH :vs PATH", "this window, or a new one, at a path"}}},
+          {"Toward the panes", {{"<CR>", "as the focused pane takes it"}, {"V <CR>", "insert several, directories too"}, {"gf", "open in the tab's editor"}, {"cd s", "cd the shell here, a new shell here"}, {"@", "mention to the agent"}, {"yr yn", "copy the relative path, the name"}, {".", "repeat"}}},
+          {"Git, sizes and what shows", {{"=", "the diff below the row"}, {"ga gu", "stage, unstage"}, {"gX", "discard changes, through the plan"}, {"gc", ":commit with a message"}, {"S", "sort by name, size, time"}, {"g. gi", "dotfiles, what git ignores"}, {"R", "read again"}}},
+          {"Modes", {{"V", "visual: y d <CR> @ ga gu"}, {"/", "filter the listing"}, {":", "e w vs sp cd commit marks q"}, {"F", "follow the pane"}, {"q", "close"}, {"?", "this help"}}},
+      };
+      QVariantList result;
+
+      for (const auto& group : groups) {
+        QVariantList keys;
+
+        for (const auto& [sequence, meaning] : group.keys) {
+          keys.push_back(QVariantMap{{QStringLiteral("keys"), QString::fromUtf8(sequence)}, {QStringLiteral("label"), QString::fromUtf8(meaning)}});
+        }
+
+        result.push_back(QVariantMap{{QStringLiteral("title"), QString::fromUtf8(group.title)}, {QStringLiteral("keys"), keys}});
+      }
+
+      return result;
+    }
+
+  }
+
+  ExplorerController::ExplorerController(Store& store, ApplicationAllocator& memory, QObject* parent)
+      : QObject(parent),
+        store_(store),
+        view_(memory),
+        home_(QDir::homePath().toUtf8()) {
+    // A model an invokable hands to QML with no parent would be the engine's to delete.
+    for (auto& model : rows_.viewMut()) {
+      model.setParent(this);
+    }
+  }
+
+  explorer::Host ExplorerController::host() const {
+    const auto& machines = store_.machines();
+    const auto rows = machines.rows();
+    const auto active = machines.active();
+    const bool local = active == application::machines::Machines::local_slot;
+
+    label_ = active < rows.size() ? QByteArray{rows[active].label.view().data(), static_cast<qsizetype>(rows[active].label.view().size())} : QByteArray{};
+    return {
+        .machine = static_cast<std::uint64_t>(active) + 1,
+        .name = {label_.constData(), static_cast<std::size_t>(label_.size())},
+        // The home of another machine's account is not known here.
+        .home = local ? std::string_view{home_.constData(), static_cast<std::size_t>(home_.size())} : std::string_view{},
+        .local = local,
+    };
+  }
+
+  bool ExplorerController::available() const {
+    return explorer::available(store_.session());
+  }
+
+  bool ExplorerController::showing() const {
+    return view_.open;
+  }
+
+  bool ExplorerController::sideBySide() const {
+    return view_.side_by_side;
+  }
+
+  QAbstractItemModel* ExplorerController::rows(int window) {
+    return window >= 0 && static_cast<std::size_t>(window) < rows_.size() ? &rows_.atMut(static_cast<std::size_t>(window)) : nullptr;
+  }
+
+  QVariantList ExplorerController::describeWindows() const {
+    const auto& session = store_.session();
+    const auto machine = host();
+    QVariantList result;
+
+    for (std::size_t index = 0; index < view_.windows.size(); ++index) {
+      const auto& window = *view_.windows[index];
+      const auto header = explorer::header(session, view_, machine, index);
+      const auto status = explorer::status(session, view_, machine, index);
+
+      result.push_back(QVariantMap{
+          {QStringLiteral("index"), static_cast<int>(index)},
+          {QStringLiteral("current"), status.current},
+          {QStringLiteral("machine"), toQString(header.machine)},
+          {QStringLiteral("local"), header.local},
+          {QStringLiteral("lead"), text(header.lead)},
+          {QStringLiteral("last"), toQString(header.last)},
+          {QStringLiteral("repository"), header.repository},
+          {QStringLiteral("branch"), toQString(header.branch)},
+          {QStringLiteral("upstream"), header.upstream},
+          {QStringLiteral("ahead"), header.ahead},
+          {QStringLiteral("behind"), header.behind},
+          {QStringLiteral("staged"), header.staged},
+          {QStringLiteral("unstaged"), header.unstaged},
+          {QStringLiteral("untracked"), header.untracked},
+          {QStringLiteral("mode"), toQString(status.mode)},
+          {QStringLiteral("modeKind"), QString::fromLatin1(mode_names[static_cast<std::size_t>(status.kind)])},
+          {QStringLiteral("following"), text(status.following)},
+          {QStringLiteral("follows"), status.follows},
+          {QStringLiteral("root"), text(status.root)},
+          {QStringLiteral("pending"), status.pending},
+          {QStringLiteral("flags"), text(status.flags)},
+          {QStringLiteral("total"), text(status.total)},
+          {QStringLiteral("keys"), text(status.keys)},
+          {QStringLiteral("chosen"), status.chosen},
+          {QStringLiteral("position"), status.position},
+          {QStringLiteral("count"), status.count},
+          {QStringLiteral("loading"), window.loading},
+          {QStringLiteral("hiddenEntries"), window.hidden_entries},
+          {QStringLiteral("ignoredEntries"), window.ignored_entries},
+          {QStringLiteral("top"), static_cast<int>(window.top)},
+          {QStringLiteral("rows"), static_cast<int>(window.rows.size())},
+          {QStringLiteral("page"), static_cast<int>(window.page)},
+          {QStringLiteral("lens"), static_cast<int>(window.lens)},
+      });
+    }
+
+    return result;
+  }
+
+  QVariantList ExplorerController::describeLenses() const {
+    QVariantList result;
+
+    if (view_.windows.empty()) {
+      return result;
+    }
+
+    for (const auto& lens : explorer::lenses(store_.session(), view_, host())) {
+      result.push_back(QVariantMap{
+          {QStringLiteral("name"), toQString(lens.name)},
+          {QStringLiteral("count"), lens.count},
+          {QStringLiteral("counted"), lens.counted},
+          {QStringLiteral("current"), lens.current},
+      });
+    }
+
+    return result;
+  }
+
+  QString ExplorerController::scope() const {
+    if (view_.windows.empty()) {
+      return {};
+    }
+
+    const auto& window = *view_.windows[view_.current];
+
+    return window.follow ? QString::fromLatin1(scope_names[static_cast<std::size_t>(window.scope)]) : QString{};
+  }
+
+  QVariantMap ExplorerController::describeLine() const {
+    QVariantMap result{
+        {QStringLiteral("mode"), QString::fromLatin1(mode_names[static_cast<std::size_t>(view_.mode)])},
+        {QStringLiteral("message"), view_.message.view().empty() ? toQString(explorer::idle_message) : text(view_.message)},
+        {QStringLiteral("tone"), QString::fromLatin1(tone_names[static_cast<std::size_t>(view_.tone)])},
+        {QStringLiteral("prefill"), toQString(view_.mode == Mode::insert ? view_.draft.view() : view_.prefill.view())},
+        {QStringLiteral("overwrite"), view_.overwrite},
+        {QStringLiteral("edits"), static_cast<int>(view_.edits.size())},
+        {QStringLiteral("revision"), static_cast<qulonglong>(view_.revision)},
+    };
+
+    if (!view_.windows.empty()) {
+      const auto& window = *view_.windows[view_.current];
+
+      result.insert(QStringLiteral("window"), static_cast<int>(view_.current));
+      result.insert(QStringLiteral("cursor"), static_cast<int>(window.cursor));
+      result.insert(QStringLiteral("filter"), toQString(window.filter.view()));
+    }
+
+    return result;
+  }
+
+  QVariantList ExplorerController::describeHints() const {
+    QVariantList result;
+
+    if (view_.windows.empty()) {
+      return result;
+    }
+
+    const auto hints = explorer::hints(store_.session(), view_, host());
+
+    for (std::size_t index = 0; index < hints.count; ++index) {
+      const auto& hint = hints.items[index];
+
+      result.push_back(QVariantMap{{QStringLiteral("keys"), toQString(hint.keys)}, {QStringLiteral("label"), text(hint.label)}, {QStringLiteral("enabled"), hint.enabled}});
+    }
+
+    return result;
+  }
+
+  QVariantMap ExplorerController::describePreview() const {
+    if (view_.windows.empty()) {
+      return {};
+    }
+
+    const auto look = explorer::preview(store_.session(), view_, host(), static_cast<std::uint64_t>(QDateTime::currentSecsSinceEpoch()));
+    if (!look.shown) {
+      return {{QStringLiteral("shown"), false}};
+    }
+
+    QVariantList facts;
+
+    for (std::size_t index = 0; index < look.fact_count; ++index) {
+      const auto& fact = look.facts[index];
+
+      facts.push_back(QVariantMap{
+          {QStringLiteral("label"), toQString(fact.label)},
+          {QStringLiteral("value"), text(fact.value)},
+          {QStringLiteral("detail"), text(fact.detail)},
+          {QStringLiteral("added"), fact.added},
+          {QStringLiteral("removed"), fact.removed},
+      });
+    }
+
+    // The text a line at a time, each with what it is in a diff.
+    QVariantList lines;
+    auto rest = look.text;
+
+    while (!rest.empty() && lines.size() < preview_lines) {
+      const auto end = rest.find('\n');
+      const auto line = rest.substr(0, end);
+      const auto tone = !look.diff ? DiffTone::context : line.starts_with("@@") ? DiffTone::hunk
+                                                     : line.starts_with('+')    ? DiffTone::added
+                                                     : line.starts_with('-')    ? DiffTone::removed
+                                                                                : DiffTone::context;
+
+      lines.push_back(QVariantMap{{QStringLiteral("text"), toQString(line)}, {QStringLiteral("tone"), QString::fromLatin1(diff_tones[static_cast<std::size_t>(tone)])}});
+      rest.remove_prefix(end == std::string_view::npos ? rest.size() : end + 1);
+    }
+
+    QVariantMap result{
+        {QStringLiteral("shown"), true},
+        {QStringLiteral("directory"), look.directory},
+        {QStringLiteral("name"), toQString(look.name)},
+        {QStringLiteral("path"), text(look.path)},
+        {QStringLiteral("facts"), facts},
+        {QStringLiteral("panes"), numbers(look.panes.view().first(look.pane_count))},
+        {QStringLiteral("title"), toQString(look.title)},
+        {QStringLiteral("lines"), lines},
+        {QStringLiteral("diff"), look.diff},
+        {QStringLiteral("waiting"), look.waiting},
+    };
+
+    putIcon(result, look.directory ? directoryIcon() : fileIcon(look.name));
+    return result;
+  }
+
+  QVariantList ExplorerController::describePlan() const {
+    QVariantList result;
+    const auto home = host().home;
+    const auto root = view_.windows.empty() ? std::string_view{} : view_.windows[view_.current]->root.view();
+
+    for (const auto& step : view_.plan) {
+      // A path below the window's root reads from there; another one from the home, or whole.
+      const auto shown = [&](std::string_view path) {
+        if (root.size() > 1 && path.starts_with(root) && path.size() > root.size() && path[root.size()] == '/') {
+          return toQString(path.substr(root.size() + 1));
+        }
+
+        return home.size() > 1 && path.starts_with(home) && path.size() > home.size() && path[home.size()] == '/' ? QStringLiteral("~") + toQString(path.substr(home.size())) : toQString(path);
+      };
+
+      result.push_back(QVariantMap{
+          {QStringLiteral("verb"), toQString(explorer::verbText(step.verb))},
+          {QStringLiteral("source"), shown(step.source.view())},
+          {QStringLiteral("target"), shown(step.target.view())},
+          {QStringLiteral("directory"), step.directory},
+      });
+    }
+
+    return result;
+  }
+
+  QVariantList ExplorerController::help() const {
+    return helpGroups();
+  }
+
+  const QVariantList& ExplorerController::windows() const noexcept {
+    return windows_;
+  }
+
+  const QVariantList& ExplorerController::lenses() const noexcept {
+    return lenses_;
+  }
+
+  const QVariantMap& ExplorerController::line() const noexcept {
+    return line_;
+  }
+
+  const QVariantList& ExplorerController::hints() const noexcept {
+    return hints_;
+  }
+
+  const QVariantMap& ExplorerController::preview() const noexcept {
+    return preview_;
+  }
+
+  const QVariantList& ExplorerController::plan() const noexcept {
+    return plan_;
+  }
+
+  QVariantMap ExplorerController::record(std::size_t window, std::size_t row) const {
+    const auto look = explorer::look(store_.session(), view_, host(), window, row);
+    const bool entry = look.kind == RowKind::entry || look.kind == RowKind::added || look.kind == RowKind::change;
+    QVariantMap result{
+        {QStringLiteral("kind"), QString::fromLatin1(kind_names[static_cast<std::size_t>(look.kind)])},
+        {QStringLiteral("index"), static_cast<int>(row)},
+        {QStringLiteral("depth"), static_cast<int>(look.depth)},
+        {QStringLiteral("directory"), look.directory},
+        {QStringLiteral("expanded"), look.expanded},
+        {QStringLiteral("selected"), look.selected},
+        {QStringLiteral("marked"), look.marked},
+        {QStringLiteral("ignored"), look.ignored},
+        {QStringLiteral("removed"), look.removed},
+        {QStringLiteral("renamed"), look.renamed},
+        {QStringLiteral("added"), look.added},
+        {QStringLiteral("lead"), toQString(look.lead)},
+        {QStringLiteral("name"), toQString(look.name)},
+        {QStringLiteral("tone"), QString::fromLatin1(diff_tones[static_cast<std::size_t>(look.tone)])},
+        {QStringLiteral("staged"), letter(look.staged)},
+        {QStringLiteral("unstaged"), letter(look.unstaged)},
+        {QStringLiteral("below"), look.below},
+        {QStringLiteral("linesAdded"), look.lines_added},
+        {QStringLiteral("linesRemoved"), look.lines_removed},
+        {QStringLiteral("size"), text(look.size)},
+        {QStringLiteral("share"), static_cast<double>(look.share) / whole_share},
+        {QStringLiteral("measured"), look.measured},
+        {QStringLiteral("partial"), look.partial},
+        {QStringLiteral("marks"), text(look.marks)},
+        {QStringLiteral("panes"), numbers(look.panes.view().first(look.pane_count))},
+        {QStringLiteral("note"), text(look.note)},
+        {QStringLiteral("editing"), view_.mode == Mode::insert && window == view_.current && look.selected},
+    };
+
+    if (entry) {
+      putIcon(result, look.directory ? directoryIcon() : fileIcon(look.name));
+    }
+
+    return result;
+  }
+
+  void ExplorerController::publish() {
+    for (std::size_t index = 0; index < rows_.size(); ++index) {
+      QList<QVariantMap> records;
+
+      if (index < view_.windows.size()) {
+        const auto& window = *view_.windows[index];
+        const auto end = std::min(window.rows.size(), window.top + window.page);
+
+        records.reserve(static_cast<qsizetype>(end - std::min(window.top, end)));
+        for (auto row = window.top; row < end; ++row) {
+          records.push_back(record(index, row));
+        }
+      }
+
+      rows_.atMut(index).replaceRows(std::move(records));
+    }
+
+    // A part that reads as it did is not told again, so nothing that draws it is built again.
+    const auto tell = [this](auto& shown, auto described, void (ExplorerController::*told)()) {
+      if (shown != described) {
+        shown = std::move(described);
+        emit(this->*told)();
+      }
+    };
+
+    tell(windows_, describeWindows(), &ExplorerController::windowsChanged);
+    tell(lenses_, describeLenses(), &ExplorerController::lensesChanged);
+    tell(line_, describeLine(), &ExplorerController::lineChanged);
+    tell(hints_, describeHints(), &ExplorerController::hintsChanged);
+    tell(preview_, describePreview(), &ExplorerController::previewChanged);
+    tell(plan_, describePlan(), &ExplorerController::planChanged);
+  }
+
+  void ExplorerController::finish(Effect effect) {
+    if (effect == Effect::copy) {
+      if (auto* clipboard = QGuiApplication::clipboard()) {
+        clipboard->setText(toQString(view_.text.view()));
+      }
+    }
+
+    store_.touch();
+    revision_ = view_.revision;
+    publish();
+    emit changed();
+    if (effect == Effect::closed || !view_.open) {
+      emit closed();
+    }
+  }
+
+  bool ExplorerController::key(int key, const QString& text, int modifiers) {
+    if (!view_.open) {
+      return false;
+    }
+
+    const QKeyEvent event{QEvent::KeyPress, key, Qt::KeyboardModifiers::fromInt(modifiers), text};
+    const auto chord = NativeKeyAdapter::chord(event);
+    if (chord.key == KeyChord::Key::character && chord.character == std::numeric_limits<std::uint32_t>::max()) {
+      return false;
+    }
+
+    try {
+      finish(explorer::press(store_.sessionMut(), view_, host(), chord));
+    } catch (const std::exception& error) {
+      emit failed(QString::fromUtf8(error.what()));
+    }
+
+    return true;
+  }
+
+  void ExplorerController::typed(const QString& text) {
+    const auto bytes = text.toUtf8();
+
+    explorer::typed(store_.sessionMut(), view_, host(), {bytes.constData(), static_cast<std::size_t>(bytes.size())});
+    finish(Effect::none);
+  }
+
+  void ExplorerController::submit(const QString& text) {
+    const auto bytes = text.toUtf8();
+
+    try {
+      finish(explorer::submit(store_.sessionMut(), view_, host(), {bytes.constData(), static_cast<std::size_t>(bytes.size())}));
+    } catch (const std::exception& error) {
+      emit failed(QString::fromUtf8(error.what()));
+    }
+  }
+
+  void ExplorerController::cancel() {
+    explorer::cancel(store_.sessionMut(), view_, host());
+    finish(Effect::none);
+  }
+
+  void ExplorerController::select(int window, int row, bool extend, bool toggle) {
+    if (window < 0 || row < 0) {
+      return;
+    }
+
+    explorer::select(store_.sessionMut(), view_, host(), static_cast<std::size_t>(window), static_cast<std::size_t>(row), extend, toggle);
+    finish(Effect::none);
+  }
+
+  void ExplorerController::activate(int window, int row) {
+    if (window < 0 || row < 0) {
+      return;
+    }
+
+    try {
+      finish(explorer::activate(store_.sessionMut(), view_, host(), static_cast<std::size_t>(window), static_cast<std::size_t>(row)));
+    } catch (const std::exception& error) {
+      emit failed(QString::fromUtf8(error.what()));
+    }
+  }
+
+  void ExplorerController::toggleRow(int window, int row) {
+    if (window < 0 || row < 0) {
+      return;
+    }
+
+    explorer::toggle(store_.sessionMut(), view_, host(), static_cast<std::size_t>(window), static_cast<std::size_t>(row));
+    finish(Effect::none);
+  }
+
+  void ExplorerController::setViewport(int window, int rows) {
+    if (window < 0 || static_cast<std::size_t>(window) >= view_.windows.size() || rows == view_.windows[static_cast<std::size_t>(window)]->page) {
+      return;
+    }
+
+    explorer::resize(view_, static_cast<std::size_t>(window), static_cast<std::uint16_t>(std::clamp(rows, 1, 1000)));
+    publish();
+    emit changed();
+  }
+
+  void ExplorerController::scroll(int window, int rows) {
+    if (window < 0) {
+      return;
+    }
+
+    explorer::scroll(view_, static_cast<std::size_t>(window), rows);
+    publish();
+    emit changed();
+  }
+
+  void ExplorerController::type(const QString& keys) {
+    // A hint spells its keys as the help does: `<CR>`, `<C-w>v`, `dd`.
+    static const QHash<QString, std::pair<int, int>> named{
+        {QStringLiteral("<CR>"), {Qt::Key_Return, 0}},
+        {QStringLiteral("<Esc>"), {Qt::Key_Escape, 0}},
+        {QStringLiteral("<C-w>"), {Qt::Key_W, static_cast<int>(NativeKeyAdapter::control_modifier)}},
+    };
+
+    for (qsizetype index = 0; index < keys.size();) {
+      const auto close = keys[index] == QLatin1Char('<') ? keys.indexOf(QLatin1Char('>'), index) : -1;
+      if (close > index) {
+        const auto found = named.constFind(keys.mid(index, close - index + 1));
+
+        if (found != named.constEnd()) {
+          key(found->first, found->first == Qt::Key_W ? QStringLiteral("w") : QString{}, found->second);
+        }
+
+        index = close + 1;
+        continue;
+      }
+
+      const auto character = keys[index];
+
+      key(character.toUpper().unicode(), QString{character}, character.isUpper() ? static_cast<int>(Qt::ShiftModifier) : 0);
+      ++index;
+    }
+  }
+
+  void ExplorerController::run(const QString& command) {
+    type(QStringLiteral(":"));
+    submit(command);
+  }
+
+  void ExplorerController::close() {
+    explorer::close(view_);
+    finish(Effect::closed);
+  }
+
+  void ExplorerController::toggle() {
+    if (view_.open) {
+      close();
+      return;
+    }
+
+    if (!explorer::open(store_.sessionMut(), view_, host())) {
+      emit failed(QStringLiteral("This machine's runtime does not answer the explorer; update telar there"));
+      return;
+    }
+
+    revision_ = view_.revision;
+    publish();
+    emit changed();
+    emit opened();
+  }
+
+  void ExplorerController::synchronize() {
+    if (!view_.open) {
+      return;
+    }
+
+    if (explorer::refresh(store_.sessionMut(), view_, host()) || revision_ != view_.revision) {
+      revision_ = view_.revision;
+      publish();
+      emit changed();
+    }
+  }
+
+  void ExplorerController::machineChanged() {
+    if (view_.open) {
+      close();
+    }
+  }
+
+}

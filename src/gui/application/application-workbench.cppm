@@ -115,6 +115,10 @@ export namespace telar::gui::application::workbench {
   // Splits the focused pane along `axis`; false when it cannot be split now.
   bool split(Session& session, ClientLayoutAxis axis);
 
+  // Splits the focused pane along `axis`, the new pane starting in `directory` instead of where
+  // the focused one works.
+  bool splitAt(Session& session, ClientLayoutAxis axis, std::string_view directory);
+
   // Splits the focused pane along `axis`, the new pane being an editor on `files`, or on an
   // empty buffer without any. False when the session cannot: its runtime runs no editors, or a
   // pane is still being opened or closed.
