@@ -1,5 +1,6 @@
 telar_add_domain(runtime files
   SOURCES
+    content/content.cpp
     directory/directory.cpp
     entry/entry.cpp
     operations/operations.cpp

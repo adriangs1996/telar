@@ -52,8 +52,9 @@ export {
       // NvimCmdline, NvimPopupMenu, NvimMessageList, NvimTabLine and NvimPrompt, and the failure a
       // request answers for a pane of another kind; cqp00010 adds NvimConfiguration, the editor
       // configuration a window brings a machine; cqp00011 adds the explorer's files: ListDirectory,
-      // MeasureDirectory, QueryChanges, InspectFile, ChangeFiles, UndoFileChanges, CommitChanges and
-      // LocateHome, with their answers. Peers without them reject the messages.
+      // MeasureDirectory, QueryChanges, InspectFile, ChangeFiles, UndoFileChanges, CommitChanges,
+      // LocateHome, ReadFile, WriteFile and EndFileWrite, with their answers. Peers without them
+      // reject the messages.
       inline constexpr SchemaId schema_id{'c', 'q', 'p', '0', '0', '0', '1', '1'};
 
       // The schemas a client of this build can speak with a runtime, oldest first. Each added
@@ -148,6 +149,9 @@ export {
           Addition{.tag = ClientTag::undo_file_changes, .dialect = Dialect::cqp00011},
           Addition{.tag = ClientTag::commit_changes, .dialect = Dialect::cqp00011},
           Addition{.tag = ClientTag::locate_home, .dialect = Dialect::cqp00011},
+          Addition{.tag = ClientTag::read_file, .dialect = Dialect::cqp00011},
+          Addition{.tag = ClientTag::write_file, .dialect = Dialect::cqp00011},
+          Addition{.tag = ClientTag::end_file_write, .dialect = Dialect::cqp00011},
       };
 
       // The first dialect whose runtime understands `tag`.

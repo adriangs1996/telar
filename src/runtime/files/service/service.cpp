@@ -19,6 +19,7 @@ namespace telar::runtime {
 
   FileService::FileService(ConcurrentMemory& memory)
       : directory_(memory),
+        content_(memory),
         repository_(memory),
         changer_(memory),
         decode_(memory) {
@@ -51,6 +52,12 @@ namespace telar::runtime {
       changer_.undo(Codec::decode<UndoFileChanges>(payload, storage), reply);
     } else if (tag == ClientTag::commit_changes) {
       changer_.commit(Codec::decode<CommitChanges>(payload, storage), cancelled, reply);
+    } else if (tag == ClientTag::read_file) {
+      content_.read(Codec::decode<ReadFile>(payload, storage), reply);
+    } else if (tag == ClientTag::write_file) {
+      changer_.write(Codec::decode<WriteFile>(payload, storage), reply);
+    } else if (tag == ClientTag::end_file_write) {
+      changer_.end(Codec::decode<EndFileWrite>(payload, storage), reply);
     } else if (tag == ClientTag::locate_home) {
       reply.send(HomeLocated{.request_id = Codec::decode<LocateHome>(payload, storage).request_id, .path = accountHome()});
     } else {

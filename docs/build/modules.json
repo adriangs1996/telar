@@ -308,6 +308,7 @@
     "src/runtime/core/media_service/media_service.cppm": "telar.runtime.core.media_service",
     "src/runtime/workers/background_executor/background_executor.cppm": "telar.runtime.workers.background_executor",
     "src/runtime/core/delivery/client_delivery/client_delivery.cppm": "telar.runtime.core.delivery.client_delivery",
+    "src/runtime/files/content/content.cppm": "telar.runtime.files.content",
     "src/runtime/files/directory/directory.cppm": "telar.runtime.files.directory",
     "src/runtime/files/entry/entry.cppm": "telar.runtime.files.entry",
     "src/runtime/files/operations/operations.cppm": "telar.runtime.files.operations",

@@ -743,6 +743,9 @@ export {
       void handle(std::uint64_t identity, const UndoFileChanges& message);
       void handle(std::uint64_t identity, const CommitChanges& message);
       void handle(std::uint64_t identity, const LocateHome& message);
+      void handle(std::uint64_t identity, const ReadFile& message);
+      void handle(std::uint64_t identity, const WriteFile& message);
+      void handle(std::uint64_t identity, const EndFileWrite& message);
       // What an editor told the runtime besides what it drew, to the client that drives it.
       void relay(PaneRef<NvimBody> pane);
       // Answers a client's question about an editor's buffers with the ones its query matches.

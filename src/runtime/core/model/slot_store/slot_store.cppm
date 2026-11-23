@@ -236,6 +236,9 @@ export {
         ClientRequest<UndoFileChanges, ClientRole::interactive, RequestLane::worker>,
         ClientRequest<CommitChanges, ClientRole::interactive, RequestLane::worker>,
         ClientRequest<LocateHome, ClientRole::interactive, RequestLane::worker>,
+        ClientRequest<ReadFile, ClientRole::interactive, RequestLane::worker>,
+        ClientRequest<WriteFile, ClientRole::interactive, RequestLane::worker>,
+        ClientRequest<EndFileWrite, ClientRole::interactive, RequestLane::worker>,
         ClientRequest<SuggestCommand, ClientRole::interactive, RequestLane::worker>>;
 
     ClientRole classifyRequest(ClientTag tag) noexcept;

@@ -269,6 +269,9 @@ export {
       case ServerTag::files_changed:
       case ServerTag::changes_committed:
       case ServerTag::home_located:
+      case ServerTag::file_chunk:
+      case ServerTag::file_written:
+      case ServerTag::file_write_ended:
       case ServerTag::nvim_navigated:
       case ServerTag::nvim_pick:
       case ServerTag::nvim_link:

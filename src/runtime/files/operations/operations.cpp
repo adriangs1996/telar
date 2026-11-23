@@ -810,6 +810,119 @@ namespace telar::runtime {
     journal_.clear();
   }
 
+  namespace {
+
+    // The name a file that arrives has until it is whole: hidden, and no name a listing takes
+    // for the file itself.
+    constexpr std::string_view partial_prefix = ".telar-partial-";
+
+    // Whether `partial` is a name this runtime gives a file arriving at `target`: beside it, and
+    // made as `partialFor` makes them.
+    constexpr bool partialOf(std::string_view partial, std::string_view target) {
+      return acceptable(partial) && parentOf(partial) == parentOf(target) && nameOf(partial).starts_with(partial_prefix) && nameOf(partial).size() > partial_prefix.size();
+    }
+
+    // A name for the partial of `target` that nothing has: random, so two transfers to one
+    // directory do not meet.
+    void partialFor(Path& partial, std::string_view target) {
+      constexpr std::size_t nonce_bytes = 8;
+      ds::Array<Byte, nonce_bytes> nonce{};
+
+      randomBytes(nonce.dataMut(), nonce.size());
+      partial.assign(parentOf(target));
+      if (!partial.view().ends_with('/')) {
+        partial.append("/");
+      }
+
+      partial.append(partial_prefix);
+      for (const auto byte : nonce) {
+        ds::formatTo(partial, "{:02x}", byte);
+      }
+    }
+
+  }
+
+  void FileChanger::write(const WriteFile& request, EncodedReply<ConcurrentMemory>& reply) {
+    if (!acceptable(request.target) || nameOf(request.target).size() > FileLimits::name_bytes) {
+      throw RequestError{FailureCode::invalid_request, "A file arrives at a plain absolute path"};
+    }
+
+    Path partial{memory_, request.partial};
+    FileDescriptor file;
+
+    if (request.partial.empty()) {
+      if (request.offset != 0) {
+        throw RequestError{FailureCode::invalid_request, "The first bytes of a file go at its start"};
+      }
+
+      if (Path parent{memory_, parentOf(request.target)}; request.parents && !createDirectories(parent)) {
+        throw RequestError{FailureCode::invalid_request, "The directory the file goes in could not be made"};
+      }
+
+      partialFor(partial, request.target);
+      // Exclusive: what exists is never written over, and a link there is not followed.
+      file = FileDescriptor{::open(partial.data(), combineFlags(O_WRONLY, O_CREAT, O_EXCL, O_NOFOLLOW, O_CLOEXEC), new_file)}; // NOLINT(cppcoreguidelines-pro-type-vararg): open's C signature is variadic
+    } else if (partialOf(request.partial, request.target)) {
+      file = FileDescriptor{::open(partial.data(), combineFlags(O_WRONLY, O_APPEND, O_NOFOLLOW, O_CLOEXEC))}; // NOLINT(cppcoreguidelines-pro-type-vararg): open's C signature is variadic
+    } else {
+      throw RequestError{FailureCode::invalid_request, "That is no file arriving at this target"};
+    }
+
+    struct stat status{};
+    if (!file || ::fstat(file.get(), &status) != 0 || !S_ISREG(status.st_mode)) {
+      throw RequestError{FailureCode::invalid_request, "The directory does not take the file that arrives"};
+    }
+
+    // A chunk that came twice, or out of turn, would leave a file that is not the one sent.
+    if (std::cmp_not_equal(status.st_size, request.offset)) {
+      throw RequestError{FailureCode::invalid_request, "The bytes do not go where the file that arrives ends"};
+    }
+
+    if (const int failure = writeAll(file.get(), request.bytes); failure != 0) {
+      throw RequestError{FailureCode::invalid_request, "The file that arrives could not be written"};
+    }
+
+    reply.send(FileWritten{.request_id = request.request_id, .partial = partial.view(), .size = request.offset + request.bytes.size()});
+  }
+
+  void FileChanger::end(const EndFileWrite& request, EncodedReply<ConcurrentMemory>& reply) {
+    if (!acceptable(request.target) || !partialOf(request.partial, request.target)) {
+      throw RequestError{FailureCode::invalid_request, "That is no file arriving at this target"};
+    }
+
+    const Path partial{memory_, request.partial};
+
+    if (!request.keep) {
+      // What a transfer that stopped left behind: only what this runtime wrote under that name.
+      ::unlink(partial.data());
+      reply.send(FileWriteEnded{.request_id = request.request_id, .outcome = FileOutcome::done});
+      return;
+    }
+
+    Path target{memory_, request.target};
+    bool renamed = false;
+
+    if (!statOf(partial)) {
+      reply.send(FileWriteEnded{.request_id = request.request_id, .outcome = FileOutcome::missing});
+      return;
+    }
+
+    if (statOf(target) && !clear(target, request.overwrite, renamed)) {
+      reply.send(FileWriteEnded{.request_id = request.request_id, .outcome = FileOutcome::refused});
+      return;
+    }
+
+    if (renameAt(AT_FDCWD, partial.data(), AT_FDCWD, target.data(), RenameMode::create_only) != 0) {
+      reply.send(FileWriteEnded{.request_id = request.request_id, .outcome = outcomeOf(sys::lastError())});
+      return;
+    }
+
+    const auto made = statOf(target);
+
+    remember(Step::created, target.view(), {}, made ? static_cast<std::uint64_t>(made->st_ino) : 0);
+    reply.send(FileWriteEnded{.request_id = request.request_id, .outcome = renamed ? FileOutcome::renamed : FileOutcome::done, .path = target.view()});
+  }
+
   void FileChanger::commit(const CommitChanges& request, const std::atomic<bool>& cancelled, EncodedReply<ConcurrentMemory>& reply) {
     if (!request.path.starts_with('/')) {
       throw RequestError{FailureCode::invalid_request, "A commit needs an absolute directory"};

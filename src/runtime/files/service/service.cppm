@@ -2,6 +2,7 @@ export module telar.runtime.files.service;
 
 import std;
 
+import telar.runtime.files.content;
 import telar.runtime.files.directory;
 import telar.runtime.files.operations;
 import telar.runtime.files.repository;
@@ -25,6 +26,7 @@ export namespace telar::runtime {
 
   private:
     DirectoryReader directory_;
+    FileContent content_;
     RepositoryReader repository_;
     FileChanger changer_;
     // Where a request's operations are decoded.

@@ -71,6 +71,20 @@ namespace {
 
     check(refused, "a directory that does not exist is refused, not answered empty");
     check(explorer.exchange<HomeLocated>(LocateHome{.request_id = 8}).path == root, "and it says where the home of its account is");
+
+    // A file arrives a chunk at a time, as one a window brings from another machine, and is read
+    // back as it was written.
+    const auto arriving = work + "/arrived.bin";
+    const std::string_view sent = "bytes that crossed";
+    const std::span<const Byte> crossing{reinterpret_cast<const Byte*>(sent.data()), sent.size()}; // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast): the bytes of a text
+    const std::string partial{explorer.exchange<FileWritten>(WriteFile{.request_id = 9, .target = arriving, .offset = 0, .bytes = crossing}).partial};
+
+    check(explorer.exchange<FileWriteEnded>(EndFileWrite{.request_id = 10, .partial = partial, .target = arriving, .keep = true}).outcome == FileOutcome::done);
+
+    const auto arrived = explorer.exchange<FileInspection>(InspectFile{.request_id = 11, .path = arriving}).identity;
+    const auto back = explorer.exchange<FileChunk>(ReadFile{.request_id = 12, .path = arriving, .identity = arrived, .offset = 0, .limit = FileLimits::chunk_bytes});
+
+    check(back.end && back.size == sent.size() && std::ranges::equal(back.bytes, crossing), "what was written in chunks reads back whole");
   }
 
   const telar::testing::Case case_a_client_lists_and_changes_files{"files_wire.a_client_lists_and_changes_files", testAClientListsAndChangesFiles};

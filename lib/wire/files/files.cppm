@@ -54,6 +54,8 @@ export extern "C++" {
       static constexpr std::size_t commit_bytes = 40;
       static constexpr std::size_t subject_bytes = 256;
       static constexpr std::size_t message_bytes = 4096;
+      // The bytes of a file one message carries, from one machine to another through a window.
+      static constexpr std::uint32_t chunk_bytes = std::uint32_t{256} * 1024;
       // A file's modification time holds this many nanoseconds past its second.
       static constexpr std::uint32_t maximum_nanoseconds = 999'999'999;
     };
@@ -439,6 +441,126 @@ export extern "C++" {
     template <>
     struct MessageSchema<HomeLocated>
         : Schema<Direction::server, ServerTag::home_located, Field<&HomeLocated::request_id, NonzeroU64, "request_id">, Field<&HomeLocated::path, Text16<FileLimits::path_bytes, true>, "path">> {};
+
+    // Reads the bytes of the file at `path` from `offset`, `limit` of them at most and never more
+    // than a chunk, while it still is the file `identity` names: one that was written since is
+    // refused, so a file read in several chunks arrives as one file or not at all. A link is
+    // not followed.
+    struct ReadFile {
+      std::uint64_t request_id{};
+      std::string_view path;
+      FileIdentity identity{};
+      std::uint64_t offset{};
+      std::uint32_t limit{};
+    };
+
+    template <>
+    struct MessageSchema<ReadFile>
+        : Schema<
+              Direction::client,
+              ClientTag::read_file,
+              Field<&ReadFile::request_id, NonzeroU64, "request_id">,
+              Field<&ReadFile::path, Text16<FileLimits::path_bytes>, "path">,
+              Field<&ReadFile::identity, ValueCodec<FileIdentity>, "identity">,
+              Field<&ReadFile::offset, u64, "offset">,
+              Field<&ReadFile::limit, u32, "limit">> {};
+
+    // The bytes read at `offset` of a file `size` bytes long; `end` once they reach its end.
+    struct FileChunk {
+      std::uint64_t request_id{};
+      std::uint64_t offset{};
+      std::uint64_t size{};
+      bool end{};
+      std::span<const Byte> bytes;
+    };
+
+    template <>
+    struct MessageSchema<FileChunk>
+        : Schema<
+              Direction::server,
+              ServerTag::file_chunk,
+              Field<&FileChunk::request_id, NonzeroU64, "request_id">,
+              Field<&FileChunk::offset, u64, "offset">,
+              Field<&FileChunk::size, u64, "size">,
+              Field<&FileChunk::end, BoolByte, "end">,
+              Field<&FileChunk::bytes, SizedBytes<u32, FileLimits::chunk_bytes>, "bytes">> {};
+
+    // Writes bytes of a file that is arriving, which will be `target`. The first chunk names no
+    // `partial`: the runtime makes one beside the target, under a name of its own that no listing
+    // takes for the file, and answers it; with `parents` it first makes the directories the
+    // target is in. A later chunk names that partial and the `offset` it goes at, which must be
+    // where the partial ends. Nothing that exists is written over, and no link is followed.
+    struct WriteFile {
+      std::uint64_t request_id{};
+      std::string_view target;
+      std::string_view partial;
+      std::uint64_t offset{};
+      bool parents{};
+      std::span<const Byte> bytes;
+    };
+
+    template <>
+    struct MessageSchema<WriteFile>
+        : Schema<
+              Direction::client,
+              ClientTag::write_file,
+              Field<&WriteFile::request_id, NonzeroU64, "request_id">,
+              Field<&WriteFile::target, Text16<FileLimits::path_bytes>, "target">,
+              Field<&WriteFile::partial, Text16<FileLimits::path_bytes, true>, "partial">,
+              Field<&WriteFile::offset, u64, "offset">,
+              Field<&WriteFile::parents, BoolByte, "parents">,
+              Field<&WriteFile::bytes, SizedBytes<u32, FileLimits::chunk_bytes>, "bytes">> {};
+
+    // The partial the bytes went to, and how long it is now.
+    struct FileWritten {
+      std::uint64_t request_id{};
+      std::string_view partial;
+      std::uint64_t size{};
+    };
+
+    template <>
+    struct MessageSchema<FileWritten>
+        : Schema<Direction::server, ServerTag::file_written, Field<&FileWritten::request_id, NonzeroU64, "request_id">, Field<&FileWritten::partial, Text16<FileLimits::path_bytes>, "partial">, Field<&FileWritten::size, u64, "size">> {};
+
+    // Ends a file that was arriving. With `keep` the partial takes the name `target`: where one
+    // exists it takes another name beside it, or with `overwrite` what was there goes to the
+    // trash first. Without `keep` the partial is removed, as when the transfer was cancelled or
+    // its source failed.
+    struct EndFileWrite {
+      std::uint64_t request_id{};
+      std::string_view partial;
+      std::string_view target;
+      bool keep{};
+      bool overwrite{};
+    };
+
+    template <>
+    struct MessageSchema<EndFileWrite>
+        : Schema<
+              Direction::client,
+              ClientTag::end_file_write,
+              Field<&EndFileWrite::request_id, NonzeroU64, "request_id">,
+              Field<&EndFileWrite::partial, Text16<FileLimits::path_bytes>, "partial">,
+              Field<&EndFileWrite::target, Text16<FileLimits::path_bytes>, "target">,
+              Field<&EndFileWrite::keep, BoolByte, "keep">,
+              Field<&EndFileWrite::overwrite, BoolByte, "overwrite">> {};
+
+    // What became of the partial: `done` with the path the file has, `renamed` when that is
+    // another name beside the target; of one removed, `done` and no path.
+    struct FileWriteEnded {
+      std::uint64_t request_id{};
+      FileOutcome outcome{};
+      std::string_view path;
+    };
+
+    template <>
+    struct MessageSchema<FileWriteEnded>
+        : Schema<
+              Direction::server,
+              ServerTag::file_write_ended,
+              Field<&FileWriteEnded::request_id, NonzeroU64, "request_id">,
+              Field<&FileWriteEnded::outcome, EnumByte<FileOutcome, static_cast<Byte>(FileOutcome::failed)>, "outcome">,
+              Field<&FileWriteEnded::path, Text16<FileLimits::path_bytes, true>, "path">> {};
 
   }
 }

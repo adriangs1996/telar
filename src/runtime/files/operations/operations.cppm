@@ -36,6 +36,17 @@ export namespace telar::runtime {
     // refuses.
     void commit(const CommitChanges& request, const std::atomic<bool>& cancelled, EncodedReply<ConcurrentMemory>& reply);
 
+    // Takes bytes of a file that arrives from another machine and sends its FileWritten. The
+    // first chunk makes the partial, beside the target and under a name of the runtime's own; a
+    // later one goes at the end of the partial it names. Throws RequestError for a target that
+    // is no plain absolute path, a partial that is not one of this target, and an offset that is
+    // not where the partial ends.
+    void write(const WriteFile& request, EncodedReply<ConcurrentMemory>& reply);
+
+    // Ends a file that arrived and sends its FileWriteEnded: the partial takes the target's
+    // name, as a new file of the last change, which `undo` takes back with it; or it is removed.
+    void end(const EndFileWrite& request, EncodedReply<ConcurrentMemory>& reply);
+
   private:
     using Clock = std::chrono::steady_clock;
     using Path = ds::String<ConcurrentMemory>;
