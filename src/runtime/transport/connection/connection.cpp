@@ -278,7 +278,8 @@ namespace telar::runtime {
 
   template <Allocator Memory>
   void OutgoingFrames<Memory>::requireCapacity(DeliveryLane lane) const {
-    if (responseLane(lane) && response_depth_ == response_capacity) {
+    // A deferred response of several frames can pass the capacity it was admitted under.
+    if (responseLane(lane) && response_depth_ >= response_capacity) {
       throw ResponseQueueFull{};
     }
   }

@@ -436,31 +436,35 @@ export {
       TBC_GENERIC inline void resolve(Encoder&& encode) {
         const auto offset = deferred_.offset();
         std::size_t resolved_size = 0;
+        std::size_t frames = 0;
 
-        std::forward<Encoder>(encode)(deferred_.response(), [&](const auto& message) {
-          using Message = std::remove_cvref_t<decltype(message)>;
-          static_assert(deliveryLane(MessageSchema<Message>::tag) == DeliveryLane::management);
+        // The answer may follow what a client has to know to read it, each a frame of its own, in
+        // the order they are sent. Either every frame is queued, or none.
+        try {
+          std::forward<Encoder>(encode)(deferred_.response(), [&](const auto& message) {
+            using Message = std::remove_cvref_t<decltype(message)>;
+            static_assert(deliveryLane(MessageSchema<Message>::tag) == DeliveryLane::management);
 
-          if (resolved_size != 0) {
-            throw std::logic_error{"A deferred response must produce exactly one frame"};
-          }
+            const auto size = Codec::encodedSize(message);
+            auto frame = bytes_.insertUninitialized(offset + resolved_size, frame_prefix_size + size);
 
-          const auto size = Codec::encodedSize(message);
-          auto frame = bytes_.insertUninitialized(offset, frame_prefix_size + size);
-
-          try {
+            resolved_size += frame_prefix_size + size;
             u32::encode(static_cast<std::uint32_t>(size), frame);
             Codec::encode(message, frame);
-          } catch (...) {
-            bytes_.erase(offset, frame_prefix_size + size);
-            throw;
-          }
+            ++frames;
+          });
+        } catch (...) {
+          bytes_.erase(offset, resolved_size);
+          throw;
+        }
 
-          resolved_size = frame_prefix_size + size;
-        });
+        if (frames == 0) {
+          throw std::logic_error{"A deferred response must produce a frame"};
+        }
 
-        if (resolved_size == 0) {
-          throw std::logic_error{"A deferred response must produce exactly one frame"};
+        // Deferring counted one frame: the others are counted as they join it.
+        for (std::size_t extra = 1; extra < frames; ++extra) {
+          inserted(DeliveryLane::management);
         }
 
         deferred_.resolved(resolved_size);

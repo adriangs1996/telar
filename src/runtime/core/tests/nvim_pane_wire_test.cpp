@@ -606,6 +606,29 @@ namespace {
     editor.until(peer, "typed");
   }
 
+  // A client that asks what a tab holds was told nothing of its panes: the editor is announced
+  // before the snapshot that names it.
+  void testTabSnapshotAnnouncesTheEditor() {
+    EditorHost editor_host;
+    ProtocolPeer peer{editor_host.host->socket()};
+    const auto terminal = openTerminal(peer);
+    auto editor = openEditor(peer, terminal);
+
+    editor.until(peer, "ready");
+
+    ProtocolPeer late{editor_host.host->socket()};
+
+    late.send(RequestTabSnapshot{.request_id = 7, .location = terminal.location});
+    late.deadline(std::chrono::seconds{10});
+    const auto first = late.receiveAny<PaneKindNotice, TabSnapshot>();
+    const auto snapshot = late.receive<TabSnapshot>();
+    const auto* notice = std::get_if<PaneKindNotice>(&first);
+
+    check(notice != nullptr && notice->pane_id == editor.pane && notice->kind == PaneKind::nvim, "the editor's kind comes before the snapshot");
+    check(snapshot.request_id == 7 && snapshot.panes.size() == 2, "and the snapshot names the terminal and the editor");
+    check(late.exchange<TabSnapshot>(RequestTabSnapshot{.request_id = 8, .location = terminal.location}).panes.size() == 2, "on a connection that stays open");
+  }
+
   // What an agent reads of an editor pane is what its screen shows.
   void testEditorTextIsRead() {
     EditorHost editor_host;
@@ -875,6 +898,7 @@ namespace {
   const telar::testing::Case case_second{"nvim_pane_wire.second_client_is_sent_the_screen_whole", testSecondClientIsSentTheScreenWhole};
   const telar::testing::Case case_refused{"nvim_pane_wire.requests_of_another_kind_are_refused", testRequestsOfAnotherKindAreRefused};
   const telar::testing::Case case_prompt{"nvim_pane_wire.prompt_is_shown_and_answered", testPromptIsShownAndAnswered};
+  const telar::testing::Case case_snapshot{"nvim_pane_wire.tab_snapshot_announces_the_editor", testTabSnapshotAnnouncesTheEditor};
   const telar::testing::Case case_text{"nvim_pane_wire.editor_text_is_read", testEditorTextIsRead};
   const telar::testing::Case case_configuration{"nvim_pane_wire.host_without_configuration_gets_telars", testHostWithoutConfigurationGetsTelars};
   const telar::testing::Case case_tells{"nvim_pane_wire.editor_tells_its_client", testEditorTellsItsClient};

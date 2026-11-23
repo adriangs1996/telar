@@ -276,12 +276,54 @@ namespace {
       check(failed && refused.empty() && refused.responseDepth() == 0 && refused.responseHighWater() == 0);
     }
 
+    // A deferred response may be more than one frame: what a client has to know, then the answer.
+    void testDeferredFrames() {
+      SystemAllocator system;
+      BudgetAllocator memory{system, 4096};
+      OutgoingFrames queue{memory};
+
+      queue.defer(QueryLimits{1});
+      queue.append(RequestCompleted{.request_id = 3});
+      const auto broken = [](const DeferredResponse&, auto&& send) {
+        send(RequestCompleted{.request_id = 1});
+        throw std::runtime_error{"the second frame could not be written"};
+      };
+
+      const auto later = encodeFrame(RequestCompleted{.request_id = 3});
+      bool failed = false;
+
+      try {
+        queue.prepare(4096, broken);
+      } catch (const std::runtime_error&) {
+        failed = true;
+      }
+
+      check(failed && queue.size() == later.size() && queue.responseDepth() == 2, "a response that fails halfway queues none of its frames");
+
+      const auto response = [](const DeferredResponse&, auto&& send) {
+        send(RequestCompleted{.request_id = 1});
+        send(RequestCompleted{.request_id = 2});
+      };
+
+      auto expected = encodeFrame(RequestCompleted{.request_id = 1});
+      const auto second = encodeFrame(RequestCompleted{.request_id = 2});
+
+      expected.insert(expected.end(), second.begin(), second.end());
+      expected.insert(expected.end(), later.begin(), later.end());
+      const auto bytes = queue.prepare(4096, response);
+
+      check(std::ranges::equal(bytes, expected), "its frames are written in the order they were sent, before what was queued after it");
+      queue.consume(bytes.size());
+      check(queue.empty() && queue.responseDepth() == 0 && queue.nextLane() == DeliveryLane::count, "and each is counted once");
+    }
+
   }
 
   void testOutgoingFrames() {
     testRandomWrites();
     testCapacityAndReservation();
     testDeferredAllocationFailure();
+    testDeferredFrames();
   }
 
   const telar::testing::Case case_outgoing_frames{"outgoing_frames.outgoing_frames", testOutgoingFrames};
