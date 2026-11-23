@@ -1,0 +1,43 @@
+#!/bin/sh
+# Stands in for telar in the machine wizard case of quick_test: a machine whose gateway
+# answers as box.example's would, to `machine add` and `machine setup --events`.
+event() { printf '%s\n' "$1"; sleep 0.15; }
+version=/home/dev/.local/share/telar/versions/0.0.1/telar
+case "$1 $2" in
+"machine add")
+  sleep 0.3
+  case "$4" in
+  *unreachable*) echo 'telar machine: the gateway does not answer at unreachable.example:8352' >&2; exit 1 ;;
+  esac
+  exit 0 ;;
+"machine setup")
+  event '{"event":"step","step":"gateway","status":"ok","detail":"the gateway of box admits this machine"}'
+  event '{"event":"step","step":"platform","status":"ok","detail":"Linux x86_64, telar-linux-x86_64-headless.tar.gz"}'
+  event '{"event":"step","step":"telar","status":"ok","detail":"telar 0.0.1 at '"$version"'"}'
+  case " $* " in
+  *" agents,config,editor "*)
+    event '{"event":"step","step":"runtime","status":"ok","detail":"running at /run/user/1000/telar/runtime.sock"}'
+    event '{"event":"login","agent":"claude","url":"https://claude.com/oauth/authorize?code=true&client_id=telar-fixture","code":""}'
+    event '{"event":"question","kind":"login_code","agent":"claude","text":"Paste the authentication code for claude"}'
+    read -r answer
+    event '{"event":"note","step":"logins","text":"claude: done"}'
+    event '{"event":"step","step":"logins","status":"changed","detail":"every started login finished"}'
+    event '{"event":"step","step":"check","status":"ok","detail":"a window can attach: schema cqp00009 on both sides"}'
+    event '{"event":"done","report":{"label":"box","destination":"telar://box.example:8352#6fae526f0c3b9d1e84a27f5b6c0d9e1f2a3b4c5d6e7f8091a2b3c4d5e6f7a9af","ready":true,"pending":false,"changed":true,"steps":[]}}'
+    exit 0 ;;
+  esac
+  event '{"event":"question","kind":"stop_runtime","agent":"","text":"A telar runtime of another build runs on box. Stopping it ends every pane and agent it runs. Stop it now?"}'
+  read -r answer
+  case "$answer" in *true*) ;; *) event '{"event":"step","step":"runtime","status":"failed","detail":"a runtime of another telar build runs there and keeps its panes"}'; exit 1 ;; esac
+  event '{"event":"step","step":"runtime","status":"changed","detail":"running at /run/user/1000/telar/runtime.sock"}'
+  event '{"event":"note","step":"runtime","text":"~/.local/bin/telar now links to '"$version"'"}'
+  event '{"event":"step","step":"profile","status":"changed","detail":"box updated, enabled, telar at '"$version"'"}'
+  event '{"event":"step","step":"agents","status":"changed","detail":"installed claude"}'
+  event '{"event":"step","step":"integrations","status":"changed","detail":"claude"}'
+  event '{"event":"note","step":"integrations","text":"claude: integrated"}'
+  event '{"event":"step","step":"configuration","status":"changed","detail":"3 of 3 files written; credentials, sessions and history stay here"}'
+  event '{"event":"step","step":"check","status":"ok","detail":"a window can attach: schema cqp00009 on both sides"}'
+  event '{"event":"done","report":{"label":"box","destination":"telar://box.example:8352#6fae526f0c3b9d1e84a27f5b6c0d9e1f2a3b4c5d6e7f8091a2b3c4d5e6f7a9af","ready":true,"pending":false,"changed":true,"steps":[{"step":"profile","status":"changed","detail":"box updated, enabled, telar at '"$version"'","notes":[]}]}}'
+  exit 0 ;;
+esac
+exit 2

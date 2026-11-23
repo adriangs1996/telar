@@ -21,6 +21,7 @@ namespace telar::gui::qt {
   class HistoryController;
   class KeyBindings;
   class MachinePromptController;
+  class MachineWizardController;
   class PaletteController;
   class PathPickerController;
   class PeekController;
@@ -49,6 +50,7 @@ namespace telar::gui::qt {
       Store& store;
       PeekController& peek;
       MachinePromptController& machine_prompt;
+      MachineWizardController& machine_wizard;
       PaletteController& palette;
       PathPickerController& paths;
       HistoryController& history;
@@ -73,8 +75,10 @@ namespace telar::gui::qt {
     void show(Dialog kind);
     void showPalette(application::palette::PaletteMode mode);
     void showPaths();
-    // Opens the prompt that adds a machine, or renames the one given.
-    void showMachinePrompt(ds::Option<application::machines::MachineToken> renamed = {});
+    // Opens the prompt that renames a machine.
+    void showMachinePrompt(application::machines::MachineToken renamed);
+    // Opens the wizard that adds a machine, or sets up the saved one given.
+    void showMachineWizard(ds::Option<application::machines::MachineToken> machine = {});
 
   signals:
     void changed();
@@ -83,6 +87,7 @@ namespace telar::gui::qt {
     tbc::mut_a<Store> store_;
     tbc::mut_a<PeekController> peek_;
     tbc::mut_a<MachinePromptController> machine_prompt_;
+    tbc::mut_a<MachineWizardController> machine_wizard_;
     tbc::mut_a<PaletteController> palette_;
     tbc::mut_a<PathPickerController> paths_;
     tbc::mut_a<HistoryController> history_;

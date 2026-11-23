@@ -12,7 +12,6 @@ static_assert(true);
 
 import telar.gui.foundation.forms;
 import telar.gui.application;
-import telar.base.ds;
 
 namespace telar::gui::qt {
 
@@ -34,23 +33,17 @@ namespace telar::gui::qt {
     prompt_.reset();
   }
 
-  bool MachinePromptController::open(ds::Option<application::machines::MachineToken> renamed) {
-    if (renamed && (!store_.machines().contains(*renamed) || renamed->slot == application::machines::Machines::local_slot)) {
+  bool MachinePromptController::open(application::machines::MachineToken renamed) {
+    if (!store_.machines().contains(renamed) || renamed.slot == application::machines::Machines::local_slot) {
       return false;
     }
 
-    prompt_.emplace();
-    prompt_.getMut().renamed = renamed;
-    if (renamed) {
-      prompt_.getMut().mode = Mode::rename;
-      prompt_.getMut().text = toQString(store_.machines().row(renamed->slot).label.view());
-    }
-
+    prompt_.emplace(Prompt{.text = toQString(store_.machines().row(renamed.slot).label.view()), .renamed = renamed});
     return true;
   }
 
-  std::size_t MachinePromptController::limit() const noexcept {
-    return prompt_ && prompt_->mode == Mode::add_destination ? application::machines::MachineLimits::destination_bytes : application::machines::MachineLimits::label_bytes;
+  std::size_t MachinePromptController::limit() noexcept {
+    return application::machines::MachineLimits::label_bytes;
   }
 
   void MachinePromptController::search(const QString& text) {
@@ -76,9 +69,7 @@ namespace telar::gui::qt {
       return;
     }
 
-    const auto* const name = prompt_->mode == Mode::add_destination ? "prompt.machine_destination_bytes" : "prompt.machine_label_bytes";
-
-    application::notifications::reportLimit(store_.sessionMut(), {.name = name, .noun = "bytes", .value = limit(), .requested = requested_bytes, .route = {}});
+    application::notifications::reportLimit(store_.sessionMut(), {.name = "prompt.machine_label_bytes", .noun = "bytes", .value = limit(), .requested = requested_bytes, .route = {}});
     store_.commit();
   }
 
@@ -87,28 +78,11 @@ namespace telar::gui::qt {
       return;
     }
 
-    if (prompt_->mode == Mode::add_label) {
-      prompt_.getMut().label = prompt_->text;
-      prompt_.getMut().text.clear();
-      prompt_.getMut().mode = Mode::add_destination;
-      store_.advanceDialog();
-      emit changed();
-
-      return;
-    }
-
     const auto text = prompt_->text.toUtf8();
     const std::string_view value{text.constData(), static_cast<std::size_t>(text.size())};
 
-    if (prompt_->mode == Mode::rename) {
-      const auto renamed = prompt_->renamed;
-      if (renamed && store_.machines().contains(*renamed)) {
-        static_cast<void>(profiles_.edit({.kind = application::machines::MachineEditKind::rename, .label = store_.machines().row(renamed->slot).label.view(), .value = value}));
-      }
-    } else {
-      const auto label = prompt_->label.toUtf8();
-
-      static_cast<void>(profiles_.edit({.kind = application::machines::MachineEditKind::add, .label = {label.constData(), static_cast<std::size_t>(label.size())}, .value = value}));
+    if (const auto renamed = prompt_->renamed; store_.machines().contains(renamed)) {
+      static_cast<void>(profiles_.edit({.kind = application::machines::MachineEditKind::rename, .label = store_.machines().row(renamed.slot).label.view(), .value = value}));
     }
 
     prompt_.reset();
@@ -116,23 +90,8 @@ namespace telar::gui::qt {
   }
 
   QVariantMap MachinePromptController::state() const {
-    QString title;
-    QString text;
-
-    if (prompt_) {
-      text = prompt_->text;
-      switch (prompt_->mode) {
-      case Mode::add_label:
-        title = QStringLiteral("New machine label");
-        break;
-      case Mode::add_destination:
-        title = QStringLiteral("The address `telar server pair` prints there");
-        break;
-      case Mode::rename:
-        title = QStringLiteral("Rename machine");
-        break;
-      }
-    }
+    const auto text = prompt_ ? prompt_->text : QString{};
+    const auto title = prompt_ ? QStringLiteral("Rename machine") : QString{};
 
     return {{QStringLiteral("revision"), QString::number(store_.dialog().generation)}, {QStringLiteral("title"), title}, {QStringLiteral("editorText"), text}, {QStringLiteral("maximumBytes"), static_cast<qulonglong>(limit())}};
   }

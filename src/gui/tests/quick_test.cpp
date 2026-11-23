@@ -4119,7 +4119,114 @@ return {api_version=2, client={keybindings={
       QCOMPARE(client_->dialogs()->kind(), telar::gui::qt::ApplicationController::Dialog::palette);
     }
 
-    Q_SLOT void machinePromptKeepsCompositionAndByteBounds() {
+    // The wizard pairs a machine, sets it up and signs its agents in through the telar it runs,
+    // here a stand-in that answers as `machine add` and `machine setup --events` do. With
+    // TELAR_GUI_TEST_WIZARD_SCREENSHOTS naming a directory, it saves the window at each step.
+    Q_SLOT void machineWizardPairsSetsUpAndSignsIn() {
+      const QTemporaryDir stand_in;
+
+      QVERIFY(stand_in.isValid());
+      const auto program = stand_in.filePath(QStringLiteral("telar"));
+      QFile script{program};
+
+      QVERIFY(script.open(QIODevice::WriteOnly));
+      QFile fixture{QStringLiteral(":/telar/machine-wizard/telar")};
+
+      QVERIFY(fixture.open(QIODevice::ReadOnly));
+      script.write(fixture.readAll());
+      script.close();
+      QVERIFY(script.setPermissions(QFileDevice::ReadOwner | QFileDevice::WriteOwner | QFileDevice::ExeOwner));
+      auto* wizard = client_->machineWizard();
+
+      wizard->setProgram(program);
+      const auto cleanup = qScopeGuard([this, wizard] {
+        client_->commands()->execute(window_actions::Action::cancel);
+        wizard->setProgram(QString{});
+      });
+      const auto shots = qEnvironmentVariable("TELAR_GUI_TEST_WIZARD_SCREENSHOTS");
+      const auto shoot = [this, &shots](const char* name) {
+        if (shots.isEmpty()) {
+          return true;
+        }
+
+        // The dialog rises into place as it opens; the picture is of it at rest.
+        QTest::qWait(600);
+        return test::waitForSynchronizedFrame(*window_, runtime_wait_ms) && window_->grabWindow().save(QDir{shots}.filePath(QString::fromLatin1(name) + QStringLiteral(".png")), "PNG");
+      };
+      const auto state = [wizard](const char* key) {
+        return wizard->state().value(QString::fromLatin1(key));
+      };
+      const auto key = QStringLiteral("6fae526f0c3b9d1e84a27f5b6c0d9e1f2a3b4c5d6e7f8091a2b3c4d5e6f7a9af");
+
+      client_->commands()->execute(window_actions::Action::add_machine);
+      QCOMPARE(client_->dialogs()->kind(), ApplicationController::Dialog::machine_wizard);
+      QTRY_VERIFY_WITH_TIMEOUT(window_->findChild<QQuickItem*>(QStringLiteral("machineWizard")) != nullptr, runtime_wait_ms);
+      QVERIFY(!state("canContinue").toBool());
+      QVERIFY(shoot("01-pair"));
+
+      // An address whose gateway does not answer: the wizard says so and keeps the name.
+      wizard->setField(QStringLiteral("address"), QStringLiteral("telar://unreachable.example:8352#") + key + QStringLiteral(".1a30130599b22d1637980d5f11e4a982"));
+      QCOMPARE(state("label").toString(), QStringLiteral("unreachable.example"));
+      wizard->next();
+      QTRY_VERIFY_WITH_TIMEOUT(!state("running").toBool() && state("failure").toString().contains(QStringLiteral("does not answer")), runtime_wait_ms);
+      QVERIFY(!state("paired").toBool());
+      QVERIFY(shoot("02-pair-failed"));
+
+      // The help starts from the address that failed, and prints the command for a new one.
+      wizard->openHelper(true);
+      QVERIFY(state("helper").toBool());
+      QCOMPARE(state("reachAs").toString(), QStringLiteral("unreachable.example"));
+      wizard->setField(QStringLiteral("reach"), QStringLiteral("forward"));
+      wizard->setField(QStringLiteral("reachAs"), QStringLiteral("203.0.113.7"));
+      wizard->setField(QStringLiteral("dialPort"), QStringLiteral("9000"));
+      QCOMPARE(state("command").toString(), QStringLiteral("curl -fsSL https://github.com/adriangs1996/telar/releases/latest/download/install.sh | sh -s -- --headless --serve --host 203.0.113.7 --port 9000"));
+      QVERIFY(shoot("03-prepare-the-machine"));
+      wizard->next();
+      QVERIFY(!state("helper").toBool());
+      QCOMPARE(state("address").toString(), QString{});
+
+      // The address the machine printed pairs and saves it.
+      wizard->setField(QStringLiteral("address"), QStringLiteral("telar://box.example:8352#") + key + QStringLiteral(".9c41e07d2b5a8f3e6d1c0b9a8f7e6d5c"));
+      wizard->setField(QStringLiteral("label"), QStringLiteral("box"));
+      QVERIFY(state("canContinue").toBool());
+      QVERIFY(shoot("04-pair-address"));
+      wizard->next();
+      QTRY_VERIFY_WITH_TIMEOUT(state("paired").toBool(), runtime_wait_ms);
+      QVERIFY(shoot("05-paired"));
+      wizard->next();
+      QCOMPARE(state("step").toInt(), static_cast<int>(MachineWizardController::Step::telar));
+      QCOMPARE(state("source").toString(), QStringLiteral("release"));
+      QVERIFY(shoot("06-telar"));
+      wizard->next();
+      QCOMPARE(state("step").toInt(), static_cast<int>(MachineWizardController::Step::agents));
+      QVERIFY(shoot("07-agents"));
+
+      // Setup asks before it stops a runtime of another build, and goes on once it may.
+      wizard->next();
+      QTRY_VERIFY_WITH_TIMEOUT(state("question").toMap().value(QStringLiteral("kind")).toString() == QStringLiteral("stop_runtime"), runtime_wait_ms);
+      QVERIFY(shoot("08-apply-question"));
+      wizard->answer(QStringLiteral("true"));
+      QTRY_VERIFY_WITH_TIMEOUT(state("applied").toBool(), runtime_wait_ms);
+      QVERIFY(shoot("09-applied"));
+
+      // Signing in shows the agent's page and takes the code it gives.
+      wizard->next();
+      QTRY_VERIFY_WITH_TIMEOUT(state("question").toMap().value(QStringLiteral("kind")).toString() == QStringLiteral("login_code"), runtime_wait_ms);
+      QCOMPARE(state("logins").toList().size(), 1);
+      QVERIFY(shoot("10-sign-in"));
+      wizard->answer(QStringLiteral("fixture-code"));
+      QTRY_VERIFY_WITH_TIMEOUT(state("signedIn").toBool() && !state("running").toBool(), runtime_wait_ms);
+      wizard->next();
+      QCOMPARE(state("step").toInt(), static_cast<int>(MachineWizardController::Step::ready));
+      QCOMPARE(state("telarPath").toString(), QStringLiteral("/home/dev/.local/share/telar/versions/0.0.1/telar"));
+      QVERIFY(shoot("11-ready"));
+      wizard->next();
+      QTRY_VERIFY_WITH_TIMEOUT(client_->dialogs()->kind() == ApplicationController::Dialog::none, runtime_wait_ms);
+    }
+
+    // The wizard's address field takes the window's focus, keeps a composition until it is
+    // committed, and passes what is committed to the wizard.
+    Q_SLOT void machineWizardKeepsComposition() {
       client_->commands()->execute(window_actions::Action::add_machine);
       const auto cleanup = qScopeGuard([this] {
         client_->commands()->execute(window_actions::Action::cancel);
@@ -4133,32 +4240,16 @@ return {api_version=2, client={keybindings={
 
       QCoreApplication::sendEvent(search, &preedit);
       QTRY_VERIFY_WITH_TIMEOUT(search->property("layout").toMap().value(QStringLiteral("composing")).toBool(), runtime_wait_ms);
-      QTest::keyClick(window_, Qt::Key_Escape);
-      QCOMPARE(client_->dialogs()->kind(), telar::gui::qt::ApplicationController::Dialog::machine);
-      QTRY_VERIFY_WITH_TIMEOUT(!search->property("layout").toMap().value(QStringLiteral("composing")).toBool(), runtime_wait_ms);
-      const auto maximum = client_->machinePrompt()->state().value(QStringLiteral("maximumBytes")).toInt();
-      const QString retained(maximum, QLatin1Char('x'));
+      QCOMPARE(client_->machineWizard()->state().value(QStringLiteral("address")).toString(), QString{});
       QInputMethodEvent commit;
 
-      commit.setCommitString(retained + QStringLiteral("🧵"));
+      commit.setCommitString(QStringLiteral("telar://box.example:8352"));
       QCoreApplication::sendEvent(search, &commit);
-      QCOMPARE(search->text(), retained);
-      QCOMPARE(client_->machinePrompt()->state().value(QStringLiteral("editorText")).toString(), retained);
-      const auto find_notice = [this] {
-        return std::ranges::find_if(client_->notifications()->center().items(), [](const auto& notice) {
-          return notice.title.view() == "Limit reached" && notice.message.view().find("prompt.machine_label_bytes") != std::string_view::npos;
-        });
-      };
-
-      QTRY_VERIFY_WITH_TIMEOUT(find_notice() != client_->notifications()->center().items().end(), runtime_wait_ms);
-      const auto notice = find_notice()->id;
-
-      client_->notifications()->dismiss(client_->notifications()->identity(notice));
-      QTest::keyClick(window_, Qt::Key_Return);
-      QCOMPARE(client_->machinePrompt()->state().value(QStringLiteral("title")).toString(), QStringLiteral("The address `telar server pair` prints there"));
-      QCOMPARE(search->text(), QString{});
+      QTRY_VERIFY_WITH_TIMEOUT(!search->property("layout").toMap().value(QStringLiteral("composing")).toBool(), runtime_wait_ms);
+      QCOMPARE(client_->machineWizard()->state().value(QStringLiteral("address")).toString(), QStringLiteral("telar://box.example:8352"));
+      QCOMPARE(client_->dialogs()->kind(), telar::gui::qt::ApplicationController::Dialog::machine_wizard);
       QTest::keyClick(window_, Qt::Key_Escape);
-      QVERIFY((client_->dialogs()->kind() == telar::gui::qt::ApplicationController::Dialog::none));
+      QTRY_VERIFY_WITH_TIMEOUT(client_->dialogs()->kind() == telar::gui::qt::ApplicationController::Dialog::none, runtime_wait_ms);
     }
 
     Q_SLOT void paletteCompositionAndUtf8LimitsKeepTheEditorOwned() {

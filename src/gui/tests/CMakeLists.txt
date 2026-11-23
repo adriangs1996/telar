@@ -220,6 +220,10 @@ if(TELAR_GUI_NATIVE)
     endif()
   endif()
   telar_add_test(gui-quick-test QT NO_TEST SOURCES quick_test.cpp agent_report_fixture.cpp LIBRARIES gui-quick gui-quickplugin Qt6::Test gui-test-window-activation gui-test-fixtures)
+  qt_add_resources(gui-quick-test gui-machine-wizard-fixtures
+    PREFIX "/telar/machine-wizard"
+    BASE "${CMAKE_CURRENT_SOURCE_DIR}/fixtures/machine-wizard"
+    FILES "${CMAKE_CURRENT_SOURCE_DIR}/fixtures/machine-wizard/telar")
   set(TELAR_GUI_TEST_RUNTIME "" CACHE FILEPATH "Runtime executable for native GUI integration tests")
   # The cases of ui/app that drive a real runtime: the program always builds, and its
   # cases register when TELAR_GUI_TEST_RUNTIME names the runtime.
