@@ -85,6 +85,7 @@ FocusScope {
     readonly property real barHeight: Math.round(35.2 * ratio)
     readonly property real commandHeight: Math.round(24 * ratio)
     readonly property real hintsHeight: Math.round(30.4 * ratio)
+    readonly property real scrollTrack: Math.round(12.8 * ratio)
     readonly property real previewWidth: pinned || windows.length > 1 ? 0 : Math.round(Math.max(300 * ratio, body.width * 0.38))
     readonly property real indent: 14 * ratio
     readonly property real gutter: 10 * ratio
@@ -774,7 +775,7 @@ FocusScope {
                             readonly property color nameColor: record.removed ? root.colors.red : record.added ? root.colors.green : record.renamed ? root.colors.yellow : record.ignored ? root.colors.overlay1 : record.directory ? root.colors.accent : root.colors.text
 
                             y: root.rowY(index)
-                            width: list.width - (scrollbar.visible ? scrollbar.width + 2 * root.ratio : 0)
+                            width: list.width - (scrollbar.visible ? scrollbar.width : 0)
                             height: root.rowY(index + 1) - y
 
                             // The directory that would take the rows dragged.
@@ -1013,7 +1014,7 @@ FocusScope {
                                     Rectangle {
                                         id: track
                                         // Beside the size, which is four letters wide at most.
-                                        x: Math.round(parent.width - (30.4 + 6 + 32) * root.ratio)
+                                        x: Math.round(parent.width - (4 * 7.2 + 6 + 32) * root.ratio)
                                         y: Math.round((parent.height - height) / 2)
                                         width: 32 * root.ratio
                                         height: 4 * root.ratio
@@ -1193,18 +1194,26 @@ FocusScope {
                         }
                     }
 
-                    // Where the rows shown stand in the listing.
+                    // Where the rows shown stand in the listing: a track the rows leave free, as
+                    // wide as the design's, and in it the part that shows.
                     Rectangle {
                         id: scrollbar
                         readonly property real share: pane.modelData.rows > 0 ? Math.min(1, pane.modelData.page / pane.modelData.rows) : 1
 
-                        x: parent.width - width - 2 * root.ratio
-                        y: 4 * root.ratio + (pane.modelData.rows > 0 ? (parent.height - 8 * root.ratio) * pane.modelData.top / pane.modelData.rows : 0)
-                        width: 4 * root.ratio
-                        height: Math.max(16 * root.ratio, (parent.height - 8 * root.ratio) * share)
-                        radius: width / 2
-                        color: Qt.alpha(root.colors.text, 0.22)
+                        x: parent.width - width
+                        width: root.scrollTrack
+                        height: parent.height
+                        color: root.colors.panel_bg
                         visible: share < 1
+
+                        Rectangle {
+                            x: Math.round((parent.width - width) / 2)
+                            y: 4 * root.ratio + (pane.modelData.rows > 0 ? (parent.height - 8 * root.ratio) * pane.modelData.top / pane.modelData.rows : 0)
+                            width: Math.round(6.4 * root.ratio)
+                            height: Math.max(16 * root.ratio, (parent.height - 8 * root.ratio) * scrollbar.share)
+                            radius: width / 2
+                            color: Qt.alpha(root.colors.text, 0.3)
+                        }
                     }
                 }
 
@@ -1647,7 +1656,7 @@ FocusScope {
                             // As the bar of a row, and beside the size as it is there.
                             Rectangle {
                                 id: heavyTrack
-                                x: Math.round(parent.width - (30.4 + 6 + 32) * root.ratio)
+                                x: Math.round(parent.width - (4 * 7.2 + 6 + 32) * root.ratio)
                                 y: Math.round((parent.height - height) / 2)
                                 width: 32 * root.ratio
                                 height: 4 * root.ratio
