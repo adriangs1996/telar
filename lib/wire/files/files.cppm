@@ -326,11 +326,13 @@ export extern "C++" {
 
     // Applies the operations in order, each on its own: one that fails leaves the others to run.
     // Where a target exists, `overwrite` sends what was there to the trash; without it the runtime
-    // picks a free name beside it.
+    // picks a free name beside it. What it does is the change undo takes back; with `joins` it
+    // is part of the change before it, and both go back together.
     struct ChangeFiles {
       std::uint64_t request_id{};
       bool overwrite{};
       std::span<const FileOperation> operations;
+      bool joins{};
     };
 
     template <>
@@ -340,7 +342,8 @@ export extern "C++" {
               ClientTag::change_files,
               Field<&ChangeFiles::request_id, NonzeroU64, "request_id">,
               Field<&ChangeFiles::overwrite, BoolByte, "overwrite">,
-              Field<&ChangeFiles::operations, CountedSpan<u8, ValueCodec<FileOperation>, FileLimits::maximum_operations, 1>, "operations">> {};
+              Field<&ChangeFiles::operations, CountedSpan<u8, ValueCodec<FileOperation>, FileLimits::maximum_operations, 1>, "operations">,
+              Field<&ChangeFiles::joins, BoolByte, "joins">> {};
 
     enum class FileOutcome : Byte {
       done = 0,
@@ -525,13 +528,15 @@ export extern "C++" {
     // Ends a file that was arriving. With `keep` the partial takes the name `target`: where one
     // exists it takes another name beside it, or with `overwrite` what was there goes to the
     // trash first. Without `keep` the partial is removed, as when the transfer was cancelled or
-    // its source failed.
+    // its source failed. A file kept is a change undo takes back: one of its own, or with
+    // `joins` part of the change before it.
     struct EndFileWrite {
       std::uint64_t request_id{};
       std::string_view partial;
       std::string_view target;
       bool keep{};
       bool overwrite{};
+      bool joins{};
     };
 
     template <>
@@ -543,7 +548,8 @@ export extern "C++" {
               Field<&EndFileWrite::partial, Text16<FileLimits::path_bytes>, "partial">,
               Field<&EndFileWrite::target, Text16<FileLimits::path_bytes>, "target">,
               Field<&EndFileWrite::keep, BoolByte, "keep">,
-              Field<&EndFileWrite::overwrite, BoolByte, "overwrite">> {};
+              Field<&EndFileWrite::overwrite, BoolByte, "overwrite">,
+              Field<&EndFileWrite::joins, BoolByte, "joins">> {};
 
     // What became of the partial: `done` with the path the file has, `renamed` when that is
     // another name beside the target; of one removed, `done` and no path.

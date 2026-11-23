@@ -54,6 +54,11 @@ export namespace telar::gui::features::explorer {
     runtime::FixedText<ExplorerLimits::error_bytes> error;
     // Counts the reads, for the directory read longest ago.
     std::uint64_t clock = 0;
+    // The requests of transfers in flight on this machine, and their answers not yet taken.
+    ds::Vec<std::uint64_t, Memory> carrying;
+    ds::Vec<Carried, Memory> carried;
+    // Grows with each connection: a request that left on an earlier one is answered by none.
+    std::uint64_t epoch = 0;
   };
 
   // The directory `path` as the window holds it; none when it never asked for it.
@@ -108,6 +113,14 @@ export namespace telar::gui::features::explorer {
   bool receive(State& state, const FilesChanged& changed);
   bool receive(State& state, const ChangesCommitted& committed);
   bool receive(State& state, const HomeLocated& located);
+
+  // A request of a transfer left under `request_id`: its answer is kept for the transfer.
+  void carrying(State& state, std::uint64_t request_id);
+  bool receive(State& state, const FileChunk& chunk);
+  bool receive(State& state, const FileWritten& written);
+  bool receive(State& state, const FileWriteEnded& ended);
+  // The answer to a transfer's request, taken out of the cache; none before it arrived.
+  [[nodiscard]] ds::Option<Carried> carried(State& state, std::uint64_t request_id);
   // The matches of the search asked last; false for an answer to one that a later query replaced.
   bool receive(State& state, const PathResults& results);
 

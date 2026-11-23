@@ -71,6 +71,8 @@ export namespace telar::gui::features::explorer {
     bool removed = false;
     bool renamed = false;
     bool added = false;
+    // It is a file arriving from another machine: its size says how much of it did.
+    bool arriving = false;
     // The name, and before it, in a flat list, the path that leads to it.
     LineText lead;
     LineText name;
@@ -138,6 +140,8 @@ export namespace telar::gui::features::explorer {
     std::uint32_t chosen = 0;
     std::uint32_t position = 0;
     std::uint32_t count = 0;
+    // The files on the way to or from the window's machine.
+    std::uint32_t carried = 0;
   };
 
   [[nodiscard]] StatusLook status(const View& view, const State& state, const Context& context, std::size_t window);
@@ -220,6 +224,34 @@ export namespace telar::gui::features::explorer {
 
   // The menu of the row it opened on; no line while none shows.
   [[nodiscard]] MenuLook menu(const View& view, const State& state, const Context& context);
+
+  // A file on its way between two machines, as the explorer lists it under its windows.
+  struct TransferLook {
+    std::uint32_t id = 0;
+    LineText name;
+    // `box → macbook`.
+    LineText route;
+    // `1.2M of 4.0M`, how much of it arrived in thousandths, and `3.1M/s` while it runs.
+    ShortText progress;
+    std::uint16_t share = 0;
+    ShortText rate;
+    // What it does now, or how it ended.
+    Word phase;
+    bool ended = false;
+    bool failed = false;
+  };
+
+  inline constexpr std::size_t transfer_lines = 4;
+
+  struct TransferLooks {
+    ds::Array<TransferLook, transfer_lines> items{};
+    std::size_t count = 0;
+    // The ones that do not fit the lines.
+    std::size_t more = 0;
+  };
+
+  // The transfers the explorer shows, the ones that run first.
+  [[nodiscard]] TransferLooks transfers(const View& view, const Context& context, std::uint64_t now_ms);
 
   // The verb of a step of the plan, as it reads: CREATE, MOVE, COPY, DELETE, RESTORE.
   [[nodiscard]] std::string_view verbText(PlanVerb verb) noexcept;

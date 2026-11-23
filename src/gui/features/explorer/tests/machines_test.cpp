@@ -210,20 +210,33 @@ namespace {
     check(explorer.type("u").kind == ActionKind::undo && explorer.view.awaited.size() == 2 && std::ranges::contains(explorer.view.wrote, Explorer::box) && std::ranges::contains(explorer.view.wrote, Explorer::machine));
   }
 
-  void testAPasteFromAnotherMachineIsRefused() {
+  void testADirectoryIsNotCarriedToAnotherMachine() {
     Explorer explorer;
 
     splitToBox(explorer);
-    explorer.type("2jyy");
+    check(explorer.selected() == "/home/ops/logs");
+    explorer.type("yy");
     explorer.type("<C-w>h");
     explorer.type("p");
-    check(explorer.view.edits.empty() && explorer.view.tone == Tone::error && explorer.view.message.view() == "What was yanked is on box: copying between machines is not there yet");
+    check(explorer.view.edits.empty() && explorer.view.tone == Tone::error && explorer.view.message.view() == "A directory is not carried between machines yet: yank its files");
 
-    // Nor does a drag take a row to a window of another machine.
+    // A file dragged to a window of another machine is copied there, and moved with Shift.
     check(grab(explorer.view, explorer.state, explorer.context(), {.window = 0, .row = explorer.at("justfile")}) == 1);
+
+    const auto copied = aim(explorer.view, explorer.remote, explorer.context(Explorer::box), {.window = 1, .row = 0});
+    const auto moved = aim(explorer.view, explorer.remote, explorer.context(Explorer::box), {.window = 1, .row = 0, .move = true});
+
+    check(copied.count == 1 && copied.copy && moved.count == 1 && !moved.copy);
+    // On its own machine it moves, and Alt copies it.
+    check(!aim(explorer.view, explorer.state, explorer.context(Explorer::machine), {.window = 0, .row = explorer.at("docs")}).copy);
+    check(aim(explorer.view, explorer.state, explorer.context(Explorer::machine), {.window = 0, .row = explorer.at("docs"), .copy = true}).copy);
+    release(explorer.view);
+
+    // A directory is not.
+    check(grab(explorer.view, explorer.state, explorer.context(), {.window = 0, .row = explorer.at("docs")}) == 1);
     check(aim(explorer.view, explorer.remote, explorer.context(Explorer::box), {.window = 1, .row = 0}).count == 0);
     drop(explorer.view, explorer.remote, explorer.context(Explorer::box), {.window = 1, .row = 0});
-    check(explorer.view.edits.empty() && explorer.view.message.view().starts_with("That window is on another machine"));
+    check(explorer.view.edits.empty() && explorer.view.message.view().starts_with("A directory is not carried between machines yet"));
   }
 
   void testAFileIsHandedOnlyToItsOwnMachine() {
@@ -236,8 +249,8 @@ namespace {
     // The focused pane is of the machine that shows: a path of another one is not typed there.
     const auto handed = explorer.type("<CR>");
 
-    check(handed.kind == ActionKind::none && explorer.view.tone == Tone::error, "nothing is typed at the pane");
-    check(explorer.view.message.view() == "It is on box and the focused pane on macbook: gf opens it there, yy copies where it is");
+    check(handed.kind == ActionKind::none && explorer.view.mode == Mode::question && explorer.view.tone == Tone::ask, "nothing is typed at the pane: a copy is offered");
+    check(explorer.view.message.view() == "It is on box and the pane on macbook · bring a copy there? [y/N]");
     check(explorer.type("@").kind == ActionKind::none && explorer.type("cd").kind == ActionKind::none, "nor mentioned, nor a shell sent there");
 
     // gf opens it in an editor of its machine; yy copies where it is.
@@ -264,7 +277,7 @@ namespace {
   const telar::testing::Case case_tab{"machines.tab_completes_the_label_of_a_machine", testTabCompletesTheLabelOfAMachine};
   const telar::testing::Case case_marks{"machines.marks_and_jumps_keep_their_machine", testMarksAndJumpsKeepTheirMachine};
   const telar::testing::Case case_plan{"machines.one_plan_goes_to_each_machine_its_part", testOnePlanGoesToEachMachineItsPart};
-  const telar::testing::Case case_paste{"machines.a_paste_from_another_machine_is_refused", testAPasteFromAnotherMachineIsRefused};
+  const telar::testing::Case case_paste{"machines.a_directory_is_not_carried_to_another_machine", testADirectoryIsNotCarriedToAnotherMachine};
   const telar::testing::Case case_hand{"machines.a_file_is_handed_only_to_its_own_machine", testAFileIsHandedOnlyToItsOwnMachine};
 
 }

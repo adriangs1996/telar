@@ -317,6 +317,163 @@ namespace telar::gui::application::explorer {
     return view.revision != before;
   }
 
+  namespace {
+
+    using feature::TransferAsk;
+
+    // Says where a file brought to this machine goes, once the machine's home is known: below
+    // its downloads, in a directory of the machine it comes from. False while the home is not
+    // known, which the runtime is then asked.
+    bool place(Session& session, View& view, std::size_t index, const Context& context, std::uint64_t now_ms) {
+      if (!view.transfers[index].directory.empty()) {
+        return true;
+      }
+
+      // The home the window knows of the machine, or the one its runtime said.
+      const auto home = context.home.empty() ? session.explorer.home.view() : context.home;
+      if (!home.empty()) {
+        const auto label = feature::labelOf(context, view.transfers[index].from);
+        auto& directory = view.transfers.atMut(index).directory;
+
+        directory.assign(home);
+        directory.append("/Downloads/telar/");
+        for (const char character : label) {
+          // A label is no path: what would part it into two directories does not.
+          directory.push(character == '/' || character == '\\' ? '-' : character);
+        }
+
+        return true;
+      }
+
+      if (session.explorer.located) {
+        feature::giveUp(view, index, "its machine has no home to bring it to", now_ms);
+      } else if (session.explorer.locating == 0) {
+        const feature::Need wanted{.kind = feature::NeedKind::home};
+
+        if (const auto request = session.link.ask(LocateHome{})) {
+          feature::asked(session.explorer, wanted, *request);
+        }
+      }
+
+      return false;
+    }
+
+    // Sends what the transfer asks of this session's runtime. Nothing when the queue is full:
+    // the next time asks again.
+    ds::Option<std::uint64_t> request(Session& session, const feature::Transfer& transfer, TransferAsk ask, bool joined) {
+      ds::String<Memory> target{session.memory, transfer.directory.view()};
+
+      target.append("/");
+      target.append(transfer.name.view());
+      switch (ask) {
+      case TransferAsk::none:
+        return ds::none;
+      case TransferAsk::read:
+        return session.link.ask(ReadFile{.path = transfer.source.view(), .identity = transfer.identity, .offset = transfer.done, .limit = FileLimits::chunk_bytes});
+      case TransferAsk::write:
+        return session.link.ask(WriteFile{.target = target.view(), .partial = transfer.partial.view(), .offset = transfer.done, .parents = transfer.kind == feature::TransferKind::bring, .bytes = transfer.chunk.view()});
+      case TransferAsk::keep:
+        return session.link.ask(EndFileWrite{.partial = transfer.partial.view(), .target = target.view(), .keep = true, .overwrite = transfer.overwrite, .joins = joined});
+      case TransferAsk::drop:
+        return session.link.ask(EndFileWrite{.partial = transfer.partial.view(), .target = target.view(), .keep = false});
+      case TransferAsk::trash: {
+        const ds::Array<FileOperation, 1> original{{{.kind = FileOperationKind::trash, .source = transfer.source.view(), .identity = transfer.identity}}};
+
+        return session.link.ask(ChangeFiles{.operations = original.view(), .joins = joined});
+      }
+      }
+
+      return ds::none;
+    }
+
+    // Types the path of a file that was brought at the pane that waited for it.
+    void handBrought(Session& session, const feature::Transfer& transfer, std::string_view home) {
+      ds::String<Memory> typed{session.memory};
+
+      if (transfer.mention) {
+        typed.append("@");
+      }
+
+      feature::appendTyped(typed, transfer.placed.view(), {.cwd = {}, .home = home, .shell = !transfer.mention});
+      typed.append(" ");
+      hand(session, transfer.pane, typed.view());
+      if (transfer.mention) {
+        workbench::focusPane(session, transfer.pane);
+      }
+    }
+
+    // The machine a pass carries for, and when.
+    struct Pass {
+      std::uint64_t machine = 0;
+      std::uint64_t now_ms = 0;
+    };
+
+    // Takes what this machine answered the request the transfer has in flight here.
+    void collect(Session& session, View& view, std::size_t index, const Pass& pass) {
+      if (feature::awaits(view.transfers[index]) != pass.machine) {
+        return;
+      }
+
+      const auto waited = view.transfers[index].request;
+      const auto epoch = view.transfers[index].epoch;
+
+      if (epoch != session.explorer.epoch || !session.ready()) {
+        feature::lose(view, index, pass.now_ms);
+        return;
+      }
+
+      if (auto answer = feature::carried(session.explorer, waited)) {
+        feature::take(view, index, answer.getMut(), pass.now_ms);
+      }
+    }
+
+  }
+
+  bool carry(Session& session, View& view, const Context& context, std::uint64_t now_ms) {
+    const auto before = view.revision;
+    const auto machine = context.host;
+
+    for (std::size_t index = 0; index < view.transfers.size(); ++index) {
+      collect(session, view, index, {.machine = machine, .now_ms = now_ms});
+      static_cast<void>(feature::halt(view, index, now_ms));
+
+      const auto asking = feature::asks(view, index);
+      if (asking.machine != machine || asking.ask == TransferAsk::none) {
+        continue;
+      }
+
+      if (!session.ready() || !session.explores()) {
+        feature::giveUp(view, index, "its machine does not answer for files", now_ms);
+        continue;
+      }
+
+      if (asking.ask == TransferAsk::write && !place(session, view, index, context, now_ms)) {
+        continue;
+      }
+
+      const bool joined = feature::joins(view.begun, view.transfers[index].batch, machine);
+
+      if (const auto sent = request(session, view.transfers[index], asking.ask, joined)) {
+        feature::carrying(session.explorer, *sent);
+        feature::asked(view.transfers.atMut(index), {.request = *sent, .epoch = session.explorer.epoch, .now_ms = now_ms});
+      }
+    }
+
+    // A file brought for a pane of this machine is typed there once it is whole.
+    for (std::size_t index = 0; index < view.transfers.size(); ++index) {
+      const auto& transfer = view.transfers[index];
+      const bool brought = transfer.kind == feature::TransferKind::bring && transfer.phase == feature::TransferPhase::arrived && !transfer.handed && transfer.to == machine;
+
+      if (brought) {
+        view.transfers.atMut(index).handed = true;
+        handBrought(session, view.transfers[index], context.home);
+      }
+    }
+
+    static_cast<void>(feature::sweep(view, now_ms));
+    return view.revision != before;
+  }
+
   Effect deliver(Session& session, View& view, const Context& context, const Action& action) {
     switch (action.kind) {
     case ActionKind::none:

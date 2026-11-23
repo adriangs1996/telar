@@ -3,6 +3,7 @@ telar_add_domain(gui features/explorer
     explorer-cache.cpp
     explorer-keys.cpp
     explorer-presentation.cpp
+    explorer-transfers.cpp
     explorer-view.cpp
   DEPS foundation/keys)
 

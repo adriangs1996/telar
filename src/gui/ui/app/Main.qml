@@ -76,6 +76,8 @@ Window {
         agentModel: telar.activity.rows
         preferredWidth: telar.display.sidebarWidth
         textScale: telar.display.chromeTextScale
+        transfers: telar.explorer?.transfers ?? []
+        onTransferCancelled: id => telar.explorer.cancelTransfer(id)
         onAgentSelected: key => telar.commands.execute(WindowActions.Action.select_agent, key)
         onAgentPeekRequested: key => telar.commands.peekActivity(key)
         onSidebarResized: requestedWidth => telar.display.setSidebarWidth(requestedWidth)

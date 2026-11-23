@@ -7,6 +7,7 @@ export import :cache;
 export import :files;
 export import :keys;
 export import :presentation;
+export import :transfers;
 export import :view;
 
 import std;

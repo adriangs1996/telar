@@ -726,7 +726,9 @@ namespace telar::runtime {
   }
 
   void FileChanger::change(const ChangeFiles& request, const std::atomic<bool>& cancelled, EncodedReply<ConcurrentMemory>& reply) {
-    journal_.clear();
+    if (!request.joins) {
+      journal_.clear();
+    }
 
     // Every operation first, then the results: a result views its path, which stays where it is
     // once nothing more is kept.
@@ -905,6 +907,11 @@ namespace telar::runtime {
     if (!statOf(partial)) {
       reply.send(FileWriteEnded{.request_id = request.request_id, .outcome = FileOutcome::missing});
       return;
+    }
+
+    // An arrival is a change of its own unless it joins the one before it.
+    if (!request.joins) {
+      journal_.clear();
     }
 
     if (statOf(target) && !clear(target, request.overwrite, renamed)) {

@@ -263,11 +263,51 @@ namespace telar::gui::features::explorer {
       }
     }
 
+    // How much of a transfer's file arrived, in thousandths.
+    constexpr std::uint16_t shareOf(const Transfer& transfer) noexcept {
+      constexpr std::uint64_t whole = 1000;
+
+      return transfer.size == 0 ? 0 : static_cast<std::uint16_t>(std::min(whole, transfer.done * whole / transfer.size));
+    }
+
+    // What a transfer does now, or how it ended.
+    constexpr Word phaseText(TransferPhase phase) noexcept {
+      switch (phase) {
+      case TransferPhase::waiting:
+        return "waits";
+      case TransferPhase::reading:
+      case TransferPhase::writing:
+        return "on the way";
+      case TransferPhase::placing:
+      case TransferPhase::trashing:
+        return "arriving";
+      case TransferPhase::dropping:
+        return "stopping";
+      case TransferPhase::arrived:
+        return "arrived";
+      case TransferPhase::failed:
+        return "did not arrive";
+      case TransferPhase::cancelled:
+        return "cancelled";
+      }
+
+      return {};
+    }
+
     void addedLook(RowLook& look, const Seen& seen) {
       look.added = true;
 
       const auto* edit = editOf(seen.view, seen.row);
       if (edit == nullptr) {
+        // A file that arrives from another machine: how much of it did.
+        if (const auto* transfer = transferOf(seen.view, seen.row)) {
+          look.arriving = true;
+          put(look.name, transfer->name.view());
+          write(look.note, "arriving from {} · {} of {}", labelOf(seen.context, transfer->from), bytes(transfer->done).view(), bytes(transfer->size).view());
+          look.size = bytes(transfer->done);
+          look.share = shareOf(*transfer);
+        }
+
         return;
       }
 
@@ -414,6 +454,10 @@ namespace telar::gui::features::explorer {
       case Mode::plan:
         addHint(hints, "y", {.text = "apply"});
         addHint(hints, "n", {.text = "cancel"});
+        return true;
+      case Mode::question:
+        addHint(hints, "y", {.text = "bring a copy"});
+        addHint(hints, "n", {.text = "leave it"});
         return true;
       case Mode::menu:
         addHint(hints, "j k", {.text = "move"});
@@ -866,6 +910,7 @@ namespace telar::gui::features::explorer {
     case Mode::help:
     case Mode::plan:
     case Mode::menu:
+    case Mode::question:
       return "NORMAL";
     case Mode::visual:
       return "VISUAL";
@@ -924,6 +969,10 @@ namespace telar::gui::features::explorer {
         put(result.keys, view.keys.pending.view());
       }
     }
+
+    result.carried = static_cast<std::uint32_t>(std::ranges::count_if(view.transfers, [&](const Transfer& transfer) {
+      return !ended(transfer.phase) && (transfer.from == window.machine || transfer.to == window.machine);
+    }));
 
     result.chosen = chosenRows(view, window);
     result.count = static_cast<std::uint32_t>(countSelectable(window, window.rows.size()));
@@ -1138,6 +1187,44 @@ namespace telar::gui::features::explorer {
 
     text.assign(runtime::utf8Prefix({buffer.data(), length}, line_text_bytes));
     return text;
+  }
+
+  TransferLooks transfers(const View& view, const Context& context, std::uint64_t now_ms) {
+    constexpr std::uint64_t second_ms = 1000;
+    TransferLooks result;
+
+    // The ones that run, then the ones that wait, then the ones that just ended.
+    for (const bool running : {true, false}) {
+      for (const auto& transfer : view.transfers) {
+        const bool active = transfer.phase != TransferPhase::waiting && !ended(transfer.phase);
+        if (active != running) {
+          continue;
+        }
+
+        if (result.count == result.items.size()) {
+          ++result.more;
+          continue;
+        }
+
+        auto& look = result.items.atMut(result.count++);
+        const auto elapsed = now_ms > transfer.started_ms ? now_ms - transfer.started_ms : 0;
+
+        look.id = transfer.id;
+        put(look.name, transfer.name.view());
+        write(look.route, "{} → {}", labelOf(context, transfer.from), labelOf(context, transfer.to));
+        write(look.progress, "{} of {}", bytes(transfer.done).view(), bytes(transfer.size).view());
+        look.share = shareOf(transfer);
+        if (active && elapsed >= second_ms / 2 && transfer.done != 0) {
+          write(look.rate, "{}/s", bytes(transfer.done * second_ms / elapsed).view());
+        }
+
+        look.phase = phaseText(transfer.phase);
+        look.ended = ended(transfer.phase);
+        look.failed = transfer.phase == TransferPhase::failed;
+      }
+    }
+
+    return result;
   }
 
 }

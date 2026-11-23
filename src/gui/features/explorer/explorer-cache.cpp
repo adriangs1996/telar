@@ -203,7 +203,13 @@ namespace telar::gui::features::explorer {
         search(made_in),
         home(made_in),
         outcomes(made_in),
-        committed(made_in) {}
+        committed(made_in),
+        carrying(made_in),
+        carried(made_in) {}
+
+  Carried::Carried(Memory& memory)
+      : bytes(memory),
+        text(memory) {}
 
   Standing standing(const Repository& repository, std::string_view path, bool directory) noexcept {
     const auto root = repository.root.view();
@@ -533,7 +539,91 @@ namespace telar::gui::features::explorer {
     return true;
   }
 
+  namespace {
+
+    // A place for the answer to `request`, when a transfer waits for it.
+    tbc::val_a<Carried*> keepCarried(tbc::mut_a<State> state, std::uint64_t request, CarriedKind kind) {
+      if (!std::ranges::contains(state.carrying, request)) {
+        return nullptr;
+      }
+
+      state.carrying.retain([&](std::uint64_t waited) {
+        return waited != request;
+      });
+
+      auto& kept = state.carried.push(Carried{state.memory});
+
+      kept.request = request;
+      kept.kind = kind;
+      return &kept;
+    }
+
+  }
+
+  void carrying(State& state, std::uint64_t request_id) {
+    state.carrying.push(request_id);
+  }
+
+  bool receive(State& state, const FileChunk& chunk) {
+    auto* kept = keepCarried(state, chunk.request_id, CarriedKind::chunk);
+    if (kept == nullptr) {
+      return false;
+    }
+
+    kept->offset = chunk.offset;
+    kept->size = chunk.size;
+    kept->end = chunk.end;
+    kept->bytes.extend(chunk.bytes);
+    return true;
+  }
+
+  bool receive(State& state, const FileWritten& written) {
+    auto* kept = keepCarried(state, written.request_id, CarriedKind::written);
+    if (kept == nullptr) {
+      return false;
+    }
+
+    kept->size = written.size;
+    kept->text.assign(written.partial);
+    return true;
+  }
+
+  bool receive(State& state, const FileWriteEnded& ended) {
+    auto* kept = keepCarried(state, ended.request_id, CarriedKind::ended);
+    if (kept == nullptr) {
+      return false;
+    }
+
+    kept->outcome = ended.outcome;
+    kept->text.assign(ended.path);
+    // The directory it arrived in lists one entry more.
+    if (!ended.path.empty()) {
+      invalidate(state, ended.path.substr(0, std::max<std::size_t>(ended.path.find_last_of('/'), 1)));
+      ++state.revision;
+    }
+
+    return true;
+  }
+
+  ds::Option<Carried> carried(State& state, std::uint64_t request_id) {
+    for (std::size_t index = 0; index < state.carried.size(); ++index) {
+      if (state.carried[index].request == request_id) {
+        return state.carried.remove(index);
+      }
+    }
+
+    return ds::none;
+  }
+
   bool receive(State& state, const FilesChanged& changed) {
+    // The source of a file that moved to another machine, sent to the trash once it arrived.
+    if (auto* kept = keepCarried(state, changed.request_id, CarriedKind::trashed)) {
+      kept->outcome = changed.results.empty() ? FileOutcome::failed : changed.results.front().outcome;
+      invalidate(state, {});
+      ++state.revision;
+      return true;
+    }
+
     if (state.applying == 0 || state.applying != changed.request_id) {
       return false;
     }
@@ -613,6 +703,11 @@ namespace telar::gui::features::explorer {
   bool fail(State& state, const RequestFailed& failure) {
     const auto request = failure.request_id;
     bool ours = false;
+
+    if (auto* kept = keepCarried(state, request, CarriedKind::failed)) {
+      kept->text.assign(runtime::utf8Prefix(failure.message, ExplorerLimits::error_bytes));
+      return true;
+    }
 
     // A search the runtime refused found nothing, and is not asked again as it is.
     if (request != 0 && state.search.waiting == request) {
@@ -722,6 +817,10 @@ namespace telar::gui::features::explorer {
     state.applying = 0;
     state.committing = 0;
     state.in_flight = 0;
+    // What a transfer asked of the connection that ended is answered by none.
+    state.carrying.clear();
+    state.carried.clear();
+    ++state.epoch;
   }
 
 }

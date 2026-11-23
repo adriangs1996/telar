@@ -27,7 +27,10 @@ FocusScope {
     readonly property var preview: controller.preview
     readonly property var menu: controller.menu
     // Rows the pointer drags: how many, where it is in the explorer, whether Alt asks for a
-    // copy, and the window and row whose directory would take them there, if one would.
+    // copy or Shift for a move, whether they would be copied where the pointer is, and the
+    // window and row whose directory would take them there, if one would.
+    property bool dragCopy: false
+    property bool dragMove: false
     property bool dragging: false
     property int dragCount: 0
     property real dragX: 0
@@ -143,13 +146,16 @@ FocusScope {
 
     // The pointer drags the rows to a point of the explorer: what is there says whether it takes
     // them, and which directory does.
-    function dragTo(x, y, copy) {
+    function dragTo(x, y, copy, move) {
         const at = rowsAt(x, y);
-        const aimed = at === null ? ({}) : controller.aim(at.window, at.row, copy);
+        const aimed = at === null ? ({}) : controller.aim(at.window, at.row, copy, move);
 
         dragX = x;
         dragY = y;
-        dropCopy = copy;
+        dragCopy = copy;
+        dragMove = move;
+        // On another machine rows are copied unless a move is asked for.
+        dropCopy = aimed.copy ?? copy;
         dropWindow = (aimed.count ?? 0) > 0 ? at.window : -1;
         dropRow = aimed.row ?? -1;
     }
@@ -162,7 +168,7 @@ FocusScope {
         dropWindow = -1;
         dropRow = -1;
         if (at !== null)
-            controller.drop(at.window, at.row, dropCopy);
+            controller.drop(at.window, at.row, dragCopy, dragMove);
         else
             controller.release();
         settleFocus();
@@ -819,13 +825,14 @@ FocusScope {
                                         height: 4 * root.ratio
                                         radius: height / 2
                                         color: root.colors.surface0
-                                        visible: row.record.kind === "entry"
+                                        // A file that arrives from another machine fills it as it does.
+                                        visible: row.record.kind === "entry" || (row.record.arriving ?? false)
 
                                         Rectangle {
                                             width: Math.round(parent.width * Math.min(1, row.record.share ?? 0))
                                             height: parent.height
                                             radius: parent.radius
-                                            color: Qt.alpha(root.colors.peach, 0.7)
+                                            color: (row.record.arriving ?? false) ? root.colors.accent : Qt.alpha(root.colors.peach, 0.7)
                                         }
                                     }
 
@@ -956,7 +963,7 @@ FocusScope {
                                 root.dragging = true;
                             }
 
-                            root.dragTo(place.x, place.y, (mouse.modifiers & Qt.AltModifier) !== 0);
+                            root.dragTo(place.x, place.y, (mouse.modifiers & Qt.AltModifier) !== 0, (mouse.modifiers & Qt.ShiftModifier) !== 0);
                         }
                         onReleased: mouse => {
                             if (root.dragging)
@@ -1068,6 +1075,17 @@ FocusScope {
                             height: parent.height
                             visible: (pane.modelData.keys ?? "").length > 0
                             text: pane.modelData.keys ?? ""
+                            grid: root.smallGrid
+                            color: root.colors.accent
+                        }
+
+                        // The files on their way to or from the window's machine.
+                        CellText {
+                            objectName: "explorerCarried"
+                            width: implicitWidth
+                            height: parent.height
+                            visible: (pane.modelData.carried ?? 0) > 0
+                            text: (pane.modelData.carried ?? 0) + " in transit"
                             grid: root.smallGrid
                             color: root.colors.accent
                         }

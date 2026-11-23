@@ -14,6 +14,7 @@ static_assert(true);
 #include <QKeyEvent>
 #include <QVariantList>
 #include <algorithm>
+#include <chrono>
 #include <exception>
 #include <string_view>
 
@@ -33,7 +34,9 @@ namespace telar::gui::qt {
 
     constexpr ds::Array<const char*, 8> kind_names{"entry", "added", "header", "note", "diff", "change", "pane", "match"};
     constexpr ds::Array<const char*, 4> diff_tones{"context", "added", "removed", "hunk"};
-    constexpr ds::Array<const char*, 8> mode_names{"normal", "visual", "insert", "search", "command", "plan", "help", "menu"};
+    constexpr ds::Array<const char*, 9> mode_names{"normal", "visual", "insert", "search", "command", "plan", "help", "menu", "question"};
+    // How often the transfers are looked at again with nothing arriving.
+    constexpr int transfers_tick_ms = 250;
     constexpr ds::Array<const char*, 3> tone_names{"info", "error", "ask"};
     constexpr ds::Array<const char*, 3> follow_scopes{"pane", "workspace", "machine"};
     // The lines of a preview's text the window draws.
@@ -246,6 +249,9 @@ namespace telar::gui::qt {
     for (auto& model : rows_.viewMut()) {
       model.setParent(this);
     }
+
+    transfers_tick_.setInterval(transfers_tick_ms);
+    connect(&transfers_tick_, &QTimer::timeout, this, &ExplorerController::synchronize);
   }
 
   void ExplorerController::observe() {
@@ -362,6 +368,7 @@ namespace telar::gui::qt {
           {QStringLiteral("total"), fixedText(status.total)},
           {QStringLiteral("keys"), fixedText(status.keys)},
           {QStringLiteral("chosen"), status.chosen},
+          {QStringLiteral("carried"), status.carried},
           {QStringLiteral("position"), status.position},
           {QStringLiteral("count"), status.count},
           {QStringLiteral("loading"), window.loading},
@@ -549,7 +556,7 @@ namespace telar::gui::qt {
     const auto root = view_.windows.empty() ? std::string_view{} : view_.windows[view_.current]->root.view();
     // A plan for more than one machine says the machine of each line.
     const bool several = std::ranges::any_of(view_.plan, [&](const explorer::PlanStep& step) {
-      return step.machine != view_.plan[0].machine;
+      return step.machine != view_.plan[0].machine || step.source_machine != 0;
     });
 
     for (const auto& step : view_.plan) {
@@ -567,7 +574,8 @@ namespace telar::gui::qt {
 
       result.push_back(QVariantMap{
           {QStringLiteral("verb"), toQString(explorer::verbText(step.verb))},
-          {QStringLiteral("source"), shown(step.source.view())},
+          // What comes from another machine says which, as scp writes it.
+          {QStringLiteral("source"), step.source_machine != 0 ? toQString(explorer::contextOf(around, step.source_machine).machine) + QLatin1Char(':') + toQString(step.source.view()) : shown(step.source.view())},
           {QStringLiteral("target"), shown(step.target.view())},
           {QStringLiteral("directory"), step.directory},
           {QStringLiteral("machine"), several ? toQString(context.machine) : QString{}},
@@ -609,6 +617,10 @@ namespace telar::gui::qt {
     return menu_;
   }
 
+  const QVariantList& ExplorerController::transfers() const noexcept {
+    return transfers_;
+  }
+
   QVariantMap ExplorerController::record(const explorer::State& cache, const explorer::Context& context, explorer::Pick pick) const {
     const auto look = explorer::look(view_, cache, context, pick);
     const bool entry = look.kind == RowKind::entry || look.kind == RowKind::added || look.kind == RowKind::change || look.kind == RowKind::match;
@@ -624,6 +636,7 @@ namespace telar::gui::qt {
         {QStringLiteral("removed"), look.removed},
         {QStringLiteral("renamed"), look.renamed},
         {QStringLiteral("added"), look.added},
+        {QStringLiteral("arriving"), look.arriving},
         {QStringLiteral("lead"), fixedText(look.lead)},
         {QStringLiteral("name"), fixedText(look.name)},
         {QStringLiteral("tone"), QString::fromLatin1(diff_tones[static_cast<std::size_t>(look.tone)])},
@@ -686,6 +699,73 @@ namespace telar::gui::qt {
     tell(preview_, describePreview(around), &ExplorerController::previewChanged);
     tell(plan_, describePlan(around), &ExplorerController::planChanged);
     tell(menu_, describeMenu(around), &ExplorerController::menuChanged);
+    tell(transfers_, describeTransfers(around), &ExplorerController::transfersChanged);
+  }
+
+  bool ExplorerController::carry() {
+    if (view_.transfers.empty()) {
+      transfers_tick_.stop();
+      return false;
+    }
+
+    const auto around = explorer::around(scene_);
+    const auto machines = store_.machines().rows().size();
+    const auto now = static_cast<std::uint64_t>(std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now().time_since_epoch()).count());
+    bool changed = false;
+
+    // Twice: what one machine answered is what the other is asked next, whichever comes first.
+    for (int pass = 0; pass < 2; ++pass) {
+      for (std::size_t slot = 0; slot < machines; ++slot) {
+        if (auto* session = keepsMachine(store_, slot) ? explorerSessionMut(store_, slot) : nullptr) {
+          changed = explorer::carry(*session, view_, explorer::contextOf(around, explorerMachine(slot)), now) || changed;
+        }
+      }
+    }
+
+    // While one is on its way its rate is told again, and one that ended leaves in a while.
+    if (view_.transfers.empty()) {
+      transfers_tick_.stop();
+    } else if (!transfers_tick_.isActive()) {
+      transfers_tick_.start();
+    }
+
+    return changed;
+  }
+
+  void ExplorerController::cancelTransfer(int id) {
+    if (id > 0 && explorer::stopTransfer(view_, static_cast<std::uint32_t>(id))) {
+      synchronize();
+    }
+  }
+
+  QVariantList ExplorerController::describeTransfers(const explorer::Around& around) const {
+    QVariantList result;
+
+    if (view_.transfers.empty()) {
+      return result;
+    }
+
+    const auto now = static_cast<std::uint64_t>(std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now().time_since_epoch()).count());
+    const auto looks = explorer::transfers(view_, explorer::contextOf(around, scene_.shown), now);
+
+    for (std::size_t index = 0; index < looks.count; ++index) {
+      const auto& look = looks.items[index];
+
+      result.push_back(QVariantMap{
+          {QStringLiteral("id"), look.id},
+          {QStringLiteral("name"), fixedText(look.name)},
+          {QStringLiteral("route"), fixedText(look.route)},
+          {QStringLiteral("progress"), fixedText(look.progress)},
+          {QStringLiteral("share"), static_cast<double>(look.share) / whole_share},
+          {QStringLiteral("rate"), fixedText(look.rate)},
+          {QStringLiteral("phase"), toQString(look.phase)},
+          {QStringLiteral("ended"), look.ended},
+          {QStringLiteral("failed"), look.failed},
+          {QStringLiteral("more"), index + 1 == looks.count ? static_cast<int>(looks.more) : 0},
+      });
+    }
+
+    return result;
   }
 
   void ExplorerController::finish(const explorer::Action& action) {
@@ -718,6 +798,8 @@ namespace telar::gui::qt {
     // A window may have gone to another machine, whose cache builds it; each runtime is asked
     // for what its windows now lack.
     static_cast<void>(refresh());
+    // What a plan sends between machines starts at once.
+    static_cast<void>(carry());
     store_.touch();
     revision_ = view_.revision;
     publish();
@@ -886,7 +968,7 @@ namespace telar::gui::qt {
     return static_cast<int>(carried);
   }
 
-  QVariantMap ExplorerController::aim(int window, int row, bool copy) const {
+  QVariantMap ExplorerController::aim(int window, int row, bool copy, bool move) const {
     if (window < 0 || !view_.open) {
       return {};
     }
@@ -894,12 +976,12 @@ namespace telar::gui::qt {
     const auto pick = pickOf(window, row);
     const auto around = explorer::around(scene_);
     const auto machine = machineOf(pick.window);
-    const auto aimed = explorer::aim(view_, cacheOf(machine), explorer::contextOf(around, machine), {.window = pick.window, .row = pick.row, .copy = copy});
+    const auto aimed = explorer::aim(view_, cacheOf(machine), explorer::contextOf(around, machine), {.window = pick.window, .row = pick.row, .copy = copy, .move = move});
 
-    return {{QStringLiteral("count"), static_cast<int>(aimed.count)}, {QStringLiteral("row"), aimed.row ? static_cast<int>(*aimed.row) : -1}};
+    return {{QStringLiteral("count"), static_cast<int>(aimed.count)}, {QStringLiteral("row"), aimed.row ? static_cast<int>(*aimed.row) : -1}, {QStringLiteral("copy"), aimed.copy}};
   }
 
-  void ExplorerController::drop(int window, int row, bool copy) {
+  void ExplorerController::drop(int window, int row, bool copy, bool move) {
     if (window < 0 || !view_.open) {
       release();
       return;
@@ -912,7 +994,7 @@ namespace telar::gui::qt {
     const auto around = explorer::around(scene_);
     const auto machine = machineOf(pick.window);
 
-    explorer::drop(view_, cacheOf(machine), explorer::contextOf(around, machine), {.window = pick.window, .row = pick.row, .copy = copy});
+    explorer::drop(view_, cacheOf(machine), explorer::contextOf(around, machine), {.window = pick.window, .row = pick.row, .copy = copy, .move = move});
     finish(Effect::none);
   }
 
@@ -1029,12 +1111,24 @@ namespace telar::gui::qt {
   }
 
   void ExplorerController::synchronize() {
-    if (!view_.open) {
+    // A file on its way between two machines goes on while the explorer is closed.
+    if (!view_.open && view_.transfers.empty()) {
       return;
     }
 
     observe();
-    if (refresh() || revision_ != view_.revision) {
+
+    const bool carried = carry();
+
+    if (!view_.open) {
+      if (carried) {
+        store_.touch();
+      }
+
+      return;
+    }
+
+    if (refresh() || carried || revision_ != view_.revision) {
       revision_ = view_.revision;
       publish();
       emit changed();

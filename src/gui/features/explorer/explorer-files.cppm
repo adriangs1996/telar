@@ -8,6 +8,7 @@ import telar.base.memory.allocators;
 import telar.base.memory.containers;
 import telar.base.ds;
 import telar.wire.files;
+import telar.wire.vocabulary;
 
 export namespace telar::gui::features::explorer {
 
@@ -175,6 +176,34 @@ export namespace telar::gui::features::explorer {
   struct Outcome {
     FileOutcome outcome = FileOutcome::done;
     ds::String<Memory> path;
+  };
+
+  // What a runtime answered a request of a transfer: a chunk read, a chunk written, the file
+  // ended, its source sent to the trash, or a refusal.
+  enum class CarriedKind : std::uint8_t {
+    chunk,
+    written,
+    ended,
+    trashed,
+    failed,
+  };
+
+  // An answer to a transfer's request, kept by the machine's cache until the transfer takes it.
+  struct Carried {
+    explicit Carried(Memory& memory);
+
+    std::uint64_t request = 0;
+    CarriedKind kind = CarriedKind::failed;
+    // Of a chunk read: where it starts, how long its file is, and whether it is the last. Of
+    // one written: how long the partial is now.
+    std::uint64_t offset = 0;
+    std::uint64_t size = 0;
+    bool end = false;
+    ds::Vec<Byte, Memory> bytes;
+    // The partial a chunk was written to, the path a file ended at, or what the runtime said
+    // when it refused.
+    ds::String<Memory> text;
+    FileOutcome outcome = FileOutcome::done;
   };
 
 }

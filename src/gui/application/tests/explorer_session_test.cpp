@@ -124,6 +124,46 @@ namespace {
       return effect;
     }
 
+    // Carries the files on their way a step further on both machines, as the window does when
+    // a runtime answered.
+    bool carry() {
+      observe();
+
+      const auto around = explorer::around(scene);
+      bool changed = false;
+
+      for (int pass = 0; pass < 2; ++pass) {
+        changed = explorer::carry(client, view, explorer::contextOf(around, host.machine), now_ms) || changed;
+        if (linked) {
+          changed = explorer::carry(box, view, explorer::contextOf(around, far.machine), now_ms) || changed;
+        }
+      }
+
+      now_ms += 10;
+      return changed;
+    }
+
+    // The file of the box pasted on the machine that shows, and its plan accepted.
+    void pasteFromBox(char taken) {
+      list();
+      settle();
+      splitToBox();
+      static_cast<void>(press(taken));
+      static_cast<void>(press(taken));
+      if (taken == 'd') {
+        check(deliver(box, FileInspection{.request_id = box_transport.last<InspectFile>().request_id, .path = "/home/ops/deploy.sh", .size = 300}) == application::Change::explorer);
+        static_cast<void>(refresh());
+      }
+
+      static_cast<void>(strike(control('w')));
+      static_cast<void>(press('h'));
+      static_cast<void>(press('p'));
+      static_cast<void>(run("w"));
+      check(view.mode == explorer::Mode::plan && view.plan.size() == 1 && view.plan[0].source_machine == far.machine && view.plan[0].machine == host.machine);
+      static_cast<void>(press('y'));
+      check(view.transfers.size() == 1 && !view.writing);
+    }
+
     explorer::Effect press(char character) {
       return strike(key(character));
     }
@@ -249,6 +289,7 @@ namespace {
     // The cache of a machine with no session: it holds nothing.
     explorer::State away{client.memory};
     bool linked = true;
+    std::uint64_t now_ms = 1000;
   };
 
   void theWindowAsksForWhatItShowsAndKeepsTheAnswers() {
@@ -460,7 +501,7 @@ namespace {
     const auto typed = transport.sent.size();
 
     static_cast<void>(fixture.strike({.key = explorer::KeyChord::Key::enter}));
-    check(fixture.view.message.view() == "It is on box and the focused pane on macbook: gf opens it there, yy copies where it is");
+    check(fixture.view.mode == explorer::Mode::question && fixture.view.message.view() == "It is on box and the pane on macbook · bring a copy there? [y/N]");
     static_cast<void>(fixture.press('@'));
     check(transport.sent.size() == typed && fixture.view.open, "a path of another machine is not typed at a pane of this one, nor mentioned there");
     static_cast<void>(fixture.press('y'));
@@ -479,6 +520,159 @@ namespace {
     check(fixture.view.message.view() == "No editor opens on box: its runtime has none, or no tab to put it in");
   }
 
+  bool same(std::span<const Byte> left, std::span<const Byte> right) {
+    return std::ranges::equal(left, right);
+  }
+
+  void aFileIsCarriedFromOneMachineToTheOther() {
+    Fixture fixture;
+    auto& transport = fixture.transport;
+    auto& box_transport = fixture.box_transport;
+
+    fixture.pasteFromBox('y');
+
+    const std::string target{fixture.view.transfers[0].directory.view()};
+    const std::vector<Byte> first(200, Byte{'a'});
+    const std::vector<Byte> second(100, Byte{'b'});
+    const std::string partial = target + "/.telar-partial-0011223344556677";
+
+    check(transport.count(ClientTag::change_files) == 0 && box_transport.count(ClientTag::change_files) == 0, "no runtime is given the copy as an operation");
+    static_cast<void>(fixture.carry());
+
+    // The source is asked for a chunk of the file that was listed, and only for one.
+    const auto read = box_transport.last<ReadFile>();
+
+    check(read.path == "/home/ops/deploy.sh" && read.identity.inode == 9 && read.offset == 0 && read.limit == FileLimits::chunk_bytes);
+    static_cast<void>(fixture.carry());
+    check(box_transport.count(ClientTag::read_file) == 1 && transport.count(ClientTag::write_file) == 0, "one request is in flight");
+    check(deliver(fixture.box, FileChunk{.request_id = read.request_id, .offset = 0, .size = 300, .end = false, .bytes = first}) == application::Change::explorer);
+    static_cast<void>(fixture.carry());
+
+    // What one runtime read the other is given to write, and the next chunk waits for it.
+    const auto write = transport.last<WriteFile>();
+
+    check(write.target == target + "/deploy.sh" && write.partial.empty() && write.offset == 0 && !write.parents && same(write.bytes, first));
+    check(box_transport.count(ClientTag::read_file) == 1, "the next chunk is not read before this one is written");
+    check(deliver(fixture.client, FileWritten{.request_id = write.request_id, .partial = partial, .size = 200}) == application::Change::explorer);
+    static_cast<void>(fixture.carry());
+
+    const auto next = box_transport.last<ReadFile>();
+
+    check(box_transport.count(ClientTag::read_file) == 2 && next.offset == 200 && transport.count(ClientTag::write_file) == 1);
+    check(deliver(fixture.box, FileChunk{.request_id = next.request_id, .offset = 200, .size = 300, .end = true, .bytes = second}) == application::Change::explorer);
+    static_cast<void>(fixture.carry());
+
+    const auto last = transport.last<WriteFile>();
+
+    check(transport.count(ClientTag::write_file) == 2 && last.partial == partial && last.offset == 200 && same(last.bytes, second), "the bytes arrive in the order they were read");
+    check(deliver(fixture.client, FileWritten{.request_id = last.request_id, .partial = partial, .size = 300}) == application::Change::explorer);
+    static_cast<void>(fixture.carry());
+
+    // Whole, it takes its name: a change of its own on that machine, which u takes back.
+    const auto end = transport.last<EndFileWrite>();
+
+    check(end.keep && !end.overwrite && !end.joins && end.partial == partial && end.target == target + "/deploy.sh" && box_transport.count(ClientTag::read_file) == 2);
+    check(deliver(fixture.client, FileWriteEnded{.request_id = end.request_id, .outcome = FileOutcome::done, .path = target + "/deploy.sh"}) == application::Change::explorer);
+    check(fixture.carry() && fixture.view.transfers[0].phase == explorer::TransferPhase::arrived && fixture.view.message.view() == "deploy.sh arrived");
+    check(box_transport.count(ClientTag::change_files) == 0, "a copy leaves its original");
+    static_cast<void>(fixture.press('u'));
+    check(transport.count(ClientTag::undo_file_changes) == 1 && box_transport.count(ClientTag::undo_file_changes) == 0, "u takes it back where it arrived");
+  }
+
+  void aMoveTrashesItsOriginalOnceTheCopyArrivedAndACancelRemovesIt() {
+    Fixture fixture;
+    auto& transport = fixture.transport;
+    auto& box_transport = fixture.box_transport;
+
+    fixture.pasteFromBox('d');
+
+    const std::string target{fixture.view.transfers[0].directory.view()};
+    const std::vector<Byte> whole(300, Byte{'a'});
+    const std::string partial = target + "/.telar-partial-0011223344556677";
+    const ds::Array<FileResult, 1> done{{{.outcome = FileOutcome::done}}};
+
+    static_cast<void>(fixture.carry());
+    check(deliver(fixture.box, FileChunk{.request_id = box_transport.last<ReadFile>().request_id, .offset = 0, .size = 300, .end = true, .bytes = whole}) == application::Change::explorer);
+    static_cast<void>(fixture.carry());
+    check(deliver(fixture.client, FileWritten{.request_id = transport.last<WriteFile>().request_id, .partial = partial, .size = 300}) == application::Change::explorer);
+    static_cast<void>(fixture.carry());
+    check(box_transport.count(ClientTag::change_files) == 0, "the original is not touched while the copy has no name");
+    check(deliver(fixture.client, FileWriteEnded{.request_id = transport.last<EndFileWrite>().request_id, .outcome = FileOutcome::done, .path = target + "/deploy.sh"}) == application::Change::explorer);
+    static_cast<void>(fixture.carry());
+
+    const auto trash = box_transport.last<ChangeFiles>();
+
+    check(trash.operations.size() == 1 && trash.operations[0].kind == FileOperationKind::trash && trash.operations[0].source == "/home/ops/deploy.sh" && trash.operations[0].identity.inode == 9 && !trash.joins);
+    check(deliver(fixture.box, FilesChanged{.request_id = trash.request_id, .undoable = true, .results = done.view()}) == application::Change::explorer);
+    check(fixture.carry() && fixture.view.transfers[0].phase == explorer::TransferPhase::arrived && !fixture.view.writing, "the answer is the transfer's, and no plan's");
+    static_cast<void>(fixture.press('u'));
+    check(transport.count(ClientTag::undo_file_changes) == 1 && box_transport.count(ClientTag::undo_file_changes) == 1, "u takes the copy away and the original out of the trash");
+
+    // A transfer cancelled removes what had arrived, and asks nothing more of the source.
+    Fixture other;
+
+    other.pasteFromBox('d');
+    static_cast<void>(other.carry());
+    check(deliver(other.box, FileChunk{.request_id = other.box_transport.last<ReadFile>().request_id, .offset = 0, .size = 300, .end = false, .bytes = std::span{whole}.first(200)}) == application::Change::explorer);
+    static_cast<void>(other.carry());
+    static_cast<void>(other.run("cancel!"));
+    check(deliver(other.client, FileWritten{.request_id = other.transport.last<WriteFile>().request_id, .partial = partial, .size = 200}) == application::Change::explorer);
+    static_cast<void>(other.carry());
+
+    const auto dropped = other.transport.last<EndFileWrite>();
+
+    check(!dropped.keep && dropped.partial == partial && other.box_transport.count(ClientTag::read_file) == 1 && other.box_transport.count(ClientTag::change_files) == 0);
+    check(deliver(other.client, FileWriteEnded{.request_id = dropped.request_id, .outcome = FileOutcome::done}) == application::Change::explorer);
+    check(other.carry() && other.view.transfers[0].phase == explorer::TransferPhase::cancelled && other.view.message.view() == "deploy.sh cancelled · nothing of it stays where it was going");
+
+    // A runtime that refuses the read fails it, with what it said.
+    Fixture refused;
+
+    refused.pasteFromBox('y');
+    static_cast<void>(refused.carry());
+    check(deliver(refused.box, RequestFailed{.request_id = refused.box_transport.last<ReadFile>().request_id, .code = FailureCode::invalid_request, .message = "The file changed since it was listed"}) == application::Change::explorer);
+    check(refused.carry() && refused.view.transfers[0].phase == explorer::TransferPhase::failed && refused.view.message.view() == "deploy.sh did not arrive: The file changed since it was listed");
+    check(refused.transport.count(ClientTag::write_file) == 0 && refused.transport.count(ClientTag::end_file_write) == 0, "nothing had arrived to remove");
+  }
+
+  void aFileBroughtIsTypedAtThePaneOnceItIsWhole() {
+    Fixture fixture;
+    auto& transport = fixture.transport;
+    auto& box_transport = fixture.box_transport;
+    const std::vector<Byte> whole(300, Byte{'a'});
+    const std::string partial = "/home/dev/Downloads/telar/box/.telar-partial-0011223344556677";
+
+    fixture.list();
+    fixture.settle();
+    fixture.splitToBox();
+    static_cast<void>(fixture.strike({.key = explorer::KeyChord::Key::enter}));
+    check(fixture.view.mode == explorer::Mode::question);
+    static_cast<void>(fixture.press('y'));
+    check(fixture.view.transfers.size() == 1 && fixture.view.transfers[0].kind == explorer::TransferKind::bring);
+    static_cast<void>(fixture.carry());
+    check(deliver(fixture.box, FileChunk{.request_id = box_transport.last<ReadFile>().request_id, .offset = 0, .size = 300, .end = true, .bytes = whole}) == application::Change::explorer);
+    static_cast<void>(fixture.carry());
+
+    // It goes below the downloads of the machine's home, in a directory of the machine it comes
+    // from, which is made when it is missing.
+    const auto write = transport.last<WriteFile>();
+
+    check(write.target == "/home/dev/Downloads/telar/box/deploy.sh" && write.parents && write.bytes.size() == 300);
+    check(deliver(fixture.client, FileWritten{.request_id = write.request_id, .partial = partial, .size = 300}) == application::Change::explorer);
+    static_cast<void>(fixture.carry());
+
+    const auto typed = transport.sent.size();
+
+    check(deliver(fixture.client, FileWriteEnded{.request_id = transport.last<EndFileWrite>().request_id, .outcome = FileOutcome::renamed, .path = "/home/dev/Downloads/telar/box/deploy.1.sh"}) == application::Change::explorer);
+    check(fixture.carry() && fixture.view.transfers[0].handed && transport.sent.size() == typed + 1, "the path it has is typed at the pane, once");
+
+    const auto input = transport.last<PaneInput>();
+
+    check(input.pane_id == 1 && std::string_view{reinterpret_cast<const char*>(input.bytes.data()), input.bytes.size()} == "~/Downloads/telar/box/deploy.1.sh ");
+    static_cast<void>(fixture.carry());
+    check(transport.sent.size() == typed + 1);
+  }
+
   const telar::testing::Case case_asks{"explorer_session.the_window_asks_for_what_it_shows_and_keeps_the_answers", theWindowAsksForWhatItShowsAndKeepsTheAnswers};
   const telar::testing::Case case_filter{"explorer_session.a_filter_asks_the_runtime_for_the_paths_below_the_root", aFilterAsksTheRuntimeForThePathsBelowTheRoot};
   const telar::testing::Case case_refused{"explorer_session.a_directory_the_runtime_refuses_is_not_asked_for_again", aDirectoryTheRuntimeRefusesIsNotAskedForAgain};
@@ -486,5 +680,8 @@ namespace {
   const telar::testing::Case case_far{"explorer_session.a_window_on_another_machine_asks_that_machine_alone", aWindowOnAnotherMachineAsksThatMachineAlone};
   const telar::testing::Case case_plans{"explorer_session.one_plan_is_sent_to_each_machine_it_touches", onePlanIsSentToEachMachineItTouches};
   const telar::testing::Case case_hand{"explorer_session.a_file_of_another_machine_is_handed_only_there", aFileOfAnotherMachineIsHandedOnlyThere};
+  const telar::testing::Case case_carried{"explorer_session.a_file_is_carried_from_one_machine_to_the_other", aFileIsCarriedFromOneMachineToTheOther};
+  const telar::testing::Case case_moved{"explorer_session.a_move_trashes_its_original_once_the_copy_arrived_and_a_cancel_removes_it", aMoveTrashesItsOriginalOnceTheCopyArrivedAndACancelRemovesIt};
+  const telar::testing::Case case_brought{"explorer_session.a_file_brought_is_typed_at_the_pane_once_it_is_whole", aFileBroughtIsTypedAtThePaneOnceItIsWhole};
 
 }

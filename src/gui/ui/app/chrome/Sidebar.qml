@@ -19,6 +19,10 @@ NativeRoundedRectangle {
     property real ratio: 1
     property real textScale: 1
     property bool expanded: true
+    // The files on their way between two machines: each with its name, its route, how much of
+    // it arrived and how fast.
+    property var transfers: []
+    signal transferCancelled(int id)
     signal agentSelected(string key)
     signal agentPeekRequested(string key)
     signal sidebarResized(real requestedWidth)
@@ -190,7 +194,8 @@ NativeRoundedRectangle {
         x: root.regions.activity.x
         y: root.regions.activity.y
         width: root.regions.activity.width
-        height: root.regions.activity.height
+        // The transfers stand under the agents while there are some.
+        height: Math.max(0, root.regions.activity.height - transfersPart.height)
         model: root.expanded ? root.agentModel : null
         hoverIdentity: root.activity?.hovered ?? ""
         semanticHover: typeof root.activity?.hover === "function"
@@ -208,6 +213,124 @@ NativeRoundedRectangle {
         onHovered: (key, card) => {
             if (activityList.semanticHover) {
                 root.activity.hover(key, card);
+            }
+        }
+    }
+
+    Item {
+        id: transfersPart
+        objectName: "sidebarTransfers"
+        readonly property real headerHeight: root.regions.activityHeader.height
+        readonly property real rowHeight: Math.round(38 * root.unit)
+        x: root.regions.activity.x
+        y: root.regions.activity.y + root.regions.activity.height - height
+        width: root.regions.activity.width
+        height: visible ? headerHeight + root.transfers.length * rowHeight + root.headerInset : 0
+        visible: root.expanded && root.transfers.length > 0
+
+        Rectangle {
+            x: root.headerInset
+            width: Math.max(0, parent.width - 2 * root.headerInset)
+            height: 1 / Screen.devicePixelRatio
+            color: Qt.alpha(root.colors.text, ChromeStyle.outlineAlpha)
+        }
+
+        ChromeText {
+            x: root.textInset
+            width: Math.max(0, parent.width - x - root.headerInset)
+            height: transfersPart.headerHeight
+            text: "TRANSFERS"
+            color: root.colors.text
+            pixelSize: root.typography.small
+            emphasized: true
+        }
+
+        ChromeText {
+            objectName: "transferCount"
+            x: parent.width - width - root.headerInset
+            width: implicitWidth
+            height: transfersPart.headerHeight
+            text: root.transfers.length + ((root.transfers[root.transfers.length - 1]?.more ?? 0) > 0 ? "+" : "")
+            color: root.colors.subtext0
+            pixelSize: root.typography.small
+            elide: Text.ElideNone
+        }
+
+        Repeater {
+            model: root.transfers
+
+            Item {
+                id: transfer
+                required property var modelData
+                required property int index
+                readonly property bool running: !(modelData.ended ?? false)
+                objectName: "sidebarTransfer"
+                y: transfersPart.headerHeight + index * transfersPart.rowHeight
+                width: transfersPart.width
+                height: transfersPart.rowHeight
+
+                ChromeText {
+                    id: transferName
+                    x: root.textInset
+                    width: Math.max(0, cancel.x - x - 4 * root.unit)
+                    height: Math.round(parent.height * 0.42)
+                    text: transfer.modelData.name ?? ""
+                    color: (transfer.modelData.failed ?? false) ? root.colors.red : root.colors.text
+                    pixelSize: root.typography.small
+                }
+
+                // From where to where, and how much of it arrived, or how it ended.
+                ChromeText {
+                    x: root.textInset
+                    y: transferName.height
+                    width: Math.max(0, parent.width - x - root.headerInset)
+                    height: transferName.height
+                    text: (transfer.modelData.route ?? "") + " · " + (transfer.running ? (transfer.modelData.progress ?? "") + ((transfer.modelData.rate ?? "").length > 0 ? " · " + transfer.modelData.rate : "") : (transfer.modelData.phase ?? ""))
+                    color: root.colors.subtext0
+                    pixelSize: root.typography.small
+                }
+
+                Rectangle {
+                    x: root.textInset
+                    y: 2 * transferName.height + Math.round(1 * root.unit)
+                    width: Math.max(0, parent.width - x - root.headerInset)
+                    height: Math.max(1, Math.round(2 * root.unit))
+                    radius: height / 2
+                    color: root.colors.surface0
+                    visible: transfer.running
+
+                    Rectangle {
+                        width: Math.round(parent.width * Math.min(1, transfer.modelData.share ?? 0))
+                        height: parent.height
+                        radius: parent.radius
+                        color: root.colors.accent
+                    }
+                }
+
+                AbstractButton {
+                    id: cancel
+                    objectName: "sidebarTransferCancel"
+                    x: parent.width - width - root.headerInset
+                    width: Math.round(16 * root.unit)
+                    height: transferName.height
+                    visible: transfer.running
+                    hoverEnabled: true
+                    focusPolicy: Qt.TabFocus
+                    padding: 0
+                    background: null
+                    Accessible.role: Accessible.Button
+                    Accessible.name: "Cancel the transfer of " + (transfer.modelData.name ?? "")
+                    onClicked: root.transferCancelled(transfer.modelData.id)
+                    contentItem: ChromeText {
+                        text: "×"
+                        color: cancel.hovered ? root.colors.red : root.colors.subtext0
+                        pixelSize: root.typography.small
+                        horizontalAlignment: Text.AlignHCenter
+                        elide: Text.ElideNone
+                    }
+
+                    HoverHandler { cursorShape: Qt.PointingHandCursor }
+                }
             }
         }
     }

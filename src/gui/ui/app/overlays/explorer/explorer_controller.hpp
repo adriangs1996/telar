@@ -10,6 +10,7 @@ static_assert(true);
 #include <QObject>
 #include <QPointF>
 #include <QString>
+#include <QTimer>
 #include <QVariantList>
 #include <QVariantMap>
 #include <QtQml/qqmlregistration.h>
@@ -43,6 +44,7 @@ namespace telar::gui::qt {
     Q_PROPERTY(QVariantMap preview READ preview NOTIFY previewChanged)
     Q_PROPERTY(QVariantList plan READ plan NOTIFY planChanged)
     Q_PROPERTY(QVariantMap menu READ menu NOTIFY menuChanged)
+    Q_PROPERTY(QVariantList transfers READ transfers NOTIFY transfersChanged)
     Q_PROPERTY(QVariantList help READ help CONSTANT)
 
   public:
@@ -68,6 +70,7 @@ namespace telar::gui::qt {
     [[nodiscard]] const QVariantList& plan() const noexcept;
     // The menu of a row while one shows: its lines, and where the pointer asked for it.
     [[nodiscard]] const QVariantMap& menu() const noexcept;
+    [[nodiscard]] const QVariantList& transfers() const noexcept;
     [[nodiscard]] static QVariantList help();
 
     // The rows window `window` shows.
@@ -94,8 +97,12 @@ namespace telar::gui::qt {
     // would take `count` of them, in the directory at `row` or in the window's root at -1; and
     // it let them go there, or where nothing takes them.
     Q_INVOKABLE int grab(int window, int row);
-    [[nodiscard]] Q_INVOKABLE QVariantMap aim(int window, int row, bool copy) const;
-    Q_INVOKABLE void drop(int window, int row, bool copy);
+    // `copy` and `move` are what the person holds to ask for one: rows move on their machine and
+    // are copied to another unless one of them says otherwise.
+    [[nodiscard]] Q_INVOKABLE QVariantMap aim(int window, int row, bool copy, bool move) const;
+    Q_INVOKABLE void drop(int window, int row, bool copy, bool move);
+    // Asks a file on its way between two machines to stop.
+    Q_INVOKABLE void cancelTransfer(int id);
     Q_INVOKABLE void release();
     // A window shows `rows` rows; the wheel moves what it shows.
     Q_INVOKABLE void setViewport(int window, int rows);
@@ -126,6 +133,7 @@ namespace telar::gui::qt {
     void previewChanged();
     void planChanged();
     void menuChanged();
+    void transfersChanged();
     // The explorer opened, and closed: the panes give up the keys, and take them back.
     void opened();
     void closed();
@@ -145,6 +153,10 @@ namespace telar::gui::qt {
     // Brings the windows of every machine up to date with its cache, and asks each runtime for
     // what they lack. True when what the explorer shows changed.
     bool refresh();
+    // Carries the files on their way between machines a step further, on every machine. True
+    // when what the explorer shows of them changed.
+    bool carry();
+    [[nodiscard]] QVariantList describeTransfers(const application::explorer::Around& around) const;
     // A key a chord names, given to the explorer; false for one it has no use for.
     bool strike(int key, const QString& text, int modifiers);
     // What a use case asks of the panes and of the runtimes, done; and what it asks of the
@@ -173,6 +185,10 @@ namespace telar::gui::qt {
     QVariantMap preview_;
     QVariantList plan_;
     QVariantMap menu_;
+    QVariantList transfers_;
+    // Runs while a file is on its way between two machines: its rate is told again, and one
+    // that ended leaves the list in a while.
+    QTimer transfers_tick_;
     // Where the pointer asked for the menu; below zero when the keys did.
     QPointF menu_at_{-1, -1};
     std::uint64_t revision_ = 0;

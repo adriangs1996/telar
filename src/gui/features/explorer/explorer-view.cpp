@@ -14,11 +14,6 @@ namespace telar::gui::features::explorer {
 
     using Text = ds::String<Memory>;
 
-    void say(View& view, std::string_view text, Tone tone = Tone::info) {
-      view.message.assign(runtime::utf8Prefix(text, ViewLimits::message_bytes));
-      view.tone = tone;
-    }
-
     template <typename... Arguments>
     void report(View& view, Tone tone, std::format_string<Arguments...> format, Arguments&&... arguments) {
       Text text{view.memory};
@@ -113,9 +108,17 @@ namespace telar::gui::features::explorer {
     }
 
     // What building the rows of a window carries down the tree.
+    // What is not on disk yet and shows among what is: the changes typed, and the files arriving
+    // from another machine.
+    struct Pending {
+      const Edits& edits;
+      const ds::Vec<Transfer, Memory>& transfers;
+    };
+
     struct Build {
       Window& window;
       const Edits& edits;
+      const ds::Vec<Transfer, Memory>& transfers;
       const State& state;
       // The entries of a directory in the window's order, reused at every level.
       ds::Vec<std::uint32_t, Memory> order;
@@ -158,6 +161,13 @@ namespace telar::gui::features::explorer {
       for (const auto& edit : build.edits) {
         if ((edit.kind == EditKind::create || edit.kind == EditKind::paste) && edit.machine == build.window.machine && edit.path.view() == directory) {
           pushText(build.window, {.kind = RowKind::added, .depth = depth, .directory = edit.directory, .item = edit.id}, edit.name.view());
+        }
+      }
+
+      // A file that arrives shows where it will be, until its directory is read again.
+      for (const auto& transfer : build.transfers) {
+        if (transfer.to == build.window.machine && !ended(transfer.phase) && transfer.directory.view() == directory) {
+          pushText(build.window, {.kind = RowKind::added, .depth = depth, .item = transfer.id | arriving_item}, transfer.name.view());
         }
       }
     }
@@ -334,8 +344,8 @@ namespace telar::gui::features::explorer {
       }
     }
 
-    void buildTree(Window& window, const Edits& edits, const State& state) {
-      Build build{.window = window, .edits = edits, .state = state, .order = ds::Vec<std::uint32_t, Memory>{window.rows.memory()}};
+    void buildTree(Window& window, const Pending& pending, const State& state) {
+      Build build{.window = window, .edits = pending.edits, .transfers = pending.transfers, .state = state, .order = ds::Vec<std::uint32_t, Memory>{window.rows.memory()}};
       const auto* root = find(state, window.root.view());
 
       window.loading = root == nullptr || !root->listed;
@@ -485,7 +495,7 @@ namespace telar::gui::features::explorer {
       return false;
     }
 
-    void buildWindow(Window& window, const Edits& edits, const State& state, const Context& context) {
+    void buildWindow(Window& window, const Pending& pending, const State& state, const Context& context) {
       const auto before = window.cursor;
 
       window.rows.clear();
@@ -508,7 +518,7 @@ namespace telar::gui::features::explorer {
         if (state.finds && !queryOf(window).empty()) {
           buildMatches(window, state);
         } else {
-          buildTree(window, edits, state);
+          buildTree(window, pending, state);
         }
 
         break;
@@ -548,7 +558,7 @@ namespace telar::gui::features::explorer {
     }
 
     void rebuildCurrent(View& view, const State& state, const Context& context) {
-      buildWindow(windowAt(view.windows, view.current), view.edits, state, context);
+      buildWindow(windowAt(view.windows, view.current), {.edits = view.edits, .transfers = view.transfers}, state, context);
       ++view.revision;
     }
 
@@ -748,17 +758,6 @@ namespace telar::gui::features::explorer {
       }
 
       return Reach::away;
-    }
-
-    // The label of the machine `id`, as the window names it.
-    constexpr std::string_view labelOf(const Context& context, std::uint64_t id) noexcept {
-      for (const auto& machine : context.machines) {
-        if (machine.id == id) {
-          return machine.label;
-        }
-      }
-
-      return id == context.host ? context.machine : std::string_view{"another machine"};
     }
 
     // Whether the panes are of another machine than the one the window lists, where nothing of
@@ -993,7 +992,10 @@ namespace telar::gui::features::explorer {
         awaited(memory),
         wrote(memory),
         seen(memory),
-        visited(memory) {}
+        visited(memory),
+        transfers(memory),
+        begun(memory),
+        bringing(memory) {}
 
   DiffTone toneOf(std::string_view line) noexcept {
     if (line.starts_with("@@")) {
@@ -1441,11 +1443,11 @@ namespace telar::gui::features::explorer {
         return;
       }
 
-      if (const auto* other = std::ranges::find_if(view.yanked, [&](const Yanked& item) {
-            return item.machine != window.machine;
-          });
-          other != view.yanked.end()) {
-        report(view, Tone::error, "What was yanked is on {}: copying between machines is not there yet", labelOf(context, other->machine));
+      // From another machine the window carries files one by one, and no directory yet.
+      if (std::ranges::any_of(view.yanked, [&](const Yanked& item) {
+            return item.machine != window.machine && item.directory;
+          })) {
+        say(view, "A directory is not carried between machines yet: yank its files", Tone::error);
         return;
       }
 
@@ -1506,6 +1508,8 @@ namespace telar::gui::features::explorer {
         } else if (edit.kind == EditKind::paste) {
           auto& made = step(edit.paste == PasteKind::move ? PlanVerb::move : PlanVerb::copy, edit);
 
+          // From another machine the window carries it: no runtime does that as an operation.
+          made.source_machine = edit.source_machine != 0 && edit.source_machine != edit.machine ? edit.source_machine : 0;
           made.source.assign(edit.source.view());
           join(made.target, {.directory = edit.path.view(), .name = edit.name.view()});
         }
@@ -1565,7 +1569,7 @@ namespace telar::gui::features::explorer {
       view.awaited.clear();
       view.written = {};
       for (const auto& step : view.plan) {
-        if (!std::ranges::contains(view.awaited, step.machine)) {
+        if (step.source_machine == 0 && !std::ranges::contains(view.awaited, step.machine)) {
           view.awaited.push(step.machine);
         }
       }
@@ -1815,7 +1819,7 @@ namespace telar::gui::features::explorer {
       cloneWindow(view.windows, view.memory, view.current);
       view.side_by_side = view.windows.size() == 2 ? side_by_side : view.side_by_side;
       view.current = view.windows.size() - 1;
-      buildWindow(windowAt(view.windows, view.current), view.edits, state, context);
+      buildWindow(windowAt(view.windows, view.current), {.edits = view.edits, .transfers = view.transfers}, state, context);
       ++view.revision;
     }
 
@@ -1864,6 +1868,41 @@ namespace telar::gui::features::explorer {
 
     // Enter on the rows chosen: a directory alone is entered; files go to the focused pane as its
     // kind takes them.
+    // A file of another machine than the panes' cannot be typed where the pane is: asks whether
+    // to bring a copy there, which the pane takes once it is whole. False for a row that names
+    // no file.
+    bool askToBring(View& view, const State& state, const Context& context, const PaneFact& pane) {
+      const auto& window = windowAt(view.windows, view.current);
+      const auto& row = window.rows[window.cursor];
+      if (row.directory || !namesPath(row.kind)) {
+        return false;
+      }
+
+      pathOf(view.bringing.path, window, state, context, row);
+      if (view.bringing.path.empty()) {
+        return false;
+      }
+
+      view.bringing.machine = window.machine;
+      view.bringing.identity = {};
+      view.bringing.size = 0;
+      // The file as its listing named it, where the window holds one: a row found by a filter or
+      // by git is read as it is.
+      if (row.kind == RowKind::entry && row.holder < state.directories.size() && row.entry < state.directories[row.holder]->entries.size()) {
+        const auto& entry = state.directories[row.holder]->entries[row.entry];
+
+        view.bringing.identity = entry.identity;
+        view.bringing.size = entry.size;
+      }
+
+      view.bringing.to = context.shown;
+      view.bringing.pane = pane.id;
+      view.bringing.mention = pane.kind == PaneKind::agent;
+      view.mode = Mode::question;
+      report(view, Tone::ask, "It is on {} and the pane on {} · bring a copy there? [y/N]", context.machine, labelOf(context, context.shown));
+      return true;
+    }
+
     Action enter(View& view, const State& state, const Context& context) {
       const auto& window = windowAt(view.windows, view.current);
       if (window.rows.empty()) {
@@ -1898,9 +1937,12 @@ namespace telar::gui::features::explorer {
         return {};
       }
 
-      // A path of this machine names nothing where the pane is.
+      // A path of this machine names nothing where the pane is: a copy brought there would.
       if (window.machine != context.shown) {
-        report(view, Tone::error, "It is on {} and the focused pane on {}: gf opens it there, yy copies where it is", context.machine, labelOf(context, context.shown));
+        if (!single || pane->kind == PaneKind::editor || !askToBring(view, state, context, *pane)) {
+          report(view, Tone::error, "It is on {} and the focused pane on {}: gf opens it there, yy copies where it is", context.machine, labelOf(context, context.shown));
+        }
+
         return {};
       }
 
@@ -2824,6 +2866,15 @@ namespace telar::gui::features::explorer {
           followPane(window, context);
           rebuildCurrent(view, state, context);
         }
+      } else if (name == "cancel" || name == "cancel!") {
+        // The transfers of this window's machine, or with `!` every one.
+        const auto stopped = stopTransfers(view, name == "cancel" ? windowAt(view.windows, view.current).machine : 0);
+
+        if (stopped == 0) {
+          say(view, "No transfer to cancel");
+        } else {
+          report(view, Tone::info, "{} transfer{} stopping: what had arrived is removed", stopped, stopped == 1 ? "" : "s");
+        }
       } else if (name == "marks") {
         listMarks(view, context);
       } else if (name == "help") {
@@ -2985,6 +3036,21 @@ namespace telar::gui::features::explorer {
     ++view.revision;
   }
 
+  tbc::val_a<std::string_view> labelOf(tbc::ref_a<Context> context, std::uint64_t id) noexcept {
+    for (const auto& machine : context.machines) {
+      if (machine.id == id) {
+        return machine.label;
+      }
+    }
+
+    return id == context.host ? context.machine : std::string_view{"another machine"};
+  }
+
+  void say(View& view, std::string_view text, Tone tone) {
+    view.message.assign(runtime::utf8Prefix(text, ViewLimits::message_bytes));
+    view.tone = tone;
+  }
+
   void refuse(View& view, std::string_view text) {
     say(view, text, Tone::error);
     ++view.revision;
@@ -3012,7 +3078,7 @@ namespace telar::gui::features::explorer {
   void rebuild(View& view, const State& state, const Context& context, std::uint64_t machine) {
     for (auto& window : view.windows.viewMut()) {
       if (window->machine == machine) {
-        buildWindow(window.getMut(), view.edits, state, context);
+        buildWindow(window.getMut(), {.edits = view.edits, .transfers = view.transfers}, state, context);
       }
     }
 
@@ -3039,7 +3105,7 @@ namespace telar::gui::features::explorer {
       const bool previewed = window->previewed != state.previews;
 
       if (window->built != state.revision || window->reached != context.reach || (previewed && !window->diffs.empty())) {
-        buildWindow(window.getMut(), view.edits, state, context);
+        buildWindow(window.getMut(), {.edits = view.edits, .transfers = view.transfers}, state, context);
         changed = true;
       } else if (previewed) {
         window.getMut().previewed = state.previews;
@@ -3397,10 +3463,11 @@ namespace telar::gui::features::explorer {
     }
 
     // Whether `item` can go to `directory` of `machine`: not where it already is, when it is
-    // moved, never into itself, and not to another machine, which nothing copies to yet.
+    // moved, never into itself, and to another machine only a file.
     bool lands(const Yanked& item, const Put& where) noexcept {
+      // To another machine the window carries a file, and no directory yet.
       if (item.machine != where.machine) {
-        return false;
+        return !item.directory;
       }
 
       if (where.kind == PasteKind::move && parentOf(item.path.view()) == where.directory) {
@@ -3408,6 +3475,20 @@ namespace telar::gui::features::explorer {
       }
 
       return !within(where.directory, item.path.view());
+    }
+
+    // Whether rows let go on `machine` are moved or copied there. On their own machine they move
+    // unless a copy is asked for; to another they are copied unless a move is.
+    PasteKind dropKind(std::span<const Yanked> dragged, std::uint64_t machine, const Drop& drop) noexcept {
+      const bool across = std::ranges::any_of(dragged, [&](const Yanked& item) {
+        return item.machine != machine;
+      });
+
+      if (across) {
+        return drop.move ? PasteKind::move : PasteKind::copy;
+      }
+
+      return drop.copy ? PasteKind::copy : PasteKind::move;
     }
 
     // The directory that takes what is let go at `drop`: the row's own when it is one, the one a
@@ -3466,6 +3547,55 @@ namespace telar::gui::features::explorer {
 
   }
 
+  namespace {
+
+    // The answer to whether a copy of a file of another machine is brought: a yes starts it.
+    void answerQuestion(View& view, bool accepted) {
+      view.mode = Mode::normal;
+      ++view.revision;
+      if (!accepted) {
+        view.bringing.machine = 0;
+        say(view, "Not brought");
+      } else if (bring(view)) {
+        say(view, "Bringing a copy · it is typed at the pane when it is whole · :cancel stops it");
+      } else {
+        say(view, "Too many transfers wait: :cancel some first", Tone::error);
+      }
+    }
+
+    // The answer to the plan of `:w`: a yes sends each runtime its part, and starts what the
+    // window carries between machines.
+    Action answerPlan(View& view, bool accepted) {
+      view.mode = Mode::normal;
+      ++view.revision;
+      if (!accepted) {
+        view.plan.clear();
+        say(view, "Plan cancelled · the changes are still pending");
+        return {};
+      }
+
+      send(view, true);
+
+      const auto carried = carry(view);
+
+      if (carried != 0) {
+        // What is carried is no longer a change typed, which `u` would take back.
+        view.history.clear();
+        report(view, Tone::info, "{} file{} on the way between machines · :cancel stops {}", carried, carried == 1 ? "" : "s", carried == 1 ? "it" : "them");
+      }
+
+      // With nothing for a runtime to do, the plan ends here.
+      if (view.awaited.empty()) {
+        view.writing = false;
+        view.plan.clear();
+        return {};
+      }
+
+      return {.kind = ActionKind::apply, .overwrite = view.overwrite};
+    }
+
+  }
+
   Action press(View& view, State& state, const Context& context, KeyChord chord) {
     if (!view.open || view.windows.empty()) {
       return {};
@@ -3474,19 +3604,13 @@ namespace telar::gui::features::explorer {
     const auto key = notation(chord);
     const auto text = key.view();
 
-    if (view.mode == Mode::plan) {
-      const bool accepted = text == "y" || text == "<CR>";
-
-      view.mode = Mode::normal;
-      ++view.revision;
-      if (accepted) {
-        send(view, true);
-        return {.kind = ActionKind::apply, .overwrite = view.overwrite};
-      }
-
-      view.plan.clear();
-      say(view, "Plan cancelled · the changes are still pending");
+    if (view.mode == Mode::question) {
+      answerQuestion(view, text == "y" || text == "Y");
       return {};
+    }
+
+    if (view.mode == Mode::plan) {
+      return answerPlan(view, text == "y" || text == "<CR>");
     }
 
     if (view.mode == Mode::help) {
@@ -3547,6 +3671,7 @@ namespace telar::gui::features::explorer {
     case Mode::plan:
     case Mode::help:
     case Mode::menu:
+    case Mode::question:
       break;
     }
 
@@ -3670,6 +3795,10 @@ namespace telar::gui::features::explorer {
     case Mode::command:
       view.completing.clear();
       view.completing_in.clear();
+      break;
+    case Mode::question:
+      view.bringing.machine = 0;
+      say(view, "Not brought");
       break;
     case Mode::help:
     case Mode::menu:
@@ -3820,8 +3949,9 @@ namespace telar::gui::features::explorer {
 
     dropDirectory(directory, view, state, context, drop);
 
-    const Put where{.kind = drop.copy ? PasteKind::copy : PasteKind::move, .machine = window.machine, .directory = directory.view()};
+    const Put where{.kind = dropKind(view.dragged.view(), window.machine, drop), .machine = window.machine, .directory = directory.view()};
 
+    result.copy = where.kind == PasteKind::copy;
     result.count = static_cast<std::size_t>(std::ranges::count_if(view.dragged, [&](const Yanked& item) {
       return lands(item, where);
     }));
@@ -3847,7 +3977,7 @@ namespace telar::gui::features::explorer {
 
     dropDirectory(directory, view, state, context, drop);
 
-    const Put where{.kind = drop.copy ? PasteKind::copy : PasteKind::move, .machine = view.windows[drop.window]->machine, .directory = directory.view()};
+    const Put where{.kind = dropKind(view.dragged.view(), view.windows[drop.window]->machine, drop), .machine = view.windows[drop.window]->machine, .directory = directory.view()};
 
     for (auto& item : view.dragged.viewMut()) {
       if (lands(item, where)) {
@@ -3862,7 +3992,7 @@ namespace telar::gui::features::explorer {
     view.dragged.clear();
     ++view.revision;
     if (landing.empty()) {
-      say(view, elsewhere ? std::string_view{"That window is on another machine: copying between machines is not there yet"} : std::string_view{"It is there already, or a directory would go into itself: nothing dropped"}, Tone::error);
+      say(view, elsewhere ? std::string_view{"A directory is not carried between machines yet: drop its files"} : std::string_view{"It is there already, or a directory would go into itself: nothing dropped"}, Tone::error);
       return;
     }
 
@@ -4007,7 +4137,8 @@ namespace telar::gui::features::explorer {
     std::size_t count = 0;
 
     for (const auto& step : view.plan) {
-      if (step.machine != machine || count == output.size()) {
+      // What comes from another machine is carried by the window, and is no operation of this one.
+      if (step.machine != machine || step.source_machine != 0 || count == output.size()) {
         continue;
       }
 

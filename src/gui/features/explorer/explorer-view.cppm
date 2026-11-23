@@ -11,6 +11,7 @@ import telar.base.memory.containers;
 import telar.base.ds;
 import telar.tbc;
 import telar.wire.files;
+import telar.wire.vocabulary;
 
 export namespace telar::gui::features::explorer {
 
@@ -63,6 +64,8 @@ export namespace telar::gui::features::explorer {
     help,
     // The menu of a row shows, and takes the keys.
     menu,
+    // A question waits for a yes: whether to bring a copy of a file from another machine.
+    question,
   };
 
   enum class Sort : std::uint8_t {
@@ -246,6 +249,100 @@ export namespace telar::gui::features::explorer {
     ds::String<Memory> target;
     FileIdentity identity{};
     std::uint64_t size = 0;
+    // The machine a copy or a move comes from, when it is another than the one it goes to: the
+    // window carries it there, and no runtime is asked for it as an operation. 0 otherwise.
+    std::uint64_t source_machine = 0;
+  };
+
+  // How a file goes from one machine to another: copied, moved, which sends the original to the
+  // trash of its machine once the copy is whole, or brought to be typed at a pane.
+  enum class TransferKind : std::uint8_t {
+    copy,
+    move,
+    bring,
+  };
+
+  enum class TransferPhase : std::uint8_t {
+    // More transfers run than the window carries at once.
+    waiting,
+    // A chunk is read from the source, then written to the partial of the target.
+    reading,
+    writing,
+    // The partial takes the target's name; the source of a move goes to the trash.
+    placing,
+    trashing,
+    // What arrived is removed, after a failure or a cancel.
+    dropping,
+    arrived,
+    failed,
+    cancelled,
+  };
+
+  // A file the window carries from one machine to another, a chunk at a time: the runtimes do
+  // not talk to each other. It goes on while the explorer is closed.
+  struct Transfer {
+    explicit Transfer(Memory& memory);
+
+    std::uint32_t id = 0;
+    TransferKind kind = TransferKind::copy;
+    TransferPhase phase = TransferPhase::waiting;
+    // The file, on the machine it is read from, as its listing named it.
+    std::uint64_t from = 0;
+    ds::String<Memory> source;
+    FileIdentity identity{};
+    // The machine, the directory and the name it arrives at. A file brought names no directory:
+    // whoever drives the explorer says where that machine keeps what it brings.
+    std::uint64_t to = 0;
+    ds::String<Memory> directory;
+    ds::String<Memory> name;
+    bool overwrite = false;
+    // The pane a file brought is typed at, and whether as a mention.
+    std::uint64_t pane = 0;
+    bool mention = false;
+    bool handed = false;
+    // The plan it is of: what one plan brings to a machine goes back together.
+    std::uint32_t batch = 0;
+    // The partial the target's runtime named, and the path the file ended at.
+    ds::String<Memory> partial;
+    ds::String<Memory> placed;
+    // How much arrived, of how much.
+    std::uint64_t done = 0;
+    std::uint64_t size = 0;
+    // The chunk read and not yet written, and whether it is the file's last.
+    ds::Vec<Byte, Memory> chunk;
+    bool last = false;
+    // The request in flight, 0 when none, and the connection of its machine it left on.
+    std::uint64_t request = 0;
+    std::uint64_t epoch = 0;
+    // Asked to stop, which it does once no request of its is in flight; and why it did not arrive.
+    bool stop = false;
+    runtime::FixedText<ViewLimits::message_bytes> said;
+    // When it started, when its progress last showed, and when it ended, in milliseconds.
+    std::uint64_t started_ms = 0;
+    std::uint64_t shown_ms = 0;
+    std::uint64_t ended_ms = 0;
+  };
+
+  // A file of another machine the keys asked to hand to a pane: the question waits for a yes.
+  // A machine where a batch of transfers already changed something: what it changes next there
+  // joins that change, and `u` takes both back together.
+  struct Begun {
+    std::uint32_t batch = 0;
+    std::uint64_t machine = 0;
+
+    friend bool operator==(const Begun&, const Begun&) = default;
+  };
+
+  struct Bringing {
+    explicit Bringing(Memory& memory);
+
+    std::uint64_t machine = 0;
+    ds::String<Memory> path;
+    FileIdentity identity{};
+    std::uint64_t size = 0;
+    std::uint64_t to = 0;
+    std::uint64_t pane = 0;
+    bool mention = false;
   };
 
   // A place the explorer was, to go back to: a mark, or a step of the jump list.
@@ -459,9 +556,22 @@ export namespace telar::gui::features::explorer {
     ds::Vec<Settled, Memory> seen;
     // Where a window last was on each machine it left, to return there.
     ds::Vec<Place, Memory> visited;
+    // The files carried between machines, the ones that wait and the ones that just ended; and
+    // the one a question asks about.
+    ds::Vec<Transfer, Memory> transfers;
+    std::uint32_t next_transfer = 1;
+    std::uint32_t next_batch = 1;
+    ds::Vec<Begun, Memory> begun;
+    Bringing bringing;
   };
 
   [[nodiscard]] const Window& window(const View& view) noexcept;
+
+  // The label of the machine `id`, as the window names it.
+  [[nodiscard]] tbc::val_a<std::string_view> labelOf(tbc::ref_a<Context> context, std::uint64_t id) noexcept;
+
+  // Says `text` on the line under the windows.
+  void say(View& view, std::string_view text, Tone tone = Tone::info);
 
   // The filter of a window as the runtime searches for it: without the spaces around it, cut to
   // what a search takes.
@@ -488,6 +598,8 @@ export namespace telar::gui::features::explorer {
     std::size_t window = 0;
     std::size_t row = 0;
     bool copy = false;
+    // Between two machines the rows are copied unless this asks for a move.
+    bool move = false;
   };
 
   // What letting go there would do: how many rows the directory takes, none when it refuses them
@@ -495,6 +607,8 @@ export namespace telar::gui::features::explorer {
   struct Aim {
     std::size_t count = 0;
     ds::Option<std::size_t> row;
+    // Whether they would be copied there, not moved.
+    bool copy = false;
   };
 
   // Rows of a window, counted: how many it shows, or by how many the wheel moves what it shows.

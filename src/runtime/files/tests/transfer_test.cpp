@@ -220,6 +220,30 @@ namespace {
     const auto undone = Codec::decode<FilesChanged>(reply.payload(), storage);
 
     check(undone.results.size() == 1 && undone.results[0].outcome == FileOutcome::done && !std::filesystem::exists(target), "undo takes the file that arrived away again");
+
+    // Two arrivals of one plan go back together, where the second joins the first; one that
+    // does not join is a change of its own, and leaves the ones before it be.
+    const auto other = root + "/other.txt";
+    const auto late = root + "/late.txt";
+    const auto one = arrive(changer, memory, {.request_id = 4, .target = target, .offset = 0, .bytes = bytes("one")});
+
+    check(finish(changer, memory, {.request_id = 5, .partial = one.partial, .target = target, .keep = true}).outcome == FileOutcome::done);
+
+    const auto two = arrive(changer, memory, {.request_id = 6, .target = other, .offset = 0, .bytes = bytes("two")});
+
+    check(finish(changer, memory, {.request_id = 7, .partial = two.partial, .target = other, .keep = true, .joins = true}).outcome == FileOutcome::done);
+    changer.undo(UndoFileChanges{.request_id = 8}, reply);
+    check(!std::filesystem::exists(target) && !std::filesystem::exists(other), "what joined goes back with what it joined");
+
+    const auto kept = arrive(changer, memory, {.request_id = 9, .target = target, .offset = 0, .bytes = bytes("kept")});
+
+    check(finish(changer, memory, {.request_id = 10, .partial = kept.partial, .target = target, .keep = true}).outcome == FileOutcome::done);
+
+    const auto last = arrive(changer, memory, {.request_id = 11, .target = late, .offset = 0, .bytes = bytes("last")});
+
+    check(finish(changer, memory, {.request_id = 12, .partial = last.partial, .target = late, .keep = true}).outcome == FileOutcome::done);
+    changer.undo(UndoFileChanges{.request_id = 13}, reply);
+    check(std::filesystem::exists(target) && !std::filesystem::exists(late), "an arrival of its own goes back alone");
   }
 
   const telar::testing::Case case_read{"transfer.a_file_is_read_a_chunk_at_a_time_while_it_is_the_one_listed", testAFileIsReadAChunkAtATimeWhileItIsTheOneListed};

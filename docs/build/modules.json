@@ -613,6 +613,7 @@
     "src/gui/features/explorer/explorer-files.cppm": "telar.gui.features.explorer:files",
     "src/gui/features/explorer/explorer-keys.cppm": "telar.gui.features.explorer:keys",
     "src/gui/features/explorer/explorer-presentation.cppm": "telar.gui.features.explorer:presentation",
+    "src/gui/features/explorer/explorer-transfers.cppm": "telar.gui.features.explorer:transfers",
     "src/gui/features/explorer/explorer-view.cppm": "telar.gui.features.explorer:view",
     "src/gui/features/explorer/explorer.cppm": "telar.gui.features.explorer",
     "src/gui/features/history/history-browser.cppm": "telar.gui.features.history:browser",

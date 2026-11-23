@@ -34,6 +34,9 @@ export namespace telar::gui::application::explorer {
   using features::explorer::State;
   using features::explorer::StatusLook;
   using features::explorer::Tone;
+  using features::explorer::TransferKind;
+  using features::explorer::TransferLooks;
+  using features::explorer::TransferPhase;
   using features::explorer::View;
   using features::explorer::Window;
   using features::explorer::WindowRows;
@@ -42,7 +45,10 @@ export namespace telar::gui::application::explorer {
   using features::explorer::idle_message;
   using features::explorer::lens_count;
   using features::explorer::modeText;
+  using features::explorer::stopTransfer;
   using features::explorer::toneOf;
+  using features::explorer::transferring;
+  using features::explorer::transfers;
   using features::explorer::verbText;
 
   using runtime::config::KeyChord;
@@ -182,6 +188,12 @@ export namespace telar::gui::application::explorer {
   // with the focused pane when the session is the one that shows; then asks for what they still
   // lack. True when what the explorer shows changed.
   bool refresh(Session& session, View& view, const Context& context);
+
+  // Carries the files on their way to or from the session's machine: takes what its runtime
+  // answered them, and asks it for what each wants next of it, one request for each. A file
+  // brought for a pane of this session is typed there once it is whole. It goes on while the
+  // explorer is closed. True when what the explorer shows of them changed.
+  bool carry(Session& session, View& view, const Context& context, std::uint64_t now_ms);
 
   // What an action hands to the panes, which are of `session`, the one that shows: a path
   // typed, a mention, a shell's directory, a split, the focus.
