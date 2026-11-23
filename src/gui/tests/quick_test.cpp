@@ -2423,7 +2423,8 @@ return {api_version = 2, client = {
       // Where an item of the editor is in the window; nowhere while it does not show.
       const auto place = [&](const QString& name, bool parent = false) {
         const auto items = test::visualItems(*window_->contentItem(), name);
-        const auto* item = items.empty() ? nullptr : parent ? items.front()->parentItem() : items.front();
+        const auto* item = items.empty() ? nullptr : parent ? items.front()->parentItem()
+                                                            : items.front();
 
         return item == nullptr ? QRectF{} : item->mapRectToScene(item->boundingRect());
       };
