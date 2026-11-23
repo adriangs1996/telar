@@ -644,6 +644,7 @@ export {
       Change apply(const FileInspection& message);
       Change apply(const FilesChanged& message);
       Change apply(const ChangesCommitted& message);
+      Change apply(const HomeLocated& message);
 
       Change apply(const PaneKindNotice& message);
       Change apply(const NvimGrid& message);

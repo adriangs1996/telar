@@ -1,7 +1,8 @@
 # Explore the files of a machine
 
-The explorer lists the files of the window's machine over the panes of the tab. The runtime of
-that machine reads the directories, measures them, asks git and changes the files, so on a
+The explorer lists the files of a machine over the panes of the tab: the one the window shows
+when it opens, and any other one the window keeps, a window of the explorer each. The runtime
+of the machine reads the directories, measures them, asks git and changes the files, so on a
 remote machine the explorer works beside the files, and only what a window shows crosses the
 connection.
 
@@ -170,15 +171,44 @@ The explorer splits into three windows at most, each on its own directory.
 | `Ctrl+w` `v`, `Ctrl+w` `s` | Another window, beside or below. |
 | `Ctrl+w` `w`, `Ctrl+w` `h` `j` `k` `l` | Go to the next window, or to the one that way. |
 | `Ctrl+w` `q`, `Ctrl+w` `o` | Close this window, or every other one. |
-| `:e PATH`, `:vs PATH`, `:sp PATH` | Take this window, or a new one, to a path. `~` is the home, and a relative path starts at the window's root. |
+| `:e PATH`, `:vs PATH`, `:sp PATH` | Take this window, or a new one, to a path. `~` is the home, and a relative path starts at the window's root. A path of [another machine](#machines) starts with its label and a colon. |
 | `Tab` | On one of those lines and on `:cd`, complete the directory being typed: the one that matches, or the start that several share, which it lists beside the line. |
 
 `yy` in one window and `p` in another copies between two directories; `dd` and `p` moves.
 
+## Machines
+
+Each window of the explorer is on one machine, and two windows can be on two. The head of a
+window says which: its label, and `local` for the machine the window runs on or `remote` for
+another one. What a window lists, measures, previews and searches, and what git says there,
+comes from the runtime of its own machine; a machine with no window is asked for nothing.
+
+| Keys | What they do |
+| --- | --- |
+| `:e LABEL:PATH`, `:vs LABEL:PATH`, `:sp LABEL:PATH` | Take this window, or a new one, to a path of the machine with that label: `:vs box:~/logs`. `~` is the home of the account there, which its runtime says. |
+| `:machine LABEL` | Take this window to that machine: where this explorer last was on it, or its home. `:machine` alone lists the machines. |
+| `gm`, or a click on the machine in the head | The next machine that answers, around. |
+| `Tab` | Complete the label of a machine before its colon, where no directory starts that way. |
+
+- A machine that is disabled or not connected, or whose runtime is too old to answer for
+  files, says so in its window, and is asked for nothing until it answers.
+- A window on another machine than the one the window shows follows no pane: `gp` and `gw`
+  are refused there, and `gh` goes to the home of its machine.
+- A mark in lower case belongs to the machine it was set on; from another one, `'a` says so
+  and goes nowhere. A mark in upper case keeps its machine: `'B` takes the window there in
+  one jump, which `Ctrl+o` takes back. The jumps go back and forward across machines.
+- A file goes to a pane of its own machine alone. With the file on one machine and the
+  focused pane on another, Enter, `@` and `cd` type nothing and say where each is. `gf`
+  opens the file in an editor of its machine and shows that machine; `yy` copies
+  `LABEL:/absolute/path`.
+- `:w` shows one plan for every window, and each line says its machine when they are of more
+  than one. Accepting it sends each runtime the operations on its own files; the line under
+  the windows counts what all of them did, and `u` takes the plan back on every machine it
+  touched. The changes of a machine that does not answer wait.
+
 ## What it does not do yet
 
-- A window lists the machine the window shows: two windows cannot be on two machines, and
-  nothing is copied from one machine to another.
+- Nothing is copied or moved from one machine to another: a paste or a drop of what another
+  machine holds is refused.
 - Nothing is dragged onto a pane, out to the desktop, or in from it.
-- The home of a remote machine's account is not known to the window, so its paths are
-  written whole and `~` goes nowhere there.
+- `Tab` completes no path of another machine than the window's.

@@ -201,6 +201,7 @@ namespace telar::gui::features::explorer {
         repository(made_in),
         inspections(made_in),
         search(made_in),
+        home(made_in),
         outcomes(made_in),
         committed(made_in) {}
 
@@ -304,6 +305,8 @@ namespace telar::gui::features::explorer {
     case NeedKind::search:
       // One search at a time: another root or query replaces it, the same one is not asked twice.
       return !state.search.of(need.path, need.text);
+    case NeedKind::home:
+      return !state.located && state.locating == 0;
     }
 
     return false;
@@ -361,6 +364,9 @@ namespace telar::gui::features::explorer {
       break;
     }
     case NeedKind::search:
+      break;
+    case NeedKind::home:
+      state.locating = request_id;
       break;
     }
 
@@ -561,6 +567,18 @@ namespace telar::gui::features::explorer {
     return true;
   }
 
+  bool receive(State& state, const HomeLocated& located) {
+    if (state.locating == 0 || state.locating != located.request_id) {
+      return false;
+    }
+
+    state.home.assign(located.path);
+    state.located = true;
+    state.locating = 0;
+    settle(state);
+    return true;
+  }
+
   bool receive(State& state, const PathResults& results) {
     auto& search = state.search;
     if (results.request_id == 0 || results.request_id != search.waiting || results.root != search.root.view()) {
@@ -642,6 +660,13 @@ namespace telar::gui::features::explorer {
       }
     }
 
+    // A runtime that does not say its home is not asked again: `~` stands for nothing there.
+    if (request != 0 && state.locating == request) {
+      state.locating = 0;
+      state.located = true;
+      ours = true;
+    }
+
     if (ours) {
       settle(state);
       return true;
@@ -692,6 +717,7 @@ namespace telar::gui::features::explorer {
     state.repository.stale = true;
     state.search.waiting = 0;
     state.search.known = false;
+    state.locating = 0;
     state.inspections.clear();
     state.applying = 0;
     state.committing = 0;

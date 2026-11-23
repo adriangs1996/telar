@@ -227,7 +227,7 @@ namespace {
 
     const auto shown = hints(explorer.view, explorer.state, explorer.context());
 
-    check(shown.count == 5 && shown.items[4].keys == "<Tab>", "the line of hints says what Tab does there");
+    check(shown.count == 7 && shown.items[3].keys == ":e LABEL:PATH" && shown.items[6].keys == "<Tab>", "the line of hints says what Tab does there, and how another machine is named");
 
     const auto completes = [&](std::string_view line) {
       complete(explorer.view, explorer.state, explorer.context(), line);

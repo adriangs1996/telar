@@ -381,6 +381,13 @@ namespace telar::gui::qt {
     });
 
     connect(&explorer_, &ExplorerController::failed, &status_, &WindowStatus::report);
+    // Files of another machine opened in an editor there: the window shows that machine.
+    connect(&explorer_, &ExplorerController::machineRequested, this, [this](application::machines::MachineToken token) {
+      commands_.interact([this, token] {
+        machines_.select(token);
+      });
+    });
+
     connect(&commands_, &WindowCommands::explorerRequested, &explorer_, &ExplorerController::toggle);
     connect(&machines_, &MachinesCoordinator::changed, &explorer_, &ExplorerController::machineChanged);
     // What the panes show moved: a window that follows the focused pane goes where it is.

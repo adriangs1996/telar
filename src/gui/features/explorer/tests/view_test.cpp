@@ -43,7 +43,7 @@ namespace {
     const auto previews = explorer.state.previews;
 
     explorer.type("j");
-    check(explorer.state.previews == previews + 1 && explorer.state.revision == built && explorer.view.built == built && explorer.view.previewed == explorer.state.previews);
+    check(explorer.state.previews == previews + 1 && explorer.state.revision == built && window(explorer.view).built == built && window(explorer.view).previewed == explorer.state.previews);
     explorer.type("k");
     explorer.type("l");
     check(explorer.row("docs").expanded, "l unfolds the directory of the selection");

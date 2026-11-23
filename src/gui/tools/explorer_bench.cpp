@@ -76,7 +76,7 @@ namespace {
     }
 
     [[nodiscard]] Context context() const {
-      return {.panes = panes, .focused = 1, .workspace = root, .home = "/home/dev", .machine = "bench", .local = true};
+      return {.panes = panes, .focused = 1, .workspace = root, .home = "/home/dev", .machine = "bench", .local = true, .host = machine, .shown = machine};
     }
 
     // Answers what the explorer lacks, a page of a listing at a time, until it lacks nothing.
@@ -109,6 +109,10 @@ namespace {
           break;
         case NeedKind::search:
           // The bench's runtime searches no paths: its explorer never asks.
+          break;
+        case NeedKind::home:
+          asked(state, *wanted, request);
+          static_cast<void>(receive(state, HomeLocated{.request_id = request, .path = "/home/dev"}));
           break;
         }
       }

@@ -108,6 +108,11 @@ namespace telar::gui::features::explorer {
     // The panes whose shell is in `path`.
     template <typename Look>
     void notePanes(Look& look, const Context& context, std::string_view path) noexcept {
+      // The panes are of the machine the window shows: a directory of another one holds none.
+      if (context.host != context.shown) {
+        return;
+      }
+
       for (const auto& pane : context.panes) {
         if (pane.kind != PaneKind::editor && pane.cwd == path && look.pane_count < look.panes.size()) {
           look.panes.atMut(look.pane_count++) = pane.number;
@@ -432,8 +437,10 @@ namespace telar::gui::features::explorer {
         addHint(hints, ":w", {.text = "plan"});
         addHint(hints, ":e", {.text = "path"});
         addHint(hints, ":vs", {.text = "window"});
+        addHint(hints, ":e LABEL:PATH", {.text = "another machine"});
+        addHint(hints, ":machine", {.text = "list them"});
         addHint(hints, ":commit", {.text = "message"});
-        addHint(hints, "<Tab>", {.text = "complete a path"});
+        addHint(hints, "<Tab>", {.text = "complete a path or a machine"});
         return true;
       case Mode::normal:
       case Mode::insert:
@@ -1096,35 +1103,8 @@ namespace telar::gui::features::explorer {
     return {};
   }
 
-  LineText outcomeText(const State& state) {
+  LineText outcomeText(const Written& written, std::size_t waiting) {
     LineText text;
-    std::size_t applied = 0;
-    std::size_t renamed = 0;
-    std::size_t stale = 0;
-    std::size_t missing = 0;
-    std::size_t refused = 0;
-
-    for (const auto& outcome : state.outcomes) {
-      switch (outcome.outcome) {
-      case FileOutcome::done:
-        ++applied;
-        break;
-      case FileOutcome::renamed:
-        ++applied;
-        ++renamed;
-        break;
-      case FileOutcome::stale:
-        ++stale;
-        break;
-      case FileOutcome::missing:
-        ++missing;
-        break;
-      case FileOutcome::refused:
-      case FileOutcome::failed:
-        ++refused;
-        break;
-      }
-    }
 
     ds::Array<char, line_text_bytes> buffer{};
     std::size_t length = 0;
@@ -1145,13 +1125,14 @@ namespace telar::gui::features::explorer {
       }
     };
 
-    append(state.undone ? "taken back" : ":w");
-    count(applied, state.undone ? "step" : "applied by the runtime");
-    count(renamed, "under another name: the target existed");
-    count(stale, "skipped: changed since it was listed");
-    count(missing, "skipped: gone");
-    count(refused, "refused");
-    if (state.undoable) {
+    append(written.undone ? "taken back" : ":w");
+    count(written.applied, written.undone ? "step" : "applied by the runtime");
+    count(written.renamed, "under another name: the target existed");
+    count(written.stale, "skipped: changed since it was listed");
+    count(written.missing, "skipped: gone");
+    count(written.refused, "refused");
+    count(waiting, waiting == 1 ? "machine still to answer" : "machines still to answer");
+    if (written.undoable && waiting == 0) {
       append(" · u takes it back");
     }
 

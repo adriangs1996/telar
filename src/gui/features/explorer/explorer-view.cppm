@@ -94,15 +94,37 @@ export namespace telar::gui::features::explorer {
     std::string_view cwd;
   };
 
-  // What the explorer reads of the session it is driven with: the panes of the tab that shows,
-  // the workspace's directory, and the machine.
+  // How the window reaches a machine: its runtime answers for files, it is not connected, or it
+  // is connected to a runtime that knows nothing of them.
+  enum class Reach : std::uint8_t {
+    answers,
+    away,
+    silent,
+  };
+
+  // A machine the window keeps, for a command that names one or goes to the next.
+  struct MachineFact {
+    std::uint64_t id = 0;
+    std::string_view label;
+    bool local = false;
+    Reach reach = Reach::answers;
+  };
+
+  // What the explorer reads around the files of one machine, the host: the one whose cache a
+  // use case is given, which is the machine of the window it acts on. The panes are the ones of
+  // the tab that shows, which is of the machine `shown` and may be another.
   struct Context {
     std::span<const PaneFact> panes;
     std::uint64_t focused = 0;
     std::string_view workspace;
+    // The host's home, its label, whether the window runs on it, and how the window reaches it.
     std::string_view home;
     std::string_view machine;
     bool local = true;
+    Reach reach = Reach::answers;
+    std::uint64_t host = 0;
+    std::uint64_t shown = 0;
+    std::span<const MachineFact> machines;
   };
 
   enum class RowKind : std::uint8_t {
@@ -279,6 +301,13 @@ export namespace telar::gui::features::explorer {
     // The pane it last followed and where that pane was, to follow again only when either moves.
     std::uint64_t followed = 0;
     ds::String<Memory> followed_cwd;
+    // The revision of its machine's cache its rows were built from, and the previews of that
+    // cache it last showed. A window that changed machine was built from none.
+    static constexpr std::uint64_t unbuilt = std::numeric_limits<std::uint64_t>::max();
+    std::uint64_t built = unbuilt;
+    std::uint64_t previewed = 0;
+    // Whether its machine answered when the rows were built: one that comes or goes builds them again.
+    Reach reached = Reach::answers;
   };
 
   // A line of the menu the pointer asks a row for. Each runs the command its key runs, so the
@@ -349,6 +378,27 @@ export namespace telar::gui::features::explorer {
     ActionKind kind = ActionKind::none;
     std::uint64_t pane = 0;
     bool overwrite = false;
+    // The machine whose files it is about: where the paths to open are, and whose repository
+    // a commit is of.
+    std::uint64_t machine = 0;
+  };
+
+  // What the runtimes did with the plan last sent, counted over every machine it went to.
+  struct Written {
+    std::uint32_t applied = 0;
+    std::uint32_t renamed = 0;
+    std::uint32_t stale = 0;
+    std::uint32_t missing = 0;
+    std::uint32_t refused = 0;
+    // Whether it was taken back, and whether a machine says it still can be.
+    bool undone = false;
+    bool undoable = false;
+  };
+
+  // What a machine's cache had settled when the explorer last took it in.
+  struct Settled {
+    std::uint64_t machine = 0;
+    std::uint64_t count = 0;
   };
 
   struct View {
@@ -401,11 +451,14 @@ export namespace telar::gui::features::explorer {
     Command last = Command::none;
     // Grows with every change to what the explorer shows.
     std::uint64_t revision = 0;
-    // The cache's revision and settled count the rows were last built from.
-    std::uint64_t built = 0;
-    // The previews of the cache the explorer last showed.
-    std::uint64_t previewed = 0;
-    std::uint64_t settled = 0;
+    // The machines the plan in flight went to and that have not answered, what the ones that
+    // did answer did, and the machines the last plan changed, for `u` to take it back on each.
+    ds::Vec<std::uint64_t, Memory> awaited;
+    Written written;
+    ds::Vec<std::uint64_t, Memory> wrote;
+    ds::Vec<Settled, Memory> seen;
+    // Where a window last was on each machine it left, to return there.
+    ds::Vec<Place, Memory> visited;
   };
 
   [[nodiscard]] const Window& window(const View& view) noexcept;

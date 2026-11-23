@@ -28,6 +28,11 @@ export namespace telar::gui::features::explorer {
     // paths at all: the session says so when the explorer opens.
     Search search;
     bool finds = false;
+    // The home of the machine's account, which `~` stands for there: empty until its runtime
+    // says it, which it is asked once. `located` once it answered, or refused to.
+    ds::String<Memory> home;
+    bool located = false;
+    std::uint64_t locating = 0;
     // The plan in flight, 0 when none; what the last one did, and whether it can be taken back.
     std::uint64_t applying = 0;
     ds::Vec<Outcome, Memory> outcomes;
@@ -66,6 +71,8 @@ export namespace telar::gui::features::explorer {
     inspection,
     // The paths below `path` that match `text`.
     search,
+    // Where the home of the machine's account is.
+    home,
   };
 
   struct Need {
@@ -100,6 +107,7 @@ export namespace telar::gui::features::explorer {
   bool receive(State& state, const FileInspection& inspection);
   bool receive(State& state, const FilesChanged& changed);
   bool receive(State& state, const ChangesCommitted& committed);
+  bool receive(State& state, const HomeLocated& located);
   // The matches of the search asked last; false for an answer to one that a later query replaced.
   bool receive(State& state, const PathResults& results);
 

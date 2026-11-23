@@ -44,6 +44,7 @@ namespace telar::gui::features::explorer {
         bind("gp", Command::scope_pane),
         bind("gw", Command::scope_workspace),
         bind("gh", Command::scope_machine),
+        bind("gm", Command::next_machine),
         bind("m", Command::mark, true),
         bind("'", Command::jump_to_mark, true),
         bind("<C-o>", Command::jump_back),

@@ -22,6 +22,10 @@ export namespace telar::gui::features::explorer {
 
   void close(View& view) noexcept;
 
+  // Says on the line under the windows what could not be done past the explorer: by a session,
+  // or by the window.
+  void refuse(View& view, std::string_view text);
+
   // A window of `machine` that follows the focused pane goes where the pane is, when the pane
   // or its directory is another than the one it last followed. True when a window moved.
   bool follow(View& view, const Context& context, std::uint64_t machine);

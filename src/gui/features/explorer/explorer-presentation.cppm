@@ -230,8 +230,8 @@ export namespace telar::gui::features::explorer {
   // What the line under the windows says while the explorer has nothing else to say.
   inline constexpr std::string_view idle_message = "? shows the keys · /, : and V as in Neovim";
 
-  // What the last plan did, as the status line says it: how many operations were applied, and
-  // how many were skipped and why.
-  [[nodiscard]] LineText outcomeText(const State& state);
+  // What the runtimes did with the plan last sent, for the status line: what was applied, what
+  // was skipped, and how many machines have yet to say.
+  [[nodiscard]] LineText outcomeText(const Written& written, std::size_t waiting);
 
 }

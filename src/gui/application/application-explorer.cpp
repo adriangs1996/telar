@@ -15,40 +15,13 @@ namespace telar::gui::application::explorer {
 
   namespace {
 
-    using feature::Action;
-    using feature::ActionKind;
-    using feature::Context;
-    using feature::PaneFact;
     using feature::PaneKind;
-
-    // The panes of a tab the explorer reads: as many as a tab holds.
-    constexpr std::size_t tab_panes = 64;
 
     constexpr bool isShell(std::string_view program) noexcept {
       constexpr ds::Array<std::string_view, 9> shells{"zsh", "bash", "fish", "sh", "dash", "ksh", "tcsh", "nu", "pwsh"};
 
       return std::ranges::contains(shells, program);
     }
-
-    // What the explorer reads of the session: the panes of the tab that shows, the one focused,
-    // and the directory of the workspace. It views the session's panes, agents and workspaces.
-    struct Facts {
-      ds::Array<PaneFact, tab_panes> panes{};
-      std::size_t count = 0;
-      std::uint64_t focused = 0;
-      std::string_view workspace;
-    };
-
-    // The fields of the session the facts are read from. A use case that changes the explorer's
-    // state names them one by one, so each is lent on its own while that state changes.
-    struct Sources {
-      const Panes& panes;
-      const Tabs& tabs;
-      ds::Option<TabLocation> active;
-      const ds::Vec<Agent<Memory>, Memory>& agents;
-      const features::nvim::State& editors;
-      const ds::Vec<Workspace<Memory>, Memory>& workspaces;
-    };
 
     // The agent the pane runs, if the runtime reports one there.
     tbc::val_a<const Agent<Memory>*> agentIn(tbc::ref_a<ds::Vec<Agent<Memory>, Memory>> agents, std::uint64_t pane) noexcept {
@@ -61,78 +34,54 @@ namespace telar::gui::application::explorer {
       return nullptr;
     }
 
-    // What the pane of `fact` runs: an editor, an agent, a shell or another program.
-    void name(tbc::mut_a<PaneFact> fact, tbc::holds<const Sources&, tbc::lt::a> sources) {
-      if (features::nvim::find(sources.editors, fact.id) != nullptr) {
-        fact.kind = PaneKind::editor;
-        fact.title = "nvim";
-      } else if (const auto* agent = agentIn(sources.agents, fact.id)) {
-        fact.kind = PaneKind::agent;
-        fact.title = !agent->display_name.view().empty() ? agent->display_name.view() : agent->provider_name.view();
+    // What the pane runs, and the name it shows: an editor, an agent, a shell or another program.
+    void name(Scene::Pane& kept, const Session& session, std::string_view foreground) {
+      if (features::nvim::find(session.nvim, kept.id) != nullptr) {
+        kept.kind = PaneKind::editor;
+        kept.title.assign("nvim");
+      } else if (const auto* agent = agentIn(session.agent_list.entries(), kept.id)) {
+        kept.kind = PaneKind::agent;
+        kept.title.assign(!agent->display_name.view().empty() ? agent->display_name.view() : agent->provider_name.view());
       } else {
-        fact.kind = isShell(fact.title) ? PaneKind::shell : PaneKind::program;
+        kept.kind = isShell(foreground) ? PaneKind::shell : PaneKind::program;
+        kept.title.assign(foreground);
       }
 
-      if (fact.title.empty()) {
-        fact.title = "shell";
-      }
-    }
-
-    void gather(tbc::mut_a<Facts> facts, tbc::holds<const Sources&, tbc::lt::a> sources) {
-      const auto* tab = activeTab(sources.tabs, sources.active);
-      if (tab == nullptr) {
-        return;
-      }
-
-      facts.focused = tab->focused_pane;
-      // The panes the session holds of the tab, which it knows before the runtime lists them.
-      for (const auto& pane : sources.panes) {
-        if (!sameTab(pane->location, tab->location) || pane->exited || facts.count == facts.panes.size()) {
-          continue;
-        }
-
-        auto& fact = facts.panes.atMut(facts.count);
-
-        fact = {.id = pane->id, .number = static_cast<std::uint16_t>(facts.count + 1), .title = pane->foreground.view(), .cwd = pane->cwd.view()};
-        name(fact, sources);
-        ++facts.count;
-      }
-
-      for (const auto& workspace : sources.workspaces) {
-        if (workspace.location.kind == tab->location.workspace.kind && workspace.location.id == tab->location.workspace.id) {
-          facts.workspace = workspace.path.view();
-        }
+      if (kept.title.empty()) {
+        kept.title.assign("shell");
       }
     }
 
-    // The facts of the session, which they view whole: for a use case that reads its explorer.
-    tbc::val_a<Facts> factsOf(tbc::ref_a<Session> session) {
-      Facts facts;
+    // The place in `scene` for one machine more; none past what a window keeps.
+    tbc::val_a<Scene::Machine*> place(tbc::mut_a<Scene> scene, const Host& host) {
+      if (scene.machine_count == scene_machines) {
+        return nullptr;
+      }
 
-      gather(facts, {.panes = session.panes, .tabs = session.tabs, .active = session.active_tab, .agents = session.agent_list.entries(), .editors = session.nvim, .workspaces = session.workspace_list.entries()});
-      return facts;
-    }
+      if (scene.machine_count == scene.machines.size()) {
+        scene.machines.push(Scene::Machine{scene.workspace.memory()});
+      }
 
-    // The context of the facts and of the machine: it views both.
-    tbc::val_a<Context> contextOf(tbc::ref_a<Facts> facts, tbc::ref_a<Host> host) noexcept {
-      return {.panes = facts.panes.view().first(facts.count), .focused = facts.focused, .workspace = facts.workspace, .home = host.home, .machine = host.name, .local = host.local};
-    }
+      auto& kept = scene.machines.atMut(scene.machine_count++);
 
-    // Runs `use`, a use case that changes the explorer's state, with that state and the context
-    // around it.
-    template <typename Use>
-    Action act(Session& session, const Host& host, const Use& use) {
-      Facts facts;
-
-      gather(facts, {.panes = session.panes, .tabs = session.tabs, .active = session.active_tab, .agents = session.agent_list.entries(), .editors = session.nvim, .workspaces = session.workspace_list.entries()});
-      return use(session.explorer, contextOf(facts, host));
+      kept.id = host.machine;
+      kept.label.assign(host.name);
+      kept.home.assign(host.home);
+      kept.local = host.local;
+      kept.reach = Reach::away;
+      return &kept;
     }
 
     // Asks the runtime for what the windows of the machine lack, while it may ask for more.
-    void reconcile(Session& session, const View& view, const Host& host) {
+    void reconcile(Session& session, const View& view, std::uint64_t machine) {
+      // A runtime that does not speak of files is asked for nothing: its windows say so.
+      if (!available(session)) {
+        return;
+      }
+
       session.explorer.finds = session.speaks(ClientTag::find_paths);
       while (session.ready()) {
-        const auto need = feature::need(view, session.explorer, host.machine);
+        const auto need = feature::need(view, session.explorer, machine);
         // A search follows what is typed, and waits for no answer on files to be asked.
         if (!need || (need->kind != feature::NeedKind::search && !feature::mayAsk(session.explorer))) {
           return;
@@ -155,6 +104,9 @@ namespace telar::gui::application::explorer {
           break;
         case feature::NeedKind::search:
           request = session.link.ask(feature::search(session.explorer, *need));
+          break;
+        case feature::NeedKind::home:
+          request = session.link.ask(LocateHome{});
           break;
         }
 
@@ -188,288 +140,268 @@ namespace telar::gui::application::explorer {
     }
 
     // Opens the paths the view gathered in the editor of the tab, from `pane` or, with none
-    // named, from the focused one.
-    void edit(Session& session, const View& view, std::uint64_t pane) {
+    // named, from the focused one. False when none of them opened.
+    bool edit(Session& session, const View& view, std::uint64_t pane) {
       if (pane == 0) {
         const auto* tab = activeTab(session.tabs, session.active_tab);
 
         pane = tab == nullptr ? 0 : tab->focused_pane;
       }
 
+      bool opened = false;
+
       for (const auto& path : view.paths) {
-        static_cast<void>(nvim::edit(session, pane, {.path = path.view()}));
+        opened = nvim::edit(session, pane, {.path = path.view()}) || opened;
+      }
+
+      return opened;
+    }
+
+    // Sends the runtime of `machine` its part of the plan.
+    void apply(Session& session, const View& view, std::uint64_t machine, bool overwrite) {
+      feature::Operations operations{};
+      const auto count = feature::operations(view, machine, operations);
+      if (count == 0 || session.explorer.applying != 0) {
+        return;
+      }
+
+      if (const auto request = session.link.ask(ChangeFiles{.overwrite = overwrite, .operations = operations.view().first(count)})) {
+        feature::applying(session.explorer, *request, false);
       }
     }
 
-    Effect perform(Session& session, View& view, const Host& host, const Action& action) {
-      switch (action.kind) {
-      case ActionKind::none:
-        return Effect::none;
-      case ActionKind::close:
-        feature::close(view);
-        return Effect::closed;
-      case ActionKind::copy:
-        return Effect::copy;
-      case ActionKind::insert:
-      case ActionKind::mention:
-        hand(session, action.pane, view.text.view());
-        if (action.kind == ActionKind::mention) {
-          workbench::focusPane(session, action.pane);
-        }
+  }
 
-        return leave(view);
-      case ActionKind::open:
-        edit(session, view, action.pane);
-        return leave(view);
-      case ActionKind::change_directory: {
-        ds::String<Memory> command{session.memory, "cd "};
+  Scene::Scene(Memory& made_in)
+      : panes(made_in),
+        machines(made_in),
+        workspace(made_in) {}
 
-        feature::appendTyped(command, view.text.view(), {.cwd = {}, .home = host.home});
-        session.runCommand(action.pane, command.view());
-        return leave(view);
-      }
-      case ActionKind::split:
-        static_cast<void>(workbench::splitAt(session, ClientLayoutAxis::horizontal, view.text.view()));
-        return leave(view);
-      case ActionKind::focus_pane:
-        workbench::focusPane(session, action.pane);
-        return leave(view);
-      case ActionKind::apply: {
-        feature::Operations operations{};
-        const auto count = feature::operations(view, host.machine, operations);
-        if (count == 0 || session.explorer.applying != 0) {
-          return Effect::none;
-        }
+  Scene::Pane::Pane(Memory& made_in)
+      : title(made_in),
+        cwd(made_in) {}
 
-        if (const auto request = session.link.ask(ChangeFiles{.overwrite = action.overwrite, .operations = operations.view().first(count)})) {
-          feature::applying(session.explorer, *request, false);
-        }
+  Scene::Machine::Machine(Memory& made_in)
+      : label(made_in),
+        home(made_in) {}
 
-        return Effect::none;
-      }
-      case ActionKind::undo:
-        if (session.explorer.applying == 0) {
-          if (const auto request = session.link.ask(UndoFileChanges{})) {
-            feature::applying(session.explorer, *request, true);
-          }
-        }
+  void clear(Scene& scene) noexcept {
+    scene.machine_count = 0;
+  }
 
-        return Effect::none;
-      case ActionKind::commit:
-        if (session.explorer.committing == 0 && !view.windows.empty()) {
-          if (const auto request = session.link.ask(CommitChanges{.path = feature::window(view).root.view(), .message = view.text.view()})) {
-            feature::committing(session.explorer, *request);
-          }
-        }
+  void observe(Scene& scene, const Session& session, std::uint64_t machine) {
+    scene.shown = machine;
+    scene.pane_count = 0;
+    scene.focused = 0;
+    scene.workspace.clear();
 
-        return Effect::none;
-      }
-
-      return Effect::none;
+    const auto* tab = activeTab(session.tabs, session.active_tab);
+    if (tab == nullptr) {
+      return;
     }
 
-    // What every use case ends with: the action done, and the runtime asked for what is lacking.
-    Effect finish(Session& session, View& view, const Host& host, const Action& action) {
-      const auto effect = perform(session, view, host, action);
+    scene.focused = tab->focused_pane;
+    // The panes the session holds of the tab, which it knows before the runtime lists them.
+    for (const auto& pane : session.panes) {
+      if (!sameTab(pane->location, tab->location) || pane->exited || scene.pane_count == scene_panes) {
+        continue;
+      }
 
-      reconcile(session, view, host);
-      return effect;
+      if (scene.pane_count == scene.panes.size()) {
+        scene.panes.push(Scene::Pane{scene.workspace.memory()});
+      }
+
+      auto& kept = scene.panes.atMut(scene.pane_count);
+
+      kept.id = pane->id;
+      kept.number = static_cast<std::uint16_t>(++scene.pane_count);
+      kept.cwd.assign(pane->cwd.view());
+      name(kept, session, pane->foreground.view());
     }
 
+    for (const auto& workspace : session.workspace_list.entries()) {
+      if (workspace.location.kind == tab->location.workspace.kind && workspace.location.id == tab->location.workspace.id) {
+        scene.workspace.assign(workspace.path.view());
+      }
+    }
+  }
+
+  void observe(Scene& scene, const Host& host, const Session& session) {
+    auto* kept = place(scene, host);
+    if (kept == nullptr) {
+      return;
+    }
+
+    // What the runtime says of its home is what `~` stands for there, whatever ui believed.
+    if (!session.explorer.home.empty()) {
+      kept->home.assign(session.explorer.home.view());
+    }
+
+    if (session.ready()) {
+      kept->reach = session.explores() ? Reach::answers : Reach::silent;
+    }
+  }
+
+  void observe(Scene& scene, const Host& host) {
+    static_cast<void>(place(scene, host));
+  }
+
+  tbc::val_a<Around> around(tbc::ref_a<Scene> scene) noexcept {
+    Around result;
+
+    result.focused = scene.focused;
+    result.shown = scene.shown;
+    result.workspace = scene.workspace.view();
+    result.pane_count = scene.pane_count;
+    for (std::size_t index = 0; index < scene.pane_count; ++index) {
+      const auto& kept = scene.panes[index];
+
+      result.panes.atMut(index) = {.id = kept.id, .number = kept.number, .kind = kept.kind, .title = kept.title.view(), .cwd = kept.cwd.view()};
+    }
+
+    result.machine_count = scene.machine_count;
+    for (std::size_t index = 0; index < scene.machine_count; ++index) {
+      const auto& kept = scene.machines[index];
+
+      result.machines.atMut(index) = {.id = kept.id, .label = kept.label.view(), .local = kept.local, .reach = kept.reach};
+      result.homes.atMut(index) = kept.home.view();
+    }
+
+    return result;
+  }
+
+  tbc::val_a<Context> contextOf(tbc::ref_a<Around> around, std::uint64_t machine) noexcept {
+    Context context{
+        .panes = around.panes.view().first(around.pane_count),
+        .focused = around.focused,
+        .workspace = around.workspace,
+        .reach = Reach::away,
+        .host = machine,
+        .shown = around.shown,
+        .machines = around.machines.view().first(around.machine_count),
+    };
+
+    for (std::size_t index = 0; index < around.machine_count; ++index) {
+      const auto& known = around.machines[index];
+      if (known.id == machine) {
+        context.home = around.homes[index];
+        context.machine = known.label;
+        context.local = known.local;
+        context.reach = known.reach;
+      }
+    }
+
+    return context;
   }
 
   bool available(const Session& session) noexcept {
     return session.ready() && session.explores();
   }
 
-  bool open(Session& session, View& view, const Host& host) {
-    if (!available(session)) {
-      return false;
-    }
-
-    const auto facts = factsOf(session);
-
-    session.explorer.finds = session.speaks(ClientTag::find_paths);
-    feature::open(view, session.explorer, contextOf(facts, host), host.machine);
-    reconcile(session, view, host);
-    return true;
-  }
-
-  void close(View& view) noexcept {
-    feature::close(view);
-  }
-
-  Effect press(Session& session, View& view, const Host& host, KeyChord chord) {
-    const auto action = act(session, host, [&](feature::State& state, const Context& context) {
-      return feature::press(view, state, context, chord);
-    });
-
-    return finish(session, view, host, action);
-  }
-
-  void typed(Session& session, View& view, const Host& host, std::string_view text) {
-    const auto facts = factsOf(session);
-
-    feature::typed(view, session.explorer, contextOf(facts, host), text);
-    reconcile(session, view, host);
-  }
-
-  Effect submit(Session& session, View& view, const Host& host, std::string_view text) {
-    const auto action = act(session, host, [&](feature::State& state, const Context& context) {
-      return feature::submit(view, state, context, text);
-    });
-
-    return finish(session, view, host, action);
-  }
-
-  void complete(Session& session, View& view, const Host& host, std::string_view line) {
-    const auto facts = factsOf(session);
-
-    feature::complete(view, session.explorer, contextOf(facts, host), line);
-    reconcile(session, view, host);
-  }
-
-  void cancel(Session& session, View& view, const Host& host) {
-    const auto facts = factsOf(session);
-
-    feature::cancel(view, session.explorer, contextOf(facts, host));
-    reconcile(session, view, host);
-  }
-
-  void select(Session& session, View& view, const Host& host, const Pick& pick) {
-    const auto facts = factsOf(session);
-
-    feature::select(view, session.explorer, contextOf(facts, host), pick);
-    reconcile(session, view, host);
-  }
-
-  Effect activate(Session& session, View& view, const Host& host, const Pick& pick) {
-    const auto action = act(session, host, [&](feature::State& state, const Context& context) {
-      return feature::activate(view, state, context, pick);
-    });
-
-    return finish(session, view, host, action);
-  }
-
-  void toggle(Session& session, View& view, const Host& host, const Pick& pick) {
-    const auto facts = factsOf(session);
-
-    feature::toggle(view, session.explorer, contextOf(facts, host), pick);
-    reconcile(session, view, host);
-  }
-
-  void openMenu(Session& session, View& view, const Host& host, const Pick& pick) {
-    const auto facts = factsOf(session);
-
-    feature::openMenu(view, session.explorer, contextOf(facts, host), pick);
-    reconcile(session, view, host);
-  }
-
-  Effect chooseMenu(Session& session, View& view, const Host& host, std::size_t line) {
-    const auto action = act(session, host, [&](feature::State& state, const Context& context) {
-      return feature::chooseMenu(view, state, context, line);
-    });
-
-    return finish(session, view, host, action);
-  }
-
-  std::size_t grab(Session& session, View& view, const Host& host, const Pick& pick) {
-    const auto facts = factsOf(session);
-    const auto carried = feature::grab(view, session.explorer, contextOf(facts, host), pick);
-
-    reconcile(session, view, host);
-    return carried;
-  }
-
-  Aim aim(const Session& session, const View& view, const Host& host, const Drop& drop) {
-    const auto facts = factsOf(session);
-
-    return feature::aim(view, session.explorer, contextOf(facts, host), drop);
-  }
-
-  void drop(Session& session, View& view, const Host& host, const Drop& drop) {
-    const auto facts = factsOf(session);
-
-    feature::drop(view, session.explorer, contextOf(facts, host), drop);
-    reconcile(session, view, host);
-  }
-
-  void release(View& view) noexcept {
-    feature::release(view);
-  }
-
-  void resize(View& view, const WindowRows& shown) noexcept {
-    feature::resize(view, shown);
-  }
-
-  void scroll(View& view, const WindowRows& moved) noexcept {
-    feature::scroll(view, moved);
-  }
-
-  bool refresh(Session& session, View& view, const Host& host) {
+  bool refresh(Session& session, View& view, const Context& context) {
     if (!view.open) {
       return false;
     }
 
     const auto before = view.revision;
-    const auto facts = factsOf(session);
-    const auto context = contextOf(facts, host);
 
-    feature::settle(view, session.explorer, context, host.machine);
-    if (feature::follow(view, context, host.machine)) {
-      feature::rebuild(view, session.explorer, context, host.machine);
+    feature::settle(view, session.explorer, context, context.host);
+    // A window follows a pane of the machine that shows, and of no other.
+    if (context.host == context.shown && feature::follow(view, context, context.host)) {
+      feature::rebuild(view, session.explorer, context, context.host);
     } else {
-      feature::absorb(view, session.explorer, context, host.machine);
+      feature::absorb(view, session.explorer, context, context.host);
     }
 
-    reconcile(session, view, host);
+    reconcile(session, view, context.host);
     return view.revision != before;
   }
 
-  RowLook look(const Session& session, const View& view, const Host& host, const Pick& pick) {
-    const auto facts = factsOf(session);
+  Effect deliver(Session& session, View& view, const Context& context, const Action& action) {
+    switch (action.kind) {
+    case ActionKind::none:
+    case ActionKind::apply:
+    case ActionKind::undo:
+    case ActionKind::commit:
+      return Effect::none;
+    case ActionKind::close:
+      feature::close(view);
+      return Effect::closed;
+    case ActionKind::copy:
+      return Effect::copy;
+    case ActionKind::insert:
+    case ActionKind::mention:
+      hand(session, action.pane, view.text.view());
+      if (action.kind == ActionKind::mention) {
+        workbench::focusPane(session, action.pane);
+      }
 
-    return feature::look(view, session.explorer, contextOf(facts, host), pick);
+      return leave(view);
+    case ActionKind::open:
+      // The session of the machine the files are on opens them.
+      return leave(view);
+    case ActionKind::change_directory: {
+      ds::String<Memory> command{session.memory, "cd "};
+
+      feature::appendTyped(command, view.text.view(), {.cwd = {}, .home = context.home});
+      session.runCommand(action.pane, command.view());
+      return leave(view);
+    }
+    case ActionKind::split:
+      static_cast<void>(workbench::splitAt(session, ClientLayoutAxis::horizontal, view.text.view()));
+      return leave(view);
+    case ActionKind::focus_pane:
+      workbench::focusPane(session, action.pane);
+      return leave(view);
+    }
+
+    return Effect::none;
   }
 
-  HeaderLook header(const Session& session, const View& view, const Host& host, std::size_t window) {
-    const auto facts = factsOf(session);
+  bool send(Session& session, View& view, const Context& context, const Action& action) {
+    switch (action.kind) {
+    case ActionKind::none:
+    case ActionKind::close:
+    case ActionKind::copy:
+    case ActionKind::insert:
+    case ActionKind::mention:
+    case ActionKind::change_directory:
+    case ActionKind::split:
+    case ActionKind::focus_pane:
+      return true;
+    case ActionKind::open:
+      // From the pane the keys named when it is of this session, else from its focused one.
+      if (action.machine == context.host && !edit(session, view, context.host == context.shown ? action.pane : 0)) {
+        ds::String<Memory> said{session.memory};
 
-    return feature::header(view, session.explorer, contextOf(facts, host), window);
-  }
+        ds::formatTo(said, "No editor opens on {}: its runtime has none, or no tab to put it in", context.machine);
+        feature::refuse(view, said.view());
+        return false;
+      }
 
-  StatusLook status(const Session& session, const View& view, const Host& host, std::size_t window) {
-    const auto facts = factsOf(session);
+      return true;
+    case ActionKind::apply:
+      apply(session, view, context.host, action.overwrite);
+      return true;
+    case ActionKind::undo:
+      if (session.explorer.applying == 0 && std::ranges::contains(view.wrote, context.host)) {
+        if (const auto request = session.link.ask(UndoFileChanges{})) {
+          feature::applying(session.explorer, *request, true);
+        }
+      }
 
-    return feature::status(view, session.explorer, contextOf(facts, host), window);
-  }
+      return true;
+    case ActionKind::commit:
+      if (action.machine == context.host && session.explorer.committing == 0 && !view.windows.empty()) {
+        if (const auto request = session.link.ask(CommitChanges{.path = feature::window(view).root.view(), .message = view.text.view()})) {
+          feature::committing(session.explorer, *request);
+        }
+      }
 
-  Hints hints(const Session& session, const View& view, const Host& host) {
-    const auto facts = factsOf(session);
+      return true;
+    }
 
-    return feature::hints(view, session.explorer, contextOf(facts, host));
-  }
-
-  ds::Array<LensLook, lens_count> lenses(const Session& session, const View& view, const Host& host) {
-    const auto facts = factsOf(session);
-
-    return feature::lenses(view, session.explorer, contextOf(facts, host));
-  }
-
-  tbc::val_a<std::string_view> previewText(tbc::ref_a<Session> session, const View& view) noexcept {
-    return feature::previewText(view, session.explorer);
-  }
-
-  PreviewLook preview(const Session& session, const View& view, const Host& host, std::uint64_t now_seconds) {
-    const auto facts = factsOf(session);
-
-    return feature::preview(view, session.explorer, contextOf(facts, host), now_seconds);
-  }
-
-  MenuLook menu(const Session& session, const View& view, const Host& host) {
-    const auto facts = factsOf(session);
-
-    return feature::menu(view, session.explorer, contextOf(facts, host));
+    return true;
   }
 
 }

@@ -85,7 +85,7 @@ namespace telar::gui::qt {
       std::string_view label;
     };
 
-    constexpr ds::Array<HelpKey, 51> help_keys{
+    constexpr ds::Array<HelpKey, 56> help_keys{
         {
             {.group = "Moving", .keys = "j k", .label = "down, up; with a count"},
             {.group = "Moving", .keys = "gg G", .label = "first, last; 12G goes to row 12"},
@@ -112,6 +112,11 @@ namespace telar::gui::qt {
             {.group = "Windows", .keys = "<C-w>w <C-w>hjkl", .label = "the next window, the one that way"},
             {.group = "Windows", .keys = "<C-w>q <C-w>o", .label = "close this one, keep only this one"},
             {.group = "Windows", .keys = ":e PATH :vs PATH", .label = "this window, or a new one, at a path"},
+            {.group = "Machines", .keys = "gm", .label = "this window on the next machine"},
+            {.group = "Machines", .keys = ":machine LABEL", .label = "go to a machine; alone, list them"},
+            {.group = "Machines", .keys = ":e LABEL:PATH", .label = "a path of another machine; :vs and :sp too"},
+            {.group = "Machines", .keys = "mA 'A", .label = "a mark in upper case keeps its machine"},
+            {.group = "Machines", .keys = "gf yy", .label = "open where the file is; copy LABEL:/path"},
             {.group = "Toward the panes", .keys = "<CR>", .label = "as the focused pane takes it"},
             {.group = "Toward the panes", .keys = "V <CR>", .label = "insert several, directories too"},
             {.group = "Toward the panes", .keys = "gf", .label = "open in the tab's editor"},
@@ -197,33 +202,112 @@ namespace telar::gui::qt {
       return result;
     }
 
+    // The number the explorer's windows carry for the machine in a slot of the window: never 0.
+    constexpr std::uint64_t explorerMachine(std::size_t slot) noexcept {
+      return static_cast<std::uint64_t>(slot) + 1;
+    }
+
+    // The session of the machine in `slot`, if the window holds a client for it.
+    tbc::val_a<const GuiSession*> explorerSession(tbc::ref_a<Store> store, std::size_t slot) noexcept {
+      const auto& clients = store.clients();
+
+      return slot < clients.size() && clients[slot] ? &(*clients[slot])->session : nullptr;
+    }
+
+    tbc::val_a<GuiSession*> explorerSessionMut(tbc::mut_a<Store> store, std::size_t slot) noexcept {
+      return explorerSession(store, slot) == nullptr ? nullptr : &store.clientMut(static_cast<application::machines::Machines::Slot>(slot)).session;
+    }
+
+    // The cache a use case changes on the machine of its window: the one its session holds, or
+    // `away`, which holds nothing, for a machine the window has no client for.
+    tbc::val_a<explorer::State&> explorerCacheMut(tbc::mut_a<Store> store, tbc::mut_a<explorer::State> away, std::uint64_t machine) noexcept {
+      auto* session = machine == 0 ? nullptr : explorerSessionMut(store, static_cast<std::size_t>(machine - 1));
+
+      return session == nullptr ? away : session->explorer;
+    }
+
+    // Whether the window keeps a machine in `slot`.
+    bool keepsMachine(const Store& store, std::size_t slot) noexcept {
+      const auto rows = store.machines().rows();
+
+      return slot < rows.size() && rows[slot].used;
+    }
+
   }
 
   ExplorerController::ExplorerController(Store& store, ApplicationAllocator& memory, QObject* parent)
       : QObject(parent),
         store_(store),
         view_(memory),
-        home_(QDir::homePath().toUtf8()) {
+        home_(QDir::homePath().toUtf8()),
+        scene_(memory),
+        away_(memory) {
     // A model an invokable hands to QML with no parent would be the engine's to delete.
     for (auto& model : rows_.viewMut()) {
       model.setParent(this);
     }
   }
 
-  explorer::Host ExplorerController::host() const {
+  void ExplorerController::observe() {
     const auto& machines = store_.machines();
     const auto rows = machines.rows();
-    const auto active = machines.active();
-    const bool local = active == application::machines::Machines::local_slot;
 
-    label_ = active < rows.size() ? QByteArray{rows[active].label.view().data(), static_cast<qsizetype>(rows[active].label.view().size())} : QByteArray{};
-    return {
-        .machine = static_cast<std::uint64_t>(active) + 1,
-        .name = {label_.constData(), static_cast<std::size_t>(label_.size())},
-        // The home of another machine's account is not known here.
-        .home = local ? std::string_view{home_.constData(), static_cast<std::size_t>(home_.size())} : std::string_view{},
-        .local = local,
-    };
+    shown_ = machines.active();
+    explorer::clear(scene_);
+    explorer::observe(scene_, store_.session(), explorerMachine(shown_));
+    for (std::size_t slot = 0; slot < rows.size(); ++slot) {
+      if (!rows[slot].used) {
+        continue;
+      }
+
+      const bool local = slot == application::machines::Machines::local_slot;
+      const explorer::Host host{
+          .machine = explorerMachine(slot),
+          .name = rows[slot].label.view(),
+          // The home of another machine's account is what its runtime says, once it does.
+          .home = local ? std::string_view{home_.constData(), static_cast<std::size_t>(home_.size())} : std::string_view{},
+          .local = local,
+      };
+
+      if (const auto* session = explorerSession(store_, slot)) {
+        explorer::observe(scene_, host, *session);
+      } else {
+        explorer::observe(scene_, host);
+      }
+    }
+  }
+
+  const explorer::State& ExplorerController::cacheOf(std::uint64_t machine) const noexcept {
+    const auto* session = machine == 0 ? nullptr : explorerSession(store_, static_cast<std::size_t>(machine - 1));
+
+    return session == nullptr ? away_ : session->explorer;
+  }
+
+  std::uint64_t ExplorerController::machineOf(std::size_t window) const noexcept {
+    return window < view_.windows.size() ? view_.windows[window]->machine : scene_.shown;
+  }
+
+  bool ExplorerController::refresh() {
+    const auto around = explorer::around(scene_);
+    const auto machines = store_.machines().rows().size();
+    const auto before = view_.revision;
+
+    for (std::size_t slot = 0; slot < machines; ++slot) {
+      if (!keepsMachine(store_, slot)) {
+        continue;
+      }
+
+      const auto context = explorer::contextOf(around, explorerMachine(slot));
+
+      if (auto* session = explorerSessionMut(store_, slot)) {
+        static_cast<void>(explorer::refresh(*session, view_, context));
+      } else {
+        // A machine that is away shows what its windows say of it, from a cache that holds nothing.
+        explorer::absorb(view_, away_, context, context.host);
+      }
+    }
+
+    return view_.revision != before;
   }
 
   bool ExplorerController::available() const {
@@ -242,15 +326,15 @@ namespace telar::gui::qt {
     return window >= 0 && static_cast<std::size_t>(window) < rows_.size() ? &rows_.atMut(static_cast<std::size_t>(window)) : nullptr;
   }
 
-  QVariantList ExplorerController::describeWindows() const {
-    const auto& session = store_.session();
-    const auto machine = host();
+  QVariantList ExplorerController::describeWindows(const explorer::Around& around) const {
     QVariantList result;
 
     for (std::size_t index = 0; index < view_.windows.size(); ++index) {
       const auto& window = *view_.windows[index];
-      const auto header = explorer::header(session, view_, machine, index);
-      const auto status = explorer::status(session, view_, machine, index);
+      const auto& cache = cacheOf(window.machine);
+      const auto context = explorer::contextOf(around, window.machine);
+      const auto header = explorer::header(view_, cache, context, index);
+      const auto status = explorer::status(view_, cache, context, index);
 
       result.push_back(QVariantMap{
           {QStringLiteral("index"), static_cast<int>(index)},
@@ -293,14 +377,16 @@ namespace telar::gui::qt {
     return result;
   }
 
-  QVariantList ExplorerController::describeLenses() const {
+  QVariantList ExplorerController::describeLenses(const explorer::Around& around) const {
     QVariantList result;
 
     if (view_.windows.empty()) {
       return result;
     }
 
-    for (const auto& lens : explorer::lenses(store_.session(), view_, host())) {
+    const auto machine = machineOf(view_.current);
+
+    for (const auto& lens : explorer::lenses(view_, cacheOf(machine), explorer::contextOf(around, machine))) {
       result.push_back(QVariantMap{
           {QStringLiteral("name"), toQString(lens.name)},
           {QStringLiteral("count"), lens.count},
@@ -350,14 +436,15 @@ namespace telar::gui::qt {
     return result;
   }
 
-  QVariantList ExplorerController::describeHints() const {
+  QVariantList ExplorerController::describeHints(const explorer::Around& around) const {
     QVariantList result;
 
     if (view_.windows.empty()) {
       return result;
     }
 
-    const auto hints = explorer::hints(store_.session(), view_, host());
+    const auto machine = machineOf(view_.current);
+    const auto hints = explorer::hints(view_, cacheOf(machine), explorer::contextOf(around, machine));
 
     for (std::size_t index = 0; index < hints.count; ++index) {
       const auto& hint = hints.items[index];
@@ -368,12 +455,14 @@ namespace telar::gui::qt {
     return result;
   }
 
-  QVariantMap ExplorerController::describePreview() const {
+  QVariantMap ExplorerController::describePreview(const explorer::Around& around) const {
     if (view_.windows.empty()) {
       return {};
     }
 
-    const auto look = explorer::preview(store_.session(), view_, host(), static_cast<std::uint64_t>(QDateTime::currentSecsSinceEpoch()));
+    const auto machine = machineOf(view_.current);
+    const auto& cache = cacheOf(machine);
+    const auto look = explorer::preview(view_, cache, explorer::contextOf(around, machine), static_cast<std::uint64_t>(QDateTime::currentSecsSinceEpoch()));
     if (!look.shown) {
       return {{QStringLiteral("shown"), false}};
     }
@@ -394,7 +483,7 @@ namespace telar::gui::qt {
 
     // The text a line at a time, each with what it is in a diff.
     QVariantList lines;
-    auto rest = explorer::previewText(store_.session(), view_);
+    auto rest = explorer::previewText(view_, cache);
 
     while (!rest.empty() && lines.size() < preview_lines) {
       const auto end = rest.find('\n');
@@ -422,8 +511,9 @@ namespace telar::gui::qt {
     return result;
   }
 
-  QVariantMap ExplorerController::describeMenu() const {
-    const auto look = explorer::menu(store_.session(), view_, host());
+  QVariantMap ExplorerController::describeMenu(const explorer::Around& around) const {
+    const auto machine = machineOf(view_.current);
+    const auto look = explorer::menu(view_, cacheOf(machine), explorer::contextOf(around, machine));
     QVariantList lines;
 
     for (std::size_t index = 0; index < look.count; ++index) {
@@ -453,15 +543,22 @@ namespace telar::gui::qt {
     };
   }
 
-  QVariantList ExplorerController::describePlan() const {
+  QVariantList ExplorerController::describePlan(const explorer::Around& around) const {
     QVariantList result;
-    const auto home = host().home;
+    const auto here = machineOf(view_.current);
     const auto root = view_.windows.empty() ? std::string_view{} : view_.windows[view_.current]->root.view();
+    // A plan for more than one machine says the machine of each line.
+    const bool several = std::ranges::any_of(view_.plan, [&](const explorer::PlanStep& step) {
+      return step.machine != view_.plan[0].machine;
+    });
 
     for (const auto& step : view_.plan) {
-      // A path below the window's root reads from there; another one from the home, or whole.
+      const auto context = explorer::contextOf(around, step.machine);
+      const auto home = context.home;
+      // A path below the root of the window that has the keys reads from there, when it is of
+      // its machine; another one from the home, or whole.
       const auto shown = [&](std::string_view path) {
-        if (root.size() > 1 && path.starts_with(root) && path.size() > root.size() && path[root.size()] == '/') {
+        if (step.machine == here && root.size() > 1 && path.starts_with(root) && path.size() > root.size() && path[root.size()] == '/') {
           return toQString(path.substr(root.size() + 1));
         }
 
@@ -473,6 +570,7 @@ namespace telar::gui::qt {
           {QStringLiteral("source"), shown(step.source.view())},
           {QStringLiteral("target"), shown(step.target.view())},
           {QStringLiteral("directory"), step.directory},
+          {QStringLiteral("machine"), several ? toQString(context.machine) : QString{}},
       });
     }
 
@@ -511,12 +609,12 @@ namespace telar::gui::qt {
     return menu_;
   }
 
-  QVariantMap ExplorerController::record(std::size_t window, std::size_t row) const {
-    const auto look = explorer::look(store_.session(), view_, host(), {.window = window, .row = row});
+  QVariantMap ExplorerController::record(const explorer::State& cache, const explorer::Context& context, explorer::Pick pick) const {
+    const auto look = explorer::look(view_, cache, context, pick);
     const bool entry = look.kind == RowKind::entry || look.kind == RowKind::added || look.kind == RowKind::change || look.kind == RowKind::match;
     QVariantMap result{
         {QStringLiteral("kind"), QString::fromLatin1(kind_names[static_cast<std::size_t>(look.kind)])},
-        {QStringLiteral("index"), static_cast<int>(row)},
+        {QStringLiteral("index"), static_cast<int>(pick.row)},
         {QStringLiteral("depth"), static_cast<int>(look.depth)},
         {QStringLiteral("directory"), look.directory},
         {QStringLiteral("expanded"), look.expanded},
@@ -541,7 +639,7 @@ namespace telar::gui::qt {
         {QStringLiteral("marks"), fixedText(look.marks)},
         {QStringLiteral("panes"), numbers(look.panes.view().first(look.pane_count))},
         {QStringLiteral("note"), fixedText(look.note)},
-        {QStringLiteral("editing"), view_.mode == Mode::insert && window == view_.current && look.selected},
+        {QStringLiteral("editing"), view_.mode == Mode::insert && pick.window == view_.current && look.selected},
     };
 
     if (entry) {
@@ -552,16 +650,21 @@ namespace telar::gui::qt {
   }
 
   void ExplorerController::publish() {
+    const auto around = explorer::around(scene_);
+
     for (std::size_t index = 0; index < rows_.size(); ++index) {
       QList<QVariantMap> records;
 
       if (index < view_.windows.size()) {
         const auto& window = *view_.windows[index];
         const auto end = std::min(window.rows.size(), window.top + window.page);
+        // The cache and the facts of the window's machine, found once for all its rows.
+        const auto& cache = cacheOf(window.machine);
+        const auto context = explorer::contextOf(around, window.machine);
 
         records.reserve(static_cast<qsizetype>(end - std::min(window.top, end)));
         for (auto row = window.top; row < end; ++row) {
-          records.push_back(record(index, row));
+          records.push_back(record(cache, context, {.window = index, .row = row}));
         }
       }
 
@@ -576,13 +679,33 @@ namespace telar::gui::qt {
       }
     };
 
-    tell(windows_, describeWindows(), &ExplorerController::windowsChanged);
-    tell(lenses_, describeLenses(), &ExplorerController::lensesChanged);
+    tell(windows_, describeWindows(around), &ExplorerController::windowsChanged);
+    tell(lenses_, describeLenses(around), &ExplorerController::lensesChanged);
     tell(line_, describeLine(), &ExplorerController::lineChanged);
-    tell(hints_, describeHints(), &ExplorerController::hintsChanged);
-    tell(preview_, describePreview(), &ExplorerController::previewChanged);
-    tell(plan_, describePlan(), &ExplorerController::planChanged);
-    tell(menu_, describeMenu(), &ExplorerController::menuChanged);
+    tell(hints_, describeHints(around), &ExplorerController::hintsChanged);
+    tell(preview_, describePreview(around), &ExplorerController::previewChanged);
+    tell(plan_, describePlan(around), &ExplorerController::planChanged);
+    tell(menu_, describeMenu(around), &ExplorerController::menuChanged);
+  }
+
+  void ExplorerController::finish(const explorer::Action& action) {
+    const auto around = explorer::around(scene_);
+    const auto machines = store_.machines().rows().size();
+    // What is asked of a runtime goes to the session of each machine, which takes its own part;
+    // what goes to a pane, to the session that shows them.
+    bool sent = true;
+
+    for (std::size_t slot = 0; slot < machines; ++slot) {
+      if (auto* session = keepsMachine(store_, slot) ? explorerSessionMut(store_, slot) : nullptr) {
+        sent = explorer::send(*session, view_, explorer::contextOf(around, explorerMachine(slot)), action) && sent;
+      }
+    }
+
+    finish(sent ? explorer::deliver(store_.sessionMut(), view_, explorer::contextOf(around, scene_.shown), action) : Effect::none);
+    // Files opened in an editor of another machine show once the window shows that machine.
+    if (sent && action.kind == explorer::ActionKind::open && action.machine != scene_.shown && action.machine != 0 && keepsMachine(store_, static_cast<std::size_t>(action.machine - 1))) {
+      emit machineRequested(store_.machines().token(static_cast<application::machines::Machines::Slot>(action.machine - 1)));
+    }
   }
 
   void ExplorerController::finish(Effect effect) {
@@ -592,6 +715,9 @@ namespace telar::gui::qt {
       }
     }
 
+    // A window may have gone to another machine, whose cache builds it; each runtime is asked
+    // for what its windows now lack.
+    static_cast<void>(refresh());
     store_.touch();
     revision_ = view_.revision;
     publish();
@@ -629,7 +755,12 @@ namespace telar::gui::qt {
     }
 
     try {
-      finish(explorer::press(store_.sessionMut(), view_, host(), chord));
+      observe();
+
+      const auto around = explorer::around(scene_);
+      const auto machine = machineOf(view_.current);
+
+      finish(explorer::press(view_, explorerCacheMut(store_, away_, machine), explorer::contextOf(around, machine), chord));
     } catch (const std::exception& error) {
       emit failed(QString::fromUtf8(error.what()));
     }
@@ -640,7 +771,12 @@ namespace telar::gui::qt {
   void ExplorerController::typed(const QString& text) {
     const auto bytes = text.toUtf8();
 
-    explorer::typed(store_.sessionMut(), view_, host(), {bytes.constData(), static_cast<std::size_t>(bytes.size())});
+    observe();
+
+    const auto around = explorer::around(scene_);
+    const auto machine = machineOf(view_.current);
+
+    explorer::typed(view_, cacheOf(machine), explorer::contextOf(around, machine), {bytes.constData(), static_cast<std::size_t>(bytes.size())});
     finish(Effect::none);
   }
 
@@ -648,21 +784,36 @@ namespace telar::gui::qt {
     const auto bytes = text.toUtf8();
 
     try {
-      finish(explorer::submit(store_.sessionMut(), view_, host(), {bytes.constData(), static_cast<std::size_t>(bytes.size())}));
+      observe();
+
+      const auto around = explorer::around(scene_);
+      const auto machine = machineOf(view_.current);
+
+      finish(explorer::submit(view_, explorerCacheMut(store_, away_, machine), explorer::contextOf(around, machine), {bytes.constData(), static_cast<std::size_t>(bytes.size())}));
     } catch (const std::exception& error) {
       emit failed(QString::fromUtf8(error.what()));
     }
   }
 
   void ExplorerController::cancel() {
-    explorer::cancel(store_.sessionMut(), view_, host());
+    observe();
+
+    const auto around = explorer::around(scene_);
+    const auto machine = machineOf(view_.current);
+
+    explorer::cancel(view_, cacheOf(machine), explorer::contextOf(around, machine));
     finish(Effect::none);
   }
 
   void ExplorerController::complete(const QString& text) {
     const auto bytes = text.toUtf8();
 
-    explorer::complete(store_.sessionMut(), view_, host(), {bytes.constData(), static_cast<std::size_t>(bytes.size())});
+    observe();
+
+    const auto around = explorer::around(scene_);
+    const auto machine = machineOf(view_.current);
+
+    explorer::complete(view_, cacheOf(machine), explorer::contextOf(around, machine), {bytes.constData(), static_cast<std::size_t>(bytes.size())});
     finish(Effect::none);
   }
 
@@ -671,7 +822,12 @@ namespace telar::gui::qt {
       return;
     }
 
-    explorer::select(store_.sessionMut(), view_, host(), {.window = static_cast<std::size_t>(window), .row = static_cast<std::size_t>(row), .extend = extend, .toggle = toggle});
+    observe();
+
+    const auto around = explorer::around(scene_);
+    const auto machine = machineOf(static_cast<std::size_t>(window));
+
+    explorer::select(view_, cacheOf(machine), explorer::contextOf(around, machine), {.window = static_cast<std::size_t>(window), .row = static_cast<std::size_t>(row), .extend = extend, .toggle = toggle});
     finish(Effect::none);
   }
 
@@ -681,7 +837,12 @@ namespace telar::gui::qt {
     }
 
     menu_at_ = place;
-    explorer::openMenu(store_.sessionMut(), view_, host(), pickOf(window, row));
+    observe();
+
+    const auto around = explorer::around(scene_);
+    const auto machine = machineOf(static_cast<std::size_t>(window));
+
+    explorer::openMenu(view_, cacheOf(machine), explorer::contextOf(around, machine), pickOf(window, row));
     finish(Effect::none);
   }
 
@@ -691,7 +852,12 @@ namespace telar::gui::qt {
     }
 
     try {
-      finish(explorer::chooseMenu(store_.sessionMut(), view_, host(), static_cast<std::size_t>(line)));
+      observe();
+
+      const auto around = explorer::around(scene_);
+      const auto machine = machineOf(view_.current);
+
+      finish(explorer::chooseMenu(view_, explorerCacheMut(store_, away_, machine), explorer::contextOf(around, machine), static_cast<std::size_t>(line)));
     } catch (const std::exception& error) {
       emit failed(QString::fromUtf8(error.what()));
     }
@@ -710,7 +876,11 @@ namespace telar::gui::qt {
       return 0;
     }
 
-    const auto carried = explorer::grab(store_.sessionMut(), view_, host(), pickOf(window, row));
+    observe();
+
+    const auto around = explorer::around(scene_);
+    const auto machine = machineOf(static_cast<std::size_t>(window));
+    const auto carried = explorer::grab(view_, cacheOf(machine), explorer::contextOf(around, machine), pickOf(window, row));
 
     finish(Effect::none);
     return static_cast<int>(carried);
@@ -722,7 +892,9 @@ namespace telar::gui::qt {
     }
 
     const auto pick = pickOf(window, row);
-    const auto aimed = explorer::aim(store_.session(), view_, host(), {.window = pick.window, .row = pick.row, .copy = copy});
+    const auto around = explorer::around(scene_);
+    const auto machine = machineOf(pick.window);
+    const auto aimed = explorer::aim(view_, cacheOf(machine), explorer::contextOf(around, machine), {.window = pick.window, .row = pick.row, .copy = copy});
 
     return {{QStringLiteral("count"), static_cast<int>(aimed.count)}, {QStringLiteral("row"), aimed.row ? static_cast<int>(*aimed.row) : -1}};
   }
@@ -735,7 +907,12 @@ namespace telar::gui::qt {
 
     const auto pick = pickOf(window, row);
 
-    explorer::drop(store_.sessionMut(), view_, host(), {.window = pick.window, .row = pick.row, .copy = copy});
+    observe();
+
+    const auto around = explorer::around(scene_);
+    const auto machine = machineOf(pick.window);
+
+    explorer::drop(view_, cacheOf(machine), explorer::contextOf(around, machine), {.window = pick.window, .row = pick.row, .copy = copy});
     finish(Effect::none);
   }
 
@@ -749,7 +926,12 @@ namespace telar::gui::qt {
     }
 
     try {
-      finish(explorer::activate(store_.sessionMut(), view_, host(), {.window = static_cast<std::size_t>(window), .row = static_cast<std::size_t>(row)}));
+      observe();
+
+      const auto around = explorer::around(scene_);
+      const auto machine = machineOf(static_cast<std::size_t>(window));
+
+      finish(explorer::activate(view_, explorerCacheMut(store_, away_, machine), explorer::contextOf(around, machine), {.window = static_cast<std::size_t>(window), .row = static_cast<std::size_t>(row)}));
     } catch (const std::exception& error) {
       emit failed(QString::fromUtf8(error.what()));
     }
@@ -760,7 +942,12 @@ namespace telar::gui::qt {
       return;
     }
 
-    explorer::toggle(store_.sessionMut(), view_, host(), {.window = static_cast<std::size_t>(window), .row = static_cast<std::size_t>(row)});
+    observe();
+
+    const auto around = explorer::around(scene_);
+    const auto machine = machineOf(static_cast<std::size_t>(window));
+
+    explorer::toggle(view_, cacheOf(machine), explorer::contextOf(around, machine), {.window = static_cast<std::size_t>(window), .row = static_cast<std::size_t>(row)});
     finish(Effect::none);
   }
 
@@ -822,11 +1009,19 @@ namespace telar::gui::qt {
       return;
     }
 
-    if (!explorer::open(store_.sessionMut(), view_, host())) {
+    if (!explorer::available(store_.session())) {
       emit failed(QStringLiteral("This machine's runtime does not answer the explorer; update telar there"));
       return;
     }
 
+    observe();
+    {
+      const auto around = explorer::around(scene_);
+
+      explorer::open(view_, cacheOf(scene_.shown), explorer::contextOf(around, scene_.shown), scene_.shown);
+    }
+
+    static_cast<void>(refresh());
     revision_ = view_.revision;
     publish();
     emit changed();
@@ -838,7 +1033,8 @@ namespace telar::gui::qt {
       return;
     }
 
-    if (explorer::refresh(store_.sessionMut(), view_, host()) || revision_ != view_.revision) {
+    observe();
+    if (refresh() || revision_ != view_.revision) {
       revision_ = view_.revision;
       publish();
       emit changed();
@@ -846,9 +1042,32 @@ namespace telar::gui::qt {
   }
 
   void ExplorerController::machineChanged() {
-    if (view_.open) {
-      close();
+    if (!view_.open) {
+      return;
     }
+
+    // The panes of another machine are other panes: the explorer opens again over them. A
+    // machine that was renamed, or came or went, only shows so.
+    if (store_.machines().active() != shown_) {
+      close();
+      return;
+    }
+
+    // A label reads from the machines, which no cache says changed: the heads are told again.
+    observe();
+    static_cast<void>(refresh());
+    revision_ = view_.revision;
+    publish();
+    emit changed();
+  }
+
+  void ExplorerController::nextMachine(int window) {
+    if (window < 0 || std::cmp_greater_equal(window, view_.windows.size())) {
+      return;
+    }
+
+    select(window, static_cast<int>(view_.windows[static_cast<std::size_t>(window)]->cursor), false, false);
+    type(QStringLiteral("gm"));
   }
 
 }

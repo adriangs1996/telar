@@ -1,5 +1,6 @@
-// The explorer as ui drives it: the files of a session's machine as its runtime answers, the keys
-// and the pointer of the person, and what they hand to the panes of the tab.
+// The explorer as ui drives it over the sessions of a window: each of its windows reads the files
+// of one machine, as the runtime of that session answers; the keys and the pointer of the person
+// go to the window they act on, and what they hand over to the panes of the tab that shows.
 export module telar.gui.application:explorer;
 
 import std;
@@ -47,15 +48,123 @@ export namespace telar::gui::application::explorer {
   using runtime::config::KeyChord;
   using telar::FileState;
 
-  // The machine a session is of, as the window names it, which only ui knows: its label, the
-  // home of its account, whether it is the one the window runs on, and the number the explorer's
-  // windows on it carry.
+  using features::explorer::Action;
+  using features::explorer::ActionKind;
+  using features::explorer::Context;
+  using features::explorer::MachineFact;
+  using features::explorer::PaneFact;
+  using features::explorer::Reach;
+
+  // The use cases, which ui runs with the cache of the machine of the window they act on: the
+  // session of that machine holds it, and ui keeps one of its own for a machine that is away.
+  using features::explorer::absorb;
+  using features::explorer::activate;
+  using features::explorer::aim;
+  using features::explorer::cancel;
+  using features::explorer::chooseMenu;
+  using features::explorer::close;
+  using features::explorer::complete;
+  using features::explorer::drop;
+  using features::explorer::grab;
+  using features::explorer::header;
+  using features::explorer::hints;
+  using features::explorer::lenses;
+  using features::explorer::look;
+  using features::explorer::menu;
+  using features::explorer::open;
+  using features::explorer::openMenu;
+  using features::explorer::press;
+  using features::explorer::preview;
+  using features::explorer::previewText;
+  using features::explorer::release;
+  using features::explorer::resize;
+  using features::explorer::scroll;
+  using features::explorer::select;
+  using features::explorer::status;
+  using features::explorer::submit;
+  using features::explorer::toggle;
+  using features::explorer::typed;
+
+  // A machine the window keeps, as only ui knows it: the number the explorer's windows on it
+  // carry, its label, the home of its account where ui knows it, and whether the window runs
+  // on it.
   struct Host {
     std::uint64_t machine = 0;
     std::string_view name;
     std::string_view home;
     bool local = true;
   };
+
+  // The panes a tab holds at most, and the machines a window keeps.
+  inline constexpr std::size_t scene_panes = 64;
+  inline constexpr std::size_t scene_machines = 16;
+
+  // What the explorer reads around the files: the panes of the tab that shows, and every machine
+  // the window keeps. It owns what it holds, copied out of the sessions, so a use case changes
+  // a session's cache while it reads this. ui keeps one and observes again when a session
+  // changed.
+  struct Scene {
+    explicit Scene(Memory& made_in);
+
+    struct Pane {
+      explicit Pane(Memory& made_in);
+
+      std::uint64_t id = 0;
+      std::uint16_t number = 0;
+      features::explorer::PaneKind kind = features::explorer::PaneKind::shell;
+      ds::String<Memory> title;
+      ds::String<Memory> cwd;
+    };
+
+    struct Machine {
+      explicit Machine(Memory& made_in);
+
+      std::uint64_t id = 0;
+      ds::String<Memory> label;
+      ds::String<Memory> home;
+      bool local = false;
+      Reach reach = Reach::away;
+    };
+
+    // The texts are kept from one observation to the next, and `pane_count` and `machine_count`
+    // say how many of each stand now.
+    ds::Vec<Pane, Memory> panes;
+    std::size_t pane_count = 0;
+    ds::Vec<Machine, Memory> machines;
+    std::size_t machine_count = 0;
+    std::uint64_t focused = 0;
+    std::uint64_t shown = 0;
+    ds::String<Memory> workspace;
+  };
+
+  // Forgets the machines, before each is observed again.
+  void clear(Scene& scene) noexcept;
+
+  // Reads into `scene` the panes of the tab `session` shows, which is the session of `machine`.
+  void observe(Scene& scene, const Session& session, std::uint64_t machine);
+
+  // Adds a machine to `scene`: one whose session the window holds, with the home its runtime
+  // said; or one that is away.
+  void observe(Scene& scene, const Host& host, const Session& session);
+  void observe(Scene& scene, const Host& host);
+
+  // The scene as the use cases read it: views of what it holds, for as long as it is not
+  // observed again.
+  struct Around {
+    ds::Array<PaneFact, scene_panes> panes{};
+    std::size_t pane_count = 0;
+    ds::Array<MachineFact, scene_machines> machines{};
+    ds::Array<std::string_view, scene_machines> homes{};
+    std::size_t machine_count = 0;
+    std::uint64_t focused = 0;
+    std::uint64_t shown = 0;
+    std::string_view workspace;
+  };
+
+  [[nodiscard]] tbc::val_a<Around> around(tbc::ref_a<Scene> scene) noexcept;
+
+  // The context of a use case on a window of `machine`.
+  [[nodiscard]] tbc::val_a<Context> contextOf(tbc::ref_a<Around> around, std::uint64_t machine) noexcept;
 
   // What ui does once a use case returns.
   enum class Effect : std::uint8_t {
@@ -69,58 +178,18 @@ export namespace telar::gui::application::explorer {
   // Whether the runtime of this session answers the explorer.
   [[nodiscard]] bool available(const Session& session) noexcept;
 
-  // Opens the explorer at the focused pane of the session; false when its runtime does not
-  // answer for files.
-  bool open(Session& session, View& view, const Host& host);
+  // Brings the windows on the session's machine up to date with what its runtime answered, and
+  // with the focused pane when the session is the one that shows; then asks for what they still
+  // lack. True when what the explorer shows changed.
+  bool refresh(Session& session, View& view, const Context& context);
 
-  void close(View& view) noexcept;
+  // What an action hands to the panes, which are of `session`, the one that shows: a path
+  // typed, a mention, a shell's directory, a split, the focus.
+  Effect deliver(Session& session, View& view, const Context& context, const Action& action);
 
-  // A key of normal or visual mode, or over the plan.
-  Effect press(Session& session, View& view, const Host& host, KeyChord chord);
-
-  // What was typed in the field of the mode, as it changes and when Enter ends it; and Escape.
-  void typed(Session& session, View& view, const Host& host, std::string_view text);
-  Effect submit(Session& session, View& view, const Host& host, std::string_view text);
-  void cancel(Session& session, View& view, const Host& host);
-  // `<Tab>` on the command line: completes the directory it names, or asks for it to.
-  void complete(Session& session, View& view, const Host& host, std::string_view line);
-
-  // The pointer chose, asked for or unfolded a row of a window.
-  void select(Session& session, View& view, const Host& host, const Pick& pick);
-  Effect activate(Session& session, View& view, const Host& host, const Pick& pick);
-  void toggle(Session& session, View& view, const Host& host, const Pick& pick);
-
-  // The pointer asked for the menu of a row of a window, or of the window with a row past its
-  // last; and chose a line of it.
-  void openMenu(Session& session, View& view, const Host& host, const Pick& pick);
-  Effect chooseMenu(Session& session, View& view, const Host& host, std::size_t line);
-
-  // The pointer took hold of a row to drag it, which says how many rows go with it; where it
-  // is now would take them or not; and it let them go there, or where nothing takes them.
-  std::size_t grab(Session& session, View& view, const Host& host, const Pick& pick);
-  [[nodiscard]] Aim aim(const Session& session, const View& view, const Host& host, const Drop& drop);
-  void drop(Session& session, View& view, const Host& host, const Drop& drop);
-  void release(View& view) noexcept;
-
-  // A window shows `rows` rows; and the wheel moves what it shows by `rows` rows.
-  void resize(View& view, const WindowRows& shown) noexcept;
-  void scroll(View& view, const WindowRows& moved) noexcept;
-
-  // Brings the windows of the session's machine up to date with what its runtime answered and
-  // with the focused pane, and asks the runtime for what they still lack. True when what the
-  // explorer shows changed.
-  bool refresh(Session& session, View& view, const Host& host);
-
-  // What ui reads to draw a window, a row, the hints and the preview.
-  [[nodiscard]] RowLook look(const Session& session, const View& view, const Host& host, const Pick& pick);
-  [[nodiscard]] HeaderLook header(const Session& session, const View& view, const Host& host, std::size_t window);
-  [[nodiscard]] StatusLook status(const Session& session, const View& view, const Host& host, std::size_t window);
-  [[nodiscard]] Hints hints(const Session& session, const View& view, const Host& host);
-  [[nodiscard]] ds::Array<LensLook, lens_count> lenses(const Session& session, const View& view, const Host& host);
-  [[nodiscard]] PreviewLook preview(const Session& session, const View& view, const Host& host, std::uint64_t now_seconds);
-  [[nodiscard]] MenuLook menu(const Session& session, const View& view, const Host& host);
-
-  // The text the preview shows, which is the session's own.
-  [[nodiscard]] tbc::val_a<std::string_view> previewText(tbc::ref_a<Session> session, const View& view) noexcept;
+  // What an action asks of the runtime of the session's machine: its part of the plan, the
+  // plan taken back, a commit, or the files to open in an editor there. False when it was to
+  // open them and no editor did: the view says so, and the action is not delivered.
+  bool send(Session& session, View& view, const Context& context, const Action& action);
 
 }

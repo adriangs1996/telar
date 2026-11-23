@@ -53,6 +53,9 @@ FocusScope {
     // its place, so a long list does not drift from the pitch.
     readonly property real rowPitch: 22 * ratio
     readonly property real rowHeight: Math.round(rowPitch)
+    // The cells the longest machine's label takes in a plan that goes to more than one, so the
+    // paths of its lines start in one column.
+    readonly property int planMachineCells: controller.plan.reduce((longest, step) => Math.max(longest, (step.machine ?? "").length), 0)
     readonly property real listPadding: 4 * ratio
     // With the line above it.
     readonly property real statusHeight: Math.round(20 * ratio)
@@ -489,6 +492,13 @@ FocusScope {
                             text: pane.modelData.local ? "local" : "remote"
                             grid: root.tinyGrid
                             color: root.colors.subtext0
+                        }
+
+                        // A click takes the window to the next machine, as `gm` does.
+                        ActionPointer {
+                            anchors.fill: parent
+                            identity: "machine:" + pane.index
+                            onActivated: root.controller.nextMachine(pane.index)
                         }
                     }
 
@@ -1593,8 +1603,20 @@ FocusScope {
                         bold: true
                     }
 
+                    // The machine of the step, in a plan that goes to more than one.
                     CellText {
+                        id: stepMachine
                         x: verb.width
+                        width: root.planMachineCells > 0 ? Math.round((root.planMachineCells + 1) * (root.smallGrid.cellWidth ?? 8)) : 0
+                        height: parent.height
+                        visible: width > 0
+                        text: step.modelData.machine ?? ""
+                        grid: root.smallGrid
+                        color: root.colors.blue
+                    }
+
+                    CellText {
+                        x: verb.width + stepMachine.width
                         width: parent.width - x
                         height: parent.height
                         text: (step.modelData.source ?? "") + ((step.modelData.source ?? "").length > 0 && (step.modelData.target ?? "").length > 0 ? " → " : "") + (step.modelData.target ?? "") + (step.modelData.directory && (step.modelData.source ?? "").length === 0 ? "/" : "")

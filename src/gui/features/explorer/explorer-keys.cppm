@@ -35,6 +35,8 @@ export namespace telar::gui::features::explorer {
     scope_pane,
     scope_workspace,
     scope_machine,
+    // The window goes to the next machine whose runtime answers for files.
+    next_machine,
     mark,
     jump_to_mark,
     jump_back,

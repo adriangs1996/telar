@@ -397,6 +397,7 @@ namespace telar::gui::application {
         std::type_identity<FileInspection>{},
         std::type_identity<FilesChanged>{},
         std::type_identity<ChangesCommitted>{},
+        std::type_identity<HomeLocated>{},
         std::type_identity<PaneKindNotice>{},
         std::type_identity<NvimGrid>{},
         std::type_identity<NvimFrame>{},
@@ -744,6 +745,10 @@ namespace telar::gui::application {
     return features::explorer::receive(explorer, message) ? Change::explorer : Change::none;
   }
 
+  Change Session::apply(const HomeLocated& message) {
+    return features::explorer::receive(explorer, message) ? Change::explorer : Change::none;
+  }
+
   bool Session::speaks(ClientTag tag) const noexcept {
     return dialect_ && handshake::speaks(*dialect_, tag);
   }
@@ -887,6 +892,7 @@ namespace telar::gui::application {
   template ds::Option<std::uint64_t> Session::Link::ask<ChangeFiles>(ChangeFiles request);
   template ds::Option<std::uint64_t> Session::Link::ask<UndoFileChanges>(UndoFileChanges request);
   template ds::Option<std::uint64_t> Session::Link::ask<CommitChanges>(CommitChanges request);
+  template ds::Option<std::uint64_t> Session::Link::ask<LocateHome>(LocateHome request);
   template ds::Option<std::uint64_t> Session::Link::ask<RequestProcessPriority>(RequestProcessPriority request);
   template ds::Option<std::uint64_t> Session::Link::ask<RequestProcessSignal>(RequestProcessSignal request);
   template void Session::Link::send<CopySelection>(const CopySelection& message);

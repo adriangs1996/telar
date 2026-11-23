@@ -449,6 +449,42 @@ namespace telar::gui::features::explorer {
       return 0;
     }
 
+    // What a window shows of a machine the cache at hand does not answer for, or cannot yet:
+    // true when it showed that and there is nothing to build.
+    bool buildsNothing(Window& window, const State& state, const Context& context) {
+      // The cache is another machine's: whoever drives the explorer builds the window next,
+      // with its own.
+      if (window.machine != context.host) {
+        window.built = Window::unbuilt;
+        window.loading = true;
+        return true;
+      }
+
+      window.built = state.revision;
+      window.previewed = state.previews;
+      window.reached = context.reach;
+      if (context.reach != Reach::answers) {
+        window.loading = false;
+        pushText(window, {.kind = RowKind::note}, context.reach == Reach::away ? "this machine is not connected" : "the runtime of this machine does not answer for files");
+        return true;
+      }
+
+      // `~` stands for the home its runtime says, once it says it.
+      if (window.root.view().starts_with('~')) {
+        if (context.home.empty() && !state.located) {
+          window.loading = true;
+          return true;
+        }
+
+        const Text below{window.root.memory(), window.root.view().substr(1)};
+
+        window.root.assign(context.home.empty() ? std::string_view{"/"} : context.home);
+        window.root.append(below.view() == "/" ? std::string_view{} : below.view());
+      }
+
+      return false;
+    }
+
     void buildWindow(Window& window, const Edits& edits, const State& state, const Context& context) {
       const auto before = window.cursor;
 
@@ -459,6 +495,12 @@ namespace telar::gui::features::explorer {
       window.hidden_entries = 0;
       window.ignored_entries = 0;
       window.matching = false;
+      if (buildsNothing(window, state, context)) {
+        window.cursor = 0;
+        window.top = 0;
+        return;
+      }
+
       switch (window.lens) {
       case Lens::tree:
         // A runtime that searches paths answers the filter; with one that does not, the filter
@@ -554,14 +596,20 @@ namespace telar::gui::features::explorer {
       return edit.kind == EditKind::paste ? edit.source.view() : edit.path.view();
     }
 
-    // Gives each change that waits for it what the runtime said its file is. A path the runtime
-    // could not read stays without: the runtime says it is missing when the plan is applied.
-    // Returns how many still wait.
-    std::size_t identify(Edits& edits, const State& state) noexcept {
+    // The machine whose runtime knows the file a change names: where a paste comes from, or
+    // where the change is made.
+    constexpr std::uint64_t subjectMachine(const Edit& edit) noexcept {
+      return edit.kind == EditKind::paste ? edit.source_machine : edit.machine;
+    }
+
+    // Gives each change on a file of `machine` that waits for it what its runtime said the file
+    // is. A path the runtime could not read stays without: the runtime says it is missing when
+    // the plan is applied. Returns how many of that machine still wait.
+    std::size_t identify(Edits& edits, const State& state, std::uint64_t machine) noexcept {
       std::size_t waiting = 0;
 
       for (auto& edit : edits.viewMut()) {
-        if (!edit.unidentified) {
+        if (!edit.unidentified || subjectMachine(edit) != machine) {
           continue;
         }
 
@@ -652,6 +700,12 @@ namespace telar::gui::features::explorer {
       Text joined{resolved.memory()};
 
       if (argument == "~" || argument.starts_with("~/")) {
+        // A home the machine has not said yet is found when the window is built.
+        if (context.home.empty()) {
+          resolved.assign(argument);
+          return;
+        }
+
         joined.assign(context.home);
         joined.append(argument.substr(1));
       } else if (argument.starts_with('/')) {
@@ -678,6 +732,157 @@ namespace telar::gui::features::explorer {
 
       if (resolved.empty()) {
         resolved.assign("/");
+      }
+    }
+
+    // How the window reaches the machine `id`; away for one it does not keep.
+    constexpr Reach reachOf(const Context& context, std::uint64_t id) noexcept {
+      if (id == context.host) {
+        return context.reach;
+      }
+
+      for (const auto& machine : context.machines) {
+        if (machine.id == id) {
+          return machine.reach;
+        }
+      }
+
+      return Reach::away;
+    }
+
+    // The label of the machine `id`, as the window names it.
+    constexpr std::string_view labelOf(const Context& context, std::uint64_t id) noexcept {
+      for (const auto& machine : context.machines) {
+        if (machine.id == id) {
+          return machine.label;
+        }
+      }
+
+      return id == context.host ? context.machine : std::string_view{"another machine"};
+    }
+
+    // Whether the panes are of another machine than the one the window lists, where nothing of
+    // them applies; says so.
+    bool apart(View& view, const Context& context) {
+      if (windowAt(view.windows, view.current).machine == context.shown) {
+        return false;
+      }
+
+      report(view, Tone::error, "This window lists {} and the panes are of {}: go there with gm", context.machine, labelOf(context, context.shown));
+      return true;
+    }
+
+    // Where the window that takes the keys last was on `machine`, if it was there.
+    tbc::val_a<Place*> visitedOn(tbc::mut_a<ds::Vec<Place, Memory>> visited, std::uint64_t machine) noexcept {
+      for (auto& place : visited.viewMut()) {
+        if (place.machine == machine) {
+          return &place;
+        }
+      }
+
+      return nullptr;
+    }
+
+    // Takes the window that has the keys to another machine: to `path` there, or with none to
+    // where it last was on it, or to its home. Its rows are built by whoever holds that
+    // machine's cache: the one at hand is of the machine it leaves.
+    void toMachine(View& view, std::uint64_t machine, std::string_view path) {
+      Text root{view.memory, path};
+      Text selected{view.memory};
+
+      pushJump(view);
+      {
+        const auto& leaving = windowAt(view.windows, view.current);
+        auto* known = visitedOn(view.visited, leaving.machine);
+        if (known == nullptr) {
+          known = &view.visited.push(Place{view.memory});
+        }
+
+        known->machine = leaving.machine;
+        known->root.assign(leaving.root.view());
+        known->selected.assign(leaving.selected.view());
+      }
+
+      if (root.empty()) {
+        if (const auto* back = visitedOn(view.visited, machine)) {
+          root.assign(back->root.view());
+          selected.assign(back->selected.view());
+        } else {
+          root.assign("~");
+        }
+      } else if (!root.view().starts_with('/') && !root.view().starts_with('~')) {
+        // A path that starts nowhere starts at the home, as a shell's would there.
+        root.insert(0, "~/");
+      }
+
+      go(view, {.root = root.view(), .selected = selected.view(), .jump = false});
+
+      auto& window = windowAt(view.windows, view.current);
+
+      window.machine = machine;
+      window.expanded.clear();
+      window.diffs.clear();
+      window.rows.clear();
+      window.text.clear();
+      window.picked.clear();
+      window.built = Window::unbuilt;
+      window.loading = true;
+      window.top = 0;
+      ++view.revision;
+    }
+
+    // `gm`: the next machine whose runtime answers for files, around.
+    void nextMachine(View& view, const Context& context) {
+      const auto here = windowAt(view.windows, view.current).machine;
+      const auto count = context.machines.size();
+      std::size_t start = 0;
+
+      for (std::size_t index = 0; index < count; ++index) {
+        start = context.machines[index].id == here ? index : start;
+      }
+
+      for (std::size_t step = 1; step < count; ++step) {
+        const auto& next = context.machines[(start + step) % count];
+        if (next.reach == Reach::answers) {
+          toMachine(view, next.id, {});
+          return;
+        }
+      }
+
+      say(view, "No other machine answers for files", Tone::error);
+    }
+
+    // The machine a path names before a colon, as `box:~/logs` does; none when what stands
+    // there is no machine's label.
+    tbc::val_a<const MachineFact*> machineNamed(tbc::ref_a<Context> context, std::string_view label) noexcept {
+      for (const auto& machine : context.machines) {
+        if (machine.label == label && !label.empty()) {
+          return &machine;
+        }
+      }
+
+      return nullptr;
+    }
+
+    // `:machine`: lists the machines, or takes the window to the one named.
+    void machineCommand(View& view, const Context& context, std::string_view label) {
+      if (label.empty()) {
+        Text listed{view.memory};
+
+        for (const auto& machine : context.machines) {
+          ds::formatTo(listed, "{}{}{}{}", listed.empty() ? "" : " · ", machine.label, machine.id == windowAt(view.windows, view.current).machine ? " (here)" : "", machine.reach == Reach::answers ? "" : " (away)");
+        }
+
+        say(view, listed.view());
+        return;
+      }
+
+      // A label may be given with its colon, as a path's start is.
+      const auto* named = machineNamed(context, label.ends_with(':') ? label.substr(0, label.size() - 1) : label);
+      if (named == nullptr) {
+        report(view, Tone::error, "No machine is called {} · :machine lists them", label);
+      } else if (named->id != windowAt(view.windows, view.current).machine) {
+        toMachine(view, named->id, {});
       }
     }
 
@@ -784,7 +989,11 @@ namespace telar::gui::features::explorer {
         completing_in(memory),
         plan(memory),
         text(memory),
-        paths(memory) {}
+        paths(memory),
+        awaited(memory),
+        wrote(memory),
+        seen(memory),
+        visited(memory) {}
 
   DiffTone toneOf(std::string_view line) noexcept {
     if (line.starts_with("@@")) {
@@ -1055,6 +1264,11 @@ namespace telar::gui::features::explorer {
     }
 
     void setLens(View& view, const State& state, const Context& context, Lens lens) {
+      // The panes are of the machine the window shows, which this window may not list.
+      if (lens == Lens::panes && apart(view, context)) {
+        return;
+      }
+
       auto& window = windowAt(view.windows, view.current);
 
       window.lens = lens;
@@ -1227,6 +1441,14 @@ namespace telar::gui::features::explorer {
         return;
       }
 
+      if (const auto* other = std::ranges::find_if(view.yanked, [&](const Yanked& item) {
+            return item.machine != window.machine;
+          });
+          other != view.yanked.end()) {
+        report(view, Tone::error, "What was yanked is on {}: copying between machines is not there yet", labelOf(context, other->machine));
+        return;
+      }
+
       Text directory{view.memory};
 
       targetDirectory(directory, window, state, context);
@@ -1238,9 +1460,24 @@ namespace telar::gui::features::explorer {
       rebuildCurrent(view, state, context);
     }
 
-    // The plan of the changes typed, in the order the runtime applies it: what is created, what
-    // moves and what is copied, then what is removed and what git restores.
-    void plan(View& view) {
+    // The changes typed on machines that answer, for the plan; how many wait on ones that do not.
+    std::size_t leaveAway(Edits& planned, const Edits& edits, const Context& context) {
+      std::size_t waiting = 0;
+
+      for (const auto& edit : edits) {
+        if (reachOf(context, edit.machine) == Reach::answers) {
+          planned.push(edit.clone(planned.memory()));
+        } else {
+          ++waiting;
+        }
+      }
+
+      return waiting;
+    }
+
+    // The plan of `edits`, in the order a runtime applies it: what is created, what moves and
+    // what is copied, then what is removed and what git restores.
+    void plan(View& view, const Edits& edits) {
       view.plan.clear();
 
       const auto step = [&](PlanVerb verb, const Edit& edit) -> PlanStep& {
@@ -1254,13 +1491,13 @@ namespace telar::gui::features::explorer {
         return made;
       };
 
-      for (const auto& edit : view.edits) {
+      for (const auto& edit : edits) {
         if (edit.kind == EditKind::create && !edit.name.empty()) {
           join(step(PlanVerb::create, edit).target, {.directory = edit.path.view(), .name = edit.name.view()});
         }
       }
 
-      for (const auto& edit : view.edits) {
+      for (const auto& edit : edits) {
         if (edit.kind == EditKind::rename) {
           auto& made = step(PlanVerb::move, edit);
 
@@ -1274,9 +1511,9 @@ namespace telar::gui::features::explorer {
         }
       }
 
-      for (const auto& edit : view.edits) {
+      for (const auto& edit : edits) {
         // What a paste moves away is not removed as well.
-        const bool moved = std::ranges::any_of(view.edits, [&](const Edit& other) {
+        const bool moved = std::ranges::any_of(edits, [&](const Edit& other) {
           return other.kind == EditKind::paste && other.paste == PasteKind::move && other.source_machine == edit.machine && other.source.view() == edit.path.view();
         });
 
@@ -1288,27 +1525,56 @@ namespace telar::gui::features::explorer {
       }
     }
 
-    void write(View& view, const State& state, bool overwrite) {
+    void write(View& view, const State& state, const Context& context, bool overwrite) {
       if (view.edits.empty()) {
         say(view, "Nothing to write");
         return;
       }
 
-      // A plan names each file as the runtime last read it, so it waits for the ones still asked.
-      if (const auto waiting = identify(view.edits, state); waiting != 0) {
-        report(view, Tone::info, "Reading {} of the files to change · :w again shows the plan", waiting);
+      // A plan names each file as its runtime last read it, so it waits for the ones still
+      // asked, on this machine or on another.
+      static_cast<void>(identify(view.edits, state, context.host));
+
+      const auto unread = std::ranges::count(view.edits, true, &Edit::unidentified);
+      if (unread != 0) {
+        report(view, Tone::info, "Reading {} of the files to change · :w again shows the plan", unread);
         return;
       }
 
-      plan(view);
+      Edits planned{view.memory};
+      const auto away = leaveAway(planned, view.edits, context);
+
+      plan(view, planned);
       if (view.plan.empty()) {
-        say(view, "Nothing to write");
+        say(view, away == 0 ? std::string_view{"Nothing to write"} : std::string_view{"The changes are on a machine that does not answer: they wait"}, away == 0 ? Tone::info : Tone::error);
         return;
+      }
+
+      if (away != 0) {
+        report(view, Tone::info, "{} change{} on a machine that does not answer and wait", away, away == 1 ? " is" : "s are");
       }
 
       view.overwrite = overwrite;
       view.mode = Mode::plan;
       ++view.revision;
+    }
+
+    // The machines the plan goes to, each once: the ones that are heard from before it ends, and
+    // the ones `u` takes it back on when it is the plan of the changes typed.
+    void send(View& view, bool written) {
+      view.awaited.clear();
+      view.written = {};
+      for (const auto& step : view.plan) {
+        if (!std::ranges::contains(view.awaited, step.machine)) {
+          view.awaited.push(step.machine);
+        }
+      }
+
+      view.writing = written;
+      if (written) {
+        view.wrote.clear();
+        view.wrote.extend(view.awaited.view());
+      }
     }
 
     // `ga`, `gu`: git's index takes the rows, or lets go of them, at once.
@@ -1333,7 +1599,7 @@ namespace telar::gui::features::explorer {
         return {};
       }
 
-      view.writing = false;
+      send(view, false);
       return {.kind = ActionKind::apply};
     }
 
@@ -1575,9 +1841,16 @@ namespace telar::gui::features::explorer {
       return {.kind = ActionKind::close};
     }
 
-    tbc::val_a<Place*> markOf(tbc::mut_a<ds::Vec<Place, Memory>> marks, std::string_view letter) noexcept {
+    // A mark in lower case is of the machine it was set on, and each machine has its own; one
+    // in upper case keeps its machine, and there is one of each for all of them.
+    constexpr bool marksMachine(std::string_view letter) noexcept {
+      return letter.size() == 1 && letter.front() >= 'A' && letter.front() <= 'Z';
+    }
+
+    // The mark `letter` as a window on `machine` reads it.
+    tbc::val_a<Place*> markOf(tbc::mut_a<ds::Vec<Place, Memory>> marks, std::string_view letter, std::uint64_t machine) noexcept {
       for (auto& mark : marks.viewMut()) {
-        if (mark.letter.view() == letter) {
+        if (mark.letter.view() == letter && (marksMachine(letter) || mark.machine == machine)) {
           return &mark;
         }
       }
@@ -1625,6 +1898,12 @@ namespace telar::gui::features::explorer {
         return {};
       }
 
+      // A path of this machine names nothing where the pane is.
+      if (window.machine != context.shown) {
+        report(view, Tone::error, "It is on {} and the focused pane on {}: gf opens it there, yy copies where it is", context.machine, labelOf(context, context.shown));
+        return {};
+      }
+
       gather(view, state, context, pane->kind == PaneKind::editor);
       leaveVisual(view);
       if (view.paths.empty()) {
@@ -1632,7 +1911,7 @@ namespace telar::gui::features::explorer {
       }
 
       if (pane->kind == PaneKind::editor) {
-        return {.kind = ActionKind::open, .pane = pane->id};
+        return {.kind = ActionKind::open, .pane = pane->id, .machine = window.machine};
       }
 
       typeFor(view, context, *pane, pane->kind == PaneKind::agent ? std::string_view{"@"} : std::string_view{});
@@ -1697,6 +1976,17 @@ namespace telar::gui::features::explorer {
 
     // `gp`, `gw`, `gh`: the window follows the focused pane, rooted where `scope` says.
     void setScope(View& view, const State& state, const Context& context, Scope scope) {
+      // On another machine than the panes' there is no pane to follow: `gh` goes to its home.
+      if (windowAt(view.windows, view.current).machine != context.shown) {
+        if (scope == Scope::machine) {
+          rootAt(view, state, context, context.home.empty() ? std::string_view{"~"} : context.home);
+        } else {
+          static_cast<void>(apart(view, context));
+        }
+
+        return;
+      }
+
       pushJump(view);
 
       auto& window = windowAt(view.windows, view.current);
@@ -1716,7 +2006,7 @@ namespace telar::gui::features::explorer {
         return;
       }
 
-      auto* mark = markOf(view.marks, letter.view());
+      auto* mark = markOf(view.marks, letter.view(), window.machine);
       if (mark == nullptr) {
         if (view.marks.size() == ViewLimits::marks) {
           return;
@@ -1733,10 +2023,36 @@ namespace telar::gui::features::explorer {
       ++view.revision;
     }
 
+    // The window that has the keys was rooted on `machine`, which may be another than the one
+    // it listed: its rows are built from the cache at hand when that is the machine's, and by
+    // whoever holds the machine's cache otherwise.
+    void place(View& view, const State& state, const Context& context, std::uint64_t machine) {
+      auto& window = windowAt(view.windows, view.current);
+
+      if (window.machine != machine) {
+        window.machine = machine;
+        window.expanded.clear();
+        window.diffs.clear();
+      }
+
+      rebuildCurrent(view, state, context);
+    }
+
     void jumpToMark(View& view, const State& state, const Context& context, std::string_view letter) {
-      const auto* mark = markOf(view.marks, letter);
+      const auto here = windowAt(view.windows, view.current).machine;
+      const auto* mark = markOf(view.marks, letter, here);
       if (mark == nullptr) {
-        report(view, Tone::error, "E20: Mark not set: {}", letter);
+        // One of that letter set on another machine is that machine's.
+        const auto* other = std::ranges::find(view.marks, letter, [](const Place& place) {
+          return place.letter.view();
+        });
+
+        if (other == view.marks.end()) {
+          report(view, Tone::error, "E20: Mark not set: {}", letter);
+        } else {
+          report(view, Tone::error, "Mark {} is of {}: a mark in upper case keeps its machine", letter, labelOf(context, other->machine));
+        }
+
         return;
       }
 
@@ -1745,9 +2061,8 @@ namespace telar::gui::features::explorer {
       const auto machine = mark->machine;
 
       pushJump(view);
-      windowAt(view.windows, view.current).machine = machine;
       go(view, {.root = root.view(), .selected = selected.view(), .jump = false});
-      rebuildCurrent(view, state, context);
+      place(view, state, context, machine);
     }
 
     // `<C-o>`, `<C-i>`: back and forward through the places the window was rooted at.
@@ -1769,9 +2084,10 @@ namespace telar::gui::features::explorer {
       const Text root{view.memory, view.jumps[view.jump].root.view()};
       const Text selected{view.memory, view.jumps[view.jump].selected.view()};
 
-      windowAt(view.windows, view.current).machine = view.jumps[view.jump].machine;
+      const auto machine = view.jumps[view.jump].machine;
+
       go(view, {.root = root.view(), .selected = selected.view(), .jump = false});
-      rebuildCurrent(view, state, context);
+      place(view, state, context, machine);
     }
 
     // `gt`, `gT`: the next or the previous lens, or the one a count names.
@@ -1797,11 +2113,19 @@ namespace telar::gui::features::explorer {
           view.text.push('\n');
         }
 
+        const bool here = windowAt(view.windows, view.current).machine == context.shown;
+
         if (command == Command::yank_name) {
           view.text.append(baseOf(path.view()));
-        } else if (const auto* pane = focusedPane(context); command == Command::yank_relative && pane != nullptr) {
+        } else if (const auto* pane = focusedPane(context); command == Command::yank_relative && pane != nullptr && here) {
           appendTyped(view.text, path.view(), {.cwd = pane->cwd, .home = context.home, .shell = false});
         } else {
+          // A path of another machine says which, as scp and rsync read it.
+          if (!context.local) {
+            view.text.append(context.machine);
+            view.text.push(':');
+          }
+
           view.text.append(path.view());
         }
       }
@@ -1824,7 +2148,16 @@ namespace telar::gui::features::explorer {
     // `u`: the last change typed is taken back; with none, the last plan the runtime applied.
     Action undo(View& view, const State& state, const Context& context) {
       if (view.history.empty()) {
-        if (state.undoable) {
+        // The last plan is taken back on every machine it changed; one of this machine alone,
+        // from before a window knew another, where its runtime says it can be.
+        if (view.wrote.empty() && state.undoable) {
+          view.wrote.push(context.host);
+        }
+
+        if (!view.wrote.empty()) {
+          view.awaited.clear();
+          view.awaited.extend(view.wrote.view());
+          view.written = {};
           return {.kind = ActionKind::undo};
         }
 
@@ -1871,7 +2204,8 @@ namespace telar::gui::features::explorer {
         return {};
       }
 
-      return {.kind = ActionKind::open};
+      // On the machine the files are on: an editor runs beside what it edits.
+      return {.kind = ActionKind::open, .machine = windowAt(view.windows, view.current).machine};
     }
 
     // `l`: unfolds a directory, then moves into it; on a file it opens it, as in a tree of Neovim.
@@ -1932,6 +2266,10 @@ namespace telar::gui::features::explorer {
     }
 
     Action toDirectory(View& view, const State& state, const Context& context, bool split) {
+      if (apart(view, context)) {
+        return {};
+      }
+
       rowDirectory(view.text, windowAt(view.windows, view.current), state, context);
       if (view.text.empty()) {
         return {};
@@ -1952,6 +2290,10 @@ namespace telar::gui::features::explorer {
 
     // `@`: the rows chosen, mentioned to the agent of the tab.
     Action mention(View& view, const State& state, const Context& context) {
+      if (apart(view, context)) {
+        return {};
+      }
+
       const auto agent = std::ranges::find(context.panes, PaneKind::agent, &PaneFact::kind);
       if (agent == context.panes.end()) {
         say(view, "No agent in this tab to mention it to", Tone::error);
@@ -2039,6 +2381,10 @@ namespace telar::gui::features::explorer {
     }
 
     void toggleFollow(View& view, const State& state, const Context& context) {
+      if (apart(view, context)) {
+        return;
+      }
+
       auto& window = windowAt(view.windows, view.current);
 
       window.follow = !window.follow;
@@ -2137,10 +2483,17 @@ namespace telar::gui::features::explorer {
         goUp(view, state, context);
         break;
       case Command::workspace_root:
-        rootAt(view, state, context, context.workspace.starts_with('/') ? context.workspace : context.home);
+        if (!apart(view, context)) {
+          rootAt(view, state, context, context.workspace.starts_with('/') ? context.workspace : context.home);
+        }
+
         break;
       case Command::home:
-        rootAt(view, state, context, context.home.starts_with('/') ? context.home : std::string_view{"/"});
+        // A home the machine has not said yet is found when the window is built.
+        rootAt(view, state, context, context.home.starts_with('/') ? context.home : std::string_view{"~"});
+        break;
+      case Command::next_machine:
+        nextMachine(view, context);
         break;
       case Command::scope_pane:
         setScope(view, state, context, Scope::pane);
@@ -2190,7 +2543,7 @@ namespace telar::gui::features::explorer {
       case Command::undo:
         return undo(view, state, context);
       case Command::write:
-        write(view, state, false);
+        write(view, state, context, false);
         break;
       case Command::split_vertical:
         split(view, state, context, true);
@@ -2350,14 +2703,14 @@ namespace telar::gui::features::explorer {
 
     // The commands that take no argument and say themselves what they changed: `:w` and `:q`
     // with their marks, `:only` and `:pin`. None for another name.
-    ds::Option<Action> plainCommand(View& view, const State& state, std::string_view name) {
+    ds::Option<Action> plainCommand(View& view, const State& state, const Context& context, std::string_view name) {
       if (name == "w" || name == "write" || name == "wa") {
-        write(view, state, false);
+        write(view, state, context, false);
         return changed(view);
       }
 
       if (name == "w!") {
-        write(view, state, true);
+        write(view, state, context, true);
         return changed(view);
       }
 
@@ -2405,14 +2758,22 @@ namespace telar::gui::features::explorer {
         return ds::none;
       }
 
+      // `box:~/logs`: the path is of another machine, which the window goes to.
+      const auto colon = typed.argument.find(':');
+      const auto* named = colon == std::string_view::npos ? nullptr : machineNamed(context, typed.argument.substr(0, colon));
+      const bool elsewhere = named != nullptr && named->id != windowAt(view.windows, view.current).machine;
+      const auto path = named == nullptr ? typed.argument : typed.argument.substr(colon + 1);
+
       if (splits) {
         split(view, state, context, name.starts_with('v'));
       }
 
-      if (!typed.argument.empty()) {
+      if (elsewhere) {
+        toMachine(view, named->id, path.empty() ? std::string_view{"~"} : path);
+      } else if (!path.empty()) {
         Text target{view.memory};
 
-        resolve(target, typed.argument, windowAt(view.windows, view.current), context);
+        resolve(target, path, windowAt(view.windows, view.current), context);
         go(view, {.root = target.view()});
         rebuildCurrent(view, state, context);
       }
@@ -2436,11 +2797,16 @@ namespace telar::gui::features::explorer {
       return ds::none;
     }
 
-    void listMarks(View& view) {
+    // The marks a window on this machine jumps to: its own, and the ones that keep a machine.
+    void listMarks(View& view, const Context& context) {
       Text listed{view.memory};
 
       for (const auto& mark : view.marks) {
-        ds::formatTo(listed, "{}'{} {}", listed.empty() ? "" : " · ", mark.letter.view(), mark.root.view());
+        if (marksMachine(mark.letter.view())) {
+          ds::formatTo(listed, "{}'{} {}:{}", listed.empty() ? "" : " · ", mark.letter.view(), labelOf(context, mark.machine), mark.root.view());
+        } else if (mark.machine == context.host) {
+          ds::formatTo(listed, "{}'{} {}", listed.empty() ? "" : " · ", mark.letter.view(), mark.root.view());
+        }
       }
 
       say(view, listed.empty() ? std::string_view{"No marks set"} : listed.view());
@@ -2451,13 +2817,15 @@ namespace telar::gui::features::explorer {
       if (const auto lens = lensNamed(name)) {
         setLens(view, state, context, *lens);
       } else if (name == "follow") {
-        auto& window = windowAt(view.windows, view.current);
+        if (!apart(view, context)) {
+          auto& window = windowAt(view.windows, view.current);
 
-        window.follow = true;
-        followPane(window, context);
-        rebuildCurrent(view, state, context);
+          window.follow = true;
+          followPane(window, context);
+          rebuildCurrent(view, state, context);
+        }
       } else if (name == "marks") {
-        listMarks(view);
+        listMarks(view, context);
       } else if (name == "help") {
         view.mode = Mode::help;
       } else {
@@ -2508,6 +2876,48 @@ namespace telar::gui::features::explorer {
       found.names.assign({text.data(), length});
     }
 
+    // What a command line holds up to the name being completed, and the start of that name.
+    struct Stem {
+      std::string_view kept;
+      std::string_view stem;
+    };
+
+    // Completes the label of a machine: one that starts so gets its colon, several get the
+    // start they share and are listed. False when no label starts so.
+    bool completeMachine(View& view, const Context& context, const Stem& typed) {
+      Text listed{view.memory};
+      std::string_view shared;
+      std::size_t count = 0;
+
+      for (const auto& machine : context.machines) {
+        if (!machine.label.starts_with(typed.stem) || machine.label.empty()) {
+          continue;
+        }
+
+        const auto same = std::ranges::mismatch(shared, machine.label).in1 - shared.begin();
+
+        shared = count++ == 0 ? machine.label : shared.substr(0, static_cast<std::size_t>(same));
+        ds::formatTo(listed, "{}:  ", machine.label);
+      }
+
+      if (count == 0) {
+        return false;
+      }
+
+      view.completion.assign(typed.kept);
+      view.completion.append(shared);
+      if (count == 1) {
+        view.completion.push(':');
+        say(view, {});
+      } else {
+        say(view, listed.view());
+      }
+
+      ++view.completed;
+      ++view.revision;
+      return true;
+    }
+
     Action command(View& view, State& state, const Context& context, std::string_view line) {
       line.remove_prefix(std::min(line.find_first_not_of(" :"), line.size()));
       while (line.ends_with(' ')) {
@@ -2520,7 +2930,7 @@ namespace telar::gui::features::explorer {
         return {};
       }
 
-      if (const auto done = plainCommand(view, state, typed.name)) {
+      if (const auto done = plainCommand(view, state, context, typed.name)) {
         return *done;
       }
 
@@ -2535,7 +2945,12 @@ namespace telar::gui::features::explorer {
         }
 
         view.text.assign(typed.argument);
-        return {.kind = ActionKind::commit};
+        return {.kind = ActionKind::commit, .machine = windowAt(view.windows, view.current).machine};
+      }
+
+      if (typed.name == "machine") {
+        machineCommand(view, context, typed.argument);
+        return changed(view);
       }
 
       if (!showCommand(view, state, context, typed.name)) {
@@ -2570,6 +2985,11 @@ namespace telar::gui::features::explorer {
     ++view.revision;
   }
 
+  void refuse(View& view, std::string_view text) {
+    say(view, text, Tone::error);
+    ++view.revision;
+  }
+
   bool follow(View& view, const Context& context, std::uint64_t machine) {
     const auto* pane = focusedPane(context);
     const auto cwd = pane == nullptr ? std::string_view{} : pane->cwd;
@@ -2596,30 +3016,38 @@ namespace telar::gui::features::explorer {
       }
     }
 
-    view.built = state.revision;
-    view.previewed = state.previews;
     ++view.revision;
   }
 
   void absorb(View& view, const State& state, const Context& context, std::uint64_t machine) {
-    const bool previewed = view.previewed != state.previews;
-
     // What the runtime said of a file a change waits to know, and the directory `<Tab>` waits for.
-    static_cast<void>(identify(view.edits, state));
-    if (!view.completing.empty()) {
+    static_cast<void>(identify(view.edits, state, machine));
+    if (!view.completing.empty() && window(view).machine == machine) {
       const Text line{view.memory, view.completing.view()};
 
       complete(view, state, context, line.view());
     }
 
-    const bool unfolded = std::ranges::any_of(view.windows, [](const ds::Box<Window, Memory>& window) {
-      return !window->diffs.empty();
-    });
+    bool changed = false;
 
-    if (view.built != state.revision || (previewed && unfolded)) {
-      rebuild(view, state, context, machine);
-    } else if (previewed) {
-      view.previewed = state.previews;
+    for (auto& window : view.windows.viewMut()) {
+      if (window->machine != machine) {
+        continue;
+      }
+
+      // A preview that arrived changes no row but the ones a diff is unfolded below.
+      const bool previewed = window->previewed != state.previews;
+
+      if (window->built != state.revision || window->reached != context.reach || (previewed && !window->diffs.empty())) {
+        buildWindow(window.getMut(), view.edits, state, context);
+        changed = true;
+      } else if (previewed) {
+        window.getMut().previewed = state.previews;
+        changed = true;
+      }
+    }
+
+    if (changed) {
       ++view.revision;
     }
   }
@@ -2693,7 +3121,7 @@ namespace telar::gui::features::explorer {
     // What the runtime is asked of the files that changes name without a listing to know them by.
     tbc::val_a<ds::Option<Need>> identityNeed(tbc::ref_a<View> view, const State& state, std::uint64_t machine) {
       for (const auto& edit : view.edits) {
-        if (!edit.unidentified || (edit.kind == EditKind::paste ? edit.source_machine : edit.machine) != machine) {
+        if (!edit.unidentified || subjectMachine(edit) != machine) {
           continue;
         }
 
@@ -2706,12 +3134,28 @@ namespace telar::gui::features::explorer {
     }
 
     // The directory a command line waits for to complete a path in it.
-    tbc::val_a<ds::Option<Need>> completionNeed(tbc::ref_a<View> view, const State& state) {
-      if (view.completing.empty()) {
+    tbc::val_a<ds::Option<Need>> completionNeed(tbc::ref_a<View> view, const State& state, std::uint64_t machine) {
+      if (view.completing.empty() || window(view).machine != machine) {
         return ds::none;
       }
 
       return lacking(state, NeedKind::listing, view.completing_in.view());
+    }
+
+    // The window of `machine` that git is asked about: the one that takes the keys when it is
+    // on that machine, else the first that is; none when no window is.
+    tbc::val_a<const Window*> windowOn(tbc::ref_a<View> view, std::uint64_t machine) noexcept {
+      if (view.current < view.windows.size() && view.windows[view.current]->machine == machine) {
+        return &view.windows[view.current].get();
+      }
+
+      for (const auto& window : view.windows) {
+        if (window->machine == machine) {
+          return &window.get();
+        }
+      }
+
+      return nullptr;
     }
 
     // The previews the windows of `machine` lack: of each selection, and of each diff unfolded.
@@ -2740,13 +3184,23 @@ namespace telar::gui::features::explorer {
   }
 
   tbc::val_a<ds::Option<Need>> need(tbc::ref_a<View> view, const State& state, std::uint64_t machine) {
+    const auto* shows = windowOn(view, machine);
+    if (shows == nullptr) {
+      return ds::none;
+    }
+
+    // Where `~` is on the machine, once: a window may be waiting to go there.
+    if (lacks(state, {.kind = NeedKind::home})) {
+      return Need{.kind = NeedKind::home};
+    }
+
     // What is typed is answered first: the filter, and the path a command line completes. Then
     // what each window lists, what git says, the previews, and the sizes last.
     if (auto wanted = searchNeed(view, state, machine)) {
       return wanted;
     }
 
-    if (auto wanted = completionNeed(view, state)) {
+    if (auto wanted = completionNeed(view, state, machine)) {
       return wanted;
     }
 
@@ -2754,12 +3208,11 @@ namespace telar::gui::features::explorer {
       return wanted;
     }
 
-    // What git says is asked for the window that takes the keys alone. One answer is kept: two
-    // windows in two repositories would ask for theirs in turns, without end.
-    if (view.current < view.windows.size() && view.windows[view.current]->machine == machine) {
-      if (auto wanted = lacking(state, NeedKind::changes, view.windows[view.current]->root.view())) {
-        return wanted;
-      }
+    // What git says is asked for one window of the machine alone: the one that takes the keys,
+    // or its first. One answer is kept of a machine: two of its windows in two repositories
+    // would ask for theirs in turns, without end.
+    if (auto wanted = lacking(state, NeedKind::changes, shows->root.view())) {
+      return wanted;
     }
 
     if (auto wanted = previewNeed(view, state, machine)) {
@@ -2944,10 +3397,10 @@ namespace telar::gui::features::explorer {
     }
 
     // Whether `item` can go to `directory` of `machine`: not where it already is, when it is
-    // moved, and never into itself.
+    // moved, never into itself, and not to another machine, which nothing copies to yet.
     bool lands(const Yanked& item, const Put& where) noexcept {
       if (item.machine != where.machine) {
-        return true;
+        return false;
       }
 
       if (where.kind == PasteKind::move && parentOf(item.path.view()) == where.directory) {
@@ -3027,7 +3480,7 @@ namespace telar::gui::features::explorer {
       view.mode = Mode::normal;
       ++view.revision;
       if (accepted) {
-        view.writing = true;
+        send(view, true);
         return {.kind = ActionKind::apply, .overwrite = view.overwrite};
       }
 
@@ -3109,14 +3562,32 @@ namespace telar::gui::features::explorer {
 
     line.remove_prefix(std::min(line.find_first_not_of(" :"), line.size()));
 
-    const auto argument = argumentOf(line);
+    const auto typed = argumentOf(line);
     const auto name = line.substr(0, line.find(' '));
 
-    if (!takesPath(name) || name.size() == line.size()) {
+    if ((!takesPath(name) && name != "machine") || name.size() == line.size()) {
+      return;
+    }
+
+    // What stands before a colon and a slash may be the start of a machine's label: `:machine`
+    // takes nothing else, and a path does where no directory starts so.
+    const auto colon = typed.find(':');
+    const Stem label{.kept = line.substr(0, line.size() - typed.size()), .stem = typed};
+    const bool labels = colon == std::string_view::npos && !typed.empty() && !typed.contains('/') && !typed.starts_with('~') && !typed.starts_with('.');
+
+    if (name == "machine") {
+      static_cast<void>(completeMachine(view, context, label));
+      return;
+    }
+
+    // A path of another machine is completed by what that machine lists, which is not at hand.
+    const auto* named = colon == std::string_view::npos ? nullptr : machineNamed(context, typed.substr(0, colon));
+    if (named != nullptr && named->id != windowAt(view.windows, view.current).machine) {
       return;
     }
 
     // The line up to the last slash stays as it was typed; what follows it is completed.
+    const auto argument = named == nullptr ? typed : typed.substr(colon + 1);
     const auto slash = argument.rfind('/');
     const auto stem = argument.substr(slash == std::string_view::npos ? 0 : slash + 1);
     const auto kept = line.substr(0, line.size() - stem.size());
@@ -3125,16 +3596,24 @@ namespace telar::gui::features::explorer {
     resolve(directory, slash == std::string_view::npos ? std::string_view{"."} : argument.substr(0, slash + 1), windowAt(view.windows, view.current), context);
 
     const auto* listed = find(state, directory.view());
-    if (listed == nullptr || (!listed->failed && !listed->whole())) {
+    const bool known = listed != nullptr && (listed->failed || listed->whole());
+    Candidates found;
+
+    if (known) {
+      gatherCandidates(found, *listed, stem);
+    }
+
+    if (found.count == 0 && labels && completeMachine(view, context, label)) {
+      return;
+    }
+
+    if (!known) {
       // The runtime is asked for the directory, and the line is completed when it answers.
       view.completing.assign(line);
       view.completing_in.assign(directory.view());
       return;
     }
 
-    Candidates found;
-
-    gatherCandidates(found, *listed, stem);
     if (found.count == 0) {
       say(view, "No directory there starts with that", Tone::error);
       return;
@@ -3376,10 +3855,14 @@ namespace telar::gui::features::explorer {
       }
     }
 
+    const bool elsewhere = std::ranges::any_of(view.dragged, [&](const Yanked& item) {
+      return item.machine != where.machine;
+    });
+
     view.dragged.clear();
     ++view.revision;
     if (landing.empty()) {
-      say(view, "It is there already, or a directory would go into itself: nothing dropped", Tone::error);
+      say(view, elsewhere ? std::string_view{"That window is on another machine: copying between machines is not there yet"} : std::string_view{"It is there already, or a directory would go into itself: nothing dropped"}, Tone::error);
       return;
     }
 
@@ -3437,33 +3920,86 @@ namespace telar::gui::features::explorer {
     ++view.revision;
   }
 
+  namespace {
+
+    // What the machine's cache had settled when the explorer last took it in.
+    tbc::mut_a<Settled> seenOf(tbc::mut_a<ds::Vec<Settled, Memory>> seen, std::uint64_t machine) {
+      for (auto& known : seen.viewMut()) {
+        if (known.machine == machine) {
+          return known;
+        }
+      }
+
+      return seen.push({.machine = machine});
+    }
+
+    // Adds what a machine's runtime did with its part of the plan to what the others did.
+    void count(Written& written, const State& state) noexcept {
+      for (const auto& outcome : state.outcomes) {
+        switch (outcome.outcome) {
+        case FileOutcome::done:
+          ++written.applied;
+          break;
+        case FileOutcome::renamed:
+          ++written.applied;
+          ++written.renamed;
+          break;
+        case FileOutcome::stale:
+          ++written.stale;
+          break;
+        case FileOutcome::missing:
+          ++written.missing;
+          break;
+        case FileOutcome::refused:
+        case FileOutcome::failed:
+          ++written.refused;
+          break;
+        }
+      }
+
+      written.undone = state.undone;
+      written.undoable = written.undoable || state.undoable;
+    }
+
+  }
+
   void settle(View& view, const State& state, const Context& context, std::uint64_t machine) {
-    if (view.settled == state.settled) {
+    auto& seen = seenOf(view.seen, machine);
+    if (seen.count == state.settled) {
       return;
     }
 
-    view.settled = state.settled;
+    seen.count = state.settled;
+    view.awaited.retain([&](std::uint64_t waited) {
+      return waited != machine;
+    });
+
     if (!state.error.view().empty()) {
       say(view, state.error.view(), Tone::error);
     } else if (!state.committed.empty() && state.outcomes.empty()) {
       report(view, Tone::info, "[{}] · committed by the runtime of {}", state.committed.view(), context.machine);
     } else {
-      const auto text = outcomeText(state);
+      count(view.written, state);
 
-      say(view, text.view(), std::ranges::any_of(state.outcomes, [](const Outcome& outcome) {
-        return outcome.outcome != FileOutcome::done && outcome.outcome != FileOutcome::renamed;
-      })
-                                 ? Tone::error
-                                 : Tone::info);
-      // The changes that were written are no longer pending.
+      const auto text = outcomeText(view.written, view.awaited.size());
+
+      say(view, text.view(), view.written.stale + view.written.missing + view.written.refused != 0 ? Tone::error : Tone::info);
+      // The changes that were written on this machine are no longer pending.
       if (view.writing && !state.undone) {
-        view.edits.clear();
+        view.edits.retain([&](const Edit& edit) {
+          return edit.machine != machine;
+        });
+
         view.history.clear();
       }
     }
 
-    view.writing = false;
-    view.plan.clear();
+    // The plan ends once every machine it went to has answered.
+    if (view.awaited.empty()) {
+      view.writing = false;
+      view.plan.clear();
+    }
+
     rebuild(view, state, context, machine);
   }
 

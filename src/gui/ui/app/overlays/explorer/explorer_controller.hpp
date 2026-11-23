@@ -23,9 +23,11 @@ import telar.base.ds;
 
 namespace telar::gui::qt {
 
-  // The explorer over the panes: the files of the active machine as a tree a person moves in with
-  // Neovim's keys, edits as text and hands to the panes. The controller gives each window the rows
-  // it shows and nothing past them, so a directory of any size costs what the window draws.
+  // The explorer over the panes: the files of a machine as a tree a person moves in with Neovim's
+  // keys, edits as text and hands to the panes. Each of its windows is on one of the machines the
+  // window keeps, and reads the cache the session of that machine holds. The controller gives
+  // each window the rows it shows and nothing past them, so a directory of any size costs what
+  // the window draws.
   class ExplorerController final : public QObject {
     Q_OBJECT
     QML_NAMED_ELEMENT(ExplorerController)
@@ -87,12 +89,12 @@ namespace telar::gui::qt {
     Q_INVOKABLE void openMenu(int window, int row, const QPointF& place);
     Q_INVOKABLE void chooseMenu(int line);
     // Whether a row is part of the selection a drag or a menu would take.
-    Q_INVOKABLE bool isChosen(int window, int row) const;
+    [[nodiscard]] Q_INVOKABLE bool isChosen(int window, int row) const;
     // The pointer took hold of a row to drag it: how many rows go with it. Then where it is
     // would take `count` of them, in the directory at `row` or in the window's root at -1; and
     // it let them go there, or where nothing takes them.
     Q_INVOKABLE int grab(int window, int row);
-    Q_INVOKABLE QVariantMap aim(int window, int row, bool copy) const;
+    [[nodiscard]] Q_INVOKABLE QVariantMap aim(int window, int row, bool copy) const;
     Q_INVOKABLE void drop(int window, int row, bool copy);
     Q_INVOKABLE void release();
     // A window shows `rows` rows; the wheel moves what it shows.
@@ -102,13 +104,16 @@ namespace telar::gui::qt {
     Q_INVOKABLE void type(const QString& keys);
     // Runs a command as the command line would: `tree`, `w`, `e ~/src`.
     Q_INVOKABLE void run(const QString& command);
+    // A click on the machine of a window's head: the window goes to the next one, as `gm`.
+    Q_INVOKABLE void nextMachine(int window);
     Q_INVOKABLE void close();
 
     // Opens the explorer at the focused pane, or closes the one that shows.
     void toggle();
     // The session kept an answer about its files, or what the panes show moved.
     void synchronize();
-    // The window shows another machine: what the explorer listed was the last one's.
+    // The machines changed: the explorer closes when the window shows another one, whose panes
+    // are others, and reads their names and reach again otherwise.
     void machineChanged();
 
   signals:
@@ -125,25 +130,38 @@ namespace telar::gui::qt {
     void opened();
     void closed();
     void failed(const QString& message);
+    // Files were opened in an editor of a machine the window does not show: it shows it.
+    void machineRequested(application::machines::MachineToken token);
 
   private:
-    // The machine the window shows, as the explorer names it.
-    [[nodiscard]] application::explorer::Host host() const;
+    // Reads again what the explorer sees around the files: the panes that show, and each
+    // machine with its label, its home and whether its runtime answers.
+    void observe();
+    // The cache of the machine an explorer's window is on: the one its session holds, or one
+    // that holds nothing, for a machine the window has no client for.
+    [[nodiscard]] const application::explorer::State& cacheOf(std::uint64_t machine) const noexcept;
+    // The machine of a window of the explorer; the one the window shows for a window it lacks.
+    [[nodiscard]] std::uint64_t machineOf(std::size_t window) const noexcept;
+    // Brings the windows of every machine up to date with its cache, and asks each runtime for
+    // what they lack. True when what the explorer shows changed.
+    bool refresh();
     // A key a chord names, given to the explorer; false for one it has no use for.
     bool strike(int key, const QString& text, int modifiers);
-    // What a use case asks of the window once it returns.
+    // What a use case asks of the panes and of the runtimes, done; and what it asks of the
+    // window once it returns.
+    void finish(const application::explorer::Action& action);
     void finish(application::explorer::Effect effect);
     // What the explorer shows, from what the session holds: each part is told only when it is
     // another than the one shown.
     void publish();
-    [[nodiscard]] QVariantList describeWindows() const;
-    [[nodiscard]] QVariantList describeLenses() const;
+    [[nodiscard]] QVariantList describeWindows(const application::explorer::Around& around) const;
+    [[nodiscard]] QVariantList describeLenses(const application::explorer::Around& around) const;
     [[nodiscard]] QVariantMap describeLine() const;
-    [[nodiscard]] QVariantList describeHints() const;
-    [[nodiscard]] QVariantMap describePreview() const;
-    [[nodiscard]] QVariantList describePlan() const;
-    [[nodiscard]] QVariantMap describeMenu() const;
-    [[nodiscard]] QVariantMap record(std::size_t window, std::size_t row) const;
+    [[nodiscard]] QVariantList describeHints(const application::explorer::Around& around) const;
+    [[nodiscard]] QVariantMap describePreview(const application::explorer::Around& around) const;
+    [[nodiscard]] QVariantList describePlan(const application::explorer::Around& around) const;
+    [[nodiscard]] QVariantMap describeMenu(const application::explorer::Around& around) const;
+    [[nodiscard]] QVariantMap record(const application::explorer::State& cache, const application::explorer::Context& context, application::explorer::Pick pick) const;
 
     Store& store_;
     application::explorer::View view_;
@@ -158,9 +176,15 @@ namespace telar::gui::qt {
     // Where the pointer asked for the menu; below zero when the keys did.
     QPointF menu_at_{-1, -1};
     std::uint64_t revision_ = 0;
-    // The home of the account the window runs as, and the active machine's label.
+    // The home of the account the window runs as, which the local machine has before its
+    // runtime says it.
     QByteArray home_;
-    mutable QByteArray label_;
+    // What the use cases read around the files, and the cache of a machine that is away: one
+    // that holds nothing.
+    application::explorer::Scene scene_;
+    application::explorer::State away_;
+    // The machine the window showed when the explorer last looked.
+    application::machines::Machines::Slot shown_ = application::machines::Machines::local_slot;
   };
 
 }

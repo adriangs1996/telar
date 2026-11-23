@@ -3,6 +3,7 @@
 static_assert(true);
 #endif
 
+#include <array>
 #include <cctype>
 #include <cstddef>
 #include <cstdint>
@@ -37,12 +38,42 @@ namespace telar::gui::test {
     std::uint64_t modified = 0;
   };
 
-  // An explorer on a machine whose runtime the fixture answers for: the directories it lists,
-  // what git says of them, and the panes of the tab that shows.
+  // What the runtime of a machine answers from: the directories it lists, what they weigh, and
+  // what git says below the root of its repository.
+  struct Disk {
+    std::map<std::string, std::vector<Listed>> files;
+    std::map<std::string, std::vector<std::pair<std::string, std::uint64_t>>> sizes;
+    std::vector<FileChange> changes;
+    bool repository = true;
+    std::string root;
+    std::string branch;
+    std::string home;
+  };
+
+  // An explorer in a window that keeps two machines, whose runtimes the fixture answers for: the
+  // one it runs on and shows, `machine`, with the panes of its tab; and `box`, another one.
   struct Explorer {
     static constexpr std::uint64_t machine = 1;
+    static constexpr std::uint64_t box = 2;
 
     Explorer() {
+      disk.root = "/home/dev/telar";
+      disk.branch = "lifetime-speed";
+      disk.home = "/home/dev";
+      changes = {
+          {.path = ".github/", .unstaged = FileState::untracked},
+          {.path = "docs/remote.md", .staged = FileState::added, .added = 20},
+          {.path = "docs/usage.md", .unstaged = FileState::modified, .added = 12, .removed = 7},
+          {.path = "out/", .unstaged = FileState::ignored},
+      };
+      far.root = "/home/ops/site";
+      far.branch = "release";
+      far.home = "/home/ops";
+      far.files["/home/ops"] = {{"logs", true}, {"site", true}, {"deploy.sh", false, 300, 15}};
+      far.files["/home/ops/logs"] = {{"app.log", false, 9000, 25}, {"db.log", false, 4000, 35}};
+      far.files["/home/ops/site"] = {{"index.html", false, 700, 45}};
+      far.files["/var/log"] = {{"syslog", false, 80000, 55}};
+      far.changes = {{.path = "index.html", .unstaged = FileState::modified, .added = 3, .removed = 1}};
       // In the order the runtime lists: directories first, each group by name.
       files["/home/dev/telar"] = {{".github", true}, {"assets", true}, {"docs", true}, {"out", true}, {"src", true}, {".gitignore", false, 5, 10}, {"justfile", false, 8300, 20}, {"README.md", false, 5500, 30}};
       files["/home/dev/telar/docs"] = {{"images", true}, {"agents.md", false, 6500, 40}, {"remote.md", false, 6300, 50}, {"usage.md", false, 7739, 60}};
@@ -58,17 +89,71 @@ namespace telar::gui::test {
       };
     }
 
-    [[nodiscard]] Context context() const {
-      return {.panes = panes, .focused = focused, .workspace = "/home/dev/telar", .home = "/home/dev", .machine = "macbook", .local = true};
+    // The machine of the window that has the keys.
+    [[nodiscard]] std::uint64_t here() const {
+      return view.windows.empty() ? machine : window(view).machine;
     }
 
-    // Answers what the explorer lacks, as the runtime of the machine would, until it lacks nothing.
+    // The cache of a machine, and what its runtime answers from.
+    [[nodiscard]] State& cache(std::uint64_t of) {
+      return of == box ? remote : state;
+    }
+
+    [[nodiscard]] const State& cache(std::uint64_t of) const {
+      return of == box ? remote : state;
+    }
+
+    [[nodiscard]] Disk& diskOf(std::uint64_t of) {
+      return of == box ? far : disk;
+    }
+
+    // What a use case reads around the files, on a window of the machine that has the keys or of
+    // the one named.
+    [[nodiscard]] Context context() const {
+      return context(here());
+    }
+
+    [[nodiscard]] Context context(std::uint64_t of) const {
+      const auto& known = machines[of - 1];
+
+      return {
+          .panes = panes,
+          .focused = focused,
+          .workspace = "/home/dev/telar",
+          .home = of == box ? std::string_view{far.home} : std::string_view{disk.home},
+          .machine = known.label,
+          .local = known.local,
+          .reach = known.reach,
+          .host = of,
+          .shown = shown,
+          .machines = machines,
+      };
+    }
+
+    // Answers what the explorer lacks, as the runtime of each machine that answers would, until
+    // it lacks nothing.
     void answer() {
+      for (const auto& known : machines) {
+        if (known.reach == Reach::answers) {
+          answer(known.id);
+        }
+      }
+
+      settle();
+    }
+
+    void answer(std::uint64_t of) {
+      auto& state = cache(of);
+      auto& disk = diskOf(of);
+      auto& files = disk.files;
+      auto& sizes = disk.sizes;
       // A thing is asked for once: an explorer that asks without end fails here, not the runtime.
       const auto limit = requests + 256;
 
-      while (const auto wanted = need(view, state, machine)) {
+      while (const auto wanted = need(view, state, of)) {
         const auto request = ++requests;
+
+        ++asked_of[of - 1];
 
         telar::testing::check(request < limit, "what was answered is not asked for again");
         const std::string path{wanted->path};
@@ -101,30 +186,39 @@ namespace telar::gui::test {
           telar::testing::check(receive(state, DirectorySizes{.request_id = request, .path = path, .sizes = measured}));
           break;
         }
-        case NeedKind::changes:
-          telar::testing::check(receive(state, RepositoryChanges{.request_id = request, .path = path, .root = repository ? std::string_view{"/home/dev/telar"} : std::string_view{}, .branch = "lifetime-speed", .changes = repository ? std::span<const FileChange>{changes} : std::span<const FileChange>{}}));
+        case NeedKind::changes: {
+          // The machine that shows says so of any path, as its tests were written; the other one
+          // only of what is below its repository.
+          const bool inside = disk.repository && (of == machine || path.starts_with(disk.root));
+
+          telar::testing::check(receive(state, RepositoryChanges{.request_id = request, .path = path, .root = inside ? std::string_view{disk.root} : std::string_view{}, .branch = disk.branch, .changes = inside ? std::span<const FileChange>{disk.changes} : std::span<const FileChange>{}}));
           break;
+        }
         case NeedKind::inspection:
           telar::testing::check(receive(state, FileInspection{.request_id = request, .path = path, .size = 7739, .identity = {.inode = inspected_inode, .modified_seconds = 77}, .text = "# Usage\n", .commit = "31d2299b4000000000000000000000000000000f", .committed_seconds = 1794096000, .subject = "Describe the usage", .diff = path.ends_with("usage.md") ? std::string_view{"@@ -1,2 +1,2 @@\n-old\n+new\n context\n"} : std::string_view{}}));
           break;
         case NeedKind::search:
-          telar::testing::check(receive(state, found(request, path, std::string{wanted->text}, true)));
+          telar::testing::check(receive(state, found(request, path, std::string{wanted->text}, true, of)));
+          break;
+        case NeedKind::home:
+          telar::testing::check(receive(state, HomeLocated{.request_id = request, .path = disk.home}));
           break;
         }
 
         settle();
       }
-
-      settle();
     }
 
-    // As the window does after each answer and when its session changed: a pane followed moves
-    // the windows, and the rows take in what was answered.
+    // As the window does after each answer and when a session changed: a pane followed moves
+    // the windows of the machine that shows, and the rows of each machine take in what its
+    // cache was answered.
     void settle() {
-      if (follow(view, context(), machine)) {
-        rebuild(view, state, context(), machine);
-      } else {
-        absorb(view, state, context(), machine);
+      for (const auto& known : machines) {
+        if (known.id == shown && follow(view, context(known.id), known.id)) {
+          rebuild(view, cache(known.id), context(known.id), known.id);
+        } else {
+          absorb(view, cache(known.id), context(known.id), known.id);
+        }
       }
     }
 
@@ -143,7 +237,8 @@ namespace telar::gui::test {
     }
 
     // The paths below `directory` that match, from it, in the order of their names.
-    void gather(std::vector<std::pair<std::string, bool>>& paths, const std::string& directory, const std::string& prefix, std::string_view query) const {
+    void gather(std::vector<std::pair<std::string, bool>>& paths, const std::string& directory, const std::string& prefix, std::string_view query, std::uint64_t of = machine) const {
+      const auto& files = of == box ? far.files : disk.files;
       const auto listed = files.find(directory);
       if (listed == files.end()) {
         return;
@@ -157,7 +252,7 @@ namespace telar::gui::test {
         }
 
         if (entry.directory) {
-          gather(paths, directory + "/" + entry.name, relative + "/", query);
+          gather(paths, directory + "/" + entry.name, relative + "/", query, of);
         }
       }
     }
@@ -165,10 +260,10 @@ namespace telar::gui::test {
     // What the runtime's path search answers under `request`: the paths below `root` that match
     // `query`, `search_limit` of them at most, and the first half of those alone while it still
     // reads its index, when not `complete`.
-    [[nodiscard]] PathResults found(std::uint64_t request, const std::string& root, const std::string& query, bool complete) {
+    [[nodiscard]] PathResults found(std::uint64_t request, const std::string& root, const std::string& query, bool complete, std::uint64_t of = machine) {
       std::vector<std::pair<std::string, bool>> paths;
 
-      gather(paths, root, {}, query);
+      gather(paths, root, {}, query, of);
       std::ranges::sort(paths);
       found_root = root;
       found_paths.clear();
@@ -189,7 +284,7 @@ namespace telar::gui::test {
     }
 
     void start() {
-      open(view, state, context(), machine);
+      open(view, state, context(machine), machine);
       answer();
     }
 
@@ -219,7 +314,7 @@ namespace telar::gui::test {
           ++index;
         }
 
-        last = press(view, state, context(), chord);
+        last = press(view, cache(here()), context(), chord);
         answer();
       }
 
@@ -227,7 +322,7 @@ namespace telar::gui::test {
     }
 
     Action enter(std::string_view text) {
-      const auto action = submit(view, state, context(), text);
+      const auto action = submit(view, cache(here()), context(), text);
 
       answer();
       return action;
@@ -239,7 +334,7 @@ namespace telar::gui::test {
       const auto& listed = window(view);
 
       for (std::size_t index = 0; index < listed.rows.size(); ++index) {
-        const auto seen = look(view, state, context(), {.window = view.current, .row = index});
+        const auto seen = look(view, cache(here()), context(), {.window = view.current, .row = index});
 
         result.push_back(std::string{seen.lead.view()} + std::string{seen.name.view()} + (seen.directory ? "/" : ""));
       }
@@ -255,7 +350,7 @@ namespace telar::gui::test {
       const auto& listed = window(view);
 
       for (std::size_t index = 0; index < listed.rows.size(); ++index) {
-        const auto seen = look(view, state, context(), {.window = view.current, .row = index});
+        const auto seen = look(view, cache(here()), context(), {.window = view.current, .row = index});
         if (seen.name.view() == name) {
           return seen;
         }
@@ -274,7 +369,7 @@ namespace telar::gui::test {
       const auto& listed = *view.windows[window_index];
 
       for (std::size_t index = 0; index < listed.rows.size(); ++index) {
-        if (look(view, state, context(), {.window = window_index, .row = index}).name.view() == name) {
+        if (look(view, cache(listed.machine), context(listed.machine), {.window = window_index, .row = index}).name.view() == name) {
           return index;
         }
       }
@@ -285,23 +380,31 @@ namespace telar::gui::test {
 
     // The pointer chooses the row named, in the current window.
     void click(std::string_view name) {
-      select(view, state, context(), {.window = view.current, .row = at(name)});
+      select(view, cache(here()), context(), {.window = view.current, .row = at(name)});
       answer();
     }
 
     SystemAllocator upstream;
     telar::MemoryAdapter<SystemAllocator> adapter{upstream};
     telar::Memory& memory = adapter;
+    // The cache of the machine that shows and of the other one, and the one view of both.
     State state{memory};
+    State remote{memory};
     View view{memory};
-    std::map<std::string, std::vector<Listed>> files;
-    std::map<std::string, std::vector<std::pair<std::string, std::uint64_t>>> sizes;
-    std::vector<FileChange> changes{
-        {.path = ".github/", .unstaged = FileState::untracked},
-        {.path = "docs/remote.md", .staged = FileState::added, .added = 20},
-        {.path = "docs/usage.md", .unstaged = FileState::modified, .added = 12, .removed = 7},
-        {.path = "out/", .unstaged = FileState::ignored},
+    Disk disk;
+    Disk far;
+    // The machine that shows, by the names its tests know it by.
+    std::map<std::string, std::vector<Listed>>& files = disk.files;
+    std::map<std::string, std::vector<std::pair<std::string, std::uint64_t>>>& sizes = disk.sizes;
+    std::vector<FileChange>& changes = disk.changes;
+    bool& repository = disk.repository;
+    // The machines the window keeps, the one whose panes show, and what was asked of each.
+    std::vector<MachineFact> machines{
+        {.id = machine, .label = "macbook", .local = true, .reach = Reach::answers},
+        {.id = box, .label = "box", .local = false, .reach = Reach::answers},
     };
+    std::uint64_t shown = machine;
+    std::array<std::uint64_t, 2> asked_of{};
     // What the last answer of the path search views, and how many matches one carries.
     std::string found_root;
     std::vector<std::string> found_paths;
@@ -309,7 +412,6 @@ namespace telar::gui::test {
     std::size_t search_limit = FindPaths::maximum_limit;
     // The inode the runtime says a file it inspects has.
     std::uint64_t inspected_inode = 4242;
-    bool repository = true;
     std::vector<PaneFact> panes;
     std::uint64_t focused = 13;
     std::uint64_t requests = 0;

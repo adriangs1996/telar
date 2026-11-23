@@ -136,6 +136,7 @@ import telar.gui.features.machines;
 import telar.gui.features.notifications;
 import telar.wire.agents;
 import telar.wire.content;
+import telar.wire.files;
 import telar.wire.layout;
 import telar.wire.monitor;
 import telar.wire.nvim;
@@ -450,6 +451,70 @@ namespace {
     },
         wait_ms);
   }
+
+  // A machine's runtime as the explorer asks it: where its home is, the one directory it lists,
+  // and what git says of it. It answers what was asked since it last served, a request of a kind
+  // at a time, which is how an explorer that unfolds nothing asks.
+  struct ExplorerReplies {
+    WireRuntime& runtime;
+    std::string_view home;
+    std::string_view directory;
+    std::span<const DirectoryEntry> entries;
+    std::string_view branch;
+    std::span<const FileChange> changes;
+    std::size_t homes = 0;
+    std::size_t listings = 0;
+    std::size_t queries = 0;
+    std::size_t measures = 0;
+    std::size_t inspections = 0;
+
+    // Whether one more request of `tag` arrived than `served` counts, which then counts it.
+    [[nodiscard]] bool asked(ClientTag tag, std::size_t& served) const {
+      const auto count = runtime.count(tag);
+      if (count == served) {
+        return false;
+      }
+
+      served = count;
+      return true;
+    }
+
+    void serve() {
+      if (asked(ClientTag::locate_home, homes)) {
+        runtime.send(HomeLocated{.request_id = runtime.last<LocateHome>().request_id, .path = home});
+      }
+
+      if (asked(ClientTag::list_directory, listings)) {
+        const auto listing = runtime.last<ListDirectory>();
+        const std::string path{listing.path};
+        const auto listed = path == directory ? entries : std::span<const DirectoryEntry>{};
+
+        runtime.send(DirectoryContents{.request_id = listing.request_id, .path = path, .total = static_cast<std::uint32_t>(listed.size()), .entries = listed});
+      }
+
+      if (asked(ClientTag::query_changes, queries)) {
+        const auto query = runtime.last<QueryChanges>();
+        const std::string path{query.path};
+        const bool inside = !branch.empty() && path == directory;
+
+        runtime.send(RepositoryChanges{.request_id = query.request_id, .path = path, .root = inside ? directory : std::string_view{}, .branch = branch, .changes = inside ? changes : std::span<const FileChange>{}});
+      }
+
+      if (asked(ClientTag::measure_directory, measures)) {
+        const auto measure = runtime.last<MeasureDirectory>();
+        const std::string path{measure.path};
+
+        runtime.send(DirectorySizes{.request_id = measure.request_id, .path = path});
+      }
+
+      if (asked(ClientTag::inspect_file, inspections)) {
+        const auto inspect = runtime.last<InspectFile>();
+        const std::string path{inspect.path};
+
+        runtime.send(FileInspection{.request_id = inspect.request_id, .path = path, .size = 120, .text = "#!/bin/sh\nexec telar \"$@\"\n"});
+      }
+    }
+  };
 
   int activeMachine(ApplicationController& application) {
     for (const auto& machine : application.monitor()->machines()) {
@@ -2458,6 +2523,134 @@ namespace {
       QVERIFY(monitor->confirmation().isEmpty());
       monitor->confirm();
       QCOMPARE(signals_sent(*fixture.local_runtime) + signals_sent(*fixture.remote_runtime), 1);
+    }
+
+    // The explorer with a window on each of two machines: each lists what its own runtime
+    // answers and asks the other for nothing, and one plan is sent to both. With
+    // TELAR_EXPLORER_MACHINE_SHOTS it takes pictures of them into that directory.
+    Q_SLOT static void explorerShowsWindowsOnTwoMachines() {
+      MachineFixture fixture;
+      auto& application = fixture.application;
+      QQmlApplicationEngine engine;
+
+      engine.rootContext()->setContextProperty(QStringLiteral("telar"), &application);
+      engine.loadFromModule(QStringLiteral("Telar.Gui"), QStringLiteral("Main"));
+      QCOMPARE(engine.rootObjects().size(), 1);
+      auto* window = qobject_cast<QQuickWindow*>(engine.rootObjects().front());
+
+      QVERIFY(window != nullptr);
+      constexpr QSize window_size{1492, 917};
+
+      window->resize(window_size);
+      application.setWindow(*window);
+      QVERIFY(fixture.start());
+      fixture.local_runtime->send(ClientLayoutSnapshot{});
+      fixture.remote_runtime->send(ClientLayoutSnapshot{});
+      QVERIFY(finishOpening(*fixture.local_runtime));
+      // The machine has the name its user gave it, whatever the host that runs the test is called.
+      MachineWindow::rename(application, Machines::local_slot, "macbook");
+      window->show();
+
+      const ds::Array near_entries{
+          DirectoryEntry{.name = "src", .kind = FileKind::directory, .directory = true, .identity = {.inode = 2, .modified_seconds = 5}},
+          DirectoryEntry{.name = "README.md", .kind = FileKind::file, .size = 5500, .identity = {.inode = 3, .modified_seconds = 10}},
+      };
+      const ds::Array far_entries{
+          DirectoryEntry{.name = "logs", .kind = FileKind::directory, .directory = true, .identity = {.inode = 8, .modified_seconds = 15}},
+          DirectoryEntry{.name = "deploy.sh", .kind = FileKind::file, .size = 300, .identity = {.inode = 9, .modified_seconds = 20}},
+      };
+      const ds::Array near_changes{FileChange{.path = "README.md", .unstaged = FileState::modified, .added = 2, .removed = 1}};
+      ExplorerReplies near{.runtime = *fixture.local_runtime, .home = "/home/dev", .directory = "/work/project", .entries = near_entries.view(), .branch = "main", .changes = near_changes.view()};
+      ExplorerReplies far{.runtime = *fixture.remote_runtime, .home = "/home/ops", .directory = "/home/ops", .entries = far_entries.view()};
+      auto* explorer = application.explorer();
+      const auto shows = [&](auto shown) {
+        return waitForGuiCondition([&] {
+          near.serve();
+          far.serve();
+
+          return shown();
+        },
+            wait_ms);
+      };
+      const auto pane = [&](int index) {
+        return explorer->windows().value(index).toMap();
+      };
+      const auto name = [&](int index, int row) {
+        return explorer->rows(index)->index(row, 0).data(ListModel::record_role).toMap().value(QStringLiteral("name")).toString();
+      };
+      const auto shots = qEnvironmentVariable("TELAR_EXPLORER_MACHINE_SHOTS");
+      const auto shoot = [&](const QString& file) {
+        if (!shots.isEmpty()) {
+          QVERIFY(waitForSynchronizedFrame(*window, wait_ms));
+          QVERIFY(window->grabWindow().save(shots + QLatin1Char('/') + file + QStringLiteral(".png"), "PNG"));
+        }
+      };
+
+      application.commands()->execute(window_actions::Action::explorer);
+      QVERIFY(explorer->showing());
+      explorer->run(QStringLiteral("e /work/project"));
+      QVERIFY(shows([&] {
+        return explorer->rows(0)->rowCount() == 2 && pane(0).value(QStringLiteral("repository")).toBool();
+      }));
+      QVERIFY(pane(0).value(QStringLiteral("local")).toBool());
+      QCOMPARE(pane(0).value(QStringLiteral("machine")).toString(), QStringLiteral("macbook"));
+      // A machine with no window is asked for nothing.
+      QCOMPARE(fixture.remote_runtime->count(ClientTag::locate_home) + fixture.remote_runtime->count(ClientTag::list_directory) + fixture.remote_runtime->count(ClientTag::query_changes), 0);
+
+      // A second window, at the home of the other machine: its runtime says where that is.
+      const auto listed = fixture.local_runtime->count(ClientTag::list_directory);
+
+      explorer->run(QStringLiteral("vs Build:~"));
+      QVERIFY(shows([&] {
+        return explorer->windows().size() == 2 && explorer->rows(1)->rowCount() == 2;
+      }));
+      QCOMPARE(pane(1).value(QStringLiteral("machine")).toString(), QStringLiteral("Build"));
+      QVERIFY(!pane(1).value(QStringLiteral("local")).toBool() && !pane(1).value(QStringLiteral("repository")).toBool());
+      QCOMPARE(pane(1).value(QStringLiteral("root")).toString(), QStringLiteral("~"));
+      QCOMPARE(name(1, 0), QStringLiteral("logs"));
+      QCOMPARE(name(0, 0), QStringLiteral("src"));
+      QCOMPARE(pane(0).value(QStringLiteral("branch")).toString(), QStringLiteral("main"));
+      QCOMPARE(fixture.remote_runtime->last<ListDirectory>().path, std::string_view{"/home/ops"});
+      QCOMPARE(fixture.local_runtime->count(ClientTag::list_directory), listed);
+      QVERIFY(shows([&] {
+        return far.measures == 1;
+      }));
+      shoot(QStringLiteral("explorer-two-machines"));
+
+      // A file removed on each machine, and one plan that says the machine of each line.
+      explorer->type(QStringLiteral("jdd"));
+      explorer->type(QStringLiteral("<C-w>h"));
+      explorer->type(QStringLiteral("jdd"));
+      explorer->run(QStringLiteral("w"));
+
+      const auto plan = explorer->plan();
+
+      QCOMPARE(plan.size(), 2);
+      QCOMPARE(plan.value(0).toMap().value(QStringLiteral("machine")).toString(), QStringLiteral("Build"));
+      QCOMPARE(plan.value(1).toMap().value(QStringLiteral("machine")).toString(), QStringLiteral("macbook"));
+      shoot(QStringLiteral("explorer-plan-two-machines"));
+      explorer->type(QStringLiteral("y"));
+      QVERIFY(shows([&] {
+        return fixture.local_runtime->count(ClientTag::change_files) == 1 && fixture.remote_runtime->count(ClientTag::change_files) == 1;
+      }));
+
+      const auto sent_near = fixture.local_runtime->last<ChangeFiles>();
+
+      QVERIFY(sent_near.operations.size() == 1 && sent_near.operations[0].source == "/work/project/README.md");
+
+      const auto near_request = sent_near.request_id;
+      const auto sent_far = fixture.remote_runtime->last<ChangeFiles>();
+
+      QVERIFY(sent_far.operations.size() == 1 && sent_far.operations[0].source == "/home/ops/deploy.sh");
+
+      const ds::Array results{FileResult{.outcome = FileOutcome::done}};
+
+      fixture.remote_runtime->send(FilesChanged{.request_id = sent_far.request_id, .undoable = true, .results = results.view()});
+      fixture.local_runtime->send(FilesChanged{.request_id = near_request, .undoable = true, .results = results.view()});
+      QVERIFY(shows([&] {
+        return explorer->line().value(QStringLiteral("said")).toString() == QStringLiteral(":w · 2 applied by the runtime · u takes it back");
+      }));
+      explorer->close();
     }
   };
 
