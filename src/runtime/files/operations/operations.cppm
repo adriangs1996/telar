@@ -47,6 +47,11 @@ export namespace telar::runtime {
     // name, as a new file of the last change, which `undo` takes back with it; or it is removed.
     void end(const EndFileWrite& request, EncodedReply<ConcurrentMemory>& reply);
 
+    // Removes the files that were arriving and that no chunk reached for `idle`: a window that
+    // closed, or whose connection ended, ends no transfer itself. Returns how many. Every file
+    // that starts to arrive does it for the ones before it.
+    std::size_t abandon(std::chrono::milliseconds idle);
+
   private:
     using Clock = std::chrono::steady_clock;
     using Path = ds::String<ConcurrentMemory>;
@@ -92,7 +97,15 @@ export namespace telar::runtime {
     [[nodiscard]] int git(std::string_view directory, std::span<const std::string_view> arguments, const std::atomic<bool>& cancelled);
     void remember(Step step, std::string_view first, std::string_view second, std::uint64_t inode);
 
+    // A file that arrives, and when its last chunk did.
+    struct Arriving {
+      Path partial;
+      Clock::time_point touched;
+    };
+
     ConcurrentMemory& memory_;
+    // The files that arrive and have not ended.
+    ds::Vec<Arriving, ConcurrentMemory> arriving_;
     // What the last change did, in order.
     ds::Vec<Record, ConcurrentMemory> journal_;
     // What git wrote last.

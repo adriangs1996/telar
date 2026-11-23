@@ -203,6 +203,15 @@ namespace {
     static_cast<void>(send(lost, 1, 1000));
     lose(lost.view, 0, 1010);
     check(lost.view.transfers[0].phase == TransferPhase::failed && lost.view.message.view() == "deploy.sh did not arrive: the connection to its machine ended" && asks(lost.view, 0).ask == TransferAsk::none, "a move that failed asks nothing of its original");
+
+    // Nor does a machine the window no longer reaches.
+    Explorer away;
+
+    pasteFromBox(away, "yy");
+    away.type("y");
+    check(strand(away.view, away.context(), 1000) == 0);
+    away.machines[1].reach = Reach::away;
+    check(strand(away.view, away.context(), 1010) == 1 && away.view.transfers[0].phase == TransferPhase::failed && strand(away.view, away.context(), 1020) == 0);
   }
 
   void testAFileOfAnotherMachineIsBroughtOnAYes() {

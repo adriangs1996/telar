@@ -221,7 +221,8 @@ NativeRoundedRectangle {
         id: transfersPart
         objectName: "sidebarTransfers"
         readonly property real headerHeight: root.regions.activityHeader.height
-        readonly property real rowHeight: Math.round(38 * root.unit)
+        readonly property real lineHeight: Math.round(16 * root.unit)
+        readonly property real rowHeight: 3 * lineHeight + Math.round(14 * root.unit)
         x: root.regions.activity.x
         y: root.regions.activity.y + root.regions.activity.height - height
         width: root.regions.activity.width
@@ -273,30 +274,41 @@ NativeRoundedRectangle {
                     id: transferName
                     x: root.textInset
                     width: Math.max(0, cancel.x - x - 4 * root.unit)
-                    height: Math.round(parent.height * 0.42)
+                    height: transfersPart.lineHeight
                     text: transfer.modelData.name ?? ""
                     color: (transfer.modelData.failed ?? false) ? root.colors.red : root.colors.text
                     pixelSize: root.typography.small
                 }
 
-                // From where to where, and how much of it arrived, or how it ended.
+                // From where to where.
                 ChromeText {
                     x: root.textInset
-                    y: transferName.height
+                    y: transfersPart.lineHeight
                     width: Math.max(0, parent.width - x - root.headerInset)
-                    height: transferName.height
-                    text: (transfer.modelData.route ?? "") + " · " + (transfer.running ? (transfer.modelData.progress ?? "") + ((transfer.modelData.rate ?? "").length > 0 ? " · " + transfer.modelData.rate : "") : (transfer.modelData.phase ?? ""))
+                    height: transfersPart.lineHeight
+                    text: transfer.modelData.route ?? ""
+                    color: root.colors.subtext0
+                    pixelSize: root.typography.small
+                }
+
+                // How much of it arrived and how fast, or how it ended.
+                ChromeText {
+                    x: root.textInset
+                    y: 2 * transfersPart.lineHeight
+                    width: Math.max(0, parent.width - x - root.headerInset)
+                    height: transfersPart.lineHeight
+                    text: transfer.running ? (transfer.modelData.progress ?? "") + ((transfer.modelData.rate ?? "").length > 0 ? " · " + transfer.modelData.rate : "") : (transfer.modelData.phase ?? "")
                     color: root.colors.subtext0
                     pixelSize: root.typography.small
                 }
 
                 Rectangle {
                     x: root.textInset
-                    y: 2 * transferName.height + Math.round(1 * root.unit)
+                    y: 3 * transfersPart.lineHeight + Math.round(3 * root.unit)
                     width: Math.max(0, parent.width - x - root.headerInset)
-                    height: Math.max(1, Math.round(2 * root.unit))
+                    height: Math.max(1, Math.round(3 * root.unit))
                     radius: height / 2
-                    color: root.colors.surface0
+                    color: Qt.alpha(root.colors.text, ChromeStyle.outlineAlpha)
                     visible: transfer.running
 
                     Rectangle {
@@ -312,7 +324,7 @@ NativeRoundedRectangle {
                     objectName: "sidebarTransferCancel"
                     x: parent.width - width - root.headerInset
                     width: Math.round(16 * root.unit)
-                    height: transferName.height
+                    height: transfersPart.lineHeight
                     visible: transfer.running
                     hoverEnabled: true
                     focusPolicy: Qt.TabFocus

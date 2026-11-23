@@ -1786,9 +1786,9 @@ return {api_version = 2, client = {
       // A row dragged onto a directory is a change to write, as `dd` and `p` there: nothing moves
       // on the disk, and `u` takes it back. The directory a row is in does not take it.
       QCOMPARE(explorer->grab(0, listed(QStringLiteral("usage.md"))), 1);
-      QCOMPARE(explorer->aim(0, listed(QStringLiteral("docs")), false).value(QStringLiteral("count")).toInt(), 0);
-      QCOMPARE(explorer->aim(0, listed(QStringLiteral("assets")), false).value(QStringLiteral("row")).toInt(), listed(QStringLiteral("assets")));
-      explorer->drop(0, listed(QStringLiteral("assets")), false);
+      QCOMPARE(explorer->aim(0, listed(QStringLiteral("docs")), false, false).value(QStringLiteral("count")).toInt(), 0);
+      QCOMPARE(explorer->aim(0, listed(QStringLiteral("assets")), false, false).value(QStringLiteral("row")).toInt(), listed(QStringLiteral("assets")));
+      explorer->drop(0, listed(QStringLiteral("assets")), false, false);
       QCOMPARE(explorer->line().value(QStringLiteral("edits")).toInt(), 1);
       QVERIFY(explorer->line().value(QStringLiteral("message")).toString().startsWith(QStringLiteral("1 to move into assets")));
       QVERIFY(QFile::exists(root + QStringLiteral("/docs/usage.md")) && !QFile::exists(root + QStringLiteral("/assets/usage.md")));

@@ -46,6 +46,7 @@ export namespace telar::gui::application::explorer {
   using features::explorer::lens_count;
   using features::explorer::modeText;
   using features::explorer::stopTransfer;
+  using features::explorer::strand;
   using features::explorer::toneOf;
   using features::explorer::transferring;
   using features::explorer::transfers;

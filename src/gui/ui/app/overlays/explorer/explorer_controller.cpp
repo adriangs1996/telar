@@ -88,7 +88,7 @@ namespace telar::gui::qt {
       std::string_view label;
     };
 
-    constexpr ds::Array<HelpKey, 56> help_keys{
+    constexpr ds::Array<HelpKey, 58> help_keys{
         {
             {.group = "Moving", .keys = "j k", .label = "down, up; with a count"},
             {.group = "Moving", .keys = "gg G", .label = "first, last; 12G goes to row 12"},
@@ -127,6 +127,7 @@ namespace telar::gui::qt {
             {.group = "Toward the panes", .keys = "@", .label = "mention to the agent"},
             {.group = "Toward the panes", .keys = "yr yn", .label = "copy the relative path, the name"},
             {.group = "Toward the panes", .keys = ".", .label = "repeat"},
+            {.group = "Toward the panes", .keys = "<CR> @ y", .label = "from another machine: bring a copy"},
             {.group = "Git, sizes and what shows", .keys = "=", .label = "the diff below the row"},
             {.group = "Git, sizes and what shows", .keys = "ga gu", .label = "stage, unstage"},
             {.group = "Git, sizes and what shows", .keys = "gX", .label = "discard changes, through the plan"},
@@ -136,7 +137,7 @@ namespace telar::gui::qt {
             {.group = "Git, sizes and what shows", .keys = "R", .label = "read again"},
             {.group = "Modes", .keys = "V", .label = "visual: y d <CR> @ ga gu"},
             {.group = "Modes", .keys = "/ n N", .label = "filter every path below; next, previous"},
-            {.group = "Modes", .keys = ":", .label = "e w vs sp cd commit marks q"},
+            {.group = "Modes", .keys = ":", .label = "e w vs sp cd commit marks cancel q"},
             {.group = "Modes", .keys = "<Tab>", .label = "on a line of :, complete a directory"},
             {.group = "Modes", .keys = "F", .label = "follow the pane"},
             {.group = "Modes", .keys = "q", .label = "close"},
@@ -144,6 +145,7 @@ namespace telar::gui::qt {
             {.group = "Pointer and shortcuts", .keys = "right click", .label = "the row's menu, with the key of each"},
             {.group = "Pointer and shortcuts", .keys = "Shift+F10", .label = "the menu, from the keys"},
             {.group = "Pointer and shortcuts", .keys = "drag", .label = "moves there on :w; Alt copies"},
+            {.group = "Pointer and shortcuts", .keys = "drag to a machine", .label = "copies there on :w; Shift moves"},
             {.group = "Pointer and shortcuts", .keys = "<D-c> <D-x> <D-v>", .label = "copy, cut, paste; Control too"},
             {.group = "Pointer and shortcuts", .keys = "<D-z> <D-s> F2", .label = "undo, write, rename"},
         },
@@ -711,7 +713,8 @@ namespace telar::gui::qt {
     const auto around = explorer::around(scene_);
     const auto machines = store_.machines().rows().size();
     const auto now = static_cast<std::uint64_t>(std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now().time_since_epoch()).count());
-    bool changed = false;
+    // A machine that went away answers no transfer.
+    bool changed = explorer::strand(view_, explorer::contextOf(around, scene_.shown), now) != 0;
 
     // Twice: what one machine answered is what the other is asked next, whichever comes first.
     for (int pass = 0; pass < 2; ++pass) {
@@ -1121,7 +1124,13 @@ namespace telar::gui::qt {
     const bool carried = carry();
 
     if (!view_.open) {
+      // The sidebar lists them while the explorer is closed.
       if (carried) {
+        if (auto described = describeTransfers(explorer::around(scene_)); described != transfers_) {
+          transfers_ = std::move(described);
+          emit transfersChanged();
+        }
+
         store_.touch();
       }
 

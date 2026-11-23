@@ -46,6 +46,10 @@ namespace telar::runtime {
     return identity == FileIdentity{} || identityOf(status) == identity;
   }
 
+  bool arriving(std::string_view name) noexcept {
+    return name.starts_with(arriving_prefix);
+  }
+
   std::string_view accountHome() noexcept {
     const char* value = std::getenv("HOME"); // NOLINT(concurrency-mt-unsafe): the runtime does not change its environment once it started
 

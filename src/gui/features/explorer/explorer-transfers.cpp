@@ -146,6 +146,7 @@ namespace telar::gui::features::explorer {
           // Progress shows a few times a second, however many chunks arrive in one.
           shows = transfer.last || now_ms - transfer.shown_ms >= TransferLimits::shown_every_ms;
           transfer.shown_ms = shows ? now_ms : transfer.shown_ms;
+          transfer.shown = shows ? transfer.done : transfer.shown;
         }
       }
 
@@ -343,6 +344,28 @@ namespace telar::gui::features::explorer {
     finish(view, index, TransferPhase::failed, now_ms);
   }
 
+  std::size_t strand(View& view, const Context& context, std::uint64_t now_ms) {
+    const auto reached = [&](std::uint64_t id) {
+      return std::ranges::any_of(context.machines, [&](const auto& machine) {
+        return machine.id == id && machine.reach == Reach::answers;
+      });
+    };
+
+    std::size_t stranded = 0;
+
+    for (std::size_t index = 0; index < view.transfers.size(); ++index) {
+      const auto from = view.transfers[index].from;
+      const auto into = view.transfers[index].to;
+
+      if (!ended(view.transfers[index].phase) && (!reached(from) || !reached(into))) {
+        lose(view, index, now_ms);
+        ++stranded;
+      }
+    }
+
+    return stranded;
+  }
+
   void giveUp(View& view, std::size_t index, std::string_view why, std::uint64_t now_ms) {
     if (index >= view.transfers.size()) {
       return;
@@ -480,6 +503,15 @@ namespace telar::gui::features::explorer {
 
   bool sweep(View& view, std::uint64_t now_ms) {
     const auto before = view.transfers.size();
+
+    // What arrived since progress was last shown shows once its turn comes.
+    for (auto& transfer : view.transfers.viewMut()) {
+      if (transfer.shown != transfer.done && !ended(transfer.phase) && now_ms - transfer.shown_ms >= TransferLimits::shown_every_ms) {
+        transfer.shown = transfer.done;
+        transfer.shown_ms = now_ms;
+        ++view.revision;
+      }
+    }
 
     view.transfers.retain([&](const Transfer& transfer) {
       return !ended(transfer.phase) || now_ms - transfer.ended_ms < TransferLimits::lingers_ms;

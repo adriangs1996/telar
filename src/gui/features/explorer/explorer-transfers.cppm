@@ -73,6 +73,10 @@ export namespace telar::gui::features::explorer {
   // The connection its request left on is gone, and nothing answers it.
   void lose(View& view, std::size_t index, std::uint64_t now_ms);
 
+  // Fails the transfers to or from a machine the window no longer reaches: nothing answers
+  // them. Returns how many.
+  std::size_t strand(View& view, const Context& context, std::uint64_t now_ms);
+
   // It cannot go on, for what `why` says: what had arrived is removed first.
   void giveUp(View& view, std::size_t index, std::string_view why, std::uint64_t now_ms);
 
@@ -98,7 +102,8 @@ export namespace telar::gui::features::explorer {
   // first, when something had. False for any other transfer.
   bool halt(View& view, std::size_t index, std::uint64_t now_ms);
 
-  // Forgets the transfers that ended a while ago. True when one went.
+  // Forgets the transfers that ended a while ago, and shows the progress that waited its turn.
+  // True when one went.
   bool sweep(View& view, std::uint64_t now_ms);
 
   // How many transfers have not ended.

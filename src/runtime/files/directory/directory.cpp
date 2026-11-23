@@ -91,6 +91,11 @@ namespace telar::runtime {
       const std::string_view name{terminated};
       struct stat status{};
 
+      // A file that is still arriving is no entry yet.
+      if (arriving(name)) {
+        continue;
+      }
+
       ++total_;
       if (name.size() > FileLimits::name_bytes || items_.size() == kept_entries || ::fstatat(descriptor, terminated, &status, AT_SYMLINK_NOFOLLOW) != 0) {
         continue;

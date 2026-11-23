@@ -7,6 +7,7 @@ import telar.testing.test_memory;
 import telar.base.memory.allocators;
 import telar.platform.fs;
 import telar.runtime.files.content;
+import telar.runtime.files.directory;
 import telar.runtime.files.operations;
 import telar.runtime.transport.connection;
 import telar.wire.files;
@@ -246,6 +247,43 @@ namespace {
     check(std::filesystem::exists(target) && !std::filesystem::exists(late), "an arrival of its own goes back alone");
   }
 
+  void testAFileNoChunkReachesAnyMoreIsRemoved() {
+    telar::testing::TestMemory adapter;
+    ConcurrentMemory& memory = adapter;
+    const TemporaryDirectory directory{"/tmp/telar-transfer-XXXXXX"};
+    const std::string root{directory.path()};
+    const auto target = root + "/report.txt";
+    FileChanger changer{memory};
+    const auto arrived = arrive(changer, memory, {.request_id = 1, .target = target, .offset = 0, .bytes = bytes("half")});
+
+    // While it arrives no listing shows it.
+    DirectoryReader reader{memory};
+    EncodedReply reply{memory};
+    std::vector<Byte> scratch(8192);
+    DecodeStorage storage{scratch};
+
+    reader.list(ListDirectory{.request_id = 2, .path = root, .skip = 0, .limit = FileLimits::maximum_entries}, reply);
+
+    const auto listing = Codec::decode<DirectoryContents>(reply.payload(), storage);
+
+    check(std::filesystem::exists(arrived.partial) && listing.total == 0 && listing.entries.empty(), "a file that is still arriving is no entry");
+
+    // A window that closed ends no transfer: what no chunk reaches any more is removed.
+    check(changer.abandon(std::chrono::minutes{15}) == 0 && std::filesystem::exists(arrived.partial), "one a chunk just reached stays");
+    check(changer.abandon(std::chrono::milliseconds{0}) == 1 && !std::filesystem::exists(arrived.partial));
+    check(refused([&] {
+      static_cast<void>(arrive(changer, memory, {.request_id = 3, .target = target, .partial = arrived.partial, .offset = 4, .bytes = bytes("more")}));
+    }),
+        "and takes no chunk more");
+
+    // One that ended is no longer watched.
+    const auto whole = arrive(changer, memory, {.request_id = 4, .target = target, .offset = 0, .bytes = bytes("whole")});
+
+    check(finish(changer, memory, {.request_id = 5, .partial = whole.partial, .target = target, .keep = true}).outcome == FileOutcome::done);
+    check(changer.abandon(std::chrono::milliseconds{0}) == 0 && std::filesystem::exists(target));
+  }
+
+  const telar::testing::Case case_abandoned{"transfer.a_file_no_chunk_reaches_any_more_is_removed", testAFileNoChunkReachesAnyMoreIsRemoved};
   const telar::testing::Case case_read{"transfer.a_file_is_read_a_chunk_at_a_time_while_it_is_the_one_listed", testAFileIsReadAChunkAtATimeWhileItIsTheOneListed};
   const telar::testing::Case case_arrives{"transfer.a_file_arrives_under_a_name_of_its_own_and_then_takes_its_target", testAFileArrivesUnderANameOfItsOwnAndThenTakesItsTarget};
   const telar::testing::Case case_undone{"transfer.an_arrival_is_part_of_the_last_change_and_goes_back_with_it", testAnArrivalIsPartOfTheLastChangeAndGoesBackWithIt};

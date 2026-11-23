@@ -2650,6 +2650,97 @@ namespace {
       QVERIFY(shows([&] {
         return explorer->line().value(QStringLiteral("said")).toString() == QStringLiteral(":w · 2 applied by the runtime · u takes it back");
       }));
+
+      // A file yanked on one machine and pasted on the other: the plan names both, and the
+      // window carries it, a chunk read on one runtime and written on the other.
+      explorer->type(QStringLiteral("<C-w>l"));
+      explorer->type(QStringLiteral("ggjyy"));
+      explorer->type(QStringLiteral("<C-w>h"));
+      explorer->type(QStringLiteral("p"));
+      explorer->run(QStringLiteral("w"));
+      QCOMPARE(explorer->plan().size(), 1);
+      QCOMPARE(explorer->plan().value(0).toMap().value(QStringLiteral("source")).toString(), QStringLiteral("Build:/home/ops/deploy.sh"));
+      QCOMPARE(explorer->plan().value(0).toMap().value(QStringLiteral("machine")).toString(), QStringLiteral("macbook"));
+      shoot(QStringLiteral("explorer-plan-transfer"));
+      explorer->type(QStringLiteral("y"));
+      QVERIFY(shows([&] {
+        return fixture.remote_runtime->count(ClientTag::read_file) == 1;
+      }));
+
+      const auto read = fixture.remote_runtime->last<ReadFile>();
+      const std::vector<Byte> first(200, Byte{'a'});
+      const std::vector<Byte> second(100, Byte{'b'});
+      const std::string_view arriving_partial = "/work/project/.telar-partial-0011223344556677";
+
+      QVERIFY(read.path == "/home/ops/deploy.sh" && read.offset == 0 && read.identity.inode == 9);
+      fixture.remote_runtime->send(FileChunk{.request_id = read.request_id, .offset = 0, .size = 300, .end = false, .bytes = first});
+      QVERIFY(shows([&] {
+        return fixture.local_runtime->count(ClientTag::write_file) == 1;
+      }));
+
+      const auto write = fixture.local_runtime->last<WriteFile>();
+
+      QVERIFY(write.target == "/work/project/deploy.sh" && write.partial.empty() && write.bytes.size() == first.size());
+      QCOMPARE(fixture.remote_runtime->count(ClientTag::read_file), 1);
+      fixture.local_runtime->send(FileWritten{.request_id = write.request_id, .partial = arriving_partial, .size = 200});
+      QVERIFY(shows([&] {
+        return fixture.remote_runtime->count(ClientTag::read_file) == 2;
+      }));
+
+      // On its way it is a row where it will be, a line of the sidebar and a count in the status.
+      const auto arriving = [&] {
+        for (int row = 0; row < explorer->rows(0)->rowCount(); ++row) {
+          const auto record = explorer->rows(0)->index(row, 0).data(ListModel::record_role).toMap();
+
+          if (record.value(QStringLiteral("arriving")).toBool()) {
+            return record;
+          }
+        }
+
+        return QVariantMap{};
+      };
+
+      QVERIFY(shows([&] {
+        return arriving().value(QStringLiteral("note")).toString() == QStringLiteral("arriving from Build · 200B of 300B");
+      }));
+      QCOMPARE(arriving().value(QStringLiteral("name")).toString(), QStringLiteral("deploy.sh"));
+      QCOMPARE(explorer->transfers().size(), 1);
+      QCOMPARE(explorer->transfers().value(0).toMap().value(QStringLiteral("route")).toString(), QStringLiteral("Build → macbook"));
+      QCOMPARE(explorer->transfers().value(0).toMap().value(QStringLiteral("progress")).toString(), QStringLiteral("200B of 300B"));
+      QCOMPARE(pane(0).value(QStringLiteral("carried")).toInt(), 1);
+      QCOMPARE(pane(1).value(QStringLiteral("carried")).toInt(), 1);
+
+      auto* listed_transfers = window->findChild<QQuickItem*>(QStringLiteral("sidebarTransfers"));
+
+      QVERIFY(listed_transfers != nullptr && listed_transfers->isVisible() && listed_transfers->height() > 0);
+      shoot(QStringLiteral("explorer-transfer"));
+
+      const auto next = fixture.remote_runtime->last<ReadFile>();
+
+      QCOMPARE(next.offset, std::uint64_t{200});
+      fixture.remote_runtime->send(FileChunk{.request_id = next.request_id, .offset = 200, .size = 300, .end = true, .bytes = second});
+      QVERIFY(shows([&] {
+        return fixture.local_runtime->count(ClientTag::write_file) == 2;
+      }));
+
+      const auto last = fixture.local_runtime->last<WriteFile>();
+
+      QVERIFY(last.partial == arriving_partial && last.offset == 200 && last.bytes.size() == second.size());
+      fixture.local_runtime->send(FileWritten{.request_id = last.request_id, .partial = arriving_partial, .size = 300});
+      QVERIFY(shows([&] {
+        return fixture.local_runtime->count(ClientTag::end_file_write) == 1;
+      }));
+
+      const auto ended = fixture.local_runtime->last<EndFileWrite>();
+
+      QVERIFY(ended.keep && ended.partial == arriving_partial && ended.target == "/work/project/deploy.sh");
+      fixture.local_runtime->send(FileWriteEnded{.request_id = ended.request_id, .outcome = FileOutcome::done, .path = "/work/project/deploy.sh"});
+      QVERIFY(shows([&] {
+        return explorer->line().value(QStringLiteral("said")).toString() == QStringLiteral("deploy.sh arrived");
+      }));
+      QVERIFY(explorer->transfers().value(0).toMap().value(QStringLiteral("ended")).toBool());
+      QCOMPARE(pane(0).value(QStringLiteral("carried")).toInt(), 0);
+      QCOMPARE(fixture.remote_runtime->count(ClientTag::change_files), 1);
       explorer->close();
     }
   };

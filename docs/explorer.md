@@ -148,7 +148,8 @@ drop is a change typed, the same `dd` or `yy` and then `p` leave there: it moves
 copies them with Alt held, when `:w` writes it, and `u` takes it back. A row of a selection
 takes the selection with it. A label beside the pointer says what letting go would do and to
 how many rows, and the directory that would take them is marked. A drop that would leave a row
-where it is, or put a directory into itself, is refused.
+where it is, or put a directory into itself, is refused. Onto a window of
+[another machine](#between-machines) a drop copies, and moves with Shift held.
 
 ## Git
 
@@ -199,18 +200,53 @@ comes from the runtime of its own machine; a machine with no window is asked for
 - A mark in lower case belongs to the machine it was set on; from another one, `'a` says so
   and goes nowhere. A mark in upper case keeps its machine: `'B` takes the window there in
   one jump, which `Ctrl+o` takes back. The jumps go back and forward across machines.
-- A file goes to a pane of its own machine alone. With the file on one machine and the
-  focused pane on another, Enter, `@` and `cd` type nothing and say where each is. `gf`
-  opens the file in an editor of its machine and shows that machine; `yy` copies
-  `LABEL:/absolute/path`.
+- A path names a file on its own machine alone. With the file on one machine and the
+  focused pane on another, Enter and `@` type nothing and ask whether to
+  [bring a copy](#between-machines); `cd` is refused. `gf` opens the file in an editor of its
+  machine and shows that machine; `yy` copies `LABEL:/absolute/path`.
 - `:w` shows one plan for every window, and each line says its machine when they are of more
   than one. Accepting it sends each runtime the operations on its own files; the line under
   the windows counts what all of them did, and `u` takes the plan back on every machine it
   touched. The changes of a machine that does not answer wait.
 
+### Between machines
+
+The runtimes do not talk to each other: the window reads a file from one and writes it to the
+other, 256 KiB at a time, and holds one such piece of it and no more.
+
+| What you do | What happens |
+| --- | --- |
+| `yy` in a window, `p` in a window on another machine, `:w` | The plan has a COPY line that names both machines, as `box:/home/ops/deploy.sh`. A yes starts the transfer. |
+| `dd`, `p` on another machine, `:w` | A MOVE line. The original goes to the trash of its machine once the copy is whole and has its name, and not before. |
+| A drag onto a window of another machine | A copy; with Shift held, a move. On its own machine a drag moves, and copies with Alt. |
+| Enter or `@` on a file, with the focused pane on another machine | The line under the windows asks `bring a copy there? [y/N]`. With `y` the file goes to `~/Downloads/telar/LABEL/` on the pane's machine, in a directory made when it is missing, and its path is typed at the pane once it is whole. Any other key leaves it. |
+| `:cancel` | Stops the files on their way to or from the machine of this window; `:cancel!` stops every one. |
+
+![A file on its way from one machine to another](images/telar-explorer-transfer.png)
+
+- A file that arrives shows as a row where it will be, with how much of it arrived, until
+  its directory is read again. The status line of a window counts the files on their way to
+  or from its machine, and the sidebar lists them under TRANSFERS with their route, how much
+  arrived, the rate, and a control that cancels one.
+- Two files travel at once and the rest wait their turn. A transfer goes on while the
+  explorer is closed.
+- While it arrives a file has a name of the runtime's own beside its target,
+  `.telar-partial-` and sixteen digits, which no listing shows. Where the target exists, the
+  file takes a free name beside it, or with `:w!` what was there goes to the trash.
+- A transfer that is cancelled or that fails removes what had arrived, and the line under
+  the windows says why: the file changed since it was listed, its machine stopped answering,
+  the directory did not take it. The original is never touched before the copy is whole.
+- `u` takes back what the last plan brought: the copies go to the trash of the machine they
+  arrived on, and the originals of a move come out of the trash of theirs.
+- A window that closes ends its transfers. What had arrived stays under its hidden name
+  until the next file arrives on that machine, which removes the ones no piece reached for a
+  quarter of an hour.
+
 ## What it does not do yet
 
-- Nothing is copied or moved from one machine to another: a paste or a drop of what another
-  machine holds is refused.
+- A directory is not carried from one machine to another: a paste or a drop of one is
+  refused, and its files are carried one by one.
+- A transfer does not go on after its machine was disconnected and connected again: it
+  fails, and is started again by hand.
 - Nothing is dragged onto a pane, out to the desktop, or in from it.
 - `Tab` completes no path of another machine than the window's.

@@ -432,6 +432,7 @@ namespace telar::runtime {
 
   FileChanger::FileChanger(ConcurrentMemory& memory)
       : memory_(memory),
+        arriving_(memory),
         journal_(memory),
         output_(memory) {}
 
@@ -814,14 +815,15 @@ namespace telar::runtime {
 
   namespace {
 
-    // The name a file that arrives has until it is whole: hidden, and no name a listing takes
-    // for the file itself.
-    constexpr std::string_view partial_prefix = ".telar-partial-";
+    // How long a file may wait for its next chunk before it is taken for abandoned, and how
+    // many arrive at once.
+    constexpr std::chrono::minutes arriving_idle{15};
+    constexpr std::size_t arriving_limit = 64;
 
     // Whether `partial` is a name this runtime gives a file arriving at `target`: beside it, and
     // made as `partialFor` makes them.
     constexpr bool partialOf(std::string_view partial, std::string_view target) {
-      return acceptable(partial) && parentOf(partial) == parentOf(target) && nameOf(partial).starts_with(partial_prefix) && nameOf(partial).size() > partial_prefix.size();
+      return acceptable(partial) && parentOf(partial) == parentOf(target) && arriving(nameOf(partial)) && nameOf(partial).size() > arriving_prefix.size();
     }
 
     // A name for the partial of `target` that nothing has: random, so two transfers to one
@@ -836,7 +838,7 @@ namespace telar::runtime {
         partial.append("/");
       }
 
-      partial.append(partial_prefix);
+      partial.append(arriving_prefix);
       for (const auto byte : nonce) {
         ds::formatTo(partial, "{:02x}", byte);
       }
@@ -855,6 +857,11 @@ namespace telar::runtime {
     if (request.partial.empty()) {
       if (request.offset != 0) {
         throw RequestError{FailureCode::invalid_request, "The first bytes of a file go at its start"};
+      }
+
+      static_cast<void>(abandon(arriving_idle));
+      if (arriving_.size() == arriving_limit) {
+        throw RequestError{FailureCode::invalid_request, "Too many files arrive at once"};
       }
 
       if (Path parent{memory_, parentOf(request.target)}; request.parents && !createDirectories(parent)) {
@@ -884,7 +891,37 @@ namespace telar::runtime {
       throw RequestError{FailureCode::invalid_request, "The file that arrives could not be written"};
     }
 
+    // The file is known as arriving until it ends, with when it last did.
+    bool known = false;
+
+    for (auto& waited : arriving_.viewMut()) {
+      if (waited.partial.view() == partial.view()) {
+        waited.touched = Clock::now();
+        known = true;
+      }
+    }
+
+    if (!known && arriving_.size() < arriving_limit) {
+      arriving_.push({.partial = Path{memory_, partial.view()}, .touched = Clock::now()});
+    }
+
     reply.send(FileWritten{.request_id = request.request_id, .partial = partial.view(), .size = request.offset + request.bytes.size()});
+  }
+
+  std::size_t FileChanger::abandon(std::chrono::milliseconds idle) {
+    const auto now = Clock::now();
+    const auto before = arriving_.size();
+
+    arriving_.retain([&](const Arriving& file) {
+      if (now - file.touched < idle) {
+        return true;
+      }
+
+      ::unlink(file.partial.data());
+      return false;
+    });
+
+    return before - arriving_.size();
   }
 
   void FileChanger::end(const EndFileWrite& request, EncodedReply<ConcurrentMemory>& reply) {
@@ -893,6 +930,10 @@ namespace telar::runtime {
     }
 
     const Path partial{memory_, request.partial};
+
+    arriving_.retain([&](const Arriving& file) {
+      return file.partial.view() != request.partial;
+    });
 
     if (!request.keep) {
       // What a transfer that stopped left behind: only what this runtime wrote under that name.

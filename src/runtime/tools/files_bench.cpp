@@ -1,6 +1,7 @@
 // What the runtime does for the explorer, measured on directories it makes: listing one with
-// many entries, giving its next page, measuring a tree, asking git what changed and inspecting
-// a changed file. Each request goes through the file service as a client's does, decoded from
+// many entries, giving its next page, measuring a tree, reading a file a chunk at a time and
+// taking one that arrives in chunks, as a transfer between two machines asks of each, asking
+// git what changed and inspecting a changed file. Each request goes through the file service as a client's does, decoded from
 // its bytes and answered as an encoded reply, and is timed over many repetitions. The output is
 // one JSON object per workload.
 //
@@ -97,6 +98,60 @@ namespace {
     std::println(R"({{"workload":"{}","size":{},"iterations":{},"reply_bytes":{},"p50_us":{:.1f},"p99_us":{:.1f}}})", workload.name, workload.size, workload.iterations, reply_bytes, samples.quantile(0.5), samples.quantile(0.99));
   }
 
+  // A file carried from one runtime to another as the window does it: a chunk read on one is
+  // written on the other, then the next, and at the end the file takes its name. Times each
+  // chunk on each side, and the whole.
+  void carry(ConcurrentMemory& memory, const std::string& source, const std::string& target, std::size_t size) {
+    constexpr std::size_t frame_bytes = FileLimits::chunk_bytes + std::size_t{64} * 1024;
+    constexpr double microsecond = 1000;
+    constexpr double mebibyte = 1024.0 * 1024.0;
+    std::vector<Byte> frame(frame_bytes);
+    std::vector<Byte> scratch(frame_bytes);
+    FileService from{memory};
+    FileService into{memory};
+    Samples reads;
+    Samples writes;
+    std::string partial;
+    std::uint64_t offset = 0;
+    std::size_t chunks = 0;
+    bool end = false;
+    const auto start = Clock::now();
+
+    while (!end) {
+      EncodedReply read{memory};
+      EncodedReply written{memory};
+      DecodeStorage storage{scratch};
+      const auto asked = Codec::encode(ReadFile{.request_id = 1, .path = source, .identity = {}, .offset = offset, .limit = FileLimits::chunk_bytes}, std::span<Byte>{frame});
+      auto before = Clock::now();
+
+      from.process(asked, read);
+      reads.add(Clock::now() - before);
+
+      const auto chunk = Codec::decode<FileChunk>(read.payload(), storage);
+      const auto sent = Codec::encode(WriteFile{.request_id = 2, .target = target, .partial = partial, .offset = offset, .parents = false, .bytes = chunk.bytes}, std::span<Byte>{frame});
+
+      before = Clock::now();
+      into.process(sent, written);
+      writes.add(Clock::now() - before);
+      partial = Codec::decode<FileWritten>(written.payload(), storage).partial;
+      offset += chunk.bytes.size();
+      end = chunk.end;
+      ++chunks;
+    }
+
+    EncodedReply ended{memory};
+    const auto before = Clock::now();
+
+    into.process(Codec::encode(EndFileWrite{.request_id = 3, .partial = partial, .target = target, .keep = true, .overwrite = true}, std::span<Byte>{frame}), ended);
+
+    const auto placed = static_cast<double>(std::chrono::duration_cast<std::chrono::nanoseconds>(Clock::now() - before).count()) / microsecond;
+    const auto seconds = std::chrono::duration<double>(Clock::now() - start).count();
+
+    std::println(R"({{"workload":"transfer.read_chunk","size":{},"iterations":{},"reply_bytes":{},"p50_us":{:.1f},"p99_us":{:.1f}}})", size, chunks, FileLimits::chunk_bytes, reads.quantile(0.5), reads.quantile(0.99));
+    std::println(R"({{"workload":"transfer.write_chunk","size":{},"iterations":{},"reply_bytes":{},"p50_us":{:.1f},"p99_us":{:.1f}}})", size, chunks, partial.size(), writes.quantile(0.5), writes.quantile(0.99));
+    std::println(R"({{"workload":"transfer.whole_file","size":{},"chunks":{},"end_us":{:.1f},"seconds":{:.3f},"mib_per_second":{:.0f}}})", size, chunks, placed, seconds, static_cast<double>(size) / mebibyte / seconds);
+  }
+
   void write(const std::string& path, std::size_t lines) {
     std::ofstream file{path};
 
@@ -178,6 +233,25 @@ int main(int argc, char** argv) {
   run(memory, {.name = "list.first_page", .size = options.entries, .iterations = options.iterations, .fresh = true}, ListDirectory{.request_id = 1, .path = flat, .skip = 0, .limit = FileLimits::maximum_entries});
   run(memory, {.name = "list.next_page", .size = options.entries, .iterations = options.iterations}, ListDirectory{.request_id = 1, .path = flat, .skip = FileLimits::maximum_entries, .limit = FileLimits::maximum_entries});
   run(memory, {.name = "measure.tree", .size = options.directories * files_in_directory, .iterations = std::max<std::size_t>(1, options.iterations / 4)}, MeasureDirectory{.request_id = 1, .path = tree, .skip = 0, .limit = FileLimits::maximum_entries});
+
+  // A file of many chunks, carried from one service to another.
+  {
+    constexpr std::size_t chunks = 256;
+    const std::size_t size = chunks * FileLimits::chunk_bytes;
+    const auto source = root + "/carried.bin";
+    std::vector<char> block(FileLimits::chunk_bytes);
+    std::ofstream file{source, std::ios::binary};
+
+    for (std::size_t chunk = 0; chunk < chunks; ++chunk) {
+      std::ranges::fill(block, static_cast<char>('a' + chunk % 26));
+      file.write(block.data(), static_cast<std::streamsize>(block.size()));
+    }
+
+    file.close();
+    for (std::size_t round = 0; round < 3; ++round) {
+      carry(memory, source, root + "/arrived.bin", size);
+    }
+  }
 
   // A repository whose files changed since its commit.
   std::filesystem::create_directories(repository);

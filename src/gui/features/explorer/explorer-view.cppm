@@ -300,6 +300,8 @@ export namespace telar::gui::features::explorer {
     std::uint64_t pane = 0;
     bool mention = false;
     bool handed = false;
+    // How much of it had arrived when that was last shown.
+    std::uint64_t shown = 0;
     // The plan it is of: what one plan brings to a machine goes back together.
     std::uint32_t batch = 0;
     // The partial the target's runtime named, and the path the file ended at.
