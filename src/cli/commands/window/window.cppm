@@ -70,9 +70,15 @@ export {
         Line text;
       };
 
-      SetupReport(Memory& memory, bool json_output);
+      // A question waits this long for its answer; then it has none.
+      static constexpr auto answer_timeout = std::chrono::minutes{10};
+
+      // `events` writes each step, note and question as one JSON line as it happens, and reads
+      // each answer as one JSON line on standard input: what a window that runs setup reads.
+      SetupReport(Memory& memory, bool json_output, bool events_output = false);
 
       bool json;
+      bool events;
       ds::Array<Result, static_cast<std::size_t>(Step::count)> results{};
       ds::Vec<Note, Memory> notes;
       std::size_t omitted_notes = 0;
@@ -95,6 +101,14 @@ export {
       }
 
       [[nodiscard]] bool has(Status status) const;
+
+      // With events, asks the window that runs setup and waits for its answer: `true`, `false`
+      // or the text it gave. None without events, when the answer did not come in time, or when
+      // the window closed standard input.
+      [[nodiscard]] ds::Option<Line> ask(Memory& memory, std::string_view kind, std::string_view text, std::string_view agent = {}) const;
+
+      // With events, where an agent logs in there: its link, and the code that link asks for.
+      void login(std::string_view agent, std::string_view url, std::string_view code) const;
 
       int refuse(Memory& memory, SetupTarget target, std::string_view reason) const;
 
