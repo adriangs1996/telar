@@ -240,6 +240,10 @@ export {
       // Whether the runtime the session is connected to understands `tag`.
       [[nodiscard]] bool speaks(ClientTag tag) const noexcept;
 
+      // Whether the runtime speaks `dialect` or a newer one, for what a dialect changed in a
+      // request every runtime knows.
+      [[nodiscard]] bool speaks(handshake::Dialect dialect) const noexcept;
+
       // Asks for the rows from stable row `first` to `last` the pane holds neither on its screen
       // nor in its cache, a request at a time while requests are free.
       void requestRows(std::uint64_t pane_id, std::uint64_t first, std::uint64_t last);

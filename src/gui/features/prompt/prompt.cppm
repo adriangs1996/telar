@@ -375,10 +375,11 @@ export namespace telar::gui::features::prompt {
   using CommandQuery = std::variant<CompleteWords, FindPaths>;
 
   // The question about `word` under `request_id`: the commands that start with it, or for a
-  // command named by its path, the files in its directory. None when the path names nothing to
-  // look for. It views `word`, and for a path the directory it writes in `root`, the state's
+  // command named by its path, the executables in its directory, which a runtime that
+  // `reads_directories` lists and an older one searches for. None when the path names nothing to
+  // look for. It views `word`, and for a search the directory it writes in `root`, the state's
   // command_root.
-  [[nodiscard]] tbc::val_b<ds::Option<CommandQuery>> ask(tbc::mut_b<Name> root, const Commands& commands, tbc::val_b<std::string_view> word, std::uint64_t request_id);
+  [[nodiscard]] tbc::val_b<ds::Option<CommandQuery>> ask(tbc::mut_b<Name> root, const Commands& commands, tbc::val_b<std::string_view> word, std::uint64_t request_id, bool reads_directories);
 
   // The question `request_id` about `word` went out, `sent`, and `word` waits for its answer; or
   // it could not, and `word` stays unknown.
@@ -429,12 +430,14 @@ export namespace telar::gui::features::prompt {
 
   // Where a plan's choices come from: the spec held for the command when `specified`, and, when
   // `asks`, what only the runtime knows (files under `directory`, commands, branches…), for the
-  // `dialect`'s shell.
+  // `dialect`'s shell. A runtime that `reads_directories` lists the one directory a path names;
+  // an older one is searched under it.
   struct CompletionSources {
     bool specified = false;
     bool asks = false;
     std::string_view directory;
     shell::Dialect dialect = shell::Dialect::posix;
+    bool reads_directories = false;
   };
 
   // The choices for `context` in `line`, from `sources`.

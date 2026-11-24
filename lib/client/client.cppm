@@ -55,9 +55,10 @@ export {
       // MeasureDirectory, QueryChanges, InspectFile, ChangeFiles, UndoFileChanges, CommitChanges,
       // LocateHome, ReadFile, WriteFile, EndFileWrite, QueryTouches, KeepPlaces and QueryPlaces, with their answers,
       // what an editor tells the explorer: NvimOpenFiles and NvimExplore, and the explorer as a
-      // pane: CreateExplorerPane, KeepExplorer and ExplorerKept. Peers without them reject the
-      // messages.
-      inline constexpr SchemaId schema_id{'c', 'q', 'p', '0', '0', '0', '1', '1'};
+      // pane: CreateExplorerPane, KeepExplorer and ExplorerKept; cqp00012 adds the providers of
+      // CompleteWords that read one directory: path, directory and executable. Peers without them
+      // reject the messages.
+      inline constexpr SchemaId schema_id{'c', 'q', 'p', '0', '0', '0', '1', '2'};
 
       // The schemas a client of this build can speak with a runtime, oldest first. Each added
       // messages to the one before it and left the layouts of the others alone, so a client that
@@ -75,11 +76,16 @@ export {
         cqp00009,
         cqp00010,
         cqp00011,
+        cqp00012,
       };
 
-      inline constexpr Dialect current_dialect = Dialect::cqp00011;
+      inline constexpr Dialect current_dialect = Dialect::cqp00012;
 
-      inline constexpr ds::Array<SchemaId, 11> dialect_schemas{
+      // The first dialect whose runtime completes from one directory, CompleteWords' path,
+      // directory and executable providers; an older one is asked with FindPaths.
+      inline constexpr Dialect directory_words = Dialect::cqp00012;
+
+      inline constexpr ds::Array<SchemaId, 12> dialect_schemas{
           SchemaId{'8', '7', '6', 'b', '4', '8', '0', 'd'},
           SchemaId{'c', 'q', 'p', '0', '0', '0', '0', '2'},
           SchemaId{'c', 'q', 'p', '0', '0', '0', '0', '3'},
@@ -90,6 +96,7 @@ export {
           SchemaId{'c', 'q', 'p', '0', '0', '0', '0', '8'},
           SchemaId{'c', 'q', 'p', '0', '0', '0', '0', '9'},
           SchemaId{'c', 'q', 'p', '0', '0', '0', '1', '0'},
+          SchemaId{'c', 'q', 'p', '0', '0', '0', '1', '1'},
           schema_id,
       };
 

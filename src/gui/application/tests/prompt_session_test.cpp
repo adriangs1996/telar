@@ -31,6 +31,7 @@ import telar.wire.runtime;
 import telar.gui.foundation.core;
 import telar.config.client;
 import telar.base.ds;
+import telar.client;
 
 namespace {
 
@@ -297,13 +298,13 @@ namespace {
   }
 
   // A prompt request the runtime fails, or a lost connection never answers, settles quietly
-  // instead of waiting forever.
+  // instead of waiting forever. The runtime is one before directory words, which Tab searches.
   void promptRequestsSettleOnFailure() {
     SystemAllocator memory;
     Transport transport;
     TestSession client{memory, transport};
 
-    openFirstPane(client, transport);
+    openFirstPane(client, transport, telar::handshake::Dialect::cqp00011);
     FrameBody frame;
 
     frame.pane_id = 1;
@@ -478,12 +479,12 @@ command = "switch" : "Switch branches" , { @branch } | "status" : "Show the work
 
     check(cat.command == "cat", "a command's spec is asked for once");
     deliver(client, CommandSpec{.request_id = cat.request_id, .command = "cat", .state = CommandSpecState::unavailable, .digest = 0, .source = {}});
-    const auto find = transport.last<FindPaths>();
+    const auto find = transport.last<CompleteWords>();
 
-    check(find.root.starts_with('/') && find.query == "sr" && prompt::line(client, 1)->pending(find.request_id), "paths are asked from the runtime");
-    const ds::Array matches{PathMatch{.path = "src/", .kind = PathKind::directory}, PathMatch{.path = "src/main.cpp", .kind = PathKind::file}, PathMatch{.path = "README", .kind = PathKind::file}};
+    check(find.provider == CompletionProvider::path && find.prefix == "sr" && prompt::line(client, 1)->pending(find.request_id), "the directory typed is read by the runtime");
+    const ds::Array children{CompletionWord{.text = "src/"}};
 
-    check(deliver(client, PathResults{.request_id = find.request_id, .root = find.root, .complete = true, .matches = matches}) == application::Change::terminal, "the answer repaints the line");
+    check(deliver(client, CompletionWords{.request_id = find.request_id, .words = children}) == application::Change::terminal, "the answer repaints the line");
     check(prompt::line(client, 1)->text() == "cat src/", "the only child that matches is written, a directory without a space");
 
     typeKeys(client, "my file");
@@ -570,12 +571,40 @@ command = "switch" : "Switch branches" , { @branch } | "status" : "Show the work
   template <typename Client>
   void fallsBackToFiles(Client& client, Transport& transport) {
     prompt::key(client, 1, prompt::KeyPress{.key = prompt::Key::character, .character = 'u', .modifiers = {.control = true}});
-    const auto before = transport.count(ClientTag::find_paths);
-
     typeKeys(client, "git reset fi");
     tab(client);
-    check(transport.count(ClientTag::find_paths) == before + 1 && transport.last<FindPaths>().query == "fi", "a subcommand the spec does not know completes files");
+    check(transport.last<CompleteWords>().provider == CompletionProvider::path && transport.last<CompleteWords>().prefix == "fi", "a subcommand the spec does not know completes files");
     prompt::key(client, 1, prompt::KeyPress{.key = prompt::Key::escape});
+  }
+
+  // A path's directory is read where the shell runs, `~` too, and the line keeps what was typed;
+  // a command named by its path completes from the executables there.
+  template <typename Client>
+  void completesPaths(Client& client, Transport& transport) {
+    prompt::key(client, 1, prompt::KeyPress{.key = prompt::Key::character, .character = 'u', .modifiers = {.control = true}});
+    typeKeys(client, "cat ~/Doc");
+    tab(client);
+    const auto home = transport.last<CompleteWords>();
+
+    check(home.provider == CompletionProvider::path && home.prefix == "~/Doc", "~ goes to the runtime as typed");
+    const ds::Array documents{CompletionWord{.text = "~/Documents/"}};
+
+    deliver(client, CompletionWords{.request_id = home.request_id, .words = documents});
+    check(prompt::line(client, 1)->text() == "cat ~/Documents/", "the line keeps ~");
+
+    prompt::key(client, 1, prompt::KeyPress{.key = prompt::Key::character, .character = 'u', .modifiers = {.control = true}});
+    typeKeys(client, "./gra");
+    tab(client);
+    const auto local = transport.last<CompleteWords>();
+
+    check(local.provider == CompletionProvider::executable && local.prefix == "./gra", "a command named by its path asks for the executables there");
+    const ds::Array gradle{CompletionWord{.text = "./gradlew"}};
+
+    deliver(client, CompletionWords{.request_id = local.request_id, .words = gradle});
+    check(prompt::line(client, 1)->text() == "./gradlew ", "the executable is written");
+    check(prompt::commandPresence(client, 1, "./gradlew") == prompt::CommandPresence::pending && transport.last<CompleteWords>().provider == CompletionProvider::executable, "whether it runs is asked the same way");
+    deliver(client, CompletionWords{.request_id = transport.last<CompleteWords>().request_id, .words = gradle});
+    check(prompt::commandPresence(client, 1, "./gradlew") == prompt::CommandPresence::found, "an executable listed there is found");
   }
 
   void lineCompletes() {
@@ -601,6 +630,7 @@ command = "switch" : "Switch branches" , { @branch } | "status" : "Show the work
     completesFromRuntime(client, transport);
     completesFromProviders(client, transport);
     fallsBackToFiles(client, transport);
+    completesPaths(client, transport);
 
     // After a command the pane asks again, with the digest of the spec it holds: an unchanged
     // spec is not sent twice.

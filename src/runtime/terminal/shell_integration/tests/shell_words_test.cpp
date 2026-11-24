@@ -157,7 +157,76 @@ namespace {
     check(result.expansion.size() <= CommandSpec::maximum_expansion_bytes, "the expansion is longer than the reply carries");
   }
 
+  // Tab's paths: the direct children of the directory typed that start with what follows its
+  // last slash, written back as typed, whatever lies deeper or is ignored.
+  void testDirectoryWords() {
+    telar::testing::TestMemory adapter;
+    telar::ConcurrentMemory& memory = adapter;
+    ds::Array<char, 64> directory{};
+
+    std::strcpy(directory.dataMut(), "/tmp/telar-word-paths-XXXXXX");
+    check(::mkdtemp(directory.dataMut()) != nullptr);
+    const std::string root{directory.data()};
+
+    // Deeper matches than one reply carries must not crowd out the child.
+    for (int index = 0; index < 60; ++index) {
+      const auto nested = root + std::format("/d{:02}", index);
+
+      std::filesystem::create_directory(nested);
+      std::ofstream{nested + "/main.c"};
+    }
+
+    std::ofstream{root + "/main-application-config.yaml"};
+    std::ofstream{root + "/.env"};
+    std::ofstream{root + "/README"};
+    std::ofstream{root + "/gradlew"};
+    check(::chmod((root + "/gradlew").c_str(), 0700) == 0);
+    std::filesystem::create_directory(root + "/node_modules");
+    std::filesystem::create_directory_symlink(root + "/d00", root + "/linked");
+
+    const auto words = [&](CompletionProvider provider, std::string_view prefix, std::string_view home = {}) {
+      WordReader reader{memory};
+      WordRequest request{.client = 1, .request = 2, .provider = provider, .prefix = {}, .directory = {}, .home = {}, .path = {}};
+
+      request.prefix.assign(prefix);
+      request.directory.assign(root);
+      request.home.assign(home);
+      const auto result = reader.observe(request);
+      std::vector<std::string> found;
+
+      for (const auto& word : result.words) {
+        found.emplace_back(word.text.view());
+      }
+
+      return std::pair{found, result.truncated};
+    };
+
+    check(words(CompletionProvider::path, "ma").first == std::vector<std::string>{"main-application-config.yaml"}, "a direct child is found whatever lies deeper");
+    const auto [all, cut] = words(CompletionProvider::path, "");
+
+    check(all.size() == 65 && !cut && std::ranges::is_sorted(all), "every direct child, sorted");
+    check(std::ranges::find(all, ".env") == all.end() && std::ranges::find(all, "node_modules/") != all.end(), "dot files stay hidden, ignored directories do not");
+    check(std::ranges::find(all, "linked/") != all.end(), "a link to a directory is a directory");
+    check(words(CompletionProvider::path, ".e").first == std::vector<std::string>{".env"}, "a dot typed shows dot files");
+    check(words(CompletionProvider::directory, "").first.size() == 62, "directories alone");
+    check(words(CompletionProvider::executable, "./gra").first == std::vector<std::string>{"./gradlew"}, "an executable named by its path");
+    check(words(CompletionProvider::executable, "./RE").first.empty(), "a file that does not run is no command");
+    check(words(CompletionProvider::path, "d00/m").first == std::vector<std::string>{"d00/main.c"}, "a directory typed is read, and written back as typed");
+    check(words(CompletionProvider::path, "~/RE", root).first == std::vector<std::string>{"~/README"}, "~ reads the home and keeps ~ in what is written");
+    check(words(CompletionProvider::path, "$HOME/RE", root).first.empty(), "a variable is the shell's to expand");
+
+    for (int index = 0; index < 300; ++index) {
+      std::ofstream{root + std::format("/many{:03}", index)};
+    }
+
+    const auto [many, truncated] = words(CompletionProvider::path, "many");
+
+    check(many.size() == WordReader::maximum_words && truncated && many.front() == "many000", "a cut list says so");
+    std::filesystem::remove_all(root);
+  }
+
   const telar::testing::Case case_reply_cap{"shell_words.reply_cap", testReplyCap};
+  const telar::testing::Case case_directory_words{"shell_words.directory_words", testDirectoryWords};
   const telar::testing::Case case_token_parse{"shell_words.token_parse", testTokenParse};
   const telar::testing::Case case_ignores_special_and_oversized_files{"shell_words.ignores_special_and_oversized_files", testIgnoresSpecialAndOversizedFiles};
   const telar::testing::Case case_cuts_descriptions_at_characters{"shell_words.cuts_descriptions_at_characters", testCutsDescriptionsAtCharacters};

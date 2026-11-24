@@ -365,10 +365,19 @@ namespace telar::gui::features::prompt {
     return ds::none;
   }
 
-  tbc::val_b<ds::Option<CommandQuery>> ask(tbc::mut_b<Name> root, const Commands& commands, tbc::val_b<std::string_view> word, std::uint64_t request_id) {
+  tbc::val_b<ds::Option<CommandQuery>> ask(tbc::mut_b<Name> root, const Commands& commands, tbc::val_b<std::string_view> word, std::uint64_t request_id, bool reads_directories) {
     const auto slash = word.rfind('/');
     if (slash == std::string_view::npos) {
       return CompleteWords{.request_id = request_id, .pane_id = commands.pane_id, .provider = CompletionProvider::command, .prefix = word};
+    }
+
+    // A command named by its path: the executables of its directory, read where the shell runs.
+    if (reads_directories) {
+      if (word.size() > longest_word || slash + 1 == word.size()) {
+        return ds::none;
+      }
+
+      return CompleteWords{.request_id = request_id, .pane_id = commands.pane_id, .provider = CompletionProvider::executable, .prefix = word};
     }
 
     // A command named by its path: a file there, from the directory the shell is in.
@@ -671,6 +680,21 @@ namespace telar::gui::features::prompt {
       }
     }
 
+    // The entries of the one directory `partial` names, which the runtime reads where the shell
+    // runs and writes back as typed: files, or only directories.
+    void askDirectory(tbc::mut_a<CompletionPlan> result, tbc::mut_a<Memory> memory, std::string_view partial, CompletionProvider provider) {
+      if (partial.size() > longest_word) {
+        return;
+      }
+
+      CompletionPlan::Question question{memory};
+
+      question.provider = provider;
+      question.query.assign(partial);
+      question.base.assign(result.completion.provider_prefix.view());
+      result.questions.push(std::move(question));
+    }
+
     // Commands on the shell's PATH, branches, SSH hosts and make targets come from the runtime.
     // A spec's @ref is a branch name as far as the editor completes it.
     void askProviders(tbc::mut_a<CompletionPlan> result, tbc::mut_a<Memory> memory, bool command_position, std::string_view partial) {
@@ -713,7 +737,7 @@ namespace telar::gui::features::prompt {
   }
 
   tbc::val_a<CompletionPlan> plan(State& state, const PaneLine& line, tbc::val_a<CompletionContext> context, const CompletionSources& sources) {
-    const auto& [specified, asks, directory, dialect] = sources;
+    const auto& [specified, asks, directory, dialect, reads_directories] = sources;
     auto& memory = state.memory;
     const auto& specs = state.specs;
     const ebnf::command_spec* found = nullptr;
@@ -737,11 +761,19 @@ namespace telar::gui::features::prompt {
 
     // A remote shell's files, branches and commands are on its host: only the spec's own choices
     // apply there.
-    if (asks && (wants(completion, "file") || wants(completion, "directory"))) {
-      askPaths(result, directory, memory, partial);
-    }
+    const bool files = wants(completion, "file");
 
-    if (asks) {
+    if (asks && reads_directories && context.command_position && partial.contains('/')) {
+      // A command named by its path: the executables and directories there.
+      askDirectory(result, memory, partial, CompletionProvider::executable);
+    } else if (asks && reads_directories && (files || wants(completion, "directory"))) {
+      askDirectory(result, memory, partial, files ? CompletionProvider::path : CompletionProvider::directory);
+      askProviders(result, memory, context.command_position, partial);
+    } else if (asks) {
+      if (files || wants(completion, "directory")) {
+        askPaths(result, directory, memory, partial);
+      }
+
       askProviders(result, memory, context.command_position, partial);
     }
 
@@ -805,7 +837,8 @@ namespace telar::gui::features::prompt {
       Name text = base.clone();
 
       text.append(word.text);
-      words.push(Choice{.text = std::move(text), .description = Name{memory, word.description}});
+      // A directory's path ends with its slash; Tab goes on into it instead of ending the word.
+      words.push(Choice{.text = std::move(text), .description = Name{memory, word.description}, .directory = word.text.ends_with('/')});
     }
 
     line->line.receive(message.request_id, std::move(words), message.truncated);

@@ -95,7 +95,7 @@ Legend: `[ ]` todo, `[x]` done, `[~]` not a bug / dropped (with reason).
   remote, clone, blame, bisect, clean, grep, config), generic arguments are enough
   (`{ @ref | @file }`).
 
-- [ ] **T6 (C2, with C3, C6, C7). Tab's paths come from a recursive fuzzy search.**
+- [x] **T6 (C2, with C3, C6, C7). Tab's paths come from a recursive fuzzy search.**
   `FindPaths` is the path picker's search: recursive, fuzzy, server-side `limit` 50 that
   `truncated` does not report (`query_task.cppm:265,294`); the GUI then keeps only direct
   children that start with the query (`prompt.cpp:823`). Deeper matches crowd out direct
@@ -121,6 +121,10 @@ Legend: `[ ]` todo, `[x]` done, `[~]` not a bug / dropped (with reason).
   asks for paths (executables and directories). `$VAR` is expanded only if the runtime
   knows the pane's environment; otherwise nothing completes. Keep `FindPaths` for the
   picker.
+  Decision: the providers are `path`, `directory` and `executable`, new values of
+  `CompletionProvider`, so the schema is cqp00012; against an older runtime Tab keeps
+  searching with `FindPaths`. The runtime does not know the pane's environment, so `$VAR`
+  completes nothing.
 
 - [ ] **T7 (C4). A word with escapes or quotes never completes.**
   `prompt-line.cpp:213` and `:426` filter the answers with the raw typed text (`My\ Do`,

@@ -13,6 +13,7 @@ import telar.wire.editor;
 import telar.wire.pane_io;
 import telar.wire.vocabulary;
 import telar.base.ds;
+import telar.client;
 
 namespace telar::gui::application::prompt {
 
@@ -108,7 +109,7 @@ namespace telar::gui::application::prompt {
         }
       }
 
-      auto plan = features::prompt::plan(state, *line, std::move(context.getMut()), {.specified = specified, .asks = asks, .directory = std::string_view{pane->cwd}, .dialect = dialect});
+      auto plan = features::prompt::plan(state, *line, std::move(context.getMut()), {.specified = specified, .asks = asks, .directory = std::string_view{pane->cwd}, .dialect = dialect, .reads_directories = session.speaks(handshake::directory_words)});
 
       for (std::size_t index = 0; index < features::prompt::questions(plan); ++index) {
         const auto request_id = session.link.nextRequest();
@@ -297,7 +298,7 @@ namespace telar::gui::application::prompt {
     const auto request_id = session.link.nextRequest();
 
     try {
-      const auto query = features::prompt::ask(state.command_root, asked, word, request_id);
+      const auto query = features::prompt::ask(state.command_root, asked, word, request_id, session.speaks(handshake::directory_words));
       if (!query) {
         return CommandPresence::unknown;
       }

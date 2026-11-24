@@ -680,6 +680,116 @@ namespace telar::runtime {
       }
     }
 
+    // The directory a typed path's directory part names, NUL-terminated in `resolved`: `~` or
+    // `~user` at its start is a home, and a relative one is under `directory`. False for a
+    // directory part with a variable, which only the shell can expand, or one that does not fit.
+    bool typedDirectory(std::string_view typed, std::string_view directory, std::string_view home, ds::Array<char, PATH_MAX>& resolved) {
+      if (typed.contains('$')) {
+        return false;
+      }
+
+      std::size_t length = 0;
+      const auto append = [&](std::string_view part) {
+        if (length + part.size() >= resolved.size()) {
+          return false;
+        }
+
+        std::ranges::copy(part, resolved.dataMut() + length);
+        length += part.size();
+        return true;
+      };
+
+      bool fits = true;
+
+      if (typed.starts_with('~')) {
+        const auto end = std::min(typed.find('/'), typed.size());
+        const auto user = typed.substr(1, end - 1);
+
+        if (user.empty()) {
+          fits = append(home);
+        } else {
+          constexpr std::size_t account_bytes = 4096;
+          ds::Array<char, NAME_MAX + 1> name{};
+          ds::Array<char, account_bytes> storage{};
+          passwd account{};
+          passwd* found = nullptr;
+          if (user.size() >= name.size()) {
+            return false;
+          }
+
+          *std::ranges::copy(user, name.dataMut()).out = '\0';
+          if (::getpwnam_r(name.data(), &account, storage.dataMut(), storage.size(), &found) != 0 || found == nullptr || found->pw_dir == nullptr) {
+            return false;
+          }
+
+          fits = append(std::string_view{found->pw_dir});
+        }
+
+        typed.remove_prefix(end);
+      } else if (!typed.starts_with('/')) {
+        fits = append(directory) && append("/");
+      }
+
+      if (!fits || !append(typed) || length == 0 || resolved[0] != '/') {
+        return false;
+      }
+
+      resolved.atMut(length) = '\0';
+      return true;
+    }
+
+    // The entries of the one directory `typed` names, before its last slash, that start with
+    // what follows it, written back with `typed`'s directory part: a directory, or a link to one,
+    // ends with a slash. Dot files only for a name that starts with a dot.
+    template <typename Add>
+    void directoryEntries(ConcurrentMemory& memory, const WordRequest& request, Add& add) {
+      const auto typed = request.prefix.view();
+      const auto slash = typed.rfind('/');
+      const auto shown = slash == std::string_view::npos ? std::string_view{} : typed.substr(0, slash + 1);
+      const auto partial = slash == std::string_view::npos ? typed : typed.substr(slash + 1);
+      ds::Array<char, PATH_MAX> path; // NOLINT(cppcoreguidelines-pro-type-member-init): typedDirectory writes the bytes open reads, up to their NUL
+      if (!typedDirectory(shown, request.directory.view(), request.home.view(), path)) {
+        return;
+      }
+
+      FileDescriptor directory{::open(path.data(), combineFlags(O_RDONLY, O_DIRECTORY, O_CLOEXEC))}; // NOLINT(cppcoreguidelines-pro-type-vararg): open's C signature is variadic
+      if (!directory) {
+        return;
+      }
+
+      DirectoryStream entries{directory.get()};
+      Text word{memory};
+      std::size_t scanned = 0;
+
+      while (const auto* entry = entries.next()) {
+        const std::string_view name{std::data(entry->d_name)};
+        if (++scanned > WordReader::maximum_entries) {
+          break;
+        }
+
+        if (!name.starts_with(partial) || (name.starts_with('.') && !partial.starts_with('.'))) {
+          continue;
+        }
+
+        // Followed: a link to a directory lists as one. A dangling link is a file.
+        struct stat state{};
+        const bool listed = ::fstatat(entries.descriptor(), entry->d_name, &state, 0) == 0;
+        const bool is_directory = listed && S_ISDIR(state.st_mode);
+        const bool executable = listed && S_ISREG(state.st_mode) && ::faccessat(entries.descriptor(), entry->d_name, X_OK, 0) == 0;
+        if ((request.provider == CompletionProvider::directory && !is_directory) || (request.provider == CompletionProvider::executable && !is_directory && !executable)) {
+          continue;
+        }
+
+        word.assign(shown);
+        word.append(name);
+        if (is_directory) {
+          word.push('/');
+        }
+
+        add(word.view());
+      }
+    }
+
   }
 
   WordResult::WordResult(tbc::mut_a<ConcurrentMemory> memory)
@@ -797,6 +907,11 @@ namespace telar::runtime {
       break;
     case CompletionProvider::compose_service:
       composeServices(memory_, request.directory.view(), add);
+      break;
+    case CompletionProvider::path:
+    case CompletionProvider::directory:
+    case CompletionProvider::executable:
+      directoryEntries(memory_, request, add);
       break;
     }
 

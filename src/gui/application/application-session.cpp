@@ -798,6 +798,10 @@ namespace telar::gui::application {
     return dialect_ && handshake::speaks(*dialect_, tag);
   }
 
+  bool Session::speaks(handshake::Dialect dialect) const noexcept {
+    return dialect_ && *dialect_ >= dialect;
+  }
+
   Change Session::apply(const ProxyStatus& message) {
     proxy_ = message;
     return Change::model;
