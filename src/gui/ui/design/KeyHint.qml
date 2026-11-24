@@ -13,9 +13,13 @@ Item {
     required property var keys
     required property string word
     property real ratio: 1
+    // The key of what Enter does: its caps are filled with the accent.
+    property bool primary: false
     property bool actionable: false
     property string activationIdentity: ""
-    readonly property real keyGap: 2 * ratio
+    readonly property real keyGap: 3 * ratio
+    // A cap is as tall as a line of its label, centred in the footer, never its whole height.
+    readonly property real capHeight: Math.min(height, Math.max(20 * ratio, typography.smallRow ?? 0))
     readonly property real wordGap: 6 * ratio
     readonly property real hoverInset: 4 * ratio
     signal activated()
@@ -46,8 +50,10 @@ Item {
             model: root.keys
             delegate: PaletteKeycap {
                 required property string modelData
+                y: Math.round((keysRow.height - height) / 2)
                 width: implicitWidth
-                height: keysRow.height
+                height: root.capHeight
+                primary: root.primary
                 colors: root.colors
                 typography: root.typography
                 text: modelData

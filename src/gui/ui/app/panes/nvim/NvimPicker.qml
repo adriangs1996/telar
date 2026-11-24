@@ -13,15 +13,19 @@ FocusScope {
     objectName: "editorPicker"
 
     // The editor's picker: open, source, query, root, loading, truncated and rows of
-    // {runs, name, directory, line, text}.
+    // {runs, trail, name, directory, line, text, textRuns}.
     required property var picker
     required property var colors
     required property var typography
     property real ratio: 1
+    // The cells of the editor the panel lies over: its preview is a float of them.
+    property real cellWidth: 0
+    property real cellHeight: 0
     readonly property bool shown: picker.open ?? false
     readonly property var rows: picker.rows ?? []
     readonly property string source: picker.source ?? "files"
-    readonly property var sources: [{name: "files", label: "Files", icon: "\uea7b"}, {name: "text", label: "Text", icon: "\uea6d"}, {name: "buffers", label: "Buffers", icon: "\ueaf0"}]
+    readonly property var sources: [{name: "files", label: "Files", icon: "\uea7b", unit: "file", placeholder: "Search files by name"}, {name: "text", label: "Text", icon: "\uea6d", unit: "match", placeholder: "Search the text of the files"}, {name: "buffers", label: "Buffers", icon: "\ueaf0", unit: "buffer", placeholder: "Search open buffers"}]
+    readonly property var currentSource: sources.find(entry => entry.name === source) ?? sources[0]
     // The room left for the preview, in the parent's own coordinates.
     readonly property rect previewArea: Qt.rect(x + panel.previewArea.x, y + panel.previewArea.y, panel.previewArea.width, panel.previewArea.height)
     readonly property var currentRow: rows[current] ?? null
@@ -38,10 +42,26 @@ FocusScope {
     signal previewed(int index, rect area)
     signal closed()
 
-    width: Math.min(parent.width - 32 * ratio, 1040 * ratio)
-    height: Math.min(parent.height - 32 * ratio, 560 * ratio)
-    x: Math.round((parent.width - width) / 2)
-    y: Math.round((parent.height - height) / 2) - (1 - reveal) * 8 * ratio
+    // The panel takes a share of the pane, never less than it took when its size was fixed,
+    // and stands on the editor's cells: its preview starts on a column, right under the
+    // header, and holds whole cells. The list keeps to what a name needs and the preview to
+    // what a line of code needs; a pane too narrow for a preview gives the list all of it.
+    readonly property real margin: 16 * ratio
+    readonly property real roomWidth: Math.min(parent.width - 2 * margin, Math.max(1040 * ratio, parent.width * 0.8))
+    readonly property real roomHeight: Math.min(parent.height - 2 * margin, Math.max(560 * ratio, parent.height * 0.75))
+    readonly property int listWidth: Math.round(Math.min(560 * ratio, Math.max(320 * ratio, roomWidth * 0.4)))
+    readonly property int previewColumns: cellWidth > 0 ? Math.min(140, Math.floor((roomWidth - listWidth - 2 * panel.inset) / cellWidth)) : 0
+    readonly property bool previewing: previewColumns >= 45 && cellHeight > 0
+    readonly property int previewRows: previewing ? Math.floor((roomHeight - panel.headerHeight - panel.footerHeight) / cellHeight) : 0
+    // The first column and row of the preview, nearest to the panel centred in the pane.
+    readonly property int previewColumn: previewing ? Math.max(Math.ceil((listWidth + panel.inset) / cellWidth), Math.min(Math.floor((parent.width - width + listWidth + panel.inset) / cellWidth), Math.round(((parent.width - width) / 2 + listWidth + panel.inset) / cellWidth))) : 0
+    readonly property int previewRow: previewing ? Math.max(Math.ceil(panel.headerHeight / cellHeight), Math.min(Math.floor((parent.height - height + panel.headerHeight) / cellHeight), Math.round(((parent.height - height) / 2 + panel.headerHeight) / cellHeight))) : 0
+
+    // A pixel past the cells, as the panel's own edges are whole pixels below theirs.
+    width: previewing ? Math.ceil(listWidth + 2 * panel.inset + previewColumns * cellWidth) + 1 : Math.round(roomWidth)
+    height: previewing ? Math.ceil(panel.headerHeight + previewRows * cellHeight + panel.footerHeight) + 1 : Math.round(roomHeight)
+    x: previewing ? Math.floor(previewColumn * cellWidth - listWidth - panel.inset) : Math.round((parent.width - width) / 2)
+    y: (previewing ? Math.floor(previewRow * cellHeight - panel.headerHeight) : Math.round((parent.height - height) / 2)) - (1 - reveal) * 8 * ratio
     opacity: reveal
     visible: reveal > 0
 
@@ -110,26 +130,39 @@ FocusScope {
         ratio: root.ratio
         fieldName: "editorPickerSearch"
         searchName: "Search the editor's files"
-        glyph: root.sources.find(source => source.name === root.source)?.icon ?? "\uea6d"
+        placeholder: root.currentSource.placeholder
+        glyph: root.currentSource.icon
         scopes: root.sources
         scope: root.source
         rows: root.rows.map((row, index) => ({
             runs: row.runs ?? [],
+            trail: row.trail ?? [],
             icon: row.icon ?? "",
             iconTone: row.iconTone ?? "",
             badge: row.badge ?? "",
             badgeTone: row.badgeTone ?? "",
             suffix: (row.line ?? 0) > 0 ? ":" + row.line : "",
             detail: (row.line ?? 0) > 0 ? (row.text ?? "") : "",
+            detailRuns: (row.line ?? 0) > 0 ? (row.textRuns ?? []) : [],
             marked: root.marked.indexOf(index) >= 0
         }))
         current: root.current
-        countText: (root.picker.loading ?? false) ? "searching" : root.rows.length + ((root.picker.truncated ?? false) ? "+" : "")
+        // Where the chosen row is among those found, and what they are.
+        countText: {
+            if (root.picker.loading ?? false) {
+                return "searching";
+            }
+
+            const total = root.rows.length + ((root.picker.truncated ?? false) ? "+" : "");
+            const unit = root.currentSource.unit + (root.rows.length === 1 && !(root.picker.truncated ?? false) ? "" : (root.currentSource.unit === "match" ? "es" : "s"));
+
+            return (root.rows.length > 0 ? (root.current + 1) + " / " : "") + total + " " + unit;
+        }
         emptyText: (root.picker.loading ?? false) ? "" : root.source === "text" && queryField.text.length < 2 ? "Type to search the text of the files" : "Nothing found"
-        hints: [{keys: ["↑", "↓"], word: "Navigate"}, {keys: ["⇥"], word: "Mark"}, {keys: ["⌃↵"], word: "Split"}]
+        hints: [{keys: ["↑", "↓"], word: "Navigate"}, {keys: ["⇥"], word: "Mark"}, {keys: ["⌃↵"], word: "Split"}, {keys: ["⇧⇥"], word: "Source"}]
         // What Enter does, where the eye ends.
-        trailing: ({keys: ["↵"], word: root.marked.length > 0 ? "Quickfix" : "Open"})
-        previewShare: 0.58
+        trailing: [{keys: ["esc"], word: "Close"}, {keys: ["↵"], word: root.marked.length > 0 ? "Quickfix" : "Open", primary: true}]
+        previewShare: root.previewing ? 1 - root.listWidth / root.width : 0
         previewTitle: root.currentRow === null ? "" : (root.currentRow.name ?? "") + ((root.currentRow.line ?? 0) > 0 ? ":" + root.currentRow.line : "")
         previewDetail: root.currentRow?.directory ?? ""
         onSearched: text => root.searched(text)

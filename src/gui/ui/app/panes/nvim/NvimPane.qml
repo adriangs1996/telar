@@ -483,6 +483,8 @@ FocusScope {
             colors: root.colors
             typography: root.typography
             ratio: root.ratio
+            cellWidth: view.cellWidth
+            cellHeight: view.cellHeight
             onSearched: query => view.searchPicker(query)
             onSourceChosen: source => view.pick(source)
             onAccepted: (index, where) => {

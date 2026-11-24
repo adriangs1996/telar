@@ -1339,6 +1339,10 @@ return {api_version = 2, client = {
             }
 
             QVERIFY2(room.contains(cells), qPrintable(QStringLiteral("preview %1,%2 %3x%4 past %5,%6 %7x%8").arg(cells.x()).arg(cells.y()).arg(cells.width()).arg(cells.height()).arg(room.x()).arg(room.y()).arg(room.width()).arg(room.height())));
+            // The panel stands on the editor's cells: the preview starts where its room does,
+            // right under the header, and fills it but for less than a cell.
+            QVERIFY2(cells.x() - room.x() < 1 && cells.y() - room.y() < 1, qPrintable(QStringLiteral("preview at %1,%2, room at %3,%4").arg(cells.x()).arg(cells.y()).arg(room.x()).arg(room.y())));
+            QVERIFY2(room.right() - cells.right() < view->cellWidth() && room.bottom() - cells.bottom() < view->cellHeight(), qPrintable(QStringLiteral("preview %1x%2 in room %3x%4").arg(cells.width()).arg(cells.height()).arg(room.width()).arg(room.height())));
             ++inside;
           }
         }
@@ -1355,6 +1359,16 @@ return {api_version = 2, client = {
           view->searchPicker(QStringLiteral("needle is"));
           QTRY_VERIFY_WITH_TIMEOUT(rows().size() == 1 && rows().first().toMap().value(QStringLiteral("line")).toInt() == 2, runtime_wait_ms);
           QCOMPARE(rows().first().toMap().value(QStringLiteral("text")).toString(), QStringLiteral("// the needle is here"));
+          // What the query matched is marked in the line, and only that.
+          QStringList matched;
+
+          for (const auto& run : rows().first().toMap().value(QStringLiteral("textRuns")).toList()) {
+            if (run.toMap().value(QStringLiteral("bold")).toBool()) {
+              matched.append(run.toMap().value(QStringLiteral("text")).toString());
+            }
+          }
+
+          QCOMPARE(matched, QStringList{QStringLiteral("needle is")});
           shoot(QStringLiteral("editor-picker-text"));
         }
 

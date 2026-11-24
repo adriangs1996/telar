@@ -11,6 +11,8 @@ Item {
     required property var typography
     required property string text
     property real ratio: 1
+    // Filled with the accent: the key of what Enter does.
+    property bool primary: false
     readonly property real minimumHeight: 20 * ratio
     readonly property real minimumWidth: 20 * ratio
     readonly property real horizontalPadding: 5 * ratio
@@ -27,7 +29,7 @@ Item {
         width: root.width
         height: root.boxHeight
         y: (root.height - height) / 2
-        color: root.colors.surface0
+        color: root.primary ? root.colors.accent : root.colors.surface0
         radius: root.cornerRadius
     }
 
@@ -36,7 +38,8 @@ Item {
         anchors.fill: parent
         text: root.text
         pixelSize: root.typography.small
-        color: Qt.alpha(root.colors.text, root.textAlpha)
+        emphasized: root.primary
+        color: root.primary ? root.colors.background : Qt.alpha(root.colors.text, root.textAlpha)
         horizontalAlignment: Text.AlignHCenter
         elide: Text.ElideNone
     }

@@ -13,8 +13,10 @@ Item {
     required property var typography
     property real ratio: 1
     property var hints: []
-    // Shown at the right edge while it fits beside the hints.
+    // One hint or a list of them, shown at the right edge while they fit beside the hints. One
+    // with `primary` has its keys in the accent.
     property var trailing: null
+    readonly property var trailingHints: trailing === null ? [] : Array.isArray(trailing) ? trailing : [trailing]
     readonly property real inset: 16 * ratio
     readonly property real hintGap: 16 * ratio
     signal activated(string action)
@@ -50,16 +52,28 @@ Item {
         }
     }
 
-    KeyHint {
-        id: trailingHint
+    Row {
+        id: trailingRow
         x: root.width - root.inset - width
-        width: implicitWidth
         height: parent.height
-        colors: root.colors
-        typography: root.typography
-        ratio: root.ratio
-        keys: root.trailing?.keys ?? []
-        word: root.trailing?.word ?? ""
-        visible: root.trailing !== null && x >= hintsRow.x + hintsRow.width + root.hintGap
+        spacing: root.hintGap
+        visible: root.trailingHints.length > 0 && x >= hintsRow.x + hintsRow.width + root.hintGap
+
+        Repeater {
+            model: root.trailingHints
+            delegate: KeyHint {
+                required property var modelData
+                height: trailingRow.height
+                colors: root.colors
+                typography: root.typography
+                ratio: root.ratio
+                keys: modelData.keys ?? []
+                word: modelData.word ?? ""
+                primary: modelData.primary ?? false
+                actionable: (modelData.action ?? "").length > 0
+                activationIdentity: modelData.action ?? ""
+                onActivated: root.activated(modelData.action)
+            }
+        }
     }
 }

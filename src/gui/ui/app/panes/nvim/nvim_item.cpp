@@ -20,8 +20,10 @@ static_assert(true);
 #include <QVariantList>
 #include <QWheelEvent>
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <exception>
+#include <span>
 #include <stdexcept>
 #include <string_view>
 #include <utility>
@@ -85,6 +87,78 @@ namespace telar::gui::qt {
     // Text Neovim wrote, which may not be UTF-8: what is not is shown as the replacement mark.
     QString shown(std::string_view text) {
       return QString::fromUtf8(text.data(), static_cast<qsizetype>(text.size()));
+    }
+
+    // The bytes of a path the query matched that fall in its part from `start` to `end`, counted
+    // from `start`. A match names at most max_match_positions of them, which the wire bounds.
+    class PartMarks {
+    public:
+      PartMarks(std::span<const std::uint16_t> marks, std::size_t start, std::size_t end) noexcept {
+        for (const auto mark : marks) {
+          if (mark >= start && mark < end && count_ < positions_.size()) {
+            positions_.at(count_++) = static_cast<std::uint16_t>(mark - start);
+          }
+        }
+      }
+
+      [[nodiscard]] std::span<const std::uint16_t> view() const noexcept {
+        return std::span{positions_}.first(count_);
+      }
+
+    private:
+      static constexpr std::size_t max_match_positions = 64;
+
+      std::array<std::uint16_t, max_match_positions> positions_{};
+      std::size_t count_ = 0;
+    };
+
+    QVariantMap textRun(std::string_view text, bool matched) {
+      return {{QStringLiteral("text"), shown(text)}, {QStringLiteral("bold"), matched}};
+    }
+
+    // A line of a file in parts, each place the query is in it bold, as the search found it: by
+    // its bytes, and regardless of case when the query has no capital letter. None when the
+    // query is not in it, as when the line answers a query typed before.
+    QVariantList textRuns(std::string_view text, std::string_view query) {
+      QVariantList runs;
+
+      if (query.empty()) {
+        return runs;
+      }
+
+      const auto lower = [](char character) {
+        return character >= 'A' && character <= 'Z' ? static_cast<char>(character - 'A' + 'a') : character;
+      };
+      const bool folded = std::ranges::none_of(query, [](char character) {
+        return character >= 'A' && character <= 'Z';
+      });
+      const auto same = [&](char left, char right) {
+        return folded ? lower(left) == lower(right) : left == right;
+      };
+      std::size_t written = 0;
+
+      while (written + query.size() <= text.size()) {
+        const auto rest = text.substr(written);
+        const auto found = std::ranges::search(rest, query, same);
+        if (found.empty()) {
+          break;
+        }
+
+        const auto start = written + static_cast<std::size_t>(found.begin() - rest.begin());
+
+        if (start > written) {
+          runs.append(textRun(text.substr(written, start - written), false));
+        }
+
+        runs.append(textRun(text.substr(start, query.size()), true));
+        written = start + query.size();
+      }
+
+      if (!runs.isEmpty() && written < text.size()) {
+        runs.append(textRun(text.substr(written), false));
+      }
+
+      return runs;
     }
 
     QString messageKind(nvim::NvimMessageKind kind) {
@@ -427,8 +501,14 @@ namespace telar::gui::qt {
 
     preview_index_ = index;
     preview_pixels_ = area;
-    // The cells that fit whole inside the area: the float never passes its edges.
-    preview_area_ = index < 0 ? nvim::PreviewArea{} : nvim::PreviewArea{.row = cells(area.y(), font_.cell.height(), false), .column = cells(area.x(), font_.cell.width(), false), .columns = cells(area.width() - font_.cell.width(), font_.cell.width(), true), .rows = cells(area.height() - font_.cell.height(), font_.cell.height(), true)};
+    // The cells that fit whole inside the area, from the first edge of a cell in it to the last:
+    // the float never passes its edges.
+    const auto row = cells(area.y(), font_.cell.height(), false);
+    const auto column = cells(area.x(), font_.cell.width(), false);
+    const auto bottom = cells(area.y() + area.height(), font_.cell.height(), true);
+    const auto right = cells(area.x() + area.width(), font_.cell.width(), true);
+
+    preview_area_ = index < 0 ? nvim::PreviewArea{} : nvim::PreviewArea{.row = row, .column = column, .columns = static_cast<std::uint16_t>(right > column ? right - column : 0), .rows = static_cast<std::uint16_t>(bottom > row ? bottom - row : 0)};
     controller_->preview(pane_id_, index < 0 ? ds::Option<std::size_t>{} : ds::Option<std::size_t>{static_cast<std::size_t>(index)}, preview_area_);
   }
 
@@ -468,6 +548,7 @@ namespace telar::gui::qt {
 
     const auto& picker = editor.picker;
     const std::string_view text{picker.text.data(), picker.text.size()};
+    const auto query = picker.query.view();
     QVariantList rows;
 
     picker_revision_ = editor.picker_revision;
@@ -475,17 +556,25 @@ namespace telar::gui::qt {
     for (const auto& match : picker.matches) {
       const auto path = match.path.of(text);
       const auto slash = path.rfind('/');
+      const auto name_start = slash == std::string_view::npos ? 0 : slash + 1;
+      const auto directory = slash == std::string_view::npos ? std::string_view{} : path.substr(0, slash);
+      const auto line = match.text.of(text);
 
-      // The path as the terminal's path picker shows one: the same runs, from the same code.
+      // The name first and where it is after it, each as the terminal's path picker shows a
+      // path: the same runs, from the same code, with what the query matched in each.
       constexpr std::uint16_t label_columns = 96;
       const auto marks = std::span<const std::uint16_t>{std::as_const(picker.positions).view()}.subspan(match.first_position, match.position_count);
+      const PartMarks name_marks{marks, name_start, path.size()};
+      const PartMarks directory_marks{marks, 0, directory.size()};
 
       QVariantMap row{
-          {QStringLiteral("runs"), pathLabelRuns(path, marks, label_columns)},
-          {QStringLiteral("name"), shown(slash == std::string_view::npos ? path : path.substr(slash + 1))},
-          {QStringLiteral("directory"), shown(slash == std::string_view::npos ? std::string_view{} : path.substr(0, slash))},
+          {QStringLiteral("runs"), pathLabelRuns(path.substr(name_start), name_marks.view(), label_columns)},
+          {QStringLiteral("trail"), directory.empty() ? QVariantList{} : pathLabelRuns(directory, directory_marks.view(), label_columns)},
+          {QStringLiteral("name"), shown(path.substr(name_start))},
+          {QStringLiteral("directory"), shown(directory)},
           {QStringLiteral("line"), static_cast<int>(match.line)},
-          {QStringLiteral("text"), shown(match.text.of(text))},
+          {QStringLiteral("text"), shown(line)},
+          {QStringLiteral("textRuns"), match.line > 0 ? textRuns(line, query) : QVariantList{}},
       };
 
       putIcon(row, fileIcon(path));

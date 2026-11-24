@@ -8,11 +8,13 @@ import Telar.Gui
 // preview when its host has one. The terminal's path search and the editor's picker are both
 // this panel; each gives it its rows and decides what its keys do.
 //
-// A row is {runs, suffix, detail, icon, iconTone, badge, badgeTone, marked}: `runs` are the parts of its name,
-// each {text, colorRole, bold}, as a path's label gives them; `suffix` follows the name;
-// `detail` is a second line under it; `icon` is the glyph of what it is, a file's type or a
-// folder, drawn in `iconTone`, a role of the window's colors; `badge` is a letter at its end,
-// what git says of it, drawn in `badgeTone`.
+// A row is {runs, suffix, trail, detail, detailRuns, icon, iconTone, badge, badgeTone, marked}:
+// `runs` are the parts of its name, each {text, colorRole, bold}, as a path's label gives them;
+// `suffix` follows the name and is never cut; `trail` are runs after it, quiet, that give way
+// first, as where a file is; `detail` is a second line under it, a line of a file, and
+// `detailRuns` the same line in parts, {text, bold}, with what the query matched bold; `icon` is
+// the glyph of what it is, a file's type or a folder, drawn in `iconTone`, a role of the
+// window's colors; `badge` is a letter at its end, what git says of it, drawn in `badgeTone`.
 //
 // A focus scope: the keys given to the panel are its query's. A host that sets `focus` on the
 // panel names the panel in its own scope, never an item that would hold the keys in the
@@ -26,8 +28,10 @@ FocusScope {
     // The name tests and accessibility find the query's field by, and what it says it is.
     property string fieldName: "pickerSearch"
     property string searchName: "Search"
+    // What the empty query says it searches.
+    property string placeholder: ""
     // The icon before the query: what is searched.
-    property string glyph: "\uea6d"
+    property string glyph: ""
     property int maximumQueryBytes: 256
     // Where the search is rooted, shown when it has no scopes to choose from.
     property string label: ""
@@ -40,6 +44,7 @@ FocusScope {
     property string status: ""
     property bool failed: false
     property var hints: []
+    // One hint or a list of them, at the right edge: what Enter does goes last.
     property var trailing: null
     // The share of the panel left beside the list for a preview; none without one.
     property real previewShare: 0
@@ -49,21 +54,29 @@ FocusScope {
     // of its parts is then a row of them, and what the search says goes on the footer's row.
     property bool compact: false
     readonly property real cell: Math.max(typography.grid?.cellHeight ?? 0, 16 * ratio)
+    readonly property real bodyRow: Math.max(typography.bodyRow ?? 0, typography.body ?? 0)
+    readonly property real smallRow: Math.max(typography.smallRow ?? 0, typography.small ?? 0)
     readonly property bool detailed: rows.some(row => (row.detail ?? "").length > 0)
     readonly property real inset: 8 * ratio
+    // Whether the renderer can fade what a row cuts; without shaders it is only cut.
+    readonly property bool fades: GraphicsInfo.api !== GraphicsInfo.Software && GraphicsInfo.api !== GraphicsInfo.Unknown
     readonly property real headerHeight: compact ? Math.round(cell * 1.25) : 44 * ratio
     readonly property real scopeHeight: (scopes.length > 0 || label.length > 0 || countText.length > 0) ? (compact ? cell : 30 * ratio) : 0
     readonly property real statusHeight: status.length > 0 && !compact ? 22 * ratio : 0
     readonly property real footerHeight: (hints.length > 0 || trailing !== null || (compact && status.length > 0)) ? (compact ? Math.round(cell * 1.25) : 30 * ratio) : 0
-    readonly property real rowHeight: detailed ? 42 * ratio : compact ? cell : 30 * ratio
+    // A row of two lines holds both whole, with room above and below them.
+    readonly property real rowPadding: 5 * ratio
+    readonly property real rowHeight: detailed ? Math.ceil(bodyRow + smallRow + 2 * rowPadding) : compact ? cell : Math.max(30 * ratio, Math.ceil(bodyRow + 8 * ratio))
+    // The slot of a row's icon, its glyph centred, and the gap to the name.
+    readonly property real iconSlot: compact ? 2 * (typography.grid?.cellWidth ?? 8) : 20 * ratio
+    readonly property real iconGap: compact ? 0 : 8 * ratio
     readonly property real listWidth: previewShare > 0 ? Math.round(width * (1 - previewShare)) : width
     readonly property real listHeight: Math.max(0, height - headerHeight - scopeHeight - statusHeight - footerHeight)
     readonly property int visibleRows: Math.max(1, Math.floor(listHeight / rowHeight))
     readonly property int firstRow: Math.max(0, Math.min(rows.length - visibleRows, current - Math.floor(visibleRows / 2)))
-    // The strip over the preview that names what it shows, and the room under it, in the
-    // panel's own coordinates.
-    readonly property real previewHeader: 34 * ratio
-    readonly property rect previewArea: previewShare > 0 ? Qt.rect(listWidth + inset, previewHeader + inset / 2, width - listWidth - 2 * inset, height - previewHeader - footerHeight - inset) : Qt.rect(0, 0, 0, 0)
+    // The room under the header beside the list, in the panel's own coordinates: the preview
+    // starts right under the header's line.
+    readonly property rect previewArea: previewShare > 0 ? Qt.rect(listWidth + inset, headerHeight, width - listWidth - 2 * inset, height - headerHeight - footerHeight) : Qt.rect(0, 0, 0, 0)
     property alias queryField: field
     signal searched(string text)
     signal limitReached(var requested)
@@ -72,6 +85,13 @@ FocusScope {
     signal rowActivated(int index)
     signal rowPointed(int index)
     signal scopeChosen(string name)
+
+    // A layer that fades what passes its right edge, where the renderer has shaders.
+    component Fade: ShaderEffect {
+        property variant source
+        property real fadeStart: 0.8
+        fragmentShader: "qrc:/telar/shaders/tab_caption.frag.qsb"
+    }
 
     ChromeIcon {
         id: mark
@@ -84,18 +104,22 @@ FocusScope {
         color: root.colors.accent
     }
 
+    // In a terminal the query is a row of its cells; elsewhere it is a field of the window, in
+    // the size of the rows, whose text starts its own padding (12, FormFieldGeometry's) after
+    // the icon: 8 past it.
     FormTextField {
         id: field
         objectName: root.fieldName
-        x: mark.x + mark.width + 6 * root.ratio
-        y: Math.round((root.headerHeight - height) / 2)
-        width: root.listWidth - x - 48 * root.ratio
-        height: Math.max(root.typography.grid?.cellHeight ?? 0, 20 * root.ratio)
+        x: mark.x + mark.width + (root.compact ? 6 : 8 - 12) * root.ratio
+        y: root.compact ? Math.round((root.headerHeight - height) / 2) : 0
+        width: root.listWidth - x - 12 * root.ratio
+        height: root.compact ? Math.max(root.typography.grid?.cellHeight ?? 0, 20 * root.ratio) : root.headerHeight
         focus: true
         colors: root.colors
         typography: root.typography
         ratio: root.ratio
-        formControl: false
+        formControl: !root.compact
+        placeholderText: root.placeholder
         maximumBytes: root.maximumQueryBytes
         Accessible.name: root.searchName
         onTextEdited: root.searched(text)
@@ -103,19 +127,9 @@ FocusScope {
         Keys.onPressed: event => root.keyPressed(event)
     }
 
-    ChromeText {
-        x: root.listWidth - width - 12 * root.ratio
-        width: 36 * root.ratio
-        height: root.headerHeight
-        horizontalAlignment: Text.AlignRight
-        text: "esc"
-        pixelSize: root.typography.small
-        color: Qt.alpha(root.colors.text, 0.45)
-    }
-
     Rectangle {
         y: root.headerHeight - height
-        width: root.listWidth
+        width: root.width
         height: Math.max(1, root.ratio) / Screen.devicePixelRatio
         color: Qt.alpha(root.colors.text, ChromeStyle.outlineAlpha)
     }
@@ -143,15 +157,16 @@ FocusScope {
                 readonly property string glyph: modelData.icon ?? ""
                 readonly property real iconSide: glyph.length > 0 ? Math.round(root.typography.small * 1.1) : 0
 
-                width: name.implicitWidth + iconSide + (iconSide > 0 ? 5 * root.ratio : 0) + 16 * root.ratio
+                // As wide as its name in bold, chosen or not: choosing one moves no other.
+                width: widest.implicitWidth + iconSide + (iconSide > 0 ? 5 * root.ratio : 0) + 16 * root.ratio
                 height: root.scopeHeight
                 // A chip is whole or not shown: the keys still reach the scopes left out.
                 visible: x + width <= parent.width
 
                 NativeRoundedRectangle {
-                    y: 5 * root.ratio
+                    height: Math.min(parent.height - 4 * root.ratio, Math.max(22 * root.ratio, root.smallRow + 4 * root.ratio))
+                    y: Math.round((parent.height - height) / 2)
                     width: parent.width
-                    height: parent.height - 10 * root.ratio
                     radius: ChromeStyle.smallRadius * root.ratio
                     color: Qt.alpha(root.colors.text, ChromeStyle.selectionAlpha)
                     visible: entry.chosen
@@ -169,7 +184,16 @@ FocusScope {
                 }
 
                 ChromeText {
-                    id: name
+                    id: widest
+                    opacity: 0
+                    width: implicitWidth
+                    height: parent.height
+                    text: entry.modelData.label
+                    pixelSize: root.typography.small
+                    emphasized: true
+                }
+
+                ChromeText {
                     x: 8 * root.ratio + entry.iconSide + (entry.iconSide > 0 ? 5 * root.ratio : 0)
                     width: implicitWidth
                     height: parent.height
@@ -213,6 +237,7 @@ FocusScope {
     }
 
     Item {
+        id: list
         x: root.inset
         y: root.headerHeight + root.scopeHeight
         width: root.listWidth - 2 * root.inset
@@ -230,7 +255,11 @@ FocusScope {
                 readonly property var row: root.rows[rowIndex] ?? ({})
                 readonly property bool chosen: rowIndex === root.current
                 readonly property bool iconed: (row.icon ?? "").length > 0
+                readonly property bool twoLines: (row.detail ?? "").length > 0
                 readonly property real badged: (row.badge ?? "").length > 0 ? badge.implicitWidth + 12 * root.ratio : 0
+                // The band of the first line: the name's, whole in height.
+                readonly property real firstTop: twoLines ? root.rowPadding : 0
+                readonly property real firstHeight: twoLines ? root.bodyRow : height
 
                 y: index * root.rowHeight
                 width: parent.width
@@ -257,8 +286,9 @@ FocusScope {
                 ChromeText {
                     id: badge
                     x: parent.width - width - 12 * root.ratio
+                    y: line.firstTop
                     width: implicitWidth
-                    height: root.detailed ? parent.height / 2 : parent.height
+                    height: line.firstHeight
                     visible: line.badged > 0
                     text: line.row.badge ?? ""
                     pixelSize: root.typography.small
@@ -269,12 +299,13 @@ FocusScope {
                 Item {
                     id: icon
                     x: 10 * root.ratio
-                    width: line.iconed ? (root.compact ? 2 * (root.typography.grid?.cellWidth ?? 8) : 24 * root.ratio) : 0
-                    height: root.detailed ? parent.height / 2 : parent.height
+                    y: line.firstTop
+                    width: line.iconed ? root.iconSlot : 0
+                    height: line.firstHeight
                     visible: line.iconed
 
                     ChromeIcon {
-                        anchors.left: parent.left
+                        x: root.compact ? 0 : Math.round((parent.width - width) / 2)
                         anchors.verticalCenter: parent.verticalCenter
                         width: height
                         height: Math.round(root.typography.body * 1.15)
@@ -285,46 +316,112 @@ FocusScope {
                 }
 
                 // The name: its directory quiet, its own part plain, what the query matched
-                // marked. Then what follows it, as the line of a match of text.
-                Row {
+                // marked. What follows it is never cut; the trail after it gives way first,
+                // and then the name, faded where it stops.
+                Item {
                     id: label
-                    x: 10 * root.ratio + icon.width
-                    width: Math.min(implicitWidth, parent.width - x - 10 * root.ratio - line.badged)
-                    height: (line.row.detail ?? "").length > 0 ? parent.height / 2 : parent.height
-                    clip: true
+                    x: 10 * root.ratio + icon.width + (line.iconed ? root.iconGap : 0)
+                    y: line.firstTop
+                    width: Math.max(0, parent.width - x - 10 * root.ratio - line.badged)
+                    height: line.firstHeight
+                    readonly property bool trailed: (line.row.trail ?? []).length > 0
+                    readonly property real nameRoom: Math.max(0, width - suffix.implicitWidth)
 
-                    Repeater {
-                        model: line.row.runs ?? []
+                    Item {
+                        id: nameBox
+                        width: Math.min(nameRow.implicitWidth, label.nameRoom)
+                        height: parent.height
+                        clip: true
+                        layer.enabled: nameRow.implicitWidth > label.nameRoom && root.fades
+                        layer.effect: Fade {
+                            fadeStart: Math.max(0, 1 - 24 * root.ratio / Math.max(1, nameBox.width))
+                        }
 
-                        delegate: ChromeText {
-                            required property var modelData
-                            height: label.height
-                            text: modelData.text
-                            pixelSize: root.typography.body
-                            emphasized: modelData.bold
-                            color: modelData.bold ? root.colors.accent : modelData.colorRole === "text" ? root.colors.text : Qt.alpha(root.colors.text, 0.5)
+                        Row {
+                            id: nameRow
+                            height: parent.height
+
+                            Repeater {
+                                model: line.row.runs ?? []
+
+                                delegate: ChromeText {
+                                    required property var modelData
+                                    width: implicitWidth
+                                    height: nameRow.height
+                                    text: modelData.text
+                                    pixelSize: root.typography.body
+                                    elide: Text.ElideNone
+                                    emphasized: modelData.bold
+                                    color: modelData.bold ? root.colors.accent : modelData.colorRole === "text" ? root.colors.text : Qt.alpha(root.colors.text, 0.5)
+                                }
+                            }
                         }
                     }
 
                     ChromeText {
-                        height: label.height
-                        visible: (line.row.suffix ?? "").length > 0
+                        id: suffix
+                        x: nameBox.width
+                        width: implicitWidth
+                        height: parent.height
+                        visible: text.length > 0
                         text: line.row.suffix ?? ""
                         pixelSize: root.typography.body
+                        elide: Text.ElideNone
                         color: Qt.alpha(root.colors.text, 0.5)
+                    }
+
+                    Item {
+                        id: trailBox
+                        x: nameBox.width + suffix.implicitWidth + 10 * root.ratio
+                        width: Math.max(0, label.width - x)
+                        height: parent.height
+                        visible: label.trailed && width > 24 * root.ratio
+                        clip: true
+                        layer.enabled: visible && trailRow.implicitWidth > width && root.fades
+                        layer.effect: Fade {
+                            fadeStart: Math.max(0, 1 - 24 * root.ratio / Math.max(1, trailBox.width))
+                        }
+
+                        Row {
+                            id: trailRow
+                            height: parent.height
+
+                            Repeater {
+                                model: line.row.trail ?? []
+
+                                delegate: ChromeText {
+                                    required property var modelData
+                                    width: implicitWidth
+                                    height: trailRow.height
+                                    text: modelData.text
+                                    pixelSize: root.typography.small
+                                    elide: Text.ElideNone
+                                    emphasized: modelData.bold
+                                    color: modelData.bold ? root.colors.accent : Qt.alpha(root.colors.text, 0.4)
+                                }
+                            }
+                        }
                     }
                 }
 
-                // What a row says under its name, as the line of text that matched.
-                ChromeText {
-                    visible: (line.row.detail ?? "").length > 0
-                    x: 10 * root.ratio
-                    y: parent.height / 2 - 2 * root.ratio
-                    width: parent.width - 18 * root.ratio
-                    height: parent.height / 2
-                    text: line.row.detail ?? ""
-                    pixelSize: root.typography.small
+                // What a row says under its name, as the line of text that matched: in the
+                // editor's own family, under the name, with what the query matched marked.
+                Text {
+                    visible: line.twoLines
+                    x: label.x
+                    y: line.firstTop + line.firstHeight
+                    width: parent.width - x - 10 * root.ratio
+                    height: root.smallRow
+                    verticalAlignment: Text.AlignVCenter
+                    elide: Text.ElideRight
+                    renderType: Text.NativeRendering
+                    // The configured family, or the one the terminal falls back to without one.
+                    font.family: root.typography.primaryFamily || "Telar Forma"
+                    font.pixelSize: root.typography.small
                     color: Qt.alpha(root.colors.text, 0.6)
+                    textFormat: (line.row.detailRuns ?? []).length > 0 ? Text.StyledText : Text.PlainText
+                    text: (line.row.detailRuns ?? []).length > 0 ? root.styled(line.row.detailRuns) : (line.row.detail ?? "")
+                    Accessible.ignored: true
                 }
 
                 ActionPointer {
@@ -349,23 +446,34 @@ FocusScope {
             pixelSize: root.typography.small
             color: Qt.alpha(root.colors.text, 0.45)
         }
+
+        // Where the rows shown are among all of them, when they are not all shown.
+        NativeRoundedRectangle {
+            readonly property real share: root.rows.length > 0 ? Math.min(1, root.visibleRows / root.rows.length) : 1
+            visible: share < 1
+            x: parent.width - width
+            y: Math.round(parent.height * root.firstRow / Math.max(1, root.rows.length))
+            width: 3 * root.ratio
+            height: Math.max(12 * root.ratio, Math.round(parent.height * share))
+            radius: width / 2
+            color: Qt.alpha(root.colors.text, 0.28)
+        }
     }
 
     // Between the list and the room of the preview.
     Rectangle {
         visible: root.previewShare > 0
         x: root.listWidth
-        y: root.inset
         width: Math.max(1, root.ratio) / Screen.devicePixelRatio
-        height: root.height - root.inset - root.footerHeight
+        height: root.height - root.footerHeight
         color: Qt.alpha(root.colors.text, ChromeStyle.outlineAlpha)
     }
 
-    // What the preview shows: its name, then where it is.
+    // What the preview shows: its name, then where it is, on the header's line.
     Row {
-        x: root.listWidth + root.inset
-        width: root.width - x - root.inset
-        height: root.previewHeader
+        x: root.listWidth + 2 * root.inset
+        width: root.width - x - 2 * root.inset
+        height: root.headerHeight
         spacing: 8 * root.ratio
         visible: root.previewShare > 0 && root.previewTitle.length > 0
         clip: true
@@ -411,5 +519,13 @@ FocusScope {
         ratio: root.ratio
         hints: root.hints
         trailing: root.trailing
+    }
+
+    // Parts of a line as styled text: the matched ones bold, in the accent.
+    function styled(runs) {
+        const escaped = text => text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+        const accent = String(root.colors.accent);
+
+        return runs.map(run => run.bold ? "<b><font color=\"" + accent + "\">" + escaped(run.text) + "</font></b>" : escaped(run.text)).join("");
     }
 }
