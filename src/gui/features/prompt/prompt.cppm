@@ -263,6 +263,8 @@ export namespace telar::gui::features::prompt {
     tbc::val_a<MatchScratch> scratch;
     tbc::val_a<ds::Vec<Name, Memory>> history;
     std::uint64_t history_request = 0;
+    // An answer to the history query arrived: until one does, it is asked again.
+    bool history_loaded = false;
     tbc::val_a<ds::Map<std::uint64_t, PathCompletion, Memory>> completions;
     tbc::val_a<ds::Map<std::uint64_t, CommandRequest, Memory>> command_requests;
     tbc::val_a<ds::Map<std::uint64_t, CommandChecks, Memory>> command_checks;
@@ -485,6 +487,10 @@ export namespace telar::gui::features::prompt {
 
   // Whether the history is on its way.
   [[nodiscard]] bool historyAsked(const State& state) noexcept;
+
+  // Whether the history is to be asked for: no answer arrived and none is on its way, as after
+  // a query that failed or a connection lost.
+  [[nodiscard]] bool historyWanted(const State& state) noexcept;
 
   // The question for the commands people typed, most recent first and each once.
   [[nodiscard]] QueryHistory historyQuery(std::uint64_t request_id) noexcept;

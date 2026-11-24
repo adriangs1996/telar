@@ -347,8 +347,19 @@ namespace telar::gui::application::prompt {
       return;
     }
 
+    // A history that never arrived is asked for again each time a shell is back at its prompt.
+    if (current.phase == ShellPhase::prompt && previous.phase != ShellPhase::prompt && features::prompt::historyWanted(session.prompt)) {
+      requestHistory(session);
+    }
+
     if (const auto outcome = features::prompt::follow(*line, previous, current)) {
       deliver(session, pane_id, *outcome);
+    }
+  }
+
+  void connected(Session& session) {
+    if (!session.prompt_lines.empty() && features::prompt::historyWanted(session.prompt)) {
+      requestHistory(session);
     }
   }
 

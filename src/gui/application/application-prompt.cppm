@@ -88,6 +88,9 @@ namespace telar::gui::application::prompt {
   // The shell of pane `pane_id` went from `previous` to `current`.
   void follow(Session& session, std::uint64_t pane_id, const PaneShell& previous, const PaneShell& current);
 
+  // The session connected again: a history its lines never got is asked for.
+  void connected(Session& session);
+
   // Tells the runtime whether telar's editor stands in for the shell's prompt: the shells of the
   // panes it opens from now on print no prompt of their own. A cqp00002 runtime cannot hear it.
   void configureShell(Session& session);

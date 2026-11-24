@@ -186,6 +186,7 @@ namespace telar::gui::application {
     link.send(ConfigureGraphics{supportsSharedGraphics()});
     window::pace(*this);
     prompt::configureShell(*this);
+    prompt::connected(*this);
     configuration::configureTerminal(*this);
   }
 

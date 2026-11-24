@@ -886,6 +886,12 @@ namespace telar::gui::features::prompt {
   // ---- requests that fail -----------------------------------------------------------------------
 
   ds::Option<std::uint64_t> fail(tbc::mut_a<State> state, tbc::mut_a<Lines> lines, std::uint64_t request_id) {
+    // A history query that failed is asked again.
+    if (request_id != 0 && request_id == state.history_request) {
+      state.history_request = 0;
+      return 0;
+    }
+
     if (state.command_requests.contains(request_id)) {
       const auto settled = take(state.command_requests, request_id, CommandPresence::unknown);
 
@@ -923,6 +929,7 @@ namespace telar::gui::features::prompt {
     auto& specs = state.spec_requests;
     auto& completions = state.completions;
 
+    state.history_request = 0;
     try {
       while (!commands.empty()) {
         static_cast<void>(fail(state, lines, (*commands.begin()).key));
@@ -950,6 +957,10 @@ namespace telar::gui::features::prompt {
     return state.history_request != 0;
   }
 
+  bool historyWanted(const State& state) noexcept {
+    return !state.history_loaded && state.history_request == 0;
+  }
+
   QueryHistory historyQuery(std::uint64_t request_id) noexcept {
     return {.request_id = request_id, .author = HistoryAuthorFilter::human, .distinct = true, .limit = State::history_limit};
   }
@@ -967,6 +978,7 @@ namespace telar::gui::features::prompt {
     auto& history = state.history;
 
     request = 0;
+    state.history_loaded = true;
     history.clear();
     for (const auto& entry : message.entries) {
       if (!entry.command_truncated && !entry.command.empty()) {

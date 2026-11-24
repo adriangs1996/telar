@@ -253,6 +253,44 @@ namespace {
     check(up() == "make test", "nothing older");
   }
 
+  // A history query the runtime fails, or a connection loses, is asked again: at the shell's next
+  // prompt, and once connected again.
+  void historyIsAskedAgain() {
+    SystemAllocator memory;
+    Transport transport;
+    TestSession client{memory, transport};
+
+    openFirstPane(client, transport);
+    FrameBody frame;
+
+    frame.pane_id = 1;
+    frame.frame_id = 1;
+    frame.scroll.total_rows = 1;
+    deliverSingleCell(client, frame);
+    auto configuration = client.configuration;
+
+    configuration.prompt.mode = PromptMode::telar;
+    application::configuration::configure(client, configuration);
+    deliver(client, atPrompt());
+    typeKeys(client, "x");
+    const auto first = transport.last<QueryHistory>();
+    const auto asked = transport.count(ClientTag::query_history);
+
+    deliver(client, RequestFailed{.request_id = first.request_id, .code = FailureCode::resource_limit, .message = "busy"});
+    deliver(client, running(1));
+    deliver(client, atPrompt(2, 0));
+    check(transport.count(ClientTag::query_history) == asked + 1, "a failed history query is asked again at the next prompt");
+
+    client.disconnected();
+    client.connected(1);
+    check(transport.count(ClientTag::query_history) == asked + 2, "a query a lost connection never answered is asked again");
+    const auto last = transport.last<QueryHistory>();
+    const ds::Array entries{HistoryEntry{.id = 1, .pane_id = 1, .command = "make", .cwd = "/"}};
+
+    deliver(client, HistoryResults{.request_id = last.request_id, .snapshot_id = 1, .entries = entries});
+    check(prompt::history(client).size() == 1, "the answer loads the history");
+  }
+
   // A frame of one row, the cursor at `column` on it.
   struct Row {
     std::uint64_t frame_id = 0;
@@ -1127,6 +1165,7 @@ command = "switch" : "Switch branches" , { @branch } | "status" : "Show the work
   const telar::testing::Case case_line_runs_commands{"prompt_session.line_runs_commands", lineRunsCommands};
   const telar::testing::Case case_line_keeps_unsendable_commands{"prompt_session.line_keeps_unsendable_commands", lineKeepsUnsendableCommands};
   const telar::testing::Case case_line_recalls_history{"prompt_session.line_recalls_history", lineRecallsHistory};
+  const telar::testing::Case case_history_is_asked_again{"prompt_session.history_is_asked_again", historyIsAskedAgain};
   const telar::testing::Case case_line_hides_terminal_cursor{"prompt_session.line_hides_terminal_cursor", lineHidesTerminalCursor};
   const telar::testing::Case case_commands_settle_as_typed{"prompt_session.commands_settle_as_typed", commandsSettleAsTyped};
   const telar::testing::Case case_line_searches{"prompt_session.line_searches", lineSearches};

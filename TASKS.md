@@ -218,7 +218,7 @@ Legend: `[ ]` todo, `[x]` done, `[~]` not a bug / dropped (with reason).
   filters by that prefix.
   The optional prefix filter is left out.
 
-- [ ] **T17 (E16). Ghost suggestions can stay unloaded forever.**
+- [x] **T17 (E16). Ghost suggestions can stay unloaded forever.**
   `prompt.cpp:870` `failAll` and `prompt::fail` never reset `history_request`, so after a
   failed history query (or a disconnect while it is in flight) `historyAsked()` stays true.
   Expected: a failed or lost query is asked again.
