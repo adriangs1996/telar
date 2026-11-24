@@ -208,7 +208,7 @@ Legend: `[ ]` todo, `[x]` done, `[~]` not a bug / dropped (with reason).
 
 ## P1: history and the editor
 
-- [ ] **T16 (E15). Up in a new pane does nothing.**
+- [x] **T16 (E15). Up in a new pane does nothing.**
   `prompt-line.cpp` `travel()` walks only `recent_`: what this pane sent in this GUI
   session.
   Expected: Up recalls this pane's commands first, then the global history, as fish or zsh
@@ -216,6 +216,7 @@ Legend: `[ ]` todo, `[x]` done, `[~]` not a bug / dropped (with reason).
   Fix: pass the `History` that `press` already has to `travel()`; past `recent_`, continue
   through `state.history` skipping duplicates. Optional, as fish: with text typed, Up
   filters by that prefix.
+  The optional prefix filter is left out.
 
 - [ ] **T17 (E16). Ghost suggestions can stay unloaded forever.**
   `prompt.cpp:870` `failAll` and `prompt::fail` never reset `history_request`, so after a

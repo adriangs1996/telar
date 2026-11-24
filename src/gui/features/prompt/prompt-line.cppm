@@ -147,7 +147,7 @@ namespace telar::gui::features::prompt {
 
     [[nodiscard]] static bool isCommandExtendedBy(std::string_view command, std::string_view text);
 
-    Outcome handle(Request request, Surface surface, const Continuation& incomplete);
+    Outcome handle(Request request, Surface surface, const Continuation& incomplete, History history);
 
     void closeMenu() noexcept;
 
@@ -173,14 +173,19 @@ namespace telar::gui::features::prompt {
 
     Outcome submit(Surface surface, bool incomplete);
 
-    // Up and Down past the editor's first and last line walk the commands sent from it, keeping
-    // what was being written to come back to.
-    Outcome travel(int direction);
+    // Up and Down past the editor's first and last line walk the commands sent from it, then
+    // `history`'s, keeping what was being written to come back to.
+    Outcome travel(int direction, History history);
+
+    // The command `steps` back from the line: this one's own, newest first, then the ones of
+    // `history` it did not send, newest first; each once.
+    [[nodiscard]] ds::Option<std::string_view> back(std::size_t steps, History history) const noexcept;
 
     tbc::val_a<Editor> editor_;
     tbc::val_a<ds::Vec<ds::String<Memory>, Memory>> recent_;
     tbc::val_a<ds::String<Memory>> draft_;
     tbc::val_a<ds::String<Memory>> delivery_;
+    // How many commands back Up went; none at the line being written.
     ds::Option<std::size_t> history_index_;
     tbc::val_a<ds::Option<Menu>> menu_;
     std::uint64_t revision_ = 0;

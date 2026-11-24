@@ -209,6 +209,50 @@ namespace {
     check(prompt::line(client, 1)->text() == "a2Jb", "a pasted C1 control is dropped");
   }
 
+  // Up walks this pane's commands first, then the history's, each once, as fish and zsh with
+  // share_history do; Down comes back to what was being written.
+  void lineRecallsHistory() {
+    SystemAllocator memory;
+    Transport transport;
+    TestSession client{memory, transport};
+
+    openFirstPane(client, transport);
+    FrameBody frame;
+
+    frame.pane_id = 1;
+    frame.frame_id = 1;
+    frame.scroll.total_rows = 1;
+    deliverSingleCell(client, frame);
+    auto configuration = client.configuration;
+
+    configuration.prompt.mode = PromptMode::telar;
+    application::configuration::configure(client, configuration);
+    deliver(client, atPrompt());
+    const auto up = [&] {
+      prompt::key(client, 1, prompt::KeyPress{.key = prompt::Key::up});
+      return std::string{prompt::line(client, 1)->text()};
+    };
+    const auto down = [&] {
+      prompt::key(client, 1, prompt::KeyPress{.key = prompt::Key::down});
+      return std::string{prompt::line(client, 1)->text()};
+    };
+
+    typeKeys(client, "x");
+    const auto query = transport.last<QueryHistory>();
+    const ds::Array entries{HistoryEntry{.id = 3, .pane_id = 2, .command = "make test", .cwd = "/"}, HistoryEntry{.id = 2, .pane_id = 2, .command = "git status", .cwd = "/"}};
+
+    deliver(client, HistoryResults{.request_id = query.request_id, .snapshot_id = 1, .entries = entries});
+    prompt::key(client, 1, prompt::KeyPress{.key = prompt::Key::backspace});
+    check(up() == "make test" && up() == "git status", "a new pane's Up reaches the history, newest first");
+    check(up() == "git status", "Up stops at the oldest");
+    check(down() == "make test" && down().empty(), "Down comes back to the line being written");
+
+    typeKeys(client, "git status");
+    enter(client);
+    check(up() == "git status" && up() == "make test", "the pane's own commands come first, each command once");
+    check(up() == "make test", "nothing older");
+  }
+
   // A frame of one row, the cursor at `column` on it.
   struct Row {
     std::uint64_t frame_id = 0;
@@ -1082,6 +1126,7 @@ command = "switch" : "Switch branches" , { @branch } | "status" : "Show the work
 
   const telar::testing::Case case_line_runs_commands{"prompt_session.line_runs_commands", lineRunsCommands};
   const telar::testing::Case case_line_keeps_unsendable_commands{"prompt_session.line_keeps_unsendable_commands", lineKeepsUnsendableCommands};
+  const telar::testing::Case case_line_recalls_history{"prompt_session.line_recalls_history", lineRecallsHistory};
   const telar::testing::Case case_line_hides_terminal_cursor{"prompt_session.line_hides_terminal_cursor", lineHidesTerminalCursor};
   const telar::testing::Case case_commands_settle_as_typed{"prompt_session.commands_settle_as_typed", commandsSettleAsTyped};
   const telar::testing::Case case_line_searches{"prompt_session.line_searches", lineSearches};

@@ -176,7 +176,7 @@ namespace telar::gui::features::prompt {
       return Outcome::edited;
     }
 
-    const auto outcome = handle(editor_.press(key), surface, incomplete);
+    const auto outcome = handle(editor_.press(key), surface, incomplete, history);
 
     return refining && menu_ ? refine(outcome) : outcome;
   }
@@ -194,7 +194,7 @@ namespace telar::gui::features::prompt {
       return Outcome::edited;
     }
 
-    return handle(editor_.perform(action), surface, incomplete);
+    return handle(editor_.perform(action), surface, incomplete, history);
   }
 
   void Line::insertText(std::string_view text) {
@@ -324,7 +324,7 @@ namespace telar::gui::features::prompt {
     return command.size() > text.size() && command.starts_with(text);
   }
 
-  Outcome Line::handle(Request request, Surface surface, const Continuation& incomplete) {
+  Outcome Line::handle(Request request, Surface surface, const Continuation& incomplete, History history) {
     switch (request) {
     case Request::none:
       history_index_.reset();
@@ -332,9 +332,9 @@ namespace telar::gui::features::prompt {
     case Request::submit:
       return submit(surface, incomplete.incomplete(editor_.text().view()));
     case Request::history_previous:
-      return travel(-1);
+      return travel(-1, history);
     case Request::history_next:
-      return travel(1);
+      return travel(1, history);
     case Request::cancel:
       if (surface == Surface::running && editor_.text().empty()) {
         return Outcome::terminal;
@@ -550,36 +550,72 @@ namespace telar::gui::features::prompt {
     return Outcome::run;
   }
 
-  Outcome Line::travel(int direction) {
-    if (recent_.empty()) {
-      return Outcome::edited;
-    }
-
+  Outcome Line::travel(int direction, History history) {
     if (!history_index_) {
       if (direction > 0) {
         return Outcome::edited;
       }
 
+      if (!back(1, history)) {
+        return Outcome::edited;
+      }
+
       draft_.assign(editor_.text().view());
-      history_index_ = recent_.size();
+      history_index_ = 0;
     }
 
-    const auto next = static_cast<std::ptrdiff_t>(*history_index_) + direction;
-    if (next < 0) {
-      return Outcome::edited;
-    }
+    const auto steps = direction < 0 ? *history_index_ + 1 : *history_index_ - 1;
 
-    if (static_cast<std::size_t>(next) >= recent_.size()) {
+    if (steps == 0) {
       history_index_.reset();
       editor_.textMut().assign(draft_);
+    } else if (const auto entry = back(steps, history)) {
+      // Copied: the entry views the history the assignment may outlive.
+      const ds::String<Memory> command{draft_.memory(), *entry};
+
+      history_index_ = steps;
+      editor_.textMut().assign(command);
     } else {
-      history_index_ = static_cast<std::size_t>(next);
-      editor_.textMut().assign(recent_[*history_index_]);
+      return Outcome::edited;
     }
 
     editor_.textMut().moveTo(editor_.textMut().size());
     ++revision_;
     return Outcome::edited;
+  }
+
+  ds::Option<std::string_view> Line::back(std::size_t steps, History history) const noexcept {
+    const auto own = recent_.view();
+    std::size_t seen = 0;
+
+    for (std::size_t index = own.size(); index-- > 0;) {
+      const auto command = own[index].view();
+      const auto newer = own.subspan(index + 1);
+      if (std::ranges::any_of(newer, [command](const ds::String<Memory>& sent) {
+            return sent.view() == command;
+          })) {
+        continue;
+      }
+
+      if (++seen == steps) {
+        return command;
+      }
+    }
+
+    for (const auto& entry : history) {
+      const auto command = entry.view();
+      if (std::ranges::any_of(own, [command](const ds::String<Memory>& sent) {
+            return sent.view() == command;
+          })) {
+        continue;
+      }
+
+      if (++seen == steps) {
+        return command;
+      }
+    }
+
+    return ds::none;
   }
 
 }
