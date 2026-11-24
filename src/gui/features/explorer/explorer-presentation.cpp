@@ -541,16 +541,21 @@ namespace telar::gui::features::explorer {
     }
 
     void paneLook(RowLook& look, const Seen& seen) {
-      if (seen.row.item >= seen.context.panes.size()) {
+      const auto& roster = seen.context.roster;
+
+      if (seen.row.item >= roster.panes.size()) {
         return;
       }
 
-      const auto& pane = seen.context.panes[seen.row.item];
+      const auto& pane = roster.panes[seen.row.item];
+      const auto workspace = textOf(roster, pane.workspace);
+      const auto cwd = textOf(roster, pane.cwd);
 
-      put(look.name, pane.title);
+      put(look.name, textOf(roster, pane.title));
       look.panes.atMut(0) = pane.number;
       look.pane_count = 1;
-      put(look.note, pane.cwd);
+      // Its workspace, which the panes of a machine are of several of, then where it is.
+      write(look.note, "{}{}{}", workspace, workspace.empty() || cwd.empty() ? "" : " · ", cwd);
     }
 
     // `[size↓ . !]`: how the window sorts, and what it lists besides.
@@ -652,7 +657,7 @@ namespace telar::gui::features::explorer {
         addHint(hints, ":e", {.text = "path"});
         addHint(hints, ":vs", {.text = "window"});
         addHint(hints, ":e LABEL:PATH", {.text = "another machine"});
-        addHint(hints, ":machine", {.text = "list them"});
+        addHint(hints, ":machine", {.text = "the next one"});
         addHint(hints, ":commit", {.text = "message"});
         addHint(hints, "<Tab>", {.text = "complete a command, a path or a machine"});
         return true;
@@ -851,6 +856,43 @@ namespace telar::gui::features::explorer {
       }
     }
 
+    // An entry of a directory, by the path of the directory and its own name.
+    struct Inside {
+      std::string_view directory;
+      std::string_view name;
+    };
+
+    // Whether git ignores that entry: read from what git said of the ignored paths, as the count
+    // of them is.
+    bool ignoredChild(const Repository& repository, const Inside& entry) noexcept {
+      const auto root = repository.root.view();
+      const auto name = entry.name;
+
+      if (root.empty() || !within(entry.directory, root)) {
+        return false;
+      }
+
+      auto relative = entry.directory;
+
+      relative.remove_prefix(std::min(relative.size(), root.size() + 1));
+      return std::ranges::any_of(repository.changes, [&](const Change& change) {
+        auto ignored = repository.path(change);
+
+        if (change.unstaged != FileState::ignored) {
+          return false;
+        }
+
+        if (ignored.ends_with('/')) {
+          ignored.remove_suffix(1);
+        }
+
+        auto parent = ignored;
+
+        parent.remove_suffix(std::min(parent.size(), name.size() + 1));
+        return baseOf(ignored) == name && parent == relative;
+      });
+    }
+
     // The heaviest of what the directory at `path` holds. A directory not listed whole, or with a
     // directory in it not measured yet, has none: the window asks for no size to show them.
     void noteHeaviest(PreviewLook& look, const State& state, std::string_view path) {
@@ -895,7 +937,16 @@ namespace telar::gui::features::explorer {
         const auto& entry = entries[index];
         auto& line = look.heavy.atMut(look.heavy_count++);
 
-        put(line.name, directory->name(entry));
+        const auto name = directory->name(entry);
+
+        put(line.name, name);
+        // One the window leaves out of its rows unless asked says why it is not there.
+        if (ignoredChild(state.repository, {.directory = path, .name = name})) {
+          line.tag = "ignored";
+        } else if (name.starts_with('.')) {
+          line.tag = "hidden";
+        }
+
         line.size = bytes(entry.size);
         // Of a sum as large as this a hundredth is taken first, so that the product fits.
         line.share = static_cast<std::uint8_t>(whole < hundredths ? entry.size * hundredths / whole : entry.size / (whole / hundredths));
@@ -1054,20 +1105,39 @@ namespace telar::gui::features::explorer {
       return {};
     }
 
-    // A pane of the tab: what it is and where, which Enter goes to.
+    // A pane of the machine: what it is and where, which Enter goes to.
     void panePreview(PreviewLook& look, const Context& context, const Row& row) {
-      if (row.item >= context.panes.size()) {
+      const auto& roster = context.roster;
+
+      if (row.item >= roster.panes.size()) {
         return;
       }
 
-      const auto& pane = context.panes[row.item];
+      const auto& pane = roster.panes[row.item];
+      const auto workspace = textOf(roster, pane.workspace);
+      const auto cwd = textOf(roster, pane.cwd);
+      const auto buffer = textOf(roster, pane.buffer);
 
       look.shown = true;
       look.kind = RowKind::pane;
-      write(look.name, "{} {}", pane.number, pane.title);
-      write(look.path, "{} · {}", context.workspace, context.machine);
+      write(look.name, "{} {}", pane.number, textOf(roster, pane.title));
+      write(look.path, "{}{}{}", workspace, workspace.empty() ? "" : " · ", context.machine);
       put(addFact(look, "Kind").value, paneKindName(pane.kind));
-      put(addFact(look, "Directory").value, pane.cwd);
+      if (!cwd.empty()) {
+        put(addFact(look, "Directory").value, cwd);
+      }
+
+      if (!buffer.empty()) {
+        // The file an editor is on, from its directory when it is below it.
+        const bool below = buffer.size() > cwd.size() + 1 && buffer.starts_with(cwd) && buffer[cwd.size()] == '/';
+
+        put(addFact(look, "Buffer").value, below && cwd.size() > 1 ? buffer.substr(cwd.size() + 1) : buffer);
+      }
+
+      if (const auto state = textOf(roster, pane.state); !state.empty()) {
+        put(addFact(look, "State").value, state);
+      }
+
       look.note = "Enter focuses this pane; a window that follows it goes to its directory.";
     }
 
@@ -1365,7 +1435,11 @@ namespace telar::gui::features::explorer {
       result.kind = view.menu.over;
     }
 
-    result.mode = modeText(result.kind);
+    // A window that does not take the keys says which it is, as `<C-w>` counts them.
+    static constexpr ds::Array<std::string_view, ViewLimits::windows> ordinals{"1", "2", "3"};
+
+    result.mode = result.current || window_index >= ordinals.size() ? modeText(result.kind) : ordinals[window_index];
+
     result.follows = window.follow && context.reach != Reach::away;
     if (context.reach == Reach::away) {
       put(result.following, "[stale]");
@@ -1376,6 +1450,11 @@ namespace telar::gui::features::explorer {
     }
 
     write(result.root, "{}{}", tilde ? "~" : "", below);
+    // The root of another machine says which, as scp names a path there.
+    if (!context.local) {
+      write(result.machine, "{}:", context.machine);
+    }
+
     result.pending = !view.edits.empty();
     writeFlags(result, window);
     writeFilter(result, window, state);
@@ -1420,7 +1499,6 @@ namespace telar::gui::features::explorer {
     const bool tree = window.lens == Lens::tree;
     LineText verb;
 
-    static_cast<void>(state);
     writeEnter(verb, row, focusedPane(context));
     const auto& keymap = view.keymap;
 
@@ -1440,7 +1518,20 @@ namespace telar::gui::features::explorer {
     addHint(result, keysOf(keymap, Command::rename), {.text = "rename", .enabled = (entry || added) && tree});
     addHint(result, keysOf(keymap, Command::cut), {.text = "cut", .enabled = entry || added});
     addHint(result, keysOf(keymap, Command::yank), {.text = "copy", .enabled = entry});
+    // What was yanked or cut waits for a place: how many, and whether `p` moves or copies them.
+    if (!view.yanked.empty()) {
+      LineText paste;
+
+      write(paste, "paste {} ({})", view.yanked.size(), view.yank == PasteKind::move ? "move" : "copy");
+      addHint(result, keysOf(keymap, Command::paste), {.text = paste.view(), .enabled = tree});
+    }
+
     addHint(result, keysOf(keymap, Command::create), {.text = "new", .enabled = tree});
+    // With nothing typed left to take back, `u` takes back the last plan a runtime applied.
+    if (view.edits.empty() && view.history.empty() && (!view.wrote.empty() || state.undoable)) {
+      addHint(result, keysOf(keymap, Command::undo), {.text = "undo :w"});
+    }
+
     addHint(result, keysOf(keymap, Command::split_vertical), {.text = "window"});
     // Beside the panes, the way back over them; over them the hints are the ones of the design.
     if (view.pinned) {
@@ -1645,7 +1736,10 @@ namespace telar::gui::features::explorer {
   ds::Array<LensLook, lens_count> lenses(const View& view, const State& state, const Context& context) {
     ds::Array<LensLook, lens_count> result{};
     const auto current = view.windows.empty() ? Lens::tree : explorer::window(view).lens;
-    const auto changes = state.repository.staged + state.repository.unstaged + state.repository.untracked;
+    // The changed paths below the root of the window that takes the keys, and the panes of its
+    // machine.
+    const auto changes = view.windows.empty() ? 0 : explorer::window(view).changes;
+    const auto panes = static_cast<std::uint32_t>(std::ranges::count(context.roster.panes, context.host, &RosterPane::machine));
 
     result.atMut(0) = {.name = "tree", .current = current == Lens::tree};
     result.atMut(1) = {.name = "changes", .count = changes, .counted = state.repository.known && !state.repository.root.empty(), .current = current == Lens::changes};
@@ -1664,7 +1758,7 @@ namespace telar::gui::features::explorer {
     }
 
     result.atMut(2) = {.name = "touched", .count = touched, .counted = touches.known, .current = current == Lens::touched};
-    result.atMut(3) = {.name = "panes", .count = static_cast<std::uint32_t>(context.panes.size()), .counted = true, .current = current == Lens::panes};
+    result.atMut(3) = {.name = "panes", .count = panes, .counted = true, .current = current == Lens::panes};
     return result;
   }
 
@@ -1858,6 +1952,15 @@ namespace telar::gui::features::explorer {
       warn(note, "with all it holds");
     }
 
+    // What the line does besides what its verb says: where it travels, and what keeps it safe.
+    if (step.source_machine != 0) {
+      write(note.note, "Carried from {} to {} through this window, in the background{}{}{}", seen.source, seen.machine, step.verb == PlanVerb::move ? "; the original goes to the trash of " : "", step.verb == PlanVerb::move ? seen.source : std::string_view{}, step.verb == PlanVerb::move ? " once it arrived whole" : "");
+    } else if (step.verb == PlanVerb::remove) {
+      write(note.note, "To the trash of {}; u brings it back", seen.machine);
+    } else if (step.verb == PlanVerb::restore) {
+      put(note.note, "Drops its changes not staged; the runtime keeps a copy in the trash first");
+    }
+
     return note;
   }
 
@@ -1904,8 +2007,19 @@ namespace telar::gui::features::explorer {
       }
     };
 
+    const auto total = written.applied + written.stale + written.missing + written.refused;
+
     append(written.undone ? "taken back" : ":w");
-    count(written.applied, written.undone ? "step" : "applied by the runtime");
+    if (written.undone) {
+      count(written.applied, "step");
+    } else if (total != 0) {
+      // How many of the plan's operations the runtimes did, as its title said how many it had.
+      LineText done;
+
+      write(done, " · {} of {} applied by the runtime", written.applied, total);
+      append(done.view());
+    }
+
     count(written.renamed, "under another name: the target existed");
     count(written.stale, "skipped: changed since it was listed");
     count(written.missing, "skipped: gone");

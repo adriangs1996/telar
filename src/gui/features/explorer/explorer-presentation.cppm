@@ -180,6 +180,8 @@ export namespace telar::gui::features::explorer {
     // machine is not connected, whatever it followed.
     ShortText following;
     bool follows = false;
+    // `box:` before the root of a window on another machine than the one the window runs on.
+    ShortText machine;
     LineText root;
     bool pending = false;
     // `[size↓ . !]`: the sort, and the hidden and ignored entries it lists.
@@ -209,7 +211,8 @@ export namespace telar::gui::features::explorer {
     bool enabled = true;
   };
 
-  inline constexpr std::size_t hint_capacity = 14;
+  // As many as normal mode shows at most: with changes to write, rows yanked, and beside the panes.
+  inline constexpr std::size_t hint_capacity = 16;
 
   struct Hints {
     ds::Array<Hint, hint_capacity> items{};
@@ -274,6 +277,8 @@ export namespace telar::gui::features::explorer {
   // part of what the directory holds, in hundredths.
   struct HeavyLook {
     LineText name;
+    // Why the window does not list it unless asked: `hidden`, `ignored`, or nothing.
+    Word tag;
     ShortText size;
     std::uint8_t share = 0;
     bool directory = false;
@@ -367,6 +372,9 @@ export namespace telar::gui::features::explorer {
   struct PlanNote {
     ShortText size;
     LineText warning;
+    // What the line does besides what its verb says: a transfer between machines, the trash a
+    // delete goes to, what a restore discards.
+    LineText note;
   };
 
   // Whether an agent touched the file a step reads after the time its listing gave it. `state`
@@ -378,6 +386,9 @@ export namespace telar::gui::features::explorer {
   struct PlanSeen {
     bool touched = false;
     Edited edited;
+    // The label of the machine the step changes, and of the one it carries from, if any.
+    std::string_view machine;
+    std::string_view source;
   };
 
   // `state` is the cache of the machine the step changes, whose listings say whether the name

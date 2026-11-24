@@ -14,24 +14,42 @@ namespace {
   void testItOpensAtTheFocusedPane() {
     Explorer explorer;
 
-    explorer.start();
+    explorer.start(true);
 
     const auto& shown = window(explorer.view);
 
     check(shown.root.view() == "/home/dev/telar" && shown.follow, "rooted at the workspace, following the focused pane");
-    check(explorer.names() == Names{"assets/", "docs/", "src/", "justfile", "README.md"}, "dotfiles and what git ignores left out");
-    check(explorer.selected() == "/home/dev/telar/docs", "the selection on the pane's directory, which stays folded");
+    check(explorer.names() == Names{"assets/", "docs/", "images/", "agents.md", "remote.md", "usage.md", "src/", "justfile", "README.md"}, "the pane's directory unfolded; dotfiles and what git ignores left out");
+    check(explorer.selected() == "/home/dev/telar/docs" && explorer.row("docs").expanded, "and the selection on it");
     check(shown.hidden_entries == 2 && shown.ignored_entries == 1, "and how many entries of the root it leaves out");
     check(explorer.leftOut() == "2 dotfiles (g.) · 1 ignored by git (gi) not listed here", "which the last row of the tree says, with the keys that list them");
-    check(status(explorer.view, explorer.state, explorer.context(), 0).count == 5, "a row no key selects");
-    check(explorer.row("docs").pane_count == 1 && explorer.row("docs").panes[0] == 3 && !explorer.row("docs").expanded, "the directory says which pane is in it");
+    check(status(explorer.view, explorer.state, explorer.context(), 0).count == 9, "a row no key selects");
+    check(explorer.row("docs").pane_count == 1 && explorer.row("docs").panes[0] == 3, "the directory says which pane is in it");
     check(shown.bytes == 6800000 + 3800000 + 120000 + 4096 + 21000000000ULL + 5 + 8300 + 5500, "what the root holds counts what is not listed too");
 
-    // Another pane takes the focus: the window goes with it.
+    // Another pane takes the focus: the window goes with it. An editor on no file is in a
+    // directory, which is chosen and stays folded: it is the file it edits that would show.
     explorer.focused = 12;
     explorer.answer();
-    check(explorer.selected() == "/home/dev/telar/src" && explorer.row("src").pane_count == 0, "an editor is in the directory, with no shell there to mark");
+    check(explorer.selected() == "/home/dev/telar/src" && !explorer.row("src").expanded && explorer.row("src").pane_count == 0, "an editor is in the directory, with no shell there to mark");
     check(!follow(explorer.view, explorer.context(), Explorer::machine), "a pane that did not move leaves the window where it is");
+
+    // The editor goes to a file: the window chooses that file, in its directory unfolded.
+    explorer.panes[1].buffer = "/home/dev/telar/docs/images/window.png";
+    explorer.answer();
+    explorer.answer();
+    check(explorer.selected() == "/home/dev/telar/docs/images/window.png" && explorer.row("images").expanded && explorer.row("window.png").selected, "with an editor it is the file being edited that is chosen");
+    check(!follow(explorer.view, explorer.context(), Explorer::machine));
+    // To another file: the window follows the buffer, though the pane did not move.
+    explorer.panes[1].buffer = "/home/dev/telar/src/main.cpp";
+    // The window follows once the scene is observed, and then asks for what it unfolded.
+    explorer.answer();
+    explorer.answer();
+    check(explorer.selected() == "/home/dev/telar/src/main.cpp" && explorer.row("main.cpp").selected, "and it follows the editor from one file to the next");
+    // A file outside the root is not shown: the window stays at its scope.
+    explorer.panes[1].buffer = "/etc/hosts";
+    explorer.answer();
+    check(window(explorer.view).root.view() == "/home/dev/telar" && explorer.selected() == "/home/dev/telar/src/main.cpp");
   }
 
   void testTheKeysMoveAsNeovims() {

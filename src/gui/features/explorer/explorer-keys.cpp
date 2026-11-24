@@ -358,14 +358,57 @@ namespace telar::gui::features::explorer {
     keys.counted = false;
   }
 
+  namespace {
+
+    // The keys of the mode the keys are read in, and the ones it borrows where it has none.
+    struct Maps {
+      std::span<const Binding> own;
+      std::span<const Binding> lent;
+    };
+
+    // The binding whose sequence is `keys`, of the mode's own first: one that takes an argument,
+    // or one that takes none, as `argument` asks. And whether it was borrowed.
+    struct Named {
+      const Binding* binding = nullptr;
+      bool borrowed = false;
+    };
+
+    tbc::val_a<Named> named(tbc::val_a<Maps> maps, std::string_view keys, bool argument) noexcept {
+      for (const auto& binding : maps.own) {
+        if (binding.argument == argument && binding.keys.view() == keys) {
+          return {.binding = &binding};
+        }
+      }
+
+      for (const auto& binding : maps.lent) {
+        if (binding.argument == argument && binding.keys.view() == keys) {
+          return {.binding = &binding, .borrowed = true};
+        }
+      }
+
+      return {};
+    }
+
+    // Whether a sequence of `bindings` goes on from `keys`: a longer one, or one that takes an
+    // argument after them.
+    bool startsLonger(std::span<const Binding> bindings, std::string_view keys) noexcept {
+      return std::ranges::any_of(bindings, [&](const Binding& binding) {
+        return binding.keys.view().starts_with(keys) && (binding.argument || binding.keys.view().size() > keys.size());
+      });
+    }
+
+  }
+
   Stroke feed(const Keymap& keymap, Keys& keys, KeyChord chord, bool visual) {
     constexpr std::uint32_t decimal = 10;
     constexpr std::uint32_t largest_count = 100000;
     const auto bindings = of(keymap, visual);
+    // A selection takes the keys of normal mode that it has none of its own for.
+    const auto lent = visual ? of(keymap, false) : std::span<const Binding>{};
     auto key = notation(chord);
 
     // Alt+w stands for Ctrl+w, which some systems keep for themselves, unless the map binds it.
-    if (key.view() == alt_window && !startsAny(bindings, alt_window)) {
+    if (key.view() == alt_window && !startsAny(bindings, alt_window) && !startsAny(lent, alt_window)) {
       key.assign(control_window);
     }
 
@@ -384,36 +427,32 @@ namespace telar::gui::features::explorer {
     const auto held = keys.pending.view();
 
     // The key after a command that takes an argument is that argument.
-    for (const auto& binding : bindings) {
-      if (binding.argument && binding.keys.view() == held) {
-        Stroke stroke{.command = binding.command, .count = keys.counted ? keys.count : 1, .counted = keys.counted, .argument = key};
+    if (const auto taker = named({.own = bindings, .lent = lent}, held, true); taker.binding != nullptr) {
+      Stroke stroke{.command = taker.binding->command, .count = keys.counted ? keys.count : 1, .counted = keys.counted, .argument = key, .borrowed = taker.borrowed};
 
-        clear(keys);
-        return stroke;
-      }
+      clear(keys);
+      return stroke;
     }
 
     append(keys.pending, text);
 
     const auto sequence = keys.pending.view();
-    bool starts_longer = false;
 
-    for (const auto& binding : bindings) {
-      if (binding.keys.view() == sequence && !binding.argument) {
-        Stroke stroke{.command = binding.command, .count = keys.counted ? keys.count : 1, .counted = keys.counted};
+    if (const auto whole = named({.own = bindings, .lent = lent}, sequence, false); whole.binding != nullptr) {
+      Stroke stroke{.command = whole.binding->command, .count = keys.counted ? keys.count : 1, .counted = keys.counted, .borrowed = whole.borrowed};
 
-        clear(keys);
-        return stroke;
-      }
-
-      starts_longer = starts_longer || (binding.keys.view().starts_with(sequence) && (binding.argument || binding.keys.view().size() > sequence.size()));
+      clear(keys);
+      return stroke;
     }
 
-    if (!starts_longer) {
+    Stroke nothing;
+
+    if (!startsLonger(bindings, sequence) && !startsLonger(lent, sequence)) {
+      nothing.unknown = keys.pending;
       clear(keys);
     }
 
-    return {};
+    return nothing;
   }
 
   tbc::val_a<std::string_view> keysOf(tbc::ref_a<Keymap> keymap, Command command, bool visual) noexcept {

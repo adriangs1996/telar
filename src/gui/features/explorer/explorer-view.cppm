@@ -104,6 +104,39 @@ export namespace telar::gui::features::explorer {
     PaneKind kind = PaneKind::shell;
     std::string_view title;
     std::string_view cwd;
+    // The file an editor is on, by its path on the pane's machine; empty for another kind of
+    // pane, and for an editor on no file.
+    std::string_view buffer;
+  };
+
+  // A piece of a text that several things share.
+  struct Slice {
+    std::uint32_t offset = 0;
+    std::uint32_t size = 0;
+  };
+
+  // A pane of a machine, of whatever tab and workspace of it: what the lens of panes lists. Its
+  // texts are pieces of the text of the `Roster` that holds it.
+  struct RosterPane {
+    std::uint64_t machine = 0;
+    std::uint64_t id = 0;
+    // Its place in its tab, from one.
+    std::uint16_t number = 0;
+    PaneKind kind = PaneKind::shell;
+    Slice title;
+    // Empty for a pane of a tab the window never showed: its runtime lists it without one.
+    Slice cwd;
+    // The name of its workspace, and the file an editor is on.
+    Slice workspace;
+    Slice buffer;
+    // What its agent is doing, as the runtime names it; empty with no agent.
+    Slice state;
+  };
+
+  // The panes of every machine the window keeps, as the window last saw them.
+  struct Roster {
+    std::string_view text;
+    std::span<const RosterPane> panes;
   };
 
   // How the window reaches a machine: its runtime answers for files, it is not connected, or it
@@ -137,6 +170,8 @@ export namespace telar::gui::features::explorer {
     std::uint32_t size = 0;
     // The buffer has changes that were not written.
     bool modified = false;
+    // It is the buffer its editor is on.
+    bool current = false;
   };
 
   // The files the editors of every machine hold in their buffers, as the window last saw them.
@@ -169,6 +204,7 @@ export namespace telar::gui::features::explorer {
     std::uint64_t shown = 0;
     std::span<const MachineFact> machines;
     Edited edited;
+    Roster roster;
   };
 
   enum class RowKind : std::uint8_t {
@@ -459,6 +495,15 @@ export namespace telar::gui::features::explorer {
     ds::String<Memory> away;
   };
 
+  // The directories a window had unfolded on a machine it left: the window that next goes there
+  // unfolds them again.
+  struct Folds {
+    explicit Folds(Memory& memory);
+
+    std::uint64_t machine = 0;
+    ds::Vec<ds::String<Memory>, Memory> expanded;
+  };
+
   // One window of the explorer: a directory of a machine, what it lists and how.
   struct Window {
     explicit Window(Memory& memory);
@@ -498,6 +543,8 @@ export namespace telar::gui::features::explorer {
     std::uint32_t hidden_entries = 0;
     std::uint32_t ignored_entries = 0;
     std::uint64_t bytes = 0;
+    // The changed paths of the repository below the root: what the lens of changes counts.
+    std::uint32_t changes = 0;
     // The rows that fit, for half a page.
     std::uint16_t page = ViewLimits::page;
     // Whether the root's listing is yet to arrive.
@@ -516,6 +563,13 @@ export namespace telar::gui::features::explorer {
     std::uint64_t touched = 0;
     // Whether its machine answered when the rows were built: one that comes or goes builds them again.
     Reach reached = Reach::answers;
+    // `:e` took it to its root, which no listing has yet said is a directory: a file is chosen
+    // in its own directory instead, and a path that is not there sends the window back to where
+    // it was, which is kept until then.
+    bool opened = false;
+    std::uint64_t back_machine = 0;
+    ds::String<Memory> back_root;
+    ds::String<Memory> back_selected;
   };
 
   // A line of the menu the pointer asks a row for. Each runs the command its key runs, so the
@@ -689,8 +743,9 @@ export namespace telar::gui::features::explorer {
     Written written;
     ds::Vec<std::uint64_t, Memory> wrote;
     ds::Vec<Settled, Memory> seen;
-    // Where a window last was on each machine it left, to return there.
+    // Where a window last was on each machine it left, to return there, and what it had unfolded.
     ds::Vec<Place, Memory> visited;
+    ds::Vec<Folds, Memory> folds;
     // The files carried between machines, the ones that wait and the ones that just ended; and
     // the one a question asks about.
     ds::Vec<Transfer, Memory> transfers;
@@ -703,6 +758,9 @@ export namespace telar::gui::features::explorer {
   };
 
   [[nodiscard]] const Window& window(const View& view) noexcept;
+
+  // A piece of the roster's text.
+  [[nodiscard]] tbc::val_a<std::string_view> textOf(tbc::ref_a<Roster> roster, Slice slice) noexcept;
 
   // The label of the machine `id`, as the window names it.
   [[nodiscard]] tbc::val_a<std::string_view> labelOf(tbc::ref_a<Context> context, std::uint64_t id) noexcept;

@@ -74,16 +74,19 @@ namespace {
     check(explorer.view.windows.size() == 2 && explorer.here() == Explorer::machine && window(explorer.view).root.view() == "/home/dev" && !explorer.view.side_by_side);
     explorer.type("<C-w>o");
 
-    // :machine goes to the last root the explorer had there, or the home; alone, it lists them.
+    // :machine goes to the last root the explorer had there, or the home; alone, to the next one.
     explorer.type(":");
     explorer.enter("machine box");
     check(explorer.here() == Explorer::box && window(explorer.view).root.view() == "/var/log", "where this explorer last was on it");
     explorer.type(":");
     explorer.enter("machine");
-    check(explorer.view.message.view() == "macbook · box (here)");
+    check(explorer.here() == Explorer::machine && explorer.view.message.view() == "macbook · local", "as gm, and it says where it went");
+    explorer.type(":");
+    explorer.enter("machine");
+    check(explorer.here() == Explorer::box && explorer.view.message.view() == "box · remote");
     explorer.type(":");
     explorer.enter("machine nas");
-    check(explorer.view.tone == Tone::error && explorer.view.message.view() == "No machine is called nas · :machine lists them" && explorer.here() == Explorer::box);
+    check(explorer.view.tone == Tone::error && explorer.view.message.view() == "No machine is called nas: macbook · box (here)" && explorer.here() == Explorer::box, "a name that is no machine's is answered with the ones there are");
 
     // gm goes to the next machine that answers, around.
     explorer.type("gm");
@@ -199,11 +202,11 @@ namespace {
     check(receive(explorer.state, FilesChanged{.request_id = 900, .undoable = true, .results = done.view()}));
     settle(explorer.view, explorer.state, explorer.context(Explorer::machine), Explorer::machine);
     check(explorer.view.writing && explorer.view.edits.size() == 1 && explorer.view.edits[0].machine == Explorer::box, "the changes of the machine that answered are written");
-    check(explorer.view.message.view() == ":w · 1 applied by the runtime · 1 machine still to answer");
+    check(explorer.view.message.view() == ":w · 1 of 1 applied by the runtime · 1 machine still to answer");
     check(receive(explorer.remote, FilesChanged{.request_id = 901, .undoable = true, .results = done.view()}));
     settle(explorer.view, explorer.remote, explorer.context(Explorer::box), Explorer::box);
     check(!explorer.view.writing && explorer.view.edits.empty() && explorer.view.plan.empty());
-    check(explorer.view.message.view() == ":w · 2 applied by the runtime · u takes it back", "the line counts what every machine did");
+    check(explorer.view.message.view() == ":w · 2 of 2 applied by the runtime · u takes it back", "the line counts what every machine did");
     explorer.answer();
 
     // u takes it back on every machine it touched.
@@ -260,7 +263,7 @@ namespace {
     check(completedOn(explorer.view, explorer.context(), "e do") == Explorer::machine && completedOn(explorer.view, explorer.context(), "machine box:") == Explorer::machine);
     check(completes("e box:~/lo") == std::pair{Explorer::box, std::string{"e box:~/logs/"}}, "what the other machine lists below its home");
     check(completes("vs box:s") == std::pair{Explorer::box, std::string{"vs box:site/"}}, "a path that starts nowhere starts at the home there");
-    check(completes("e box:/home/ops/") == std::pair{Explorer::box, std::string{"e box:/home/ops/"}} && explorer.view.message.view() == "logs/  site/  ", "several are listed");
+    check(completes("e box:/home/ops/") == std::pair{Explorer::box, std::string{"e box:/home/ops/"}} && explorer.view.message.view() == "logs/  site/  deploy.sh  ", "several are listed, the files among them");
     check(explorer.view.windows.size() == 1 && explorer.here() == Explorer::machine, "no window went there");
     check(completes("e box:~/nothing") == std::pair{Explorer::box, std::string{"e box:/home/ops/"}} && explorer.view.tone == Tone::error, "the line stays as it was");
   }

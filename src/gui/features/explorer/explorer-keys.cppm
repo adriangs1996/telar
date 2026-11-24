@@ -42,6 +42,11 @@ export namespace telar::gui::features::explorer {
     std::uint32_t count = 1;
     bool counted = false;
     Notation argument;
+    // In visual mode, the keys named a command of normal mode, which a selection takes as it
+    // would be taken there.
+    bool borrowed = false;
+    // The keys that named nothing and started nothing, when that is what was typed.
+    runtime::FixedText<pending_bytes> unknown;
   };
 
   // A sequence of keys and the command it names.
@@ -77,7 +82,8 @@ export namespace telar::gui::features::explorer {
   bool rebind(Keymap& keymap, const ExplorerKeys& changes);
 
   // Takes one more key. A command when the keys so far name one, in `visual` among the ones a
-  // selection takes; none while they start a longer sequence or name nothing, which forgets them.
+  // selection takes first and then among the ones of normal mode; none while they start a longer
+  // sequence or name nothing, which forgets them and says what they were.
   [[nodiscard]] Stroke feed(const Keymap& keymap, Keys& keys, KeyChord chord, bool visual);
 
   // Forgets the keys typed so far.

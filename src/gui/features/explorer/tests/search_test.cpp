@@ -250,13 +250,15 @@ namespace {
     check(completes("vs docs/im") == "vs docs/im" && explorer.view.completed == 3);
     check(completes("cd ~/te") == "cd ~/telar/", "from the home");
     check(completes("sp /home/dev/telar/s") == "sp /home/dev/telar/src/", "or from the root of the machine");
-    check(completes("e ") == "e " && explorer.view.message.view() == "assets/  docs/  out/  src/  ", "a dotted name is listed for a stem that starts with a dot");
-    check(completes("e .") == "e .github/");
+    check(completes("e ") == "e " && explorer.view.message.view() == "assets/  docs/  out/  src/  justfile  README.md  ", "a dotted name is listed for a stem that starts with a dot");
+    check(completes("cd ") == "cd " && explorer.view.message.view() == "assets/  docs/  out/  src/  ", "a shell goes to a directory, and to no file");
+    check(completes("e .gith") == "e .github/");
+    check(completes("e READ") == "e README.md" && explorer.view.message.view().empty(), "a file is completed whole, with no slash: :e chooses it where it is");
 
     const auto before = explorer.view.completed;
 
-    check(completes("e docs/zz") == "e .github/" && explorer.view.completed == before && explorer.view.tone == Tone::error && explorer.view.message.view() == "No directory there starts with that");
-    check(completes("e README") == "e .github/" && explorer.view.completed == before, "a file is nowhere to go");
+    check(completes("e docs/zz") == "e README.md" && explorer.view.completed == before && explorer.view.tone == Tone::error && explorer.view.message.view() == "Nothing there starts with that");
+    check(completes("cd READ") == "e README.md" && explorer.view.completed == before && explorer.view.message.view() == "No directory there starts with that", "a file is nowhere for a shell to go");
     complete(explorer.view, explorer.state, explorer.context(), "w do");
     complete(explorer.view, explorer.state, explorer.context(), "e");
     check(explorer.view.completed == before && explorer.view.completing.empty(), "a command that goes nowhere, or names nothing yet, completes nothing");

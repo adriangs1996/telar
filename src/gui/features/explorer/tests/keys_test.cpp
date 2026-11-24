@@ -145,7 +145,9 @@ namespace {
 
     check(typed(keys, "d", true).command == Command::cut && typed(keys, "y", true).command == Command::yank, "one key where normal mode takes two");
     check(typed(keys, "j", true).command == Command::down && typed(keys, "V", true).command == Command::escape);
-    check(typed(keys, "o", true).command == Command::none, "a command a selection does not take");
+    check(typed(keys, "o", true).command == Command::create && typed(keys, "o", true).borrowed && !typed(keys, "j", true).borrowed, "a key it has none of its own for is the one of normal mode, which it borrows");
+    check(typed(keys, "gt", true).command == Command::next_lens && typed(keys, "cw", true).command == Command::rename && typed(keys, "ma", true).argument.view() == "a", "whatever its length, and with its argument");
+    check(typed(keys, "Z", true).command == Command::none && typed(keys, "Z").unknown.view() == "Z" && typed(keys, "g").unknown.view().empty(), "and keys that name nothing say which they were, once they can start nothing");
     check(keysOf(defaults(), Command::cut) == "dd" && keysOf(defaults(), Command::split_vertical) == "<C-w>v" && keysOf(defaults(), Command::none).empty());
   }
 

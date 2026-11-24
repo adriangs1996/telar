@@ -327,7 +327,7 @@ namespace {
 
     const auto pane = preview(explorer.view, explorer.state, explorer.context(), explorer.now);
 
-    check(pane.shown && pane.kind == RowKind::pane && pane.name.view() == "3 zsh" && pane.path.view() == "/home/dev/telar · macbook");
+    check(pane.shown && pane.kind == RowKind::pane && pane.name.view() == "3 zsh" && pane.path.view() == "telar · macbook");
     check(pane.fact_count == 2 && pane.facts[0].label == "Kind" && pane.facts[0].value.view() == "shell" && pane.facts[1].label == "Directory" && pane.facts[1].value.view() == "/home/dev/telar/docs");
     check(std::string_view{pane.note} == "Enter focuses this pane; a window that follows it goes to its directory." && previewText(explorer.view, explorer.state).empty());
 

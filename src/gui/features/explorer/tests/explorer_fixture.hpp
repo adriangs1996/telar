@@ -9,6 +9,7 @@ static_assert(true);
 #include <cstdint>
 #include <initializer_list>
 #include <map>
+#include <set>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -128,8 +129,45 @@ namespace telar::gui::test {
       return context(here());
     }
 
+    // A pane of a tab that does not show: of another workspace of the machine that shows, or
+    // of another machine.
+    struct Apart {
+      std::uint64_t machine = 0;
+      std::uint64_t id = 0;
+      std::uint16_t number = 0;
+      PaneKind kind = PaneKind::shell;
+      std::string title;
+      std::string cwd;
+      std::string workspace;
+      std::string buffer;
+      std::string state;
+    };
+
+    // The panes of every machine, as the window lists them: the ones of the tab that shows, of
+    // the workspace `telar`, then the ones apart.
+    void enroll() const {
+      const auto keep = [&](std::string_view piece) {
+        const Slice slice{.offset = static_cast<std::uint32_t>(roster_text.size()), .size = static_cast<std::uint32_t>(piece.size())};
+
+        roster_text += piece;
+        return slice;
+      };
+
+      roster_text.clear();
+      roster.clear();
+      for (const auto& pane : panes) {
+        roster.push_back({.machine = shown, .id = pane.id, .number = pane.number, .kind = pane.kind, .title = keep(pane.title), .cwd = keep(pane.cwd), .workspace = keep("telar"), .buffer = keep(pane.buffer)});
+      }
+
+      for (const auto& pane : apart) {
+        roster.push_back({.machine = pane.machine, .id = pane.id, .number = pane.number, .kind = pane.kind, .title = keep(pane.title), .cwd = keep(pane.cwd), .workspace = keep(pane.workspace), .buffer = keep(pane.buffer), .state = keep(pane.state)});
+      }
+    }
+
     [[nodiscard]] Context context(std::uint64_t of) const {
       const auto& known = machines[of - 1];
+
+      enroll();
 
       return {
           .panes = panes,
@@ -144,6 +182,7 @@ namespace telar::gui::test {
           .shown = shown,
           .machines = machines,
           .edited = {.text = edited_text, .files = edited},
+          .roster = {.text = roster_text, .panes = roster},
       };
     }
 
@@ -218,6 +257,20 @@ namespace telar::gui::test {
           break;
         }
         case NeedKind::inspection:
+          // A path the disk lists as a directory, or that leads to one, is a directory, and one
+          // said to be gone is nothing; any other is a file, as the tests of files were written.
+          if (gone.contains(path)) {
+            telar::testing::check(receive(state, FileInspection{.request_id = request}));
+            break;
+          }
+
+          if (files.contains(path) || std::ranges::any_of(files, [&](const auto& listed) {
+                return listed.first.starts_with(path + "/");
+              })) {
+            telar::testing::check(receive(state, FileInspection{.request_id = request, .path = path, .kind = FileKind::directory, .identity = {.inode = inspected_inode, .modified_seconds = 77}}));
+            break;
+          }
+
           telar::testing::check(receive(state, FileInspection{.request_id = request, .path = path, .size = 7739, .identity = {.inode = inspected_inode, .modified_seconds = 77}, .text = "# Usage\n", .commit = "31d2299b4000000000000000000000000000000f", .committed_seconds = 1794096000, .subject = "Describe the usage", .diff = path.ends_with("usage.md") ? std::string_view{"@@ -1,2 +1,2 @@\n-old\n+new\n context\n"} : std::string_view{}}));
           break;
         case NeedKind::search:
@@ -309,8 +362,15 @@ namespace telar::gui::test {
       return {.request_id = request, .root = found_root, .scanned = static_cast<std::uint32_t>(paths.size()), .complete = complete, .truncated = paths.size() > whole, .matches = found_matches};
     }
 
-    void start() {
+    // Opens the explorer and answers it. Opening unfolds the directory of the focused pane; the
+    // tests of anything else start from the tree folded, so that directory is folded again
+    // before anything is listed, unless `unfolded` asks for the explorer as it opens.
+    void start(bool unfolded = false) {
       open(view, state, context(machine), machine);
+      if (!unfolded && !view.windows.empty()) {
+        view.windows.atMut(view.current).getMut().expanded.clear();
+      }
+
       answer();
     }
 
@@ -460,7 +520,13 @@ namespace telar::gui::test {
     std::size_t search_limit = FindPaths::maximum_limit;
     // The inode the runtime says a file it inspects has.
     std::uint64_t inspected_inode = 4242;
+    // The paths the runtimes say nothing is at.
+    std::set<std::string> gone;
     std::vector<PaneFact> panes;
+    std::vector<Apart> apart;
+    // The roster the contexts view, written again for each.
+    mutable std::string roster_text;
+    mutable std::vector<RosterPane> roster;
     // The files the editors hold, each path a piece of the text.
     std::string edited_text;
     std::vector<EditedFile> edited;

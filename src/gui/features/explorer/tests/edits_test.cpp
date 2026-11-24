@@ -95,7 +95,7 @@ namespace {
     check(receive(explorer.state, FilesChanged{.request_id = 900, .undoable = true, .results = results.view()}));
     settle(explorer.view, explorer.state, explorer.context(), Explorer::machine);
     check(explorer.view.edits.empty() && explorer.view.plan.empty());
-    check(explorer.view.message.view() == ":w · 3 applied by the runtime · 1 under another name: the target existed · 1 skipped: changed since it was listed · u takes it back" && explorer.view.tone == Tone::error);
+    check(explorer.view.message.view() == ":w · 3 of 4 applied by the runtime · 1 under another name: the target existed · 1 skipped: changed since it was listed · u takes it back" && explorer.view.tone == Tone::error);
     explorer.answer();
     // u with nothing pending takes the plan back, once a yes says so.
     check(explorer.type("u").kind == ActionKind::none && explorer.view.mode == Mode::question && explorer.view.asked == Asked::undo && explorer.view.tone == Tone::ask);

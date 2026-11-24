@@ -161,10 +161,18 @@ namespace {
     answer(explorer, {.kind = CarriedKind::chunk, .size = 300, .bytes = 200}, 1010);
     static_cast<void>(send(explorer, 2, 1020));
 
-    // `:cancel` while a chunk is being written: it stops once that is answered.
+    // `:cancel N` stops the transfer of that number, and one that is none says so.
+    explorer.type(":");
+    explorer.enter("cancel 9");
+    check(!explorer.view.transfers[0].stop && explorer.view.tone == Tone::error && explorer.view.message.view() == "No transfer of that number runs");
+    explorer.type(":");
+    explorer.enter("cancel soon");
+    check(!explorer.view.transfers[0].stop && explorer.view.message.view() == "cancel takes the number of a transfer, or none for the last");
+    // `:cancel` alone the last one that still runs, here while a chunk is being written: it
+    // stops once that is answered.
     explorer.type(":");
     explorer.enter("cancel");
-    check(explorer.view.transfers[0].stop && explorer.view.message.view() == "1 transfer stopping: what had arrived is removed" && !halt(explorer.view, 0, 1025), "it waits for the request in flight");
+    check(explorer.view.transfers[0].stop && explorer.view.message.view() == "Transfer 1 stopping: what had arrived is removed, and where it came from is not touched" && !halt(explorer.view, 0, 1025), "it waits for the request in flight");
     answer(explorer, {.kind = CarriedKind::written, .size = 200, .text = partial}, 1030);
     check(explorer.view.transfers[0].phase == TransferPhase::dropping && send(explorer, 3, 1040) == Asking{.ask = TransferAsk::drop, .machine = Explorer::machine}, "the partial is removed, and nothing is asked of the source");
     answer(explorer, {.kind = CarriedKind::ended}, 1050);
@@ -178,7 +186,10 @@ namespace {
 
     pasteFromBox(waiting, "yy");
     waiting.type("y");
-    check(stopTransfers(waiting.view, Explorer::box) == 1 && halt(waiting.view, 0, 1000) && waiting.view.transfers[0].phase == TransferPhase::cancelled);
+    waiting.type(":");
+    waiting.enter("cancel 1");
+    check(waiting.view.transfers[0].stop && waiting.view.message.view() == "Transfer 1 stopping: what had arrived is removed, and where it came from is not touched", "by its number");
+    check(halt(waiting.view, 0, 1000) && waiting.view.transfers[0].phase == TransferPhase::cancelled);
 
     // A source that changed: the read is refused, and what had arrived is removed.
     Explorer failed;
