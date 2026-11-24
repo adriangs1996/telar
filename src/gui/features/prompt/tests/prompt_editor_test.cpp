@@ -47,8 +47,16 @@ namespace {
       static_cast<void>(feature::open(state_, lines_, pane_id, keymap));
     }
 
+    // A command handed over is sent at once, as the owner does when the shell takes it.
     Outcome press(const KeyPress& key) {
-      return feature::press(state_, line(), Surface::editor, key, {.configuration = configuration_, .dialect = telar::shell::Dialect::posix});
+      const auto outcome = feature::press(state_, line(), Surface::editor, key, {.configuration = configuration_, .dialect = telar::shell::Dialect::posix});
+      if (outcome == Outcome::run || outcome == Outcome::answer) {
+        const telar::ds::String<Memory> sent{memory, outcome == Outcome::run ? feature::delivery(line()) : std::string_view{}};
+
+        feature::committed(line(), sent.view());
+      }
+
+      return outcome;
     }
 
     // `command` replaces the line, the caret at its end.
@@ -182,8 +190,8 @@ namespace {
     lines.press({.key = Key::up});
     require(cursor(lines) < 4, "counts lines");
 
-    // The text a line holds stops at 256 KiB, as Text::capacity says.
-    constexpr std::size_t capacity = std::size_t{256} * 1024;
+    // The text a line holds stops at 64 KiB, as Text::capacity says.
+    constexpr std::size_t capacity = std::size_t{64} * 1024;
     Arena arena;
     telar::ds::String<Memory> huge{arena.memory};
     Editor bounded;

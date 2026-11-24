@@ -246,15 +246,28 @@ namespace telar::gui::features::prompt {
     history.truncate(State::history_limit);
   }
 
+  void committed(PaneLine& line, std::string_view command) {
+    line.line.committed(command);
+  }
+
   void insert(State& state, PaneLine& line, std::string_view text) {
     constexpr unsigned char first_printable = 0x20;
     constexpr unsigned char delete_control = 0x7f;
+    // U+0080 to U+009F, the C1 controls, are C2 80 to C2 9F in UTF-8.
+    constexpr unsigned char extended_control_lead = 0xc2;
+    constexpr unsigned char last_extended_control = 0x9f;
 
     Name clean{state.memory};
 
     clean.reserve(text.size());
-    for (const auto byte : text) {
+    for (std::size_t index = 0; index < text.size(); ++index) {
+      const auto byte = text[index];
       const auto value = static_cast<unsigned char>(byte);
+      if (value == extended_control_lead && index + 1 < text.size() && static_cast<unsigned char>(text[index + 1]) <= last_extended_control) {
+        ++index;
+        continue;
+      }
+
       if (value >= first_printable || byte == '\n' || byte == '\t') {
         clean.push(value == delete_control ? ' ' : byte);
       }

@@ -13,9 +13,9 @@ namespace telar::gui::features::prompt {
 
   class Text {
   public:
-    // A pasted file must not grow the editor without bound; the shell's own line editor has
-    // limits of the same order.
-    static constexpr std::size_t capacity = std::size_t{256} * 1024;
+    // A pasted file must not grow the editor without bound. The most a command carries to the
+    // shell, history's HistoryText::maximum_bytes: the editor holds nothing it could not send.
+    static constexpr std::size_t capacity = std::size_t{64} * 1024;
     static constexpr std::size_t undo_capacity = 256;
 
     // The text and its undo history live in `memory`.

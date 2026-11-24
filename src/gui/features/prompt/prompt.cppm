@@ -329,6 +329,10 @@ export namespace telar::gui::features::prompt {
   // history again.
   void remember(State& state, std::string_view command);
 
+  // What the line handed over with `run` or `answer` reached its pane: the line clears and
+  // remembers `command`, empty for an answer. A delivery that fails leaves the text in the line.
+  void committed(PaneLine& line, std::string_view command);
+
   // Text an input method committed or a paste, into the line. Controls other than newline and tab
   // are dropped: they would act on the shell instead of being written.
   void insert(State& state, PaneLine& line, std::string_view text);

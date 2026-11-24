@@ -153,6 +153,61 @@ namespace {
     check(prompt::surface(client, 1) == prompt::Surface::none, "a full-screen program keeps the terminal");
   }
 
+  // A command the shell cannot receive stays in the editor with its error: nothing is sent,
+  // cleared or remembered until it can be.
+  void lineKeepsUnsendableCommands() {
+    SystemAllocator memory;
+    Transport transport;
+    TestSession client{memory, transport};
+
+    openFirstPane(client, transport);
+    FrameBody frame;
+
+    frame.pane_id = 1;
+    frame.frame_id = 1;
+    frame.scroll.total_rows = 1;
+    deliverSingleCell(client, frame);
+    auto configuration = client.configuration;
+
+    configuration.prompt.mode = PromptMode::telar;
+    application::configuration::configure(client, configuration);
+    deliver(client, atPrompt());
+
+    const auto refused = [&] {
+      try {
+        static_cast<void>(enter(client));
+      } catch (const std::exception&) {
+        return true;
+      }
+
+      return false;
+    };
+
+    // Without bracketed paste the shell would run each line of it on its own.
+    const auto before = transport.sent.size();
+
+    typeKeys(client, "echo 'a");
+    check(enter(client) == prompt::Outcome::edited, "an open quote continues on a new line");
+    typeKeys(client, "b'");
+    check(refused(), "a multi-line command the shell cannot take whole is refused");
+    check(transport.commandsSince(before).empty() && transport.inputSince(before).empty(), "nothing reaches the shell");
+    check(prompt::line(client, 1)->text() == "echo 'a\nb'", "the command stays in the editor");
+    check(prompt::line(client, 1)->recent().empty() && prompt::history(client).empty(), "a command never sent is not remembered");
+
+    // An answer to a running program is checked the same way.
+    deliver(client, running(1));
+    prompt::key(client, 1, prompt::KeyPress{.key = prompt::Key::enter, .modifiers = {.alt = true}});
+    check(prompt::line(client, 1)->answering(), "Alt-Enter answers the program");
+    check(refused() && prompt::line(client, 1)->text() == "echo 'a\nb'" && transport.inputSince(before).empty(), "an answer the program cannot take stays in the editor");
+
+    // C1 controls act on the terminal: a paste drops them as it drops the others.
+    deliver(client, atPrompt(2, 0));
+    prompt::key(client, 1, prompt::KeyPress{.key = prompt::Key::character, .character = 'c', .modifiers = {.control = true}});
+    client.paste(1, "a\xc2\x9b"
+                    "2Jb");
+    check(prompt::line(client, 1)->text() == "a2Jb", "a pasted C1 control is dropped");
+  }
+
   // A frame of one row, the cursor at `column` on it.
   struct Row {
     std::uint64_t frame_id = 0;
@@ -880,6 +935,7 @@ command = "switch" : "Switch branches" , { @branch } | "status" : "Show the work
   }
 
   const telar::testing::Case case_line_runs_commands{"prompt_session.line_runs_commands", lineRunsCommands};
+  const telar::testing::Case case_line_keeps_unsendable_commands{"prompt_session.line_keeps_unsendable_commands", lineKeepsUnsendableCommands};
   const telar::testing::Case case_line_hides_terminal_cursor{"prompt_session.line_hides_terminal_cursor", lineHidesTerminalCursor};
   const telar::testing::Case case_commands_settle_as_typed{"prompt_session.commands_settle_as_typed", commandsSettleAsTyped};
   const telar::testing::Case case_line_searches{"prompt_session.line_searches", lineSearches};

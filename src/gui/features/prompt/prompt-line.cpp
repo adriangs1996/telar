@@ -242,9 +242,14 @@ namespace telar::gui::features::prompt {
     }
 
     delivery_.assign(editor_.text().view());
-    remember(delivery_);
-    editor_.clear();
     return Outcome::run;
+  }
+
+  void Line::committed(std::string_view command) {
+    remember(command);
+    editor_.clear();
+    history_index_.reset();
+    ++revision_;
   }
 
   void Line::countSecretKey() noexcept {
@@ -447,7 +452,6 @@ namespace telar::gui::features::prompt {
     if (surface == Surface::running) {
       if (answering_) {
         delivery_.assign(editor_.text().view());
-        editor_.clear();
         return Outcome::answer;
       }
 
@@ -468,9 +472,6 @@ namespace telar::gui::features::prompt {
     }
 
     delivery_.assign(editor_.text().view());
-    remember(delivery_);
-    editor_.clear();
-    history_index_.reset();
     return Outcome::run;
   }
 

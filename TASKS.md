@@ -45,7 +45,7 @@ Legend: `[ ]` todo, `[x]` done, `[~]` not a bug / dropped (with reason).
   for its replies; cut descriptions with `runtime::utf8Prefix`; drop (or cap) an alias
   expansion whose total exceeds the field. Tests for both triggers.
 
-- [ ] **T2 (E20). A command the shell cannot receive is wiped before it is checked.**
+- [x] **T2 (E20). A command the shell cannot receive is wiped before it is checked.**
   `src/gui/features/prompt/prompt-line.cpp:~470` `Line::submit` copies to `delivery_`,
   remembers and clears the editor, then `application-prompt.cpp:145` validates with
   `HistoryText::validate` and throws (multiline/tab without bracketed paste, C1 controls,

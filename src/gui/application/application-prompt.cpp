@@ -128,11 +128,12 @@ namespace telar::gui::application::prompt {
     }
 
     // Sends what pane `pane_id`'s line decided: a command to run, a line for the running program,
-    // or raw bytes the shell reads as keys. Commands are validated like a pasted history entry.
+    // or raw bytes the shell reads as keys. Commands are validated like a pasted history entry,
+    // and the line lets go of one only once it is sent: one that cannot be stays in the editor.
     // The text is copied first: sending it reaches the line again, for a secret prompt's dots.
     void deliver(Session& session, std::uint64_t pane_id, Outcome outcome) {
       const auto* pane = findPane(session.panes, pane_id);
-      const auto* line = features::prompt::find(session.prompt_lines, pane_id);
+      auto* line = features::prompt::find(session.prompt_lines, pane_id);
       if (pane == nullptr || line == nullptr || !pane->attached || pane->exited) {
         return;
       }
@@ -144,12 +145,14 @@ namespace telar::gui::application::prompt {
       case Outcome::run:
         features::history::HistoryText::validate(text.view(), bracketed);
         session.runCommand(pane_id, text.view());
+        features::prompt::committed(*line, text.view());
         features::prompt::remember(session.prompt, text.view());
         break;
       case Outcome::answer:
         features::history::HistoryText::validate(text.empty() ? std::string_view{" "} : text.view(), false);
         text.push('\r');
         session.input(pane_id, text.view());
+        features::prompt::committed(*line, {});
         break;
       case Outcome::bytes:
         session.input(pane_id, text.view());

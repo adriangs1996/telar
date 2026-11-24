@@ -132,6 +132,10 @@ namespace telar::gui::features::prompt {
     // after a success, and otherwise stays as a draft.
     Outcome promptReturned(bool succeeded);
 
+    // What `run` or `answer` handed over reached the pane: the line clears, and remembers
+    // `command` unless it is empty. Until then the text stays, for a delivery that fails.
+    void committed(std::string_view command);
+
     void countSecretKey() noexcept;
 
     void clearSecret() noexcept;
