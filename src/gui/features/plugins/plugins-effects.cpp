@@ -208,6 +208,7 @@ namespace telar::gui::features::plugins {
     case Kind::previous_machine:
     case Kind::machine_picker:
     case Kind::add_machine:
+    case Kind::explorer:
     case Kind::monitor:
     case Kind::process_picker:
     case Kind::process_terminate:

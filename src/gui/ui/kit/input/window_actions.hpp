@@ -66,6 +66,7 @@ namespace telar::gui::qt::window_actions {
     next_machine,
     previous_machine,
     add_machine,
+    explorer,
     monitor,
     process_picker,
     process_terminate,

@@ -192,6 +192,7 @@ export {
       case ServerTag::nvim_popup_menu:
       case ServerTag::nvim_message_list:
       case ServerTag::nvim_tab_line:
+      case ServerTag::nvim_open_files:
       case ServerTag::nvim_prompt:
         return DeliveryLane::cells;
       case ServerTag::agent_snapshot:
@@ -262,9 +263,23 @@ export {
       case ServerTag::editor_opened:
       case ServerTag::path_results:
       case ServerTag::text_results:
+      case ServerTag::directory_contents:
+      case ServerTag::directory_sizes:
+      case ServerTag::repository_changes:
+      case ServerTag::file_inspection:
+      case ServerTag::files_changed:
+      case ServerTag::changes_committed:
+      case ServerTag::home_located:
+      case ServerTag::file_chunk:
+      case ServerTag::file_written:
+      case ServerTag::file_write_ended:
+      case ServerTag::file_touches:
+      case ServerTag::places_kept:
       case ServerTag::nvim_navigated:
       case ServerTag::nvim_pick:
       case ServerTag::nvim_link:
+      case ServerTag::nvim_explore:
+      case ServerTag::explorer_kept:
       case ServerTag::completion_words:
       case ServerTag::command_spec:
       case ServerTag::worktree_registered:

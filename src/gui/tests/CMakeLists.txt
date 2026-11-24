@@ -14,6 +14,8 @@ telar_add_test(gui-display-metrics-test SOURCES display_metrics_test.cpp LIBRARI
 target_compile_options(gui-display-metrics-test PRIVATE -ffp-contract=off)
 
 telar_add_test(gui-glyph-ink-probe PROBE SOURCES ${TELAR_PROCESS_SOURCE_DIR}/tools/glyph_ink_probe.cpp LIBRARIES gui-foundation-core gui-foundation-fonts)
+# What a key and a page drawn cost the explorer, without a window or a runtime.
+telar_add_test(gui-explorer-bench PROBE SOURCES ${TELAR_PROCESS_SOURCE_DIR}/tools/explorer_bench.cpp LIBRARIES gui-features-explorer)
 
 telar_add_test(gui-suggestion-state-test SOURCES suggestion_state_test.cpp LIBRARIES gui-foundation-keys gui-foundation-model gui-foundation-forms gui-foundation-core gui-foundation-terminal gui-features-palette deps::ghostty_vt
   TEST gui-suggestion-state LABELS gui.features.palette)
@@ -126,7 +128,8 @@ if(TELAR_GUI_NATIVE)
   telar_add_test(gui-machine-window-test QT SOURCES machine_window_test.cpp LIBRARIES gui-quick gui-quickplugin Qt6::Test gui-test-fixtures
     TEST gui-machine-window LABELS gui.ui ENVIRONMENT QT_QUICK_BACKEND=software QT_QPA_PLATFORM=offscreen TIMEOUT 30)
   if(APPLE)
-    target_sources(gui-machine-window-test PRIVATE platform/macos/private_clipboard.mm)
+    target_sources(gui-machine-window-test PRIVATE platform/macos/private_clipboard.mm platform/macos/promised_file.mm)
+    target_include_directories(gui-machine-window-test PRIVATE "${TELAR_PROCESS_SOURCE_DIR}")
     target_include_directories(gui-machine-window-test PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}")
     target_compile_options(gui-machine-window-test PRIVATE "$<$<COMPILE_LANGUAGE:OBJCXX>:-fobjc-arc>")
     if(TELAR_GUI_HAS_OBJC_CLASS_STUB_CONTROL)
@@ -243,6 +246,11 @@ if(TELAR_GUI_NATIVE)
     get_filename_component(gui_test_runtime_directory "${TELAR_GUI_TEST_RUNTIME}" DIRECTORY)
     telar_add_test(gui-quick COMMAND gui-quick-test
       LABELS gui.ui ENVIRONMENT "TELAR_GUI_TEST_RUNTIME=${TELAR_GUI_TEST_RUNTIME}" "PATH=${gui_test_runtime_directory}:$ENV{PATH}" QT_QUICK_BACKEND=software QT_QPA_PLATFORM=offscreen TIMEOUT 120)
+    # The cases of the explorer, which the program skips unless they are named: the whole
+    # program runs close to its time, so they have a test of their own. The one with an editor
+    # needs a Neovim.
+    telar_add_test(gui-quick-explorer COMMAND gui-quick-test ARGS explorerListsAndChangesFiles editorAndExplorerKnowOfEachOther
+      LABELS gui.ui ENVIRONMENT "TELAR_GUI_TEST_RUNTIME=${TELAR_GUI_TEST_RUNTIME}" "PATH=${gui_test_runtime_directory}:$ENV{PATH}" QT_QUICK_BACKEND=software QT_QPA_PLATFORM=offscreen TIMEOUT 90)
   endif()
 endif()
 

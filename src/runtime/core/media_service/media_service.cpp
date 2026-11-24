@@ -36,12 +36,14 @@ namespace telar::runtime {
         history_(memory, history),
         editor_(memory, editor),
         suggestions_(memory, suggestions),
+        file_service_(memory),
+        files_(memory, file_service_),
         worktrees_(std::in_place, memory) {
   }
 
   template <typename History, typename Paths, typename Editor, typename Suggestions, typename Worktrees>
   ds::Array<int, background_worker_count> BackgroundPool<History, Paths, Editor, Suggestions, Worktrees>::descriptors() const noexcept {
-    return {history_.descriptor(), path_service_.descriptor(), editor_.descriptor(), suggestions_.descriptor(), worktrees_.descriptor()};
+    return {history_.descriptor(), path_service_.descriptor(), editor_.descriptor(), suggestions_.descriptor(), files_.descriptor(), worktrees_.descriptor()};
   }
 
   template <typename History, typename Paths, typename Editor, typename Suggestions, typename Worktrees>
@@ -56,6 +58,19 @@ namespace telar::runtime {
 
   template <typename History, typename Paths, typename Editor, typename Suggestions, typename Worktrees>
   bool BackgroundPool<History, Paths, Editor, Suggestions, Worktrees>::recordHistory(const HistoryEventView& event) noexcept {
+    // A command a pane finished names the files it touched.
+    if (event.kind == HistoryEventKind::command_finished) {
+      constexpr std::int64_t second_ms = 1000;
+
+      noteTouch({
+          .pane = event.session.pane,
+          .actor = event.command.author == HistoryAuthor::agent ? TouchActor::agent : TouchActor::user,
+          .text = event.command.command,
+          .directory = event.command.directory,
+          .seconds = static_cast<std::uint64_t>(std::max<std::int64_t>(0, event.finished_at_ms) / second_ms),
+      });
+    }
+
     try {
       history_.submitInternal(event);
       return true;
@@ -63,6 +78,11 @@ namespace telar::runtime {
       history_submission_failures_.fetch_add(1, std::memory_order_relaxed);
       return false;
     }
+  }
+
+  template <typename History, typename Paths, typename Editor, typename Suggestions, typename Worktrees>
+  void BackgroundPool<History, Paths, Editor, Suggestions, Worktrees>::noteTouch(const TouchNote& note) noexcept {
+    file_service_.touches().note(note);
   }
 
   template <typename History, typename Paths, typename Editor, typename Suggestions, typename Worktrees>
@@ -81,6 +101,7 @@ namespace telar::runtime {
     path_service_.cancel(client);
     editor_.cancel(client);
     suggestions_.cancel(client);
+    files_.cancel(client);
   }
 
 #if TELAR_DIAGNOSTICS

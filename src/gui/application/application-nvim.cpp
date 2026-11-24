@@ -416,6 +416,19 @@ namespace telar::gui::application::nvim {
     return target;
   }
 
+  void explored(Session& session, std::uint64_t pane_id) noexcept {
+    feature::explored(session.nvim, pane_id);
+  }
+
+  Change receive(Session& session, const NvimOpenFiles& message) {
+    // What lists files beside the editors marks the ones they hold.
+    return feature::hold(session.nvim, message) ? Change::explorer : Change::none;
+  }
+
+  Change receive(Session& session, const NvimExplore& message) {
+    return feature::explore(session.nvim, message.pane_id, message.path) ? shown(session, message.pane_id) : Change::none;
+  }
+
   Change receive(Session& session, const NvimPick& message) {
     pick(session, message.pane_id, message.source);
 
@@ -458,7 +471,8 @@ namespace telar::gui::application::nvim {
       return Change::none;
     }
 
-    // The editor had no window on that side: the pane there takes the focus.
+    // The editor had no window on that side: the pane there takes the focus, the explorer's as
+    // any other.
     workbench::focusToward(session, message.direction);
     return Change::model;
   }

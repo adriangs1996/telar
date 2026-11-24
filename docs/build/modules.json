@@ -128,6 +128,7 @@
       "workspaces",
       "workspaces/worktrees",
       "paths",
+      "files",
       "nvim",
       "metrics",
       "terminal",
@@ -172,6 +173,7 @@
       "features/nvim",
       "features/palette",
       "features/paths",
+      "features/explorer",
       "features/history",
       "features/prompt",
       "features/terminal/input",
@@ -220,6 +222,7 @@
   },
   "upward_imports": [],
   "interfaces": {
+    "src/gui/application/application-explorer.cppm": "telar.gui.application:explorer",
     "src/gui/application/application-monitor.cppm": "telar.gui.application:monitor",
     "src/gui/application/application-nvim.cppm": "telar.gui.application:nvim",
     "src/gui/features/nvim/nvim.cppm": "telar.gui.features.nvim",
@@ -305,6 +308,14 @@
     "src/runtime/core/media_service/media_service.cppm": "telar.runtime.core.media_service",
     "src/runtime/workers/background_executor/background_executor.cppm": "telar.runtime.workers.background_executor",
     "src/runtime/core/delivery/client_delivery/client_delivery.cppm": "telar.runtime.core.delivery.client_delivery",
+    "src/runtime/files/content/content.cppm": "telar.runtime.files.content",
+    "src/runtime/files/directory/directory.cppm": "telar.runtime.files.directory",
+    "src/runtime/files/entry/entry.cppm": "telar.runtime.files.entry",
+    "src/runtime/files/moves/moves.cppm": "telar.runtime.files.moves",
+    "src/runtime/files/operations/operations.cppm": "telar.runtime.files.operations",
+    "src/runtime/files/repository/repository.cppm": "telar.runtime.files.repository",
+    "src/runtime/files/service/service.cppm": "telar.runtime.files.service",
+    "src/runtime/files/touches/touches.cppm": "telar.runtime.files.touches",
     "src/runtime/paths/query_task/query_task.cppm": "telar.runtime.paths.query_task",
     "src/runtime/paths/text_search/text_search.cppm": "telar.runtime.paths.text_search",
     "src/runtime/nvim/screen/screen.cppm": "telar.runtime.nvim.screen",
@@ -451,6 +462,7 @@
     "lib/wire/clipboard/clipboard.cppm": "telar.wire.clipboard",
     "lib/wire/content/content.cppm": "telar.wire.content",
     "lib/wire/editor/editor.cppm": "telar.wire.editor",
+    "lib/wire/files/files.cppm": "telar.wire.files",
     "lib/wire/execution/execution.cppm": "telar.wire.execution",
     "lib/wire/graphics/graphics.cppm": "telar.wire.graphics",
     "lib/wire/history/history.cppm": "telar.wire.history",
@@ -522,6 +534,7 @@
     "src/gui/foundation/fonts/fonts-text_runs.cppm": "telar.gui.foundation.fonts:text_runs",
     "src/gui/foundation/system/system-awake_clock.cppm": "telar.gui.foundation.system:awake_clock",
     "src/gui/foundation/system/system-background_effect.cppm": "telar.gui.foundation.system:background_effect",
+    "src/gui/foundation/system/system-drag_cache.cppm": "telar.gui.foundation.system:drag_cache",
     "src/gui/foundation/system/system-file_stamp.cppm": "telar.gui.foundation.system:file_stamp",
     "src/gui/foundation/system/system-file_tree.cppm": "telar.gui.foundation.system:file_tree",
     "src/gui/foundation/system/system-keyboard.cppm": "telar.gui.foundation.system:keyboard",
@@ -599,6 +612,13 @@
     "src/gui/features/paths/paths.cppm": "telar.gui.features.paths",
     "src/gui/application/application-paths.cppm": "telar.gui.application:paths",
     "src/gui/foundation/system/system-directory_completion.cppm": "telar.gui.foundation.system:directory_completion",
+    "src/gui/features/explorer/explorer-cache.cppm": "telar.gui.features.explorer:cache",
+    "src/gui/features/explorer/explorer-files.cppm": "telar.gui.features.explorer:files",
+    "src/gui/features/explorer/explorer-keys.cppm": "telar.gui.features.explorer:keys",
+    "src/gui/features/explorer/explorer-presentation.cppm": "telar.gui.features.explorer:presentation",
+    "src/gui/features/explorer/explorer-transfers.cppm": "telar.gui.features.explorer:transfers",
+    "src/gui/features/explorer/explorer-view.cppm": "telar.gui.features.explorer:view",
+    "src/gui/features/explorer/explorer.cppm": "telar.gui.features.explorer",
     "src/gui/features/history/history-browser.cppm": "telar.gui.features.history:browser",
     "src/gui/features/history/history-cards.cppm": "telar.gui.features.history:cards",
     "src/gui/features/history/history-entry.cppm": "telar.gui.features.history:entry",
@@ -717,6 +737,7 @@
   },
   "textual_boundaries": {
     "src/gui/ui/app/overlays/monitor/monitor_controller.hpp": "Qt moc/QML integration",
+    "src/gui/ui/app/overlays/explorer/explorer_controller.hpp": "Qt moc/QML integration",
     "lib/base/include/telar_base/diagnostics/config.hpp": "Project macro header: TELAR_DIAGNOSTIC, TELAR_DIAGNOSTICS and TELAR_ASSERT; includes nothing",
     "lib/base/include/telar_base/diagnostics/limit_reach.hpp": "Included by other textual headers and tests; module units import its owner module",
     "lib/base/include/telar_base/diagnostics/timing.hpp": "Objective-C++ ABI",
@@ -791,6 +812,8 @@
     "src/gui/platform/macos/blur_radius.hpp": "Objective-C++ ABI",
     "src/gui/platform/macos/blur_symbols.h": "Objective-C++ ABI",
     "src/gui/platform/macos/cf_reference.hpp": "Objective-C++ sources include it; Objective-C++ cannot import the C++ modules",
+    "src/gui/platform/file_drag.hpp": "Objective-C++ ABI",
+    "src/gui/platform/macos/file_drag_writers.h": "Objective-C++ ABI",
     "src/gui/platform/macos/font_smoothing.h": "Objective-C++ ABI",
     "src/gui/platform/macos/glyph_rasterizer.h": "Objective-C++ ABI",
     "src/gui/platform/scroll_event.hpp": "Objective-C++ ABI",
@@ -968,6 +991,7 @@
     "src/gui/ui/kit/timing/window_frame_pacer.hpp": "Qt moc/QML integration",
     "src/gui/ui/kit/machines/window_identity.hpp": "Qt moc/QML integration",
     "src/gui/ui/kit/cell_scene/window_images.hpp": "Qt moc/QML integration",
+    "src/gui/features/explorer/tests/explorer_fixture.hpp": "Test or tool support (local textual fixture)",
     "src/gui/tests/agent_report_fixture.hpp": "Test or tool support (local textual fixture)",
     "src/gui/tests/appearance_fixture.hpp": "Qt adapter dependency",
     "src/gui/tests/assertions.hpp": "Objective-C++ ABI",
@@ -980,6 +1004,7 @@
     "src/gui/tests/history_presentation_fixture.hpp": "Qt adapter dependency",
     "src/gui/tests/objc_case.hpp": "Objective-C++ ABI",
     "src/gui/tests/platform/private_clipboard.hpp": "Objective-C++ ABI",
+    "src/gui/tests/platform/promised_file.hpp": "Objective-C++ ABI",
     "src/gui/tests/platform/window_activation.hpp": "Objective-C++ ABI",
     "src/gui/tests/qml_fixture.hpp": "Qt adapter dependency",
     "src/gui/tests/screen_fixture.hpp": "Qt adapter dependency",
@@ -1242,6 +1267,7 @@
       "telar.wire.clipboard",
       "telar.wire.content",
       "telar.wire.editor",
+      "telar.wire.files",
       "telar.wire.execution",
       "telar.wire.graphics",
       "telar.wire.history",
@@ -1321,6 +1347,9 @@
     ],
     "src/gui/features/configuration": [
       "telar.gui.features.configuration"
+    ],
+    "src/gui/features/explorer": [
+      "telar.gui.features.explorer"
     ],
     "src/gui/features/history": [
       "telar.gui.features.history"
@@ -1428,6 +1457,11 @@
       "telar.runtime.diagnostics.line",
       "telar.runtime.diagnostics.operation",
       "telar.runtime.diagnostics.runtime_counters"
+    ],
+    "src/runtime/files": [
+      "telar.runtime.files.moves",
+      "telar.runtime.files.service",
+      "telar.runtime.files.touches"
     ],
     "src/runtime/history": [
       "telar.runtime.history.command",

@@ -140,6 +140,8 @@ namespace telar::gui::qt {
 
         // What draws the pane's content: an editor's grids, or a terminal's rows.
         record.insert(QStringLiteral("editor"), application::nvim::editor(session, pane->id) != nullptr);
+        // The explorer draws itself in the room of the pane it stands as.
+        record.insert(QStringLiteral("explorer"), application::explorer::docked(session.explorer, pane->id) != nullptr);
         record.insert(QStringLiteral("motionContext"), motion_context);
         record.insert(QStringLiteral("fullscreen"), tab->fullscreen);
         if (tab->fullscreen) {

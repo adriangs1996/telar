@@ -15,6 +15,7 @@ import telar.runtime.transport.connection;
 
 import telar.wire.vocabulary;
 import telar.wire.editor;
+import telar.wire.files;
 import telar.wire.history;
 import telar.wire.runtime;
 import telar.base.text.json;
@@ -446,6 +447,14 @@ export {
           }
         }
 
+        if constexpr (std::same_as<Message, ListDirectory>) {
+          // A directory newly asked for waits behind no sizes: the window left where they were
+          // wanted, or wants this first. It asks again for the ones it still shows.
+          if (message.skip == 0) {
+            hurryMeasures(client);
+          }
+        }
+
         if (admissionFull() || stopping_) {
           TELAR_DIAGNOSTIC(++queue_metrics_.dropped);
           if constexpr (history_queue && std::same_as<Message, ImportHistory>) {
@@ -608,6 +617,8 @@ export {
 
         bool cancelled = false;
         bool superseded = false;
+        // It runs as one told to end: it answers with what it has at once.
+        bool hurried = false;
         ds::Option<HistoryQueryOrder> history_query;
 
         [[nodiscard]] inline bool durable() const noexcept {
@@ -670,6 +681,23 @@ export {
         }
 
         return false;
+      }
+
+      // Ends the measure running for `client`, which answers with what it measured, and has the
+      // ones it still has queued answer at once.
+      inline void hurryMeasures(std::uint64_t client) noexcept {
+        if (active_client_ == client && active_tag_ == ClientTag::measure_directory) {
+          active_cancelled_ = true;
+        }
+
+        for (auto* queue : {&batch_, &requests_}) {
+          for (std::size_t index = 0; index < queue->size(); ++index) {
+            auto& job = queue->atMut(index);
+            if (job.client == client && !job.request.empty() && static_cast<ClientTag>(job.request.front()) == ClientTag::measure_directory) {
+              job.hurried = true;
+            }
+          }
+        }
       }
 
       template <typename Predicate>
@@ -736,7 +764,7 @@ export {
         job.getMut().superseded = historySuperseded(*job);
         active_client_ = job->client;
         active_tag_ = job->request.empty() ? ds::Option<ClientTag>{} : ds::Option<ClientTag>{static_cast<ClientTag>(job->request.front())};
-        active_cancelled_ = false;
+        active_cancelled_ = job->hurried;
         return Step::run;
       }
 

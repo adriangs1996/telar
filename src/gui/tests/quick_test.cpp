@@ -52,6 +52,7 @@ static_assert(true);
 #include <QDateTime>
 #include <QDebug>
 #include <QDir>
+#include <QDragEnterEvent>
 #include <QFile>
 #include <QFileInfo>
 #include <QInputMethodEvent>
@@ -73,6 +74,7 @@ static_assert(true);
 #include <QSignalSpy>
 #include <QSizeF>
 #include <QStandardPaths>
+#include <QStyleHints>
 #include <QTemporaryDir>
 #include <QThreadPool>
 #include <QTimer>
@@ -592,6 +594,10 @@ return {api_version = 2, client = {
       environment.insert(QStringLiteral("TELAR_HISTORY"), directory_.filePath(QStringLiteral("history.db")));
       environment.insert(QStringLiteral("HISTFILE"), directory_.filePath(QStringLiteral("shell-history")));
       environment.insert(QStringLiteral("XDG_DATA_HOME"), directory_.filePath(QStringLiteral("data")));
+      // What the runtime sends to the trash goes to the one of its account's home, on macOS: a
+      // home of the test's own, so nothing of a run is left in the trash of whoever runs it.
+      QVERIFY(QDir{}.mkpath(directory_.filePath(QStringLiteral("home"))));
+      environment.insert(QStringLiteral("HOME"), directory_.filePath(QStringLiteral("home")));
       // An editor pane's Neovim reads the layer under telar's configuration directory: never
       // the one of whoever runs the tests.
       environment.insert(QStringLiteral("XDG_CONFIG_HOME"), directory_.filePath(QStringLiteral("config")));
@@ -1553,6 +1559,974 @@ return {api_version = 2, client = {
       QCOMPARE(client_->dialogs()->kind(), Store::Dialog::none);
     }
 
+    // The explorer lists a directory of the runtime's machine as a tree, says what git holds of it,
+    // and writes a rename as a plan the runtime applies and takes back; with TELAR_EXPLORER_SHOTS
+    // set to a directory, the window at each step is saved there.
+    // The editor and the explorer know of each other, through a Neovim that runs: a row marks
+    // the file a buffer shows, apart while it has changes not written, and the plan warns of
+    // them; `:Telar explore` shows that file in the explorer; a file the explorer renames is
+    // followed by its buffer, with its changes; and the focus leaves the editor's last window
+    // for the pane the explorer stands as.
+    Q_SLOT void editorAndExplorerKnowOfEachOther() {
+      // The whole program runs close to the time its test is given: this case runs when it is
+      // asked for by its name, as the test `gui-quick-explorer` asks.
+      if (!QCoreApplication::arguments().contains(QStringLiteral("editorAndExplorerKnowOfEachOther"))) {
+        QSKIP("Runs when asked for by its name, as the test gui-quick-explorer does");
+      }
+
+      if (QStandardPaths::findExecutable(QStringLiteral("nvim")).isEmpty()) {
+        QSKIP("Neovim is not installed on this host");
+      }
+
+      QTRY_VERIFY_WITH_TIMEOUT(terminalReady(), runtime_wait_ms);
+      QTRY_VERIFY_WITH_TIMEOUT(!firstPane()->cwd.empty(), runtime_wait_ms);
+      auto* explorer = client_->explorer();
+      const auto original_id = firstPane()->id;
+      const auto tab_count = client_->tabs()->rows()->rowCount();
+      // Neovim names a file by the real path of its directory.
+      const auto fixture = QFileInfo{toQString(firstPane()->cwd)}.canonicalFilePath() + QStringLiteral("/editor-explorer-fixture");
+      bool opened = false;
+      const auto restore = qScopeGuard([&] {
+        if (explorer->showing()) {
+          explorer->close();
+        }
+
+        if (opened) {
+          closeTemporaryTab({.count = tab_count, .pane_id = original_id});
+        }
+
+        static_cast<void>(QDir{fixture}.removeRecursively());
+      });
+
+      QVERIFY(QDir{}.mkpath(fixture));
+      writeTestFile(fixture + QStringLiteral("/draft.md"), "one\n");
+      writeTestFile(fixture + QStringLiteral("/other.md"), "two\n");
+
+      const auto editorView = [&] {
+        const auto views = test::visualItems(*window_->contentItem(), QStringLiteral("paneEditor"));
+
+        return views.empty() ? nullptr : qobject_cast<NvimItem*>(views.front());
+      };
+      // The files the editor's buffers show, as the window knows them: `+` after one with
+      // changes not written, and `*` after the one the editor is on.
+      const auto held = [&] {
+        QString text;
+        const auto* view = editorView();
+        const auto* editor = view == nullptr ? nullptr : view->editorState();
+
+        if (editor != nullptr) {
+          const std::string_view paths{editor->files.text.data(), editor->files.text.size()};
+
+          for (const auto& file : editor->files.files) {
+            text += toQString(file.path.of(paths)).mid(fixture.size() + 1) + (file.modified ? QStringLiteral("+") : QString{}) + (file.current ? QStringLiteral("*") : QString{}) + QLatin1Char(' ');
+          }
+        }
+
+        return text;
+      };
+      const auto named = [&](const QString& name) {
+        for (int row = 0; row < explorer->rows(0)->rowCount(); ++row) {
+          const auto record = explorer->rows(0)->index(row, 0).data(ListModel::record_role).toMap();
+          if (record.value(QStringLiteral("name")) == name) {
+            return record;
+          }
+        }
+
+        return QVariantMap{};
+      };
+
+      client_->commands()->execute(window_actions::Action::new_editor_tab);
+      QTRY_VERIFY2_WITH_TIMEOUT(client_->tabs()->rows()->rowCount() == tab_count + 1, qPrintable(client_->status()->error() + errors_), runtime_wait_ms);
+      opened = true;
+      QTRY_VERIFY2_WITH_TIMEOUT(editorView() != nullptr && editorView()->ready(), qPrintable(client_->status()->error() + errors_), runtime_wait_ms);
+      editorView()->send(QStringLiteral("<Cmd>set noswapfile<CR><Cmd>edit ") + fixture + QStringLiteral("/draft.md<CR>"));
+      QTRY_COMPARE_WITH_TIMEOUT(held(), QStringLiteral("draft.md* "), runtime_wait_ms);
+      // Another buffer, and back: the editor says which one it is on.
+      editorView()->send(QStringLiteral("<Cmd>edit ") + fixture + QStringLiteral("/other.md<CR>"));
+      QTRY_COMPARE_WITH_TIMEOUT(held(), QStringLiteral("draft.md other.md* "), runtime_wait_ms);
+      editorView()->send(QStringLiteral("<Cmd>bwipeout<CR>"));
+      QTRY_COMPARE_WITH_TIMEOUT(held(), QStringLiteral("draft.md* "), runtime_wait_ms);
+
+      // `:Telar explore`: the explorer opens on the file's directory, with the file selected,
+      // and its row says an editor holds it.
+      editorView()->send(QStringLiteral("<Cmd>Telar explore<CR>"));
+      QTRY_VERIFY_WITH_TIMEOUT(explorer->showing(), runtime_wait_ms);
+      QTRY_COMPARE_WITH_TIMEOUT(explorer->rows(0)->rowCount(), 2, runtime_wait_ms);
+      QVERIFY2(explorer->preview().value(QStringLiteral("path")).toString().endsWith(QStringLiteral("/editor-explorer-fixture/draft.md")), qPrintable(explorer->preview().value(QStringLiteral("path")).toString()));
+      QVERIFY(named(QStringLiteral("draft.md")).value(QStringLiteral("selected")).toBool());
+      QCOMPARE(named(QStringLiteral("draft.md")).value(QStringLiteral("editor")).toString(), QStringLiteral("open"));
+      QCOMPARE(named(QStringLiteral("other.md")).value(QStringLiteral("editor")).toString(), QString{});
+
+      // A change not written shows on the row and in the preview, and the plan warns of it.
+      editorView()->send(QStringLiteral("<Cmd>normal! ohalf a thought<CR>"));
+      QTRY_VERIFY2_WITH_TIMEOUT(named(QStringLiteral("draft.md")).value(QStringLiteral("editor")).toString() == QStringLiteral("unsaved"), qPrintable(held()), runtime_wait_ms);
+
+      const auto fact = [&] {
+        for (const auto& known : explorer->preview().value(QStringLiteral("facts")).toList()) {
+          if (known.toMap().value(QStringLiteral("label")) == QStringLiteral("Editor")) {
+            return known.toMap().value(QStringLiteral("value")).toString();
+          }
+        }
+
+        return QString{};
+      };
+
+      QTRY_COMPARE_WITH_TIMEOUT(fact(), QStringLiteral("pane 1 · changes not written"), runtime_wait_ms);
+      // With TELAR_EXPLORER_SHOTS set to a directory, a picture of the marks is kept there.
+      if (const auto shots = qEnvironmentVariable("TELAR_EXPLORER_SHOTS"); !shots.isEmpty()) {
+        constexpr int settle_ms = 400;
+
+        QTest::qWait(settle_ms);
+        QVERIFY(window_->grabWindow().save(QDir{shots}.filePath(QStringLiteral("explorer-editor.png"))));
+      }
+
+      // Renamed in the explorer: the plan says an editor holds changes to it, and once applied
+      // the buffer shows the file under its new name, its changes still not written.
+      explorer->type(QStringLiteral("cw"));
+      explorer->submit(QStringLiteral("final.md"));
+      explorer->run(QStringLiteral("w"));
+      QCOMPARE(explorer->plan().size(), 1);
+      QCOMPARE(explorer->plan().value(0).toMap().value(QStringLiteral("warning")).toString(), QStringLiteral("an editor holds changes to it that were not written"));
+      explorer->type(QStringLiteral("y"));
+      QTRY_VERIFY_WITH_TIMEOUT(QFileInfo::exists(fixture + QStringLiteral("/final.md")), runtime_wait_ms);
+      QTRY_COMPARE_WITH_TIMEOUT(held(), QStringLiteral("final.md+* "), runtime_wait_ms);
+      QCOMPARE(readTestFile(fixture + QStringLiteral("/final.md")), QByteArrayLiteral("one\n"));
+      QTRY_COMPARE_WITH_TIMEOUT(named(QStringLiteral("final.md")).value(QStringLiteral("editor")).toString(), QStringLiteral("unsaved"), runtime_wait_ms);
+
+      // As a pane beside the editor's, the key that moves the focus to the right leaves the
+      // editor's only window for the explorer's pane.
+      const auto editor_pane = focusedPaneId();
+
+      explorer->type(QStringLiteral("<C-w>T"));
+      QTRY_VERIFY_WITH_TIMEOUT(explorer->pinned() && explorer->focused(), runtime_wait_ms);
+      client_->commands()->execute(window_actions::Action::focus_pane, QString::number(editor_pane));
+      QTRY_VERIFY(!explorer->focused() && explorer->showing());
+      // `navigate_pane` asks Neovim first, which says it has no window there.
+      QVERIFY(client_->commands()->runBinding(BindingAction{.kind = BindingActionKind::navigate_right}, nullptr));
+      QTRY_VERIFY_WITH_TIMEOUT(explorer->focused(), runtime_wait_ms);
+      // The key that goes from pane to pane asks no editor: it enters at once.
+      client_->commands()->execute(window_actions::Action::focus_pane, QString::number(editor_pane));
+      QTRY_VERIFY(!explorer->focused());
+      client_->commands()->execute(window_actions::Action::focus_right);
+      QTRY_VERIFY(explorer->focused());
+      // Closed with its pane, as the cases after this one find the tab.
+      explorer->type(QStringLiteral("q"));
+      QTRY_VERIFY_WITH_TIMEOUT(!explorer->showing() && focusedPaneId() == editor_pane, runtime_wait_ms);
+    }
+
+    Q_SLOT void explorerListsAndChangesFiles() {
+      // As the case of the editor and the explorer above: it runs when it is named.
+      if (!QCoreApplication::arguments().contains(QStringLiteral("explorerListsAndChangesFiles"))) {
+        QSKIP("Runs when asked for by its name, as the test gui-quick-explorer does");
+      }
+
+      if (QStandardPaths::findExecutable(QStringLiteral("git")).isEmpty()) {
+        QSKIP("git is not installed on this host");
+      }
+
+      QTRY_VERIFY_WITH_TIMEOUT(terminalReady(), runtime_wait_ms);
+      auto* explorer = client_->explorer();
+      const auto shots = qEnvironmentVariable("TELAR_EXPLORER_SHOTS");
+      const auto original_size = window_->size();
+      // The machine has the name its user gave it, whatever the host that runs the test is called.
+      const auto profiles_path = directory_.filePath(QStringLiteral("machines.json"));
+
+      writeTestFile(profiles_path, R"({"version":1,"local_label":"macbook","machines":[]})");
+      QVERIFY(QFile::setPermissions(profiles_path, QFile::ReadOwner | QFile::WriteOwner));
+      client_->roster()->openProfiles(profiles_path);
+
+      const auto restore = qScopeGuard([&] {
+        if (explorer->showing()) {
+          explorer->close();
+        }
+
+        window_->resize(original_size);
+        static_cast<void>(QFile::remove(profiles_path));
+        client_->roster()->openProfiles(profiles_path);
+      });
+      const auto shoot = [&](const QString& name) {
+        if (shots.isEmpty()) {
+          return;
+        }
+
+        // What the runtime still answers has settled before the picture is taken.
+        constexpr int settle_ms = 400;
+
+        QTest::qWait(settle_ms);
+        QVERIFY(window_->grabWindow().save(QDir{shots}.filePath(name + QStringLiteral(".png"))));
+      };
+
+      // A repository with a directory of documents, one of them changed since its commit.
+      // Below where the pane is, so what its agent touches there is the pane's to tell.
+      QTRY_VERIFY_WITH_TIMEOUT(!firstPane()->cwd.empty(), runtime_wait_ms);
+      const auto fixture = toQString(firstPane()->cwd) + QStringLiteral("/explorer-fixture");
+      const auto root = fixture + QStringLiteral("/telar");
+      const auto discard = qScopeGuard([&] {
+        static_cast<void>(QDir{fixture}.removeRecursively());
+        // The agent of the pane ends with its input, and its shell echoes again.
+        client_->terminals()->input(firstPane()->id, QByteArrayLiteral("\x04stty echo\r"));
+      });
+
+      const auto write = [&](const QString& relative, int lines) {
+        const auto path = root + QLatin1Char('/') + relative;
+        QByteArray text;
+
+        QVERIFY(QDir{}.mkpath(QFileInfo{path}.path()));
+        for (int line = 0; line < lines; ++line) {
+          text += QByteArrayLiteral("Press `Ctrl+b`, then `g` to open the command palette and type `split`.\n");
+        }
+
+        writeTestFile(path, text.constData());
+      };
+      const auto git = [&](const QStringList& arguments) {
+        QProcess process;
+        auto environment = QProcessEnvironment::systemEnvironment();
+
+        environment.insert(QStringLiteral("GIT_CONFIG_GLOBAL"), QStringLiteral("/dev/null"));
+        environment.insert(QStringLiteral("GIT_CONFIG_NOSYSTEM"), QStringLiteral("1"));
+        process.setProcessEnvironment(environment);
+        process.setWorkingDirectory(root);
+        process.start(QStringLiteral("git"), QStringList{QStringLiteral("-c"), QStringLiteral("user.name=telar"), QStringLiteral("-c"), QStringLiteral("user.email=telar@example.invalid"), QStringLiteral("-c"), QStringLiteral("commit.gpgsign=false")} + arguments);
+        return process.waitForFinished(runtime_wait_ms) && process.exitCode() == 0;
+      };
+
+      for (const auto& [name, lines] : std::initializer_list<std::pair<const char*, int>>{{"assets/logo.svg", 90}, {"cmake/toolchain.cmake", 14}, {"dev/config.lua", 40}, {"docs/build/modules.json", 120}, {"docs/examples/bar/usage.lua", 30}, {"docs/images/window.png", 400}, {"docs/agents.md", 90}, {"docs/clipboard.md", 52}, {"docs/code-style.md", 50}, {"docs/configuration.md", 1100}, {"docs/development.md", 32}, {"docs/kitty-graphics.md", 220}, {"docs/mods.md", 140}, {"docs/notifications.md", 115}, {"docs/packaging.md", 320}, {"docs/plugins.md", 100}, {"docs/README.md", 26}, {"docs/remote.md", 88}, {"docs/sidebar.md", 350}, {"docs/usage.md", 106}, {"examples/change.diff", 280}, {"integrations/nvim/init.lua", 280}, {"lib/base/base.cppm", 200}, {"src/gui/main.cpp", 300}, {".gitignore", 1}, {"CLAUDE.md", 60}, {"README.md", 80}, {"justfile", 120}}) {
+        write(QString::fromLatin1(name), lines);
+      }
+
+      writeTestFile(root + QStringLiteral("/.gitignore"), "out/\n");
+      QVERIFY(git({QStringLiteral("init"), QStringLiteral("-q"), QStringLiteral("-b"), QStringLiteral("lifetime-speed")}));
+      QVERIFY(git({QStringLiteral("add"), QStringLiteral(".")}));
+      QVERIFY(git({QStringLiteral("commit"), QStringLiteral("-q"), QStringLiteral("-m"), QStringLiteral("Describe the C++ behavior without the Zig reference")}));
+      // The branch stands as far ahead of the head of its remote as the one of the design's
+      // picture does: that commit is where a clone would have left `origin/main`, and the
+      // commits since are written by one git, with the tree that one had.
+      QVERIFY(git({QStringLiteral("update-ref"), QStringLiteral("refs/remotes/origin/main"), QStringLiteral("HEAD")}));
+      QVERIFY(git({QStringLiteral("symbolic-ref"), QStringLiteral("refs/remotes/origin/HEAD"), QStringLiteral("refs/remotes/origin/main")}));
+      {
+        constexpr int commits_ahead = 330;
+        QByteArray stream;
+        QProcess importing;
+        auto environment = QProcessEnvironment::systemEnvironment();
+
+        for (int commit = 0; commit < commits_ahead; ++commit) {
+          stream += QByteArrayLiteral("commit refs/heads/lifetime-speed\ncommitter telar <telar@example.invalid> 1700000000 +0000\ndata 4\nWork\n");
+          if (commit == 0) {
+            stream += QByteArrayLiteral("from refs/heads/lifetime-speed^0\n");
+          }
+        }
+
+        environment.insert(QStringLiteral("GIT_CONFIG_GLOBAL"), QStringLiteral("/dev/null"));
+        environment.insert(QStringLiteral("GIT_CONFIG_NOSYSTEM"), QStringLiteral("1"));
+        importing.setProcessEnvironment(environment);
+        importing.setWorkingDirectory(root);
+        importing.start(QStringLiteral("git"), {QStringLiteral("fast-import"), QStringLiteral("--quiet")});
+        QVERIFY(importing.waitForStarted(runtime_wait_ms));
+        importing.write(stream);
+        importing.closeWriteChannel();
+        QVERIFY(importing.waitForFinished(runtime_wait_ms));
+        QCOMPARE(importing.exitCode(), 0);
+      }
+
+      write(QStringLiteral("docs/usage.md"), 111);
+      writeTestFile(root + QStringLiteral("/docs/usage.md"), (readTestFile(root + QStringLiteral("/docs/usage.md")) + QByteArrayLiteral("the split commands. Use Up/Down to select a result and Enter to run it.\n")).constData());
+      write(QStringLiteral("docs/configuration.md"), 1101);
+      write(QStringLiteral("docs/examples/notes.lua"), 3);
+      write(QStringLiteral("out/dev/telar"), 2000);
+
+      const auto record = [&](int row) {
+        return explorer->rows(0)->index(row, 0).data(ListModel::record_role).toMap();
+      };
+      const auto named = [&](const QString& name) {
+        for (int row = 0; row < explorer->rows(0)->rowCount(); ++row) {
+          if (record(row).value(QStringLiteral("name")) == name) {
+            return record(row);
+          }
+        }
+
+        return QVariantMap{};
+      };
+      const auto selected = [&] {
+        for (int row = 0; row < explorer->rows(0)->rowCount(); ++row) {
+          if (record(row).value(QStringLiteral("selected")).toBool()) {
+            return record(row).value(QStringLiteral("name")).toString();
+          }
+        }
+
+        return QString{};
+      };
+      const auto press = [&](const QString& keys) {
+        explorer->type(keys);
+      };
+      const auto window = [&] {
+        return explorer->windows().value(0).toMap();
+      };
+
+      window_->resize(1492, 917);
+      client_->commands()->execute(window_actions::Action::explorer);
+      QCOMPARE(client_->dialogs()->kind(), Store::Dialog::explorer);
+      QVERIFY(explorer->showing());
+
+      // The window goes to the repository, and the runtime lists it: directories first.
+      explorer->run(QStringLiteral("e ") + root);
+      QTRY_VERIFY_WITH_TIMEOUT(explorer->rows(0)->rowCount() > 6, runtime_wait_ms);
+      QCOMPARE(record(0).value(QStringLiteral("name")).toString(), QStringLiteral("assets"));
+      QVERIFY(record(0).value(QStringLiteral("directory")).toBool());
+      QVERIFY(named(QStringLiteral(".gitignore")).isEmpty());
+      QCOMPARE(window().value(QStringLiteral("hiddenEntries")).toInt(), 2);
+
+      // git says what changed, and a directory how many paths below it did; what it ignores
+      // leaves the listing.
+      QTRY_VERIFY_WITH_TIMEOUT(window().value(QStringLiteral("repository")).toBool(), runtime_wait_ms);
+      QVERIFY(named(QStringLiteral("out")).isEmpty());
+      QCOMPARE(window().value(QStringLiteral("ignoredEntries")).toInt(), 1);
+      QCOMPARE(window().value(QStringLiteral("branch")).toString(), QStringLiteral("lifetime-speed"));
+      QCOMPARE(window().value(QStringLiteral("distance")).toString(), QStringLiteral("\u2191330 main"));
+      QVERIFY(!window().value(QStringLiteral("away")).toBool());
+      QCOMPARE(window().value(QStringLiteral("machine")).toString(), QStringLiteral("macbook"));
+      QVERIFY(window().value(QStringLiteral("local")).toBool());
+      QTRY_COMPARE_WITH_TIMEOUT(named(QStringLiteral("docs")).value(QStringLiteral("below")).toInt(), 3, runtime_wait_ms);
+      // The runtime measures each directory after it listed them.
+      QTRY_VERIFY_WITH_TIMEOUT(named(QStringLiteral("docs")).value(QStringLiteral("measured")).toBool(), runtime_wait_ms);
+
+      // `3j` then `l` unfolds the documents; the keys move as Neovim's.
+      press(QStringLiteral("3j"));
+      QCOMPARE(selected(), QStringLiteral("docs"));
+      press(QStringLiteral("l"));
+      QTRY_VERIFY_WITH_TIMEOUT(!named(QStringLiteral("usage.md")).isEmpty(), runtime_wait_ms);
+      QCOMPARE(named(QStringLiteral("usage.md")).value(QStringLiteral("unstaged")).toString(), QStringLiteral("M"));
+      QCOMPARE(named(QStringLiteral("usage.md")).value(QStringLiteral("depth")).toInt(), 1);
+      press(QStringLiteral("G"));
+      QCOMPARE(selected(), QStringLiteral("README.md"));
+      press(QStringLiteral("gg"));
+      QCOMPARE(selected(), QStringLiteral("assets"));
+
+      // The preview of a directory the window lists whole says what weighs the most in it, and
+      // how many of its entries the window lists.
+      press(QStringLiteral("3j"));
+      QCOMPARE(selected(), QStringLiteral("docs"));
+      QTRY_VERIFY_WITH_TIMEOUT(!explorer->preview().value(QStringLiteral("heavy")).toList().isEmpty(), runtime_wait_ms);
+      QVERIFY(explorer->preview().value(QStringLiteral("heavy")).toList().size() <= 7);
+      QVERIFY(std::ranges::any_of(explorer->preview().value(QStringLiteral("facts")).toList(), [](const QVariant& fact) {
+        return fact.toMap().value(QStringLiteral("label")) == QStringLiteral("Entries") && fact.toMap().value(QStringLiteral("value")).toString().endsWith(QStringLiteral("visible"));
+      }));
+      shoot(QStringLiteral("explorer-heaviest"));
+
+      // `]c` goes to the next path git says something of, in the tree's order, and unfolds the
+      // directory that hides it: a file git does not track, marked in both of its columns.
+      press(QStringLiteral("]c"));
+      QTRY_COMPARE_WITH_TIMEOUT(selected(), QStringLiteral("notes.lua"), runtime_wait_ms);
+      QCOMPARE(named(QStringLiteral("notes.lua")).value(QStringLiteral("staged")).toString(), QStringLiteral("?"));
+      QCOMPARE(named(QStringLiteral("notes.lua")).value(QStringLiteral("unstaged")).toString(), QStringLiteral("?"));
+      QVERIFY(named(QStringLiteral("examples")).value(QStringLiteral("expanded")).toBool());
+      // `zc` folds the directory it is in, and selects it: the tree is as it was.
+      press(QStringLiteral("zc"));
+      QCOMPARE(selected(), QStringLiteral("examples"));
+      QVERIFY(!named(QStringLiteral("examples")).value(QStringLiteral("expanded")).toBool() && named(QStringLiteral("notes.lua")).isEmpty());
+      for (int step = 0; step < 40 && selected() != QStringLiteral("usage.md"); ++step) {
+        press(QStringLiteral("j"));
+      }
+
+      QCOMPARE(selected(), QStringLiteral("usage.md"));
+      QTRY_VERIFY_WITH_TIMEOUT(explorer->preview().value(QStringLiteral("diff")).toBool(), runtime_wait_ms);
+      QVERIFY(!explorer->preview().value(QStringLiteral("lines")).toList().isEmpty());
+
+      // An agent runs in the pane, and reports the tool it runs as its hooks do: the file it names
+      // is touched, which its row and its preview say.
+      {
+        const auto pane_id = firstPane()->id;
+        // The screen is cleared of the line typed, which names where this program is, so a picture
+        // taken with the pane in view shows nothing of the machine the test runs on.
+        const auto agent = QStringLiteral("printf '\\033[H\\033[2J'; stty -echo; %1 --report-blocked %2 %3 %4\r").arg(shellLiteral(QCoreApplication::applicationFilePath()), shellLiteral(socket_)).arg(pane_id).arg(firstPane()->generation);
+
+        client_->terminals()->input(pane_id, agent.toUtf8());
+        QTRY_VERIFY2_WITH_TIMEOUT(screenText(client_->pane(pane_id)->screen, ScreenTextLayout::logical).contains(QStringLiteral("GUI_ATTENTION_READY")), qPrintable(screenText(client_->pane(pane_id)->screen)), runtime_wait_ms);
+
+        QProcess report;
+
+        report.start(runtime_.program(), {QStringLiteral("agent"), QStringLiteral("report-state"), QString::number(pane_id), QStringLiteral("working"), QStringLiteral("--event"), QStringLiteral("» Edit explorer-fixture/telar/docs/usage.md"), QStringLiteral("--socket"), socket_});
+        QVERIFY(report.waitForFinished(runtime_wait_ms));
+        QVERIFY2(report.exitCode() == 0, report.readAllStandardError().constData());
+      }
+
+      QTRY_COMPARE_WITH_TIMEOUT(named(QStringLiteral("usage.md")).value(QStringLiteral("actors")).toList().size(), 1, runtime_wait_ms);
+      QCOMPARE(named(QStringLiteral("usage.md")).value(QStringLiteral("actors")).toList().first().toMap().value(QStringLiteral("chip")).toString(), QStringLiteral("1"));
+      QVERIFY(named(QStringLiteral("agents.md")).value(QStringLiteral("actors")).toList().isEmpty());
+      QTRY_COMPARE_WITH_TIMEOUT(explorer->preview().value(QStringLiteral("activity")).toList().size(), 1, runtime_wait_ms);
+      QCOMPARE(explorer->preview().value(QStringLiteral("activity")).toList().first().toMap().value(QStringLiteral("verb")).toString(), QStringLiteral("Edit"));
+      shoot(QStringLiteral("explorer-tree"));
+
+      // The pointer asks for the menu of the row: what applies to it, each line with its keys.
+      const auto listed = [&](const QString& name) {
+        for (int row = 0; row < explorer->rows(0)->rowCount(); ++row) {
+          if (record(row).value(QStringLiteral("name")) == name) {
+            return window().value(QStringLiteral("top")).toInt() + row;
+          }
+        }
+
+        return -1;
+      };
+      constexpr QPointF menu_place{330, 250};
+
+      explorer->openMenu(0, listed(QStringLiteral("usage.md")), menu_place);
+      QCOMPARE(explorer->line().value(QStringLiteral("mode")).toString(), QStringLiteral("menu"));
+
+      auto menu_lines = explorer->menu().value(QStringLiteral("lines")).toList();
+
+      QVERIFY(menu_lines.size() > 16);
+      QVERIFY(menu_lines.value(0).toMap().value(QStringLiteral("current")).toBool());
+      QCOMPARE(menu_lines.value(0).toMap().value(QStringLiteral("keys")).toString(), QStringLiteral("<CR>"));
+      // An agent runs in the pane now: Enter mentions the file to it.
+      QVERIFY2(menu_lines.value(0).toMap().value(QStringLiteral("label")).toString().startsWith(QStringLiteral("Mention")), qPrintable(menu_lines.value(0).toMap().value(QStringLiteral("label")).toString()));
+      QVERIFY(menu_lines.value(3).toMap().value(QStringLiteral("rule")).toBool());
+      QCOMPARE(menu_lines.value(4).toMap().value(QStringLiteral("label")).toString(), QStringLiteral("Rename"));
+      shoot(QStringLiteral("explorer-menu"));
+      // The keys move in it, and a line runs what its key runs: here `cw`.
+      press(QStringLiteral("j"));
+      menu_lines = explorer->menu().value(QStringLiteral("lines")).toList();
+      QVERIFY(!menu_lines.value(0).toMap().value(QStringLiteral("current")).toBool() && menu_lines.value(1).toMap().value(QStringLiteral("current")).toBool());
+      explorer->chooseMenu(4);
+      QCOMPARE(explorer->line().value(QStringLiteral("mode")).toString(), QStringLiteral("insert"));
+      QVERIFY(explorer->menu().isEmpty());
+      explorer->cancel();
+      // Shift+F10 asks for it on the selected row, and Escape closes it.
+      QVERIFY(explorer->key(Qt::Key_F10, QString{}, Qt::ShiftModifier));
+      QCOMPARE(explorer->line().value(QStringLiteral("mode")).toString(), QStringLiteral("menu"));
+      QVERIFY(explorer->key(Qt::Key_Escape, QString{}, Qt::NoModifier));
+      QCOMPARE(explorer->line().value(QStringLiteral("mode")).toString(), QStringLiteral("normal"));
+      QCOMPARE(selected(), QStringLiteral("usage.md"));
+
+      // A rename is a change typed, not written: the plan shows it, and `y` applies it.
+      press(QStringLiteral("cw"));
+      QCOMPARE(explorer->line().value(QStringLiteral("mode")).toString(), QStringLiteral("insert"));
+      QCOMPARE(explorer->line().value(QStringLiteral("prefill")).toString(), QStringLiteral("usage.md"));
+      shoot(QStringLiteral("explorer-name"));
+      explorer->submit(QStringLiteral("guide.md"));
+      QVERIFY(named(QStringLiteral("guide.md")).value(QStringLiteral("renamed")).toBool());
+      QVERIFY(QFile::exists(root + QStringLiteral("/docs/usage.md")));
+      press(QStringLiteral("k"));
+      press(QStringLiteral("dd"));
+      QVERIFY(named(QStringLiteral("sidebar.md")).value(QStringLiteral("removed")).toBool());
+      press(QStringLiteral("o"));
+      explorer->submit(QStringLiteral("notes/"));
+      shoot(QStringLiteral("explorer-pending"));
+      explorer->run(QStringLiteral("w"));
+      QCOMPARE(explorer->line().value(QStringLiteral("mode")).toString(), QStringLiteral("plan"));
+      QCOMPARE(explorer->plan().size(), 3);
+      QCOMPARE(explorer->plan().value(0).toMap().value(QStringLiteral("verb")).toString(), QStringLiteral("CREATE"));
+      QCOMPARE(explorer->plan().value(1).toMap().value(QStringLiteral("verb")).toString(), QStringLiteral("MOVE"));
+      QCOMPARE(explorer->plan().value(2).toMap().value(QStringLiteral("verb")).toString(), QStringLiteral("DELETE"));
+      // A line says the size of what it changes. That an agent named the file since it changed
+      // is said when its report came a second or more after the fixture was written, so only
+      // what the line may say is checked here; the feature's tests check when.
+      QVERIFY(explorer->plan().value(0).toMap().value(QStringLiteral("size")).toString().isEmpty());
+      QVERIFY(!explorer->plan().value(2).toMap().value(QStringLiteral("size")).toString().isEmpty());
+
+      const auto touched_note = explorer->plan().value(1).toMap().value(QStringLiteral("warning")).toString();
+
+      QVERIFY2(touched_note.isEmpty() || touched_note == QStringLiteral("an agent touched it since it was listed"), qPrintable(touched_note));
+      QVERIFY(explorer->plan().value(2).toMap().value(QStringLiteral("warning")).toString().isEmpty());
+      shoot(QStringLiteral("explorer-plan"));
+      press(QStringLiteral("y"));
+      QTRY_VERIFY_WITH_TIMEOUT(QFile::exists(root + QStringLiteral("/docs/guide.md")), runtime_wait_ms);
+      QVERIFY(!QFile::exists(root + QStringLiteral("/docs/usage.md")));
+      QVERIFY(!QFile::exists(root + QStringLiteral("/docs/sidebar.md")));
+      QVERIFY(QFileInfo{root + QStringLiteral("/docs/notes")}.isDir());
+      QTRY_COMPARE_WITH_TIMEOUT(explorer->line().value(QStringLiteral("edits")).toInt(), 0, runtime_wait_ms);
+      QTRY_VERIFY_WITH_TIMEOUT(!named(QStringLiteral("guide.md")).isEmpty() && named(QStringLiteral("usage.md")).isEmpty(), runtime_wait_ms);
+
+      // `u` with nothing pending takes the plan back, once a yes says so.
+      press(QStringLiteral("u"));
+      QCOMPARE(explorer->line().value(QStringLiteral("mode")).toString(), QStringLiteral("question"));
+      QCOMPARE(explorer->line().value(QStringLiteral("tone")).toString(), QStringLiteral("ask"));
+      press(QStringLiteral("y"));
+      QTRY_VERIFY_WITH_TIMEOUT(QFile::exists(root + QStringLiteral("/docs/usage.md")) && QFile::exists(root + QStringLiteral("/docs/sidebar.md")), runtime_wait_ms);
+      QVERIFY(!QFile::exists(root + QStringLiteral("/docs/guide.md")));
+      QTRY_VERIFY_WITH_TIMEOUT(!named(QStringLiteral("usage.md")).isEmpty(), runtime_wait_ms);
+
+      // A row dragged onto a directory is a change to write, as `dd` and `p` there: nothing moves
+      // on the disk, and `u` takes it back. The directory a row is in does not take it.
+      QCOMPARE(explorer->grab(0, listed(QStringLiteral("usage.md"))), 1);
+      // Out of the window the row is its path, and a file of this machine a file URL as well.
+      {
+        const auto outside = explorer->draggedData();
+
+        QCOMPARE(outside->text(), root + QStringLiteral("/docs/usage.md"));
+        QCOMPARE(outside->urls(), QList<QUrl>{QUrl::fromLocalFile(root + QStringLiteral("/docs/usage.md"))});
+      }
+
+      // The hints say what `p` would put now, in one line more: the list shows a row less, and
+      // is moved to show its first rows again.
+      explorer->scroll(0, -window().value(QStringLiteral("top")).toInt());
+      QVERIFY(listed(QStringLiteral("assets")) >= 0 && listed(QStringLiteral("usage.md")) >= 0);
+      QCOMPARE(explorer->aim(0, listed(QStringLiteral("docs")), false, false).value(QStringLiteral("count")).toInt(), 0);
+      QCOMPARE(explorer->aim(0, listed(QStringLiteral("assets")), false, false).value(QStringLiteral("row")).toInt(), listed(QStringLiteral("assets")));
+      explorer->drop(0, listed(QStringLiteral("assets")), false, false);
+      QCOMPARE(explorer->line().value(QStringLiteral("edits")).toInt(), 1);
+      QVERIFY(explorer->line().value(QStringLiteral("message")).toString().startsWith(QStringLiteral("1 to move into assets")));
+      QVERIFY(QFile::exists(root + QStringLiteral("/docs/usage.md")) && !QFile::exists(root + QStringLiteral("/assets/usage.md")));
+      press(QStringLiteral("u"));
+      QCOMPARE(explorer->line().value(QStringLiteral("edits")).toInt(), 0);
+
+      // The directory that took the row was unfolded to show it there, and lists its entry once
+      // the runtime answers, which moves every row below it. The pointer goes to rows once that
+      // is so, from the top of the window, where each of them is in view.
+      QTRY_VERIFY_WITH_TIMEOUT(!named(QStringLiteral("logo.svg")).isEmpty(), runtime_wait_ms);
+      explorer->type(QStringLiteral("gg"));
+      QTRY_COMPARE(listed(QStringLiteral("assets")), 0);
+      QVERIFY(listed(QStringLiteral("remote.md")) > 0 && listed(QStringLiteral("sidebar.md")) > 0);
+
+      // The pointer itself: a right click asks for the menu where it is, a click elsewhere closes
+      // it, and a press, a move and a release drag the row under it.
+      const auto* overlay = test::visualItems(*window_->contentItem(), QStringLiteral("explorerOverlay")).value(0);
+      const auto* rows_area = test::visualItems(*window_->contentItem(), QStringLiteral("explorerRows")).value(0);
+
+      QVERIFY(overlay != nullptr && rows_area != nullptr);
+
+      // The middle of a row, where the list draws it: each says where it starts below the first
+      // one shown and how tall it is, in hundredths of one of the design's pixels.
+      const auto over = [&](const QString& name) {
+        constexpr qreal rows_inset = 4;
+        constexpr qreal hundredths = 100;
+        constexpr qreal half = 2;
+        const auto shown_row = record(listed(name) - window().value(QStringLiteral("top")).toInt());
+        const auto middle = (shown_row.value(QStringLiteral("offset")).toReal() + (shown_row.value(QStringLiteral("tall")).toReal() / half)) / hundredths;
+
+        return rows_area->mapToScene({rows_area->width() / 3, (rows_inset + middle) * overlay->property("ratio").toReal()}).toPoint();
+      };
+
+      // A click on the row that is selected folds its directory, and one more unfolds it; far
+      // enough apart not to be the two halves of a double click.
+      const auto apart_ms = QGuiApplication::styleHints()->mouseDoubleClickInterval() + 100;
+
+      QCOMPARE(selected(), QStringLiteral("assets"));
+      QVERIFY(named(QStringLiteral("assets")).value(QStringLiteral("expanded")).toBool());
+      QTest::qWait(apart_ms);
+      QTest::mouseClick(window_, Qt::LeftButton, Qt::NoModifier, over(QStringLiteral("assets")));
+      QTRY_VERIFY(!named(QStringLiteral("assets")).value(QStringLiteral("expanded")).toBool() && named(QStringLiteral("logo.svg")).isEmpty());
+      QTest::qWait(apart_ms);
+      QTest::mouseClick(window_, Qt::LeftButton, Qt::NoModifier, over(QStringLiteral("assets")));
+      QTRY_VERIFY_WITH_TIMEOUT(!named(QStringLiteral("logo.svg")).isEmpty(), runtime_wait_ms);
+      QTest::qWait(apart_ms);
+
+      // A click on a directory of the path the head shows roots the window there, and `<C-o>`
+      // comes back from it.
+      {
+        const auto* crumbs = test::visualItems(*window_->contentItem(), QStringLiteral("explorerCrumbs")).value(0);
+
+        QVERIFY(crumbs != nullptr);
+        QTest::mouseClick(window_, Qt::LeftButton, Qt::NoModifier, crumbs->mapToScene({crumbs->width() / 3, crumbs->height() / 2}).toPoint());
+
+        const auto climbed = window().value(QStringLiteral("rootPath")).toString();
+
+        QVERIFY2(climbed != root && root.startsWith(climbed + QLatin1Char('/')), qPrintable(climbed));
+        QVERIFY(explorer->key(Qt::Key_O, QStringLiteral("o"), static_cast<int>(NativeKeyAdapter::control_modifier)));
+        QCOMPARE(window().value(QStringLiteral("rootPath")).toString(), root);
+        QTRY_VERIFY_WITH_TIMEOUT(!named(QStringLiteral("logo.svg")).isEmpty(), runtime_wait_ms);
+        explorer->type(QStringLiteral("gg"));
+        QTRY_COMPARE(listed(QStringLiteral("assets")), 0);
+      }
+
+      // The name of a row starts being typed with the caret where its key puts it, and Escape
+      // ends it as Enter does: what was typed is the change.
+      {
+        auto* name_field = window_->findChild<QQuickItem*>(QStringLiteral("explorerName"));
+
+        QVERIFY(name_field != nullptr);
+        explorer->type(QStringLiteral("G"));
+        QCOMPARE(selected(), QStringLiteral("README.md"));
+        press(QStringLiteral("cw"));
+        QTRY_COMPARE(name_field->property("selectedText").toString(), QStringLiteral("README"));
+        explorer->cancel();
+        press(QStringLiteral("a"));
+        QTRY_COMPARE(name_field->property("cursorPosition").toInt(), 9);
+        QVERIFY(name_field->property("selectedText").toString().isEmpty());
+        explorer->cancel();
+        press(QStringLiteral("i"));
+        QTRY_COMPARE(name_field->property("cursorPosition").toInt(), 0);
+        QVERIFY(name_field->property("activeFocus").toBool());
+        name_field->setProperty("text", QStringLiteral("READ.md"));
+        QTest::keyClick(window_, Qt::Key_Escape);
+        QCOMPARE(explorer->line().value(QStringLiteral("mode")).toString(), QStringLiteral("normal"));
+        QCOMPARE(explorer->line().value(QStringLiteral("edits")).toInt(), 1);
+        QVERIFY(named(QStringLiteral("READ.md")).value(QStringLiteral("renamed")).toBool());
+        press(QStringLiteral("u"));
+        QCOMPARE(explorer->line().value(QStringLiteral("edits")).toInt(), 0);
+        explorer->type(QStringLiteral("gg"));
+        QTRY_COMPARE(listed(QStringLiteral("assets")), 0);
+      }
+
+      QTest::mouseClick(window_, Qt::RightButton, Qt::NoModifier, over(QStringLiteral("agents.md")));
+      QCOMPARE(explorer->line().value(QStringLiteral("mode")).toString(), QStringLiteral("menu"));
+      QCOMPARE(selected(), QStringLiteral("agents.md"));
+      QTest::mouseClick(window_, Qt::LeftButton, Qt::NoModifier, over(QStringLiteral("assets")));
+      QCOMPARE(explorer->line().value(QStringLiteral("mode")).toString(), QStringLiteral("normal"));
+      QTest::mousePress(window_, Qt::LeftButton, Qt::NoModifier, over(QStringLiteral("remote.md")));
+      QTest::mouseMove(window_, over(QStringLiteral("sidebar.md")));
+      QTest::mouseMove(window_, over(QStringLiteral("assets")));
+      QTRY_VERIFY(overlay->property("dragging").toBool());
+      QCOMPARE(overlay->property("dragCount").toInt(), 1);
+      QCOMPARE(overlay->property("dropRow").toInt(), listed(QStringLiteral("assets")));
+      shoot(QStringLiteral("explorer-drag"));
+      QTest::mouseRelease(window_, Qt::LeftButton, Qt::NoModifier, over(QStringLiteral("assets")));
+      QVERIFY(!overlay->property("dragging").toBool());
+      QCOMPARE(explorer->line().value(QStringLiteral("edits")).toInt(), 1);
+      QVERIFY(QFile::exists(root + QStringLiteral("/docs/remote.md")));
+      press(QStringLiteral("u"));
+      QCOMPARE(explorer->line().value(QStringLiteral("edits")).toInt(), 0);
+
+      // Taken past the window's edge the row is another program's: the explorer drags it no
+      // more, changes nothing, and what it gives of it is the file's path and its URL.
+      {
+        const QPoint past_edge{-12, over(QStringLiteral("sidebar.md")).y()};
+
+        QTest::mousePress(window_, Qt::LeftButton, Qt::NoModifier, over(QStringLiteral("remote.md")));
+        QTest::mouseMove(window_, over(QStringLiteral("sidebar.md")));
+        QTRY_VERIFY(overlay->property("dragging").toBool());
+        QTest::mouseMove(window_, past_edge);
+        QTRY_VERIFY(!overlay->property("dragging").toBool());
+
+        const auto outside = explorer->draggedData();
+
+        QCOMPARE(outside->text(), root + QStringLiteral("/docs/remote.md"));
+        QCOMPARE(outside->urls(), QList<QUrl>{QUrl::fromLocalFile(root + QStringLiteral("/docs/remote.md"))});
+        QTest::mouseRelease(window_, Qt::LeftButton, Qt::NoModifier, past_edge);
+        QCOMPARE(explorer->line().value(QStringLiteral("edits")).toInt(), 0);
+        QCOMPARE(explorer->line().value(QStringLiteral("mode")).toString(), QStringLiteral("normal"));
+      }
+
+      // A file dragged in from outside the window is held as rows dragged are, and let go on a
+      // directory it is a copy to write: nothing is written by the drop.
+      {
+        QMimeData files;
+
+        files.setUrls({QUrl::fromLocalFile(root + QStringLiteral("/justfile"))});
+
+        const auto target = over(QStringLiteral("docs"));
+        QDragEnterEvent enter{target, Qt::CopyAction, &files, Qt::LeftButton, Qt::NoModifier};
+
+        QCoreApplication::sendEvent(window_, &enter);
+
+        QDragMoveEvent move{target, Qt::CopyAction, &files, Qt::LeftButton, Qt::NoModifier};
+
+        QCoreApplication::sendEvent(window_, &move);
+        QTRY_VERIFY(overlay->property("draggingIn").toBool());
+        QCOMPARE(overlay->property("dragCount").toInt(), 1);
+        QVERIFY(listed(QStringLiteral("docs")) >= 0);
+        QCOMPARE(overlay->property("dropRow").toInt(), listed(QStringLiteral("docs")));
+
+        QDropEvent let_go{QPointF{target}, Qt::CopyAction, &files, Qt::LeftButton, Qt::NoModifier};
+
+        QCoreApplication::sendEvent(window_, &let_go);
+        QVERIFY(!overlay->property("dragging").toBool());
+        QCOMPARE(explorer->line().value(QStringLiteral("edits")).toInt(), 1);
+        QVERIFY(explorer->line().value(QStringLiteral("message")).toString().startsWith(QStringLiteral("1 to copy into docs")));
+        QVERIFY(!QFile::exists(root + QStringLiteral("/docs/justfile")));
+        press(QStringLiteral("u"));
+        QCOMPARE(explorer->line().value(QStringLiteral("edits")).toInt(), 0);
+        // What is no file of this machine is not taken.
+        QCOMPARE(explorer->grabFiles({QUrl{QStringLiteral("https://example.invalid/page")}}), 0);
+        QVERIFY(explorer->line().value(QStringLiteral("message")).toString().startsWith(QStringLiteral("Only files of this machine")));
+      }
+
+      // The changes lens lists what git says; a filter narrows a listing; `q` closes the explorer.
+      explorer->run(QStringLiteral("changes"));
+      QTRY_VERIFY_WITH_TIMEOUT(!named(QStringLiteral("usage.md")).isEmpty(), runtime_wait_ms);
+      QCOMPARE(record(0).value(QStringLiteral("kind")).toString(), QStringLiteral("header"));
+      shoot(QStringLiteral("explorer-changes"));
+      // The rows are laid by their own heights: a heading is taller than a file and a line of a
+      // diff shorter. The pointer finds a row where it is drawn, below a diff that is unfolded.
+      {
+        constexpr int entry_tall = 2200;
+        constexpr int header_tall = 2575;
+        constexpr int diff_tall = 1705;
+        const auto shown = [&](const QString& name) {
+          return listed(name) - window().value(QStringLiteral("top")).toInt();
+        };
+
+        const auto before = selected();
+
+        QCOMPARE(record(0).value(QStringLiteral("tall")).toInt(), header_tall);
+        QCOMPARE(record(1).value(QStringLiteral("offset")).toInt(), header_tall);
+        QCOMPARE(record(1).value(QStringLiteral("tall")).toInt(), entry_tall);
+        QTest::mouseClick(window_, Qt::LeftButton, Qt::NoModifier, over(QStringLiteral("usage.md")));
+        QTRY_COMPARE(selected(), QStringLiteral("usage.md"));
+        press(QStringLiteral("="));
+        QTRY_COMPARE_WITH_TIMEOUT(record(shown(QStringLiteral("usage.md")) + 1).value(QStringLiteral("kind")).toString(), QStringLiteral("diff"), runtime_wait_ms);
+
+        const auto first_line = shown(QStringLiteral("usage.md")) + 1;
+        auto lines = 0;
+
+        while (record(first_line + lines).value(QStringLiteral("kind")).toString() == QStringLiteral("diff")) {
+          QCOMPARE(record(first_line + lines).value(QStringLiteral("tall")).toInt(), diff_tall);
+          ++lines;
+        }
+
+        QVERIFY(lines > 3);
+        QCOMPARE(record(first_line + lines).value(QStringLiteral("offset")).toInt(), record(first_line).value(QStringLiteral("offset")).toInt() + (lines * diff_tall));
+        shoot(QStringLiteral("explorer-diff"));
+        QTest::qWait(apart_ms);
+        QTest::mouseClick(window_, Qt::LeftButton, Qt::NoModifier, over(QStringLiteral("notes.lua")));
+        QTRY_COMPARE(selected(), QStringLiteral("notes.lua"));
+        QTest::qWait(apart_ms);
+        QTest::mouseClick(window_, Qt::LeftButton, Qt::NoModifier, over(QStringLiteral("usage.md")));
+        QTRY_COMPARE(selected(), QStringLiteral("usage.md"));
+        press(QStringLiteral("="));
+        QTRY_VERIFY(record(shown(QStringLiteral("usage.md")) + 1).value(QStringLiteral("kind")).toString() != QStringLiteral("diff"));
+        QTest::qWait(apart_ms);
+        QTest::mouseClick(window_, Qt::LeftButton, Qt::NoModifier, over(before));
+        QTRY_COMPARE(selected(), before);
+      }
+
+      // The lens of touches lists the file the agent touched, with how and who.
+      explorer->run(QStringLiteral("touched"));
+      QTRY_VERIFY_WITH_TIMEOUT(!named(QStringLiteral("usage.md")).isEmpty(), runtime_wait_ms);
+      QCOMPARE(named(QStringLiteral("usage.md")).value(QStringLiteral("verb")).toString(), QStringLiteral("Edit"));
+      QCOMPARE(named(QStringLiteral("usage.md")).value(QStringLiteral("lead")).toString(), QStringLiteral("docs/"));
+      QVERIFY(!named(QStringLiteral("usage.md")).value(QStringLiteral("ago")).toString().isEmpty());
+      shoot(QStringLiteral("explorer-touched"));
+      explorer->run(QStringLiteral("tree"));
+      // The tree ends with what its root leaves out, on a row taller than a file's, and the list
+      // ends where that row ends.
+      {
+        constexpr int note_tall = 2850;
+        const auto before = selected();
+
+        press(QStringLiteral("G"));
+
+        const auto last = record(explorer->rows(0)->rowCount() - 1);
+
+        QCOMPARE(last.value(QStringLiteral("kind")).toString(), QStringLiteral("note"));
+        QCOMPARE(last.value(QStringLiteral("tall")).toInt(), note_tall);
+        QVERIFY(last.value(QStringLiteral("offset")).toInt() + note_tall <= window().value(QStringLiteral("room")).toInt());
+        QCOMPARE(window().value(QStringLiteral("extent")).toInt() - window().value(QStringLiteral("above")).toInt(), last.value(QStringLiteral("offset")).toInt() + note_tall);
+        shoot(QStringLiteral("explorer-end"));
+
+        // In a window too short for it, the preview of a file's text is reached with the wheel,
+        // and another selection starts at its top.
+        {
+          constexpr int short_height = 560;
+          constexpr int wheel_notch = 120;
+          const auto full = window_->size();
+          const auto room = window().value(QStringLiteral("room")).toInt();
+          const auto* preview = test::visualItems(*window_->contentItem(), QStringLiteral("explorerPreview")).value(0);
+
+          QVERIFY(preview != nullptr);
+          QCOMPARE(preview->property("contentY").toReal(), 0.0);
+          window_->resize(full.width(), short_height);
+          QTRY_VERIFY(preview->property("contentHeight").toReal() > preview->height());
+
+          const auto place = preview->mapToScene({preview->width() / 2, preview->height() / 2});
+          QWheelEvent wheel{place, window_->mapToGlobal(place.toPoint()), {}, {0, -wheel_notch}, Qt::NoButton, Qt::NoModifier, Qt::NoScrollPhase, false};
+
+          QCoreApplication::sendEvent(window_, &wheel);
+          QTRY_VERIFY(preview->property("contentY").toReal() > 0);
+          shoot(QStringLiteral("explorer-preview-scrolled"));
+          press(QStringLiteral("k"));
+          QTRY_COMPARE(preview->property("contentY").toReal(), 0.0);
+          window_->resize(full);
+          QTRY_COMPARE(window().value(QStringLiteral("room")).toInt(), room);
+        }
+
+        press(QStringLiteral("gg"));
+        for (int step = 0; step < 60 && selected() != before; ++step) {
+          press(QStringLiteral("j"));
+        }
+
+        QCOMPARE(selected(), before);
+      }
+
+      // The filter asks the runtime for every path below the root: a file of a directory the
+      // window never unfolded shows, with the path that leads to it.
+      press(QStringLiteral("/"));
+      explorer->typed(QStringLiteral("base.cpp"));
+      QTRY_VERIFY_WITH_TIMEOUT(!named(QStringLiteral("base.cppm")).isEmpty(), runtime_wait_ms);
+      QCOMPARE(named(QStringLiteral("base.cppm")).value(QStringLiteral("kind")).toString(), QStringLiteral("match"));
+      QCOMPARE(named(QStringLiteral("base.cppm")).value(QStringLiteral("lead")).toString(), QStringLiteral("lib/base/"));
+      QVERIFY(named(QStringLiteral("agents.md")).isEmpty());
+      QTRY_VERIFY_WITH_TIMEOUT(window().value(QStringLiteral("filter")).toString().startsWith(QStringLiteral("/base.cpp 1")), runtime_wait_ms);
+      QTRY_COMPARE_WITH_TIMEOUT(explorer->preview().value(QStringLiteral("name")).toString(), QStringLiteral("base.cppm"), runtime_wait_ms);
+      // The picture shows the filter in its field, as when it is typed there.
+      if (auto* field = window_->findChild<QQuickItem*>(QStringLiteral("explorerCommand"))) {
+        field->setProperty("text", QStringLiteral("base.cpp"));
+      }
+
+      shoot(QStringLiteral("explorer-filter"));
+      explorer->typed(QStringLiteral("USAGE"));
+      QTRY_VERIFY_WITH_TIMEOUT(!named(QStringLiteral("usage.md")).isEmpty() && named(QStringLiteral("base.cppm")).isEmpty(), runtime_wait_ms);
+      // While the filter is typed, the arrows and Control with n and p move among what it found.
+      explorer->typed(QStringLiteral("md"));
+      QTRY_VERIFY_WITH_TIMEOUT(explorer->rows(0)->rowCount() > 2 && !selected().isEmpty(), runtime_wait_ms);
+      {
+        const auto first = selected();
+
+        QTest::keyClick(window_, Qt::Key_Down);
+        QTRY_VERIFY(selected() != first);
+        QTest::keyClick(window_, Qt::Key_P, NativeKeyAdapter::control_modifier);
+        QTRY_COMPARE(selected(), first);
+        QCOMPARE(explorer->line().value(QStringLiteral("mode")).toString(), QStringLiteral("search"));
+      }
+
+      explorer->cancel();
+      QTRY_VERIFY_WITH_TIMEOUT(!named(QStringLiteral("agents.md")).isEmpty(), runtime_wait_ms);
+
+      // `<Tab>` completes the directory a command goes to.
+      press(QStringLiteral(":"));
+      explorer->complete(QStringLiteral("e exa"));
+      QTRY_COMPARE_WITH_TIMEOUT(explorer->line().value(QStringLiteral("completion")).toString(), QStringLiteral("e examples/"), runtime_wait_ms);
+      explorer->cancel();
+      press(QStringLiteral("?"));
+      shoot(QStringLiteral("explorer-help"));
+      press(QStringLiteral("q"));
+
+      // `<C-w>T` stands the explorer as a pane of the tab, which the runtime makes beside the
+      // pane that had the focus: it is drawn in the room the tab's layout gives that pane.
+      const auto shell = firstPane()->id;
+      const auto focusedPane = [&] {
+        return focusedPaneId();
+      };
+      // The frame of the pane the explorer stands as, in the window: the rightmost of the two.
+      const auto explorerFrame = [&] {
+        QRectF frame;
+
+        for (const auto* item : test::visualItems(*window_->contentItem(), QStringLiteral("paneFrame"))) {
+          const QRectF candidate{item->mapToScene({0, 0}), QSizeF{item->width(), item->height()}};
+          if (item->isVisible() && candidate.left() > frame.left()) {
+            frame = candidate;
+          }
+        }
+
+        return frame;
+      };
+
+      press(QStringLiteral("gg"));
+
+      const auto before_pin = selected();
+
+      explorer->run(QStringLiteral("pin"));
+      QTRY_VERIFY_WITH_TIMEOUT(explorer->pinned(), runtime_wait_ms);
+      QVERIFY(explorer->focused() && explorer->showing());
+      QCOMPARE(selected(), before_pin);
+      QCOMPARE(client_->dialogs()->kind(), Store::Dialog::explorer);
+      QTRY_COMPARE(client_->panes()->rows()->rowCount(), 2);
+
+      const auto stood = focusedPane();
+
+      QVERIFY(stood != 0 && stood != shell);
+      // Once the panes are at rest, the explorer is inside the frame of its own.
+      QTRY_VERIFY(explorerFrame().width() > 0 && explorerFrame().adjusted(-1, -1, 1, 1).contains(QRectF{overlay->mapToScene({0, 0}), QSizeF{overlay->width(), overlay->height()}}));
+      QTRY_VERIFY(overlay->width() > explorerFrame().width() * 0.8 && overlay->height() > explorerFrame().height() * 0.8);
+      QVERIFY(!explorer->preview().value(QStringLiteral("shown")).toBool() || overlay->property("previewWidth").toReal() == 0);
+      shoot(QStringLiteral("explorer-pinned"));
+
+      // The key that opened it returns the keys to the pane: what is typed then is the pane's.
+      client_->commands()->execute(window_actions::Action::explorer);
+      QTRY_VERIFY(explorer->showing() && !explorer->focused());
+      QCOMPARE(focusedPane(), shell);
+      QCOMPARE(client_->dialogs()->kind(), Store::Dialog::none);
+
+      // The command line sees it as a pane of the tab, and is told it is of another kind when it
+      // asks for what only a terminal has.
+      {
+        QProcess listed;
+        QProcess read;
+
+        listed.start(runtime_.program(), {QStringLiteral("pane"), QStringLiteral("get"), QString::number(stood), QStringLiteral("--socket"), socket_});
+        QVERIFY(listed.waitForFinished(runtime_wait_ms));
+        QVERIFY2(listed.exitStatus() == QProcess::NormalExit && listed.exitCode() == 0, listed.readAllStandardError().constData());
+        read.start(runtime_.program(), {QStringLiteral("pane"), QStringLiteral("read"), QString::number(stood), QStringLiteral("--socket"), socket_});
+        QVERIFY(read.waitForFinished(runtime_wait_ms));
+        QVERIFY(read.exitStatus() == QProcess::NormalExit && read.exitCode() == 1);
+        QVERIFY(read.readAllStandardError().contains("of another kind"));
+      }
+
+      const auto at_rest = selected();
+
+      QTRY_VERIFY(window_->activeFocusItem() != nullptr && !overlay->isAncestorOf(window_->activeFocusItem()));
+      QTest::keyClick(window_, Qt::Key_J);
+      QCOMPARE(selected(), at_rest);
+      shoot(QStringLiteral("explorer-pinned-unfocused"));
+
+      // The key that moves the focus to the right enters it, as it enters any pane; the one to
+      // the left, from its first window, returns to the pane.
+      client_->commands()->execute(window_actions::Action::focus_right);
+      QTRY_VERIFY(explorer->focused());
+      QCOMPARE(focusedPane(), stood);
+      QCOMPARE(client_->dialogs()->kind(), Store::Dialog::explorer);
+      press(QStringLiteral("j"));
+      QVERIFY(selected() != at_rest);
+      client_->commands()->execute(window_actions::Action::focus_left);
+      QTRY_VERIFY(!explorer->focused() && explorer->showing());
+      QCOMPARE(focusedPane(), shell);
+
+      // Rows dragged out of it onto the pane are given to the pane, which is marked meanwhile.
+      const QQuickItem* pane_frame = nullptr;
+
+      for (const auto* item : test::visualItems(*window_->contentItem(), QStringLiteral("paneFrame"))) {
+        if (item->isVisible() && (pane_frame == nullptr || item->mapToScene({0, 0}).x() < pane_frame->mapToScene({0, 0}).x())) {
+          pane_frame = item;
+        }
+      }
+
+      QVERIFY(pane_frame != nullptr);
+
+      const auto on_pane = pane_frame->mapToScene({pane_frame->width() / 2, pane_frame->height() / 2}).toPoint();
+
+      QTest::mousePress(window_, Qt::LeftButton, Qt::NoModifier, over(QStringLiteral("cmake")));
+      QTRY_VERIFY(explorer->focused());
+      QCOMPARE(focusedPane(), stood);
+      QTest::mouseMove(window_, over(QStringLiteral("dev")));
+      QTest::mouseMove(window_, on_pane);
+      QTRY_VERIFY(overlay->property("dragging").toBool());
+      QCOMPARE(overlay->property("dropPane").toString(), QString::number(shell));
+      shoot(QStringLiteral("explorer-pinned-drop"));
+      QTest::mouseRelease(window_, Qt::LeftButton, Qt::NoModifier, on_pane);
+      QVERIFY(!overlay->property("dragging").toBool() && explorer->showing());
+      QCOMPARE(explorer->line().value(QStringLiteral("edits")).toInt(), 0);
+      // What the pane was given, and the key typed before it, stay on its line: the line is
+      // cleared, so the agent ends with its input when this case does.
+      client_->terminals()->input(shell, QByteArrayLiteral("\x15"));
+
+      // Its windows split inside its pane, and the key that moves the focus goes through them
+      // before it leaves the pane. The agent that was mentioned has the focus: the explorer's
+      // pane takes it back.
+      client_->commands()->execute(window_actions::Action::focus_pane, QString::number(stood));
+      QTRY_VERIFY(explorer->focused());
+      press(QStringLiteral("<C-w>v"));
+      QCOMPARE(explorer->windows().size(), 2);
+      shoot(QStringLiteral("explorer-pinned-two"));
+      client_->commands()->execute(window_actions::Action::focus_left);
+      QVERIFY(explorer->focused());
+      QCOMPARE(focusedPane(), stood);
+      press(QStringLiteral("<C-w>l"));
+      press(QStringLiteral("<C-w>q"));
+      QCOMPARE(explorer->windows().size(), 1);
+
+      // Another tab shows: the explorer is of the tab it stands in, and is there on the way back
+      // with the windows it had, which its runtime kept.
+      const auto root_before = explorer->windows().value(0).toMap().value(QStringLiteral("root")).toString();
+
+      client_->commands()->execute(window_actions::Action::new_tab);
+      QTRY_VERIFY_WITH_TIMEOUT(!explorer->showing() && terminalReady(), runtime_wait_ms);
+      QCOMPARE(client_->dialogs()->kind(), Store::Dialog::none);
+      client_->commands()->execute(window_actions::Action::close_tab);
+      QTRY_VERIFY_WITH_TIMEOUT(explorer->showing() && explorer->pinned(), runtime_wait_ms);
+      QCOMPARE(explorer->windows().value(0).toMap().value(QStringLiteral("root")).toString(), root_before);
+      client_->commands()->execute(window_actions::Action::focus_pane, QString::number(stood));
+      QTRY_VERIFY(explorer->focused());
+
+      // Over the panes again its pane closes, and the pane that was split has the tab whole.
+      explorer->run(QStringLiteral("pin"));
+      QVERIFY(!explorer->pinned() && explorer->focused() && explorer->showing());
+      QTRY_COMPARE_WITH_TIMEOUT(client_->panes()->rows()->rowCount(), 1, runtime_wait_ms);
+      QVERIFY(explorer->showing() && !explorer->pinned());
+      press(QStringLiteral("q"));
+      QVERIFY(!explorer->showing());
+      QCOMPARE(client_->dialogs()->kind(), Store::Dialog::none);
+      QCOMPARE(client_->status()->error(), QString{});
+      QCOMPARE(errors_, QString{});
+    }
+
     // A program in a pane hands the window a document: it covers the pane while the program
     // runs, scrolls by key, and goes away when the program quits.
     Q_SLOT void nativeDocumentCoversThePane() {
@@ -2211,7 +3185,8 @@ return {api_version = 2, client = {
       // Where an item of the editor is in the window; nowhere while it does not show.
       const auto place = [&](const QString& name, bool parent = false) {
         const auto items = test::visualItems(*window_->contentItem(), name);
-        const auto* item = items.empty() ? nullptr : parent ? items.front()->parentItem() : items.front();
+        const auto* item = items.empty() ? nullptr : parent ? items.front()->parentItem()
+                                                            : items.front();
 
         return item == nullptr ? QRectF{} : item->mapRectToScene(item->boundingRect());
       };
@@ -4568,7 +5543,7 @@ return {api_version=2, client={keybindings={
     Q_SLOT void paletteActionsUseOriginalLabelsAndReorderExistingTabs() {
       const auto commands = client_->commands()->list();
 
-      QCOMPARE(commands.size(), qsizetype{46});
+      QCOMPARE(commands.size(), qsizetype{47});
       QCOMPARE(commands.front().toMap().value(QStringLiteral("label")).toString(), QStringLiteral("Split right"));
       const QStringList tail{QStringLiteral("Copy process command"), QStringLiteral("Go to process pane"), QStringLiteral("Review process stack"), QStringLiteral("Review process open files"), QStringLiteral("Review process logs")};
 
@@ -10765,6 +11740,20 @@ return {api_version=2, client={keybindings={
       }
 
       return nullptr;
+    }
+
+    // The pane of the tab that shows that has the focus, by its number; 0 when none does.
+    [[nodiscard]] std::uint64_t focusedPaneId() const {
+      auto* rows = client_->panes()->rows();
+
+      for (int row = 0; row < rows->rowCount(); ++row) {
+        const auto record = rows->data(rows->index(row, 0), ListModel::record_role).toMap();
+        if (record.value(QStringLiteral("focused")).toBool()) {
+          return record.value(QStringLiteral("key")).toString().toULongLong();
+        }
+      }
+
+      return 0;
     }
 
     [[nodiscard]] const application::Pane<telar::Memory>* firstPane() const {

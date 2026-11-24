@@ -90,6 +90,9 @@ export {
       // An editor's lanes: its frames, and what every pane says of its program.
       bool prepare(Output& output, Attachment& attachment, PaneRef<NvimBody> pane, DeliveryLane lane);
 
+      // An explorer pane has what every pane has to say and nothing of its own: the window draws it.
+      bool prepare(Output& output, Attachment& attachment, PaneRef<ExplorerBody> pane, DeliveryLane lane);
+
       // What the client lacks of an editor's screen, as the grids of one frame and its end.
       bool editorFrame(Output& output, Attachment& attachment, PaneRef<const NvimBody> pane);
 
@@ -209,6 +212,12 @@ export {
         for (const auto* pane : model_.panes.items()) {
           if (pane != nullptr && pane->kind() != PaneKind::terminal && matchesSnapshot(*pane, request.location)) {
             send(PaneKindNotice{.pane_id = pane->id, .kind = pane->kind()});
+            ExplorerScratch scratch; // NOLINT(cppcoreguidelines-pro-type-member-init): the decoder writes the windows it hands back, so zeroing them first would be waste
+
+            // And an explorer, where its windows are.
+            if (const auto kept = explorerKept(*pane, scratch)) {
+              send(*kept);
+            }
           }
         }
 

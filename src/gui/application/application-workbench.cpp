@@ -42,6 +42,10 @@ namespace telar::gui::application::workbench {
       // Where an editor's cursor starts in its first file, counted from one.
       std::uint32_t line = 0;
       std::uint32_t column = 0;
+      // Where a terminal starts, instead of where the pane it splits works.
+      std::string_view directory;
+      // The windows of an explorer, when the pane is one.
+      const ExplorerLayout* explorer = nullptr;
     };
 
     // Splits pane `pane_id` along `axis`, the new pane being `added`.
@@ -71,9 +75,16 @@ namespace telar::gui::application::workbench {
         launch.arguments = *added.arguments;
       }
 
+      if (!added.directory.empty()) {
+        launch.cwd = added.directory;
+        launch.cwd_source = 0;
+      }
+
       try {
         session.link.send(PaneResize{.pane_id = pane_id, .size = sizes->existing});
-        if (added.editor) {
+        if (added.explorer != nullptr) {
+          session.link.send(CreateExplorerPane{.request_id = request_id, .location = tab->location, .size = sizes->added, .layout = *added.explorer});
+        } else if (added.editor) {
           // The editor starts where the pane it splits works.
           session.link.send(CreateNvimPane{.request_id = request_id, .location = tab->location, .size = sizes->added, .cwd = pane->cwd, .files = added.files, .line = added.line, .column = added.column});
         } else {
@@ -278,13 +289,18 @@ namespace telar::gui::application::workbench {
       const auto* const agent = std::ranges::find_if(agents, [&](const auto& entry) {
         return entry.pane_id == pane_id;
       });
-      if (agent == agents.end()) {
+
+      // A pane the session never showed is one its runtime lists: an agent's, or any other.
+      const auto listed = session.paneList();
+      const auto known = std::ranges::find(listed, pane_id, &ListedPane::pane_id);
+
+      if (agent == agents.end() && known == listed.end()) {
         return;
       }
 
-      // The agent's row is read before the pane table can grow.
-      const auto location = agent->location;
-      const auto generation = agent->pane_generation;
+      // The row is read before the pane table can grow.
+      const auto location = agent != agents.end() ? agent->location : known->location;
+      const auto generation = agent != agents.end() ? agent->pane_generation : known->pane_generation;
 
       pane = &Access::ensurePane(session, pane_id, location);
       pane->generation = generation;
@@ -400,6 +416,28 @@ namespace telar::gui::application::workbench {
     return requestSplit(session, focused, axis, {});
   }
 
+  bool splitAt(Session& session, ClientLayoutAxis axis, std::string_view directory) {
+    const auto* tab = activeTab(session.tabs, session.active_tab);
+    if (tab == nullptr || !directory.starts_with('/')) {
+      return false;
+    }
+
+    const auto focused = tab->focused_pane;
+
+    return requestSplit(session, focused, axis, {.directory = directory});
+  }
+
+  bool splitExplorer(Session& session, const ExplorerLayout& layout) {
+    const auto* tab = activeTab(session.tabs, session.active_tab);
+    if (tab == nullptr || !session.speaks(ClientTag::create_explorer_pane)) {
+      return false;
+    }
+
+    const auto focused = tab->focused_pane;
+
+    return requestSplit(session, focused, ClientLayoutAxis::horizontal, {.explorer = &layout});
+  }
+
   bool splitEditor(Session& session, ClientLayoutAxis axis, std::span<const std::string_view> files, EditorStart start) {
     const auto* tab = activeTab(session.tabs, session.active_tab);
     if (tab == nullptr || !session.speaks(ClientTag::create_nvim_pane) || files.size() > max_nvim_files) {
@@ -418,6 +456,12 @@ namespace telar::gui::application::workbench {
     }
 
     return requestTab(session, {}, {.editor = true, .files = files});
+  }
+
+  bool closing(const Session& session, std::uint64_t pane_id) noexcept {
+    return std::ranges::any_of(session.link.requests(), [&](const auto& request) {
+      return request.kind == RequestKind::close_pane && request.pane_id == pane_id;
+    });
   }
 
   bool closePane(Session& session, std::uint64_t pane_id) {

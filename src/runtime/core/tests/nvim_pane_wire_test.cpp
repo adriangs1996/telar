@@ -11,6 +11,7 @@ import telar.runtime.core.tests.runtime_host;
 import telar.wire.clipboard;
 import telar.wire.content;
 import telar.wire.editor;
+import telar.wire.files;
 import telar.wire.layout;
 import telar.wire.nvim;
 import telar.wire.pane_io;
@@ -143,6 +144,29 @@ namespace {
           return;
         }
 
+        // The files its buffers show, and `:Telar explore` on one of them.
+        if (keys == "<F10>") {
+          tell("telar_files", 1, [](msgpack::Writer& writer) {
+            writer.array(2);
+            writer.array(3);
+            writer.string("/work/main.cpp");
+            writer.boolean(true);
+            writer.boolean(true);
+            writer.array(3);
+            writer.string("/work/README.md");
+            writer.boolean(false);
+            writer.boolean(false);
+          });
+          return;
+        }
+
+        if (keys == "<F11>") {
+          tell("telar_explore", 1, [](msgpack::Writer& writer) {
+            writer.string("/work/main.cpp");
+          });
+          return;
+        }
+
         typed_ += keys;
         draw("typed", false);
       } else if (method == "nvim_exec_lua") {
@@ -206,6 +230,12 @@ namespace {
 
         static_cast<void>(reader.unsignedInteger(id) && reader.boolean(accepted) && reader.unsignedInteger(index));
         draw(accepted ? "chose " + std::to_string(index) : std::string{"dismissed"}, false);
+      } else if (source.starts_with("__telar_moved")) {
+        // The buffer of a file that moved is given its new name: the stand-in says which.
+        const std::filesystem::path from{reader.string().valueOr("")};
+        const std::filesystem::path target{reader.string().valueOr("")};
+
+        draw("moved " + from.filename().string() + ">" + target.filename().string() + (std::filesystem::weakly_canonical(from.parent_path()) == std::filesystem::weakly_canonical(target.parent_path()) ? "" : " elsewhere"), false);
       } else if (source.starts_with("__telar_theme")) {
         ++themes_;
       } else if (source.starts_with("__telar_navigate")) {
@@ -404,6 +434,9 @@ namespace {
     std::uint16_t cursor_row = 0;
     std::uint16_t cursor_column = 0;
     std::size_t frames = 0;
+    // The files its buffers show, as the frames said them: each path, with `+` after one whose
+    // buffer has changes not written.
+    std::string files;
 
     std::string row(std::size_t index) const {
       std::string text;
@@ -439,10 +472,19 @@ namespace {
     void next(ProtocolPeer& peer) {
       peer.deadline(std::chrono::seconds{10});
       for (;;) {
-        const auto message = peer.receiveAny<NvimGrid, NvimFrame>();
+        const auto message = peer.receiveAny<NvimGrid, NvimOpenFiles, NvimFrame>();
         if (const auto* grid = std::get_if<NvimGrid>(&message)) {
           if (grid->pane_id == pane) {
             apply(*grid);
+          }
+
+          continue;
+        }
+
+        if (const auto* shown = std::get_if<NvimOpenFiles>(&message)) {
+          files.clear();
+          for (const auto& file : shown->files) {
+            files += std::string{file.path} + (file.modified ? "+ " : " ");
           }
 
           continue;
@@ -686,6 +728,47 @@ namespace {
     check(all.matches.size() == 2 && all.truncated && all.matches[0].path == "docs/editor.md", "without a query, the most recently used first, up to the limit");
     peer.send(NvimMenuSelect{.pane_id = editor.pane, .item = 2, .accept = true});
     editor.until(peer, "picked 2");
+  }
+
+  // The editor says which files its buffers show and asks for the explorer on one; and a file
+  // an explorer moves is followed by the editor that may show it, back too when the move is
+  // undone.
+  void testEditorAndExplorerKnowOfEachOther() {
+    EditorHost editor_host;
+    ProtocolPeer peer{editor_host.host->socket()};
+    const auto terminal = openTerminal(peer);
+    auto editor = openEditor(peer, terminal);
+    const runtime::TemporaryDirectory directory{"/tmp/telar-moved-XXXXXX"};
+    const std::string from = std::string{directory.path()} + "/draft.md";
+    const std::string target = std::string{directory.path()} + "/final.md";
+
+    std::ofstream{from} << "text";
+    editor.until(peer, "ready");
+    peer.deadline(std::chrono::seconds{10});
+    peer.send(NvimInput{.pane_id = editor.pane, .keys = bytes("<F10>")});
+
+    // They reach the client with a frame, which it applies as any other.
+    while (editor.files.empty()) {
+      editor.next(peer);
+    }
+
+    check(editor.files == "/work/main.cpp+ /work/README.md ", "the files of its buffers, and which has changes not written");
+    peer.send(NvimInput{.pane_id = editor.pane, .keys = bytes("<F11>")});
+
+    const auto explore = peer.receive<NvimExplore>();
+
+    check(explore.pane_id == editor.pane && explore.path == "/work/main.cpp", "`:Telar explore` reaches who is typing in the editor");
+
+    const ds::Array<FileOperation, 1> operations{FileOperation{.kind = FileOperationKind::move, .source = from, .target = target}};
+    const auto changed = peer.exchange<FilesChanged>(ChangeFiles{.request_id = 40, .operations = operations.view()});
+
+    check(changed.results.size() == 1 && changed.results[0].outcome == FileOutcome::done && std::filesystem::exists(target));
+    editor.until(peer, "moved draft.md>final.md");
+
+    const auto undone = peer.exchange<FilesChanged>(UndoFileChanges{.request_id = 41});
+
+    check(undone.results.size() == 1 && undone.results[0].outcome == FileOutcome::done && std::filesystem::exists(from));
+    editor.until(peer, "moved final.md>draft.md");
   }
 
   // A query asked while an older one waits for Neovim's answer is answered, whatever order the
@@ -936,6 +1019,7 @@ namespace {
   const telar::testing::Case case_text{"nvim_pane_wire.editor_text_is_read", testEditorTextIsRead};
   const telar::testing::Case case_configuration{"nvim_pane_wire.editor_starts_on_telars_configuration", testEditorStartsOnTelarsConfiguration};
   const telar::testing::Case case_tells{"nvim_pane_wire.editor_tells_its_client", testEditorTellsItsClient};
+  const telar::testing::Case case_explorer{"nvim_pane_wire.editor_and_explorer_know_of_each_other", testEditorAndExplorerKnowOfEachOther};
   const telar::testing::Case case_newest{"nvim_pane_wire.newest_buffers_query_is_answered", testNewestBuffersQueryIsAnswered};
   const telar::testing::Case case_policy{"nvim_pane_wire.yank_follows_the_clipboard_policy", testYankFollowsTheClipboardPolicy};
   const telar::testing::Case case_theme{"nvim_pane_wire.editor_takes_the_windows_theme", testEditorTakesTheWindowsTheme};

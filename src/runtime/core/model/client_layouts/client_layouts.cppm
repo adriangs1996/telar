@@ -35,6 +35,7 @@ import telar.wire.vocabulary;
 import telar.wire.clipboard;
 import telar.wire.editor;
 import telar.wire.layout;
+import telar.wire.files;
 import telar.wire.pane_io;
 import telar.wire.worktrees;
 import telar.platform.primitives;
@@ -482,6 +483,29 @@ export {
       ds::Option<BufferQuery> buffer_query;
     };
 
+    // What a pane that is the explorer of a window has of its own: the windows the explorer is
+    // split into, as the last window that showed it gave them. It runs no program, so it reads
+    // nothing and nothing is written to it: a window draws it from what it knows of the files.
+    class ExplorerBody {
+    public:
+      static constexpr PaneKind pane_kind = PaneKind::explorer;
+
+      explicit ExplorerBody(ConcurrentMemory& memory);
+
+      // Keeps the windows a client gives. Ones that name no window, or a current one that is
+      // none of them, are refused, and what was kept stays.
+      void keep(const ExplorerLayout& layout);
+
+      // What is kept, as a KeepExplorer encodes it; empty before a client gave any.
+      [[nodiscard]] std::span<const Byte> kept() const noexcept;
+
+      // It has no program to ask.
+      void endProgram() noexcept;
+
+    private:
+      ds::Vec<Byte, ConcurrentMemory> kept_;
+    };
+
     // A pane: what every pane has, whatever its kind, which is where it is, the process it
     // started and what the runtime reports of both, and `body`, the state of the kind it is. Code
     // that needs that state asks for the body by name, `as<TerminalBody>()`, and gets none from a
@@ -493,6 +517,14 @@ export {
 
       // An editor, whose Neovim `command` is.
       explicit Pane(ConcurrentMemory& memory, std::uint64_t identity, TabLocation tab, Command<ConcurrentMemory>& command, TerminalSize size);
+
+      // An explorer, which is drawn at `size` and whose windows start from `directory`.
+      struct Explorer {
+        std::string_view directory;
+        TerminalSize size{};
+      };
+
+      explicit Pane(ConcurrentMemory& memory, std::uint64_t identity, TabLocation tab, Explorer explorer);
 
       ~Pane() = default;
 
@@ -566,7 +598,7 @@ export {
 
       // The state of the kind the pane is. Last, so that a body is made in a pane whose every
       // other member is.
-      std::variant<TerminalBody, NvimBody> body;
+      std::variant<TerminalBody, NvimBody, ExplorerBody> body;
     };
 
     // A pane a request works on as one kind: what every pane has and the state of that kind. A
@@ -589,26 +621,36 @@ export {
     // add one.
     template <typename Visitor>
     TBC_GENERIC inline void visitPane(Pane& pane, Visitor&& visitor) {
-      static_assert(std::variant_size_v<decltype(pane.body)> == 2, "a new kind of pane is visited here");
+      static_assert(std::variant_size_v<decltype(pane.body)> == 3, "a new kind of pane is visited here");
 
       if (auto* terminal = std::get_if<TerminalBody>(&pane.body)) {
         std::forward<Visitor>(visitor)(*terminal);
         return;
       }
 
-      std::forward<Visitor>(visitor)(*std::get_if<NvimBody>(&pane.body));
+      if (auto* editor = std::get_if<NvimBody>(&pane.body)) {
+        std::forward<Visitor>(visitor)(*editor);
+        return;
+      }
+
+      std::forward<Visitor>(visitor)(*std::get_if<ExplorerBody>(&pane.body));
     }
 
     template <typename Visitor>
     TBC_GENERIC inline void visitPane(const Pane& pane, Visitor&& visitor) {
-      static_assert(std::variant_size_v<decltype(pane.body)> == 2, "a new kind of pane is visited here");
+      static_assert(std::variant_size_v<decltype(pane.body)> == 3, "a new kind of pane is visited here");
 
       if (const auto* terminal = std::get_if<TerminalBody>(&pane.body)) {
         std::forward<Visitor>(visitor)(*terminal);
         return;
       }
 
-      std::forward<Visitor>(visitor)(*std::get_if<NvimBody>(&pane.body));
+      if (const auto* editor = std::get_if<NvimBody>(&pane.body)) {
+        std::forward<Visitor>(visitor)(*editor);
+        return;
+      }
+
+      std::forward<Visitor>(visitor)(*std::get_if<ExplorerBody>(&pane.body));
     }
 
     // Calls `visitor` with the pane as the kind it is, for what works on a kind's state and on
@@ -653,6 +695,22 @@ export {
       return paneAs<NvimBody>(pane);
     }
 
+    // The explorer a pane is; none for no pane and for a pane of another kind.
+    TBC_HOT_PATH [[nodiscard]] inline tbc::val_a<ds::Option<PaneRef<ExplorerBody>>> asExplorer(tbc::val_a<Pane*> pane) noexcept {
+      return paneAs<ExplorerBody>(pane);
+    }
+
+    TBC_HOT_PATH [[nodiscard]] inline tbc::val_a<ds::Option<PaneRef<const ExplorerBody>>> asExplorer(tbc::val_a<const Pane*> pane) noexcept {
+      return paneAs<ExplorerBody>(pane);
+    }
+
+    // The bytes the windows of an explorer pane are decoded into.
+    using ExplorerScratch = ds::Array<Byte, FileLimits::explorer_windows * sizeof(ExplorerWindow)>;
+
+    // The windows an explorer pane keeps, as a client is told them; none for a pane of another
+    // kind, and for an explorer no client gave any. They view `scratch` and the pane.
+    [[nodiscard]] tbc::val_a<ds::Option<ExplorerKept>> explorerKept(tbc::ref_a<Pane> pane, tbc::mut_a<ExplorerScratch> scratch);
+
     // What changes a kind's state and the pane's with it.
 
     // Reads what the terminal's program wrote; false once its output closed.
@@ -668,6 +726,9 @@ export {
     void resize(PaneRef<TerminalBody> pane, TerminalSize size);
 
     void resize(PaneRef<NvimBody> pane, TerminalSize size);
+
+    // An explorer keeps the size its window draws it at, and tells no program.
+    void resize(PaneRef<ExplorerBody> pane, TerminalSize size) noexcept;
 
     // Asks a pane's program to end, as closing the pane does, whatever its kind.
     void requestClose(Pane& pane) noexcept;
@@ -884,6 +945,10 @@ export {
     // The editor a request names by id, refused as requireTerminal refuses.
     tbc::val_a<PaneRef<NvimBody>> requireNvim(tbc::mut_a<PaneStore> panes, std::uint64_t identity);
 
+    // The explorer the pane `identity` is: a request only an explorer answers is refused for a
+    // pane of another kind.
+    tbc::val_a<PaneRef<ExplorerBody>> requireExplorer(tbc::mut_a<PaneStore> panes, std::uint64_t identity);
+
     // The pane an agent's report names, which must still run the generation it names and be the one
     // the runtime verified the reporting client inside.
     tbc::mut_a<Pane> requireReporterPane(tbc::mut_a<PaneStore> panes, const ClientSession& client, PaneKey key);
@@ -935,6 +1000,17 @@ export {
       void publish(const RuntimeModel& model, ClientSession& client);
 
       [[nodiscard]] ds::Option<std::uint64_t> focusedPane(std::uint64_t identity) const noexcept;
+
+      // The marks and the jump list of a window's explorer, kept for the windows that come after
+      // it: one set for the runtime, which the last window to give one replaces. Places that say
+      // more than the runtime keeps are not taken, and what was kept stays.
+      void keepPlaces(const KeepPlaces& places);
+
+      // Answers a window what is kept.
+      void publishPlaces(std::uint64_t request, ClientSession& client) const;
+
+      // What is kept, as the message that gave it encodes; empty when nothing is.
+      [[nodiscard]] std::span<const Byte> places() const noexcept;
 
       [[nodiscard]] std::uint64_t revision() const noexcept;
 
@@ -1006,6 +1082,7 @@ export {
       Record* find(std::uint64_t identity) noexcept;
 
       ds::Vec<Record, ConcurrentMemory> records_;
+      ds::Vec<Byte, ConcurrentMemory> places_;
       std::uint64_t clock_ = 0;
     };
 

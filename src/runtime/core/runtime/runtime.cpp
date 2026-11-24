@@ -4,6 +4,7 @@ module;
 
 module telar.runtime.core.runtime;
 
+import telar.runtime.files.touches;
 import telar.runtime.nvim.editor;
 import telar.runtime.nvim.provision;
 import telar.runtime.paths.query_task;
@@ -25,6 +26,13 @@ import telar.base.ds;
 namespace telar::runtime {
 
   namespace {
+
+    // What an agent's line starts with when it names the tool it runs.
+    constexpr std::string_view agent_tool_mark = "» ";
+
+    std::uint64_t secondsNow() noexcept {
+      return static_cast<std::uint64_t>(std::chrono::duration_cast<std::chrono::seconds>(std::chrono::system_clock::now().time_since_epoch()).count());
+    }
 
     // The socket to listen on, once a fresh start has set the previous session aside: the listener
     // makes the runtime reachable, so a client that finds the socket finds the session set aside.
@@ -204,12 +212,12 @@ namespace telar::runtime {
   }
 
   template <EventLoop Poller, HistoryEventSink History>
-  void AgentService<Poller, History>::report(RuntimeModel& model, ClientSession& client, const ReportAgent& request) {
+  AgentProvider AgentService<Poller, History>::report(RuntimeModel& model, ClientSession& client, const ReportAgent& request) {
     auto& pane = authorize(model.panes, client, request.pane_id, request.pane_generation, request.provider);
     auto* existing = agents_.findMut(pane.id, pane.generation);
     if (existing == nullptr && request.state == AgentReportState::continuing) {
       client.connection.send(RequestCompleted{.request_id = request.request_id});
-      return;
+      return request.provider;
     }
 
     if (existing == nullptr) {
@@ -235,6 +243,12 @@ namespace telar::runtime {
     }
 
     client.connection.send(RequestCompleted{.request_id = request.request_id});
+    if (request.provider != AgentProvider::unknown) {
+      return request.provider;
+    }
+
+    // A report that names no provider is by the one that claimed the pane.
+    return agent.provider != AgentProvider::unknown ? agent.provider : agent.evidence.reporter;
   }
 
   template <EventLoop Poller, HistoryEventSink History>
@@ -1093,6 +1107,48 @@ namespace telar::runtime {
   }
 
   template <EventLoop Poller, HistoryEventSink History>
+  void WorkspaceService<Poller, History>::createExplorer(RuntimeModel& model, Panes& panes, ClientStore& clients, std::uint64_t client_id, const CreateExplorerPane& request) {
+    const auto location = request.location;
+    const auto* workspace = model.workspaces.find(location.workspace.id);
+    const auto* tab = workspace == nullptr ? nullptr : workspace->tab(location.tab_id);
+    if (location.workspace.kind != WorkspaceLocation::Kind::workspace || tab == nullptr || (!firstPane(model.panes, *tab) && !tabHeld(clients, location))) {
+      throw RequestError{FailureCode::pane_not_found, "tab not found"};
+    }
+
+    for (const auto identity : tab->panes) {
+      if (const auto* pane = model.panes.find(identity); pane != nullptr && pane->kind() == PaneKind::explorer && !pane->close_requested) {
+        throw RequestError{FailureCode::invalid_request, "This tab already has an explorer"};
+      }
+    }
+
+    if (tab->panes.size() == maximum_panes_per_tab) {
+      throw RequestError{FailureCode::resource_limit, "Tab pane limit reached"};
+    }
+
+    if (!acquireGeometry(model.panes, model.metrics, requireClient(clients, client_id), require(model.workspaces, location.workspace))) {
+      throw RequestError{FailureCode::resource_limit, "workspace geometry is leased by another client"};
+    }
+
+    // The workspace's directory has storage of its own, which the new pane copies.
+    LaunchDirectory directory;
+    const auto started_in = ownDirectory(directory, require(model.workspaces, location.workspace).path);
+    const auto pane = panes.launchExplorer(model, {.location = location, .size = request.size}, started_in).core.id;
+
+    try {
+      requireExplorer(model.panes, pane).body.keep(request.layout);
+      panes.attach(model, requireClient(clients, client_id), pane, request.size);
+      requireTab(model.workspaces, location).panes.push(pane);
+    } catch (...) {
+      panes.remove(model, clients, pane);
+      throw;
+    }
+
+    ++model.workspace_revision;
+    notify(location.workspace.id, client_id);
+    sendOpened(requireClient(clients, client_id), request.request_id, Panes::require(model.panes, pane), true, GenerationField::omitted);
+  }
+
+  template <EventLoop Poller, HistoryEventSink History>
   void WorkspaceService<Poller, History>::renameWorkspace(RuntimeModel& model, ClientSession& client, const RenameWorkspace& request) {
     require(model.workspaces, request.workspace).name.assign(request.name);
     ++model.workspace_revision;
@@ -1594,6 +1650,13 @@ namespace telar::runtime {
     if (pane.kind() != PaneKind::terminal) {
       client.connection.send(PaneKindNotice{.pane_id = pane.id, .kind = pane.kind()});
     }
+
+    ExplorerScratch scratch; // NOLINT(cppcoreguidelines-pro-type-member-init): the decoder writes the windows it hands back, so zeroing them first would be waste
+
+    // An explorer says where its windows are, to a client that did not give them.
+    if (const auto kept = explorerKept(pane, scratch)) {
+      client.connection.send(*kept);
+    }
   }
 
   template <EventLoop Poller, HistoryEventSink History>
@@ -1852,6 +1915,7 @@ namespace telar::runtime {
         editor_configuration_(memory, options.editor_configuration),
         words_(memory, options.configuration_directory),
         agent_files_(memory),
+        file_moves_(memory),
         descriptions_(memory, background_, options.descriptions),
         telemetry_(options.socket, proxy.status()) {
     model_.cli_executable = options.cli_executable;
@@ -2093,6 +2157,10 @@ namespace telar::runtime {
 
   template <EventLoop Poller, typename Background>
     requires BackgroundExecutor<Background, ConcurrentMemory>
+  void Runtime<Poller, Background>::paneEvent(PaneRef<ExplorerBody> /*pane*/, const Event& /*event*/) noexcept {}
+
+  template <EventLoop Poller, typename Background>
+    requires BackgroundExecutor<Background, ConcurrentMemory>
   void Runtime<Poller, Background>::paneEvent(PaneRef<NvimBody> pane, const Event& event) {
     try {
       if (event.descriptor == pane.body.process->output()) {
@@ -2294,7 +2362,14 @@ namespace telar::runtime {
   template <EventLoop Poller, typename Background>
     requires BackgroundExecutor<Background, ConcurrentMemory>
   void Runtime<Poller, Background>::handle(std::uint64_t identity, const ReportAgent& message) {
-    agents_.report(model_, requireClient(clients_, identity), message);
+    const auto provider = agents_.report(model_, requireClient(clients_, identity), message);
+
+    // The line of a tool names what the agent touches: the explorer's files keep it for who asks.
+    if constexpr (requires(Background& background, const TouchNote& note) { background.noteTouch(note); }) {
+      if (const auto pane = asTerminal(model_.panes.find(message.pane_id)); pane && message.event.starts_with(agent_tool_mark)) {
+        background_.noteTouch({.pane = message.pane_id, .actor = TouchActor::agent, .provider = provider, .text = message.event, .directory = std::string_view{pane->core.cwd}, .seconds = secondsNow()});
+      }
+    }
   }
 
   template <EventLoop Poller, typename Background>
@@ -2665,6 +2740,123 @@ namespace telar::runtime {
 
   template <EventLoop Poller, typename Background>
     requires BackgroundExecutor<Background, ConcurrentMemory>
+  void Runtime<Poller, Background>::handle(std::uint64_t identity, const ListDirectory& message) {
+    submitBackground(background_, requireClient(clients_, identity), message);
+  }
+
+  template <EventLoop Poller, typename Background>
+    requires BackgroundExecutor<Background, ConcurrentMemory>
+  void Runtime<Poller, Background>::handle(std::uint64_t identity, const MeasureDirectory& message) {
+    submitBackground(background_, requireClient(clients_, identity), message);
+  }
+
+  template <EventLoop Poller, typename Background>
+    requires BackgroundExecutor<Background, ConcurrentMemory>
+  void Runtime<Poller, Background>::handle(std::uint64_t identity, const QueryChanges& message) {
+    submitBackground(background_, requireClient(clients_, identity), message);
+  }
+
+  template <EventLoop Poller, typename Background>
+    requires BackgroundExecutor<Background, ConcurrentMemory>
+  void Runtime<Poller, Background>::handle(std::uint64_t identity, const InspectFile& message) {
+    submitBackground(background_, requireClient(clients_, identity), message);
+  }
+
+  template <EventLoop Poller, typename Background>
+    requires BackgroundExecutor<Background, ConcurrentMemory>
+  void Runtime<Poller, Background>::handle(std::uint64_t identity, const ChangeFiles& message) {
+    const auto& client = requireClient(clients_, identity);
+    const bool edits = std::ranges::any_of(model_.panes.items(), [](auto* stored) {
+      return static_cast<bool>(asNvim(stored));
+    });
+
+    // Only an editor is told where a file went: without one nothing is kept.
+    if (edits) {
+      file_moves_.asked(client.id, message);
+    }
+
+    submitBackground(background_, client, message);
+  }
+
+  template <EventLoop Poller, typename Background>
+    requires BackgroundExecutor<Background, ConcurrentMemory>
+  void Runtime<Poller, Background>::handle(std::uint64_t identity, const UndoFileChanges& message) {
+    submitBackground(background_, requireClient(clients_, identity), message);
+  }
+
+  template <EventLoop Poller, typename Background>
+    requires BackgroundExecutor<Background, ConcurrentMemory>
+  void Runtime<Poller, Background>::handle(std::uint64_t identity, const CommitChanges& message) {
+    submitBackground(background_, requireClient(clients_, identity), message);
+  }
+
+  template <EventLoop Poller, typename Background>
+    requires BackgroundExecutor<Background, ConcurrentMemory>
+  void Runtime<Poller, Background>::handle(std::uint64_t identity, const LocateHome& message) {
+    submitBackground(background_, requireClient(clients_, identity), message);
+  }
+
+  template <EventLoop Poller, typename Background>
+    requires BackgroundExecutor<Background, ConcurrentMemory>
+  void Runtime<Poller, Background>::handle(std::uint64_t identity, const ReadFile& message) {
+    submitBackground(background_, requireClient(clients_, identity), message);
+  }
+
+  template <EventLoop Poller, typename Background>
+    requires BackgroundExecutor<Background, ConcurrentMemory>
+  void Runtime<Poller, Background>::handle(std::uint64_t identity, const WriteFile& message) {
+    submitBackground(background_, requireClient(clients_, identity), message);
+  }
+
+  template <EventLoop Poller, typename Background>
+    requires BackgroundExecutor<Background, ConcurrentMemory>
+  void Runtime<Poller, Background>::handle(std::uint64_t identity, const EndFileWrite& message) {
+    submitBackground(background_, requireClient(clients_, identity), message);
+  }
+
+  template <EventLoop Poller, typename Background>
+    requires BackgroundExecutor<Background, ConcurrentMemory>
+  void Runtime<Poller, Background>::handle(std::uint64_t identity, const QueryTouches& message) {
+    submitBackground(background_, requireClient(clients_, identity), message);
+  }
+
+  template <EventLoop Poller, typename Background>
+    requires BackgroundExecutor<Background, ConcurrentMemory>
+  void Runtime<Poller, Background>::handle(std::uint64_t identity, const KeepPlaces& message) {
+    static_cast<void>(requireClient(clients_, identity));
+    client_layouts_.keepPlaces(message);
+  }
+
+  template <EventLoop Poller, typename Background>
+    requires BackgroundExecutor<Background, ConcurrentMemory>
+  void Runtime<Poller, Background>::handle(std::uint64_t identity, const CreateExplorerPane& message) {
+    workspaces_.createExplorer(model_, panes_, clients_, identity, message);
+  }
+
+  template <EventLoop Poller, typename Background>
+    requires BackgroundExecutor<Background, ConcurrentMemory>
+  void Runtime<Poller, Background>::handle(std::uint64_t identity, const KeepExplorer& message) {
+    static_cast<void>(requireClient(clients_, identity));
+    auto explorer = requireExplorer(model_.panes, message.pane_id);
+
+    explorer.body.keep(message.layout);
+    // The pane is where its current window is, when that is on this machine. The count grows
+    // either way: the windows are part of the session written to disk, which it tells of.
+    if (const auto& current = message.layout.windows[message.layout.current]; current.machine.empty() && !current.root.empty()) {
+      explorer.core.cwd.assign(current.root);
+    }
+
+    ++explorer.core.cwd_revision;
+  }
+
+  template <EventLoop Poller, typename Background>
+    requires BackgroundExecutor<Background, ConcurrentMemory>
+  void Runtime<Poller, Background>::handle(std::uint64_t identity, const QueryPlaces& message) {
+    client_layouts_.publishPlaces(message.request_id, requireClient(clients_, identity));
+  }
+
+  template <EventLoop Poller, typename Background>
+    requires BackgroundExecutor<Background, ConcurrentMemory>
   void Runtime<Poller, Background>::relay(PaneRef<NvimBody> pane) {
     const auto pulse = pane.body.editor.takePulse();
     if (pulse.listed) {
@@ -2693,6 +2885,10 @@ namespace telar::runtime {
 
     if (pulse.opened) {
       driver->connection.send(NvimLink{.pane_id = pane.core.id, .uri = pane.body.editor.link()});
+    }
+
+    if (pulse.explore) {
+      driver->connection.send(NvimExplore{.pane_id = pane.core.id, .path = pane.body.editor.explored()});
     }
   }
 
@@ -3267,9 +3463,35 @@ namespace telar::runtime {
 
   template <EventLoop Poller, typename Background>
     requires BackgroundExecutor<Background, ConcurrentMemory>
+  void Runtime<Poller, Background>::followMoves(std::uint64_t client_id, ClientTag request_tag, std::span<const Byte> payload) noexcept {
+    std::size_t count = 0;
+
+    try {
+      count = file_moves_.answered(client_id, payload, request_tag == ClientTag::undo_file_changes);
+    } catch (const std::exception&) { // NOLINT(bugprone-empty-catch): a move no editor could be told of leaves its buffer where the file was, as a move made outside telar does
+    }
+
+    if (count == 0) {
+      return;
+    }
+
+    for (auto* stored : model_.panes.items()) {
+      if (const auto editor = asNvim(stored)) {
+        panes_.followMoves(*editor, file_moves_, count);
+      }
+    }
+  }
+
+  template <EventLoop Poller, typename Background>
+    requires BackgroundExecutor<Background, ConcurrentMemory>
   void Runtime<Poller, Background>::deliverBackgroundReply(std::uint64_t client_id, ClientTag request_tag, std::span<const Byte> payload) {
     if (request_tag == ClientTag::import_history) {
       return;
+    }
+
+    // Before the client is looked for: the files moved whether or not it is still here.
+    if ((request_tag == ClientTag::change_files || request_tag == ClientTag::undo_file_changes) && file_moves_.waiting()) {
+      followMoves(client_id, request_tag, payload);
     }
 
     if (request_tag == ClientTag::report_agent_command) {
@@ -3355,6 +3577,10 @@ namespace telar::runtime {
       pane.core.exit_observed = true;
     }
   }
+
+  template <EventLoop Poller, typename Background>
+    requires BackgroundExecutor<Background, ConcurrentMemory>
+  void Runtime<Poller, Background>::refreshPane(PaneRef<ExplorerBody> /*pane*/, Clock::time_point /*now*/, bool /*poll_panes*/) noexcept {}
 
   template <EventLoop Poller, typename Background>
     requires BackgroundExecutor<Background, ConcurrentMemory>

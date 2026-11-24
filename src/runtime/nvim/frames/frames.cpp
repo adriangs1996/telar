@@ -554,6 +554,24 @@ namespace telar::runtime {
     return payload_.view();
   }
 
+  std::span<const Byte> NvimFrames::openFiles(const NvimScreen& screen) {
+    const auto& shown = screen.files();
+    if (shown.changed_at <= seen_) {
+      return {};
+    }
+
+    const std::string_view text{shown.text.data(), shown.text.size()};
+    ds::Array<NvimOpenFile, max_nvim_open_files> files{};
+    const auto count = std::min(shown.files.size(), max_nvim_open_files);
+
+    for (std::size_t index = 0; index < count; ++index) {
+      files.atMut(index) = {.path = shown.files[index].path.of(text), .modified = shown.files[index].modified, .current = shown.files[index].current};
+    }
+
+    write(payload_, NvimOpenFiles{.pane_id = pane_, .files = files.view().first(count)});
+    return payload_.view();
+  }
+
   std::span<const Byte> NvimFrames::end(const NvimScreen& screen) {
     const auto& cursor = screen.cursor();
     const auto modes = screen.modes();

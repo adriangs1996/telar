@@ -1061,6 +1061,7 @@ namespace telar::gui::qt {
     case Action::next_machine:
     case Action::previous_machine:
     case Action::add_machine:
+    case Action::explorer:
     case Action::monitor:
     case Action::process_picker:
       return false;

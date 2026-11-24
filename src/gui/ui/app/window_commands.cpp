@@ -77,6 +77,22 @@ namespace telar::gui::qt {
       };
     }
 
+    // The action of the key that moves the focus that way.
+    constexpr window_actions::Action focusAction(PaneDirection direction) noexcept {
+      switch (direction) {
+      case PaneDirection::left:
+        return window_actions::Action::focus_left;
+      case PaneDirection::right:
+        return window_actions::Action::focus_right;
+      case PaneDirection::up:
+        return window_actions::Action::focus_up;
+      case PaneDirection::down:
+        return window_actions::Action::focus_down;
+      }
+
+      return window_actions::Action::none;
+    }
+
     auto paneDirection(window_actions::Action action) noexcept -> PaneDirection {
       switch (action) {
       case window_actions::Action::focus_left:
@@ -130,6 +146,7 @@ namespace telar::gui::qt {
       case window_actions::Action::next_machine:
       case window_actions::Action::previous_machine:
       case window_actions::Action::add_machine:
+      case window_actions::Action::explorer:
       case window_actions::Action::monitor:
       case window_actions::Action::process_picker:
       case window_actions::Action::process_terminate:
@@ -205,6 +222,7 @@ namespace telar::gui::qt {
       case window_actions::Action::next_machine:
       case window_actions::Action::previous_machine:
       case window_actions::Action::add_machine:
+      case window_actions::Action::explorer:
       case window_actions::Action::monitor:
       case window_actions::Action::process_picker:
       case window_actions::Action::process_terminate:
@@ -227,7 +245,7 @@ namespace telar::gui::qt {
     ds::Option<window_actions::Action> nativeAction(BindingActionKind kind) noexcept {
       using Native = window_actions::Action;
       using Binding = BindingActionKind;
-      constexpr auto actions = ds::Array<std::pair<Binding, Native>, 53>{
+      constexpr auto actions = ds::Array<std::pair<Binding, Native>, 54>{
           {
               {Binding::new_tab, Native::new_tab},
               {Binding::new_editor, Native::new_editor},
@@ -270,6 +288,7 @@ namespace telar::gui::qt {
               {Binding::next_machine, Native::next_machine},
               {Binding::previous_machine, Native::previous_machine},
               {Binding::add_machine, Native::add_machine},
+              {Binding::explorer, Native::explorer},
               {Binding::monitor, Native::monitor},
               {Binding::process_picker, Native::process_picker},
               {Binding::process_terminate, Native::process_terminate},
@@ -513,7 +532,10 @@ namespace telar::gui::qt {
     }
 
     if (const auto direction = navigationDirection(action.kind)) {
-      application::workbench::navigate(store_.sessionMut(), *direction);
+      if (!insideTakes(focusAction(*direction))) {
+        application::workbench::navigate(store_.sessionMut(), *direction);
+      }
+
       return;
     }
 
@@ -529,7 +551,7 @@ namespace telar::gui::qt {
     }
   }
 
-  void WindowCommands::executeWindowBinding(BindingAction action, const ConfigurationSource::Actions* resolved) {
+  void WindowCommands::executeWindowBinding(BindingAction action, const ConfigurationSource::Actions* resolved) { // NOLINT(readability-function-size): one case per kind, in one switch, is what makes a kind without its case an error
     switch (action.kind) {
     case BindingActionKind::select_tab:
       application::workbench::selectTabAt(store_.sessionMut(), static_cast<std::size_t>(action.parameter));
@@ -609,6 +631,7 @@ namespace telar::gui::qt {
     case BindingActionKind::previous_machine:
     case BindingActionKind::machine_picker:
     case BindingActionKind::add_machine:
+    case BindingActionKind::explorer:
     case BindingActionKind::monitor:
     case BindingActionKind::process_picker:
     case BindingActionKind::process_terminate:
@@ -991,9 +1014,19 @@ namespace telar::gui::qt {
     return true;
   }
 
+  void WindowCommands::setInside(tbc::val_a<ds::Function<bool(window_actions::Action)>> inside) {
+    inside_ = std::move(inside);
+  }
+
+  bool WindowCommands::insideTakes(window_actions::Action action) {
+    return inside_(action);
+  }
+
   bool WindowCommands::executePane(window_actions::Action action, std::uint64_t identity) {
     if (action == window_actions::Action::focus_left || action == window_actions::Action::focus_right || action == window_actions::Action::focus_up || action == window_actions::Action::focus_down) {
-      application::workbench::focusToward(store_.sessionMut(), paneDirection(action));
+      if (!insideTakes(action)) {
+        application::workbench::focusToward(store_.sessionMut(), paneDirection(action));
+      }
     } else if (action == window_actions::Action::resize_left || action == window_actions::Action::resize_right || action == window_actions::Action::resize_up || action == window_actions::Action::resize_down) {
       application::workbench::resizeToward(store_.sessionMut(), paneDirection(action));
     } else if (action == window_actions::Action::focus_pane) {
@@ -1025,6 +1058,11 @@ namespace telar::gui::qt {
     // The monitor and its process actions belong to the monitor's controller.
     if (action >= window_actions::Action::monitor && action <= window_actions::Action::process_review_logs) {
       emit monitorRequested(action);
+      return;
+    }
+
+    if (action == window_actions::Action::explorer) {
+      emit explorerRequested();
       return;
     }
 
@@ -1139,6 +1177,7 @@ namespace telar::gui::qt {
     case window_actions::Action::copy_mode:
     case window_actions::Action::path_picker:
     case window_actions::Action::suggest_command:
+    case window_actions::Action::explorer:
     case window_actions::Action::monitor:
     case window_actions::Action::process_picker:
     case window_actions::Action::process_terminate:

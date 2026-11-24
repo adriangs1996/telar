@@ -93,6 +93,9 @@ export namespace telar::gui::application::workbench {
   // Focuses the pane next to the focused one toward `direction`.
   void focusToward(Session& session, PaneDirection direction);
 
+  // The pane next to the focused one toward `direction`; 0 when there is none.
+  [[nodiscard]] std::uint64_t neighbor(Session& session, PaneDirection direction);
+
   // As focusToward, but a pane running nvim gets the keys that move between its windows.
   void navigate(Session& session, PaneDirection direction);
 
@@ -115,6 +118,14 @@ export namespace telar::gui::application::workbench {
   // Splits the focused pane along `axis`; false when it cannot be split now.
   bool split(Session& session, ClientLayoutAxis axis);
 
+  // Splits the focused pane along `axis`, the new pane starting in `directory` instead of where
+  // the focused one works.
+  bool splitAt(Session& session, ClientLayoutAxis axis, std::string_view directory);
+
+  // Splits the focused pane with a pane that is the explorer, at its right, with the windows
+  // `layout` gives it.
+  bool splitExplorer(Session& session, const ExplorerLayout& layout);
+
   // Splits the focused pane along `axis`, the new pane being an editor on `files`, or on an
   // empty buffer without any. False when the session cannot: its runtime runs no editors, or a
   // pane is still being opened or closed.
@@ -131,6 +142,9 @@ export namespace telar::gui::application::workbench {
   TabCreationOutcome createEditorTab(Session& session, std::span<const std::string_view> files = {});
 
   bool closePane(Session& session, std::uint64_t pane_id);
+
+  // Whether the runtime was asked to close the pane and has not yet said it did.
+  [[nodiscard]] bool closing(const Session& session, std::uint64_t pane_id) noexcept;
 
   void toggleFullscreen(Session& session);
 
@@ -181,9 +195,6 @@ namespace telar::gui::application::workbench {
 
   // A split of pane `pane_id` in the tab at `location` failed: the pane takes back its size.
   void recoverSplit(Session& session, TabLocation location, std::uint64_t pane_id);
-
-  // The pane next to the focused one toward `direction`; 0 when there is none.
-  [[nodiscard]] std::uint64_t neighbor(Session& session, PaneDirection direction);
 
   // The active tab's layout as a token the CLI prints; it views the session's response to the
   // command, valid until the next one.

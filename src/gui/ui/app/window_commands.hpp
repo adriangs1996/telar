@@ -167,11 +167,18 @@ namespace telar::gui::qt {
       });
     }
 
+    // What the focused pane holds of windows of its own, as the explorer's does, is asked first
+    // when a key moves the focus between panes, with the action of that key: true when it took
+    // the key, and no pane is asked.
+    void setInside(tbc::val_a<ds::Function<bool(window_actions::Action)>> inside);
+
   signals:
     // A command has something to tell the user that no dialog shows.
     void notified(const QString& message);
     // The monitor, or an action on the process selected in it.
     void monitorRequested(telar::gui::qt::window_actions::Action action);
+    // The explorer over the panes: to open it, or to close the one that shows.
+    void explorerRequested();
 
   private:
     [[nodiscard]] BindingContext context() const;
@@ -194,6 +201,7 @@ namespace telar::gui::qt {
     void executeWindowAction(window_actions::Action action);
     bool executeMachineAction(window_actions::Action action);
     void cancelCurrentInteraction();
+    [[nodiscard]] bool insideTakes(window_actions::Action action);
     [[nodiscard]] static bool answerConfiguration(tbc::mut_a<WindowCommands> commands, const ClientCommand& message, tbc::mut_a<CompleteClientCommand> reply);
     void executeHostCommand(const ClientCommand& message, CompleteClientCommand& reply);
 
@@ -221,6 +229,9 @@ namespace telar::gui::qt {
     tbc::mut_a<CommandsHost> host_;
     // Where the pressed component action that is running was pressed, for a panel it opens.
     ds::Option<QPointF> component_action_anchor_;
+    tbc::val_a<ds::Function<bool(window_actions::Action)>> inside_{[](window_actions::Action) {
+      return false;
+    }};
   };
 
 }

@@ -369,6 +369,12 @@ namespace telar::gui::qt {
       colors.insert(QStringLiteral("syntax_") + QString::fromLatin1(syntax_names[index]), toQColor(theme.resolve(theme.syntax[index], theme.foreground)));
     }
 
+    // The yellow the terminal draws with, which the explorer marks a change in: a theme whose
+    // accent is its bright yellow, as the default one's is, keeps the two apart with it.
+    constexpr std::size_t terminal_yellow = 3;
+
+    colors.insert(QStringLiteral("terminalYellow"), toQColor(theme.palette[terminal_yellow]));
+
     return colors;
   }
 

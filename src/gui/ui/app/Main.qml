@@ -76,6 +76,8 @@ Window {
         agentModel: telar.activity.rows
         preferredWidth: telar.display.sidebarWidth
         textScale: telar.display.chromeTextScale
+        transfers: telar.explorer?.transfers ?? []
+        onTransferCancelled: id => telar.explorer.cancelTransfer(id)
         onAgentSelected: key => telar.commands.execute(WindowActions.Action.select_agent, key)
         onAgentPeekRequested: key => telar.commands.peekActivity(key)
         onSidebarResized: requestedWidth => telar.display.setSidebarWidth(requestedWidth)
@@ -185,6 +187,16 @@ Window {
         typography: root.geometry.typography
         ratio: root.ratio
         topInset: root.geometry.navigation.y + root.geometry.navigation.height
+    }
+
+    ExplorerOverlay {
+        // Over the panes of the tab, with the sidebar and the bars left in view; or, as a pane
+        // of the tab, in the room that pane has.
+        area: telar.explorer.pinned ? Qt.rect(paneArea.x + paneArea.explorerRoom.x, paneArea.y + paneArea.explorerRoom.y, paneArea.explorerRoom.width, paneArea.explorerRoom.height) : root.geometry.terminal
+        paneArea: paneArea
+        controller: telar.explorer
+        colors: telar.colors
+        typography: root.geometry.typography
     }
 
     AttachmentModal {

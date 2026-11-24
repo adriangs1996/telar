@@ -47,6 +47,7 @@ namespace telar::gui::qt {
       rename_workspace,
       monitor,
       machine_wizard,
+      explorer,
     };
     Q_ENUM(Dialog)
 

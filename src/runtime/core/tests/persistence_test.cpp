@@ -61,6 +61,7 @@ import telar.runtime.workers.request_worker;
 import telar.runtime.core.execution_service;
 import telar.wire.vocabulary;
 import telar.wire.worktrees;
+import telar.wire.files;
 import telar.platform.error;
 import telar.runtime.agents.snapshot;
 import telar.runtime.core.model.slot_store;
@@ -780,6 +781,40 @@ namespace {
 
   const telar::testing::Case case_persistence{"persistence.persistence", testPersistence};
   const telar::testing::Case case_checkpoint_validation{"persistence.checkpoint_validation", testCheckpointValidation};
+
+  void testPlacesRestore() {
+    telar::testing::TestMemory adapter;
+    ConcurrentMemory& memory = adapter;
+    RuntimeModel model{memory};
+    ClientLayouts layouts{memory};
+    const ds::Array<KeptPlace, 2> places{{{.letter = Byte{'A'}, .machine = "box", .root = "/var/log", .selected = "/var/log/app.log"}, {.root = "/srv"}}};
+    const auto before = layouts.revision();
+
+    layouts.keepPlaces(KeepPlaces{.places = places.view(), .jump = 1});
+    check(layouts.revision() != before, "places that changed are a session to write");
+
+    // A session is written with them, and one restored from it keeps them.
+    std::vector<Byte> buffer(checkpoint::maximum_bytes);
+    std::size_t dropped = 0;
+    const auto session = checkpoint::Snapshot<SnapshotAgents>::encode(model, layouts, SnapshotAgents{}, buffer, dropped);
+    RuntimeModel restored_model{memory};
+    LimitService limits;
+    NativeEventLoop<ConcurrentMemory> poller{memory};
+    PaneService panes{memory, poller, limits, PaneLaunchOptions{.socket = "/tmp/unused-checkpoint-test.sock"}};
+    ClientLayouts restored{memory};
+    checkpoint::Restore restore{memory, restored_model, panes, restored, false};
+
+    restore.apply(session);
+    check(dropped == 0 && !restored.places().empty() && std::ranges::equal(restored.places(), layouts.places()));
+
+    ds::Array<Byte, 4096> scratch;
+    DecodeStorage storage{scratch.viewMut()};
+    const auto kept = Codec::decode<KeepPlaces>(restored.places(), storage);
+
+    check(kept.places.size() == 2 && kept.jump == 1 && kept.places[0].letter == Byte{'A'} && kept.places[0].machine == "box" && kept.places[0].selected == "/var/log/app.log" && kept.places[1].root == "/srv");
+  }
+
+  const telar::testing::Case case_places_restore{"persistence.places_restore", testPlacesRestore};
   const telar::testing::Case case_worktree_restore{"persistence.worktree_restore", testWorktreeRestore};
   const telar::testing::Case case_corrupt_session_quarantined{"persistence.corrupt_session_quarantined", testCorruptSessionQuarantined};
   const telar::testing::Case case_agent_resume{"persistence.agent_resume", testAgentResume};

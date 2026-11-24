@@ -629,6 +629,16 @@ namespace {
 
       check(tabs.current_tab == 1 && tabs.tabs.size() == 1 && tabs.tabs[0].name == "main.cpp", "the tabs by name");
       check(frames.messageList(screen).empty(), "a surface that never changed is not sent");
+      check(frames.openFiles(screen).empty(), "nor are the files of an editor that told none");
+
+      // The files its buffers show go to a client that has not seen them, and once.
+      const std::array shown{NvimOpenFile{.path = "/work/main.cpp", .modified = true}, NvimOpenFile{.path = "/work/README.md"}};
+
+      check(screen.showFiles(shown) && !screen.showFiles(shown));
+
+      const auto files = decoded<NvimOpenFiles>(frames.openFiles(screen), scratch);
+
+      check(files.pane_id == pane_id && files.files.size() == 2 && files.files[0].path == "/work/main.cpp" && files.files[0].modified && files.files[1].path == "/work/README.md" && !files.files[1].modified);
 
       // The selection moves: the client keeps the items it has.
       redraw(screen, memory, 1, [](msgpack::Writer& writer) {

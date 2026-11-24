@@ -130,7 +130,7 @@ endif()
 
 # The domains of docs/build/modules.json (process_layers), lowest first.
 foreach(domain IN ITEMS diagnostics transport server/config suggestions host workers
-    terminal/shell_integration workspaces workspaces/worktrees paths nvim metrics terminal history
+    terminal/shell_integration workspaces workspaces/worktrees paths files nvim metrics terminal history
     terminal/command_capture terminal/graphics agents traffic/tap agents/observation core/model
     traffic/http1 traffic/http traffic/exchange_capture traffic/http2 traffic/tls traffic/redirect
     traffic traffic/proxy plugins workspaces/editors core/persistence core server)

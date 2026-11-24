@@ -48,6 +48,8 @@ namespace telar::gui::features::activity {
 
     // Terminal programs have no operating system icon of their own.
     static constexpr ds::Array known{
+        // The explorer that stands as a pane, by the folder its rows show.
+        Known{.name = "explorer", .glyph = "󰉋", .tile = "#8cd0d3", .ink = "#16282a"},
         Known{.name = "nvim", .glyph = "", .tile = "#5fb095", .ink = "#0f1a16"},
         Known{.name = "vim", .glyph = "", .tile = "#5fb095", .ink = "#0f1a16"},
         Known{.name = "vi", .glyph = "", .tile = "#5fb095", .ink = "#0f1a16"},

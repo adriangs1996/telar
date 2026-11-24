@@ -80,6 +80,7 @@ export {
   using ::stat;
   using ::statvfs;
   using ::symlink;
+  using ::symlinkat;
   using ::unlink;
   using ::unlinkat;
 
@@ -163,6 +164,7 @@ export {
   X(ENOSPC)                 \
   X(ENOSYS)                 \
   X(ENOTDIR)                \
+  X(ENOTEMPTY)              \
   X(ENOTSUP)                \
   X(ENXIO)                  \
   X(EOVERFLOW)              \
@@ -170,7 +172,8 @@ export {
   X(EPIPE)                  \
   X(ESRCH)                  \
   X(ETIMEDOUT)              \
-  X(EWOULDBLOCK)
+  X(EWOULDBLOCK)            \
+  X(EXDEV)
 
 // open, fcntl, flock and the *at calls.
 // NOLINTNEXTLINE(cppcoreguidelines-macro-usage): an X-macro lists the C macros to capture, which no template can name
@@ -309,6 +312,7 @@ namespace telar::sys::captured {
 #undef ENOSPC
 #undef ENOSYS
 #undef ENOTDIR
+#undef ENOTEMPTY
 #undef ENOTSUP
 #undef ENXIO
 #undef EOVERFLOW
@@ -317,6 +321,7 @@ namespace telar::sys::captured {
 #undef ESRCH
 #undef ETIMEDOUT
 #undef EWOULDBLOCK
+#undef EXDEV
 #undef AT_FDCWD
 #undef AT_REMOVEDIR
 #undef AT_SYMLINK_NOFOLLOW

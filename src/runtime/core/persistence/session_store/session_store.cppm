@@ -14,6 +14,7 @@ import telar.runtime.core.model.client_layouts;
 import telar.runtime.workers.request_worker;
 import telar.wire.vocabulary;
 import telar.wire.layout;
+import telar.wire.files;
 import telar.wire.worktrees;
 import telar.platform.primitives;
 import telar.runtime.terminal.control;
@@ -29,7 +30,8 @@ export {
   namespace telar::runtime::checkpoint {
 
     inline constexpr std::string_view magic = "TELARCKP";
-    inline constexpr std::uint16_t current_version = 11;
+    // 12 added the places of the explorer; 13 the windows of a pane that is one.
+    inline constexpr std::uint16_t current_version = 13;
     inline constexpr std::size_t maximum_bytes = std::size_t{4} * 1024 * 1024;
 
     enum class Kind : Byte {
@@ -39,6 +41,7 @@ export {
       pane,
       layout,
       worktree,
+      places,
     };
 
     struct Counters {
@@ -78,6 +81,9 @@ export {
       bool in_pane = false;
       // What the pane is: a checkpoint written before panes had kinds holds only terminals.
       PaneKind kind = PaneKind::terminal;
+      // The windows of an explorer, as the KeepExplorer that gave them encodes; empty for a pane
+      // of another kind, and for an explorer no window gave any.
+      std::span<const Byte> explorer;
     };
 
     struct LayoutRecord {
@@ -90,6 +96,12 @@ export {
       std::uint64_t id = 0;
       std::uint64_t workspace = 0;
       RegisterWorktree registration;
+    };
+
+    // The places of the explorer the runtime keeps for its windows, as the message that gave them
+    // encodes.
+    struct PlacesRecord {
+      std::span<const Byte> payload;
     };
 
     void validatePath(std::string_view path);
@@ -111,6 +123,8 @@ namespace telar::runtime::checkpoint {
   inline constexpr std::size_t maximum_argument_bytes = std::size_t{128} * 1024;
   inline constexpr std::size_t maximum_session_bytes = 64;
   inline constexpr std::size_t maximum_layout_bytes = std::size_t{16} * 1024;
+  inline constexpr std::size_t maximum_places_bytes = std::size_t{128} * 1024;
+  inline constexpr std::size_t maximum_explorer_bytes = std::size_t{32} * 1024;
 }
 
 // Interface: persistence/file_store.cppm
@@ -176,7 +190,7 @@ export {
       TBC_GENERIC inline void read(Consumer consume) {
         for (;;) {
           const auto kind = u8::decode(input_);
-          if (kind > static_cast<Byte>(Kind::worktree)) {
+          if (kind > static_cast<Byte>(Kind::places)) {
             throw EncodingError{"Unknown checkpoint record"};
           }
 
@@ -208,6 +222,9 @@ export {
             }
 
             break;
+          case Kind::places:
+            consume(places());
+            break;
           }
         }
       }
@@ -234,6 +251,8 @@ export {
       LayoutRecord layout();
 
       WorktreeRecord worktree();
+
+      PlacesRecord places();
 
       // Whether a worktree record is one to restore; one that is not is counted as skipped.
       bool accepted(const WorktreeRecord& record);
@@ -280,7 +299,7 @@ export {
         reader.read([&]<typename Record>(const Record& record) {
           if constexpr (std::same_as<Record, PaneRecord>) {
             records.atMut(count++) = record;
-          } else if constexpr (!std::same_as<Record, LayoutRecord>) {
+          } else if constexpr (!std::same_as<Record, LayoutRecord> && !std::same_as<Record, PlacesRecord>) {
             try {
               restore(record);
             } catch (const std::exception&) { // NOLINT(bugprone-empty-catch): a record that cannot be restored is left out, and the rest restore
@@ -314,6 +333,14 @@ export {
 
               layouts_.retain(model_, record.identity, Codec::decode<UpdateClientLayout>(record.payload, storage));
             } catch (const std::exception&) { // NOLINT(bugprone-empty-catch): a layout that cannot be decoded is left out, as one never saved
+            }
+          } else if constexpr (std::same_as<Record, PlacesRecord>) {
+            try {
+              ds::Array<Byte, FileLimits::maximum_places * sizeof(KeptPlace)> scratch; // NOLINT(cppcoreguidelines-pro-type-member-init): the decoder writes the places it hands back, so zeroing them first would be waste
+              DecodeStorage storage{scratch.viewMut()};
+
+              layouts_.keepPlaces(Codec::decode<KeepPlaces>(record.payload, storage));
+            } catch (const std::exception&) { // NOLINT(bugprone-empty-catch): places that cannot be decoded are left out, as ones never kept
             }
           }
         });
@@ -357,11 +384,35 @@ export {
         }
       }
 
+      inline void restoreExplorer(const PaneRecord& record) {
+        const TerminalSize size{.cols = record.columns == 0 ? std::uint16_t{80} : record.columns, .rows = record.rows == 0 ? std::uint16_t{24} : record.rows, .cell_width_px = 0, .cell_height_px = 0};
+        const auto restored = panes_.launchExplorer(model_, {.location = TabLocation{.workspace = {.id = record.workspace}, .tab_id = record.tab}, .size = size}, record.cwd, record.id).core.id;
+
+        model_.workspaces.find(record.workspace)->tabMut(record.tab)->panes.push(restored);
+        if (record.explorer.empty()) {
+          return;
+        }
+
+        try {
+          ExplorerScratch scratch; // NOLINT(cppcoreguidelines-pro-type-member-init): the decoder writes the windows it hands back, so zeroing them first would be waste
+          DecodeStorage storage{scratch.viewMut()};
+
+          requireExplorer(model_.panes, restored).body.keep(Codec::decode<KeepExplorer>(record.explorer, storage).layout);
+        } catch (const std::exception&) { // NOLINT(bugprone-empty-catch): windows that cannot be decoded are left out, and the explorer starts with one of its own
+        }
+      }
+
       inline void restore(const PaneRecord& record) {
         validateIdentity(record.id);
         auto* workspace = model_.workspaces.find(record.workspace);
         const auto* tab = workspace == nullptr ? nullptr : workspace->tab(record.tab);
         if (tab == nullptr || tab->panes.size() == maximum_tab_panes || model_.panes.find(record.id) != nullptr) {
+          return;
+        }
+
+        // An explorer comes back where its windows were. It starts no program.
+        if (record.kind == PaneKind::explorer) {
+          restoreExplorer(record);
           return;
         }
 
@@ -537,6 +588,8 @@ export {
 
       void write(const LayoutRecord& record);
 
+      void write(const PlacesRecord& record);
+
       tbc::val_a<std::span<Byte>> buffer_;
       tbc::val_a<std::span<Byte>> remaining_;
       std::size_t dropped_ = 0;
@@ -547,6 +600,7 @@ export {
     extern template void Writer::append<PaneRecord>(const PaneRecord& record);
     extern template void Writer::append<WorktreeRecord>(const WorktreeRecord& record);
     extern template void Writer::append<LayoutRecord>(const LayoutRecord& record);
+    extern template void Writer::append<PlacesRecord>(const PlacesRecord& record);
 
   }
 }
@@ -603,6 +657,10 @@ export {
 
           PaneRecord record{.id = pane->id, .workspace = pane->location.workspace.id, .tab = pane->location.tab_id, .cwd = pane->cwd, .columns = pane->extent.cols, .rows = pane->extent.rows, .argument_count = pane->launch.count(), .arguments = pane->launch.bytes(), .kind = pane->kind()};
 
+          if (const auto* explorer = pane->template as<ExplorerBody>()) {
+            record.explorer = explorer->kept();
+          }
+
           if (const auto* agent = agents.find(pane->id, pane->generation); agent != nullptr && validResumeSession(agent->provider, agent->session.view())) {
             record.provider = agent->provider;
             record.session = agent->session.view();
@@ -630,6 +688,10 @@ export {
         layouts.exportRecords(model, [&](std::uint64_t identity, std::uint64_t last_used, const UpdateClientLayout& layout) {
           writer.append(LayoutRecord{.identity = identity, .last_used = last_used, .payload = Codec::encode(layout, payload.viewMut())});
         });
+
+        if (const auto places = layouts.places(); !places.empty()) {
+          writer.append(PlacesRecord{.payload = places});
+        }
 
         dropped = writer.dropped();
         return writer.finish();

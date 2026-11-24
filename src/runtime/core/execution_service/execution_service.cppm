@@ -43,6 +43,7 @@ import telar.runtime.diagnostics.runtime_counters;
 import telar.runtime.history.event;
 import telar.runtime.core.model.slot_store;
 import telar.runtime.nvim.editor;
+import telar.runtime.files.moves;
 import telar.runtime.nvim.provision;
 import telar.base.ds;
 
@@ -350,6 +351,22 @@ export {
         return requireNvim(model.panes, identity.id);
       }
 
+      // A new explorer pane in a tab, with the windows `layout` gives it. It starts no program
+      // and watches no descriptor.
+      inline tbc::val_a<PaneRef<ExplorerBody>> launchExplorer(tbc::mut_a<RuntimeModel> model, const PanePlacement& placement, std::string_view directory, std::uint64_t restored_identity = 0) {
+        const auto identity = allocateIdentity(model, restored_identity);
+        auto pane = ds::makeBox<Pane>(memory_, memory_, identity.id, placement.location, Pane::Explorer{.directory = directory, .size = placement.size});
+
+        pane.getMut().generation = identity.generation;
+        const auto handle = model.panes.insert(identity.id, std::move(pane));
+
+        ++model.pane_revision;
+        auto inserted = requireExplorer(model.panes, identity.id);
+
+        inserted.core.event_identity = handle;
+        return inserted;
+      }
+
       // Writes what an editor queued for its Neovim, and asks to be woken while some is left.
       inline void flushEditor(PaneRef<NvimBody> pane) {
         if (pane.core.close_requested || pane.body.process->input() < 0) {
@@ -385,6 +402,30 @@ export {
           }
 
           flushEditor(pane);
+        } catch (const std::exception&) {
+          failEditor(pane);
+        }
+      }
+
+      // Asks an editor to follow the files the last answered change moved, the `count` that
+      // `moves` tells: a buffer that shows one shows it under its new name.
+      inline void followMoves(PaneRef<NvimBody> pane, const FileMoves& moves, std::size_t count) noexcept {
+        if (pane.core.close_requested || pane.core.output_closed) {
+          return;
+        }
+
+        try {
+          bool asked = false;
+
+          for (std::size_t index = 0; index < count; ++index) {
+            const auto move = moves.told(index);
+
+            asked = pane.body.editor.follow(move.from, move.to) || asked;
+          }
+
+          if (asked) {
+            flushEditor(pane);
+          }
         } catch (const std::exception&) {
           failEditor(pane);
         }
@@ -470,6 +511,8 @@ export {
         } else if (const auto editor = asNvim(&pane)) {
           telar::runtime::resize(*editor, size);
           flushEditor(*editor);
+        } else if (const auto explorer = asExplorer(&pane)) {
+          telar::runtime::resize(*explorer, size);
         }
       }
 
@@ -605,6 +648,9 @@ export {
           }
         }
       }
+
+      // An explorer holds nothing outside its pane.
+      inline void release(PaneRef<ExplorerBody> /*removed*/) noexcept {}
 
       template <typename Observer = IgnorePaneInput>
       inline void input(RuntimeModel& model, ClientStore& clients, std::uint64_t client_id, const PaneInput& request, const Observer& observe = {}) {
