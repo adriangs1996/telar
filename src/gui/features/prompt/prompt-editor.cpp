@@ -1188,6 +1188,8 @@ namespace telar::gui::features::prompt {
 
   void Editor::operate(std::size_t start, std::size_t end, bool linewise) {
     const auto action = operator_;
+    // Only what deletes, changes or yanks fills a register; case and indent leave it alone.
+    const bool stores = action == 'd' || action == 'c' || action == 'y';
 
     if (linewise) {
       start = text_.lineStart(start);
@@ -1195,17 +1197,20 @@ namespace telar::gui::features::prompt {
 
       // A linewise register holds whole lines, each with its newline, whichever newline the
       // edit takes.
-      ds::String<Memory> lines{memory(), text_.view().substr(start, end - start)};
+      if (stores) {
+        ds::String<Memory> lines{memory(), text_.view().substr(start, end - start)};
 
-      lines.push('\n');
-      store(lines, true);
+        lines.push('\n');
+        store(lines, true);
+      }
+
       if (end < text_.size()) {
         ++end;
       } else if (start > 0 && action == 'd') {
         // Deleting the last line takes the newline before it instead.
         --start;
       }
-    } else {
+    } else if (stores) {
       store(text_.view().substr(start, end - start), false);
     }
 

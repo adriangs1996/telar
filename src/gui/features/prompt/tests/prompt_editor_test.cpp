@@ -432,6 +432,16 @@ namespace {
       type(editor, "ggP");
       require(text(editor) == "b\na\nb", "P puts it as a line above");
     }
+
+    // Changing case or indent keeps what was yanked.
+    {
+      Editor editor{Keymap::vim};
+
+      start(editor, "abc");
+      type(editor, "0yl~>><<");
+      type(editor, "$p");
+      require(text(editor) == "Abca", "~, >> and << leave the unnamed register alone");
+    }
   }
 
   void routing() {

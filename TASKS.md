@@ -391,7 +391,7 @@ Legend: `[ ]` todo, `[x]` done, `[~]` not a bug / dropped (with reason).
   `moveTo(start)`.
 - [x] **T39 (V25).** `dd` on the last line stores `"\nb"`: store a linewise register `b\n`;
   `p`/`P` paste whole lines for linewise registers.
-- [ ] **T40 (V26).** `~`, `>>`, `<<` overwrite the unnamed register: only `d c y x s` call
+- [x] **T40 (V26).** `~`, `>>`, `<<` overwrite the unnamed register: only `d c y x s` call
   `store()`.
 - [ ] **T41 (V27).** `dw` on a line's last word joins the lines: when `w` crosses into the
   next line, stop at the end of the line (vim's special case).
