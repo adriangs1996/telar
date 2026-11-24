@@ -22,6 +22,7 @@ static_assert(true);
 import telar.testing;
 import telar.gui.application.tests.session_fixture;
 import telar.gui.application;
+import telar.gui.features.explorer;
 import telar.gui.foundation.terminal;
 import telar.wire.clients;
 import telar.wire.editor;
@@ -196,7 +197,7 @@ namespace {
     SystemAllocator memory;
     Transport transport;
     TestSession client{memory, transport};
-    const std::array shown{NvimOpenFile{.path = "/srv/app/main.cpp", .modified = true}, NvimOpenFile{.path = "/srv/app/README.md"}};
+    const std::array shown{NvimOpenFile{.path = "/srv/app/main.cpp", .modified = true}, NvimOpenFile{.path = "/srv/app/README.md", .current = true}};
     const application::explorer::Host host{.machine = 1, .name = "macbook", .home = "/home/dev", .local = true};
 
     openEditor(client, transport);
@@ -214,6 +215,16 @@ namespace {
 
     check(context.edited.files.size() == 2 && context.edited.files[0].machine == host.machine && context.edited.files[0].pane == editor_pane && context.edited.files[0].modified && !context.edited.files[1].modified);
     check(context.edited.text.substr(context.edited.files[1].offset, context.edited.files[1].size) == "/srv/app/README.md");
+    check(!context.edited.files[0].current && context.edited.files[1].current, "with the one the editor is on");
+
+    // The pane of the editor says the file it is on, which a window that follows it selects,
+    // and the roster of the machine's panes lists it by that file.
+    const auto pane = std::ranges::find(context.panes, editor_pane, &features::explorer::PaneFact::id);
+    const auto listed = std::ranges::find(context.roster.panes, editor_pane, &features::explorer::RosterPane::id);
+
+    check(pane != context.panes.end() && pane->kind == features::explorer::PaneKind::editor && pane->buffer == "/srv/app/README.md");
+    check(listed != context.roster.panes.end() && listed->machine == host.machine && features::explorer::textOf(context.roster, listed->buffer) == "/srv/app/README.md" && listed->number == pane->number);
+    check(context.roster.panes.size() == context.panes.size(), "a pane is listed once, whether the session holds it or its runtime lists it");
 
     // Observed again, they are read again and not added to.
     application::explorer::clear(scene);

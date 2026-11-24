@@ -169,6 +169,9 @@ namespace telar::gui::qt {
     Q_INVOKABLE void run(const QString& command);
     // A click on the machine of a window's head: the window goes to the next one, as `gm`.
     Q_INVOKABLE void nextMachine(int window);
+    // A click on what a window's status line says it follows: it follows the focused pane, or
+    // stays where it is, as `:follow` asks.
+    Q_INVOKABLE void toggleFollow(int window);
     Q_INVOKABLE void close();
 
     // Opens the explorer at the focused pane, or closes the one that shows.

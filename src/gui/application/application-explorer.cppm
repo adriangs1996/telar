@@ -134,9 +134,11 @@ export namespace telar::gui::application::explorer {
     bool local = true;
   };
 
-  // The panes a tab holds at most, and the machines a window keeps.
+  // The panes a tab holds at most, the machines a window keeps, and the panes of every tab of
+  // those machines the lens of panes lists at most.
   inline constexpr std::size_t scene_panes = 64;
   inline constexpr std::size_t scene_machines = 16;
+  inline constexpr std::size_t scene_roster = 256;
 
   // What the explorer reads around the files: the panes of the tab that shows, and every machine
   // the window keeps. It owns what it holds, copied out of the sessions, so a use case changes
@@ -153,6 +155,8 @@ export namespace telar::gui::application::explorer {
       features::explorer::PaneKind kind = features::explorer::PaneKind::shell;
       ds::String<Memory> title;
       ds::String<Memory> cwd;
+      // The file an editor is on; empty otherwise.
+      ds::String<Memory> buffer;
     };
 
     struct Machine {
@@ -190,6 +194,9 @@ export namespace telar::gui::application::explorer {
     // The sum of what the sessions observed count of the changes of those files: another
     // number when they are other files.
     std::uint64_t edited_revision = 0;
+    // The panes of every tab of the machines observed, each text a piece of `roster_text`.
+    ds::Vec<char, Memory> roster_text;
+    ds::Vec<features::explorer::RosterPane, Memory> roster;
   };
 
   // Forgets the machines, before each is observed again.
@@ -218,6 +225,7 @@ export namespace telar::gui::application::explorer {
     std::string_view workspace;
     std::uint64_t now = 0;
     features::explorer::Edited edited;
+    features::explorer::Roster roster;
   };
 
   [[nodiscard]] tbc::val_a<Around> around(tbc::ref_a<Scene> scene) noexcept;
@@ -273,8 +281,9 @@ export namespace telar::gui::application::explorer {
   Effect deliver(Session& session, View& view, const Context& context, const Action& action);
 
   // What an action asks of the runtime of the session's machine: its part of the plan, the
-  // plan taken back, a commit, the files to open in an editor there, or a mention or a split
-  // for the tab that machine has in view, from a window that is not on the machine that shows.
+  // plan taken back, a commit, the files to open in an editor there, a mention or a split for
+  // the tab that machine has in view, from a window that is not on the machine that shows, or
+  // the focus for a pane of it the lens of panes listed.
   // False when it was to open them and no editor did: the view says so, and the action is not
   // delivered.
   bool send(Session& session, View& view, const Context& context, const Action& action);

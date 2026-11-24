@@ -2669,7 +2669,7 @@ namespace {
       fixture.remote_runtime->send(FilesChanged{.request_id = sent_far.request_id, .undoable = true, .results = results.view()});
       fixture.local_runtime->send(FilesChanged{.request_id = near_request, .undoable = true, .results = results.view()});
       QVERIFY(shows([&] {
-        return explorer->line().value(QStringLiteral("said")).toString() == QStringLiteral(":w · 2 applied by the runtime · u takes it back");
+        return explorer->line().value(QStringLiteral("said")).toString() == QStringLiteral(":w · 2 of 2 applied by the runtime · u takes it back");
       }));
 
       // A file yanked on one machine and pasted on the other: the plan names both, and the

@@ -12,6 +12,7 @@ static_assert(true);
 import telar.testing;
 import telar.gui.application.tests.session_fixture;
 import telar.gui.application;
+import telar.gui.features.explorer;
 import telar.gui.foundation.keys;
 import telar.wire.editor;
 import telar.wire.files;
@@ -532,10 +533,10 @@ namespace {
 
     check(deliver(fixture.client, FilesChanged{.request_id = near.request_id, .undoable = true, .results = results.view()}) == application::Change::explorer);
     static_cast<void>(fixture.refresh());
-    check(fixture.view.writing && fixture.view.message.view() == ":w · 1 applied by the runtime · 1 machine still to answer");
+    check(fixture.view.writing && fixture.view.message.view() == ":w · 1 of 1 applied by the runtime · 1 machine still to answer");
     check(deliver(fixture.box, FilesChanged{.request_id = remote.request_id, .undoable = true, .results = results.view()}) == application::Change::explorer);
     static_cast<void>(fixture.refresh());
-    check(!fixture.view.writing && fixture.view.edits.empty() && fixture.view.message.view() == ":w · 2 applied by the runtime · u takes it back", "one line counts what both did");
+    check(!fixture.view.writing && fixture.view.edits.empty() && fixture.view.message.view() == ":w · 2 of 2 applied by the runtime · u takes it back", "one line counts what both did");
     static_cast<void>(fixture.press('u'));
     static_cast<void>(fixture.press('y'));
     check(transport.count(ClientTag::undo_file_changes) == 1 && box_transport.count(ClientTag::undo_file_changes) == 1, "u takes it back on every machine it touched");
@@ -589,6 +590,63 @@ namespace {
     check(fixture.press('s') == explorer::Effect::closed, "it leaves the panes in view, as when the shell opens here");
     check(box_transport.count(ClientTag::create_pane) == there + 1 && box_transport.last<CreatePane>().launch.cwd == "/home/ops");
     check(transport.count(ClientTag::create_pane) == here, "and none on the machine that shows");
+  }
+
+  void theLensOfPanesListsEveryTabOfAMachineAndFocusesThem() {
+    Fixture fixture;
+    auto& client = fixture.client;
+
+    fixture.list();
+    fixture.settle();
+
+    // The runtime of the machine that shows lists a pane of another tab, which the window
+    // never showed: it has a program, and no directory the window knows.
+    const auto first = client.focusedPane()->location;
+    auto other = first;
+
+    other.tab_id = first.tab_id + 6;
+
+    const ds::Array entries{
+        PaneListEntry{.pane_id = 1, .pane_generation = client.focusedPane()->generation, .location = first, .foreground = "zsh", .shell = true},
+        PaneListEntry{.pane_id = 9, .pane_generation = 4, .location = other, .foreground = "htop"},
+    };
+
+    deliver(client, PaneList{.revision = 2, .entries = entries});
+    fixture.observe();
+    {
+      const auto around = explorer::around(fixture.scene);
+      const auto& roster = around.roster;
+
+      check(roster.panes.size() == 3 && roster.panes[0].id == 1 && roster.panes[0].machine == host.machine && roster.panes[0].number == 1, "the panes the session holds, as their tab numbers them");
+      check(roster.panes[1].id == 9 && roster.panes[1].number == 1 && features::explorer::textOf(roster, roster.panes[1].title) == "htop" && features::explorer::textOf(roster, roster.panes[1].cwd).empty(), "then the ones its runtime lists, first of their own tab");
+      check(roster.panes[2].machine == far.machine, "and the ones of the other machine, which are its own");
+    }
+
+    static_cast<void>(fixture.press('4'));
+    static_cast<void>(fixture.press('g'));
+    static_cast<void>(fixture.press('t'));
+    check(fixture.view.windows[0]->rows.size() == 2, "the lens lists the panes of every tab of the window's machine");
+    static_cast<void>(fixture.press('j'));
+    check(fixture.strike({.key = explorer::KeyChord::Key::enter}) == explorer::Effect::closed && client.focusedPane()->id == 9 && client.focusedPane()->location.tab_id == other.tab_id, "Enter focuses a pane of another tab, which comes into view");
+
+    // A window on the other machine lists that machine's panes, and Enter focuses one there.
+    fixture.observe();
+    {
+      const auto around = explorer::around(fixture.scene);
+
+      explorer::open(fixture.view, client.explorer, explorer::contextOf(around, host.machine), host.machine);
+    }
+
+    static_cast<void>(fixture.refresh());
+    fixture.splitToBox();
+    static_cast<void>(fixture.press('4'));
+    static_cast<void>(fixture.press('g'));
+    static_cast<void>(fixture.press('t'));
+    check(fixture.view.windows[fixture.view.current]->machine == far.machine && fixture.view.windows[fixture.view.current]->rows.size() == 1 && fixture.view.windows[fixture.view.current]->rows[0].kind == features::explorer::RowKind::pane, "the lens is not refused on another machine");
+
+    const auto focused = client.focusedPane()->id;
+
+    check(fixture.strike({.key = explorer::KeyChord::Key::enter}) == explorer::Effect::closed && fixture.box.focusedPane()->id == 1 && client.focusedPane()->id == focused, "and the focus is given by the session of the pane's machine");
   }
 
   void asAPaneItStaysAndAPaneTakesWhatIsDroppedOnIt() {
@@ -1005,6 +1063,7 @@ namespace {
   const telar::testing::Case case_plans{"explorer_session.one_plan_is_sent_to_each_machine_it_touches", onePlanIsSentToEachMachineItTouches};
   const telar::testing::Case case_hand{"explorer_session.a_file_of_another_machine_is_handed_only_there", aFileOfAnotherMachineIsHandedOnlyThere};
   const telar::testing::Case case_shell_there{"explorer_session.a_window_on_another_machine_opens_a_shell_in_the_tab_that_machine_has_in_view", aWindowOnAnotherMachineOpensAShellInTheTabThatMachineHasInView};
+  const telar::testing::Case case_roster{"explorer_session.the_lens_of_panes_lists_every_tab_of_a_machine_and_focuses_them", theLensOfPanesListsEveryTabOfAMachineAndFocusesThem};
   const telar::testing::Case case_beside{"explorer_session.as_a_pane_it_stays_and_a_pane_takes_what_is_dropped_on_it", asAPaneItStaysAndAPaneTakesWhatIsDroppedOnIt};
   const telar::testing::Case case_kept{"explorer_session.an_explorer_pane_is_taken_with_the_windows_its_runtime_keeps", anExplorerPaneIsTakenWithTheWindowsItsRuntimeKeeps};
   const telar::testing::Case case_carried{"explorer_session.a_file_is_carried_from_one_machine_to_the_other", aFileIsCarriedFromOneMachineToTheOther};

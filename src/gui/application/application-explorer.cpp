@@ -34,21 +34,132 @@ namespace telar::gui::application::explorer {
       return nullptr;
     }
 
-    // What the pane runs, and the name it shows: an editor, an agent, a shell or another program.
-    void name(Scene::Pane& kept, const Session& session, std::string_view foreground) {
-      if (features::nvim::find(session.nvim, kept.id) != nullptr) {
-        kept.kind = PaneKind::editor;
-        kept.title.assign("nvim");
-      } else if (const auto* agent = agentIn(session.agent_list.entries(), kept.id)) {
-        kept.kind = PaneKind::agent;
-        kept.title.assign(!agent->display_name.view().empty() ? agent->display_name.view() : agent->provider_name.view());
-      } else {
-        kept.kind = isShell(foreground) ? PaneKind::shell : PaneKind::program;
-        kept.title.assign(foreground);
+    // What a pane runs, the name it shows, the file its editor is on and what its agent is
+    // doing: views of what the session holds.
+    struct Named {
+      PaneKind kind = PaneKind::shell;
+      std::string_view title;
+      std::string_view buffer;
+      std::string_view state;
+    };
+
+    // An editor, an agent, a shell or another program.
+    tbc::val_a<Named> named(tbc::ref_a<Session> session, std::uint64_t pane, tbc::val_a<std::string_view> foreground) {
+      Named result{.kind = isShell(foreground) ? PaneKind::shell : PaneKind::program, .title = foreground};
+
+      if (const auto* editor = features::nvim::find(session.nvim, pane)) {
+        const std::string_view text{editor->files.text.data(), editor->files.text.size()};
+
+        result.kind = PaneKind::editor;
+        result.title = "nvim";
+        for (const auto& file : editor->files.files) {
+          if (file.current) {
+            result.buffer = file.path.of(text);
+          }
+        }
+      } else if (const auto* agent = agentIn(session.agent_list.entries(), pane)) {
+        result.kind = PaneKind::agent;
+        result.title = !agent->display_name.view().empty() ? agent->display_name.view() : agent->provider_name.view();
+        result.state = agentStatusName(agent->status);
       }
 
-      if (kept.title.empty()) {
-        kept.title.assign("shell");
+      if (result.title.empty()) {
+        result.title = "shell";
+      }
+
+      return result;
+    }
+
+    // A text more of the roster: where it is in the roster's own.
+    feature::Slice keep(ds::Vec<char, Memory>& text, std::string_view piece) {
+      const feature::Slice slice{.offset = static_cast<std::uint32_t>(text.size()), .size = static_cast<std::uint32_t>(piece.size())};
+
+      text.extend(std::span<const char>{piece});
+      return slice;
+    }
+
+    // The tabs whose panes the roster has counted, to say each pane's place in its own.
+    struct Counted {
+      static constexpr std::size_t tabs = 64;
+
+      ds::Array<TabLocation, tabs> locations{};
+      ds::Array<std::uint16_t, tabs> panes{};
+      std::size_t count = 0;
+    };
+
+    // The place of one pane more in the tab at `location`, from one; 0 past the tabs counted.
+    std::uint16_t placeIn(Counted& counted, const TabLocation& location) noexcept {
+      for (std::size_t index = 0; index < counted.count; ++index) {
+        if (sameTab(counted.locations[index], location)) {
+          return ++counted.panes.atMut(index);
+        }
+      }
+
+      if (counted.count == Counted::tabs) {
+        return 0;
+      }
+
+      counted.locations.atMut(counted.count) = location;
+      counted.panes.atMut(counted.count++) = 1;
+      return 1;
+    }
+
+    // A pane of a session, as the roster lists it.
+    struct Listed {
+      std::uint64_t id = 0;
+      TabLocation location;
+      std::string_view foreground;
+      std::string_view cwd;
+    };
+
+    void enroll(Scene& scene, const Session& session, std::uint64_t machine, const Listed& pane, Counted& counted) {
+      const auto number = placeIn(counted, pane.location);
+
+      if (scene.roster.size() == scene_roster || feature::docked(session.explorer, pane.id) != nullptr) {
+        return;
+      }
+
+      const auto known = named(session, pane.id, pane.foreground);
+      std::string_view workspace;
+
+      for (const auto& listed : session.workspace_list.entries()) {
+        if (listed.location.kind == pane.location.workspace.kind && listed.location.id == pane.location.workspace.id) {
+          workspace = listed.name.view();
+        }
+      }
+
+      scene.roster.push({
+          .machine = machine,
+          .id = pane.id,
+          .number = number,
+          .kind = known.kind,
+          .title = keep(scene.roster_text, known.title),
+          .cwd = keep(scene.roster_text, pane.cwd),
+          .workspace = keep(scene.roster_text, workspace),
+          .buffer = keep(scene.roster_text, known.buffer),
+          .state = keep(scene.roster_text, known.state),
+      });
+    }
+
+    // The panes of every tab of a machine's session: the ones it holds, in the order the tabs
+    // number them, then the ones its runtime lists and it never showed, which have no directory.
+    void observeRoster(Scene& scene, const Session& session, std::uint64_t machine) {
+      Counted counted;
+
+      for (const auto& pane : session.panes) {
+        if (!pane->exited) {
+          enroll(scene, session, machine, {.id = pane->id, .location = pane->location, .foreground = pane->foreground.view(), .cwd = pane->cwd.view()}, counted);
+        }
+      }
+
+      for (const auto& listed : session.paneList()) {
+        const bool held = std::ranges::any_of(session.panes, [&](const auto& pane) {
+          return pane->id == listed.pane_id;
+        });
+
+        if (!held) {
+          enroll(scene, session, machine, {.id = listed.pane_id, .location = listed.location, .foreground = listed.foreground.view()}, counted);
+        }
       }
     }
 
@@ -209,11 +320,14 @@ namespace telar::gui::application::explorer {
         machines(made_in),
         workspace(made_in),
         edited_text(made_in),
-        edited(made_in) {}
+        edited(made_in),
+        roster_text(made_in),
+        roster(made_in) {}
 
   Scene::Pane::Pane(Memory& made_in)
       : title(made_in),
-        cwd(made_in) {}
+        cwd(made_in),
+        buffer(made_in) {}
 
   Scene::Machine::Machine(Memory& made_in)
       : label(made_in),
@@ -226,6 +340,8 @@ namespace telar::gui::application::explorer {
     scene.edited_text.clear();
     scene.edited.clear();
     scene.edited_revision = 0;
+    scene.roster_text.clear();
+    scene.roster.clear();
   }
 
   namespace {
@@ -244,7 +360,7 @@ namespace telar::gui::application::explorer {
         for (const auto& file : editor->files.files) {
           const auto path = file.path.of(text);
 
-          scene.edited.push({.machine = machine, .pane = pane->id, .offset = static_cast<std::uint32_t>(scene.edited_text.size()), .size = static_cast<std::uint32_t>(path.size()), .modified = file.modified});
+          scene.edited.push({.machine = machine, .pane = pane->id, .offset = static_cast<std::uint32_t>(scene.edited_text.size()), .size = static_cast<std::uint32_t>(path.size()), .modified = file.modified, .current = file.current});
           scene.edited_text.extend(std::span<const char>{path});
         }
       }
@@ -309,10 +425,14 @@ namespace telar::gui::application::explorer {
 
       auto& kept = scene.panes.atMut(scene.pane_count);
 
+      const auto known = named(session, pane->id, pane->foreground.view());
+
       kept.id = pane->id;
       kept.number = static_cast<std::uint16_t>(++scene.pane_count);
       kept.cwd.assign(pane->cwd.view());
-      name(kept, session, pane->foreground.view());
+      kept.kind = known.kind;
+      kept.title.assign(known.title);
+      kept.buffer.assign(known.buffer);
     }
 
     if (!within) {
@@ -349,6 +469,7 @@ namespace telar::gui::application::explorer {
 
     observeTab(*kept, session);
     observeEdited(scene, session, host.machine);
+    observeRoster(scene, session, host.machine);
   }
 
   void observe(Scene& scene, const Host& host) {
@@ -363,11 +484,12 @@ namespace telar::gui::application::explorer {
     result.now = scene.now;
     result.workspace = scene.workspace.view();
     result.edited = {.text = std::string_view{scene.edited_text.data(), scene.edited_text.size()}, .files = scene.edited.view()};
+    result.roster = {.text = std::string_view{scene.roster_text.data(), scene.roster_text.size()}, .panes = scene.roster.view()};
     result.pane_count = scene.pane_count;
     for (std::size_t index = 0; index < scene.pane_count; ++index) {
       const auto& kept = scene.panes[index];
 
-      result.panes.atMut(index) = {.id = kept.id, .number = kept.number, .kind = kept.kind, .title = kept.title.view(), .cwd = kept.cwd.view()};
+      result.panes.atMut(index) = {.id = kept.id, .number = kept.number, .kind = kept.kind, .title = kept.title.view(), .cwd = kept.cwd.view(), .buffer = kept.buffer.view()};
     }
 
     result.machine_count = scene.machine_count;
@@ -392,6 +514,7 @@ namespace telar::gui::application::explorer {
         .shown = around.shown,
         .machines = around.machines.view().first(around.machine_count),
         .edited = around.edited,
+        .roster = around.roster,
     };
 
     for (std::size_t index = 0; index < around.machine_count; ++index) {
@@ -835,11 +958,25 @@ namespace telar::gui::application::explorer {
 
       return leave(view);
     case ActionKind::focus_pane:
-      workbench::focusPane(session, action.pane);
+      // A pane of another machine was given the focus by that machine's session.
+      if (action.machine == 0 || action.machine == context.shown) {
+        workbench::focusPane(session, action.pane);
+      }
+
       return leave(view);
     }
 
     return Effect::none;
+  }
+
+  namespace {
+
+    // Whether an action is for the machine of the context while another one shows: the session
+    // of that machine does it, which the one that shows cannot.
+    constexpr bool elsewhere(const Context& context, const Action& action) noexcept {
+      return action.machine == context.host && context.host != context.shown;
+    }
+
   }
 
   bool send(Session& session, View& view, const Context& context, const Action& action) {
@@ -849,20 +986,27 @@ namespace telar::gui::application::explorer {
     case ActionKind::copy:
     case ActionKind::insert:
     case ActionKind::change_directory:
-    case ActionKind::focus_pane:
     case ActionKind::pin:
     case ActionKind::unpin:
+      return true;
+    case ActionKind::focus_pane:
+      // A pane the lens of panes listed of this machine, while another one shows: its tab comes
+      // into view here, for whoever drives the explorer to show this machine.
+      if (elsewhere(context, action)) {
+        workbench::focusPane(session, action.pane);
+      }
+
       return true;
     case ActionKind::mention:
       // From a window that is not on the machine that shows: the agent of the tab this machine
       // has in view takes it.
-      if (action.machine == context.host && context.host != context.shown) {
+      if (elsewhere(context, action)) {
         hand(session, action.pane, view.text.view());
       }
 
       return true;
     case ActionKind::split:
-      if (action.machine == context.host && context.host != context.shown && !workbench::splitAt(session, ClientLayoutAxis::horizontal, view.text.view())) {
+      if (elsewhere(context, action) && !workbench::splitAt(session, ClientLayoutAxis::horizontal, view.text.view())) {
         ds::String<Memory> said{session.memory};
 
         ds::formatTo(said, "No shell opens on {}: it has no tab in view to put it in", context.machine);

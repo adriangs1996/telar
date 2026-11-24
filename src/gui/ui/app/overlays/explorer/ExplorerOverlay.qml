@@ -1476,14 +1476,37 @@ FocusScope {
                             grid: root.smallGrid
                             // `[stale]`, of a machine that is not connected, in the color its dot has.
                             color: pane.modelData.away ? root.colors.red : pane.modelData.follows ? root.colors.green : root.colors.subtext0
+
+                            // A click follows the focused pane, or stops following it, as `F` does.
+                            ActionPointer {
+                                anchors.fill: parent
+                                identity: "follow:" + pane.index
+                                onActivated: root.controller.toggleFollow(pane.index)
+                            }
                         }
 
-                        CellText {
-                            width: implicitWidth
+                        // The root, with `box:` before it in a window on another machine, as one
+                        // word.
+                        Row {
                             height: parent.height
-                            text: root.tail((pane.modelData.root ?? "") + (pane.modelData.pending ? " [+]" : ""), statusStart.width - following.width - statusStart.spacing, root.smallGrid)
-                            grid: root.smallGrid
-                            color: root.colors.text
+
+                            CellText {
+                                id: rootMachine
+                                width: visible ? implicitWidth : 0
+                                height: parent.height
+                                visible: (pane.modelData.rootMachine ?? "").length > 0
+                                text: pane.modelData.rootMachine ?? ""
+                                grid: root.smallGrid
+                                color: root.colors.blue
+                            }
+
+                            CellText {
+                                width: implicitWidth
+                                height: parent.height
+                                text: root.tail((pane.modelData.root ?? "") + (pane.modelData.pending ? " [+]" : ""), statusStart.width - following.width - rootMachine.width - statusStart.spacing, root.smallGrid)
+                                grid: root.smallGrid
+                                color: root.colors.text
+                            }
                         }
                     }
                 }
@@ -1786,12 +1809,25 @@ FocusScope {
                             height: Math.round(root.smallGrid.cellHeight ?? 16)
 
                             CellText {
-                                width: heavyTrack.x - 8 * root.ratio
+                                id: heavyName
+                                width: Math.min(implicitWidth, heavyTrack.x - 8 * root.ratio - (heavyTag.visible ? heavyTag.width + 6 * root.ratio : 0))
                                 height: parent.height
                                 text: heavy.modelData.name ?? ""
                                 grid: root.smallGrid
                                 color: root.colors.text
                                 clip: true
+                            }
+
+                            // Why the window does not list it unless asked: hidden, or ignored.
+                            ChromeText {
+                                id: heavyTag
+                                x: heavyName.x + heavyName.width + 6 * root.ratio
+                                width: implicitWidth
+                                height: parent.height
+                                visible: (heavy.modelData.tag ?? "").length > 0
+                                text: heavy.modelData.tag ?? ""
+                                pixelSize: root.headingSize
+                                color: root.colors.overlay1
                             }
 
                             // As the bar of a row, and beside the size as it is there.
@@ -2131,12 +2167,13 @@ FocusScope {
                     readonly property color verbColor: modelData.verb === "CREATE" ? root.colors.green : modelData.verb === "MOVE" ? root.colors.yellow : modelData.verb === "COPY" ? root.colors.blue : root.colors.red
 
                     width: parent.width
-                    height: root.rowHeight
+                    // A line that says more than its verb has that below its paths.
+                    height: root.rowHeight + (stepNote.visible ? stepNote.height : 0)
 
                     CellText {
                         id: verb
                         width: Math.round(9 * (root.smallGrid.cellWidth ?? 8))
-                        height: parent.height
+                        height: root.rowHeight
                         text: step.modelData.verb
                         grid: root.smallGrid
                         color: step.verbColor
@@ -2148,7 +2185,7 @@ FocusScope {
                         id: stepMachine
                         x: verb.width
                         width: root.planMachineCells > 0 ? Math.round((root.planMachineCells + 1) * (root.smallGrid.cellWidth ?? 8)) : 0
-                        height: parent.height
+                        height: root.rowHeight
                         visible: width > 0
                         text: step.modelData.machine ?? ""
                         grid: root.smallGrid
@@ -2162,7 +2199,7 @@ FocusScope {
 
                         x: verb.width + stepMachine.width
                         width: Math.max(0, Math.min(implicitWidth, room))
-                        height: parent.height
+                        height: root.rowHeight
                         text: (step.modelData.source ?? "") + ((step.modelData.source ?? "").length > 0 && (step.modelData.target ?? "").length > 0 ? " → " : "") + (step.modelData.target ?? "") + (step.modelData.directory && (step.modelData.source ?? "").length === 0 ? "/" : "")
                         grid: root.smallGrid
                         color: root.colors.text
@@ -2175,7 +2212,7 @@ FocusScope {
                         id: stepWarning
                         x: stepPaths.x + stepPaths.width + 2 * (root.smallGrid.cellWidth ?? 8)
                         width: Math.min(implicitWidth, Math.max(0, (stepSize.x - verb.width - stepMachine.width) / 2))
-                        height: parent.height
+                        height: root.rowHeight
                         visible: (step.modelData.warning ?? "").length > 0
                         text: step.modelData.warning ?? ""
                         grid: root.smallGrid
@@ -2188,10 +2225,23 @@ FocusScope {
                         id: stepSize
                         x: parent.width - width
                         width: root.planSizeCells > 0 ? Math.round((root.planSizeCells + 2) * (root.smallGrid.cellWidth ?? 8)) : 0
-                        height: parent.height
+                        height: root.rowHeight
                         visible: width > 0
                         text: (step.modelData.size ?? "").padStart(root.planSizeCells + 2, " ")
                         grid: root.smallGrid
+                        color: root.colors.subtext0
+                    }
+
+                    // Where it travels, the trash it goes to, what a restore discards.
+                    ChromeText {
+                        id: stepNote
+                        x: stepPaths.x
+                        y: root.rowHeight - Math.round(2 * root.ratio)
+                        width: parent.width - x
+                        height: root.typography.smallRow
+                        visible: (step.modelData.note ?? "").length > 0
+                        text: step.modelData.note ?? ""
+                        pixelSize: 11 * root.ratio
                         color: root.colors.subtext0
                     }
                 }

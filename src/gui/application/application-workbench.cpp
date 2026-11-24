@@ -289,13 +289,18 @@ namespace telar::gui::application::workbench {
       const auto* const agent = std::ranges::find_if(agents, [&](const auto& entry) {
         return entry.pane_id == pane_id;
       });
-      if (agent == agents.end()) {
+
+      // A pane the session never showed is one its runtime lists: an agent's, or any other.
+      const auto listed = session.paneList();
+      const auto known = std::ranges::find(listed, pane_id, &ListedPane::pane_id);
+
+      if (agent == agents.end() && known == listed.end()) {
         return;
       }
 
-      // The agent's row is read before the pane table can grow.
-      const auto location = agent->location;
-      const auto generation = agent->pane_generation;
+      // The row is read before the pane table can grow.
+      const auto location = agent != agents.end() ? agent->location : known->location;
+      const auto generation = agent != agents.end() ? agent->pane_generation : known->pane_generation;
 
       pane = &Access::ensurePane(session, pane_id, location);
       pane->generation = generation;

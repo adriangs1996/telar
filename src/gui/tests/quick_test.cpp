@@ -1608,7 +1608,7 @@ return {api_version = 2, client = {
         return views.empty() ? nullptr : qobject_cast<NvimItem*>(views.front());
       };
       // The files the editor's buffers show, as the window knows them: `+` after one with
-      // changes not written.
+      // changes not written, and `*` after the one the editor is on.
       const auto held = [&] {
         QString text;
         const auto* view = editorView();
@@ -1618,7 +1618,7 @@ return {api_version = 2, client = {
           const std::string_view paths{editor->files.text.data(), editor->files.text.size()};
 
           for (const auto& file : editor->files.files) {
-            text += toQString(file.path.of(paths)).mid(fixture.size() + 1) + (file.modified ? QStringLiteral("+ ") : QStringLiteral(" "));
+            text += toQString(file.path.of(paths)).mid(fixture.size() + 1) + (file.modified ? QStringLiteral("+") : QString{}) + (file.current ? QStringLiteral("*") : QString{}) + QLatin1Char(' ');
           }
         }
 
@@ -1640,7 +1640,12 @@ return {api_version = 2, client = {
       opened = true;
       QTRY_VERIFY2_WITH_TIMEOUT(editorView() != nullptr && editorView()->ready(), qPrintable(client_->status()->error() + errors_), runtime_wait_ms);
       editorView()->send(QStringLiteral("<Cmd>set noswapfile<CR><Cmd>edit ") + fixture + QStringLiteral("/draft.md<CR>"));
-      QTRY_COMPARE_WITH_TIMEOUT(held(), QStringLiteral("draft.md "), runtime_wait_ms);
+      QTRY_COMPARE_WITH_TIMEOUT(held(), QStringLiteral("draft.md* "), runtime_wait_ms);
+      // Another buffer, and back: the editor says which one it is on.
+      editorView()->send(QStringLiteral("<Cmd>edit ") + fixture + QStringLiteral("/other.md<CR>"));
+      QTRY_COMPARE_WITH_TIMEOUT(held(), QStringLiteral("draft.md other.md* "), runtime_wait_ms);
+      editorView()->send(QStringLiteral("<Cmd>bwipeout<CR>"));
+      QTRY_COMPARE_WITH_TIMEOUT(held(), QStringLiteral("draft.md* "), runtime_wait_ms);
 
       // `:Telar explore`: the explorer opens on the file's directory, with the file selected,
       // and its row says an editor holds it.
@@ -1684,7 +1689,7 @@ return {api_version = 2, client = {
       QCOMPARE(explorer->plan().value(0).toMap().value(QStringLiteral("warning")).toString(), QStringLiteral("an editor holds changes to it that were not written"));
       explorer->type(QStringLiteral("y"));
       QTRY_VERIFY_WITH_TIMEOUT(QFileInfo::exists(fixture + QStringLiteral("/final.md")), runtime_wait_ms);
-      QTRY_COMPARE_WITH_TIMEOUT(held(), QStringLiteral("final.md+ "), runtime_wait_ms);
+      QTRY_COMPARE_WITH_TIMEOUT(held(), QStringLiteral("final.md+* "), runtime_wait_ms);
       QCOMPARE(readTestFile(fixture + QStringLiteral("/final.md")), QByteArrayLiteral("one\n"));
       QTRY_COMPARE_WITH_TIMEOUT(named(QStringLiteral("final.md")).value(QStringLiteral("editor")).toString(), QStringLiteral("unsaved"), runtime_wait_ms);
 
@@ -2049,6 +2054,10 @@ return {api_version = 2, client = {
         QCOMPARE(outside->urls(), QList<QUrl>{QUrl::fromLocalFile(root + QStringLiteral("/docs/usage.md"))});
       }
 
+      // The hints say what `p` would put now, in one line more: the list shows a row less, and
+      // is moved to show its first rows again.
+      explorer->scroll(0, -window().value(QStringLiteral("top")).toInt());
+      QVERIFY(listed(QStringLiteral("assets")) >= 0 && listed(QStringLiteral("usage.md")) >= 0);
       QCOMPARE(explorer->aim(0, listed(QStringLiteral("docs")), false, false).value(QStringLiteral("count")).toInt(), 0);
       QCOMPARE(explorer->aim(0, listed(QStringLiteral("assets")), false, false).value(QStringLiteral("row")).toInt(), listed(QStringLiteral("assets")));
       explorer->drop(0, listed(QStringLiteral("assets")), false, false);

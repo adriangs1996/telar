@@ -349,6 +349,7 @@ namespace telar::gui::qt {
           {QStringLiteral("mode"), toQString(status.mode)},
           {QStringLiteral("modeKind"), QString::fromLatin1(mode_names[static_cast<std::size_t>(status.kind)])},
           {QStringLiteral("following"), fixedText(status.following)},
+          {QStringLiteral("rootMachine"), fixedText(status.machine)},
           {QStringLiteral("follows"), status.follows},
           {QStringLiteral("root"), fixedText(status.root)},
           {QStringLiteral("rootPath"), toQString(window.root.view())},
@@ -511,6 +512,7 @@ namespace telar::gui::qt {
     for (const auto& entry : look.heavy.view().first(look.heavy_count)) {
       heavy.push_back(QVariantMap{
           {QStringLiteral("name"), fixedText(entry.name) + (entry.directory ? QStringLiteral("/") : QString{})},
+          {QStringLiteral("tag"), toQString(entry.tag)},
           {QStringLiteral("size"), fixedText(entry.size)},
           {QStringLiteral("share"), entry.share / hundredths},
       });
@@ -594,7 +596,7 @@ namespace telar::gui::qt {
         return home.size() > 1 && path.starts_with(home) && path.size() > home.size() && path[home.size()] == '/' ? QStringLiteral("~") + toQString(path.substr(home.size())) : toQString(path);
       };
 
-      const auto note = explorer::planNote(view_, cacheOf(step.machine), step, {.touched = explorer::touchedSince(cacheOf(step.source_machine != 0 ? step.source_machine : step.machine), step), .edited = around.edited});
+      const auto note = explorer::planNote(view_, cacheOf(step.machine), step, {.touched = explorer::touchedSince(cacheOf(step.source_machine != 0 ? step.source_machine : step.machine), step), .edited = around.edited, .machine = context.machine, .source = step.source_machine != 0 ? explorer::contextOf(around, step.source_machine).machine : std::string_view{}});
 
       result.push_back(QVariantMap{
           {QStringLiteral("verb"), toQString(explorer::verbText(step.verb))},
@@ -605,6 +607,7 @@ namespace telar::gui::qt {
           {QStringLiteral("machine"), several ? toQString(context.machine) : QString{}},
           {QStringLiteral("size"), fixedText(note.size)},
           {QStringLiteral("warning"), fixedText(note.warning)},
+          {QStringLiteral("note"), fixedText(note.note)},
       });
     }
 
@@ -816,8 +819,11 @@ namespace telar::gui::qt {
     }
 
     finish(sent ? explorer::deliver(store_.sessionMut(), view_, explorer::contextOf(around, scene_.shown), action) : Effect::none);
-    // Files opened in an editor of another machine show once the window shows that machine.
-    if (sent && action.kind == explorer::ActionKind::open && action.machine != scene_.shown && action.machine != 0 && keepsMachine(store_, static_cast<std::size_t>(action.machine - 1))) {
+    // Files opened in an editor of another machine, and a pane of it given the focus, show once
+    // the window shows that machine.
+    const bool shows = action.kind == explorer::ActionKind::open || action.kind == explorer::ActionKind::focus_pane;
+
+    if (sent && shows && action.machine != scene_.shown && action.machine != 0 && keepsMachine(store_, static_cast<std::size_t>(action.machine - 1))) {
       emit machineRequested(store_.machines().token(static_cast<application::machines::Machines::Slot>(action.machine - 1)));
     }
   }
@@ -1638,6 +1644,15 @@ namespace telar::gui::qt {
 
     select(window, static_cast<int>(view_.windows[static_cast<std::size_t>(window)]->cursor), false, false);
     type(QStringLiteral("gm"));
+  }
+
+  void ExplorerController::toggleFollow(int window) {
+    if (window < 0 || std::cmp_greater_equal(window, view_.windows.size())) {
+      return;
+    }
+
+    select(window, static_cast<int>(view_.windows[static_cast<std::size_t>(window)]->cursor), false, false);
+    run(QStringLiteral("follow"));
   }
 
 }
