@@ -473,6 +473,15 @@ namespace {
       type(editor, ";");
       require(cursor(editor) == 2, "; goes on to the comma before");
     }
+
+    // $ on an empty line reaches no character: d$ there keeps the line's newline.
+    {
+      Editor editor{Keymap::vim};
+
+      type(editor, "a\n\nb");
+      type(editor, "\x1bggjd$");
+      require(text(editor) == "a\n\nb", "d$ on an empty line deletes nothing");
+    }
   }
 
   void routing() {

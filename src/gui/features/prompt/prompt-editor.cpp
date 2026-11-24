@@ -891,7 +891,12 @@ namespace telar::gui::features::prompt {
 
     const auto end = text_.lineEnd(line);
 
-    return Motion{.target = end > line ? text_.previous(end) : end, .inclusive = true};
+    // An empty line has no character for $ to reach: the motion covers nothing, not its newline.
+    if (end == line) {
+      return Motion{.target = end};
+    }
+
+    return Motion{.target = text_.previous(end), .inclusive = true};
   }
 
   Editor::Motion Editor::lineMotion(bool down) const noexcept {

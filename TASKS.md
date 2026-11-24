@@ -398,7 +398,7 @@ Legend: `[ ]` todo, `[x]` done, `[~]` not a bug / dropped (with reason).
 - [x] **T42 (V28).** `ge`/`dge` go to a word start: add a `wordEndBackward` motion.
 - [x] **T43 (V29).** `T,` then `;` never moves: make `findBefore` symmetric with `findAfter`
   (`substr(from)`), and let `;` after `T` skip the adjacent character.
-- [ ] **T44 (V30).** `d$`/`c$`/`y$` on an empty line take the newline: `lineEndMotion` is a
+- [x] **T44 (V30).** `d$`/`c$`/`y$` on an empty line take the newline: `lineEndMotion` is a
   no-op when `end == line`.
 - [ ] **T45 (V31).** Undo grouping: one group per insert, from the operator (`c`, `o`, `s`)
   to Esc; a Backspace inside the insert does not split it (`cwxyz<Esc>u`, `oabc<Esc>u`,
