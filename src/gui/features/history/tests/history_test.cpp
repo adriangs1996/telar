@@ -131,6 +131,108 @@ namespace {
     check(refreshed.offset == 0 && refreshed.snapshot_id == 0, "a refresh must choose a new insertion boundary");
   }
 
+  // After a delete the list stays on its page, with the selection on the row that took the
+  // deleted one's place, or the last when the deleted one was last.
+  void deleteKeepsThePosition() {
+    SystemAllocator memory;
+    telar::MemoryAdapter adapted{memory};
+    Browser browser{adapted};
+    const ds::Array first{HistoryEntry{.id = 1, .command = "a"}, HistoryEntry{.id = 2, .command = "b"}};
+    const ds::Array second{HistoryEntry{.id = 3, .command = "c"}, HistoryEntry{.id = 4, .command = "d"}, HistoryEntry{.id = 5, .command = "e"}};
+    const ds::Array after{HistoryEntry{.id = 3, .command = "c"}, HistoryEntry{.id = 5, .command = "e"}};
+
+    static_cast<void>(browser.begin({.request_id = 1}));
+    browser.apply(HistoryResults{.request_id = 1, .snapshot_id = 7, .has_more = true, .entries = first});
+    static_cast<void>(browser.page(HistoryPage::older, 2));
+    browser.apply(HistoryResults{.request_id = 2, .snapshot_id = 7, .entries = second});
+    browser.select(1);
+    static_cast<void>(browser.erase(4, 3));
+    browser.apply(HistoryPruned{.request_id = 3, .removed = 1});
+    const auto refreshed = browser.refresh(4);
+
+    check(refreshed.offset == first.size() && refreshed.snapshot_id == 0, "the refresh reads the same page anew");
+    browser.apply(HistoryResults{.request_id = 4, .snapshot_id = 8, .entries = after});
+    check(browser.reads().state().page_offset == first.size() && browser.reads().state().selection == 1, "the selection stays on the next row");
+    browser.select(1);
+    static_cast<void>(browser.erase(5, 5));
+    browser.apply(HistoryPruned{.request_id = 5, .removed = 1});
+    static_cast<void>(browser.refresh(6));
+    browser.apply(HistoryResults{.request_id = 6, .snapshot_id = 9, .entries = std::span{after}.first(1)});
+    check(browser.reads().state().selection == 0, "the last row deleted selects the one before it");
+
+    // The only row of a later page deleted: the page before it, at its last row.
+    static_cast<void>(browser.erase(3, 7));
+    browser.apply(HistoryPruned{.request_id = 7, .removed = 1});
+    const auto back = browser.refresh(8);
+
+    check(back.offset == 0, "an emptied page gives way to the one before it");
+    browser.apply(HistoryResults{.request_id = 8, .snapshot_id = 10, .entries = first});
+    check(browser.reads().state().page_offset == 0 && browser.reads().state().selection == first.size() - 1, "at its last row");
+  }
+
+  // Deletes queue: a second before the first is confirmed goes too, and no page that arrives
+  // meanwhile brings a deleted row back.
+  void deletesQueue() {
+    SystemAllocator memory;
+    telar::MemoryAdapter adapted{memory};
+    Browser browser{adapted};
+    const ds::Array entries{HistoryEntry{.id = 1, .command = "a"}, HistoryEntry{.id = 2, .command = "b"}, HistoryEntry{.id = 3, .command = "c"}};
+
+    static_cast<void>(browser.begin({.request_id = 1}));
+    browser.apply(HistoryResults{.request_id = 1, .snapshot_id = 1, .entries = entries});
+    const auto first = browser.erase(1, 2);
+    const auto second = browser.erase(2, 3);
+
+    check(browser.reads().rows().size() == 1 && browser.reads().rows().front().id == 3, "both rows leave at once");
+    check(browser.apply(HistoryPruned{.request_id = first.request_id, .removed = 1}) && browser.reads().deleting(), "the first confirmation leaves the second waiting");
+    static_cast<void>(browser.refresh(4));
+    browser.apply(HistoryResults{.request_id = 4, .snapshot_id = 2, .entries = std::span{entries}.last(2)});
+    check(browser.reads().rows().size() == 1 && browser.reads().rows().front().id == 3, "a page read before the second delete does not bring its row back");
+    check(browser.apply(HistoryPruned{.request_id = second.request_id, .removed = 1}) && !browser.reads().deleting(), "the second confirmation ends the deletes");
+  }
+
+  // A detail that failed is read again for the same row, and one that does not fit the request
+  // table fails alone, never the page.
+  void detailsRetryAndFailAlone() {
+    SystemAllocator memory;
+    telar::MemoryAdapter adapted{memory};
+    Browser browser{adapted};
+    const ds::Array entries{HistoryEntry{.id = 1, .command = "a"}, HistoryEntry{.id = 2, .command = "b"}};
+    std::uint64_t sequence = 0;
+
+    static_cast<void>(browser.begin({.request_id = ++sequence}));
+    browser.apply(HistoryResults{.request_id = sequence, .snapshot_id = 1, .entries = entries});
+    browser.setInspecting(true);
+    const auto first = browser.readOutput(++sequence);
+
+    check(first.hasValue(), "inspecting reads the output");
+    browser.fail(first->request_id, "output failed");
+    const auto again = browser.readOutput(++sequence);
+
+    check(again && again->id == first->id, "a failed output is read again for the same row");
+
+    // Searches that never answered fill the table; the last one's page arrives, and a delete
+    // takes the slot its answer freed.
+    while (sequence < decltype(browser)::maximum_requests + 2) {
+      static_cast<void>(browser.begin({.request_id = ++sequence}));
+    }
+
+    browser.apply(HistoryResults{.request_id = sequence, .snapshot_id = 2, .entries = entries});
+    static_cast<void>(browser.erase(1, ++sequence));
+    browser.setInspecting(false);
+    browser.setInspecting(true);
+    bool refused = false;
+
+    try {
+      static_cast<void>(browser.readOutput(++sequence));
+    } catch (const std::exception&) {
+      refused = true;
+    }
+
+    check(refused && browser.reads().state().output_phase == HistoryPhase::failed, "the output that does not fit fails");
+    check(browser.reads().state().phase == HistoryPhase::ready, "the page it was for stays");
+  }
+
   void renderedChoicesNeverRetargetACommand() {
     SystemAllocator memory;
     telar::MemoryAdapter adapted{memory};
@@ -323,7 +425,8 @@ namespace {
 
     const auto deletion = browser.erase(2, ++sequence);
 
-    check(browser.reads().rows().size() == 2 && browser.reads().deleting(), "deletion must leave rows present until runtime confirmation");
+    check(browser.reads().rows().size() == 1 && browser.reads().rows().front().id == 1 && browser.reads().deleting(), "a deleted row leaves the list at once");
+    check(browser.reads().state().selection == 0, "the selection moves to a row still there");
     check(browser.apply(HistoryPruned{.request_id = deletion.request_id, .removed = 1}), "only the matching deletion confirmation may trigger refresh");
     const auto stale_deletion = browser.erase(1, ++sequence);
 
@@ -487,12 +590,16 @@ namespace {
       std::string_view expected;
     };
 
-    constexpr auto examples = ds::Array<Example, 5>{
+    constexpr auto examples = ds::Array<Example, 8>{
         Example{.input = "\x1b[31mfail\x1b[0m\r\n", .expected = "fail\n"},
         Example{.input = "before\x1b]52;c;hidden\aafter", .expected = "beforeafter"},
         Example{.input = "a\x1bPpayload\x1b\\b\x1bXhidden\x1b\\c\x1b^private\ad\x1b_graphics\x1b\\e", .expected = "abcde"},
         Example{.input = "a\x1b(Bb\x1b[12;", .expected = "ab"},
         Example{.input = "café\t🌱\n", .expected = "café\t🌱\n"},
+        // A progress line rewritten with carriage returns shows its last state.
+        Example{.input = "10%\r50%\r100%\ndone\n", .expected = "100%\ndone\n"},
+        Example{.input = "first\nloading…\r\x1b[2Kready\r\n", .expected = "first\nready\n"},
+        Example{.input = "end\r", .expected = "end"},
     };
 
     constexpr std::size_t output_capacity = 128;
@@ -572,6 +679,9 @@ namespace {
     check(HistorySearch::parse(" !compiler", false).query == " !compiler", "only a leading failure marker changes the filter");
     check(HistorySearch::parse("!\tcompiler", false).query == "\tcompiler", "the failure prefix must preserve non-space query bytes");
     check(HistorySearch::parse("compiler", true).failed_only, "an explicit failure filter must survive an ordinary query");
+    const auto literal = HistorySearch::parse("\\!important", false);
+
+    check(!literal.failed_only && literal.query == "!important", "an escaped ! searches for itself");
   }
 
   void historyRowsProtectTheCommandBeforeFacts() {
@@ -604,6 +714,9 @@ namespace {
   }
 
   const telar::testing::Case case_owned_search_and_pages{"history.owned_search_and_pages", ownedSearchAndPages};
+  const telar::testing::Case case_delete_keeps_the_position{"history.delete_keeps_the_position", deleteKeepsThePosition};
+  const telar::testing::Case case_deletes_queue{"history.deletes_queue", deletesQueue};
+  const telar::testing::Case case_details_retry_and_fail_alone{"history.details_retry_and_fail_alone", detailsRetryAndFailAlone};
   const telar::testing::Case case_rendered_choices_never_retarget_a_command{"history.rendered_choices_never_retarget_a_command", renderedChoicesNeverRetargetACommand};
   const telar::testing::Case case_bounded_requests_and_stale_failures{"history.bounded_requests_and_stale_failures", boundedRequestsAndStaleFailures};
   const telar::testing::Case case_allocation_failure_is_atomic{"history.allocation_failure_is_atomic", allocationFailureIsAtomic};

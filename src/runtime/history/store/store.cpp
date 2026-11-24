@@ -4,10 +4,12 @@ module;
 module telar.runtime.history.store;
 
 import std;
+import telar.sys.posix;
 import telar.native.sqlite;
 import telar.tbc;
 import telar.base.diagnostics;
 import telar.base.history;
+import telar.base.text.utf8;
 import telar.wire.runtime;
 import telar.base.ds;
 
@@ -206,10 +208,96 @@ namespace telar::runtime {
       };
     }
 
+    // A directory as the history keeps and matches it: its real path when it exists, so a link to
+    // it and the slash it may end with name it the same way, else the path without the slashes
+    // it ends with. Viewed in `buffer` or in `path`.
+    std::string_view canonicalDirectory(std::string_view path, ds::Array<char, PATH_MAX>& buffer) noexcept {
+      ds::Array<char, PATH_MAX> terminated{};
+
+      if (path.starts_with('/') && path.size() < terminated.size() && !path.contains('\0')) {
+        *std::ranges::copy(path, terminated.dataMut()).out = '\0';
+        if (::realpath(terminated.data(), buffer.dataMut()) != nullptr) {
+          return std::string_view{buffer.data()};
+        }
+      }
+
+      while (path.size() > 1 && path.ends_with('/')) {
+        path.remove_suffix(1);
+      }
+
+      return path;
+    }
+
+    // telar_fold(text): the text with historyFold's case fold, which a short query matches with
+    // as the index's trigrams fold a longer one. Its scratch is the store's memory.
+    void foldText(sqlite3_context* context, int count, sqlite3_value** values) {
+      constexpr std::size_t small_text = 1024;
+      if (count != 1 || sqlite3_value_type(values[0]) == SQLITE_NULL) {
+        sqlite3_result_null(context);
+        return;
+      }
+
+      const auto* bytes = reinterpret_cast<const char*>(sqlite3_value_text(values[0]));
+      const std::string_view text{bytes == nullptr ? "" : bytes, static_cast<std::size_t>(sqlite3_value_bytes(values[0]))};
+
+      try {
+        ds::Array<char, small_text> scratch; // NOLINT(cppcoreguidelines-pro-type-member-init): historyFold writes every byte SQLite copies
+        ds::String<ConcurrentMemory> large{*static_cast<ConcurrentMemory*>(sqlite3_user_data(context))};
+        std::span<char> out = scratch.viewMut();
+
+        if (text.size() > out.size()) {
+          large.resizeForOverwrite(text.size());
+          out = large.viewMut();
+        }
+
+        const auto written = historyFold(text, out);
+
+        sqlite3_result_text(context, out.data(), static_cast<int>(written), SQLITE_TRANSIENT);
+      } catch (...) {
+        sqlite3_result_error_nomem(context);
+      }
+    }
+
     // The schema must be current before the index can be built over it.
     bool prepareHistory(Database& database) {
       migrateHistory(database);
       return enableHistoryIndex(database);
+    }
+
+    // Outputs stored before the tracker dropped the shell integration's marks keep them, and the
+    // pane's token they carry: version 6 strips them, once.
+    void stripOutputMarks(Database& database, ConcurrentMemory& memory) {
+      constexpr std::int64_t stripped_version = 6;
+
+      {
+        Statement version{database, "SELECT version FROM history_schema"};
+        if (!version.next() || version.integer(0) >= stripped_version) {
+          return;
+        }
+      }
+
+      Transaction transaction{database};
+      Statement rows{database, "SELECT command_id, content FROM command_output WHERE instr(content, char(27) || ']133') > 0 OR instr(content, char(27) || ']6973') > 0"};
+      Statement update{database, "UPDATE command_output SET content = ?2 WHERE command_id = ?1"};
+      ds::String<ConcurrentMemory> kept{memory};
+
+      while (rows.next()) {
+        const auto content = rows.text(1);
+        IntegrationMarkFilter marks;
+
+        kept.clear();
+        marks.feed(byteView(content), [&](std::span<const std::uint8_t> run) {
+          kept.append({reinterpret_cast<const char*>(run.data()), run.size()});
+        });
+
+        update.reset();
+        update.bind(1, rows.integer(0));
+        update.bind(2, kept.view());
+        update.finish();
+      }
+
+      database.execute("UPDATE history_schema SET version = 6 WHERE version < 6");
+      transaction.commit();
     }
 
   }
@@ -227,6 +315,10 @@ namespace telar::runtime {
     }
 
     Transaction transaction{database_};
+    ds::Array<char, PATH_MAX> workspace_buffer; // NOLINT(cppcoreguidelines-pro-type-member-init): canonicalDirectory writes what it views
+    ds::Array<char, PATH_MAX> cwd_buffer;       // NOLINT(cppcoreguidelines-pro-type-member-init): canonicalDirectory writes what it views
+    const auto workspace_path = canonicalDirectory(context.workspace_path, workspace_buffer);
+    const auto cwd = canonicalDirectory(request.cwd, cwd_buffer);
     const auto now = context.received_at_ms != 0 ? context.received_at_ms : wallMilliseconds();
 
     session_.reset();
@@ -235,14 +327,14 @@ namespace telar::runtime {
     session_.bind(context_parameter::location_kind, static_cast<std::int64_t>(context.location.workspace.kind));
     session_.bind(context_parameter::location_id, static_cast<std::int64_t>(context.location.workspace.id));
     session_.bind(context_parameter::tab, static_cast<std::int64_t>(context.location.tab_id));
-    session_.bind(context_parameter::workspace_path, context.workspace_path);
+    session_.bind(context_parameter::workspace_path, workspace_path);
     session_.bind(agent_session_parameter::started_at, now);
     session_.finish();
 
     if (request.phase == AgentCommandPhase::finished && !request.tool_call_id.empty()) {
       finish_.reset();
       finish_.bind(agent_finish_parameter::command, request.command);
-      finish_.bind(agent_finish_parameter::cwd, request.cwd);
+      finish_.bind(agent_finish_parameter::cwd, cwd);
       finish_.bind(agent_finish_parameter::finished_at, now);
       if (request.exit_code) {
         finish_.bind(agent_finish_parameter::exit_code, *request.exit_code);
@@ -252,7 +344,7 @@ namespace telar::runtime {
 
       finish_.bind(agent_finish_parameter::session, std::span{context.history_session});
       finish_.bind(agent_finish_parameter::tool_call, request.tool_call_id);
-      finish_.bind(agent_finish_parameter::workspace_path, context.workspace_path);
+      finish_.bind(agent_finish_parameter::workspace_path, workspace_path);
       finish_.bind(agent_finish_parameter::provider, request.provider);
       finish_.finish();
       if (sqlite3_changes(database_.handle()) != 0) {
@@ -268,8 +360,8 @@ namespace telar::runtime {
     insert_.bind(context_parameter::location_id, static_cast<std::int64_t>(context.location.workspace.id));
     insert_.bind(context_parameter::tab, static_cast<std::int64_t>(context.location.tab_id));
     insert_.bind(agent_insert_parameter::command, request.command);
-    insert_.bind(agent_insert_parameter::cwd, request.cwd);
-    insert_.bind(agent_insert_parameter::workspace_path, context.workspace_path);
+    insert_.bind(agent_insert_parameter::cwd, cwd);
+    insert_.bind(agent_insert_parameter::workspace_path, workspace_path);
     insert_.bind(agent_insert_parameter::started_at, now);
     if (request.exit_code) {
       insert_.bind(agent_insert_parameter::exit_code, *request.exit_code);
@@ -399,7 +491,9 @@ namespace telar::runtime {
     bindContext(command_, session);
     command_.bind(pane_command_parameter::command, command.command);
     command_.bind(pane_command_parameter::truncated, static_cast<std::int64_t>(command.truncated));
-    command_.bind(pane_command_parameter::cwd, command.directory);
+    ds::Array<char, PATH_MAX> directory; // NOLINT(cppcoreguidelines-pro-type-member-init): canonicalDirectory writes what it views
+
+    command_.bind(pane_command_parameter::cwd, canonicalDirectory(command.directory, directory));
     command_.bind(pane_command_parameter::started_at, command.started.milliseconds);
     command_.bind(pane_command_parameter::duration, command.duration_ns);
     if (command.exit_code) {
@@ -430,7 +524,9 @@ namespace telar::runtime {
     statement.bind(context_parameter::location_kind, static_cast<std::int64_t>(session.location.workspace.kind));
     statement.bind(context_parameter::location_id, static_cast<std::int64_t>(session.location.workspace.id));
     statement.bind(context_parameter::tab, static_cast<std::int64_t>(session.location.tab_id));
-    statement.bind(context_parameter::workspace_path, session.workspace_path);
+    ds::Array<char, PATH_MAX> workspace; // NOLINT(cppcoreguidelines-pro-type-member-init): canonicalDirectory writes what it views
+
+    statement.bind(context_parameter::workspace_path, canonicalDirectory(session.workspace_path, workspace));
   }
 
   HistoryRows::HistoryRows(ConcurrentMemory& memory)
@@ -582,7 +678,10 @@ END;
         filters_(filters),
         database_(path),
         rows_(memory),
-        indexed_(prepareHistory(database_)) {}
+        indexed_(prepareHistory(database_)) {
+    stripOutputMarks(database_, memory_);
+    checkSqlite(sqlite3_create_function_v2(database_.handle(), "telar_fold", 1, SQLITE_UTF8 | SQLITE_DETERMINISTIC | SQLITE_INNOCUOUS, &memory_, foldText, nullptr, nullptr, nullptr));
+  }
 
   void HistoryStore::reportAgentCommand(const ReportAgentCommand& request, const RequestContext& context, EncodedReply<ConcurrentMemory>& reply) {
     if (!filters_.allowsAgent(request.command, request.cwd)) {
@@ -731,6 +830,14 @@ END;
     reply.send(HistoryPruned{.request_id = request.request_id, .removed = static_cast<std::uint64_t>(sqlite3_changes64(database_.handle()))});
   }
 
+  void HistoryStore::removeCommand(const DeleteHistoryCommand& request, EncodedReply<ConcurrentMemory>& reply) {
+    Statement statement{database_, "DELETE FROM command WHERE command = (SELECT command FROM command WHERE id = ?1)"};
+
+    statement.bind(1, integer(request.id));
+    statement.finish();
+    reply.send(HistoryPruned{.request_id = request.request_id, .removed = static_cast<std::uint64_t>(sqlite3_changes64(database_.handle()))});
+  }
+
   void HistoryStore::prune(const PruneHistory& request, EncodedReply<ConcurrentMemory>& reply) {
     auto sql = string("DELETE FROM command WHERE 1=1");
 
@@ -775,10 +882,12 @@ END;
 
   void HistoryStore::workspaces(const QueryHistoryWorkspaces& request, EncodedReply<ConcurrentMemory>& reply) {
     rows_.clear();
-    Statement recorded{database_, "SELECT DISTINCT workspace_path FROM session LIMIT ?1"};
+    // The paths that name no directory are left out here, not counted against the limit.
+    Statement recorded{database_, "SELECT DISTINCT workspace_path FROM session WHERE workspace_path != '' AND length(CAST(workspace_path AS BLOB)) < ?2 AND instr(workspace_path, char(0)) = 0 LIMIT ?1"};
 
     // One more than a reply lists, to tell a full reply from a truncated one.
     recorded.bind(1, static_cast<std::int64_t>(HistoryWorkspaces::maximum_paths) + 1);
+    recorded.bind(2, static_cast<std::int64_t>(max_path_bytes));
     ds::Vec<std::string_view, ConcurrentMemory> paths{memory_};
     HistoryWorkspaces result{.request_id = request.request_id};
     std::size_t bytes = 0;
@@ -840,7 +949,9 @@ END;
     std::size_t count = 0;
 
     while (top.next()) {
-      const auto group = historyGroup(top.text(0));
+      // A command longer than a stats entry carries, a 16-bit length, groups under what of it fits.
+      constexpr std::size_t entry_command_bytes = std::numeric_limits<std::uint16_t>::max();
+      const auto group = utf8Prefix(historyGroup(top.text(0)), entry_command_bytes);
       const auto occurrences = static_cast<std::uint64_t>(top.integer(1));
       const auto existing = groups.view().first(count);
       const auto found = static_cast<std::size_t>(std::ranges::find(existing, group, &HistoryStatsEntry::command) - existing.begin());
@@ -860,13 +971,18 @@ END;
   }
 
   void HistoryStore::queryFuzzy(const QueryHistory& request, EncodedReply<ConcurrentMemory>& reply) {
-    // The newest candidates, newest first: SQLite stops at the limit through the started_at
-    // index instead of every command being read and scored on each keystroke.
+    // The newest candidates, newest first: SQLite walks the started_at index and stops at the
+    // cap instead of every command being read and scored on each keystroke. For a list of each
+    // command once, the cap counts commands, not runs: a run of a command already read is
+    // passed over as it is read, so no command run often hides an older one.
     auto sql = string("SELECT id, command FROM command WHERE id <= ?1");
 
     appendFilters(sql, request);
-    sql.append(" ORDER BY started_at_ms DESC, id DESC LIMIT ");
-    sql.append(fuzzy_candidate_limit);
+    sql.append(" ORDER BY started_at_ms DESC, id DESC");
+    if (!request.distinct) {
+      sql.append(" LIMIT ");
+      sql.append(fuzzy_candidate_limit);
+    }
 
     Statement statement{database_, sql};
 
@@ -876,31 +992,25 @@ END;
 
     ranked.reserve(maximum_fuzzy_candidates);
     HashSet seen{memory_};
-
-    ds::Vec<FuzzyCandidate, ConcurrentMemory> candidates{memory_};
-
-    candidates.reserve(maximum_fuzzy_candidates);
-    while (statement.next()) {
-      FuzzyCandidate candidate{.id = statement.integer(0)};
-      const auto command = statement.text(1);
-
-      if (request.distinct) {
-        candidate.command_hash = ImportIdentity::hash(command_hash_seed, command);
-      }
-
-      candidate.score = historyScore(command, request.query);
-      candidates.push(candidate);
-    }
-
+    std::size_t read = 0;
+    bool capped = false;
     std::uint32_t order = 0;
 
-    for (const auto& candidate : candidates) {
-      if (request.distinct && !seen.insert(candidate.command_hash, true)) {
+    while (statement.next()) {
+      const auto command = statement.text(1);
+
+      if (request.distinct && !seen.insert(ImportIdentity::hash(command_hash_seed, command), true)) {
         continue;
       }
 
-      if (candidate.score) {
-        ranked.push(RankedEntry{.id = candidate.id, .score = *candidate.score, .order = order++});
+      if (read == maximum_fuzzy_candidates) {
+        capped = true;
+        break;
+      }
+
+      ++read;
+      if (const auto score = historyScore(command, request.query)) {
+        ranked.push(RankedEntry{.id = statement.integer(0), .score = *score, .order = order++});
       }
     }
 
@@ -929,7 +1039,8 @@ END;
       detail.reset();
     }
 
-    reply.send(HistoryResults{.request_id = request.request_id, .snapshot_id = request.snapshot_id, .has_more = start + rows_.entries().size() < ranked.size(), .entries = rows_.entries()});
+    // Past the cap there are commands the search did not read.
+    reply.send(HistoryResults{.request_id = request.request_id, .snapshot_id = request.snapshot_id, .has_more = capped || start + rows_.entries().size() < ranked.size(), .entries = rows_.entries()});
   }
 
   ds::String<ConcurrentMemory> HistoryStore::string(std::string_view value) const {
@@ -965,7 +1076,7 @@ END;
 
   void HistoryStore::appendMatch(ds::String<ConcurrentMemory>& sql, std::string_view query) const {
     if (!query.empty()) {
-      sql.append(useIndex(query) ? " AND id IN (SELECT rowid FROM command_fts WHERE command_fts MATCH ?3)" : " AND instr(lower(command), lower(?3)) > 0");
+      sql.append(useIndex(query) ? " AND id IN (SELECT rowid FROM command_fts WHERE command_fts MATCH ?3)" : " AND instr(telar_fold(command), telar_fold(?3)) > 0");
     }
   }
 
@@ -1012,7 +1123,10 @@ END;
     if (scope == HistoryScope::pane) {
       statement.bind(query_parameter::scope, integer(std::get<std::uint64_t>(value)));
     } else if (scope != HistoryScope::global) {
-      statement.bind(query_parameter::scope, std::get<std::string_view>(value));
+      // Matched as it is kept, however the query wrote it.
+      ds::Array<char, PATH_MAX> directory; // NOLINT(cppcoreguidelines-pro-type-member-init): canonicalDirectory writes what it views
+
+      statement.bind(query_parameter::scope, canonicalDirectory(std::get<std::string_view>(value), directory));
     }
   }
 

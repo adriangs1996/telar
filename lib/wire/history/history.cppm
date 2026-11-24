@@ -63,6 +63,17 @@ export extern "C++" {
     struct MessageSchema<DeleteHistory>
         : Schema<Direction::client, ClientTag::delete_history, Field<&DeleteHistory::request_id, NonzeroU64, "request_id">, Field<&DeleteHistory::id, NonzeroU64, "id">> {};
 
+    // Deletes every run of the command entry `id` ran, as a list of each command once shows it.
+    // Answered with HistoryPruned. Since cqp00012.
+    struct DeleteHistoryCommand {
+      std::uint64_t request_id{};
+      std::uint64_t id{};
+    };
+
+    template <>
+    struct MessageSchema<DeleteHistoryCommand>
+        : Schema<Direction::client, ClientTag::delete_history_command, Field<&DeleteHistoryCommand::request_id, NonzeroU64, "request_id">, Field<&DeleteHistoryCommand::id, NonzeroU64, "id">> {};
+
     struct PruneHistory {
       static constexpr std::size_t maximum_match_bytes = 1024;
 

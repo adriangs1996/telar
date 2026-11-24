@@ -25,6 +25,11 @@ namespace {
   // The memory a test's prompt lives in, counted so a test can tell it all came back.
   struct Arena {
     Arena() = default;
+
+    // An arena that refuses what passes `limit` bytes.
+    explicit Arena(std::size_t limit)
+        : budget{system, limit} {}
+
     ~Arena() = default;
     Arena(const Arena&) = delete;
     Arena& operator=(const Arena&) = delete;
@@ -47,8 +52,24 @@ namespace {
       static_cast<void>(feature::open(state_, lines_, pane_id, keymap));
     }
 
+    // An editor whose memory refuses what passes `limit` bytes.
+    Editor(Keymap keymap, std::size_t limit)
+        : Arena(limit),
+          state_(memory),
+          lines_(memory) {
+      static_cast<void>(feature::open(state_, lines_, pane_id, keymap));
+    }
+
+    // A command handed over is sent at once, as the owner does when the shell takes it.
     Outcome press(const KeyPress& key) {
-      return feature::press(state_, line(), Surface::editor, key, {.configuration = configuration_, .dialect = telar::shell::Dialect::posix});
+      const auto outcome = feature::press(state_, line(), Surface::editor, key, {.configuration = configuration_, .dialect = telar::shell::Dialect::posix});
+      if (outcome == Outcome::run || outcome == Outcome::answer) {
+        const telar::ds::String<Memory> sent{memory, outcome == Outcome::run ? feature::delivery(line()) : std::string_view{}};
+
+        feature::committed(line(), sent.view());
+      }
+
+      return outcome;
     }
 
     // `command` replaces the line, the caret at its end.
@@ -182,8 +203,8 @@ namespace {
     lines.press({.key = Key::up});
     require(cursor(lines) < 4, "counts lines");
 
-    // The text a line holds stops at 256 KiB, as Text::capacity says.
-    constexpr std::size_t capacity = std::size_t{256} * 1024;
+    // The text a line holds stops at 64 KiB, as Text::capacity says.
+    constexpr std::size_t capacity = std::size_t{64} * 1024;
     Arena arena;
     telar::ds::String<Memory> huge{arena.memory};
     Editor bounded;
@@ -191,6 +212,110 @@ namespace {
     huge.resize(capacity + 1, 'x');
     bounded.insert(huge.view());
     require(text(bounded).empty(), "refuses text beyond the capacity");
+  }
+
+  // A command pasted from the history search starts Up and Down over: Down keeps it instead of
+  // bringing back a draft from before the paste.
+  void writeStartsHistoryOver() {
+    Editor editor;
+
+    for (const auto* command : {"echo one", "echo two"}) {
+      type(editor, command);
+      static_cast<void>(editor.press({.key = Key::enter}));
+    }
+
+    static_cast<void>(editor.press({.key = Key::up}));
+    static_cast<void>(editor.press({.key = Key::up}));
+    require(text(editor) == "echo one", "Up walks back");
+    editor.write("ls -la");
+    static_cast<void>(editor.press({.key = Key::down}));
+    require(text(editor) == "ls -la", "Down after a paste keeps it");
+    static_cast<void>(editor.press({.key = Key::up}));
+    require(text(editor) == "echo two", "Up after a paste starts from the newest");
+  }
+
+  // The column Up and Down keep is forgotten by any other motion, as readline's is.
+  void emacsGoalColumn() {
+    Editor editor;
+
+    editor.write("abcdef\nabcdef\nab");
+    control(editor, 'a');
+    static_cast<void>(editor.press({.key = Key::up}));
+    require(cursor(editor) == 7, "Up keeps the column");
+    control(editor, 'e');
+    static_cast<void>(editor.press({.key = Key::down}));
+    require(cursor(editor) == 16, "after Ctrl-E, Down goes from the line's end, not the column before");
+  }
+
+  // An undo step keeps what it changed, not the whole text: many small edits of a long command
+  // hold little, and undo and redo still bring each state back.
+  void undoKeepsChanges() {
+    constexpr std::size_t budget = std::size_t{2} * 1024 * 1024;
+    constexpr std::size_t length = std::size_t{60} * 1024;
+    Editor editor{Keymap::emacs, budget};
+    const std::string long_text(length, 'x');
+
+    editor.write(long_text);
+    for (int index = 0; index < 200; ++index) {
+      control(editor, 'a');
+      type(editor, "y");
+    }
+
+    require(text(editor).size() == length + 200, "every edit took");
+    for (int index = 0; index < 200; ++index) {
+      control(editor, '_');
+    }
+
+    require(text(editor) == long_text, "undo brings the text back");
+    type(editor, "ab");
+    static_cast<void>(editor.press({.key = Key::backspace}));
+    type(editor, "c");
+    control(editor, '_');
+    require(text(editor) == "a" + long_text, "undo takes the last typing back");
+    control(editor, '_');
+    require(text(editor) == "ab" + long_text, "then the erasure");
+    control(editor, '_');
+    require(text(editor) == long_text, "then the first typing");
+
+    // Redo brings each step forward again.
+    Editor vim{Keymap::vim};
+
+    type(vim, "one two");
+    type(vim, "\x1b"
+              "0dwxu");
+    require(text(vim) == "two", "undo takes the last change back");
+    control(vim, 'r');
+    require(text(vim) == "wo", "redo brings it again");
+    type(vim, "uu");
+    require(text(vim) == "one two", "undo goes back through every step");
+  }
+
+  // Kills in a row join one kill ring entry, the ones backward before it, as readline's do.
+  void emacsKillsAccumulate() {
+    Editor backward;
+
+    type(backward, "one two three");
+    control(backward, 'w');
+    control(backward, 'w');
+    require(text(backward) == "one ", "two words killed");
+    control(backward, 'y');
+    require(text(backward) == "one two three", "two Ctrl-W in a row yank back as one");
+
+    Editor forward;
+
+    forward.write("a\nb");
+    control(forward, 'p');
+    control(forward, 'a');
+    control(forward, 'k');
+    control(forward, 'k');
+    require(text(forward) == "b", "the line and its newline killed");
+    control(forward, 'y');
+    require(text(forward) == "a\nb", "Ctrl-K in a row append to one kill");
+
+    control(forward, 'e');
+    control(forward, 'w');
+    control(forward, 'y');
+    require(text(forward) == "a\nb", "a kill after another key starts anew");
   }
 
   void emacs() {
@@ -381,6 +506,191 @@ namespace {
     require(text(editor).ends_with("pasted"), "the + register reads it");
   }
 
+  // Behaviours that differed from vim's, each as vim has it.
+  void vimFixes() {
+    // Vjd deletes both lines the selection spans.
+    {
+      Editor editor{Keymap::vim};
+
+      type(editor, "one\ntwo\nthree");
+      type(editor, "\x1bggVjd");
+      require(text(editor) == "three", "Vjd deletes the two lines");
+    }
+
+    // dd on the last line keeps the line, whole, for p to paste back as a line.
+    {
+      Editor editor{Keymap::vim};
+
+      type(editor, "a\nb");
+      type(editor, "\x1bGdd");
+      require(text(editor) == "a", "dd deletes the last line with the newline before it");
+      type(editor, "p");
+      require(text(editor) == "a\nb", "p puts it back as a line below");
+      type(editor, "ggP");
+      require(text(editor) == "b\na\nb", "P puts it as a line above");
+    }
+
+    // Changing case or indent keeps what was yanked.
+    {
+      Editor editor{Keymap::vim};
+
+      start(editor, "abc");
+      type(editor, "0yl~>><<");
+      type(editor, "$p");
+      require(text(editor) == "Abca", "~, >> and << leave the unnamed register alone");
+    }
+
+    // dw on a line's last word stops at the line's end instead of joining the next line.
+    {
+      Editor editor{Keymap::vim};
+
+      type(editor, "one two\nthree");
+      type(editor, "\x1bgg$bdw");
+      require(text(editor) == "one \nthree", "dw deletes the last word alone");
+    }
+
+    // ge goes back to the end of the word before, and dge deletes through it.
+    {
+      Editor editor{Keymap::vim};
+
+      start(editor, "one two three");
+      type(editor, "0fhge");
+      require(cursor(editor) == 6, "ge goes to the end of the word before");
+      type(editor, "fhdge");
+      require(text(editor) == "one twree", "dge deletes from there through the cursor");
+    }
+
+    // ; after T skips the character T stopped after, as it does after t.
+    {
+      Editor editor{Keymap::vim};
+
+      start(editor, "a,b,c");
+      type(editor, "$T,");
+      require(cursor(editor) == 4, "T, right after the comma stays");
+      type(editor, ";");
+      require(cursor(editor) == 2, "; goes on to the comma before");
+    }
+
+    // $ on an empty line reaches no character: d$ there keeps the line's newline.
+    {
+      Editor editor{Keymap::vim};
+
+      type(editor, "a\n\nb");
+      type(editor, "\x1bggjd$");
+      require(text(editor) == "a\n\nb", "d$ on an empty line deletes nothing");
+    }
+
+    // An insert is one undo step, from the command that began it to Escape, erasures included.
+    {
+      Editor editor{Keymap::vim};
+
+      start(editor, "one two");
+      type(editor, "0cwxyz\x1bu");
+      require(text(editor) == "one two", "cw and what it typed undo together");
+      type(editor, "oabc\x1bu");
+      require(text(editor) == "one two", "o and what it typed undo together");
+      type(editor, "$aabc");
+      static_cast<void>(editor.press({.key = Key::backspace}));
+      type(editor, "d\x1bu");
+      require(text(editor) == "one two", "a Backspace inside the insert does not split it");
+    }
+
+    // r followed by a key that types nothing is cancelled, the text left alone.
+    {
+      Editor editor{Keymap::vim};
+
+      start(editor, "abc");
+      for (const auto key : {Key::backspace, Key::left, Key::delete_forward}) {
+        type(editor, "0r");
+        static_cast<void>(editor.press({.key = key}));
+        require(text(editor) == "abc", "r with a key that types nothing changes nothing");
+      }
+
+      type(editor, "0rx");
+      require(text(editor) == "xbc", "r still replaces with a character");
+    }
+
+    // A put that could not fit builds nothing first: 9999p of a large register does not try to
+    // hold thousands of copies of it.
+    {
+      constexpr std::size_t budget = std::size_t{4} * 1024 * 1024;
+      Editor editor{Keymap::vim, budget};
+
+      editor.write(std::string(std::size_t{32} * 1024, 'x'));
+      type(editor, "\x1b"
+                   "0yy9999p");
+      require(text(editor).size() == std::size_t{32} * 1024, "a put past the capacity changes nothing");
+    }
+
+    // The smaller ones.
+    {
+      Editor editor{Keymap::vim};
+
+      start(editor, "a b c d e f g");
+      type(editor, "02dw3.");
+      require(text(editor) == "f g", "a count before . replaces the change's own");
+    }
+
+    {
+      Editor editor{Keymap::vim};
+
+      start(editor, "one two");
+      type(editor, "0wyy");
+      require(cursor(editor) == 4, "yy keeps the cursor");
+      type(editor, "Y");
+      require(cursor(editor) == 4, "Y keeps the cursor");
+    }
+
+    {
+      Editor editor{Keymap::vim};
+
+      type(editor, "a\nb\nc");
+      type(editor, "\x1bgg5j");
+      require(cursor(editor) == 4, "5j with fewer lines below goes to the last");
+    }
+
+    {
+      Editor editor{Keymap::vim};
+
+      start(editor, "ab");
+      type(editor, "0vlllld");
+      require(text(editor).empty(), "visual l stops at the last character");
+    }
+
+    {
+      Editor editor{Keymap::vim};
+
+      type(editor, "one\ntwo");
+      type(editor, "\x1bggyyjVp");
+      require(text(editor) == "one\none", "V with a line register replaces the line with it");
+      type(editor, "ggyyGvep");
+      require(text(editor) == "one\n\none\n", "v with a line register puts the line apart");
+      type(editor, "ggP");
+      require(text(editor) == "oneone\n\none\n", "the replaced text, charwise, is in the unnamed register");
+    }
+
+    // What a visual mode highlights is what d takes: v both ends' characters, V whole lines.
+    {
+      Editor editor{Keymap::vim};
+
+      type(editor, "abc\ndef");
+      type(editor, "\x1bgg0vl");
+      const auto characters = editor.view().highlight();
+
+      require(characters && characters->first == 0 && characters->second == 2, "v highlights both ends' characters");
+      type(editor, "o");
+      const auto swapped = editor.view().highlight();
+
+      require(swapped && swapped->first == 0 && swapped->second == 2, "and the anchor's after o");
+      type(editor, "\x1bVj");
+      const auto lines = editor.view().highlight();
+
+      require(lines && lines->first == 0 && lines->second == 7, "V highlights whole lines");
+      type(editor, "\x1b");
+      require(!editor.view().highlight(), "nothing is highlighted outside them");
+    }
+  }
+
   void routing() {
     // The line discipline's defaults: Ctrl-C, Ctrl-\, Ctrl-Z and Ctrl-D.
     constexpr telar::Byte interrupt = 0x03;
@@ -509,6 +819,55 @@ namespace {
     const auto cjk = layout({.text = wide, .styles = styled(wide).view()}, {.cursor = wide.size(), .anchor = wide.size()}, 80);
 
     require(cjk.caret_column == Layout::indent + echo_cells + cjk_cells, "wide characters take two cells");
+
+    // A caret inside a grapheme is drawn on that grapheme, never at the line's start.
+    const std::string_view accented = "cafe\u0301";
+    const auto inside = layout({.text = accented, .styles = styled(accented).view()}, {.cursor = accented.size() - 1, .anchor = accented.size() - 1}, 80);
+
+    require(inside.caret_column == Layout::indent + 3, "the caret sits on the grapheme it is inside");
+
+    // A bidi or zero-width character takes the cells of a mark naming it, in a run of its own the
+    // view draws as that mark: what runs is what shows.
+    const std::string_view trojan = "echo a\u202Eb\u200Bc";
+    const auto marked = layout({.text = trojan, .styles = styled(trojan).view()}, {.cursor = trojan.size(), .anchor = trojan.size()}, 80);
+    const auto hidden = std::ranges::count_if(marked.runs, [](const Run& run) {
+      return run.style == Style::hidden;
+    });
+    telar::ds::String<Memory> marks{arena.memory};
+
+    hiddenMarks("\u202E\u200B", marks);
+    require(hidden == 2 && marked.caret_column == Layout::indent + 6 + (2 * hidden_mark_columns) + 2, "each takes a mark's cells, in a run of its own");
+    require(marks.view() == "⟨U+202E⟩⟨U+200B⟩", "the mark names the character");
+
+    // A command of more runs than a layout keeps still shows the rows around its caret.
+    std::string long_command;
+
+    for (int index = 0; index < 3000; ++index) {
+      long_command += "a 'b' ";
+    }
+
+    const auto far = layout({.text = long_command, .styles = styled(long_command).view()}, {.cursor = long_command.size(), .anchor = long_command.size()}, 40);
+    const auto shown = std::ranges::count_if(far.runs, [&](const Run& run) {
+      return run.row == far.caret_row;
+    });
+
+    require(far.caret_row + 1 == far.rows && shown > 0, "the caret's row has its runs");
+  }
+
+  // Left, Right and Backspace move over a grapheme, an accent written apart or a flag whole.
+  void graphemeMotions() {
+    Editor editor;
+
+    editor.insert("cafe\u0301");
+    static_cast<void>(editor.press({.key = Key::left}));
+    require(cursor(editor) == 3, "Left steps over the accented letter");
+    static_cast<void>(editor.press({.key = Key::right}));
+    require(cursor(editor) == text(editor).size(), "Right steps over it");
+    static_cast<void>(editor.press({.key = Key::backspace}));
+    require(text(editor) == "caf", "Backspace erases the letter with its accent");
+    editor.insert("\U0001F1EA\U0001F1F8");
+    static_cast<void>(editor.press({.key = Key::left}));
+    require(cursor(editor) == 3, "a flag is one step");
   }
 
   // What the line holds (its text, undo, registers and the commands it ran) lives in the memory
@@ -547,6 +906,12 @@ namespace {
     require(arena.budget.liveBytes() == 0, "the line gives all of it back");
   }
 
+  const telar::testing::Case case_write_starts_history_over{"prompt_editor.write_starts_history_over", writeStartsHistoryOver};
+  const telar::testing::Case case_grapheme_motions{"prompt_editor.grapheme_motions", graphemeMotions};
+  const telar::testing::Case case_vim_fixes{"prompt_editor.vim_fixes", vimFixes};
+  const telar::testing::Case case_emacs_goal_column{"prompt_editor.emacs_goal_column", emacsGoalColumn};
+  const telar::testing::Case case_emacs_kills_accumulate{"prompt_editor.emacs_kills_accumulate", emacsKillsAccumulate};
+  const telar::testing::Case case_undo_keeps_changes{"prompt_editor.undo_keeps_changes", undoKeepsChanges};
   const telar::testing::Case case_memory_returns{"prompt_editor.memory_returns", memoryReturns};
   const telar::testing::Case case_layout_and_styles{"prompt_editor.layout_and_styles", layoutAndStyles};
   const telar::testing::Case case_routing{"prompt_editor.routing", routing};

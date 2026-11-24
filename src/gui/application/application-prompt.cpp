@@ -13,6 +13,7 @@ import telar.wire.editor;
 import telar.wire.pane_io;
 import telar.wire.vocabulary;
 import telar.base.ds;
+import telar.client;
 
 namespace telar::gui::application::prompt {
 
@@ -90,12 +91,13 @@ namespace telar::gui::application::prompt {
         return;
       }
 
-      // A command's spec comes from the runtime, for the commands this pane's shell runs; while
-      // it is on its way, Tab waits for it and completes once it arrives.
+      // A command's spec comes from the runtime, for the commands this pane's shell runs, a remote
+      // one's too; while it is on its way, Tab waits for it and completes once it arrives. Files,
+      // commands and providers only for a shell on this host.
       const bool asks = ready && !pane->shell.remote;
       bool specified = false;
 
-      if (!context->command_position && asks) {
+      if (!context->command_position && ready) {
         switch (specState(state, session.link, *pane, context->command)) {
         case SpecState::available:
           specified = true;
@@ -108,7 +110,7 @@ namespace telar::gui::application::prompt {
         }
       }
 
-      auto plan = features::prompt::plan(state, *line, std::move(context.getMut()), {.specified = specified, .asks = asks, .directory = std::string_view{pane->cwd}, .dialect = dialect});
+      auto plan = features::prompt::plan(state, *line, std::move(context.getMut()), {.specified = specified, .asks = asks, .directory = std::string_view{pane->cwd}, .dialect = dialect, .reads_directories = session.speaks(handshake::directory_words), .reads_references = session.speaks(handshake::reference_words)});
 
       for (std::size_t index = 0; index < features::prompt::questions(plan); ++index) {
         const auto request_id = session.link.nextRequest();
@@ -128,11 +130,12 @@ namespace telar::gui::application::prompt {
     }
 
     // Sends what pane `pane_id`'s line decided: a command to run, a line for the running program,
-    // or raw bytes the shell reads as keys. Commands are validated like a pasted history entry.
+    // or raw bytes the shell reads as keys. Commands are validated like a pasted history entry,
+    // and the line lets go of one only once it is sent: one that cannot be stays in the editor.
     // The text is copied first: sending it reaches the line again, for a secret prompt's dots.
     void deliver(Session& session, std::uint64_t pane_id, Outcome outcome) {
       const auto* pane = findPane(session.panes, pane_id);
-      const auto* line = features::prompt::find(session.prompt_lines, pane_id);
+      auto* line = features::prompt::find(session.prompt_lines, pane_id);
       if (pane == nullptr || line == nullptr || !pane->attached || pane->exited) {
         return;
       }
@@ -141,15 +144,24 @@ namespace telar::gui::application::prompt {
       ds::String<Memory> text{session.memory, features::prompt::delivery(*line)};
 
       switch (outcome) {
-      case Outcome::run:
+      case Outcome::run: {
         features::history::HistoryText::validate(text.view(), bracketed);
         session.runCommand(pane_id, text.view());
-        features::prompt::remember(session.prompt, text.view());
+        // What the history does not keep, the suggestions do not offer.
+        const bool kept = session.configuration.history_filters.allowsPane(text.view(), std::string_view{pane->cwd});
+
+        features::prompt::committed(*line, kept ? text.view() : std::string_view{});
+        if (kept) {
+          features::prompt::remember(session.prompt, text.view());
+        }
+
         break;
+      }
       case Outcome::answer:
         features::history::HistoryText::validate(text.empty() ? std::string_view{" "} : text.view(), false);
         text.push('\r');
         session.input(pane_id, text.view());
+        features::prompt::committed(*line, {});
         break;
       case Outcome::bytes:
         session.input(pane_id, text.view());
@@ -294,7 +306,7 @@ namespace telar::gui::application::prompt {
     const auto request_id = session.link.nextRequest();
 
     try {
-      const auto query = features::prompt::ask(state.command_root, asked, word, request_id);
+      const auto query = features::prompt::ask(state.command_root, asked, word, request_id, session.speaks(handshake::directory_words));
       if (!query) {
         return CommandPresence::unknown;
       }
@@ -342,8 +354,19 @@ namespace telar::gui::application::prompt {
       return;
     }
 
+    // A history that never arrived is asked for again each time a shell is back at its prompt.
+    if (current.phase == ShellPhase::prompt && previous.phase != ShellPhase::prompt && features::prompt::historyWanted(session.prompt)) {
+      requestHistory(session);
+    }
+
     if (const auto outcome = features::prompt::follow(*line, previous, current)) {
       deliver(session, pane_id, *outcome);
+    }
+  }
+
+  void connected(Session& session) {
+    if (!session.prompt_lines.empty() && features::prompt::historyWanted(session.prompt)) {
+      requestHistory(session);
     }
   }
 

@@ -167,7 +167,13 @@ namespace telar::gui::application::history {
 
     HistoryText::validate(command, bracketed);
     session.paste(pane_id, command);
-    if (runs) {
+    // Enter runs the command only where the shell waits for one: a program in front, as vim or an
+    // agent, would take it as its own key. Without shell integration only a full-screen program
+    // tells that the shell is not in front.
+    const bool integrated = pane->shell.shell != IntegratedShell::none;
+    const bool at_prompt = integrated ? pane->shell.phase == ShellPhase::prompt : !pane->screen.modes().alternate_screen;
+
+    if (runs && at_prompt) {
       session.input(pane_id, "\r");
     }
   }
@@ -182,8 +188,13 @@ namespace telar::gui::application::history {
 
   void remove(Session& session, std::uint64_t entry_id) {
     const auto request = features::history::erase(session.history, entry_id, session.link.nextRequest());
+    // The search lists each command once, at its newest run: deleting it deletes every run, or
+    // the next older one would take its place. A runtime before cqp00012 deletes the one run.
+    const auto refused = session.speaks(ClientTag::delete_history_command) ? refusal(session.link, DeleteHistoryCommand{.request_id = request.request_id, .id = request.id}) : refusal(session.link, request);
 
-    settle(session.history, request.request_id, refusal(session.link, request));
+    settle(session.history, request.request_id, refused);
+    // The row that took the deleted one's place is selected now.
+    readDetails(session);
   }
 
   Change receive(Session& session, const HistoryResults& results) {
@@ -200,16 +211,20 @@ namespace telar::gui::application::history {
     return features::history::receive(session.history, output) ? Change::history : Change::none;
   }
 
-  Change receive(Session& session, const HistoryPruned& pruned) {
+  void refresh(Session& session) {
     auto& state = session.history;
-    if (!features::history::receive(state, pruned)) {
-      return Change::none;
-    }
-
     const auto request = features::history::refresh(state, session.link.nextRequest());
     const auto refused = refusal(session.link, request);
 
     settle(state, request.request_id, refused);
+  }
+
+  Change receive(Session& session, const HistoryPruned& pruned) {
+    if (!features::history::receive(session.history, pruned)) {
+      return Change::none;
+    }
+
+    refresh(session);
 
     return Change::history;
   }

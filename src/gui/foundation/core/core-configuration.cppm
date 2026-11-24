@@ -5,6 +5,7 @@ import std;
 import telar.base.memory.containers;
 import telar.wire.vocabulary;
 import telar.config.client;
+import telar.config.runtime;
 import :theme;
 import telar.base.ds;
 
@@ -114,6 +115,9 @@ export {
       PromptMotion motion = PromptMotion::spring;
       PromptKeymap keymap = PromptKeymap::emacs;
       bool ghost = true;
+      // On macOS, Option+key sends Meta (Alt) with the key under it instead of the character
+      // the layout gives it, in the editor and the terminal alike.
+      bool macos_option_as_alt = false;
       std::uint8_t max_lines = default_max_lines;
       PromptBindings bindings;
 
@@ -167,6 +171,9 @@ export {
       runtime::FixedText<maximum_editor_bytes> editor;
       runtime::FixedText<maximum_window_title_bytes> window_title;
       HistoryConfiguration history;
+      // What the history does not keep, from the configuration's runtime.history: the editor
+      // suggests none of it either. A runtime on another machine filters by its own.
+      runtime::HistoryFilters history_filters;
       // The changes the configuration makes to the explorer's keys.
       runtime::config::ExplorerKeys explorer_keys;
       PromptConfiguration prompt;

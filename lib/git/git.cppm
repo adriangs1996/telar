@@ -168,6 +168,11 @@ export namespace telar::git {
     // throws: failures and limits show as unknown parts of the status.
     const Status& read(std::string_view directory) noexcept;
 
+    // Reads only what read() reads to find the repository and its refs: no divergence, and no
+    // comparison of the index with HEAD or the working tree, whose counts keep their last
+    // values. Enough for branches(), remoteBranches(), tags(), remotes() and stashes().
+    const Status& refs(std::string_view directory) noexcept;
+
     [[nodiscard]] const Status& status() const noexcept;
 
     // The remotes the repository's config names, from the last read().
@@ -191,14 +196,19 @@ export namespace telar::git {
     // Reads only what it lists; nothing is followed out of the git directory.
     template <typename Visit>
     TBC_GENERIC void branches(std::size_t limit, Visit&& visit) const noexcept {
-      // Stays generic over the caller's visitor, which the reader calls through a function pointer.
-      using Target = std::remove_reference_t<Visit>;
+      references("refs/heads", limit, std::forward<Visit>(visit));
+    }
 
-      auto&& visitor = std::forward<Visit>(visit);
+    // The remote-tracking branches, as remote/branch, the same way; a remote's HEAD is not one.
+    template <typename Visit>
+    TBC_GENERIC void remoteBranches(std::size_t limit, Visit&& visit) const noexcept {
+      references("refs/remotes", limit, std::forward<Visit>(visit));
+    }
 
-      visitBranches(limit, const_cast<std::remove_const_t<Target>*>(std::addressof(visitor)), [](void* target, std::string_view name) {
-        (*static_cast<Target*>(target))(name);
-      });
+    // The tags, the same way.
+    template <typename Visit>
+    TBC_GENERIC void tags(std::size_t limit, Visit&& visit) const noexcept {
+      references("refs/tags", limit, std::forward<Visit>(visit));
     }
 
     // Whether HEAD, the index, the config, packed-refs, the branch or upstream
@@ -210,7 +220,21 @@ export namespace telar::git {
 
   private:
     void visitRemotes(void* target, void (*visit)(void*, std::string_view)) noexcept;
-    void visitBranches(std::size_t limit, void* target, void (*visit)(void*, std::string_view)) const noexcept;
+
+    // The refs under `space` (refs/heads, refs/remotes or refs/tags), named without it.
+    template <typename Visit>
+    TBC_GENERIC void references(std::string_view space, std::size_t limit, Visit&& visit) const noexcept {
+      // Stays generic over the caller's visitor, which the reader calls through a function pointer.
+      using Target = std::remove_reference_t<Visit>;
+
+      auto&& visitor = std::forward<Visit>(visit);
+
+      visitReferences(space, limit, const_cast<std::remove_const_t<Target>*>(std::addressof(visitor)), [](void* target, std::string_view name) {
+        (*static_cast<Target*>(target))(name);
+      });
+    }
+
+    void visitReferences(std::string_view space, std::size_t limit, void* target, void (*visit)(void*, std::string_view)) const noexcept;
     void reset(RepositoryState state);
 
     // Drops every cache that belongs to the previous repository.
@@ -218,7 +242,8 @@ export namespace telar::git {
 
     [[nodiscard]] Inputs probe() const noexcept;
     [[nodiscard]] Fingerprint referenceFingerprint(std::string_view name) const noexcept;
-    void readRepository(std::string_view directory);
+    // Everything read() reads, or with `refs_only` only what refs() does.
+    void readRepository(std::string_view directory, bool refs_only = false);
 
     // Walks up from `directory` as git's setup_git_directory does: a .git
     // directory or "gitdir:" file, else the directory itself as a bare git

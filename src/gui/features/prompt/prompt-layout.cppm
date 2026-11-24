@@ -27,7 +27,16 @@ export namespace telar::gui::features::prompt {
     // An argument naming a file, and a command the shell does not run.
     path,
     missing,
+    // A bidi control or a zero-width character, drawn as the mark that names it: hidden, it
+    // would make the command shown differ from the one that runs.
+    hidden,
   };
+
+  // The cells of a hidden character's mark, ⟨U+202E⟩.
+  inline constexpr std::uint32_t hidden_mark_columns = 8;
+
+  // The marks of the hidden characters of `text`, a hidden run's, appended to `out`.
+  void hiddenMarks(std::string_view text, ds::String<Memory>& out);
 
   struct Run {
     std::uint32_t row = 0;
@@ -50,6 +59,9 @@ export namespace telar::gui::features::prompt {
     // The prompt mark takes the first columns of every row, so wrapped lines align with it.
     static constexpr std::uint32_t indent = 2;
     static constexpr std::size_t maximum_runs = 4096;
+    // A text that could hold more runs keeps those of the rows this far around the caret's, more
+    // than a view of the most lines the editor shows reaches: the rest it scrolls to.
+    static constexpr std::uint32_t kept_rows = 64;
 
     explicit Layout(Memory& memory);
 
@@ -82,10 +94,12 @@ export namespace telar::gui::features::prompt {
     std::span<const std::uint8_t> groups;
   };
 
-  // The caret's byte and the selection's other end; nothing is selected when they meet.
+  // The caret's byte and the selection's other end; nothing is selected when they meet. `range`,
+  // when given, is what is highlighted instead, as vim's visual modes take more than that.
   struct Selection {
     std::size_t cursor = 0;
     std::size_t anchor = 0;
+    ds::Option<std::pair<std::size_t, std::size_t>> range;
   };
 
   // Lays out `styled` in rows of `columns` cells into `result`, replacing what it held. A run

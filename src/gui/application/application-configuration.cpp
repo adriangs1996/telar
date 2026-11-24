@@ -47,6 +47,10 @@ namespace telar::gui::application {
       });
 
       features::configuration::ThemeReader::apply(settings.themes, result.themes);
+      if (const auto runtime = configuration.field("runtime"); runtime.is(LUA_TTABLE)) {
+        runtime::config::readHistoryFilters(runtime.field("history"), result.history_filters);
+      }
+
       client(settings.client, result);
       prompt(settings.client.prompt, bindings, result.prompt);
       gui(settings.gui, result);
@@ -148,6 +152,7 @@ namespace telar::gui::application {
     }
 
     prompt.ghost = settings.ghost.valueOr(prompt.ghost);
+    prompt.macos_option_as_alt = settings.macos_option_as_alt.valueOr(prompt.macos_option_as_alt);
     prompt.max_lines = settings.max_lines.valueOr(prompt.max_lines);
   }
 

@@ -46,6 +46,12 @@ namespace telar::gui::features::prompt {
 
     [[nodiscard]] Mode mode() const noexcept;
 
+    // What a visual mode takes, and highlights: from one end's character through the other's for v,
+
+    // the lines they are on for V; none outside them.
+
+    [[nodiscard]] ds::Option<std::pair<std::size_t, std::size_t>> visualRange() const noexcept;
+
     // An operator or count is waiting for the rest of the command.
     [[nodiscard]] bool pending() const noexcept;
 
@@ -66,6 +72,9 @@ namespace telar::gui::features::prompt {
     Request press(const KeyPress& key);
 
   private:
+    // perform's own work, inside the goal column's bookkeeping.
+    Request performAction(Action action);
+
     enum class Pending : std::uint8_t {
       none,
       find,
@@ -143,6 +152,8 @@ namespace telar::gui::features::prompt {
 
     // vim's e: the last character of the current or next word.
     [[nodiscard]] std::size_t endOfWord(std::size_t offset, bool big) const noexcept;
+    // The end of the word before the one at `offset`, as vim's ge goes back to it.
+    [[nodiscard]] std::size_t wordEndBackward(std::size_t offset, bool big) const noexcept;
 
     // ---- vim -------------------------------------------------------------------------------
 
@@ -295,6 +306,11 @@ namespace telar::gui::features::prompt {
     tbc::val_a<ds::Vec<Recorded, Memory>> recorded_;
     tbc::val_a<ds::Vec<Recorded, Memory>> last_change_;
     ds::Option<std::size_t> goal_column_;
+    // Whether the key or action being handled moved Up or Down, which keeps the goal column.
+    bool vertical_ = false;
+    // Whether the key being handled killed text, and whether the one before did.
+    bool killing_ = false;
+    bool killed_ = false;
     Find last_find_;
     std::size_t count_ = 0;
     std::size_t operator_count_ = 0;

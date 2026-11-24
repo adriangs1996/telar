@@ -54,6 +54,18 @@ namespace telar::gui::features::prompt {
     return mode_;
   }
 
+  ds::Option<std::pair<std::size_t, std::size_t>> Editor::visualRange() const noexcept {
+    if (mode_ != Mode::visual && mode_ != Mode::visual_line) {
+      return ds::none;
+    }
+
+    if (mode_ == Mode::visual_line) {
+      return std::pair{text_.lineStart(text_.selectionStart()), text_.lineEnd(text_.selectionEnd())};
+    }
+
+    return std::pair{text_.selectionStart(), text_.next(text_.selectionEnd())};
+  }
+
   bool Editor::pending() const noexcept {
     return count_ != 0 || operator_ != 0 || pending_ != Pending::none || register_pending_;
   }
@@ -81,6 +93,21 @@ namespace telar::gui::features::prompt {
   }
 
   Request Editor::perform(Action action) {
+    // Run as a key is: the column Up and Down keep lasts only as long as they follow each other.
+    vertical_ = false;
+    killing_ = false;
+    const auto request = performAction(action);
+
+    if (!vertical_) {
+      goal_column_.reset();
+    }
+
+    killed_ = killing_;
+
+    return request;
+  }
+
+  Request Editor::performAction(Action action) {
     const auto cursor = text_.cursor();
 
     switch (action) {
@@ -160,6 +187,7 @@ namespace telar::gui::features::prompt {
     case Action::insert_mode:
       if (keymap_ == Keymap::vim && mode_ != Mode::insert) {
         mode_ = Mode::insert;
+        text_.hold();
         reset();
       }
 
@@ -174,7 +202,17 @@ namespace telar::gui::features::prompt {
       record(key);
     }
 
+    vertical_ = false;
+    killing_ = false;
     const auto request = dispatch(key);
+
+    // The column Up and Down keep lasts only as long as they follow each other, as kills join
+    // only while they do.
+    if (!vertical_) {
+      goal_column_.reset();
+    }
+
+    killed_ = killing_;
 
     if (repeat_requested_) {
       repeat();
@@ -381,6 +419,7 @@ namespace telar::gui::features::prompt {
 
     move(text_.atColumn({.line_start = target_start, .column = column}), extend);
     goal_column_ = column;
+    vertical_ = true;
     return Request::none;
   }
 
@@ -389,7 +428,19 @@ namespace telar::gui::features::prompt {
       return;
     }
 
-    kill_ring_.assign(text_.view().substr(start, end - start));
+    // Kills in a row join one entry, as readline's do: one backward of the cursor goes before
+    // what the others took, one forward of it after.
+    const auto killed = text_.view().substr(start, end - start);
+
+    if (!killed_) {
+      kill_ring_.assign(killed);
+    } else if (end == text_.cursor() && start < end) {
+      kill_ring_.insert(0, killed);
+    } else {
+      kill_ring_.append(killed);
+    }
+
+    killing_ = true;
     text_.replace(start, end, {});
   }
 
@@ -491,6 +542,30 @@ namespace telar::gui::features::prompt {
     return position;
   }
 
+  std::size_t Editor::wordEndBackward(std::size_t offset, bool big) const noexcept {
+    auto position = offset;
+
+    // Out of the word the cursor is on, then over the blanks before it.
+    if (!blank(position)) {
+      const auto run = kind(position, big);
+
+      while (position > 0 && kind(text_.previous(position), big) == run) {
+        position = text_.previous(position);
+      }
+    }
+
+    if (position == 0) {
+      return 0;
+    }
+
+    position = text_.previous(position);
+    while (position > 0 && blank(position)) {
+      position = text_.previous(position);
+    }
+
+    return position;
+  }
+
   std::size_t Editor::endOfWord(std::size_t offset, bool big) const noexcept {
     auto position = text_.next(offset);
 
@@ -523,7 +598,7 @@ namespace telar::gui::features::prompt {
 
   void Editor::enterNormal() {
     mode_ = Mode::normal;
-    text_.seal();
+    text_.release();
     const auto cursor = text_.cursor();
     if (cursor > text_.lineStart(cursor)) {
       text_.moveTo(text_.previous(cursor));
@@ -539,6 +614,7 @@ namespace telar::gui::features::prompt {
     mode_ = Mode::insert;
     text_.moveTo(offset);
     text_.seal();
+    text_.hold();
   }
 
   void Editor::clampNormal() noexcept {
@@ -633,6 +709,12 @@ namespace telar::gui::features::prompt {
 
     switch (pending_) {
     case Pending::replace:
+      // A key that types nothing (Backspace, an arrow, Delete) cancels the r.
+      if (key.key != Key::character || key.text.empty()) {
+        reset();
+        return Request::none;
+      }
+
       replaceCharacters(key.text);
       return Request::none;
     case Pending::find:
@@ -656,7 +738,13 @@ namespace telar::gui::features::prompt {
     }
 
     if (character == 'e' || character == 'E') {
-      return applyMotion(Motion{.target = wordStart(text_.cursor(), character == 'E'), .inclusive = true});
+      auto target = text_.cursor();
+
+      for (std::size_t index = 0; index < count(); ++index) {
+        target = wordEndBackward(target, character == 'E');
+      }
+
+      return applyMotion(Motion{.target = target, .inclusive = true});
     }
 
     reset();
@@ -769,7 +857,11 @@ namespace telar::gui::features::prompt {
     case ' ':
       return Motion{
           .target = apply([&](std::size_t offset) {
-            return offset < text_.lineEnd(cursor) ? text_.next(offset) : offset;
+            // A visual selection stops on the line's last character, as vim's does.
+            const auto line_end = text_.lineEnd(cursor);
+            const auto last = (mode_ == Mode::visual || mode_ == Mode::visual_line) && line_end > text_.lineStart(cursor) ? text_.previous(line_end) : line_end;
+
+            return offset < last ? text_.next(offset) : offset;
           }),
       };
     case 'w':
@@ -835,9 +927,17 @@ namespace telar::gui::features::prompt {
     }
 
     auto position = cursor;
+    auto last = cursor;
 
     for (std::size_t index = 0; index < repeat; ++index) {
+      last = position;
       position = nextWord(position, big);
+    }
+
+    // With an operator, the last word moved over ends the text when it ends its line, as vim
+    // has it: dw on a line's last word does not join the next line.
+    if (operator_ != 0 && position > text_.lineEnd(last)) {
+      position = text_.lineEnd(last);
     }
 
     return Motion{.target = position};
@@ -853,7 +953,12 @@ namespace telar::gui::features::prompt {
 
     const auto end = text_.lineEnd(line);
 
-    return Motion{.target = end > line ? text_.previous(end) : end, .inclusive = true};
+    // An empty line has no character for $ to reach: the motion covers nothing, not its newline.
+    if (end == line) {
+      return Motion{.target = end};
+    }
+
+    return Motion{.target = text_.previous(end), .inclusive = true};
   }
 
   Editor::Motion Editor::lineMotion(bool down) const noexcept {
@@ -862,9 +967,14 @@ namespace telar::gui::features::prompt {
     auto line = text_.lineStart(cursor);
 
     for (std::size_t index = 0; index < repeat; ++index) {
+      // A count past the last line goes as far as there are lines; none at all moves nowhere.
       const bool edge = down ? text_.lineEnd(line) == text_.size() : line == 0;
       if (edge) {
-        return Motion{.target = cursor, .inclusive = false, .linewise = true, .valid = operator_ != 0 && index > 0};
+        if (index == 0) {
+          return Motion{.target = cursor, .inclusive = false, .linewise = true, .valid = false};
+        }
+
+        break;
       }
 
       line = down ? text_.lineEnd(line) + 1 : text_.lineStart(line - 1);
@@ -955,7 +1065,13 @@ namespace telar::gui::features::prompt {
   ds::Option<std::size_t> Editor::findBefore(std::size_t position, std::string_view needle, bool skip, std::size_t start) const {
     const auto view = text_.view();
     auto from = text_.previous(position);
-    if (skip && from > start && view.substr(text_.previous(from), needle.size()) == needle) {
+
+    // As findAfter does: the character right before the cursor, which T stopped after, is passed.
+    if (skip && position > start && view.substr(from, needle.size()) == needle) {
+      if (from <= start) {
+        return ds::none;
+      }
+
       from = text_.previous(from);
     }
 
@@ -1188,21 +1304,33 @@ namespace telar::gui::features::prompt {
 
   void Editor::operate(std::size_t start, std::size_t end, bool linewise) {
     const auto action = operator_;
+    const auto cursor = text_.cursor();
+    // Only what deletes, changes or yanks fills a register; case and indent leave it alone.
+    const bool stores = action == 'd' || action == 'c' || action == 'y';
 
     if (linewise) {
       start = text_.lineStart(start);
       end = text_.lineEnd(end);
+
+      // A linewise register holds whole lines, each with its newline, whichever newline the
+      // edit takes.
+      if (stores) {
+        ds::String<Memory> lines{memory(), text_.view().substr(start, end - start)};
+
+        lines.push('\n');
+        store(lines, true);
+      }
+
       if (end < text_.size()) {
         ++end;
       } else if (start > 0 && action == 'd') {
         // Deleting the last line takes the newline before it instead.
         --start;
       }
+    } else if (stores) {
+      store(text_.view().substr(start, end - start), false);
     }
 
-    const auto view = text_.view();
-
-    store(view.substr(start, end - start), linewise);
     switch (action) {
     case 'd':
       text_.replace(start, end, {});
@@ -1216,11 +1344,17 @@ namespace telar::gui::features::prompt {
         --end;
       }
 
+      // What it deletes and what is typed after it undo as one step.
+      text_.hold();
       text_.replace(start, end, {});
       mode_ = Mode::insert;
       break;
     case 'y':
-      text_.moveTo(start);
+      // A yank of the lines the cursor is on leaves it there, as yy and Y do.
+      if (!linewise || cursor < start || cursor >= end) {
+        text_.moveTo(start);
+      }
+
       mode_ = Mode::normal;
       clampNormal();
       break;
@@ -1329,6 +1463,12 @@ namespace telar::gui::features::prompt {
   void Editor::put(bool before) {
     const auto value = load();
     if (value.text.empty()) {
+      return;
+    }
+
+    // What could never fit is not built: a count of copies past the text's capacity puts none.
+    const auto room = Text::capacity - std::min(text_.size(), Text::capacity);
+    if (value.text.size() + 1 > room / count()) {
       return;
     }
 
@@ -1538,6 +1678,8 @@ namespace telar::gui::features::prompt {
   void Editor::openLine(bool above) {
     const auto cursor = text_.cursor();
 
+    text_.hold();
+
     if (above) {
       const auto start = text_.lineStart(cursor);
 
@@ -1645,8 +1787,9 @@ namespace telar::gui::features::prompt {
   }
 
   Request Editor::visualCommand(char32_t character) {
-    auto start = text_.selectionStart();
-    auto end = text_.next(text_.selectionEnd());
+    // Read before the cursor moves: moving it collapses the selection. What the commands take is
+    // what the mode highlights.
+    const auto [start, end] = *visualRange();
     const bool lines = mode_ == Mode::visual_line;
 
     switch (character) {
@@ -1669,7 +1812,7 @@ namespace telar::gui::features::prompt {
 
       mode_ = Mode::normal;
       text_.moveTo(start);
-      operate(start, lines ? text_.selectionEnd() : end, lines);
+      operate(start, end, lines);
       return Request::none;
     }
     case 'o': {
@@ -1690,11 +1833,45 @@ namespace telar::gui::features::prompt {
       return Request::none;
     case 'p':
     case 'P': {
-      const auto value = load();
+      // Copied: storing the replaced text may overwrite the register it comes from.
+      const auto loaded = load();
+      const ds::String<Memory> value{memory(), loaded.text};
+      const auto from = start;
+      auto to = end;
 
-      text_.replace(start, end, value.text);
+      ds::String<Memory> replaced{memory(), text_.view().substr(from, to - from)};
+      ds::String<Memory> put{memory()};
+
+      // Whole lines for whole lines; a line register over characters goes on lines of its own.
+      if (lines) {
+        const bool through_newline = to < text_.size();
+
+        replaced.push('\n');
+        put.assign(value);
+        if (!put.view().ends_with('\n')) {
+          put.push('\n');
+        }
+
+        if (through_newline) {
+          ++to;
+        } else {
+          put.truncate(put.size() - 1);
+        }
+      } else if (loaded.linewise) {
+        put.push('\n');
+        put.append(value);
+      } else {
+        put.assign(value);
+      }
+
+      text_.replace(from, to, put);
+      // The text it replaced is the unnamed register's, as vim keeps it.
+      register_ = '"';
+      store(replaced, lines);
       mode_ = Mode::normal;
+      text_.moveTo(lines || loaded.linewise ? firstNonBlank(text_.lineStart(std::min(from + (lines ? 0 : 1), text_.size()))) : text_.cursor());
       clampNormal();
+      reset();
       return Request::none;
     }
     default:
@@ -1752,15 +1929,39 @@ namespace telar::gui::features::prompt {
 
   void Editor::repeat() {
     repeat_requested_ = false;
+    // A count typed before the dot replaces the change's own.
+    const auto given = count_;
     // Copied: pressing the keys records them again.
     const auto changes = last_change_.clone();
+    std::size_t first = 0;
 
     ++replaying_;
     reset();
-    for (const auto& entry : changes) {
-      auto key = entry.key;
+    if (given != 0) {
+      const auto digit = [&](std::size_t index) {
+        const auto& key = changes[index].key;
 
-      key.text = entry.text;
+        return key.key == Key::character && !key.modifiers.control && key.character >= (index == 0 ? U'1' : U'0') && key.character <= U'9';
+      };
+
+      while (first < changes.size() && digit(first)) {
+        ++first;
+      }
+
+      // Room for any std::size_t in decimal.
+      constexpr std::size_t count_digits = 24;
+      ds::Array<char, count_digits> digits{};
+      auto* const end = std::to_chars(digits.dataMut(), std::to_address(digits.viewMut().end()), given).ptr;
+
+      for (const auto character : std::string_view{digits.data(), end}) {
+        dispatch(KeyPress{.key = Key::character, .character = static_cast<char32_t>(character)});
+      }
+    }
+
+    for (std::size_t index = first; index < changes.size(); ++index) {
+      auto key = changes[index].key;
+
+      key.text = changes[index].text;
       dispatch(key);
     }
 

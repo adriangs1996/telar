@@ -1,6 +1,7 @@
 module telar.gui.features.prompt;
 
 import std;
+import telar.gui.foundation.text;
 
 import telar.tbc;
 
@@ -76,9 +77,10 @@ namespace telar::gui::features::prompt {
     }
 
     const bool joined = kind != Group::none && kind == group_ && !undo_.empty() && (kind == Group::insert ? start == cursor_ : end == cursor_ || start == cursor_);
-    if (!joined) {
-      record();
-    }
+    const bool open = holding_ ? !held_ : !joined;
+
+    track(start, end, text.size(), open);
+    held_ = held_ || holding_;
 
     bytes_.replace(start, end - start, text);
     cursor_ = anchor_ = start + text.size();
@@ -113,6 +115,17 @@ namespace telar::gui::features::prompt {
     return travel(false);
   }
 
+  void Text::hold() noexcept {
+    holding_ = true;
+    held_ = false;
+  }
+
+  void Text::release() noexcept {
+    holding_ = false;
+    held_ = false;
+    group_ = Group::none;
+  }
+
   void Text::seal() noexcept {
     group_ = Group::none;
   }
@@ -122,25 +135,39 @@ namespace telar::gui::features::prompt {
       return bytes_.size();
     }
 
-    ++offset;
-    while (offset < bytes_.size() && continuation(bytes_[offset])) {
-      ++offset;
-    }
+    GraphemeCursor graphemes{view().substr(offset)};
 
-    return offset;
+    static_cast<void>(graphemes.nextReplacingInvalid());
+    return offset + std::max<std::size_t>(graphemes.position(), 1);
   }
 
   std::size_t Text::previous(std::size_t offset) const noexcept {
+    // Graphemes are read from a code point a bounded way back, which holds any cluster a line
+    // shows, or from the line's start.
+    constexpr std::size_t lookback = 256;
+
     if (offset == 0) {
       return 0;
     }
 
-    --offset;
-    while (offset > 0 && continuation(bytes_[offset])) {
-      --offset;
+    auto from = std::max(lineStart(offset - 1), offset > lookback ? offset - lookback : 0);
+
+    while (from > 0 && continuation(bytes_[from])) {
+      --from;
     }
 
-    return offset;
+    GraphemeCursor graphemes{view().substr(from, offset - from)};
+    auto boundary = from;
+
+    while (graphemes.nextReplacingInvalid()) {
+      if (from + graphemes.position() >= offset) {
+        break;
+      }
+
+      boundary = from + graphemes.position();
+    }
+
+    return boundary;
   }
 
   std::size_t Text::lineStart(std::size_t offset) const noexcept {
@@ -202,12 +229,33 @@ namespace telar::gui::features::prompt {
     return offset;
   }
 
-  void Text::record() {
-    if (undo_.size() == undo_capacity) {
-      static_cast<void>(undo_.remove(0));
+  void Text::track(std::size_t start, std::size_t end, std::size_t inserted, bool open) {
+    const auto view = bytes_.view();
+    auto& memory = bytes_.memory();
+
+    if (open || undo_.empty()) {
+      if (undo_.size() == undo_capacity) {
+        static_cast<void>(undo_.remove(0));
+      }
+
+      undo_.push(Snapshot{.start = start, .end = start + inserted, .removed = ds::String<Memory>{memory, view.substr(start, end - start)}, .cursor = cursor_});
+      return;
     }
 
-    undo_.push(Snapshot{.bytes = bytes_.clone(), .cursor = cursor_});
+    // The step's range grows over the change: what it takes beyond the range is still the text
+    // the step began from.
+    auto& step = undo_.backMut();
+    const auto from = std::min(step.start, start);
+    const auto to = std::max(step.end, end);
+    ds::String<Memory> removed{memory};
+
+    removed.reserve((step.start - from) + step.removed.size() + (to - step.end));
+    removed.append(view.substr(from, step.start - from));
+    removed.append(step.removed);
+    removed.append(view.substr(step.end, to - step.end));
+    step.removed = std::move(removed);
+    step.start = from;
+    step.end = to - (end - start) + inserted;
   }
 
   bool Text::travel(bool back) {
@@ -218,12 +266,15 @@ namespace telar::gui::features::prompt {
       return false;
     }
 
-    auto snapshot = source.remove(source.size() - 1);
+    auto step = source.remove(source.size() - 1);
+    Snapshot inverse{.start = step.start, .end = step.start + step.removed.size(), .removed = ds::String<Memory>{bytes_.memory(), bytes_.view().substr(step.start, step.end - step.start)}, .cursor = cursor_};
 
-    target.push(Snapshot{.bytes = std::move(bytes_), .cursor = cursor_});
-    bytes_ = std::move(snapshot.bytes);
-    cursor_ = anchor_ = std::min(snapshot.cursor, bytes_.size());
+    bytes_.replace(step.start, step.end - step.start, step.removed);
+    target.push(std::move(inverse));
+    cursor_ = anchor_ = std::min(step.cursor, bytes_.size());
     group_ = Group::none;
+    holding_ = false;
+    held_ = false;
     ++revision_;
     return true;
   }

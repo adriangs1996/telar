@@ -48,9 +48,7 @@ Popup {
 
     function activateResult(alternate) {
         if (historyMode) {
-            if (!telar.history.loading) {
-                telar.history.use(telar.history.state.selection, alternate);
-            }
+            telar.history.use(telar.history.state.selection, alternate);
         } else if (paletteMode) {
             paletteBrowser.item?.submit(alternate);
         }

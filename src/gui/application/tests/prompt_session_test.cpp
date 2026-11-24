@@ -31,6 +31,7 @@ import telar.wire.runtime;
 import telar.gui.foundation.core;
 import telar.config.client;
 import telar.base.ds;
+import telar.client;
 
 namespace {
 
@@ -153,6 +154,182 @@ namespace {
     check(prompt::surface(client, 1) == prompt::Surface::none, "a full-screen program keeps the terminal");
   }
 
+  // A command the shell cannot receive stays in the editor with its error: nothing is sent,
+  // cleared or remembered until it can be.
+  void lineKeepsUnsendableCommands() {
+    SystemAllocator memory;
+    Transport transport;
+    TestSession client{memory, transport};
+
+    openFirstPane(client, transport);
+    FrameBody frame;
+
+    frame.pane_id = 1;
+    frame.frame_id = 1;
+    frame.scroll.total_rows = 1;
+    deliverSingleCell(client, frame);
+    auto configuration = client.configuration;
+
+    configuration.prompt.mode = PromptMode::telar;
+    application::configuration::configure(client, configuration);
+    deliver(client, atPrompt());
+
+    const auto refused = [&] {
+      try {
+        static_cast<void>(enter(client));
+      } catch (const std::exception&) {
+        return true;
+      }
+
+      return false;
+    };
+
+    // Without bracketed paste the shell would run each line of it on its own.
+    const auto before = transport.sent.size();
+
+    typeKeys(client, "echo 'a");
+    check(enter(client) == prompt::Outcome::edited, "an open quote continues on a new line");
+    typeKeys(client, "b'");
+    check(refused(), "a multi-line command the shell cannot take whole is refused");
+    check(transport.commandsSince(before).empty() && transport.inputSince(before).empty(), "nothing reaches the shell");
+    check(prompt::line(client, 1)->text() == "echo 'a\nb'", "the command stays in the editor");
+    check(prompt::line(client, 1)->recent().empty() && prompt::history(client).empty(), "a command never sent is not remembered");
+
+    // An answer to a running program is checked the same way.
+    deliver(client, running(1));
+    prompt::key(client, 1, prompt::KeyPress{.key = prompt::Key::enter, .modifiers = {.alt = true}});
+    check(prompt::line(client, 1)->answering(), "Alt-Enter answers the program");
+    check(refused() && prompt::line(client, 1)->text() == "echo 'a\nb'" && transport.inputSince(before).empty(), "an answer the program cannot take stays in the editor");
+
+    // An answer is the program's to read: Enter sends it whatever a shell would make of it.
+    prompt::key(client, 1, prompt::KeyPress{.key = prompt::Key::character, .character = 'c', .modifiers = {.control = true}});
+    const auto answered = transport.sent.size();
+
+    typeKeys(client, "O'Brien");
+    check(enter(client) == prompt::Outcome::answer && transport.inputSince(answered) == "O'Brien\r", "an open quote in an answer is sent, not continued");
+
+    // C1 controls act on the terminal: a paste drops them as it drops the others.
+    deliver(client, atPrompt(2, 0));
+    prompt::key(client, 1, prompt::KeyPress{.key = prompt::Key::character, .character = 'c', .modifiers = {.control = true}});
+    client.paste(1, "a\xc2\x9b"
+                    "2Jb");
+    check(prompt::line(client, 1)->text() == "a2Jb", "a pasted C1 control is dropped");
+  }
+
+  // Up walks this pane's commands first, then the history's, each once, as fish and zsh with
+  // share_history do; Down comes back to what was being written.
+  void lineRecallsHistory() {
+    SystemAllocator memory;
+    Transport transport;
+    TestSession client{memory, transport};
+
+    openFirstPane(client, transport);
+    FrameBody frame;
+
+    frame.pane_id = 1;
+    frame.frame_id = 1;
+    frame.scroll.total_rows = 1;
+    deliverSingleCell(client, frame);
+    auto configuration = client.configuration;
+
+    configuration.prompt.mode = PromptMode::telar;
+    application::configuration::configure(client, configuration);
+    deliver(client, atPrompt());
+    const auto up = [&] {
+      prompt::key(client, 1, prompt::KeyPress{.key = prompt::Key::up});
+      return std::string{prompt::line(client, 1)->text()};
+    };
+    const auto down = [&] {
+      prompt::key(client, 1, prompt::KeyPress{.key = prompt::Key::down});
+      return std::string{prompt::line(client, 1)->text()};
+    };
+
+    typeKeys(client, "x");
+    const auto query = transport.last<QueryHistory>();
+    const ds::Array entries{HistoryEntry{.id = 3, .pane_id = 2, .command = "make test", .cwd = "/"}, HistoryEntry{.id = 2, .pane_id = 2, .command = "git status", .cwd = "/"}};
+
+    deliver(client, HistoryResults{.request_id = query.request_id, .snapshot_id = 1, .entries = entries});
+    prompt::key(client, 1, prompt::KeyPress{.key = prompt::Key::backspace});
+    check(up() == "make test" && up() == "git status", "a new pane's Up reaches the history, newest first");
+    check(up() == "git status", "Up stops at the oldest");
+    check(down() == "make test" && down().empty(), "Down comes back to the line being written");
+
+    typeKeys(client, "git status");
+    enter(client);
+    check(up() == "git status" && up() == "make test", "the pane's own commands come first, each command once");
+    check(up() == "make test", "nothing older");
+  }
+
+  // A history query the runtime fails, or a connection loses, is asked again: at the shell's next
+  // prompt, and once connected again.
+  void historyIsAskedAgain() {
+    SystemAllocator memory;
+    Transport transport;
+    TestSession client{memory, transport};
+
+    openFirstPane(client, transport);
+    FrameBody frame;
+
+    frame.pane_id = 1;
+    frame.frame_id = 1;
+    frame.scroll.total_rows = 1;
+    deliverSingleCell(client, frame);
+    auto configuration = client.configuration;
+
+    configuration.prompt.mode = PromptMode::telar;
+    application::configuration::configure(client, configuration);
+    deliver(client, atPrompt());
+    typeKeys(client, "x");
+    const auto first = transport.last<QueryHistory>();
+    const auto asked = transport.count(ClientTag::query_history);
+
+    deliver(client, RequestFailed{.request_id = first.request_id, .code = FailureCode::resource_limit, .message = "busy"});
+    deliver(client, running(1));
+    deliver(client, atPrompt(2, 0));
+    check(transport.count(ClientTag::query_history) == asked + 1, "a failed history query is asked again at the next prompt");
+
+    client.disconnected();
+    client.connected(1);
+    check(transport.count(ClientTag::query_history) == asked + 2, "a query a lost connection never answered is asked again");
+    const auto last = transport.last<QueryHistory>();
+    const ds::Array entries{HistoryEntry{.id = 1, .pane_id = 1, .command = "make", .cwd = "/"}};
+
+    deliver(client, HistoryResults{.request_id = last.request_id, .snapshot_id = 1, .entries = entries});
+    check(prompt::history(client).size() == 1, "the answer loads the history");
+  }
+
+  // What the runtime's history filters keep out is not suggested either.
+  void lineForgetsFilteredCommands() {
+    SystemAllocator memory;
+    Transport transport;
+    TestSession client{memory, transport};
+
+    openFirstPane(client, transport);
+    FrameBody frame;
+
+    frame.pane_id = 1;
+    frame.frame_id = 1;
+    frame.scroll.total_rows = 1;
+    deliverSingleCell(client, frame);
+    auto configuration = client.configuration;
+
+    configuration.prompt.mode = PromptMode::telar;
+    configuration.history_filters.commands.append("internal-deploy");
+    application::configuration::configure(client, configuration);
+    deliver(client, atPrompt());
+
+    const auto before = transport.sent.size();
+
+    for (const auto* command : {"export TOKEN=synthetic-test-value", " echo hidden", "internal-deploy now", "echo kept"}) {
+      typeKeys(client, command);
+      check(enter(client) == prompt::Outcome::run, "Enter runs the command");
+    }
+
+    check(transport.commandsSince(before).size() == 4, "every command still runs");
+    check(prompt::history(client).size() == 1 && prompt::history(client).front() == "echo kept", "a filtered command joins no suggestions");
+    check(prompt::line(client, 1)->recent().size() == 1 && prompt::line(client, 1)->recent().back() == "echo kept", "nor the line's own commands");
+  }
+
   // A frame of one row, the cursor at `column` on it.
   struct Row {
     std::uint64_t frame_id = 0;
@@ -242,13 +419,13 @@ namespace {
   }
 
   // A prompt request the runtime fails, or a lost connection never answers, settles quietly
-  // instead of waiting forever.
+  // instead of waiting forever. The runtime is one before directory words, which Tab searches.
   void promptRequestsSettleOnFailure() {
     SystemAllocator memory;
     Transport transport;
     TestSession client{memory, transport};
 
-    openFirstPane(client, transport);
+    openFirstPane(client, transport, telar::handshake::Dialect::cqp00011);
     FrameBody frame;
 
     frame.pane_id = 1;
@@ -423,12 +600,12 @@ command = "switch" : "Switch branches" , { @branch } | "status" : "Show the work
 
     check(cat.command == "cat", "a command's spec is asked for once");
     deliver(client, CommandSpec{.request_id = cat.request_id, .command = "cat", .state = CommandSpecState::unavailable, .digest = 0, .source = {}});
-    const auto find = transport.last<FindPaths>();
+    const auto find = transport.last<CompleteWords>();
 
-    check(find.root.starts_with('/') && find.query == "sr" && prompt::line(client, 1)->pending(find.request_id), "paths are asked from the runtime");
-    const ds::Array matches{PathMatch{.path = "src/", .kind = PathKind::directory}, PathMatch{.path = "src/main.cpp", .kind = PathKind::file}, PathMatch{.path = "README", .kind = PathKind::file}};
+    check(find.provider == CompletionProvider::path && find.prefix == "sr" && prompt::line(client, 1)->pending(find.request_id), "the directory typed is read by the runtime");
+    const ds::Array children{CompletionWord{.text = "src/"}};
 
-    check(deliver(client, PathResults{.request_id = find.request_id, .root = find.root, .complete = true, .matches = matches}) == application::Change::terminal, "the answer repaints the line");
+    check(deliver(client, CompletionWords{.request_id = find.request_id, .words = children}) == application::Change::terminal, "the answer repaints the line");
     check(prompt::line(client, 1)->text() == "cat src/", "the only child that matches is written, a directory without a space");
 
     typeKeys(client, "my file");
@@ -510,6 +687,141 @@ command = "switch" : "Switch branches" , { @branch } | "status" : "Show the work
     check(prompt::suggestion(client, 1) == "e test-runtime", "a command sent from the line is suggested next");
   }
 
+  // Where the spec does not accept the line, Tab offers files, as zsh and fish fall back to
+  // theirs.
+  template <typename Client>
+  void fallsBackToFiles(Client& client, Transport& transport) {
+    prompt::key(client, 1, prompt::KeyPress{.key = prompt::Key::character, .character = 'u', .modifiers = {.control = true}});
+    typeKeys(client, "git reset fi");
+    tab(client);
+    check(transport.last<CompleteWords>().provider == CompletionProvider::path && transport.last<CompleteWords>().prefix == "fi", "a subcommand the spec does not know completes files");
+    prompt::key(client, 1, prompt::KeyPress{.key = prompt::Key::escape});
+  }
+
+  // A path's directory is read where the shell runs, `~` too, and the line keeps what was typed;
+  // a command named by its path completes from the executables there.
+  template <typename Client>
+  void completesPaths(Client& client, Transport& transport) {
+    prompt::key(client, 1, prompt::KeyPress{.key = prompt::Key::character, .character = 'u', .modifiers = {.control = true}});
+    typeKeys(client, "cat ~/Doc");
+    tab(client);
+    const auto home = transport.last<CompleteWords>();
+
+    check(home.provider == CompletionProvider::path && home.prefix == "~/Doc", "~ goes to the runtime as typed");
+    const ds::Array documents{CompletionWord{.text = "~/Documents/"}};
+
+    deliver(client, CompletionWords{.request_id = home.request_id, .words = documents});
+    check(prompt::line(client, 1)->text() == "cat ~/Documents/", "the line keeps ~");
+
+    prompt::key(client, 1, prompt::KeyPress{.key = prompt::Key::character, .character = 'u', .modifiers = {.control = true}});
+    typeKeys(client, "./gra");
+    tab(client);
+    const auto local = transport.last<CompleteWords>();
+
+    check(local.provider == CompletionProvider::executable && local.prefix == "./gra", "a command named by its path asks for the executables there");
+    const ds::Array gradle{CompletionWord{.text = "./gradlew"}};
+
+    deliver(client, CompletionWords{.request_id = local.request_id, .words = gradle});
+    check(prompt::line(client, 1)->text() == "./gradlew ", "the executable is written");
+    check(prompt::commandPresence(client, 1, "./gradlew") == prompt::CommandPresence::pending && transport.last<CompleteWords>().provider == CompletionProvider::executable, "whether it runs is asked the same way");
+    deliver(client, CompletionWords{.request_id = transport.last<CompleteWords>().request_id, .words = gradle});
+    check(prompt::commandPresence(client, 1, "./gradlew") == prompt::CommandPresence::found, "an executable listed there is found");
+
+    // A word typed with escapes or quotes completes as the shell reads it, and keeps its quoting.
+    prompt::key(client, 1, prompt::KeyPress{.key = prompt::Key::character, .character = 'u', .modifiers = {.control = true}});
+    typeKeys(client, "cat My\\ Do");
+    tab(client);
+    const auto escaped = transport.last<CompleteWords>();
+
+    check(escaped.prefix == "My Do", "the runtime is asked for the word as the shell reads it");
+    const ds::Array spaced{CompletionWord{.text = "My Documents/"}};
+
+    deliver(client, CompletionWords{.request_id = escaped.request_id, .words = spaced});
+    check(prompt::line(client, 1)->text() == "cat My\\ Documents/", "an escaped word completes, escaped");
+
+    prompt::key(client, 1, prompt::KeyPress{.key = prompt::Key::character, .character = 'u', .modifiers = {.control = true}});
+    typeKeys(client, "cat \"Some fi");
+    tab(client);
+    const auto quoted = transport.last<CompleteWords>();
+    const ds::Array file{CompletionWord{.text = "Some file.txt"}};
+
+    deliver(client, CompletionWords{.request_id = quoted.request_id, .words = file});
+    check(prompt::line(client, 1)->text() == "cat \"Some file.txt\" ", "a quote the word opened is closed");
+  }
+
+  // An option that takes its value in the same word is written joined, and the value completes.
+  template <typename Client>
+  void completesJoinedOptions(Client& client, Transport& transport) {
+    prompt::key(client, 1, prompt::KeyPress{.key = prompt::Key::character, .character = 'u', .modifiers = {.control = true}});
+    typeKeys(client, "ls --col");
+    tab(client);
+    const auto asked = transport.last<RequestCommandSpec>();
+    constexpr std::string_view ls_spec = R"(ls = { "--color=" : "When to color" ~ ( "always" | "never" ) } ;)";
+
+    check(asked.command == "ls", "Tab asks for the spec of ls");
+    deliver(client, CommandSpec{.request_id = asked.request_id, .command = "ls", .state = CommandSpecState::available, .digest = 3, .source = ls_spec});
+    check(prompt::line(client, 1)->text() == "ls --color=", "an option ending in = is written without a space");
+    tab(client);
+    check(prompt::line(client, 1)->menu() && prompt::line(client, 1)->menu()->choices.size() == 2, "its values complete");
+    prompt::key(client, 1, prompt::KeyPress{.key = prompt::Key::escape});
+
+    // A revision asks for references, which name tags and remote branches as well.
+    prompt::key(client, 1, prompt::KeyPress{.key = prompt::Key::character, .character = 'u', .modifiers = {.control = true}});
+    typeKeys(client, "tig v");
+    tab(client);
+    const auto tig = transport.last<RequestCommandSpec>();
+
+    deliver(client, CommandSpec{.request_id = tig.request_id, .command = "tig", .state = CommandSpecState::available, .digest = 5, .source = "tig = { @ref } ;"});
+    check(transport.last<CompleteWords>().provider == CompletionProvider::reference && transport.last<CompleteWords>().prefix == "v", "a spec's @ref asks for references");
+    prompt::key(client, 1, prompt::KeyPress{.key = prompt::Key::escape});
+  }
+
+  // The command after sudo, env or time completes as the command; history offers the command
+  // a line ran, not an assignment or a wrapper before it.
+  template <typename Client>
+  void completesWrappedCommands(Client& client, Transport& transport) {
+    prompt::key(client, 1, prompt::KeyPress{.key = prompt::Key::character, .character = 'u', .modifiers = {.control = true}});
+    typeKeys(client, "sudo -E git sw");
+    tab(client);
+    check(prompt::line(client, 1)->text() == "sudo -E git switch ", "the command after a wrapper and its options completes from its spec");
+
+    prompt::key(client, 1, prompt::KeyPress{.key = prompt::Key::character, .character = 'u', .modifiers = {.control = true}});
+    typeKeys(client, "env tel");
+    tab(client);
+    check(transport.last<CompleteWords>().provider == CompletionProvider::command && transport.last<CompleteWords>().prefix == "tel", "the word after env is a command's position");
+    prompt::key(client, 1, prompt::KeyPress{.key = prompt::Key::escape});
+  }
+
+  // History at a command's position offers the command each line ran.
+  template <typename Client>
+  void completesCommandsFromHistory(Client& client) {
+    prompt::key(client, 1, prompt::KeyPress{.key = prompt::Key::character, .character = 'u', .modifiers = {.control = true}});
+    for (const auto* command : {"FOO=1 zmake all", "sudo zapt install"}) {
+      typeKeys(client, command);
+      enter(client);
+    }
+
+    typeKeys(client, "z");
+    tab(client);
+    const auto& menu = prompt::line(client, 1)->menu();
+    const auto offers = [&](std::string_view text) {
+      return menu && std::ranges::any_of(menu->all, [&](const auto& choice) {
+        return choice.text == text;
+      });
+    };
+
+    check(offers("zmake") && offers("zapt"), "the command each line ran is offered");
+    prompt::key(client, 1, prompt::KeyPress{.key = prompt::Key::escape});
+    prompt::key(client, 1, prompt::KeyPress{.key = prompt::Key::character, .character = 'u', .modifiers = {.control = true}});
+    typeKeys(client, "FO");
+    tab(client);
+    check(!prompt::line(client, 1)->menu() || std::ranges::none_of(prompt::line(client, 1)->menu()->all, [](const auto& choice) {
+      return choice.text == "FOO=1";
+    }),
+        "not an assignment before it");
+    prompt::key(client, 1, prompt::KeyPress{.key = prompt::Key::escape});
+  }
+
   void lineCompletes() {
     SystemAllocator memory;
     Transport transport;
@@ -532,6 +844,11 @@ command = "switch" : "Switch branches" , { @branch } | "status" : "Show the work
     completesFromSpecs(client, transport);
     completesFromRuntime(client, transport);
     completesFromProviders(client, transport);
+    fallsBackToFiles(client, transport);
+    completesPaths(client, transport);
+    completesJoinedOptions(client, transport);
+    completesWrappedCommands(client, transport);
+    completesCommandsFromHistory(client);
 
     // After a command the pane asks again, with the digest of the spec it holds: an unchanged
     // spec is not sent twice.
@@ -549,7 +866,8 @@ command = "switch" : "Switch branches" , { @branch } | "status" : "Show the work
     check(prompt::line(client, 1)->text() == "git stash " || (prompt::line(client, 1)->menu() && prompt::line(client, 1)->menu()->choices.size() == 2), "the spec it held completes");
     prompt::key(client, 1, prompt::KeyPress{.key = prompt::Key::escape});
 
-    // A shell ssh reached: its files and commands are not this host's to offer.
+    // A shell ssh reached: its files and commands are not this host's to offer, but its specs'
+    // subcommands and flags complete.
     auto remote = atPrompt();
 
     remote.remote = true;
@@ -557,14 +875,18 @@ command = "switch" : "Switch branches" , { @branch } | "status" : "Show the work
     prompt::key(client, 1, prompt::KeyPress{.key = prompt::Key::character, .character = 'u', .modifiers = {.control = true}});
     const auto paths = transport.count(ClientTag::find_paths);
     const auto words = transport.count(ClientTag::complete_words);
-    const auto specs = transport.count(ClientTag::request_command_spec);
 
-    typeKeys(client, "cat sr");
+    typeKeys(client, "git sw");
     tab(client);
+    const auto remote_spec = transport.last<RequestCommandSpec>();
+
+    check(remote_spec.command == "git", "a remote line asks for the spec of its command");
+    deliver(client, CommandSpec{.request_id = remote_spec.request_id, .command = "git", .state = CommandSpecState::unchanged, .digest = git_spec_digest, .source = {}});
+    check(prompt::line(client, 1)->text() == "git switch ", "the spec's subcommand completes");
     prompt::key(client, 1, prompt::KeyPress{.key = prompt::Key::character, .character = 'u', .modifiers = {.control = true}});
     typeKeys(client, "tel");
     tab(client);
-    check(transport.count(ClientTag::find_paths) == paths && transport.count(ClientTag::complete_words) == words && transport.count(ClientTag::request_command_spec) == specs, "a remote shell asks the runtime for nothing");
+    check(transport.count(ClientTag::find_paths) == paths && transport.count(ClientTag::complete_words) == words, "a remote shell asks the runtime for no files, commands or providers");
     check(prompt::surface(client, 1) == prompt::Surface::editor, "its prompt is still edited");
   }
 
@@ -880,6 +1202,10 @@ command = "switch" : "Switch branches" , { @branch } | "status" : "Show the work
   }
 
   const telar::testing::Case case_line_runs_commands{"prompt_session.line_runs_commands", lineRunsCommands};
+  const telar::testing::Case case_line_keeps_unsendable_commands{"prompt_session.line_keeps_unsendable_commands", lineKeepsUnsendableCommands};
+  const telar::testing::Case case_line_recalls_history{"prompt_session.line_recalls_history", lineRecallsHistory};
+  const telar::testing::Case case_history_is_asked_again{"prompt_session.history_is_asked_again", historyIsAskedAgain};
+  const telar::testing::Case case_line_forgets_filtered_commands{"prompt_session.line_forgets_filtered_commands", lineForgetsFilteredCommands};
   const telar::testing::Case case_line_hides_terminal_cursor{"prompt_session.line_hides_terminal_cursor", lineHidesTerminalCursor};
   const telar::testing::Case case_commands_settle_as_typed{"prompt_session.commands_settle_as_typed", commandsSettleAsTyped};
   const telar::testing::Case case_line_searches{"prompt_session.line_searches", lineSearches};

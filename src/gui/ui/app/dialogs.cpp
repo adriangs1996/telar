@@ -52,6 +52,11 @@ namespace telar::gui::qt {
       palette_.forget();
     }
 
+    // A search its debounce still holds goes nowhere once the history closes.
+    if (kind != Dialog::history) {
+      history_.forget();
+    }
+
     if (store_.dialog().kind == Dialog::paths && kind != Dialog::paths) {
       application::paths::close(store_.sessionMut());
     }

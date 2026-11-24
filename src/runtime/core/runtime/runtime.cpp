@@ -2445,7 +2445,7 @@ namespace telar::runtime {
 
     request.directory.assign(pane->body.shell_zones && !pane->body.shell_zones->directory().empty() ? pane->body.shell_zones->directory() : std::string_view{pane->core.cwd});
     request.home.assign(processHome());
-    words_.request(request);
+    queueWords(client, request);
   }
 
   template <EventLoop Poller, typename Background>
@@ -2458,16 +2458,22 @@ namespace telar::runtime {
       throw RequestError{FailureCode::pane_not_found, "Could not find a command spec"};
     }
 
-    if (pane->body.shell_state.remote) {
-      client.connection.send(CommandSpec{.request_id = message.request_id, .command = message.command, .state = CommandSpecState::unavailable, .digest = 0, .source = {}});
-      return;
-    }
-
     auto request = makeWordRequest(client, message.request_id, CompletionProvider::command, message.command, pane->body);
 
+    // A remote shell's commands are not this host's to find: the spec of any command it names.
+    request.remote = pane->body.shell_state.remote;
     request.spec = true;
     request.known_digest = message.known_digest;
-    words_.request(request);
+    queueWords(client, request);
+  }
+
+  template <EventLoop Poller, typename Background>
+    requires BackgroundExecutor<Background, ConcurrentMemory>
+  void Runtime<Poller, Background>::queueWords(ClientSession& client, const WordRequest& request) {
+    // Every request is answered: the oldest one the service let go to make room fails.
+    if (const auto dropped = words_.request(request)) {
+      client.connection.send(RequestFailed{.request_id = *dropped, .code = FailureCode::resource_limit, .message = "Too many completion requests are waiting"});
+    }
   }
 
   template <EventLoop Poller, typename Background>
@@ -3318,6 +3324,12 @@ namespace telar::runtime {
 
   template <EventLoop Poller, typename Background>
     requires BackgroundExecutor<Background, ConcurrentMemory>
+  void Runtime<Poller, Background>::handle(std::uint64_t identity, const DeleteHistoryCommand& message) {
+    submitBackground(background_, requireClient(clients_, identity), message);
+  }
+
+  template <EventLoop Poller, typename Background>
+    requires BackgroundExecutor<Background, ConcurrentMemory>
   void Runtime<Poller, Background>::handle(std::uint64_t identity, const PruneHistory& message) {
     submitBackground(background_, requireClient(clients_, identity), message);
   }
@@ -3446,19 +3458,30 @@ namespace telar::runtime {
       return;
     }
 
-    if (result.spec) {
-      client->connection.send(CommandSpec{.request_id = result.request, .command = result.command, .state = result.spec_state, .digest = result.digest, .source = result.source, .expansion = result.expansion});
-      return;
+    // A reply the wire refuses fails its request alone; a client that cannot take even that is dropped.
+    try {
+      if (result.spec) {
+        client->connection.send(CommandSpec{.request_id = result.request, .command = result.command, .state = result.spec_state, .digest = result.digest, .source = result.source, .expansion = result.expansion});
+        return;
+      }
+
+      ds::Vec<CompletionWord, ConcurrentMemory> words{memory_};
+
+      words.reserve(result.words.size());
+      for (const auto& word : result.words) {
+        words.push({.text = word.text.view(), .description = word.description.view()});
+      }
+
+      client->connection.send(CompletionWords{.request_id = result.request, .truncated = result.truncated, .words = words.view()});
+    } catch (const EncodingError& error) {
+      if (!client->connection.trySend(RequestFailed{.request_id = result.request, .code = FailureCode::internal, .message = error.what()})) {
+        dropClient(result.client);
+      }
+    } catch (...) {
+      if (!client->connection.trySend(RequestFailed{.request_id = result.request, .code = FailureCode::resource_limit, .message = "Runtime memory or capacity limit reached"})) {
+        dropClient(result.client);
+      }
     }
-
-    ds::Vec<CompletionWord, ConcurrentMemory> words{memory_};
-
-    words.reserve(result.words.size());
-    for (const auto& word : result.words) {
-      words.push({.text = word.text.view(), .description = word.description.view()});
-    }
-
-    client->connection.send(CompletionWords{.request_id = result.request, .truncated = result.truncated, .words = words.view()});
   }
 
   template <EventLoop Poller, typename Background>

@@ -209,7 +209,7 @@ namespace telar::gui::qt {
     void styleDisplay(const Composed& composed, const application::Pane<Memory>* pane);
     void markCommands(std::size_t typed);
     void groupFresh(const Composed& composed);
-    void lay(std::size_t caret, std::size_t mark);
+    void lay(std::size_t caret, std::size_t mark, ds::Option<std::pair<std::size_t, std::size_t>> range);
     void placeRuns();
     void placeRun(std::size_t index, const application::prompt::Run& run, const RunLook& look, QSizeF cell);
     [[nodiscard]] RunLook look(const application::prompt::Run& run, QSizeF cell, qint64 now, QVariantList& glows) const;
@@ -278,6 +278,7 @@ namespace telar::gui::qt {
       ds::Vec<std::uint8_t, Memory> groups;
       std::size_t caret = 0;
       std::size_t anchor = 0;
+      ds::Option<std::pair<std::size_t, std::size_t>> range;
       int columns = 0;
       int rows = 0;
     };

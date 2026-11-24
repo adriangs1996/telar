@@ -8,6 +8,7 @@ module;
 #include <dirent.h>
 #include <dlfcn.h>
 #include <fcntl.h>
+#include <glob.h>
 #include <poll.h>
 #include <pwd.h>
 #include <sys/file.h>
@@ -93,6 +94,11 @@ export {
   using ::opendir;
   using ::readdir;
 
+  // Path patterns.
+  using ::glob;
+  using ::glob_t;
+  using ::globfree;
+
   // Memory mappings and shared memory objects.
   using ::mmap;
   using ::mprotect;
@@ -107,6 +113,7 @@ export {
   using ::gethostname;
   using ::getpagesize;
   using ::getpid;
+  using ::getpwnam_r;
   using ::getpwuid;
   using ::getpwuid_r;
   using ::getuid;

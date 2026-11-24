@@ -129,8 +129,8 @@ namespace {
               {"AgentSnapshot", 0x0d98295029aede63},
           }},
       },
-      // Changes NvimPreview, which marks what the query matched; the layouts of the others are
-      // unchanged.
+      // Changes NvimPreview, which marks what the query matched, and adds CompleteWords' directory
+      // providers; the layouts of the others are unchanged.
       SchemaLayouts{
           .schema = {'c', 'q', 'p', '0', '0', '0', '1', '2'},
           .layouts = {{

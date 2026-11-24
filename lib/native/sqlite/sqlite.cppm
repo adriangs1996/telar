@@ -24,6 +24,8 @@ export {
   using ::sqlite3_column_text;
   using ::sqlite3_column_type;
   using ::sqlite3_config;
+  using ::sqlite3_context;
+  using ::sqlite3_create_function_v2;
   using ::sqlite3_db_handle;
   using ::sqlite3_errcode;
   using ::sqlite3_errstr;
@@ -35,8 +37,16 @@ export {
   using ::sqlite3_open_v2;
   using ::sqlite3_prepare_v3;
   using ::sqlite3_reset;
+  using ::sqlite3_result_error_nomem;
+  using ::sqlite3_result_null;
+  using ::sqlite3_result_text;
   using ::sqlite3_shutdown;
   using ::sqlite3_step;
+  using ::sqlite3_user_data;
+  using ::sqlite3_value;
+  using ::sqlite3_value_bytes;
+  using ::sqlite3_value_text;
+  using ::sqlite3_value_type;
 }
 
 // Macros do not cross an import. Each constant the tree reads is captured while the header still
@@ -45,7 +55,9 @@ export {
 #define TELAR_SQLITE_CONSTANTS(X) \
   X(SQLITE_CONFIG_GETMALLOC)      \
   X(SQLITE_CONFIG_MALLOC)         \
+  X(SQLITE_DETERMINISTIC)         \
   X(SQLITE_DONE)                  \
+  X(SQLITE_INNOCUOUS)             \
   X(SQLITE_LIMIT_LENGTH)          \
   X(SQLITE_NOMEM)                 \
   X(SQLITE_NULL)                  \
@@ -55,7 +67,8 @@ export {
   X(SQLITE_OPEN_NOMUTEX)          \
   X(SQLITE_OPEN_READONLY)         \
   X(SQLITE_OPEN_READWRITE)        \
-  X(SQLITE_ROW)
+  X(SQLITE_ROW)                   \
+  X(SQLITE_UTF8)
 
 namespace telar::native::sqlite::captured {
 
@@ -66,7 +79,9 @@ namespace telar::native::sqlite::captured {
 
 #undef SQLITE_CONFIG_GETMALLOC
 #undef SQLITE_CONFIG_MALLOC
+#undef SQLITE_DETERMINISTIC
 #undef SQLITE_DONE
+#undef SQLITE_INNOCUOUS
 #undef SQLITE_LIMIT_LENGTH
 #undef SQLITE_NOMEM
 #undef SQLITE_NULL
@@ -77,6 +92,7 @@ namespace telar::native::sqlite::captured {
 #undef SQLITE_OPEN_READONLY
 #undef SQLITE_OPEN_READWRITE
 #undef SQLITE_ROW
+#undef SQLITE_UTF8
 
 #define TELAR_SQLITE_CONSTANT(name) inline constexpr auto name = telar::native::sqlite::captured::name##_;
 

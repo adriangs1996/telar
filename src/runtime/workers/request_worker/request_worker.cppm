@@ -352,6 +352,9 @@ export {
 export {
   namespace telar::runtime {
 
+    // What tells a history query of a client from another kind it sends: a newer one of the same
+    // kind, the same search typed further, replaces one still waiting. The scope's value is kept
+    // by its hash, as the query's text lives in the request's payload.
     struct HistoryQueryOrder {
       explicit HistoryQueryOrder(const QueryHistory& query, bool persistent_client) noexcept;
 
@@ -359,6 +362,12 @@ export {
 
       bool replaceable;
       bool distinct;
+      bool failed_only;
+      HistoryScope scope;
+      std::uint64_t scope_value;
+      HistoryAuthorFilter author;
+      HistoryMatch match;
+      std::uint16_t limit;
     };
 
   }

@@ -145,14 +145,22 @@ namespace {
     same_request.second.request_id = same_request.first.request_id;
     checkHistoryQueue(memory, same_request);
 
+    // A query of another kind is not the same search typed further: the editor's history and
+    // the dialog's first page each keep theirs.
     enum class QueryField {
       offset,
       snapshot,
       entry,
       distinct,
+      scope,
+      scope_value,
+      author,
+      failed_only,
+      match,
+      limit,
     };
 
-    for (const auto field : {QueryField::offset, QueryField::snapshot, QueryField::entry, QueryField::distinct}) {
+    for (const auto field : {QueryField::offset, QueryField::snapshot, QueryField::entry, QueryField::distinct, QueryField::scope, QueryField::scope_value, QueryField::author, QueryField::failed_only, QueryField::match, QueryField::limit}) {
       for (bool first : {false, true}) {
         HistoryQueueCase scenario;
         auto& query = first ? scenario.first : scenario.second;
@@ -169,6 +177,27 @@ namespace {
           break;
         case QueryField::distinct:
           query.distinct = true;
+          break;
+        case QueryField::scope:
+          query.scope = HistoryScope::pane;
+          query.scope_value = std::uint64_t{1};
+          break;
+        case QueryField::scope_value:
+          scenario.first.scope = scenario.second.scope = HistoryScope::cwd;
+          scenario.first.scope_value = std::string_view{"/a"};
+          scenario.second.scope_value = std::string_view{"/b"};
+          break;
+        case QueryField::author:
+          query.author = HistoryAuthorFilter::agent;
+          break;
+        case QueryField::failed_only:
+          query.failed_only = true;
+          break;
+        case QueryField::match:
+          query.match = HistoryMatch::fuzzy;
+          break;
+        case QueryField::limit:
+          query.limit = 1;
           break;
         }
 

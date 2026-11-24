@@ -13,9 +13,9 @@ namespace telar::gui::features::prompt {
 
   class Text {
   public:
-    // A pasted file must not grow the editor without bound; the shell's own line editor has
-    // limits of the same order.
-    static constexpr std::size_t capacity = std::size_t{256} * 1024;
+    // A pasted file must not grow the editor without bound. The most a command carries to the
+    // shell, history's HistoryText::maximum_bytes: the editor holds nothing it could not send.
+    static constexpr std::size_t capacity = std::size_t{64} * 1024;
     static constexpr std::size_t undo_capacity = 256;
 
     // The text and its undo history live in `memory`.
@@ -64,6 +64,12 @@ namespace telar::gui::features::prompt {
     // Ends the current undo group, as moving the cursor does.
     void seal() noexcept;
 
+    // Every change until release() is one undo step, the text before the first restored by it:
+    // vim's insert, from the command that began it to Escape.
+    void hold() noexcept;
+
+    void release() noexcept;
+
     // Code point navigation.
     [[nodiscard]] std::size_t next(std::size_t offset) const noexcept;
 
@@ -97,14 +103,20 @@ namespace telar::gui::features::prompt {
       erase,
     };
 
+    // What an undo step changed, not the whole text: the range [start, end) the text holds now,
+    // the bytes it held before, and the cursor to restore.
     struct Snapshot {
-      tbc::val_a<ds::String<Memory>> bytes;
-      std::size_t cursor;
+      std::size_t start = 0;
+      std::size_t end = 0;
+      tbc::val_a<ds::String<Memory>> removed;
+      std::size_t cursor = 0;
     };
 
     [[nodiscard]] std::size_t boundary(std::size_t offset) const noexcept;
 
-    void record();
+    // Records the change of [start, end) to `inserted` bytes, before it is made: a step of its own
+    // when `open`, else part of the last one, whose range grows over it.
+    void track(std::size_t start, std::size_t end, std::size_t inserted, bool open);
 
     // Restores the last snapshot of the undo history, or of the redo history when not `back`, and
     // keeps the current text in the other.
@@ -117,6 +129,9 @@ namespace telar::gui::features::prompt {
     std::size_t anchor_ = 0;
     std::uint64_t revision_ = 0;
     Group group_ = Group::none;
+    bool holding_ = false;
+    // Whether the held step took its snapshot, at its first change.
+    bool held_ = false;
   };
 
   // Word classes as vim and readline use them: letters, digits and underscore form words,

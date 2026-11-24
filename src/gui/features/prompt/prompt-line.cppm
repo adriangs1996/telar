@@ -117,6 +117,10 @@ namespace telar::gui::features::prompt {
     // Writes `text` over [begin, end) of the line, as a path chosen for the word there does.
     void replaceText(std::size_t begin, std::size_t end, std::string_view text);
 
+    // `command` replaces the line, the caret at its end, as a history entry pasted does: Up and
+    // Down start over from it, and the menu closes.
+    void write(std::string_view command);
+
     [[nodiscard]] const ds::Option<Menu>& menu() const noexcept;
 
     // Offers `choices` for the `word`: one is written at once, more open the menu. While
@@ -132,6 +136,10 @@ namespace telar::gui::features::prompt {
     // after a success, and otherwise stays as a draft.
     Outcome promptReturned(bool succeeded);
 
+    // What `run` or `answer` handed over reached the pane: the line clears, and remembers
+    // `command` unless it is empty. Until then the text stays, for a delivery that fails.
+    void committed(std::string_view command);
+
     void countSecretKey() noexcept;
 
     void clearSecret() noexcept;
@@ -143,7 +151,7 @@ namespace telar::gui::features::prompt {
 
     [[nodiscard]] static bool isCommandExtendedBy(std::string_view command, std::string_view text);
 
-    Outcome handle(Request request, Surface surface, const Continuation& incomplete);
+    Outcome handle(Request request, Surface surface, const Continuation& incomplete, History history);
 
     void closeMenu() noexcept;
 
@@ -159,20 +167,29 @@ namespace telar::gui::features::prompt {
     // The word the menu completes, as typed so far.
     [[nodiscard]] std::string_view typedWord() const noexcept;
 
+    // The word under the cursor as the shell reads it, quotes and escapes removed; none when the
+    // cursor left the word the menu completes.
+    [[nodiscard]] ds::Option<CompletionContext> menuWord();
+
     // After a key typed or erased in the word: the choices that still start with it. Erasing
     // past where they were offered asks for them again; leaving the word closes the menu.
     Outcome refine(Outcome outcome);
 
     Outcome submit(Surface surface, bool incomplete);
 
-    // Up and Down past the editor's first and last line walk the commands sent from it, keeping
-    // what was being written to come back to.
-    Outcome travel(int direction);
+    // Up and Down past the editor's first and last line walk the commands sent from it, then
+    // `history`'s, keeping what was being written to come back to.
+    Outcome travel(int direction, History history);
+
+    // The command `steps` back from the line: this one's own, newest first, then the ones of
+    // `history` it did not send, newest first; each once.
+    [[nodiscard]] ds::Option<std::string_view> back(std::size_t steps, History history) const noexcept;
 
     tbc::val_a<Editor> editor_;
     tbc::val_a<ds::Vec<ds::String<Memory>, Memory>> recent_;
     tbc::val_a<ds::String<Memory>> draft_;
     tbc::val_a<ds::String<Memory>> delivery_;
+    // How many commands back Up went; none at the line being written.
     ds::Option<std::size_t> history_index_;
     tbc::val_a<ds::Option<Menu>> menu_;
     std::uint64_t revision_ = 0;

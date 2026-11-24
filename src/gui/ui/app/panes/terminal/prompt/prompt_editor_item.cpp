@@ -556,11 +556,14 @@ namespace telar::gui::qt {
 
     const auto caret = shifted(cursor);
     const auto mark = shifted(anchor);
+    // vim's visual modes highlight what their commands take, more than the selection.
+    const auto visual = !line ? ds::none : line->highlight();
+    const auto range = visual ? ds::Option{std::pair{shifted(visual->first), shifted(visual->second)}} : ds::none;
     const auto state_changed = [&] {
       return previous_surface != surface_ || previous_failed != failed_ || previous_cursor_hidden != cursor_hidden_ || line.hasValue();
     };
 
-    const bool unchanged = reuse_layout && !cell_changed && !animating(clock_.elapsed()) && display_.view() == laid_.display.view() && std::ranges::equal(styles_.view(), laid_.styles.view()) && std::ranges::equal(groups_.view(), laid_.groups.view()) && caret == laid_.caret && mark == laid_.anchor && maximum_columns_ == laid_.columns && maximum_rows_ == laid_.rows;
+    const bool unchanged = reuse_layout && !cell_changed && !animating(clock_.elapsed()) && display_.view() == laid_.display.view() && std::ranges::equal(styles_.view(), laid_.styles.view()) && std::ranges::equal(groups_.view(), laid_.groups.view()) && caret == laid_.caret && mark == laid_.anchor && range == laid_.range && maximum_columns_ == laid_.columns && maximum_rows_ == laid_.rows;
     if (unchanged) {
       if (state_changed()) {
         emit stateChanged();
@@ -569,7 +572,7 @@ namespace telar::gui::qt {
       return;
     }
 
-    lay(caret, mark);
+    lay(caret, mark, range);
     placeRuns();
     if (animating(clock_.elapsed()) && ticker_.state() != QAbstractAnimation::Running) {
       ticker_.start();
@@ -690,8 +693,9 @@ namespace telar::gui::qt {
   }
 
   // Lays the display out, remembers what from, and scrolls so the caret's row shows.
-  void PromptEditorItem::lay(std::size_t caret, std::size_t mark) {
-    application::prompt::layout(layout_, {.text = display_.view(), .styles = styles_.view(), .groups = groups_.view()}, {.cursor = caret, .anchor = mark}, static_cast<std::uint32_t>(maximum_columns_));
+  void PromptEditorItem::lay(std::size_t caret, std::size_t mark, ds::Option<std::pair<std::size_t, std::size_t>> range) {
+    application::prompt::layout(layout_, {.text = display_.view(), .styles = styles_.view(), .groups = groups_.view()}, {.cursor = caret, .anchor = mark, .range = range}, static_cast<std::uint32_t>(maximum_columns_));
+    laid_.range = range;
     laid_.display.assign(display_.view());
     laid_.styles.clear();
     laid_.styles.extend(styles_.view());
@@ -747,7 +751,18 @@ namespace telar::gui::qt {
     auto* item = runs_[index];
 
     item->setGrid(grid_);
-    item->setText(QString::fromUtf8(display_.view().substr(run.start, run.end - run.start).data(), static_cast<qsizetype>(run.end - run.start)));
+    const auto bytes = display_.view().substr(run.start, run.end - run.start);
+
+    // A hidden character shows as the mark that names it, never as itself.
+    if (run.style == application::prompt::Style::hidden) {
+      ds::String<Memory> marks{adapter_};
+
+      application::prompt::hiddenMarks(bytes, marks);
+      item->setText(QString::fromUtf8(marks.view().data(), static_cast<qsizetype>(marks.size())));
+    } else {
+      item->setText(QString::fromUtf8(bytes.data(), static_cast<qsizetype>(bytes.size())));
+    }
+
     item->setColor(look.color);
     item->setPosition({run.column * cell.width(), ((static_cast<int>(run.row) - first_row_) * cell.height()) + look.lift});
     item->setOpacity(look.opacity);
@@ -836,6 +851,7 @@ namespace telar::gui::qt {
       return role("subtext0", "muted");
     case application::prompt::Style::error:
     case application::prompt::Style::missing:
+    case application::prompt::Style::hidden:
       return role("red", "failure");
     case application::prompt::Style::ghost: {
       constexpr float ghost_alpha = 0.7F;

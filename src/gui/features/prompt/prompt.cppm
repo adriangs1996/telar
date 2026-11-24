@@ -137,6 +137,11 @@ export namespace telar::gui::features::prompt {
       return line_->editor().text().anchor();
     }
 
+    // What vim's visual modes highlight, which is more than the selection; none outside them.
+    [[nodiscard]] TBC_HOT_PATH inline ds::Option<std::pair<std::size_t, std::size_t>> highlight() const noexcept {
+      return line_->editor().visualRange();
+    }
+
     [[nodiscard]] TBC_HOT_PATH inline Keymap keymap() const noexcept {
       return line_->editor().keymap();
     }
@@ -263,6 +268,8 @@ export namespace telar::gui::features::prompt {
     tbc::val_a<MatchScratch> scratch;
     tbc::val_a<ds::Vec<Name, Memory>> history;
     std::uint64_t history_request = 0;
+    // An answer to the history query arrived: until one does, it is asked again.
+    bool history_loaded = false;
     tbc::val_a<ds::Map<std::uint64_t, PathCompletion, Memory>> completions;
     tbc::val_a<ds::Map<std::uint64_t, CommandRequest, Memory>> command_requests;
     tbc::val_a<ds::Map<std::uint64_t, CommandChecks, Memory>> command_checks;
@@ -329,6 +336,10 @@ export namespace telar::gui::features::prompt {
   // history again.
   void remember(State& state, std::string_view command);
 
+  // What the line handed over with `run` or `answer` reached its pane: the line clears and
+  // remembers `command`, empty for an answer. A delivery that fails leaves the text in the line.
+  void committed(PaneLine& line, std::string_view command);
+
   // Text an input method committed or a paste, into the line. Controls other than newline and tab
   // are dropped: they would act on the shell instead of being written.
   void insert(State& state, PaneLine& line, std::string_view text);
@@ -371,10 +382,11 @@ export namespace telar::gui::features::prompt {
   using CommandQuery = std::variant<CompleteWords, FindPaths>;
 
   // The question about `word` under `request_id`: the commands that start with it, or for a
-  // command named by its path, the files in its directory. None when the path names nothing to
-  // look for. It views `word`, and for a path the directory it writes in `root`, the state's
+  // command named by its path, the executables in its directory, which a runtime that
+  // `reads_directories` lists and an older one searches for. None when the path names nothing to
+  // look for. It views `word`, and for a search the directory it writes in `root`, the state's
   // command_root.
-  [[nodiscard]] tbc::val_b<ds::Option<CommandQuery>> ask(tbc::mut_b<Name> root, const Commands& commands, tbc::val_b<std::string_view> word, std::uint64_t request_id);
+  [[nodiscard]] tbc::val_b<ds::Option<CommandQuery>> ask(tbc::mut_b<Name> root, const Commands& commands, tbc::val_b<std::string_view> word, std::uint64_t request_id, bool reads_directories);
 
   // The question `request_id` about `word` went out, `sent`, and `word` waits for its answer; or
   // it could not, and `word` stays unknown.
@@ -425,12 +437,17 @@ export namespace telar::gui::features::prompt {
 
   // Where a plan's choices come from: the spec held for the command when `specified`, and, when
   // `asks`, what only the runtime knows (files under `directory`, commands, branches…), for the
-  // `dialect`'s shell.
+  // `dialect`'s shell. A runtime that `reads_directories` lists the one directory a path names;
+  // an older one is searched under it.
   struct CompletionSources {
     bool specified = false;
     bool asks = false;
     std::string_view directory;
     shell::Dialect dialect = shell::Dialect::posix;
+    bool reads_directories = false;
+    // The runtime names revisions, tags too, where a spec expects a @ref; an older one lists
+    // branches there.
+    bool reads_references = false;
   };
 
   // The choices for `context` in `line`, from `sources`.
@@ -475,6 +492,10 @@ export namespace telar::gui::features::prompt {
 
   // Whether the history is on its way.
   [[nodiscard]] bool historyAsked(const State& state) noexcept;
+
+  // Whether the history is to be asked for: no answer arrived and none is on its way, as after
+  // a query that failed or a connection lost.
+  [[nodiscard]] bool historyWanted(const State& state) noexcept;
 
   // The question for the commands people typed, most recent first and each once.
   [[nodiscard]] QueryHistory historyQuery(std::uint64_t request_id) noexcept;

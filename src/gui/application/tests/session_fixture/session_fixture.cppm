@@ -19,6 +19,7 @@ import telar.wire.worktrees;
 import telar.wire.vocabulary;
 import telar.gui.foundation.system;
 import telar.base.ds;
+import telar.client;
 
 export {
   namespace telar::gui::application::tests::session_fixture {
@@ -223,9 +224,10 @@ export {
       deliver(client, PaneFrame{frame});
     }
 
+    // The first pane, of a runtime that speaks `dialect`.
     template <typename Client>
-    void openFirstPane(Client& client, Transport& transport) {
-      client.connected(1);
+    void openFirstPane(Client& client, Transport& transport, handshake::Dialect dialect = handshake::current_dialect) {
+      client.connected(1, dialect);
       telar::testing::check(transport.last<RequestRuntimeState>().interactive, "GUI must subscribe as an interactive client");
       deliver(client, ClientLayoutSnapshot{});
       const auto open = transport.last<OpenPane>();

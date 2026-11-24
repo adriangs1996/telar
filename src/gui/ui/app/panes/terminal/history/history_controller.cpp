@@ -109,9 +109,13 @@ namespace telar::gui::qt {
         store_(store) {
     constexpr int debounce_ms = 60;
 
+    constexpr int age_ms = 30'000;
+
     search_timer_.setSingleShot(true);
     search_timer_.setInterval(debounce_ms);
     connect(&search_timer_, &QTimer::timeout, this, &HistoryController::query);
+    age_timer_.setInterval(age_ms);
+    connect(&age_timer_, &QTimer::timeout, this, &HistoryController::age);
   }
 
   void HistoryController::open() {
@@ -129,10 +133,13 @@ namespace telar::gui::qt {
     }
 
     search(seed);
+    age_timer_.start();
   }
 
   void HistoryController::forget() {
     search_timer_.stop();
+    age_timer_.stop();
+    pending_submit_.reset();
     rows_.reconcile({});
     synchronized_.reset();
     rows_version_ = 0;
@@ -174,6 +181,17 @@ namespace telar::gui::qt {
   }
 
   void HistoryController::synchronize() {
+    if (pending_submit_ && !busy()) {
+      const bool alternate = *pending_submit_;
+      const auto& rows = application::history::view(store_.session()).rows();
+
+      pending_submit_.reset();
+      if (!rows.empty()) {
+        submit(rows.front().id, alternate);
+        return;
+      }
+    }
+
     auto next = inputs();
     if (synchronized_ == next) {
       return;
@@ -391,6 +409,8 @@ namespace telar::gui::qt {
       query_ = QString::fromUtf8(query_.toUtf8());
     }
 
+    // Typing again takes back an Enter that waited for the search.
+    pending_submit_.reset();
     search_timer_.start();
     ++search_version_;
     synchronize();
@@ -400,13 +420,43 @@ namespace telar::gui::qt {
     }
   }
 
+  void HistoryController::age() {
+    if (!isOpen()) {
+      age_timer_.stop();
+      return;
+    }
+
+    if (busy()) {
+      return;
+    }
+
+    // A row still running is read again, which brings its duration and end; the others only need
+    // their ages told anew.
+    const auto& rows = application::history::view(store_.session()).rows();
+    const bool running = std::ranges::any_of(rows, [](const auto& row) {
+      return row.status == HistoryStatus::running;
+    });
+
+    if (running) {
+      interact([&] {
+        application::history::refresh(store_.sessionMut());
+      });
+      return;
+    }
+
+    buildRows();
+    state_ = buildState();
+    inspection_ = buildInspection();
+    emit changed();
+  }
+
   void HistoryController::query() {
     try {
       const auto query = query_.toUtf8();
 
       application::history::search(store_.sessionMut(), std::string_view{query.constData(), static_cast<std::size_t>(query.size())}, filters_);
     } catch (const std::exception& error) {
-      emit failed(QString::fromUtf8(error.what()));
+      fail(error);
     }
 
     synchronize();
@@ -433,18 +483,29 @@ namespace telar::gui::qt {
         next.author = parseAuthor(filters.value(QStringLiteral("author")).toString());
       }
 
+      auto query = query_;
+
       if (filters.contains(QStringLiteral("failedOnly"))) {
         next.failed_only = filters.value(QStringLiteral("failedOnly")).toBool();
+        // The chip turns off what a leading ! turned on too: the ! leaves the search.
+        if (!next.failed_only && query.startsWith(QLatin1Char('!'))) {
+          qsizetype start = 1;
+
+          while (start < query.size() && query[start] == QLatin1Char(' ')) {
+            ++start;
+          }
+
+          query = query.mid(start);
+        }
       }
 
       filters_ = next;
-      const auto query = query_;
-
       search(query);
     });
   }
 
   void HistoryController::select(int row) {
+    pending_submit_.reset();
     if (row < 0 || busy()) {
       return;
     }
@@ -471,6 +532,10 @@ namespace telar::gui::qt {
   }
 
   void HistoryController::execute(Action action, const QString& entry_id) {
+    if (action == Action::older || action == Action::newer) {
+      pending_submit_.reset();
+    }
+
     if (!isOpen() || (busy() && action != Action::inspect)) {
       return;
     }
@@ -517,6 +582,22 @@ namespace telar::gui::qt {
   }
 
   void HistoryController::use(int row, bool alternate) {
+    if (!isOpen()) {
+      return;
+    }
+
+    // The rows shown are of an older query: the search runs now, and its first row once it
+    // arrives, as fzf runs its best match.
+    if (busy()) {
+      pending_submit_ = alternate;
+      if (search_timer_.isActive()) {
+        search_timer_.stop();
+        query();
+      }
+
+      return;
+    }
+
     const auto& entries = application::history::view(store_.session()).rows();
     if (row < 0 || static_cast<std::size_t>(row) >= entries.size()) {
       return;

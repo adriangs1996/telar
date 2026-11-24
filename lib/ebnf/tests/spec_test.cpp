@@ -123,12 +123,16 @@ namespace {
 
     const auto subcommands = texts("git", {}, "");
 
-    for (const auto name : {"switch", "checkout", "branch", "add", "restore", "commit", "push", "pull", "fetch", "merge", "rebase", "stash", "log", "diff", "status"}) {
+    for (const auto name : {"switch", "checkout", "branch", "add", "restore", "commit", "push", "pull", "fetch", "merge", "rebase", "stash", "log", "diff", "status", "show", "reset", "rm", "mv", "tag", "worktree", "cherry-pick", "revert", "remote", "clone", "blame", "bisect", "clean", "grep", "config"}) {
       SCOPED_TRACE(name);
       EXPECT_NE(std::ranges::find(subcommands, name), subcommands.end());
     }
 
     EXPECT_EQ(texts("git", {}, "st"), (std::vector<std::string>{"stash", "status"}));
+    EXPECT_TRUE(contains(texts("git", {"reset"}, "--h"), "--hard"));
+    EXPECT_TRUE(contains(texts("git", {"reset", "--hard"}, ""), "@ref"));
+    EXPECT_TRUE(contains(texts("git", {"worktree"}, "a"), "add"));
+    EXPECT_TRUE(contains(texts("git", {"rm"}, ""), "@file"));
   }
 
   TEST_F(Spec, GitCompletesFlagsProvidersAndValues) {

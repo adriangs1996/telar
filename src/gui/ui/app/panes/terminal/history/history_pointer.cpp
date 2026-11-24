@@ -405,6 +405,7 @@ namespace telar::gui::qt {
   void HistoryController::moveRows(std::int32_t steps) {
     auto& session = store_.sessionMut();
 
+    pending_submit_.reset();
     for (std::int32_t remaining = std::abs(steps); remaining > 0; --remaining) {
       // Viewed anew each step: selecting a row or a page changes the session the view reads.
       const auto browser = application::history::view(session);

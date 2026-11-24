@@ -42,6 +42,7 @@ import telar.wire.layout;
 import telar.wire.runtime;
 import telar.gui.foundation.model;
 import telar.base.ds;
+import telar.client;
 
 namespace {
 
@@ -837,6 +838,13 @@ namespace {
 
     configuration.history = {.show_agent_commands = true, .enter_runs = true, .match_fts = true};
     application::configuration::configure(client, configuration);
+    // Enter runs the paste only where the shell waits for a command: a program in front, as vim
+    // or an agent, gets the text alone.
+    deliver(client, PaneShell{.pane_id = 1, .shell = IntegratedShell::zsh, .phase = ShellPhase::running, .shell_foreground = false, .commands = 1});
+    first_message = transport.sent.size();
+    application::history::paste(client, 1);
+    check(transport.inputSince(first_message) == "echo safe", "a running program gets the paste without Enter");
+    deliver(client, PaneShell{.pane_id = 1, .shell = IntegratedShell::zsh, .phase = ShellPhase::prompt, .shell_foreground = true, .commands = 1});
     first_message = transport.sent.size();
     application::history::paste(client, 1);
     check(transport.inputSince(first_message) == "echo safe\r", "configured run must append Enter after the complete paste");
@@ -899,9 +907,11 @@ namespace {
     application::history::copy(client, 1);
     check(client.clipboard() == "copy exact bytes", "history copy must use the complete canonical command");
     application::history::remove(client, 1);
-    const auto deletion = transport.last<DeleteHistory>();
+    const auto deletion = transport.last<DeleteHistoryCommand>();
 
-    check(application::history::view(client).rows().size() == entries.size(), "queued deletion must preserve rows until confirmation");
+    check(deletion.id == 1, "the list shows each command once: deleting one deletes every run of it");
+
+    check(application::history::view(client).rows().size() == entries.size() - 1, "a deleted row leaves the list at once");
     check(deliver(client, HistoryPruned{.request_id = deletion.request_id, .removed = 1}) == application::Change::history, "deletion confirmation must refresh the history projection");
     const auto refreshed = transport.last<QueryHistory>();
 
@@ -919,6 +929,22 @@ namespace {
     deliver(client, PaneOpened{.request_id = opened.request_id, .pane_id = 2, .location = destination, .pane_generation = 1});
     check(client.focusedPane()->id == 2 && sameTab(client.activeTab()->location, destination), "a visited pane must select the authoritative workspace and tab");
     check(transport.count(ClientTag::create_pane) == creations, "history navigation must never create a replacement process");
+  }
+
+  // A runtime before cqp00012 deletes the one run it is asked for.
+  void olderRuntimeDeletesOneRun() {
+    SystemAllocator memory;
+    Transport transport;
+    TestSession client{memory, transport};
+
+    openFirstPane(client, transport, telar::handshake::Dialect::cqp00011);
+    application::history::search(client, {});
+    const auto query = transport.last<QueryHistory>();
+    const ds::Array entries{HistoryEntry{.id = 1, .pane_id = 1, .command = "ls"}};
+
+    deliver(client, HistoryResults{.request_id = query.request_id, .snapshot_id = 1, .entries = entries});
+    application::history::remove(client, 1);
+    check(transport.count(ClientTag::delete_history) == 1 && transport.count(ClientTag::delete_history_command) == 0, "an older runtime is asked to delete the run");
   }
 
   void agentNavigationUsesCommittedGenerationsAndExistingPanes() {
@@ -1064,6 +1090,7 @@ namespace {
     const ds::Array entries{HistoryEntry{.id = 1, .pane_id = 1, .command = "echo first\necho\tsecond"}};
 
     deliver(client, HistoryResults{.request_id = transport.last<QueryHistory>().request_id, .snapshot_id = 1, .entries = entries});
+    deliver(client, PaneShell{.pane_id = 1, .shell = IntegratedShell::zsh, .phase = ShellPhase::prompt, .shell_foreground = true});
     const auto first_message = transport.sent.size();
 
     application::history::paste(client, 1, true);
@@ -1219,6 +1246,7 @@ namespace {
   const telar::testing::Case case_routed_host_commands{"session.routed_host_commands", routedHostCommands};
   const telar::testing::Case case_history_replay{"session.history_replay", historyReplay};
   const telar::testing::Case case_history_scopes_and_visits{"session.history_scopes_and_visits", historyScopesAndVisits};
+  const telar::testing::Case case_older_runtime_deletes_one_run{"session.older_runtime_deletes_one_run", olderRuntimeDeletesOneRun};
   const telar::testing::Case case_agent_navigation_uses_committed_generations_and_existing_panes{"session.agent_navigation_uses_committed_generations_and_existing_panes", agentNavigationUsesCommittedGenerationsAndExistingPanes};
   const telar::testing::Case case_uncached_history_replay{"session.uncached_history_replay", uncachedHistoryReplay};
   const telar::testing::Case case_history_query_bounds{"session.history_query_bounds", historyQueryBounds};

@@ -6914,6 +6914,60 @@ return {api_version=2, client={keybindings={
       QTRY_VERIFY_WITH_TIMEOUT(!search->property("layout").toMap().value(QStringLiteral("composing")).toBool(), runtime_wait_ms);
     }
 
+    // The failed chip shows and controls the filter a leading ! turned on: turning it off takes
+    // the ! out of the search.
+    Q_SLOT void historyFailedChipControlsTheMarker() {
+      client_->commands()->execute(window_actions::Action::history);
+      const auto restore = qScopeGuard([this] {
+        client_->commands()->execute(window_actions::Action::cancel);
+      });
+
+      client_->history()->search(QStringLiteral("!  GUI_HISTORY_FIXTURE"));
+      QTRY_VERIFY_WITH_TIMEOUT(!client_->history()->loading(), runtime_wait_ms);
+      QVERIFY(client_->history()->state().value(QStringLiteral("failedOnly")).toBool());
+      client_->history()->setFilters({{QStringLiteral("failedOnly"), false}});
+      QTRY_VERIFY_WITH_TIMEOUT(!client_->history()->loading(), runtime_wait_ms);
+      QVERIFY(!client_->history()->state().value(QStringLiteral("failedOnly")).toBool());
+      auto* search = window_->findChild<QQuickItem*>(QStringLiteral("commandSearch"));
+
+      QVERIFY(search != nullptr);
+      QTRY_COMPARE_WITH_TIMEOUT(search->property("text").toString(), QStringLiteral("GUI_HISTORY_FIXTURE"), runtime_wait_ms);
+    }
+
+    // While the history is open its ages move on, and a running command is read again; closing
+    // it stops both.
+    Q_SLOT void historyAgesMoveOnWhileOpen() {
+      client_->commands()->execute(window_actions::Action::history);
+      client_->history()->search(QStringLiteral("GUI_HISTORY_FIXTURE"));
+      QTRY_VERIFY_WITH_TIMEOUT(!client_->history()->loading() && client_->history()->rows()->rowCount() > 0, runtime_wait_ms);
+      QVERIFY(test::HistoryPresentation::aging(*client_));
+      int changes = 0;
+      const auto counted = connect(client_->history(), &HistoryController::changed, [&] {
+        ++changes;
+      });
+
+      test::HistoryPresentation::age(*client_);
+      disconnect(counted);
+      QVERIFY(changes > 0);
+      QTRY_VERIFY_WITH_TIMEOUT(!client_->history()->loading() && client_->history()->rows()->rowCount() > 0, runtime_wait_ms);
+      client_->commands()->execute(window_actions::Action::cancel);
+      QVERIFY(!test::HistoryPresentation::aging(*client_));
+    }
+
+    // Closing the history stops the search its debounce still held: none goes out after it.
+    Q_SLOT void historyCloseStopsThePendingSearch() {
+      client_->commands()->execute(window_actions::Action::history);
+      QTRY_VERIFY_WITH_TIMEOUT(!client_->history()->loading(), runtime_wait_ms);
+      client_->history()->search(QStringLiteral("GUI_HISTORY_CLOSED_BEFORE_SENT"));
+      QVERIFY(client_->history()->loading());
+      client_->commands()->execute(window_actions::Action::cancel);
+      QCOMPARE(client_->dialogs()->kind(), telar::gui::qt::ApplicationController::Dialog::none);
+      QVERIFY(!client_->history()->loading());
+      QTest::qWait(200);
+      QVERIFY(!client_->history()->loading());
+      QCOMPARE(client_->status()->error(), QString{});
+    }
+
     Q_SLOT void historyQueryOverflowPublishesTheExistingLimitNotice() {
       client_->commands()->execute(window_actions::Action::history);
       const auto restore = qScopeGuard([this] {
@@ -7514,6 +7568,30 @@ return {api_version=2, client={keybindings={
 
       client_->history()->use(0);
       QCOMPARE(client_->dialogs()->kind(), telar::gui::qt::ApplicationController::Dialog::none);
+      const auto* pane = firstPane();
+      if (pane == nullptr) {
+        QFAIL("Required terminal fixture is missing");
+      }
+
+      client_->terminals()->input(pane->id, "\x15");
+    }
+
+    // Enter while the search is still loading runs the best match of what was typed once its
+    // page arrives, as fzf does; typing again first cancels it.
+    Q_SLOT void historyEnterWhileLoading() {
+      client_->commands()->execute(window_actions::Action::history);
+      QTRY_VERIFY_WITH_TIMEOUT(!client_->history()->loading(), runtime_wait_ms);
+
+      client_->history()->search(QStringLiteral("GUI_HISTORY_FIXTURE"));
+      QVERIFY(client_->history()->loading());
+      client_->history()->use(0);
+      client_->history()->search(QStringLiteral("GUI_HISTORY_FIXTURE "));
+      QTRY_VERIFY_WITH_TIMEOUT(!client_->history()->loading(), runtime_wait_ms);
+      QCOMPARE(client_->dialogs()->kind(), telar::gui::qt::ApplicationController::Dialog::history);
+
+      client_->history()->search(QStringLiteral("GUI_HISTORY_FIXTURE"));
+      client_->history()->use(0);
+      QTRY_COMPARE_WITH_TIMEOUT(client_->dialogs()->kind(), telar::gui::qt::ApplicationController::Dialog::none, runtime_wait_ms);
       const auto* pane = firstPane();
       if (pane == nullptr) {
         QFAIL("Required terminal fixture is missing");

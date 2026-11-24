@@ -1419,6 +1419,12 @@ with, as do panes the runtime restores from a saved session. A command run from
 the editor reaches the runtime whole, which types it at the shell's prompt and
 records that text in the history.
 
+On macOS, Option types the character the keyboard layout gives the key, as
+Option+2 types `@` on a Spanish layout, in the editor and in the terminal. Set
+`client.prompt.macos_option_as_alt = true` for Option to act as Meta instead:
+Option+F then sends Alt with `f`, which readline and the editor read as a word
+forward. Option keys whose character is the key itself stay Alt either way.
+
 While the focused pane's shell waits for a command, the history search and the
 path picker open under the command instead of in a dialog. The command becomes
 the query: the history search starts from the whole command, and the path picker

@@ -186,6 +186,7 @@ namespace telar::gui::application {
     link.send(ConfigureGraphics{supportsSharedGraphics()});
     window::pace(*this);
     prompt::configureShell(*this);
+    prompt::connected(*this);
     configuration::configureTerminal(*this);
   }
 
@@ -798,6 +799,10 @@ namespace telar::gui::application {
     return dialect_ && handshake::speaks(*dialect_, tag);
   }
 
+  bool Session::speaks(handshake::Dialect dialect) const noexcept {
+    return dialect_ && *dialect_ >= dialect;
+  }
+
   Change Session::apply(const ProxyStatus& message) {
     proxy_ = message;
     return Change::model;
@@ -953,6 +958,7 @@ namespace telar::gui::application {
   template void Session::Link::send<CreateTab>(const CreateTab& message);
   template void Session::Link::send<CreateWorkspace>(const CreateWorkspace& message);
   template void Session::Link::send<DeleteHistory>(const DeleteHistory& message);
+  template void Session::Link::send<DeleteHistoryCommand>(const DeleteHistoryCommand& message);
   template void Session::Link::send<DetachPane>(const DetachPane& message);
   template void Session::Link::send<FindPaths>(const FindPaths& message);
   template void Session::Link::send<ForgetWorktree>(const ForgetWorktree& message);

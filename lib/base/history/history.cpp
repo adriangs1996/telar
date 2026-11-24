@@ -5,16 +5,214 @@ import telar.base.ds;
 
 namespace telar::runtime {
 
+  namespace {
+
+    // One character of UTF-8 at the start of `text`, and its bytes; a byte that starts none is a
+    // character of its own above Unicode's, so it matches only itself.
+    struct Decoded {
+      std::uint32_t character = 0;
+      std::size_t bytes = 1;
+    };
+
+    Decoded decode(std::string_view text) noexcept {
+      constexpr std::uint32_t outside = 0x110000;
+      const auto lead = static_cast<unsigned char>(text.front());
+      const auto continuation = [&](std::size_t index) {
+        return index < text.size() && (static_cast<unsigned char>(text[index]) & 0xc0U) == 0x80U;
+      };
+
+      if (lead < 0x80U) {
+        return {.character = lead};
+      }
+
+      std::size_t length = 0;
+      std::uint32_t character = 0;
+
+      if ((lead & 0xe0U) == 0xc0U) {
+        length = 2;
+        character = lead & 0x1fU;
+      } else if ((lead & 0xf0U) == 0xe0U) {
+        length = 3;
+        character = lead & 0x0fU;
+      } else if ((lead & 0xf8U) == 0xf0U) {
+        length = 4;
+        character = lead & 0x07U;
+      } else {
+        return {.character = outside + lead};
+      }
+
+      for (std::size_t index = 1; index < length; ++index) {
+        if (!continuation(index)) {
+          return {.character = outside + lead};
+        }
+
+        character = (character << 6U) | (static_cast<unsigned char>(text[index]) & 0x3fU);
+      }
+
+      return {.character = character, .bytes = length};
+    }
+
+    std::size_t encode(std::uint32_t character, std::span<char> out) noexcept {
+      if (character < 0x80U) {
+        out[0] = static_cast<char>(character);
+        return 1;
+      }
+
+      if (character < 0x800U) {
+        out[0] = static_cast<char>(0xc0U | (character >> 6U));
+        out[1] = static_cast<char>(0x80U | (character & 0x3fU));
+        return 2;
+      }
+
+      if (character < 0x10000U) {
+        out[0] = static_cast<char>(0xe0U | (character >> 12U));
+        out[1] = static_cast<char>(0x80U | ((character >> 6U) & 0x3fU));
+        out[2] = static_cast<char>(0x80U | (character & 0x3fU));
+        return 3;
+      }
+
+      out[0] = static_cast<char>(0xf0U | (character >> 18U));
+      out[1] = static_cast<char>(0x80U | ((character >> 12U) & 0x3fU));
+      out[2] = static_cast<char>(0x80U | ((character >> 6U) & 0x3fU));
+      out[3] = static_cast<char>(0x80U | (character & 0x3fU));
+      return 4;
+    }
+
+    // A run of capitals [first, last] whose small letters are `offset` away.
+    struct FoldRange {
+      std::uint32_t first;
+      std::uint32_t last;
+      std::int32_t offset;
+    };
+
+    // Runs where capital and small letter alternate, the capital even, from `first` to `last`.
+    struct FoldPairs {
+      std::uint32_t first;
+      std::uint32_t last;
+    };
+
+    constexpr ds::Array<FoldRange, 18> fold_ranges{{
+        {.first = 'A', .last = 'Z', .offset = 32},
+        {.first = 0xc0, .last = 0xd6, .offset = 32},
+        {.first = 0xd8, .last = 0xde, .offset = 32},
+        {.first = 0x386, .last = 0x386, .offset = 38},
+        {.first = 0x388, .last = 0x38a, .offset = 37},
+        {.first = 0x38c, .last = 0x38c, .offset = 64},
+        {.first = 0x38e, .last = 0x38f, .offset = 63},
+        {.first = 0x391, .last = 0x3a1, .offset = 32},
+        {.first = 0x3a3, .last = 0x3ab, .offset = 32},
+        {.first = 0x3c2, .last = 0x3c2, .offset = 1},
+        {.first = 0x400, .last = 0x40f, .offset = 80},
+        {.first = 0x410, .last = 0x42f, .offset = 32},
+        {.first = 0x531, .last = 0x556, .offset = 48},
+        {.first = 0x10a0, .last = 0x10c5, .offset = 0x2d00 - 0x10a0},
+        {.first = 0x2126, .last = 0x2126, .offset = 0x3c9 - 0x2126},
+        {.first = 0x212a, .last = 0x212a, .offset = 'k' - 0x212a},
+        {.first = 0x212b, .last = 0x212b, .offset = 0xe5 - 0x212b},
+        {.first = 0xff21, .last = 0xff3a, .offset = 32},
+    }};
+
+    constexpr ds::Array<FoldPairs, 9> fold_pairs{{
+        {.first = 0x100, .last = 0x12f},
+        {.first = 0x132, .last = 0x137},
+        {.first = 0x14a, .last = 0x177},
+        {.first = 0x3d8, .last = 0x3ef},
+        {.first = 0x460, .last = 0x481},
+        {.first = 0x48a, .last = 0x4bf},
+        {.first = 0x4d0, .last = 0x52f},
+        {.first = 0x1e00, .last = 0x1e95},
+        {.first = 0x1ea0, .last = 0x1eff},
+    }};
+
+  }
+
+  std::uint32_t historyFold(std::uint32_t character) noexcept {
+    // Latin Extended-A's odd runs, where the capital is odd, and its outliers.
+    constexpr std::uint32_t long_s = 0x17f;
+    constexpr std::uint32_t y_diaeresis = 0x178;
+    constexpr std::uint32_t capital_sharp_s = 0x1e9e;
+    constexpr std::uint32_t cyrillic_palochka = 0x4c0;
+
+    if (character < 0x80U) {
+      return character >= 'A' && character <= 'Z' ? character + 32 : character;
+    }
+
+    for (const auto& range : fold_ranges) {
+      if (character >= range.first && character <= range.last) {
+        return static_cast<std::uint32_t>(static_cast<std::int32_t>(character) + range.offset);
+      }
+    }
+
+    for (const auto& pairs : fold_pairs) {
+      if (character >= pairs.first && character <= pairs.last) {
+        return character | 1U;
+      }
+    }
+
+    if ((character >= 0x139 && character <= 0x148) || (character >= 0x179 && character <= 0x17e) || (character >= 0x4c1 && character <= 0x4ce)) {
+      return (character & 1U) != 0 ? character + 1 : character;
+    }
+
+    switch (character) {
+    case long_s:
+      return 's';
+    case y_diaeresis:
+      return 0xff;
+    case capital_sharp_s:
+      return 0xdf;
+    case cyrillic_palochka:
+      return 0x4cf;
+    default:
+      return character;
+    }
+  }
+
+  std::size_t historyFold(std::string_view text, std::span<char> out) noexcept {
+    std::size_t written = 0;
+
+    while (!text.empty()) {
+      const auto decoded = decode(text);
+      const auto folded = decoded.character > 0x10ffffU ? decoded.character : historyFold(decoded.character);
+
+      if (decoded.character > 0x10ffffU || folded == decoded.character) {
+        std::copy_n(text.data(), decoded.bytes, out.data() + written);
+        written += decoded.bytes;
+      } else {
+        written += encode(folded, out.subspan(written));
+      }
+
+      text.remove_prefix(decoded.bytes);
+    }
+
+    return written;
+  }
+
   ds::Option<std::uint32_t> historyScore(std::string_view command, std::string_view query) noexcept {
     if (query.empty()) {
       return 1;
     }
 
+    // The query's characters, folded once; a query past what this holds is never typed.
+    constexpr std::size_t maximum_query = 1024;
+    ds::Array<std::uint32_t, maximum_query> wanted{};
+    std::size_t wanted_count = 0;
+
+    for (auto rest = query; !rest.empty() && wanted_count < wanted.size();) {
+      const auto decoded = decode(rest);
+
+      wanted.atMut(wanted_count++) = historyFold(decoded.character);
+      rest.remove_prefix(decoded.bytes);
+    }
+
     std::size_t matched = 0;
     std::size_t first = 0;
+    std::size_t index = 0;
 
-    for (std::size_t index = 0; index < command.size(); ++index) {
-      if (asciiLower(static_cast<unsigned char>(command[index])) != asciiLower(static_cast<unsigned char>(query[matched]))) {
+    for (auto rest = command; !rest.empty(); ++index) {
+      const auto decoded = decode(rest);
+
+      rest.remove_prefix(decoded.bytes);
+      if (historyFold(decoded.character) != wanted[matched]) {
         continue;
       }
 
@@ -23,11 +221,11 @@ namespace telar::runtime {
       }
 
       ++matched;
-      if (matched == query.size()) {
+      if (matched == wanted_count) {
         constexpr std::uint32_t base_score = 4096;
         constexpr std::uint32_t leading_penalty = 8;
         constexpr std::uint32_t inner_penalty = 16;
-        const auto penalty = (first * leading_penalty) + ((index - first + 1 - query.size()) * inner_penalty);
+        const auto penalty = (first * leading_penalty) + ((index - first + 1 - wanted_count) * inner_penalty);
 
         return penalty >= base_score ? 0 : base_score - static_cast<std::uint32_t>(penalty);
       }
@@ -78,6 +276,71 @@ namespace telar::runtime {
     const auto second_end = remainder.find(' ');
 
     return head(command, static_cast<std::size_t>(remainder.data() - command.data()) + std::min(second_end, remainder.size()));
+  }
+
+  void IntegrationMarkFilter::reset() noexcept {
+    state_ = State::ground;
+    held_count_ = 0;
+    number_ = 0;
+  }
+
+  IntegrationMarkFilter::Step IntegrationMarkFilter::step(std::uint8_t byte) noexcept {
+    constexpr std::uint8_t bell = 0x07;
+    constexpr std::uint8_t cancel = 0x18;
+    constexpr std::uint8_t substitute = 0x1a;
+    constexpr std::uint32_t prompt_mark = 133;
+    constexpr std::uint32_t private_mark = 6973;
+    constexpr std::uint32_t decimal = 10;
+
+    switch (state_) {
+    case State::ground:
+      held_.atMut(0) = byte;
+      held_count_ = 1;
+      state_ = State::escape;
+      return Step::consumed;
+    case State::escape:
+      if (byte != ']') {
+        state_ = State::ground;
+        return Step::release;
+      }
+
+      held_.atMut(held_count_++) = byte;
+      number_ = 0;
+      state_ = State::number;
+      return Step::consumed;
+    case State::number: {
+      const bool digit = byte >= '0' && byte <= '9';
+      if (digit && held_count_ < held_.size()) {
+        held_.atMut(held_count_++) = byte;
+        number_ = (number_ * decimal) + (byte - '0');
+        return Step::consumed;
+      }
+
+      const bool ends = byte == ';' || byte == bell || byte == escape;
+      if (digit || !ends || (number_ != prompt_mark && number_ != private_mark)) {
+        state_ = State::ground;
+        return Step::release;
+      }
+
+      held_count_ = 0;
+      state_ = byte == ';' ? State::mark : (byte == bell ? State::ground : State::mark_escape);
+      return Step::consumed;
+    }
+    case State::mark:
+      if (byte == bell || byte == cancel || byte == substitute) {
+        state_ = State::ground;
+      } else if (byte == escape) {
+        state_ = State::mark_escape;
+      }
+
+      return Step::consumed;
+    case State::mark_escape:
+      // ESC \ ends the mark; ESC before anything else ends it too, and that byte is read anew.
+      state_ = State::ground;
+      return byte == '\\' ? Step::consumed : Step::release;
+    }
+
+    return Step::consumed;
   }
 
 }

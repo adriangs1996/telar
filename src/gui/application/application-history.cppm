@@ -120,6 +120,10 @@ export namespace telar::gui::application::history {
   // Deletes command `entry_id` from the history.
   void remove(Session& session, std::uint64_t entry_id);
 
+  // Reads the page shown anew from a new insertion boundary, the selection kept: what changed
+  // since, as a command that was running and ended, shows.
+  void refresh(Session& session);
+
 }
 
 // What the session's routing hands the history; ui never calls these.

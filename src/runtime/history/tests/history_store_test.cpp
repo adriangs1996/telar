@@ -119,6 +119,123 @@ INSERT INTO command VALUES (1, x'01', 1, 0, 1, 1, 'legacy command', 0, '/legacy'
     check(commands(store, reply, QueryHistory{.request_id = 2, .limit = 10}) == std::vector<std::string>{"legacy command", "new command"});
   }
 
+  // Outputs stored before the tracker dropped the shell integration's marks keep them, and the
+  // pane's token: opening the history strips them once.
+  void testStripsMarksFromStoredOutput() {
+    telar::testing::TestMemory adapter;
+    ConcurrentMemory& memory = adapter;
+    Directory directory;
+    const auto path = directory.file("history.db");
+    const std::string signature = ";telar=0123456789abcdef0123456789abcdef";
+    const auto marked = "\x1b]133;C" + signature + "\x07"
+                                                   "file\r\n\x1b]133;D;0" +
+                        signature + "\x1b\\";
+
+    {
+      HistoryStore store{memory, path.c_str()};
+
+      finished(store, session(1, "/work"), "ls", "/work");
+    }
+
+    {
+      Database database{path.c_str()};
+      Statement output{database, "INSERT INTO command_output (command_id, content, truncated, observed_bytes) VALUES (1, ?1, 0, 0)"};
+
+      output.bind(1, std::string_view{marked});
+      output.finish();
+      database.execute("UPDATE history_schema SET version = 5");
+    }
+
+    HistoryStore store{memory, path.c_str()};
+    EncodedReply reply{memory};
+    std::vector<Byte> storage(64 * 1024);
+
+    store.readOutput(ReadHistoryOutput{.request_id = 1, .id = 1}, reply);
+    const auto result = decodeReply<HistoryOutput>(reply, storage);
+    const std::string_view content{reinterpret_cast<const char*>(result.content.data()), result.content.size()};
+
+    check(!content.contains("telar="), "a stored output keeps the token");
+    check(content == "file\r\n", "the stored output is what the command printed");
+  }
+
+  // A list of each command once deletes a command with every run of it, so no older run takes
+  // its place.
+  void testRemovesEveryRunOfACommand() {
+    telar::testing::TestMemory adapter;
+    ConcurrentMemory& memory = adapter;
+    HistoryStore store{memory, ":memory:"};
+    EncodedReply reply{memory};
+    std::vector<Byte> storage(64 * 1024);
+    const auto owner = session(1, "/work");
+
+    for (const auto* command : {"ls", "pwd", "ls", "ls"}) {
+      finished(store, owner, command, "/work");
+    }
+
+    store.removeCommand(DeleteHistoryCommand{.request_id = 1, .id = 4}, reply);
+    check(decodeReply<HistoryPruned>(reply, storage).removed == 3, "every run of the command goes");
+    check(commands(store, reply, QueryHistory{.request_id = 2, .limit = 10}) == std::vector<std::string>{"pwd"}, "the other commands stay");
+  }
+
+  // A command run more than the fuzzy search reads, again and again, does not hide an older
+  // one: the cap counts distinct commands.
+  void testFuzzyCapCountsCommands() {
+    telar::testing::TestMemory adapter;
+    ConcurrentMemory& memory = adapter;
+    HistoryStore store{memory, ":memory:"};
+    EncodedReply reply{memory};
+    const auto owner = session(1, "/work");
+
+    finished(store, owner, "needle in the haystack", "/work");
+    for (std::size_t index = 0; index <= HistoryStore::maximum_fuzzy_candidates; ++index) {
+      finished(store, owner, "make", "/work");
+    }
+
+    check(commands(store, reply, QueryHistory{.request_id = 1, .query = "needle", .match = HistoryMatch::fuzzy, .distinct = true, .limit = 10}) == std::vector<std::string>{"needle in the haystack"}, "an older command is found past the runs of a newer one");
+  }
+
+  // The same case folding at any query length, beyond ASCII, and the fuzzy search compares
+  // characters, not the bytes of other characters.
+  void testFoldsCaseAtAnyLength() {
+    telar::testing::TestMemory adapter;
+    ConcurrentMemory& memory = adapter;
+    HistoryStore store{memory, ":memory:"};
+    EncodedReply reply{memory};
+    const auto owner = session(1, "/work");
+
+    for (const auto* command : {"echo ÉCOLE", "echo école", "echo \xc3\x83\xc2\xa9"}) {
+      finished(store, owner, command, "/work");
+    }
+
+    const std::vector<std::string> both{"echo ÉCOLE", "echo école"};
+
+    check(commands(store, reply, QueryHistory{.request_id = 1, .query = "éc", .limit = 10}) == both, "a short query folds as a long one does");
+    check(commands(store, reply, QueryHistory{.request_id = 2, .query = "écol", .limit = 10}) == both, "a long query folds");
+    check(commands(store, reply, QueryHistory{.request_id = 3, .query = "ÉC", .match = HistoryMatch::fuzzy, .limit = 10}) == both, "the fuzzy search folds the same way");
+    check(commands(store, reply, QueryHistory{.request_id = 4, .query = "é", .match = HistoryMatch::fuzzy, .limit = 10}) == both, "and never matches the bytes of other characters");
+  }
+
+  // A directory matches however it was written: with a slash at its end, or through a link to it
+  // (/tmp is one to /private/tmp on macOS).
+  void testScopeMatchesTheSameDirectory() {
+    telar::testing::TestMemory adapter;
+    ConcurrentMemory& memory = adapter;
+    Directory directory;
+    const auto path = directory.file("work");
+    const auto linked = directory.file("linked");
+
+    std::filesystem::create_directory(path);
+    std::filesystem::create_directory_symlink(path, linked);
+    HistoryStore store{memory, ":memory:"};
+    EncodedReply reply{memory};
+
+    finished(store, session(1, path + "/"), "in the tree", path + "/");
+    for (const auto& written : {path, path + "/", linked, linked + "/"}) {
+      check(commands(store, reply, QueryHistory{.request_id = 1, .scope = HistoryScope::cwd, .scope_value = std::string_view{written}, .limit = 10}) == std::vector<std::string>{"in the tree"}, "the directory matches as " + written);
+      check(commands(store, reply, QueryHistory{.request_id = 2, .scope = HistoryScope::workspace, .scope_value = std::string_view{written}, .limit = 10}) == std::vector<std::string>{"in the tree"}, "the workspace matches as " + written);
+    }
+  }
+
   void testFailedWriteRollsBack() {
     telar::testing::TestMemory adapter;
     ConcurrentMemory& memory = adapter;
@@ -239,6 +356,44 @@ INSERT INTO command VALUES (1, x'01', 1, 0, 1, 1, 'legacy command', 0, '/legacy'
 
     std::ranges::sort(paths);
     check(listed.request_id == 2 && !listed.truncated && paths == std::vector<std::string>{"/project-a", "/project-b"}, "each workspace a session ran in must be listed once");
+  }
+
+  // Paths that name no workspace are left out before the listing's limit, not counted against
+  // it: every real one still fits.
+  void testWorkspacesSkipNoPathsAgainstTheLimit() {
+    telar::testing::TestMemory adapter;
+    ConcurrentMemory& memory = adapter;
+    HistoryStore store{memory, ":memory:"};
+    EncodedReply reply{memory};
+    std::vector<Byte> storage(2 * 1024 * 1024);
+
+    finished(store, session(1, ""), "nowhere", "/");
+    finished(store, session(2, "/" + std::string(5000, 'x')), "too long", "/");
+    for (std::size_t index = 0; index < HistoryWorkspaces::maximum_paths; ++index) {
+      const auto path = std::format("/w{}", index);
+
+      finished(store, HistorySession{.id = {static_cast<Byte>(index % 256), static_cast<Byte>(index / 256), 1}, .pane = 1, .workspace_path = path, .shell = "/bin/sh"}, "work", path);
+    }
+
+    store.workspaces(QueryHistoryWorkspaces{.request_id = 1}, reply);
+    const auto listed = decodeReply<HistoryWorkspaces>(reply, storage);
+
+    check(listed.paths.size() == HistoryWorkspaces::maximum_paths && !listed.truncated, "every workspace is listed");
+  }
+
+  // A command too long to group past what a stats entry carries still has its stats.
+  void testStatsOfALongCommand() {
+    telar::testing::TestMemory adapter;
+    ConcurrentMemory& memory = adapter;
+    HistoryStore store{memory, ":memory:"};
+    EncodedReply reply{memory};
+    std::vector<Byte> storage(256 * 1024);
+
+    finished(store, session(1, "/work"), std::string(std::size_t{64} * 1024, 'x'), "/work");
+    store.stats(HistoryStatsQuery{.request_id = 1}, reply);
+    const auto stats = decodeReply<HistoryStatsResult>(reply, storage);
+
+    check(stats.total == 1 && stats.top.size() == 1 && stats.top.front().command.size() < std::size_t{64} * 1024, "the group is cut to what its entry carries");
   }
 
   // The failure code `run` threw, or nothing when it returned.
@@ -495,6 +650,13 @@ INSERT INTO command VALUES (1, x'01', 1, 0, 1, 1, 'legacy command', 0, '/legacy'
   }
 
   const telar::testing::Case case_migrates_legacy_schema{"history_store.migrates_legacy_schema", testMigratesLegacySchema};
+  const telar::testing::Case case_strips_marks_from_stored_output{"history_store.strips_marks_from_stored_output", testStripsMarksFromStoredOutput};
+  const telar::testing::Case case_removes_every_run_of_a_command{"history_store.removes_every_run_of_a_command", testRemovesEveryRunOfACommand};
+  const telar::testing::Case case_fuzzy_cap_counts_commands{"history_store.fuzzy_cap_counts_commands", testFuzzyCapCountsCommands};
+  const telar::testing::Case case_folds_case_at_any_length{"history_store.folds_case_at_any_length", testFoldsCaseAtAnyLength};
+  const telar::testing::Case case_scope_matches_the_same_directory{"history_store.scope_matches_the_same_directory", testScopeMatchesTheSameDirectory};
+  const telar::testing::Case case_workspaces_skip_no_paths_against_the_limit{"history_store.workspaces_skip_no_paths_against_the_limit", testWorkspacesSkipNoPathsAgainstTheLimit};
+  const telar::testing::Case case_stats_of_a_long_command{"history_store.stats_of_a_long_command", testStatsOfALongCommand};
   const telar::testing::Case case_failed_write_rolls_back{"history_store.failed_write_rolls_back", testFailedWriteRollsBack};
   const telar::testing::Case case_page_respects_payload_cap{"history_store.page_respects_payload_cap", testPageRespectsPayloadCap};
   const telar::testing::Case case_prune_failed_only{"history_store.prune_failed_only", testPruneFailedOnly};

@@ -6,6 +6,7 @@ import telar.sys.posix;
 import telar.sys.apple;
 #endif
 import telar.base.text;
+import telar.base.text.utf8;
 import telar.base.text.json;
 import telar.platform.fs;
 import telar.platform.primitives;
@@ -36,12 +37,15 @@ namespace telar::runtime {
 
     }
 
+    // UTF-8 without control bytes: what the wire carries as display text.
     bool printable(std::string_view word) noexcept {
-      return std::ranges::none_of(word, [](char byte) {
+      const auto control = std::ranges::any_of(word, [](char byte) {
         const auto value = static_cast<unsigned char>(byte);
 
         return value < first_printable || value == delete_byte;
       });
+
+      return !control && inspectUtf8(word) == Utf8Validation::valid;
     }
 
     // FNV-1a: names a spec's text, so a client asks again only for one that changed.
@@ -234,7 +238,8 @@ namespace telar::runtime {
         }
       }
 
-      if (!expanded) {
+      // Words past what a reply carries are dropped, not cut.
+      if (!expanded || words.size() > maximum_text_bytes) {
         words.clear();
       }
 
@@ -325,7 +330,9 @@ namespace telar::runtime {
       }
 
       if (line.front() == '#') {
-        notes.comment = trimText(line.substr(line.find_first_not_of('#')), " \t");
+        const auto text = line.find_first_not_of('#');
+
+        notes.comment = text == std::string_view::npos ? std::string_view{} : trimText(line.substr(text), " \t");
         return true;
       }
 
@@ -438,7 +445,7 @@ namespace telar::runtime {
           command.clear();
         }
 
-        add(std::string_view{name}, std::string_view{command}.substr(0, maximum_text_bytes));
+        add(std::string_view{name}, utf8Prefix(std::string_view{command}, maximum_text_bytes));
       });
     }
 
@@ -520,9 +527,94 @@ namespace telar::runtime {
       });
     }
 
-    // `Host` names in ~/.ssh/config, without patterns.
+    // The words after `keyword` when `line` starts with it, as ssh_config reads it: any case, then
+    // a blank or `=`; none for another line.
+    ds::Option<std::string_view> sshArguments(std::string_view line, std::string_view keyword) noexcept {
+      if (line.size() <= keyword.size() || !asciiStartsWithIgnoreCase(line, keyword)) {
+        return ds::none;
+      }
+
+      if (const char separator = line[keyword.size()]; separator != ' ' && separator != '\t' && separator != '=') {
+        return ds::none;
+      }
+
+      return trimText(line.substr(keyword.size() + 1), " \t=");
+    }
+
+    // Each blank-separated word of `arguments`, a double-quoted one without its quotes.
+    template <typename Visit>
+    void sshWords(std::string_view arguments, Visit visit) {
+      while (!arguments.empty()) {
+        arguments = trimText(arguments, " \t");
+        if (arguments.empty()) {
+          return;
+        }
+
+        const bool quoted = arguments.front() == '"';
+        const auto end = quoted ? arguments.find('"', 1) : arguments.find_first_of(" \t");
+        const auto word = quoted ? arguments.substr(1, end == std::string_view::npos ? std::string_view::npos : end - 1) : arguments.substr(0, end);
+
+        visit(word);
+        arguments.remove_prefix(end == std::string_view::npos ? arguments.size() : end + (quoted ? 1 : 0));
+      }
+    }
+
+    // `Host` names in one ssh config file, without patterns, and in the files its `Include`s
+    // name: relative to ~/.ssh or from ~, globbed, at most 16 deep as ssh reads them, and at most
+    // `budget` files in all.
+    template <typename Add>
+    void sshConfig(ConcurrentMemory& memory, int ssh_directory, std::string_view home, const char* name, int depth, std::size_t& budget, Add& add) {
+      constexpr int maximum_depth = 16;
+      if (budget == 0) {
+        return;
+      }
+
+      --budget;
+      const auto text = readSmall(memory, ssh_directory, name);
+      Text pattern{memory};
+
+      lines(text, [&](std::string_view line) {
+        line = trimText(line, " \t");
+        if (const auto included = sshArguments(line, "include"); included && depth < maximum_depth) {
+          sshWords(*included, [&](std::string_view file) {
+            if (file.starts_with("~/")) {
+              pattern.assign(home);
+              pattern.append(file.substr(1));
+            } else if (file.starts_with('/')) {
+              pattern.assign(file);
+            } else {
+              pattern.assign(home);
+              pattern.append("/.ssh/");
+              pattern.append(file);
+            }
+
+            glob_t found{};
+
+            if (::glob(pattern.data(), 0, nullptr, &found) == 0) {
+              for (std::size_t index = 0; index < found.gl_pathc; ++index) {
+                sshConfig(memory, ssh_directory, home, found.gl_pathv[index], depth + 1, budget, add);
+              }
+            }
+
+            ::globfree(&found);
+          });
+          return;
+        }
+
+        if (const auto names = sshArguments(line, "host")) {
+          sshWords(*names, [&](std::string_view host) {
+            if (!host.empty() && host.find_first_of("*?!=") == std::string_view::npos) {
+              add(host);
+            }
+          });
+        }
+      });
+    }
+
+    // `Host` names in ~/.ssh/config and the files it includes.
     template <typename Add>
     void sshHosts(ConcurrentMemory& memory, std::string_view home, Add& add) {
+      constexpr std::size_t maximum_files = 256;
       if (home.empty() || home.front() != '/') {
         return;
       }
@@ -535,33 +627,9 @@ namespace telar::runtime {
         return;
       }
 
-      const auto text = readSmall(memory, directory.get(), "config");
+      std::size_t budget = maximum_files;
 
-      lines(text, [&](std::string_view line) {
-        constexpr std::string_view keyword = "host";
-
-        line = trimText(line, " \t");
-        if (line.size() <= keyword.size() || !asciiStartsWithIgnoreCase(line, keyword)) {
-          return;
-        }
-
-        if (const char separator = line[keyword.size()]; separator != ' ' && separator != '\t' && separator != '=') {
-          return;
-        }
-
-        auto names = line.substr(keyword.size() + 1);
-
-        while (!names.empty()) {
-          names = trimText(names, " \t");
-          const auto end = names.find_first_of(" \t");
-          const auto name = names.substr(0, end);
-          if (!name.empty() && name.find_first_of("*?!=") == std::string_view::npos) {
-            add(name);
-          }
-
-          names.remove_prefix(end == std::string_view::npos ? names.size() : end);
-        }
-      });
+      sshConfig(memory, directory.get(), home, "config", 0, budget, add);
     }
 
     // The explicit targets of the makefile make would read in `directory`.
@@ -675,6 +743,116 @@ namespace telar::runtime {
       }
     }
 
+    // The directory a typed path's directory part names, NUL-terminated in `resolved`: `~` or
+    // `~user` at its start is a home, and a relative one is under `directory`. False for a
+    // directory part with a variable, which only the shell can expand, or one that does not fit.
+    bool typedDirectory(std::string_view typed, std::string_view directory, std::string_view home, ds::Array<char, PATH_MAX>& resolved) {
+      if (typed.contains('$')) {
+        return false;
+      }
+
+      std::size_t length = 0;
+      const auto append = [&](std::string_view part) {
+        if (length + part.size() >= resolved.size()) {
+          return false;
+        }
+
+        std::ranges::copy(part, resolved.dataMut() + length);
+        length += part.size();
+        return true;
+      };
+
+      bool fits = true;
+
+      if (typed.starts_with('~')) {
+        const auto end = std::min(typed.find('/'), typed.size());
+        const auto user = typed.substr(1, end - 1);
+
+        if (user.empty()) {
+          fits = append(home);
+        } else {
+          constexpr std::size_t account_bytes = 4096;
+          ds::Array<char, NAME_MAX + 1> name{};
+          ds::Array<char, account_bytes> storage{};
+          passwd account{};
+          passwd* found = nullptr;
+          if (user.size() >= name.size()) {
+            return false;
+          }
+
+          *std::ranges::copy(user, name.dataMut()).out = '\0';
+          if (::getpwnam_r(name.data(), &account, storage.dataMut(), storage.size(), &found) != 0 || found == nullptr || found->pw_dir == nullptr) {
+            return false;
+          }
+
+          fits = append(std::string_view{found->pw_dir});
+        }
+
+        typed.remove_prefix(end);
+      } else if (!typed.starts_with('/')) {
+        fits = append(directory) && append("/");
+      }
+
+      if (!fits || !append(typed) || length == 0 || resolved[0] != '/') {
+        return false;
+      }
+
+      resolved.atMut(length) = '\0';
+      return true;
+    }
+
+    // The entries of the one directory `typed` names, before its last slash, that start with
+    // what follows it, written back with `typed`'s directory part: a directory, or a link to one,
+    // ends with a slash. Dot files only for a name that starts with a dot.
+    template <typename Add>
+    void directoryEntries(ConcurrentMemory& memory, const WordRequest& request, Add& add) {
+      const auto typed = request.prefix.view();
+      const auto slash = typed.rfind('/');
+      const auto shown = slash == std::string_view::npos ? std::string_view{} : typed.substr(0, slash + 1);
+      const auto partial = slash == std::string_view::npos ? typed : typed.substr(slash + 1);
+      ds::Array<char, PATH_MAX> path; // NOLINT(cppcoreguidelines-pro-type-member-init): typedDirectory writes the bytes open reads, up to their NUL
+      if (!typedDirectory(shown, request.directory.view(), request.home.view(), path)) {
+        return;
+      }
+
+      FileDescriptor directory{::open(path.data(), combineFlags(O_RDONLY, O_DIRECTORY, O_CLOEXEC))}; // NOLINT(cppcoreguidelines-pro-type-vararg): open's C signature is variadic
+      if (!directory) {
+        return;
+      }
+
+      DirectoryStream entries{directory.get()};
+      Text word{memory};
+      std::size_t scanned = 0;
+
+      while (const auto* entry = entries.next()) {
+        const std::string_view name{std::data(entry->d_name)};
+        if (++scanned > WordReader::maximum_entries) {
+          break;
+        }
+
+        if (!name.starts_with(partial) || (name.starts_with('.') && !partial.starts_with('.'))) {
+          continue;
+        }
+
+        // Followed: a link to a directory lists as one. A dangling link is a file.
+        struct stat state{};
+        const bool listed = ::fstatat(entries.descriptor(), entry->d_name, &state, 0) == 0;
+        const bool is_directory = listed && S_ISDIR(state.st_mode);
+        const bool executable = listed && S_ISREG(state.st_mode) && ::faccessat(entries.descriptor(), entry->d_name, X_OK, 0) == 0;
+        if ((request.provider == CompletionProvider::directory && !is_directory) || (request.provider == CompletionProvider::executable && !is_directory && !executable)) {
+          continue;
+        }
+
+        word.assign(shown);
+        word.append(name);
+        if (is_directory) {
+          word.push('/');
+        }
+
+        add(word.view());
+      }
+    }
+
   }
 
   WordResult::WordResult(tbc::mut_a<ConcurrentMemory> memory)
@@ -729,12 +907,13 @@ namespace telar::runtime {
         return;
       }
 
-      if (result.words.size() >= maximum_words * 4) {
+      // A bound on memory only: the reply is cut once everything is sorted.
+      if (result.words.size() >= maximum_entries) {
         result.truncated = true;
         return;
       }
 
-      result.words.push(Word{.text = Text{memory_, word}, .description = Text{memory_, printable(description) ? description.substr(0, maximum_text_bytes) : std::string_view{}}});
+      result.words.push(Word{.text = Text{memory_, word}, .description = Text{memory_, printable(description) ? utf8Prefix(description, maximum_text_bytes) : std::string_view{}}});
     };
 
     const auto add_word = [&](std::string_view word) {
@@ -743,7 +922,7 @@ namespace telar::runtime {
 
     switch (request.provider) {
     case CompletionProvider::command:
-      commands({.path = request.path.view(), .prefix = prefix}, add);
+      // The shell's own names first, so no PATH, however long, crowds them out.
       builtins(request.shell, add_word);
       if (request.names) {
         words(request.names->view(), add_word);
@@ -751,19 +930,33 @@ namespace telar::runtime {
         result.truncated = true;
       }
 
+      commands({.path = request.path.view(), .prefix = prefix}, add);
       break;
     case CompletionProvider::branch:
-      git_.read(request.directory.view());
+    case CompletionProvider::reference: {
+      // A branch only a remote has checks out by its own name too, as git checkout does.
+      const auto remote_branch = [&](std::string_view name) {
+        add(name);
+        add(name.substr(name.find('/') + 1));
+      };
+
+      git_.refs(request.directory.view());
       git_.branches(maximum_entries, add_word);
+      git_.remoteBranches(maximum_entries, remote_branch);
+      if (request.provider == CompletionProvider::reference) {
+        git_.tags(maximum_entries, add_word);
+      }
+
       break;
+    }
     case CompletionProvider::remote:
-      git_.read(request.directory.view());
+      git_.refs(request.directory.view());
       git_.remotes(add_word);
       break;
     case CompletionProvider::stash: {
       constexpr std::size_t stash_name_bytes = 32;
 
-      git_.read(request.directory.view());
+      git_.refs(request.directory.view());
       const auto count = git_.stashes(maximum_words);
 
       for (std::size_t index = 0; index < count; ++index) {
@@ -793,6 +986,11 @@ namespace telar::runtime {
     case CompletionProvider::compose_service:
       composeServices(memory_, request.directory.view(), add);
       break;
+    case CompletionProvider::path:
+    case CompletionProvider::directory:
+    case CompletionProvider::executable:
+      directoryEntries(memory_, request, add);
+      break;
     }
 
     // Processes keep the newest first; everything else reads best sorted.
@@ -818,7 +1016,7 @@ namespace telar::runtime {
     }
 
     // An alias completes as the command it stands for.
-    if (request.names) {
+    if (request.names && !request.remote) {
       result.expansion = expand(memory_, request.names->view(), name);
       if (!result.expansion.empty()) {
         name = result.expansion.view().substr(0, result.expansion.view().find(' '));
@@ -829,7 +1027,7 @@ namespace telar::runtime {
       }
     }
 
-    if (!runs(request, name)) {
+    if (!request.remote && !runs(request, name)) {
       result.expansion.clear();
       return;
     }
@@ -910,12 +1108,21 @@ namespace telar::runtime {
       : worker_(std::in_place, memory, configuration_directory),
         queue_(memory) {}
 
-  void WordService::request(tbc::holds<const WordRequest&, tbc::lt::a> request) {
-    if (std::ranges::count(queue_.waiting(), request.client, &WordRequest::client) >= 4) {
-      return;
+  ds::Option<std::uint64_t> WordService::request(tbc::holds<const WordRequest&, tbc::lt::a> request) {
+    ds::Option<std::uint64_t> dropped;
+    const auto waiting = queue_.waiting();
+
+    if (std::cmp_greater_equal(std::ranges::count(waiting, request.client, &WordRequest::client), waiting_per_client)) {
+      const auto oldest = std::ranges::find(waiting, request.client, &WordRequest::client)->request;
+
+      queue_.dropWaiting([&](const WordRequest& entry) {
+        return entry.client == request.client && entry.request == oldest;
+      });
+      dropped = oldest;
     }
 
     queue_.request(worker_, request);
+    return dropped;
   }
 
   int WordService::descriptor() const noexcept {

@@ -2141,7 +2141,7 @@ namespace telar::runtime::config {
   }
 
   tbc::val_a<lua::Value> PromptReader::begin(const lua::Value& table, PromptSettings& settings) {
-    table.onlyFields({"mode", "skin", "motion", "ghost", "keymap", "max_lines", "bindings"});
+    table.onlyFields({"mode", "skin", "motion", "ghost", "macos_option_as_alt", "keymap", "max_lines", "bindings"});
     settings.mode = optionalChoice<PromptMode>(table.field("mode"), prompt_mode_names);
     return table.field("bindings");
   }
@@ -2179,6 +2179,7 @@ namespace telar::runtime::config {
     settings.motion = optionalChoice<PromptMotion>(table.field("motion"), prompt_motion_names);
     settings.keymap = optionalChoice<PromptKeymap>(table.field("keymap"), prompt_keymap_names);
     settings.ghost = optionalBoolean(table.field("ghost"));
+    settings.macos_option_as_alt = optionalBoolean(table.field("macos_option_as_alt"));
     if (const auto lines = table.field("max_lines"); lines.present()) {
       settings.max_lines = static_cast<std::uint8_t>(boundedWhole(lines, PromptBounds::max_lines.minimum, PromptBounds::max_lines));
     }
