@@ -176,6 +176,37 @@ namespace {
     std::filesystem::remove_all(root);
   }
 
+  // Hosts of the files ~/.ssh/config includes, relative to ~/.ssh or by ~, globbed, and of the
+  // files they include in turn; patterns are no hosts.
+  void testSshIncludes() {
+    telar::testing::TestMemory adapter;
+    telar::ConcurrentMemory& memory = adapter;
+    ds::Array<char, 64> directory{};
+
+    std::strcpy(directory.dataMut(), "/tmp/telar-word-ssh-XXXXXX");
+    check(::mkdtemp(directory.dataMut()) != nullptr);
+    const std::string home{directory.data()};
+
+    std::filesystem::create_directories(home + "/.ssh/config.d");
+    std::ofstream{home + "/.ssh/config"} << "Include config.d/*\nInclude ~/.ssh/extra \"/nonexistent/x\"\nHost main *.wild\n";
+    std::ofstream{home + "/.ssh/config.d/work"} << "Host work\n  HostName work.example\nInclude nested\n";
+    std::ofstream{home + "/.ssh/config.d/play"} << "Host play\n";
+    std::ofstream{home + "/.ssh/extra"} << "host extra\n";
+    std::ofstream{home + "/.ssh/nested"} << "Host nested\nInclude nested\n";
+    WordReader reader{memory};
+    WordRequest request{.client = 1, .request = 2, .provider = CompletionProvider::ssh_host, .prefix = {}, .directory = {}, .home = {}, .path = {}};
+
+    request.home.assign(home);
+    std::vector<std::string> hosts;
+
+    for (const auto& word : reader.observe(request).words) {
+      hosts.emplace_back(word.text.view());
+    }
+
+    check(hosts == std::vector<std::string>{"extra", "main", "nested", "play", "work"}, "included files' hosts are listed, an include loop stops");
+    std::filesystem::remove_all(home);
+  }
+
   void testTokenParse() {
     const auto valid = std::string(16, 'a') + "0123456789abcdef";
     const auto token = ShellToken::parse(valid);
@@ -369,6 +400,7 @@ namespace {
   const telar::testing::Case case_full_queue_fails_oldest{"shell_words.full_queue_fails_oldest", testFullQueueFailsOldest};
   const telar::testing::Case case_reference_words{"shell_words.reference_words", testReferenceWords};
   const telar::testing::Case case_justfile_dividers{"shell_words.justfile_dividers", testJustfileDividers};
+  const telar::testing::Case case_ssh_includes{"shell_words.ssh_includes", testSshIncludes};
   const telar::testing::Case case_token_parse{"shell_words.token_parse", testTokenParse};
   const telar::testing::Case case_ignores_special_and_oversized_files{"shell_words.ignores_special_and_oversized_files", testIgnoresSpecialAndOversizedFiles};
   const telar::testing::Case case_cuts_descriptions_at_characters{"shell_words.cuts_descriptions_at_characters", testCutsDescriptionsAtCharacters};

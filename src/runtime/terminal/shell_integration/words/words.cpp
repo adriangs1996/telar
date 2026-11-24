@@ -527,9 +527,94 @@ namespace telar::runtime {
       });
     }
 
-    // `Host` names in ~/.ssh/config, without patterns.
+    // The words after `keyword` when `line` starts with it, as ssh_config reads it: any case, then
+    // a blank or `=`; none for another line.
+    ds::Option<std::string_view> sshArguments(std::string_view line, std::string_view keyword) noexcept {
+      if (line.size() <= keyword.size() || !asciiStartsWithIgnoreCase(line, keyword)) {
+        return ds::none;
+      }
+
+      if (const char separator = line[keyword.size()]; separator != ' ' && separator != '\t' && separator != '=') {
+        return ds::none;
+      }
+
+      return trimText(line.substr(keyword.size() + 1), " \t=");
+    }
+
+    // Each blank-separated word of `arguments`, a double-quoted one without its quotes.
+    template <typename Visit>
+    void sshWords(std::string_view arguments, Visit visit) {
+      while (!arguments.empty()) {
+        arguments = trimText(arguments, " \t");
+        if (arguments.empty()) {
+          return;
+        }
+
+        const bool quoted = arguments.front() == '"';
+        const auto end = quoted ? arguments.find('"', 1) : arguments.find_first_of(" \t");
+        const auto word = quoted ? arguments.substr(1, end == std::string_view::npos ? std::string_view::npos : end - 1) : arguments.substr(0, end);
+
+        visit(word);
+        arguments.remove_prefix(end == std::string_view::npos ? arguments.size() : end + (quoted ? 1 : 0));
+      }
+    }
+
+    // `Host` names in one ssh config file, without patterns, and in the files its `Include`s
+    // name: relative to ~/.ssh or from ~, globbed, at most 16 deep as ssh reads them, and at most
+    // `budget` files in all.
+    template <typename Add>
+    void sshConfig(ConcurrentMemory& memory, int ssh_directory, std::string_view home, const char* name, int depth, std::size_t& budget, Add& add) {
+      constexpr int maximum_depth = 16;
+      if (budget == 0) {
+        return;
+      }
+
+      --budget;
+      const auto text = readSmall(memory, ssh_directory, name);
+      Text pattern{memory};
+
+      lines(text, [&](std::string_view line) {
+        line = trimText(line, " \t");
+        if (const auto included = sshArguments(line, "include"); included && depth < maximum_depth) {
+          sshWords(*included, [&](std::string_view file) {
+            if (file.starts_with("~/")) {
+              pattern.assign(home);
+              pattern.append(file.substr(1));
+            } else if (file.starts_with('/')) {
+              pattern.assign(file);
+            } else {
+              pattern.assign(home);
+              pattern.append("/.ssh/");
+              pattern.append(file);
+            }
+
+            glob_t found{};
+
+            if (::glob(pattern.data(), 0, nullptr, &found) == 0) {
+              for (std::size_t index = 0; index < found.gl_pathc; ++index) {
+                sshConfig(memory, ssh_directory, home, found.gl_pathv[index], depth + 1, budget, add);
+              }
+            }
+
+            ::globfree(&found);
+          });
+          return;
+        }
+
+        if (const auto names = sshArguments(line, "host")) {
+          sshWords(*names, [&](std::string_view host) {
+            if (!host.empty() && host.find_first_of("*?!=") == std::string_view::npos) {
+              add(host);
+            }
+          });
+        }
+      });
+    }
+
+    // `Host` names in ~/.ssh/config and the files it includes.
     template <typename Add>
     void sshHosts(ConcurrentMemory& memory, std::string_view home, Add& add) {
+      constexpr std::size_t maximum_files = 256;
       if (home.empty() || home.front() != '/') {
         return;
       }
@@ -542,33 +627,9 @@ namespace telar::runtime {
         return;
       }
 
-      const auto text = readSmall(memory, directory.get(), "config");
+      std::size_t budget = maximum_files;
 
-      lines(text, [&](std::string_view line) {
-        constexpr std::string_view keyword = "host";
-
-        line = trimText(line, " \t");
-        if (line.size() <= keyword.size() || !asciiStartsWithIgnoreCase(line, keyword)) {
-          return;
-        }
-
-        if (const char separator = line[keyword.size()]; separator != ' ' && separator != '\t' && separator != '=') {
-          return;
-        }
-
-        auto names = line.substr(keyword.size() + 1);
-
-        while (!names.empty()) {
-          names = trimText(names, " \t");
-          const auto end = names.find_first_of(" \t");
-          const auto name = names.substr(0, end);
-          if (!name.empty() && name.find_first_of("*?!=") == std::string_view::npos) {
-            add(name);
-          }
-
-          names.remove_prefix(end == std::string_view::npos ? names.size() : end);
-        }
-      });
+      sshConfig(memory, directory.get(), home, "config", 0, budget, add);
     }
 
     // The explicit targets of the makefile make would read in `directory`.

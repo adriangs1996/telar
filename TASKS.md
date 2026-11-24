@@ -188,7 +188,7 @@ Legend: `[ ]` todo, `[x]` done, `[~]` not a bug / dropped (with reason).
   Expected: empty comment lines are skipped.
   Fix: check `npos` before `substr`. Test with `#` and `####`.
 
-- [ ] **T14 (C13). `ssh_host` ignores `Include`.**
+- [x] **T14 (C13). `ssh_host` ignores `Include`.**
   `sshHosts` reads only `~/.ssh/config`.
   Expected: hosts from included files appear too.
   Fix: follow `Include` with `glob(3)`, relative to `~/.ssh`, depth at most 16 as ssh does,

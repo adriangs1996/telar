@@ -8,6 +8,7 @@ module;
 #include <dirent.h>
 #include <dlfcn.h>
 #include <fcntl.h>
+#include <glob.h>
 #include <poll.h>
 #include <pwd.h>
 #include <sys/file.h>
@@ -92,6 +93,11 @@ export {
   using ::fdopendir;
   using ::opendir;
   using ::readdir;
+
+  // Path patterns.
+  using ::glob;
+  using ::glob_t;
+  using ::globfree;
 
   // Memory mappings and shared memory objects.
   using ::mmap;
