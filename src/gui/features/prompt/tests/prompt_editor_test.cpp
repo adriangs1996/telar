@@ -419,6 +419,19 @@ namespace {
       type(editor, "\x1bggVjd");
       require(text(editor) == "three", "Vjd deletes the two lines");
     }
+
+    // dd on the last line keeps the line, whole, for p to paste back as a line.
+    {
+      Editor editor{Keymap::vim};
+
+      type(editor, "a\nb");
+      type(editor, "\x1bGdd");
+      require(text(editor) == "a", "dd deletes the last line with the newline before it");
+      type(editor, "p");
+      require(text(editor) == "a\nb", "p puts it back as a line below");
+      type(editor, "ggP");
+      require(text(editor) == "b\na\nb", "P puts it as a line above");
+    }
   }
 
   void routing() {

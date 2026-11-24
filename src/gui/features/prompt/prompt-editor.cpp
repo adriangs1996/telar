@@ -1192,17 +1192,23 @@ namespace telar::gui::features::prompt {
     if (linewise) {
       start = text_.lineStart(start);
       end = text_.lineEnd(end);
+
+      // A linewise register holds whole lines, each with its newline, whichever newline the
+      // edit takes.
+      ds::String<Memory> lines{memory(), text_.view().substr(start, end - start)};
+
+      lines.push('\n');
+      store(lines, true);
       if (end < text_.size()) {
         ++end;
       } else if (start > 0 && action == 'd') {
         // Deleting the last line takes the newline before it instead.
         --start;
       }
+    } else {
+      store(text_.view().substr(start, end - start), false);
     }
 
-    const auto view = text_.view();
-
-    store(view.substr(start, end - start), linewise);
     switch (action) {
     case 'd':
       text_.replace(start, end, {});
