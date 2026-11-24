@@ -381,6 +381,45 @@ namespace {
     check(!setup_failed);
   }
 
+  // A client that writes and closes before it is accepted, as a helper that sends a capture and
+  // goes, is still admitted: what it sent is read, and a write to it fails without SIGPIPE.
+  void testClosedClientIsRead() {
+    ds::Array<char, 64> directory{};
+
+    std::strcpy(directory.dataMut(), "/tmp/telar-closed-socket-XXXXXX");
+    check(::mkdtemp(directory.dataMut()) != nullptr);
+    const auto path = std::string{directory.data()} + "/runtime.sock";
+
+    {
+      LocalListener listener{path};
+      sockaddr_un address{};
+
+      address.sun_family = AF_UNIX;
+      std::strcpy(address.sun_path, path.c_str());
+      FileDescriptor client{::socket(AF_UNIX, SOCK_STREAM, 0)};
+
+      check(static_cast<bool>(client));
+      check(::connect(client.get(), reinterpret_cast<const sockaddr*>(&address), sizeof(address)) == 0);
+      constexpr std::string_view sent = "capture";
+
+      check(::write(client.get(), sent.data(), sent.size()) == static_cast<ssize_t>(sent.size()));
+      client.reset();
+      const auto connection = listener.accept();
+
+      check(static_cast<bool>(connection), "a client that closed after it wrote is admitted");
+      ds::Array<char, 16> received{};
+
+      check(::recv(connection.get(), received.dataMut(), received.size(), 0) == static_cast<ssize_t>(sent.size()));
+      check(std::string_view{received.data(), sent.size()} == sent, "what it sent is read");
+      constexpr char reply = 'R';
+
+      check(::send(connection.get(), &reply, sizeof(reply), 0) == -1 && errno == EPIPE, "a write to it fails with EPIPE, not SIGPIPE");
+    }
+
+    check(::unlink((path + ".lock").c_str()) == 0);
+    check(::rmdir(directory.data()) == 0);
+  }
+
   void testChildExitNotification() {
     SystemAllocator memory;
     struct sigaction previous{};
@@ -629,6 +668,7 @@ namespace {
 
   const telar::testing::Case case_platform{"platform.platform", testPlatform};
   const telar::testing::Case case_disconnected_socket_clients{"platform.disconnected_socket_clients", testDisconnectedSocketClients};
+  const telar::testing::Case case_closed_client_is_read{"platform.closed_client_is_read", testClosedClientIsRead};
   const telar::testing::Case case_unread_output_shutdown{"platform.unread_output_shutdown", testUnreadOutputShutdown};
   const telar::testing::Case case_descriptor_holes{"platform.descriptor_holes", testDescriptorHoles};
   const telar::testing::Case case_inherited_descriptors{"platform.inherited_descriptors", testInheritedDescriptors};

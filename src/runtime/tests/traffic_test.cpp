@@ -56,6 +56,16 @@ namespace {
     }
   }
 
+  // How long a case reads for the frame it waits for among the others the service sends, its
+  // statistics among them: past it, the case fails where it waits instead of reading forever.
+  struct Wait {
+    std::chrono::steady_clock::time_point deadline = std::chrono::steady_clock::now() + std::chrono::seconds{10};
+
+    void check(std::string_view what, std::source_location location = std::source_location::current()) const {
+      telar::testing::check(std::chrono::steady_clock::now() < deadline, what, location);
+    }
+  };
+
   struct Received {
     std::vector<Byte> bytes;
     std::uint64_t drops = 0;
@@ -237,8 +247,10 @@ namespace {
     }
 
     std::size_t found = 0;
+    const Wait both;
 
     while (found < 2) {
+      both.check("both offline packets reach the subscriber without a filter");
       const auto frame = receive(all.get());
       const auto event = frame.event();
       if (event.kind == Kind::packet) {
@@ -249,7 +261,8 @@ namespace {
       }
     }
 
-    for (;;) {
+    for (const Wait udp_only;;) {
+      udp_only.check("the offline UDP packet reaches the filtered subscriber");
       const auto frame = receive(filtered.get());
       const auto event = frame.event();
       if (event.kind == Kind::packet) {
@@ -333,7 +346,8 @@ namespace {
     exchange.response.getMut().finish(CaptureOutcome::finished, 3);
     service.submit(exchange);
 
-    for (;;) {
+    for (const Wait submitted;;) {
+      submitted.check("the submitted exchange reaches its subscriber");
       const auto frame = receive(client.get());
       const auto event = frame.event();
       if (event.kind != Kind::exchange) {
@@ -392,7 +406,8 @@ namespace {
     const auto ticket = request.ticket;
 
     check(ticket != 0);
-    for (;;) {
+    for (const Wait asked;;) {
+      asked.check("the intercepted flow reaches its owner");
       const auto frame = receive(owner.get());
       const auto event = frame.event();
       if (event.kind != Kind::intercept_request) {
@@ -433,7 +448,8 @@ namespace {
 
     check(pending != 0);
     send_second(InterceptionCodec::decision(output.viewMut(), pending, Verdict::reject));
-    for (;;) {
+    for (const Wait asked;;) {
+      asked.check("the second flow reaches the first owner");
       const auto frame = receive(owner.get());
       if (frame.event().kind == Kind::intercept_request) {
         break;
@@ -444,7 +460,8 @@ namespace {
     send(InterceptionCodec::decision(output.viewMut(), pending, Verdict::replace, replacement));
     std::uint64_t second_ticket = 0;
 
-    for (;;) {
+    for (const Wait replaced;;) {
+      replaced.check("the replaced flow reaches the second owner");
       const auto frame = receive(second.get());
       if (frame.event().kind != Kind::intercept_request) {
         continue;

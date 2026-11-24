@@ -51,6 +51,17 @@ namespace telar::runtime {
 #endif
   }
 
+  bool socketSignalsSuppressed(int descriptor) noexcept {
+#ifdef __APPLE__
+    return ::fcntl(descriptor, F_GETNOSIGPIPE) == 1; // NOLINT(cppcoreguidelines-pro-type-vararg): fcntl's C signature is variadic
+#else
+    (void)descriptor;
+    struct sigaction current{};
+
+    return ::sigaction(SIGPIPE, nullptr, &current) == 0 && sys::signalHandler(current) == SIG_IGN;
+#endif
+  }
+
   ds::Option<PeerCredentials> peerCredentials(int socket) noexcept {
 #ifdef __APPLE__
     PeerCredentials credentials{};

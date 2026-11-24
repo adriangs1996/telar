@@ -138,6 +138,7 @@ export {
   X(MNT_LOCAL)                   \
   X(MNT_NOWAIT)                  \
   X(F_GETPATH)                   \
+  X(F_GETNOSIGPIPE)              \
   X(F_SETNOSIGPIPE)              \
   X(MAXCOMLEN)                   \
   X(POSIX_SPAWN_CLOEXEC_DEFAULT) \
@@ -254,6 +255,7 @@ namespace telar::sys::captured {
 #undef MNT_LOCAL
 #undef MNT_NOWAIT
 #undef F_GETPATH
+#undef F_GETNOSIGPIPE
 #undef F_SETNOSIGPIPE
 #undef MAXCOMLEN
 #undef POSIX_SPAWN_CLOEXEC_DEFAULT

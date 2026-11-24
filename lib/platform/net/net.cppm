@@ -74,6 +74,8 @@ export {
   namespace telar::runtime {
 
     void suppressSocketSignals(int descriptor);
+    // Whether a write to `descriptor` whose peer is gone fails with EPIPE instead of raising SIGPIPE.
+    bool socketSignalsSuppressed(int descriptor) noexcept;
 
   }
 }
