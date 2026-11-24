@@ -188,6 +188,58 @@ namespace {
     check(deliver(client, NvimNavigated{.pane_id = editor_pane, .direction = PaneDirection::right}) == application::Change::none, "an answer for a pane that lost the focus moves nothing");
     application::nvim::choose(client, editor_pane, 4, true);
     check(transport.last<NvimMenuSelect>().item == 4 && transport.last<NvimMenuSelect>().accept, "a click on the completion menu takes its item");
+
+    // With no pane on that side either, the window is told once: what stands beside the panes
+    // there, the explorer, may take the focus.
+    application::workbench::focusPane(client, editor_pane);
+    check(!application::nvim::takeEdge(client, editor_pane));
+    check(deliver(client, NvimNavigated{.pane_id = editor_pane, .direction = PaneDirection::right}) == application::Change::editor && client.changedPane() == editor_pane);
+    check(client.focusedPane()->id == editor_pane, "the editor keeps the focus until something takes it");
+
+    const auto edge = application::nvim::takeEdge(client, editor_pane);
+
+    check(edge && *edge == PaneDirection::right && !application::nvim::takeEdge(client, editor_pane), "the side is taken once");
+  }
+
+  // The editor says which files its buffers show, which the explorer reads around its files,
+  // and asks for the explorer on the file it is on.
+  void editorTellsTheExplorer() {
+    SystemAllocator memory;
+    Transport transport;
+    TestSession client{memory, transport};
+    const std::array shown{NvimOpenFile{.path = "/srv/app/main.cpp", .modified = true}, NvimOpenFile{.path = "/srv/app/README.md"}};
+    const application::explorer::Host host{.machine = 1, .name = "macbook", .home = "/home/dev", .local = true};
+
+    openEditor(client, transport);
+    check(deliver(client, NvimOpenFiles{.pane_id = 1, .files = shown}) == application::Change::none, "the files of a pane that is no editor are dropped");
+    check(deliver(client, NvimOpenFiles{.pane_id = editor_pane, .files = shown}) == application::Change::explorer, "the explorer reads them again");
+    check(deliver(client, NvimOpenFiles{.pane_id = editor_pane, .files = shown}) == application::Change::none, "the same again changes nothing");
+
+    application::explorer::Scene scene{client.memory};
+
+    application::explorer::observe(scene, client, host.machine);
+    application::explorer::observe(scene, host, client);
+
+    const auto around = application::explorer::around(scene);
+    const auto context = application::explorer::contextOf(around, host.machine);
+
+    check(context.edited.files.size() == 2 && context.edited.files[0].machine == host.machine && context.edited.files[0].pane == editor_pane && context.edited.files[0].modified && !context.edited.files[1].modified);
+    check(context.edited.text.substr(context.edited.files[1].offset, context.edited.files[1].size) == "/srv/app/README.md");
+
+    // Observed again, they are read again and not added to.
+    application::explorer::clear(scene);
+    application::explorer::observe(scene, host, client);
+    check(application::explorer::around(scene).edited.files.size() == 2);
+
+    // `:Telar explore`.
+    check(deliver(client, NvimExplore{.pane_id = 1, .path = "/srv/app/main.cpp"}) == application::Change::none);
+    check(deliver(client, NvimExplore{.pane_id = editor_pane, .path = "/srv/app/main.cpp"}) == application::Change::editor && client.changedPane() == editor_pane);
+
+    const auto* editor = application::nvim::editor(client, editor_pane);
+
+    check(editor != nullptr && editor->explores && editor->explore.view() == "/srv/app/main.cpp");
+    application::nvim::explored(client, editor_pane);
+    check(!editor->explores && editor->explore.empty(), "the window opened it");
   }
 
   // The picker of an editor asks the runtime for what its query finds, shows only the answer
@@ -380,6 +432,7 @@ namespace {
   const telar::testing::Case case_action{"nvim_session.action_opens_the_tabs_picker", actionOpensTheTabsPicker};
   const telar::testing::Case case_files{"nvim_session.files_open_in_the_tabs_editor", filesOpenInTheTabsEditor};
   const telar::testing::Case case_navigation{"nvim_session.navigation_asks_the_editor_first", navigationAsksTheEditorFirst};
+  const telar::testing::Case case_explorer{"nvim_session.editor_tells_the_explorer", editorTellsTheExplorer};
   const telar::testing::Case case_lost{"nvim_session.lost_frame_asks_for_the_screen_once", lostFrameAsksForTheScreenOnce};
   const telar::testing::Case case_prompt{"nvim_session.prompt_is_answered_through_the_session", promptIsAnsweredThroughTheSession};
   const telar::testing::Case case_tab{"nvim_session.editor_tab_is_a_tab_like_any_other", editorTabIsATabLikeAnyOther};

@@ -3219,6 +3219,30 @@ namespace telar::gui::features::explorer {
     rebuild(view, state, context, machine);
   }
 
+  bool reveal(View& view, const State& state, const Context& context, const Revealed& revealed) {
+    const bool named = !revealed.path.empty();
+    const auto slash = revealed.path.rfind('/');
+    if (named && slash == std::string_view::npos) {
+      return false;
+    }
+
+    // The directory of a file at the root is the root.
+    const auto root = named ? revealed.path.substr(0, std::max<std::size_t>(slash, 1)) : revealed.directory;
+    if (root.empty()) {
+      return false;
+    }
+
+    if (!view.open) {
+      open(view, state, context, context.host);
+    } else if (view.mode != Mode::normal) {
+      return false;
+    }
+
+    go(view, {.root = root, .selected = revealed.path});
+    place(view, state, context, context.host);
+    return true;
+  }
+
   void close(View& view) noexcept {
     view.open = false;
     view.mode = Mode::normal;

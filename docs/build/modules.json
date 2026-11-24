@@ -311,6 +311,7 @@
     "src/runtime/files/content/content.cppm": "telar.runtime.files.content",
     "src/runtime/files/directory/directory.cppm": "telar.runtime.files.directory",
     "src/runtime/files/entry/entry.cppm": "telar.runtime.files.entry",
+    "src/runtime/files/moves/moves.cppm": "telar.runtime.files.moves",
     "src/runtime/files/operations/operations.cppm": "telar.runtime.files.operations",
     "src/runtime/files/repository/repository.cppm": "telar.runtime.files.repository",
     "src/runtime/files/service/service.cppm": "telar.runtime.files.service",
@@ -1454,6 +1455,7 @@
       "telar.runtime.diagnostics.runtime_counters"
     ],
     "src/runtime/files": [
+      "telar.runtime.files.moves",
       "telar.runtime.files.service",
       "telar.runtime.files.touches"
     ],

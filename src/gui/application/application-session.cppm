@@ -662,6 +662,8 @@ export {
       Change apply(const NvimPrompt& message);
       Change apply(const NvimNavigated& message);
       Change apply(const NvimPick& message);
+      Change apply(const NvimOpenFiles& message);
+      Change apply(const NvimExplore& message);
       Change apply(const NvimLink& message);
       Change apply(const TextResults& message);
 

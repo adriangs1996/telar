@@ -23,6 +23,12 @@ export namespace telar::gui::features::explorer {
 
   void close(View& view) noexcept;
 
+  // What an editor asks for the file it shows: the explorer, opened if it was not, with its
+  // current window on the host, fixed at the directory that holds `path` and with `path`
+  // selected. Without a path it goes to `directory`. False while something else waits for an
+  // answer there: a plan, a field, a menu.
+  bool reveal(View& view, const State& state, const Context& context, const Revealed& revealed);
+
   // Says on the line under the windows what could not be done past the explorer: by a session,
   // or by the window.
   void refuse(View& view, std::string_view text);

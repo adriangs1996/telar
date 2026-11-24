@@ -53,8 +53,9 @@ export {
       // request answers for a pane of another kind; cqp00010 adds NvimConfiguration, the editor
       // configuration a window brings a machine; cqp00011 adds the explorer's files: ListDirectory,
       // MeasureDirectory, QueryChanges, InspectFile, ChangeFiles, UndoFileChanges, CommitChanges,
-      // LocateHome, ReadFile, WriteFile, EndFileWrite, QueryTouches, KeepPlaces and QueryPlaces, with their answers. Peers
-      // without them reject the messages.
+      // LocateHome, ReadFile, WriteFile, EndFileWrite, QueryTouches, KeepPlaces and QueryPlaces, with their answers, and
+      // what an editor tells the explorer: NvimOpenFiles and NvimExplore. Peers without them reject
+      // the messages.
       inline constexpr SchemaId schema_id{'c', 'q', 'p', '0', '0', '0', '1', '1'};
 
       // The schemas a client of this build can speak with a runtime, oldest first. Each added

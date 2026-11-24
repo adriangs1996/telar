@@ -21,6 +21,8 @@ export extern "C++" {
     // The byte and count limits of the editor's messages.
     inline constexpr std::size_t max_nvim_files = 64;
     inline constexpr std::size_t max_nvim_path_bytes = 4096;
+    // The files of its buffers an editor says it shows.
+    inline constexpr std::size_t max_nvim_open_files = 64;
     inline constexpr std::size_t max_nvim_input_bytes = 65536;
     inline constexpr std::size_t max_nvim_paste_bytes = std::size_t{1024} * 1024;
     inline constexpr std::size_t max_nvim_grid_spans = 2048;
@@ -297,6 +299,38 @@ export extern "C++" {
 
     template <>
     struct MessageSchema<NvimLink> : Schema<Direction::server, ServerTag::nvim_link, Field<&NvimLink::pane_id, NonzeroU64, "pane_id">, Field<&NvimLink::uri, Text16<max_nvim_path_bytes, false>, "uri">> {};
+
+    // A file a listed buffer of the editor shows, by its absolute path on the editor's machine,
+    // and whether that buffer has changes that were not written.
+    struct NvimOpenFile {
+      std::string_view path;
+      bool modified{};
+    };
+
+    template <>
+    struct BodySchema<NvimOpenFile> : Serializer<Field<&NvimOpenFile::path, Text16<max_nvim_path_bytes, false>, "path">, Field<&NvimOpenFile::modified, BoolByte, "modified">> {};
+
+    // The files the editor's listed buffers show, sent whole when the list or what is written of
+    // one changes. What lists files beside the editor marks them, and warns before it moves or
+    // deletes one whose changes were not written.
+    struct NvimOpenFiles {
+      std::uint64_t pane_id{};
+      std::span<const NvimOpenFile> files;
+    };
+
+    template <>
+    struct MessageSchema<NvimOpenFiles>
+        : Schema<Direction::server, ServerTag::nvim_open_files, Field<&NvimOpenFiles::pane_id, NonzeroU64, "pane_id">, Field<&NvimOpenFiles::files, CountedSpan<u8, ValueCodec<NvimOpenFile>, max_nvim_open_files>, "files">> {};
+
+    // Something in the editor asked for the explorer, as `:Telar explore` does: on the directory
+    // of `path`, with it selected. Without a path, on the editor's directory.
+    struct NvimExplore {
+      std::uint64_t pane_id{};
+      std::string_view path;
+    };
+
+    template <>
+    struct MessageSchema<NvimExplore> : Schema<Direction::server, ServerTag::nvim_explore, Field<&NvimExplore::pane_id, NonzeroU64, "pane_id">, Field<&NvimExplore::path, Text16<max_nvim_path_bytes>, "path">> {};
 
     // How a grid is shown: not at all, as a window in the editor's layout, floating over it, in
     // a window of its own, or as the rows messages scroll in.

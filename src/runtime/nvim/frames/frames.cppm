@@ -53,6 +53,8 @@ export {
       [[nodiscard]] std::span<const Byte> popupMenu(const NvimScreen& screen);
       [[nodiscard]] std::span<const Byte> messageList(const NvimScreen& screen);
       [[nodiscard]] std::span<const Byte> tabLine(const NvimScreen& screen);
+      // The files the editor's buffers show, which is no surface: the same rule tells it.
+      [[nodiscard]] std::span<const Byte> openFiles(const NvimScreen& screen);
 
       // The NvimFrame that ends the frame.
       [[nodiscard]] std::span<const Byte> end(const NvimScreen& screen);

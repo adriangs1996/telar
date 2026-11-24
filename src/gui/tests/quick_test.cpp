@@ -1557,6 +1557,143 @@ return {api_version = 2, client = {
     // The explorer lists a directory of the runtime's machine as a tree, says what git holds of it,
     // and writes a rename as a plan the runtime applies and takes back; with TELAR_EXPLORER_SHOTS
     // set to a directory, the window at each step is saved there.
+    // The editor and the explorer know of each other, through a Neovim that runs: a row marks
+    // the file a buffer shows, apart while it has changes not written, and the plan warns of
+    // them; `:Telar explore` shows that file in the explorer; a file the explorer renames is
+    // followed by its buffer, with its changes; and the focus leaves the editor's last window
+    // for the explorer beside the panes.
+    Q_SLOT void editorAndExplorerKnowOfEachOther() {
+      if (QStandardPaths::findExecutable(QStringLiteral("nvim")).isEmpty()) {
+        QSKIP("Neovim is not installed on this host");
+      }
+
+      QTRY_VERIFY_WITH_TIMEOUT(terminalReady(), runtime_wait_ms);
+      QTRY_VERIFY_WITH_TIMEOUT(!firstPane()->cwd.empty(), runtime_wait_ms);
+      auto* explorer = client_->explorer();
+      const auto original_id = firstPane()->id;
+      const auto tab_count = client_->tabs()->rows()->rowCount();
+      // Neovim names a file by the real path of its directory.
+      const auto fixture = QFileInfo{toQString(firstPane()->cwd)}.canonicalFilePath() + QStringLiteral("/editor-explorer-fixture");
+      bool opened = false;
+      const auto restore = qScopeGuard([&] {
+        if (explorer->showing()) {
+          explorer->close();
+        }
+
+        if (opened) {
+          closeTemporaryTab({.count = tab_count, .pane_id = original_id});
+        }
+
+        static_cast<void>(QDir{fixture}.removeRecursively());
+      });
+
+      QVERIFY(QDir{}.mkpath(fixture));
+      writeTestFile(fixture + QStringLiteral("/draft.md"), "one\n");
+      writeTestFile(fixture + QStringLiteral("/other.md"), "two\n");
+
+      const auto editorView = [&] {
+        const auto views = test::visualItems(*window_->contentItem(), QStringLiteral("paneEditor"));
+
+        return views.empty() ? nullptr : qobject_cast<NvimItem*>(views.front());
+      };
+      // The files the editor's buffers show, as the window knows them: `+` after one with
+      // changes not written.
+      const auto held = [&] {
+        QString text;
+        const auto* view = editorView();
+        const auto* editor = view == nullptr ? nullptr : view->editorState();
+
+        if (editor != nullptr) {
+          const std::string_view paths{editor->files.text.data(), editor->files.text.size()};
+
+          for (const auto& file : editor->files.files) {
+            text += toQString(file.path.of(paths)).mid(fixture.size() + 1) + (file.modified ? QStringLiteral("+ ") : QStringLiteral(" "));
+          }
+        }
+
+        return text;
+      };
+      const auto named = [&](const QString& name) {
+        for (int row = 0; row < explorer->rows(0)->rowCount(); ++row) {
+          const auto record = explorer->rows(0)->index(row, 0).data(ListModel::record_role).toMap();
+          if (record.value(QStringLiteral("name")) == name) {
+            return record;
+          }
+        }
+
+        return QVariantMap{};
+      };
+
+      client_->commands()->execute(window_actions::Action::new_editor_tab);
+      QTRY_VERIFY2_WITH_TIMEOUT(client_->tabs()->rows()->rowCount() == tab_count + 1, qPrintable(client_->status()->error() + errors_), runtime_wait_ms);
+      opened = true;
+      QTRY_VERIFY2_WITH_TIMEOUT(editorView() != nullptr && editorView()->ready(), qPrintable(client_->status()->error() + errors_), runtime_wait_ms);
+      editorView()->send(QStringLiteral("<Cmd>set noswapfile<CR><Cmd>edit ") + fixture + QStringLiteral("/draft.md<CR>"));
+      QTRY_COMPARE_WITH_TIMEOUT(held(), QStringLiteral("draft.md "), runtime_wait_ms);
+
+      // `:Telar explore`: the explorer opens on the file's directory, with the file selected,
+      // and its row says an editor holds it.
+      editorView()->send(QStringLiteral("<Cmd>Telar explore<CR>"));
+      QTRY_VERIFY_WITH_TIMEOUT(explorer->showing(), runtime_wait_ms);
+      QTRY_COMPARE_WITH_TIMEOUT(explorer->rows(0)->rowCount(), 2, runtime_wait_ms);
+      QVERIFY2(explorer->preview().value(QStringLiteral("path")).toString().endsWith(QStringLiteral("/editor-explorer-fixture/draft.md")), qPrintable(explorer->preview().value(QStringLiteral("path")).toString()));
+      QVERIFY(named(QStringLiteral("draft.md")).value(QStringLiteral("selected")).toBool());
+      QCOMPARE(named(QStringLiteral("draft.md")).value(QStringLiteral("editor")).toString(), QStringLiteral("open"));
+      QCOMPARE(named(QStringLiteral("other.md")).value(QStringLiteral("editor")).toString(), QString{});
+
+      // A change not written shows on the row and in the preview, and the plan warns of it.
+      editorView()->send(QStringLiteral("<Cmd>normal! ohalf a thought<CR>"));
+      QTRY_VERIFY2_WITH_TIMEOUT(named(QStringLiteral("draft.md")).value(QStringLiteral("editor")).toString() == QStringLiteral("unsaved"), qPrintable(held()), runtime_wait_ms);
+
+      const auto fact = [&] {
+        for (const auto& known : explorer->preview().value(QStringLiteral("facts")).toList()) {
+          if (known.toMap().value(QStringLiteral("label")) == QStringLiteral("Editor")) {
+            return known.toMap().value(QStringLiteral("value")).toString();
+          }
+        }
+
+        return QString{};
+      };
+
+      QTRY_COMPARE_WITH_TIMEOUT(fact(), QStringLiteral("pane 1 · changes not written"), runtime_wait_ms);
+      // With TELAR_EXPLORER_SHOTS set to a directory, a picture of the marks is kept there.
+      if (const auto shots = qEnvironmentVariable("TELAR_EXPLORER_SHOTS"); !shots.isEmpty()) {
+        constexpr int settle_ms = 400;
+
+        QTest::qWait(settle_ms);
+        QVERIFY(window_->grabWindow().save(QDir{shots}.filePath(QStringLiteral("explorer-editor.png"))));
+      }
+
+      // Renamed in the explorer: the plan says an editor holds changes to it, and once applied
+      // the buffer shows the file under its new name, its changes still not written.
+      explorer->type(QStringLiteral("cw"));
+      explorer->submit(QStringLiteral("final.md"));
+      explorer->run(QStringLiteral("w"));
+      QCOMPARE(explorer->plan().size(), 1);
+      QCOMPARE(explorer->plan().value(0).toMap().value(QStringLiteral("warning")).toString(), QStringLiteral("an editor holds changes to it that were not written"));
+      explorer->type(QStringLiteral("y"));
+      QTRY_VERIFY_WITH_TIMEOUT(QFileInfo::exists(fixture + QStringLiteral("/final.md")), runtime_wait_ms);
+      QTRY_COMPARE_WITH_TIMEOUT(held(), QStringLiteral("final.md+ "), runtime_wait_ms);
+      QCOMPARE(readTestFile(fixture + QStringLiteral("/final.md")), QByteArrayLiteral("one\n"));
+      QTRY_COMPARE_WITH_TIMEOUT(named(QStringLiteral("final.md")).value(QStringLiteral("editor")).toString(), QStringLiteral("unsaved"), runtime_wait_ms);
+
+      // Beside the panes, the key that moves the focus to the right leaves the editor's only
+      // window for the explorer.
+      explorer->type(QStringLiteral("<C-w>T"));
+      QVERIFY(explorer->pinned());
+      explorer->giveFocus(false);
+      QVERIFY(!explorer->focused());
+      // `navigate_pane` asks Neovim first, which says it has no window there.
+      QVERIFY(client_->commands()->runBinding(BindingAction{.kind = BindingActionKind::navigate_right}, nullptr));
+      QTRY_VERIFY_WITH_TIMEOUT(explorer->focused(), runtime_wait_ms);
+      // The key that goes from pane to pane asks no editor: it enters at once.
+      explorer->giveFocus(false);
+      client_->commands()->execute(window_actions::Action::focus_right);
+      QVERIFY(explorer->focused());
+      // Not left behind for the next case's editor.
+      editorView()->send(QStringLiteral("<Cmd>bwipeout!<CR>"));
+    }
+
     Q_SLOT void explorerListsAndChangesFiles() {
       if (QStandardPaths::findExecutable(QStringLiteral("git")).isEmpty()) {
         QSKIP("git is not installed on this host");

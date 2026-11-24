@@ -320,7 +320,13 @@ namespace telar::gui::features::nvim {
         tabs(made_in),
         prompt(made_in),
         picker(made_in),
-        link(made_in) {}
+        link(made_in),
+        files(made_in),
+        explore(made_in) {}
+
+  OpenFiles::OpenFiles(Memory& memory)
+      : text(memory),
+        files(memory) {}
 
   namespace {
 
@@ -527,9 +533,18 @@ namespace telar::gui::features::nvim {
   }
 
   void forget(State& state, std::uint64_t pane_id) noexcept {
-    static_cast<void>(Access::editors(state).retain([pane_id](const auto& editor) {
+    const auto gone = Access::editors(state).retain([pane_id](const auto& editor) {
       return editor->pane_id != pane_id;
-    }));
+    });
+
+    // The files it held are held no more.
+    if (gone != 0) {
+      ++Access::filesRevision(state);
+    }
+  }
+
+  std::uint64_t filesRevision(const State& state) noexcept {
+    return Access::filesRevision(state);
   }
 
   void detach(State& state) noexcept {
@@ -857,6 +872,62 @@ namespace telar::gui::features::nvim {
     }
 
     editor->link.assign(uri);
+    return true;
+  }
+
+  bool hold(State& state, const NvimOpenFiles& message) {
+    auto* editor = Access::find(state, message.pane_id);
+    if (editor == nullptr) {
+      return false;
+    }
+
+    auto& held = editor->files;
+    const std::string_view text{held.text.data(), held.text.size()};
+    const bool same = std::ranges::equal(held.files, message.files, [&](const OpenFile& kept, const NvimOpenFile& file) {
+      return kept.modified == file.modified && kept.path.of(text) == file.path;
+    });
+
+    if (same) {
+      return false;
+    }
+
+    held.text.clear();
+    held.files.clear();
+    for (const auto& file : message.files) {
+      const auto path = append(held.text, file.path);
+
+      held.files.push({.path = path, .modified = file.modified});
+    }
+
+    ++Access::filesRevision(state);
+    return true;
+  }
+
+  bool explore(State& state, std::uint64_t pane_id, std::string_view path) {
+    auto* editor = Access::find(state, pane_id);
+    if (editor == nullptr) {
+      return false;
+    }
+
+    editor->explore.assign(path);
+    editor->explores = true;
+    return true;
+  }
+
+  void explored(State& state, std::uint64_t pane_id) noexcept {
+    if (auto* editor = Access::find(state, pane_id)) {
+      editor->explores = false;
+      editor->explore.clear();
+    }
+  }
+
+  bool leave(State& state, std::uint64_t pane_id, ds::Option<PaneDirection> side) noexcept {
+    auto* editor = Access::find(state, pane_id);
+    if (editor == nullptr) {
+      return false;
+    }
+
+    editor->edge = side;
     return true;
   }
 

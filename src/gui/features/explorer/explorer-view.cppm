@@ -115,6 +115,29 @@ export namespace telar::gui::features::explorer {
     Reach reach = Reach::answers;
   };
 
+  // A file a buffer of an editor pane shows, by the path its machine names it by: a piece of the
+  // text of the `Edited` that lists it.
+  struct EditedFile {
+    std::uint64_t machine = 0;
+    std::uint64_t pane = 0;
+    std::uint32_t offset = 0;
+    std::uint32_t size = 0;
+    // The buffer has changes that were not written.
+    bool modified = false;
+  };
+
+  // The files the editors of every machine hold in their buffers, as the window last saw them.
+  struct Edited {
+    std::string_view text;
+    std::span<const EditedFile> files;
+  };
+
+  // A file to show in the explorer, or with no path the directory to show.
+  struct Revealed {
+    std::string_view path;
+    std::string_view directory;
+  };
+
   // What the explorer reads around the files of one machine, the host: the one whose cache a
   // use case is given, which is the machine of the window it acts on. The panes are the ones of
   // the tab that shows, which is of the machine `shown` and may be another.
@@ -132,6 +155,7 @@ export namespace telar::gui::features::explorer {
     std::uint64_t host = 0;
     std::uint64_t shown = 0;
     std::span<const MachineFact> machines;
+    Edited edited;
   };
 
   enum class RowKind : std::uint8_t {

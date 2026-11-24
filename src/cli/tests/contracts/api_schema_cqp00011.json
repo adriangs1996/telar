@@ -218,6 +218,8 @@
     "file_written": 219,
     "file_write_ended": 220,
     "file_touches": 221,
-    "places_kept": 222
+    "places_kept": 222,
+    "nvim_open_files": 223,
+    "nvim_explore": 224
   }
 }

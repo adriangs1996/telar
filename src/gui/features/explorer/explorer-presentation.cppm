@@ -74,6 +74,31 @@ export namespace telar::gui::features::explorer {
 
   inline constexpr std::size_t actor_capacity = 3;
 
+  // How the editors hold a file: in a buffer, and in one with changes that were not written.
+  enum class Hold : std::uint8_t {
+    none,
+    open,
+    unsaved,
+  };
+
+  // What the editors of a machine hold of a file, and the pane of the one that holds it so: one
+  // with changes not written before any other.
+  struct Held {
+    Hold hold = Hold::none;
+    std::uint64_t pane = 0;
+  };
+
+  // A file of a machine, by its path there.
+  struct Located {
+    std::uint64_t machine = 0;
+    std::string_view path;
+  };
+
+  [[nodiscard]] Held heldBy(const Edited& edited, const Located& file);
+
+  // Whether a buffer with changes not written shows the file, or one below it.
+  [[nodiscard]] bool unsavedIn(const Edited& edited, const Located& file);
+
   struct RowLook {
     RowKind kind = RowKind::entry;
     std::uint8_t depth = 0;
@@ -115,6 +140,8 @@ export namespace telar::gui::features::explorer {
     // Who touched it lately, the last one first.
     ds::Array<ActorLook, actor_capacity> actors{};
     std::uint8_t actor_count = 0;
+    // Whether an editor of its machine has it in a buffer.
+    Hold editor = Hold::none;
     // In the lens of touches: with which command or tool, and how long ago.
     ShortText verb;
     ShortText ago;
@@ -226,7 +253,7 @@ export namespace telar::gui::features::explorer {
     std::uint32_t removed = 0;
   };
 
-  inline constexpr std::size_t fact_capacity = 6;
+  inline constexpr std::size_t fact_capacity = 7;
 
   // A touch of the selected file, in the preview: who, from which pane, how and how long ago.
   struct ActivityLook {
@@ -339,9 +366,16 @@ export namespace telar::gui::features::explorer {
   // is the cache of the machine that file is on.
   [[nodiscard]] bool touchedSince(const State& state, const PlanStep& step) noexcept;
 
+  // What the window knows of the file a step changes that the listings do not say: what
+  // `touchedSince` said of its source, and the files the editors hold.
+  struct PlanSeen {
+    bool touched = false;
+    Edited edited;
+  };
+
   // `state` is the cache of the machine the step changes, whose listings say whether the name
-  // it goes to is taken; `touched` what `touchedSince` said of its source.
-  [[nodiscard]] PlanNote planNote(const View& view, const State& state, const PlanStep& step, bool touched);
+  // it goes to is taken.
+  [[nodiscard]] PlanNote planNote(const View& view, const State& state, const PlanStep& step, const PlanSeen& seen);
 
   // The name of a mode on the status line.
   [[nodiscard]] std::string_view modeText(Mode mode) noexcept;

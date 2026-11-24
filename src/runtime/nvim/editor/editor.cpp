@@ -301,6 +301,7 @@ end
         prompt_(memory),
         clipboard_(memory),
         link_(memory),
+        explored_(memory),
         typed_(memory, input_limit),
         buffers_(memory) {
     request(output_, {.id = identify_request_, .method = "nvim_get_api_info"}, [](msgpack::Writer&) {});
@@ -412,6 +413,10 @@ end
       changed(reader, false);
     } else if (method == "telar_buffer_marks") {
       changed(reader, true);
+    } else if (method == "telar_files") {
+      filed(reader);
+    } else if (method == "telar_explore") {
+      explore(reader);
     } else if (method == "telar_status") {
       placedStatus(reader);
     } else if (method == "telar_buffers") {
@@ -517,6 +522,52 @@ end
     if (screen_.markTabs(marks.view().first(count), buffers)) {
       publish(settled);
     }
+  }
+
+  // `[[path, modified]...]`: the files the listed buffers show.
+  void NvimEditor::filed(msgpack::Reader& reader) {
+    ds::Array<NvimOpenFile, max_nvim_open_files> files{};
+    std::uint32_t count = 0;
+    std::size_t kept = 0;
+
+    if (!reader.tuple(1) || !reader.array(count) || count > max_nvim_open_files) {
+      return;
+    }
+
+    for (std::uint32_t index = 0; index < count; ++index) {
+      if (!reader.tuple(2)) {
+        return;
+      }
+
+      const auto path = reader.string();
+      bool modified = false;
+
+      if (!path || !reader.boolean(modified)) {
+        return;
+      }
+
+      // Only what can be a file of this machine and a client can show: an absolute path.
+      if (path->starts_with('/') && path->size() <= max_nvim_path_bytes && displayable(*path)) {
+        files.atMut(kept++) = {.path = *path, .modified = modified};
+      }
+    }
+
+    const bool settled = screen_.settled();
+
+    if (screen_.showFiles(files.view().first(kept))) {
+      publish(settled);
+    }
+  }
+
+  // `[path]`: the file to show in the explorer, or nothing for the editor's directory.
+  void NvimEditor::explore(msgpack::Reader& reader) {
+    const auto path = reader.tuple(1) ? reader.string() : ds::none;
+    if (!path || path->size() > max_nvim_path_bytes || !displayable(*path)) {
+      return;
+    }
+
+    explored_.assign(path->starts_with('/') ? *path : std::string_view{});
+    pulse_.explore = true;
   }
 
   void NvimEditor::framed(msgpack::Reader& reader) {
@@ -816,6 +867,22 @@ end
     });
   }
 
+  bool NvimEditor::follow(std::string_view from, std::string_view target) {
+    constexpr std::string_view script = "__telar_moved(...)";
+    constexpr std::size_t room = 64;
+
+    if (state_ != NvimState::attached || from.size() > max_nvim_path_bytes || target.size() > max_nvim_path_bytes) {
+      return false;
+    }
+
+    return request(output_, {.id = next_request_++, .method = "nvim_exec_lua", .parameters = 2, .room = room + from.size() + target.size()}, [&](msgpack::Writer& writer) {
+      writer.string(script);
+      writer.array(2);
+      writer.string(from);
+      writer.string(target);
+    });
+  }
+
   bool NvimEditor::selectMenu(std::uint32_t item, bool accept) {
     constexpr std::uint32_t parameter_count = 4;
     constexpr std::size_t room = 32;
@@ -909,6 +976,10 @@ end
 
   std::string_view NvimEditor::link() const noexcept {
     return link_.view();
+  }
+
+  std::string_view NvimEditor::explored() const noexcept {
+    return explored_.view();
   }
 
   const NvimBufferList& NvimEditor::buffers() const noexcept {

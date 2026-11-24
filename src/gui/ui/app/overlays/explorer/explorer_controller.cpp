@@ -42,6 +42,8 @@ namespace telar::gui::qt {
     constexpr ds::Array<const char*, 3> tone_names{"info", "error", "ask"};
     constexpr ds::Array<const char*, 3> follow_scopes{"pane", "workspace", "machine"};
     constexpr ds::Array<const char*, 4> actor_tones{"you", "claude", "codex", "agent"};
+    // How an editor holds a row's file, in the order of explorer::Hold.
+    constexpr ds::Array<const char*, 3> editor_holds{"", "open", "unsaved"};
 
     // The lines of a preview's text the window draws.
     constexpr qsizetype preview_lines = 200;
@@ -298,28 +300,39 @@ namespace telar::gui::qt {
     return view_.windows.size() > 1 && view_.side_by_side ? two_windows : one_window;
   }
 
-  bool ExplorerController::takes(explorer::Side side) {
+  bool ExplorerController::takes(explorer::Side side, bool through_editor) {
     if (!view_.open || !view_.pinned) {
       return false;
     }
 
-    if (view_.focused) {
-      // Past its first window to the left the panes take the keys back.
-      if (!explorer::toward(view_, side)) {
-        explorer::focus(view_, false);
-      }
-    } else {
+    if (!view_.focused) {
       const auto* pane = store_.session().focusedPane();
 
-      // It stands at the right of the panes: the pane with none at its right is next to it. An
-      // editor is asked for its own window on that side, which the explorer does not know of.
-      if (side != explorer::Side::right || pane == nullptr || application::nvim::editor(store_.session(), pane->id) != nullptr || application::workbench::neighbor(store_.sessionMut(), PaneDirection::right) != 0) {
-        return false;
-      }
+      // An editor is asked for its own window on that side, which the explorer does not know
+      // of: it says when it has none, and the explorer is entered then.
+      const bool asks = through_editor && pane != nullptr && application::nvim::editor(store_.session(), pane->id) != nullptr;
 
-      explorer::focus(view_, true);
+      return pane != nullptr && !asks && enter(side);
     }
 
+    // Past its first window to the left the panes take the keys back.
+    if (!explorer::toward(view_, side)) {
+      explorer::focus(view_, false);
+    }
+
+    revision_ = view_.revision;
+    publish();
+    emit changed();
+    return true;
+  }
+
+  bool ExplorerController::enter(explorer::Side side) {
+    // It stands at the right of the panes: the pane with none at its right is next to it.
+    if (!view_.open || !view_.pinned || view_.focused || side != explorer::Side::right || application::workbench::neighbor(store_.sessionMut(), PaneDirection::right) != 0) {
+      return false;
+    }
+
+    explorer::focus(view_, true);
     revision_ = view_.revision;
     publish();
     emit changed();
@@ -638,7 +651,7 @@ namespace telar::gui::qt {
         return home.size() > 1 && path.starts_with(home) && path.size() > home.size() && path[home.size()] == '/' ? QStringLiteral("~") + toQString(path.substr(home.size())) : toQString(path);
       };
 
-      const auto note = explorer::planNote(view_, cacheOf(step.machine), step, explorer::touchedSince(cacheOf(step.source_machine != 0 ? step.source_machine : step.machine), step));
+      const auto note = explorer::planNote(view_, cacheOf(step.machine), step, {.touched = explorer::touchedSince(cacheOf(step.source_machine != 0 ? step.source_machine : step.machine), step), .edited = around.edited});
 
       result.push_back(QVariantMap{
           {QStringLiteral("verb"), toQString(explorer::verbText(step.verb))},
@@ -723,6 +736,7 @@ namespace telar::gui::qt {
         {QStringLiteral("panes"), numbers(look.panes.view().first(look.pane_count))},
         {QStringLiteral("note"), fixedText(look.note)},
         {QStringLiteral("actors"), actorChips(look.actors.view().first(look.actor_count))},
+        {QStringLiteral("editor"), QString::fromLatin1(editor_holds[static_cast<std::size_t>(look.editor)])},
         {QStringLiteral("verb"), fixedText(look.verb)},
         {QStringLiteral("ago"), fixedText(look.ago)},
         {QStringLiteral("editing"), view_.mode == Mode::insert && pick.window == view_.current && look.selected},
@@ -736,6 +750,7 @@ namespace telar::gui::qt {
   }
 
   void ExplorerController::publish() {
+    edited_ = scene_.edited_revision;
     const auto around = explorer::around(scene_);
 
     for (std::size_t index = 0; index < rows_.size(); ++index) {
@@ -1290,19 +1305,56 @@ namespace telar::gui::qt {
       explorer::open(view_, cacheOf(scene_.shown), explorer::contextOf(around, scene_.shown), scene_.shown);
     }
 
-    // It opens where this workspace last had it: beside the panes, or over them.
-    const auto now = here();
+    present(true);
+  }
 
-    explorer::pin(view_, std::ranges::any_of(beside_, [&](const Beside& kept) {
-      return kept.machine == now.machine && kept.workspace == now.workspace && kept.directory == now.directory;
-    }));
+  void ExplorerController::present(bool opening) {
+    if (opening) {
+      // It opens where this workspace last had it: beside the panes, or over them.
+      const auto now = here();
+
+      explorer::pin(view_, std::ranges::any_of(beside_, [&](const Beside& kept) {
+        return kept.machine == now.machine && kept.workspace == now.workspace && kept.directory == now.directory;
+      }));
+    }
 
     static_cast<void>(refresh());
     remember();
     revision_ = view_.revision;
     publish();
     emit changed();
-    emit opened();
+    if (opening) {
+      emit opened();
+    }
+  }
+
+  void ExplorerController::reveal(std::string_view path, std::string_view directory) {
+    if (!explorer::available(store_.session())) {
+      emit failed(QStringLiteral("This machine's runtime does not answer the explorer; update telar there"));
+      return;
+    }
+
+    const bool opening = !view_.open;
+    bool revealed = false;
+
+    observe();
+    {
+      const auto around = explorer::around(scene_);
+
+      revealed = explorer::reveal(view_, cacheOf(scene_.shown), explorer::contextOf(around, scene_.shown), {.path = path, .directory = directory});
+    }
+
+    if (!revealed) {
+      emit failed(QStringLiteral("The explorer waits for an answer: it stays where it is"));
+      return;
+    }
+
+    // Beside the panes it takes the keys: the person asked for it.
+    if (!opening && view_.pinned) {
+      explorer::focus(view_, true);
+    }
+
+    present(opening);
   }
 
   void ExplorerController::synchronize() {
@@ -1362,7 +1414,8 @@ namespace telar::gui::qt {
       return;
     }
 
-    if (refresh() || carried || revision_ != view_.revision) {
+    // The files the editors hold are no change of the view: its rows mark them all the same.
+    if (refresh() || carried || revision_ != view_.revision || edited_ != scene_.edited_revision) {
       revision_ = view_.revision;
       publish();
       emit changed();

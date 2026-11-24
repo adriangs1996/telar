@@ -75,6 +75,24 @@ namespace telar::gui::qt {
       return action == window_actions::Action::focus_up ? Side::up : Side::down;
     }
 
+    // And the one a pane's direction names.
+    constexpr application::explorer::Side explorerSide(PaneDirection direction) noexcept {
+      using application::explorer::Side;
+
+      switch (direction) {
+      case PaneDirection::left:
+        return Side::left;
+      case PaneDirection::right:
+        return Side::right;
+      case PaneDirection::up:
+        return Side::up;
+      case PaneDirection::down:
+        return Side::down;
+      }
+
+      return Side::down;
+    }
+
   }
 
   ApplicationController::ApplicationController(ApplicationAllocator& memory, QObject* parent)
@@ -432,8 +450,8 @@ namespace telar::gui::qt {
     // Beside the panes the explorer takes their keys only while it has the focus, and the room
     // it stands in is taken from their area, at the size of the terminal's font.
     connect(&explorer_, &ExplorerController::changed, this, &ApplicationController::settleExplorer);
-    commands_.setBeside([this](window_actions::Action action) {
-      return explorer_.takes(explorerSide(action));
+    commands_.setBeside([this](window_actions::Action action, bool through_editor) {
+      return explorer_.takes(explorerSide(action), through_editor);
     });
 
     connect(&explorer_, &ExplorerController::failed, &status_, &WindowStatus::report);
@@ -856,6 +874,7 @@ namespace telar::gui::qt {
         static_cast<void>(links_.open(*link, session().changedPane()));
       }
 
+      askExplorer(session().changedPane());
       emit editors_.editorChanged(session().changedPane());
       break;
     case application::Change::peek:
@@ -931,6 +950,26 @@ namespace telar::gui::qt {
 
   void ApplicationController::scheduleGraphicsRecovery() {
     scheduleDeadline(graphics_resume_timer_, session().ready() ? application::terminal::graphics::resumeDeadline(session()) : ds::none, system::AwakeClock::nowNanoseconds());
+  }
+
+  void ApplicationController::askExplorer(std::uint64_t pane_id) {
+    // `:Telar explore`: the explorer shows the file the editor is on, or its directory.
+    if (const auto* editor = application::nvim::editor(session(), pane_id); editor != nullptr && editor->explores) {
+      const auto* pane = application::findPane(session().panes, pane_id);
+      const auto asked = editor->explore.view();
+      const auto where = pane == nullptr ? std::string_view{} : pane->cwd.view();
+      // Kept apart from the session, which the explorer changes while it reads them.
+      const QByteArray path{asked.data(), static_cast<qsizetype>(asked.size())};
+      const QByteArray directory{where.data(), static_cast<qsizetype>(where.size())};
+
+      application::nvim::explored(sessionMut(), pane_id);
+      explorer_.reveal({path.constData(), static_cast<std::size_t>(path.size())}, {directory.constData(), static_cast<std::size_t>(directory.size())});
+    }
+
+    // The focus left the editor's last window on a side with no pane: the explorer there takes it.
+    if (const auto side = application::nvim::takeEdge(sessionMut(), pane_id)) {
+      static_cast<void>(explorer_.enter(explorerSide(*side)));
+    }
   }
 
   void ApplicationController::refresh() {

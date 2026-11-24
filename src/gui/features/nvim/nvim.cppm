@@ -180,6 +180,20 @@ export namespace telar::gui::features::nvim {
     ds::Vec<Tab, Memory> buffers;
   };
 
+  // A file one of the editor's listed buffers shows, by its path on the editor's machine, and
+  // whether that buffer has changes not written.
+  struct OpenFile {
+    Slice path;
+    bool modified = false;
+  };
+
+  struct OpenFiles {
+    explicit OpenFiles(Memory& memory);
+
+    ds::Vec<char, Memory> text;
+    ds::Vec<OpenFile, Memory> files;
+  };
+
   // A word of the status line, as the window draws it in place of the line's cells: cells side
   // by side in one style, or one icon of the Nerd Fonts' private area. The window draws the line
   // flat, on one background, so `ink` is the color the word keeps there: its own, or the
@@ -313,6 +327,15 @@ export namespace telar::gui::features::nvim {
     Picker picker;
     // A link the editor opened, until the window opens it.
     ds::String<Memory> link;
+    // The files its buffers show, as the runtime last said them.
+    OpenFiles files;
+    // `:Telar explore` asked for the explorer, on this file or on the editor's directory, until
+    // the window opens it.
+    bool explores = false;
+    ds::String<Memory> explore;
+    // The side the focus left the editor's last window by with no pane there to take it, until
+    // the window gives it to what stands beside the panes.
+    ds::Option<PaneDirection> edge;
     // Every frame applied.
     std::uint64_t revision = 0;
     // The grids there are, where each is placed and what of its buffer it shows.
@@ -375,6 +398,8 @@ export namespace telar::gui::features::nvim {
   private:
     Memory& memory_;
     ds::Vec<ds::Box<Editor, Memory>, Memory> editors_;
+    // Counts each change of the files the editors hold: one that told its files, or left.
+    std::uint64_t files_revision_ = 0;
   };
 
   // The runtime said a pane is an editor, before the message that names it.
@@ -421,6 +446,21 @@ export namespace telar::gui::features::nvim {
   // False when the pane is no editor.
   bool link(State& state, std::uint64_t pane_id, std::string_view uri);
 
+  // The files the editor's buffers show. False when they are the ones it held, or the pane is
+  // no editor.
+  bool hold(State& state, const NvimOpenFiles& message);
+
+  // A number that changes when the files the editors hold do: what reads them reads them again.
+  [[nodiscard]] std::uint64_t filesRevision(const State& state) noexcept;
+
+  // The editor asked for the explorer on `path`; and the window opened it. False when the pane
+  // is no editor.
+  bool explore(State& state, std::uint64_t pane_id, std::string_view path);
+  void explored(State& state, std::uint64_t pane_id) noexcept;
+
+  // The focus left the editor by `side` and no pane took it; nothing once the window saw to it.
+  bool leave(State& state, std::uint64_t pane_id, ds::Option<PaneDirection> side) noexcept;
+
   // Closes an editor's picker. False when it had none open.
   bool dismiss(State& state, std::uint64_t pane_id) noexcept;
 
@@ -450,6 +490,14 @@ namespace telar::gui::features::nvim {
     }
 
     [[nodiscard]] static Editor* find(State& state, std::uint64_t pane_id) noexcept;
+
+    [[nodiscard]] static constexpr std::uint64_t& filesRevision(State& state) noexcept {
+      return state.files_revision_;
+    }
+
+    [[nodiscard]] static constexpr std::uint64_t filesRevision(const State& state) noexcept {
+      return state.files_revision_;
+    }
   };
 
 }

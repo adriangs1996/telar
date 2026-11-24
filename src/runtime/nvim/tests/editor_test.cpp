@@ -393,6 +393,76 @@ namespace {
       check(!open("https://example.com/again"), "one link for each thing the person does");
     }
 
+    // Neovim's side says which files its buffers show, and which have changes not written, for
+    // what lists files beside the editor. Only what can be a file of the machine is kept, and no
+    // more files than a client is sent.
+    void filesShownAreKept() {
+      testing::TestMemory adapter;
+      ConcurrentMemory& memory = adapter;
+      NvimEditor editor{memory, {.columns = 80, .rows = 24}, {}};
+      const auto shown = [](msgpack::Writer& writer) {
+        writer.array(4);
+        writer.array(2);
+        writer.string("/work/main.cpp");
+        writer.boolean(true);
+        writer.array(2);
+        writer.string("relative/notes.md");
+        writer.boolean(true);
+        writer.array(2);
+        writer.string("/work/bad\x01name");
+        writer.boolean(false);
+        writer.array(2);
+        writer.string("/work/README.md");
+        writer.boolean(false);
+      };
+
+      attach(editor);
+      drain(editor);
+      static_cast<void>(editor.takePulse());
+      check(tell(editor, "telar_files", 1, shown));
+
+      const auto& files = editor.screen().files();
+      const std::string_view text{files.text.data(), files.text.size()};
+
+      check(editor.takePulse().flushed && files.files.size() == 2 && files.changed_at != 0, "the files are kept, and told at once");
+      check(files.files[0].path.of(text) == "/work/main.cpp" && files.files[0].modified && files.files[1].path.of(text) == "/work/README.md" && !files.files[1].modified);
+      check(tell(editor, "telar_files", 1, shown));
+      check(!editor.takePulse().flushed, "the same again changes nothing");
+
+      // A list longer than a client is sent, or one that is no list of files, says nothing.
+      check(tell(editor, "telar_files", 1, [](msgpack::Writer& writer) {
+        writer.array(max_nvim_open_files + 1);
+        for (std::size_t index = 0; index <= max_nvim_open_files; ++index) {
+          writer.array(2);
+          writer.string("/work/many.cpp");
+          writer.boolean(false);
+        }
+      }));
+      check(tell(editor, "telar_files", 1, [](msgpack::Writer& writer) {
+        writer.array(1);
+        writer.string("/work/alone.cpp");
+      }));
+      check(!editor.takePulse().flushed && editor.screen().files().files.size() == 2);
+
+      // `:Telar explore` names the file it is on, or nothing for a buffer without one.
+      check(tell(editor, "telar_explore", 1, [](msgpack::Writer& writer) {
+        writer.string("/work/main.cpp");
+      }));
+      check(editor.takePulse().explore && editor.explored() == "/work/main.cpp");
+      check(tell(editor, "telar_explore", 1, [](msgpack::Writer& writer) {
+        writer.string("term://zsh");
+      }));
+      check(editor.takePulse().explore && editor.explored().empty(), "what is no file of the machine asks for the editor's directory");
+      check(tell(editor, "telar_explore", 1, [](msgpack::Writer& writer) {
+        writer.unsignedInteger(4);
+      }));
+      check(!editor.takePulse().explore);
+
+      // A file that moved is followed by asking Neovim's side, which knows the buffers.
+      check(editor.follow("/work/main.cpp", "/work/app.cpp") && drain(editor).size() == 1, "one request for a move");
+      check(!editor.follow(std::string(max_nvim_path_bytes + 1, 'a'), "/work/app.cpp"), "a path longer than a path is not asked");
+    }
+
     // Neovim's side says on which row the status line of the whole editor is, and that there is
     // none; a row the editor does not have says nothing.
     void statusLineRowIsKept() {
@@ -532,6 +602,7 @@ namespace {
   const telar::testing::Case case_open{"nvim_editor.opens_a_file_where_asked", opensAFileWhereAsked};
   const telar::testing::Case case_theme{"nvim_editor.theme_is_the_colorscheme", themeIsTheColorscheme};
   const telar::testing::Case case_told{"nvim_editor.neovim_tells_the_runtime", neovimTellsTheRuntime};
+  const telar::testing::Case case_files{"nvim_editor.files_shown_are_kept", filesShownAreKept};
   const telar::testing::Case case_status{"nvim_editor.status_line_row_is_kept", statusLineRowIsKept};
   const telar::testing::Case case_keys{"nvim_editor.keys_neovim_leaves_go_again", keysNeovimLeavesGoAgain};
   const telar::testing::Case case_link{"nvim_editor.link_is_the_gestures_only", linkIsTheGesturesOnly};

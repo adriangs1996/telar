@@ -64,6 +64,7 @@ export namespace telar::gui::application::explorer {
   using features::explorer::MachineFact;
   using features::explorer::PaneFact;
   using features::explorer::Reach;
+  using features::explorer::Revealed;
   using features::explorer::Side;
 
   // The use cases, which ui runs with the cache of the machine of the window they act on: the
@@ -97,6 +98,7 @@ export namespace telar::gui::application::explorer {
   using features::explorer::previewText;
   using features::explorer::release;
   using features::explorer::resize;
+  using features::explorer::reveal;
   using features::explorer::say;
   using features::explorer::scroll;
   using features::explorer::select;
@@ -158,6 +160,12 @@ export namespace telar::gui::application::explorer {
     ds::String<Memory> workspace;
     // The time of the observation, in seconds: what a row says how long ago against.
     std::uint64_t now = 0;
+    // The files the editors of the machines observed hold, each path a piece of `edited_text`.
+    ds::Vec<char, Memory> edited_text;
+    ds::Vec<features::explorer::EditedFile, Memory> edited;
+    // The sum of what the sessions observed count of the changes of those files: another
+    // number when they are other files.
+    std::uint64_t edited_revision = 0;
   };
 
   // Forgets the machines, before each is observed again.
@@ -183,6 +191,7 @@ export namespace telar::gui::application::explorer {
     std::uint64_t shown = 0;
     std::string_view workspace;
     std::uint64_t now = 0;
+    features::explorer::Edited edited;
   };
 
   [[nodiscard]] tbc::val_a<Around> around(tbc::ref_a<Scene> scene) noexcept;

@@ -212,6 +212,8 @@ namespace telar {
     file_write_ended = 0xdc,
     file_touches = 0xdd,
     places_kept = 0xde,
+    nvim_open_files = 0xdf,
+    nvim_explore = 0xe0,
   };
 
   struct RequestRuntimeState {
@@ -744,6 +746,10 @@ namespace telar {
       return "file_touches";
     case ServerTag::places_kept:
       return "places_kept";
+    case ServerTag::nvim_open_files:
+      return "nvim_open_files";
+    case ServerTag::nvim_explore:
+      return "nvim_explore";
     case ServerTag::pane_theme:
       return "pane_theme";
     }

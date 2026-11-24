@@ -140,7 +140,14 @@ namespace telar::gui::test {
           .host = of,
           .shown = shown,
           .machines = machines,
+          .edited = {.text = edited_text, .files = edited},
       };
+    }
+
+    // An editor pane of a machine holds a file in a buffer, with changes not written or without.
+    void hold(std::uint64_t of, std::uint64_t pane, std::string_view path, bool modified) {
+      edited.push_back({.machine = of, .pane = pane, .offset = static_cast<std::uint32_t>(edited_text.size()), .size = static_cast<std::uint32_t>(path.size()), .modified = modified});
+      edited_text += path;
     }
 
     // Answers what the explorer lacks, as the runtime of each machine that answers would, until
@@ -429,6 +436,9 @@ namespace telar::gui::test {
     // The inode the runtime says a file it inspects has.
     std::uint64_t inspected_inode = 4242;
     std::vector<PaneFact> panes;
+    // The files the editors hold, each path a piece of the text.
+    std::string edited_text;
+    std::vector<EditedFile> edited;
     std::uint64_t focused = 13;
     // The time the rows say how long ago against.
     std::uint64_t now = 1'000'000;

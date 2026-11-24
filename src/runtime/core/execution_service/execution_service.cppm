@@ -43,6 +43,7 @@ import telar.runtime.diagnostics.runtime_counters;
 import telar.runtime.history.event;
 import telar.runtime.core.model.slot_store;
 import telar.runtime.nvim.editor;
+import telar.runtime.files.moves;
 import telar.runtime.nvim.provision;
 import telar.base.ds;
 
@@ -385,6 +386,30 @@ export {
           }
 
           flushEditor(pane);
+        } catch (const std::exception&) {
+          failEditor(pane);
+        }
+      }
+
+      // Asks an editor to follow the files the last answered change moved, the `count` that
+      // `moves` tells: a buffer that shows one shows it under its new name.
+      inline void followMoves(PaneRef<NvimBody> pane, const FileMoves& moves, std::size_t count) noexcept {
+        if (pane.core.close_requested || pane.core.output_closed) {
+          return;
+        }
+
+        try {
+          bool asked = false;
+
+          for (std::size_t index = 0; index < count; ++index) {
+            const auto move = moves.told(index);
+
+            asked = pane.body.editor.follow(move.from, move.to) || asked;
+          }
+
+          if (asked) {
+            flushEditor(pane);
+          }
         } catch (const std::exception&) {
           failEditor(pane);
         }

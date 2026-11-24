@@ -166,13 +166,13 @@ namespace {
     explorer.enter("w");
     check(explorer.view.mode == Mode::plan && explorer.view.plan.size() == 1 && explorer.view.plan[0].verb == PlanVerb::copy);
 
-    const auto copied = planNote(explorer.view, explorer.state, explorer.view.plan[0], false);
+    const auto copied = planNote(explorer.view, explorer.state, explorer.view.plan[0], {.touched = false});
 
     check(copied.size.view() == "7.6K" && copied.warning.view() == "its name is taken: it takes another");
     explorer.type("n");
     explorer.type(":");
     explorer.enter("w!");
-    check(planNote(explorer.view, explorer.state, explorer.view.plan[0], true).warning.view() == "replaces what is there, which goes to the trash · an agent touched it since it was listed");
+    check(planNote(explorer.view, explorer.state, explorer.view.plan[0], {.touched = true}).warning.view() == "replaces what is there, which goes to the trash · an agent touched it since it was listed");
     explorer.type("n");
     explorer.type("u");
 
@@ -186,8 +186,8 @@ namespace {
     const auto& tree = explorer.view.plan[0].directory ? explorer.view.plan[0] : explorer.view.plan[1];
     const auto& file = explorer.view.plan[0].directory ? explorer.view.plan[1] : explorer.view.plan[0];
 
-    check(planNote(explorer.view, explorer.state, tree, false).warning.view() == "with all it holds" && planNote(explorer.view, explorer.state, tree, false).size.view() == "3.6M");
-    check(planNote(explorer.view, explorer.state, file, false).warning.view().empty() && !planNote(explorer.view, explorer.state, file, false).size.view().empty());
+    check(planNote(explorer.view, explorer.state, tree, {.touched = false}).warning.view() == "with all it holds" && planNote(explorer.view, explorer.state, tree, {.touched = false}).size.view() == "3.6M");
+    check(planNote(explorer.view, explorer.state, file, {.touched = false}).warning.view().empty() && !planNote(explorer.view, explorer.state, file, {.touched = false}).size.view().empty());
   }
 
   // The texts of the help's lines, each `keys|label`, to find one by what it does.

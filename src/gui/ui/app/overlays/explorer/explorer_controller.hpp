@@ -74,7 +74,16 @@ namespace telar::gui::qt {
     // A key that moves the focus between panes was pressed: the explorer beside them takes it
     // to go to one of its windows, to give the keys back to the panes, or to take them from
     // the pane next to it. False when it is the panes' to act on.
-    [[nodiscard]] bool takes(application::explorer::Side side);
+    // With `through_editor` the key asks an editor for its own window on that side first: the
+    // editor says when it has none, and `enter` is what it leads to.
+    [[nodiscard]] bool takes(application::explorer::Side side, bool through_editor);
+    // The focus left the pane next to it toward `side`, as it leaves the last window of an
+    // editor: beside the panes and without the keys, it takes them. False otherwise.
+    [[nodiscard]] bool enter(application::explorer::Side side);
+    // An editor asked for the explorer on a file of the machine that shows: it opens, or the
+    // window that has the keys goes, to the file's directory, with the file selected. Without
+    // a path, to `directory`.
+    void reveal(std::string_view path, std::string_view directory);
     [[nodiscard]] const QVariantList& windows() const noexcept;
     [[nodiscard]] const QVariantList& lenses() const noexcept;
     [[nodiscard]] QString scope() const;
@@ -224,6 +233,8 @@ namespace telar::gui::qt {
     // Where the pointer asked for the menu; below zero when the keys did.
     QPointF menu_at_{-1, -1};
     std::uint64_t revision_ = 0;
+    // What the scene counted of the files the editors hold when the rows were last told.
+    std::uint64_t edited_ = 0;
 
     // The workspaces where the explorer was put beside the panes, for the life of the window:
     // it returns there when the workspace shows again, if it was showing when it left.
@@ -237,6 +248,8 @@ namespace telar::gui::qt {
     [[nodiscard]] Beside here() const noexcept;
     // Keeps what the explorer is now for the workspace that shows.
     void remember();
+    // Shows the explorer as it now is; with `opening`, where this workspace last had it.
+    void present(bool opening);
     ds::Vec<Beside, ApplicationAllocator> beside_;
     ds::Option<Beside> last_;
     // The home of the account the window runs as, which the local machine has before its

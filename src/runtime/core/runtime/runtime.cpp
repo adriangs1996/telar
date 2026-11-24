@@ -1866,6 +1866,7 @@ namespace telar::runtime {
         editor_configuration_(memory, options.editor_configuration),
         words_(memory, options.configuration_directory),
         agent_files_(memory),
+        file_moves_(memory),
         descriptions_(memory, background_, options.descriptions),
         telemetry_(options.socket, proxy.status()) {
     model_.cli_executable = options.cli_executable;
@@ -2711,7 +2712,17 @@ namespace telar::runtime {
   template <EventLoop Poller, typename Background>
     requires BackgroundExecutor<Background, ConcurrentMemory>
   void Runtime<Poller, Background>::handle(std::uint64_t identity, const ChangeFiles& message) {
-    submitBackground(background_, requireClient(clients_, identity), message);
+    const auto& client = requireClient(clients_, identity);
+    const bool edits = std::ranges::any_of(model_.panes.items(), [](auto* stored) {
+      return static_cast<bool>(asNvim(stored));
+    });
+
+    // Only an editor is told where a file went: without one nothing is kept.
+    if (edits) {
+      file_moves_.asked(identity, message);
+    }
+
+    submitBackground(background_, client, message);
   }
 
   template <EventLoop Poller, typename Background>
@@ -2799,6 +2810,10 @@ namespace telar::runtime {
 
     if (pulse.opened) {
       driver->connection.send(NvimLink{.pane_id = pane.core.id, .uri = pane.body.editor.link()});
+    }
+
+    if (pulse.explore) {
+      driver->connection.send(NvimExplore{.pane_id = pane.core.id, .path = pane.body.editor.explored()});
     }
   }
 
@@ -3373,9 +3388,35 @@ namespace telar::runtime {
 
   template <EventLoop Poller, typename Background>
     requires BackgroundExecutor<Background, ConcurrentMemory>
+  void Runtime<Poller, Background>::followMoves(std::uint64_t client_id, ClientTag request_tag, std::span<const Byte> payload) noexcept {
+    std::size_t count = 0;
+
+    try {
+      count = file_moves_.answered(client_id, payload, request_tag == ClientTag::undo_file_changes);
+    } catch (const std::exception&) { // NOLINT(bugprone-empty-catch): a move no editor could be told of leaves its buffer where the file was, as a move made outside telar does
+    }
+
+    if (count == 0) {
+      return;
+    }
+
+    for (auto* stored : model_.panes.items()) {
+      if (const auto editor = asNvim(stored)) {
+        panes_.followMoves(*editor, file_moves_, count);
+      }
+    }
+  }
+
+  template <EventLoop Poller, typename Background>
+    requires BackgroundExecutor<Background, ConcurrentMemory>
   void Runtime<Poller, Background>::deliverBackgroundReply(std::uint64_t client_id, ClientTag request_tag, std::span<const Byte> payload) {
     if (request_tag == ClientTag::import_history) {
       return;
+    }
+
+    // Before the client is looked for: the files moved whether or not it is still here.
+    if ((request_tag == ClientTag::change_files || request_tag == ClientTag::undo_file_changes) && file_moves_.waiting()) {
+      followMoves(client_id, request_tag, payload);
     }
 
     if (request_tag == ClientTag::report_agent_command) {

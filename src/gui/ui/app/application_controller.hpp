@@ -295,6 +295,8 @@ namespace telar::gui::qt {
     void initializePeekAndMonitor();
     // The explorer changed: who takes the keys, and the room it stands in beside the panes.
     void settleExplorer();
+    // What the editor of a pane asked of the explorer since it was last seen to.
+    void askExplorer(std::uint64_t pane_id);
     void yieldExplorer();
     void initializeConfigurationSource();
     // The mod content a record carries for its slots, keyed by slot name.

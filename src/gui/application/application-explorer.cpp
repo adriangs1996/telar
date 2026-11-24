@@ -181,7 +181,9 @@ namespace telar::gui::application::explorer {
   Scene::Scene(Memory& made_in)
       : panes(made_in),
         machines(made_in),
-        workspace(made_in) {}
+        workspace(made_in),
+        edited_text(made_in),
+        edited(made_in) {}
 
   Scene::Pane::Pane(Memory& made_in)
       : title(made_in),
@@ -193,6 +195,33 @@ namespace telar::gui::application::explorer {
 
   void clear(Scene& scene) noexcept {
     scene.machine_count = 0;
+    scene.edited_text.clear();
+    scene.edited.clear();
+    scene.edited_revision = 0;
+  }
+
+  namespace {
+
+    // The files the editors of a machine's session hold, whatever tab their panes are in.
+    void observeEdited(Scene& scene, const Session& session, std::uint64_t machine) {
+      scene.edited_revision += features::nvim::filesRevision(session.nvim);
+      for (const auto& pane : session.panes) {
+        const auto* editor = pane->exited ? nullptr : features::nvim::find(session.nvim, pane->id);
+        if (editor == nullptr) {
+          continue;
+        }
+
+        const std::string_view text{editor->files.text.data(), editor->files.text.size()};
+
+        for (const auto& file : editor->files.files) {
+          const auto path = file.path.of(text);
+
+          scene.edited.push({.machine = machine, .pane = pane->id, .offset = static_cast<std::uint32_t>(scene.edited_text.size()), .size = static_cast<std::uint32_t>(path.size()), .modified = file.modified});
+          scene.edited_text.extend(std::span<const char>{path});
+        }
+      }
+    }
+
   }
 
   void observe(Scene& scene, const Session& session, std::uint64_t machine) {
@@ -246,6 +275,8 @@ namespace telar::gui::application::explorer {
     if (session.ready()) {
       kept->reach = session.explores() ? Reach::answers : Reach::silent;
     }
+
+    observeEdited(scene, session, host.machine);
   }
 
   void observe(Scene& scene, const Host& host) {
@@ -259,6 +290,7 @@ namespace telar::gui::application::explorer {
     result.shown = scene.shown;
     result.now = scene.now;
     result.workspace = scene.workspace.view();
+    result.edited = {.text = std::string_view{scene.edited_text.data(), scene.edited_text.size()}, .files = scene.edited.view()};
     result.pane_count = scene.pane_count;
     for (std::size_t index = 0; index < scene.pane_count; ++index) {
       const auto& kept = scene.panes[index];
@@ -287,6 +319,7 @@ namespace telar::gui::application::explorer {
         .host = machine,
         .shown = around.shown,
         .machines = around.machines.view().first(around.machine_count),
+        .edited = around.edited,
     };
 
     for (std::size_t index = 0; index < around.machine_count; ++index) {

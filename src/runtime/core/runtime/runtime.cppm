@@ -31,6 +31,7 @@ import telar.runtime.core.runtime_telemetry;
 import telar.runtime.traffic.tap.exchange;
 
 import telar.runtime.workers.background_executor;
+import telar.runtime.files.moves;
 
 import telar.wire.vocabulary;
 import telar.wire.agents;
@@ -875,6 +876,9 @@ export {
       // A background worker's reply to `client_id`'s request: history failures become limits, the
       // rest goes to the client, which a failed send drops.
       void deliverBackgroundReply(std::uint64_t client_id, ClientTag request_tag, std::span<const Byte> payload);
+      // Tells the editors where the files an answered change moved went: a buffer that shows one
+      // follows it.
+      void followMoves(std::uint64_t client_id, ClientTag request_tag, std::span<const Byte> payload) noexcept;
 
       // An opened editor reported to the client that asked, as failed unless it opened beside the
       // pane it was asked from.
@@ -943,6 +947,8 @@ export {
       std::string_view runtime_path_ = runtimePath();
       WorktreeDetectionService<WorktreeDetectionProbe> worktree_detection_;
       AgentFileService<ConcurrentMemory, Agents> agent_files_;
+      // What the changes of the explorers move, from their request to their answer.
+      FileMoves file_moves_;
       DescriptionService<ConcurrentMemory, Agents, Background> descriptions_;
       [[no_unique_address]] diagnostics::RuntimeTelemetry telemetry_;
       static constexpr auto pane_poll_interval = std::chrono::milliseconds{100};

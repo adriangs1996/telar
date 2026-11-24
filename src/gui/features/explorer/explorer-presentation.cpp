@@ -340,6 +340,10 @@ namespace telar::gui::features::explorer {
       }
     }
 
+    constexpr tbc::val_a<std::string_view> pathOf(tbc::val_a<Edited> edited, const EditedFile& file) {
+      return edited.text.substr(std::min<std::size_t>(file.offset, edited.text.size()), file.size);
+    }
+
     void entryLook(RowLook& look, const Seen& seen) {
       const auto& row = seen.row;
       if (row.holder >= seen.state.directories.size() || row.entry >= seen.state.directories[row.holder]->entries.size()) {
@@ -377,6 +381,7 @@ namespace telar::gui::features::explorer {
       noteMarks(look, seen.view, machine, path.view());
       if (!row.directory) {
         noteActors(look, seen, path.view());
+        look.editor = heldBy(seen.context.edited, {.machine = machine, .path = path.view()}).hold;
       }
 
       if (row.directory) {
@@ -894,6 +899,17 @@ namespace telar::gui::features::explorer {
       });
     }
 
+    // Whether the step takes a file from under a buffer with changes not written: the one it
+    // moves, deletes or restores, or the one what it brings replaces.
+    bool takesUnsaved(const View& view, const State& state, const PlanStep& step, const Edited& edited) {
+      const bool takes = step.verb == PlanVerb::move || step.verb == PlanVerb::remove || step.verb == PlanVerb::restore;
+      if (takes && unsavedIn(edited, {.machine = step.source_machine != 0 ? step.source_machine : step.machine, .path = step.source.view()})) {
+        return true;
+      }
+
+      return view.overwrite && taken(state, step) && unsavedIn(edited, {.machine = step.machine, .path = step.target.view()});
+    }
+
     void warn(PlanNote& note, std::string_view text) {
       write(note.warning, "{}{}{}", note.warning.view(), note.warning.view().empty() ? "" : " · ", text);
     }
@@ -928,6 +944,25 @@ namespace telar::gui::features::explorer {
 
       if (inspection.kind == FileKind::link && !inspection.target.empty()) {
         put(addFact(look, "Link to").value, inspection.target.view());
+      }
+    }
+
+    // Which editor holds the file, for its preview. The panes are of the machine the window
+    // shows, and of the tab that shows: an editor elsewhere has no number here.
+    void noteEditor(PreviewLook& look, const Context& context, std::string_view path) {
+      const auto held = heldBy(context.edited, {.machine = context.host, .path = path});
+      if (held.hold == Hold::none) {
+        return;
+      }
+
+      const std::string_view state = held.hold == Hold::unsaved ? "changes not written" : "open";
+      const auto pane = std::ranges::find(context.panes, held.pane, &PaneFact::id);
+      auto& fact = addFact(look, "Editor");
+
+      if (context.host == context.shown && pane != context.panes.end()) {
+        write(fact.value, "pane {} · {}", pane->number, state);
+      } else {
+        write(fact.value, "another tab · {}", state);
       }
     }
 
@@ -1520,6 +1555,7 @@ namespace telar::gui::features::explorer {
       notePanes(result, context, path);
       noteHeaviest(result, state, path);
     } else {
+      noteEditor(result, context, path);
       noteActivity(result, state, context, path);
     }
 
@@ -1592,7 +1628,34 @@ namespace telar::gui::features::explorer {
     });
   }
 
-  PlanNote planNote(const View& view, const State& state, const PlanStep& step, bool touched) {
+  Held heldBy(const Edited& edited, const Located& file) {
+    Held held;
+
+    for (const auto& known : edited.files) {
+      if (known.machine != file.machine || pathOf(edited, known) != file.path) {
+        continue;
+      }
+
+      if (known.modified) {
+        held = {.hold = Hold::unsaved, .pane = known.pane};
+        break;
+      }
+
+      if (held.hold == Hold::none) {
+        held = {.hold = Hold::open, .pane = known.pane};
+      }
+    }
+
+    return held;
+  }
+
+  bool unsavedIn(const Edited& edited, const Located& file) {
+    return !file.path.empty() && std::ranges::any_of(edited.files, [&](const EditedFile& known) {
+      return known.modified && known.machine == file.machine && within(pathOf(edited, known), file.path);
+    });
+  }
+
+  PlanNote planNote(const View& view, const State& state, const PlanStep& step, const PlanSeen& seen) {
     PlanNote note;
 
     if (step.size != 0) {
@@ -1603,8 +1666,12 @@ namespace telar::gui::features::explorer {
       warn(note, view.overwrite ? "replaces what is there, which goes to the trash" : "its name is taken: it takes another");
     }
 
-    if (touched) {
+    if (seen.touched) {
       warn(note, "an agent touched it since it was listed");
+    }
+
+    if (takesUnsaved(view, state, step, seen.edited)) {
+      warn(note, "an editor holds changes to it that were not written");
     }
 
     if (step.verb == PlanVerb::remove && step.directory) {

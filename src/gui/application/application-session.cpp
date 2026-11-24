@@ -413,6 +413,8 @@ namespace telar::gui::application {
         std::type_identity<NvimPrompt>{},
         std::type_identity<NvimNavigated>{},
         std::type_identity<NvimPick>{},
+        std::type_identity<NvimOpenFiles>{},
+        std::type_identity<NvimExplore>{},
         std::type_identity<NvimLink>{},
         std::type_identity<TextResults>{},
         std::type_identity<ProxyStatus>{},
@@ -711,6 +713,14 @@ namespace telar::gui::application {
   }
 
   Change Session::apply(const NvimLink& message) {
+    return nvim::receive(*this, message);
+  }
+
+  Change Session::apply(const NvimOpenFiles& message) {
+    return nvim::receive(*this, message);
+  }
+
+  Change Session::apply(const NvimExplore& message) {
     return nvim::receive(*this, message);
   }
 

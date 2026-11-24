@@ -359,6 +359,21 @@ export {
       std::uint64_t changed_at = 0;
     };
 
+    // The files the editor's listed buffers show, as telar's side inside Neovim says them: each
+    // path as a view of `text`.
+    struct NvimShownFiles {
+      struct Entry {
+        NvimSlice path;
+        bool modified = false;
+      };
+
+      explicit NvimShownFiles(ConcurrentMemory& memory);
+
+      ds::Vec<char, ConcurrentMemory> text;
+      ds::Vec<Entry, ConcurrentMemory> files;
+      std::uint64_t changed_at = 0;
+    };
+
     // What Neovim has drawn, as its redraw events left it. A client is shown it only between a
     // flush and the next event: `settled()`.
     class NvimScreen {
@@ -397,6 +412,8 @@ export {
       // is what they had.
       // What is marked on the tab pages, or on the listed buffers; false when nothing changed.
       bool markTabs(std::span<const NvimTabs::Mark> marks, bool buffers = false);
+      // The files the listed buffers show; false when they are the ones it held.
+      bool showFiles(std::span<const NvimOpenFile> files);
       // A float placed since its frame was last asked for: its window, which then counts as
       // asked, or zero when there is none.
       [[nodiscard]] std::uint64_t nextUnframed() noexcept;
@@ -460,6 +477,7 @@ export {
       [[nodiscard]] const NvimCompletion& completion() const noexcept;
       [[nodiscard]] const NvimMessages& messages() const noexcept;
       [[nodiscard]] const NvimTabs& tabs() const noexcept;
+      [[nodiscard]] const NvimShownFiles& files() const noexcept;
 
       // Clusters a redraw could not keep: its cells show a replacement until Neovim redraws.
       [[nodiscard]] bool takeClusterOverflow() noexcept;
@@ -515,6 +533,7 @@ export {
       NvimCompletion completion_;
       NvimMessages messages_;
       NvimTabs tabs_;
+      NvimShownFiles files_;
 
       ds::Vec<NvimRemoved, ConcurrentMemory> removed_;
       std::uint64_t removed_forgotten_at_ = 0;

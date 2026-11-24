@@ -924,6 +924,19 @@ FocusScope {
                                     color: root.colors.red
                                 }
 
+                                // An editor of its machine has it in a buffer: a ring, and a
+                                // dot of the color of a change while that buffer has changes
+                                // that were not written.
+                                CellText {
+                                    objectName: "explorerEditorMark"
+                                    width: implicitWidth
+                                    height: parent.height
+                                    visible: (row.record.editor ?? "").length > 0
+                                    text: row.record.editor === "unsaved" ? "●" : "○"
+                                    grid: root.tinyGrid
+                                    color: row.record.editor === "unsaved" ? root.colors.yellow : root.colors.overlay1
+                                }
+
                                 // In the lens of touches: how the file was touched last.
                                 CellText {
                                     width: implicitWidth

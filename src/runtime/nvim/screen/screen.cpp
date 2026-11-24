@@ -171,6 +171,10 @@ namespace telar::runtime {
         marks(memory),
         buffer_marks(memory) {}
 
+  NvimShownFiles::NvimShownFiles(ConcurrentMemory& memory)
+      : text(memory),
+        files(memory) {}
+
   NvimScreen::NvimScreen(ConcurrentMemory& memory)
       : memory_(memory),
         grids_(memory),
@@ -186,6 +190,7 @@ namespace telar::runtime {
         completion_(memory),
         messages_(memory),
         tabs_(memory),
+        files_(memory),
         removed_(memory) {
     highlights_.push({});
   }
@@ -838,6 +843,33 @@ namespace telar::runtime {
 
   const NvimTabs& NvimScreen::tabs() const noexcept {
     return tabs_;
+  }
+
+  const NvimShownFiles& NvimScreen::files() const noexcept {
+    return files_;
+  }
+
+  bool NvimScreen::showFiles(std::span<const NvimOpenFile> files) {
+    const auto shown = files.first(std::min(files.size(), max_nvim_open_files));
+    const std::string_view text{files_.text.data(), files_.text.size()};
+    const bool same = std::ranges::equal(files_.files, shown, [&](const NvimShownFiles::Entry& held, const NvimOpenFile& file) {
+      return held.modified == file.modified && held.path.of(text) == file.path;
+    });
+
+    if (same) {
+      return false;
+    }
+
+    touch();
+    files_.text.clear();
+    files_.files.clear();
+    for (const auto& file : shown) {
+      files_.files.push({.path = {.offset = static_cast<std::uint32_t>(files_.text.size()), .size = static_cast<std::uint32_t>(file.path.size())}, .modified = file.modified});
+      files_.text.extend(std::span<const char>{file.path});
+    }
+
+    files_.changed_at = stamp();
+    return true;
   }
 
   namespace {

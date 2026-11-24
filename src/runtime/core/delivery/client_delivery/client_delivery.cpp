@@ -262,6 +262,10 @@ namespace telar::runtime {
       output.connection.sendPayload(tabs);
     }
 
+    if (const auto files = frames.openFiles(screen); !files.empty()) {
+      output.connection.sendPayload(files);
+    }
+
     output.connection.sendPayload(frames.end(screen));
     attachment.editor_sent = frames.frame();
     slots_.atMut(attachment.slot).cells_current = true;
