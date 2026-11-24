@@ -226,7 +226,7 @@ namespace telar::runtime {
     // The key a scope matches a directory by: its real path when it exists, so a link to it and
     // the slash it may end with name it the same way, else the path as it is shown. Viewed in
     // `buffer` or in `path`.
-    std::string_view directoryKey(std::string_view path, ds::Array<char, PATH_MAX>& buffer) noexcept {
+    tbc::val_a<std::string_view> directoryKey(tbc::val_a<std::string_view> path, tbc::mut_a<ds::Array<char, PATH_MAX>> buffer) noexcept {
       ds::Array<char, PATH_MAX> terminated{};
 
       if (path.starts_with('/') && path.size() < terminated.size() && !path.contains('\0')) {
@@ -243,6 +243,7 @@ namespace telar::runtime {
     // as the index's trigrams fold a longer one. Its scratch is the store's memory.
     void foldText(sqlite3_context* context, int count, sqlite3_value** values) {
       constexpr std::size_t small_text = 1024;
+
       if (count != 1 || sqlite3_value_type(values[0]) == SQLITE_NULL) {
         sqlite3_result_null(context);
         return;
@@ -307,7 +308,7 @@ namespace telar::runtime {
         update.finish();
       }
 
-      database.execute("UPDATE history_schema SET version = 6 WHERE version < 6");
+      Statement{database, "UPDATE history_schema SET version = 6 WHERE version < 6"}.finish();
       transaction.commit();
     }
 
@@ -333,6 +334,7 @@ namespace telar::runtime {
           KeyedColumn{.rows = "SELECT id, cwd FROM command WHERE cwd_key = '' AND cwd != '' ORDER BY cwd", .update = "UPDATE command SET cwd_key = ?2 WHERE id = ?1"},
           KeyedColumn{.rows = "SELECT id, workspace_path FROM command WHERE workspace_key = '' AND workspace_path != '' ORDER BY workspace_path", .update = "UPDATE command SET workspace_key = ?2 WHERE id = ?1"},
       };
+
       Transaction transaction{database};
       ds::String<ConcurrentMemory> path{memory};
       ds::String<ConcurrentMemory> key{memory};
@@ -358,7 +360,7 @@ namespace telar::runtime {
         }
       }
 
-      database.execute("UPDATE history_schema SET version = 7 WHERE version < 7");
+      Statement{database, "UPDATE history_schema SET version = 7 WHERE version < 7"}.finish();
       transaction.commit();
     }
 

@@ -146,11 +146,15 @@ namespace telar::gui::application::prompt {
       switch (outcome) {
       case Outcome::run: {
         features::history::HistoryText::validate(text.view(), bracketed);
-        session.runCommand(pane_id, text.view());
         // What the history does not keep, the suggestions do not offer.
         const bool kept = session.configuration.history_filters.allowsPane(text.view(), std::string_view{pane->cwd});
 
-        features::prompt::committed(*line, kept ? text.view() : std::string_view{});
+        session.runCommand(pane_id, text.view());
+        // Sending reaches the session, so the line is found again.
+        if (auto* sent = features::prompt::find(session.prompt_lines, pane_id)) {
+          features::prompt::committed(*sent, kept ? text.view() : std::string_view{});
+        }
+
         if (kept) {
           features::prompt::remember(session.prompt, text.view());
         }
@@ -161,7 +165,10 @@ namespace telar::gui::application::prompt {
         features::history::HistoryText::validate(text.empty() ? std::string_view{" "} : text.view(), false);
         text.push('\r');
         session.input(pane_id, text.view());
-        features::prompt::committed(*line, {});
+        if (auto* sent = features::prompt::find(session.prompt_lines, pane_id)) {
+          features::prompt::committed(*sent, {});
+        }
+
         break;
       case Outcome::bytes:
         session.input(pane_id, text.view());
@@ -354,13 +361,15 @@ namespace telar::gui::application::prompt {
       return;
     }
 
-    // A history that never arrived is asked for again each time a shell is back at its prompt.
-    if (current.phase == ShellPhase::prompt && previous.phase != ShellPhase::prompt && features::prompt::historyWanted(session.prompt)) {
-      requestHistory(session);
-    }
+    const bool back_at_prompt = current.phase == ShellPhase::prompt && previous.phase != ShellPhase::prompt;
 
     if (const auto outcome = features::prompt::follow(*line, previous, current)) {
       deliver(session, pane_id, *outcome);
+    }
+
+    // A history that never arrived is asked for again each time a shell is back at its prompt.
+    if (back_at_prompt && features::prompt::historyWanted(session.prompt)) {
+      requestHistory(session);
     }
   }
 

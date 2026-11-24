@@ -883,8 +883,8 @@ export {
 
       // A completion's words, or a command's spec, for the client that asked.
       void deliverWords(const WordResult& result);
-      // Queues a completion request, failing the client's oldest waiting one when it must make room.
-      void queueWords(ClientSession& client, const WordRequest& request);
+      // Fails the waiting completion request the word service let go to make room, if it did.
+      static void failDropped(ClientSession& client, ds::Option<std::uint64_t> dropped);
 
       // A background worker's reply to `client_id`'s request: history failures become limits, the
       // rest goes to the client, which a failed send drops.

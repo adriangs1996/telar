@@ -312,6 +312,7 @@ namespace telar::gui::features::history {
     } else {
       state_.selection = newer && !page_.rows().empty() ? page_.rows().size() - 1 : 0;
     }
+
     page_request_ = 0;
     ++rows_version_;
     contentChanged();

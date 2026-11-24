@@ -529,7 +529,7 @@ namespace telar::runtime {
 
     // The words after `keyword` when `line` starts with it, as ssh_config reads it: any case, then
     // a blank or `=`; none for another line.
-    ds::Option<std::string_view> sshArguments(std::string_view line, std::string_view keyword) noexcept {
+    tbc::val_a<ds::Option<std::string_view>> sshArguments(tbc::val_a<std::string_view> line, std::string_view keyword) noexcept {
       if (line.size() <= keyword.size() || !asciiStartsWithIgnoreCase(line, keyword)) {
         return ds::none;
       }
@@ -565,6 +565,7 @@ namespace telar::runtime {
     template <typename Add>
     void sshConfig(ConcurrentMemory& memory, int ssh_directory, std::string_view home, const char* name, int depth, std::size_t& budget, Add& add) {
       constexpr int maximum_depth = 16;
+
       if (budget == 0) {
         return;
       }
@@ -598,6 +599,7 @@ namespace telar::runtime {
 
             ::globfree(&found);
           });
+
           return;
         }
 
@@ -615,6 +617,7 @@ namespace telar::runtime {
     template <typename Add>
     void sshHosts(ConcurrentMemory& memory, std::string_view home, Add& add) {
       constexpr std::size_t maximum_files = 256;
+
       if (home.empty() || home.front() != '/') {
         return;
       }
@@ -776,6 +779,7 @@ namespace telar::runtime {
           ds::Array<char, account_bytes> storage{};
           passwd account{};
           passwd* found = nullptr;
+
           if (user.size() >= name.size()) {
             return false;
           }
@@ -826,6 +830,7 @@ namespace telar::runtime {
 
       while (const auto* entry = entries.next()) {
         const std::string_view name{std::data(entry->d_name)};
+
         if (++scanned > WordReader::maximum_entries) {
           break;
         }
@@ -1118,6 +1123,7 @@ namespace telar::runtime {
       queue_.dropWaiting([&](const WordRequest& entry) {
         return entry.client == request.client && entry.request == oldest;
       });
+
       dropped = oldest;
     }
 

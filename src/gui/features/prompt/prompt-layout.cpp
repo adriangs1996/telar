@@ -128,6 +128,7 @@ namespace telar::gui::features::prompt {
       constexpr std::size_t two_bytes = 2;
 
       std::uint32_t character = 0;
+
       if (grapheme.size() == three_bytes && (static_cast<unsigned char>(grapheme[0]) & 0xf0U) == 0xe0U) {
         character = ((static_cast<unsigned char>(grapheme[0]) & 0x0fU) << 12U) | ((static_cast<unsigned char>(grapheme[1]) & 0x3fU) << 6U) | (static_cast<unsigned char>(grapheme[2]) & 0x3fU);
       } else if (grapheme.size() == two_bytes && (static_cast<unsigned char>(grapheme[0]) & 0xe0U) == 0xc0U) {
@@ -204,6 +205,7 @@ namespace telar::gui::features::prompt {
           caret_row = cell.row;
         }
       });
+
       const auto caret = caret_row.valueOr(end.column >= columns ? end.row + 1 : end.row);
 
       first_kept = caret > Layout::kept_rows ? caret - Layout::kept_rows : 0;

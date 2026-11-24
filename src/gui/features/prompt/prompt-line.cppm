@@ -167,10 +167,6 @@ namespace telar::gui::features::prompt {
     // The word the menu completes, as typed so far.
     [[nodiscard]] std::string_view typedWord() const noexcept;
 
-    // The word under the cursor as the shell reads it, quotes and escapes removed; none when the
-    // cursor left the word the menu completes.
-    [[nodiscard]] ds::Option<CompletionContext> menuWord();
-
     // After a key typed or erased in the word: the choices that still start with it. Erasing
     // past where they were offered asks for them again; leaving the word closes the menu.
     Outcome refine(Outcome outcome);
@@ -183,7 +179,8 @@ namespace telar::gui::features::prompt {
 
     // The command `steps` back from the line: this one's own, newest first, then the ones of
     // `history` it did not send, newest first; each once.
-    [[nodiscard]] ds::Option<std::string_view> back(std::size_t steps, History history) const noexcept;
+    // A command of the line's own or of `history`, so the result lends from either.
+    [[nodiscard]] tbc::val_a<ds::Option<std::string_view>> back(std::size_t steps, tbc::val_a<History> history) const noexcept;
 
     tbc::val_a<Editor> editor_;
     tbc::val_a<ds::Vec<ds::String<Memory>, Memory>> recent_;

@@ -1007,9 +1007,11 @@ namespace telar::gui::features::nvim {
     const auto capital = [](char character) {
       return character >= 'A' && character <= 'Z';
     };
+
     const auto lower = [&](char character) {
       return capital(character) ? static_cast<char>(character - 'A' + 'a') : character;
     };
+
     const bool folded = std::ranges::none_of(query, capital);
     const auto rest = line.substr(from);
     const auto found = std::ranges::search(rest, query, [&](char left, char right) {

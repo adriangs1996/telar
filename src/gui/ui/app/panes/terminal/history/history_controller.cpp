@@ -441,6 +441,7 @@ namespace telar::gui::qt {
       interact([&] {
         application::history::refresh(store_.sessionMut());
       });
+
       return;
     }
 

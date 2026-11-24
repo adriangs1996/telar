@@ -96,7 +96,7 @@ namespace telar::gui::qt {
       PartMarks(std::span<const std::uint16_t> marks, std::size_t start, std::size_t end) noexcept {
         for (const auto mark : marks) {
           if (mark >= start && mark < end && count_ < positions_.size()) {
-            positions_.at(count_++) = static_cast<std::uint16_t>(mark - start);
+            positions_.atMut(count_++) = static_cast<std::uint16_t>(mark - start);
           }
         }
       }
@@ -108,7 +108,7 @@ namespace telar::gui::qt {
     private:
       static constexpr std::size_t max_match_positions = 64;
 
-      std::array<std::uint16_t, max_match_positions> positions_{};
+      ds::Array<std::uint16_t, max_match_positions> positions_{};
       std::size_t count_ = 0;
     };
 

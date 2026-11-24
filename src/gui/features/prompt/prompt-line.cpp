@@ -10,6 +10,18 @@ namespace telar::gui::features::prompt {
 
   namespace {
 
+    // The word the menu completes, as the shell reads it now: none when the cursor left it. It
+    // borrows only `memory`, so the menu can change while it is read.
+    tbc::val_a<ds::Option<CompletionContext>> menuContext(tbc::mut_a<Memory> memory, const Editor& editor, const Menu& menu) {
+      const auto& text = editor.text();
+      auto context = completionContext(memory, text.view(), text.cursor(), shell::Syntax{.dialect = menu.dialect});
+      if (!context || context->replace_begin != menu.begin) {
+        return ds::none;
+      }
+
+      return context;
+    }
+
     bool takesSuggestion(const KeyPress& key) noexcept {
       return (key.key == Key::right && !key.modifiers.alt && !key.modifiers.shift) || key.key == Key::end || (key.key == Key::character && key.modifiers.control && (key.character == 'e' || key.character == 'f'));
     }
@@ -208,10 +220,10 @@ namespace telar::gui::features::prompt {
   }
 
   void Line::write(std::string_view command) {
-    auto& text = editor_.textMut();
-
     closeMenu();
     history_index_.reset();
+    auto& text = editor_.textMut();
+
     text.assign(command);
     text.moveTo(text.size());
   }
@@ -252,14 +264,15 @@ namespace telar::gui::features::prompt {
 
     menu_.getMut().whole = menu_->whole && !truncated && menu_->all.size() + paths.size() <= Menu::capacity;
     // Answers to an older word join, narrowed to the word as it is now, as the shell reads it.
-    const auto typed = menuWord();
-    const auto word = typed ? typed->partial.view() : typedWord();
+    // The word is owned, as the menu grows while it is compared.
+    auto typed = menuContext(draft_.memory(), editor_, *menu_);
+    const auto word = typed ? std::move(typed.getMut().partial) : ds::String<Memory>{draft_.memory(), typedWord()};
 
     for (auto& path : paths.viewMut()) {
       if (menu_->all.size() < Menu::capacity && std::ranges::none_of(menu_->all, [&](const Choice& choice) {
             return choice.text == path.text;
           })) {
-        if (path.text.view().starts_with(word)) {
+        if (path.text.view().starts_with(word.view())) {
           menu_.getMut().choices.push(path.clone());
         }
 
@@ -396,7 +409,7 @@ namespace telar::gui::features::prompt {
   }
 
   void Line::accept() {
-    const auto typed = menuWord();
+    const auto typed = menuContext(draft_.memory(), editor_, *menu_);
     const auto& menu = *menu_;
     const auto& choice = menu.choices[menu.selected];
     const auto begin = menu.begin;
@@ -483,7 +496,7 @@ namespace telar::gui::features::prompt {
   }
 
   Outcome Line::refine(Outcome outcome) {
-    const auto typed = menuWord();
+    auto typed = menuContext(draft_.memory(), editor_, *menu_);
     auto& menu = menu_.getMut();
     const auto cursor = editor_.text().cursor();
     if (cursor < menu.begin || !typed) {
@@ -499,11 +512,12 @@ namespace telar::gui::features::prompt {
       return Outcome::complete;
     }
 
-    const auto word = typed->partial.view();
+    // Owned, as the choices are rebuilt while it is compared.
+    const auto word = std::move(typed.getMut().partial);
 
     menu.choices.clear();
     for (const auto& choice : menu.all) {
-      if (choice.text.view().starts_with(word)) {
+      if (choice.text.view().starts_with(word.view())) {
         menu.choices.push(choice.clone());
       }
     }
@@ -516,16 +530,6 @@ namespace telar::gui::features::prompt {
 
     ++revision_;
     return outcome;
-  }
-
-  ds::Option<CompletionContext> Line::menuWord() {
-    const auto& text = editor_.text();
-    auto context = completionContext(draft_.memory(), text.view(), text.cursor(), shell::Syntax{.dialect = menu_->dialect});
-    if (!context || context->replace_begin != menu_->begin) {
-      return ds::none;
-    }
-
-    return context;
   }
 
   Outcome Line::submit(Surface surface, bool incomplete) {
