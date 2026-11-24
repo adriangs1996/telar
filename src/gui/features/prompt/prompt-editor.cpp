@@ -659,6 +659,12 @@ namespace telar::gui::features::prompt {
 
     switch (pending_) {
     case Pending::replace:
+      // A key that types nothing (Backspace, an arrow, Delete) cancels the r.
+      if (key.key != Key::character || key.text.empty()) {
+        reset();
+        return Request::none;
+      }
+
       replaceCharacters(key.text);
       return Request::none;
     case Pending::find:

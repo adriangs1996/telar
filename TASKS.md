@@ -403,7 +403,7 @@ Legend: `[ ]` todo, `[x]` done, `[~]` not a bug / dropped (with reason).
 - [x] **T45 (V31).** Undo grouping: one group per insert, from the operator (`c`, `o`, `s`)
   to Esc; a Backspace inside the insert does not split it (`cwxyz<Esc>u`, `oabc<Esc>u`,
   `iabc<BS>d<Esc>u`).
-- [ ] **T46 (V32).** `r` followed by BS, an arrow or Delete deletes the character: cancel the
+- [x] **T46 (V32).** `r` followed by BS, an arrow or Delete deletes the character: cancel the
   `r` without changes.
 - [ ] **T47 (V33).** Smaller ones: `3.` replaces the original count; `yy`/`Y` keep the
   cursor; `5j` with fewer lines goes to the last line; visual `l` stops at the last

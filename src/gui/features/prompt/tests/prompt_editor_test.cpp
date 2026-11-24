@@ -497,6 +497,21 @@ namespace {
       type(editor, "d\x1bu");
       require(text(editor) == "one two", "a Backspace inside the insert does not split it");
     }
+
+    // r followed by a key that types nothing is cancelled, the text left alone.
+    {
+      Editor editor{Keymap::vim};
+
+      start(editor, "abc");
+      for (const auto key : {Key::backspace, Key::left, Key::delete_forward}) {
+        type(editor, "0r");
+        static_cast<void>(editor.press({.key = key}));
+        require(text(editor) == "abc", "r with a key that types nothing changes nothing");
+      }
+
+      type(editor, "0rx");
+      require(text(editor) == "xbc", "r still replaces with a character");
+    }
   }
 
   void routing() {
