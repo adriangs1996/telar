@@ -93,6 +93,18 @@ namespace telar::gui::features::prompt {
   }
 
   Request Editor::perform(Action action) {
+    // Run as a key is: the column Up and Down keep lasts only as long as they follow each other.
+    vertical_ = false;
+    const auto request = performAction(action);
+
+    if (!vertical_) {
+      goal_column_.reset();
+    }
+
+    return request;
+  }
+
+  Request Editor::performAction(Action action) {
     const auto cursor = text_.cursor();
 
     switch (action) {
@@ -187,7 +199,13 @@ namespace telar::gui::features::prompt {
       record(key);
     }
 
+    vertical_ = false;
     const auto request = dispatch(key);
+
+    // The column Up and Down keep lasts only as long as they follow each other.
+    if (!vertical_) {
+      goal_column_.reset();
+    }
 
     if (repeat_requested_) {
       repeat();
@@ -394,6 +412,7 @@ namespace telar::gui::features::prompt {
 
     move(text_.atColumn({.line_start = target_start, .column = column}), extend);
     goal_column_ = column;
+    vertical_ = true;
     return Request::none;
   }
 

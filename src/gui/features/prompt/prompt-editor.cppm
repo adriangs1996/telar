@@ -72,6 +72,9 @@ namespace telar::gui::features::prompt {
     Request press(const KeyPress& key);
 
   private:
+    // perform's own work, inside the goal column's bookkeeping.
+    Request performAction(Action action);
+
     enum class Pending : std::uint8_t {
       none,
       find,
@@ -303,6 +306,8 @@ namespace telar::gui::features::prompt {
     tbc::val_a<ds::Vec<Recorded, Memory>> recorded_;
     tbc::val_a<ds::Vec<Recorded, Memory>> last_change_;
     ds::Option<std::size_t> goal_column_;
+    // Whether the key or action being handled moved Up or Down, which keeps the goal column.
+    bool vertical_ = false;
     Find last_find_;
     std::size_t count_ = 0;
     std::size_t operator_count_ = 0;

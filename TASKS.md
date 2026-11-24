@@ -414,7 +414,7 @@ Legend: `[ ]` todo, `[x]` done, `[~]` not a bug / dropped (with reason).
 
 ## P2: emacs (expected: what readline does)
 
-- [ ] **T49 (M35).** The goal column survives other motions (`Ctrl-A`, Up, `Ctrl-E`, Down
+- [x] **T49 (M35).** The goal column survives other motions (`Ctrl-A`, Up, `Ctrl-E`, Down
   lands at column 0): reset `goal_column_` on every action that is not Up or Down.
 - [ ] **T50 (M36).** Consecutive kills do not accumulate (`Ctrl-W Ctrl-W Ctrl-Y` restores
   one word): when the previous action was a kill, prepend (backward kills) or append

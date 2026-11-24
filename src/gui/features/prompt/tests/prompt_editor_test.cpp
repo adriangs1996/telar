@@ -221,6 +221,19 @@ namespace {
     require(text(editor) == "echo two", "Up after a paste starts from the newest");
   }
 
+  // The column Up and Down keep is forgotten by any other motion, as readline's is.
+  void emacsGoalColumn() {
+    Editor editor;
+
+    editor.write("abcdef\nabcdef\nab");
+    control(editor, 'a');
+    static_cast<void>(editor.press({.key = Key::up}));
+    require(cursor(editor) == 7, "Up keeps the column");
+    control(editor, 'e');
+    static_cast<void>(editor.press({.key = Key::down}));
+    require(cursor(editor) == 16, "after Ctrl-E, Down goes from the line's end, not the column before");
+  }
+
   void emacs() {
     Editor editor;
 
@@ -787,6 +800,7 @@ namespace {
   const telar::testing::Case case_write_starts_history_over{"prompt_editor.write_starts_history_over", writeStartsHistoryOver};
   const telar::testing::Case case_grapheme_motions{"prompt_editor.grapheme_motions", graphemeMotions};
   const telar::testing::Case case_vim_fixes{"prompt_editor.vim_fixes", vimFixes};
+  const telar::testing::Case case_emacs_goal_column{"prompt_editor.emacs_goal_column", emacsGoalColumn};
   const telar::testing::Case case_memory_returns{"prompt_editor.memory_returns", memoryReturns};
   const telar::testing::Case case_layout_and_styles{"prompt_editor.layout_and_styles", layoutAndStyles};
   const telar::testing::Case case_routing{"prompt_editor.routing", routing};
