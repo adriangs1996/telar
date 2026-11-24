@@ -133,11 +133,41 @@ namespace telar::gui::features::explorer {
       return offset;
     }
 
+    constexpr std::uint32_t heightOf(RowKind kind) noexcept {
+      switch (kind) {
+      case RowKind::entry:
+      case RowKind::added:
+      case RowKind::change:
+      case RowKind::pane:
+      case RowKind::match:
+        return RowHeights::entry;
+      case RowKind::header:
+        return RowHeights::header;
+      case RowKind::note:
+        return RowHeights::note;
+      case RowKind::diff:
+        return RowHeights::diff;
+      }
+
+      return RowHeights::entry;
+    }
+
+    // Where the row after `row` starts.
+    constexpr std::uint32_t below(const Row& row) noexcept {
+      return row.offset + heightOf(row.kind);
+    }
+
+    // Adds `row` to `window` below its last one, where that one ends.
+    void place(Window& window, Row row) {
+      row.offset = window.rows.empty() ? 0 : below(window.rows[window.rows.size() - 1]);
+      window.rows.push(row);
+    }
+
     // A row of `window` that shows `text`: `row` says its kind, its depth and what it stands for.
     void pushText(Window& window, Row row, std::string_view text) {
       row.text = keepText(window, text);
       row.text_size = static_cast<std::uint32_t>(text.size());
-      window.rows.push(row);
+      place(window, row);
     }
 
     // The lines of a file's diff, below its row.
@@ -265,15 +295,18 @@ namespace telar::gui::features::explorer {
 
       const bool expanded = entry.directory && holds(window.expanded, child.view());
 
-      window.rows.push({
-          .kind = RowKind::entry,
-          .depth = level.depth,
-          .directory = entry.directory,
-          .expanded = expanded,
-          .holder = level.holder,
-          .entry = index,
-          .share = static_cast<std::uint16_t>(entry.size * whole / level.largest),
-      });
+      place(
+          window,
+          {
+              .kind = RowKind::entry,
+              .depth = level.depth,
+              .directory = entry.directory,
+              .expanded = expanded,
+              .share = static_cast<std::uint16_t>(entry.size * whole / level.largest),
+              .holder = level.holder,
+              .entry = index,
+          }
+      );
 
       if (!entry.directory) {
         pushUnfolded(window, build.state, child.view(), static_cast<std::uint8_t>(level.depth + 1));
@@ -607,17 +640,74 @@ namespace telar::gui::features::explorer {
       }
     }
 
-    // Moves what the window shows so that it holds the selection.
-    void reveal(Window& window) noexcept {
-      const auto page = std::max<std::size_t>(1, window.page);
+    // The first row `window` may show with the row `last` whole in its room: as far above it as
+    // fits. It walks the rows of one page, however many the window has.
+    std::size_t topFor(const Window& window, std::size_t last) noexcept {
+      const auto end = below(window.rows[last]);
+      auto top = last;
 
-      if (window.cursor < window.top) {
-        window.top = window.cursor;
-      } else if (window.cursor >= window.top + page) {
-        window.top = window.cursor + 1 - page;
+      while (top > 0 && end - window.rows[top - 1].offset <= window.room) {
+        --top;
       }
 
-      window.top = std::min(window.top, window.rows.size() > page ? window.rows.size() - page : 0);
+      return top;
+    }
+
+    // The rows of `window` that fit whole in its room from the first it shows: one at least.
+    std::uint16_t fitting(const Window& window) noexcept {
+      const auto start = window.rows[window.top].offset;
+      const auto most = std::min<std::size_t>(window.rows.size(), window.top + std::numeric_limits<std::uint16_t>::max());
+      auto end = window.top + 1;
+
+      while (end < most && below(window.rows[end]) - start <= window.room) {
+        ++end;
+      }
+
+      return static_cast<std::uint16_t>(end - window.top);
+    }
+
+    // Moves what the window shows so that it holds the selection, whole, and ends where its
+    // rows end when they fill it.
+    void reveal(Window& window) noexcept {
+      if (window.rows.empty()) {
+        window.top = 0;
+        window.page = static_cast<std::uint16_t>(std::clamp<std::uint32_t>(window.room / RowHeights::entry, 1, std::numeric_limits<std::uint16_t>::max()));
+        return;
+      }
+
+      const auto last = window.rows.size() - 1;
+      const auto cursor = std::min(window.cursor, last);
+      const auto before = window.top;
+
+      window.top = std::min(window.top, last);
+      if (cursor < window.top) {
+        window.top = cursor;
+        // The heading of its group comes with the first row below it.
+        while (window.top > 0 && window.rows[window.top - 1].kind == RowKind::header) {
+          --window.top;
+        }
+      } else {
+        // What the list says below its last entry comes with that entry.
+        auto shown = cursor;
+
+        while (shown < last && window.rows[shown + 1].kind == RowKind::note) {
+          ++shown;
+        }
+
+        if (below(window.rows[shown]) - window.rows[window.top].offset > window.room) {
+          window.top = std::min(topFor(window, shown), cursor);
+        }
+      }
+
+      // Room left below the last row: what shows starts as far up as fills it.
+      if (below(window.rows[last]) - window.rows[window.top].offset < window.room) {
+        window.top = std::min(window.top, topFor(window, last));
+      }
+
+      // A selection that moves inside what shows leaves the rows that fit as they were.
+      if (window.top != before || window.page == 0) {
+        window.page = fitting(window);
+      }
     }
 
     // Puts the selection on `index` and remembers its path.
@@ -774,6 +864,8 @@ namespace telar::gui::features::explorer {
       const auto before = window.cursor;
 
       window.rows.clear();
+      // The rows that fit are counted again once the new ones are laid.
+      window.page = 0;
       window.text.clear();
       window.picked.clear();
       window.bytes = 0;
@@ -1157,6 +1249,8 @@ namespace telar::gui::features::explorer {
 
       changeMachine(view.folds, window, machine);
       window.rows.clear();
+      // The rows that fit are counted again once the new ones are laid.
+      window.page = 0;
       window.text.clear();
       window.picked.clear();
       window.built = Window::unbuilt;
@@ -2379,6 +2473,7 @@ namespace telar::gui::features::explorer {
       window.sort = from.sort;
       window.selected.assign(from.selected.view());
       window.page = from.page;
+      window.room = from.room;
       for (const auto& path : from.expanded) {
         window.expanded.push(Text{memory, path.view()});
       }
@@ -5772,11 +5867,16 @@ namespace telar::gui::features::explorer {
     return false;
   }
 
-  void resize(View& view, const WindowRows& shown) noexcept {
+  std::uint32_t tall(RowKind kind) noexcept {
+    return heightOf(kind);
+  }
+
+  void resize(View& view, const WindowRoom& shown) noexcept {
     if (shown.window < view.windows.size()) {
       auto& resized = view.windows.atMut(shown.window).getMut();
 
-      resized.page = static_cast<std::uint16_t>(std::clamp<std::int64_t>(shown.count, 1, std::numeric_limits<std::uint16_t>::max()));
+      resized.room = std::max(shown.room, RowHeights::entry);
+      resized.page = 0;
       reveal(resized);
       ++view.revision;
     }
@@ -5788,10 +5888,15 @@ namespace telar::gui::features::explorer {
     }
 
     auto& scrolled = view.windows.atMut(moved.window).getMut();
-    const auto page = std::max<std::size_t>(1, scrolled.page);
-    const auto last = static_cast<std::int64_t>(scrolled.rows.size() > page ? scrolled.rows.size() - page : 0);
+
+    if (scrolled.rows.empty()) {
+      return;
+    }
+
+    const auto last = static_cast<std::int64_t>(topFor(scrolled, scrolled.rows.size() - 1));
 
     scrolled.top = static_cast<std::size_t>(std::clamp<std::int64_t>(static_cast<std::int64_t>(scrolled.top) + moved.count, 0, last));
+    scrolled.page = fitting(scrolled);
     ++view.revision;
   }
 

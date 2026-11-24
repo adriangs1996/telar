@@ -396,6 +396,11 @@ namespace telar::gui::qt {
           {QStringLiteral("top"), static_cast<int>(window.top)},
           {QStringLiteral("rows"), static_cast<int>(window.rows.size())},
           {QStringLiteral("page"), static_cast<int>(window.page)},
+          // Where the list stands in its rows, in hundredths of one of the design's pixels: how
+          // tall they all are, how much of them is above the first one shown, and its own room.
+          {QStringLiteral("extent"), window.rows.empty() ? 0 : static_cast<int>(window.rows[window.rows.size() - 1].offset + explorer::tall(window.rows[window.rows.size() - 1].kind))},
+          {QStringLiteral("above"), window.top < window.rows.size() ? static_cast<int>(window.rows[window.top].offset) : 0},
+          {QStringLiteral("room"), static_cast<int>(window.room)},
           {QStringLiteral("lens"), static_cast<int>(window.lens)},
       });
     }
@@ -743,7 +748,13 @@ namespace telar::gui::qt {
 
         records.reserve(static_cast<qsizetype>(end - std::min(window.top, end)));
         for (auto row = window.top; row < end; ++row) {
-          records.push_back(record(cache, context, {.window = index, .row = row}));
+          auto drawn = record(cache, context, {.window = index, .row = row});
+
+          // Where the row starts below the first one shown, and how tall it is, in hundredths of
+          // one of the design's pixels.
+          drawn.insert(QStringLiteral("offset"), static_cast<int>(window.rows[row].offset - window.rows[window.top].offset));
+          drawn.insert(QStringLiteral("tall"), static_cast<int>(explorer::tall(window.rows[row].kind)));
+          records.push_back(std::move(drawn));
         }
       }
 
@@ -1438,15 +1449,15 @@ namespace telar::gui::qt {
     finish(Effect::none);
   }
 
-  void ExplorerController::setViewport(int window, int rows) {
-    // More rows than any screen shows.
-    constexpr int most_rows = 1000;
+  void ExplorerController::setViewport(int window, int room) {
+    // Taller than the list of any screen, in hundredths of one of the design's pixels.
+    constexpr int most_room = 4'000'000;
 
-    if (window < 0 || static_cast<std::size_t>(window) >= view_.windows.size() || std::cmp_equal(rows, view_.windows[static_cast<std::size_t>(window)]->page)) {
+    if (window < 0 || static_cast<std::size_t>(window) >= view_.windows.size() || std::cmp_equal(room, view_.windows[static_cast<std::size_t>(window)]->room)) {
       return;
     }
 
-    explorer::resize(view_, {.window = static_cast<std::size_t>(window), .count = std::clamp(rows, 1, most_rows)});
+    explorer::resize(view_, {.window = static_cast<std::size_t>(window), .room = static_cast<std::uint32_t>(std::clamp(room, 1, most_room))});
     publish();
     emit changed();
   }

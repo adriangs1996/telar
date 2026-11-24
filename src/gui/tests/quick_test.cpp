@@ -2083,12 +2083,16 @@ return {api_version = 2, client = {
 
       QVERIFY(overlay != nullptr && rows_area != nullptr);
 
+      // The middle of a row, where the list draws it: each says where it starts below the first
+      // one shown and how tall it is, in hundredths of one of the design's pixels.
       const auto over = [&](const QString& name) {
         constexpr qreal rows_inset = 4;
-        constexpr qreal half_row = 0.5;
-        const auto shown_row = listed(name) - window().value(QStringLiteral("top")).toInt();
+        constexpr qreal hundredths = 100;
+        constexpr qreal half = 2;
+        const auto shown_row = record(listed(name) - window().value(QStringLiteral("top")).toInt());
+        const auto middle = (shown_row.value(QStringLiteral("offset")).toReal() + (shown_row.value(QStringLiteral("tall")).toReal() / half)) / hundredths;
 
-        return rows_area->mapToScene({rows_area->width() / 3, (rows_inset * overlay->property("ratio").toReal()) + ((shown_row + half_row) * overlay->property("rowHeight").toReal())}).toPoint();
+        return rows_area->mapToScene({rows_area->width() / 3, (rows_inset + middle) * overlay->property("ratio").toReal()}).toPoint();
       };
 
       // A click on the row that is selected folds its directory, and one more unfolds it; far
@@ -2230,6 +2234,50 @@ return {api_version = 2, client = {
       QTRY_VERIFY_WITH_TIMEOUT(!named(QStringLiteral("usage.md")).isEmpty(), runtime_wait_ms);
       QCOMPARE(record(0).value(QStringLiteral("kind")).toString(), QStringLiteral("header"));
       shoot(QStringLiteral("explorer-changes"));
+      // The rows are laid by their own heights: a heading is taller than a file and a line of a
+      // diff shorter. The pointer finds a row where it is drawn, below a diff that is unfolded.
+      {
+        constexpr int entry_tall = 2200;
+        constexpr int header_tall = 2575;
+        constexpr int diff_tall = 1705;
+        const auto shown = [&](const QString& name) {
+          return listed(name) - window().value(QStringLiteral("top")).toInt();
+        };
+
+        const auto before = selected();
+
+        QCOMPARE(record(0).value(QStringLiteral("tall")).toInt(), header_tall);
+        QCOMPARE(record(1).value(QStringLiteral("offset")).toInt(), header_tall);
+        QCOMPARE(record(1).value(QStringLiteral("tall")).toInt(), entry_tall);
+        QTest::mouseClick(window_, Qt::LeftButton, Qt::NoModifier, over(QStringLiteral("usage.md")));
+        QTRY_COMPARE(selected(), QStringLiteral("usage.md"));
+        press(QStringLiteral("="));
+        QTRY_COMPARE_WITH_TIMEOUT(record(shown(QStringLiteral("usage.md")) + 1).value(QStringLiteral("kind")).toString(), QStringLiteral("diff"), runtime_wait_ms);
+
+        const auto first_line = shown(QStringLiteral("usage.md")) + 1;
+        auto lines = 0;
+
+        while (record(first_line + lines).value(QStringLiteral("kind")).toString() == QStringLiteral("diff")) {
+          QCOMPARE(record(first_line + lines).value(QStringLiteral("tall")).toInt(), diff_tall);
+          ++lines;
+        }
+
+        QVERIFY(lines > 3);
+        QCOMPARE(record(first_line + lines).value(QStringLiteral("offset")).toInt(), record(first_line).value(QStringLiteral("offset")).toInt() + (lines * diff_tall));
+        shoot(QStringLiteral("explorer-diff"));
+        QTest::qWait(apart_ms);
+        QTest::mouseClick(window_, Qt::LeftButton, Qt::NoModifier, over(QStringLiteral("notes.lua")));
+        QTRY_COMPARE(selected(), QStringLiteral("notes.lua"));
+        QTest::qWait(apart_ms);
+        QTest::mouseClick(window_, Qt::LeftButton, Qt::NoModifier, over(QStringLiteral("usage.md")));
+        QTRY_COMPARE(selected(), QStringLiteral("usage.md"));
+        press(QStringLiteral("="));
+        QTRY_VERIFY(record(shown(QStringLiteral("usage.md")) + 1).value(QStringLiteral("kind")).toString() != QStringLiteral("diff"));
+        QTest::qWait(apart_ms);
+        QTest::mouseClick(window_, Qt::LeftButton, Qt::NoModifier, over(before));
+        QTRY_COMPARE(selected(), before);
+      }
+
       // The lens of touches lists the file the agent touched, with how and who.
       explorer->run(QStringLiteral("touched"));
       QTRY_VERIFY_WITH_TIMEOUT(!named(QStringLiteral("usage.md")).isEmpty(), runtime_wait_ms);
@@ -2238,6 +2286,56 @@ return {api_version = 2, client = {
       QVERIFY(!named(QStringLiteral("usage.md")).value(QStringLiteral("ago")).toString().isEmpty());
       shoot(QStringLiteral("explorer-touched"));
       explorer->run(QStringLiteral("tree"));
+      // The tree ends with what its root leaves out, on a row taller than a file's, and the list
+      // ends where that row ends.
+      {
+        constexpr int note_tall = 2850;
+        const auto before = selected();
+
+        press(QStringLiteral("G"));
+
+        const auto last = record(explorer->rows(0)->rowCount() - 1);
+
+        QCOMPARE(last.value(QStringLiteral("kind")).toString(), QStringLiteral("note"));
+        QCOMPARE(last.value(QStringLiteral("tall")).toInt(), note_tall);
+        QVERIFY(last.value(QStringLiteral("offset")).toInt() + note_tall <= window().value(QStringLiteral("room")).toInt());
+        QCOMPARE(window().value(QStringLiteral("extent")).toInt() - window().value(QStringLiteral("above")).toInt(), last.value(QStringLiteral("offset")).toInt() + note_tall);
+        shoot(QStringLiteral("explorer-end"));
+
+        // In a window too short for it, the preview of a file's text is reached with the wheel,
+        // and another selection starts at its top.
+        {
+          constexpr int short_height = 560;
+          constexpr int wheel_notch = 120;
+          const auto full = window_->size();
+          const auto room = window().value(QStringLiteral("room")).toInt();
+          const auto* preview = test::visualItems(*window_->contentItem(), QStringLiteral("explorerPreview")).value(0);
+
+          QVERIFY(preview != nullptr);
+          QCOMPARE(preview->property("contentY").toReal(), 0.0);
+          window_->resize(full.width(), short_height);
+          QTRY_VERIFY(preview->property("contentHeight").toReal() > preview->height());
+
+          const auto place = preview->mapToScene({preview->width() / 2, preview->height() / 2});
+          QWheelEvent wheel{place, window_->mapToGlobal(place.toPoint()), {}, {0, -wheel_notch}, Qt::NoButton, Qt::NoModifier, Qt::NoScrollPhase, false};
+
+          QCoreApplication::sendEvent(window_, &wheel);
+          QTRY_VERIFY(preview->property("contentY").toReal() > 0);
+          shoot(QStringLiteral("explorer-preview-scrolled"));
+          press(QStringLiteral("k"));
+          QTRY_COMPARE(preview->property("contentY").toReal(), 0.0);
+          window_->resize(full);
+          QTRY_COMPARE(window().value(QStringLiteral("room")).toInt(), room);
+        }
+
+        press(QStringLiteral("gg"));
+        for (int step = 0; step < 60 && selected() != before; ++step) {
+          press(QStringLiteral("j"));
+        }
+
+        QCOMPARE(selected(), before);
+      }
+
       // The filter asks the runtime for every path below the root: a file of a directory the
       // window never unfolded shows, with the path that leads to it.
       press(QStringLiteral("/"));

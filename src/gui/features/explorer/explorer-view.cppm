@@ -225,6 +225,17 @@ export namespace telar::gui::features::explorer {
     match,
   };
 
+  // How tall a row is, in hundredths of one of the design's pixels: the list is laid by these and
+  // the window scales them to its own. An entry, a heading, a note of the list, a line of a diff.
+  struct RowHeights {
+    static constexpr std::uint32_t entry = 2200;
+    static constexpr std::uint32_t header = 2575;
+    static constexpr std::uint32_t note = 2850;
+    static constexpr std::uint32_t diff = 1705;
+  };
+
+  std::uint32_t tall(RowKind kind) noexcept;
+
   enum class DiffTone : std::uint8_t {
     context,
     added,
@@ -241,6 +252,8 @@ export namespace telar::gui::features::explorer {
     bool directory = false;
     bool expanded = false;
     DiffTone tone = DiffTone::context;
+    // An entry's size against the largest beside it, in thousandths.
+    std::uint16_t share = 0;
     // An entry: the directory of the machine's cache that holds it, and its place there.
     std::uint32_t holder = 0;
     std::uint32_t entry = 0;
@@ -249,8 +262,8 @@ export namespace telar::gui::features::explorer {
     std::uint32_t text = 0;
     std::uint32_t text_size = 0;
     std::uint32_t item = 0;
-    // An entry's size against the largest beside it, in thousandths.
-    std::uint16_t share = 0;
+    // Where it starts below the first row of its window, in the unit of `RowHeights`.
+    std::uint32_t offset = 0;
   };
 
   enum class EditKind : std::uint8_t {
@@ -525,7 +538,8 @@ export namespace telar::gui::features::explorer {
     ds::Vec<char, Memory> text;
     // The row selected, and its path, which a new listing finds it by.
     std::size_t cursor = 0;
-    // The first row the window shows: it draws `page` rows from there.
+    // The first row the window shows: it draws `page` rows from there, the ones that fit whole
+    // in `room`.
     std::size_t top = 0;
     ds::String<Memory> selected;
     // A path the selection goes to once its directory is listed: where `]a` or `]c` is headed.
@@ -545,8 +559,10 @@ export namespace telar::gui::features::explorer {
     std::uint64_t bytes = 0;
     // The changed paths of the repository below the root: what the lens of changes counts.
     std::uint32_t changes = 0;
-    // The rows that fit, for half a page.
+    // The rows that fit from `top`, for half a page.
     std::uint16_t page = ViewLimits::page;
+    // How tall its list is, in the unit of `RowHeights`.
+    std::uint32_t room = ViewLimits::page * RowHeights::entry;
     // Whether the root's listing is yet to arrive.
     bool loading = false;
     // Whether the rows are what the runtime found for the filter, not the tree.
@@ -841,10 +857,16 @@ export namespace telar::gui::features::explorer {
     bool copy = false;
   };
 
-  // Rows of a window, counted: how many it shows, or by how many the wheel moves what it shows.
+  // Rows of a window, counted: by how many the wheel moves what it shows.
   struct WindowRows {
     std::size_t window = 0;
     std::int64_t count = 0;
+  };
+
+  // How tall the list of a window is, in the unit of `RowHeights`.
+  struct WindowRoom {
+    std::size_t window = 0;
+    std::uint32_t room = 0;
   };
 
   // The rows a command acts on: the visual selection, else the ones picked, else the selected one

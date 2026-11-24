@@ -145,8 +145,9 @@ export namespace telar::gui::features::explorer {
   // that side, if there is one, takes the keys.
   bool toward(View& view, Side side) noexcept;
 
-  // A window shows `rows` rows; and the wheel moves what it shows by `rows` rows.
-  void resize(View& view, const WindowRows& shown) noexcept;
+  // The list of a window is `room` tall, which says the rows it shows; and the wheel moves what
+  // it shows by `rows` rows.
+  void resize(View& view, const WindowRoom& shown) noexcept;
   void scroll(View& view, const WindowRows& moved) noexcept;
 
   // The runtime of `machine` ended a plan, an undo or a commit: what the status line says of it,

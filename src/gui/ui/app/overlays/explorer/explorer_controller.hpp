@@ -160,8 +160,9 @@ namespace telar::gui::qt {
     Q_INVOKABLE void dropOnPane(qulonglong pane);
     // A press in it asks for the keys: as a pane, its pane takes the focus.
     Q_INVOKABLE void claimFocus();
-    // A window shows `rows` rows; the wheel moves what it shows.
-    Q_INVOKABLE void setViewport(int window, int rows);
+    // The list of a window is `room` tall, in hundredths of one of the design's pixels; the wheel
+    // moves what it shows.
+    Q_INVOKABLE void setViewport(int window, int room);
     Q_INVOKABLE void scroll(int window, int rows);
     // Types the keys of a hint, as a click on it asks.
     Q_INVOKABLE void type(const QString& keys);

@@ -219,13 +219,24 @@ FocusScope {
     visible: controller.showing
     z: 40
 
-    // Where the row `index` of a window's list starts, and the row a place in the list is in.
-    function rowY(index) {
-        return Math.round(listPadding + index * rowPitch);
+    // Where a row is drawn that starts `offset` below the first one its list shows. `offset` is
+    // in hundredths of one of the design's pixels, as the rows say theirs; a list of entries
+    // alone falls on the pitch of a row, to the pixel.
+    function rowTop(offset) {
+        return Math.round(listPadding + offset / 2200 * rowPitch);
     }
 
-    function rowAt(y) {
-        return Math.floor((y - listPadding) / rowPitch);
+    // Where the row `place` of those a window shows starts in its list, and where it ends.
+    function placeTop(window, place) {
+        const item = panes.itemAt(window)?.rowItem(place) ?? null;
+
+        return item ? item.y : rowTop(place * 2200);
+    }
+
+    function placeBottom(window, place) {
+        const item = panes.itemAt(window)?.rowItem(place) ?? null;
+
+        return item ? item.y + item.height : rowTop((place + 1) * 2200);
     }
 
     // `grid` at `factor` of its size. A cell is a whole number of the screen's pixels, as the text
@@ -297,6 +308,21 @@ FocusScope {
         return [text.slice(0, cut), rest.length <= cells ? rest : rest.slice(0, cells - 1) + "…"];
     }
 
+    // `text` broken into the lines `width` holds in `grid`, at any letter, as the design breaks a
+    // path of the plan. A path longer than `most` lines ends in an ellipsis there.
+    function broken(text, width, grid, most) {
+        const cells = Math.max(1, Math.floor(width / Math.max(1, grid.cellWidth ?? 8)));
+        const letters = Array.from(text);
+        const lines = [];
+
+        for (let start = 0; start < letters.length && lines.length < most; start += cells)
+            lines.push(letters.slice(start, start + cells).join(""));
+        if (letters.length > most * cells)
+            lines[most - 1] = lines[most - 1].slice(0, -1) + "…";
+
+        return lines.length > 0 ? lines : [""];
+    }
+
     // The window and the row of its listing under a point of the explorer; none outside the rows
     // of every window, and row -1 below the last one.
     function rowsAt(x, y) {
@@ -309,7 +335,7 @@ FocusScope {
             if (point.x < 0 || point.y < 0 || point.x >= pane.rowsArea.width || point.y >= pane.rowsArea.height)
                 continue;
 
-            const row = pane.modelData.top + rowAt(point.y);
+            const row = pane.modelData.top + pane.rowAt(point.y);
 
             return {window: index, row: row >= 0 && row < pane.modelData.rows ? row : -1};
         }
@@ -734,7 +760,9 @@ FocusScope {
                 readonly property bool sideBySide: root.controller.sideBySide
                 readonly property real room: body.width - root.previewWidth
                 readonly property bool current: modelData.current && root.active
-                readonly property int visibleRows: Math.max(1, Math.floor((list.height - root.listPadding) / root.rowPitch))
+                // How tall the list is, in hundredths of one of the design's pixels: the rows that
+                // fit in it are the explorer's to say, since they are not all as tall.
+                readonly property int listRoom: Math.max(2200, Math.round((list.height - root.listPadding) / root.ratio * 100))
                 readonly property Item rowsArea: list
 
                 x: sideBySide ? Math.round(index * room / count) : 0
@@ -744,8 +772,25 @@ FocusScope {
                 clip: true
 
                 // Told once the frame that measured it ends, not while it is being laid out.
-                onVisibleRowsChanged: Qt.callLater(root.controller.setViewport, index, visibleRows)
-                Component.onCompleted: Qt.callLater(root.controller.setViewport, index, visibleRows)
+                onListRoomChanged: Qt.callLater(root.controller.setViewport, index, listRoom)
+                Component.onCompleted: Qt.callLater(root.controller.setViewport, index, listRoom)
+
+                // The row of those shown that a place down the list is in: the first for one
+                // above them all, and one past the last for one below them.
+                function rowAt(y) {
+                    for (let place = 0; place < shownRows.count; ++place) {
+                        const item = shownRows.itemAt(place);
+
+                        if (item && y < item.y + item.height)
+                            return place;
+                    }
+
+                    return shownRows.count;
+                }
+
+                function rowItem(place) {
+                    return place >= 0 && place < shownRows.count ? shownRows.itemAt(place) : null;
+                }
 
                 // Between two windows.
                 Rectangle {
@@ -978,6 +1023,7 @@ FocusScope {
                     clip: true
 
                     Repeater {
+                        id: shownRows
                         model: root.controller.rows(pane.index)
 
                         delegate: Item {
@@ -992,9 +1038,9 @@ FocusScope {
                             readonly property string hit: record.hit ?? ""
                             readonly property color nameColor: record.removed ? root.colors.red : record.added ? root.colors.green : record.renamed ? root.changed : record.ignored ? root.colors.overlay1 : record.directory ? root.colors.accent : root.colors.text
 
-                            y: root.rowY(index)
+                            y: root.rowTop(record.offset ?? index * 2200)
                             width: list.width - (scrollbar.visible ? scrollbar.width : 0)
-                            height: root.rowY(index + 1) - y
+                            height: root.rowTop((record.offset ?? index * 2200) + (record.tall ?? 2200)) - y
 
                             // The row a name is being typed on says how deep it is.
                             Binding {
@@ -1363,7 +1409,8 @@ FocusScope {
                             // The heading of a group of the list, in capitals at the list's edge.
                             Heading {
                                 x: root.gutter
-                                y: Math.round(4.25 * root.ratio)
+                                // Eight of the design's pixels above its line and two below.
+                                y: Math.round(8 * root.ratio)
                                 height: Math.round(15.75 * root.ratio)
                                 visible: row.record.kind === "header"
                                 text: row.record.kind === "header" ? (row.record.name ?? "").toUpperCase() : ""
@@ -1435,7 +1482,7 @@ FocusScope {
                         property bool gone: false
 
                         function rowOf(mouse) {
-                            return pane.modelData.top + root.rowAt(mouse.y);
+                            return pane.modelData.top + pane.rowAt(mouse.y);
                         }
 
                         onPressed: mouse => {
@@ -1464,7 +1511,7 @@ FocusScope {
                         }
                         onPositionChanged: mouse => {
                             root.hoverWindow = pane.index;
-                            root.hoverRow = root.rowAt(mouse.y);
+                            root.hoverRow = pane.rowAt(mouse.y);
                             if ((mouse.buttons & Qt.LeftButton) === 0 || pressedRow < 0)
                                 return;
 
@@ -1531,7 +1578,9 @@ FocusScope {
                     // wide as the design's, and in it the part that shows.
                     Rectangle {
                         id: scrollbar
-                        readonly property real share: pane.modelData.rows > 0 ? Math.min(1, pane.modelData.page / pane.modelData.rows) : 1
+                        // By how tall the rows are, not by how many: they are not all as tall.
+                        readonly property real extent: pane.modelData.extent ?? 0
+                        readonly property real share: extent > 0 ? Math.min(1, (pane.modelData.room ?? 0) / extent) : 1
 
                         x: parent.width - width
                         width: root.scrollTrack
@@ -1541,7 +1590,7 @@ FocusScope {
 
                         Rectangle {
                             x: Math.round((parent.width - width) / 2)
-                            y: 4 * root.ratio + (pane.modelData.rows > 0 ? (parent.height - 8 * root.ratio) * pane.modelData.top / pane.modelData.rows : 0)
+                            y: 4 * root.ratio + (scrollbar.extent > 0 ? (parent.height - 8 * root.ratio) * (pane.modelData.above ?? 0) / scrollbar.extent : 0)
                             width: Math.round(6.4 * root.ratio)
                             height: Math.max(16 * root.ratio, (parent.height - 8 * root.ratio) * scrollbar.share)
                             radius: width / 2
@@ -1734,402 +1783,439 @@ FocusScope {
                 color: root.colors.surface1
             }
 
-            Column {
-                x: 12 * root.ratio
-                y: 10 * root.ratio
-                width: parent.width - 24 * root.ratio
-                spacing: 10 * root.ratio
-                visible: root.preview.shown ?? false
+            // What does not fit is reached with the wheel; another selection starts at its top.
+            Flickable {
+                id: previewBody
+                objectName: "explorerPreview"
+                readonly property string shownPath: root.preview.path ?? ""
 
-                Item {
-                    width: parent.width
-                    height: Math.round((root.grid.cellHeight ?? 16) + 4 * root.ratio)
+                anchors.fill: parent
+                contentWidth: width
+                contentHeight: previewColumn.height + 20 * root.ratio
+                boundsBehavior: Flickable.StopAtBounds
+                interactive: contentHeight > height
+                clip: true
+                onShownPathChanged: contentY = 0
+                onContentHeightChanged: contentY = Math.max(0, Math.min(contentY, contentHeight - height))
 
-                    ChromeIcon {
-                        id: previewIcon
-                        y: Math.round((parent.height - height) / 2)
-                        width: (root.preview.icon ?? "").length > 0 ? Math.round((root.grid.cellHeight ?? 16) * 1.05) : 0
-                        height: Math.round((root.grid.cellHeight ?? 16) * 1.05)
-                        visible: width > 0
-                        glyph: root.preview.icon ?? ""
-                        pixelSize: width
-                        color: root.colors[root.preview.iconTone ?? "subtext0"] ?? root.colors.subtext0
+                Column {
+                    id: previewColumn
+                    x: 12 * root.ratio
+                    y: 10 * root.ratio
+                    width: previewBody.width - 24 * root.ratio
+                    spacing: 10 * root.ratio
+                    visible: root.preview.shown ?? false
+
+                    Item {
+                        width: parent.width
+                        height: Math.round((root.grid.cellHeight ?? 16) + 4 * root.ratio)
+
+                        ChromeIcon {
+                            id: previewIcon
+                            y: Math.round((parent.height - height) / 2)
+                            width: (root.preview.icon ?? "").length > 0 ? Math.round((root.grid.cellHeight ?? 16) * 1.05) : 0
+                            height: Math.round((root.grid.cellHeight ?? 16) * 1.05)
+                            visible: width > 0
+                            glyph: root.preview.icon ?? ""
+                            pixelSize: width
+                            color: root.colors[root.preview.iconTone ?? "subtext0"] ?? root.colors.subtext0
+                        }
+
+                        CellText {
+                            x: previewIcon.visible ? previewIcon.width + 6 * root.ratio : 0
+                            width: parent.width - x
+                            height: parent.height
+                            text: (root.preview.name ?? "") + (root.preview.directory ? "/" : "")
+                            grid: root.titleGrid
+                            color: root.colors.text
+                            // The design's weight is between the two the terminal's font has here;
+                            // the heavier is the nearer.
+                            bold: true
+                            clip: true
+                        }
                     }
 
                     CellText {
-                        x: previewIcon.visible ? previewIcon.width + 6 * root.ratio : 0
-                        width: parent.width - x
-                        height: parent.height
-                        text: (root.preview.name ?? "") + (root.preview.directory ? "/" : "")
-                        grid: root.titleGrid
-                        color: root.colors.text
-                        // The design's weight is between the two the terminal's font has here;
-                        // the heavier is the nearer.
-                        bold: true
+                        width: parent.width
+                        height: Math.round(root.tinyGrid.cellHeight ?? 14)
+                        text: root.tail(root.preview.path ?? "", width, root.tinyGrid)
+                        grid: root.tinyGrid
+                        color: root.colors.overlay1
                         clip: true
                     }
-                }
 
-                CellText {
-                    width: parent.width
-                    height: Math.round(root.tinyGrid.cellHeight ?? 14)
-                    text: root.tail(root.preview.path ?? "", width, root.tinyGrid)
-                    grid: root.tinyGrid
-                    color: root.colors.overlay1
-                    clip: true
-                }
-
-                // What is known of it, a line's height apart from what is above and below.
-                Column {
-                    width: parent.width
-                    topPadding: root.labelSize + 1.6 * root.ratio
-                    bottomPadding: root.labelSize
-                    spacing: 2 * root.ratio
-
-                    Repeater {
-                        model: root.preview.facts ?? []
-
-                        delegate: Item {
-                            id: fact
-
-                            required property var modelData
-                            readonly property real labelWidth: 87 * root.ratio
-                            readonly property real line: Math.round(17.6 * root.ratio)
-                            readonly property bool detailed: (modelData.detail ?? "").length > 0 && modelData.label === "Last commit"
-                            // The subject of a commit takes a second line when it is long.
-                            readonly property var subject: detailed ? root.folded(modelData.detail ?? "", width - labelWidth, root.smallGrid) : ["", ""]
-
-                            // The lines of the subject are set as close as a browser sets the
-                            // lines of one text, which is closer than two facts are.
-                            readonly property real subjectLine: Math.round(15.2 * root.ratio)
-                            readonly property real subjectTop: line - Math.round(0.8 * root.ratio)
-
-                            width: parent.width
-                            height: detailed ? subjectTop + (subject[1].length > 0 ? 2 : 1) * subjectLine + Math.round(3.2 * root.ratio) : line
-
-                            ChromeText {
-                                width: fact.labelWidth
-                                height: fact.line
-                                text: fact.modelData.label
-                                pixelSize: root.labelSize
-                                color: root.colors.subtext0
-                            }
-
-                            Row {
-                                x: fact.labelWidth
-                                width: parent.width - x
-                                height: fact.line
-                                spacing: 6 * root.ratio
-                                clip: true
-
-                                CellText {
-                                    width: implicitWidth
-                                    height: parent.height
-                                    text: fact.modelData.value ?? ""
-                                    grid: root.smallGrid
-                                    color: root.colors.text
-                                }
-
-                                CellText {
-                                    width: implicitWidth
-                                    height: parent.height
-                                    visible: !fact.detailed && (fact.modelData.detail ?? "").length > 0
-                                    text: fact.modelData.detail ?? ""
-                                    grid: root.smallGrid
-                                    color: root.colors.overlay1
-                                }
-
-                                CellText {
-                                    width: implicitWidth
-                                    height: parent.height
-                                    visible: fact.modelData.added > 0 || fact.modelData.removed > 0
-                                    text: "+" + fact.modelData.added
-                                    grid: root.smallGrid
-                                    color: root.colors.green
-                                    bold: true
-                                }
-
-                                CellText {
-                                    width: implicitWidth
-                                    height: parent.height
-                                    visible: fact.modelData.added > 0 || fact.modelData.removed > 0
-                                    text: "−" + fact.modelData.removed
-                                    grid: root.smallGrid
-                                    color: root.colors.red
-                                }
-                            }
-
-                            CellText {
-                                x: fact.labelWidth
-                                y: fact.subjectTop
-                                width: parent.width - x
-                                height: fact.subjectLine
-                                visible: fact.detailed
-                                text: fact.subject[0]
-                                grid: root.smallGrid
-                                color: root.colors.overlay1
-                                clip: true
-                            }
-
-                            CellText {
-                                x: fact.labelWidth
-                                y: fact.subjectTop + fact.subjectLine
-                                width: parent.width - x
-                                height: fact.subjectLine
-                                visible: fact.detailed && fact.subject[1].length > 0
-                                text: fact.subject[1]
-                                grid: root.smallGrid
-                                color: root.colors.overlay1
-                                clip: true
-                            }
-                        }
-                    }
-                }
-
-                // Who touched it lately.
-                Column {
-                    width: parent.width
-                    spacing: 4 * root.ratio
-                    visible: (root.preview.activity ?? []).length > 0
-
-                    Heading {
-                        height: root.typography.smallRow
-                        text: "ACTIVITY"
-                    }
-
-                    // A line for each, as tall as its chip and as far from the heading and from
-                    // what follows as a browser sets them.
+                    // What is known of it, a line's height apart from what is above and below.
                     Column {
                         width: parent.width
-                        topPadding: Math.round(0.5 * root.ratio)
-                        bottomPadding: Math.round(0.5 * root.ratio)
-                        spacing: 4 * root.ratio
+                        topPadding: root.labelSize + 1.6 * root.ratio
+                        bottomPadding: root.labelSize
+                        spacing: 2 * root.ratio
 
                         Repeater {
-                            model: root.preview.activity ?? []
+                            model: root.preview.facts ?? []
 
-                            delegate: Row {
-                                id: touch
+                            delegate: Item {
+                                id: fact
 
                                 required property var modelData
+                                readonly property real labelWidth: 87 * root.ratio
+                                readonly property real line: Math.round(17.6 * root.ratio)
+                                readonly property bool detailed: (modelData.detail ?? "").length > 0 && modelData.label === "Last commit"
+                                // The subject of a commit takes a second line when it is long.
+                                readonly property var subject: detailed ? root.folded(modelData.detail ?? "", width - labelWidth, root.smallGrid) : ["", ""]
 
-                                height: Math.round(17.25 * root.ratio)
-                                spacing: 6 * root.ratio
+                                // The lines of the subject are set as close as a browser sets the
+                                // lines of one text, which is closer than two facts are.
+                                readonly property real subjectLine: Math.round(15.2 * root.ratio)
+                                readonly property real subjectTop: line - Math.round(0.8 * root.ratio)
 
-                                ActorChip {
-                                    anchors.verticalCenter: parent.verticalCenter
-                                    actor: (touch.modelData.actors ?? [])[0] ?? ({})
-                                    cell: false
-                                }
+                                width: parent.width
+                                height: detailed ? subjectTop + (subject[1].length > 0 ? 2 : 1) * subjectLine + Math.round(3.2 * root.ratio) : line
 
                                 ChromeText {
-                                    width: implicitWidth
-                                    height: parent.height
-                                    text: touch.modelData.who ?? ""
+                                    width: fact.labelWidth
+                                    height: fact.line
+                                    text: fact.modelData.label
                                     pixelSize: root.labelSize
-                                    color: root.colors.text
-                                }
-
-                                ChromeText {
-                                    width: implicitWidth
-                                    height: parent.height
-                                    text: touch.modelData.verb ?? ""
-                                    pixelSize: 11 * root.ratio
                                     color: root.colors.subtext0
                                 }
 
-                                Item {
-                                    width: Math.round(33.6 * root.ratio)
-                                    height: parent.height
+                                Row {
+                                    x: fact.labelWidth
+                                    width: parent.width - x
+                                    height: fact.line
+                                    spacing: 6 * root.ratio
+                                    clip: true
 
-                                    ChromeText {
-                                        x: parent.width - width
+                                    CellText {
                                         width: implicitWidth
                                         height: parent.height
-                                        text: touch.modelData.ago ?? ""
-                                        pixelSize: 10.5 * root.ratio
+                                        text: fact.modelData.value ?? ""
+                                        grid: root.smallGrid
+                                        color: root.colors.text
+                                    }
+
+                                    CellText {
+                                        width: implicitWidth
+                                        height: parent.height
+                                        visible: !fact.detailed && (fact.modelData.detail ?? "").length > 0
+                                        text: fact.modelData.detail ?? ""
+                                        grid: root.smallGrid
                                         color: root.colors.overlay1
                                     }
+
+                                    CellText {
+                                        width: implicitWidth
+                                        height: parent.height
+                                        visible: fact.modelData.added > 0 || fact.modelData.removed > 0
+                                        text: "+" + fact.modelData.added
+                                        grid: root.smallGrid
+                                        color: root.colors.green
+                                        bold: true
+                                    }
+
+                                    CellText {
+                                        width: implicitWidth
+                                        height: parent.height
+                                        visible: fact.modelData.added > 0 || fact.modelData.removed > 0
+                                        text: "−" + fact.modelData.removed
+                                        grid: root.smallGrid
+                                        color: root.colors.red
+                                    }
                                 }
-                            }
-                        }
-                    }
-                }
-
-                // The panes whose shell is in it.
-                Column {
-                    width: parent.width
-                    spacing: 4 * root.ratio
-                    visible: (root.preview.panes ?? []).length > 0
-
-                    Heading {
-                        height: root.typography.smallRow
-                        text: "PANES HERE"
-                    }
-
-                    Repeater {
-                        model: root.preview.panes ?? []
-
-                        delegate: CellText {
-                            required property var modelData
-
-                            width: implicitWidth
-                            height: Math.round(root.smallGrid.cellHeight ?? 16)
-                            text: "◂ pane " + modelData
-                            grid: root.smallGrid
-                            color: root.colors.accent
-                        }
-                    }
-                }
-
-                // The heaviest of what a directory holds, each with its part of the whole.
-                Column {
-                    width: parent.width
-                    spacing: 4 * root.ratio
-                    visible: (root.preview.heavy ?? []).length > 0
-
-                    Heading {
-                        height: root.typography.smallRow
-                        text: "HEAVIEST"
-                    }
-
-                    Column {
-                        width: parent.width
-                        spacing: 3 * root.ratio
-
-                        Repeater {
-                            model: root.preview.heavy ?? []
-
-                            delegate: Item {
-                                id: heavy
-
-                                required property var modelData
-
-                                width: parent.width
-                                height: Math.round(16.5 * root.ratio)
 
                                 CellText {
-                                    id: heavyName
-                                    width: Math.min(implicitWidth, heavyTrack.x - 8 * root.ratio - (heavyTag.visible ? heavyTag.width + 6 * root.ratio : 0))
-                                    height: parent.height
-                                    text: heavy.modelData.name ?? ""
+                                    x: fact.labelWidth
+                                    y: fact.subjectTop
+                                    width: parent.width - x
+                                    height: fact.subjectLine
+                                    visible: fact.detailed
+                                    text: fact.subject[0]
                                     grid: root.smallGrid
-                                    color: root.colors.text
+                                    color: root.colors.overlay1
                                     clip: true
                                 }
 
-                                // Why the window does not list it unless asked: hidden, or ignored.
-                                ChromeText {
-                                    id: heavyTag
-                                    x: heavyName.x + heavyName.width + 6 * root.ratio
-                                    width: implicitWidth
-                                    height: parent.height
-                                    visible: (heavy.modelData.tag ?? "").length > 0
-                                    text: heavy.modelData.tag ?? ""
-                                    pixelSize: root.headingSize
+                                CellText {
+                                    x: fact.labelWidth
+                                    y: fact.subjectTop + fact.subjectLine
+                                    width: parent.width - x
+                                    height: fact.subjectLine
+                                    visible: fact.detailed && fact.subject[1].length > 0
+                                    text: fact.subject[1]
+                                    grid: root.smallGrid
                                     color: root.colors.overlay1
+                                    clip: true
                                 }
+                            }
+                        }
+                    }
 
-                                // As the bar of a row, before a column the size ends.
-                                Rectangle {
-                                    id: heavyTrack
-                                    x: Math.round(parent.width - (40 + 8 + 32) * root.ratio)
-                                    y: Math.round((parent.height - height) / 2)
-                                    width: 32 * root.ratio
-                                    height: 4 * root.ratio
-                                    radius: height / 2
-                                    color: root.colors.surface0
+                    // Who touched it lately.
+                    Column {
+                        width: parent.width
+                        spacing: 4 * root.ratio
+                        visible: (root.preview.activity ?? []).length > 0
 
-                                    Rectangle {
-                                        width: Math.round(parent.width * Math.min(1, heavy.modelData.share ?? 0))
+                        Heading {
+                            height: root.typography.smallRow
+                            text: "ACTIVITY"
+                        }
+
+                        // A line for each, as tall as its chip and as far from the heading and from
+                        // what follows as a browser sets them.
+                        Column {
+                            width: parent.width
+                            topPadding: Math.round(0.5 * root.ratio)
+                            bottomPadding: Math.round(0.5 * root.ratio)
+                            spacing: 4 * root.ratio
+
+                            Repeater {
+                                model: root.preview.activity ?? []
+
+                                delegate: Row {
+                                    id: touch
+
+                                    required property var modelData
+
+                                    height: Math.round(17.25 * root.ratio)
+                                    spacing: 6 * root.ratio
+
+                                    ActorChip {
+                                        anchors.verticalCenter: parent.verticalCenter
+                                        actor: (touch.modelData.actors ?? [])[0] ?? ({})
+                                        cell: false
+                                    }
+
+                                    ChromeText {
+                                        width: implicitWidth
                                         height: parent.height
-                                        radius: parent.radius
-                                        color: Qt.alpha(root.colors.peach, 0.7)
+                                        text: touch.modelData.who ?? ""
+                                        pixelSize: root.labelSize
+                                        color: root.colors.text
+                                    }
+
+                                    ChromeText {
+                                        width: implicitWidth
+                                        height: parent.height
+                                        text: touch.modelData.verb ?? ""
+                                        pixelSize: 11 * root.ratio
+                                        color: root.colors.subtext0
+                                    }
+
+                                    Item {
+                                        width: Math.round(33.6 * root.ratio)
+                                        height: parent.height
+
+                                        ChromeText {
+                                            x: parent.width - width
+                                            width: implicitWidth
+                                            height: parent.height
+                                            text: touch.modelData.ago ?? ""
+                                            pixelSize: 10.5 * root.ratio
+                                            color: root.colors.overlay1
+                                        }
                                     }
                                 }
+                            }
+                        }
+                    }
 
-                                CellText {
-                                    x: parent.width - width
-                                    width: implicitWidth
-                                    height: parent.height
-                                    text: heavy.modelData.size ?? ""
-                                    grid: root.smallGrid
-                                    color: root.colors.subtext0
+                    // The panes whose shell is in it.
+                    Column {
+                        width: parent.width
+                        spacing: 4 * root.ratio
+                        visible: (root.preview.panes ?? []).length > 0
+
+                        Heading {
+                            height: root.typography.smallRow
+                            text: "PANES HERE"
+                        }
+
+                        Repeater {
+                            model: root.preview.panes ?? []
+
+                            delegate: CellText {
+                                required property var modelData
+
+                                width: implicitWidth
+                                height: Math.round(root.smallGrid.cellHeight ?? 16)
+                                text: "◂ pane " + modelData
+                                grid: root.smallGrid
+                                color: root.colors.accent
+                            }
+                        }
+                    }
+
+                    // The heaviest of what a directory holds, each with its part of the whole.
+                    Column {
+                        width: parent.width
+                        spacing: 4 * root.ratio
+                        visible: (root.preview.heavy ?? []).length > 0
+
+                        Heading {
+                            height: root.typography.smallRow
+                            text: "HEAVIEST"
+                        }
+
+                        Column {
+                            width: parent.width
+                            spacing: 3 * root.ratio
+
+                            Repeater {
+                                model: root.preview.heavy ?? []
+
+                                delegate: Item {
+                                    id: heavy
+
+                                    required property var modelData
+
+                                    width: parent.width
+                                    height: Math.round(16.5 * root.ratio)
+
+                                    CellText {
+                                        id: heavyName
+                                        width: Math.min(implicitWidth, heavyTrack.x - 8 * root.ratio - (heavyTag.visible ? heavyTag.width + 6 * root.ratio : 0))
+                                        height: parent.height
+                                        text: heavy.modelData.name ?? ""
+                                        grid: root.smallGrid
+                                        color: root.colors.text
+                                        clip: true
+                                    }
+
+                                    // Why the window does not list it unless asked: hidden, or ignored.
+                                    ChromeText {
+                                        id: heavyTag
+                                        x: heavyName.x + heavyName.width + 6 * root.ratio
+                                        width: implicitWidth
+                                        height: parent.height
+                                        visible: (heavy.modelData.tag ?? "").length > 0
+                                        text: heavy.modelData.tag ?? ""
+                                        pixelSize: root.headingSize
+                                        color: root.colors.overlay1
+                                    }
+
+                                    // As the bar of a row, before a column the size ends.
+                                    Rectangle {
+                                        id: heavyTrack
+                                        x: Math.round(parent.width - (40 + 8 + 32) * root.ratio)
+                                        y: Math.round((parent.height - height) / 2)
+                                        width: 32 * root.ratio
+                                        height: 4 * root.ratio
+                                        radius: height / 2
+                                        color: root.colors.surface0
+
+                                        Rectangle {
+                                            width: Math.round(parent.width * Math.min(1, heavy.modelData.share ?? 0))
+                                            height: parent.height
+                                            radius: parent.radius
+                                            color: Qt.alpha(root.colors.peach, 0.7)
+                                        }
+                                    }
+
+                                    CellText {
+                                        x: parent.width - width
+                                        width: implicitWidth
+                                        height: parent.height
+                                        text: heavy.modelData.size ?? ""
+                                        grid: root.smallGrid
+                                        color: root.colors.subtext0
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    // What is worth knowing of a row that is a pane, or no file yet: on two lines.
+                    Column {
+                        id: previewNote
+                        readonly property var lines: root.folded(root.preview.note ?? "", width, root.tinyGrid)
+
+                        width: parent.width
+                        visible: (root.preview.note ?? "").length > 0
+
+                        Repeater {
+                            model: previewNote.lines
+
+                            delegate: CellText {
+                                required property string modelData
+
+                                width: previewNote.width
+                                height: Math.round((root.tinyGrid.cellHeight ?? 14) * 1.25)
+                                visible: modelData.length > 0
+                                text: modelData
+                                grid: root.tinyGrid
+                                color: root.colors.overlay1
+                            }
+                        }
+                    }
+
+                    // Its diff, or the head of its text, under what says which it is.
+                    Column {
+                        id: snippetGroup
+                        width: parent.width
+                        spacing: 4 * root.ratio
+                        visible: (root.preview.title ?? "").length > 0 || snippet.total > 0
+
+                        Heading {
+                            height: root.typography.smallRow
+                            visible: (root.preview.title ?? "").length > 0
+                            text: root.preview.title ?? ""
+                        }
+
+                        Rectangle {
+                            id: snippet
+                            readonly property real line: Math.round((root.tinyGrid.cellHeight ?? 14) * 1.25)
+                            readonly property int total: (root.preview.lines ?? []).length
+                            // It is as tall as all its lines, and the ones drawn are those the
+                            // preview's room shows of them: `first` and the `shown` after it.
+                            readonly property real above: previewBody.contentY - (previewColumn.y + snippetGroup.y + y + 8 * root.ratio)
+                            readonly property int first: Math.max(0, Math.min(total, Math.floor(above / line)))
+                            readonly property int shown: Math.max(0, Math.min(total - first, Math.ceil(previewBody.height / line) + 1))
+
+                            width: parent.width
+                            height: total * line + 16 * root.ratio
+                            visible: total > 0
+                            radius: 4 * root.ratio
+                            color: root.colors.surface_dim
+                            border.width: root.edge
+                            border.color: root.colors.surface1
+                            clip: true
+
+                            Repeater {
+                                model: snippet.shown
+
+                                delegate: CellText {
+                                    required property int index
+                                    readonly property int place: snippet.first + index
+                                    readonly property var entry: (root.preview.lines ?? [])[place] ?? ({})
+
+                                    x: 8 * root.ratio
+                                    y: 8 * root.ratio + place * snippet.line
+                                    width: snippet.width - 16 * root.ratio
+                                    height: snippet.line
+                                    text: entry.text ?? ""
+                                    grid: root.tinyGrid
+                                    color: root.toneColor(entry.tone ?? "context")
+                                    clip: true
                                 }
                             }
                         }
                     }
                 }
+            }
 
-                // What is worth knowing of a row that is a pane, or no file yet: on two lines.
-                Column {
-                    id: previewNote
-                    readonly property var lines: root.folded(root.preview.note ?? "", width, root.tinyGrid)
+            // How much of the preview shows, when not all of it does: the list's thumb.
+            Rectangle {
+                readonly property real share: previewBody.contentHeight > 0 ? Math.min(1, previewBody.height / previewBody.contentHeight) : 1
 
-                    width: parent.width
-                    visible: (root.preview.note ?? "").length > 0
-
-                    Repeater {
-                        model: previewNote.lines
-
-                        delegate: CellText {
-                            required property string modelData
-
-                            width: previewNote.width
-                            height: Math.round((root.tinyGrid.cellHeight ?? 14) * 1.25)
-                            visible: modelData.length > 0
-                            text: modelData
-                            grid: root.tinyGrid
-                            color: root.colors.overlay1
-                        }
-                    }
-                }
-
-                // Its diff, or the head of its text, under what says which it is.
-                Column {
-                    width: parent.width
-                    spacing: 4 * root.ratio
-                    visible: (root.preview.title ?? "").length > 0 || snippet.shown > 0
-
-                    Heading {
-                        height: root.typography.smallRow
-                        visible: (root.preview.title ?? "").length > 0
-                        text: root.preview.title ?? ""
-                    }
-
-                    Rectangle {
-                        id: snippet
-                        readonly property real line: Math.round((root.tinyGrid.cellHeight ?? 14) * 1.25)
-                        readonly property int shown: Math.max(0, Math.min((root.preview.lines ?? []).length, Math.floor((previewPane.height - y - parent.y - 34 * root.ratio) / line)))
-
-                        width: parent.width
-                        height: shown * line + 16 * root.ratio
-                        visible: shown > 0
-                        radius: 4 * root.ratio
-                        color: root.colors.surface_dim
-                        border.width: root.edge
-                        border.color: root.colors.surface1
-                        clip: true
-
-                        Repeater {
-                            model: snippet.shown
-
-                            delegate: CellText {
-                                required property int index
-                                readonly property var entry: (root.preview.lines ?? [])[index] ?? ({})
-
-                                x: 8 * root.ratio
-                                y: 8 * root.ratio + index * snippet.line
-                                width: snippet.width - 16 * root.ratio
-                                height: snippet.line
-                                text: entry.text ?? ""
-                                grid: root.tinyGrid
-                                color: root.toneColor(entry.tone ?? "context")
-                                clip: true
-                            }
-                        }
-                    }
-                }
+                x: parent.width - width - Math.round(3.2 * root.ratio)
+                y: 4 * root.ratio + (previewBody.height - 8 * root.ratio) * (previewBody.contentHeight > 0 ? previewBody.contentY / previewBody.contentHeight : 0)
+                width: Math.round(6.4 * root.ratio)
+                height: Math.max(16 * root.ratio, (previewBody.height - 8 * root.ratio) * share)
+                radius: width / 2
+                visible: share < 1
+                color: Qt.alpha(root.colors.text, 0.3)
             }
         }
     }
@@ -2338,7 +2424,7 @@ FocusScope {
         readonly property real boxWidth: Math.max(12 * (root.grid.cellWidth ?? 8) + 10 * root.ratio, root.editRoom)
 
         x: boxX + root.edge + 4 * root.ratio
-        y: body.y + paneY + root.headHeight + root.rowY(place) + Math.round((root.rowHeight - height) / 2)
+        y: body.y + paneY + root.headHeight + root.placeTop(root.line.window ?? 0, place) + Math.round((root.rowHeight - height) / 2)
         z: 5
         width: boxWidth - 2 * (root.edge + 4 * root.ratio)
         height: Math.max(root.grid.cellHeight ?? 0, 18 * root.ratio)
@@ -2440,17 +2526,20 @@ FocusScope {
                             // Where the paths start: after the verb's eight cells and their gap,
                             // and the machine's in a plan that goes to more than one.
                             readonly property real pathsX: Math.round(8 * (root.planGrid.cellWidth ?? 8) + 10 * root.ratio) + stepMachine.width
+                            readonly property string paths: (modelData.source ?? "") + ((modelData.source ?? "").length > 0 && (modelData.target ?? "").length > 0 ? " → " : "") + (modelData.target ?? "") + (modelData.directory && (modelData.target ?? "").length > 0 && !(modelData.target ?? "").endsWith("/") ? "/" : "")
+                            // The paths on as many lines as they need, broken at any letter.
+                            readonly property var pathLines: root.broken(paths, stepSize.x - pathsX - 10 * root.ratio, root.planGrid, 8)
 
                             width: parent.width
                             spacing: 1 * root.ratio
 
                             Item {
                                 width: parent.width
-                                height: step.line
+                                height: step.line * step.pathLines.length
 
                                 CellText {
                                     width: implicitWidth
-                                    height: parent.height
+                                    height: step.line
                                     text: step.modelData.verb
                                     grid: root.planGrid
                                     color: step.verbColor
@@ -2462,21 +2551,29 @@ FocusScope {
                                     id: stepMachine
                                     x: step.pathsX - width
                                     width: root.planMachineCells > 0 ? Math.round((root.planMachineCells + 1) * (root.planGrid.cellWidth ?? 8)) : 0
-                                    height: parent.height
+                                    height: step.line
                                     visible: width > 0
                                     text: step.modelData.machine ?? ""
                                     grid: root.planGrid
                                     color: root.colors.blue
                                 }
 
-                                CellText {
-                                    x: step.pathsX
-                                    width: Math.max(0, Math.min(implicitWidth, stepSize.x - x - 10 * root.ratio))
-                                    height: parent.height
-                                    text: (step.modelData.source ?? "") + ((step.modelData.source ?? "").length > 0 && (step.modelData.target ?? "").length > 0 ? " → " : "") + (step.modelData.target ?? "") + (step.modelData.directory && (step.modelData.target ?? "").length > 0 && !(step.modelData.target ?? "").endsWith("/") ? "/" : "")
-                                    grid: root.planGrid
-                                    color: root.colors.text
-                                    clip: true
+                                Repeater {
+                                    model: step.pathLines
+
+                                    delegate: CellText {
+                                        required property string modelData
+                                        required property int index
+
+                                        x: step.pathsX
+                                        y: index * step.line
+                                        width: Math.max(0, stepSize.x - x - 10 * root.ratio)
+                                        height: step.line
+                                        text: modelData
+                                        grid: root.planGrid
+                                        color: root.colors.text
+                                        clip: true
+                                    }
                                 }
 
                                 // The size of what it changes, when the window knows it.
@@ -2484,7 +2581,7 @@ FocusScope {
                                     id: stepSize
                                     x: parent.width - width
                                     width: root.planSizeCells > 0 ? Math.round(root.planSizeCells * (root.planGrid.cellWidth ?? 8)) : 0
-                                    height: parent.height
+                                    height: step.line
                                     visible: width > 0
                                     text: (step.modelData.size ?? "").padStart(root.planSizeCells, " ")
                                     grid: root.planGrid
@@ -2727,7 +2824,7 @@ FocusScope {
 
             const pane = panes.itemAt(root.menu.window ?? 0);
 
-            return pane ? pane.rowsArea.mapToItem(root, root.gutter + 40 * root.ratio, root.rowY((root.menu.row ?? 0) + 1)) : Qt.point(0, 0);
+            return pane ? pane.rowsArea.mapToItem(root, root.gutter + 40 * root.ratio, root.placeBottom(root.menu.window ?? 0, root.menu.row ?? 0)) : Qt.point(0, 0);
         }
         readonly property real wanted: {
             let widest = 250 * root.ratio;

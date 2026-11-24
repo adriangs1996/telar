@@ -41,6 +41,7 @@ export namespace telar::gui::application::explorer {
   using features::explorer::TransferPhase;
   using features::explorer::View;
   using features::explorer::Window;
+  using features::explorer::WindowRoom;
   using features::explorer::WindowRows;
 
   using features::explorer::baseOf;
@@ -120,6 +121,7 @@ export namespace telar::gui::application::explorer {
   using features::explorer::status;
   using features::explorer::step;
   using features::explorer::submit;
+  using features::explorer::tall;
   using features::explorer::toggle;
   using features::explorer::toward;
   using features::explorer::typed;
