@@ -242,6 +242,8 @@ export {
         ClientRequest<QueryTouches, ClientRole::interactive, RequestLane::worker>,
         ClientRequest<KeepPlaces>,
         ClientRequest<QueryPlaces>,
+        ClientRequest<CreateExplorerPane>,
+        ClientRequest<KeepExplorer>,
         ClientRequest<SuggestCommand, ClientRole::interactive, RequestLane::worker>>;
 
     ClientRole classifyRequest(ClientTag tag) noexcept;

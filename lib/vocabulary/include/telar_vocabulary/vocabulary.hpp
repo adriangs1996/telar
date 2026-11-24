@@ -38,6 +38,9 @@ namespace telar {
     terminal = 1,
     // A Neovim the runtime starts and is the only UI of, drawn grid by grid.
     nvim = 2,
+    // The explorer of a window, standing among the panes of a tab. It runs no program: the
+    // window draws it, and the runtime keeps where its windows are.
+    explorer = 3,
   };
 
   enum class EnvironmentMode : Byte {

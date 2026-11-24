@@ -30,8 +30,8 @@ export {
   namespace telar::runtime::checkpoint {
 
     inline constexpr std::string_view magic = "TELARCKP";
-    // 12 added the places of the explorer.
-    inline constexpr std::uint16_t current_version = 12;
+    // 12 added the places of the explorer; 13 the windows of a pane that is one.
+    inline constexpr std::uint16_t current_version = 13;
     inline constexpr std::size_t maximum_bytes = std::size_t{4} * 1024 * 1024;
 
     enum class Kind : Byte {
@@ -81,6 +81,9 @@ export {
       bool in_pane = false;
       // What the pane is: a checkpoint written before panes had kinds holds only terminals.
       PaneKind kind = PaneKind::terminal;
+      // The windows of an explorer, as the KeepExplorer that gave them encodes; empty for a pane
+      // of another kind, and for an explorer no window gave any.
+      std::span<const Byte> explorer;
     };
 
     struct LayoutRecord {
@@ -121,6 +124,7 @@ namespace telar::runtime::checkpoint {
   inline constexpr std::size_t maximum_session_bytes = 64;
   inline constexpr std::size_t maximum_layout_bytes = std::size_t{16} * 1024;
   inline constexpr std::size_t maximum_places_bytes = std::size_t{128} * 1024;
+  inline constexpr std::size_t maximum_explorer_bytes = std::size_t{32} * 1024;
 }
 
 // Interface: persistence/file_store.cppm
@@ -380,11 +384,35 @@ export {
         }
       }
 
+      inline void restoreExplorer(const PaneRecord& record) {
+        const TerminalSize size{.cols = record.columns == 0 ? std::uint16_t{80} : record.columns, .rows = record.rows == 0 ? std::uint16_t{24} : record.rows, .cell_width_px = 0, .cell_height_px = 0};
+        const auto restored = panes_.launchExplorer(model_, {.location = TabLocation{.workspace = {.id = record.workspace}, .tab_id = record.tab}, .size = size}, record.cwd, record.id).core.id;
+
+        model_.workspaces.find(record.workspace)->tabMut(record.tab)->panes.push(restored);
+        if (record.explorer.empty()) {
+          return;
+        }
+
+        try {
+          ExplorerScratch scratch; // NOLINT(cppcoreguidelines-pro-type-member-init): the decoder writes the windows it hands back, so zeroing them first would be waste
+          DecodeStorage storage{scratch.viewMut()};
+
+          requireExplorer(model_.panes, restored).body.keep(Codec::decode<KeepExplorer>(record.explorer, storage).layout);
+        } catch (const std::exception&) { // NOLINT(bugprone-empty-catch): windows that cannot be decoded are left out, and the explorer starts with one of its own
+        }
+      }
+
       inline void restore(const PaneRecord& record) {
         validateIdentity(record.id);
         auto* workspace = model_.workspaces.find(record.workspace);
         const auto* tab = workspace == nullptr ? nullptr : workspace->tab(record.tab);
         if (tab == nullptr || tab->panes.size() == maximum_tab_panes || model_.panes.find(record.id) != nullptr) {
+          return;
+        }
+
+        // An explorer comes back where its windows were. It starts no program.
+        if (record.kind == PaneKind::explorer) {
+          restoreExplorer(record);
           return;
         }
 
@@ -628,6 +656,10 @@ export {
           }
 
           PaneRecord record{.id = pane->id, .workspace = pane->location.workspace.id, .tab = pane->location.tab_id, .cwd = pane->cwd, .columns = pane->extent.cols, .rows = pane->extent.rows, .argument_count = pane->launch.count(), .arguments = pane->launch.bytes(), .kind = pane->kind()};
+
+          if (const auto* explorer = pane->template as<ExplorerBody>()) {
+            record.explorer = explorer->kept();
+          }
 
           if (const auto* agent = agents.find(pane->id, pane->generation); agent != nullptr && validResumeSession(agent->provider, agent->session.view())) {
             record.provider = agent->provider;

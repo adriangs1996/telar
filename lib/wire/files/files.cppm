@@ -63,6 +63,8 @@ export extern "C++" {
       // take together.
       static constexpr std::uint8_t maximum_places = 84;
       static constexpr std::size_t places_bytes = std::size_t{64} * 1024;
+      // The windows an explorer that stands as a pane splits into.
+      static constexpr std::uint8_t explorer_windows = 3;
       // A file's modification time holds this many nanoseconds past its second.
       static constexpr std::uint32_t maximum_nanoseconds = 999'999'999;
     };
@@ -691,6 +693,114 @@ export extern "C++" {
               Field<&PlacesKept::request_id, NonzeroU64, "request_id">,
               Field<&PlacesKept::places, CountedSpan<u8, ValueCodec<KeptPlace>, FileLimits::maximum_places>, "places">,
               Field<&PlacesKept::jump, u16, "jump">> {};
+
+    // What a window of the explorer lists: the tree below its root, what git says changed, the
+    // files the panes touched lately, or the panes.
+    enum class ExplorerLens : Byte {
+      tree = 0,
+      changes = 1,
+      touched = 2,
+      panes = 3,
+    };
+
+    // What orders the rows of a window.
+    enum class ExplorerSort : Byte {
+      name = 0,
+      size = 1,
+      modified = 2,
+    };
+
+    // Where a window that follows the focused pane roots itself: at the pane's directory, at the
+    // workspace's, or at the home of the machine.
+    enum class ExplorerScope : Byte {
+      pane = 0,
+      workspace = 1,
+      machine = 2,
+    };
+
+    // A window of an explorer that stands as a pane, as the runtime keeps it: where it is and how
+    // it lists. `machine` is the label the window knows its machine by, and empty for the machine
+    // of the runtime that keeps it.
+    struct ExplorerWindow {
+      std::string_view machine;
+      std::string_view root;
+      std::string_view selected;
+      ExplorerLens lens{};
+      ExplorerSort sort{};
+      ExplorerScope scope{};
+      // Whether it follows the focused pane, and whether it lists the hidden and the ignored.
+      bool follow{};
+      bool hidden{};
+      bool ignored{};
+    };
+
+    template <>
+    struct BodySchema<ExplorerWindow>
+        : Serializer<
+              Field<&ExplorerWindow::machine, Text16<FileLimits::name_bytes>, "machine">,
+              Field<&ExplorerWindow::root, Text16<FileLimits::path_bytes>, "root">,
+              Field<&ExplorerWindow::selected, Text16<FileLimits::path_bytes>, "selected">,
+              Field<&ExplorerWindow::lens, EnumByte<ExplorerLens, std::to_underlying(ExplorerLens::panes)>, "lens">,
+              Field<&ExplorerWindow::sort, EnumByte<ExplorerSort, std::to_underlying(ExplorerSort::modified)>, "sort">,
+              Field<&ExplorerWindow::scope, EnumByte<ExplorerScope, std::to_underlying(ExplorerScope::machine)>, "scope">,
+              Field<&ExplorerWindow::follow, BoolByte, "follow">,
+              Field<&ExplorerWindow::hidden, BoolByte, "hidden">,
+              Field<&ExplorerWindow::ignored, BoolByte, "ignored">> {};
+
+    // The windows of an explorer that stands as a pane: which has the keys, and whether they
+    // stand side by side or one over another.
+    struct ExplorerLayout {
+      std::span<const ExplorerWindow> windows;
+      std::uint8_t current{};
+      bool side_by_side{};
+    };
+
+    template <>
+    struct BodySchema<ExplorerLayout>
+        : Serializer<
+              Field<&ExplorerLayout::windows, CountedSpan<u8, ValueCodec<ExplorerWindow>, FileLimits::explorer_windows>, "windows">,
+              Field<&ExplorerLayout::current, u8, "current">,
+              Field<&ExplorerLayout::side_by_side, BoolByte, "side_by_side">> {};
+
+    // Asks for a pane that is the explorer in a tab, with the windows `layout` gives it. It runs
+    // no program. The runtime answers PaneOpened, after a PaneKindNotice that says what it is.
+    struct CreateExplorerPane {
+      std::uint64_t request_id{};
+      TabLocation location{};
+      TerminalSize size{};
+      ExplorerLayout layout;
+    };
+
+    template <>
+    struct MessageSchema<CreateExplorerPane>
+        : Schema<
+              Direction::client,
+              ClientTag::create_explorer_pane,
+              Field<&CreateExplorerPane::request_id, NonzeroU64, "request_id">,
+              Field<&CreateExplorerPane::location, ValueCodec<TabLocation>, "location">,
+              Field<&CreateExplorerPane::size, ValueCodec<TerminalSize>, "size">,
+              Field<&CreateExplorerPane::layout, ValueCodec<ExplorerLayout>, "layout">> {};
+
+    // Gives the runtime the windows of an explorer pane as they are now, to keep with the pane:
+    // a window that attaches later, and a session that is restored, find them. It answers
+    // nothing; a pane of another kind refuses it.
+    struct KeepExplorer {
+      std::uint64_t pane_id{};
+      ExplorerLayout layout;
+    };
+
+    template <>
+    struct MessageSchema<KeepExplorer> : Schema<Direction::client, ClientTag::keep_explorer, Field<&KeepExplorer::pane_id, NonzeroU64, "pane_id">, Field<&KeepExplorer::layout, ValueCodec<ExplorerLayout>, "layout">> {};
+
+    // The windows the runtime keeps of an explorer pane, sent after the PaneKindNotice that says
+    // the pane is one.
+    struct ExplorerKept {
+      std::uint64_t pane_id{};
+      ExplorerLayout layout;
+    };
+
+    template <>
+    struct MessageSchema<ExplorerKept> : Schema<Direction::server, ServerTag::explorer_kept, Field<&ExplorerKept::pane_id, NonzeroU64, "pane_id">, Field<&ExplorerKept::layout, ValueCodec<ExplorerLayout>, "layout">> {};
 
   }
 }

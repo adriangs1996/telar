@@ -361,6 +361,10 @@ export {
       // An editor pane on the request's files, in a tab of its own or beside a tab's panes.
       void createEditor(RuntimeModel& model, Panes& panes, ClientStore& clients, EditorRequest asked, const NvimProvision& provision);
 
+      // An explorer pane beside a tab's panes, with the windows the request gives it. A tab has
+      // one at most: a second is refused.
+      void createExplorer(RuntimeModel& model, Panes& panes, ClientStore& clients, std::uint64_t client_id, const CreateExplorerPane& request);
+
       void renameWorkspace(RuntimeModel& model, ClientSession& client, const RenameWorkspace& request);
 
       void renameTab(RuntimeModel& model, ClientSession& client, const RenameTab& request);
@@ -651,6 +655,8 @@ export {
       void paneEvent(const Event& event);
       void paneEvent(PaneRef<TerminalBody> pane, const Event& event);
       void paneEvent(PaneRef<NvimBody> pane, const Event& event);
+      // An explorer watches no descriptor, so no event is its own.
+      void paneEvent(PaneRef<ExplorerBody> pane, const Event& event) noexcept;
 
       // The client's frames leave its connection while their requests run, so a request can change any
       // client, its own included, without touching the bytes it was decoded from.
@@ -723,6 +729,10 @@ export {
 
       void handle(std::uint64_t identity, const CreatePane& message);
       void handle(std::uint64_t identity, const CreateNvimPane& message);
+
+      void handle(std::uint64_t identity, const CreateExplorerPane& message);
+
+      void handle(std::uint64_t identity, const KeepExplorer& message);
       void handle(std::uint64_t identity, const NvimInput& message);
       void handle(std::uint64_t identity, const NvimPaste& message);
       void handle(std::uint64_t identity, const NvimMouse& message);
@@ -888,6 +898,8 @@ export {
       static void followRepository(PaneRef<TerminalBody> pane, ShellGitService& shell_git);
       void refreshPane(PaneRef<TerminalBody> pane, Clock::time_point now, bool poll_panes);
       void refreshPane(PaneRef<NvimBody> pane, Clock::time_point now, bool poll_panes);
+      // An explorer has nothing to follow between events.
+      void refreshPane(PaneRef<ExplorerBody> pane, Clock::time_point now, bool poll_panes) noexcept;
 
       void refreshServices(Clock::time_point now);
 

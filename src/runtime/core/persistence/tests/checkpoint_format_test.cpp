@@ -54,8 +54,8 @@ namespace {
 
     // A pane as `version` wrote it: arguments in a 16-bit length before version 9, no title
     // before 2, the dropped flag of version 4, the in-pane flag from version 8 and what kind of
-    // pane it is from version 11.
-    Encoder& pane(std::uint64_t id, std::uint16_t count, std::string_view arguments, bool dropped = false, Byte pane_kind = 1) {
+    // pane it is from version 11, and the windows of an explorer from version 13.
+    Encoder& pane(std::uint64_t id, std::uint16_t count, std::string_view arguments, bool dropped = false, Byte pane_kind = 1, std::string_view explorer = {}) { // NOLINT(readability-function-size): one branch per version that changed the record
       kind(checkpoint::Kind::pane).integer(id).integer(std::uint64_t{1}).integer(std::uint64_t{7}).text16("/tmp");
       integer(std::uint16_t{80}).integer(std::uint16_t{24}).integer(count);
       if (version_ >= 9) {
@@ -79,6 +79,10 @@ namespace {
 
       if (version_ >= 11) {
         integer(pane_kind);
+      }
+
+      if (version_ >= 13) {
+        integer(static_cast<std::uint32_t>(explorer.size())).raw(explorer);
       }
 
       return *this;
@@ -219,6 +223,18 @@ namespace {
     Encoder older{10};
 
     check(decode(older.workspace(1, "Shells").pane(2, 1, cat).finish()).panes.at(0).kind == PaneKind::terminal, "a pane of a checkpoint without kinds is a terminal");
+
+    // An explorer is read with its windows; and a pane of a kind unknown is passed over with
+    // whatever its record ends with, so the pane after it reads.
+    Encoder windows{checkpoint::current_version};
+    constexpr std::string_view explorer{"explorer\0", 9};
+    const auto stood = decode(windows.workspace(1, "Shells").pane(2, 1, explorer, false, std::to_underlying(PaneKind::explorer), "windows").pane(4, 1, cat, false, 9, "unknown").pane(5, 1, cat).finish());
+
+    check(stood.panes.size() == 2 && stood.panes[0].kind == PaneKind::explorer && stood.panes[0].explorer.size() == 7 && stood.panes[1].id == 5 && stood.panes[1].explorer.empty(), "an explorer with its windows, and the pane after one passed over");
+
+    Encoder before{12};
+
+    check(decode(before.workspace(1, "Shells").pane(2, 1, cat).finish()).panes.at(0).explorer.empty(), "a pane of a checkpoint before explorers has no windows");
   }
 
   void testPaneCap() {

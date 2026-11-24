@@ -119,6 +119,8 @@ namespace telar {
     query_touches = 0x6f,
     keep_places = 0x70,
     query_places = 0x71,
+    create_explorer_pane = 0x72,
+    keep_explorer = 0x73,
   };
 
   enum class ServerTag : Byte {
@@ -214,6 +216,7 @@ namespace telar {
     places_kept = 0xde,
     nvim_open_files = 0xdf,
     nvim_explore = 0xe0,
+    explorer_kept = 0xe1,
   };
 
   struct RequestRuntimeState {
@@ -561,6 +564,10 @@ namespace telar {
       return "keep_places";
     case ClientTag::query_places:
       return "query_places";
+    case ClientTag::create_explorer_pane:
+      return "create_explorer_pane";
+    case ClientTag::keep_explorer:
+      return "keep_explorer";
     }
 
     return {};
@@ -750,6 +757,8 @@ namespace telar {
       return "nvim_open_files";
     case ServerTag::nvim_explore:
       return "nvim_explore";
+    case ServerTag::explorer_kept:
+      return "explorer_kept";
     case ServerTag::pane_theme:
       return "pane_theme";
     }

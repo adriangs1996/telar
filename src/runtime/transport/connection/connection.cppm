@@ -279,6 +279,7 @@ export {
       case ServerTag::nvim_pick:
       case ServerTag::nvim_link:
       case ServerTag::nvim_explore:
+      case ServerTag::explorer_kept:
       case ServerTag::completion_words:
       case ServerTag::command_spec:
       case ServerTag::worktree_registered:

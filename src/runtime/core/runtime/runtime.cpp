@@ -1107,6 +1107,48 @@ namespace telar::runtime {
   }
 
   template <EventLoop Poller, HistoryEventSink History>
+  void WorkspaceService<Poller, History>::createExplorer(RuntimeModel& model, Panes& panes, ClientStore& clients, std::uint64_t client_id, const CreateExplorerPane& request) {
+    const auto location = request.location;
+    const auto* workspace = model.workspaces.find(location.workspace.id);
+    const auto* tab = workspace == nullptr ? nullptr : workspace->tab(location.tab_id);
+    if (location.workspace.kind != WorkspaceLocation::Kind::workspace || tab == nullptr || (!firstPane(model.panes, *tab) && !tabHeld(clients, location))) {
+      throw RequestError{FailureCode::pane_not_found, "tab not found"};
+    }
+
+    for (const auto identity : tab->panes) {
+      if (const auto* pane = model.panes.find(identity); pane != nullptr && pane->kind() == PaneKind::explorer && !pane->close_requested) {
+        throw RequestError{FailureCode::invalid_request, "This tab already has an explorer"};
+      }
+    }
+
+    if (tab->panes.size() == maximum_panes_per_tab) {
+      throw RequestError{FailureCode::resource_limit, "Tab pane limit reached"};
+    }
+
+    if (!acquireGeometry(model.panes, model.metrics, requireClient(clients, client_id), require(model.workspaces, location.workspace))) {
+      throw RequestError{FailureCode::resource_limit, "workspace geometry is leased by another client"};
+    }
+
+    // The workspace's directory has storage of its own, which the new pane copies.
+    LaunchDirectory directory;
+    const auto started_in = ownDirectory(directory, require(model.workspaces, location.workspace).path);
+    const auto pane = panes.launchExplorer(model, {.location = location, .size = request.size}, started_in).core.id;
+
+    try {
+      requireExplorer(model.panes, pane).body.keep(request.layout);
+      panes.attach(model, requireClient(clients, client_id), pane, request.size);
+      requireTab(model.workspaces, location).panes.push(pane);
+    } catch (...) {
+      panes.remove(model, clients, pane);
+      throw;
+    }
+
+    ++model.workspace_revision;
+    notify(location.workspace.id, client_id);
+    sendOpened(requireClient(clients, client_id), request.request_id, Panes::require(model.panes, pane), true, GenerationField::omitted);
+  }
+
+  template <EventLoop Poller, HistoryEventSink History>
   void WorkspaceService<Poller, History>::renameWorkspace(RuntimeModel& model, ClientSession& client, const RenameWorkspace& request) {
     require(model.workspaces, request.workspace).name.assign(request.name);
     ++model.workspace_revision;
@@ -1608,6 +1650,13 @@ namespace telar::runtime {
     if (pane.kind() != PaneKind::terminal) {
       client.connection.send(PaneKindNotice{.pane_id = pane.id, .kind = pane.kind()});
     }
+
+    ExplorerScratch scratch; // NOLINT(cppcoreguidelines-pro-type-member-init): the decoder writes the windows it hands back, so zeroing them first would be waste
+
+    // An explorer says where its windows are, to a client that did not give them.
+    if (const auto kept = explorerKept(pane, scratch)) {
+      client.connection.send(*kept);
+    }
   }
 
   template <EventLoop Poller, HistoryEventSink History>
@@ -2105,6 +2154,10 @@ namespace telar::runtime {
       }
     }
   }
+
+  template <EventLoop Poller, typename Background>
+    requires BackgroundExecutor<Background, ConcurrentMemory>
+  void Runtime<Poller, Background>::paneEvent(PaneRef<ExplorerBody> /*pane*/, const Event& /*event*/) noexcept {}
 
   template <EventLoop Poller, typename Background>
     requires BackgroundExecutor<Background, ConcurrentMemory>
@@ -2772,6 +2825,28 @@ namespace telar::runtime {
   void Runtime<Poller, Background>::handle(std::uint64_t identity, const KeepPlaces& message) {
     static_cast<void>(requireClient(clients_, identity));
     client_layouts_.keepPlaces(message);
+  }
+
+  template <EventLoop Poller, typename Background>
+    requires BackgroundExecutor<Background, ConcurrentMemory>
+  void Runtime<Poller, Background>::handle(std::uint64_t identity, const CreateExplorerPane& message) {
+    workspaces_.createExplorer(model_, panes_, clients_, identity, message);
+  }
+
+  template <EventLoop Poller, typename Background>
+    requires BackgroundExecutor<Background, ConcurrentMemory>
+  void Runtime<Poller, Background>::handle(std::uint64_t identity, const KeepExplorer& message) {
+    static_cast<void>(requireClient(clients_, identity));
+    auto explorer = requireExplorer(model_.panes, message.pane_id);
+
+    explorer.body.keep(message.layout);
+    // The pane is where its current window is, when that is on this machine. The count grows
+    // either way: the windows are part of the session written to disk, which it tells of.
+    if (const auto& current = message.layout.windows[message.layout.current]; current.machine.empty() && !current.root.empty()) {
+      explorer.core.cwd.assign(current.root);
+    }
+
+    ++explorer.core.cwd_revision;
   }
 
   template <EventLoop Poller, typename Background>
@@ -3502,6 +3577,10 @@ namespace telar::runtime {
       pane.core.exit_observed = true;
     }
   }
+
+  template <EventLoop Poller, typename Background>
+    requires BackgroundExecutor<Background, ConcurrentMemory>
+  void Runtime<Poller, Background>::refreshPane(PaneRef<ExplorerBody> /*pane*/, Clock::time_point /*now*/, bool /*poll_panes*/) noexcept {}
 
   template <EventLoop Poller, typename Background>
     requires BackgroundExecutor<Background, ConcurrentMemory>

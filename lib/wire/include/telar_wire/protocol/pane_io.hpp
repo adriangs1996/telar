@@ -276,7 +276,7 @@ namespace telar {
 
   template <>
   struct MessageSchema<PaneKindNotice>
-      : Schema<Direction::server, ServerTag::pane_kind_notice, Field<&PaneKindNotice::pane_id, NonzeroU64, "pane_id">, Field<&PaneKindNotice::kind, EnumByte<PaneKind, std::to_underlying(PaneKind::nvim), std::to_underlying(PaneKind::terminal)>, "kind">> {};
+      : Schema<Direction::server, ServerTag::pane_kind_notice, Field<&PaneKindNotice::pane_id, NonzeroU64, "pane_id">, Field<&PaneKindNotice::kind, EnumByte<PaneKind, std::to_underlying(PaneKind::explorer), std::to_underlying(PaneKind::terminal)>, "kind">> {};
 
   // Every live pane, so a client can list the ones it has not opened. Bounded by the runtime's
   // pane capacity.

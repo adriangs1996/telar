@@ -9,6 +9,7 @@ import telar.base.memory.allocators;
 import telar.platform.process;
 import telar.runtime.core.model.client_layouts;
 import telar.runtime.core.model.slot_store;
+import telar.wire.files;
 import telar.wire.vocabulary;
 
 namespace {
@@ -61,7 +62,7 @@ namespace {
     return FailureCode::internal;
   }
 
-  // What a visit was handed: the body of a terminal or of an editor.
+  // What a visit was handed: the body of a terminal, of an editor or of an explorer.
   struct Visited {
     void operator()(TerminalBody& body) {
       terminal = &body;
@@ -71,9 +72,24 @@ namespace {
       editor = &body;
     }
 
+    void operator()(ExplorerBody& body) {
+      explorer = &body;
+    }
+
     TerminalBody* terminal = nullptr;
     NvimBody* editor = nullptr;
+    ExplorerBody* explorer = nullptr;
   };
+
+  FailureCode explorerRefusal(PaneStore& panes, std::uint64_t identity) {
+    try {
+      requireExplorer(panes, identity);
+    } catch (const RequestError& error) {
+      return error.code();
+    }
+
+    return FailureCode::internal;
+  }
 
   // Code that holds a pane by what every kind shares reaches a kind's own state only by naming
   // the kind, and gets the pane with the body of that kind when it is one.
@@ -168,7 +184,63 @@ namespace {
     check(fixture.model.panes.find(OneTerminal::pane_id) == nullptr && fixture.model.panes.size() == 0, "the pane is gone");
   }
 
+  // An explorer is a pane with no program: it is reached as its kind, keeps the windows it is
+  // given, and ends when it is asked to, with nothing to wait for.
+  void anExplorerIsAPaneWithNoProgram() {
+    testing::TestMemory adapter;
+    ConcurrentMemory& memory = adapter;
+    OneTerminal fixture{memory};
+    auto& panes = fixture.model.panes;
+    constexpr std::uint64_t explorer_id = 9;
+
+    panes.insert(explorer_id, ds::makeBox<Pane>(memory, memory, explorer_id, TabLocation{}, Pane::Explorer{.directory = "/srv", .size = OneTerminal::size}));
+    auto* pane = panes.find(explorer_id);
+
+    check(pane != nullptr && pane->kind() == PaneKind::explorer && pane->process_id == 0 && pane->extent == OneTerminal::size && pane->cwd.view() == "/srv" && pane->foreground.view() == "explorer" && !pane->foreground_shell);
+    check(pane->launch.count() == 1, "a session written to disk names it");
+    check(refusal(panes, explorer_id) == FailureCode::unsupported_pane_kind && editorRefusal(panes, explorer_id) == FailureCode::unsupported_pane_kind, "what a terminal or an editor answers is refused for it");
+    check(explorerRefusal(panes, OneTerminal::pane_id) == FailureCode::unsupported_pane_kind && explorerRefusal(panes, explorer_id + 1) == FailureCode::pane_not_found);
+
+    Visited visited;
+
+    visitPane(*pane, visited);
+    check(visited.explorer == pane->asMut<ExplorerBody>() && visited.explorer != nullptr && visited.terminal == nullptr && visited.editor == nullptr, "a visit hands an explorer's body over");
+
+    // The windows it is given are kept as they are said, and ones that are no windows refused.
+    auto explorer = requireExplorer(panes, explorer_id);
+    ExplorerScratch scratch{};
+    const ds::Array<ExplorerWindow, 2> windows{{{.root = "/srv", .selected = "/srv/site"}, {.machine = "box", .root = "/var/log", .lens = ExplorerLens::changes}}};
+
+    check(!explorerKept(*pane, scratch) && !explorerKept(*panes.find(OneTerminal::pane_id), scratch), "none before a client gave any, and none of a pane of another kind");
+    explorer.body.keep({.windows = windows.view(), .current = 1, .side_by_side = true});
+
+    for (const auto& wrong : {ExplorerLayout{}, ExplorerLayout{.windows = windows.view(), .current = 2}}) {
+      try {
+        explorer.body.keep(wrong);
+        check(false, "windows that are none, or whose current one is none of them, were kept");
+      } catch (const RequestError& error) {
+        check(error.code() == FailureCode::invalid_request);
+      }
+    }
+
+    const auto kept = explorerKept(*pane, scratch);
+
+    check(kept && kept->pane_id == explorer_id && kept->layout.windows.size() == 2 && kept->layout.current == 1 && kept->layout.side_by_side);
+    check(kept->layout.windows[0].root == "/srv" && kept->layout.windows[0].selected == "/srv/site" && kept->layout.windows[1].machine == "box" && kept->layout.windows[1].lens == ExplorerLens::changes);
+
+    // It has no process to signal or to wait for: it ended, well, once it was asked to close.
+    resize(explorer, {.cols = 40, .rows = 12, .cell_width_px = 8, .cell_height_px = 16});
+    check(pane->extent.cols == 40 && programTitle(*pane).text.empty());
+    signalProcess(*pane, SIGTERM);
+    check(!reapProcess(*pane) && !pane->output_closed, "it runs until it is closed");
+    requestClose(*pane);
+    check(pane->close_requested && pane->output_closed && reapProcess(*pane) == ds::Option<int>{0});
+    panes.erase(explorer_id);
+    check(panes.find(explorer_id) == nullptr && panes.size() == 1);
+  }
+
   const telar::testing::Case case_kind{"pane_kinds.pane_is_reached_as_its_kind", paneIsReachedAsItsKind};
+  const telar::testing::Case case_explorer{"pane_kinds.an_explorer_is_a_pane_with_no_program", anExplorerIsAPaneWithNoProgram};
   const telar::testing::Case case_missing{"pane_kinds.missing_pane_is_refused", missingPaneIsRefused};
   const telar::testing::Case case_refused{"pane_kinds.request_for_another_kind_is_refused", requestForAnotherKindIsRefused};
   const telar::testing::Case case_process{"pane_kinds.process_is_driven_through_the_pane", processIsDrivenThroughThePane};

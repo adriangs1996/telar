@@ -20,6 +20,8 @@ namespace telar::runtime::checkpoint {
     constexpr std::uint16_t long_arguments_version = 9;
     constexpr std::uint16_t coordinator_version = 10;
     constexpr std::uint16_t kinds_version = 11;
+    // Since when a pane's record ends with the windows of an explorer.
+    constexpr std::uint16_t explorer_version = 13;
 
     constexpr std::size_t maximum_title_bytes = 96;
 
@@ -259,7 +261,17 @@ namespace telar::runtime::checkpoint {
 
       // A pane of a kind this runtime does not run is passed over; the rest of the session is
       // restored without it.
-      if (kind != std::to_underlying(PaneKind::terminal) && kind != std::to_underlying(PaneKind::nvim)) {
+      const bool known = kind == std::to_underlying(PaneKind::terminal) || kind == std::to_underlying(PaneKind::nvim) || kind == std::to_underlying(PaneKind::explorer);
+
+      // Read whatever the kind: the record after this one starts past them.
+      if (version_ >= explorer_version) {
+        record.explorer = bytes32();
+        if (record.explorer.size() > maximum_explorer_bytes) {
+          throw EncodingError{"Invalid checkpoint explorer size"};
+        }
+      }
+
+      if (!known) {
         return ds::none;
       }
 
@@ -422,7 +434,7 @@ namespace telar::runtime::checkpoint {
   void Writer::write(const PaneRecord& record) {
     validatePath(record.cwd);
     validateTitle(record.title, record.title_source);
-    if (record.argument_count == 0 || record.argument_count > maximum_arguments || record.arguments.size() > maximum_argument_bytes || record.session.size() > maximum_session_bytes) {
+    if (record.argument_count == 0 || record.argument_count > maximum_arguments || record.arguments.size() > maximum_argument_bytes || record.session.size() > maximum_session_bytes || record.explorer.size() > maximum_explorer_bytes) {
       throw EncodingError{"Invalid checkpoint launch record"};
     }
 
@@ -441,6 +453,7 @@ namespace telar::runtime::checkpoint {
     integer(static_cast<Byte>(record.title_source));
     integer(static_cast<Byte>(record.in_pane));
     integer(static_cast<Byte>(record.kind));
+    text32(textView(record.explorer));
   }
 
   void Writer::write(const WorktreeRecord& record) {
