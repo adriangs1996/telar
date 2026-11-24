@@ -397,8 +397,9 @@ def history_rows(f):
         connection.execute("INSERT INTO session (id,pane_id,location_kind,location_id,tab_id,workspace_path,shell,started_at_ms) VALUES (?,?,?,?,?,?,?,?)",
                            (session, 900, 0, 1, 1, "/p", "/bin/sh", 1735689600000))
         for sequence, (command, workspace, code, status, author, provider) in enumerate(rows, 1):
-            connection.execute("INSERT INTO command (session_id,pane_id,location_kind,location_id,tab_id,sequence,command,cwd,workspace_path,started_at_ms,duration_ns,exit_code,status,author,provider) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
-                               (session, 900, 0, 1, 1, sequence, command, workspace, workspace, 1735689600000 + sequence, 0, code, status, author, provider))
+            # A directory that does not exist is its own key, as the store keys it.
+            connection.execute("INSERT INTO command (session_id,pane_id,location_kind,location_id,tab_id,sequence,command,cwd,workspace_path,cwd_key,workspace_key,started_at_ms,duration_ns,exit_code,status,author,provider) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                               (session, 900, 0, 1, 1, sequence, command, workspace, workspace, workspace, workspace, 1735689600000 + sequence, 0, code, status, author, provider))
 
     def listed(name, *args):
         lines = f.invoke(name, "history", "list", *args, socket=True).stdout.splitlines()
