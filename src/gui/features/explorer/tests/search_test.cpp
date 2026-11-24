@@ -268,6 +268,34 @@ namespace {
     check(explorer.view.completing.empty() && !need(explorer.view, explorer.state, Explorer::machine));
   }
 
+  void testTheSelectionMovesWhileTheFilterIsTyped() {
+    Searching explorer;
+
+    explorer.filter("md");
+
+    const auto first = explorer.selected();
+
+    check(explorer.view.mode == Mode::search && window(explorer.view).rows.size() > 2);
+    step(explorer.view, explorer.state, explorer.context(), 1);
+    step(explorer.view, explorer.state, explorer.context(), 1);
+
+    const auto moved = explorer.selected();
+
+    check(moved != first && window(explorer.view).cursor == 2, "it moves among what the filter found, with the field still open");
+    step(explorer.view, explorer.state, explorer.context(), -1);
+    check(window(explorer.view).cursor == 1 && explorer.view.mode == Mode::search);
+
+    const auto chosen = explorer.selected();
+
+    explorer.enter("md");
+    check(explorer.view.mode == Mode::normal && explorer.selected() == chosen, "and Enter keeps the filter with the row it was moved to");
+
+    // Outside a filter it moves nothing: the keys do.
+    step(explorer.view, explorer.state, explorer.context(), 1);
+    check(explorer.selected() == chosen);
+  }
+
+  const telar::testing::Case case_step{"search.the_selection_moves_while_the_filter_is_typed", testTheSelectionMovesWhileTheFilterIsTyped};
   const telar::testing::Case case_asks{"search.the_filter_asks_the_runtime_below_the_root", testTheFilterAsksTheRuntimeBelowTheRoot};
   const telar::testing::Case case_parts{"search.an_answer_comes_in_parts_and_a_later_query_replaces_it", testAnAnswerComesInPartsAndALaterQueryReplacesIt};
   const telar::testing::Case case_around{"search.n_and_N_go_around_the_matches", testNAndNGoAroundTheMatches};

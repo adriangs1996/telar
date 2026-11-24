@@ -311,7 +311,8 @@ namespace telar::gui::test {
       answer();
     }
 
-    // Types `keys`, each character a key, with `<CR>`, `<Esc>` and `<C-x>` spelled as Neovim does.
+    // Types `keys`, each character a key, with `<CR>`, `<Esc>`, `<BS>`, `<C-x>`, `<D-x>` and
+    // `<M-x>` spelled as Neovim does.
     Action type(std::string_view keys) {
       Action last;
 
@@ -326,9 +327,12 @@ namespace telar::gui::test {
             chord.key = KeyChord::Key::enter;
           } else if (name == "<Esc>") {
             chord.key = KeyChord::Key::escape;
+          } else if (name == "<BS>") {
+            chord.key = KeyChord::Key::backspace;
           } else {
             chord.character = KeyCharacter::pack(static_cast<std::uint32_t>(name[3]));
-            chord.modifiers = static_cast<unsigned>(name[1] == 'C' ? KeyChord::Modifier::control : KeyChord::Modifier::super);
+            chord.modifiers = static_cast<unsigned>(name[1] == 'C' ? KeyChord::Modifier::control : name[1] == 'M' ? KeyChord::Modifier::alt
+                                                                                                                  : KeyChord::Modifier::super);
           }
 
           index = close + 1;
@@ -351,19 +355,37 @@ namespace telar::gui::test {
       return action;
     }
 
-    // The names of the rows the current window lists, a directory's ending in a slash.
+    // The names of the rows the current window lists, a directory's ending in a slash. The note
+    // that ends a tree with what its root leaves out is no part of them: `leftOut` reads it.
     [[nodiscard]] std::vector<std::string> names() const {
       std::vector<std::string> result;
       const auto& listed = window(view);
 
       for (std::size_t index = 0; index < listed.rows.size(); ++index) {
         const auto seen = look(view, cache(here()), context(), {.window = view.current, .row = index});
+        if (listed.rows[index].kind == RowKind::note && seen.name.view().ends_with(left_out)) {
+          continue;
+        }
 
         result.push_back(std::string{seen.lead.view()} + std::string{seen.name.view()} + (seen.directory ? "/" : ""));
       }
 
       return result;
     }
+
+    // What the last row of the tree says its root leaves out; empty when it leaves nothing out.
+    [[nodiscard]] std::string leftOut() const {
+      const auto& listed = window(view);
+      if (listed.rows.empty() || listed.rows[listed.rows.size() - 1].kind != RowKind::note) {
+        return {};
+      }
+
+      const auto seen = look(view, cache(here()), context(), {.window = view.current, .row = listed.rows.size() - 1});
+
+      return seen.name.view().ends_with(left_out) ? std::string{seen.name.view()} : std::string{};
+    }
+
+    static constexpr std::string_view left_out = "not listed here";
 
     [[nodiscard]] std::string selected() const {
       return std::string{window(view).selected.view()};

@@ -391,6 +391,79 @@ namespace {
     check(explorer.view.mode == Mode::plan && explorer.view.plan[0].source_machine == Explorer::machine && explorer.view.plan[0].machine == Explorer::box, "the plan carries them between the two");
   }
 
+  // The pointer clicks the row named, in the current window.
+  void clickOn(Explorer& explorer, std::string_view name) {
+    click(explorer.view, explorer.state, explorer.context(), {.window = explorer.view.current, .row = explorer.at(name)});
+    explorer.answer();
+  }
+
+  void testAClickOnTheSelectedRowUnfoldsIt() {
+    Explorer explorer;
+
+    explorer.start();
+    clickOn(explorer, "assets");
+    check(explorer.selected() == "/home/dev/telar/assets" && !explorer.row("assets").expanded, "a click on another row selects it");
+    clickOn(explorer, "assets");
+    check(explorer.row("assets").expanded && explorer.at("logo.svg") == 1, "one more on it unfolds its directory");
+    clickOn(explorer, "assets");
+    check(!explorer.row("assets").expanded, "and one more folds it");
+
+    // On a file git says something of, it is the diff that unfolds.
+    explorer.type("jl");
+    clickOn(explorer, "usage.md");
+    check(explorer.selected() == "/home/dev/telar/docs/usage.md" && window(explorer.view).diffs.empty());
+    clickOn(explorer, "usage.md");
+    check(window(explorer.view).diffs.size() == 1 && window(explorer.view).rows[explorer.at("usage.md") + 1].kind == RowKind::diff);
+    clickOn(explorer, "usage.md");
+    check(window(explorer.view).diffs.empty());
+    clickOn(explorer, "agents.md");
+    clickOn(explorer, "agents.md");
+    check(window(explorer.view).diffs.empty(), "a file as it was committed has none");
+
+    // A click that adds to the selection folds nothing.
+    clickOn(explorer, "docs");
+    click(explorer.view, explorer.state, explorer.context(), {.window = 0, .row = explorer.at("docs"), .toggle = true});
+    check(explorer.row("docs").expanded);
+  }
+
+  void testThePathOfTheHeadRootsTheWindow() {
+    Explorer explorer;
+
+    explorer.start();
+    explorer.type(":");
+    explorer.enter("e docs/images");
+    check(window(explorer.view).root.view() == "/home/dev/telar/docs/images");
+    climb(explorer.view, explorer.state, explorer.context(), {.window = 0, .directory = "/home/dev/telar"});
+    explorer.answer();
+    check(window(explorer.view).root.view() == "/home/dev/telar" && explorer.selected() == "/home/dev/telar/docs", "the directory it came down through is selected");
+    explorer.type("<C-o>");
+    check(window(explorer.view).root.view() == "/home/dev/telar/docs/images", "it is a jump, to come back from");
+
+    // The root itself is where it is already; and a window that is not the current one takes
+    // the keys when its path is chosen.
+    explorer.type("<C-w>v");
+    climb(explorer.view, explorer.state, explorer.context(), {.window = 0, .directory = "/home/dev"});
+    explorer.answer();
+    check(explorer.view.current == 0 && window(explorer.view).root.view() == "/home/dev" && explorer.view.windows[1]->root.view() == "/home/dev/telar/docs/images");
+    climb(explorer.view, explorer.state, explorer.context(), {.window = 7, .directory = "/"});
+    check(window(explorer.view).root.view() == "/home/dev", "a window there is not is none to move");
+  }
+
+  void testEveryRowIsPickedAtOnce() {
+    Explorer explorer;
+
+    explorer.start();
+    explorer.type("<D-a>");
+    check(window(explorer.view).picked.size() == 5 && explorer.view.mode == Mode::normal && status(explorer.view, explorer.state, explorer.context(), 0).chosen == 5, "the note that ends the tree is no row to pick");
+    explorer.type("dd");
+    check(explorer.view.edits.size() == 5, "what follows takes them all");
+    explorer.type("u<C-a><Esc>");
+    check(window(explorer.view).picked.empty());
+  }
+
+  const telar::testing::Case case_click{"pointer.a_click_on_the_selected_row_unfolds_it", testAClickOnTheSelectedRowUnfoldsIt};
+  const telar::testing::Case case_climb{"pointer.the_path_of_the_head_roots_the_window", testThePathOfTheHeadRootsTheWindow};
+  const telar::testing::Case case_all{"pointer.every_row_is_picked_at_once", testEveryRowIsPickedAtOnce};
   const telar::testing::Case case_menu{"pointer.the_menu_of_a_row_lists_what_applies_to_it", testTheMenuOfARowListsWhatAppliesToIt};
   const telar::testing::Case case_menu_keys{"pointer.the_keys_move_in_the_menu_and_a_line_runs_what_its_key_runs", testTheKeysMoveInTheMenuAndALineRunsWhatItsKeyRuns};
   const telar::testing::Case case_menu_selection{"pointer.the_menu_acts_on_the_selection_it_opens_on", testTheMenuActsOnTheSelectionItOpensOn};

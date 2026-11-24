@@ -209,7 +209,7 @@ namespace telar::gui::features::explorer {
     }
 
     // The marks set on `path`, as Neovim writes them.
-    void noteMarks(RowLook& look, const View& view, std::uint64_t machine, std::string_view path) {
+    void noteMarks(ShortText& marks, const View& view, std::uint64_t machine, std::string_view path) {
       ds::Array<char, short_text_bytes> letters{};
       std::size_t length = 0;
 
@@ -221,7 +221,7 @@ namespace telar::gui::features::explorer {
         }
       }
 
-      look.marks.assign({letters.data(), length});
+      marks.assign({letters.data(), length});
     }
 
     // How long ago a touch was, in the few characters a row has for it: `40s`, `6m`, `2h`, `3d`.
@@ -378,7 +378,7 @@ namespace telar::gui::features::explorer {
       }
 
       noteRemoval(look, seen.view, machine, path.view());
-      noteMarks(look, seen.view, machine, path.view());
+      noteMarks(look.marks, seen.view, machine, path.view());
       if (!row.directory) {
         noteActors(look, seen, path.view());
         look.editor = heldBy(seen.context.edited, {.machine = machine, .path = path.view()}).hold;
@@ -520,7 +520,7 @@ namespace telar::gui::features::explorer {
       }
 
       noteRemoval(look, seen.view, machine, path.view());
-      noteMarks(look, seen.view, machine, path.view());
+      noteMarks(look.marks, seen.view, machine, path.view());
       if (row.directory) {
         notePanes(look, seen.context, path.view());
       }
@@ -596,6 +596,14 @@ namespace telar::gui::features::explorer {
       return count;
     }
 
+    // Whether the name being typed is of an entry a change adds new, which a slash at its end
+    // makes a directory.
+    bool creates(const View& view) noexcept {
+      return std::ranges::any_of(view.edits, [&](const Edit& edit) {
+        return edit.id == view.inserting && edit.kind == EditKind::create;
+      });
+    }
+
     // The hints of a mode whose keys do not depend on the selected row; false for a mode whose
     // hints do.
     bool fixedHints(Hints& hints, const View& view) {
@@ -607,8 +615,18 @@ namespace telar::gui::features::explorer {
         addHint(hints, "n", {.text = "cancel"});
         return true;
       case Mode::question:
-        addHint(hints, "y", {.text = "bring a copy"});
+        addHint(hints, "y", {.text = view.asked == Asked::undo ? std::string_view{"take it back"} : std::string_view{"bring a copy"}});
         addHint(hints, "n", {.text = "leave it"});
+        return true;
+      case Mode::insert:
+        addHint(hints, "<CR>", {.text = "end"});
+        addHint(hints, "<Esc>", {.text = "end"});
+        if (creates(view)) {
+          addHint(hints, "name/", {.text = "a directory"});
+        } else {
+          addHint(hints, "empty", {.text = "cancels"});
+        }
+
         return true;
       case Mode::menu:
         addHint(hints, "j k", {.text = "move"});
@@ -627,6 +645,7 @@ namespace telar::gui::features::explorer {
       case Mode::search:
         addHint(hints, "<CR>", {.text = "keep the filter"});
         addHint(hints, "<Esc>", {.text = "drop it"});
+        addHint(hints, "<C-n> <C-p>", {.text = "move"});
         return true;
       case Mode::command:
         addHint(hints, ":w", {.text = "plan"});
@@ -635,10 +654,9 @@ namespace telar::gui::features::explorer {
         addHint(hints, ":e LABEL:PATH", {.text = "another machine"});
         addHint(hints, ":machine", {.text = "list them"});
         addHint(hints, ":commit", {.text = "message"});
-        addHint(hints, "<Tab>", {.text = "complete a path or a machine"});
+        addHint(hints, "<Tab>", {.text = "complete a command, a path or a machine"});
         return true;
       case Mode::normal:
-      case Mode::insert:
       case Mode::help:
         return false;
       }
@@ -964,6 +982,127 @@ namespace telar::gui::features::explorer {
       } else {
         write(fact.value, "another tab · {}", state);
       }
+    }
+
+    // The entries of the directory at `path` that git ignores, without the dotfiles when
+    // `dotted` is false: read from what git said, and not asked of each entry, so that a
+    // directory of thousands costs what its changes do.
+    std::size_t ignoredIn(const Repository& repository, std::string_view path, bool dotted) noexcept {
+      const auto root = repository.root.view();
+      if (root.empty() || !within(path, root)) {
+        return 0;
+      }
+
+      // The directory as git names it, from the repository's top: nothing for the top itself.
+      auto relative = path;
+
+      relative.remove_prefix(std::min(relative.size(), root.size() + 1));
+
+      std::size_t count = 0;
+
+      for (const auto& change : repository.changes) {
+        if (change.unstaged != FileState::ignored) {
+          continue;
+        }
+
+        auto ignored = repository.path(change);
+        if (ignored.ends_with('/')) {
+          ignored.remove_suffix(1);
+        }
+
+        // What leads to its name, without the slash before it: nothing at the top.
+        const auto name = baseOf(ignored);
+        auto parent = ignored;
+
+        parent.remove_suffix(std::min(parent.size(), name.size() + 1));
+        count += parent == relative && (dotted || !name.starts_with('.')) ? 1 : 0;
+      }
+
+      return count;
+    }
+
+    // How many of the entries a directory holds the window lists, once the directory is listed.
+    void noteEntries(PreviewLook& look, const Window& window, const State& state, std::string_view path) {
+      const auto* directory = find(state, path);
+      if (directory == nullptr || !directory->listed || directory->failed || directory->total > directory->entries.size()) {
+        return;
+      }
+
+      const auto entries = directory->entries.size();
+      const auto dotted = static_cast<std::size_t>(std::ranges::count_if(directory->entries, [&](const Entry& entry) {
+        return directory->name(entry).starts_with('.');
+      }));
+
+      const auto hidden = window.hidden ? 0 : dotted;
+      const auto ignored = window.ignored ? 0 : ignoredIn(state.repository, path, window.hidden);
+
+      write(addFact(look, "Entries").value, "{} of {} visible", entries - std::min(entries, hidden + ignored), entries);
+    }
+
+    constexpr std::string_view paneKindName(PaneKind kind) noexcept {
+      switch (kind) {
+      case PaneKind::shell:
+        return "shell";
+      case PaneKind::agent:
+        return "agent";
+      case PaneKind::editor:
+        return "editor";
+      case PaneKind::program:
+        return "program";
+      }
+
+      return {};
+    }
+
+    // A pane of the tab: what it is and where, which Enter goes to.
+    void panePreview(PreviewLook& look, const Context& context, const Row& row) {
+      if (row.item >= context.panes.size()) {
+        return;
+      }
+
+      const auto& pane = context.panes[row.item];
+
+      look.shown = true;
+      look.kind = RowKind::pane;
+      write(look.name, "{} {}", pane.number, pane.title);
+      write(look.path, "{} · {}", context.workspace, context.machine);
+      put(addFact(look, "Kind").value, paneKindName(pane.kind));
+      put(addFact(look, "Directory").value, pane.cwd);
+      look.note = "Enter focuses this pane; a window that follows it goes to its directory.";
+    }
+
+    // An entry that is not on disk yet: what a change typed adds, or a file on its way from
+    // another machine.
+    void addedPreview(PreviewLook& look, const View& view, const Context& context, const Row& row) {
+      look.kind = RowKind::added;
+      look.directory = row.directory;
+      if (const auto* transfer = transferOf(view, row)) {
+        look.shown = true;
+        put(look.name, transfer->name.view());
+        write(look.path, "{}{}{}", transfer->directory.view(), transfer->directory.view().ends_with('/') ? "" : "/", transfer->name.view());
+        write(addFact(look, "Pending").value, "arriving from {}", labelOf(context, transfer->from));
+        put(addFact(look, "Size").value, bytes(transfer->tree ? wholeBytes(*transfer) : transfer->size).view());
+        look.note = "It is on its way: :cancel stops it and removes what had arrived.";
+        return;
+      }
+
+      const auto* edit = editOf(view, row);
+      if (edit == nullptr) {
+        return;
+      }
+
+      look.shown = true;
+      look.directory = edit->directory;
+      put(look.name, edit->name.empty() ? std::string_view{"…"} : edit->name.view());
+      write(look.path, "{}{}{}", edit->path.view(), edit->path.view().ends_with('/') ? "" : "/", edit->name.view());
+      if (edit->kind == EditKind::paste) {
+        write(addFact(look, "Pending").value, "{} from {}:{}", edit->paste == PasteKind::move ? "move" : "copy", labelOf(context, edit->source_machine), edit->source.view());
+        put(addFact(look, "Size").value, bytes(edit->size).view());
+      } else {
+        put(addFact(look, "Pending").value, edit->directory ? "create a directory" : "create an empty file");
+      }
+
+      look.note = "It does not exist until :w applies it. Cutting it drops the change; renaming it names it again.";
     }
 
     // The title over the text a preview shows of a file.
@@ -1361,23 +1500,23 @@ namespace telar::gui::features::explorer {
 
     constexpr ds::Array<HelpText, help_lines> help_texts{
         {
-            {.group = "Moving", .keys = {{key(Command::down), key(Command::up)}}, .label = "down, up; with a count"},
+            {.group = "Moving", .keys = {{key(Command::down), key(Command::up), only(Command::down, "<C-n>"), only(Command::up, "<C-p>")}}, .label = "down, up; with a count"},
             {.group = "Moving", .keys = {{key(Command::top), key(Command::bottom)}}, .label = "first, last; with a count, that row"},
             {.group = "Moving", .keys = {{key(Command::half_page_down), key(Command::half_page_up)}}, .label = "half a page"},
             {.group = "Moving", .keys = {{key(Command::collapse), key(Command::expand)}}, .label = "fold, unfold; unfold on a file opens it"},
-            {.group = "Moving", .keys = {{key(Command::toggle_fold), key(Command::fold_all), key(Command::unfold_all)}}, .label = "toggle a fold, fold all, unfold a level"},
+            {.group = "Moving", .keys = {{key(Command::toggle_fold), key(Command::unfold), key(Command::fold), key(Command::fold_all), key(Command::unfold_all)}}, .label = "toggle, unfold, fold; fold all, unfold all"},
             {.group = "Moving", .keys = {{key(Command::next_change), key(Command::previous_change)}}, .label = "next, previous change of git"},
             {.group = "Moving", .keys = {{key(Command::next_touch), key(Command::previous_touch)}}, .label = "next, previous file an agent touched"},
             {.group = "Roots and jumps", .keys = {{key(Command::enter)}}, .label = "enter a directory"},
-            {.group = "Roots and jumps", .keys = {{key(Command::parent)}}, .label = "the directory above"},
+            {.group = "Roots and jumps", .keys = {{key(Command::parent), only(Command::parent, "<BS>")}}, .label = "the directory above"},
             {.group = "Roots and jumps", .keys = {{key(Command::workspace_root), key(Command::home)}}, .label = "the workspace's root, the home"},
             {.group = "Roots and jumps", .keys = {{key(Command::scope_pane), key(Command::scope_workspace), key(Command::scope_machine)}}, .label = "follow pane, workspace, machine"},
             {.group = "Roots and jumps", .keys = {{lettered(Command::mark, 'a'), lettered(Command::jump_to_mark, 'a')}}, .label = "set a mark, jump to it"},
             {.group = "Roots and jumps", .keys = {{key(Command::jump_back), key(Command::jump_forward)}}, .label = "back, forward in the jumps"},
             {.group = "Roots and jumps", .keys = {{key(Command::next_lens), key(Command::previous_lens)}}, .label = "next, previous lens"},
-            {.group = "Editing as text", .keys = {{key(Command::rename), only(Command::rename, "i"), only(Command::rename, "a")}}, .label = "rename on the row"},
+            {.group = "Editing as text", .keys = {{key(Command::rename), key(Command::rename_whole), key(Command::rename_start), key(Command::rename_end)}}, .label = "rename: stem, all, at its start, its end"},
             {.group = "Editing as text", .keys = {{key(Command::create)}}, .label = "new entry; name/ is a directory"},
-            {.group = "Editing as text", .keys = {{key(Command::cut)}}, .label = "cut: deletes, or moves once pasted"},
+            {.group = "Editing as text", .keys = {{key(Command::cut), only(Command::cut, "<Del>")}}, .label = "cut: deletes, or moves once pasted"},
             {.group = "Editing as text", .keys = {{key(Command::yank)}}, .label = "copy, and its path to the clipboard"},
             {.group = "Editing as text", .keys = {{key(Command::paste)}}, .label = "paste into the row's directory"},
             {.group = "Editing as text", .keys = {{key(Command::undo)}}, .label = "undo a change, else the last :w"},
@@ -1385,16 +1524,17 @@ namespace telar::gui::features::explorer {
             {.group = "Editing as text", .keys = {{said(":e! :q!")}}, .label = "discard the changes"},
             {.group = "Windows", .keys = {{key(Command::split_vertical), key(Command::split_horizontal)}}, .label = "another window beside, below"},
             {.group = "Windows", .keys = {{key(Command::next_window), key(Command::window_left), joined(Command::window_down), joined(Command::window_up), joined(Command::window_right)}}, .label = "the next window, the one that way"},
+            {.group = "Windows", .keys = {{said("<M-w>")}}, .label = "stands for <C-w>, where that is taken"},
             {.group = "Windows", .keys = {{key(Command::close_window), key(Command::only_window)}}, .label = "close this one, keep only this one"},
             {.group = "Windows", .keys = {{said(":e PATH :vs PATH")}}, .label = "this window, or a new one, at a path"},
             {.group = "Windows", .keys = {{key(Command::pin), said(":pin")}}, .label = "beside the panes, or over them again"},
-            {.group = "Windows", .keys = {{said("prefix o")}}, .label = "beside them: to it, and back to the pane"},
-            {.group = "Windows", .keys = {{said("focus keys")}}, .label = "beside them: in from the last pane, out"},
+            {.group = "Windows", .keys = {{said("prefix o")}}, .label = "beside them: to it, and back"},
+            {.group = "Windows", .keys = {{said("focus keys")}}, .label = "beside them: in from a pane, out"},
             {.group = "Machines", .keys = {{key(Command::next_machine)}}, .label = "this window on the next machine"},
             {.group = "Machines", .keys = {{said(":machine LABEL")}}, .label = "go to a machine; alone, list them"},
-            {.group = "Machines", .keys = {{said(":e LABEL:PATH")}}, .label = "a path of another machine; :vs and :sp too"},
-            {.group = "Machines", .keys = {{lettered(Command::mark, 'A'), lettered(Command::jump_to_mark, 'A')}}, .label = "a mark in upper case keeps its machine"},
-            {.group = "Machines", .keys = {{key(Command::open), key(Command::yank)}}, .label = "open where the file is; copy LABEL:/path"},
+            {.group = "Machines", .keys = {{said(":e LABEL:PATH")}}, .label = "a path of another machine; :vs too"},
+            {.group = "Machines", .keys = {{lettered(Command::mark, 'A'), lettered(Command::jump_to_mark, 'A')}}, .label = "upper case: a mark with its machine"},
+            {.group = "Machines", .keys = {{key(Command::open), key(Command::yank)}}, .label = "open where it is; copy LABEL:/path"},
             {.group = "Toward the panes", .keys = {{key(Command::enter)}}, .label = "as the focused pane takes it"},
             {.group = "Toward the panes", .keys = {{key(Command::visual), selecting(Command::enter)}}, .label = "insert several, directories too"},
             {.group = "Toward the panes", .keys = {{key(Command::open)}}, .label = "open in the tab's editor"},
@@ -1410,10 +1550,10 @@ namespace telar::gui::features::explorer {
             {.group = "Git, sizes and what shows", .keys = {{key(Command::cycle_sort)}}, .label = "sort by name, size, time"},
             {.group = "Git, sizes and what shows", .keys = {{key(Command::toggle_hidden), key(Command::toggle_ignored)}}, .label = "dotfiles, what git ignores"},
             {.group = "Git, sizes and what shows", .keys = {{key(Command::refresh)}}, .label = "read again"},
-            {.group = "Modes", .keys = {{key(Command::visual)}}, .label = "visual: copy, cut, insert, mention"},
+            {.group = "Modes", .keys = {{key(Command::visual), only(Command::select_all, "<D-a>")}}, .label = "visual, every row: copy, cut, insert"},
             {.group = "Modes", .keys = {{key(Command::search), key(Command::next_match), key(Command::previous_match)}}, .label = "filter every path below; next, previous"},
-            {.group = "Modes", .keys = {{key(Command::command_line)}}, .label = "e w vs sp cd commit marks cancel q"},
-            {.group = "Modes", .keys = {{said("<Tab>")}}, .label = "on a line of :, complete a directory"},
+            {.group = "Modes", .keys = {{key(Command::command_line)}}, .label = "e w vs cd scope commit marks q"},
+            {.group = "Modes", .keys = {{said("<Tab>")}}, .label = "on a : line: a command, a path"},
             {.group = "Modes", .keys = {{key(Command::toggle_follow)}}, .label = "follow the pane"},
             {.group = "Modes", .keys = {{key(Command::quit)}}, .label = "close"},
             {.group = "Modes", .keys = {{key(Command::help)}}, .label = "this help"},
@@ -1520,6 +1660,15 @@ namespace telar::gui::features::explorer {
     return result;
   }
 
+  namespace {
+
+    // Whether a row of that kind names a file of its machine, whose text a preview shows.
+    constexpr bool namesFile(RowKind kind) noexcept {
+      return kind == RowKind::entry || kind == RowKind::change || kind == RowKind::match;
+    }
+
+  }
+
   PreviewLook preview(const View& view, const State& state, const Context& context, std::uint64_t now_seconds) {
     PreviewLook result;
 
@@ -1533,6 +1682,16 @@ namespace telar::gui::features::explorer {
     }
 
     const auto& row = window.rows[window.cursor];
+    if (row.kind == RowKind::pane) {
+      panePreview(result, context, row);
+      return result;
+    }
+
+    if (row.kind == RowKind::added) {
+      addedPreview(result, view, context, row);
+      return result;
+    }
+
     if (row.kind != RowKind::entry && row.kind != RowKind::change && row.kind != RowKind::match) {
       return result;
     }
@@ -1541,10 +1700,15 @@ namespace telar::gui::features::explorer {
     const auto* inspection = inspected(state, path);
 
     result.shown = true;
+    result.kind = row.kind;
     result.directory = row.directory;
     put(result.name, baseOf(path));
     put(result.path, path);
     addListed(result, listedOf(state, row, inspection), now_seconds);
+    if (row.directory) {
+      noteEntries(result, window, state, path);
+    }
+
     addGit(result, state.repository, path);
     if (inspection != nullptr) {
       addInspected(result, *inspection);
@@ -1557,6 +1721,14 @@ namespace telar::gui::features::explorer {
     } else {
       noteEditor(result, context, path);
       noteActivity(result, state, context, path);
+    }
+
+    // The marks set on it, when the explorer has any.
+    if (ShortText marks; !view.marks.empty()) {
+      noteMarks(marks, view, window.machine, path);
+      if (!marks.view().empty()) {
+        put(addFact(result, "Marks").value, marks.view());
+      }
     }
 
     result.waiting = inspection == nullptr;
@@ -1574,7 +1746,7 @@ namespace telar::gui::features::explorer {
     }
 
     const auto& window = explorer::window(view);
-    if (window.rows.empty() || window.rows[window.cursor].directory) {
+    if (window.rows.empty() || window.rows[window.cursor].directory || !namesFile(window.rows[window.cursor].kind)) {
       return {};
     }
 

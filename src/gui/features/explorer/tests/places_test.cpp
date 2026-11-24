@@ -45,8 +45,8 @@ namespace {
     const auto jump = keeping(places, first.view, first.context(Explorer::machine));
 
     check(places.size() == 2 + first.view.jumps.size() && jump == first.view.jump);
-    check(places[0].letter == Byte{'a'} && places[0].machine.empty() && places[0].root == "/home/dev/telar", "the machine the window runs on has no label where it is kept");
-    check(places[1].letter == Byte{'B'} && places[1].machine == "box" && places[1].root == "/home/ops" && places[1].selected == "/home/ops/site");
+    check(places[0].letter == Byte{'a'} && places[0].machine.empty() && places[0].root == "/home/dev/telar/src" && places[0].selected.empty(), "the machine the window runs on has no label where it is kept, and a directory is marked as the root it becomes");
+    check(places[1].letter == Byte{'B'} && places[1].machine == "box" && places[1].root == "/home/ops/site" && places[1].selected.empty());
     check(places[2].letter == Byte{0} && places[2].root == "/home/dev/telar", "the steps follow the marks, from the oldest");
 
     // The window that comes after it reads them when its explorer opens.
@@ -57,9 +57,9 @@ namespace {
     check(!unkept(next.view), "what was only read is what the runtime keeps already");
     check(next.view.marks.size() == 2 && next.view.jumps.size() == first.view.jumps.size() && next.view.jump == first.view.jump);
     next.type("gg'a");
-    check(next.selected() == places[0].selected && next.selected() != "/home/dev/telar/assets" && next.here() == Explorer::machine, "a mark goes where it was set");
+    check(window(next.view).root.view() == "/home/dev/telar/src" && next.here() == Explorer::machine, "a mark goes where it was set");
     next.type("'B");
-    check(next.here() == Explorer::box && window(next.view).root.view() == "/home/ops" && next.selected() == "/home/ops/site", "one in upper case with its machine");
+    check(next.here() == Explorer::box && window(next.view).root.view() == "/home/ops/site", "one in upper case with its machine");
     check(unkept(next.view), "a jump is a change to keep");
   }
 
@@ -102,13 +102,13 @@ namespace {
     check(next.view.tone == Tone::error && next.view.message.view() == "Mark B is of box, which is no machine of this window" && next.here() == Explorer::machine);
     next.type(":");
     next.enter("marks");
-    check(next.view.message.view() == "'a /home/dev/telar · 'B box:/home/ops");
+    check(next.view.message.view() == "'a /home/dev/telar/src · 'B box:/home/ops/site");
 
     // It is given back as it was read, for a window that keeps the machine again.
     ds::Vec<KeptPlace, Memory> again{next.memory};
 
     static_cast<void>(keeping(again, next.view, next.context(Explorer::machine)));
-    check(again.size() == places.size() && again[1].letter == Byte{'B'} && again[1].machine == "box" && again[1].root == "/home/ops");
+    check(again.size() == places.size() && again[1].letter == Byte{'B'} && again[1].machine == "box" && again[1].root == "/home/ops/site");
   }
 
   void testWhatDoesNotFitIsLeftOut() {

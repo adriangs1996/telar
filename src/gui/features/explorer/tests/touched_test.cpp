@@ -181,6 +181,20 @@ namespace {
     check(explorer.requests == quiet, "a window that shows no file asks nothing of who touched them");
   }
 
+  void testADiffUnfoldsInTheLens() {
+    Explorer explorer;
+
+    touch(explorer);
+    explorer.start();
+    explorer.type("3gtG=");
+    check(explorer.selected() == "/home/dev/telar/docs/usage.md");
+    check(explorer.names() == Names{"src/main.cpp", "docs/images/window.png", "docs/usage.md", "@@ -1,2 +1,2 @@", "-old", "+new", " context"}, "= unfolds the diff below the row of what was touched");
+    check(explorer.row("usage.md").share == 250 && explorer.row("main.cpp").share == 1000, "the sizes are of the files, as before");
+    explorer.type("=");
+    check(explorer.names().size() == 3);
+  }
+
+  const telar::testing::Case case_diff{"touched.a_diff_unfolds_in_the_lens", testADiffUnfoldsInTheLens};
   const telar::testing::Case case_lens{"touched.the_lens_lists_what_was_touched_below_the_root", testTheLensListsWhatWasTouchedBelowTheRoot};
   const telar::testing::Case case_row{"touched.a_row_says_who_touched_it_and_the_preview_how", testARowSaysWhoTouchedItAndThePreviewHow};
   const telar::testing::Case case_plan_touched{"touched.the_plan_knows_what_an_agent_touched_since_it_was_listed", testThePlanKnowsWhatAnAgentTouchedSinceItWasListed};

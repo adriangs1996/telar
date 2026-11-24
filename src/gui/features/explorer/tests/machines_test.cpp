@@ -146,18 +146,18 @@ namespace {
     check(explorer.view.message.view() == "Mark a is of macbook: a mark in upper case keeps its machine");
     explorer.type("jma");
     explorer.type("gg'a");
-    check(explorer.selected() == "/home/ops/site", "each machine has its own");
+    check(window(explorer.view).root.view() == "/home/ops/site", "each machine has its own, and one set on a directory makes it the root");
 
     // One in upper case goes to its machine, in one jump that <C-o> takes back.
     explorer.type("'B");
     check(explorer.here() == Explorer::machine && window(explorer.view).root.view() == "/home/dev/telar" && explorer.selected() == "/home/dev/telar/justfile");
     explorer.type("<C-o>");
-    check(explorer.here() == Explorer::box && window(explorer.view).root.view() == "/home/ops" && explorer.names() == Names{"logs/", "site/", "deploy.sh"}, "back on the other machine, listed");
+    check(explorer.here() == Explorer::box && window(explorer.view).root.view() == "/home/ops/site" && explorer.names() == Names{"index.html", "latest"}, "back on the other machine, listed");
     explorer.type("<C-i>");
     check(explorer.here() == Explorer::machine && window(explorer.view).root.view() == "/home/dev/telar", "and forward again");
     explorer.type(":");
     explorer.enter("marks");
-    check(explorer.view.message.view() == "'a /home/dev/telar · 'B macbook:/home/dev/telar", ":marks lists the ones of this machine, and the ones that keep theirs");
+    check(explorer.view.message.view() == "'a /home/dev/telar/src · 'B macbook:/home/dev/telar/justfile", ":marks lists what each marks: the ones of this machine, and the ones that keep theirs");
   }
 
   void testOnePlanGoesToEachMachineItsPart() {
@@ -207,7 +207,8 @@ namespace {
     explorer.answer();
 
     // u takes it back on every machine it touched.
-    check(explorer.type("u").kind == ActionKind::undo && explorer.view.awaited.size() == 2 && std::ranges::contains(explorer.view.wrote, Explorer::box) && std::ranges::contains(explorer.view.wrote, Explorer::machine));
+    check(explorer.type("u").kind == ActionKind::none && explorer.view.mode == Mode::question, "it asks first");
+    check(explorer.type("y").kind == ActionKind::undo && explorer.view.awaited.size() == 2 && std::ranges::contains(explorer.view.wrote, Explorer::box) && std::ranges::contains(explorer.view.wrote, Explorer::machine));
   }
 
   void testADirectoryGoesToAnotherMachineAsAnyRow() {

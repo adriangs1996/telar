@@ -415,7 +415,8 @@ namespace {
     check(fixture.refresh());
     check(fixture.view.edits.empty() && transport.count(ClientTag::list_directory) == listings + 1, "the changes are written, and the directory is read again");
     static_cast<void>(fixture.press('u'));
-    check(transport.count(ClientTag::undo_file_changes) == 1 && fixture.box_transport.count(ClientTag::undo_file_changes) == 0, "u with nothing typed takes the plan back, where it was written");
+    static_cast<void>(fixture.press('y'));
+    check(transport.count(ClientTag::undo_file_changes) == 1 && fixture.box_transport.count(ClientTag::undo_file_changes) == 0, "u with nothing typed takes the plan back, where it was written, once a yes says so");
   }
 
   void aFilterAsksTheRuntimeForThePathsBelowTheRoot() {
@@ -536,6 +537,7 @@ namespace {
     static_cast<void>(fixture.refresh());
     check(!fixture.view.writing && fixture.view.edits.empty() && fixture.view.message.view() == ":w · 2 applied by the runtime · u takes it back", "one line counts what both did");
     static_cast<void>(fixture.press('u'));
+    static_cast<void>(fixture.press('y'));
     check(transport.count(ClientTag::undo_file_changes) == 1 && box_transport.count(ClientTag::undo_file_changes) == 1, "u takes it back on every machine it touched");
   }
 
@@ -728,6 +730,7 @@ namespace {
     check(fixture.carry() && fixture.view.transfers[0].phase == explorer::TransferPhase::arrived && fixture.view.message.view() == "deploy.sh arrived");
     check(box_transport.count(ClientTag::change_files) == 0, "a copy leaves its original");
     static_cast<void>(fixture.press('u'));
+    static_cast<void>(fixture.press('y'));
     check(transport.count(ClientTag::undo_file_changes) == 1 && box_transport.count(ClientTag::undo_file_changes) == 0, "u takes it back where it arrived");
   }
 
@@ -905,6 +908,7 @@ namespace {
     check(deliver(fixture.box, FilesChanged{.request_id = trash.request_id, .undoable = true, .results = done.view()}) == application::Change::explorer);
     check(fixture.carry() && fixture.view.transfers[0].phase == explorer::TransferPhase::arrived && !fixture.view.writing, "the answer is the transfer's, and no plan's");
     static_cast<void>(fixture.press('u'));
+    static_cast<void>(fixture.press('y'));
     check(transport.count(ClientTag::undo_file_changes) == 1 && box_transport.count(ClientTag::undo_file_changes) == 1, "u takes the copy away and the original out of the trash");
 
     // A transfer cancelled removes what had arrived, and asks nothing more of the source.

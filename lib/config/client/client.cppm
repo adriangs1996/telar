@@ -2188,6 +2188,9 @@ export {
       collapse,
       expand,
       toggle_fold,
+      // `zo`, `zc`: the directory unfolds, or folds; `zc` on what is in one folds that one.
+      unfold,
+      fold,
       fold_all,
       unfold_all,
       next_change,
@@ -2212,8 +2215,12 @@ export {
       next_lens,
       previous_lens,
       // Editing the listing as text.
+      // A row's name is typed again: with its stem selected, all of it, or the caret before or
+      // after it.
       rename,
       rename_whole,
+      rename_start,
+      rename_end,
       create,
       // A new entry that is a directory, whatever its name ends in: no key names it, a row's menu does.
       create_directory,
@@ -2257,6 +2264,8 @@ export {
       // Modes.
       toggle_follow,
       visual,
+      // Every row of the window is picked, as the pointer picks them one by one.
+      select_all,
       search,
       next_match,
       previous_match,
@@ -2268,7 +2277,7 @@ export {
 
     // The name the configuration gives each command, in the order of the commands. `none` names
     // no command a key can take.
-    inline constexpr ds::Array<std::string_view, 76> explorer_command_names{
+    inline constexpr ds::Array<std::string_view, 81> explorer_command_names{
         "none",
         "down",
         "up",
@@ -2279,6 +2288,8 @@ export {
         "collapse",
         "expand",
         "toggle_fold",
+        "unfold",
+        "fold",
         "fold_all",
         "unfold_all",
         "next_change",
@@ -2301,6 +2312,8 @@ export {
         "previous_lens",
         "rename",
         "rename_whole",
+        "rename_start",
+        "rename_end",
         "create",
         "create_directory",
         "cut",
@@ -2338,6 +2351,7 @@ export {
         "refresh",
         "toggle_follow",
         "visual",
+        "select_all",
         "search",
         "next_match",
         "previous_match",

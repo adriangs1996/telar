@@ -22,6 +22,8 @@ namespace {
     check(explorer.names() == Names{"assets/", "docs/", "src/", "justfile", "README.md"}, "dotfiles and what git ignores left out");
     check(explorer.selected() == "/home/dev/telar/docs", "the selection on the pane's directory, which stays folded");
     check(shown.hidden_entries == 2 && shown.ignored_entries == 1, "and how many entries of the root it leaves out");
+    check(explorer.leftOut() == "2 dotfiles (g.) · 1 ignored by git (gi) not listed here", "which the last row of the tree says, with the keys that list them");
+    check(status(explorer.view, explorer.state, explorer.context(), 0).count == 5, "a row no key selects");
     check(explorer.row("docs").pane_count == 1 && explorer.row("docs").panes[0] == 3 && !explorer.row("docs").expanded, "the directory says which pane is in it");
     check(shown.bytes == 6800000 + 3800000 + 120000 + 4096 + 21000000000ULL + 5 + 8300 + 5500, "what the root holds counts what is not listed too");
 
@@ -71,13 +73,60 @@ namespace {
     explorer.type("zM");
     check(explorer.names().size() == 5);
     explorer.type("zR");
-    check(explorer.names().size() == 11 && explorer.row("images").directory && !explorer.row("images").expanded, "zR unfolds every directory that shows, not what they hold");
+    check(explorer.names().size() == 12 && explorer.row("images").expanded && explorer.row("window.png").depth == 2, "zR unfolds every directory, and what each holds as its listing comes");
+    check(!window(explorer.view).unfolding, "and is done once nothing is left folded");
 
-    // The changes of git: usage.md is modified, remote.md is staged.
-    explorer.type("gg]c");
-    check(explorer.selected() == "/home/dev/telar/docs", "a directory with changes below it counts");
-    explorer.type("]c]c");
+    // zo unfolds and zc folds; zc on what is in a directory folds that one, and selects it.
+    explorer.type("zM");
+    explorer.type("ggjzo");
+    check(explorer.row("docs").expanded && explorer.selected() == "/home/dev/telar/docs");
+    explorer.type("zo");
+    check(explorer.row("docs").expanded, "zo on one unfolded leaves it so");
+    explorer.type("jjzc");
+    check(!explorer.row("docs").expanded && explorer.selected() == "/home/dev/telar/docs");
+
+    // <C-n> and <C-p> move as j and k; Backspace goes up as - does.
+    explorer.type("gg<C-n><C-n>");
+    check(explorer.selected() == "/home/dev/telar/src");
+    explorer.type("<C-p>");
+    check(explorer.selected() == "/home/dev/telar/docs");
+  }
+
+  void testTheNextChangeUnfoldsWhatHidesIt() {
+    Explorer explorer;
+
+    // The changes of git: remote.md is staged and usage.md modified, both in a folded directory;
+    // .github/ is not listed, and out/ is ignored.
+    explorer.start();
+    explorer.type("zMgg");
+    check(!explorer.row("docs").expanded);
+    explorer.type("]c");
+    check(explorer.selected() == "/home/dev/telar/docs/remote.md" && explorer.row("docs").expanded, "]c goes to the next changed path in the tree's order, unfolding what hides it");
+    explorer.type("]c");
     check(explorer.selected() == "/home/dev/telar/docs/usage.md");
+    explorer.type("]c");
+    check(explorer.selected() == "/home/dev/telar/docs/remote.md", "and around past the last");
+    explorer.type("[c");
+    check(explorer.selected() == "/home/dev/telar/docs/usage.md", "[c the other way");
+
+    // From another lens it goes to the tree.
+    explorer.type("2gt");
+    explorer.type("]c");
+    check(window(explorer.view).lens == Lens::tree && explorer.selected().starts_with("/home/dev/telar/docs/"));
+
+    // With the dotfiles listed, the directory git does not track is one of them.
+    explorer.type("g.gg");
+    explorer.type("[c");
+    check(explorer.selected() == "/home/dev/telar/docs/usage.md", "before the first, the last");
+    explorer.type("]c");
+    check(explorer.selected() == "/home/dev/telar/.github", "a directory git does not track is a change of its own, once the window lists it");
+
+    Explorer clean;
+
+    clean.changes.clear();
+    clean.start();
+    clean.type("]c");
+    check(clean.view.tone == Tone::error && clean.view.message.view() == "Nothing changed below this directory");
   }
 
   void testRootsMarksAndJumps() {
@@ -119,8 +168,10 @@ namespace {
     explorer.type("zM");
     explorer.type("g.");
     check(explorer.names() == Names{".github/", "assets/", "docs/", "src/", ".gitignore", "justfile", "README.md"}, "g. lists the dotfiles");
+    check(explorer.leftOut() == "1 ignored by git (gi) not listed here");
     explorer.type("gi");
     check(explorer.names()[3] == "out/" && explorer.row("out").ignored, "gi lists what git ignores, marked so");
+    check(explorer.leftOut().empty(), "with nothing left out the tree ends at its last entry");
     check(window(explorer.view).hidden_entries == 0 && window(explorer.view).ignored_entries == 0);
     explorer.type("S");
     check(explorer.names().front() == "out/" && explorer.names()[1] == "assets/", "S sorts by size, the largest first");
@@ -220,7 +271,185 @@ namespace {
     check(explorer.view.message.view() == "E492: Not an editor command: frobnicate");
   }
 
+  void testAWindowIsReachedByItsSide() {
+    Explorer explorer;
+
+    explorer.start();
+    explorer.type("<C-w>l");
+    check(explorer.view.current == 0 && explorer.view.message.view() == "No window that way");
+    explorer.type("<C-w>v");
+    check(explorer.view.current == 1 && explorer.view.side_by_side);
+    explorer.type("<C-w>l");
+    check(explorer.view.current == 1 && explorer.view.message.view() == "No window that way", "past the last there is none: it does not go around");
+    explorer.type("<C-w>h");
+    check(explorer.view.current == 0 && explorer.view.message.view().empty());
+    explorer.type("<C-w>j");
+    check(explorer.view.current == 0 && explorer.view.message.view() == "No window that way", "side by side, none is below");
+    explorer.type("<C-w>l");
+    check(explorer.view.current == 1);
+
+    // One below the other.
+    explorer.type("<C-w>o<C-w>s");
+    check(explorer.view.windows.size() == 2 && explorer.view.current == 1 && !explorer.view.side_by_side);
+    explorer.type("<C-w>h");
+    check(explorer.view.current == 1 && explorer.view.message.view() == "No window that way");
+    explorer.type("<C-w>k");
+    check(explorer.view.current == 0);
+    explorer.type("<C-w>j");
+    check(explorer.view.current == 1);
+
+    // Alt with w starts the same sequences.
+    explorer.type("<M-w>k");
+    check(explorer.view.current == 0);
+  }
+
+  void testTheCommandLineTakesTheCommandsOfTheDesign() {
+    Explorer explorer;
+
+    explorer.start();
+
+    // :cd is the shell's cd: the window stays where it is.
+    explorer.type(":");
+
+    auto action = explorer.enter("cd docs/images");
+
+    check(action.kind == ActionKind::change_directory && action.pane == 13 && explorer.view.text.view() == "/home/dev/telar/docs/images");
+    check(window(explorer.view).root.view() == "/home/dev/telar", "the window is not taken there");
+    explorer.type(":");
+    action = explorer.enter("cd");
+    check(action.kind == ActionKind::change_directory && explorer.view.text.view() == "/home/dev/telar", "with no path, to the window's root");
+    explorer.type(":");
+    check(explorer.enter("cd box:~/logs").kind == ActionKind::none && explorer.view.message.view() == "That directory is on box and the panes are of macbook");
+    explorer.focused = 11;
+    explorer.type(":");
+    check(explorer.enter("cd docs").kind == ActionKind::none && explorer.view.message.view() == "cd is for a shell's pane; s opens one here");
+    explorer.focused = 13;
+
+    // A number is a row, as a count before G.
+    explorer.type(":");
+    explorer.enter("4");
+    check(explorer.selected() == "/home/dev/telar/justfile");
+    explorer.type(":");
+    explorer.enter("99");
+    check(explorer.selected() == "/home/dev/telar/README.md", "past the last, the last");
+
+    // :wq shows the plan, as :w does; and :wa! overwrites, as :w! does.
+    explorer.type("dd:");
+    explorer.enter("wq");
+    check(explorer.view.mode == Mode::plan && !explorer.view.overwrite);
+    explorer.type("n:");
+    explorer.enter("wa!");
+    check(explorer.view.mode == Mode::plan && explorer.view.overwrite);
+    explorer.type("nu");
+
+    // :scope names where a window that follows roots itself.
+    explorer.type(":");
+    explorer.enter("scope pane");
+    check(window(explorer.view).scope == Scope::pane && window(explorer.view).follow && window(explorer.view).root.view() == "/home/dev/telar/docs");
+    explorer.type(":");
+    explorer.enter("scope nowhere");
+    check(explorer.view.tone == Tone::error && explorer.view.message.view() == "scope pane, workspace or machine");
+    explorer.type(":");
+    explorer.enter("scope workspace");
+    check(window(explorer.view).scope == Scope::workspace && window(explorer.view).root.view() == "/home/dev/telar");
+
+    // <Tab> completes the name of a command, or lists the ones that start so.
+    explorer.type(":");
+    complete(explorer.view, explorer.state, explorer.context(), "sc");
+    check(explorer.view.completion.view() == "scope ", "the one name, and a space after it");
+
+    const auto completed = explorer.view.completed;
+
+    complete(explorer.view, explorer.state, explorer.context(), "w");
+    check(explorer.view.completed == completed && explorer.view.message.view() == "w  w!  wa  wq  write", "several leave the line as it is, and are listed");
+    complete(explorer.view, explorer.state, explorer.context(), "zz");
+    check(explorer.view.tone == Tone::error && explorer.view.message.view() == "No command starts with that");
+  }
+
+  void testTheLastActionIsRepeated() {
+    Explorer explorer;
+
+    explorer.start();
+    explorer.type("l4j");
+    check(explorer.selected() == "/home/dev/telar/docs/usage.md");
+
+    auto action = explorer.type("yn");
+
+    check(action.kind == ActionKind::copy && explorer.view.text.view() == "usage.md");
+    explorer.type("k");
+    action = explorer.type(".");
+    check(action.kind == ActionKind::copy && explorer.view.text.view() == "remote.md", ". copies the name of another row");
+    explorer.type("yr");
+    explorer.type("j");
+    action = explorer.type(".");
+    check(action.kind == ActionKind::copy && explorer.view.text.view() == "usage.md", "and its path from the pane, in the pane's directory");
+    explorer.type("cd");
+    explorer.type("gg");
+    action = explorer.type(".");
+    check(action.kind == ActionKind::change_directory && explorer.view.text.view() == "/home/dev/telar/assets");
+    explorer.type("s");
+    explorer.type("j");
+    action = explorer.type(".");
+    check(action.kind == ActionKind::split && explorer.view.text.view() == "/home/dev/telar/docs");
+    explorer.type("4jgX");
+    check(explorer.view.edits.size() == 1 && explorer.view.edits[0].kind == EditKind::restore);
+    explorer.type("k.");
+    check(explorer.view.edits.size() == 1 && explorer.view.message.view() == "Nothing unstaged to discard here", ". discards again, where there is something to");
+  }
+
+  void testAMarkIsOfTheRowItIsSetOn() {
+    Explorer explorer;
+
+    explorer.start();
+    explorer.type("ma");
+    check(explorer.view.message.view() == "mark 'a → /home/dev/telar/docs" && explorer.row("docs").marks.view() == "'a");
+    explorer.type("jjmb");
+    check(explorer.view.message.view() == "mark 'b → /home/dev/telar/justfile" && explorer.row("justfile").marks.view() == "'b");
+
+    const auto shown = preview(explorer.view, explorer.state, explorer.context(), explorer.now);
+
+    check(shown.facts[shown.fact_count - 1].label == "Marks" && shown.facts[shown.fact_count - 1].value.view() == "'b", "the preview says the marks of what it shows");
+    explorer.type("gg'a");
+    check(window(explorer.view).root.view() == "/home/dev/telar/docs" && explorer.names().size() == 4, "a directory that was marked is the root its mark goes to");
+    explorer.type("`b");
+    check(window(explorer.view).root.view() == "/home/dev/telar" && explorer.selected() == "/home/dev/telar/justfile", "a file is selected where the window listed it; either quote jumps");
+  }
+
+  void testADiffUnfoldsInTheChanges() {
+    Explorer explorer;
+
+    // usage.md is the third of the fixture's changes: here the index holds all of its change.
+    explorer.changes[2] = {.path = "docs/usage.md", .staged = FileState::modified, .added = 1};
+    explorer.start();
+    explorer.type("2gt");
+    check(explorer.names() == Names{"Staged", "docs/remote.md", "docs/usage.md", "Untracked", ".github/"});
+    explorer.type("j=");
+    check(explorer.selected() == "/home/dev/telar/docs/usage.md");
+    check(explorer.names() == Names{"Staged", "docs/remote.md", "docs/usage.md", "@@ -1,2 +1,2 @@", "-old", "+new", " context", "Untracked", ".github/"}, "= unfolds the diff below the row of the lens too");
+    check(window(explorer.view).rows[3].kind == RowKind::diff && window(explorer.view).rows[3].depth == 1 && window(explorer.view).rows[4].tone == DiffTone::removed);
+    explorer.type("j");
+    check(explorer.selected() == "/home/dev/telar/.github", "the lines of a diff are no rows to select");
+    explorer.type("k=");
+    check(explorer.names().size() == 5, "and folds it again");
+
+    // A file the index and the working tree both changed shows it once, in the second group.
+    Explorer both;
+
+    both.changes[2].staged = FileState::modified;
+    both.start();
+    both.type("2gt");
+    check(both.names() == Names{"Staged", "docs/remote.md", "docs/usage.md", "Unstaged", "docs/usage.md", "Untracked", ".github/"});
+    both.type("jj=");
+    check(both.names() == Names{"Staged", "docs/remote.md", "docs/usage.md", "Unstaged", "docs/usage.md", "@@ -1,2 +1,2 @@", "-old", "+new", " context", "Untracked", ".github/"});
+  }
+
   const telar::testing::Case case_opens{"view.it_opens_at_the_focused_pane", testItOpensAtTheFocusedPane};
+  const telar::testing::Case case_next_change{"view.the_next_change_unfolds_what_hides_it", testTheNextChangeUnfoldsWhatHidesIt};
+  const telar::testing::Case case_sides{"view.a_window_is_reached_by_its_side", testAWindowIsReachedByItsSide};
+  const telar::testing::Case case_commands{"view.the_command_line_takes_the_commands_of_the_design", testTheCommandLineTakesTheCommandsOfTheDesign};
+  const telar::testing::Case case_repeats{"view.the_last_action_is_repeated", testTheLastActionIsRepeated};
+  const telar::testing::Case case_marks_row{"view.a_mark_is_of_the_row_it_is_set_on", testAMarkIsOfTheRowItIsSetOn};
+  const telar::testing::Case case_diffs{"view.a_diff_unfolds_in_the_changes", testADiffUnfoldsInTheChanges};
   const telar::testing::Case case_moves{"view.the_keys_move_as_neovims", testTheKeysMoveAsNeovims};
   const telar::testing::Case case_roots{"view.roots_marks_and_jumps", testRootsMarksAndJumps};
   const telar::testing::Case case_listed{"view.what_is_listed_and_in_which_order", testWhatIsListedAndInWhichOrder};

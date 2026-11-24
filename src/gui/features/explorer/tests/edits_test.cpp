@@ -97,7 +97,12 @@ namespace {
     check(explorer.view.edits.empty() && explorer.view.plan.empty());
     check(explorer.view.message.view() == ":w · 3 applied by the runtime · 1 under another name: the target existed · 1 skipped: changed since it was listed · u takes it back" && explorer.view.tone == Tone::error);
     explorer.answer();
-    check(explorer.type("u").kind == ActionKind::undo, "u with nothing pending takes the plan back");
+    // u with nothing pending takes the plan back, once a yes says so.
+    check(explorer.type("u").kind == ActionKind::none && explorer.view.mode == Mode::question && explorer.view.asked == Asked::undo && explorer.view.tone == Tone::ask);
+    check(explorer.view.message.view() == "Take the last :w back? What it deleted returns from the trash [y/N]");
+    check(explorer.type("n").kind == ActionKind::none && explorer.view.mode == Mode::normal && explorer.view.message.view() == "Left as it is", "any other key leaves it");
+    explorer.type("u");
+    check(explorer.type("y").kind == ActionKind::undo && explorer.view.mode == Mode::normal && explorer.view.awaited.size() == 1, "a yes asks the runtime to");
   }
 
   void testChangesAreUndoneOneAtATime() {
@@ -130,8 +135,8 @@ namespace {
     // A row a change added is that change undone by dd.
     explorer.type("o");
     explorer.enter("draft.md");
-    check(explorer.view.edits.size() == 1 && explorer.row("draft.md").added && explorer.names()[6] == "draft.md", "the new row closes its directory");
-    explorer.type("2jdd");
+    check(explorer.view.edits.size() == 1 && explorer.row("draft.md").added && explorer.names()[6] == "draft.md" && window(explorer.view).cursor == 6, "the new row closes its directory, and keeps the selection");
+    explorer.type("dd");
     check(explorer.view.edits.empty());
 
     // A count takes that many rows from the selected one, and stops at the last.
@@ -182,6 +187,68 @@ namespace {
     check(explorer.names()[6] == "src/");
   }
 
+  void testANameStartsWithTheCaretWhereItsKeyPutsIt() {
+    Explorer explorer;
+
+    explorer.start();
+    explorer.type("3j");
+    check(explorer.selected() == "/home/dev/telar/README.md");
+    explorer.type("cw");
+    check(explorer.view.mode == Mode::insert && explorer.view.draft.view() == "README.md" && explorer.view.caret == Caret::stem, "cw selects the name up to its extension");
+    cancel(explorer.view, explorer.state, explorer.context());
+    explorer.type("cc");
+    check(explorer.view.caret == Caret::all);
+    cancel(explorer.view, explorer.state, explorer.context());
+    explorer.type("i");
+    check(explorer.view.mode == Mode::insert && explorer.view.caret == Caret::start);
+    cancel(explorer.view, explorer.state, explorer.context());
+    explorer.type("I");
+    check(explorer.view.caret == Caret::start);
+    cancel(explorer.view, explorer.state, explorer.context());
+    explorer.type("a");
+    check(explorer.view.caret == Caret::end);
+    cancel(explorer.view, explorer.state, explorer.context());
+    explorer.type("A");
+    check(explorer.view.mode == Mode::insert && explorer.view.caret == Caret::end);
+
+    // The name typed is the change however the typing ends: the window ends it with what the
+    // field holds, on Enter, on Escape and on a click elsewhere.
+    explorer.enter("READ.md");
+    check(explorer.view.mode == Mode::normal && explorer.view.edits.size() == 1 && explorer.view.edits[0].kind == EditKind::rename && explorer.view.edits[0].name.view() == "READ.md");
+
+    // A new entry starts empty, with the caret at its end.
+    explorer.type("o");
+    check(explorer.view.mode == Mode::insert && explorer.view.caret == Caret::end && explorer.view.draft.view().empty());
+
+    const auto typing = hints(explorer.view, explorer.state, explorer.context());
+
+    check(typing.count == 3 && typing.items[0].keys.view() == "<CR>" && typing.items[1].keys.view() == "<Esc>" && typing.items[1].label.view() == "end" && typing.items[2].keys.view() == "name/" && typing.items[2].label.view() == "a directory", "the hints say that both keys end the name");
+    explorer.enter("");
+    check(explorer.view.edits.size() == 1, "an empty name adds nothing");
+  }
+
+  void testDiscardTakesWhatADirectoryHolds() {
+    Explorer explorer;
+
+    explorer.changes.push_back({.path = "src/main.cpp", .unstaged = FileState::modified, .added = 1});
+    explorer.start();
+    check(explorer.selected() == "/home/dev/telar/docs");
+    explorer.type("gX");
+    check(explorer.view.edits.size() == 1 && explorer.view.edits[0].kind == EditKind::restore && explorer.view.edits[0].path.view() == "/home/dev/telar/docs/usage.md", "gX on a directory restores what the working tree changed below it, and not what the index holds");
+    check(explorer.view.message.view() == "git restore of 1 pending · :w shows it before anything is touched");
+    explorer.type("u");
+    check(explorer.view.edits.empty());
+
+    // Over a selection, what each row holds.
+    explorer.type("ggVGgX");
+    check(explorer.view.edits.size() == 2 && explorer.view.mode == Mode::normal);
+    explorer.type("u");
+    explorer.type("gggX");
+    check(explorer.view.edits.empty() && explorer.view.tone == Tone::error && explorer.view.message.view() == "Nothing unstaged to discard here");
+  }
+
+  const telar::testing::Case case_carets{"edits.a_name_starts_with_the_caret_where_its_key_puts_it", testANameStartsWithTheCaretWhereItsKeyPutsIt};
+  const telar::testing::Case case_discard{"edits.discard_takes_what_a_directory_holds", testDiscardTakesWhatADirectoryHolds};
   const telar::testing::Case case_edited{"edits.the_listing_is_edited_as_text", testTheListingIsEditedAsText};
   const telar::testing::Case case_undone{"edits.changes_are_undone_one_at_a_time", testChangesAreUndoneOneAtATime};
   const telar::testing::Case case_git{"edits.git_takes_rows_at_once_and_discards_through_the_plan", testGitTakesRowsAtOnceAndDiscardsThroughThePlan};

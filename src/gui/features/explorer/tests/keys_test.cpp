@@ -60,6 +60,41 @@ namespace {
     check(notation(character('<')).view() == "<lt>", "the character that opens a key's name is spelled out");
     check(notation({.key = KeyChord::Key::enter}).view() == "<CR>" && notation({.key = KeyChord::Key::escape}).view() == "<Esc>");
     check(notation({.key = KeyChord::Key::down}).view() == "j" && notation({.key = KeyChord::Key::page_down}).view() == "<C-d>", "an arrow moves as its letter does, a page key as the half page");
+    check(notation({.key = KeyChord::Key::backspace}).view() == "<BS>" && notation({.key = KeyChord::Key::backspace, .modifiers = static_cast<unsigned>(KeyChord::Modifier::super)}).view() == "<Del>", "Command with the key that erases is Del");
+  }
+
+  void testTheKeysOfTheDesignNameTheirCommands() {
+    Keys keys;
+
+    check(typed(keys, "zo").command == Command::unfold && typed(keys, "zc").command == Command::fold && typed(keys, "zR").command == Command::unfold_all);
+    check(typed(keys, "cw").command == Command::rename && typed(keys, "cc").command == Command::rename_whole);
+    check(typed(keys, "i").command == Command::rename_start && typed(keys, "I").command == Command::rename_start && typed(keys, "a").command == Command::rename_end && typed(keys, "A").command == Command::rename_end);
+    check(feed(keys, character('n', static_cast<unsigned>(KeyChord::Modifier::control)), false).command == Command::down && feed(keys, character('p', static_cast<unsigned>(KeyChord::Modifier::control)), false).command == Command::up);
+    check(feed(keys, character('n', static_cast<unsigned>(KeyChord::Modifier::control)), true).command == Command::down, "in a selection too");
+    check(feed(keys, {.key = KeyChord::Key::backspace}, false).command == Command::parent, "the key that erases goes up, as - does");
+    check(feed(keys, {.key = KeyChord::Key::backspace, .modifiers = static_cast<unsigned>(KeyChord::Modifier::super)}, false).command == Command::cut);
+    check(feed(keys, character('a', static_cast<unsigned>(KeyChord::Modifier::super)), false).command == Command::select_all && feed(keys, character('a', static_cast<unsigned>(KeyChord::Modifier::control)), false).command == Command::select_all);
+
+    // A mark is jumped to with either quote.
+    const auto quoted = typed(keys, "'a");
+    const auto ticked = typed(keys, "`b");
+
+    check(quoted.command == Command::jump_to_mark && quoted.argument.view() == "a" && ticked.command == Command::jump_to_mark && ticked.argument.view() == "b");
+  }
+
+  void testAltWStandsForControlW() {
+    Keys keys;
+    const auto alt = static_cast<unsigned>(KeyChord::Modifier::alt);
+
+    check(feed(keys, character('w', alt), false).command == Command::none && keys.pending.view() == "<C-w>", "it starts the sequences Control with w starts");
+    check(feed(keys, character('v'), false).command == Command::split_vertical);
+    check(feed(keys, character('w', alt), false).command == Command::none && feed(keys, character('l'), false).command == Command::window_right);
+
+    // A map that binds it keeps it for what it bound.
+    Keymap keymap;
+
+    check(rebind(keymap, changes({{"<M-w>", Command::refresh, false}})));
+    check(feed(keymap, keys, character('w', alt), false).command == Command::refresh);
   }
 
   void testACountThenASequenceNamesACommand() {
@@ -132,7 +167,7 @@ namespace {
     // A sequence it binds takes the place of the ones it starts, and of the one that starts it.
     check(rebind(keymap, changes({{"g", Command::bottom, false}, {"cwx", Command::refresh, false}, {"M", Command::mark, false}})));
     check(typed(keymap, keys, "g").command == Command::bottom && typed(keymap, keys, "gg").command == Command::bottom && keysOf(keymap, Command::top).empty(), "gg is two of it now");
-    check(typed(keymap, keys, "cwx").command == Command::refresh && keysOf(keymap, Command::rename) == "i");
+    check(typed(keymap, keys, "cwx").command == Command::refresh && keysOf(keymap, Command::rename).empty() && keysOf(keymap, Command::rename_start) == "i");
 
     const auto mark = typed(keymap, keys, "MQ");
 
@@ -145,6 +180,8 @@ namespace {
   }
 
   const telar::testing::Case case_configured{"keys.the_configuration_binds_unbinds_and_rebinds", testTheConfigurationBindsUnbindsAndRebinds};
+  const telar::testing::Case case_design{"keys.the_keys_of_the_design_name_their_commands", testTheKeysOfTheDesignNameTheirCommands};
+  const telar::testing::Case case_alt{"keys.alt_w_stands_for_control_w", testAltWStandsForControlW};
   const telar::testing::Case case_notation{"keys.a_key_reads_as_neovim_spells_it", testAKeyReadsAsNeovimSpellsIt};
   const telar::testing::Case case_sequences{"keys.a_count_then_a_sequence_names_a_command", testACountThenASequenceNamesACommand};
   const telar::testing::Case case_arguments{"keys.a_command_takes_the_next_key_as_its_argument", testACommandTakesTheNextKeyAsItsArgument};

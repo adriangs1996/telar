@@ -31,6 +31,8 @@ namespace telar::gui::features::explorer {
     constexpr ds::Array normal_keys{
         bind("j", Command::down),
         bind("k", Command::up),
+        bind("<C-n>", Command::down),
+        bind("<C-p>", Command::up),
         bind("gg", Command::top),
         bind("G", Command::bottom),
         bind("<C-d>", Command::half_page_down),
@@ -38,6 +40,8 @@ namespace telar::gui::features::explorer {
         bind("h", Command::collapse),
         bind("l", Command::expand),
         bind("za", Command::toggle_fold),
+        bind("zo", Command::unfold),
+        bind("zc", Command::fold),
         bind("zM", Command::fold_all),
         bind("zR", Command::unfold_all),
         bind("]c", Command::next_change),
@@ -46,6 +50,7 @@ namespace telar::gui::features::explorer {
         bind("[a", Command::previous_touch),
         bind("<CR>", Command::enter),
         bind("-", Command::parent),
+        bind("<BS>", Command::parent),
         bind("_", Command::workspace_root),
         bind("~", Command::home),
         bind("gp", Command::scope_pane),
@@ -54,6 +59,7 @@ namespace telar::gui::features::explorer {
         bind("gm", Command::next_machine),
         bind("m", Command::mark),
         bind("'", Command::jump_to_mark),
+        bind("`", Command::jump_to_mark),
         bind("<C-o>", Command::jump_back),
         bind("<C-i>", Command::jump_forward),
         bind("<Tab>", Command::jump_forward),
@@ -61,8 +67,10 @@ namespace telar::gui::features::explorer {
         bind("gT", Command::previous_lens),
         bind("cw", Command::rename),
         bind("cc", Command::rename_whole),
-        bind("i", Command::rename),
-        bind("a", Command::rename),
+        bind("i", Command::rename_start),
+        bind("I", Command::rename_start),
+        bind("a", Command::rename_end),
+        bind("A", Command::rename_end),
         bind("o", Command::create),
         bind("O", Command::create),
         bind("dd", Command::cut),
@@ -115,18 +123,22 @@ namespace telar::gui::features::explorer {
         bind("<D-v>", Command::paste),
         bind("<D-z>", Command::undo),
         bind("<D-s>", Command::write),
+        bind("<D-a>", Command::select_all),
         // And with Control, where that is the key a system gives its shortcuts.
         bind("<C-c>", Command::yank),
         bind("<C-x>", Command::cut),
         bind("<C-v>", Command::paste),
         bind("<C-z>", Command::undo),
         bind("<C-s>", Command::write),
+        bind("<C-a>", Command::select_all),
     };
 
     // The keys of visual mode: the motions, and the commands a selection takes.
     constexpr ds::Array visual_keys{
         bind("j", Command::down),
         bind("k", Command::up),
+        bind("<C-n>", Command::down),
+        bind("<C-p>", Command::up),
         bind("gg", Command::top),
         bind("G", Command::bottom),
         bind("<C-d>", Command::half_page_down),
@@ -223,7 +235,10 @@ namespace telar::gui::features::explorer {
     Notation result;
 
     if (chord.key != KeyChord::Key::character) {
-      result.assign(named(chord.key));
+      // Command with the key that erases is the Del of a keyboard that has none.
+      const bool erases = chord.key == KeyChord::Key::backspace && chord.has(KeyChord::Modifier::super);
+
+      result.assign(erases ? named(KeyChord::Key::erase) : named(chord.key));
       return result;
     }
 
@@ -257,6 +272,16 @@ namespace telar::gui::features::explorer {
     // The keys of a mode.
     tbc::val_a<std::span<const Binding>> of(tbc::ref_a<Keymap> keymap, bool visual) noexcept {
       return visual ? keymap.visual.view().first(keymap.visual_count) : keymap.normal.view().first(keymap.normal_count);
+    }
+
+    constexpr std::string_view alt_window = "<M-w>";
+    constexpr std::string_view control_window = "<C-w>";
+
+    // Whether a sequence of the map starts with `keys`.
+    bool startsAny(std::span<const Binding> bindings, std::string_view keys) noexcept {
+      return std::ranges::any_of(bindings, [&](const Binding& binding) {
+        return binding.keys.view().starts_with(keys);
+      });
     }
 
     void fill(std::span<Binding> bindings, std::size_t& count, std::span<const Default> defaults) {
@@ -336,7 +361,14 @@ namespace telar::gui::features::explorer {
   Stroke feed(const Keymap& keymap, Keys& keys, KeyChord chord, bool visual) {
     constexpr std::uint32_t decimal = 10;
     constexpr std::uint32_t largest_count = 100000;
-    const auto key = notation(chord);
+    const auto bindings = of(keymap, visual);
+    auto key = notation(chord);
+
+    // Alt+w stands for Ctrl+w, which some systems keep for themselves, unless the map binds it.
+    if (key.view() == alt_window && !startsAny(bindings, alt_window)) {
+      key.assign(control_window);
+    }
+
     const auto text = key.view();
     if (text.empty()) {
       return {};
@@ -349,7 +381,6 @@ namespace telar::gui::features::explorer {
       return {};
     }
 
-    const auto bindings = of(keymap, visual);
     const auto held = keys.pending.view();
 
     // The key after a command that takes an argument is that argument.

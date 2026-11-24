@@ -58,8 +58,22 @@ export namespace telar::gui::features::explorer {
   void typed(View& view, const State& state, const Context& context, std::string_view text);
   [[nodiscard]] Action submit(View& view, State& state, const Context& context, std::string_view text);
 
-  // `<Tab>` on the command line `line`: completes the directory a command that goes somewhere
-  // names, as far as one name or the start that several share reaches, and lists those. What it
+  // While a filter is typed, the selection moves `rows` rows among what it found.
+  void step(View& view, const State& state, const Context& context, std::int64_t rows);
+
+  // A directory the root of a window is below, as the pointer names it on the window's head.
+  struct Climb {
+    std::size_t window = 0;
+    std::string_view directory;
+  };
+
+  // The pointer chose a directory of the path a window's head shows: the window roots itself
+  // there, with the directory it came down through selected.
+  void climb(View& view, const State& state, const Context& context, const Climb& climbed);
+
+  // `<Tab>` on the command line `line`: completes the name of a command, or the directory a
+  // command that goes somewhere names, as far as one name or the start that several share
+  // reaches, and lists those. What it
   // completed is `view.completion`, and `view.completed` counts it; a directory not yet listed
   // is asked for, and the line is completed when it arrives.
   void complete(View& view, const State& state, const Context& context, std::string_view line);
@@ -70,6 +84,11 @@ export namespace telar::gui::features::explorer {
   // The pointer chose a row of a window: alone, up to it from the selection, or beside the ones
   // picked.
   void select(View& view, const State& state, const Context& context, const Pick& pick);
+
+  // The pointer clicked a row: it is chosen as `select` chooses it, and a click alone on the row
+  // that was selected already folds or unfolds its directory in the tree, or shows or hides
+  // below it the diff of a file git says something of.
+  void click(View& view, const State& state, const Context& context, const Pick& pick);
 
   // The pointer asked for what Enter does on a row; and to fold or unfold a directory.
   [[nodiscard]] Action activate(View& view, State& state, const Context& context, const Pick& pick);

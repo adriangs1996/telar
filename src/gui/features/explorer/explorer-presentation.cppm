@@ -218,7 +218,7 @@ export namespace telar::gui::features::explorer {
   // A line of the help: the group it is listed under, the keys that do it as the map has them,
   // none for a command no key names, and what they do.
   inline constexpr std::size_t help_keys_bytes = 64;
-  inline constexpr std::size_t help_lines = 64;
+  inline constexpr std::size_t help_lines = 65;
 
   struct HelpLine {
     Word group;
@@ -253,7 +253,7 @@ export namespace telar::gui::features::explorer {
     std::uint32_t removed = 0;
   };
 
-  inline constexpr std::size_t fact_capacity = 7;
+  inline constexpr std::size_t fact_capacity = 8;
 
   // A touch of the selected file, in the preview: who, from which pane, how and how long ago.
   struct ActivityLook {
@@ -276,11 +276,13 @@ export namespace telar::gui::features::explorer {
     bool directory = false;
   };
 
-  inline constexpr std::size_t heavy_capacity = 5;
+  inline constexpr std::size_t heavy_capacity = 7;
 
   struct PreviewLook {
     bool shown = false;
     bool directory = false;
+    // What the row is: a pane and an entry not written yet have no file to show an icon of.
+    RowKind kind = RowKind::entry;
     LineText name;
     LineText path;
     ds::Array<Fact, fact_capacity> facts{};
@@ -298,6 +300,8 @@ export namespace telar::gui::features::explorer {
     Word title;
     bool diff = false;
     bool waiting = false;
+    // What is worth knowing of a row that is no file yet, or is a pane: said under its facts.
+    Word note;
   };
 
   [[nodiscard]] PreviewLook preview(const View& view, const State& state, const Context& context, std::uint64_t now_seconds);

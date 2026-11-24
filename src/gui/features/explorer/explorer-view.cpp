@@ -113,6 +113,8 @@ namespace telar::gui::features::explorer {
     struct Pending {
       const Edits& edits;
       const ds::Vec<Transfer, Memory>& transfers;
+      // The keys a note names: the ones that list what it says is left out.
+      const Keymap& keymap;
     };
 
     struct Build {
@@ -153,6 +155,18 @@ namespace telar::gui::features::explorer {
 
       if (!diff.empty()) {
         pushText(window, {.kind = RowKind::note, .depth = depth}, "… the preview shows the rest");
+      }
+    }
+
+    // The diff of the file at `path` below its row, when the window unfolds it and its runtime
+    // has sent it.
+    void pushUnfolded(Window& window, const State& state, std::string_view path, std::uint8_t depth) {
+      if (!holds(window.diffs, path)) {
+        return;
+      }
+
+      if (const auto* inspection = inspected(state, path)) {
+        pushDiff(window, inspection->diff.view(), depth);
       }
     }
 
@@ -261,10 +275,8 @@ namespace telar::gui::features::explorer {
           .share = static_cast<std::uint16_t>(entry.size * whole / level.largest),
       });
 
-      if (!entry.directory && holds(window.diffs, child.view())) {
-        if (const auto* inspection = inspected(build.state, child.view())) {
-          pushDiff(window, inspection->diff.view(), static_cast<std::uint8_t>(level.depth + 1));
-        }
+      if (!entry.directory) {
+        pushUnfolded(window, build.state, child.view(), static_cast<std::uint8_t>(level.depth + 1));
       }
 
       const auto own = window.rows.size();
@@ -349,12 +361,15 @@ namespace telar::gui::features::explorer {
         if (!named) {
           largest = std::max(largest, touches.items[index].size);
           pushText(window, {.kind = RowKind::match, .item = static_cast<std::uint32_t>(index)}, below);
+          pushUnfolded(window, state, path, 1);
         }
       }
 
       // Each one's size against the largest of them, as the entries of a directory.
       for (auto& row : window.rows.viewMut()) {
-        row.share = static_cast<std::uint16_t>(touches.items[row.item].size * whole / largest);
+        if (row.kind == RowKind::match) {
+          row.share = static_cast<std::uint16_t>(touches.items[row.item].size * whole / largest);
+        }
       }
 
       if (window.rows.empty()) {
@@ -387,6 +402,41 @@ namespace telar::gui::features::explorer {
       }
     }
 
+    // Entries of a kind the root leaves out: how many, what they are called, and the keys that
+    // list them, when the map has some.
+    struct LeftOut {
+      std::uint32_t count = 0;
+      std::string_view what;
+      std::string_view keys;
+    };
+
+    // `3 dotfiles (g.)`: one part of the note of what the root leaves out.
+    void appendLeftOut(Text& note, const LeftOut& left) {
+      if (left.count == 0) {
+        return;
+      }
+
+      ds::formatTo(note, "{}{} {}", note.empty() ? "" : " · ", left.count, left.what);
+      if (!left.keys.empty()) {
+        ds::formatTo(note, " ({})", left.keys);
+      }
+    }
+
+    // The last row of a tree says how many entries of its root the window leaves out, as the
+    // status line says which it lists.
+    void pushLeftOut(Window& window, const Keymap& keymap) {
+      if (!window.filter.empty() || (window.hidden_entries == 0 && window.ignored_entries == 0)) {
+        return;
+      }
+
+      Text note{window.rows.memory()};
+
+      appendLeftOut(note, {.count = window.hidden_entries, .what = window.hidden_entries == 1 ? "dotfile" : "dotfiles", .keys = keysOf(keymap, Command::toggle_hidden)});
+      appendLeftOut(note, {.count = window.ignored_entries, .what = "ignored by git", .keys = keysOf(keymap, Command::toggle_ignored)});
+      note.append(" not listed here");
+      pushText(window, {.kind = RowKind::note}, note.view());
+    }
+
     void buildTree(Window& window, const Pending& pending, const State& state) {
       Build build{.window = window, .edits = pending.edits, .transfers = pending.transfers, .state = state, .order = ds::Vec<std::uint32_t, Memory>{window.rows.memory()}};
       const auto* root = find(state, window.root.view());
@@ -394,6 +444,7 @@ namespace telar::gui::features::explorer {
       window.loading = root == nullptr || !root->listed;
       if (!window.loading) {
         walk(build, window.root.view(), 0);
+        pushLeftOut(window, pending.keymap);
       }
     }
 
@@ -424,8 +475,11 @@ namespace telar::gui::features::explorer {
           Group{.title = "Untracked", .belongs = isUntracked},
       };
 
+      Text whole{window.rows.memory()};
+
       window.loading = !repository.known;
-      for (const auto& group : groups) {
+      for (std::size_t place = 0; place < groups.size(); ++place) {
+        const auto& group = groups[place];
         bool titled = false;
 
         for (std::size_t index = 0; index < repository.changes.size(); ++index) {
@@ -441,6 +495,15 @@ namespace telar::gui::features::explorer {
           }
 
           pushText(window, {.kind = RowKind::change, .directory = path.ends_with('/'), .item = static_cast<std::uint32_t>(index)}, path);
+
+          // Its diff unfolds once: a file the index and the working tree both changed shows it
+          // in the working tree's group. A filter lists the paths alone.
+          const bool once = place != 0 || !isUnstaged(change);
+
+          if (once && !path.ends_with('/') && window.filter.empty()) {
+            join(whole, {.directory = repository.root.view(), .name = path});
+            pushUnfolded(window, state, whole.view(), 1);
+          }
         }
       }
     }
@@ -561,7 +624,57 @@ namespace telar::gui::features::explorer {
       }
     }
 
+    void listWindow(Window& window, const Pending& pending, const State& state, const Context& context);
+
+    // Unfolds the directories the tree shows folded, while `zR` goes on and the window has
+    // unfolded fewer than it does so; it ends when none is left, or at that many. True when one
+    // unfolded, whose listing the rows then lack.
+    bool unfoldShown(Window& window, const State& state, const Context& context) {
+      if (!window.unfolding || window.lens != Lens::tree || window.loading) {
+        return false;
+      }
+
+      Text path{window.rows.memory()};
+      bool unfolded = false;
+      bool waits = false;
+
+      for (std::size_t index = 0; index < window.rows.size(); ++index) {
+        const auto row = window.rows[index];
+        if (row.kind != RowKind::entry || !row.directory || std::cmp_greater_equal(row.depth + 1, ViewLimits::depth)) {
+          continue;
+        }
+
+        pathOf(path, window, state, context, row);
+        if (row.expanded) {
+          // One unfolded whose listing is on its way may hold more to unfold.
+          const auto* listed = find(state, path.view());
+
+          waits = waits || listed == nullptr || !listed->listed;
+          continue;
+        }
+
+        if (window.expanded.size() >= ViewLimits::unfolded) {
+          window.unfolding = false;
+          return unfolded;
+        }
+
+        add(window.expanded, path.view());
+        unfolded = true;
+      }
+
+      window.unfolding = unfolded || waits;
+      return unfolded;
+    }
+
+    // Builds the rows of a window, and again while `zR` unfolds what the listing just showed.
     void buildWindow(Window& window, const Pending& pending, const State& state, const Context& context) {
+      listWindow(window, pending, state, context);
+      while (unfoldShown(window, state, context)) {
+        listWindow(window, pending, state, context);
+      }
+    }
+
+    void listWindow(Window& window, const Pending& pending, const State& state, const Context& context) {
       const auto before = window.cursor;
 
       window.rows.clear();
@@ -629,7 +742,7 @@ namespace telar::gui::features::explorer {
     }
 
     void rebuildCurrent(View& view, const State& state, const Context& context) {
-      buildWindow(windowAt(view.windows, view.current), {.edits = view.edits, .transfers = view.transfers}, state, context);
+      buildWindow(windowAt(view.windows, view.current), {.edits = view.edits, .transfers = view.transfers, .keymap = view.keymap}, state, context);
       ++view.revision;
     }
 
@@ -777,6 +890,7 @@ namespace telar::gui::features::explorer {
       window.anchor = ds::none;
       window.lens = Lens::tree;
       window.cursor = 0;
+      window.unfolding = false;
     }
 
     // `path` as the window means it: `~`, a path from the root, or an absolute one, with `.` and
@@ -1308,40 +1422,14 @@ namespace telar::gui::features::explorer {
       if (expanded) {
         add(window.expanded, path.view());
       } else {
-        // What is below it folds with it.
+        // What is below it folds with it, and `zR` unfolds no more.
+        window.unfolding = false;
         window.expanded.retain([&](const Text& kept) {
           return !within(kept.view(), path.view());
         });
       }
 
       rebuildCurrent(view, state, context);
-    }
-
-    // The next row git says something of, `direction` rows at a time, around the ends.
-    void nextChange(View& view, const State& state, const Context& context, int direction) {
-      auto& window = windowAt(view.windows, view.current);
-      const auto count = window.rows.size();
-      Text path{view.memory};
-
-      for (std::size_t step = 1; step <= count; ++step) {
-        const auto index = (window.cursor + count + static_cast<std::size_t>(direction > 0 ? step : count - step)) % count;
-        const auto& row = window.rows[index];
-        if (!namesPath(row.kind)) {
-          continue;
-        }
-
-        pathOf(path, window, state, context, row);
-
-        const auto held = standing(state.repository, path.view(), row.directory);
-        const bool changed = row.kind == RowKind::change || (!held.ignored && (held.staged != FileState::unchanged || held.unstaged != FileState::unchanged || held.below != 0));
-
-        if (changed) {
-          choose(window, state, context, index);
-          return;
-        }
-      }
-
-      say(view, "Nothing changed here", Tone::error);
     }
 
     // Whether the name `left` lists before `right`: without regard to case, then as written.
@@ -1379,44 +1467,58 @@ namespace telar::gui::features::explorer {
       return left.empty() && !right.empty();
     }
 
-    // `]a`, `[a`: the next or the previous file an agent touched below the root, in the tree's
-    // order, with the directories that lead to it unfolded as their listings come.
-    void nextTouch(View& view, const State& state, const Context& context, int direction) {
-      auto& window = windowAt(view.windows, view.current);
-      const auto& touches = state.touches;
-      const auto root = window.root.view();
-      const auto from = window.wanted.empty() ? window.selected.view() : window.wanted.view();
+    // The path a window is headed for among several: the nearest past where it is, in the
+    // tree's order, and the one to go around to when none is past it.
+    struct Heading {
+      std::string_view from;
+      int direction = 1;
       std::string_view next;
       std::string_view wrapped;
+    };
 
-      for (const auto& touch : touches.items) {
-        const auto path = touches.path(touch);
-        if (touch.actor != TouchActor::agent || path == root || !within(path, root)) {
-          continue;
+    // Whether the tree of `window` lists `path`, a path below its root: nothing on the way to it
+    // is a dotfile the window hides.
+    bool listsBelow(const Window& window, std::string_view path) noexcept {
+      const auto root = window.root.view();
+      auto below = path;
+
+      below.remove_prefix(std::min(path.size(), root == "/" ? 1 : root.size() + 1));
+      while (!window.hidden && !below.empty()) {
+        if (below.starts_with('.')) {
+          return false;
         }
 
-        // The nearest one past the selection that way, and the one to wrap around to.
-        const bool past = direction > 0 ? treeBefore(from, path) : treeBefore(path, from);
-        const auto nearer = [&](std::string_view held) {
-          return held.empty() || (direction > 0 ? treeBefore(path, held) : treeBefore(held, path));
-        };
+        const auto slash = below.find('/');
 
-        if (past && nearer(next)) {
-          next = path;
-        }
-
-        if (nearer(wrapped)) {
-          wrapped = path;
-        }
+        below.remove_prefix(slash == std::string_view::npos ? below.size() : slash + 1);
       }
 
-      const auto target = next.empty() ? wrapped : next;
-      if (target.empty()) {
-        say(view, touches.known ? "No agent touched a file below this directory lately" : "Asking who touched what: try again", Tone::error);
-        return;
+      return true;
+    }
+
+    // Takes `path` for where the window is headed when it is nearer that way than what it has.
+    void consider(tbc::mut_a<Heading> heading, tbc::val_a<std::string_view> path) noexcept {
+      const bool forward = heading.direction > 0;
+      const bool past = forward ? treeBefore(heading.from, path) : treeBefore(path, heading.from);
+      const auto nearer = [&](std::string_view held) {
+        return held.empty() || (forward ? treeBefore(path, held) : treeBefore(held, path));
+      };
+
+      if (past && nearer(heading.next)) {
+        heading.next = path;
       }
 
+      if (nearer(heading.wrapped)) {
+        heading.wrapped = path;
+      }
+    }
+
+    // The selection goes to `target`, a path below the root, in the tree: the directories that
+    // lead to it unfold, and it is selected once the one that holds it is listed.
+    void head(View& view, const State& state, const Context& context, std::string_view target) {
+      auto& window = windowAt(view.windows, view.current);
       const Text path{view.memory, target};
+      const auto root = window.root.view();
 
       window.lens = Lens::tree;
       window.filter.clear();
@@ -1428,6 +1530,72 @@ namespace telar::gui::features::explorer {
       window.selected.assign(path.view());
       window.wanted.assign(path.view());
       rebuildCurrent(view, state, context);
+    }
+
+    // `]c`, `[c`: the next or the previous path git says something of below the root, in the
+    // tree's order, with the directories that lead to it unfolded as their listings come.
+    void nextChange(View& view, const State& state, const Context& context, int direction) {
+      const auto& window = windowAt(view.windows, view.current);
+      const auto& repository = state.repository;
+      const auto root = window.root.view();
+      Heading heading{.from = window.wanted.empty() ? window.selected.view() : window.wanted.view(), .direction = direction};
+      // The changes are paths from the repository's top: each is read below it, in a text that
+      // outlives the one before it.
+      ds::Vec<Text, Memory> paths{view.memory};
+
+      for (const auto& change : repository.changes) {
+        if (change.staged == FileState::ignored || change.unstaged == FileState::ignored) {
+          continue;
+        }
+
+        auto relative = repository.path(change);
+        if (relative.ends_with('/')) {
+          relative.remove_suffix(1);
+        }
+
+        Text path{view.memory};
+
+        join(path, {.directory = repository.root.view(), .name = relative});
+        if (path.view() != root && within(path.view(), root) && listsBelow(window, path.view())) {
+          paths.push(std::move(path));
+        }
+      }
+
+      for (const auto& path : paths) {
+        consider(heading, path.view());
+      }
+
+      const auto target = heading.next.empty() ? heading.wrapped : heading.next;
+      if (target.empty()) {
+        say(view, repository.known ? "Nothing changed below this directory" : "Asking git what changed: try again", Tone::error);
+        return;
+      }
+
+      head(view, state, context, target);
+    }
+
+    // `]a`, `[a`: the next or the previous file an agent touched below the root, in the tree's
+    // order, with the directories that lead to it unfolded as their listings come.
+    void nextTouch(View& view, const State& state, const Context& context, int direction) {
+      const auto& window = windowAt(view.windows, view.current);
+      const auto& touches = state.touches;
+      const auto root = window.root.view();
+      Heading heading{.from = window.wanted.empty() ? window.selected.view() : window.wanted.view(), .direction = direction};
+
+      for (const auto& touch : touches.items) {
+        const auto path = touches.path(touch);
+        if (touch.actor == TouchActor::agent && path != root && within(path, root)) {
+          consider(heading, path);
+        }
+      }
+
+      const auto target = heading.next.empty() ? heading.wrapped : heading.next;
+      if (target.empty()) {
+        say(view, touches.known ? "No agent touched a file below this directory lately" : "Asking who touched what: try again", Tone::error);
+        return;
+      }
+
+      head(view, state, context, target);
     }
 
     void setLens(View& view, const State& state, const Context& context, Lens lens) {
@@ -1767,12 +1935,41 @@ namespace telar::gui::features::explorer {
       return {.kind = ActionKind::apply};
     }
 
+    // The files with changes the index does not hold, among the rows chosen and below the
+    // directories chosen: what `gX` restores. They are left in `view.paths`.
+    void gatherUnstaged(View& view, const State& state, const Context& context) {
+      const auto& repository = state.repository;
+      ds::Vec<Text, Memory> found{view.memory};
+      Text whole{view.memory};
+
+      gather(view, state, context, false);
+      for (const auto& change : repository.changes) {
+        const auto relative = repository.path(change);
+        if (!isUnstaged(change) || relative.ends_with('/')) {
+          continue;
+        }
+
+        join(whole, {.directory = repository.root.view(), .name = relative});
+
+        const bool chosen = std::ranges::any_of(view.paths, [&](const Text& path) {
+          return within(whole.view(), path.view());
+        });
+
+        if (chosen) {
+          found.push(Text{view.memory, whole.view()});
+        }
+      }
+
+      view.paths = std::move(found);
+    }
+
     void discard(View& view, const State& state, const Context& context) {
       const auto& window = windowAt(view.windows, view.current);
 
-      gather(view, state, context, true);
+      gatherUnstaged(view, state, context);
+      leaveVisual(view);
       if (view.paths.empty()) {
-        say(view, "gX discards the changes of files", Tone::error);
+        say(view, "Nothing unstaged to discard here", Tone::error);
         return;
       }
 
@@ -1783,12 +1980,11 @@ namespace telar::gui::features::explorer {
         }
       }
 
-      leaveVisual(view);
       rebuildCurrent(view, state, context);
       report(view, Tone::info, "git restore of {} pending · :w shows it before anything is touched", view.paths.size());
     }
 
-    void startRename(View& view, const State& state, const Context& context) {
+    void startRename(View& view, const State& state, const Context& context, Caret caret) {
       const auto& window = windowAt(view.windows, view.current);
       if (window.rows.empty()) {
         return;
@@ -1801,6 +1997,7 @@ namespace telar::gui::features::explorer {
       }
 
       view.inserting = row.kind == RowKind::added ? row.item : 0;
+      view.caret = caret;
       // A match is a path from the root: its name is what follows the last slash.
       view.draft.assign(baseOf(nameOf(window, state, row)));
       if (row.kind != RowKind::added) {
@@ -1839,6 +2036,7 @@ namespace telar::gui::features::explorer {
 
       added.directory = directory_asked;
       view.inserting = id;
+      view.caret = Caret::end;
       view.draft.clear();
       rebuildCurrent(view, state, context);
 
@@ -1930,7 +2128,18 @@ namespace telar::gui::features::explorer {
       ++view.revision;
     }
 
-    // Enter ends insert mode: the name typed is the change.
+    // The selection stays on the row the change `id` adds, which now has its name: it names no
+    // path a listing would find it by, so it is kept by where it is.
+    void stayOn(Window& window, std::uint32_t id) noexcept {
+      for (std::size_t index = 0; index < window.rows.size(); ++index) {
+        if (window.rows[index].kind == RowKind::added && window.rows[index].item == id) {
+          window.cursor = index;
+          window.selected.clear();
+        }
+      }
+    }
+
+    // The name typed ends insert mode: it is the change.
     void endInsert(View& view, const State& state, const Context& context, std::string_view typed) {
       view.mode = Mode::normal;
       if (view.inserting == 0) {
@@ -1942,6 +2151,7 @@ namespace telar::gui::features::explorer {
 
       view.inserting = 0;
       if (nameAdded(view, id, typed)) {
+        stayOn(windowAt(view.windows, view.current), id);
         rebuildCurrent(view, state, context);
       }
     }
@@ -1979,7 +2189,7 @@ namespace telar::gui::features::explorer {
       cloneWindow(view.windows, view.memory, view.current);
       view.side_by_side = view.windows.size() == 2 ? side_by_side : view.side_by_side;
       view.current = view.windows.size() - 1;
-      buildWindow(windowAt(view.windows, view.current), {.edits = view.edits, .transfers = view.transfers}, state, context);
+      buildWindow(windowAt(view.windows, view.current), {.edits = view.edits, .transfers = view.transfers, .keymap = view.keymap}, state, context);
       ++view.revision;
     }
 
@@ -2058,6 +2268,7 @@ namespace telar::gui::features::explorer {
       view.bringing.to = context.shown;
       view.bringing.pane = pane.id;
       view.bringing.mention = pane.kind == PaneKind::agent;
+      view.asked = Asked::bring;
       view.mode = Mode::question;
       report(view, Tone::ask, "It is on {} and the pane on {} · bring a copy there? [y/N]", context.machine, labelOf(context, context.shown));
       return true;
@@ -2139,24 +2350,35 @@ namespace telar::gui::features::explorer {
       }
     }
 
+    // `zc`: the directory folds; on what is in one, that one does, and takes the selection.
+    void fold(View& view, const State& state, const Context& context) {
+      auto& window = windowAt(view.windows, view.current);
+
+      if (!window.rows.empty() && window.rows[window.cursor].expanded) {
+        setExpanded(view, state, context, window.cursor, false);
+      } else if (const auto parent = parentRow(window)) {
+        choose(window, state, context, *parent);
+        setExpanded(view, state, context, *parent, false);
+      }
+    }
+
     void foldAll(View& view, const State& state, const Context& context) {
-      windowAt(view.windows, view.current).expanded.clear();
+      auto& window = windowAt(view.windows, view.current);
+
+      window.expanded.clear();
+      window.unfolding = false;
       rebuildCurrent(view, state, context);
     }
 
-    // `zR`, one more level each time: every directory that shows unfolds.
+    // `zR`: every directory of the tree unfolds, each as its listing shows it, until none is
+    // left folded or the window has unfolded as many as it does so.
     void unfoldAll(View& view, const State& state, const Context& context) {
       auto& window = windowAt(view.windows, view.current);
-      Text path{view.memory};
 
-      for (const auto& row : window.rows) {
-        if (row.kind == RowKind::entry && row.directory && !row.expanded) {
-          pathOf(path, window, state, context, row);
-          add(window.expanded, path.view());
-        }
+      window.unfolding = window.lens == Lens::tree;
+      if (unfoldShown(window, state, context)) {
+        rebuildCurrent(view, state, context);
       }
-
-      rebuildCurrent(view, state, context);
     }
 
     // `-`: the directory above, with the one it came from selected.
@@ -2217,13 +2439,17 @@ namespace telar::gui::features::explorer {
         mark = &view.marks.push(Place{view.memory});
       }
 
+      // The row is what is marked: a directory, to be the root the mark goes to; a file, to be
+      // selected where the window lists it now.
+      const bool directory = !window.rows.empty() && window.rows[window.cursor].directory && namesPath(window.rows[window.cursor].kind) && !window.selected.empty();
+
       mark->letter = letter;
       mark->machine = window.machine;
       mark->away.clear();
-      mark->root.assign(window.root.view());
-      mark->selected.assign(window.selected.view());
+      mark->root.assign(directory ? window.selected.view() : window.root.view());
+      mark->selected.assign(directory ? std::string_view{} : window.selected.view());
       ++view.places;
-      report(view, Tone::info, "mark {} set", letter.view());
+      report(view, Tone::info, "mark '{} → {}", letter.view(), mark->selected.empty() ? mark->root.view() : mark->selected.view());
       ++view.revision;
     }
 
@@ -2374,10 +2600,10 @@ namespace telar::gui::features::explorer {
         }
 
         if (!view.wrote.empty()) {
-          view.awaited.clear();
-          view.awaited.extend(view.wrote.view());
-          view.written = {};
-          return {.kind = ActionKind::undo};
+          view.asked = Asked::undo;
+          view.mode = Mode::question;
+          say(view, "Take the last :w back? What it deleted returns from the trash [y/N]", Tone::ask);
+          return {};
         }
 
         say(view, "Already at the oldest change");
@@ -2396,6 +2622,13 @@ namespace telar::gui::features::explorer {
     void otherWindow(View& view, bool next) noexcept {
       view.current = (view.current + (next ? 1 : view.windows.size() - 1)) % view.windows.size();
       ++view.revision;
+    }
+
+    // `<C-w>h`, `j`, `k`, `l`: the window on that side, when the windows stand along it.
+    void windowToward(View& view, Side side) {
+      if (!toward(view, side)) {
+        say(view, "No window that way");
+      }
     }
 
     void onlyWindow(View& view) {
@@ -2483,6 +2716,17 @@ namespace telar::gui::features::explorer {
       rebuildCurrent(view, state, context);
     }
 
+    // The shell of the focused pane goes to the directory in `view.text`.
+    Action shellTo(View& view, const Context& context) {
+      const auto* pane = focusedPane(context);
+      if (pane == nullptr || pane->kind != PaneKind::shell) {
+        say(view, "cd is for a shell's pane; s opens one here", Tone::error);
+        return {};
+      }
+
+      return {.kind = ActionKind::change_directory, .pane = pane->id};
+    }
+
     Action toDirectory(View& view, const State& state, const Context& context, bool split) {
       if (apart(view, context)) {
         return {};
@@ -2493,17 +2737,7 @@ namespace telar::gui::features::explorer {
         return {};
       }
 
-      if (split) {
-        return {.kind = ActionKind::split};
-      }
-
-      const auto* pane = focusedPane(context);
-      if (pane == nullptr || pane->kind != PaneKind::shell) {
-        say(view, "cd is for a shell's pane; s opens one here", Tone::error);
-        return {};
-      }
-
-      return {.kind = ActionKind::change_directory, .pane = pane->id};
+      return split ? Action{.kind = ActionKind::split} : shellTo(view, context);
     }
 
     // `@`: the rows chosen, mentioned to the agent of the tab.
@@ -2622,6 +2856,20 @@ namespace telar::gui::features::explorer {
       ++view.revision;
     }
 
+    // Every row that can be chosen is picked, as the pointer picks them one by one.
+    void selectAll(View& view) {
+      auto& window = windowAt(view.windows, view.current);
+
+      leaveVisual(view);
+      for (std::size_t index = 0; index < window.rows.size(); ++index) {
+        if (selectable(window.rows[index].kind)) {
+          window.picked.push(static_cast<std::uint32_t>(index));
+        }
+      }
+
+      ++view.revision;
+    }
+
     void showHelp(View& view) noexcept {
       view.mode = Mode::help;
       ++view.revision;
@@ -2641,13 +2889,19 @@ namespace telar::gui::features::explorer {
       ++view.revision;
     }
 
+    // The commands that take the selection to a path its directory may not list yet.
+    constexpr bool heads(Command command) noexcept {
+      return command == Command::next_touch || command == Command::previous_touch || command == Command::next_change || command == Command::previous_change;
+    }
+
     Action runCommand(View& view, State& state, const Context& context, const Stroke& stroke) { // NOLINT(readability-function-size): one case per command, in one switch, is what makes a command without its case an error
       auto& window = windowAt(view.windows, view.current);
       const auto count = static_cast<std::int64_t>(stroke.count);
       const auto half = std::max<std::int64_t>(1, window.page / 2);
 
-      // Where `]a` was going is forgotten by any other command: the selection is the person's.
-      if (stroke.command != Command::next_touch && stroke.command != Command::previous_touch) {
+      // Where `]a` or `]c` was going is forgotten by any other command: the selection is the
+      // person's.
+      if (!heads(stroke.command)) {
         window.wanted.clear();
       }
 
@@ -2687,6 +2941,12 @@ namespace telar::gui::features::explorer {
         return expand(view, state, context);
       case Command::toggle_fold:
         toggleFold(view, state, context);
+        break;
+      case Command::unfold:
+        setExpanded(view, state, context, window.cursor, true);
+        break;
+      case Command::fold:
+        fold(view, state, context);
         break;
       case Command::fold_all:
         foldAll(view, state, context);
@@ -2750,8 +3010,16 @@ namespace telar::gui::features::explorer {
         cycleLens(view, state, context, stroke);
         break;
       case Command::rename:
+        startRename(view, state, context, Caret::stem);
+        break;
       case Command::rename_whole:
-        startRename(view, state, context);
+        startRename(view, state, context, Caret::all);
+        break;
+      case Command::rename_start:
+        startRename(view, state, context, Caret::start);
+        break;
+      case Command::rename_end:
+        startRename(view, state, context, Caret::end);
         break;
       case Command::create:
         startCreate(view, state, context, false);
@@ -2781,14 +3049,22 @@ namespace telar::gui::features::explorer {
         split(view, state, context, false);
         break;
       case Command::next_window:
-      case Command::window_right:
-      case Command::window_down:
         otherWindow(view, true);
         break;
       case Command::previous_window:
-      case Command::window_left:
-      case Command::window_up:
         otherWindow(view, false);
+        break;
+      case Command::window_left:
+        windowToward(view, Side::left);
+        break;
+      case Command::window_right:
+        windowToward(view, Side::right);
+        break;
+      case Command::window_up:
+        windowToward(view, Side::up);
+        break;
+      case Command::window_down:
+        windowToward(view, Side::down);
         break;
       case Command::close_window:
         return quit(view, false, false);
@@ -2839,6 +3115,9 @@ namespace telar::gui::features::explorer {
       case Command::visual:
         startVisual(view);
         break;
+      case Command::select_all:
+        selectAll(view);
+        break;
       case Command::search:
         startSearch(view);
         break;
@@ -2860,7 +3139,22 @@ namespace telar::gui::features::explorer {
 
     // The commands `.` repeats: the ones that change something or hand something over.
     constexpr bool repeats(Command command) noexcept {
-      constexpr ds::Array<Command, 8> repeated{Command::cut, Command::paste, Command::open, Command::mention, Command::stage, Command::unstage, Command::toggle_diff, Command::enter};
+      constexpr ds::Array<Command, 14> repeated{
+          Command::cut,
+          Command::paste,
+          Command::open,
+          Command::mention,
+          Command::stage,
+          Command::unstage,
+          Command::discard,
+          Command::toggle_diff,
+          Command::enter,
+          Command::yank,
+          Command::yank_relative,
+          Command::yank_name,
+          Command::change_directory,
+          Command::split_shell,
+      };
 
       return std::ranges::contains(repeated, command);
     }
@@ -2932,12 +3226,12 @@ namespace telar::gui::features::explorer {
     // The commands that take no argument and say themselves what they changed: `:w` and `:q`
     // with their marks, `:only` and `:pin`. None for another name.
     ds::Option<Action> plainCommand(View& view, const State& state, const Context& context, std::string_view name) {
-      if (name == "w" || name == "write" || name == "wa") {
+      if (name == "w" || name == "write" || name == "wa" || name == "wq") {
         write(view, state, context, false);
         return changed(view);
       }
 
-      if (name == "w!") {
+      if (name == "w!" || name == "wa!") {
         write(view, state, context, true);
         return changed(view);
       }
@@ -2966,8 +3260,66 @@ namespace telar::gui::features::explorer {
       return ds::none;
     }
 
-    // `:e!`, and `:e`, `:cd`, `:vs` and `:sp`, which take this window or a new one to a path; none
-    // for another name.
+    // `:cd`: the shell of the focused pane goes to the directory named, as the window means
+    // it, or with none to the window's root.
+    Action cdCommand(View& view, const Context& context, std::string_view argument) {
+      if (apart(view, context)) {
+        return {};
+      }
+
+      const auto colon = argument.find(':');
+      const auto* named = colon == std::string_view::npos ? nullptr : machineNamed(context, argument.substr(0, colon));
+      if (named != nullptr && named->id != context.shown) {
+        report(view, Tone::error, "That directory is on {} and the panes are of {}", named->label, labelOf(context, context.shown));
+        return {};
+      }
+
+      const auto path = named == nullptr ? argument : argument.substr(colon + 1);
+
+      resolve(view.text, path.empty() ? std::string_view{"."} : path, windowAt(view.windows, view.current), context);
+      return shellTo(view, context);
+    }
+
+    constexpr ds::Option<Scope> scopeNamed(std::string_view name) noexcept {
+      if (name == "pane") {
+        return Scope::pane;
+      }
+
+      if (name == "workspace") {
+        return Scope::workspace;
+      }
+
+      if (name == "machine") {
+        return Scope::machine;
+      }
+
+      return ds::none;
+    }
+
+    // `:12`: the selection goes to that row, counted from one, as `12G` takes it.
+    bool lineCommand(View& view, const State& state, const Context& context, std::string_view name) {
+      constexpr std::uint32_t decimal = 10;
+      constexpr std::uint32_t largest = 100000;
+      const bool digits = !name.empty() && std::ranges::all_of(name, [](char letter) {
+        return letter >= '0' && letter <= '9';
+      });
+
+      if (!digits) {
+        return false;
+      }
+
+      std::uint32_t number = 0;
+
+      for (const char digit : name) {
+        number = std::min(largest, (number * decimal) + static_cast<std::uint32_t>(digit - '0'));
+      }
+
+      goToNumber(windowAt(view.windows, view.current), state, context, std::max<std::uint32_t>(1, number));
+      return true;
+    }
+
+    // `:e!`, and `:e`, `:vs` and `:sp`, which take this window or a new one to a path; none for
+    // another name.
     ds::Option<Action> goCommand(View& view, State& state, const Context& context, const Typed& typed) {
       const auto name = typed.name;
 
@@ -2981,7 +3333,7 @@ namespace telar::gui::features::explorer {
       }
 
       const bool splits = name == "vs" || name == "vsplit" || name == "sp" || name == "split";
-      if (!splits && name != "e" && name != "edit" && name != "cd") {
+      if (!splits && name != "e" && name != "edit") {
         return ds::none;
       }
 
@@ -3033,10 +3385,12 @@ namespace telar::gui::features::explorer {
       Text listed{view.memory};
 
       for (const auto& mark : view.marks) {
+        const auto marked = mark.selected.empty() ? mark.root.view() : mark.selected.view();
+
         if (marksMachine(mark.letter.view())) {
-          ds::formatTo(listed, "{}'{} {}:{}", listed.empty() ? "" : " · ", mark.letter.view(), mark.machine == 0 ? mark.away.view() : labelOf(context, mark.machine), mark.root.view());
+          ds::formatTo(listed, "{}'{} {}:{}", listed.empty() ? "" : " · ", mark.letter.view(), mark.machine == 0 ? mark.away.view() : labelOf(context, mark.machine), marked);
         } else if (mark.machine == context.host) {
-          ds::formatTo(listed, "{}'{} {}", listed.empty() ? "" : " · ", mark.letter.view(), mark.root.view());
+          ds::formatTo(listed, "{}'{} {}", listed.empty() ? "" : " · ", mark.letter.view(), marked);
         }
       }
 
@@ -3158,6 +3512,73 @@ namespace telar::gui::features::explorer {
       return true;
     }
 
+    // The names the command line takes, as `<Tab>` completes them.
+    constexpr ds::Array<std::string_view, 31> command_names{
+        "cancel",
+        "cd",
+        "changes",
+        "close",
+        "commit",
+        "e",
+        "e!",
+        "edit",
+        "follow",
+        "help",
+        "machine",
+        "marks",
+        "only",
+        "panes",
+        "pin",
+        "q",
+        "q!",
+        "qa",
+        "quit",
+        "scope",
+        "sp",
+        "split",
+        "touched",
+        "tree",
+        "vs",
+        "vsplit",
+        "w",
+        "w!",
+        "wa",
+        "wq",
+        "write",
+    };
+
+    // Completes the name of a command: the one name that starts so, with a space after it, or
+    // the names that do, listed.
+    void completeName(View& view, std::string_view stem) {
+      Text listed{view.memory};
+      std::string_view only;
+      std::size_t count = 0;
+
+      for (const auto name : command_names) {
+        if (name.starts_with(stem)) {
+          only = name;
+          ++count;
+          ds::formatTo(listed, "{}{}", listed.empty() ? "" : "  ", name);
+        }
+      }
+
+      if (count == 0) {
+        say(view, "No command starts with that", Tone::error);
+        return;
+      }
+
+      if (count != 1) {
+        say(view, listed.view());
+        return;
+      }
+
+      view.completion.assign(only);
+      view.completion.push(' ');
+      say(view, {});
+      ++view.completed;
+      ++view.revision;
+    }
+
     Action command(View& view, State& state, const Context& context, std::string_view line) {
       line.remove_prefix(std::min(line.find_first_not_of(" :"), line.size()));
       while (line.ends_with(' ')) {
@@ -3190,6 +3611,25 @@ namespace telar::gui::features::explorer {
 
       if (typed.name == "machine") {
         machineCommand(view, context, typed.argument);
+        return changed(view);
+      }
+
+      if (typed.name == "cd") {
+        ++view.revision;
+        return cdCommand(view, context, typed.argument);
+      }
+
+      if (typed.name == "scope") {
+        if (const auto scope = scopeNamed(typed.argument)) {
+          setScope(view, state, context, *scope);
+        } else {
+          say(view, "scope pane, workspace or machine", Tone::error);
+        }
+
+        return changed(view);
+      }
+
+      if (lineCommand(view, state, context, typed.name)) {
         return changed(view);
       }
 
@@ -3441,7 +3881,7 @@ namespace telar::gui::features::explorer {
   void rebuild(View& view, const State& state, const Context& context, std::uint64_t machine) {
     for (auto& window : view.windows.viewMut()) {
       if (window->machine == machine) {
-        buildWindow(window.getMut(), {.edits = view.edits, .transfers = view.transfers}, state, context);
+        buildWindow(window.getMut(), {.edits = view.edits, .transfers = view.transfers, .keymap = view.keymap}, state, context);
       }
     }
 
@@ -3471,7 +3911,7 @@ namespace telar::gui::features::explorer {
       const bool touched = window->touched != state.touches.revision;
 
       if (window->built != state.revision || window->reached != context.reach || (previewed && !window->diffs.empty()) || (touched && window->lens == Lens::touched)) {
-        buildWindow(window.getMut(), {.edits = view.edits, .transfers = view.transfers}, state, context);
+        buildWindow(window.getMut(), {.edits = view.edits, .transfers = view.transfers, .keymap = view.keymap}, state, context);
         changed = true;
       } else if (previewed || touched) {
         window.getMut().previewed = state.previews;
@@ -3928,18 +4368,42 @@ namespace telar::gui::features::explorer {
 
   namespace {
 
-    // The answer to whether a copy of a file of another machine is brought: a yes starts it.
-    void answerQuestion(View& view, bool accepted) {
+    // The answer to the question that waits. A yes to whether a copy of a file of another
+    // machine is brought starts it; one to whether the last plan is taken back asks each machine
+    // it changed to do so.
+    Action answerQuestion(View& view, bool accepted) {
+      const auto asked = std::exchange(view.asked, Asked::nothing);
+
       view.mode = Mode::normal;
       ++view.revision;
-      if (!accepted) {
-        view.bringing.machine = 0;
-        say(view, "Not brought");
-      } else if (bring(view)) {
-        say(view, "Bringing a copy · it is typed at the pane when it is whole · :cancel stops it");
-      } else {
-        say(view, "Too many transfers wait: :cancel some first", Tone::error);
+      switch (asked) {
+      case Asked::nothing:
+        break;
+      case Asked::undo:
+        if (!accepted) {
+          say(view, "Left as it is");
+          break;
+        }
+
+        view.awaited.clear();
+        view.awaited.extend(view.wrote.view());
+        view.written = {};
+        say(view, {});
+        return {.kind = ActionKind::undo};
+      case Asked::bring:
+        if (!accepted) {
+          view.bringing.machine = 0;
+          say(view, "Not brought");
+        } else if (bring(view)) {
+          say(view, "Bringing a copy · it is typed at the pane when it is whole · :cancel stops it");
+        } else {
+          say(view, "Too many transfers wait: :cancel some first", Tone::error);
+        }
+
+        break;
       }
+
+      return {};
     }
 
     // The answer to the plan of `:w`: a yes sends each runtime its part, and starts what the
@@ -3984,8 +4448,7 @@ namespace telar::gui::features::explorer {
     const auto text = key.view();
 
     if (view.mode == Mode::question) {
-      answerQuestion(view, text == "y" || text == "Y");
-      return {};
+      return answerQuestion(view, text == "y" || text == "Y");
     }
 
     if (view.mode == Mode::plan) {
@@ -4023,6 +4486,34 @@ namespace telar::gui::features::explorer {
     }
 
     windowAt(view.windows, view.current).filter.assign(text);
+    rebuildCurrent(view, state, context);
+  }
+
+  void step(View& view, const State& state, const Context& context, std::int64_t rows) {
+    if (view.mode != Mode::search || view.windows.empty()) {
+      return;
+    }
+
+    moveBy(windowAt(view.windows, view.current), state, context, rows);
+    ++view.revision;
+  }
+
+  void climb(View& view, const State& state, const Context& context, const Climb& climbed) {
+    if (climbed.window >= view.windows.size() || (view.mode != Mode::normal && view.mode != Mode::visual) || !climbed.directory.starts_with('/')) {
+      return;
+    }
+
+    leaveVisual(view);
+    view.current = climbed.window;
+    if (windowAt(view.windows, view.current).root.view() != climbed.directory) {
+      const Text from{view.memory, windowAt(view.windows, view.current).root.view()};
+      const auto below = climbed.directory == "/" ? std::size_t{1} : climbed.directory.size() + 1;
+      const bool under = within(from.view(), climbed.directory) && from.view().size() > below;
+
+      // The directory it came down through is selected, as going up one selects it.
+      go(view, {.root = climbed.directory, .selected = under ? from.view().substr(0, from.view().find('/', below)) : std::string_view{}});
+    }
+
     rebuildCurrent(view, state, context);
   }
 
@@ -4069,7 +4560,12 @@ namespace telar::gui::features::explorer {
     const auto typed = argumentOf(line);
     const auto name = line.substr(0, line.find(' '));
 
-    if ((!takesPath(name) && name != "machine") || name.size() == line.size()) {
+    if (name.size() == line.size()) {
+      completeName(view, name);
+      return;
+    }
+
+    if (!takesPath(name) && name != "machine") {
       return;
     }
 
@@ -4176,8 +4672,7 @@ namespace telar::gui::features::explorer {
       view.completing_in.clear();
       break;
     case Mode::question:
-      view.bringing.machine = 0;
-      say(view, "Not brought");
+      static_cast<void>(answerQuestion(view, false));
       break;
     case Mode::help:
     case Mode::menu:
@@ -4231,6 +4726,30 @@ namespace telar::gui::features::explorer {
 
     choose(chosen_window, state, context, row);
     ++view.revision;
+  }
+
+  void click(View& view, const State& state, const Context& context, const Pick& pick) {
+    const bool again = !pick.extend && !pick.toggle && pick.window == view.current && pick.window < view.windows.size() && window(view).cursor == pick.row;
+
+    select(view, state, context, pick);
+    if (!again || view.mode != Mode::normal || pick.row >= window(view).rows.size()) {
+      return;
+    }
+
+    const auto row = window(view).rows[pick.row];
+
+    if (row.kind == RowKind::entry && row.directory) {
+      setExpanded(view, state, context, pick.row, !row.expanded);
+      return;
+    }
+
+    // A file git says something of shows its diff below it, or hides it.
+    const auto held = standing(state.repository, window(view).selected.view(), false);
+    const bool changed = !held.ignored && (held.staged != FileState::unchanged || held.unstaged != FileState::unchanged);
+
+    if (!row.directory && namesPath(row.kind) && changed) {
+      toggleDiff(view, state, context);
+    }
   }
 
   Action activate(View& view, State& state, const Context& context, const Pick& pick) {

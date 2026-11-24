@@ -26,8 +26,10 @@ export namespace telar::gui::features::explorer {
     static constexpr std::size_t message_bytes = 512;
     // The lines of a diff a row unfolds below itself.
     static constexpr std::size_t diff_lines = 40;
-    // How deep a tree unfolds.
+    // How deep a tree unfolds, and how many directories `zR` unfolds: fewer than a cache keeps
+    // listed, so that what one window unfolds leaves room for the others.
     static constexpr std::size_t depth = 48;
+    static constexpr std::size_t unfolded = 64;
     // The rows of a window before the client says how many fit.
     static constexpr std::uint16_t page = 20;
     // The bytes of a filter the runtime searches for: what its path search takes.
@@ -58,8 +60,25 @@ export namespace telar::gui::features::explorer {
     help,
     // The menu of a row shows, and takes the keys.
     menu,
-    // A question waits for a yes: whether to bring a copy of a file from another machine.
+    // A question waits for a yes: whether to bring a copy of a file from another machine, or
+    // to take the last plan back.
     question,
+  };
+
+  // What a question asks, while one waits.
+  enum class Asked : std::uint8_t {
+    nothing,
+    bring,
+    undo,
+  };
+
+  // Where the caret stands when a name starts being typed: with the name selected up to its
+  // extension, or all of it, or before or after it with nothing selected.
+  enum class Caret : std::uint8_t {
+    stem,
+    all,
+    start,
+    end,
   };
 
   using Sort = ExplorerSort;
@@ -458,8 +477,11 @@ export namespace telar::gui::features::explorer {
     // The first row the window shows: it draws `page` rows from there.
     std::size_t top = 0;
     ds::String<Memory> selected;
-    // A path the selection goes to once its directory is listed: where `]a` is headed.
+    // A path the selection goes to once its directory is listed: where `]a` or `]c` is headed.
     ds::String<Memory> wanted;
+    // `zR` was asked: each directory unfolds as its listing shows it, as far as the tree goes
+    // or as many as a window unfolds so.
+    bool unfolding = false;
     // Where a visual selection started.
     ds::Option<std::size_t> anchor;
     // The rows picked one by one with the pointer.
@@ -630,6 +652,7 @@ export namespace telar::gui::features::explorer {
     // selected when it is 0; and what the field starts with.
     std::uint32_t inserting = 0;
     ds::String<Memory> draft;
+    Caret caret = Caret::stem;
     // What the command line starts with.
     ds::String<Memory> prefill;
     // The command line `<Tab>` completed last, and how many times it did: whoever shows the
@@ -666,6 +689,8 @@ export namespace telar::gui::features::explorer {
     std::uint32_t next_batch = 1;
     ds::Vec<Begun, Memory> begun;
     Bringing bringing;
+    // What the question that waits asks.
+    Asked asked = Asked::nothing;
   };
 
   [[nodiscard]] const Window& window(const View& view) noexcept;

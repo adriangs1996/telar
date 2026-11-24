@@ -126,7 +126,10 @@ namespace {
 
     check(directory.directory && directory.facts[0].value.view() == "6.5M" && directory.facts[0].detail.view().empty() && previewText(explorer.view, explorer.state).empty());
     explorer.type("j");
-    check(preview(explorer.view, explorer.state, explorer.context(), now).facts[1].value.view() == "2 changed below" && preview(explorer.view, explorer.state, explorer.context(), now).pane_count == 1);
+    const auto unfolded = preview(explorer.view, explorer.state, explorer.context(), now);
+
+    check(unfolded.facts[1].label == "Entries" && unfolded.facts[1].value.view() == "4 of 4 visible", "a directory that is listed says how many of its entries the window lists");
+    check(unfolded.facts[2].value.view() == "2 changed below" && unfolded.pane_count == 1);
   }
 
   void testThePreviewOfADirectoryListsItsHeaviest() {
@@ -147,7 +150,7 @@ namespace {
 
     const auto shown = preview(measured.view, measured.state, measured.context(), 0);
 
-    check(shown.heavy_count == 4, "what it holds, the heaviest first, and no more than a handful");
+    check(shown.heavy_count == 4, "what it holds, the heaviest first, and no more than seven");
     check(shown.heavy[0].name.view() == "images" && shown.heavy[0].directory && shown.heavy[0].size.view() == "2.4M" && shown.heavy[0].share == 99);
     check(shown.heavy[1].name.view() == "usage.md" && !shown.heavy[1].directory && shown.heavy[1].size.view() == "7.6K" && shown.heavy[1].share == 0);
     check(shown.heavy[2].name.view() == "agents.md" && shown.heavy[3].name.view() == "remote.md");
@@ -231,7 +234,7 @@ namespace {
     Explorer explorer;
 
     explorer.start();
-    check(helpKeys(explorer.view, "down, up; with a count") == "j k" && helpKeys(explorer.view, "rename on the row") == "cw i a" && helpKeys(explorer.view, "the next window, the one that way") == "<C-w>w <C-w>hjkl");
+    check(helpKeys(explorer.view, "down, up; with a count") == "j k <C-n> <C-p>" && helpKeys(explorer.view, "rename: stem, all, at its start, its end") == "cw cc i a" && helpKeys(explorer.view, "the next window, the one that way") == "<C-w>w <C-w>hjkl");
     check(helpKeys(explorer.view, "set a mark, jump to it") == "ma 'a" && helpKeys(explorer.view, "copy, cut, paste; Control too") == "<D-c> <D-x> <D-v>" && helpKeys(explorer.view, "show the plan; overwrite what exists") == ":w :w!");
     check(hintKeys(explorer, "cut") == "dd" && hintKeys(explorer, "help") == "?");
 
@@ -253,7 +256,7 @@ namespace {
     change("<C-w>j", Command::none);
     check(configure(explorer.view, changed) && !configure(explorer.view, changed), "the keys are built when the configuration changes them, and not again");
 
-    check(helpKeys(explorer.view, "cut: deletes, or moves once pasted") == "x" && helpKeys(explorer.view, "down, up; with a count") == "j K");
+    check(helpKeys(explorer.view, "cut: deletes, or moves once pasted") == "x <Del>" && helpKeys(explorer.view, "down, up; with a count") == "j K <C-n> <C-p>");
     check(helpKeys(explorer.view, "stage, unstage") == "gu" && helpKeys(explorer.view, "this help").empty(), "a command no key names shows none");
     check(helpKeys(explorer.view, "copy, cut, paste; Control too") == "<D-x> <D-v>" && helpKeys(explorer.view, "the next window, the one that way") == "<C-w>w <C-w>hkl");
     check(hintKeys(explorer, "cut") == "x" && hintKeys(explorer, "stage") == "<no such hint>" && hintKeys(explorer, "help") == "<no such hint>" && hintKeys(explorer, "unstage") == "gu");
@@ -264,6 +267,93 @@ namespace {
     check(menuKeys(explorer, "Cut") == "x" && menuKeys(explorer, "Move to the trash") == "<Del>" && menuKeys(explorer, "Open a shell here") == "s" && menuKeys(explorer, "Copy") == "yy" && menuKeys(explorer, "New directory") == "o …/");
   }
 
+  void testARowThatIsNoFileHasAPreviewOfItsOwn() {
+    Explorer explorer;
+
+    explorer.start();
+    explorer.type("4gtjj");
+
+    const auto pane = preview(explorer.view, explorer.state, explorer.context(), explorer.now);
+
+    check(pane.shown && pane.kind == RowKind::pane && pane.name.view() == "3 zsh" && pane.path.view() == "/home/dev/telar · macbook");
+    check(pane.fact_count == 2 && pane.facts[0].label == "Kind" && pane.facts[0].value.view() == "shell" && pane.facts[1].label == "Directory" && pane.facts[1].value.view() == "/home/dev/telar/docs");
+    check(std::string_view{pane.note} == "Enter focuses this pane; a window that follows it goes to its directory." && previewText(explorer.view, explorer.state).empty());
+
+    // An entry a change adds, not written yet.
+    explorer.type("1gtggo");
+    explorer.enter("notes/");
+
+    const auto added = preview(explorer.view, explorer.state, explorer.context(), explorer.now);
+
+    check(added.shown && added.kind == RowKind::added && added.directory && added.name.view() == "notes" && added.path.view() == "/home/dev/telar/notes");
+    check(added.fact_count == 1 && added.facts[0].label == "Pending" && added.facts[0].value.view() == "create a directory");
+    check(std::string_view{added.note}.starts_with("It does not exist until :w applies it."));
+
+    // And what a paste brings.
+    explorer.type("ggjjjyyggpG");
+
+    const auto pasted = preview(explorer.view, explorer.state, explorer.context(), explorer.now);
+
+    check(pasted.kind == RowKind::added && pasted.name.view() == "justfile" && pasted.facts[0].value.view() == "copy from macbook:/home/dev/telar/justfile" && pasted.facts[1].label == "Size" && pasted.facts[1].value.view() == "8.1K");
+
+    // The question of taking the last plan back has its own hints.
+    Explorer asked;
+
+    asked.start();
+    asked.view.wrote.push(Explorer::machine);
+    asked.type("u");
+
+    const auto asking = hints(asked.view, asked.state, asked.context());
+
+    check(asking.count == 2 && asking.items[0].keys.view() == "y" && asking.items[0].label.view() == "take it back" && asking.items[1].label.view() == "leave it");
+  }
+
+  void testThePreviewListsSevenOfTheHeaviest() {
+    Explorer explorer;
+
+    explorer.files["/home/dev/telar/src"] = {{"a.cpp", false, 100}, {"b.cpp", false, 200}, {"c.cpp", false, 300}, {"d.cpp", false, 400}, {"e.cpp", false, 500}, {"f.cpp", false, 600}, {"g.cpp", false, 700}, {"h.cpp", false, 800}, {"i.cpp", false, 900}};
+    explorer.start();
+    explorer.type("jl");
+    check(explorer.selected() == "/home/dev/telar/src");
+
+    const auto shown = preview(explorer.view, explorer.state, explorer.context(), 0);
+
+    check(shown.heavy_count == 7 && shown.heavy[0].name.view() == "i.cpp" && shown.heavy[6].name.view() == "c.cpp", "seven of them, the heaviest first");
+  }
+
+  // The value of the fact a preview shows under `label`; empty when it shows none.
+  std::string factOf(const PreviewLook& look, std::string_view label) {
+    for (std::size_t index = 0; index < look.fact_count; ++index) {
+      if (std::string_view{look.facts[index].label} == label) {
+        return std::string{look.facts[index].value.view()};
+      }
+    }
+
+    return {};
+  }
+
+  void testThePreviewSaysHowManyEntriesTheWindowLists() {
+    Explorer explorer;
+
+    explorer.start();
+    check(factOf(preview(explorer.view, explorer.state, explorer.context(), 0), "Entries").empty(), "a directory the window never listed says none");
+
+    // From above, the repository is a row whose directory the window has listed: it holds two
+    // dotfiles and a directory git ignores.
+    explorer.type("-");
+    check(explorer.selected() == "/home/dev/telar");
+    check(factOf(preview(explorer.view, explorer.state, explorer.context(), 0), "Entries") == "5 of 8 visible");
+    explorer.type("g.");
+    check(factOf(preview(explorer.view, explorer.state, explorer.context(), 0), "Entries") == "7 of 8 visible", "the dotfiles count once the window lists them");
+    explorer.type("gi");
+    check(factOf(preview(explorer.view, explorer.state, explorer.context(), 0), "Entries") == "8 of 8 visible");
+    explorer.type("g.");
+    check(factOf(preview(explorer.view, explorer.state, explorer.context(), 0), "Entries") == "6 of 8 visible", "what git ignores, without the dotfiles");
+  }
+
+  const telar::testing::Case case_entries{"presentation.the_preview_says_how_many_entries_the_window_lists", testThePreviewSaysHowManyEntriesTheWindowLists};
+  const telar::testing::Case case_no_file{"presentation.a_row_that_is_no_file_has_a_preview_of_its_own", testARowThatIsNoFileHasAPreviewOfItsOwn};
+  const telar::testing::Case case_seven{"presentation.the_preview_lists_seven_of_the_heaviest", testThePreviewListsSevenOfTheHeaviest};
   const telar::testing::Case case_bound_keys{"presentation.the_help_the_hints_and_the_menu_show_the_keys_that_are_bound", testTheHelpTheHintsAndTheMenuShowTheKeysThatAreBound};
 
   const telar::testing::Case case_heaviest{"presentation.the_preview_of_a_directory_lists_its_heaviest", testThePreviewOfADirectoryListsItsHeaviest};
