@@ -1793,6 +1793,36 @@ return {api_version = 2, client = {
       QVERIFY(git({QStringLiteral("init"), QStringLiteral("-q"), QStringLiteral("-b"), QStringLiteral("lifetime-speed")}));
       QVERIFY(git({QStringLiteral("add"), QStringLiteral(".")}));
       QVERIFY(git({QStringLiteral("commit"), QStringLiteral("-q"), QStringLiteral("-m"), QStringLiteral("Describe the C++ behavior without the Zig reference")}));
+      // The branch stands as far ahead of the head of its remote as the one of the design's
+      // picture does: that commit is where a clone would have left `origin/main`, and the
+      // commits since are written by one git, with the tree that one had.
+      QVERIFY(git({QStringLiteral("update-ref"), QStringLiteral("refs/remotes/origin/main"), QStringLiteral("HEAD")}));
+      QVERIFY(git({QStringLiteral("symbolic-ref"), QStringLiteral("refs/remotes/origin/HEAD"), QStringLiteral("refs/remotes/origin/main")}));
+      {
+        constexpr int commits_ahead = 330;
+        QByteArray stream;
+        QProcess importing;
+        auto environment = QProcessEnvironment::systemEnvironment();
+
+        for (int commit = 0; commit < commits_ahead; ++commit) {
+          stream += QByteArrayLiteral("commit refs/heads/lifetime-speed\ncommitter telar <telar@example.invalid> 1700000000 +0000\ndata 4\nWork\n");
+          if (commit == 0) {
+            stream += QByteArrayLiteral("from refs/heads/lifetime-speed^0\n");
+          }
+        }
+
+        environment.insert(QStringLiteral("GIT_CONFIG_GLOBAL"), QStringLiteral("/dev/null"));
+        environment.insert(QStringLiteral("GIT_CONFIG_NOSYSTEM"), QStringLiteral("1"));
+        importing.setProcessEnvironment(environment);
+        importing.setWorkingDirectory(root);
+        importing.start(QStringLiteral("git"), {QStringLiteral("fast-import"), QStringLiteral("--quiet")});
+        QVERIFY(importing.waitForStarted(runtime_wait_ms));
+        importing.write(stream);
+        importing.closeWriteChannel();
+        QVERIFY(importing.waitForFinished(runtime_wait_ms));
+        QCOMPARE(importing.exitCode(), 0);
+      }
+
       write(QStringLiteral("docs/usage.md"), 111);
       writeTestFile(root + QStringLiteral("/docs/usage.md"), (readTestFile(root + QStringLiteral("/docs/usage.md")) + QByteArrayLiteral("the split commands. Use Up/Down to select a result and Enter to run it.\n")).constData());
       write(QStringLiteral("docs/configuration.md"), 1101);
@@ -1846,6 +1876,8 @@ return {api_version = 2, client = {
       QVERIFY(named(QStringLiteral("out")).isEmpty());
       QCOMPARE(window().value(QStringLiteral("ignoredEntries")).toInt(), 1);
       QCOMPARE(window().value(QStringLiteral("branch")).toString(), QStringLiteral("lifetime-speed"));
+      QCOMPARE(window().value(QStringLiteral("distance")).toString(), QStringLiteral("\u2191330 main"));
+      QVERIFY(!window().value(QStringLiteral("away")).toBool());
       QCOMPARE(window().value(QStringLiteral("machine")).toString(), QStringLiteral("macbook"));
       QVERIFY(window().value(QStringLiteral("local")).toBool());
       QTRY_COMPARE_WITH_TIMEOUT(named(QStringLiteral("docs")).value(QStringLiteral("below")).toInt(), 3, runtime_wait_ms);

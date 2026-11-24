@@ -241,6 +241,103 @@ namespace {
     check(explorer.view.edits.size() == 1 && explorer.view.edits[0].directory && explorer.view.edits[0].machine == Explorer::box && explorer.view.edits[0].source_machine == Explorer::machine);
   }
 
+  void testTabCompletesAPathOfAnotherMachine() {
+    Explorer explorer;
+
+    explorer.start();
+    explorer.type(":");
+
+    // The line is completed with the cache of the machine it names, which is asked for its
+    // home and for the directory, though no window is on it.
+    const auto completes = [&](std::string_view line) {
+      const auto owner = completedOn(explorer.view, explorer.context(), line);
+
+      complete(explorer.view, explorer.cache(owner), explorer.context(owner), line);
+      explorer.answer();
+      return std::pair{owner, std::string{explorer.view.completion.view()}};
+    };
+
+    check(completedOn(explorer.view, explorer.context(), "e do") == Explorer::machine && completedOn(explorer.view, explorer.context(), "machine box:") == Explorer::machine);
+    check(completes("e box:~/lo") == std::pair{Explorer::box, std::string{"e box:~/logs/"}}, "what the other machine lists below its home");
+    check(completes("vs box:s") == std::pair{Explorer::box, std::string{"vs box:site/"}}, "a path that starts nowhere starts at the home there");
+    check(completes("e box:/home/ops/") == std::pair{Explorer::box, std::string{"e box:/home/ops/"}} && explorer.view.message.view() == "logs/  site/  ", "several are listed");
+    check(explorer.view.windows.size() == 1 && explorer.here() == Explorer::machine, "no window went there");
+    check(completes("e box:~/nothing") == std::pair{Explorer::box, std::string{"e box:/home/ops/"}} && explorer.view.tone == Tone::error, "the line stays as it was");
+  }
+
+  void testAMachineThatWentAwayKeepsItsLastListing() {
+    Explorer explorer;
+
+    splitToBox(explorer);
+    check(explorer.names() == Names{"logs/", "site/", "deploy.sh"});
+
+    // The connection ends, as a session that lost it says: what was listed stays, marked.
+    explorer.machines[1].reach = Reach::away;
+    reset(explorer.remote);
+    explorer.settle();
+    check(explorer.names() == Names{"logs/", "site/", "deploy.sh"}, "the last listing stays to be read");
+    check(header(explorer.view, explorer.remote, explorer.context(), 1).away && status(explorer.view, explorer.remote, explorer.context(), 1).following.view() == "[stale]");
+    explorer.type("j");
+    check(explorer.selected() == "/home/ops/site", "the selection moves in it");
+
+    // Nothing is typed that its runtime would have to do.
+    for (const std::string_view keys : {"dd", "cw", "o", "ga", "p"}) {
+      explorer.type(keys);
+      check(explorer.view.mode == Mode::normal && explorer.view.edits.empty() && explorer.view.tone == Tone::error && explorer.view.message.view() == "box does not answer: what it lists is what it last said, and nothing changes there until it is back", "no change is typed there");
+    }
+
+    check(explorer.type("yy").kind == ActionKind::copy, "a path is still copied");
+
+    // Back, it is read again.
+    const auto asked = explorer.asked_of[1];
+
+    explorer.machines[1].reach = Reach::answers;
+    explorer.diskOf(Explorer::box).files["/home/ops"].push_back({"new.txt", false, 1, 99});
+    explorer.settle();
+    explorer.answer();
+    check(explorer.asked_of[1] > asked && explorer.names() == Names{"logs/", "site/", "deploy.sh", "new.txt"} && !header(explorer.view, explorer.remote, explorer.context(), 1).away);
+    check(status(explorer.view, explorer.remote, explorer.context(), 1).following.view() == "[fixed]");
+  }
+
+  void testAWindowOfAnotherMachineActsInTheTabThatMachineHasInView() {
+    Explorer explorer;
+
+    splitToBox(explorer);
+    explorer.type("2j");
+    check(explorer.selected() == "/home/ops/deploy.sh");
+
+    // With no tab known there, nothing of the panes applies.
+    check(explorer.type("@").kind == ActionKind::none && explorer.view.message.view() == "No agent in the tab box has in view to mention it to");
+    explorer.type("_");
+    check(window(explorer.view).root.view() == "/home/ops" && explorer.view.tone == Tone::error);
+
+    // The tab box has in view is of a workspace, and an agent runs in it.
+    explorer.machines[1].workspace = "/home/ops/site";
+    explorer.machines[1].agent = 21;
+    explorer.machines[1].agent_cwd = "/home/ops/site";
+
+    const auto mentioned = explorer.type("@");
+
+    check(mentioned.kind == ActionKind::mention && mentioned.pane == 21 && mentioned.machine == Explorer::box && explorer.view.text.view() == "@../deploy.sh ", "the agent there, by a path from where it runs");
+
+    const auto opened = explorer.type("s");
+
+    check(opened.kind == ActionKind::split && opened.machine == Explorer::box && explorer.view.text.view() == "/home/ops", "a shell there, where the file is");
+    check(explorer.type("cd").kind == ActionKind::none && explorer.view.tone == Tone::error, "the shell of a pane of another machine does not go there");
+
+    explorer.type("_");
+    check(window(explorer.view).root.view() == "/home/ops/site", "the workspace of that tab");
+    explorer.type("-");
+    explorer.type("gw");
+    check(window(explorer.view).root.view() == "/home/ops/site");
+    explorer.type("gh");
+    check(window(explorer.view).root.view() == "/home/ops");
+
+    // On the machine that shows, a split and a mention name no machine: its own tab takes them.
+    explorer.type("<C-w>h");
+    check(explorer.type("s").machine == 0 && explorer.type("@").machine == 0);
+  }
+
   void testAFileIsHandedOnlyToItsOwnMachine() {
     Explorer explorer;
 
@@ -280,6 +377,9 @@ namespace {
   const telar::testing::Case case_marks{"machines.marks_and_jumps_keep_their_machine", testMarksAndJumpsKeepTheirMachine};
   const telar::testing::Case case_plan{"machines.one_plan_goes_to_each_machine_its_part", testOnePlanGoesToEachMachineItsPart};
   const telar::testing::Case case_paste{"machines.a_directory_goes_to_another_machine_as_any_row", testADirectoryGoesToAnotherMachineAsAnyRow};
+  const telar::testing::Case case_tab_path{"machines.tab_completes_a_path_of_another_machine", testTabCompletesAPathOfAnotherMachine};
+  const telar::testing::Case case_stale{"machines.a_machine_that_went_away_keeps_its_last_listing", testAMachineThatWentAwayKeepsItsLastListing};
+  const telar::testing::Case case_there{"machines.a_window_of_another_machine_acts_in_the_tab_that_machine_has_in_view", testAWindowOfAnotherMachineActsInTheTabThatMachineHasInView};
   const telar::testing::Case case_hand{"machines.a_file_is_handed_only_to_its_own_machine", testAFileIsHandedOnlyToItsOwnMachine};
 
 }

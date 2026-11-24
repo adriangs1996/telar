@@ -121,7 +121,45 @@ namespace {
 
     check(directory->entries[0].size == 4096 && directory->entries[0].measured && directory->entries[0].complete);
     check(directory->entries[1].size == 12 && !directory->entries[1].complete, "one the runtime ran out of time in says so");
-    check(directory->entries[2].size == 9 && !lacks(state, sizes));
+    check(directory->entries[2].size == 9);
+
+    // A page the runtime did not finish is asked for again, from where it was: it remembers
+    // the sizes it finished, so each time goes further. A few times and no more.
+    check(lacks(state, sizes) && measure(state, "/srv").skip == 0, "the same page again");
+    for (std::uint64_t request = 3; request < 3 + ExplorerLimits::measure_attempts - 1; ++request) {
+      asked(state, sizes, request);
+      check(receive(state, DirectorySizes{.request_id = request, .path = "/srv", .sizes = measured.view()}) && lacks(state, sizes));
+    }
+
+    // The sizes that gave way to a listing are refused, and asked for again whatever was tried.
+    asked(state, sizes, 20);
+    check(fail(state, RequestFailed{.request_id = 20, .code = FailureCode::resource_limit, .message = "The sizes gave way to a listing"}) && lacks(state, sizes));
+    asked(state, sizes, 21);
+    check(receive(state, DirectorySizes{.request_id = 21, .path = "/srv", .sizes = measured.view()}));
+    check(!lacks(state, sizes) && find(state, "/srv")->entries[1].size == 12 && !find(state, "/srv")->entries[1].complete, "a tree too large stays as far as it was measured");
+
+    // Read again, it is measured again; and finished, it is asked for no more.
+    invalidate(state, {});
+    asked(state, listed, 30);
+    check(receive(state, DirectoryContents{.request_id = 30, .path = "/srv", .total = 3, .entries = entries.view()}) && lacks(state, sizes));
+    asked(state, sizes, 31);
+
+    const ds::Array<DirectorySize, 2> whole{DirectorySize{.name = "big", .bytes = 4096, .complete = true}, DirectorySize{.name = "small", .bytes = 64, .complete = true}};
+
+    check(receive(state, DirectorySizes{.request_id = 31, .path = "/srv", .sizes = whole.view()}) && !lacks(state, sizes) && find(state, "/srv")->entries[1].size == 64);
+
+    // Sizes the runtime refuses each time are asked for a bounded number of times.
+    invalidate(state, {});
+    asked(state, listed, 40);
+    check(receive(state, DirectoryContents{.request_id = 40, .path = "/srv", .total = 3, .entries = entries.view()}));
+    for (std::uint64_t request = 41; request < 41 + ExplorerLimits::measure_yields; ++request) {
+      check(lacks(state, sizes));
+      asked(state, sizes, request);
+      check(fail(state, RequestFailed{.request_id = request, .code = FailureCode::permission_denied, .message = "refused"}));
+    }
+
+    asked(state, sizes, 90);
+    check(fail(state, RequestFailed{.request_id = 90, .code = FailureCode::permission_denied, .message = "refused"}) && !lacks(state, sizes));
   }
 
   void testGitSaysHowAPathStands() {

@@ -120,6 +120,12 @@ export namespace telar::gui::features::explorer {
     std::string_view label;
     bool local = false;
     Reach reach = Reach::answers;
+    // What a window on it acts in while the panes that show are of another machine: the tab the
+    // machine itself has in view. The root of that tab's workspace, and the agent a mention goes
+    // to there, the focused pane when it is one, with the directory it runs in; 0 with none.
+    std::string_view workspace;
+    std::uint64_t agent = 0;
+    std::string_view agent_cwd;
   };
 
   // A file a buffer of an editor pane shows, by the path its machine names it by: a piece of the
@@ -418,7 +424,6 @@ export namespace telar::gui::features::explorer {
     std::uint32_t left_out = 0;
   };
 
-  // A file of another machine the keys asked to hand to a pane: the question waits for a yes.
   // A machine where a batch of transfers already changed something: what it changes next there
   // joins that change, and `u` takes both back together.
   struct Begun {
@@ -428,13 +433,14 @@ export namespace telar::gui::features::explorer {
     friend bool operator==(const Begun&, const Begun&) = default;
   };
 
+  // What of another machine the keys, or rows let go on a pane, asked to hand to that pane: the
+  // question waits for a yes.
   struct Bringing {
     explicit Bringing(Memory& memory);
 
-    std::uint64_t machine = 0;
-    ds::String<Memory> path;
-    FileIdentity identity{};
-    std::uint64_t size = 0;
+    // The rows chosen, as their listing named them: files, links, and directories, which are
+    // brought as their trees.
+    ds::Vec<Yanked, Memory> items;
     std::uint64_t to = 0;
     std::uint64_t pane = 0;
     bool mention = false;
@@ -583,8 +589,9 @@ export namespace telar::gui::features::explorer {
     ActionKind kind = ActionKind::none;
     std::uint64_t pane = 0;
     bool overwrite = false;
-    // The machine whose files it is about: where the paths to open are, and whose repository
-    // a commit is of.
+    // The machine whose files it is about: where the paths to open are, whose repository a
+    // commit is of, and whose tab takes a mention or a split from a window that is not on the
+    // machine that shows.
     std::uint64_t machine = 0;
   };
 
@@ -661,6 +668,8 @@ export namespace telar::gui::features::explorer {
     std::uint32_t completed = 0;
     ds::String<Memory> completing;
     ds::String<Memory> completing_in;
+    // The machine that directory is on: the window's, or the one the line names.
+    std::uint64_t completing_on = 0;
     ds::Vec<PlanStep, Memory> plan;
     bool overwrite = false;
     // Whether the plan in flight is the one of the changes typed, which end with it.

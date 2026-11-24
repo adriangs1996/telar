@@ -97,6 +97,58 @@ namespace {
     check(line.total.view().empty() && line.count == 3, "the list of changes says no size");
   }
 
+  void testTheHeadSaysHowFarTheBranchIsFromItsBase() {
+    Explorer explorer;
+
+    explorer.disk.base = "main";
+    explorer.disk.ahead = 6;
+    explorer.start();
+    check(header(explorer.view, explorer.state, explorer.context(), 0).distance.view() == "↑6 main");
+
+    // On the base itself there is a distance to say only when it has commits the base lacks.
+    Explorer based;
+
+    based.disk.base = "lifetime-speed";
+    based.start();
+    check(based.view.windows.size() == 1 && header(based.view, based.state, based.context(), 0).distance.view().empty());
+    based.disk.ahead = 2;
+    invalidate(based.state, {});
+    based.answer();
+    check(header(based.view, based.state, based.context(), 0).distance.view() == "↑2 lifetime-speed");
+
+    // And none where git names no base.
+    Explorer alone;
+
+    alone.start();
+    check(header(alone.view, alone.state, alone.context(), 0).distance.view().empty());
+  }
+
+  void testTheHintsOfAnEntryNotWrittenYetAreTheKeysThatActOnIt() {
+    Explorer explorer;
+
+    explorer.start();
+    explorer.type("o");
+    explorer.enter("notes/");
+
+    const auto enabled = [&](std::string_view label) {
+      const auto shown = hints(explorer.view, explorer.state, explorer.context());
+
+      for (std::size_t index = 0; index < shown.count; ++index) {
+        if (shown.items[index].label.view() == label) {
+          return shown.items[index].enabled;
+        }
+      }
+
+      check(false, "the hint shows");
+      return false;
+    };
+
+    check(look(explorer.view, explorer.state, explorer.context(), {.window = 0, .row = window(explorer.view).cursor}).kind == RowKind::added);
+    check(enabled("rename") && enabled("cut") && !enabled("copy"), "it is named again and dropped, and is not there to copy");
+    explorer.type("dd");
+    check(explorer.view.edits.empty(), "cutting it drops the change, as its preview says");
+  }
+
   void testThePreviewSaysWhatIsKnownOfTheSelection() {
     Explorer explorer;
 
@@ -351,6 +403,8 @@ namespace {
     check(factOf(preview(explorer.view, explorer.state, explorer.context(), 0), "Entries") == "6 of 8 visible", "what git ignores, without the dotfiles");
   }
 
+  const telar::testing::Case case_distance{"presentation.the_head_says_how_far_the_branch_is_from_its_base", testTheHeadSaysHowFarTheBranchIsFromItsBase};
+  const telar::testing::Case case_added_hints{"presentation.the_hints_of_an_entry_not_written_yet_are_the_keys_that_act_on_it", testTheHintsOfAnEntryNotWrittenYetAreTheKeysThatActOnIt};
   const telar::testing::Case case_entries{"presentation.the_preview_says_how_many_entries_the_window_lists", testThePreviewSaysHowManyEntriesTheWindowLists};
   const telar::testing::Case case_no_file{"presentation.a_row_that_is_no_file_has_a_preview_of_its_own", testARowThatIsNoFileHasAPreviewOfItsOwn};
   const telar::testing::Case case_seven{"presentation.the_preview_lists_seven_of_the_heaviest", testThePreviewListsSevenOfTheHeaviest};

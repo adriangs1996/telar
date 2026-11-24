@@ -50,6 +50,9 @@ namespace telar::gui::test {
     bool repository = true;
     std::string root;
     std::string branch;
+    // The branch that one is measured against, and how far ahead of it it is.
+    std::string base;
+    std::uint32_t ahead = 0;
     std::string home;
   };
 
@@ -211,7 +214,7 @@ namespace telar::gui::test {
           // only of what is below its repository.
           const bool inside = disk.repository && (of == machine || path.starts_with(disk.root));
 
-          telar::testing::check(receive(state, RepositoryChanges{.request_id = request, .path = path, .root = inside ? std::string_view{disk.root} : std::string_view{}, .branch = disk.branch, .changes = inside ? std::span<const FileChange>{disk.changes} : std::span<const FileChange>{}}));
+          telar::testing::check(receive(state, RepositoryChanges{.request_id = request, .path = path, .root = inside ? std::string_view{disk.root} : std::string_view{}, .branch = disk.branch, .base = disk.base, .ahead = disk.ahead, .changes = inside ? std::span<const FileChange>{disk.changes} : std::span<const FileChange>{}}));
           break;
         }
         case NeedKind::inspection:

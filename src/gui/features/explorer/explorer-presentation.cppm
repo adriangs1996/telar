@@ -153,14 +153,16 @@ export namespace telar::gui::features::explorer {
   struct HeaderLook {
     LineText machine;
     bool local = true;
+    // The machine is not connected: what the window lists is what it last said.
+    bool away = false;
     // The root up to its last directory, with the home written as `~`, and that directory.
     LineText lead;
     LineText last;
     bool repository = false;
     LineText branch;
-    bool upstream = false;
-    std::uint32_t ahead = 0;
-    std::uint32_t behind = 0;
+    // How far the branch is from its base, `↑6 main`: empty with no base, and on the base
+    // itself with nothing ahead of it.
+    LineText distance;
     std::uint32_t staged = 0;
     std::uint32_t unstaged = 0;
     std::uint32_t untracked = 0;
@@ -174,7 +176,8 @@ export namespace telar::gui::features::explorer {
     Word mode;
     Mode kind = Mode::normal;
     bool current = false;
-    // `[3 zsh]` while it follows the focused pane, `[fixed]` otherwise.
+    // `[3 zsh]` while it follows the focused pane, `[fixed]` otherwise; `[stale]` while its
+    // machine is not connected, whatever it followed.
     ShortText following;
     bool follows = false;
     LineText root;

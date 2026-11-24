@@ -69,6 +69,9 @@ namespace telar::gui::application::explorer {
       kept.home.assign(host.home);
       kept.local = host.local;
       kept.reach = Reach::away;
+      kept.workspace.clear();
+      kept.agent = 0;
+      kept.agent_cwd.clear();
       return &kept;
     }
 
@@ -214,7 +217,9 @@ namespace telar::gui::application::explorer {
 
   Scene::Machine::Machine(Memory& made_in)
       : label(made_in),
-        home(made_in) {}
+        home(made_in),
+        workspace(made_in),
+        agent_cwd(made_in) {}
 
   void clear(Scene& scene) noexcept {
     scene.machine_count = 0;
@@ -241,6 +246,34 @@ namespace telar::gui::application::explorer {
 
           scene.edited.push({.machine = machine, .pane = pane->id, .offset = static_cast<std::uint32_t>(scene.edited_text.size()), .size = static_cast<std::uint32_t>(path.size()), .modified = file.modified});
           scene.edited_text.extend(std::span<const char>{path});
+        }
+      }
+    }
+
+  }
+
+  namespace {
+
+    // What a window on the session's machine acts in while another machine shows: the workspace
+    // of the tab the session has in view, and the agent there a mention goes to, the focused
+    // pane when it is one.
+    void observeTab(Scene::Machine& kept, const Session& session) {
+      const auto* tab = activeTab(session.tabs, session.active_tab);
+      if (tab == nullptr) {
+        return;
+      }
+
+      for (const auto& workspace : session.workspace_list.entries()) {
+        if (workspace.location.kind == tab->location.workspace.kind && workspace.location.id == tab->location.workspace.id) {
+          kept.workspace.assign(workspace.path.view());
+        }
+      }
+
+      for (const auto& pane : session.panes) {
+        const bool agent = sameTab(pane->location, tab->location) && !pane->exited && agentIn(session.agent_list.entries(), pane->id) != nullptr;
+        if (agent && (kept.agent == 0 || pane->id == tab->focused_pane)) {
+          kept.agent = pane->id;
+          kept.agent_cwd.assign(pane->cwd.view());
         }
       }
     }
@@ -314,6 +347,7 @@ namespace telar::gui::application::explorer {
       kept->reach = session.explores() ? Reach::answers : Reach::silent;
     }
 
+    observeTab(*kept, session);
     observeEdited(scene, session, host.machine);
   }
 
@@ -340,7 +374,7 @@ namespace telar::gui::application::explorer {
     for (std::size_t index = 0; index < scene.machine_count; ++index) {
       const auto& kept = scene.machines[index];
 
-      result.machines.atMut(index) = {.id = kept.id, .label = kept.label.view(), .local = kept.local, .reach = kept.reach};
+      result.machines.atMut(index) = {.id = kept.id, .label = kept.label.view(), .local = kept.local, .reach = kept.reach, .workspace = kept.workspace.view(), .agent = kept.agent, .agent_cwd = kept.agent_cwd.view()};
       result.homes.atMut(index) = kept.home.view();
     }
 
@@ -596,7 +630,8 @@ namespace telar::gui::application::explorer {
       case TransferAsk::make: {
         const ds::Array<FileOperation, 1> made{{{.kind = FileOperationKind::create_directory, .target = path.view()}}};
 
-        return session.link.ask(ChangeFiles{.operations = made.view(), .joins = joined});
+        // What is brought for a pane goes below the downloads, where nothing may be yet.
+        return session.link.ask(ChangeFiles{.operations = made.view(), .joins = joined, .parents = transfer.kind == feature::TransferKind::bring});
       }
       case TransferAsk::link: {
         // What the link says is the chunk that was read of it, as text.
@@ -774,9 +809,12 @@ namespace telar::gui::application::explorer {
       return Effect::copy;
     case ActionKind::insert:
     case ActionKind::mention:
-      hand(session, action.pane, view.text.view());
-      if (action.kind == ActionKind::mention) {
-        workbench::focusPane(session, action.pane);
+      // One for the tab of another machine was handed over by that machine's session.
+      if (action.machine == 0 || action.machine == context.shown) {
+        hand(session, action.pane, view.text.view());
+        if (action.kind == ActionKind::mention) {
+          workbench::focusPane(session, action.pane);
+        }
       }
 
       return leave(view);
@@ -791,7 +829,10 @@ namespace telar::gui::application::explorer {
       return leave(view);
     }
     case ActionKind::split:
-      static_cast<void>(workbench::splitAt(session, ClientLayoutAxis::horizontal, view.text.view()));
+      if (action.machine == 0 || action.machine == context.shown) {
+        static_cast<void>(workbench::splitAt(session, ClientLayoutAxis::horizontal, view.text.view()));
+      }
+
       return leave(view);
     case ActionKind::focus_pane:
       workbench::focusPane(session, action.pane);
@@ -807,12 +848,28 @@ namespace telar::gui::application::explorer {
     case ActionKind::close:
     case ActionKind::copy:
     case ActionKind::insert:
-    case ActionKind::mention:
     case ActionKind::change_directory:
-    case ActionKind::split:
     case ActionKind::focus_pane:
     case ActionKind::pin:
     case ActionKind::unpin:
+      return true;
+    case ActionKind::mention:
+      // From a window that is not on the machine that shows: the agent of the tab this machine
+      // has in view takes it.
+      if (action.machine == context.host && context.host != context.shown) {
+        hand(session, action.pane, view.text.view());
+      }
+
+      return true;
+    case ActionKind::split:
+      if (action.machine == context.host && context.host != context.shown && !workbench::splitAt(session, ClientLayoutAxis::horizontal, view.text.view())) {
+        ds::String<Memory> said{session.memory};
+
+        ds::formatTo(said, "No shell opens on {}: it has no tab in view to put it in", context.machine);
+        feature::refuse(view, said.view());
+        return false;
+      }
+
       return true;
     case ActionKind::open:
       // From the pane the keys named when it is of this session, else from its focused one.

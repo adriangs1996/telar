@@ -75,8 +75,11 @@ export namespace telar::gui::features::explorer {
   // command that goes somewhere names, as far as one name or the start that several share
   // reaches, and lists those. What it
   // completed is `view.completion`, and `view.completed` counts it; a directory not yet listed
-  // is asked for, and the line is completed when it arrives.
+  // is asked for, and the line is completed when it arrives. A path that names another machine,
+  // `box:~/lo`, is completed by what that machine lists: `completedOn` says which machine's
+  // cache and context a line is to be completed with.
   void complete(View& view, const State& state, const Context& context, std::string_view line);
+  [[nodiscard]] std::uint64_t completedOn(const View& view, const Context& context, std::string_view line);
 
   // Escape: leaves the mode, the selection or the filter.
   void cancel(View& view, const State& state, const Context& context);

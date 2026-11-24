@@ -162,6 +162,7 @@ namespace telar::gui::features::explorer {
       : asked(memory),
         root(memory),
         branch(memory),
+        base(memory),
         text(memory),
         changes(memory) {}
 
@@ -431,6 +432,8 @@ namespace telar::gui::features::explorer {
       directory->entries.clear();
       directory->names.clear();
       directory->measured = 0;
+      directory->attempts = 0;
+      directory->yields = 0;
     }
 
     for (const auto& entry : listing.entries) {
@@ -469,8 +472,10 @@ namespace telar::gui::features::explorer {
 
     // The sizes come in the listing's order, one for each directory of the page measured.
     std::size_t next = directory->measured;
+    bool unfinished = false;
 
     for (const auto& size : sizes.sizes) {
+      unfinished = unfinished || !size.complete;
       for (std::size_t step = 0; step < directory->entries.size(); ++step) {
         const auto index = (next + step) % directory->entries.size();
         auto& entry = directory->entries.atMut(index);
@@ -484,8 +489,16 @@ namespace telar::gui::features::explorer {
       }
     }
 
-    directory->measured = static_cast<std::uint32_t>(std::min<std::size_t>(directory->entries.size(), std::size_t{directory->measured} + FileLimits::maximum_entries));
     directory->measuring = 0;
+    if (unfinished && directory->attempts < ExplorerLimits::measure_attempts) {
+      // The page is asked again: the runtime ran out of time.
+      ++directory->attempts;
+    } else {
+      directory->measured = static_cast<std::uint32_t>(std::min<std::size_t>(directory->entries.size(), std::size_t{directory->measured} + FileLimits::maximum_entries));
+      directory->attempts = 0;
+      directory->yields = 0;
+    }
+
     settle(state);
     return true;
   }
@@ -498,9 +511,8 @@ namespace telar::gui::features::explorer {
 
     repository.root.assign(changes.root);
     repository.branch.assign(changes.branch);
-    repository.upstream = changes.upstream;
+    repository.base.assign(changes.base);
     repository.ahead = changes.ahead;
-    repository.behind = changes.behind;
     repository.truncated = changes.truncated;
     repository.text.clear();
     repository.changes.clear();
@@ -833,6 +845,42 @@ namespace telar::gui::features::explorer {
     return true;
   }
 
+  namespace {
+
+    // The runtime refused the listing or the sizes `request` asked of a directory: true when it
+    // was one of them.
+    bool failDirectory(State& state, std::uint64_t request) {
+      bool ours = false;
+
+      for (auto& directory : state.directories.viewMut()) {
+        if (directory->listing == request) {
+          directory.getMut().listing = 0;
+          directory.getMut().failed = true;
+          directory.getMut().listed = true;
+          directory.getMut().stale = false;
+          directory.getMut().entries.clear();
+          directory.getMut().names.clear();
+          directory.getMut().total = 0;
+          ours = true;
+        } else if (directory->measuring == request) {
+          // The runtime refuses the sizes that gave way to a listing, and they are asked for
+          // again; what it refuses each time is left as it is.
+          directory.getMut().measuring = 0;
+          if (directory->yields < ExplorerLimits::measure_yields) {
+            ++directory.getMut().yields;
+          } else {
+            directory.getMut().measured = static_cast<std::uint32_t>(directory->entries.size());
+          }
+
+          ours = true;
+        }
+      }
+
+      return ours;
+    }
+
+  }
+
   bool fail(State& state, const RequestFailed& failure) {
     const auto request = failure.request_id;
     bool ours = false;
@@ -874,23 +922,7 @@ namespace telar::gui::features::explorer {
       return true;
     }
 
-    for (auto& directory : state.directories.viewMut()) {
-      if (directory->listing == request) {
-        directory.getMut().listing = 0;
-        directory.getMut().failed = true;
-        directory.getMut().listed = true;
-        directory.getMut().stale = false;
-        directory.getMut().entries.clear();
-        directory.getMut().names.clear();
-        directory.getMut().total = 0;
-        ours = true;
-      } else if (directory->measuring == request) {
-        // What could not be measured is not asked for again.
-        directory.getMut().measuring = 0;
-        directory.getMut().measured = static_cast<std::uint32_t>(directory->entries.size());
-        ours = true;
-      }
-    }
+    ours = failDirectory(state, request);
 
     if (state.repository.waiting == request) {
       state.repository.waiting = 0;

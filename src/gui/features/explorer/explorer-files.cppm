@@ -19,6 +19,12 @@ export namespace telar::gui::features::explorer {
     static constexpr std::size_t entries = std::size_t{16} * 1024;
     // The requests on files the window keeps in flight with one runtime.
     static constexpr std::size_t in_flight = 4;
+    // The times the sizes of a page are asked again while the runtime did not finish them: it
+    // remembers the ones it did, so each time goes further, and a tree too large stays with `+`.
+    static constexpr std::uint8_t measure_attempts = 4;
+    // The times they are asked again after the runtime refused them: it does when they gave way
+    // to a listing the window asked for, which costs it nothing.
+    static constexpr std::uint8_t measure_yields = 16;
     // The previews the window keeps of one machine.
     static constexpr std::size_t inspections = 16;
     static constexpr std::size_t error_bytes = 256;
@@ -56,8 +62,11 @@ export namespace telar::gui::features::explorer {
     // The listing and the measure in flight, 0 when none.
     std::uint64_t listing = 0;
     std::uint64_t measuring = 0;
-    // The entries a measure covered already.
+    // The entries a measure covered already, and the times its next page was asked again: after
+    // the runtime did not finish it, and after it refused it.
     std::uint32_t measured = 0;
+    std::uint8_t attempts = 0;
+    std::uint8_t yields = 0;
     // When it was last read, for the one read longest ago to go first.
     std::uint64_t used = 0;
 
@@ -85,9 +94,9 @@ export namespace telar::gui::features::explorer {
     ds::String<Memory> asked;
     ds::String<Memory> root;
     ds::String<Memory> branch;
-    bool upstream = false;
+    // The branch it is measured against, and the commits it has that the base lacks.
+    ds::String<Memory> base;
     std::uint32_t ahead = 0;
-    std::uint32_t behind = 0;
     bool truncated = false;
     ds::Vec<char, Memory> text;
     ds::Vec<Change, Memory> changes;

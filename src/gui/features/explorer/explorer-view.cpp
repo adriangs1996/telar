@@ -581,6 +581,13 @@ namespace telar::gui::features::explorer {
       window.touched = state.touches.revision;
       window.reached = context.reach;
       if (context.reach != Reach::answers) {
+        // What a machine that went away last listed of the root stays in view, to be read: the
+        // head and the status line say it is not what the machine holds now.
+        const auto* root = context.reach == Reach::away ? find(state, window.root.view()) : nullptr;
+        if (root != nullptr && root->listed && !root->failed) {
+          return false;
+        }
+
         window.loading = false;
         pushText(window, {.kind = RowKind::note}, context.reach == Reach::away ? "this machine is not connected" : "the runtime of this machine does not answer for files");
         return true;
@@ -958,6 +965,21 @@ namespace telar::gui::features::explorer {
 
       report(view, Tone::error, "This window lists {} and the panes are of {}: go there with gm", context.machine, labelOf(context, context.shown));
       return true;
+    }
+
+    // What the window keeps of the machine a use case is on.
+    tbc::val_a<const MachineFact*> hostOf(tbc::ref_a<Context> context) noexcept {
+      const auto found = std::ranges::find(context.machines, context.host, &MachineFact::id);
+
+      return found == context.machines.end() ? nullptr : std::to_address(found);
+    }
+
+    // The root of the workspace a window on another machine than the panes' acts in: the one
+    // the tab that machine has in view is of. Empty where it has none.
+    std::string_view workspaceThere(const Context& context) noexcept {
+      const auto* host = hostOf(context);
+
+      return host == nullptr || !host->workspace.starts_with('/') ? std::string_view{} : host->workspace;
     }
 
     // Where the window that takes the keys last was on `machine`, if it was there.
@@ -2238,39 +2260,32 @@ namespace telar::gui::features::explorer {
 
     // Enter on the rows chosen: a directory alone is entered; files go to the focused pane as its
     // kind takes them.
-    // A file of another machine than the panes' cannot be typed where the pane is: asks whether
-    // to bring a copy there, which the pane takes once it is whole. False for a row that names
-    // no file.
+    // What is on another machine than the panes' cannot be typed where the pane is: asks
+    // whether to bring a copy of each row chosen there, which the pane takes once it is whole.
+    // A directory is brought as its tree. False when no row chosen names a path.
     bool askToBring(View& view, const State& state, const Context& context, const PaneFact& pane) {
-      const auto& window = windowAt(view.windows, view.current);
-      const auto& row = window.rows[window.cursor];
-      if (row.directory || !namesPath(row.kind)) {
+      ds::Vec<Yanked, Memory> taken{view.memory};
+
+      take(taken, view, state, context);
+      view.bringing.items = std::move(taken);
+      if (view.bringing.items.empty()) {
         return false;
       }
 
-      pathOf(view.bringing.path, window, state, context, row);
-      if (view.bringing.path.empty()) {
-        return false;
-      }
-
-      view.bringing.machine = window.machine;
-      view.bringing.identity = {};
-      view.bringing.size = 0;
-      // The file as its listing named it, where the window holds one: a row found by a filter or
-      // by git is read as it is.
-      if (row.kind == RowKind::entry && row.holder < state.directories.size() && row.entry < state.directories[row.holder]->entries.size()) {
-        const auto& entry = state.directories[row.holder]->entries[row.entry];
-
-        view.bringing.identity = entry.identity;
-        view.bringing.size = entry.size;
-      }
+      const auto count = view.bringing.items.size();
 
       view.bringing.to = context.shown;
       view.bringing.pane = pane.id;
       view.bringing.mention = pane.kind == PaneKind::agent;
+      leaveVisual(view);
       view.asked = Asked::bring;
       view.mode = Mode::question;
-      report(view, Tone::ask, "It is on {} and the pane on {} · bring a copy there? [y/N]", context.machine, labelOf(context, context.shown));
+      if (count == 1) {
+        report(view, Tone::ask, "It is on {} and the pane on {} · bring a copy there? [y/N]", context.machine, labelOf(context, context.shown));
+      } else {
+        report(view, Tone::ask, "{} paths are on {} and the pane on {} · bring a copy of each there? [y/N]", count, context.machine, labelOf(context, context.shown));
+      }
+
       return true;
     }
 
@@ -2310,7 +2325,7 @@ namespace telar::gui::features::explorer {
 
       // A path of this machine names nothing where the pane is: a copy brought there would.
       if (window.machine != context.shown) {
-        if (!single || pane->kind == PaneKind::editor || !askToBring(view, state, context, *pane)) {
+        if (pane->kind == PaneKind::editor || !askToBring(view, state, context, *pane)) {
           report(view, Tone::error, "It is on {} and the focused pane on {}: gf opens it there, yy copies where it is", context.machine, labelOf(context, context.shown));
         }
 
@@ -2400,10 +2415,13 @@ namespace telar::gui::features::explorer {
 
     // `gp`, `gw`, `gh`: the window follows the focused pane, rooted where `scope` says.
     void setScope(View& view, const State& state, const Context& context, Scope scope) {
-      // On another machine than the panes' there is no pane to follow: `gh` goes to its home.
+      // On another machine than the panes' there is no pane to follow: `gh` goes to its home,
+      // and `gp` and `gw` to the workspace of the tab that machine has in view.
       if (windowAt(view.windows, view.current).machine != context.shown) {
         if (scope == Scope::machine) {
           rootAt(view, state, context, context.home.empty() ? std::string_view{"~"} : context.home);
+        } else if (const auto workspace = workspaceThere(context); !workspace.empty()) {
+          rootAt(view, state, context, workspace);
         } else {
           static_cast<void>(apart(view, context));
         }
@@ -2728,7 +2746,12 @@ namespace telar::gui::features::explorer {
     }
 
     Action toDirectory(View& view, const State& state, const Context& context, bool split) {
-      if (apart(view, context)) {
+      const auto machine = windowAt(view.windows, view.current).machine;
+
+      // A shell that opens is opened where the directory is, in the tab that machine has in
+      // view; the shell of a pane of another machine cannot go there.
+      if (machine != context.shown && !split) {
+        static_cast<void>(apart(view, context));
         return {};
       }
 
@@ -2737,13 +2760,41 @@ namespace telar::gui::features::explorer {
         return {};
       }
 
-      return split ? Action{.kind = ActionKind::split} : shellTo(view, context);
+      if (!split) {
+        return shellTo(view, context);
+      }
+
+      if (machine != context.shown) {
+        report(view, Tone::info, "a shell there, on {}", context.machine);
+      }
+
+      return {.kind = ActionKind::split, .machine = machine == context.shown ? 0 : machine};
+    }
+
+    // `@` from a window that is not on the machine that shows: the agent of the tab its own
+    // machine has in view is the one mentioned to.
+    Action mentionThere(View& view, const State& state, const Context& context) {
+      const auto* host = hostOf(context);
+      if (host == nullptr || host->agent == 0) {
+        report(view, Tone::error, "No agent in the tab {} has in view to mention it to", context.machine);
+        return {};
+      }
+
+      gather(view, state, context, false);
+      leaveVisual(view);
+      if (view.paths.empty()) {
+        return {};
+      }
+
+      typeFor(view, context, {.id = host->agent, .kind = PaneKind::agent, .cwd = host->agent_cwd}, "@");
+      report(view, Tone::info, "mentioned to the agent there, on {}", context.machine);
+      return {.kind = ActionKind::mention, .pane = host->agent, .machine = context.host};
     }
 
     // `@`: the rows chosen, mentioned to the agent of the tab.
     Action mention(View& view, const State& state, const Context& context) {
-      if (apart(view, context)) {
-        return {};
+      if (windowAt(view.windows, view.current).machine != context.shown) {
+        return mentionThere(view, state, context);
       }
 
       const auto agent = std::ranges::find(context.panes, PaneKind::agent, &PaneFact::kind);
@@ -2972,7 +3023,11 @@ namespace telar::gui::features::explorer {
         goUp(view, state, context);
         break;
       case Command::workspace_root:
-        if (!apart(view, context)) {
+        // From a window of another machine than the panes', the workspace its own machine has
+        // in view.
+        if (window.machine != context.shown && !workspaceThere(context).empty()) {
+          rootAt(view, state, context, workspaceThere(context));
+        } else if (!apart(view, context)) {
           rootAt(view, state, context, context.workspace.starts_with('/') ? context.workspace : context.home);
         }
 
@@ -3166,8 +3221,34 @@ namespace telar::gui::features::explorer {
       return std::ranges::contains(counted, command);
     }
 
+    // The commands that type a change of the files or ask git for one: what a window refuses
+    // while its machine does not answer.
+    constexpr bool changesFiles(Command command) noexcept {
+      constexpr ds::Array<Command, 12> changing{
+          Command::rename,
+          Command::rename_whole,
+          Command::rename_start,
+          Command::rename_end,
+          Command::create,
+          Command::create_directory,
+          Command::cut,
+          Command::paste,
+          Command::stage,
+          Command::unstage,
+          Command::discard,
+          Command::commit,
+      };
+
+      return std::ranges::contains(changing, command);
+    }
+
     // Runs a command that is not `.`, which `.` then repeats if it is one of those.
     Action dispatch(View& view, State& state, const Context& context, const Stroke& stroke) {
+      if (changesFiles(stroke.command) && windowAt(view.windows, view.current).reached != Reach::answers) {
+        report(view, Tone::error, "{} does not answer: what it lists is what it last said, and nothing changes there until it is back", context.machine);
+        return {};
+      }
+
       if (repeats(stroke.command)) {
         view.last = stroke.command;
       }
@@ -3891,7 +3972,7 @@ namespace telar::gui::features::explorer {
   void absorb(View& view, const State& state, const Context& context, std::uint64_t machine) {
     // What the runtime said of a file a change waits to know, and the directory `<Tab>` waits for.
     static_cast<void>(identify(view.edits, state, machine));
-    if (!view.completing.empty() && window(view).machine == machine) {
+    if (!view.completing.empty() && view.completing_on == machine) {
       const Text line{view.memory, view.completing.view()};
 
       complete(view, state, context, line.view());
@@ -4008,7 +4089,7 @@ namespace telar::gui::features::explorer {
 
     // The directory a command line waits for to complete a path in it.
     tbc::val_a<ds::Option<Need>> completionNeed(tbc::ref_a<View> view, const State& state, std::uint64_t machine) {
-      if (view.completing.empty() || window(view).machine != machine) {
+      if (view.completing.empty() || view.completing_in.empty() || view.completing_on != machine) {
         return ds::none;
       }
 
@@ -4057,14 +4138,20 @@ namespace telar::gui::features::explorer {
   }
 
   tbc::val_a<ds::Option<Need>> need(tbc::ref_a<View> view, const State& state, std::uint64_t machine) {
+    // A machine no window is on is asked only for what a command line completes of it.
     const auto* shows = windowOn(view, machine);
-    if (shows == nullptr) {
+    const bool completes = !view.completing.empty() && view.completing_on == machine;
+    if (shows == nullptr && !completes) {
       return ds::none;
     }
 
     // Where `~` is on the machine, once: a window may be waiting to go there.
     if (lacks(state, {.kind = NeedKind::home})) {
       return Need{.kind = NeedKind::home};
+    }
+
+    if (shows == nullptr) {
+      return completionNeed(view, state, machine);
     }
 
     // What is typed is answered first: the filter, and the path a command line completes. Then
@@ -4392,12 +4479,16 @@ namespace telar::gui::features::explorer {
         return {.kind = ActionKind::undo};
       case Asked::bring:
         if (!accepted) {
-          view.bringing.machine = 0;
+          view.bringing.items.clear();
           say(view, "Not brought");
-        } else if (bring(view)) {
+        } else if (const auto wanted = view.bringing.items.size(), started = bring(view); started == 0) {
+          say(view, "Too many transfers wait: :cancel some first", Tone::error);
+        } else if (started < wanted) {
+          report(view, Tone::error, "Bringing {} of {}: too many transfers wait for the rest · :cancel stops them", started, wanted);
+        } else if (started == 1) {
           say(view, "Bringing a copy · it is typed at the pane when it is whole · :cancel stops it");
         } else {
-          say(view, "Too many transfers wait: :cancel some first", Tone::error);
+          report(view, Tone::info, "Bringing {} copies · each is typed at the pane when it is whole · :cancel stops them", started);
         }
 
         break;
@@ -4548,6 +4639,97 @@ namespace telar::gui::features::explorer {
     return {};
   }
 
+  std::uint64_t completedOn(const View& view, const Context& context, std::string_view line) {
+    if (view.windows.empty()) {
+      return context.host;
+    }
+
+    line.remove_prefix(std::min(line.find_first_not_of(" :"), line.size()));
+
+    const auto typed = argumentOf(line);
+    const auto colon = typed.find(':');
+    const auto* named = colon == std::string_view::npos || !takesPath(line.substr(0, line.find(' '))) ? nullptr : machineNamed(context, typed.substr(0, colon));
+
+    return named == nullptr ? window(view).machine : named->id;
+  }
+
+  namespace {
+
+    // A path a command line names, to complete: the line, the path's part of it after the
+    // label of a machine, the machine it is of, and the label alone when what is typed may be
+    // the start of one.
+    struct Completed {
+      std::string_view line;
+      std::string_view argument;
+      std::uint64_t owner = 0;
+      ds::Option<Stem> label;
+    };
+
+    // The line waits for what `owner` is asked next: its home, with no directory, or `directory`.
+    void awaitCompletion(View& view, const Completed& path, std::string_view directory) {
+      view.completing.assign(path.line);
+      view.completing_in.assign(directory);
+      view.completing_on = path.owner;
+    }
+
+    // Completes the directory `path` names with what `state`, the cache of its machine, lists.
+    void completePath(View& view, const State& state, const Context& context, const Completed& path) {
+      // The line up to the last slash stays as it was typed; what follows it is completed.
+      const auto slash = path.argument.rfind('/');
+      const auto stem = path.argument.substr(slash == std::string_view::npos ? 0 : slash + 1);
+      const auto above = slash == std::string_view::npos ? std::string_view{"."} : path.argument.substr(0, slash + 1);
+      const bool here = path.owner == windowAt(view.windows, view.current).machine;
+      // A path of another machine that starts nowhere starts at the home there, as the window
+      // that goes to it does.
+      Text from{view.memory, here || above.starts_with('/') || above.starts_with('~') ? std::string_view{} : std::string_view{"~/"}};
+      Text directory{view.memory};
+
+      from.append(above);
+      resolve(directory, from.view(), windowAt(view.windows, view.current), context);
+      // The home of a machine that has not said it yet is asked first, and the line waits.
+      if (directory.view().starts_with('~')) {
+        awaitCompletion(view, path, {});
+        return;
+      }
+
+      const auto* listed = find(state, directory.view());
+      const bool known = listed != nullptr && (listed->failed || listed->whole());
+      Candidates found;
+
+      if (known) {
+        gatherCandidates(found, *listed, stem);
+      }
+
+      if (found.count == 0 && path.label && completeMachine(view, context, *path.label)) {
+        return;
+      }
+
+      if (!known) {
+        // The runtime is asked for the directory, and the line is completed when it answers.
+        awaitCompletion(view, path, directory.view());
+        return;
+      }
+
+      if (found.count == 0) {
+        say(view, "No directory there starts with that", Tone::error);
+        return;
+      }
+
+      view.completion.assign(path.line.substr(0, path.line.size() - stem.size()));
+      view.completion.append(found.shared);
+      if (found.count == 1) {
+        view.completion.push('/');
+        say(view, {});
+      } else {
+        report(view, Tone::info, "{}{}", found.names.view(), found.count > ViewLimits::candidates ? "…" : "");
+      }
+
+      ++view.completed;
+      ++view.revision;
+    }
+
+  }
+
   void complete(View& view, const State& state, const Context& context, std::string_view line) {
     view.completing.clear();
     view.completing_in.clear();
@@ -4580,56 +4762,13 @@ namespace telar::gui::features::explorer {
       return;
     }
 
-    // A path of another machine is completed by what that machine lists, which is not at hand.
+    // A path of another machine is completed by what that machine lists: with its cache, which
+    // is the one given for a line that `completedOn` says is of it.
     const auto* named = colon == std::string_view::npos ? nullptr : machineNamed(context, typed.substr(0, colon));
-    if (named != nullptr && named->id != windowAt(view.windows, view.current).machine) {
-      return;
+    const auto owner = named == nullptr ? windowAt(view.windows, view.current).machine : named->id;
+    if (owner == context.host) {
+      completePath(view, state, context, {.line = line, .argument = named == nullptr ? typed : typed.substr(colon + 1), .owner = owner, .label = labels ? ds::Option<Stem>{label} : ds::Option<Stem>{}});
     }
-
-    // The line up to the last slash stays as it was typed; what follows it is completed.
-    const auto argument = named == nullptr ? typed : typed.substr(colon + 1);
-    const auto slash = argument.rfind('/');
-    const auto stem = argument.substr(slash == std::string_view::npos ? 0 : slash + 1);
-    const auto kept = line.substr(0, line.size() - stem.size());
-    Text directory{view.memory};
-
-    resolve(directory, slash == std::string_view::npos ? std::string_view{"."} : argument.substr(0, slash + 1), windowAt(view.windows, view.current), context);
-
-    const auto* listed = find(state, directory.view());
-    const bool known = listed != nullptr && (listed->failed || listed->whole());
-    Candidates found;
-
-    if (known) {
-      gatherCandidates(found, *listed, stem);
-    }
-
-    if (found.count == 0 && labels && completeMachine(view, context, label)) {
-      return;
-    }
-
-    if (!known) {
-      // The runtime is asked for the directory, and the line is completed when it answers.
-      view.completing.assign(line);
-      view.completing_in.assign(directory.view());
-      return;
-    }
-
-    if (found.count == 0) {
-      say(view, "No directory there starts with that", Tone::error);
-      return;
-    }
-
-    view.completion.assign(kept);
-    view.completion.append(found.shared);
-    if (found.count == 1) {
-      view.completion.push('/');
-      say(view, {});
-    } else {
-      report(view, Tone::info, "{}{}", found.names.view(), found.count > ViewLimits::candidates ? "…" : "");
-    }
-
-    ++view.completed;
-    ++view.revision;
   }
 
   void cancel(View& view, const State& state, const Context& context) {
@@ -4953,9 +5092,14 @@ namespace telar::gui::features::explorer {
       return {};
     }
 
-    // A path of this machine names nothing where the pane is.
+    // A path of this machine names nothing where the pane is: a copy brought there would, as
+    // Enter asks. An editor edits where the file is.
     if (windowAt(view.windows, view.current).machine != context.shown) {
-      report(view, Tone::error, "It is on {} and the pane on {}: Enter asks to bring a copy there", context.machine, labelOf(context, context.shown));
+      if (taker->kind == PaneKind::editor || !askToBring(view, state, context, *taker)) {
+        report(view, Tone::error, "It is on {} and the pane on {}: gf opens it there, yy copies where it is", context.machine, labelOf(context, context.shown));
+      }
+
+      ++view.revision;
       return {};
     }
 

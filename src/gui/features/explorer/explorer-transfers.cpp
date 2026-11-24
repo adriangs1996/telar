@@ -430,7 +430,7 @@ namespace telar::gui::features::explorer {
         root(memory) {}
 
   Bringing::Bringing(Memory& memory)
-      : path(memory) {}
+      : items(memory) {}
 
   bool ended(TransferPhase phase) noexcept {
     return phase == TransferPhase::arrived || phase == TransferPhase::failed || phase == TransferPhase::cancelled;
@@ -741,26 +741,38 @@ namespace telar::gui::features::explorer {
     return started;
   }
 
-  bool bring(View& view) {
-    const auto& asked_for = view.bringing;
-    if (asked_for.machine == 0 || view.transfers.size() >= TransferLimits::kept) {
-      return false;
+  std::size_t bring(View& view) {
+    std::size_t started = 0;
+
+    for (const auto& item : view.bringing.items) {
+      if (view.transfers.size() >= TransferLimits::kept) {
+        break;
+      }
+
+      auto& transfer = add(view.transfers, view.next_transfer, TransferKind::bring);
+
+      transfer.from = item.machine;
+      transfer.source.assign(item.path.view());
+      transfer.identity = item.identity;
+      transfer.size = item.size;
+      transfer.to = view.bringing.to;
+      transfer.name.assign(baseOf(item.path.view()));
+      transfer.pane = view.bringing.pane;
+      transfer.mention = view.bringing.mention;
+      // A link goes as what it says, whether it shows a directory or a file.
+      transfer.tree = item.directory && !item.link;
+      transfer.link = item.link;
+      transfer.batch = view.next_batch;
+      ++started;
     }
 
-    auto& transfer = add(view.transfers, view.next_transfer, TransferKind::bring);
+    view.bringing.items.clear();
+    if (started != 0) {
+      ++view.next_batch;
+      ++view.revision;
+    }
 
-    transfer.from = asked_for.machine;
-    transfer.source.assign(asked_for.path.view());
-    transfer.identity = asked_for.identity;
-    transfer.size = asked_for.size;
-    transfer.to = asked_for.to;
-    transfer.name.assign(baseOf(asked_for.path.view()));
-    transfer.pane = asked_for.pane;
-    transfer.mention = asked_for.mention;
-    transfer.batch = view.next_batch++;
-    view.bringing.machine = 0;
-    ++view.revision;
-    return true;
+    return started;
   }
 
   namespace {

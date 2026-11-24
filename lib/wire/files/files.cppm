@@ -229,9 +229,10 @@ export extern "C++" {
       std::string_view path;
       std::string_view root;
       std::string_view branch;
-      bool upstream{};
+      // The branch this one is measured against, by its name without its remote, and the commits
+      // this one has that it lacks. Empty where git names none.
+      std::string_view base;
       std::uint32_t ahead{};
-      std::uint32_t behind{};
       bool truncated{};
       std::span<const FileChange> changes;
     };
@@ -245,9 +246,8 @@ export extern "C++" {
               Field<&RepositoryChanges::path, Text16<FileLimits::path_bytes, false>, "path">,
               Field<&RepositoryChanges::root, Text16<FileLimits::path_bytes>, "root">,
               Field<&RepositoryChanges::branch, Text16<FileLimits::branch_bytes>, "branch">,
-              Field<&RepositoryChanges::upstream, BoolByte, "upstream">,
+              Field<&RepositoryChanges::base, Text16<FileLimits::branch_bytes>, "base">,
               Field<&RepositoryChanges::ahead, u32, "ahead">,
-              Field<&RepositoryChanges::behind, u32, "behind">,
               Field<&RepositoryChanges::truncated, BoolByte, "truncated">,
               Field<&RepositoryChanges::changes, CountedSpan<u16, ValueCodec<FileChange>, FileLimits::maximum_changes>, "changes">> {};
 
@@ -339,12 +339,15 @@ export extern "C++" {
     // Applies the operations in order, each on its own: one that fails leaves the others to run.
     // Where a target exists, `overwrite` sends what was there to the trash; without it the runtime
     // picks a free name beside it. What it does is the change undo takes back; with `joins` it
-    // is part of the change before it, and both go back together.
+    // is part of the change before it, and both go back together. With `parents` the directories
+    // above a directory it makes are made first, as a file written with them has its own made:
+    // what is brought for a pane goes where nothing may be yet.
     struct ChangeFiles {
       std::uint64_t request_id{};
       bool overwrite{};
       std::span<const FileOperation> operations;
       bool joins{};
+      bool parents{};
     };
 
     template <>
@@ -355,7 +358,8 @@ export extern "C++" {
               Field<&ChangeFiles::request_id, NonzeroU64, "request_id">,
               Field<&ChangeFiles::overwrite, BoolByte, "overwrite">,
               Field<&ChangeFiles::operations, CountedSpan<u8, ValueCodec<FileOperation>, FileLimits::maximum_operations, 1>, "operations">,
-              Field<&ChangeFiles::joins, BoolByte, "joins">> {};
+              Field<&ChangeFiles::joins, BoolByte, "joins">,
+              Field<&ChangeFiles::parents, BoolByte, "parents">> {};
 
     enum class FileOutcome : Byte {
       done = 0,

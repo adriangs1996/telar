@@ -747,6 +747,14 @@ namespace telar::runtime {
 
     applied.reserve(request.operations.size());
     for (const auto& operation : request.operations) {
+      // The directories above one it makes, where the request asks for them: they stay when the
+      // change is taken back, as the ones a file written with them had made do.
+      if (request.parents && operation.kind == FileOperationKind::create_directory && acceptable(operation.target)) {
+        Path parent{memory_, parentOf(trimmed(operation.target))};
+
+        static_cast<void>(createDirectories(parent));
+      }
+
       applied.push(apply(operation, request.overwrite, cancelled));
     }
 

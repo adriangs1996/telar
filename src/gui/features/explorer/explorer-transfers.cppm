@@ -110,9 +110,9 @@ export namespace telar::gui::features::explorer {
   // out of the ones typed. Returns how many transfers it started.
   std::size_t carry(View& view);
 
-  // Brings the file the question asked about to the machine of the panes. False when the
-  // explorer keeps as many transfers as it can.
-  bool bring(View& view);
+  // Brings what the question asked about to the machine of the panes, a transfer for each row:
+  // how many it started, fewer than the rows when the explorer keeps as many as it can.
+  std::size_t bring(View& view);
 
   // What the window can make of a file of another machine that is dragged out of it.
   enum class Outside : std::uint8_t {

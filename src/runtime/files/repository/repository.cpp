@@ -20,6 +20,9 @@ namespace telar::runtime {
 
     using Clock = std::chrono::steady_clock;
 
+    // A commit's name, in the longest hash git writes.
+    constexpr std::size_t commit_bytes = 64;
+
     // A record is a path and what git writes before it.
     constexpr std::size_t record_capacity = FileLimits::path_bytes + 256;
 
@@ -203,8 +206,18 @@ namespace telar::runtime {
         changes_(memory),
         root_(memory),
         branch_(memory),
+        commit_(memory),
+        upstream_(memory),
+        base_(memory),
+        bases_(memory),
         head_(memory),
         diff_(memory) {}
+
+  RepositoryReader::Based::Based(ConcurrentMemory& memory)
+      : root(memory),
+        commit(memory),
+        upstream(memory),
+        name(memory) {}
 
   std::string_view RepositoryReader::pathOf(const Change& change) const {
     return std::string_view{text_.data(), text_.size()}.substr(change.path, change.path_size);
@@ -235,9 +248,18 @@ namespace telar::runtime {
   }
 
   bool RepositoryReader::keep(std::string_view record) {
+    constexpr std::string_view commit = "# branch.oid ";
     constexpr std::string_view head = "# branch.head ";
     constexpr std::string_view upstream = "# branch.upstream ";
     constexpr std::string_view distance = "# branch.ab ";
+
+    if (record.starts_with(commit)) {
+      // A repository with no commit yet says `(initial)`, which is ahead of nothing.
+      const auto named = record.substr(commit.size());
+
+      commit_.assign(named.starts_with('(') || named.size() > commit_bytes ? std::string_view{} : named);
+      return true;
+    }
 
     if (record.starts_with(head)) {
       branch_.assign(runtime::utf8Prefix(record.substr(head.size()), FileLimits::branch_bytes));
@@ -245,7 +267,9 @@ namespace telar::runtime {
     }
 
     if (record.starts_with(upstream)) {
-      upstream_ = true;
+      const auto named = record.substr(upstream.size());
+
+      upstream_.assign(named.size() > FileLimits::branch_bytes ? std::string_view{} : named);
       return true;
     }
 
@@ -253,9 +277,8 @@ namespace telar::runtime {
       // `+ahead -behind`.
       const auto counts = record.substr(distance.size());
       const auto space = counts.find(' ');
-      if (space != std::string_view::npos && counts.starts_with('+') && counts.substr(space + 1).starts_with('-')) {
-        ahead_ = parseExact<std::uint32_t>(counts.substr(1, space - 1)).valueOr(0);
-        behind_ = parseExact<std::uint32_t>(counts.substr(space + 2)).valueOr(0);
+      if (space != std::string_view::npos && counts.starts_with('+')) {
+        unpushed_ = parseExact<std::uint32_t>(counts.substr(1, space - 1)).valueOr(0);
       }
 
       return true;
@@ -310,6 +333,83 @@ namespace telar::runtime {
     }
   }
 
+  void RepositoryReader::readBase(GitRepository& git) {
+    // The remote is the one the branch follows, as git wrote it, and `origin` for a branch
+    // that follows none.
+    const auto followed = upstream_.view();
+    const auto slash = followed.find('/');
+    const auto remote = slash == std::string_view::npos ? std::string_view{"origin"} : followed.substr(0, slash);
+    ds::String<ConcurrentMemory> named{memory_};
+
+    if (remote.empty() || remote.starts_with('-')) {
+      return;
+    }
+
+    ds::formatTo(named, "{}/HEAD", remote);
+
+    try {
+      // `origin/main`, where the remote has a head; git fails where it has none.
+      const ds::String<ConcurrentMemory> head{memory_, git.run({"rev-parse", "--abbrev-ref", named.view()}, false, FileLimits::branch_bytes)};
+      const auto prefix = remote.size() + 1;
+      if (head.size() > prefix && head.view().substr(prefix) != "HEAD") {
+        named.clear();
+        ds::formatTo(named, "{}..HEAD", head.view());
+        ahead_ = parseExact<std::uint32_t>(git.run({"rev-list", "--count", named.view()})).valueOr(0);
+        base_.assign(head.view().substr(prefix));
+        return;
+      }
+    } catch (const RequestError&) { // NOLINT(bugprone-empty-catch): a remote with no head names no base, and the branch followed is asked next
+    }
+
+    if (slash != std::string_view::npos && slash + 1 < followed.size()) {
+      base_.assign(followed.substr(slash + 1));
+      ahead_ = unpushed_;
+    }
+  }
+
+  void RepositoryReader::measureBase(GitRepository& git) {
+    base_.clear();
+    ahead_ = 0;
+    if (commit_.empty()) {
+      return;
+    }
+
+    const auto now = Clock::now();
+    auto place = bases_.size();
+
+    for (std::size_t index = 0; index < bases_.size(); ++index) {
+      if (bases_[index].root.view() == root_.view()) {
+        place = index;
+      }
+    }
+
+    if (place < bases_.size()) {
+      const auto& kept = bases_[place];
+      if (kept.commit.view() == commit_.view() && kept.upstream.view() == upstream_.view() && now - kept.read < base_time) {
+        base_.assign(kept.name.view());
+        ahead_ = kept.ahead;
+        return;
+      }
+    } else if (bases_.size() < kept_bases) {
+      bases_.push(Based{memory_});
+    } else {
+      // The repository asked about longest ago gives its place.
+      place = next_base_;
+      next_base_ = (next_base_ + 1) % kept_bases;
+    }
+
+    readBase(git);
+
+    auto& kept = bases_.atMut(place);
+
+    kept.root.assign(root_.view());
+    kept.commit.assign(commit_.view());
+    kept.upstream.assign(upstream_.view());
+    kept.name.assign(base_.view());
+    kept.ahead = ahead_;
+    kept.read = now;
+  }
+
   void RepositoryReader::changes(const QueryChanges& request, const std::atomic<bool>& cancelled, EncodedReply<ConcurrentMemory>& reply) {
     if (!request.path.starts_with('/')) {
       throw RequestError{FailureCode::invalid_request, "A repository's changes need an absolute directory"};
@@ -322,9 +422,11 @@ namespace telar::runtime {
     cursor_ = 0;
     root_.clear();
     branch_.clear();
-    upstream_ = false;
+    commit_.clear();
+    upstream_.clear();
+    unpushed_ = 0;
+    base_.clear();
     ahead_ = 0;
-    behind_ = 0;
     truncated_ = false;
 
     const auto deadline = Clock::now() + status_time;
@@ -339,6 +441,7 @@ namespace telar::runtime {
         });
       },
           deadline));
+      measureBase(git);
 
       const auto counted = [&](std::span<const Byte> bytes) {
         return feed(bytes, [&](std::string_view record) {
@@ -378,9 +481,8 @@ namespace telar::runtime {
         .path = request.path,
         .root = root_.view().size() > FileLimits::path_bytes ? std::string_view{} : root_.view(),
         .branch = valid(branch_.view()) ? branch_.view() : std::string_view{},
-        .upstream = upstream_,
+        .base = valid(base_.view()) ? base_.view() : std::string_view{},
         .ahead = ahead_,
-        .behind = behind_,
         .truncated = truncated_,
         .changes = listed.view(),
     });

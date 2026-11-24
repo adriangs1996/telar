@@ -1310,13 +1310,15 @@ namespace telar::gui::features::explorer {
 
     put(result.machine, context.machine);
     result.local = context.local;
+    result.away = context.reach == Reach::away;
     put(result.last, last);
     write(result.lead, "{}{}", tilde ? "~" : "", below.substr(0, below.size() - last.size()));
     result.repository = state.repository.known && !state.repository.root.empty();
     put(result.branch, state.repository.branch.view());
-    result.upstream = state.repository.upstream;
-    result.ahead = state.repository.ahead;
-    result.behind = state.repository.behind;
+    if (const auto base = state.repository.base.view(); !base.empty() && (state.repository.ahead != 0 || base != state.repository.branch.view())) {
+      write(result.distance, "\u2191{} {}", state.repository.ahead, base);
+    }
+
     result.staged = state.repository.staged;
     result.unstaged = state.repository.unstaged;
     result.untracked = state.repository.untracked;
@@ -1364,8 +1366,10 @@ namespace telar::gui::features::explorer {
     }
 
     result.mode = modeText(result.kind);
-    result.follows = window.follow;
-    if (const auto* pane = focusedPane(context); window.follow && pane != nullptr) {
+    result.follows = window.follow && context.reach != Reach::away;
+    if (context.reach == Reach::away) {
+      put(result.following, "[stale]");
+    } else if (const auto* pane = focusedPane(context); window.follow && pane != nullptr) {
       write(result.following, "[{} {}]", pane->number, pane->title);
     } else {
       put(result.following, window.follow ? "[follow]" : "[fixed]");
@@ -1429,8 +1433,12 @@ namespace telar::gui::features::explorer {
       addHint(result, keysOf(keymap, Command::undo), {.text = "undo"});
     }
 
-    addHint(result, keysOf(keymap, Command::rename), {.text = "rename", .enabled = entry && tree});
-    addHint(result, keysOf(keymap, Command::cut), {.text = "cut", .enabled = entry});
+    // An entry a change not written adds is named again and dropped as one on disk is renamed
+    // and cut; it is not there yet to copy.
+    const bool added = row != nullptr && row->kind == RowKind::added;
+
+    addHint(result, keysOf(keymap, Command::rename), {.text = "rename", .enabled = (entry || added) && tree});
+    addHint(result, keysOf(keymap, Command::cut), {.text = "cut", .enabled = entry || added});
     addHint(result, keysOf(keymap, Command::yank), {.text = "copy", .enabled = entry});
     addHint(result, keysOf(keymap, Command::create), {.text = "new", .enabled = tree});
     addHint(result, keysOf(keymap, Command::split_vertical), {.text = "window"});

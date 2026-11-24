@@ -243,6 +243,40 @@ namespace {
     check(explorer.view.message.view() == "Bringing a copy · it is typed at the pane when it is whole · :cancel stops it");
   }
 
+  void testSeveralRowsAndDirectoriesAreBrought() {
+    Explorer explorer;
+
+    explorer.start();
+    explorer.type(":");
+    explorer.enter("vs box:~");
+
+    // Every row chosen is asked about at once; a directory is brought as its tree.
+    explorer.type("Vjj");
+    check(explorer.type("<CR>").kind == ActionKind::none && explorer.view.mode == Mode::question);
+    check(explorer.view.message.view() == "3 paths are on box and the pane on macbook · bring a copy of each there? [y/N]");
+    explorer.type("y");
+    check(explorer.view.mode == Mode::normal && explorer.view.transfers.size() == 3 && explorer.view.message.view() == "Bringing 3 copies · each is typed at the pane when it is whole · :cancel stops them");
+    check(explorer.view.transfers[0].source.view() == "/home/ops/logs" && explorer.view.transfers[0].tree && explorer.view.transfers[0].kind == TransferKind::bring);
+    check(explorer.view.transfers[1].source.view() == "/home/ops/site" && explorer.view.transfers[1].tree);
+    check(explorer.view.transfers[2].source.view() == "/home/ops/deploy.sh" && !explorer.view.transfers[2].tree && explorer.view.transfers[2].pane == explorer.focused);
+    check(explorer.view.transfers[0].batch == explorer.view.transfers[2].batch, "what one answer brings is one batch");
+
+    // Rows of another machine let go on a pane ask the same, for that pane.
+    Explorer dropped;
+
+    dropped.start();
+    dropped.type(":");
+    dropped.enter("vs box:~");
+    check(grab(dropped.view, dropped.remote, dropped.context(), {.window = 1, .row = dropped.at("deploy.sh")}) == 1);
+    check(hand(dropped.view, dropped.remote, dropped.context(), 11).kind == ActionKind::none && dropped.view.mode == Mode::question && dropped.view.message.view() == "It is on box and the pane on macbook · bring a copy there? [y/N]");
+    dropped.type("y");
+    check(dropped.view.transfers.size() == 1 && dropped.view.transfers[0].pane == 11 && dropped.view.transfers[0].mention, "for the agent it was let go on, as a mention");
+
+    // An editor edits where the file is: nothing is brought for it.
+    check(grab(dropped.view, dropped.remote, dropped.context(), {.window = 1, .row = dropped.at("deploy.sh")}) == 1);
+    check(hand(dropped.view, dropped.remote, dropped.context(), 12).kind == ActionKind::none && dropped.view.mode == Mode::normal && dropped.view.tone == Tone::error && dropped.view.transfers.size() == 1);
+  }
+
   void testTheTransfersAreListedAndOnlySomeRun() {
     Explorer explorer;
 
@@ -320,6 +354,7 @@ namespace {
     check(stopTransfer(explorer.view, explorer.view.transfers[1].id) == false, "one whose file takes its name is past stopping");
   }
 
+  const telar::testing::Case case_bring_many{"transfers.several_rows_and_directories_are_brought", testSeveralRowsAndDirectoriesAreBrought};
   const telar::testing::Case case_carried{"transfers.a_paste_from_another_machine_is_carried", testAPasteFromAnotherMachineIsCarried};
   const telar::testing::Case case_move{"transfers.a_move_trashes_its_original_only_once_the_copy_is_whole", testAMoveTrashesItsOriginalOnlyOnceTheCopyIsWhole};
   const telar::testing::Case case_cancel{"transfers.a_cancelled_or_failed_transfer_removes_what_arrived", testACancelledOrFailedTransferRemovesWhatArrived};

@@ -3143,6 +3143,33 @@ namespace {
       }));
       QVERIFY(!beside_tree->failure.empty());
 #endif
+
+      // A path of the other machine is completed by what that machine lists, from a window that
+      // is not on it.
+      explorer->release();
+      explorer->type(QStringLiteral("<C-w>h"));
+      explorer->type(QStringLiteral(":"));
+      explorer->complete(QStringLiteral("e Build:~/lo"));
+      QVERIFY(shows([&] {
+        return explorer->line().value(QStringLiteral("completion")).toString() == QStringLiteral("e Build:~/logs/");
+      }));
+      explorer->cancel();
+
+      // The other machine goes away: its window keeps what it last listed, marked, and no change
+      // is typed there.
+      explorer->type(QStringLiteral("<C-w>l"));
+      QVERIFY(!pane(1).value(QStringLiteral("away")).toBool());
+      fixture.remote_socket_->disconnectFromServer();
+      QVERIFY(shows([&] {
+        return pane(1).value(QStringLiteral("away")).toBool();
+      }));
+      QCOMPARE(explorer->rows(1)->rowCount(), 2);
+      QCOMPARE(name(1, 0), QStringLiteral("logs"));
+      QCOMPARE(pane(1).value(QStringLiteral("following")).toString(), QStringLiteral("[stale]"));
+      QVERIFY(!pane(0).value(QStringLiteral("away")).toBool());
+      explorer->type(QStringLiteral("dd"));
+      QCOMPARE(explorer->line().value(QStringLiteral("said")).toString(), QStringLiteral("Build does not answer: what it lists is what it last said, and nothing changes there until it is back"));
+      shoot(QStringLiteral("explorer-stale"));
     }
   };
 

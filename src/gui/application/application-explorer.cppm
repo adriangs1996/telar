@@ -90,6 +90,7 @@ export namespace telar::gui::application::explorer {
   using features::explorer::climb;
   using features::explorer::close;
   using features::explorer::complete;
+  using features::explorer::completedOn;
   using features::explorer::configure;
   using features::explorer::docked;
   using features::explorer::drop;
@@ -162,6 +163,11 @@ export namespace telar::gui::application::explorer {
       ds::String<Memory> home;
       bool local = false;
       Reach reach = Reach::away;
+      // The tab the machine's own session has in view: the root of its workspace, and the
+      // agent a mention goes to there with the directory it runs in.
+      ds::String<Memory> workspace;
+      std::uint64_t agent = 0;
+      ds::String<Memory> agent_cwd;
     };
 
     // The texts are kept from one observation to the next, and `pane_count` and `machine_count`
@@ -267,8 +273,10 @@ export namespace telar::gui::application::explorer {
   Effect deliver(Session& session, View& view, const Context& context, const Action& action);
 
   // What an action asks of the runtime of the session's machine: its part of the plan, the
-  // plan taken back, a commit, or the files to open in an editor there. False when it was to
-  // open them and no editor did: the view says so, and the action is not delivered.
+  // plan taken back, a commit, the files to open in an editor there, or a mention or a split
+  // for the tab that machine has in view, from a window that is not on the machine that shows.
+  // False when it was to open them and no editor did: the view says so, and the action is not
+  // delivered.
   bool send(Session& session, View& view, const Context& context, const Action& action);
 
 }

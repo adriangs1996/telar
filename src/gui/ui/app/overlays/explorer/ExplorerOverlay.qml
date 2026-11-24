@@ -675,7 +675,8 @@ FocusScope {
                             width: 6 * root.ratio
                             height: width
                             radius: width / 2
-                            color: pane.modelData.local ? root.colors.green : root.colors.blue
+                            // A machine that is not connected lists what it last said.
+                            color: pane.modelData.away ? root.colors.red : pane.modelData.local ? root.colors.green : root.colors.blue
                         }
 
                         CellText {
@@ -693,7 +694,7 @@ FocusScope {
                             x: machine.x + machine.width + 6 * root.ratio
                             width: implicitWidth
                             height: parent.height
-                            text: pane.modelData.local ? "local" : "remote"
+                            text: pane.modelData.away ? "away" : pane.modelData.local ? "local" : "remote"
                             grid: root.tinyGrid
                             color: root.colors.subtext0
                         }
@@ -711,7 +712,7 @@ FocusScope {
                         id: git
                         // What the branch's name may take: a narrow window keeps the machine's
                         // chip and the counts whole, and cuts the name.
-                        readonly property real room: head.width - chip.width - 8 * root.ratio - gitIcon.width - (upstream.visible ? upstream.width + spacing : 0) - staged.width - unstaged.width - untracked.width - 4 * spacing
+                        readonly property real room: head.width - chip.width - 8 * root.ratio - gitIcon.width - (distance.visible ? distance.width + spacing : 0) - staged.width - unstaged.width - untracked.width - 4 * spacing
 
                         anchors.right: parent.right
                         height: parent.height
@@ -738,11 +739,12 @@ FocusScope {
                         }
 
                         CellText {
-                            id: upstream
+                            // How far the branch is from its base: `↑6 main`.
+                            id: distance
                             width: implicitWidth
                             height: parent.height
-                            visible: pane.modelData.upstream && (pane.modelData.ahead > 0 || pane.modelData.behind > 0)
-                            text: (pane.modelData.ahead > 0 ? "↑" + pane.modelData.ahead : "") + (pane.modelData.behind > 0 ? "↓" + pane.modelData.behind : "")
+                            visible: text.length > 0
+                            text: pane.modelData.distance ?? ""
                             grid: root.tinyGrid
                             color: root.colors.subtext0
                         }
@@ -1436,7 +1438,8 @@ FocusScope {
                             height: parent.height
                             text: pane.modelData.following ?? ""
                             grid: root.smallGrid
-                            color: pane.modelData.follows ? root.colors.green : root.colors.subtext0
+                            // `[stale]`, of a machine that is not connected, in the color its dot has.
+                            color: pane.modelData.away ? root.colors.red : pane.modelData.follows ? root.colors.green : root.colors.subtext0
                         }
 
                         CellText {

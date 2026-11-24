@@ -572,6 +572,25 @@ namespace {
     check(fixture.view.message.view() == "No editor opens on box: its runtime has none, or no tab to put it in");
   }
 
+  void aWindowOnAnotherMachineOpensAShellInTheTabThatMachineHasInView() {
+    Fixture fixture;
+    auto& transport = fixture.transport;
+    auto& box_transport = fixture.box_transport;
+
+    fixture.list();
+    fixture.settle();
+    fixture.splitToBox();
+
+    // `s` on a file of the box: its runtime is asked for the shell, where the file is, and the
+    // one of the machine that shows for none.
+    const auto here = transport.count(ClientTag::create_pane);
+    const auto there = box_transport.count(ClientTag::create_pane);
+
+    check(fixture.press('s') == explorer::Effect::closed, "it leaves the panes in view, as when the shell opens here");
+    check(box_transport.count(ClientTag::create_pane) == there + 1 && box_transport.last<CreatePane>().launch.cwd == "/home/ops");
+    check(transport.count(ClientTag::create_pane) == here, "and none on the machine that shows");
+  }
+
   void asAPaneItStaysAndAPaneTakesWhatIsDroppedOnIt() {
     Fixture fixture;
     auto& transport = fixture.transport;
@@ -985,6 +1004,7 @@ namespace {
   const telar::testing::Case case_far{"explorer_session.a_window_on_another_machine_asks_that_machine_alone", aWindowOnAnotherMachineAsksThatMachineAlone};
   const telar::testing::Case case_plans{"explorer_session.one_plan_is_sent_to_each_machine_it_touches", onePlanIsSentToEachMachineItTouches};
   const telar::testing::Case case_hand{"explorer_session.a_file_of_another_machine_is_handed_only_there", aFileOfAnotherMachineIsHandedOnlyThere};
+  const telar::testing::Case case_shell_there{"explorer_session.a_window_on_another_machine_opens_a_shell_in_the_tab_that_machine_has_in_view", aWindowOnAnotherMachineOpensAShellInTheTabThatMachineHasInView};
   const telar::testing::Case case_beside{"explorer_session.as_a_pane_it_stays_and_a_pane_takes_what_is_dropped_on_it", asAPaneItStaysAndAPaneTakesWhatIsDroppedOnIt};
   const telar::testing::Case case_kept{"explorer_session.an_explorer_pane_is_taken_with_the_windows_its_runtime_keeps", anExplorerPaneIsTakenWithTheWindowsItsRuntimeKeeps};
   const telar::testing::Case case_carried{"explorer_session.a_file_is_carried_from_one_machine_to_the_other", aFileIsCarriedFromOneMachineToTheOther};

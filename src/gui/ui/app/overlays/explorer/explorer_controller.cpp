@@ -341,9 +341,8 @@ namespace telar::gui::qt {
           {QStringLiteral("last"), fixedText(header.last)},
           {QStringLiteral("repository"), header.repository},
           {QStringLiteral("branch"), fixedText(header.branch)},
-          {QStringLiteral("upstream"), header.upstream},
-          {QStringLiteral("ahead"), header.ahead},
-          {QStringLiteral("behind"), header.behind},
+          {QStringLiteral("distance"), fixedText(header.distance)},
+          {QStringLiteral("away"), header.away},
           {QStringLiteral("staged"), header.staged},
           {QStringLiteral("unstaged"), header.unstaged},
           {QStringLiteral("untracked"), header.untracked},
@@ -928,9 +927,11 @@ namespace telar::gui::qt {
     observe();
 
     const auto around = explorer::around(scene_);
-    const auto machine = machineOf(view_.current);
+    const std::string_view line{bytes.constData(), static_cast<std::size_t>(bytes.size())};
+    // A path of another machine is completed by what that machine lists.
+    const auto machine = explorer::completedOn(view_, explorer::contextOf(around, machineOf(view_.current)), line);
 
-    explorer::complete(view_, cacheOf(machine), explorer::contextOf(around, machine), {bytes.constData(), static_cast<std::size_t>(bytes.size())});
+    explorer::complete(view_, cacheOf(machine), explorer::contextOf(around, machine), line);
     finish(Effect::none);
   }
 

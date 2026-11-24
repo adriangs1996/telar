@@ -232,7 +232,10 @@ int main(int argc, char** argv) {
 
   run(memory, {.name = "list.first_page", .size = options.entries, .iterations = options.iterations, .fresh = true}, ListDirectory{.request_id = 1, .path = flat, .skip = 0, .limit = FileLimits::maximum_entries});
   run(memory, {.name = "list.next_page", .size = options.entries, .iterations = options.iterations}, ListDirectory{.request_id = 1, .path = flat, .skip = FileLimits::maximum_entries, .limit = FileLimits::maximum_entries});
-  run(memory, {.name = "measure.tree", .size = options.directories * files_in_directory, .iterations = std::max<std::size_t>(1, options.iterations / 4)}, MeasureDirectory{.request_id = 1, .path = tree, .skip = 0, .limit = FileLimits::maximum_entries});
+  // The tree walked, as a service that remembers none of it finds it; and asked again of one that
+  // measured it a moment ago.
+  run(memory, {.name = "measure.tree", .size = options.directories * files_in_directory, .iterations = std::max<std::size_t>(1, options.iterations / 4), .fresh = true}, MeasureDirectory{.request_id = 1, .path = tree, .skip = 0, .limit = FileLimits::maximum_entries});
+  run(memory, {.name = "measure.tree.again", .size = options.directories * files_in_directory, .iterations = std::max<std::size_t>(1, options.iterations / 4)}, MeasureDirectory{.request_id = 1, .path = tree, .skip = 0, .limit = FileLimits::maximum_entries});
 
   // A file of many chunks, carried from one service to another.
   {
@@ -267,6 +270,12 @@ int main(int argc, char** argv) {
     return 0;
   }
 
+  // A branch a few commits ahead of the head of its remote, as a clone that was worked on is.
+  const bool branched = shell(repository, "git update-ref refs/remotes/origin/main HEAD") && shell(repository, "git symbolic-ref refs/remotes/origin/HEAD refs/remotes/origin/main") && shell(repository, "git checkout -q -b work") && shell(repository, "git -c user.name=telar -c user.email=telar@example.invalid -c commit.gpgsign=false commit -q --allow-empty -m 'Work'");
+  if (!branched) {
+    std::println(stderr, "git refused the branch: the base is not measured");
+  }
+
   for (std::size_t file = 0; file < options.changes; ++file) {
     constexpr std::size_t lines = 104;
 
@@ -275,6 +284,9 @@ int main(int argc, char** argv) {
 
   const auto slow = std::max<std::size_t>(1, options.iterations / 10);
 
+  // What changed, with the base asked of git, as the first request on a commit finds it; and
+  // again of a service that keeps the base it found for the commit.
+  run(memory, {.name = "git.changes.first", .size = options.changes, .iterations = slow, .fresh = true}, QueryChanges{.request_id = 1, .path = repository});
   run(memory, {.name = "git.changes", .size = options.changes, .iterations = slow}, QueryChanges{.request_id = 1, .path = repository});
   run(memory, {.name = "inspect.changed_file", .size = 1, .iterations = slow}, InspectFile{.request_id = 1, .path = repository + "/file-0000.md"});
   return 0;
