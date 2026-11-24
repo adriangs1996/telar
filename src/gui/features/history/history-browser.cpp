@@ -188,6 +188,12 @@ namespace telar::gui::features::history {
   }
 
   HistorySearch HistorySearch::parse(std::string_view text, bool failed_only) noexcept {
+    // \! searches for a ! of its own.
+    if (text.starts_with("\\!")) {
+      text.remove_prefix(1);
+      return {.query = text, .failed_only = failed_only};
+    }
+
     if (text.starts_with('!')) {
       failed_only = true;
       text.remove_prefix(1);

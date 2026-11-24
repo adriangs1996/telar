@@ -633,6 +633,9 @@ namespace {
     check(HistorySearch::parse(" !compiler", false).query == " !compiler", "only a leading failure marker changes the filter");
     check(HistorySearch::parse("!\tcompiler", false).query == "\tcompiler", "the failure prefix must preserve non-space query bytes");
     check(HistorySearch::parse("compiler", true).failed_only, "an explicit failure filter must survive an ordinary query");
+    const auto literal = HistorySearch::parse("\\!important", false);
+
+    check(!literal.failed_only && literal.query == "!important", "an escaped ! searches for itself");
   }
 
   void historyRowsProtectTheCommandBeforeFacts() {

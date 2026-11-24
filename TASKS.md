@@ -327,7 +327,7 @@ Legend: `[ ]` todo, `[x]` done, `[~]` not a bug / dropped (with reason).
   exact: `workspace` already covers the tree.
   Rows stored before keep the path as it was written; only new rows are canonical.
 
-- [ ] **T30 (H10). The "Failed" chip sticks when the query starts with `!`.**
+- [x] **T30 (H10). The "Failed" chip sticks when the query starts with `!`.**
   `history_controller.cpp:328` shows `parsed.failed_only` and `HistoryPanel.qml:108`
   toggles from it, so it can never turn off.
   Expected: the chip shows and controls the filter.

@@ -6900,6 +6900,26 @@ return {api_version=2, client={keybindings={
       QTRY_VERIFY_WITH_TIMEOUT(!search->property("layout").toMap().value(QStringLiteral("composing")).toBool(), runtime_wait_ms);
     }
 
+    // The failed chip shows and controls the filter a leading ! turned on: turning it off takes
+    // the ! out of the search.
+    Q_SLOT void historyFailedChipControlsTheMarker() {
+      client_->commands()->execute(window_actions::Action::history);
+      const auto restore = qScopeGuard([this] {
+        client_->commands()->execute(window_actions::Action::cancel);
+      });
+
+      client_->history()->search(QStringLiteral("!  GUI_HISTORY_FIXTURE"));
+      QTRY_VERIFY_WITH_TIMEOUT(!client_->history()->loading(), runtime_wait_ms);
+      QVERIFY(client_->history()->state().value(QStringLiteral("failedOnly")).toBool());
+      client_->history()->setFilters({{QStringLiteral("failedOnly"), false}});
+      QTRY_VERIFY_WITH_TIMEOUT(!client_->history()->loading(), runtime_wait_ms);
+      QVERIFY(!client_->history()->state().value(QStringLiteral("failedOnly")).toBool());
+      auto* search = window_->findChild<QQuickItem*>(QStringLiteral("commandSearch"));
+
+      QVERIFY(search != nullptr);
+      QTRY_COMPARE_WITH_TIMEOUT(search->property("text").toString(), QStringLiteral("GUI_HISTORY_FIXTURE"), runtime_wait_ms);
+    }
+
     Q_SLOT void historyQueryOverflowPublishesTheExistingLimitNotice() {
       client_->commands()->execute(window_actions::Action::history);
       const auto restore = qScopeGuard([this] {

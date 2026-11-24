@@ -447,13 +447,23 @@ namespace telar::gui::qt {
         next.author = parseAuthor(filters.value(QStringLiteral("author")).toString());
       }
 
+      auto query = query_;
+
       if (filters.contains(QStringLiteral("failedOnly"))) {
         next.failed_only = filters.value(QStringLiteral("failedOnly")).toBool();
+        // The chip turns off what a leading ! turned on too: the ! leaves the search.
+        if (!next.failed_only && query.startsWith(QLatin1Char('!'))) {
+          qsizetype start = 1;
+
+          while (start < query.size() && query[start] == QLatin1Char(' ')) {
+            ++start;
+          }
+
+          query = query.mid(start);
+        }
       }
 
       filters_ = next;
-      const auto query = query_;
-
       search(query);
     });
   }
