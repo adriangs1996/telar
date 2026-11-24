@@ -201,6 +201,13 @@ namespace {
     check(prompt::line(client, 1)->answering(), "Alt-Enter answers the program");
     check(refused() && prompt::line(client, 1)->text() == "echo 'a\nb'" && transport.inputSince(before).empty(), "an answer the program cannot take stays in the editor");
 
+    // An answer is the program's to read: Enter sends it whatever a shell would make of it.
+    prompt::key(client, 1, prompt::KeyPress{.key = prompt::Key::character, .character = 'c', .modifiers = {.control = true}});
+    const auto answered = transport.sent.size();
+
+    typeKeys(client, "O'Brien");
+    check(enter(client) == prompt::Outcome::answer && transport.inputSince(answered) == "O'Brien\r", "an open quote in an answer is sent, not continued");
+
     // C1 controls act on the terminal: a paste drops them as it drops the others.
     deliver(client, atPrompt(2, 0));
     prompt::key(client, 1, prompt::KeyPress{.key = prompt::Key::character, .character = 'c', .modifiers = {.control = true}});

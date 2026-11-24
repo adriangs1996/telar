@@ -339,7 +339,8 @@ namespace telar::gui::features::prompt {
       history_index_.reset();
       return Outcome::edited;
     case Request::submit:
-      return submit(surface, incomplete.incomplete(editor_.text().view()));
+      // An answer is the running program's to read, not the shell's to continue.
+      return submit(surface, !(surface == Surface::running && answering_) && incomplete.incomplete(editor_.text().view()));
     case Request::history_previous:
       return travel(-1, history);
     case Request::history_next:

@@ -240,7 +240,7 @@ Legend: `[ ]` todo, `[x]` done, `[~]` not a bug / dropped (with reason).
   Expected: after a paste, Up/Down start from the end.
   Fix: reset `history_index_` and close the menu in `write`.
 
-- [ ] **T20 (E21). Answers to a running program go through the shell's completeness check.**
+- [x] **T20 (E21). Answers to a running program go through the shell's completeness check.**
   `Line::submit` tests `incomplete` before the `running`/`answering_` branch: `O'Brien`⏎ in
   answer mode inserts a newline.
   Expected: in answer mode Enter always sends the line.
