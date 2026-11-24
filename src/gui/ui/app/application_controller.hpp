@@ -293,7 +293,7 @@ namespace telar::gui::qt {
     void initializeOverlays();
     void initializeMachineChrome();
     void initializePeekAndMonitor();
-    // The explorer changed: who takes the keys, and the room it stands in beside the panes.
+    // The explorer changed: who takes the keys.
     void settleExplorer();
     // What the editor of a pane asked of the explorer since it was last seen to.
     void askExplorer(std::uint64_t pane_id);

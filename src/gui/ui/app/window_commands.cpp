@@ -532,7 +532,7 @@ namespace telar::gui::qt {
     }
 
     if (const auto direction = navigationDirection(action.kind)) {
-      if (!besideTakes(focusAction(*direction), true)) {
+      if (!insideTakes(focusAction(*direction))) {
         application::workbench::navigate(store_.sessionMut(), *direction);
       }
 
@@ -1014,17 +1014,17 @@ namespace telar::gui::qt {
     return true;
   }
 
-  void WindowCommands::setBeside(tbc::val_a<ds::Function<bool(window_actions::Action, bool)>> beside) {
-    beside_ = std::move(beside);
+  void WindowCommands::setInside(tbc::val_a<ds::Function<bool(window_actions::Action)>> inside) {
+    inside_ = std::move(inside);
   }
 
-  bool WindowCommands::besideTakes(window_actions::Action action, bool through_editor) {
-    return beside_(action, through_editor);
+  bool WindowCommands::insideTakes(window_actions::Action action) {
+    return inside_(action);
   }
 
   bool WindowCommands::executePane(window_actions::Action action, std::uint64_t identity) {
     if (action == window_actions::Action::focus_left || action == window_actions::Action::focus_right || action == window_actions::Action::focus_up || action == window_actions::Action::focus_down) {
-      if (!besideTakes(action, false)) {
+      if (!insideTakes(action)) {
         application::workbench::focusToward(store_.sessionMut(), paneDirection(action));
       }
     } else if (action == window_actions::Action::resize_left || action == window_actions::Action::resize_right || action == window_actions::Action::resize_up || action == window_actions::Action::resize_down) {

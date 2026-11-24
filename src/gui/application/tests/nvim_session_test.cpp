@@ -188,17 +188,6 @@ namespace {
     check(deliver(client, NvimNavigated{.pane_id = editor_pane, .direction = PaneDirection::right}) == application::Change::none, "an answer for a pane that lost the focus moves nothing");
     application::nvim::choose(client, editor_pane, 4, true);
     check(transport.last<NvimMenuSelect>().item == 4 && transport.last<NvimMenuSelect>().accept, "a click on the completion menu takes its item");
-
-    // With no pane on that side either, the window is told once: what stands beside the panes
-    // there, the explorer, may take the focus.
-    application::workbench::focusPane(client, editor_pane);
-    check(!application::nvim::takeEdge(client, editor_pane));
-    check(deliver(client, NvimNavigated{.pane_id = editor_pane, .direction = PaneDirection::right}) == application::Change::editor && client.changedPane() == editor_pane);
-    check(client.focusedPane()->id == editor_pane, "the editor keeps the focus until something takes it");
-
-    const auto edge = application::nvim::takeEdge(client, editor_pane);
-
-    check(edge && *edge == PaneDirection::right && !application::nvim::takeEdge(client, editor_pane), "the side is taken once");
   }
 
   // The editor says which files its buffers show, which the explorer reads around its files,

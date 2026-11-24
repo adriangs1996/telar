@@ -651,6 +651,7 @@ export {
       Change apply(const FileTouches& message);
 
       Change apply(const PlacesKept& message);
+      Change apply(const ExplorerKept& message);
 
       Change apply(const PaneKindNotice& message);
       Change apply(const NvimGrid& message);

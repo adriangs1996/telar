@@ -75,24 +75,6 @@ namespace telar::gui::qt {
       return action == window_actions::Action::focus_up ? Side::up : Side::down;
     }
 
-    // And the one a pane's direction names.
-    constexpr application::explorer::Side explorerSide(PaneDirection direction) noexcept {
-      using application::explorer::Side;
-
-      switch (direction) {
-      case PaneDirection::left:
-        return Side::left;
-      case PaneDirection::right:
-        return Side::right;
-      case PaneDirection::up:
-        return Side::up;
-      case PaneDirection::down:
-        return Side::down;
-      }
-
-      return Side::down;
-    }
-
   }
 
   ApplicationController::ApplicationController(ApplicationAllocator& memory, QObject* parent)
@@ -376,8 +358,6 @@ namespace telar::gui::qt {
   }
 
   void ApplicationController::settleExplorer() {
-    constexpr qreal design_cell = 7.2;
-    const auto& grid = display_.grid();
     const bool keys = explorer_.showing() && explorer_.focused();
 
     // It takes the keys of the panes while it has the focus, as a dialog does.
@@ -386,22 +366,19 @@ namespace telar::gui::qt {
     } else if (!keys && store_.dialog().kind == Dialog::explorer) {
       dialogs_.show(Dialog::none);
     }
-
-    // The room it stands in beside the panes is taken from their area, at the size of the font.
-    display_.setBeside(explorer_.besideWidth() * static_cast<qreal>(grid.cell_width_px) / static_cast<qreal>(grid.scale) / design_cell);
   }
 
   void ApplicationController::yieldExplorer() {
-    // Another dialog took the explorer's place: over the panes it closes, and beside them it
-    // leaves the keys.
+    // Another dialog took the explorer's place: over the panes it closes. As a pane it stays,
+    // and has the keys again once that dialog is gone, if its pane still has the focus.
     if (store_.dialog().kind == Dialog::explorer || !explorer_.showing() || !explorer_.focused()) {
       return;
     }
 
-    if (explorer_.pinned()) {
-      explorer_.giveFocus(false);
-    } else {
+    if (!explorer_.pinned()) {
       explorer_.close();
+    } else if (store_.dialog().kind == Dialog::none) {
+      dialogs_.show(Dialog::explorer);
     }
   }
 
@@ -447,11 +424,11 @@ namespace telar::gui::qt {
       }
     });
 
-    // Beside the panes the explorer takes their keys only while it has the focus, and the room
-    // it stands in is taken from their area, at the size of the terminal's font.
+    // As a pane the explorer takes the keys only while its pane has the focus, and a key that
+    // moves the focus goes through its own windows before it leaves the pane.
     connect(&explorer_, &ExplorerController::changed, this, &ApplicationController::settleExplorer);
-    commands_.setBeside([this](window_actions::Action action, bool through_editor) {
-      return explorer_.takes(explorerSide(action), through_editor);
+    commands_.setInside([this](window_actions::Action action) {
+      return explorer_.takes(explorerSide(action));
     });
 
     connect(&explorer_, &ExplorerController::failed, &status_, &WindowStatus::report);
@@ -964,11 +941,6 @@ namespace telar::gui::qt {
 
       application::nvim::explored(sessionMut(), pane_id);
       explorer_.reveal({path.constData(), static_cast<std::size_t>(path.size())}, {directory.constData(), static_cast<std::size_t>(directory.size())});
-    }
-
-    // The focus left the editor's last window on a side with no pane: the explorer there takes it.
-    if (const auto side = application::nvim::takeEdge(sessionMut(), pane_id)) {
-      static_cast<void>(explorer_.enter(explorerSide(*side)));
     }
   }
 

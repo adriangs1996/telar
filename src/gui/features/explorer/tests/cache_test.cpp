@@ -68,6 +68,36 @@ namespace {
     check(fail(state, RequestFailed{.request_id = 4, .code = FailureCode::invalid_request, .message = "no"}));
     check(!lacks(state, gone) && find(state, "/gone")->failed);
     check(!fail(state, RequestFailed{.request_id = 77, .code = FailureCode::invalid_request, .message = "not ours"}));
+    // A failure that answers no request is none of the explorer's, whatever waits for no answer.
+    check(!fail(state, RequestFailed{.request_id = 0, .code = FailureCode::unsupported_pane_kind, .message = "This pane is not a terminal"}));
+    check(!find(state, "/srv")->failed && find(state, "/srv")->entries.size() == 2, "and what was listed stays listed");
+  }
+
+  // The panes of a machine that are explorers, and the windows its runtime keeps of each.
+  void testThePanesThatAreExplorersAreKept() {
+    Fixture fixture;
+    auto& state = fixture.state;
+    const std::array<ExplorerWindow, 1> windows{{{.root = "/srv", .selected = "/srv/site"}}};
+    const ExplorerKept kept{.pane_id = 7, .layout = {.windows = windows}};
+
+    check(docked(state, 7) == nullptr && !receive(state, kept), "windows of a pane that is no explorer are not kept");
+    dock(state, 7);
+    dock(state, 7);
+    check(state.docked.size() == 1 && docked(state, 7) != nullptr && docked(state, 7)->kept.empty());
+    check(receive(state, kept) && !docked(state, 7)->kept.empty());
+
+    ds::Array<Byte, FileLimits::explorer_windows * sizeof(ExplorerWindow)> scratch{};
+    DecodeStorage storage{scratch.viewMut()};
+    const auto read = Codec::decode<ExplorerKept>(docked(state, 7)->kept.view(), storage);
+
+    check(read.pane_id == 7 && read.layout.windows.size() == 1 && read.layout.windows[0].root == "/srv" && read.layout.windows[0].selected == "/srv/site", "as the runtime said them");
+    undock(state, 7);
+    check(docked(state, 7) == nullptr);
+
+    // A new connection says again which panes are explorers.
+    dock(state, 8);
+    reset(state);
+    check(state.docked.empty());
   }
 
   void testSizesFillTheDirectoriesOfAListing() {
@@ -154,6 +184,7 @@ namespace {
   const telar::testing::Case case_pages{"cache.a_directory_is_read_a_page_at_a_time", testADirectoryIsReadAPageAtATime};
   const telar::testing::Case case_sizes{"cache.sizes_fill_the_directories_of_a_listing", testSizesFillTheDirectoriesOfAListing};
   const telar::testing::Case case_standing{"cache.git_says_how_a_path_stands", testGitSaysHowAPathStands};
+  const telar::testing::Case case_docked{"cache.the_panes_that_are_explorers_are_kept", testThePanesThatAreExplorersAreKept};
   const telar::testing::Case case_previews{"cache.previews_are_kept_and_forgotten", testPreviewsAreKeptAndForgotten};
 
 }

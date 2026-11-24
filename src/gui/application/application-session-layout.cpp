@@ -807,6 +807,7 @@ namespace telar::gui::application {
     features::paths::forget(paths, pane_id);
     features::prompt::forget(prompt, prompt_lines, pane_id);
     features::nvim::forget(nvim, pane_id);
+    features::explorer::undock(explorer, pane_id);
   }
 
   void Session::cancelPaneRequests(std::uint64_t pane_id) noexcept {

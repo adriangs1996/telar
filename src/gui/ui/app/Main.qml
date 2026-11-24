@@ -190,8 +190,9 @@ Window {
     }
 
     ExplorerOverlay {
-        // Over the panes of the tab, with the sidebar and the bars left in view.
-        area: telar.explorer.pinned ? root.geometry.beside : root.geometry.terminal
+        // Over the panes of the tab, with the sidebar and the bars left in view; or, as a pane
+        // of the tab, in the room that pane has.
+        area: telar.explorer.pinned ? Qt.rect(paneArea.x + paneArea.explorerRoom.x, paneArea.y + paneArea.explorerRoom.y, paneArea.explorerRoom.width, paneArea.explorerRoom.height) : root.geometry.terminal
         paneArea: paneArea
         controller: telar.explorer
         colors: telar.colors

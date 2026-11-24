@@ -1561,12 +1561,12 @@ return {api_version = 2, client = {
     // the file a buffer shows, apart while it has changes not written, and the plan warns of
     // them; `:Telar explore` shows that file in the explorer; a file the explorer renames is
     // followed by its buffer, with its changes; and the focus leaves the editor's last window
-    // for the explorer beside the panes.
+    // for the pane the explorer stands as.
     Q_SLOT void editorAndExplorerKnowOfEachOther() {
       // The whole program runs close to the time its test is given: this case runs when it is
-      // asked for by its name, as the test `gui-quick-editor-explorer` asks.
+      // asked for by its name, as the test `gui-quick-explorer` asks.
       if (!QCoreApplication::arguments().contains(QStringLiteral("editorAndExplorerKnowOfEachOther"))) {
-        QSKIP("Runs when asked for by its name, as the test gui-quick-editor-explorer does");
+        QSKIP("Runs when asked for by its name, as the test gui-quick-explorer does");
       }
 
       if (QStandardPaths::findExecutable(QStringLiteral("nvim")).isEmpty()) {
@@ -1683,25 +1683,33 @@ return {api_version = 2, client = {
       QCOMPARE(readTestFile(fixture + QStringLiteral("/final.md")), QByteArrayLiteral("one\n"));
       QTRY_COMPARE_WITH_TIMEOUT(named(QStringLiteral("final.md")).value(QStringLiteral("editor")).toString(), QStringLiteral("unsaved"), runtime_wait_ms);
 
-      // Beside the panes, the key that moves the focus to the right leaves the editor's only
-      // window for the explorer.
+      // As a pane beside the editor's, the key that moves the focus to the right leaves the
+      // editor's only window for the explorer's pane.
+      const auto editor_pane = focusedPaneId();
+
       explorer->type(QStringLiteral("<C-w>T"));
-      QVERIFY(explorer->pinned());
-      explorer->giveFocus(false);
-      QVERIFY(!explorer->focused());
+      QTRY_VERIFY_WITH_TIMEOUT(explorer->pinned() && explorer->focused(), runtime_wait_ms);
+      client_->commands()->execute(window_actions::Action::focus_pane, QString::number(editor_pane));
+      QTRY_VERIFY(!explorer->focused() && explorer->showing());
       // `navigate_pane` asks Neovim first, which says it has no window there.
       QVERIFY(client_->commands()->runBinding(BindingAction{.kind = BindingActionKind::navigate_right}, nullptr));
       QTRY_VERIFY_WITH_TIMEOUT(explorer->focused(), runtime_wait_ms);
       // The key that goes from pane to pane asks no editor: it enters at once.
-      explorer->giveFocus(false);
+      client_->commands()->execute(window_actions::Action::focus_pane, QString::number(editor_pane));
+      QTRY_VERIFY(!explorer->focused());
       client_->commands()->execute(window_actions::Action::focus_right);
-      QVERIFY(explorer->focused());
-      // Over the panes again, as the cases after this one find it.
-      explorer->type(QStringLiteral("<C-w>T"));
-      QVERIFY(!explorer->pinned());
+      QTRY_VERIFY(explorer->focused());
+      // Closed with its pane, as the cases after this one find the tab.
+      explorer->type(QStringLiteral("q"));
+      QTRY_VERIFY_WITH_TIMEOUT(!explorer->showing() && focusedPaneId() == editor_pane, runtime_wait_ms);
     }
 
     Q_SLOT void explorerListsAndChangesFiles() {
+      // As the case of the editor and the explorer above: it runs when it is named.
+      if (!QCoreApplication::arguments().contains(QStringLiteral("explorerListsAndChangesFiles"))) {
+        QSKIP("Runs when asked for by its name, as the test gui-quick-explorer does");
+      }
+
       if (QStandardPaths::findExecutable(QStringLiteral("git")).isEmpty()) {
         QSKIP("git is not installed on this host");
       }
@@ -2104,78 +2112,132 @@ return {api_version = 2, client = {
       shoot(QStringLiteral("explorer-help"));
       press(QStringLiteral("q"));
 
-      // `<C-w>T` stands the explorer beside the panes, which are laid out in the room it leaves.
-      const auto area = [&](const QString& part) {
-        return client_->display()->geometry().value(part).toRectF();
+      // `<C-w>T` stands the explorer as a pane of the tab, which the runtime makes beside the
+      // pane that had the focus: it is drawn in the room the tab's layout gives that pane.
+      const auto shell = firstPane()->id;
+      const auto focusedPane = [&] {
+        return focusedPaneId();
       };
-      const auto whole = area(QStringLiteral("terminal"));
-      const auto ratio = overlay->property("ratio").toReal();
-      constexpr qreal one_window = 380;
-      constexpr qreal two_windows = 640;
+      // The frame of the pane the explorer stands as, in the window: the rightmost of the two.
+      const auto explorerFrame = [&] {
+        QRectF frame;
+
+        for (const auto* item : test::visualItems(*window_->contentItem(), QStringLiteral("paneFrame"))) {
+          const QRectF candidate{item->mapToScene({0, 0}), QSizeF{item->width(), item->height()}};
+          if (item->isVisible() && candidate.left() > frame.left()) {
+            frame = candidate;
+          }
+        }
+
+        return frame;
+      };
 
       press(QStringLiteral("gg"));
+
+      const auto before_pin = selected();
+
       explorer->run(QStringLiteral("pin"));
-      QVERIFY(explorer->pinned() && explorer->focused() && explorer->showing());
+      QTRY_VERIFY_WITH_TIMEOUT(explorer->pinned(), runtime_wait_ms);
+      QVERIFY(explorer->focused() && explorer->showing());
+      QCOMPARE(selected(), before_pin);
       QCOMPARE(client_->dialogs()->kind(), Store::Dialog::explorer);
-      QVERIFY(qAbs(area(QStringLiteral("beside")).width() - (one_window * ratio)) <= 1);
-      QVERIFY(qAbs(area(QStringLiteral("terminal")).width() - (whole.width() - area(QStringLiteral("beside")).width())) <= 1);
-      QCOMPARE(area(QStringLiteral("terminal")).right(), area(QStringLiteral("beside")).left());
-      QTRY_VERIFY(overlay->x() >= area(QStringLiteral("terminal")).right());
+      QTRY_COMPARE(client_->panes()->rows()->rowCount(), 2);
+
+      const auto stood = focusedPane();
+
+      QVERIFY(stood != 0 && stood != shell);
+      // Once the panes are at rest, the explorer is inside the frame of its own.
+      QTRY_VERIFY(explorerFrame().width() > 0 && explorerFrame().adjusted(-1, -1, 1, 1).contains(QRectF{overlay->mapToScene({0, 0}), QSizeF{overlay->width(), overlay->height()}}));
+      QTRY_VERIFY(overlay->width() > explorerFrame().width() * 0.8 && overlay->height() > explorerFrame().height() * 0.8);
       QVERIFY(!explorer->preview().value(QStringLiteral("shown")).toBool() || overlay->property("previewWidth").toReal() == 0);
       shoot(QStringLiteral("explorer-pinned"));
 
       // The key that opened it returns the keys to the pane: what is typed then is the pane's.
       client_->commands()->execute(window_actions::Action::explorer);
-      QVERIFY(explorer->showing() && !explorer->focused());
+      QTRY_VERIFY(explorer->showing() && !explorer->focused());
+      QCOMPARE(focusedPane(), shell);
       QCOMPARE(client_->dialogs()->kind(), Store::Dialog::none);
 
       const auto at_rest = selected();
 
+      QTRY_VERIFY(window_->activeFocusItem() != nullptr && !overlay->isAncestorOf(window_->activeFocusItem()));
       QTest::keyClick(window_, Qt::Key_J);
       QCOMPARE(selected(), at_rest);
       shoot(QStringLiteral("explorer-pinned-unfocused"));
-      QTRY_VERIFY(window_->activeFocusItem() != nullptr && !overlay->isAncestorOf(window_->activeFocusItem()));
 
-      // The key that moves the focus to the right of the last pane enters it; the one to the
-      // left, from its first window, returns to the pane.
+      // The key that moves the focus to the right enters it, as it enters any pane; the one to
+      // the left, from its first window, returns to the pane.
       client_->commands()->execute(window_actions::Action::focus_right);
-      QVERIFY(explorer->focused());
+      QTRY_VERIFY(explorer->focused());
+      QCOMPARE(focusedPane(), stood);
       QCOMPARE(client_->dialogs()->kind(), Store::Dialog::explorer);
       press(QStringLiteral("j"));
       QVERIFY(selected() != at_rest);
       client_->commands()->execute(window_actions::Action::focus_left);
-      QVERIFY(!explorer->focused() && explorer->showing());
+      QTRY_VERIFY(!explorer->focused() && explorer->showing());
+      QCOMPARE(focusedPane(), shell);
 
       // Rows dragged out of it onto the pane are given to the pane, which is marked meanwhile.
-      const auto* pane_frame = test::visualItems(*window_->contentItem(), QStringLiteral("paneFrame")).value(0);
+      const QQuickItem* pane_frame = nullptr;
+
+      for (const auto* item : test::visualItems(*window_->contentItem(), QStringLiteral("paneFrame"))) {
+        if (item->isVisible() && (pane_frame == nullptr || item->mapToScene({0, 0}).x() < pane_frame->mapToScene({0, 0}).x())) {
+          pane_frame = item;
+        }
+      }
 
       QVERIFY(pane_frame != nullptr);
 
       const auto on_pane = pane_frame->mapToScene({pane_frame->width() / 2, pane_frame->height() / 2}).toPoint();
 
       QTest::mousePress(window_, Qt::LeftButton, Qt::NoModifier, over(QStringLiteral("cmake")));
-      QVERIFY(explorer->focused());
+      QTRY_VERIFY(explorer->focused());
+      QCOMPARE(focusedPane(), stood);
       QTest::mouseMove(window_, over(QStringLiteral("dev")));
       QTest::mouseMove(window_, on_pane);
       QTRY_VERIFY(overlay->property("dragging").toBool());
-      QCOMPARE(overlay->property("dropPane").toString(), QString::number(firstPane()->id));
+      QCOMPARE(overlay->property("dropPane").toString(), QString::number(shell));
       shoot(QStringLiteral("explorer-pinned-drop"));
       QTest::mouseRelease(window_, Qt::LeftButton, Qt::NoModifier, on_pane);
       QVERIFY(!overlay->property("dragging").toBool() && explorer->showing());
       QCOMPARE(explorer->line().value(QStringLiteral("edits")).toInt(), 0);
       // What the pane was given, and the key typed before it, stay on its line: the line is
       // cleared, so the agent ends with its input when this case does.
-      client_->terminals()->input(firstPane()->id, QByteArrayLiteral("\x15"));
+      client_->terminals()->input(shell, QByteArrayLiteral("\x15"));
 
-      // Two windows side by side ask for more room, and over the panes it gives it all back.
+      // Its windows split inside its pane, and the key that moves the focus goes through them
+      // before it leaves the pane. The agent that was mentioned has the focus: the explorer's
+      // pane takes it back.
+      client_->commands()->execute(window_actions::Action::focus_pane, QString::number(stood));
+      QTRY_VERIFY(explorer->focused());
       press(QStringLiteral("<C-w>v"));
-      // Half the area stays the panes', whatever it asks for.
-      QVERIFY(qAbs(area(QStringLiteral("beside")).width() - std::min(two_windows * ratio, whole.width() / 2)) <= 1);
+      QCOMPARE(explorer->windows().size(), 2);
       shoot(QStringLiteral("explorer-pinned-two"));
+      client_->commands()->execute(window_actions::Action::focus_left);
+      QVERIFY(explorer->focused());
+      QCOMPARE(focusedPane(), stood);
+      press(QStringLiteral("<C-w>l"));
       press(QStringLiteral("<C-w>q"));
+      QCOMPARE(explorer->windows().size(), 1);
+
+      // Another tab shows: the explorer is of the tab it stands in, and is there on the way back
+      // with the windows it had, which its runtime kept.
+      const auto root_before = explorer->windows().value(0).toMap().value(QStringLiteral("root")).toString();
+
+      client_->commands()->execute(window_actions::Action::new_tab);
+      QTRY_VERIFY_WITH_TIMEOUT(!explorer->showing() && terminalReady(), runtime_wait_ms);
+      QCOMPARE(client_->dialogs()->kind(), Store::Dialog::none);
+      client_->commands()->execute(window_actions::Action::close_tab);
+      QTRY_VERIFY_WITH_TIMEOUT(explorer->showing() && explorer->pinned(), runtime_wait_ms);
+      QCOMPARE(explorer->windows().value(0).toMap().value(QStringLiteral("root")).toString(), root_before);
+      client_->commands()->execute(window_actions::Action::focus_pane, QString::number(stood));
+      QTRY_VERIFY(explorer->focused());
+
+      // Over the panes again its pane closes, and the pane that was split has the tab whole.
       explorer->run(QStringLiteral("pin"));
-      QVERIFY(!explorer->pinned() && explorer->focused());
-      QVERIFY(qAbs(area(QStringLiteral("terminal")).width() - whole.width()) <= 1);
+      QVERIFY(!explorer->pinned() && explorer->focused() && explorer->showing());
+      QTRY_COMPARE_WITH_TIMEOUT(client_->panes()->rows()->rowCount(), 1, runtime_wait_ms);
+      QVERIFY(explorer->showing() && !explorer->pinned());
       press(QStringLiteral("q"));
       QVERIFY(!explorer->showing());
       QCOMPARE(client_->dialogs()->kind(), Store::Dialog::none);
@@ -11396,6 +11458,20 @@ return {api_version=2, client={keybindings={
       }
 
       return nullptr;
+    }
+
+    // The pane of the tab that shows that has the focus, by its number; 0 when none does.
+    [[nodiscard]] std::uint64_t focusedPaneId() const {
+      auto* rows = client_->panes()->rows();
+
+      for (int row = 0; row < rows->rowCount(); ++row) {
+        const auto record = rows->data(rows->index(row, 0), ListModel::record_role).toMap();
+        if (record.value(QStringLiteral("focused")).toBool()) {
+          return record.value(QStringLiteral("key")).toString().toULongLong();
+        }
+      }
+
+      return 0;
     }
 
     [[nodiscard]] const application::Pane<telar::Memory>* firstPane() const {

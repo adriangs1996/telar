@@ -245,10 +245,11 @@ if(TELAR_GUI_NATIVE)
     get_filename_component(gui_test_runtime_directory "${TELAR_GUI_TEST_RUNTIME}" DIRECTORY)
     telar_add_test(gui-quick COMMAND gui-quick-test
       LABELS gui.ui ENVIRONMENT "TELAR_GUI_TEST_RUNTIME=${TELAR_GUI_TEST_RUNTIME}" "PATH=${gui_test_runtime_directory}:$ENV{PATH}" QT_QUICK_BACKEND=software QT_QPA_PLATFORM=offscreen TIMEOUT 120)
-    # The case of an editor with the explorer, which the program skips unless it is named:
-    # the whole program runs close to its time, and this one needs a Neovim.
-    telar_add_test(gui-quick-editor-explorer COMMAND gui-quick-test ARGS editorAndExplorerKnowOfEachOther
-      LABELS gui.ui ENVIRONMENT "TELAR_GUI_TEST_RUNTIME=${TELAR_GUI_TEST_RUNTIME}" "PATH=${gui_test_runtime_directory}:$ENV{PATH}" QT_QUICK_BACKEND=software QT_QPA_PLATFORM=offscreen TIMEOUT 60)
+    # The cases of the explorer, which the program skips unless they are named: the whole
+    # program runs close to its time, so they have a test of their own. The one with an editor
+    # needs a Neovim.
+    telar_add_test(gui-quick-explorer COMMAND gui-quick-test ARGS explorerListsAndChangesFiles editorAndExplorerKnowOfEachOther
+      LABELS gui.ui ENVIRONMENT "TELAR_GUI_TEST_RUNTIME=${TELAR_GUI_TEST_RUNTIME}" "PATH=${gui_test_runtime_directory}:$ENV{PATH}" QT_QUICK_BACKEND=software QT_QPA_PLATFORM=offscreen TIMEOUT 90)
   endif()
 endif()
 

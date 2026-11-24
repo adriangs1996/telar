@@ -44,6 +44,8 @@ namespace telar::gui::application::workbench {
       std::uint32_t column = 0;
       // Where a terminal starts, instead of where the pane it splits works.
       std::string_view directory;
+      // The windows of an explorer, when the pane is one.
+      const ExplorerLayout* explorer = nullptr;
     };
 
     // Splits pane `pane_id` along `axis`, the new pane being `added`.
@@ -80,7 +82,9 @@ namespace telar::gui::application::workbench {
 
       try {
         session.link.send(PaneResize{.pane_id = pane_id, .size = sizes->existing});
-        if (added.editor) {
+        if (added.explorer != nullptr) {
+          session.link.send(CreateExplorerPane{.request_id = request_id, .location = tab->location, .size = sizes->added, .layout = *added.explorer});
+        } else if (added.editor) {
           // The editor starts where the pane it splits works.
           session.link.send(CreateNvimPane{.request_id = request_id, .location = tab->location, .size = sizes->added, .cwd = pane->cwd, .files = added.files, .line = added.line, .column = added.column});
         } else {
@@ -418,6 +422,17 @@ namespace telar::gui::application::workbench {
     return requestSplit(session, focused, axis, {.directory = directory});
   }
 
+  bool splitExplorer(Session& session, const ExplorerLayout& layout) {
+    const auto* tab = activeTab(session.tabs, session.active_tab);
+    if (tab == nullptr || !session.speaks(ClientTag::create_explorer_pane)) {
+      return false;
+    }
+
+    const auto focused = tab->focused_pane;
+
+    return requestSplit(session, focused, ClientLayoutAxis::horizontal, {.explorer = &layout});
+  }
+
   bool splitEditor(Session& session, ClientLayoutAxis axis, std::span<const std::string_view> files, EditorStart start) {
     const auto* tab = activeTab(session.tabs, session.active_tab);
     if (tab == nullptr || !session.speaks(ClientTag::create_nvim_pane) || files.size() > max_nvim_files) {
@@ -436,6 +451,12 @@ namespace telar::gui::application::workbench {
     }
 
     return requestTab(session, {}, {.editor = true, .files = files});
+  }
+
+  bool closing(const Session& session, std::uint64_t pane_id) noexcept {
+    return std::ranges::any_of(session.link.requests(), [&](const auto& request) {
+      return request.kind == RequestKind::close_pane && request.pane_id == pane_id;
+    });
   }
 
   bool closePane(Session& session, std::uint64_t pane_id) {

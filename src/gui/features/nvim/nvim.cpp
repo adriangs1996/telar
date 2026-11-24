@@ -921,16 +921,6 @@ namespace telar::gui::features::nvim {
     }
   }
 
-  bool leave(State& state, std::uint64_t pane_id, ds::Option<PaneDirection> side) noexcept {
-    auto* editor = Access::find(state, pane_id);
-    if (editor == nullptr) {
-      return false;
-    }
-
-    editor->edge = side;
-    return true;
-  }
-
   bool dismissMessage(State& state, std::uint64_t pane_id, std::uint64_t key) { // NOLINT(bugprone-easily-swappable-parameters): the pane, then what of it, as every use case of the feature takes them
     auto* editor = Access::find(state, pane_id);
     if (editor == nullptr) {

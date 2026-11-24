@@ -145,6 +145,29 @@ namespace telar::gui::application::explorer {
       return Effect::closed;
     }
 
+    // `<C-w>T` over the panes: asks the runtime for a pane the explorer stands as, beside the
+    // focused one, with the windows it has. The pane takes it when the runtime opens it.
+    void stand(Session& session, View& view, const Context& context) {
+      if (context.host != context.shown) {
+        return;
+      }
+
+      if (!session.speaks(ClientTag::create_explorer_pane)) {
+        feature::refuse(view, "This machine's runtime keeps no explorer as a pane; update telar there");
+        return;
+      }
+
+      feature::KeptWindows windows{};
+      const auto count = feature::keptWindows(windows, view, context);
+      if (count == 0 || standing(session) != 0 || !workbench::splitExplorer(session, {.windows = windows.view().first(count), .current = static_cast<std::uint8_t>(view.current), .side_by_side = view.side_by_side})) {
+        feature::refuse(view, "The explorer cannot stand beside the panes now");
+        return;
+      }
+
+      view.moving = true;
+      feature::say(view, "beside the panes · <C-w>T puts it over them again");
+    }
+
     // Opens the paths the view gathered in the editor of the tab, from `pane` or, with none
     // named, from the focused one. False when none of them opened.
     bool edit(Session& session, const View& view, std::uint64_t pane) {
@@ -235,12 +258,17 @@ namespace telar::gui::application::explorer {
       return;
     }
 
+    const bool within = feature::docked(session.explorer, tab->focused_pane) != nullptr;
+    bool accompanied = false;
+
     scene.focused = tab->focused_pane;
     // The panes the session holds of the tab, which it knows before the runtime lists them.
     for (const auto& pane : session.panes) {
-      if (!sameTab(pane->location, tab->location) || pane->exited || scene.pane_count == scene_panes) {
+      if (!sameTab(pane->location, tab->location) || pane->exited || scene.pane_count == scene_panes || feature::docked(session.explorer, pane->id) != nullptr) {
         continue;
       }
+
+      accompanied = accompanied || pane->id == scene.companion;
 
       if (scene.pane_count == scene.panes.size()) {
         scene.panes.push(Scene::Pane{scene.workspace.memory()});
@@ -252,6 +280,16 @@ namespace telar::gui::application::explorer {
       kept.number = static_cast<std::uint16_t>(++scene.pane_count);
       kept.cwd.assign(pane->cwd.view());
       name(kept, session, pane->foreground.view());
+    }
+
+    if (!within) {
+      scene.companion = scene.focused;
+    } else if (accompanied) {
+      // The focus is in the explorer's own pane: the pane it came from stands for it.
+      scene.focused = scene.companion;
+    } else {
+      // Or the first of the tab, when that one is gone.
+      scene.focused = scene.pane_count == 0 ? 0 : scene.panes[0].id;
     }
 
     for (const auto& workspace : session.workspace_list.entries()) {
@@ -371,6 +409,108 @@ namespace telar::gui::application::explorer {
       view.places_kept = view.places;
     }
 
+  }
+
+  std::uint64_t standing(const Session& session) noexcept {
+    const auto* tab = activeTab(session.tabs, session.active_tab);
+    if (tab == nullptr) {
+      return 0;
+    }
+
+    for (const auto& docked : session.explorer.docked) {
+      const auto* pane = findPane(session.panes, docked->pane);
+
+      if (pane != nullptr && !pane->exited && !workbench::closing(session, docked->pane) && sameTab(pane->location, tab->location) && tab->layout.contains(pane->id)) {
+        return pane->id;
+      }
+    }
+
+    return 0;
+  }
+
+  namespace {
+
+    // Gives the runtime the windows of the explorer for the pane it stands as, when where they
+    // are changed since it was last given them, or whatever changed when `leaving`.
+    void keep(Session& session, View& view, const Context& context, bool leaving) {
+      const auto mark = feature::keptMark(view);
+      const auto* pane = findPane(session.panes, view.host);
+      if (pane == nullptr || pane->exited || view.windows.empty() || (!leaving && mark == view.kept_mark)) {
+        return;
+      }
+
+      feature::KeptWindows windows{};
+      const auto count = feature::keptWindows(windows, view, context);
+
+      session.link.send(KeepExplorer{.pane_id = view.host, .layout = {.windows = windows.view().first(count), .current = static_cast<std::uint8_t>(view.current), .side_by_side = view.side_by_side}});
+      view.kept_mark = mark;
+    }
+
+    // The explorer stands as `pane`: with the windows it has when it asked for the pane, and
+    // otherwise with the ones the runtime keeps of it.
+    void take(const Session& session, View& view, const Context& context, std::uint64_t pane) {
+      const auto* docked = feature::docked(session.explorer, pane);
+
+      if (!view.moving && docked != nullptr && !docked->kept.empty()) {
+        ds::Array<Byte, FileLimits::explorer_windows * sizeof(ExplorerWindow)> scratch; // NOLINT(cppcoreguidelines-pro-type-member-init): the decoder writes the windows it hands back, so zeroing them first would be waste
+        DecodeStorage storage{scratch.viewMut()};
+
+        feature::restore(view, context, Codec::decode<ExplorerKept>(docked->kept.view(), storage).layout);
+      }
+
+      if (!view.open || view.windows.empty()) {
+        feature::open(view, session.explorer, context, context.host);
+      }
+
+      view.moving = false;
+      view.host = pane;
+      feature::pin(view, true);
+      // What it has is what its runtime keeps, until a window moves.
+      view.kept_mark = feature::keptMark(view);
+    }
+
+  }
+
+  Stood host(Session& session, View& view, const Context& context) {
+    const auto pane = standing(session);
+    const auto* tab = activeTab(session.tabs, session.active_tab);
+    // Read before the session is told anything.
+    const bool focused = pane != 0 && tab != nullptr && tab->focused_pane == pane;
+
+    if (pane == 0) {
+      if (view.host == 0) {
+        return Stood::same;
+      }
+
+      // Its pane is gone, or is of a tab that no longer shows: the runtime is told where its
+      // windows were left, if the pane is still there to keep them.
+      keep(session, view, context, true);
+      view.host = 0;
+      feature::pin(view, false);
+      feature::close(view);
+      return Stood::left;
+    }
+
+    // Closed while its pane stands, it is taken again: a pane of the tab is never left empty.
+    const bool taken = view.host != pane || !view.open;
+
+    if (taken) {
+      if (view.host != 0 && view.host != pane) {
+        keep(session, view, context, true);
+      }
+
+      take(session, view, context, pane);
+    }
+
+    if (view.focused != focused) {
+      feature::focus(view, focused);
+      // The keys left it: the runtime keeps the row it was on.
+      keep(session, view, context, !focused);
+    } else {
+      keep(session, view, context, false);
+    }
+
+    return taken ? Stood::taken : Stood::same;
   }
 
   bool refresh(Session& session, View& view, const Context& context) {
@@ -609,8 +749,27 @@ namespace telar::gui::application::explorer {
     case ActionKind::commit:
       return Effect::none;
     case ActionKind::close:
+      // As a pane it closes with its pane.
+      if (view.host != 0) {
+        static_cast<void>(workbench::closePane(session, view.host));
+        view.host = 0;
+        feature::pin(view, false);
+      }
+
       feature::close(view);
       return Effect::closed;
+    case ActionKind::pin:
+      stand(session, view, context);
+      return Effect::none;
+    case ActionKind::unpin:
+      // Over the panes again, with the windows it had: its pane closes.
+      if (view.host != 0 && workbench::closePane(session, view.host)) {
+        view.host = 0;
+        feature::pin(view, false);
+        feature::say(view, "over the panes");
+      }
+
+      return Effect::none;
     case ActionKind::copy:
       return Effect::copy;
     case ActionKind::insert:
@@ -652,6 +811,8 @@ namespace telar::gui::application::explorer {
     case ActionKind::change_directory:
     case ActionKind::split:
     case ActionKind::focus_pane:
+    case ActionKind::pin:
+    case ActionKind::unpin:
       return true;
     case ActionKind::open:
       // From the pane the keys named when it is of this session, else from its focused one.

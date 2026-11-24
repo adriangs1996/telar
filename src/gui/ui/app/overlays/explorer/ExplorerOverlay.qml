@@ -13,8 +13,8 @@ FocusScope {
     required property ExplorerController controller
     required property var colors
     required property var typography
-    // The area of the panes, which the explorer takes whole; or, beside the panes, the room
-    // their area left it at their right.
+    // The area of the panes, which the explorer takes whole; or, as a pane of the tab, the room
+    // of that pane.
     required property rect area
     // Where the panes are, to say which one is under rows the pointer drags out of the explorer.
     property Item paneArea: null
@@ -32,8 +32,6 @@ FocusScope {
     readonly property real ratio: (grid.cellWidth ?? 7.2) / 7.2
     // How far inside the area it stands: that margin hides the panes too.
     readonly property real inset: pinned ? 0 : Math.round(6 * ratio)
-    // The room between the panes and the explorer beside them.
-    readonly property real gap: pinned ? Math.round(6 * ratio) : 0
 
     readonly property var windows: controller.windows
     readonly property var line: controller.line
@@ -132,9 +130,9 @@ FocusScope {
     }
 
     objectName: "explorerOverlay"
-    x: area.x + inset + gap
+    x: area.x + inset
     y: area.y + inset
-    width: Math.max(0, area.width - 2 * inset - gap)
+    width: Math.max(0, area.width - 2 * inset)
     height: Math.max(0, area.height - 2 * inset)
     visible: controller.showing
     z: 40
@@ -276,9 +274,9 @@ FocusScope {
     }
 
     // The field of the mode takes the keys while something is typed; the windows otherwise.
-    // A press in the explorer gives it the keys, which beside the panes it may not have.
+    // A press in the explorer gives it the keys, which as a pane it may not have.
     function claim() {
-        controller.giveFocus(true);
+        controller.claimFocus();
         settleFocus();
     }
 
@@ -370,23 +368,25 @@ FocusScope {
         color: root.colors.workbenchBackground
     }
 
+    // As a pane the frame around it is its pane's, which says whether it has the focus: it
+    // draws none of its own.
     NativeRoundedRectangle {
         x: -root.hairline
         y: -root.hairline
         width: root.width + 2 * root.hairline
         height: root.height + 2 * root.hairline
         radius: 8 * root.ratio + root.hairline
+        visible: !root.pinned
         color: Qt.rgba(0, 0, 0, 0.27)
     }
 
     NativeRoundedRectangle {
         id: surface
         anchors.fill: parent
-        radius: 8 * root.ratio
+        radius: root.pinned ? 0 : 8 * root.ratio
         color: root.colors.surface_dim
-        borderWidth: root.edge
-        // Beside the panes its frame is a pane's, lighter while it has the keys.
-        borderColor: root.pinned ? (root.active ? root.colors.overlay0 : root.colors.surface1) : root.colors.overlay0
+        borderWidth: root.pinned ? 0 : root.edge
+        borderColor: root.colors.overlay0
         borderAlpha: 1
     }
 

@@ -333,9 +333,6 @@ export namespace telar::gui::features::nvim {
     // the window opens it.
     bool explores = false;
     ds::String<Memory> explore;
-    // The side the focus left the editor's last window by with no pane there to take it, until
-    // the window gives it to what stands beside the panes.
-    ds::Option<PaneDirection> edge;
     // Every frame applied.
     std::uint64_t revision = 0;
     // The grids there are, where each is placed and what of its buffer it shows.
@@ -457,9 +454,6 @@ export namespace telar::gui::features::nvim {
   // is no editor.
   bool explore(State& state, std::uint64_t pane_id, std::string_view path);
   void explored(State& state, std::uint64_t pane_id) noexcept;
-
-  // The focus left the editor by `side` and no pane took it; nothing once the window saw to it.
-  bool leave(State& state, std::uint64_t pane_id, ds::Option<PaneDirection> side) noexcept;
 
   // Closes an editor's picker. False when it had none open.
   bool dismiss(State& state, std::uint64_t pane_id) noexcept;

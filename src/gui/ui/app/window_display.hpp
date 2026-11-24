@@ -60,9 +60,6 @@ namespace telar::gui::qt {
     [[nodiscard]] qreal sidebarWidth() const;
     [[nodiscard]] bool workspaceListCollapsed() const;
     Q_INVOKABLE void setSidebarWidth(qreal width);
-    // What stands beside the panes, at their right, takes this much of their area's width, and
-    // the panes are laid out in what is left: none by default. Half the area stays the panes'.
-    void setBeside(qreal width);
 
     // Measures the terminal font's cell at the window's density.
     void measureFont();
@@ -87,7 +84,6 @@ namespace telar::gui::qt {
     ConfigurationSource& configuration_;
     QPointer<QQuickWindow> window_;
     Viewport viewport_ = default_viewport;
-    qreal beside_ = 0;
     CellMetrics cell_metrics_;
     TerminalGrid terminal_grid_;
   };

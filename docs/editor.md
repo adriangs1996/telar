@@ -159,9 +159,8 @@ by it again. `vim.g.telar_tint` takes the options of the theme's engine, such as
   `vim.ui.open` always did. Text whose highlight names a URL, as a link of a Markdown file
   does, is underlined, and the pointer over it is the one of a link.
 - Moving the focus to a side with `navigate_pane` asks the editor first for a window on that
-  side, and moves to the pane there when it has none, or into the
-  [explorer](explorer.md#beside-the-panes) that stands beside the panes on that side. No
-  plugin is needed for it.
+  side, and moves to the pane there when it has none: a terminal, another editor, or the
+  [explorer](explorer.md#beside-the-panes) that stands as a pane. No plugin is needed for it.
 - The pane's directory is the one of Neovim's current window, `:lcd` and `:tcd` included.
 
 Nothing is installed in Neovim for any of this: the runtime teaches it when it starts, before

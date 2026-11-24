@@ -217,7 +217,11 @@ namespace telar::gui::features::explorer {
         outcomes(made_in),
         committed(made_in),
         carrying(made_in),
-        carried(made_in) {}
+        carried(made_in),
+        docked(made_in) {}
+
+  Docked::Docked(Memory& memory)
+      : kept(memory) {}
 
   Carried::Carried(Memory& memory)
       : bytes(memory),
@@ -728,6 +732,44 @@ namespace telar::gui::features::explorer {
     return true;
   }
 
+  void dock(State& state, std::uint64_t pane) {
+    if (docked(state, pane) == nullptr) {
+      state.docked.push(ds::makeBox<Docked>(state.memory, state.memory)).getMut().pane = pane;
+      ++state.revision;
+    }
+  }
+
+  bool receive(State& state, const ExplorerKept& kept) {
+    for (auto& docked : state.docked.viewMut()) {
+      if (docked->pane == kept.pane_id) {
+        docked.getMut().kept.resize(Codec::encodedSize(kept));
+        static_cast<void>(Codec::encode(kept, docked.getMut().kept.viewMut()));
+        ++state.revision;
+        return true;
+      }
+    }
+
+    return false;
+  }
+
+  void undock(State& state, std::uint64_t pane) noexcept {
+    if (state.docked.retain([pane](const ds::Box<Docked, Memory>& docked) {
+          return docked->pane != pane;
+        }) != 0) {
+      ++state.revision;
+    }
+  }
+
+  tbc::val_a<const Docked*> docked(tbc::ref_a<State> state, std::uint64_t pane) noexcept {
+    for (const auto& docked : state.docked) {
+      if (docked->pane == pane) {
+        return &*docked;
+      }
+    }
+
+    return nullptr;
+  }
+
   bool receive(State& state, const FileTouches& answer) {
     auto& touches = state.touches;
     if (touches.waiting == 0 || touches.waiting != answer.request_id) {
@@ -794,6 +836,12 @@ namespace telar::gui::features::explorer {
   bool fail(State& state, const RequestFailed& failure) {
     const auto request = failure.request_id;
     bool ours = false;
+
+    // A failure that answers no request is none of the explorer's: what waits for no answer
+    // would take it for its own.
+    if (request == 0) {
+      return false;
+    }
 
     if (auto* kept = keepCarried(state, request, CarriedKind::failed)) {
       kept->text.assign(runtime::utf8Prefix(failure.message, ExplorerLimits::error_bytes));
@@ -944,6 +992,8 @@ namespace telar::gui::features::explorer {
     state.applying = 0;
     state.committing = 0;
     state.in_flight = 0;
+    // The runtime that answers next says again which panes are explorers.
+    state.docked.clear();
     // What a transfer asked of the connection that ended is answered by none.
     state.carrying.clear();
     state.carried.clear();

@@ -2406,10 +2406,10 @@ namespace telar::gui::features::explorer {
       ++view.revision;
     }
 
-    // `<C-w>T`: the explorer stands beside the panes, or over them again.
-    void togglePin(View& view) {
-      pin(view, !view.pinned);
-      say(view, view.pinned ? "beside the panes · <C-w>T puts it over them again" : "over the panes");
+    // `<C-w>T`: the explorer stands as a pane beside the panes of the tab, or over them again.
+    // Whoever holds the tab makes the pane, or closes it.
+    Action togglePin(const View& view) noexcept {
+      return {.kind = view.pinned ? ActionKind::unpin : ActionKind::pin};
     }
 
     // `gf`: the files chosen open in the editor of the tab.
@@ -2798,8 +2798,7 @@ namespace telar::gui::features::explorer {
         splitHere(view, state, context);
         break;
       case Command::pin:
-        togglePin(view);
-        break;
+        return togglePin(view);
       case Command::open:
         return openFiles(view, state, context);
       case Command::change_directory:
@@ -2960,8 +2959,7 @@ namespace telar::gui::features::explorer {
       }
 
       if (name == "pin") {
-        togglePin(view);
-        return Action{};
+        return togglePin(view);
       }
 
       return ds::none;
@@ -3245,6 +3243,7 @@ namespace telar::gui::features::explorer {
 
   void close(View& view) noexcept {
     view.open = false;
+    view.moving = false;
     view.mode = Mode::normal;
     clear(view.keys);
     ++view.revision;
@@ -4462,6 +4461,127 @@ namespace telar::gui::features::explorer {
     ++view.revision;
   }
 
+  namespace {
+
+    // FNV-1a, a step at a time: enough to tell one set of windows from the one before it.
+    constexpr std::uint64_t mark_seed = 14695981039346656037ULL;
+    constexpr std::uint64_t mark_prime = 1099511628211ULL;
+
+    constexpr void mix(std::uint64_t& mark, std::uint64_t value) noexcept {
+      constexpr unsigned byte_bits = 8;
+      constexpr std::uint64_t byte_mask = 0xff;
+
+      for (unsigned shift = 0; shift < sizeof(value) * byte_bits; shift += byte_bits) {
+        mark = (mark ^ ((value >> shift) & byte_mask)) * mark_prime;
+      }
+    }
+
+    constexpr void mix(std::uint64_t& mark, std::string_view text) noexcept {
+      for (const auto character : text) {
+        mark = (mark ^ static_cast<unsigned char>(character)) * mark_prime;
+      }
+
+      mix(mark, text.size());
+    }
+
+  }
+
+  std::size_t keptWindows(tbc::mut_a<KeptWindows> windows, tbc::ref_a<View> view, tbc::ref_a<Context> context) noexcept {
+    std::size_t count = 0;
+
+    for (const auto& window : view.windows) {
+      if (count == windows.size()) {
+        break;
+      }
+
+      windows.atMut(count++) = {
+          .machine = window->machine == context.host ? std::string_view{} : labelOf(context, window->machine),
+          .root = window->root.view(),
+          .selected = window->selected.view(),
+          .lens = window->lens,
+          .sort = window->sort,
+          .scope = window->scope,
+          .follow = window->follow,
+          .hidden = window->hidden,
+          .ignored = window->ignored,
+      };
+    }
+
+    return count;
+  }
+
+  std::uint64_t keptMark(const View& view) noexcept {
+    auto mark = mark_seed;
+
+    mix(mark, view.current);
+    mix(mark, static_cast<std::uint64_t>(view.side_by_side));
+    for (const auto& window : view.windows) {
+      constexpr unsigned flag_bits = 8;
+      const auto listing = (static_cast<std::uint64_t>(std::to_underlying(window->lens)) << (2 * flag_bits)) | (static_cast<std::uint64_t>(std::to_underlying(window->sort)) << flag_bits) | std::to_underlying(window->scope);
+      const auto flags = (static_cast<std::uint64_t>(window->follow) << 2U) | (static_cast<std::uint64_t>(window->hidden) << 1U) | static_cast<std::uint64_t>(window->ignored);
+
+      mix(mark, window->machine);
+      mix(mark, window->root.view());
+      mix(mark, listing);
+      mix(mark, flags);
+    }
+
+    return mark;
+  }
+
+  void restore(View& view, const Context& context, const ExplorerLayout& layout) {
+    view.windows.clear();
+    for (const auto& kept : layout.windows) {
+      if (view.windows.size() == ViewLimits::windows) {
+        break;
+      }
+
+      auto& window = view.windows.push(ds::makeBox<Window>(view.memory, view.memory)).getMut();
+      // No label is the host; a label no machine has is 0, as `machineNamed` finds none for it.
+      const auto* named = machineNamed(context, kept.machine);
+      const auto known = named == nullptr ? std::uint64_t{0} : named->id;
+      const auto machine = kept.machine.empty() ? context.host : known;
+      // A place on a machine this window does not keep is no place it can show.
+      const bool placed = machine != 0 && kept.root.starts_with('/');
+
+      window.machine = machine == 0 ? context.host : machine;
+      window.lens = kept.lens;
+      window.sort = kept.sort;
+      window.scope = kept.scope;
+      window.hidden = kept.hidden;
+      window.ignored = kept.ignored;
+      window.follow = kept.follow || !placed;
+      if (!placed) {
+        continue;
+      }
+
+      const auto root = kept.root;
+
+      window.root.assign(root);
+      if (!within(kept.selected, root)) {
+        continue;
+      }
+
+      // Every directory from the root down to the row selected is unfolded, to find it again.
+      for (auto slash = kept.selected.find('/', root == "/" ? 1 : root.size() + 1); slash != std::string_view::npos; slash = kept.selected.find('/', slash + 1)) {
+        add(window.expanded, kept.selected.substr(0, slash));
+      }
+
+      window.selected.assign(kept.selected);
+      window.wanted.assign(kept.selected);
+    }
+
+    if (view.windows.empty()) {
+      view.windows.push(ds::makeBox<Window>(view.memory, view.memory)).getMut().machine = context.host;
+    }
+
+    view.current = std::min<std::size_t>(layout.current, view.windows.size() - 1);
+    view.side_by_side = layout.side_by_side;
+    view.mode = Mode::normal;
+    clear(view.keys);
+    ++view.revision;
+  }
+
   void focus(View& view, bool focused) noexcept {
     // Over the panes it has the keys while it shows.
     view.focused = focused || !view.pinned;
@@ -4473,7 +4593,7 @@ namespace telar::gui::features::explorer {
       return false;
     }
 
-    // Its windows stand in a row or in a column; the panes are to the left of them all.
+    // Its windows stand in a row or in a column; past the first and the last are the panes.
     const bool along = view.side_by_side ? side == Side::left || side == Side::right : side == Side::up || side == Side::down;
     const bool back = side == Side::left || side == Side::up;
 
@@ -4489,8 +4609,7 @@ namespace telar::gui::features::explorer {
       return true;
     }
 
-    // Past its first window to the left are the panes; any other way there is nothing.
-    return side != Side::left;
+    return false;
   }
 
   void resize(View& view, const WindowRows& shown) noexcept {

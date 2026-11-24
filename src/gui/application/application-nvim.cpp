@@ -420,18 +420,6 @@ namespace telar::gui::application::nvim {
     feature::explored(session.nvim, pane_id);
   }
 
-  ds::Option<PaneDirection> takeEdge(Session& session, std::uint64_t pane_id) noexcept {
-    const auto* editor = feature::find(session.nvim, pane_id);
-    if (editor == nullptr || !editor->edge) {
-      return ds::none;
-    }
-
-    const auto side = editor->edge;
-
-    static_cast<void>(feature::leave(session.nvim, pane_id, ds::none));
-    return side;
-  }
-
   Change receive(Session& session, const NvimOpenFiles& message) {
     // What lists files beside the editors marks the ones they hold.
     return feature::hold(session.nvim, message) ? Change::explorer : Change::none;
@@ -483,12 +471,8 @@ namespace telar::gui::application::nvim {
       return Change::none;
     }
 
-    // The editor had no window on that side: the pane there takes the focus, and with no pane
-    // there what stands beside the panes may.
-    if (workbench::neighbor(session, message.direction) == 0 && feature::leave(session.nvim, message.pane_id, message.direction)) {
-      return shown(session, message.pane_id);
-    }
-
+    // The editor had no window on that side: the pane there takes the focus, the explorer's as
+    // any other.
     workbench::focusToward(session, message.direction);
     return Change::model;
   }

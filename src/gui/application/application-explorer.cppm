@@ -78,6 +78,7 @@ export namespace telar::gui::application::explorer {
   using features::explorer::close;
   using features::explorer::complete;
   using features::explorer::configure;
+  using features::explorer::docked;
   using features::explorer::drop;
   using features::explorer::focus;
   using features::explorer::grab;
@@ -156,6 +157,9 @@ export namespace telar::gui::application::explorer {
     ds::Vec<Machine, Memory> machines;
     std::size_t machine_count = 0;
     std::uint64_t focused = 0;
+    // The pane that had the focus before the explorer's own took it: what the explorer hands a
+    // file to, and follows, while it stands as a pane and has the keys.
+    std::uint64_t companion = 0;
     std::uint64_t shown = 0;
     ds::String<Memory> workspace;
     // The time of the observation, in seconds: what a row says how long ago against.
@@ -172,6 +176,8 @@ export namespace telar::gui::application::explorer {
   void clear(Scene& scene) noexcept;
 
   // Reads into `scene` the panes of the tab `session` shows, which is the session of `machine`.
+  // The pane the explorer stands as is none of them: with the focus in it, the focused pane is
+  // the one that had it before.
   void observe(Scene& scene, const Session& session, std::uint64_t machine);
 
   // Adds a machine to `scene`: one whose session the window holds, with the home its runtime
@@ -210,6 +216,26 @@ export namespace telar::gui::application::explorer {
 
   // Whether the runtime of this session answers the explorer.
   [[nodiscard]] bool available(const Session& session) noexcept;
+
+  // The pane of the tab `session` shows that is the explorer; 0 when the tab has none, or the
+  // one it has is being closed.
+  [[nodiscard]] std::uint64_t standing(const Session& session) noexcept;
+
+  // What became of the explorer when it was brought to where the tab that shows has it.
+  enum class Stood : std::uint8_t {
+    same,
+    // It stands as a pane of the tab that shows now, and was closed or over the panes before.
+    taken,
+    // The pane it stood as is gone, or is of a tab that no longer shows: it closed.
+    left,
+  };
+
+  // Brings the explorer to where the tab `session` shows has it. With a pane that is the
+  // explorer, it stands as that pane, with the windows the runtime keeps of it, and has the keys
+  // while the pane has the focus. With none, an explorer that stood as a pane closes. The
+  // runtime is given its windows when they changed, and when it leaves them. `context` is the
+  // one of the session's machine.
+  Stood host(Session& session, View& view, const Context& context);
 
   // Brings the windows on the session's machine up to date with what its runtime answered, and
   // with the focused pane when the session is the one that shows; then asks for what they still

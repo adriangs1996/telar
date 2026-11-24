@@ -243,27 +243,43 @@ The explorer splits into three windows at most, each on its own directory.
 
 ## Beside the panes
 
-`Ctrl+w` `T`, or `:pin`, stands the explorer beside the panes of the tab, at their right, and
-not over them; the same key puts it over them again. The panes are laid out in the room that is
-left, as when the sidebar opens, so nothing of a pane is covered. It shows no preview there, and
-it is as wide as two windows need when it has two side by side, and never more than half the
-area.
+`Ctrl+w` `T`, or `:pin`, stands the explorer as a pane of the tab, at the right of the pane
+that had the focus, and not over the panes; the same key closes that pane and puts the explorer
+over them again, with the windows it had. Nothing of a pane is covered. As a pane it shows no
+preview.
 
-![The explorer beside a pane](images/telar-explorer-pinned.png)
+![The explorer as a pane beside a terminal](images/telar-explorer-pinned.png)
 
-Beside the panes the explorer takes the keys only while it has the focus:
+It is a pane of the runtime as a terminal and an editor are, with no program in it: the tab's
+layout holds it, so it is split, resized, swapped, shown whole and closed as any pane, the
+sidebar and the bar of the tab name it `explorer`, and `telar` lists it among the panes. What
+only a terminal answers, such as its text or keys typed at it, the runtime refuses for it. A
+tab has one explorer pane at most: `Ctrl+b` `o` in a tab that has one goes to it.
 
-- the prefix and `o` give it the focus, and return it to the pane; a click in it gives it too;
-- the keys that move the focus between panes enter it from the pane that has none at its right,
-  go from one of its windows to the other, and leave it at the left of the first. From an
-  editor pane `navigate_pane` asks Neovim first for a window on that side, and enters the
-  explorer when it has none;
-- `q` closes it, and it opens beside the panes again in that workspace, for as long as the
-  window lives. Another workspace has it where it was left there.
+The runtime keeps where its windows are: the machine, the root and the selected row of each,
+its lens, its order, whether it lists hidden and ignored entries, whether it follows the
+focused pane, which window has the keys and how they are split. So the explorer is in its pane,
+where it was, when the tab shows again, when a window attaches later, and when the runtime
+starts again from the session it wrote. It is told when a window moves or lists another way,
+and when the keys leave the explorer; moving the selection alone tells it nothing. Changes
+typed and not written are the window's, not the runtime's: they stay while the window lives,
+and another window does not see them.
 
-It does not close when it hands a file to a pane. And rows can be dragged out of it onto a
-pane, which takes them as Enter would give them to it: a shell gets the paths typed, an agent a
-mention, an editor opens them. The pane that would take them is marked while they are over it.
+As a pane the explorer takes the keys only while its pane has the focus:
+
+- the prefix and `o` give its pane the focus, and return it to the pane it came from; a click
+  in it gives it too;
+- the keys that move the focus between panes enter it as they enter any pane, go from one of
+  its windows to the other, and leave it past the first and the last. From an editor pane
+  `navigate_pane` asks Neovim first for a window on that side, and goes to the explorer's pane
+  when it has none;
+- `q` closes it with its pane.
+
+The pane a file is handed to, and the one a window follows, is the one that had the focus
+before the explorer's own took it. It does not close when it hands a file over. And rows can be
+dragged out of it onto a pane, which takes them as Enter would give them to it: a shell gets
+the paths typed, an agent a mention, an editor opens them. The pane that would take them is
+marked while they are over it.
 
 ## Machines
 
@@ -368,7 +384,7 @@ The explorer and the [editor panes](editor.md) of a machine know of each other.
   file that was deleted leaves its buffer as Neovim leaves one whose file is gone.
 - **From the editor.** `:Telar explore` opens the explorer on the directory of the file being
   edited, fixed there and with that file selected; in a buffer without a file, on the
-  editor's directory. Beside the panes it takes the keys.
+  editor's directory. As a pane, its pane takes the focus.
 
 Neovim names a file by the real path of its directory. A row reached through a symbolic link
 has another name, and is not marked; its buffer still follows a move.
@@ -386,9 +402,10 @@ by its name, or to nothing. The help, the hints and the menus then show the keys
 - A file of another machine is not downloaded by dragging it out to the desktop or to another
   program: that takes a promise of a file the window would fill on the drop, and what leaves
   is its path as text. [Bring a copy](#between-machines) with a paste or a drop in a window.
-- Beside the panes the explorer is the window's own: the runtime does not know of it as a
-  pane, so it is not part of a tab's layout, is not split or moved with the panes, and does not
-  return when the window is opened again.
+- Two windows that show the same explorer pane do not follow each other: each reads where its
+  windows are when the pane comes into view, and the runtime keeps what it was last given.
+- An explorer pane takes the half of the pane it splits, as any pane does, whatever the width
+  its windows need.
 - The files an editor holds are the ones the window last saw it hold, and it sees an editor
   while its tab shows: what an editor of another tab opened or wrote since is not marked,
   nor warned of in the plan, until its tab shows again. Its buffers follow a move all the

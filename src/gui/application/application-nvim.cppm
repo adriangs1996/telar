@@ -103,10 +103,6 @@ export namespace telar::gui::application::nvim {
   // The window opened the explorer the editor asked for, which `editor(...)->explores` said.
   void explored(Session& session, std::uint64_t pane_id) noexcept;
 
-  // The side the focus left the editor by with no pane there to take it, once: what stands
-  // beside the panes on that side may take it.
-  [[nodiscard]] ds::Option<PaneDirection> takeEdge(Session& session, std::uint64_t pane_id) noexcept;
-
   // Runs `telar edit FILE[:LINE]` itself when that is what `arguments` are, as
   // `telar.action.edit` gives them: the file opens in the editor of the focused tab, taken
   // from the focused pane's directory when it names none. False for any other command, and

@@ -36,23 +36,15 @@ export namespace telar::gui::features::explorer {
     static constexpr std::size_t candidates = 12;
   };
 
-  enum class Lens : std::uint8_t {
-    tree,
-    changes,
-    // The files the panes touched lately, the newest first.
-    touched,
-    panes,
-  };
+  // What a window lists, as the runtime keeps it for an explorer that stands as a pane: the tree,
+  // what git says changed, the files the panes touched lately, the newest first, or the panes.
+  using Lens = ExplorerLens;
 
   inline constexpr std::size_t lens_count = 4;
 
   // Where a window that follows the focused pane roots itself: at the pane's directory, at the
   // workspace's, or at the home of the machine.
-  enum class Scope : std::uint8_t {
-    pane,
-    workspace,
-    machine,
-  };
+  using Scope = ExplorerScope;
 
   enum class Mode : std::uint8_t {
     normal,
@@ -70,11 +62,7 @@ export namespace telar::gui::features::explorer {
     question,
   };
 
-  enum class Sort : std::uint8_t {
-    name,
-    size,
-    modified,
-  };
+  using Sort = ExplorerSort;
 
   enum class Tone : std::uint8_t {
     info,
@@ -564,6 +552,9 @@ export namespace telar::gui::features::explorer {
     apply,
     undo,
     commit,
+    // Stand as a pane of the tab, beside its panes; and over them again, its pane closed.
+    pin,
+    unpin,
   };
 
   struct Action {
@@ -598,10 +589,16 @@ export namespace telar::gui::features::explorer {
 
     Memory& memory;
     bool open = false;
-    // Whether the explorer stands beside the panes, where it stays once it hands a file to one,
-    // and not over them; and whether it takes the keys, which over the panes it always does.
+    // Whether the explorer stands as a pane of the tab, where it stays once it hands a file to
+    // one, and not over its panes; and whether it takes the keys, which over them it always does.
     bool pinned = false;
     bool focused = true;
+    // The pane it stands as, while it stands beside the panes; and the mark of the windows its
+    // runtime was last given.
+    std::uint64_t host = 0;
+    std::uint64_t kept_mark = 0;
+    // A pane was asked for it to stand as: its windows go there as they are.
+    bool moving = false;
     // Whether the windows stand side by side.
     bool side_by_side = true;
     ds::Vec<ds::Box<Window, Memory>, Memory> windows;
@@ -690,6 +687,23 @@ export namespace telar::gui::features::explorer {
   // newest steps of the jump list that fit what a runtime keeps, from the oldest of them. They
   // view the texts of `view` and of `context`. Returns the step the explorer is at, among those.
   [[nodiscard]] std::uint16_t keeping(tbc::mut_a<ds::Vec<KeptPlace, Memory>> places, tbc::ref_a<View> view, tbc::ref_a<Context> context);
+
+  // The windows of the explorer as a runtime keeps them for the pane it stands as, in `windows`:
+  // how many. A window of the machine `context.host`, whose runtime keeps them, names no machine.
+  // They view the texts of `view` and of `context`.
+  using KeptWindows = ds::Array<ExplorerWindow, ViewLimits::windows>;
+
+  [[nodiscard]] std::size_t keptWindows(tbc::mut_a<KeptWindows> windows, tbc::ref_a<View> view, tbc::ref_a<Context> context) noexcept;
+
+  // A number that is another when where the windows are or how they list changed: the row
+  // selected in each is no part of it, so that moving in a window tells the runtime nothing.
+  [[nodiscard]] std::uint64_t keptMark(const View& view) noexcept;
+
+  // Puts the windows where the runtime of `context.host` kept them for a pane: each on the
+  // machine its label names, and on the host for no label. A window of a machine this window
+  // does not keep goes to the host, and follows the focused pane there. The rows are built by
+  // whoever takes in the caches next.
+  void restore(View& view, const Context& context, const ExplorerLayout& layout);
 
   // Says `text` on the line under the windows.
   void say(View& view, std::string_view text, Tone tone = Tone::info);

@@ -99,6 +99,8 @@ namespace {
       const auto around = explorer::around(scene);
       const auto before = view.revision;
 
+      // Where the tab that shows has the explorer, first: as a pane of it, or not.
+      stood = explorer::host(client, view, explorer::contextOf(around, host.machine));
       static_cast<void>(explorer::refresh(client, view, explorer::contextOf(around, host.machine)));
       if (linked) {
         static_cast<void>(explorer::refresh(box, view, explorer::contextOf(around, far.machine)));
@@ -190,6 +192,18 @@ namespace {
     explorer::Effect run(std::string_view command) {
       static_cast<void>(press(':'));
       return submit(command);
+    }
+
+    // `:pin` over the panes, and what the runtime answers it: a pane that is the explorer,
+    // beside the first one.
+    void pin() {
+      static_cast<void>(run("pin"));
+
+      const auto asked = transport.last<CreateExplorerPane>();
+
+      check(deliver(client, PaneKindNotice{.pane_id = explorer_pane, .kind = PaneKind::explorer}) == application::Change::explorer);
+      deliver(client, PaneOpened{.request_id = asked.request_id, .pane_id = explorer_pane, .location = asked.location, .created = true, .pane_generation = 1});
+      static_cast<void>(refresh());
     }
 
     void typed(std::string_view text) {
@@ -286,6 +300,9 @@ namespace {
     TestSession<SystemAllocator> box{memory, box_transport};
     explorer::View view{client.memory};
     explorer::Scene scene{client.memory};
+    // The pane the runtime makes for the explorer, and what the last refresh found of it.
+    static constexpr std::uint64_t explorer_pane = 2;
+    explorer::Stood stood = explorer::Stood::same;
     // The cache of a machine with no session: it holds nothing.
     explorer::State away{client.memory};
     bool linked = true;
@@ -541,7 +558,7 @@ namespace {
     check(fixture.press('y') == explorer::Effect::copy && fixture.view.text.view() == "box:/home/ops/deploy.sh", "yy copies where it is");
 
     // gf opens it in an editor of its machine, from the pane focused there.
-    static_cast<void>(fixture.run("pin"));
+    fixture.pin();
     static_cast<void>(fixture.press('g'));
     static_cast<void>(fixture.press('f'));
     check(box_transport.count(ClientTag::create_nvim_pane) == 1 && box_transport.last<CreateNvimPane>().files.size() == 1 && box_transport.last<CreateNvimPane>().files[0] == "/home/ops/deploy.sh");
@@ -553,7 +570,7 @@ namespace {
     check(fixture.view.message.view() == "No editor opens on box: its runtime has none, or no tab to put it in");
   }
 
-  void besideThePanesItStaysAndAPaneTakesWhatIsDroppedOnIt() {
+  void asAPaneItStaysAndAPaneTakesWhatIsDroppedOnIt() {
     Fixture fixture;
     auto& transport = fixture.transport;
 
@@ -561,9 +578,19 @@ namespace {
     fixture.settle();
     static_cast<void>(fixture.press('j'));
 
-    // Over the panes a file handed over closes it; beside them it stays, with the keys.
+    // Over the panes a file handed over closes it; as a pane of the tab it stays, with the keys.
     static_cast<void>(fixture.run("pin"));
-    check(fixture.view.pinned && fixture.view.focused);
+
+    const auto asked = transport.last<CreateExplorerPane>();
+
+    check(asked.layout.windows.size() == 1 && asked.layout.windows[0].machine.empty() && asked.layout.windows[0].root == root && asked.layout.windows[0].selected == "/work/project/README.md", "the runtime is asked for a pane with the windows it has");
+    check(!fixture.view.pinned && fixture.view.open && explorer::standing(fixture.client) == 0, "and it stays over the panes until the pane is there");
+    check(deliver(fixture.client, PaneKindNotice{.pane_id = Fixture::explorer_pane, .kind = PaneKind::explorer}) == application::Change::explorer);
+    deliver(fixture.client, PaneOpened{.request_id = asked.request_id, .pane_id = Fixture::explorer_pane, .location = asked.location, .created = true, .pane_generation = 1});
+    static_cast<void>(fixture.refresh());
+    check(fixture.stood == explorer::Stood::taken && fixture.view.pinned && fixture.view.focused && fixture.view.host == Fixture::explorer_pane && explorer::standing(fixture.client) == Fixture::explorer_pane);
+    check(fixture.view.windows[0]->selected.view() == "/work/project/README.md" && fixture.client.focusedPane()->id == Fixture::explorer_pane, "with the windows it had, and the focus of the tab");
+    check(fixture.scene.pane_count == 1 && fixture.scene.focused == 1, "its own pane is none it hands a file to: the one that had the focus is");
 
     auto typed = transport.sent.size();
 
@@ -583,9 +610,66 @@ namespace {
 
     check(transport.inputSince(typed) == "README.md " && fixture.view.dragged.empty());
 
-    // Over the panes again, the next one closes it.
+    // A second one is not asked for where one stands.
+    const auto panes = transport.count(ClientTag::create_explorer_pane);
+
+    // Over the panes again its pane closes, and the next file handed over closes it.
     static_cast<void>(fixture.run("pin"));
-    check(!fixture.view.pinned && fixture.strike({.key = explorer::KeyChord::Key::enter}) == explorer::Effect::closed && !fixture.view.open);
+    check(transport.count(ClientTag::create_explorer_pane) == panes && transport.last<ClosePane>().pane_id == Fixture::explorer_pane);
+    check(!fixture.view.pinned && fixture.view.host == 0 && fixture.view.open && fixture.view.focused && explorer::standing(fixture.client) == 0, "over the panes, with the windows it had");
+    deliver(fixture.client, PaneExited{.pane_id = Fixture::explorer_pane});
+    static_cast<void>(fixture.refresh());
+    check(fixture.stood == explorer::Stood::same && fixture.view.open && fixture.strike({.key = explorer::KeyChord::Key::enter}) == explorer::Effect::closed && !fixture.view.open);
+  }
+
+  // The runtime keeps where the windows of an explorer pane are: a window that finds the pane in
+  // the tab it shows stands there, and tells the runtime when they move.
+  void anExplorerPaneIsTakenWithTheWindowsItsRuntimeKeeps() {
+    Fixture fixture;
+    auto& transport = fixture.transport;
+
+    fixture.list();
+    fixture.settle();
+    explorer::close(fixture.view);
+
+    // A pane of the tab is an explorer, as the runtime says of one a session was restored with.
+    const ds::Array<ExplorerWindow, 2> kept{{
+        {.root = root, .selected = "/work/project/README.md", .sort = ExplorerSort::size, .follow = false, .hidden = true},
+        {.machine = "box", .root = "/home/ops", .lens = ExplorerLens::changes},
+    }};
+
+    check(application::workbench::splitExplorer(fixture.client, {.windows = kept.view().first(1)}));
+
+    const auto asked = transport.last<CreateExplorerPane>();
+
+    check(deliver(fixture.client, PaneKindNotice{.pane_id = Fixture::explorer_pane, .kind = PaneKind::explorer}) == application::Change::explorer);
+    check(deliver(fixture.client, ExplorerKept{.pane_id = Fixture::explorer_pane, .layout = {.windows = kept.view(), .current = 1, .side_by_side = true}}) == application::Change::explorer);
+    deliver(fixture.client, PaneOpened{.request_id = asked.request_id, .pane_id = Fixture::explorer_pane, .location = asked.location, .created = true, .pane_generation = 1});
+
+    const auto told = transport.count(ClientTag::keep_explorer);
+
+    static_cast<void>(fixture.refresh());
+    check(fixture.stood == explorer::Stood::taken && fixture.view.open && fixture.view.pinned && fixture.view.host == Fixture::explorer_pane && fixture.view.windows.size() == 2 && fixture.view.current == 1 && fixture.view.side_by_side);
+    check(fixture.view.windows[0]->machine == host.machine && fixture.view.windows[0]->root.view() == root && fixture.view.windows[0]->selected.view() == "/work/project/README.md" && fixture.view.windows[0]->sort == ExplorerSort::size && fixture.view.windows[0]->hidden && !fixture.view.windows[0]->follow);
+    check(fixture.view.windows[1]->machine == far.machine && fixture.view.windows[1]->root.view() == "/home/ops" && fixture.view.windows[1]->lens == ExplorerLens::changes, "each window on the machine its label names");
+    check(transport.count(ClientTag::keep_explorer) == told, "what the runtime said is nothing to tell it");
+
+    // A window that moves is told; a row selected is not, until the keys leave the explorer.
+    static_cast<void>(fixture.strike(control('w')));
+    static_cast<void>(fixture.press('h'));
+    check(transport.count(ClientTag::keep_explorer) == told + 1 && transport.last<KeepExplorer>().pane_id == Fixture::explorer_pane && transport.last<KeepExplorer>().layout.current == 0 && transport.last<KeepExplorer>().layout.windows[1].machine == "box");
+    static_cast<void>(fixture.press('k'));
+    static_cast<void>(fixture.press('j'));
+    check(transport.count(ClientTag::keep_explorer) == told + 1 && fixture.view.windows[0]->selected.view() != transport.last<KeepExplorer>().layout.windows[0].selected, "the row moved, and nothing was said");
+    application::workbench::focusPane(fixture.client, 1);
+    static_cast<void>(fixture.refresh());
+    check(!fixture.view.focused && fixture.view.open && transport.count(ClientTag::keep_explorer) == told + 2);
+    check(transport.last<KeepExplorer>().layout.windows[0].selected == fixture.view.windows[0]->selected.view(), "with the row it was on");
+
+    // The pane is closed from outside the explorer: it closes with it.
+    deliver(fixture.client, PaneExited{.pane_id = Fixture::explorer_pane});
+    static_cast<void>(fixture.refresh());
+    check(fixture.stood == explorer::Stood::left && !fixture.view.open && !fixture.view.pinned && fixture.view.host == 0 && explorer::docked(fixture.client.explorer, Fixture::explorer_pane) == nullptr);
   }
 
   bool same(std::span<const Byte> left, std::span<const Byte> right) {
@@ -897,7 +981,8 @@ namespace {
   const telar::testing::Case case_far{"explorer_session.a_window_on_another_machine_asks_that_machine_alone", aWindowOnAnotherMachineAsksThatMachineAlone};
   const telar::testing::Case case_plans{"explorer_session.one_plan_is_sent_to_each_machine_it_touches", onePlanIsSentToEachMachineItTouches};
   const telar::testing::Case case_hand{"explorer_session.a_file_of_another_machine_is_handed_only_there", aFileOfAnotherMachineIsHandedOnlyThere};
-  const telar::testing::Case case_beside{"explorer_session.beside_the_panes_it_stays_and_a_pane_takes_what_is_dropped_on_it", besideThePanesItStaysAndAPaneTakesWhatIsDroppedOnIt};
+  const telar::testing::Case case_beside{"explorer_session.as_a_pane_it_stays_and_a_pane_takes_what_is_dropped_on_it", asAPaneItStaysAndAPaneTakesWhatIsDroppedOnIt};
+  const telar::testing::Case case_kept{"explorer_session.an_explorer_pane_is_taken_with_the_windows_its_runtime_keeps", anExplorerPaneIsTakenWithTheWindowsItsRuntimeKeeps};
   const telar::testing::Case case_carried{"explorer_session.a_file_is_carried_from_one_machine_to_the_other", aFileIsCarriedFromOneMachineToTheOther};
 
   void theMarksAreKeptByTheRuntimeOfTheMachineTheWindowRunsOn() {

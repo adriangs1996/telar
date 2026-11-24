@@ -36,6 +36,15 @@ export namespace telar::gui::features::explorer {
     taken,
   };
 
+  // A pane of the machine that is an explorer, and the windows its runtime keeps of it, as the
+  // ExplorerKept that said them encodes: empty until it said any.
+  struct Docked {
+    explicit Docked(Memory& memory);
+
+    std::uint64_t pane = 0;
+    ds::Vec<Byte, Memory> kept;
+  };
+
   struct State {
     explicit State(Memory& made_in);
 
@@ -87,6 +96,8 @@ export namespace telar::gui::features::explorer {
     ds::Vec<Carried, Memory> carried;
     // Grows with each connection: a request that left on an earlier one is answered by none.
     std::uint64_t epoch = 0;
+    // The panes of the machine that are explorers.
+    ds::Vec<ds::Box<Docked, Memory>, Memory> docked;
   };
 
   // The directory `path` as the window holds it; none when it never asked for it.
@@ -144,6 +155,15 @@ export namespace telar::gui::features::explorer {
   bool receive(State& state, const ChangesCommitted& committed);
   bool receive(State& state, const HomeLocated& located);
   bool receive(State& state, const FileTouches& answer);
+
+  // The runtime said the pane `pane` is an explorer; and where its windows are. The pane is
+  // gone: nothing is kept of it.
+  void dock(State& state, std::uint64_t pane);
+  bool receive(State& state, const ExplorerKept& kept);
+  void undock(State& state, std::uint64_t pane) noexcept;
+
+  // The explorer pane `pane` as the window holds it; none for a pane that is no explorer.
+  [[nodiscard]] tbc::val_a<const Docked*> docked(tbc::ref_a<State> state, std::uint64_t pane) noexcept;
 
   // The runtime was asked for the places it keeps, under `request_id`.
   void recalling(State& state, std::uint64_t request_id) noexcept;

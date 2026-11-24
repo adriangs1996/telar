@@ -105,7 +105,7 @@ export namespace telar::gui::features::explorer {
   // them to it: paths typed at a shell, a mention to an agent, files opened in an editor.
   [[nodiscard]] Action hand(View& view, const State& state, const Context& context, std::uint64_t pane);
 
-  // The explorer stands beside the panes or over them, as `<C-w>T` asks; and beside them it
+  // The explorer stands as a pane beside the panes of the tab, or over them; and beside them it
   // takes the keys or leaves them to the panes.
   void pin(View& view, bool pinned) noexcept;
   void focus(View& view, bool focused) noexcept;
@@ -118,9 +118,9 @@ export namespace telar::gui::features::explorer {
     down,
   };
 
-  // The key that moves between panes was pressed in the explorer, which stands to the right of
-  // them: it goes to the explorer's window on that side. False when the panes are what is on
-  // that side, and they take the keys.
+  // The key that moves between panes was pressed in the explorer, which stands as one of them:
+  // it goes to the explorer's window on that side. False when it has none there: the pane on
+  // that side, if there is one, takes the keys.
   bool toward(View& view, Side side) noexcept;
 
   // A window shows `rows` rows; and the wheel moves what it shows by `rows` rows.

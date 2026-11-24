@@ -64,22 +64,14 @@ namespace telar::gui::qt {
     [[nodiscard]] bool available() const;
     [[nodiscard]] bool showing() const;
     [[nodiscard]] bool sideBySide() const;
-    // Whether it stands beside the panes, not over them; and whether it takes the keys, which
-    // beside the panes it does only while it was given them.
+    // Whether it stands as a pane of the tab, not over its panes; and whether it takes the keys,
+    // which as a pane it does while that pane has the focus.
     [[nodiscard]] bool pinned() const;
     [[nodiscard]] bool focused() const;
-    // The width it asks of the panes' area while it stands beside them, as the design measures
-    // it for a font of 12px: none over the panes, or closed.
-    [[nodiscard]] qreal besideWidth() const;
-    // A key that moves the focus between panes was pressed: the explorer beside them takes it
-    // to go to one of its windows, to give the keys back to the panes, or to take them from
-    // the pane next to it. False when it is the panes' to act on.
-    // With `through_editor` the key asks an editor for its own window on that side first: the
-    // editor says when it has none, and `enter` is what it leads to.
-    [[nodiscard]] bool takes(application::explorer::Side side, bool through_editor);
-    // The focus left the pane next to it toward `side`, as it leaves the last window of an
-    // editor: beside the panes and without the keys, it takes them. False otherwise.
-    [[nodiscard]] bool enter(application::explorer::Side side);
+    // A key that moves the focus between panes was pressed while the explorer's pane has it: the
+    // explorer takes it to go to its window on that side. False when it has none there, and
+    // the pane on that side is the one to focus.
+    [[nodiscard]] bool takes(application::explorer::Side side);
     // An editor asked for the explorer on a file of the machine that shows: it opens, or the
     // window that has the keys goes, to the file's directory, with the file selected. Without
     // a path, to `directory`.
@@ -142,8 +134,8 @@ namespace telar::gui::qt {
     Q_INVOKABLE void release();
     // The rows dragged were let go over a pane, which takes them as Enter would give them.
     Q_INVOKABLE void dropOnPane(qulonglong pane);
-    // Beside the panes it is given the keys, as a click in it asks, or leaves them to the panes.
-    Q_INVOKABLE void giveFocus(bool focused);
+    // A press in it asks for the keys: as a pane, its pane takes the focus.
+    Q_INVOKABLE void claimFocus();
     // A window shows `rows` rows; the wheel moves what it shows.
     Q_INVOKABLE void setViewport(int window, int rows);
     Q_INVOKABLE void scroll(int window, int rows);
@@ -236,22 +228,11 @@ namespace telar::gui::qt {
     // What the scene counted of the files the editors hold when the rows were last told.
     std::uint64_t edited_ = 0;
 
-    // The workspaces where the explorer was put beside the panes, for the life of the window:
-    // it returns there when the workspace shows again, if it was showing when it left.
-    struct Beside {
-      std::size_t machine = 0;
-      std::uint64_t workspace = 0;
-      bool directory = false;
-      bool showing = false;
-    };
-
-    [[nodiscard]] Beside here() const noexcept;
-    // Keeps what the explorer is now for the workspace that shows.
-    void remember();
-    // Shows the explorer as it now is; with `opening`, where this workspace last had it.
+    // Shows the explorer as it now is; with `opening`, it says it opened.
     void present(bool opening);
-    ds::Vec<Beside, ApplicationAllocator> beside_;
-    ds::Option<Beside> last_;
+    // Brings it to where the tab that shows has it: as its pane, or closed when it stood as a
+    // pane that is gone or shows no more. True when it closed.
+    bool settle();
     // The home of the account the window runs as, which the local machine has before its
     // runtime says it.
     QByteArray home_;
