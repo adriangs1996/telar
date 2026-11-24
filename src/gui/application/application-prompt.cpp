@@ -144,12 +144,19 @@ namespace telar::gui::application::prompt {
       ds::String<Memory> text{session.memory, features::prompt::delivery(*line)};
 
       switch (outcome) {
-      case Outcome::run:
+      case Outcome::run: {
         features::history::HistoryText::validate(text.view(), bracketed);
         session.runCommand(pane_id, text.view());
-        features::prompt::committed(*line, text.view());
-        features::prompt::remember(session.prompt, text.view());
+        // What the history does not keep, the suggestions do not offer.
+        const bool kept = session.configuration.history_filters.allowsPane(text.view(), std::string_view{pane->cwd});
+
+        features::prompt::committed(*line, kept ? text.view() : std::string_view{});
+        if (kept) {
+          features::prompt::remember(session.prompt, text.view());
+        }
+
         break;
+      }
       case Outcome::answer:
         features::history::HistoryText::validate(text.empty() ? std::string_view{" "} : text.view(), false);
         text.push('\r');

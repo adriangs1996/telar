@@ -225,11 +225,14 @@ Legend: `[ ]` todo, `[x]` done, `[~]` not a bug / dropped (with reason).
   Fix: reset `history_request` in `prompt::fail` when the id matches and in `failAll`; on
   reconnect call `requestHistory` when the history is empty. See T27 for the runtime cause.
 
-- [ ] **T18 (E17). Commands the runtime filters as secrets are still suggested.**
+- [x] **T18 (E17). Commands the runtime filters as secrets are still suggested.**
   `remember()` in the GUI ignores `history_filters` (`secrets_filter`, `command_filters`).
   Expected: what the runtime does not store is not suggested either.
   Fix: apply the same filters in `remember()`. Their types are in `lib/config`; if the
   matching logic lives in the runtime, move it to `lib` so both share it.
+  The logic already lives in `lib/config` (`HistoryFilters::allowsPane`); the window reads
+  `runtime.history` of its own configuration with the new `readHistoryFilters`. A runtime on
+  another machine keeps filtering by its own configuration.
 
 - [ ] **T19 (E18). Pasting from Ctrl+R does not reset Up/Down.**
   `prompt::write` (`prompt.cpp:267`) keeps `history_index_`; a later Down restores an old

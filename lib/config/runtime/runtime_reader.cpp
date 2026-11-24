@@ -302,17 +302,26 @@ namespace telar::runtime::config {
     destination.assign(text);
   }
 
-  template <Allocator Memory>
-  void RuntimeReader<Memory>::patterns(const lua::Value& field, HistoryPatternList& destination) {
-    if (!field.present()) {
+  void readHistoryFilters(const lua::Value& history, HistoryFilters& filters) {
+    if (!history.present()) {
       return;
     }
 
-    const auto count = field.arraySize();
+    const auto patterns = [](const lua::Value& field, HistoryPatternList& destination) {
+      if (!field.present()) {
+        return;
+      }
 
-    for (std::size_t index = 1; index <= count; ++index) {
-      destination.append(field.element(static_cast<lua_Integer>(index)).string());
-    }
+      const auto count = field.arraySize();
+
+      for (std::size_t index = 1; index <= count; ++index) {
+        destination.append(field.element(static_cast<lua_Integer>(index)).string());
+      }
+    };
+
+    filters.secrets = history.field("secrets_filter").boolean(filters.secrets);
+    patterns(history.field("command_filters"), filters.commands);
+    patterns(history.field("cwd_filters"), filters.directories);
   }
 
   template <Allocator Memory>
@@ -323,9 +332,7 @@ namespace telar::runtime::config {
 
     table.onlyFields({"path", "secrets_filter", "command_filters", "cwd_filters", "output"});
     path(table.field("path"), values_.history_path);
-    values_.history_filters.secrets = table.field("secrets_filter").boolean(values_.history_filters.secrets);
-    patterns(table.field("command_filters"), values_.history_filters.commands);
-    patterns(table.field("cwd_filters"), values_.history_filters.directories);
+    readHistoryFilters(table, values_.history_filters);
     const auto output = table.field("output");
     if (output.present()) {
       const auto mode = output.string();

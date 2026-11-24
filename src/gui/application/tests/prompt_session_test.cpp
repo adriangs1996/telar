@@ -291,6 +291,38 @@ namespace {
     check(prompt::history(client).size() == 1, "the answer loads the history");
   }
 
+  // What the runtime's history filters keep out is not suggested either.
+  void lineForgetsFilteredCommands() {
+    SystemAllocator memory;
+    Transport transport;
+    TestSession client{memory, transport};
+
+    openFirstPane(client, transport);
+    FrameBody frame;
+
+    frame.pane_id = 1;
+    frame.frame_id = 1;
+    frame.scroll.total_rows = 1;
+    deliverSingleCell(client, frame);
+    auto configuration = client.configuration;
+
+    configuration.prompt.mode = PromptMode::telar;
+    configuration.history_filters.commands.append("internal-deploy");
+    application::configuration::configure(client, configuration);
+    deliver(client, atPrompt());
+
+    const auto before = transport.sent.size();
+
+    for (const auto* command : {"export TOKEN=synthetic-test-value", " echo hidden", "internal-deploy now", "echo kept"}) {
+      typeKeys(client, command);
+      check(enter(client) == prompt::Outcome::run, "Enter runs the command");
+    }
+
+    check(transport.commandsSince(before).size() == 4, "every command still runs");
+    check(prompt::history(client).size() == 1 && prompt::history(client).front() == "echo kept", "a filtered command joins no suggestions");
+    check(prompt::line(client, 1)->recent().size() == 1 && prompt::line(client, 1)->recent().back() == "echo kept", "nor the line's own commands");
+  }
+
   // A frame of one row, the cursor at `column` on it.
   struct Row {
     std::uint64_t frame_id = 0;
@@ -1166,6 +1198,7 @@ command = "switch" : "Switch branches" , { @branch } | "status" : "Show the work
   const telar::testing::Case case_line_keeps_unsendable_commands{"prompt_session.line_keeps_unsendable_commands", lineKeepsUnsendableCommands};
   const telar::testing::Case case_line_recalls_history{"prompt_session.line_recalls_history", lineRecallsHistory};
   const telar::testing::Case case_history_is_asked_again{"prompt_session.history_is_asked_again", historyIsAskedAgain};
+  const telar::testing::Case case_line_forgets_filtered_commands{"prompt_session.line_forgets_filtered_commands", lineForgetsFilteredCommands};
   const telar::testing::Case case_line_hides_terminal_cursor{"prompt_session.line_hides_terminal_cursor", lineHidesTerminalCursor};
   const telar::testing::Case case_commands_settle_as_typed{"prompt_session.commands_settle_as_typed", commandsSettleAsTyped};
   const telar::testing::Case case_line_searches{"prompt_session.line_searches", lineSearches};

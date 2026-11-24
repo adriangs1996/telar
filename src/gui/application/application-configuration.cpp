@@ -47,6 +47,10 @@ namespace telar::gui::application {
       });
 
       features::configuration::ThemeReader::apply(settings.themes, result.themes);
+      if (const auto runtime = configuration.field("runtime"); runtime.is(LUA_TTABLE)) {
+        runtime::config::readHistoryFilters(runtime.field("history"), result.history_filters);
+      }
+
       client(settings.client, result);
       prompt(settings.client.prompt, bindings, result.prompt);
       gui(settings.gui, result);

@@ -392,6 +392,9 @@ export {
 export {
   namespace telar::runtime::config {
 
+    // The filters of a `runtime.history` table, added to `filters`: what the history does not keep.
+    void readHistoryFilters(const lua::Value& history, HistoryFilters& filters);
+
     template <Allocator Memory>
     class RuntimeReader {
     public:
@@ -401,7 +404,6 @@ export {
     private:
       void graphics(const lua::Value& table);
       static void path(const lua::Value& field, ds::String<Memory>& destination);
-      static void patterns(const lua::Value& field, HistoryPatternList& destination);
       void history(const lua::Value& table);
       void session(const lua::Value& table);
       static void helper(const lua::Value& table, CommandValues<Memory>& destination, bool engine);
