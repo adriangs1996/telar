@@ -43,12 +43,22 @@ export namespace telar::gui::application::explorer {
   using features::explorer::Window;
   using features::explorer::WindowRows;
 
+  using features::explorer::baseOf;
   using features::explorer::chosen;
+  using features::explorer::fetch;
+  using features::explorer::Fetched;
+  using features::explorer::Fetching;
+  using features::explorer::fetching;
   using features::explorer::idle_message;
+  using features::explorer::Leaves;
+  using features::explorer::leaves;
   using features::explorer::lens_count;
   using features::explorer::modeText;
+  using features::explorer::Outside;
+  using features::explorer::saidOf;
   using features::explorer::stopTransfer;
   using features::explorer::strand;
+  using features::explorer::takeOut;
   using features::explorer::toneOf;
   using features::explorer::touchedSince;
   using features::explorer::transferring;

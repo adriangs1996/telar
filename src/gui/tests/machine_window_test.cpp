@@ -43,6 +43,7 @@ static_assert(true);
 #endif
 #ifdef __APPLE__
 #include "platform/private_clipboard.hpp"
+#include "platform/promised_file.hpp"
 #endif
 #ifdef __APPLE__
 #include <QBuffer>
@@ -2758,6 +2759,236 @@ namespace {
       QVERIFY(listed_transfers->isVisible());
       // A copy leaves its original: nothing more was asked of its machine.
       QCOMPARE(fixture.remote_runtime->count(ClientTag::change_files), 1);
+
+      // Carries the file the window reads next from the other machine to where it is written
+      // on this one, whole: says where that was. With `halfway` it stops once the first part
+      // of it is written, and says the partial that holds it.
+      const auto carryToHere = [&](bool halfway) {
+        const auto reads = fixture.remote_runtime->count(ClientTag::read_file);
+        const auto writes = fixture.local_runtime->count(ClientTag::write_file);
+        const auto ends = fixture.local_runtime->count(ClientTag::end_file_write);
+        const auto asked = fixture.remote_runtime->last<ReadFile>();
+
+        if (asked.path != "/home/ops/deploy.sh" || asked.identity.inode != 9 || asked.offset != 0) {
+          return std::string{};
+        }
+
+        fixture.remote_runtime->send(FileChunk{.request_id = asked.request_id, .offset = 0, .size = 300, .end = false, .bytes = first});
+        if (!shows([&] {
+              return fixture.local_runtime->count(ClientTag::write_file) == writes + 1;
+            })) {
+          return std::string{};
+        }
+
+        const auto put = fixture.local_runtime->last<WriteFile>();
+        const std::string target{put.target};
+        const auto held = target.substr(0, target.rfind('/')) + "/.telar-partial-8899aabbccddeeff";
+
+        fixture.local_runtime->send(FileWritten{.request_id = put.request_id, .partial = held, .size = 200});
+        if (!shows([&] {
+              return fixture.remote_runtime->count(ClientTag::read_file) == reads + 1;
+            })) {
+          return std::string{};
+        }
+
+        if (halfway) {
+          return held;
+        }
+
+        const auto rest = fixture.remote_runtime->last<ReadFile>();
+
+        fixture.remote_runtime->send(FileChunk{.request_id = rest.request_id, .offset = 200, .size = 300, .end = true, .bytes = second});
+        if (!shows([&] {
+              return fixture.local_runtime->count(ClientTag::write_file) == writes + 2;
+            })) {
+          return std::string{};
+        }
+
+        fixture.local_runtime->send(FileWritten{.request_id = fixture.local_runtime->last<WriteFile>().request_id, .partial = held, .size = 300});
+        if (!shows([&] {
+              return fixture.local_runtime->count(ClientTag::end_file_write) == ends + 1;
+            })) {
+          return std::string{};
+        }
+
+        const auto kept = fixture.local_runtime->last<EndFileWrite>();
+
+        if (!kept.keep || kept.partial != held || kept.target != target) {
+          return std::string{};
+        }
+
+        fixture.local_runtime->send(FileWriteEnded{.request_id = kept.request_id, .outcome = FileOutcome::done, .path = target});
+        return target;
+      };
+      // The transfer that is on its way, which the explorer lists first; and one by its number.
+      const auto running = [&] {
+        const auto listed = explorer->transfers().value(0).toMap();
+
+        return listed.value(QStringLiteral("ended"), true).toBool() ? QVariantMap{} : listed;
+      };
+      const auto transferOf = [&](int id) {
+        for (const auto& listed : explorer->transfers()) {
+          if (listed.toMap().value(QStringLiteral("id")).toInt() == id) {
+            return listed.toMap();
+          }
+        }
+
+        return QVariantMap{};
+      };
+
+      // A file of the other machine dragged out of the window, where the system asks for no
+      // file: it is carried first to a directory of the cache, and the system's drag has its
+      // URL once it is whole.
+      application.commands()->execute(window_actions::Action::explorer);
+      QVERIFY(explorer->showing());
+      QVERIFY(shows([&] {
+        return explorer->windows().size() == 2 && explorer->rows(1)->rowCount() == 2;
+      }));
+      QCOMPARE(name(1, 1), QStringLiteral("deploy.sh"));
+
+      const QTemporaryDir cache;
+      const auto cached_reads = fixture.remote_runtime->count(ClientTag::read_file);
+
+      explorer->carryOutAs(application::explorer::Outside::caches, cache.filePath(QStringLiteral("dragged")));
+      QCOMPARE(explorer->grab(1, 1), 1);
+      explorer->dragOut(window);
+      QVERIFY(shows([&] {
+        return fixture.remote_runtime->count(ClientTag::read_file) == cached_reads + 1;
+      }));
+      QCOMPARE(explorer->draggedData()->text(), QStringLiteral("Build:/home/ops/deploy.sh"));
+      QVERIFY(!explorer->draggedData()->hasUrls());
+
+      const auto first_out = running().value(QStringLiteral("id")).toInt();
+      const auto cached = QString::fromStdString(carryToHere(false));
+
+      QVERIFY(cached.startsWith(cache.filePath(QStringLiteral("dragged/drag-"))) && cached.endsWith(QStringLiteral("/deploy.sh")));
+      QVERIFY(QFileInfo{cached}.dir().exists());
+      QVERIFY(shows([&] {
+        return explorer->draggedData()->hasUrls();
+      }));
+      QCOMPARE(explorer->draggedData()->urls(), QList<QUrl>{QUrl::fromLocalFile(cached)});
+      QCOMPARE(explorer->draggedData()->text(), QStringLiteral("Build:/home/ops/deploy.sh"));
+      QVERIFY(first_out != 0);
+      QCOMPARE(transferOf(first_out).value(QStringLiteral("phase")).toString(), QStringLiteral("arrived"));
+
+      // Let go before its file is here, the file is stopped and what had arrived is removed.
+      const auto dropped_ends = fixture.local_runtime->count(ClientTag::end_file_write);
+
+      QCOMPARE(explorer->grab(1, 1), 1);
+      explorer->dragOut(window);
+      QVERIFY(shows([&] {
+        return fixture.remote_runtime->count(ClientTag::read_file) == cached_reads + 3;
+      }));
+
+      const auto second_out = running().value(QStringLiteral("id")).toInt();
+      const auto let_go = carryToHere(true);
+
+      QVERIFY(!let_go.empty() && second_out != 0 && second_out != first_out);
+      explorer->release();
+      fixture.remote_runtime->send(FileChunk{.request_id = fixture.remote_runtime->last<ReadFile>().request_id, .offset = 200, .size = 300, .end = true, .bytes = second});
+      QVERIFY(shows([&] {
+        return fixture.local_runtime->count(ClientTag::end_file_write) == dropped_ends + 1;
+      }));
+
+      const auto removed = fixture.local_runtime->last<EndFileWrite>();
+
+      QVERIFY(!removed.keep && removed.partial == let_go);
+      fixture.local_runtime->send(FileWriteEnded{.request_id = removed.request_id, .outcome = FileOutcome::done});
+      QVERIFY(shows([&] {
+        return transferOf(second_out).value(QStringLiteral("phase")).toString() == QStringLiteral("cancelled");
+      }));
+      QVERIFY(!explorer->draggedData()->hasUrls());
+
+#ifdef Q_OS_MACOS
+      // Where the system asks for the file once the row is let go, nothing is carried before:
+      // the row is a promise, and its file is one more transfer to where the system says.
+      const QTemporaryDir desktop;
+      const auto promised_reads = fixture.remote_runtime->count(ClientTag::read_file);
+      const auto arrived = std::make_shared<PromiseAnswer>();
+      const auto wanted = desktop.filePath(QStringLiteral("deploy 2.sh")).toStdString();
+
+      explorer->carryOutAs(application::explorer::Outside::promises, cache.filePath(QStringLiteral("dragged")));
+      QCOMPARE(explorer->grab(1, 1), 1);
+      explorer->dragOut(window);
+      QCOMPARE(promisedName(explorer->draggedOut(), 0), std::string{"deploy.sh"});
+      // The row left as a promise, and nothing is carried for it until the system asks.
+      QVERIFY(running().isEmpty());
+      QVERIFY(askPromisedFile(explorer->draggedOut(), 0, wanted, arrived));
+      QVERIFY(shows([&] {
+        return fixture.remote_runtime->count(ClientTag::read_file) == promised_reads + 1;
+      }));
+      QVERIFY(!carryToHere(true).empty());
+      // It shows as any file on its way does, and the system waits.
+      QVERIFY(shows([&] {
+        return running().value(QStringLiteral("progress")).toString() == QStringLiteral("200B of 300B");
+      }));
+      QCOMPARE(running().value(QStringLiteral("route")).toString(), QStringLiteral("Build → macbook"));
+      QCOMPARE(running().value(QStringLiteral("name")).toString(), QStringLiteral("deploy 2.sh"));
+      QVERIFY(listed_transfers->isVisible());
+      QVERIFY(!arrived->answered);
+
+      const auto promised_writes = fixture.local_runtime->count(ClientTag::write_file);
+      const auto promised_ends = fixture.local_runtime->count(ClientTag::end_file_write);
+
+      QCOMPARE(std::string{fixture.local_runtime->last<WriteFile>().target}, wanted);
+      fixture.remote_runtime->send(FileChunk{.request_id = fixture.remote_runtime->last<ReadFile>().request_id, .offset = 200, .size = 300, .end = true, .bytes = second});
+      QVERIFY(shows([&] {
+        return fixture.local_runtime->count(ClientTag::write_file) == promised_writes + 1;
+      }));
+
+      const auto last_part = fixture.local_runtime->last<WriteFile>();
+      const std::string promised_partial{last_part.partial};
+
+      fixture.local_runtime->send(FileWritten{.request_id = last_part.request_id, .partial = promised_partial, .size = 300});
+      QVERIFY(shows([&] {
+        return fixture.local_runtime->count(ClientTag::end_file_write) == promised_ends + 1;
+      }));
+
+      const auto placed = fixture.local_runtime->last<EndFileWrite>();
+
+      QVERIFY(placed.keep && !placed.overwrite && std::string{placed.target} == wanted);
+      QVERIFY(!arrived->answered);
+      fixture.local_runtime->send(FileWriteEnded{.request_id = placed.request_id, .outcome = FileOutcome::done, .path = wanted});
+      QVERIFY(shows([&] {
+        return arrived->answered;
+      }));
+      QVERIFY2(arrived->failure.empty(), arrived->failure.c_str());
+
+      // Stopped on its way, what had arrived is removed and the system is told it did not come.
+      const auto stopped = std::make_shared<PromiseAnswer>();
+      const auto stopped_reads = fixture.remote_runtime->count(ClientTag::read_file);
+
+      QVERIFY(askPromisedFile(explorer->draggedOut(), 0, wanted, stopped));
+      QVERIFY(shows([&] {
+        return fixture.remote_runtime->count(ClientTag::read_file) == stopped_reads + 1;
+      }));
+
+      const auto half = carryToHere(true);
+
+      QVERIFY(!half.empty());
+      QVERIFY(!running().isEmpty());
+      explorer->cancelTransfer(running().value(QStringLiteral("id")).toInt());
+      fixture.remote_runtime->send(FileChunk{.request_id = fixture.remote_runtime->last<ReadFile>().request_id, .offset = 200, .size = 300, .end = true, .bytes = second});
+      QVERIFY(shows([&] {
+        return fixture.local_runtime->count(ClientTag::end_file_write) == promised_ends + 2;
+      }));
+
+      const auto unwound = fixture.local_runtime->last<EndFileWrite>();
+
+      QVERIFY(!unwound.keep && unwound.partial == half);
+      QVERIFY(!stopped->answered);
+      fixture.local_runtime->send(FileWriteEnded{.request_id = unwound.request_id, .outcome = FileOutcome::done});
+      QVERIFY(shows([&] {
+        return stopped->answered;
+      }));
+      QVERIFY(!stopped->failure.empty());
+
+      // A name that is no entry of the directory the system gave is refused at once.
+      const auto refused = std::make_shared<PromiseAnswer>();
+
+      QVERIFY(askPromisedFile(explorer->draggedOut(), 0, (desktop.path() + QStringLiteral("/..")).toStdString(), refused));
+      QVERIFY(refused->answered && !refused->failure.empty());
+#endif
     }
   };
 

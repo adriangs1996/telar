@@ -763,6 +763,131 @@ namespace telar::gui::features::explorer {
     return true;
   }
 
+  namespace {
+
+    // The machine the window runs on, when its runtime answers; 0 otherwise.
+    std::uint64_t reachedHere(const Context& context) noexcept {
+      for (const auto& machine : context.machines) {
+        if (machine.local && machine.reach == Reach::answers) {
+          return machine.id;
+        }
+      }
+
+      return 0;
+    }
+
+    // Whether `id` is the machine the window runs on.
+    bool isHere(const Context& context, std::uint64_t id) noexcept {
+      return std::ranges::any_of(context.machines, [&](const MachineFact& machine) {
+        return machine.id == id && machine.local;
+      });
+    }
+
+    // Whether a row that left is a file of another machine: what the window can carry out.
+    bool carriedOut(const Context& context, const Yanked& item) noexcept {
+      return !item.directory && !item.link && !isHere(context, item.machine);
+    }
+
+    // Whether the files of another machine among the rows that left are few and small enough
+    // to be carried before the system has the rows.
+    bool carriedFirst(const View& view, const Context& context) noexcept {
+      std::size_t files = 0;
+      std::uint64_t bytes = 0;
+
+      for (const auto& item : view.left) {
+        if (carriedOut(context, item)) {
+          ++files;
+          // A sum past what a number holds is past the bound as well.
+          bytes = item.size > LeavingLimits::cached_bytes ? LeavingLimits::cached_bytes + 1 : bytes + item.size;
+        }
+      }
+
+      return files <= LeavingLimits::cached_files && bytes <= LeavingLimits::cached_bytes;
+    }
+
+    // Whether `name` names one entry of a directory, and nothing above or below it.
+    constexpr bool namesOneEntry(std::string_view name) noexcept {
+      return !name.empty() && name != "." && name != ".." && name.size() <= FileLimits::name_bytes && name.find_first_of(std::string_view{"/\0", 2}) == std::string_view::npos;
+    }
+
+  }
+
+  std::size_t takeOut(View& view) {
+    view.left = std::move(view.dragged);
+    view.dragged = ds::Vec<Yanked, Memory>{view.memory};
+    return view.left.size();
+  }
+
+  Leaves leaves(const View& view, const Context& context, std::size_t index, Outside outside) noexcept {
+    if (index >= view.left.size() || isHere(context, view.left[index].machine)) {
+      return Leaves::file;
+    }
+
+    if (!carriedOut(context, view.left[index]) || reachedHere(context) == 0) {
+      return Leaves::named;
+    }
+
+    switch (outside) {
+    case Outside::promises:
+      return Leaves::promised;
+    case Outside::caches:
+      return carriedFirst(view, context) ? Leaves::cached : Leaves::named;
+    case Outside::names:
+      return Leaves::named;
+    }
+
+    return Leaves::named;
+  }
+
+  std::uint32_t fetch(View& view, const Context& context, const Fetched& fetched) {
+    const auto here = reachedHere(context);
+
+    if (here == 0 || fetched.index >= view.left.size() || !carriedOut(context, view.left[fetched.index]) || view.transfers.size() >= TransferLimits::kept) {
+      return 0;
+    }
+
+    const auto& item = view.left[fetched.index];
+    const auto name = fetched.name.empty() ? baseOf(item.path.view()) : fetched.name;
+
+    if (!fetched.directory.starts_with('/') || fetched.directory.size() + 1 + name.size() > FileLimits::path_bytes || !namesOneEntry(name)) {
+      return 0;
+    }
+
+    auto& transfer = add(view.transfers, view.next_transfer, TransferKind::copy);
+
+    transfer.from = item.machine;
+    transfer.source.assign(item.path.view());
+    transfer.identity = item.identity;
+    transfer.size = item.size;
+    transfer.to = here;
+    transfer.directory.assign(fetched.directory.size() > 1 && fetched.directory.ends_with('/') ? fetched.directory.substr(0, fetched.directory.size() - 1) : fetched.directory);
+    transfer.name.assign(name);
+    transfer.batch = view.next_batch++;
+
+    const auto started = transfer.id;
+
+    // A window that shows the directory lists the file on its way.
+    unbuild(view.windows, here);
+    ++view.revision;
+    return started;
+  }
+
+  Fetching fetching(const View& view, std::uint32_t id) noexcept {
+    const auto* const transfer = std::ranges::find(view.transfers, id, &Transfer::id);
+
+    if (transfer == view.transfers.end() || transfer->phase == TransferPhase::failed || transfer->phase == TransferPhase::cancelled) {
+      return Fetching::failed;
+    }
+
+    return transfer->phase == TransferPhase::arrived ? Fetching::arrived : Fetching::carried;
+  }
+
+  tbc::val_a<std::string_view> saidOf(tbc::ref_a<View> view, std::uint32_t id) noexcept {
+    const auto* const transfer = std::ranges::find(view.transfers, id, &Transfer::id);
+
+    return transfer == view.transfers.end() ? std::string_view{} : transfer->said.view();
+  }
+
   std::size_t stopTransfers(View& view, std::uint64_t machine) {
     std::size_t stopped = 0;
 

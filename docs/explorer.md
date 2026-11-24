@@ -215,6 +215,23 @@ editor opens and a file manager copies, and a file of another machine as `LABEL:
 the text `yy` copies. The explorer holds them no more once they leave: dragged back in, they
 are files dropped as any other program's are.
 
+A file of another machine dragged out is also the file itself, which the window downloads:
+
+- **macOS.** The row is a promise of the file. Let go on the desktop, on a folder of the
+  Finder or on a program that takes files, the system says where it wants it and the window
+  carries it there, under the name the system gave. Nothing is carried for a row that is let
+  go where no file is wanted.
+- **Linux.** The system asks for no file after the drop, so the files are carried first: to
+  `dragged/` in the window's directory of your cache, `~/.cache/Telar/telar-gui` unless
+  `XDG_CACHE_HOME` says another, and the rows are given to the system once they are whole
+  there, as files. Only what is small goes that way, 8 files and 32 MiB a drag at most; past
+  either the rows leave at once, as text. Letting go before the files are here stops them. A
+  drag's directory is removed a day after it was last written.
+
+Either way the file is [one more transfer](#between-machines): it shows in the sidebar with
+its progress, `:cancel` stops it and removes what had arrived, and a name that is taken where
+it goes is not replaced. A directory or a link of another machine leaves as its text alone.
+
 ## Git
 
 | Keys | What they do |
@@ -329,6 +346,7 @@ other, 256 KiB at a time, and holds one such piece of it and no more.
 | `yy` in a window, `p` in a window on another machine, `:w` | The plan has a COPY line that names both machines, as `box:/home/ops/deploy.sh`. A yes starts the transfer. |
 | `dd`, `p` on another machine, `:w` | A MOVE line. The original goes to the trash of its machine once the copy is whole and has its name, and not before. |
 | A drag onto a window of another machine | A copy; with Shift held, a move. On its own machine a drag moves, and copies with Alt. |
+| A file of another machine dragged out of the window | A copy where it is let go: on macOS where the system asks for it, on Linux through the cache. See [the pointer](#with-the-pointer). |
 | Enter or `@` on a file, with the focused pane on another machine | The line under the windows asks `bring a copy there? [y/N]`. With `y` the file goes to `~/Downloads/telar/LABEL/` on the pane's machine, in a directory made when it is missing, and its path is typed at the pane once it is whole. Any other key leaves it. |
 | `:cancel` | Stops the files on their way to or from the machine of this window; `:cancel!` stops every one. |
 
@@ -399,9 +417,11 @@ by its name, or to nothing. The help, the hints and the menus then show the keys
 
 - A transfer does not go on after its machine was disconnected and connected again: it
   fails, and is started again by hand.
-- A file of another machine is not downloaded by dragging it out to the desktop or to another
-  program: that takes a promise of a file the window would fill on the drop, and what leaves
-  is its path as text. [Bring a copy](#between-machines) with a paste or a drop in a window.
+- A directory of another machine is not downloaded by dragging it out of the window, only a
+  file is: [carry it](#between-machines) with a paste or a drop in a window. On Linux a file
+  larger than the bound is not either, and neither X11's direct save nor a file asked for
+  after the drop is used: the files are carried before the drag has them. telar is not built
+  for Windows, so its virtual files are not written.
 - Two windows that show the same explorer pane do not follow each other: each reads where its
   windows are when the pane comes into view, and the runtime keeps what it was last given.
 - An explorer pane takes the half of the pane it splits, as any pane does, whatever the width

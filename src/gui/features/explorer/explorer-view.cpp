@@ -1057,6 +1057,7 @@ namespace telar::gui::features::explorer {
         history(memory),
         yanked(memory),
         dragged(memory),
+        left(memory),
         marks(memory),
         jumps(memory),
         draft(memory),

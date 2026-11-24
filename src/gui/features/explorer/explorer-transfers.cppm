@@ -114,6 +114,68 @@ export namespace telar::gui::features::explorer {
   // explorer keeps as many transfers as it can.
   bool bring(View& view);
 
+  // What the window can make of a file of another machine that is dragged out of it.
+  enum class Outside : std::uint8_t {
+    // The system asks for the file once it is let go, and it is carried then.
+    promises,
+    // The file is carried first to a directory of the machine the window runs on, while what
+    // is dragged is small.
+    caches,
+    // Nothing of the file: its machine and its path, as text.
+    names,
+  };
+
+  // What a row that left the window is to the program it is let go on.
+  enum class Leaves : std::uint8_t {
+    // A file or a directory of the machine the window runs on: its own path.
+    file,
+    promised,
+    cached,
+    named,
+  };
+
+  struct LeavingLimits {
+    // What a drag carries first to this machine: past either, its files are named and not carried.
+    static constexpr std::size_t cached_files = 8;
+    static constexpr std::uint64_t cached_bytes = 32ULL * 1024 * 1024;
+  };
+
+  // The rows dragged leave the window: they are kept as the ones that left, in place of the
+  // last that did, and the explorer drags them no more. Returns how many.
+  std::size_t takeOut(View& view);
+
+  // What the row `index` of the ones that left is outside the window. Only a file is carried:
+  // a directory or a link of another machine is named, and so is every file when the window
+  // reaches no runtime of the machine it runs on.
+  [[nodiscard]] Leaves leaves(const View& view, const Context& context, std::size_t index, Outside outside) noexcept;
+
+  // Where a file that left the window is asked for: the directory of the machine the window
+  // runs on, and the name it takes there, its own when none is given.
+  struct Fetched {
+    std::size_t index = 0;
+    std::string_view directory;
+    std::string_view name;
+  };
+
+  // Starts to carry the file `index` of the ones that left to where it is asked for. Returns
+  // its transfer's id, and 0 when it starts none: the row is not a file of another machine, the
+  // name is no name of one entry, the directory is no absolute path, or the explorer keeps as
+  // many transfers as it can.
+  std::uint32_t fetch(View& view, const Context& context, const Fetched& fetched);
+
+  // How the transfer `id` stands: on its way, whole where it goes, or not arrived, which is
+  // also what is said of one the explorer no longer keeps.
+  enum class Fetching : std::uint8_t {
+    carried,
+    arrived,
+    failed,
+  };
+
+  [[nodiscard]] Fetching fetching(const View& view, std::uint32_t id) noexcept;
+
+  // Why the transfer `id` did not arrive; empty when it says nothing.
+  [[nodiscard]] tbc::val_a<std::string_view> saidOf(tbc::ref_a<View> view, std::uint32_t id) noexcept;
+
   // Asks the transfers to or from `machine` to stop, or every one when it is 0. Returns how
   // many. One stops once no request of its is in flight, which `halt` then does.
   std::size_t stopTransfers(View& view, std::uint64_t machine);

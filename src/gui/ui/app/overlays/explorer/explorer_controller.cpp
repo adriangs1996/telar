@@ -13,15 +13,18 @@ static_assert(true);
 #include <QDrag>
 #include <QGuiApplication>
 #include <QKeyEvent>
+#include <QStandardPaths>
 #include <QVarLengthArray>
 #include <QVariantList>
 #include <algorithm>
 #include <chrono>
 #include <exception>
 #include <string_view>
+#include <utility>
 
 import telar.gui.application;
 import telar.gui.foundation.icons;
+import telar.gui.foundation.system;
 
 namespace telar::gui::qt {
   namespace {
@@ -191,6 +194,10 @@ namespace telar::gui::qt {
       : QObject(parent),
         store_(store),
         view_(memory),
+        promised_(memory),
+        waited_(memory),
+        outside_(platform::file_promises ? explorer::Outside::promises : explorer::Outside::caches),
+        drag_cache_(QStandardPaths::writableLocation(QStandardPaths::CacheLocation) + QStringLiteral("/dragged")),
         home_(QDir::homePath().toUtf8()),
         scene_(memory),
         away_(memory) {
@@ -721,6 +728,7 @@ namespace telar::gui::qt {
   bool ExplorerController::carry() {
     if (view_.transfers.empty()) {
       transfers_tick_.stop();
+      settleOut();
       return false;
     }
 
@@ -746,6 +754,7 @@ namespace telar::gui::qt {
       transfers_tick_.start();
     }
 
+    settleOut();
     return changed;
   }
 
@@ -1049,34 +1058,43 @@ namespace telar::gui::qt {
     finish(Effect::none);
   }
 
+  namespace {
+
+    // What a row is to a program that reads text: its path, after its machine when that is
+    // another, as scp and rsync read it and as `yy` writes it.
+    QString lineOf(const explorer::Context& context, std::string_view path) {
+      const auto text = toQString(path);
+
+      return context.local ? text : toQString(context.machine) + QLatin1Char{':'} + text;
+    }
+
+    std::string_view bytesOf(const QByteArray& text) {
+      return {text.constData(), static_cast<std::size_t>(text.size())};
+    }
+
+  }
+
   std::unique_ptr<QMimeData> ExplorerController::draggedData() {
     observe();
 
     const auto around = explorer::around(scene_);
+    const bool held = !view_.dragged.empty();
     auto data = std::make_unique<QMimeData>();
-    QString text;
-    QList<QUrl> urls;
+    QStringList lines;
+    // Of the rows that left, the files that were carried here for them.
+    QList<QUrl> urls = held ? QList<QUrl>{} : fetched_;
 
-    for (const auto& item : view_.dragged) {
+    for (const auto& item : held ? view_.dragged.view() : view_.left.view()) {
       const auto context = explorer::contextOf(around, item.machine);
-      const auto path = toQString(item.path.view());
 
-      if (!text.isEmpty()) {
-        text += QLatin1Char{'\n'};
-      }
-
+      lines.push_back(lineOf(context, item.path.view()));
       if (context.local) {
-        urls.push_back(QUrl::fromLocalFile(path));
-      } else {
-        // A path of another machine says which, as scp and rsync read it and as `yy` writes it.
-        text += toQString(context.machine) + QLatin1Char{':'};
+        urls.push_back(QUrl::fromLocalFile(toQString(item.path.view())));
       }
-
-      text += path;
     }
 
-    if (!text.isEmpty()) {
-      data->setText(text);
+    if (!lines.isEmpty()) {
+      data->setText(lines.join(QLatin1Char{'\n'}));
     }
 
     if (!urls.isEmpty()) {
@@ -1086,10 +1104,192 @@ namespace telar::gui::qt {
     return data;
   }
 
-  void ExplorerController::dragOut() {
+  void ExplorerController::carryOutAs(explorer::Outside outside, const QString& cache) {
+    outside_ = outside;
+    drag_cache_ = cache;
+  }
+
+  void ExplorerController::dragOut(QQuickWindow* window) {
+    observe();
+    abandonOut();
+    fetched_.clear();
+    if (explorer::takeOut(view_) == 0) {
+      return;
+    }
+
+    const auto around = explorer::around(scene_);
+    const auto here = explorer::contextOf(around, scene_.shown);
+    QStringList lines;
+    // As many rows as a drag most often carries stay on the stack.
+    constexpr qsizetype usual_rows = 8;
+    QVarLengthArray<std::size_t, usual_rows> cached;
+    bool promised = false;
+
+    for (std::size_t index = 0; index < view_.left.size(); ++index) {
+      const auto& item = view_.left[index];
+
+      lines.push_back(lineOf(explorer::contextOf(around, item.machine), item.path.view()));
+      switch (explorer::leaves(view_, here, index, outside_)) {
+      case explorer::Leaves::promised:
+        promised = true;
+        break;
+      case explorer::Leaves::cached:
+        cached.push_back(index);
+        break;
+      case explorer::Leaves::file:
+      case explorer::Leaves::named:
+        break;
+      }
+    }
+
+    if (promised && window != nullptr) {
+      promiseOut(*window, lines);
+    } else if (!cached.isEmpty() && fetchFirst(std::span<const std::size_t>{cached})) {
+      // The system has the rows once their files are here; until then they can be let go.
+      leaving_ = true;
+      synchronize();
+    } else {
+      beginDrag();
+    }
+  }
+
+  void ExplorerController::promiseOut(QQuickWindow& window, const QStringList& lines) {
+    const auto around = explorer::around(scene_);
+    const auto here = explorer::contextOf(around, scene_.shown);
+    const auto count = view_.left.size();
+    constexpr qsizetype usual_rows = 8;
+    QVarLengthArray<QByteArray, usual_rows> texts;
+    QVarLengthArray<platform::DraggedOut, usual_rows> rows;
+
+    // The rows read the lines where they are kept, once all of them are.
+    for (const auto& line : lines) {
+      texts.push_back(line.toUtf8());
+    }
+
+    for (std::size_t index = 0; index < count && std::cmp_less(index, texts.size()); ++index) {
+      const auto& item = view_.left[index];
+      const auto kind = explorer::leaves(view_, here, index, outside_);
+
+      rows.push_back({
+          .text = bytesOf(texts.at(static_cast<qsizetype>(index))),
+          .path = kind == explorer::Leaves::file ? item.path.view() : std::string_view{},
+          .promised = kind == explorer::Leaves::promised ? explorer::baseOf(item.path.view()) : std::string_view{},
+          .row = static_cast<std::uint32_t>(index),
+      });
+    }
+
+    // The system asks after the drag ended, and for as long as the rows are kept: no longer than
+    // this controller is.
+    static_cast<void>(drag_.give(window, std::span<const platform::DraggedOut>{rows}, [this](const platform::PromisedFile& file) {
+      fetchPromised(file);
+    }));
+  }
+
+  void ExplorerController::fetchPromised(const platform::PromisedFile& file) {
+    observe();
+
+    const auto around = explorer::around(scene_);
+    const auto transfer = explorer::fetch(view_, explorer::contextOf(around, scene_.shown), {.index = file.row, .directory = file.directory, .name = file.name});
+
+    if (transfer == 0) {
+      drag_.end(file.ticket, "telar carries no file there");
+      return;
+    }
+
+    promised_.push({.transfer = transfer, .ticket = file.ticket, .path = {}});
+    synchronize();
+  }
+
+  bool ExplorerController::fetchFirst(std::span<const std::size_t> rows) {
+    const auto root = drag_cache_.toUtf8();
+    QByteArray directory;
+
+    {
+      ds::String<Memory> made{view_.memory};
+
+      if (!openDragCache(made, bytesOf(root), scene_.now)) {
+        return false;
+      }
+
+      directory = QByteArray{made.view().data(), static_cast<qsizetype>(made.view().size())};
+    }
+
+    for (const auto row : rows) {
+      if (row >= view_.left.size()) {
+        continue;
+      }
+
+      // Under its own name, which is read before the transfer is added to what the view holds.
+      const auto path = QString::fromUtf8(directory) + QLatin1Char{'/'} + toQString(explorer::baseOf(view_.left[row].path.view()));
+      const auto around = explorer::around(scene_);
+      const auto transfer = explorer::fetch(view_, explorer::contextOf(around, scene_.shown), {.index = row, .directory = bytesOf(directory), .name = {}});
+
+      if (transfer != 0) {
+        waited_.push({.transfer = transfer, .ticket = 0, .path = path});
+      }
+    }
+
+    return !waited_.empty();
+  }
+
+  void ExplorerController::settleOut() {
+    for (std::size_t index = promised_.size(); index-- > 0;) {
+      const auto transfer = promised_[index].transfer;
+      const auto state = explorer::fetching(view_, transfer);
+
+      if (state == explorer::Fetching::carried) {
+        continue;
+      }
+
+      const auto said = explorer::saidOf(view_, transfer);
+      const QByteArray why{said.data(), static_cast<qsizetype>(said.size())};
+      const auto ticket = promised_.remove(index).ticket;
+
+      // The system is told last: what it does then may ask for another file.
+      if (state == explorer::Fetching::arrived) {
+        drag_.end(ticket, {});
+      } else {
+        drag_.end(ticket, why.isEmpty() ? std::string_view{"the file did not arrive"} : bytesOf(why));
+      }
+    }
+
+    const bool waiting = std::ranges::any_of(waited_, [&](const Awaited& awaited) {
+      return explorer::fetching(view_, awaited.transfer) == explorer::Fetching::carried;
+    });
+
+    if (!leaving_ || waiting) {
+      return;
+    }
+
+    // One that did not arrive is still named by its line of text.
+    for (const auto& awaited : waited_) {
+      if (explorer::fetching(view_, awaited.transfer) == explorer::Fetching::arrived) {
+        fetched_.push_back(QUrl::fromLocalFile(awaited.path));
+      }
+    }
+
+    waited_.clear();
+    leaving_ = false;
+    beginDrag();
+  }
+
+  void ExplorerController::abandonOut() {
+    if (!leaving_) {
+      return;
+    }
+
+    // What is still on its way is stopped, and what had arrived of it is removed.
+    for (const auto& awaited : waited_) {
+      static_cast<void>(explorer::stopTransfer(view_, awaited.transfer));
+    }
+
+    waited_.clear();
+    leaving_ = false;
+  }
+
+  void ExplorerController::beginDrag() {
     auto data = draggedData();
 
-    explorer::release(view_);
     if (!data->hasText()) {
       return;
     }
@@ -1106,6 +1306,10 @@ namespace telar::gui::qt {
 
   void ExplorerController::release() {
     explorer::release(view_);
+    if (leaving_) {
+      abandonOut();
+      synchronize();
+    }
   }
 
   void ExplorerController::dropOnPane(qulonglong pane) {

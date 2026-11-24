@@ -4,6 +4,7 @@ static_assert(true);
 #endif
 
 #include "foundation/core/application_memory.hpp"
+#include "platform/file_drag.hpp"
 #include "ui/kit/models/list_model.hpp"
 #include "ui/kit/store/store.hpp"
 #include <QAbstractItemModel>
@@ -11,7 +12,9 @@ static_assert(true);
 #include <QMimeData>
 #include <QObject>
 #include <QPointF>
+#include <QQuickWindow>
 #include <QString>
+#include <QStringList>
 #include <QTimer>
 #include <QUrl>
 #include <QVariantList>
@@ -20,6 +23,8 @@ static_assert(true);
 #include <cstddef>
 #include <cstdint>
 #include <memory>
+#include <span>
+#include <string_view>
 
 #pragma once
 
@@ -122,13 +127,26 @@ namespace telar::gui::qt {
     // are copied to another unless one of them says otherwise.
     [[nodiscard]] Q_INVOKABLE QVariantMap aim(int window, int row, bool copy, bool move) const;
     Q_INVOKABLE void drop(int window, int row, bool copy, bool move);
-    // The rows dragged left the window: another program takes them from here on, as what
-    // `draggedData` says they are, and the explorer holds them no more.
-    Q_INVOKABLE void dragOut();
-    // What a program outside the window is given of the rows dragged: a line of text each, the
-    // path of a file of the machine the window runs on and `label:/path` of another's; and of
-    // the first kind a file URL as well.
+    // The rows dragged left `window`: another program takes them from here on, and the explorer
+    // holds them no more. A file of another machine is carried to this one for it: once the
+    // system asks for it, where it promises files, or before the rows are given to the system
+    // where it does not, while what is dragged is small.
+    Q_INVOKABLE void dragOut(QQuickWindow* window);
+    // What a program outside the window is given of the rows dragged, or of the ones that last
+    // left: a line of text each, the path of a file of the machine the window runs on and
+    // `label:/path` of another's; and a file URL of each of the first kind, and of each file of
+    // another machine that was carried here first.
     [[nodiscard]] std::unique_ptr<QMimeData> draggedData();
+    // What the window makes of a file of another machine that is dragged out, and the directory
+    // it keeps those it carries first in: the platform's, unless a test says another.
+    void carryOutAs(application::explorer::Outside outside, const QString& cache);
+
+    // The rows that last left as the system's drag has them: a test asks a promise among them
+    // for its file, as the system does once the row is let go.
+    [[nodiscard]] const platform::FileDrag& draggedOut() const noexcept {
+      return drag_;
+    }
+
     // Asks a file on its way between two machines to stop.
     Q_INVOKABLE void cancelTransfer(int id);
     Q_INVOKABLE void release();
@@ -190,6 +208,22 @@ namespace telar::gui::qt {
     // when what the explorer shows of them changed.
     bool carry();
     [[nodiscard]] QVariantList describeTransfers(const application::explorer::Around& around) const;
+    // The system asked for the file a row of the ones that left promised: it is carried to where
+    // the system wants it, which is told how that ended.
+    void fetchPromised(const platform::PromisedFile& file);
+    // Gives the rows that left to the system's drag, the files of another machine among them
+    // as promises.
+    void promiseOut(QQuickWindow& window, const QStringList& lines);
+    // Starts to carry the rows `rows` of the ones that left to a directory of the cache. False
+    // when none starts.
+    bool fetchFirst(std::span<const std::size_t> rows);
+    // Tells the system of the promised files that ended, and gives it the rows that waited for
+    // their files once none is on its way.
+    void settleOut();
+    // The rows that waited for their files were let go before the system had them.
+    void abandonOut();
+    // Gives the rows that left to Qt's drag, as what `draggedData` says they are.
+    void beginDrag();
     // A key a chord names, given to the explorer; false for one it has no use for.
     bool strike(int key, const QString& text, int modifiers);
     // What a use case asks of the panes and of the runtimes, done; and what it asks of the
@@ -222,6 +256,25 @@ namespace telar::gui::qt {
     // Runs while a file is on its way between two machines: its rate is told again, and one
     // that ended leaves the list in a while.
     QTimer transfers_tick_;
+
+    // A file the system asked for, or one a drag waits for: its transfer, the ticket that tells
+    // the system how it ended, and where it arrives.
+    struct Awaited {
+      std::uint32_t transfer = 0;
+      std::uint64_t ticket = 0;
+      QString path;
+    };
+
+    // The rows that last left, as the system's drag has them, with the files they promise.
+    platform::FileDrag drag_;
+    ds::Vec<Awaited, Memory> promised_;
+    ds::Vec<Awaited, Memory> waited_;
+    // Whether the rows that left wait for their files before the system's drag has them, and
+    // the files that arrived for them.
+    bool leaving_ = false;
+    QList<QUrl> fetched_;
+    application::explorer::Outside outside_;
+    QString drag_cache_;
     // Where the pointer asked for the menu; below zero when the keys did.
     QPointF menu_at_{-1, -1};
     std::uint64_t revision_ = 0;

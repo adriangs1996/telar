@@ -255,13 +255,13 @@ FocusScope {
     }
 
     // The pointer took the rows out of the window: another program takes them from there, as
-    // paths, and the explorer shows no drag of its own.
+    // paths and as files, and the explorer shows no drag of its own.
     function leaveWindow() {
         dragging = false;
         dropWindow = -1;
         dropRow = -1;
         dropPane = "";
-        controller.dragOut();
+        controller.dragOut(root.Window.window);
         settleFocus();
     }
 
@@ -1126,6 +1126,9 @@ FocusScope {
                         property int pressedRow: -1
                         property point pressedAt: Qt.point(0, 0)
                         property bool waiting: false
+                        // The rows it held left the window: when the button comes up they are
+                        // let go, if the system does not have them yet.
+                        property bool gone: false
 
                         function rowOf(mouse) {
                             return pane.modelData.top + root.rowAt(mouse.y);
@@ -1177,6 +1180,7 @@ FocusScope {
                             if (scene.x < 0 || scene.y < 0 || scene.x >= root.Window.width || scene.y >= root.Window.height) {
                                 waiting = false;
                                 pressedRow = -1;
+                                gone = true;
                                 root.leaveWindow();
                                 return;
                             }
@@ -1186,15 +1190,21 @@ FocusScope {
                         onReleased: mouse => {
                             if (root.dragging)
                                 root.endDrag(true);
+                            else if (gone)
+                                root.controller.release();
                             else if (waiting && mouse.button === Qt.LeftButton)
                                 root.controller.select(pane.index, pressedRow, false, false);
                             waiting = false;
+                            gone = false;
                             pressedRow = -1;
                         }
                         onCanceled: {
                             if (root.dragging)
                                 root.endDrag(false);
+                            else if (gone)
+                                root.controller.release();
                             waiting = false;
+                            gone = false;
                             pressedRow = -1;
                         }
                         onDoubleClicked: mouse => {

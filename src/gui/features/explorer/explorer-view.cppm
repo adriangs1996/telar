@@ -615,6 +615,9 @@ export namespace telar::gui::features::explorer {
     PasteKind yank = PasteKind::copy;
     // The rows the pointer drags, from when it took hold of one until it lets go.
     ds::Vec<Yanked, Memory> dragged;
+    // The rows the pointer last took out of the window, which another program may ask for long
+    // after the explorer let them go: until the next ones leave.
+    ds::Vec<Yanked, Memory> left;
     Menu menu;
     ds::Vec<Place, Memory> marks;
     ds::Vec<Place, Memory> jumps;

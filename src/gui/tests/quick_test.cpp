@@ -2049,6 +2049,26 @@ return {api_version = 2, client = {
       press(QStringLiteral("u"));
       QCOMPARE(explorer->line().value(QStringLiteral("edits")).toInt(), 0);
 
+      // Taken past the window's edge the row is another program's: the explorer drags it no
+      // more, changes nothing, and what it gives of it is the file's path and its URL.
+      {
+        const QPoint past_edge{-12, over(QStringLiteral("sidebar.md")).y()};
+
+        QTest::mousePress(window_, Qt::LeftButton, Qt::NoModifier, over(QStringLiteral("remote.md")));
+        QTest::mouseMove(window_, over(QStringLiteral("sidebar.md")));
+        QTRY_VERIFY(overlay->property("dragging").toBool());
+        QTest::mouseMove(window_, past_edge);
+        QTRY_VERIFY(!overlay->property("dragging").toBool());
+
+        const auto outside = explorer->draggedData();
+
+        QCOMPARE(outside->text(), root + QStringLiteral("/docs/remote.md"));
+        QCOMPARE(outside->urls(), QList<QUrl>{QUrl::fromLocalFile(root + QStringLiteral("/docs/remote.md"))});
+        QTest::mouseRelease(window_, Qt::LeftButton, Qt::NoModifier, past_edge);
+        QCOMPARE(explorer->line().value(QStringLiteral("edits")).toInt(), 0);
+        QCOMPARE(explorer->line().value(QStringLiteral("mode")).toString(), QStringLiteral("normal"));
+      }
+
       // A file dragged in from outside the window is held as rows dragged are, and let go on a
       // directory it is a copy to write: nothing is written by the drop.
       {
