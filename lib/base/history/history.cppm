@@ -14,6 +14,18 @@ export {
       return byte >= 'A' && byte <= 'Z' ? byte + ('a' - 'A') : byte;
     }
 
+    // The simple case fold the history's search reads text with, the same for a query of any
+    // length: ASCII, Latin-1, Latin Extended-A, Greek, Cyrillic, Armenian, Georgian, Latin
+    // Extended Additional, the letterlike signs and the fullwidth forms. A character it does not
+    // fold is itself. No character folds to a longer UTF-8 sequence than its own.
+    std::uint32_t historyFold(std::uint32_t character) noexcept;
+
+    // `text` folded into `out`, UTF-8 in and out, which must hold text.size() bytes; a byte that
+    // starts no character is copied. The bytes written.
+    std::size_t historyFold(std::string_view text, std::span<char> out) noexcept;
+
+    // How well `query` matches `command` as a subsequence of folded characters; none when it does
+    // not.
     ds::Option<std::uint32_t> historyScore(std::string_view command, std::string_view query) noexcept;
 
     std::string_view historyGroup(std::string_view command) noexcept;

@@ -194,6 +194,27 @@ INSERT INTO command VALUES (1, x'01', 1, 0, 1, 1, 'legacy command', 0, '/legacy'
     check(commands(store, reply, QueryHistory{.request_id = 1, .query = "needle", .match = HistoryMatch::fuzzy, .distinct = true, .limit = 10}) == std::vector<std::string>{"needle in the haystack"}, "an older command is found past the runs of a newer one");
   }
 
+  // The same case folding at any query length, beyond ASCII, and the fuzzy search compares
+  // characters, not the bytes of other characters.
+  void testFoldsCaseAtAnyLength() {
+    telar::testing::TestMemory adapter;
+    ConcurrentMemory& memory = adapter;
+    HistoryStore store{memory, ":memory:"};
+    EncodedReply reply{memory};
+    const auto owner = session(1, "/work");
+
+    for (const auto* command : {"echo ÉCOLE", "echo école", "echo \xc3\x83\xc2\xa9"}) {
+      finished(store, owner, command, "/work");
+    }
+
+    const std::vector<std::string> both{"echo ÉCOLE", "echo école"};
+
+    check(commands(store, reply, QueryHistory{.request_id = 1, .query = "éc", .limit = 10}) == both, "a short query folds as a long one does");
+    check(commands(store, reply, QueryHistory{.request_id = 2, .query = "écol", .limit = 10}) == both, "a long query folds");
+    check(commands(store, reply, QueryHistory{.request_id = 3, .query = "ÉC", .match = HistoryMatch::fuzzy, .limit = 10}) == both, "the fuzzy search folds the same way");
+    check(commands(store, reply, QueryHistory{.request_id = 4, .query = "é", .match = HistoryMatch::fuzzy, .limit = 10}) == both, "and never matches the bytes of other characters");
+  }
+
   void testFailedWriteRollsBack() {
     telar::testing::TestMemory adapter;
     ConcurrentMemory& memory = adapter;
@@ -573,6 +594,7 @@ INSERT INTO command VALUES (1, x'01', 1, 0, 1, 1, 'legacy command', 0, '/legacy'
   const telar::testing::Case case_strips_marks_from_stored_output{"history_store.strips_marks_from_stored_output", testStripsMarksFromStoredOutput};
   const telar::testing::Case case_removes_every_run_of_a_command{"history_store.removes_every_run_of_a_command", testRemovesEveryRunOfACommand};
   const telar::testing::Case case_fuzzy_cap_counts_commands{"history_store.fuzzy_cap_counts_commands", testFuzzyCapCountsCommands};
+  const telar::testing::Case case_folds_case_at_any_length{"history_store.folds_case_at_any_length", testFoldsCaseAtAnyLength};
   const telar::testing::Case case_failed_write_rolls_back{"history_store.failed_write_rolls_back", testFailedWriteRollsBack};
   const telar::testing::Case case_page_respects_payload_cap{"history_store.page_respects_payload_cap", testPageRespectsPayloadCap};
   const telar::testing::Case case_prune_failed_only{"history_store.prune_failed_only", testPruneFailedOnly};

@@ -309,13 +309,16 @@ Legend: `[ ]` todo, `[x]` done, `[~]` not a bug / dropped (with reason).
   Expected: only a query of the same kind is replaced.
   Fix: compare scope, scope value, author, `failed_only`, `match` and `limit` too.
 
-- [ ] **T28 (H8). Case folding depends on the query length.**
+- [x] **T28 (H8). Case folding depends on the query length.**
   `store.cpp:953-968`: from 3 characters FTS trigram folds Unicode; below, SQLite `lower()`
   folds ASCII only ("école" finds "ÉCOLE", "éc" does not). Fuzzy compares bytes, so `é` can
   match bytes of other characters.
   Expected: the same case semantics at any length.
   Fix: register a Unicode fold SQL function and use it instead of `lower()`; fuzzy compares
   code points with the same fold.
+  Decision: SQLite does not export the fold FTS5 uses, so `historyFold` (lib/base/history) is
+  a simple fold of the common scripts (Latin, Greek, Cyrillic, Armenian, Georgian, fullwidth);
+  a letter outside them still folds only in queries of three characters or more.
 
 - [ ] **T29 (H5). Scope matches only the exact path string.**
   `store.cpp:995-1009`: `/tmp/` and `/private/tmp`, or a trailing slash, do not match.

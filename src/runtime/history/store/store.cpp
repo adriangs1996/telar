@@ -206,6 +206,36 @@ namespace telar::runtime {
       };
     }
 
+    // telar_fold(text): the text with historyFold's case fold, which a short query matches with
+    // as the index's trigrams fold a longer one. Its scratch is the store's memory.
+    void foldText(sqlite3_context* context, int count, sqlite3_value** values) {
+      constexpr std::size_t small_text = 1024;
+      if (count != 1 || sqlite3_value_type(values[0]) == SQLITE_NULL) {
+        sqlite3_result_null(context);
+        return;
+      }
+
+      const auto* bytes = reinterpret_cast<const char*>(sqlite3_value_text(values[0]));
+      const std::string_view text{bytes == nullptr ? "" : bytes, static_cast<std::size_t>(sqlite3_value_bytes(values[0]))};
+
+      try {
+        ds::Array<char, small_text> scratch; // NOLINT(cppcoreguidelines-pro-type-member-init): historyFold writes every byte SQLite copies
+        ds::String<ConcurrentMemory> large{*static_cast<ConcurrentMemory*>(sqlite3_user_data(context))};
+        std::span<char> out = scratch.viewMut();
+
+        if (text.size() > out.size()) {
+          large.resizeForOverwrite(text.size());
+          out = large.viewMut();
+        }
+
+        const auto written = historyFold(text, out);
+
+        sqlite3_result_text(context, out.data(), static_cast<int>(written), SQLITE_TRANSIENT);
+      } catch (...) {
+        sqlite3_result_error_nomem(context);
+      }
+    }
+
     // The schema must be current before the index can be built over it.
     bool prepareHistory(Database& database) {
       migrateHistory(database);
@@ -620,6 +650,7 @@ END;
         rows_(memory),
         indexed_(prepareHistory(database_)) {
     stripOutputMarks(database_, memory_);
+    checkSqlite(sqlite3_create_function_v2(database_.handle(), "telar_fold", 1, SQLITE_UTF8 | SQLITE_DETERMINISTIC | SQLITE_INNOCUOUS, &memory_, foldText, nullptr, nullptr, nullptr));
   }
 
   void HistoryStore::reportAgentCommand(const ReportAgentCommand& request, const RequestContext& context, EncodedReply<ConcurrentMemory>& reply) {
@@ -1011,7 +1042,7 @@ END;
 
   void HistoryStore::appendMatch(ds::String<ConcurrentMemory>& sql, std::string_view query) const {
     if (!query.empty()) {
-      sql.append(useIndex(query) ? " AND id IN (SELECT rowid FROM command_fts WHERE command_fts MATCH ?3)" : " AND instr(lower(command), lower(?3)) > 0");
+      sql.append(useIndex(query) ? " AND id IN (SELECT rowid FROM command_fts WHERE command_fts MATCH ?3)" : " AND instr(telar_fold(command), telar_fold(?3)) > 0");
     }
   }
 
