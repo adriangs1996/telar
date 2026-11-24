@@ -43,6 +43,7 @@ static_assert(true);
 #endif
 #ifdef __APPLE__
 #include "platform/private_clipboard.hpp"
+#include "platform/promised_file.hpp"
 #endif
 #ifdef __APPLE__
 #include <QBuffer>
@@ -136,6 +137,7 @@ import telar.gui.features.machines;
 import telar.gui.features.notifications;
 import telar.wire.agents;
 import telar.wire.content;
+import telar.wire.files;
 import telar.wire.layout;
 import telar.wire.monitor;
 import telar.wire.nvim;
@@ -450,6 +452,74 @@ namespace {
     },
         wait_ms);
   }
+
+  // A machine's runtime as the explorer asks it: where its home is, the one directory it lists,
+  // and what git says of it. It answers what was asked since it last served, a request of a kind
+  // at a time, which is how an explorer that unfolds nothing asks.
+  struct ExplorerReplies {
+    WireRuntime& runtime;
+    std::string_view home;
+    std::string_view directory;
+    std::span<const DirectoryEntry> entries;
+    std::string_view branch;
+    std::span<const FileChange> changes;
+    // A directory below it, and what that one lists.
+    std::string_view below;
+    std::span<const DirectoryEntry> below_entries;
+    std::size_t homes = 0;
+    std::size_t listings = 0;
+    std::size_t queries = 0;
+    std::size_t measures = 0;
+    std::size_t inspections = 0;
+
+    // Whether one more request of `tag` arrived than `served` counts, which then counts it.
+    [[nodiscard]] bool asked(ClientTag tag, std::size_t& served) const {
+      const auto count = runtime.count(tag);
+      if (count == served) {
+        return false;
+      }
+
+      served = count;
+      return true;
+    }
+
+    void serve() {
+      if (asked(ClientTag::locate_home, homes)) {
+        runtime.send(HomeLocated{.request_id = runtime.last<LocateHome>().request_id, .path = home});
+      }
+
+      if (asked(ClientTag::list_directory, listings)) {
+        const auto listing = runtime.last<ListDirectory>();
+        const std::string path{listing.path};
+        const auto listed = path == directory ? entries : !below.empty() && path == below ? below_entries
+                                                                                          : std::span<const DirectoryEntry>{};
+
+        runtime.send(DirectoryContents{.request_id = listing.request_id, .path = path, .total = static_cast<std::uint32_t>(listed.size()), .entries = listed});
+      }
+
+      if (asked(ClientTag::query_changes, queries)) {
+        const auto query = runtime.last<QueryChanges>();
+        const std::string path{query.path};
+        const bool inside = !branch.empty() && path == directory;
+
+        runtime.send(RepositoryChanges{.request_id = query.request_id, .path = path, .root = inside ? directory : std::string_view{}, .branch = branch, .changes = inside ? changes : std::span<const FileChange>{}});
+      }
+
+      if (asked(ClientTag::measure_directory, measures)) {
+        const auto measure = runtime.last<MeasureDirectory>();
+        const std::string path{measure.path};
+
+        runtime.send(DirectorySizes{.request_id = measure.request_id, .path = path});
+      }
+
+      if (asked(ClientTag::inspect_file, inspections)) {
+        const auto inspect = runtime.last<InspectFile>();
+        const std::string path{inspect.path};
+
+        runtime.send(FileInspection{.request_id = inspect.request_id, .path = path, .size = 120, .text = "#!/bin/sh\nexec telar \"$@\"\n"});
+      }
+    }
+  };
 
   int activeMachine(ApplicationController& application) {
     for (const auto& machine : application.monitor()->machines()) {
@@ -2458,6 +2528,648 @@ namespace {
       QVERIFY(monitor->confirmation().isEmpty());
       monitor->confirm();
       QCOMPARE(signals_sent(*fixture.local_runtime) + signals_sent(*fixture.remote_runtime), 1);
+    }
+
+    // The explorer with a window on each of two machines: each lists what its own runtime
+    // answers and asks the other for nothing, and one plan is sent to both. With
+    // TELAR_EXPLORER_MACHINE_SHOTS it takes pictures of them into that directory.
+    Q_SLOT static void explorerShowsWindowsOnTwoMachines() {
+      MachineFixture fixture;
+      auto& application = fixture.application;
+      QQmlApplicationEngine engine;
+
+      engine.rootContext()->setContextProperty(QStringLiteral("telar"), &application);
+      engine.loadFromModule(QStringLiteral("Telar.Gui"), QStringLiteral("Main"));
+      QCOMPARE(engine.rootObjects().size(), 1);
+      auto* window = qobject_cast<QQuickWindow*>(engine.rootObjects().front());
+
+      QVERIFY(window != nullptr);
+      constexpr QSize window_size{1492, 917};
+
+      window->resize(window_size);
+      application.setWindow(*window);
+      QVERIFY(fixture.start());
+      fixture.local_runtime->send(ClientLayoutSnapshot{});
+      fixture.remote_runtime->send(ClientLayoutSnapshot{});
+      QVERIFY(finishOpening(*fixture.local_runtime));
+      // The machine has the name its user gave it, whatever the host that runs the test is called.
+      MachineWindow::rename(application, Machines::local_slot, "macbook");
+      window->show();
+
+      const ds::Array near_entries{
+          DirectoryEntry{.name = "src", .kind = FileKind::directory, .directory = true, .identity = {.inode = 2, .modified_seconds = 5}},
+          DirectoryEntry{.name = "README.md", .kind = FileKind::file, .size = 5500, .identity = {.inode = 3, .modified_seconds = 10}},
+      };
+      const ds::Array far_entries{
+          DirectoryEntry{.name = "logs", .kind = FileKind::directory, .directory = true, .identity = {.inode = 8, .modified_seconds = 15}},
+          DirectoryEntry{.name = "deploy.sh", .kind = FileKind::file, .size = 300, .identity = {.inode = 9, .modified_seconds = 20}},
+      };
+      const ds::Array near_changes{FileChange{.path = "README.md", .unstaged = FileState::modified, .added = 2, .removed = 1}};
+      ExplorerReplies near{.runtime = *fixture.local_runtime, .home = "/home/dev", .directory = "/work/project", .entries = near_entries.view(), .branch = "main", .changes = near_changes.view()};
+      const ds::Array logs_entries{
+          DirectoryEntry{.name = "app.log", .kind = FileKind::file, .size = 300, .identity = {.inode = 21, .modified_seconds = 25}},
+          DirectoryEntry{.name = "latest", .kind = FileKind::link, .identity = {.inode = 22, .modified_seconds = 26}},
+      };
+      ExplorerReplies far{.runtime = *fixture.remote_runtime, .home = "/home/ops", .directory = "/home/ops", .entries = far_entries.view(), .below = "/home/ops/logs", .below_entries = logs_entries.view()};
+      auto* explorer = application.explorer();
+      const auto shows = [&](auto shown) {
+        return waitForGuiCondition([&] {
+          near.serve();
+          far.serve();
+
+          return shown();
+        },
+            wait_ms);
+      };
+      const auto pane = [&](int index) {
+        return explorer->windows().value(index).toMap();
+      };
+      const auto name = [&](int index, int row) {
+        return explorer->rows(index)->index(row, 0).data(ListModel::record_role).toMap().value(QStringLiteral("name")).toString();
+      };
+      const auto shots = qEnvironmentVariable("TELAR_EXPLORER_MACHINE_SHOTS");
+      const auto shoot = [&](const QString& file) {
+        if (!shots.isEmpty()) {
+          QVERIFY(waitForSynchronizedFrame(*window, wait_ms));
+          QVERIFY(window->grabWindow().save(shots + QLatin1Char('/') + file + QStringLiteral(".png"), "PNG"));
+        }
+      };
+
+      application.commands()->execute(window_actions::Action::explorer);
+      QVERIFY(explorer->showing());
+      explorer->run(QStringLiteral("e /work/project"));
+      QVERIFY(shows([&] {
+        return explorer->rows(0)->rowCount() == 2 && pane(0).value(QStringLiteral("repository")).toBool();
+      }));
+      QVERIFY(pane(0).value(QStringLiteral("local")).toBool());
+      QCOMPARE(pane(0).value(QStringLiteral("machine")).toString(), QStringLiteral("macbook"));
+      // A machine with no window is asked for nothing.
+      QCOMPARE(fixture.remote_runtime->count(ClientTag::locate_home) + fixture.remote_runtime->count(ClientTag::list_directory) + fixture.remote_runtime->count(ClientTag::query_changes), 0);
+
+      // A second window, at the home of the other machine: its runtime says where that is.
+      const auto listed = fixture.local_runtime->count(ClientTag::list_directory);
+
+      explorer->run(QStringLiteral("vs Build:~"));
+      QVERIFY(shows([&] {
+        return explorer->windows().size() == 2 && explorer->rows(1)->rowCount() == 2;
+      }));
+      QCOMPARE(pane(1).value(QStringLiteral("machine")).toString(), QStringLiteral("Build"));
+      QVERIFY(!pane(1).value(QStringLiteral("local")).toBool() && !pane(1).value(QStringLiteral("repository")).toBool());
+      QCOMPARE(pane(1).value(QStringLiteral("root")).toString(), QStringLiteral("~"));
+      QCOMPARE(name(1, 0), QStringLiteral("logs"));
+      QCOMPARE(name(0, 0), QStringLiteral("src"));
+      QCOMPARE(pane(0).value(QStringLiteral("branch")).toString(), QStringLiteral("main"));
+      QCOMPARE(fixture.remote_runtime->last<ListDirectory>().path, std::string_view{"/home/ops"});
+      QCOMPARE(fixture.local_runtime->count(ClientTag::list_directory), listed);
+      QVERIFY(shows([&] {
+        return far.measures == 1;
+      }));
+      shoot(QStringLiteral("explorer-two-machines"));
+
+      // A row of the other machine dragged out of the window is text that says its machine, and
+      // no file URL: nothing of it is on this one.
+      QCOMPARE(explorer->grab(1, 0), 1);
+      {
+        const auto outside = explorer->draggedData();
+
+        QCOMPARE(outside->text(), QStringLiteral("Build:/home/ops/logs"));
+        QVERIFY(!outside->hasUrls());
+      }
+
+      explorer->release();
+
+      // A file removed on each machine, and one plan that says the machine of each line.
+      explorer->type(QStringLiteral("jdd"));
+      explorer->type(QStringLiteral("<C-w>h"));
+      explorer->type(QStringLiteral("jdd"));
+      explorer->run(QStringLiteral("w"));
+
+      const auto plan = explorer->plan();
+
+      QCOMPARE(plan.size(), 2);
+      QCOMPARE(plan.value(0).toMap().value(QStringLiteral("machine")).toString(), QStringLiteral("Build"));
+      QCOMPARE(plan.value(1).toMap().value(QStringLiteral("machine")).toString(), QStringLiteral("macbook"));
+      shoot(QStringLiteral("explorer-plan-two-machines"));
+      explorer->type(QStringLiteral("y"));
+      QVERIFY(shows([&] {
+        return fixture.local_runtime->count(ClientTag::change_files) == 1 && fixture.remote_runtime->count(ClientTag::change_files) == 1;
+      }));
+
+      const auto sent_near = fixture.local_runtime->last<ChangeFiles>();
+
+      QVERIFY(sent_near.operations.size() == 1 && sent_near.operations[0].source == "/work/project/README.md");
+
+      const auto near_request = sent_near.request_id;
+      const auto sent_far = fixture.remote_runtime->last<ChangeFiles>();
+
+      QVERIFY(sent_far.operations.size() == 1 && sent_far.operations[0].source == "/home/ops/deploy.sh");
+
+      const ds::Array results{FileResult{.outcome = FileOutcome::done}};
+
+      fixture.remote_runtime->send(FilesChanged{.request_id = sent_far.request_id, .undoable = true, .results = results.view()});
+      fixture.local_runtime->send(FilesChanged{.request_id = near_request, .undoable = true, .results = results.view()});
+      QVERIFY(shows([&] {
+        return explorer->line().value(QStringLiteral("said")).toString() == QStringLiteral(":w · 2 of 2 applied by the runtime · u takes it back");
+      }));
+
+      // A file yanked on one machine and pasted on the other: the plan names both, and the
+      // window carries it, a chunk read on one runtime and written on the other.
+      explorer->type(QStringLiteral("<C-w>l"));
+      explorer->type(QStringLiteral("ggjyy"));
+      explorer->type(QStringLiteral("<C-w>h"));
+      explorer->type(QStringLiteral("p"));
+      explorer->run(QStringLiteral("w"));
+      QCOMPARE(explorer->plan().size(), 1);
+      QCOMPARE(explorer->plan().value(0).toMap().value(QStringLiteral("source")).toString(), QStringLiteral("Build:/home/ops/deploy.sh"));
+      QCOMPARE(explorer->plan().value(0).toMap().value(QStringLiteral("machine")).toString(), QStringLiteral("macbook"));
+      shoot(QStringLiteral("explorer-plan-transfer"));
+      explorer->type(QStringLiteral("y"));
+      QVERIFY(shows([&] {
+        return fixture.remote_runtime->count(ClientTag::read_file) == 1;
+      }));
+
+      const auto read = fixture.remote_runtime->last<ReadFile>();
+      const std::vector<Byte> first(200, Byte{'a'});
+      const std::vector<Byte> second(100, Byte{'b'});
+      const std::string_view arriving_partial = "/work/project/.telar-partial-0011223344556677";
+
+      QVERIFY(read.path == "/home/ops/deploy.sh" && read.offset == 0 && read.identity.inode == 9);
+      fixture.remote_runtime->send(FileChunk{.request_id = read.request_id, .offset = 0, .size = 300, .end = false, .bytes = first});
+      QVERIFY(shows([&] {
+        return fixture.local_runtime->count(ClientTag::write_file) == 1;
+      }));
+
+      const auto write = fixture.local_runtime->last<WriteFile>();
+
+      QVERIFY(write.target == "/work/project/deploy.sh" && write.partial.empty() && write.bytes.size() == first.size());
+      QCOMPARE(fixture.remote_runtime->count(ClientTag::read_file), 1);
+      fixture.local_runtime->send(FileWritten{.request_id = write.request_id, .partial = arriving_partial, .size = 200});
+      QVERIFY(shows([&] {
+        return fixture.remote_runtime->count(ClientTag::read_file) == 2;
+      }));
+
+      // On its way it is a row where it will be, a line of the sidebar and a count in the status.
+      const auto arriving = [&] {
+        for (int row = 0; row < explorer->rows(0)->rowCount(); ++row) {
+          const auto record = explorer->rows(0)->index(row, 0).data(ListModel::record_role).toMap();
+
+          if (record.value(QStringLiteral("arriving")).toBool()) {
+            return record;
+          }
+        }
+
+        return QVariantMap{};
+      };
+
+      QVERIFY(shows([&] {
+        return arriving().value(QStringLiteral("note")).toString() == QStringLiteral("arriving from Build · 200B of 300B");
+      }));
+      QCOMPARE(arriving().value(QStringLiteral("name")).toString(), QStringLiteral("deploy.sh"));
+      QCOMPARE(explorer->transfers().size(), 1);
+      QCOMPARE(explorer->transfers().value(0).toMap().value(QStringLiteral("route")).toString(), QStringLiteral("Build → macbook"));
+      QCOMPARE(explorer->transfers().value(0).toMap().value(QStringLiteral("progress")).toString(), QStringLiteral("200B of 300B"));
+      QCOMPARE(pane(0).value(QStringLiteral("carried")).toInt(), 1);
+      QCOMPARE(pane(1).value(QStringLiteral("carried")).toInt(), 1);
+
+      auto* listed_transfers = window->findChild<QQuickItem*>(QStringLiteral("sidebarTransfers"));
+
+      QVERIFY(listed_transfers != nullptr && listed_transfers->isVisible() && listed_transfers->height() > 0);
+      shoot(QStringLiteral("explorer-transfer"));
+
+      // It goes on with the explorer closed, and the sidebar still lists it.
+      explorer->close();
+      QVERIFY(!explorer->showing());
+
+      const auto next = fixture.remote_runtime->last<ReadFile>();
+
+      QCOMPARE(next.offset, std::uint64_t{200});
+      fixture.remote_runtime->send(FileChunk{.request_id = next.request_id, .offset = 200, .size = 300, .end = true, .bytes = second});
+      QVERIFY(shows([&] {
+        return fixture.local_runtime->count(ClientTag::write_file) == 2;
+      }));
+
+      const auto last = fixture.local_runtime->last<WriteFile>();
+
+      QVERIFY(last.partial == arriving_partial && last.offset == 200 && last.bytes.size() == second.size());
+      fixture.local_runtime->send(FileWritten{.request_id = last.request_id, .partial = arriving_partial, .size = 300});
+      QVERIFY(shows([&] {
+        return fixture.local_runtime->count(ClientTag::end_file_write) == 1;
+      }));
+
+      const auto ended = fixture.local_runtime->last<EndFileWrite>();
+
+      QVERIFY(ended.keep && ended.partial == arriving_partial && ended.target == "/work/project/deploy.sh");
+      fixture.local_runtime->send(FileWriteEnded{.request_id = ended.request_id, .outcome = FileOutcome::done, .path = "/work/project/deploy.sh"});
+      QVERIFY(shows([&] {
+        return explorer->transfers().value(0).toMap().value(QStringLiteral("ended")).toBool();
+      }));
+      QCOMPARE(explorer->transfers().value(0).toMap().value(QStringLiteral("phase")).toString(), QStringLiteral("arrived"));
+      QVERIFY(listed_transfers->isVisible());
+      // A copy leaves its original: nothing more was asked of its machine.
+      QCOMPARE(fixture.remote_runtime->count(ClientTag::change_files), 1);
+
+      // Carries the file the window reads next from the other machine to where it is written
+      // on this one, whole: says where that was. With `halfway` it stops once the first part
+      // of it is written, and says the partial that holds it.
+      const auto carryToHere = [&](bool halfway) {
+        const auto reads = fixture.remote_runtime->count(ClientTag::read_file);
+        const auto writes = fixture.local_runtime->count(ClientTag::write_file);
+        const auto ends = fixture.local_runtime->count(ClientTag::end_file_write);
+        const auto asked = fixture.remote_runtime->last<ReadFile>();
+
+        if (asked.path != "/home/ops/deploy.sh" || asked.identity.inode != 9 || asked.offset != 0) {
+          return std::string{};
+        }
+
+        fixture.remote_runtime->send(FileChunk{.request_id = asked.request_id, .offset = 0, .size = 300, .end = false, .bytes = first});
+        if (!shows([&] {
+              return fixture.local_runtime->count(ClientTag::write_file) == writes + 1;
+            })) {
+          return std::string{};
+        }
+
+        const auto put = fixture.local_runtime->last<WriteFile>();
+        const std::string target{put.target};
+        const auto held = target.substr(0, target.rfind('/')) + "/.telar-partial-8899aabbccddeeff";
+
+        fixture.local_runtime->send(FileWritten{.request_id = put.request_id, .partial = held, .size = 200});
+        if (!shows([&] {
+              return fixture.remote_runtime->count(ClientTag::read_file) == reads + 1;
+            })) {
+          return std::string{};
+        }
+
+        if (halfway) {
+          return held;
+        }
+
+        const auto rest = fixture.remote_runtime->last<ReadFile>();
+
+        fixture.remote_runtime->send(FileChunk{.request_id = rest.request_id, .offset = 200, .size = 300, .end = true, .bytes = second});
+        if (!shows([&] {
+              return fixture.local_runtime->count(ClientTag::write_file) == writes + 2;
+            })) {
+          return std::string{};
+        }
+
+        fixture.local_runtime->send(FileWritten{.request_id = fixture.local_runtime->last<WriteFile>().request_id, .partial = held, .size = 300});
+        if (!shows([&] {
+              return fixture.local_runtime->count(ClientTag::end_file_write) == ends + 1;
+            })) {
+          return std::string{};
+        }
+
+        const auto kept = fixture.local_runtime->last<EndFileWrite>();
+
+        if (!kept.keep || kept.partial != held || kept.target != target) {
+          return std::string{};
+        }
+
+        fixture.local_runtime->send(FileWriteEnded{.request_id = kept.request_id, .outcome = FileOutcome::done, .path = target});
+        return target;
+      };
+      // The transfer that is on its way, which the explorer lists first; and one by its number.
+      const auto running = [&] {
+        const auto listed = explorer->transfers().value(0).toMap();
+
+        return listed.value(QStringLiteral("ended"), true).toBool() ? QVariantMap{} : listed;
+      };
+      const auto transferOf = [&](int id) {
+        for (const auto& listed : explorer->transfers()) {
+          if (listed.toMap().value(QStringLiteral("id")).toInt() == id) {
+            return listed.toMap();
+          }
+        }
+
+        return QVariantMap{};
+      };
+
+      // A file of the other machine dragged out of the window, where the system asks for no
+      // file: it is carried first to a directory of the cache, and the system's drag has its
+      // URL once it is whole.
+      application.commands()->execute(window_actions::Action::explorer);
+      QVERIFY(explorer->showing());
+      QVERIFY(shows([&] {
+        return explorer->windows().size() == 2 && explorer->rows(1)->rowCount() == 2;
+      }));
+      QCOMPARE(name(1, 1), QStringLiteral("deploy.sh"));
+
+      const QTemporaryDir cache;
+      const auto cached_reads = fixture.remote_runtime->count(ClientTag::read_file);
+
+      explorer->carryOutAs(application::explorer::Outside::caches, cache.filePath(QStringLiteral("dragged")));
+      QCOMPARE(explorer->grab(1, 1), 1);
+      explorer->dragOut(window);
+      QVERIFY(shows([&] {
+        return fixture.remote_runtime->count(ClientTag::read_file) == cached_reads + 1;
+      }));
+      QCOMPARE(explorer->draggedData()->text(), QStringLiteral("Build:/home/ops/deploy.sh"));
+      QVERIFY(!explorer->draggedData()->hasUrls());
+
+      const auto first_out = running().value(QStringLiteral("id")).toInt();
+      const auto cached = QString::fromStdString(carryToHere(false));
+
+      QVERIFY(cached.startsWith(cache.filePath(QStringLiteral("dragged/drag-"))) && cached.endsWith(QStringLiteral("/deploy.sh")));
+      QVERIFY(QFileInfo{cached}.dir().exists());
+      QVERIFY(shows([&] {
+        return explorer->draggedData()->hasUrls();
+      }));
+      QCOMPARE(explorer->draggedData()->urls(), QList<QUrl>{QUrl::fromLocalFile(cached)});
+      QCOMPARE(explorer->draggedData()->text(), QStringLiteral("Build:/home/ops/deploy.sh"));
+      QVERIFY(first_out != 0);
+      QCOMPARE(transferOf(first_out).value(QStringLiteral("phase")).toString(), QStringLiteral("arrived"));
+
+      // Let go before its file is here, the file is stopped and what had arrived is removed.
+      const auto dropped_ends = fixture.local_runtime->count(ClientTag::end_file_write);
+
+      QCOMPARE(explorer->grab(1, 1), 1);
+      explorer->dragOut(window);
+      QVERIFY(shows([&] {
+        return fixture.remote_runtime->count(ClientTag::read_file) == cached_reads + 3;
+      }));
+
+      const auto second_out = running().value(QStringLiteral("id")).toInt();
+      const auto let_go = carryToHere(true);
+
+      QVERIFY(!let_go.empty() && second_out != 0 && second_out != first_out);
+      explorer->release();
+      fixture.remote_runtime->send(FileChunk{.request_id = fixture.remote_runtime->last<ReadFile>().request_id, .offset = 200, .size = 300, .end = true, .bytes = second});
+      QVERIFY(shows([&] {
+        return fixture.local_runtime->count(ClientTag::end_file_write) == dropped_ends + 1;
+      }));
+
+      const auto removed = fixture.local_runtime->last<EndFileWrite>();
+
+      QVERIFY(!removed.keep && removed.partial == let_go);
+      fixture.local_runtime->send(FileWriteEnded{.request_id = removed.request_id, .outcome = FileOutcome::done});
+      QVERIFY(shows([&] {
+        return transferOf(second_out).value(QStringLiteral("phase")).toString() == QStringLiteral("cancelled");
+      }));
+      QVERIFY(!explorer->draggedData()->hasUrls());
+
+#ifdef Q_OS_MACOS
+      // Where the system asks for the file once the row is let go, nothing is carried before:
+      // the row is a promise, and its file is one more transfer to where the system says.
+      const QTemporaryDir desktop;
+      const auto promised_reads = fixture.remote_runtime->count(ClientTag::read_file);
+      const auto arrived = std::make_shared<PromiseAnswer>();
+      const auto wanted = desktop.filePath(QStringLiteral("deploy 2.sh")).toStdString();
+
+      explorer->carryOutAs(application::explorer::Outside::promises, cache.filePath(QStringLiteral("dragged")));
+      QCOMPARE(explorer->grab(1, 1), 1);
+      explorer->dragOut(window);
+      QCOMPARE(promisedName(explorer->draggedOut(), 0), std::string{"deploy.sh"});
+      // The row left as a promise, and nothing is carried for it until the system asks.
+      QVERIFY(running().isEmpty());
+      QVERIFY(askPromisedFile(explorer->draggedOut(), 0, wanted, arrived));
+      QVERIFY(shows([&] {
+        return fixture.remote_runtime->count(ClientTag::read_file) == promised_reads + 1;
+      }));
+      QVERIFY(!carryToHere(true).empty());
+      // It shows as any file on its way does, and the system waits.
+      QVERIFY(shows([&] {
+        return running().value(QStringLiteral("progress")).toString() == QStringLiteral("200B of 300B");
+      }));
+      QCOMPARE(running().value(QStringLiteral("route")).toString(), QStringLiteral("Build → macbook"));
+      QCOMPARE(running().value(QStringLiteral("name")).toString(), QStringLiteral("deploy 2.sh"));
+      QVERIFY(listed_transfers->isVisible());
+      QVERIFY(!arrived->answered);
+
+      const auto promised_writes = fixture.local_runtime->count(ClientTag::write_file);
+      const auto promised_ends = fixture.local_runtime->count(ClientTag::end_file_write);
+
+      QCOMPARE(std::string{fixture.local_runtime->last<WriteFile>().target}, wanted);
+      fixture.remote_runtime->send(FileChunk{.request_id = fixture.remote_runtime->last<ReadFile>().request_id, .offset = 200, .size = 300, .end = true, .bytes = second});
+      QVERIFY(shows([&] {
+        return fixture.local_runtime->count(ClientTag::write_file) == promised_writes + 1;
+      }));
+
+      const auto last_part = fixture.local_runtime->last<WriteFile>();
+      const std::string promised_partial{last_part.partial};
+
+      fixture.local_runtime->send(FileWritten{.request_id = last_part.request_id, .partial = promised_partial, .size = 300});
+      QVERIFY(shows([&] {
+        return fixture.local_runtime->count(ClientTag::end_file_write) == promised_ends + 1;
+      }));
+
+      const auto placed = fixture.local_runtime->last<EndFileWrite>();
+
+      QVERIFY(placed.keep && !placed.overwrite && std::string{placed.target} == wanted);
+      QVERIFY(!arrived->answered);
+      fixture.local_runtime->send(FileWriteEnded{.request_id = placed.request_id, .outcome = FileOutcome::done, .path = wanted});
+      QVERIFY(shows([&] {
+        return arrived->answered;
+      }));
+      QVERIFY2(arrived->failure.empty(), arrived->failure.c_str());
+
+      // Stopped on its way, what had arrived is removed and the system is told it did not come.
+      const auto stopped = std::make_shared<PromiseAnswer>();
+      const auto stopped_reads = fixture.remote_runtime->count(ClientTag::read_file);
+
+      QVERIFY(askPromisedFile(explorer->draggedOut(), 0, wanted, stopped));
+      QVERIFY(shows([&] {
+        return fixture.remote_runtime->count(ClientTag::read_file) == stopped_reads + 1;
+      }));
+
+      const auto half = carryToHere(true);
+
+      QVERIFY(!half.empty());
+      QVERIFY(!running().isEmpty());
+      explorer->cancelTransfer(running().value(QStringLiteral("id")).toInt());
+      fixture.remote_runtime->send(FileChunk{.request_id = fixture.remote_runtime->last<ReadFile>().request_id, .offset = 200, .size = 300, .end = true, .bytes = second});
+      QVERIFY(shows([&] {
+        return fixture.local_runtime->count(ClientTag::end_file_write) == promised_ends + 2;
+      }));
+
+      const auto unwound = fixture.local_runtime->last<EndFileWrite>();
+
+      QVERIFY(!unwound.keep && unwound.partial == half);
+      QVERIFY(!stopped->answered);
+      fixture.local_runtime->send(FileWriteEnded{.request_id = unwound.request_id, .outcome = FileOutcome::done});
+      QVERIFY(shows([&] {
+        return stopped->answered;
+      }));
+      QVERIFY(!stopped->failure.empty());
+
+      // A name that is no entry of the directory the system gave is refused at once.
+      const auto refused = std::make_shared<PromiseAnswer>();
+
+      QVERIFY(askPromisedFile(explorer->draggedOut(), 0, (desktop.path() + QStringLiteral("/..")).toStdString(), refused));
+      QVERIFY(refused->answered && !refused->failure.empty());
+
+      // A directory of the other machine is a promise too, and what the system asks for is its
+      // tree: the directory made where the system wants it, then what it holds, a link as a
+      // link and a file as its bytes, each below the directory that was made and nowhere else.
+      const auto changesHere = [&] {
+        return fixture.local_runtime->count(ClientTag::change_files);
+      };
+      const ds::Array done_once{FileResult{.outcome = FileOutcome::done}};
+      // Answers the directory the tree asks this machine to make; says where that was.
+      const auto makeRoot = [&](std::size_t before) {
+        if (!shows([&] {
+              return changesHere() == before + 1;
+            })) {
+          return std::string{};
+        }
+
+        const auto made = fixture.local_runtime->last<ChangeFiles>();
+
+        if (made.operations.size() != 1 || made.operations[0].kind != FileOperationKind::create_directory) {
+          return std::string{};
+        }
+
+        const std::string root{made.operations[0].target};
+        const ds::Array created{FileResult{.outcome = FileOutcome::done, .path = root}};
+
+        fixture.local_runtime->send(FilesChanged{.request_id = made.request_id, .undoable = true, .results = created.view()});
+        return root;
+      };
+      const auto whole_tree = std::make_shared<PromiseAnswer>();
+      const auto wanted_tree = desktop.filePath(QStringLiteral("logs 2")).toStdString();
+      auto tree_changes = changesHere();
+      auto tree_reads = fixture.remote_runtime->count(ClientTag::read_file);
+      const auto tree_writes = fixture.local_runtime->count(ClientTag::write_file);
+      const auto tree_ends = fixture.local_runtime->count(ClientTag::end_file_write);
+
+      QCOMPARE(explorer->grab(1, 0), 1);
+      explorer->dragOut(window);
+      QCOMPARE(promisedName(explorer->draggedOut(), 0), std::string{"logs"});
+      QVERIFY(askPromisedFile(explorer->draggedOut(), 0, wanted_tree, whole_tree));
+      QCOMPARE(makeRoot(tree_changes), wanted_tree);
+      // Its link is read as what it says, and made as a link that says it.
+      QVERIFY(shows([&] {
+        return fixture.remote_runtime->count(ClientTag::read_file) == tree_reads + 1;
+      }));
+
+      const auto says = fixture.remote_runtime->last<ReadFile>();
+      const std::string_view link_text = "app.log";
+      const std::vector<Byte> said(link_text.begin(), link_text.end());
+
+      QVERIFY(says.path == "/home/ops/logs/latest" && says.link && says.identity.inode == 22);
+      fixture.remote_runtime->send(FileChunk{.request_id = says.request_id, .offset = 0, .size = said.size(), .end = true, .bytes = said});
+      QVERIFY(shows([&] {
+        return changesHere() == tree_changes + 2;
+      }));
+
+      const auto linked = fixture.local_runtime->last<ChangeFiles>();
+
+      QVERIFY(linked.operations.size() == 1 && linked.operations[0].kind == FileOperationKind::link && linked.operations[0].source == link_text);
+      QCOMPARE(std::string{linked.operations[0].target}, wanted_tree + "/latest");
+      fixture.local_runtime->send(FilesChanged{.request_id = linked.request_id, .undoable = true, .results = done_once.view()});
+      // Its file is read whole and written below the directory.
+      QVERIFY(shows([&] {
+        return fixture.remote_runtime->count(ClientTag::read_file) == tree_reads + 2;
+      }));
+
+      const auto nested = fixture.remote_runtime->last<ReadFile>();
+      const std::vector<Byte> nested_bytes(300, Byte{'l'});
+
+      QVERIFY(nested.path == "/home/ops/logs/app.log" && !nested.link && nested.identity.inode == 21);
+      QVERIFY(!whole_tree->answered);
+      QCOMPARE(running().value(QStringLiteral("name")).toString(), QStringLiteral("logs 2"));
+      fixture.remote_runtime->send(FileChunk{.request_id = nested.request_id, .offset = 0, .size = 300, .end = true, .bytes = nested_bytes});
+      QVERIFY(shows([&] {
+        return fixture.local_runtime->count(ClientTag::write_file) == tree_writes + 1;
+      }));
+
+      const auto nested_write = fixture.local_runtime->last<WriteFile>();
+      const auto nested_target = wanted_tree + "/app.log";
+      const auto nested_partial = wanted_tree + "/.telar-partial-0123456789abcdef";
+
+      QCOMPARE(std::string{nested_write.target}, nested_target);
+      fixture.local_runtime->send(FileWritten{.request_id = nested_write.request_id, .partial = nested_partial, .size = 300});
+      QVERIFY(shows([&] {
+        return fixture.local_runtime->count(ClientTag::end_file_write) == tree_ends + 1;
+      }));
+
+      const auto nested_end = fixture.local_runtime->last<EndFileWrite>();
+
+      QVERIFY(nested_end.keep && nested_end.partial == nested_partial && nested_end.target == nested_target);
+      fixture.local_runtime->send(FileWriteEnded{.request_id = nested_end.request_id, .outcome = FileOutcome::done, .path = nested_target});
+      QVERIFY(shows([&] {
+        return whole_tree->answered;
+      }));
+      QVERIFY2(whole_tree->failure.empty(), whole_tree->failure.c_str());
+      // A copy leaves the directory it came from.
+      QCOMPARE(fixture.remote_runtime->count(ClientTag::change_files), 1);
+
+      // Stopped on its way, the directory it had made goes to the trash with what had arrived,
+      // and the system is told the tree did not come.
+      const auto stopped_tree = std::make_shared<PromiseAnswer>();
+
+      tree_changes = changesHere();
+      tree_reads = fixture.remote_runtime->count(ClientTag::read_file);
+      QVERIFY(askPromisedFile(explorer->draggedOut(), 0, wanted_tree, stopped_tree));
+      QCOMPARE(makeRoot(tree_changes), wanted_tree);
+      QVERIFY(shows([&] {
+        return fixture.remote_runtime->count(ClientTag::read_file) == tree_reads + 1;
+      }));
+      QVERIFY(!running().isEmpty());
+      explorer->cancelTransfer(running().value(QStringLiteral("id")).toInt());
+      fixture.remote_runtime->send(FileChunk{.request_id = fixture.remote_runtime->last<ReadFile>().request_id, .offset = 0, .size = said.size(), .end = true, .bytes = said});
+      QVERIFY(shows([&] {
+        return changesHere() == tree_changes + 2;
+      }));
+
+      const auto cleared = fixture.local_runtime->last<ChangeFiles>();
+
+      QVERIFY(cleared.operations.size() == 1 && cleared.operations[0].kind == FileOperationKind::trash);
+      QCOMPARE(std::string{cleared.operations[0].source}, wanted_tree);
+      QVERIFY(!stopped_tree->answered);
+      fixture.local_runtime->send(FilesChanged{.request_id = cleared.request_id, .undoable = true, .results = done_once.view()});
+      QVERIFY(shows([&] {
+        return stopped_tree->answered;
+      }));
+      QVERIFY(!stopped_tree->failure.empty());
+
+      // A name that was taken where the system wanted the directory leaves the tree beside it,
+      // under another: the system is told it is not where it asked.
+      const auto beside_tree = std::make_shared<PromiseAnswer>();
+
+      tree_changes = changesHere();
+      QVERIFY(askPromisedFile(explorer->draggedOut(), 0, wanted_tree, beside_tree));
+      QVERIFY(shows([&] {
+        return changesHere() == tree_changes + 1;
+      }));
+
+      const auto taken = fixture.local_runtime->last<ChangeFiles>();
+      const auto other_root = wanted_tree + "-1";
+      const ds::Array renamed{FileResult{.outcome = FileOutcome::renamed, .path = other_root}};
+
+      far.below_entries = {};
+      fixture.local_runtime->send(FilesChanged{.request_id = taken.request_id, .undoable = true, .results = renamed.view()});
+      QVERIFY(shows([&] {
+        return beside_tree->answered;
+      }));
+      QVERIFY(!beside_tree->failure.empty());
+#endif
+
+      // A path of the other machine is completed by what that machine lists, from a window that
+      // is not on it.
+      explorer->release();
+      explorer->type(QStringLiteral("<C-w>h"));
+      explorer->type(QStringLiteral(":"));
+      explorer->complete(QStringLiteral("e Build:~/lo"));
+      QVERIFY(shows([&] {
+        return explorer->line().value(QStringLiteral("completion")).toString() == QStringLiteral("e Build:~/logs/");
+      }));
+      explorer->cancel();
+
+      // The other machine goes away: its window keeps what it last listed, marked, and no change
+      // is typed there.
+      explorer->type(QStringLiteral("<C-w>l"));
+      QVERIFY(!pane(1).value(QStringLiteral("away")).toBool());
+      fixture.remote_socket_->disconnectFromServer();
+      QVERIFY(shows([&] {
+        return pane(1).value(QStringLiteral("away")).toBool();
+      }));
+      QCOMPARE(explorer->rows(1)->rowCount(), 2);
+      QCOMPARE(name(1, 0), QStringLiteral("logs"));
+      QCOMPARE(pane(1).value(QStringLiteral("following")).toString(), QStringLiteral("[stale]"));
+      QVERIFY(!pane(0).value(QStringLiteral("away")).toBool());
+      explorer->type(QStringLiteral("dd"));
+      QCOMPARE(explorer->line().value(QStringLiteral("said")).toString(), QStringLiteral("Build does not answer: what it lists is what it last said, and nothing changes there until it is back"));
+      shoot(QStringLiteral("explorer-stale"));
     }
   };
 

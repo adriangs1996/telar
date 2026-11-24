@@ -164,6 +164,23 @@ namespace telar::runtime {
     process_id = std::get<NvimBody>(body).start(command, size);
   }
 
+  Pane::Pane(ConcurrentMemory& memory, std::uint64_t identity, TabLocation tab, Explorer explorer)
+      : id(identity),
+        location(tab),
+        cwd(memory, explorer.directory),
+        launch(memory),
+        extent(explorer.size),
+        foreground_shell(false),
+        body(std::in_place_type<ExplorerBody>, memory) {
+    using namespace std::string_view_literals;
+
+    randomBytes(history_session.dataMut(), history_session.size());
+    foreground.assign("explorer");
+    // What a session written to disk names it by, as a pane that runs a program is named by its
+    // arguments.
+    launch.restore("explorer\0"sv, 1);
+  }
+
   PaneKind Pane::kind() const noexcept {
     auto kind = PaneKind::terminal;
 
@@ -208,6 +225,10 @@ namespace telar::runtime {
     pane.body.editor.resize({.columns = size.cols, .rows = size.rows});
   }
 
+  void resize(PaneRef<ExplorerBody> pane, TerminalSize size) noexcept {
+    pane.core.extent = size;
+  }
+
   void requestClose(Pane& pane) noexcept {
     if (pane.close_requested) {
       return;
@@ -217,21 +238,35 @@ namespace telar::runtime {
     visitPane(pane, [](auto& body) {
       body.endProgram();
     });
+
+    // An explorer has no program whose output would close: it ends when it is asked to.
+    if (pane.as<ExplorerBody>() != nullptr) {
+      pane.output_closed = true;
+    }
   }
 
   ds::Option<int> reapProcess(Pane& pane) noexcept {
     ds::Option<int> status;
 
-    visitPane(pane, [&](auto& kind) {
-      status = kind.process.getMut().reap();
+    visitPane(pane, [&]<typename Body>(Body& kind) {
+      if constexpr (std::same_as<Body, ExplorerBody>) {
+        // No process to wait for: it ended, well, once its pane was closed.
+        if (pane.close_requested) {
+          status = 0;
+        }
+      } else {
+        status = kind.process.getMut().reap();
+      }
     });
 
     return status;
   }
 
   void signalProcess(const Pane& pane, int number) noexcept {
-    visitPane(pane, [&](const auto& kind) {
-      kind.process->signal(number);
+    visitPane(pane, [&]<typename Body>(const Body& kind) {
+      if constexpr (!std::same_as<Body, ExplorerBody>) {
+        kind.process->signal(number);
+      }
     });
   }
 
@@ -249,6 +284,11 @@ namespace telar::runtime {
       return {.text = screen.title(), .revision = screen.titleAt()};
     }
 
+    // An explorer has no program to give it a title.
+    ProgramTitle titleOf(const ExplorerBody& /*pane*/) noexcept {
+      return {};
+    }
+
   }
 
   ProgramTitle programTitle(const Pane& pane) noexcept {
@@ -260,6 +300,27 @@ namespace telar::runtime {
 
     return title;
   }
+
+  ExplorerBody::ExplorerBody(ConcurrentMemory& memory)
+      : kept_(memory) {}
+
+  void ExplorerBody::keep(const ExplorerLayout& layout) {
+    if (layout.windows.empty() || layout.current >= layout.windows.size()) {
+      throw RequestError{FailureCode::invalid_request, "An explorer has a window, and its current one is one of them"};
+    }
+
+    // The pane it is of is the pane that holds it: the bytes name none.
+    const KeepExplorer kept{.pane_id = 1, .layout = layout};
+
+    kept_.resize(Codec::encodedSize(kept));
+    static_cast<void>(Codec::encode(kept, kept_.viewMut()));
+  }
+
+  std::span<const Byte> ExplorerBody::kept() const noexcept {
+    return kept_.view();
+  }
+
+  void ExplorerBody::endProgram() noexcept {}
 
   NvimBody::NvimBody(ConcurrentMemory& memory, TerminalSize size)
       // Neovim leaves its command line, its completion menu, its messages and its tabs to the
@@ -843,6 +904,31 @@ namespace telar::runtime {
     return *editor;
   }
 
+  tbc::val_a<ds::Option<ExplorerKept>> explorerKept(tbc::ref_a<Pane> pane, tbc::mut_a<ExplorerScratch> scratch) {
+    const auto* explorer = pane.as<ExplorerBody>();
+    if (explorer == nullptr || explorer->kept().empty()) {
+      return ds::none;
+    }
+
+    DecodeStorage storage{scratch.viewMut()};
+
+    return ExplorerKept{.pane_id = pane.id, .layout = Codec::decode<KeepExplorer>(explorer->kept(), storage).layout};
+  }
+
+  tbc::val_a<PaneRef<ExplorerBody>> requireExplorer(tbc::mut_a<PaneStore> panes, std::uint64_t identity) {
+    auto* pane = panes.find(identity);
+    if (pane == nullptr) {
+      throw RequestError{FailureCode::pane_not_found, "Pane does not exist"};
+    }
+
+    const auto explorer = asExplorer(pane);
+    if (!explorer) {
+      throw RequestError{FailureCode::unsupported_pane_kind, "This pane is not an explorer"};
+    }
+
+    return *explorer;
+  }
+
   tbc::val_a<PaneRef<TerminalBody>> requireTerminal(tbc::mut_a<PaneStore> panes, std::uint64_t identity) {
     auto* pane = panes.find(identity);
     if (pane == nullptr) {
@@ -874,8 +960,48 @@ namespace telar::runtime {
         worktrees(memory) {}
 
   ClientLayouts::ClientLayouts(ConcurrentMemory& memory)
-      : records_(memory) {
+      : records_(memory),
+        places_(memory) {
     records_.reserve(maximum_identities);
+  }
+
+  void ClientLayouts::keepPlaces(const KeepPlaces& places) {
+    std::size_t bytes = 0;
+
+    for (const auto& place : places.places) {
+      const auto letter = static_cast<char>(place.letter);
+      const bool marks = (letter >= 'a' && letter <= 'z') || (letter >= 'A' && letter <= 'Z');
+      if (!marks && place.letter != 0) {
+        return;
+      }
+
+      bytes += place.machine.size() + place.root.size() + place.selected.size();
+    }
+
+    if (bytes > FileLimits::places_bytes || places.jump > places.places.size()) {
+      return;
+    }
+
+    places_.resize(Codec::encodedSize(places));
+    static_cast<void>(Codec::encode(places, places_.viewMut()));
+    ++clock_;
+  }
+
+  void ClientLayouts::publishPlaces(std::uint64_t request, ClientSession& client) const {
+    if (places_.empty()) {
+      client.connection.send(PlacesKept{.request_id = request});
+      return;
+    }
+
+    ds::Array<Byte, FileLimits::maximum_places * sizeof(KeptPlace)> scratch; // NOLINT(cppcoreguidelines-pro-type-member-init): the decoder writes the places it hands back, so zeroing them first would be waste
+    DecodeStorage storage{scratch.viewMut()};
+    const auto kept = Codec::decode<KeepPlaces>(places_.view(), storage);
+
+    client.connection.send(PlacesKept{.request_id = request, .places = kept.places, .jump = kept.jump});
+  }
+
+  std::span<const Byte> ClientLayouts::places() const noexcept {
+    return places_.view();
   }
 
   void ClientLayouts::retain(const RuntimeModel& model, std::uint64_t identity, const UpdateClientLayout& update) {

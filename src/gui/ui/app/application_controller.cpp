@@ -58,6 +58,25 @@ import telar.base.ds;
 
 namespace telar::gui::qt {
 
+  namespace {
+
+    // The side of the explorer a key that moves the focus between panes names.
+    constexpr application::explorer::Side explorerSide(window_actions::Action action) noexcept {
+      using application::explorer::Side;
+
+      if (action == window_actions::Action::focus_left) {
+        return Side::left;
+      }
+
+      if (action == window_actions::Action::focus_right) {
+        return Side::right;
+      }
+
+      return action == window_actions::Action::focus_up ? Side::up : Side::down;
+    }
+
+  }
+
   ApplicationController::ApplicationController(ApplicationAllocator& memory, QObject* parent)
       : QObject(parent),
         memory_(memory),
@@ -81,6 +100,7 @@ namespace telar::gui::qt {
         machine_chrome_(store_),
         peek_(store_),
         monitor_(store_),
+        explorer_(store_, memory),
         prompt_(store_, memory),
         documents_(store_),
         link_status_(store_),
@@ -337,6 +357,31 @@ namespace telar::gui::qt {
     });
   }
 
+  void ApplicationController::settleExplorer() {
+    const bool keys = explorer_.showing() && explorer_.focused();
+
+    // It takes the keys of the panes while it has the focus, as a dialog does.
+    if (keys && store_.dialog().kind == Dialog::none) {
+      dialogs_.show(Dialog::explorer);
+    } else if (!keys && store_.dialog().kind == Dialog::explorer) {
+      dialogs_.show(Dialog::none);
+    }
+  }
+
+  void ApplicationController::yieldExplorer() {
+    // Another dialog took the explorer's place: over the panes it closes. As a pane it stays,
+    // and has the keys again once that dialog is gone, if its pane still has the focus.
+    if (store_.dialog().kind == Dialog::explorer || !explorer_.showing() || !explorer_.focused()) {
+      return;
+    }
+
+    if (!explorer_.pinned()) {
+      explorer_.close();
+    } else if (store_.dialog().kind == Dialog::none) {
+      dialogs_.show(Dialog::explorer);
+    }
+  }
+
   void ApplicationController::initializePeekAndMonitor() {
     connect(&peek_, &PeekController::closeRequested, this, [this] {
       dialogs_.show(Dialog::none);
@@ -367,6 +412,41 @@ namespace telar::gui::qt {
     });
 
     connect(&machines_, &MachinesCoordinator::changed, &monitor_, &MonitorController::machineChanged);
+
+    // The explorer takes the keys of the panes while it shows, as a dialog does.
+    connect(&explorer_, &ExplorerController::opened, this, [this] {
+      dialogs_.show(Dialog::explorer);
+    });
+
+    connect(&explorer_, &ExplorerController::closed, this, [this] {
+      if (store_.dialog().kind == Dialog::explorer) {
+        dialogs_.show(Dialog::none);
+      }
+    });
+
+    // As a pane the explorer takes the keys only while its pane has the focus, and a key that
+    // moves the focus goes through its own windows before it leaves the pane.
+    connect(&explorer_, &ExplorerController::changed, this, &ApplicationController::settleExplorer);
+    commands_.setInside([this](window_actions::Action action) {
+      return explorer_.takes(explorerSide(action));
+    });
+
+    connect(&explorer_, &ExplorerController::failed, &status_, &WindowStatus::report);
+    // Files of another machine opened in an editor there: the window shows that machine.
+    connect(&explorer_, &ExplorerController::machineRequested, this, [this](application::machines::MachineToken token) {
+      commands_.interact([this, token] {
+        machines_.select(token);
+      });
+    });
+
+    connect(&commands_, &WindowCommands::explorerRequested, &explorer_, &ExplorerController::toggle);
+    connect(&machines_, &MachinesCoordinator::changed, &explorer_, &ExplorerController::machineChanged);
+    // What the panes show moved: a window that follows the focused pane goes where it is.
+    connect(&store_, &Store::changed, &explorer_, &ExplorerController::synchronize);
+    connect(&dialogs_, &Dialogs::changed, &explorer_, [this] {
+      yieldExplorer();
+    });
+
     connect(&commands_, &WindowCommands::monitorRequested, this, [this, open_monitor](window_actions::Action action) {
       const auto showing = store_.dialog().kind == Dialog::monitor;
       if (!showing) {
@@ -762,12 +842,16 @@ namespace telar::gui::qt {
     case application::Change::monitor:
       monitor_.synchronize();
       break;
+    case application::Change::explorer:
+      explorer_.synchronize();
+      break;
     case application::Change::editor:
       // A link the editor opened is opened here, where the person is.
       if (const auto link = application::nvim::takeLink(sessionMut(), session().changedPane())) {
         static_cast<void>(links_.open(*link, session().changedPane()));
       }
 
+      askExplorer(session().changedPane());
       emit editors_.editorChanged(session().changedPane());
       break;
     case application::Change::peek:
@@ -845,9 +929,29 @@ namespace telar::gui::qt {
     scheduleDeadline(graphics_resume_timer_, session().ready() ? application::terminal::graphics::resumeDeadline(session()) : ds::none, system::AwakeClock::nowNanoseconds());
   }
 
+  void ApplicationController::askExplorer(std::uint64_t pane_id) {
+    // `:Telar explore`: the explorer shows the file the editor is on, or its directory.
+    if (const auto* editor = application::nvim::editor(session(), pane_id); editor != nullptr && editor->explores) {
+      const auto* pane = application::findPane(session().panes, pane_id);
+      const auto asked = editor->explore.view();
+      const auto where = pane == nullptr ? std::string_view{} : pane->cwd.view();
+      // Kept apart from the session, which the explorer changes while it reads them.
+      const QByteArray path{asked.data(), static_cast<qsizetype>(asked.size())};
+      const QByteArray directory{where.data(), static_cast<qsizetype>(where.size())};
+
+      application::nvim::explored(sessionMut(), pane_id);
+      explorer_.reveal({path.constData(), static_cast<std::size_t>(path.size())}, {directory.constData(), static_cast<std::size_t>(directory.size())});
+    }
+  }
+
   void ApplicationController::refresh() {
     synchronize();
     peek_.synchronize();
+    // A pane did something: the explorer asks its machine who touched what, while it shows.
+    if (explorer_.showing()) {
+      explorer_.synchronize();
+    }
+
     refreshElementBars();
     if (store_.dialog().kind == Dialog::paths) {
       paths_.publishGeometry();

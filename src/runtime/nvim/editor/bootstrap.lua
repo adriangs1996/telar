@@ -239,12 +239,93 @@ local function tell_tabs()
   tell_marks("telar_buffer_marks", buffers)
 end
 
-vim.api.nvim_create_autocmd({ "BufModifiedSet", "BufEnter", "BufWritePost", "WinEnter", "TabEnter", "TabClosed", "DiagnosticChanged" }, {
+-- The files the listed buffers show, for what lists files beside the editor: each by its
+-- absolute path, with whether its buffer has changes not written and whether it is the one
+-- being edited. Told when the list changes, and no more of it than the runtime takes.
+local most_files, most_file_bytes = 64, 32768
+local filed = nil
+local function tell_files()
+  local files, key, bytes = {}, {}, 0
+  local edited = vim.api.nvim_get_current_buf()
+  for _, buffer in ipairs(vim.api.nvim_list_bufs()) do
+    local name = vim.api.nvim_buf_get_name(buffer)
+    if vim.bo[buffer].buflisted and vim.bo[buffer].buftype == "" and name:sub(1, 1) == "/" and #files < most_files and bytes + #name <= most_file_bytes then
+      local modified = vim.bo[buffer].modified
+      files[#files + 1] = { name, modified, buffer == edited }
+      key[#key + 1] = name .. (modified and "+" or "-") .. (buffer == edited and "*" or "")
+      bytes = bytes + #name
+    end
+  end
+
+  local now = table.concat(key, "\n")
+  if now ~= filed then
+    filed = now
+    vim.rpcnotify(channel, "telar_files", files)
+  end
+end
+
+vim.api.nvim_create_autocmd({ "BufModifiedSet", "BufEnter", "BufWritePost", "WinEnter", "TabEnter", "TabClosed", "DiagnosticChanged", "BufAdd", "BufDelete", "BufWipeout", "BufFilePost", "VimEnter" }, {
   group = group,
   callback = function()
-    vim.schedule(tell_tabs)
+    vim.schedule(function()
+      tell_tabs()
+      tell_files()
+    end)
   end,
 })
+
+-- A file the explorer moved, or a directory with what is below it: the buffer that shows it
+-- shows it under its new name, with its changes and its undo, and nothing is written for it.
+-- One without changes reads the file again where it is now, so Neovim knows it as written; one
+-- with changes keeps them, and its first `:w` there asks for `!`, as after `:file`.
+local function rename(buffer, name, moved)
+  if not pcall(vim.api.nvim_buf_set_name, buffer, moved) then
+    return
+  end
+
+  -- Neovim keeps the old name in a buffer of its own, for the alternate file. The file is not
+  -- there any more, and that buffer would be in the way of the name when the move is undone.
+  for _, other in ipairs(vim.api.nvim_list_bufs()) do
+    if other ~= buffer and vim.api.nvim_buf_get_name(other) == name and not vim.api.nvim_buf_is_loaded(other) then
+      pcall(vim.api.nvim_buf_delete, other, { force = true })
+    end
+  end
+
+  if not vim.bo[buffer].modified and vim.api.nvim_buf_is_loaded(buffer) then
+    vim.api.nvim_buf_call(buffer, function()
+      local view = vim.fn.winsaveview()
+      pcall(vim.cmd, "silent! keepalt edit")
+      vim.fn.winrestview(view)
+    end)
+  end
+end
+
+-- Neovim names a buffer by the real path of its directory, and the explorer may have reached
+-- the file through a symbolic link: the path as Neovim would name it.
+local function named(path)
+  local head, tail = path:match("^(.*)/([^/]*)$")
+  local real = head and vim.uv.fs_realpath(head == "" and "/" or head)
+  if not real then
+    return path
+  end
+
+  return (real == "/" and "" or real) .. "/" .. tail
+end
+
+function _G.__telar_moved(from, to)
+  from = named(from)
+  for _, buffer in ipairs(vim.api.nvim_list_bufs()) do
+    local name = vim.api.nvim_buf_is_valid(buffer) and vim.api.nvim_buf_get_name(buffer) or ""
+    if vim.bo[buffer].buftype == "" and (name == from or name:sub(1, #from + 1) == from .. "/") then
+      rename(buffer, name, to .. name:sub(#from + 1))
+    end
+  end
+
+  vim.schedule(function()
+    tell_tabs()
+    tell_files()
+  end)
+end
 
 -- The row of the status line of the whole editor, which the window draws natively: the one
 -- above the command line while 'laststatus' is 3, and none otherwise.
@@ -329,18 +410,22 @@ function _G.__telar_float(window)
   end
 end
 
--- `:Telar files`, `:Telar grep` and `:Telar buffers` ask the window for its picker.
+-- `:Telar files`, `:Telar grep` and `:Telar buffers` ask the window for its picker, and
+-- `:Telar explore` for its explorer, on the directory of the file being edited with that file
+-- selected.
 local sources = { "files", "grep", "buffers" }
 vim.api.nvim_create_user_command("Telar", function(command)
   if vim.tbl_contains(sources, command.args) then
     vim.rpcnotify(channel, "telar_pick", command.args)
+  elseif command.args == "explore" then
+    vim.rpcnotify(channel, "telar_explore", vim.bo.buftype == "" and vim.api.nvim_buf_get_name(0) or "")
   else
-    vim.notify("Telar: files, grep or buffers", vim.log.levels.ERROR)
+    vim.notify("Telar: files, grep, buffers or explore", vim.log.levels.ERROR)
   end
 end, {
   nargs = 1,
   complete = function()
-    return sources
+    return { "files", "grep", "buffers", "explore" }
   end,
 })
 

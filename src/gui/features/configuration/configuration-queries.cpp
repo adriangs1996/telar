@@ -360,7 +360,7 @@ namespace telar::gui::features::configuration {
     }
 
     using VoidAction = std::pair<BindingActionKind, std::string_view>;
-    constexpr auto voids = ds::Array<VoidAction, 38>{
+    constexpr auto voids = ds::Array<VoidAction, 39>{
         VoidAction{BindingActionKind::toggle_pane_fullscreen, "toggle_pane_fullscreen"},
         VoidAction{BindingActionKind::toggle_sidebar, "toggle_sidebar"},
         VoidAction{BindingActionKind::toggle_workspace_list, "toggle_workspace_list"},
@@ -387,6 +387,7 @@ namespace telar::gui::features::configuration {
         VoidAction{BindingActionKind::machine_picker, "machine_picker"},
         VoidAction{BindingActionKind::add_machine, "add_machine"},
         VoidAction{BindingActionKind::copy_mode, "enter_copy_mode"},
+        VoidAction{BindingActionKind::explorer, "explorer"},
         VoidAction{BindingActionKind::monitor, "monitor"},
         VoidAction{BindingActionKind::process_picker, "process_picker"},
         VoidAction{BindingActionKind::process_terminate, "process_terminate"},
@@ -478,6 +479,7 @@ namespace telar::gui::features::configuration {
     case BindingActionKind::refresh_panel:
     case BindingActionKind::machine_picker:
     case BindingActionKind::add_machine:
+    case BindingActionKind::explorer:
     case BindingActionKind::monitor:
     case BindingActionKind::process_picker:
     case BindingActionKind::process_terminate:

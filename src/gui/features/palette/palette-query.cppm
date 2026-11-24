@@ -107,7 +107,7 @@ export {
       bool destructive = false;
     };
 
-    inline constexpr auto palette_actions = ds::Array<PaletteAction, 46>{
+    inline constexpr auto palette_actions = ds::Array<PaletteAction, 47>{
         PaletteAction{.action = BindingActionKind::split_horizontal, .label = "Split right"},
         PaletteAction{.action = BindingActionKind::split_vertical, .label = "Split down"},
         PaletteAction{.action = BindingActionKind::focus_left, .label = "Focus pane left"},
@@ -142,6 +142,7 @@ export {
         PaletteAction{.action = BindingActionKind::next_machine, .label = "Next machine"},
         PaletteAction{.action = BindingActionKind::previous_machine, .label = "Previous machine"},
         PaletteAction{.action = BindingActionKind::add_machine, .label = "Add machine"},
+        PaletteAction{.action = BindingActionKind::explorer, .label = "Open explorer"},
         PaletteAction{.action = BindingActionKind::monitor, .label = "Open monitor"},
         PaletteAction{.action = BindingActionKind::process_picker, .label = "Find process"},
         PaletteAction{.action = BindingActionKind::process_terminate, .label = "Terminate process", .destructive = true},

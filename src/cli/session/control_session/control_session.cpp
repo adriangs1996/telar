@@ -37,7 +37,7 @@ namespace telar::runtime::cli {
     case FailureCode::process_not_found:
       return "the process is gone, or another process has its pid now";
     case FailureCode::unsupported_pane_kind:
-      return "that pane is of another kind: an editor does not answer what a terminal does, nor the reverse";
+      return "that pane is of another kind: a terminal, an editor and the explorer each answer only what is asked of their kind";
     case FailureCode::spawn_failed:
     case FailureCode::resource_limit:
     case FailureCode::internal:

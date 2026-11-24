@@ -31,6 +31,7 @@ import telar.runtime.core.runtime_telemetry;
 import telar.runtime.traffic.tap.exchange;
 
 import telar.runtime.workers.background_executor;
+import telar.runtime.files.moves;
 
 import telar.wire.vocabulary;
 import telar.wire.agents;
@@ -39,6 +40,7 @@ import telar.wire.clipboard;
 import telar.wire.content;
 import telar.wire.editor;
 import telar.wire.execution;
+import telar.wire.files;
 import telar.wire.graphics;
 import telar.wire.history;
 import telar.wire.layout;
@@ -124,7 +126,8 @@ export {
 
       ds::Option<HistorySessionTitle> completeDescription(const DescriptionResult& result);
 
-      void report(RuntimeModel& model, ClientSession& client, const ReportAgent& request);
+      // Returns what the pane's agent is known as once the report is taken: a report need not say.
+      AgentProvider report(RuntimeModel& model, ClientSession& client, const ReportAgent& request);
 
       void reportSession(RuntimeModel& model, ClientSession& client, const ReportAgentSession& request);
 
@@ -357,6 +360,10 @@ export {
 
       // An editor pane on the request's files, in a tab of its own or beside a tab's panes.
       void createEditor(RuntimeModel& model, Panes& panes, ClientStore& clients, EditorRequest asked, const NvimProvision& provision);
+
+      // An explorer pane beside a tab's panes, with the windows the request gives it. A tab has
+      // one at most: a second is refused.
+      void createExplorer(RuntimeModel& model, Panes& panes, ClientStore& clients, std::uint64_t client_id, const CreateExplorerPane& request);
 
       void renameWorkspace(RuntimeModel& model, ClientSession& client, const RenameWorkspace& request);
 
@@ -648,6 +655,8 @@ export {
       void paneEvent(const Event& event);
       void paneEvent(PaneRef<TerminalBody> pane, const Event& event);
       void paneEvent(PaneRef<NvimBody> pane, const Event& event);
+      // An explorer watches no descriptor, so no event is its own.
+      void paneEvent(PaneRef<ExplorerBody> pane, const Event& event) noexcept;
 
       // The client's frames leave its connection while their requests run, so a request can change any
       // client, its own included, without touching the bytes it was decoded from.
@@ -720,6 +729,10 @@ export {
 
       void handle(std::uint64_t identity, const CreatePane& message);
       void handle(std::uint64_t identity, const CreateNvimPane& message);
+
+      void handle(std::uint64_t identity, const CreateExplorerPane& message);
+
+      void handle(std::uint64_t identity, const KeepExplorer& message);
       void handle(std::uint64_t identity, const NvimInput& message);
       void handle(std::uint64_t identity, const NvimPaste& message);
       void handle(std::uint64_t identity, const NvimMouse& message);
@@ -733,6 +746,23 @@ export {
       void handle(std::uint64_t identity, const NvimList& message);
       void handle(std::uint64_t identity, const NvimConfiguration& message);
       void handle(std::uint64_t identity, const FindText& message);
+      // The explorer's requests on files, each answered on the files worker.
+      void handle(std::uint64_t identity, const ListDirectory& message);
+      void handle(std::uint64_t identity, const MeasureDirectory& message);
+      void handle(std::uint64_t identity, const QueryChanges& message);
+      void handle(std::uint64_t identity, const InspectFile& message);
+      void handle(std::uint64_t identity, const ChangeFiles& message);
+      void handle(std::uint64_t identity, const UndoFileChanges& message);
+      void handle(std::uint64_t identity, const CommitChanges& message);
+      void handle(std::uint64_t identity, const LocateHome& message);
+      void handle(std::uint64_t identity, const ReadFile& message);
+      void handle(std::uint64_t identity, const WriteFile& message);
+      void handle(std::uint64_t identity, const EndFileWrite& message);
+      void handle(std::uint64_t identity, const QueryTouches& message);
+
+      void handle(std::uint64_t identity, const KeepPlaces& message);
+
+      void handle(std::uint64_t identity, const QueryPlaces& message);
       // What an editor told the runtime besides what it drew, to the client that drives it.
       void relay(PaneRef<NvimBody> pane);
       // Answers a client's question about an editor's buffers with the ones its query matches.
@@ -856,6 +886,9 @@ export {
       // A background worker's reply to `client_id`'s request: history failures become limits, the
       // rest goes to the client, which a failed send drops.
       void deliverBackgroundReply(std::uint64_t client_id, ClientTag request_tag, std::span<const Byte> payload);
+      // Tells the editors where the files an answered change moved went: a buffer that shows one
+      // follows it.
+      void followMoves(std::uint64_t client_id, ClientTag request_tag, std::span<const Byte> payload) noexcept;
 
       // An opened editor reported to the client that asked, as failed unless it opened beside the
       // pane it was asked from.
@@ -865,6 +898,8 @@ export {
       static void followRepository(PaneRef<TerminalBody> pane, ShellGitService& shell_git);
       void refreshPane(PaneRef<TerminalBody> pane, Clock::time_point now, bool poll_panes);
       void refreshPane(PaneRef<NvimBody> pane, Clock::time_point now, bool poll_panes);
+      // An explorer has nothing to follow between events.
+      void refreshPane(PaneRef<ExplorerBody> pane, Clock::time_point now, bool poll_panes) noexcept;
 
       void refreshServices(Clock::time_point now);
 
@@ -924,6 +959,8 @@ export {
       std::string_view runtime_path_ = runtimePath();
       WorktreeDetectionService<WorktreeDetectionProbe> worktree_detection_;
       AgentFileService<ConcurrentMemory, Agents> agent_files_;
+      // What the changes of the explorers move, from their request to their answer.
+      FileMoves file_moves_;
       DescriptionService<ConcurrentMemory, Agents, Background> descriptions_;
       [[no_unique_address]] diagnostics::RuntimeTelemetry telemetry_;
       static constexpr auto pane_poll_interval = std::chrono::milliseconds{100};

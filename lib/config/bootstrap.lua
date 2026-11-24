@@ -310,6 +310,7 @@ for _, name in ipairs({
 	"previous-machine",
 	"machine-picker",
 	"add-machine",
+	"explorer",
 	"monitor",
 	"process-picker",
 	"process-terminate",

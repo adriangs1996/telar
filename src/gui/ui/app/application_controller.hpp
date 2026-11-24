@@ -18,6 +18,7 @@ static_assert(true);
 #include "ui/app/chrome/sidebar_controller.hpp"
 #include "ui/app/chrome/tabs/tabs_controller.hpp"
 #include "ui/app/chrome/workspaces/workspaces_controller.hpp"
+#include "ui/app/overlays/explorer/explorer_controller.hpp"
 #include "ui/app/overlays/link_status/link_status_controller.hpp"
 #include "ui/app/overlays/machine_prompt/machine_profiles_source.hpp"
 #include "ui/app/overlays/machine_prompt/machine_prompt_controller.hpp"
@@ -127,6 +128,7 @@ namespace telar::gui::qt {
     Q_PROPERTY(telar::gui::qt::MachineChromeController* machineChrome READ machineChrome CONSTANT)
     Q_PROPERTY(telar::gui::qt::PeekController* peek READ peek CONSTANT)
     Q_PROPERTY(telar::gui::qt::MonitorController* monitor READ monitor CONSTANT)
+    Q_PROPERTY(telar::gui::qt::ExplorerController* explorer READ explorer CONSTANT)
     Q_PROPERTY(telar::gui::qt::PromptController* prompt READ prompt CONSTANT)
     Q_PROPERTY(telar::gui::qt::DocumentsController* documents READ documents CONSTANT)
     Q_PROPERTY(telar::gui::qt::LinkStatusController* linkStatus READ linkStatus CONSTANT)
@@ -231,6 +233,10 @@ namespace telar::gui::qt {
       return &monitor_;
     }
 
+    ExplorerController* explorer() noexcept {
+      return &explorer_;
+    }
+
     PromptController* prompt() noexcept {
       return &prompt_;
     }
@@ -287,6 +293,11 @@ namespace telar::gui::qt {
     void initializeOverlays();
     void initializeMachineChrome();
     void initializePeekAndMonitor();
+    // The explorer changed: who takes the keys.
+    void settleExplorer();
+    // What the editor of a pane asked of the explorer since it was last seen to.
+    void askExplorer(std::uint64_t pane_id);
+    void yieldExplorer();
     void initializeConfigurationSource();
     // The mod content a record carries for its slots, keyed by slot name.
     void refreshElementBars();
@@ -377,6 +388,7 @@ namespace telar::gui::qt {
     tbc::val_self<MachineChromeController> machine_chrome_;
     tbc::val_self<PeekController> peek_;
     tbc::val_self<MonitorController> monitor_;
+    tbc::val_self<ExplorerController> explorer_;
     tbc::val_self<PromptController> prompt_;
     tbc::val_self<DocumentsController> documents_;
     tbc::val_self<LinkStatusController> link_status_;

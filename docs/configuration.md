@@ -1317,6 +1317,69 @@ removes it. `telar.action.add_machine()` asks for a new machine's label and
 the address its gateway pairs with. Each change is written to `machines.json`. They have no
 default binding, and plugins cannot run them.
 
+`telar.action.explorer()` opens [the explorer](explorer.md) over the panes of
+the tab, on the files of the window's machine, and closes it when it shows. Its
+default binding is the prefix and `o`.
+
+### Explorer keys
+
+`client.explorer.keys` changes the keys of [the explorer](explorer.md) itself.
+It has one table for each mode, `normal` and `visual`, the mode a selection is
+in. Each maps a sequence of keys, in Neovim's notation, to the name of a
+command, or to `false` for a sequence that should do nothing:
+
+```lua
+client = {
+  explorer = {
+    keys = {
+      normal = { x = "cut", dd = false, ["<C-j>"] = "half_page_down" },
+      visual = { x = "cut" },
+    },
+  },
+}
+```
+
+Here `x` cuts in both modes, `dd` no longer does, and `Ctrl+j` moves half a page
+down. The keys you do not name keep what they do. A sequence is written as the
+explorer's help writes it: a character is itself, and the other keys are
+`<CR>`, `<Esc>`, `<Tab>`, `<S-Tab>`, `<BS>`, `<Del>`, `<lt>` for `<`, and
+`<C-x>`, `<D-x>` and `<M-x>` for a character with Control, Command and Alt. It
+is at most 24 bytes, and it does not start with a digit, which a count takes.
+
+A sequence you bind takes the place of the default ones it starts and of the
+one that starts it: binding `g` leaves `gg`, `gp` and the others of `g` with
+nothing to do. Two sequences of one table where one starts the other are
+refused. The help (`?`), the hints under the windows and a row's menu show the
+keys as you bound them, and a command left with no key shows none. A profile
+changes the keys it names over the ones it inherits. A reload applies the
+changes to an explorer that is open.
+
+The commands, by what they do:
+
+| Commands | |
+| --- | --- |
+| `down` `up` `top` `bottom` `half_page_down` `half_page_up` | Move the selection. |
+| `collapse` `expand` `toggle_fold` `unfold` `fold` `fold_all` `unfold_all` | Fold and unfold directories. |
+| `next_change` `previous_change` `next_touch` `previous_touch` | Go to the next file git or an agent changed. |
+| `enter` `parent` `workspace_root` `home` | Root the window somewhere else. |
+| `scope_pane` `scope_workspace` `scope_machine` `next_machine` `toggle_follow` | What the window follows, and its machine. |
+| `mark` `jump_to_mark` `jump_back` `jump_forward` | Marks and the jump list. `mark` and `jump_to_mark` take the letter typed after their keys. |
+| `next_lens` `previous_lens` | The lens. |
+| `rename` `rename_whole` `rename_start` `rename_end` `create` `create_directory` `cut` `yank` `yank_relative` `yank_name` `paste` `undo` `write` | Change files as text. The four that rename differ in where the caret starts: on the name up to its extension, on all of it, before it, after it. |
+| `split_vertical` `split_horizontal` `split_here` `next_window` `previous_window` `window_left` `window_right` `window_up` `window_down` `close_window` `only_window` `pin` | Windows. |
+| `open` `change_directory` `split_shell` `mention` `repeat` | Hand a file to a pane. |
+| `toggle_diff` `stage` `unstage` `discard` `commit` | Git. |
+| `cycle_sort` `toggle_hidden` `toggle_ignored` `refresh` | What is listed. |
+| `visual` `select_all` `search` `next_match` `previous_match` `command_line` `help` `quit` `escape` | Modes, and every row picked at once. |
+
+`telar config check` refuses a name that is no command and a sequence that
+cannot be typed, and says which. The keys of the other modes, as `y` and `n`
+on a plan, the keys of `:` and the ones of a menu, are not changed here.
+
+Two keys are read before the map. Command with Backspace is `<Del>`, the Delete
+of a keyboard that has none. And `<M-w>`, Alt with `w`, starts the sequences
+of `<C-w>` while no sequence you bound starts with it.
+
 `telar.action.monitor()` opens the monitor over the window: the processors,
 memory, disks and network of the window's machine, and every process it runs.
 `telar.action.process_picker()` opens it with its filter focused. These act on

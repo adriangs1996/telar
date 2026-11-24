@@ -260,6 +260,9 @@ namespace telar::gui::application {
       pane->foreground.assign(message.name);
     }
 
+    // A command started or ended there: what it touched is asked of the runtime again.
+    features::explorer::stir(explorer);
+
     for (auto& tab : tabs.viewMut()) {
       tab.getMut().observeForeground(message);
     }

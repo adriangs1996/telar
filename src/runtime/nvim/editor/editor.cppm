@@ -59,6 +59,8 @@ export {
       ds::Option<NvimPickSource> pick;
       // Something opened a link: see NvimEditor::link().
       bool opened = false;
+      // `:Telar explore` asked for the explorer: see NvimEditor::explored().
+      bool explore = false;
     };
 
     // The names of the editor's listed buffers, most recently used first, as views of `text`,
@@ -147,6 +149,9 @@ export {
       bool theme(const TerminalTheme& colors);
       // Moves to the window on a side; `takePulse().navigated` says there was none.
       bool navigate(PaneDirection direction);
+      // A file was moved from `from` to `target`: the buffer that shows it, if one does, shows it
+      // under its new name, with its changes and its undo. Nothing is written for it.
+      bool follow(std::string_view from, std::string_view target);
       // Selects an item of the completion menu, and takes it when `accept`.
       bool selectMenu(std::uint32_t item, bool accept);
       // Asks for the listed buffers, which arrive as `buffers()` with this token. A list asked
@@ -174,6 +179,8 @@ export {
       [[nodiscard]] std::string_view clipboard() const noexcept;
       // The link last opened in the editor.
       [[nodiscard]] std::string_view link() const noexcept;
+      // The file the explorer was last asked for, or nothing for the editor's directory.
+      [[nodiscard]] std::string_view explored() const noexcept;
       [[nodiscard]] const NvimBufferList& buffers() const noexcept;
 
     private:
@@ -196,6 +203,8 @@ export {
       void placedStatus(msgpack::Reader& reader);
       void framed(msgpack::Reader& reader);
       void changed(msgpack::Reader& reader, bool buffers);
+      void filed(msgpack::Reader& reader);
+      void explore(msgpack::Reader& reader);
       void listed(msgpack::Reader& reader);
       // Publishes a change made outside a redraw, unless a redraw under way will.
       void publish(bool was_settled) noexcept;
@@ -220,6 +229,7 @@ export {
       ds::Option<TerminalTheme> theme_;
       ds::String<ConcurrentMemory> clipboard_;
       ds::String<ConcurrentMemory> link_;
+      ds::String<ConcurrentMemory> explored_;
       // Whether the person did something that may open a link: one link opens for each thing
       // they do, so nothing in the editor opens links by itself, or many at once. It holds from
       // the keys or the click until the first flush after Neovim took them, which is drawn once

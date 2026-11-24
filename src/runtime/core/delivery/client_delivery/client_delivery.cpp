@@ -223,6 +223,44 @@ namespace telar::runtime {
     return false;
   }
 
+  bool AttachmentDelivery::prepare(Output& output, Attachment& attachment, PaneRef<ExplorerBody> pane, DeliveryLane lane) {
+    switch (lane) {
+    case DeliveryLane::foreground:
+      return metadata(output.connection, attachment.foreground_revision, pane.core.foreground_revision, PaneForeground{.pane_id = pane.core.id, .name = pane.core.foreground.view()});
+    case DeliveryLane::exit:
+      return exit(output, attachment, pane.core, true);
+    case DeliveryLane::cells:
+      // It has no cells to send, so the client has all of them.
+      slots_.atMut(attachment.slot).cells_current = true;
+      return false;
+    case DeliveryLane::cwd:
+      return metadata(output.connection, attachment.cwd_revision, pane.core.cwd_revision + 1, PaneCwd{.pane_id = pane.core.id, .cwd = pane.core.cwd});
+    case DeliveryLane::title:
+    case DeliveryLane::scrollback:
+    case DeliveryLane::progress:
+    case DeliveryLane::shell:
+    case DeliveryLane::git:
+    case DeliveryLane::blocks:
+    case DeliveryLane::graphics:
+    case DeliveryLane::document:
+    case DeliveryLane::stopping:
+    case DeliveryLane::management:
+    case DeliveryLane::resync:
+    case DeliveryLane::clipboard:
+    case DeliveryLane::layout:
+    case DeliveryLane::proxy:
+    case DeliveryLane::agents:
+    case DeliveryLane::metrics:
+    case DeliveryLane::workspaces:
+    case DeliveryLane::panes:
+    case DeliveryLane::observation:
+    case DeliveryLane::count:
+      return false;
+    }
+
+    return false;
+  }
+
   bool AttachmentDelivery::editorFrame(Output& output, Attachment& attachment, PaneRef<const NvimBody> pane) {
     const auto& screen = pane.body.editor.screen();
 
@@ -260,6 +298,10 @@ namespace telar::runtime {
 
     if (const auto tabs = frames.tabLine(screen); !tabs.empty()) {
       output.connection.sendPayload(tabs);
+    }
+
+    if (const auto files = frames.openFiles(screen); !files.empty()) {
+      output.connection.sendPayload(files);
     }
 
     output.connection.sendPayload(frames.end(screen));

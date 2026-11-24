@@ -15,6 +15,7 @@ agent, a plugin or a proxy to use Telar as a terminal.
 | Install a plugin | [Plugins](plugins.md#try-the-example-plugin) |
 | Draw part of the window with Lua | [Mods](mods.md) |
 | Edit in a Neovim the window draws natively, without a terminal | [Native editor pane](editor.md) |
+| List, preview and change the files of a machine with Neovim's keys | [Explorer](explorer.md) |
 | Paint Neovim with Telar's theme and move between its splits and Telar panes | [Neovim integration](../integrations/nvim/README.md) |
 | Show images in a pane | [Terminal images](kitty-graphics.md#display-an-image) |
 | Inspect application network traffic | [Optional TLS proxy](proxy-tls.md#try-the-proxy) |

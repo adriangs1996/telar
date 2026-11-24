@@ -47,6 +47,23 @@ Item {
         ratio: root.ratio
     }
 
+    // The room of the pane the explorer stands as, in this item's coordinates: the explorer is
+    // drawn there by whoever holds it. Empty while the tab that shows has no such pane.
+    property rect explorerRoom: Qt.rect(0, 0, 0, 0)
+
+    // The pane at a point of the area, as its key and its frame; none where no pane is.
+    function paneAt(point) {
+        for (let index = 0; index < shown.count; ++index) {
+            const pane = shown.itemAt(index);
+
+            // The explorer's own pane takes nothing the explorer gives.
+            if (pane && !(pane.record.explorer ?? false) && point.x >= pane.x && point.x < pane.x + pane.width && point.y >= pane.y && point.y < pane.y + pane.height)
+                return {key: pane.record.key, x: pane.x + pane.record.frame.x, y: pane.y + pane.record.frame.y, width: pane.frameWidth, height: pane.frameHeight};
+        }
+
+        return null;
+    }
+
     PaneMotionLayout {
         id: motion
         anchors.fill: parent
@@ -54,6 +71,7 @@ Item {
     }
 
     Repeater {
+        id: shown
         model: motion.items
 
         delegate: Item {
@@ -77,7 +95,22 @@ Item {
             readonly property bool resizing: width !== record.width || height !== record.height
             // What draws the pane and takes its keys: the editor's view, or the terminal's.
             readonly property Item contentView: editorView.item ?? terminal
+            // A pane the explorer stands as draws nothing of its own in its room, and takes no
+            // keys: the explorer has them while the pane has the focus.
+            readonly property bool foreign: pane.record.editor || (pane.record.explorer ?? false)
+
+            function takeKeys(reason) {
+                if (!(pane.record.explorer ?? false))
+                    pane.contentView.forceActiveFocus(reason);
+            }
             visible: width > 0 && height > 0
+
+            Binding {
+                target: root
+                property: "explorerRoom"
+                value: Qt.rect(pane.x + pane.record.content.x, pane.y + pane.record.content.y, pane.contentWidth, pane.contentHeight)
+                when: pane.record.explorer ?? false
+            }
 
             HoverHandler {
                 id: paneHover
@@ -101,7 +134,8 @@ Item {
                 width: pane.frameWidth
                 height: pane.frameHeight
                 radius: pane.framed ? pane.record.frameRadius * root.ratio : 0
-                color: root.colors.paneBackground
+                // The explorer's pane is of the explorer's own surface, up to its frame.
+                color: (pane.record.explorer ?? false) ? root.colors.surface_dim : root.colors.paneBackground
                 replaceBackground: true
                 backdropColor: root.colors.workbenchBackground
             }
@@ -126,7 +160,7 @@ Item {
                         anchors.fill: parent
                         onPressed: {
                             root.actionRequested(WindowActions.Action.focus_pane, pane.record.key);
-                            pane.contentView.forceActiveFocus(Qt.MouseFocusReason);
+                            pane.takeKeys(Qt.MouseFocusReason);
                         }
                     }
                 }
@@ -175,7 +209,7 @@ Item {
                     anchors.fill: parent
                     onPressed: {
                         root.actionRequested(WindowActions.Action.focus_pane, pane.record.key);
-                        pane.contentView.forceActiveFocus(Qt.MouseFocusReason);
+                        pane.takeKeys(Qt.MouseFocusReason);
                     }
                 }
             }
@@ -277,7 +311,7 @@ Item {
 
                     function focusSelectedPane() {
                         if (terminal.modelFocused && root.dialog === Store.Dialog.none && !root.keyboardCovered) {
-                            pane.contentView.forceActiveFocus();
+                            pane.takeKeys(Qt.OtherFocusReason);
                         }
                     }
 
@@ -365,20 +399,20 @@ Item {
                     }
                 }
 
-                // An editor pane draws its own grids in the terminal's place. Bound only for an
-                // editor, so a terminal's own visibility is nobody else's to set.
+                // An editor pane draws its own grids in the terminal's place, and the explorer its
+                // windows. Bound only for them, so a terminal's own visibility is nobody else's to set.
                 Binding {
                     target: terminal
                     property: "visible"
                     value: false
-                    when: pane.record.editor
+                    when: pane.foreign
                 }
 
                 // What a terminal draws over its rows: the documents, the commands' separators and
-                // rail, the prompt line. An editor pane has none of them.
+                // rail, the prompt line. An editor pane and the explorer's have none of them.
                 Item {
                     anchors.fill: parent
-                    visible: !pane.record.editor
+                    visible: !pane.foreign
 
                     // The commands the shell ran: a separator over each one's prompt, and a dot per
                     // command beside the pane to reach it.

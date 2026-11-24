@@ -100,6 +100,9 @@ export namespace telar::gui::application::nvim {
   // does not open.
   [[nodiscard]] ds::Option<features::terminal::links::LinkTarget> takeLink(Session& session, std::uint64_t pane_id);
 
+  // The window opened the explorer the editor asked for, which `editor(...)->explores` said.
+  void explored(Session& session, std::uint64_t pane_id) noexcept;
+
   // Runs `telar edit FILE[:LINE]` itself when that is what `arguments` are, as
   // `telar.action.edit` gives them: the file opens in the editor of the focused tab, taken
   // from the focused pane's directory when it names none. False for any other command, and
@@ -186,6 +189,8 @@ namespace telar::gui::application::nvim {
   Change receive(Session& session, const NvimPrompt& message);
   Change receive(Session& session, const NvimNavigated& message);
   Change receive(Session& session, const NvimPick& message);
+  Change receive(Session& session, const NvimOpenFiles& message);
+  Change receive(Session& session, const NvimExplore& message);
   Change receive(Session& session, const NvimLink& message);
   Change receive(Session& session, const TextResults& message);
   // The paths a picker of an editor waited for; none when no picker did.

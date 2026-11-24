@@ -16,6 +16,7 @@ import telar.runtime.history.store;
 import telar.runtime.workers.background_executor;
 import telar.wire.vocabulary;
 import telar.wire.editor;
+import telar.wire.files;
 import telar.wire.history;
 import telar.platform.primitives;
 import telar.runtime.terminal.kitty;
@@ -32,6 +33,9 @@ import telar.runtime.terminal.graphics.synchronizer;
 import telar.runtime.core.execution_service;
 
 import telar.runtime.paths.query_task;
+
+import telar.runtime.files.service;
+import telar.runtime.files.touches;
 
 import telar.runtime.workspaces.git_probe;
 
@@ -54,12 +58,19 @@ import telar.base.ds;
 export {
   namespace telar::runtime {
 
-    // The workers a background pool runs, one descriptor each: history, paths, editors, suggestions and worktrees.
-    inline constexpr std::size_t background_worker_count = 5;
+    // The workers a background pool runs, one descriptor each: history, paths, editors, suggestions,
+    // files and worktrees.
+    inline constexpr std::size_t background_worker_count = 6;
 
-    // The workers behind history, paths, editors, suggestions and worktrees, which the runtime's services
-    // and their own workers share: each queue it holds is synchronized, and what it hands a consumer lives
-    // for the callback.
+    // A request on the files of the machine, which the files worker answers.
+    template <typename Message>
+    concept FileRequest = std::same_as<Message, ListDirectory> || std::same_as<Message, MeasureDirectory> || std::same_as<Message, QueryChanges> || std::same_as<Message, InspectFile> || std::same_as<Message, ChangeFiles> ||
+                          std::same_as<Message, UndoFileChanges> || std::same_as<Message, CommitChanges> || std::same_as<Message, LocateHome> ||
+                          std::same_as<Message, ReadFile> || std::same_as<Message, WriteFile> || std::same_as<Message, EndFileWrite> || std::same_as<Message, QueryTouches>;
+
+    // The workers behind history, paths, editors, suggestions, files and worktrees, which the runtime's
+    // services and their own workers share: each queue it holds is synchronized, and what it hands a
+    // consumer lives for the callback. The files service is the pool's own: nothing else asks it.
     template <typename History, typename Paths, typename Editor, typename Suggestions, typename Worktrees = WorktreeGitProbe>
     class TBC_SHARED BackgroundPool {
     public:
@@ -81,6 +92,8 @@ export {
           editor_.submit(client, message, context);
         } else if constexpr (std::same_as<Message, SuggestCommand>) {
           suggestions_.submit(client, message, context);
+        } else if constexpr (FileRequest<Message>) {
+          files_.submit(client, message, context);
         } else if constexpr (std::same_as<Message, QueryHistory>) {
           try {
             history_.submit(client, message, context);
@@ -101,6 +114,7 @@ export {
         path_service_.collect(consumer);
         editor_.collect(consumer);
         suggestions_.collect(consumer);
+        files_.collect(consumer);
       }
 
       // Kept here: the reply is the caller's, an open set no unit can instantiate ahead.
@@ -110,6 +124,8 @@ export {
       }
 
       bool recordHistory(const HistoryEventView& event) noexcept;
+      // Something a pane did that may have touched files, for the explorer's files to keep.
+      void noteTouch(const TouchNote& note) noexcept;
 
       std::uint64_t takeHistoryFailures() noexcept;
 
@@ -139,6 +155,8 @@ export {
       RequestWorker<ConcurrentMemory, History> history_;
       RequestWorker<ConcurrentMemory, Editor> editor_;
       RequestWorker<ConcurrentMemory, Suggestions> suggestions_;
+      FileService file_service_;
+      RequestWorker<ConcurrentMemory, FileService> files_;
       ObservationWorker<Worktrees> worktrees_;
       std::atomic<std::uint64_t> history_submission_failures_{0};
     };

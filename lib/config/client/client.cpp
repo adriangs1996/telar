@@ -2191,7 +2191,7 @@ namespace telar::runtime::config {
       return settings;
     }
 
-    client.onlyFields({"prefix", "theme", "icons", "sidebar", "pane_gaps", "editor", "window_title", "sound", "notifications", "appearance", "input", "keybindings", "bars", "panels", "picks", "history", "components", "prompt"});
+    client.onlyFields({"prefix", "theme", "icons", "sidebar", "pane_gaps", "editor", "window_title", "sound", "notifications", "appearance", "input", "keybindings", "bars", "panels", "picks", "history", "components", "prompt", "explorer"});
     settings.input = input(client);
     settings.pane_gaps = optionalBoolean(client.field("pane_gaps"));
     settings.editor = printableText(client.field("editor"), maximum_editor_bytes, false);
@@ -2200,6 +2200,7 @@ namespace telar::runtime::config {
     sound(client.field("sound"), settings.sound);
     notifications(client.field("notifications"), settings);
     history(client.field("history"), settings.history);
+    explorer(client.field("explorer"), settings.explorer_keys);
     return settings;
   }
 
@@ -2291,6 +2292,170 @@ namespace telar::runtime::config {
       history.show_agent_commands = optionalBoolean(table.field("show_agent_commands"));
       history.enter = optionalChoice<ClientSettings::HistoryEnter>(table.field("enter"), ds::Array<std::string_view, 2>{"paste", "run"});
       history.match = optionalChoice<ClientSettings::HistoryMatch>(table.field("match"), ds::Array<std::string_view, 2>{"fuzzy", "fts"});
+    }
+  }
+
+  namespace {
+
+    // The bytes of the character `keys` starts with: as many as its first one says, and none for
+    // a control or for a byte that starts no character.
+    std::size_t explorerCharacterBytes(std::string_view keys) noexcept {
+      constexpr ds::Array<unsigned char, 5> leads{0x80, 0xC0, 0xE0, 0xF0, 0xF8};
+      constexpr unsigned char space = ' ';
+      const unsigned char lead = keys.empty() ? static_cast<unsigned char>(0) : static_cast<unsigned char>(keys.front());
+      if (lead < space || (lead >= leads[0] && lead < leads[1]) || lead >= leads[4]) {
+        return 0;
+      }
+
+      return std::size_t{1} + static_cast<std::size_t>(lead >= leads[1]) + static_cast<std::size_t>(lead >= leads[2]) + static_cast<std::size_t>(lead >= leads[3]);
+    }
+
+    // The bytes of the key `keys` starts with, as Neovim spells one; 0 for none a person types.
+    std::size_t explorerKeyBytes(std::string_view keys) noexcept {
+      constexpr ds::Array<std::string_view, 7> named{"<CR>", "<Esc>", "<Tab>", "<S-Tab>", "<BS>", "<Del>", "<lt>"};
+      constexpr std::size_t modified_prefix = 3;
+
+      if (keys.front() != '<') {
+        return explorerCharacterBytes(keys);
+      }
+
+      for (const auto name : named) {
+        if (keys.starts_with(name)) {
+          return name.size();
+        }
+      }
+
+      // `<C-x>`, `<D-x>`, `<M-x>`: one character with a modifier.
+      if (keys.size() <= modified_prefix + 1 || !std::string_view{"CDM"}.contains(keys[1]) || keys[2] != '-') {
+        return 0;
+      }
+
+      auto character = keys;
+
+      character.remove_prefix(modified_prefix);
+
+      const auto bytes = explorerCharacterBytes(character);
+      const bool closed = bytes != 0 && character.size() > bytes && character[bytes] == '>';
+
+      return closed ? modified_prefix + bytes + 1 : 0;
+    }
+
+  }
+
+  bool typeableExplorerKeys(std::string_view keys) noexcept {
+    if (keys.empty() || keys.size() > explorer_keys_bytes || (keys.front() >= '0' && keys.front() <= '9')) {
+      return false;
+    }
+
+    while (!keys.empty()) {
+      const auto bytes = explorerKeyBytes(keys);
+      if (bytes == 0 || bytes > keys.size()) {
+        return false;
+      }
+
+      keys.remove_prefix(bytes);
+    }
+
+    return true;
+  }
+
+  bool ExplorerKey::operator==(const ExplorerKey& other) const noexcept {
+    return keys.view() == other.keys.view() && command == other.command && visual == other.visual;
+  }
+
+  std::span<const ExplorerKey> ExplorerKeys::view() const noexcept {
+    return items.view().first(count);
+  }
+
+  bool ExplorerKeys::put(const ExplorerKey& key) noexcept {
+    for (std::size_t index = 0; index < count; ++index) {
+      if (items[index].visual == key.visual && items[index].keys.view() == key.keys.view()) {
+        // The later change of a sequence is the one that applies, after the ones before it.
+        std::ranges::rotate(items.viewMut().subspan(index, count - index), items.viewMut().subspan(index + 1).begin());
+        items.atMut(count - 1) = key;
+        return true;
+      }
+    }
+
+    if (count == capacity) {
+      return false;
+    }
+
+    items.atMut(count++) = key;
+    return true;
+  }
+
+  bool ExplorerKeys::operator==(const ExplorerKeys& other) const noexcept {
+    return std::ranges::equal(view(), other.view());
+  }
+
+  void ClientReader::explorer(const lua::Value& table, ExplorerKeys& keys) {
+    if (!table.present()) {
+      return;
+    }
+
+    table.onlyFields({"keys"});
+    const auto modes = table.field("keys");
+    if (!modes.present()) {
+      return;
+    }
+
+    modes.onlyFields({"normal", "visual"});
+    explorerKeys(modes.field("normal"), false, keys);
+    explorerKeys(modes.field("visual"), true, keys);
+  }
+
+  void ClientReader::explorerKeys(const lua::Value& table, bool visual, ExplorerKeys& keys) {
+    if (!table.present()) {
+      return;
+    }
+
+    if (!table.is(LUA_TTABLE)) {
+      table.fail("must be a table from a sequence of keys to a command of the explorer, or to false");
+    }
+
+    const auto first = keys.count;
+
+    table.eachField([&](std::string_view sequence, const lua::Value& value) {
+      if (!typeableExplorerKeys(sequence)) {
+        value.fail("is bound to \"", sequence, "\", which is no sequence of keys the explorer takes");
+      }
+
+      ExplorerKey key{.visual = visual};
+
+      key.keys.assign(sequence);
+      if (value.is(LUA_TSTRING)) {
+        const auto name = value.string();
+        const auto* const found = std::ranges::find(explorer_command_names, name);
+        if (found == explorer_command_names.end() || found == explorer_command_names.begin()) {
+          value.fail("names \"", name, "\", which is no command of the explorer");
+        }
+
+        key.command = static_cast<ExplorerCommand>(found - explorer_command_names.begin());
+      } else if (!value.is(LUA_TBOOLEAN) || value.boolean(true)) {
+        value.fail("must be the name of a command of the explorer, or false to unbind the keys");
+      }
+
+      if (!keys.put(key)) {
+        value.fail("is one change more than the explorer's keys take");
+      }
+    });
+
+    // A table has no order: the changes apply by their sequence, the same on every load.
+    const auto changed = keys.items.viewMut().subspan(first, keys.count - first);
+
+    std::ranges::sort(changed, {}, [](const ExplorerKey& key) {
+      return key.keys.view();
+    });
+
+    // A sequence that starts another bound in the same table would never let it be typed.
+    for (const auto& shorter : changed) {
+      for (const auto& longer : changed) {
+        const bool both = shorter.command != ExplorerCommand::none && longer.command != ExplorerCommand::none;
+        if (both && longer.keys.view().size() > shorter.keys.view().size() && longer.keys.view().starts_with(shorter.keys.view())) {
+          table.fail("binds \"", shorter.keys.view(), "\", which starts \"", longer.keys.view(), "\": the longer one could not be typed");
+        }
+      }
     }
   }
 
