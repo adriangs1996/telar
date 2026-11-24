@@ -222,11 +222,10 @@ NativeRoundedRectangle {
         objectName: "sidebarTransfers"
         readonly property real headerHeight: root.regions.activityHeader.height
         readonly property real lineHeight: Math.round(16 * root.unit)
-        readonly property real rowHeight: 3 * lineHeight + Math.round(14 * root.unit)
         x: root.regions.activity.x
         y: root.regions.activity.y + root.regions.activity.height - height
         width: root.regions.activity.width
-        height: visible ? headerHeight + root.transfers.length * rowHeight + root.headerInset : 0
+        height: visible ? headerHeight + transferCards.height + root.headerInset : 0
         visible: root.expanded && root.transfers.length > 0
 
         Rectangle {
@@ -257,91 +256,112 @@ NativeRoundedRectangle {
             elide: Text.ElideNone
         }
 
-        Repeater {
-            model: root.transfers
+        // A card for each, as the design draws them: where it goes, its name, how much of it
+        // arrived, and while it is on its way what stops it.
+        Column {
+            id: transferCards
+            x: root.headerInset
+            y: transfersPart.headerHeight
+            width: Math.max(0, parent.width - 2 * root.headerInset)
+            spacing: Math.round(6 * root.unit)
 
-            Item {
-                id: transfer
-                required property var modelData
-                required property int index
-                readonly property bool running: !(modelData.ended ?? false)
-                objectName: "sidebarTransfer"
-                y: transfersPart.headerHeight + index * transfersPart.rowHeight
-                width: transfersPart.width
-                height: transfersPart.rowHeight
+            Repeater {
+                model: root.transfers
 
-                ChromeText {
-                    id: transferName
-                    x: root.textInset
-                    width: Math.max(0, cancel.x - x - 4 * root.unit)
-                    height: transfersPart.lineHeight
-                    text: transfer.modelData.name ?? ""
-                    color: (transfer.modelData.failed ?? false) ? root.colors.red : root.colors.text
-                    pixelSize: root.typography.small
-                }
+                delegate: NativeRoundedRectangle {
+                    id: transfer
+                    required property var modelData
+                    required property int index
+                    readonly property bool running: !(modelData.ended ?? false)
+                    readonly property bool arrived: !running && (modelData.phase ?? "") === "arrived"
+                    readonly property real pad: Math.round(8 * root.unit)
+                    objectName: "sidebarTransfer"
+                    width: transferCards.width
+                    height: transferLines.height + 2 * Math.round(7 * root.unit)
+                    radius: 6 * root.unit
+                    color: root.colors.surface_dim
+                    borderWidth: Math.max(1 / Screen.devicePixelRatio, Math.round(root.unit))
+                    borderColor: running ? root.colors.blue : root.colors.surface1
+                    borderAlpha: 1
 
-                // From where to where.
-                ChromeText {
-                    x: root.textInset
-                    y: transfersPart.lineHeight
-                    width: Math.max(0, parent.width - x - root.headerInset)
-                    height: transfersPart.lineHeight
-                    text: transfer.modelData.route ?? ""
-                    color: root.colors.subtext0
-                    pixelSize: root.typography.small
-                }
+                    Column {
+                        id: transferLines
+                        x: transfer.pad
+                        y: Math.round(7 * root.unit)
+                        width: parent.width - 2 * transfer.pad
+                        spacing: Math.round(4 * root.unit)
 
-                // How much of it arrived and how fast, or how it ended.
-                ChromeText {
-                    x: root.textInset
-                    y: 2 * transfersPart.lineHeight
-                    width: Math.max(0, parent.width - x - root.headerInset)
-                    height: transfersPart.lineHeight
-                    text: transfer.running ? (transfer.modelData.progress ?? "") + ((transfer.modelData.rate ?? "").length > 0 ? " · " + transfer.modelData.rate : "") : (transfer.modelData.phase ?? "")
-                    color: root.colors.subtext0
-                    pixelSize: root.typography.small
-                }
+                        // From where to where.
+                        ChromeText {
+                            width: parent.width
+                            height: transfersPart.lineHeight
+                            text: transfer.modelData.route ?? ""
+                            color: root.colors.subtext0
+                            pixelSize: root.typography.small
+                        }
 
-                Rectangle {
-                    x: root.textInset
-                    y: 3 * transfersPart.lineHeight + Math.round(3 * root.unit)
-                    width: Math.max(0, parent.width - x - root.headerInset)
-                    height: Math.max(1, Math.round(3 * root.unit))
-                    radius: height / 2
-                    color: Qt.alpha(root.colors.text, ChromeStyle.outlineAlpha)
-                    visible: transfer.running
+                        ChromeText {
+                            width: parent.width
+                            height: transfersPart.lineHeight
+                            text: transfer.modelData.name ?? ""
+                            color: (transfer.modelData.failed ?? false) ? root.colors.red : root.colors.text
+                            pixelSize: root.typography.small
+                        }
 
-                    Rectangle {
-                        width: Math.round(parent.width * Math.min(1, transfer.modelData.share ?? 0))
-                        height: parent.height
-                        radius: parent.radius
-                        color: root.colors.accent
+                        Rectangle {
+                            width: parent.width
+                            height: Math.max(1, Math.round(4 * root.unit))
+                            radius: height / 2
+                            color: root.colors.surface0
+
+                            Rectangle {
+                                width: Math.round(parent.width * (transfer.arrived ? 1 : transfer.running ? Math.min(1, transfer.modelData.share ?? 0) : 0))
+                                height: parent.height
+                                radius: parent.radius
+                                color: transfer.arrived ? root.colors.green : root.colors.blue
+                            }
+                        }
+
+                        // How much of it arrived and how fast, or how it ended.
+                        ChromeText {
+                            width: parent.width
+                            height: transfersPart.lineHeight
+                            text: transfer.running ? (transfer.modelData.progress ?? "") + ((transfer.modelData.rate ?? "").length > 0 ? " · " + transfer.modelData.rate : "") : (transfer.modelData.phase ?? "")
+                            color: root.colors.subtext0
+                            pixelSize: root.typography.small
+                        }
+
+                        AbstractButton {
+                            id: cancel
+                            objectName: "sidebarTransferCancel"
+                            width: cancelLabel.implicitWidth + Math.round(14 * root.unit)
+                            height: transfersPart.lineHeight
+                            visible: transfer.running
+                            hoverEnabled: true
+                            focusPolicy: Qt.TabFocus
+                            padding: 0
+                            Accessible.role: Accessible.Button
+                            Accessible.name: "Cancel the transfer of " + (transfer.modelData.name ?? "")
+                            onClicked: root.transferCancelled(transfer.modelData.id)
+                            background: NativeRoundedRectangle {
+                                radius: 4 * root.unit
+                                color: "transparent"
+                                borderWidth: Math.max(1 / Screen.devicePixelRatio, Math.round(root.unit))
+                                borderColor: cancel.hovered ? root.colors.red : root.colors.surface1
+                                borderAlpha: 1
+                            }
+                            contentItem: ChromeText {
+                                id: cancelLabel
+                                text: "cancel"
+                                color: cancel.hovered ? root.colors.red : root.colors.subtext0
+                                pixelSize: root.typography.small
+                                horizontalAlignment: Text.AlignHCenter
+                                elide: Text.ElideNone
+                            }
+
+                            HoverHandler { cursorShape: Qt.PointingHandCursor }
+                        }
                     }
-                }
-
-                AbstractButton {
-                    id: cancel
-                    objectName: "sidebarTransferCancel"
-                    x: parent.width - width - root.headerInset
-                    width: Math.round(16 * root.unit)
-                    height: transfersPart.lineHeight
-                    visible: transfer.running
-                    hoverEnabled: true
-                    focusPolicy: Qt.TabFocus
-                    padding: 0
-                    background: null
-                    Accessible.role: Accessible.Button
-                    Accessible.name: "Cancel the transfer of " + (transfer.modelData.name ?? "")
-                    onClicked: root.transferCancelled(transfer.modelData.id)
-                    contentItem: ChromeText {
-                        text: "×"
-                        color: cancel.hovered ? root.colors.red : root.colors.subtext0
-                        pixelSize: root.typography.small
-                        horizontalAlignment: Text.AlignHCenter
-                        elide: Text.ElideNone
-                    }
-
-                    HoverHandler { cursorShape: Qt.PointingHandCursor }
                 }
             }
         }

@@ -87,6 +87,88 @@ FocusScope {
     readonly property real previewWidth: pinned || windows.length > 1 ? 0 : Math.round(Math.max(300 * ratio, body.width * 0.38))
     readonly property real indent: 14 * ratio
     readonly property real gutter: 10 * ratio
+    // The color of a change: the yellow the terminal draws with, which the design keeps apart
+    // from the accent.
+    readonly property color changed: colors.terminalYellow ?? colors.yellow
+    // The font of a line of the plan, of the title of the preview and of a key in the help.
+    readonly property var planGrid: scaled(grid, 11.5 / 12)
+    readonly property var titleGrid: scaled(grid, 13 / 12)
+    readonly property var keyGrid: scaled(grid, 9.9 / 12)
+    // The row of a window under the pointer, by the window's place and the row's in its page.
+    property int hoverWindow: -1
+    property int hoverRow: -1
+    // How deep in the tree the row being named is, which its field starts after, and the room
+    // from there to what the row says at its end.
+    property int editDepth: 0
+    property real editRoom: 0
+
+    // A heading over a part: capitals a little apart, as the design sets them. Each letter is
+    // set on its own, since the window's text has no spacing to give.
+    component Heading: Row {
+        id: heading
+
+        property string text
+        property real pixelSize: root.headingSize
+        property real tracking: 0.08
+        property color color: root.colors.subtext0
+
+        spacing: tracking * pixelSize
+
+        Repeater {
+            model: heading.text.length
+
+            delegate: ChromeText {
+                required property int index
+
+                width: implicitWidth
+                height: heading.height
+                text: heading.text.charAt(index)
+                pixelSize: heading.pixelSize
+                emphasized: true
+                color: heading.color
+                elide: Text.ElideNone
+            }
+        }
+    }
+
+    // A key as the design draws one in a line of text: a cap with a thicker lower edge.
+    component Keycap: Item {
+        id: keycap
+
+        property string text
+        property var grid: root.tinyGrid
+
+        width: Math.max(Math.round(1.5 * (grid.cellHeight ?? 14)), keycapText.implicitWidth + 8 * root.ratio)
+        height: Math.round((grid.cellHeight ?? 14) + 4 * root.ratio)
+
+        NativeRoundedRectangle {
+            y: 1 * root.ratio
+            width: parent.width
+            height: parent.height
+            radius: 4 * root.ratio
+            color: root.colors.surface1
+        }
+
+        NativeRoundedRectangle {
+            width: parent.width
+            height: parent.height
+            radius: 4 * root.ratio
+            color: root.colors.surface_dim
+            borderWidth: root.edge
+            borderColor: root.colors.surface1
+            borderAlpha: 1
+        }
+
+        CellText {
+            id: keycapText
+            x: Math.round((parent.width - width) / 2)
+            width: implicitWidth
+            height: parent.height
+            text: keycap.text
+            grid: keycap.grid
+            color: root.colors.text
+        }
+    }
 
     // The chip of who touched a file: `you`, or the place in the tab of its agent's pane, in the
     // color of whose hand it was.
@@ -174,6 +256,27 @@ FocusScope {
         const cells = Math.max(1, Math.floor(width / Math.max(1, grid.cellWidth ?? 8)));
 
         return text.length <= cells ? text : text.slice(0, cells - 1) + "…";
+    }
+
+    // `text` with a space wherever `hit` has a letter, `hit` read from its place `offset`: the
+    // row draws those letters again over it, lit.
+    function blanked(text, hit, offset) {
+        if (hit.length === 0)
+            return text;
+
+        let result = "";
+
+        for (let index = 0; index < text.length; ++index)
+            result += offset + index < hit.length && hit.charAt(offset + index) !== " " ? " " : text.charAt(index);
+        return result;
+    }
+
+    // The letters a filter found, as far as `width` shows them in cells of `grid`; the cell a
+    // cut name ends with a mark in is left to the mark.
+    function shownHits(hit, width, grid) {
+        const cells = Math.max(1, Math.floor(width / Math.max(1, grid.cellWidth ?? 8)));
+
+        return hit.length <= cells ? hit : hit.slice(0, cells - 1);
     }
 
     function actorColor(tone) {
@@ -664,7 +767,7 @@ FocusScope {
                         id: chip
                         y: Math.round((parent.height - height) / 2) + 1 * root.ratio
                         width: dot.width + 6 * root.ratio + machine.implicitWidth + 6 * root.ratio + where.implicitWidth + 16 * root.ratio
-                        height: Math.round((root.smallGrid.cellHeight ?? 16) + 4 * root.ratio)
+                        height: Math.round(22.5 * root.ratio)
                         radius: height / 2
                         color: root.colors.surface0
 
@@ -801,7 +904,7 @@ FocusScope {
                             height: parent.height
                             text: String(pane.modelData.unstaged)
                             grid: root.smallGrid
-                            color: root.colors.yellow
+                            color: root.changed
                             bold: true
                         }
 
@@ -884,11 +987,36 @@ FocusScope {
                             required property int index
                             readonly property bool entry: record.kind === "entry" || record.kind === "added" || record.kind === "change" || record.kind === "pane" || record.kind === "match"
                             readonly property real leading: root.gutter + record.depth * root.indent
-                            readonly property color nameColor: record.removed ? root.colors.red : record.added ? root.colors.green : record.renamed ? root.colors.yellow : record.ignored ? root.colors.overlay1 : record.directory ? root.colors.accent : root.colors.text
+                            // A heading or a note, which the list says in the window's own font.
+                            readonly property bool said: record.kind === "header" || record.kind === "note"
+                            readonly property string hit: record.hit ?? ""
+                            readonly property color nameColor: record.removed ? root.colors.red : record.added ? root.colors.green : record.renamed ? root.changed : record.ignored ? root.colors.overlay1 : record.directory ? root.colors.accent : root.colors.text
 
                             y: root.rowY(index)
                             width: list.width - (scrollbar.visible ? scrollbar.width : 0)
                             height: root.rowY(index + 1) - y
+
+                            // The row a name is being typed on says how deep it is.
+                            Binding {
+                                target: root
+                                property: "editDepth"
+                                value: row.record.depth
+                                when: row.record.editing ?? false
+                            }
+
+                            Binding {
+                                target: root
+                                property: "editRoom"
+                                value: notes.x - 8 * root.ratio - row.leading - 38 * root.ratio
+                                when: row.record.editing ?? false
+                            }
+
+                            // The row under the pointer.
+                            Rectangle {
+                                anchors.fill: parent
+                                visible: row.entry && root.hoverWindow === pane.index && root.hoverRow === row.index && !root.dragging
+                                color: root.colors.surface0
+                            }
 
                             // The directory that would take the rows dragged.
                             Rectangle {
@@ -946,15 +1074,34 @@ FocusScope {
                                 opacity: row.record.removed || row.record.ignored ? 0.45 : 1
                             }
 
-                            // The pane's place in the tab, in the panes lens.
-                            CellText {
+                            // The pane's place in the tab, in the panes lens: in a frame, as
+                            // the mark of a pane on a directory's row.
+                            Item {
+                                id: paneChip
                                 x: row.leading + 16 * root.ratio
-                                width: implicitWidth
-                                height: parent.height
+                                y: Math.round((parent.height - height) / 2)
+                                width: visible ? paneNumber.implicitWidth + 8 * root.ratio : 0
+                                height: Math.round((root.tinyGrid.cellHeight ?? 14) + 2 * root.ratio)
                                 visible: row.record.kind === "pane"
-                                text: String((row.record.panes ?? [])[0] ?? "")
-                                grid: root.smallGrid
-                                color: root.colors.accent
+
+                                NativeRoundedRectangle {
+                                    anchors.fill: parent
+                                    radius: 3 * root.ratio
+                                    color: "transparent"
+                                    borderWidth: root.edge
+                                    borderColor: root.colors.overlay1
+                                    borderAlpha: 1
+                                }
+
+                                CellText {
+                                    id: paneNumber
+                                    x: 4 * root.ratio
+                                    width: implicitWidth
+                                    height: parent.height
+                                    text: String((row.record.panes ?? [])[0] ?? "")
+                                    grid: root.tinyGrid
+                                    color: root.colors.accent
+                                }
                             }
 
                             // What the row says after its name, from the right: its size and its
@@ -973,7 +1120,7 @@ FocusScope {
                                     visible: (row.record.note ?? "").length > 0
                                     text: row.record.note ?? ""
                                     grid: root.tinyGrid
-                                    color: row.record.removed ? root.colors.red : row.record.added ? root.colors.green : root.colors.yellow
+                                    color: row.record.removed ? root.colors.red : row.record.added ? root.colors.green : root.changed
                                 }
 
                                 CellText {
@@ -1025,6 +1172,7 @@ FocusScope {
                                     text: "+" + row.record.linesAdded
                                     grid: root.tinyGrid
                                     color: root.colors.green
+                                    bold: true
                                 }
 
                                 CellText {
@@ -1046,7 +1194,7 @@ FocusScope {
                                     visible: (row.record.editor ?? "").length > 0
                                     text: row.record.editor === "unsaved" ? "●" : "○"
                                     grid: root.tinyGrid
-                                    color: row.record.editor === "unsaved" ? root.colors.yellow : root.colors.overlay1
+                                    color: row.record.editor === "unsaved" ? root.changed : root.colors.overlay1
                                 }
 
                                 // In the lens of touches: how the file was touched last.
@@ -1102,7 +1250,7 @@ FocusScope {
                                         visible: row.record.below > 0
                                         text: "●" + row.record.below
                                         grid: root.tinyGrid
-                                        color: root.colors.yellow
+                                        color: root.changed
                                         bold: true
                                     }
 
@@ -1123,7 +1271,7 @@ FocusScope {
                                         visible: !below.visible
                                         text: row.record.unstaged ?? ""
                                         grid: root.smallGrid
-                                        color: row.record.unstaged === "?" ? root.colors.blue : row.record.unstaged === "!" ? root.colors.red : root.colors.yellow
+                                        color: row.record.unstaged === "?" ? root.colors.blue : row.record.unstaged === "!" ? root.colors.red : root.changed
                                         bold: true
                                     }
                                 }
@@ -1134,7 +1282,9 @@ FocusScope {
                                     height: parent.height
                                     // A file a pane touched says its size too, as in its directory.
                                     readonly property bool touched: (row.record.ago ?? "").length > 0
-                                    visible: row.record.kind === "entry" || row.record.kind === "added" || touched
+                                    // A change keeps the column, so what git says of it stands
+                                    // where it does in the tree; git gives no size to say in it.
+                                    visible: row.record.kind === "entry" || row.record.kind === "added" || row.record.kind === "change" || row.record.kind === "match" || touched
 
                                     Rectangle {
                                         id: track
@@ -1152,7 +1302,7 @@ FocusScope {
                                             width: Math.round(parent.width * Math.min(1, row.record.share ?? 0))
                                             height: parent.height
                                             radius: parent.radius
-                                            color: (row.record.arriving ?? false) ? root.colors.accent : Qt.alpha(root.colors.peach, 0.7)
+                                            color: (row.record.arriving ?? false) ? root.colors.blue : Qt.alpha(root.colors.peach, 0.7)
                                         }
                                     }
 
@@ -1160,9 +1310,10 @@ FocusScope {
                                         x: parent.width - width
                                         width: implicitWidth
                                         height: parent.height
+                                        visible: row.record.kind !== "change"
                                         text: row.record.measured ? (row.record.size ?? "") + (row.record.partial ? "+" : "") : "…"
                                         grid: root.smallGrid
-                                        color: row.record.measured ? root.colors.subtext0 : root.colors.overlay1
+                                        color: (row.record.arriving ?? false) ? root.colors.blue : row.record.measured ? root.colors.subtext0 : root.colors.overlay1
                                     }
                                 }
                             }
@@ -1170,30 +1321,66 @@ FocusScope {
                             // The name: in a flat list, the path that leads to it first.
                             Row {
                                 id: label
-                                x: row.entry ? row.leading + (row.record.kind === "pane" ? 34 : 38) * root.ratio : row.leading + 16 * root.ratio
+                                x: row.record.kind === "pane" ? paneChip.x + paneChip.width + (root.grid.cellWidth ?? 8) : row.entry ? row.leading + 38 * root.ratio : row.leading + 16 * root.ratio
                                 width: Math.max(0, (row.entry ? notes.x - 8 * root.ratio : parent.width - root.gutter) - x)
                                 height: parent.height
                                 clip: true
-                                visible: !row.record.editing
+                                visible: !row.record.editing && !row.said
 
                                 CellText {
                                     id: lead
                                     width: implicitWidth
                                     height: parent.height
                                     visible: (row.record.lead ?? "").length > 0
-                                    text: row.record.lead ?? ""
+                                    text: root.blanked(row.record.lead ?? "", row.hit, 0)
                                     grid: root.grid
-                                    color: root.colors.overlay1
+                                    // A path a filter found is read whole, as the design sets it.
+                                    color: row.hit.length > 0 ? row.nameColor : root.colors.overlay1
                                 }
 
                                 CellText {
                                     width: implicitWidth
                                     height: parent.height
-                                    text: root.cut((row.record.name ?? "") + (row.record.directory && row.entry && row.record.kind !== "pane" && !(row.record.name ?? "").endsWith("/") ? "/" : ""), label.width - (lead.visible ? lead.width : 0), grid)
-                                    grid: row.record.kind === "diff" || row.record.kind === "note" || row.record.kind === "header" ? root.smallGrid : root.grid
-                                    color: row.record.kind === "diff" ? root.toneColor(row.record.tone) : row.record.kind === "header" ? root.colors.subtext0 : row.record.kind === "note" ? root.colors.overlay1 : row.nameColor
-                                    bold: row.record.kind === "header"
+                                    text: root.cut(root.blanked(row.record.name ?? "", row.hit, (row.record.lead ?? "").length) + (row.record.directory && row.entry && row.record.kind !== "pane" && !(row.record.name ?? "").endsWith("/") ? "/" : ""), label.width - (lead.visible ? lead.width : 0), grid)
+                                    grid: row.record.kind === "diff" ? root.smallGrid : root.grid
+                                    color: row.record.kind === "diff" ? root.toneColor(row.record.tone) : row.nameColor
                                 }
+                            }
+
+                            // The letters a filter found in the path, lit where they stand.
+                            CellText {
+                                x: label.x
+                                width: label.width
+                                height: parent.height
+                                visible: label.visible && row.hit.length > 0
+                                text: root.shownHits(row.hit, label.width, root.grid)
+                                grid: root.grid
+                                color: root.changed
+                                bold: true
+                                clip: true
+                            }
+
+                            // The heading of a group of the list, in capitals at the list's edge.
+                            Heading {
+                                x: root.gutter
+                                y: Math.round(4.25 * root.ratio)
+                                height: Math.round(15.75 * root.ratio)
+                                visible: row.record.kind === "header"
+                                text: row.record.kind === "header" ? (row.record.name ?? "").toUpperCase() : ""
+                                pixelSize: 10.5 * root.ratio
+                                tracking: 0.07
+                            }
+
+                            // What the list says that is no entry: what it leaves out, or that
+                            // it is being read.
+                            ChromeText {
+                                x: row.record.depth > 0 ? row.leading + 16 * root.ratio : root.gutter
+                                width: Math.max(0, parent.width - x - root.gutter)
+                                height: parent.height
+                                visible: row.record.kind === "note"
+                                text: row.record.kind === "note" ? (row.record.name ?? "") : ""
+                                pixelSize: 11 * root.ratio
+                                color: root.colors.overlay1
                             }
 
                             // A removed row's name is struck through.
@@ -1232,6 +1419,11 @@ FocusScope {
                     MouseArea {
                         anchors.fill: parent
                         acceptedButtons: Qt.LeftButton | Qt.RightButton
+                        hoverEnabled: true
+                        onExited: {
+                            if (root.hoverWindow === pane.index)
+                                root.hoverRow = -1;
+                        }
                         // The row the button went down on and where, to tell a click from a drag;
                         // and whether choosing it waits for the button to come up, as it does on
                         // a row of the selection, which a drag takes whole.
@@ -1271,6 +1463,8 @@ FocusScope {
                             root.claim();
                         }
                         onPositionChanged: mouse => {
+                            root.hoverWindow = pane.index;
+                            root.hoverRow = root.rowAt(mouse.y);
                             if ((mouse.buttons & Qt.LeftButton) === 0 || pressedRow < 0)
                                 return;
 
@@ -1384,7 +1578,7 @@ FocusScope {
                             text: pane.modelData.mode
                             grid: root.smallGrid
                             color: pane.current ? root.colors.panel_bg : root.colors.subtext0
-                            bold: true
+                            bold: pane.current
                         }
                     }
 
@@ -1503,9 +1697,20 @@ FocusScope {
                             CellText {
                                 width: implicitWidth
                                 height: parent.height
-                                text: root.tail((pane.modelData.root ?? "") + (pane.modelData.pending ? " [+]" : ""), statusStart.width - following.width - rootMachine.width - statusStart.spacing, root.smallGrid)
+                                text: root.tail(pane.modelData.root ?? "", statusStart.width - following.width - rootMachine.width - unwritten.width - statusStart.spacing, root.smallGrid)
                                 grid: root.smallGrid
                                 color: root.colors.text
+                            }
+
+                            // Changes typed here and not written yet.
+                            CellText {
+                                id: unwritten
+                                width: visible ? implicitWidth : 0
+                                height: parent.height
+                                visible: pane.modelData.pending ?? false
+                                text: " [+]"
+                                grid: root.smallGrid
+                                color: root.colors.accent
                             }
                         }
                     }
@@ -1556,8 +1761,10 @@ FocusScope {
                         width: parent.width - x
                         height: parent.height
                         text: (root.preview.name ?? "") + (root.preview.directory ? "/" : "")
-                        grid: root.grid
+                        grid: root.titleGrid
                         color: root.colors.text
+                        // The design's weight is between the two the terminal's font has here;
+                        // the heavier is the nearer.
                         bold: true
                         clip: true
                     }
@@ -1685,21 +1892,17 @@ FocusScope {
                     spacing: 4 * root.ratio
                     visible: (root.preview.activity ?? []).length > 0
 
-                    ChromeText {
-                        width: parent.width
+                    Heading {
                         height: root.typography.smallRow
                         text: "ACTIVITY"
-                        pixelSize: root.headingSize
-                        emphasized: true
-                        color: root.colors.subtext0
                     }
 
                     // A line for each, as tall as its chip and as far from the heading and from
                     // what follows as a browser sets them.
                     Column {
                         width: parent.width
-                        topPadding: Math.round(1.6 * root.ratio)
-                        bottomPadding: Math.round(1.6 * root.ratio)
+                        topPadding: Math.round(0.5 * root.ratio)
+                        bottomPadding: Math.round(0.5 * root.ratio)
                         spacing: 4 * root.ratio
 
                         Repeater {
@@ -1710,10 +1913,11 @@ FocusScope {
 
                                 required property var modelData
 
-                                height: Math.round(15 * root.ratio)
+                                height: Math.round(17.25 * root.ratio)
                                 spacing: 6 * root.ratio
 
                                 ActorChip {
+                                    anchors.verticalCenter: parent.verticalCenter
                                     actor: (touch.modelData.actors ?? [])[0] ?? ({})
                                     cell: false
                                 }
@@ -1758,13 +1962,9 @@ FocusScope {
                     spacing: 4 * root.ratio
                     visible: (root.preview.panes ?? []).length > 0
 
-                    ChromeText {
-                        width: parent.width
+                    Heading {
                         height: root.typography.smallRow
                         text: "PANES HERE"
-                        pixelSize: root.headingSize
-                        emphasized: true
-                        color: root.colors.subtext0
                     }
 
                     Repeater {
@@ -1788,73 +1988,74 @@ FocusScope {
                     spacing: 4 * root.ratio
                     visible: (root.preview.heavy ?? []).length > 0
 
-                    ChromeText {
-                        width: parent.width
+                    Heading {
                         height: root.typography.smallRow
                         text: "HEAVIEST"
-                        pixelSize: root.headingSize
-                        emphasized: true
-                        color: root.colors.subtext0
                     }
 
-                    Repeater {
-                        model: root.preview.heavy ?? []
+                    Column {
+                        width: parent.width
+                        spacing: 3 * root.ratio
 
-                        delegate: Item {
-                            id: heavy
+                        Repeater {
+                            model: root.preview.heavy ?? []
 
-                            required property var modelData
+                            delegate: Item {
+                                id: heavy
 
-                            width: parent.width
-                            height: Math.round(root.smallGrid.cellHeight ?? 16)
+                                required property var modelData
 
-                            CellText {
-                                id: heavyName
-                                width: Math.min(implicitWidth, heavyTrack.x - 8 * root.ratio - (heavyTag.visible ? heavyTag.width + 6 * root.ratio : 0))
-                                height: parent.height
-                                text: heavy.modelData.name ?? ""
-                                grid: root.smallGrid
-                                color: root.colors.text
-                                clip: true
-                            }
+                                width: parent.width
+                                height: Math.round(16.5 * root.ratio)
 
-                            // Why the window does not list it unless asked: hidden, or ignored.
-                            ChromeText {
-                                id: heavyTag
-                                x: heavyName.x + heavyName.width + 6 * root.ratio
-                                width: implicitWidth
-                                height: parent.height
-                                visible: (heavy.modelData.tag ?? "").length > 0
-                                text: heavy.modelData.tag ?? ""
-                                pixelSize: root.headingSize
-                                color: root.colors.overlay1
-                            }
-
-                            // As the bar of a row, and beside the size as it is there.
-                            Rectangle {
-                                id: heavyTrack
-                                x: Math.round(parent.width - (4 * 7.2 + 6 + 32) * root.ratio)
-                                y: Math.round((parent.height - height) / 2)
-                                width: 32 * root.ratio
-                                height: 4 * root.ratio
-                                radius: height / 2
-                                color: root.colors.surface0
-
-                                Rectangle {
-                                    width: Math.round(parent.width * Math.min(1, heavy.modelData.share ?? 0))
+                                CellText {
+                                    id: heavyName
+                                    width: Math.min(implicitWidth, heavyTrack.x - 8 * root.ratio - (heavyTag.visible ? heavyTag.width + 6 * root.ratio : 0))
                                     height: parent.height
-                                    radius: parent.radius
-                                    color: Qt.alpha(root.colors.peach, 0.7)
+                                    text: heavy.modelData.name ?? ""
+                                    grid: root.smallGrid
+                                    color: root.colors.text
+                                    clip: true
                                 }
-                            }
 
-                            CellText {
-                                x: parent.width - width
-                                width: implicitWidth
-                                height: parent.height
-                                text: heavy.modelData.size ?? ""
-                                grid: root.smallGrid
-                                color: root.colors.subtext0
+                                // Why the window does not list it unless asked: hidden, or ignored.
+                                ChromeText {
+                                    id: heavyTag
+                                    x: heavyName.x + heavyName.width + 6 * root.ratio
+                                    width: implicitWidth
+                                    height: parent.height
+                                    visible: (heavy.modelData.tag ?? "").length > 0
+                                    text: heavy.modelData.tag ?? ""
+                                    pixelSize: root.headingSize
+                                    color: root.colors.overlay1
+                                }
+
+                                // As the bar of a row, before a column the size ends.
+                                Rectangle {
+                                    id: heavyTrack
+                                    x: Math.round(parent.width - (40 + 8 + 32) * root.ratio)
+                                    y: Math.round((parent.height - height) / 2)
+                                    width: 32 * root.ratio
+                                    height: 4 * root.ratio
+                                    radius: height / 2
+                                    color: root.colors.surface0
+
+                                    Rectangle {
+                                        width: Math.round(parent.width * Math.min(1, heavy.modelData.share ?? 0))
+                                        height: parent.height
+                                        radius: parent.radius
+                                        color: Qt.alpha(root.colors.peach, 0.7)
+                                    }
+                                }
+
+                                CellText {
+                                    x: parent.width - width
+                                    width: implicitWidth
+                                    height: parent.height
+                                    text: heavy.modelData.size ?? ""
+                                    grid: root.smallGrid
+                                    color: root.colors.subtext0
+                                }
                             }
                         }
                     }
@@ -1884,46 +2085,48 @@ FocusScope {
                     }
                 }
 
-                ChromeText {
+                // Its diff, or the head of its text, under what says which it is.
+                Column {
                     width: parent.width
-                    height: root.typography.smallRow
-                    visible: (root.preview.title ?? "").length > 0
-                    text: root.preview.title ?? ""
-                    pixelSize: root.headingSize
-                    emphasized: true
-                    color: root.colors.subtext0
-                }
+                    spacing: 4 * root.ratio
+                    visible: (root.preview.title ?? "").length > 0 || snippet.shown > 0
 
-                // Its diff, or the head of its text.
-                Rectangle {
-                    id: snippet
-                    readonly property real line: Math.round((root.tinyGrid.cellHeight ?? 14) * 1.25)
-                    readonly property int shown: Math.max(0, Math.min((root.preview.lines ?? []).length, Math.floor((previewPane.height - y - parent.y - 24 * root.ratio) / line)))
+                    Heading {
+                        height: root.typography.smallRow
+                        visible: (root.preview.title ?? "").length > 0
+                        text: root.preview.title ?? ""
+                    }
 
-                    width: parent.width
-                    height: shown * line + 16 * root.ratio
-                    visible: shown > 0
-                    radius: 4 * root.ratio
-                    color: root.colors.surface_dim
-                    border.width: root.edge
-                    border.color: root.colors.surface1
-                    clip: true
+                    Rectangle {
+                        id: snippet
+                        readonly property real line: Math.round((root.tinyGrid.cellHeight ?? 14) * 1.25)
+                        readonly property int shown: Math.max(0, Math.min((root.preview.lines ?? []).length, Math.floor((previewPane.height - y - parent.y - 34 * root.ratio) / line)))
 
-                    Repeater {
-                        model: snippet.shown
+                        width: parent.width
+                        height: shown * line + 16 * root.ratio
+                        visible: shown > 0
+                        radius: 4 * root.ratio
+                        color: root.colors.surface_dim
+                        border.width: root.edge
+                        border.color: root.colors.surface1
+                        clip: true
 
-                        delegate: CellText {
-                            required property int index
-                            readonly property var entry: (root.preview.lines ?? [])[index] ?? ({})
+                        Repeater {
+                            model: snippet.shown
 
-                            x: 8 * root.ratio
-                            y: 8 * root.ratio + index * snippet.line
-                            width: snippet.width - 16 * root.ratio
-                            height: snippet.line
-                            text: entry.text ?? ""
-                            grid: root.tinyGrid
-                            color: root.toneColor(entry.tone ?? "context")
-                            clip: true
+                            delegate: CellText {
+                                required property int index
+                                readonly property var entry: (root.preview.lines ?? [])[index] ?? ({})
+
+                                x: 8 * root.ratio
+                                y: 8 * root.ratio + index * snippet.line
+                                width: snippet.width - 16 * root.ratio
+                                height: snippet.line
+                                text: entry.text ?? ""
+                                grid: root.tinyGrid
+                                color: root.toneColor(entry.tone ?? "context")
+                                clip: true
+                            }
                         }
                     }
                 }
@@ -2015,7 +2218,7 @@ FocusScope {
         id: hints
         y: root.height - height - root.edge
         width: root.width
-        height: Math.max(root.hintsHeight, flow.implicitHeight + 12 * root.ratio)
+        height: Math.max(root.hintsHeight, flow.implicitHeight + 20 * root.ratio)
 
         Rectangle {
             width: parent.width
@@ -2025,8 +2228,12 @@ FocusScope {
 
         Flow {
             id: flow
+            // A hint stands 12 from the next of its line and its line 4 from the next: each is
+            // given 8 less than its height, which it draws past by 4 above and below.
+            readonly property real tuck: 8 * root.ratio
+
             x: root.gutter
-            y: 6 * root.ratio
+            y: 6 * root.ratio + tuck / 2
             width: parent.width - 2 * root.gutter
             spacing: 12 * root.ratio
 
@@ -2040,7 +2247,7 @@ FocusScope {
                     readonly property real line: Math.round(Math.max(root.typography.smallRow, (root.tinyGrid.cellHeight ?? 14) + 6 * root.ratio))
 
                     width: cap.width + 5 * root.ratio + word.implicitWidth
-                    height: line
+                    height: line - flow.tuck
                     opacity: modelData.enabled ? 1 : 0.35
 
                     // The cap's lower edge, a line thicker than the others, as a key's.
@@ -2078,8 +2285,9 @@ FocusScope {
                     ChromeText {
                         id: word
                         x: cap.width + 5 * root.ratio
+                        y: -flow.tuck / 2
                         width: implicitWidth
-                        height: parent.height
+                        height: hint.line
                         text: hint.modelData.label
                         pixelSize: root.labelSize
                         color: root.colors.subtext0
@@ -2087,7 +2295,9 @@ FocusScope {
                     }
 
                     ActionPointer {
-                        anchors.fill: parent
+                        y: -flow.tuck / 2
+                        width: parent.width
+                        height: hint.line
                         enabled: hint.modelData.enabled
                         identity: "hint:" + hint.modelData.keys
                         onActivated: root.controller.type(hint.modelData.keys === ":w" ? ":" : hint.modelData.keys)
@@ -2095,6 +2305,21 @@ FocusScope {
                 }
             }
         }
+    }
+
+    // The box the name is typed in.
+    NativeRoundedRectangle {
+        x: nameField.boxX
+        y: nameField.y - root.edge
+        z: 5
+        width: nameField.boxWidth
+        height: nameField.height + 2 * root.edge
+        visible: nameField.visible
+        radius: 3 * root.ratio
+        color: root.colors.panel_bg
+        borderWidth: root.edge
+        borderColor: root.colors.teal
+        borderAlpha: 1
     }
 
     // The name of a row while it is typed: a rename, or a new entry.
@@ -2107,10 +2332,15 @@ FocusScope {
         readonly property real paneX: (root.controller.sideBySide ? Math.round((root.line.window ?? 0) * (body.width - root.previewWidth) / Math.max(1, root.windows.length)) : 0)
         readonly property real paneY: (root.controller.sideBySide ? 0 : Math.round((root.line.window ?? 0) * body.height / Math.max(1, root.windows.length)))
 
-        x: paneX + root.gutter + 38 * root.ratio
+        // Where the name stood: after the row's indent and its icon, inside the box's line and
+        // its room at each side.
+        readonly property real boxX: body.x + paneX + root.gutter + root.editDepth * root.indent + 38 * root.ratio
+        readonly property real boxWidth: Math.max(12 * (root.grid.cellWidth ?? 8) + 10 * root.ratio, root.editRoom)
+
+        x: boxX + root.edge + 4 * root.ratio
         y: body.y + paneY + root.headHeight + root.rowY(place) + Math.round((root.rowHeight - height) / 2)
         z: 5
-        width: Math.max(120 * root.ratio, (body.width - root.previewWidth) / Math.max(1, root.windows.length) - 160 * root.ratio)
+        width: boxWidth - 2 * (root.edge + 4 * root.ratio)
         height: Math.max(root.grid.cellHeight ?? 0, 18 * root.ratio)
         visible: root.mode === "insert"
         colors: root.colors
@@ -2128,196 +2358,336 @@ FocusScope {
         }
     }
 
-    // The plan `:w` shows before anything is touched, and the help.
-    Rectangle {
+    // The plan `:w` shows before anything is touched, and the help: a sheet over the windows,
+    // which stay in view around it.
+    Item {
         id: sheet
-        // Over the windows and the preview, whole: nothing of them shows beside it.
-        x: body.x
-        y: body.y
+        readonly property real radius: 6 * root.ratio
+
+        x: root.edge + Math.round(10 * root.ratio)
+        y: root.edge + Math.round(44 * root.ratio)
         z: 6
-        width: body.width
-        height: body.height
+        width: root.width - 2 * x
+        height: Math.max(0, root.height - y - root.edge - Math.round(76 * root.ratio))
         visible: root.mode === "plan" || root.mode === "help"
-        color: root.colors.surface_dim
-        clip: true
 
-        Column {
-            x: 14 * root.ratio
-            y: 12 * root.ratio
-            width: parent.width - 28 * root.ratio
-            spacing: 6 * root.ratio
-            visible: root.mode === "plan"
+        ElevationShadow {
+            anchors.fill: parent
+            ratio: root.ratio
+            cornerRadius: sheet.radius
+            layers: 4
+            step: 4 * root.ratio
+            offset: 10 * root.ratio
+            strength: 0.08
+        }
 
-            ChromeText {
-                width: parent.width
-                height: root.typography.smallRow
-                text: "PLAN OF :w · " + root.controller.plan.length + (root.controller.plan.length === 1 ? " OPERATION" : " OPERATIONS") + ((root.line.overwrite ?? false) ? " · OVERWRITES WHAT EXISTS" : "")
-                pixelSize: root.headingSize
-                emphasized: true
-                color: root.colors.subtext0
-            }
+        NativeRoundedRectangle {
+            anchors.fill: parent
+            radius: sheet.radius
+            color: root.colors.surface_dim
+            borderWidth: root.edge
+            borderColor: root.colors.overlay0
+            borderAlpha: 1
+        }
 
-            Repeater {
-                model: root.controller.plan
+        // What is under the sheet takes no pointer through it.
+        MouseArea {
+            anchors.fill: parent
+            acceptedButtons: Qt.AllButtons
+            onPressed: mouse => mouse.accepted = true
+            onWheel: wheel => wheel.accepted = true
+        }
 
-                delegate: Item {
-                    id: step
+        // What does not fit is reached with the wheel, as the design's sheet scrolls.
+        Flickable {
+            id: sheetBody
+            anchors.fill: parent
+            anchors.margins: root.edge
+            contentWidth: width
+            contentHeight: (root.mode === "plan" ? planColumn.height : helpGrid.height) + 24 * root.ratio
+            boundsBehavior: Flickable.StopAtBounds
+            clip: true
+            onVisibleChanged: contentY = 0
 
-                    required property var modelData
-                    readonly property color verbColor: modelData.verb === "CREATE" ? root.colors.green : modelData.verb === "MOVE" ? root.colors.yellow : modelData.verb === "COPY" ? root.colors.blue : root.colors.red
+            Column {
+                id: planColumn
+                x: 14 * root.ratio
+                y: 12 * root.ratio
+                width: sheetBody.width - 28 * root.ratio
+                spacing: 10 * root.ratio
+                visible: root.mode === "plan"
+
+                Heading {
+                    height: Math.round(15 * root.ratio)
+                    text: "PLAN OF :w · " + root.controller.plan.length + (root.controller.plan.length === 1 ? " OPERATION" : " OPERATIONS") + ((root.line.overwrite ?? false) ? " · OVERWRITES WHAT EXISTS" : "")
+                }
+
+                Column {
+                    width: parent.width
+                    spacing: 6 * root.ratio
+
+                    Repeater {
+                        model: root.controller.plan
+
+                        delegate: Column {
+                            id: step
+
+                            required property var modelData
+                            readonly property color verbColor: modelData.verb === "CREATE" ? root.colors.green : modelData.verb === "MOVE" ? root.changed : modelData.verb === "COPY" ? root.colors.blue : root.colors.red
+                            readonly property real line: Math.round(17.25 * root.ratio)
+                            // What a line says below its paths, in the window's own font.
+                            readonly property real noteLine: Math.round(16.5 * root.ratio)
+                            // Where the paths start: after the verb's eight cells and their gap,
+                            // and the machine's in a plan that goes to more than one.
+                            readonly property real pathsX: Math.round(8 * (root.planGrid.cellWidth ?? 8) + 10 * root.ratio) + stepMachine.width
+
+                            width: parent.width
+                            spacing: 1 * root.ratio
+
+                            Item {
+                                width: parent.width
+                                height: step.line
+
+                                CellText {
+                                    width: implicitWidth
+                                    height: parent.height
+                                    text: step.modelData.verb
+                                    grid: root.planGrid
+                                    color: step.verbColor
+                                    bold: true
+                                }
+
+                                // The machine of the step, in a plan that goes to more than one.
+                                CellText {
+                                    id: stepMachine
+                                    x: step.pathsX - width
+                                    width: root.planMachineCells > 0 ? Math.round((root.planMachineCells + 1) * (root.planGrid.cellWidth ?? 8)) : 0
+                                    height: parent.height
+                                    visible: width > 0
+                                    text: step.modelData.machine ?? ""
+                                    grid: root.planGrid
+                                    color: root.colors.blue
+                                }
+
+                                CellText {
+                                    x: step.pathsX
+                                    width: Math.max(0, Math.min(implicitWidth, stepSize.x - x - 10 * root.ratio))
+                                    height: parent.height
+                                    text: (step.modelData.source ?? "") + ((step.modelData.source ?? "").length > 0 && (step.modelData.target ?? "").length > 0 ? " → " : "") + (step.modelData.target ?? "") + (step.modelData.directory && (step.modelData.target ?? "").length > 0 && !(step.modelData.target ?? "").endsWith("/") ? "/" : "")
+                                    grid: root.planGrid
+                                    color: root.colors.text
+                                    clip: true
+                                }
+
+                                // The size of what it changes, when the window knows it.
+                                CellText {
+                                    id: stepSize
+                                    x: parent.width - width
+                                    width: root.planSizeCells > 0 ? Math.round(root.planSizeCells * (root.planGrid.cellWidth ?? 8)) : 0
+                                    height: parent.height
+                                    visible: width > 0
+                                    text: (step.modelData.size ?? "").padStart(root.planSizeCells, " ")
+                                    grid: root.planGrid
+                                    color: root.colors.subtext0
+                                }
+                            }
+
+                            // What to know before a yes: a name taken, an agent that touched it,
+                            // what a directory takes with it.
+                            ChromeText {
+                                x: step.pathsX
+                                width: parent.width - x
+                                height: step.noteLine
+                                visible: (step.modelData.warning ?? "").length > 0
+                                text: step.modelData.warning ?? ""
+                                pixelSize: 11 * root.ratio
+                                color: root.changed
+                            }
+
+                            // Where it travels, the trash it goes to, what a restore discards.
+                            ChromeText {
+                                x: step.pathsX
+                                width: parent.width - x
+                                height: step.noteLine
+                                visible: (step.modelData.note ?? "").length > 0
+                                text: step.modelData.note ?? ""
+                                pixelSize: 11 * root.ratio
+                                color: root.colors.subtext0
+                            }
+                        }
+                    }
+                }
+
+                // The keys that answer it, and what keeps a yes safe.
+                Flow {
+                    id: planFoot
+                    readonly property real line: Math.round(17.25 * root.ratio)
 
                     width: parent.width
-                    // A line that says more than its verb has that below its paths.
-                    height: root.rowHeight + (stepNote.visible ? stepNote.height : 0)
+                    spacing: 14 * root.ratio
 
-                    CellText {
-                        id: verb
-                        width: Math.round(9 * (root.smallGrid.cellWidth ?? 8))
-                        height: root.rowHeight
-                        text: step.modelData.verb
-                        grid: root.smallGrid
-                        color: step.verbColor
-                        bold: true
+                    Repeater {
+                        model: [
+                            {
+                                keys: "y",
+                                label: "apply"
+                            },
+                            {
+                                keys: "n",
+                                label: "cancel"
+                            }
+                        ]
+
+                        delegate: Row {
+                            id: answer
+
+                            required property var modelData
+
+                            height: planFoot.line
+                            spacing: 4 * root.ratio
+
+                            Keycap {
+                                anchors.verticalCenter: parent.verticalCenter
+                                text: answer.modelData.keys
+                                grid: root.keyGrid
+                            }
+
+                            ChromeText {
+                                width: implicitWidth
+                                height: parent.height
+                                text: answer.modelData.label
+                                pixelSize: root.labelSize
+                                color: root.colors.subtext0
+                                elide: Text.ElideNone
+                            }
+                        }
                     }
 
-                    // The machine of the step, in a plan that goes to more than one.
-                    CellText {
-                        id: stepMachine
-                        x: verb.width
-                        width: root.planMachineCells > 0 ? Math.round((root.planMachineCells + 1) * (root.smallGrid.cellWidth ?? 8)) : 0
-                        height: root.rowHeight
-                        visible: width > 0
-                        text: step.modelData.machine ?? ""
-                        grid: root.smallGrid
-                        color: root.colors.blue
-                    }
-
-                    CellText {
-                        id: stepPaths
-                        // What the line says after its paths keeps its place: the paths are cut first.
-                        readonly property real room: stepSize.x - x - (stepWarning.visible ? stepWarning.width + 2 * (root.smallGrid.cellWidth ?? 8) : 0)
-
-                        x: verb.width + stepMachine.width
-                        width: Math.max(0, Math.min(implicitWidth, room))
-                        height: root.rowHeight
-                        text: (step.modelData.source ?? "") + ((step.modelData.source ?? "").length > 0 && (step.modelData.target ?? "").length > 0 ? " → " : "") + (step.modelData.target ?? "") + (step.modelData.directory && (step.modelData.source ?? "").length === 0 ? "/" : "")
-                        grid: root.smallGrid
-                        color: root.colors.text
-                        clip: true
-                    }
-
-                    // What to know before a yes: a name taken, an agent that touched it, what a
-                    // directory takes with it.
-                    CellText {
-                        id: stepWarning
-                        x: stepPaths.x + stepPaths.width + 2 * (root.smallGrid.cellWidth ?? 8)
-                        width: Math.min(implicitWidth, Math.max(0, (stepSize.x - verb.width - stepMachine.width) / 2))
-                        height: root.rowHeight
-                        visible: (step.modelData.warning ?? "").length > 0
-                        text: step.modelData.warning ?? ""
-                        grid: root.smallGrid
-                        color: root.colors.yellow
-                        clip: true
-                    }
-
-                    // The size of what it changes, when the window knows it.
-                    CellText {
-                        id: stepSize
-                        x: parent.width - width
-                        width: root.planSizeCells > 0 ? Math.round((root.planSizeCells + 2) * (root.smallGrid.cellWidth ?? 8)) : 0
-                        height: root.rowHeight
-                        visible: width > 0
-                        text: (step.modelData.size ?? "").padStart(root.planSizeCells + 2, " ")
-                        grid: root.smallGrid
-                        color: root.colors.subtext0
-                    }
-
-                    // Where it travels, the trash it goes to, what a restore discards.
                     ChromeText {
-                        id: stepNote
-                        x: stepPaths.x
-                        y: root.rowHeight - Math.round(2 * root.ratio)
-                        width: parent.width - x
-                        height: root.typography.smallRow
-                        visible: (step.modelData.note ?? "").length > 0
-                        text: step.modelData.note ?? ""
-                        pixelSize: 11 * root.ratio
+                        width: Math.min(implicitWidth, planFoot.width)
+                        height: planFoot.line
+                        text: "Before each operation the runtime checks that its source still is the file it listed, by inode and modification time."
+                        pixelSize: root.labelSize
                         color: root.colors.subtext0
                     }
                 }
             }
 
-            ChromeText {
-                width: parent.width
-                height: 2 * root.typography.smallRow
-                text: "Before each operation the runtime checks that its source still is the file it listed, by inode and modification time, and skips it otherwise. What is deleted or replaced goes to the trash."
-                pixelSize: root.labelSize
-                color: root.colors.subtext0
-            }
-        }
+            Grid {
+                id: helpGrid
+                // As many columns as fit, 20 apart: each 220 at least, and as wide as the
+                // longest line of the help, which is set on one line here and not folded.
+                readonly property real room: sheetBody.width - 28 * root.ratio
+                readonly property real widest: {
+                    let most = 220 * root.ratio;
 
-        Flow {
-            x: 14 * root.ratio
-            y: 12 * root.ratio
-            width: parent.width - 28 * root.ratio
-            spacing: 20 * root.ratio
-            visible: root.mode === "help"
-
-            Repeater {
-                model: root.controller.help
-
-                delegate: Column {
-                    id: group
-
-                    required property var modelData
-
-                    width: Math.max(220 * root.ratio, (sheet.width - 28 * root.ratio - 40 * root.ratio) / 3)
-                    spacing: 2 * root.ratio
-
-                    ChromeText {
-                        width: parent.width
-                        height: root.typography.smallRow + 4 * root.ratio
-                        text: group.modelData.title.toUpperCase()
-                        pixelSize: root.headingSize
-                        emphasized: true
-                        color: root.colors.subtext0
+                    for (let index = 0; index < helpGroups.count; ++index) {
+                        const group = helpGroups.itemAt(index);
+                        if (group)
+                            most = Math.max(most, group.wanted);
                     }
 
-                    Repeater {
-                        model: group.modelData.keys
+                    return most;
+                }
+                readonly property int fitted: Math.max(1, Math.floor((room + 20 * root.ratio) / (widest + 20 * root.ratio)))
+                readonly property real column: (room - (fitted - 1) * 20 * root.ratio) / fitted
 
-                        delegate: Item {
-                            id: binding
+                x: 14 * root.ratio
+                y: 12 * root.ratio
+                columns: fitted
+                columnSpacing: 20 * root.ratio
+                rowSpacing: 12 * root.ratio
+                visible: root.mode === "help"
 
-                            required property var modelData
+                Repeater {
+                    id: helpGroups
+                    model: root.controller.help
 
-                            width: group.width
-                            height: Math.round(Math.max(root.typography.smallRow, (root.smallGrid.cellHeight ?? 16) + 2 * root.ratio))
+                    delegate: Column {
+                        id: group
 
-                            CellText {
-                                id: bindingKeys
-                                width: Math.round(17 * (root.smallGrid.cellWidth ?? 8))
-                                height: parent.height
-                                text: binding.modelData.keys
-                                grid: root.smallGrid
-                                color: root.colors.accent
-                                clip: true
+                        required property var modelData
+                        // The keys take the width of the longest of the group.
+                        readonly property int keyCells: modelData.keys.reduce((longest, binding) => Math.max(longest, (binding.keys ?? "").length), 0)
+                        readonly property real keysWidth: Math.round(keyCells * (root.keyGrid.cellWidth ?? 8))
+                        // The room its longest line asks for.
+                        readonly property real wanted: {
+                            let most = 0;
+
+                            for (let index = 0; index < bindings.count; ++index) {
+                                const line = bindings.itemAt(index);
+                                if (line)
+                                    most = Math.max(most, line.said);
                             }
 
-                            ChromeText {
-                                x: bindingKeys.width + 8 * root.ratio
-                                width: parent.width - x
-                                height: parent.height
-                                text: binding.modelData.label
-                                pixelSize: root.labelSize
-                                color: root.colors.subtext0
+                            return keysWidth + 10 * root.ratio + most;
+                        }
+
+                        width: helpGrid.column
+                        spacing: 2 * root.ratio
+
+                        Item {
+                            width: parent.width
+                            // The heading's line, and its room below less the row's own.
+                            height: Math.round(19 * root.ratio)
+
+                            Heading {
+                                height: Math.round(15 * root.ratio)
+                                text: group.modelData.title.toUpperCase()
+                            }
+                        }
+
+                        Repeater {
+                            id: bindings
+                            model: group.modelData.keys
+
+                            delegate: Item {
+                                id: binding
+
+                                required property var modelData
+                                readonly property real said: bindingLabel.implicitWidth
+
+                                width: group.width
+                                height: Math.round(17.25 * root.ratio)
+
+                                CellText {
+                                    width: group.keysWidth
+                                    height: parent.height
+                                    text: binding.modelData.keys
+                                    grid: root.keyGrid
+                                    color: root.colors.accent
+                                }
+
+                                ChromeText {
+                                    id: bindingLabel
+                                    x: group.keysWidth + 10 * root.ratio
+                                    width: parent.width - x
+                                    height: parent.height
+                                    text: binding.modelData.label
+                                    pixelSize: root.labelSize
+                                    color: root.colors.subtext0
+                                }
                             }
                         }
                     }
                 }
             }
         }
+
+        // How much of the sheet shows, when not all of it does.
+        Rectangle {
+            readonly property real share: sheetBody.contentHeight > 0 ? Math.min(1, sheetBody.height / sheetBody.contentHeight) : 1
+
+            x: parent.width - width - root.edge - Math.round(3 * root.ratio)
+            y: root.edge + 4 * root.ratio + (sheetBody.height - 8 * root.ratio) * (sheetBody.contentHeight > 0 ? sheetBody.contentY / sheetBody.contentHeight : 0)
+            width: Math.round(6.4 * root.ratio)
+            height: Math.max(16 * root.ratio, (sheetBody.height - 8 * root.ratio) * share)
+            radius: width / 2
+            visible: share < 1
+            color: Qt.alpha(root.colors.text, 0.3)
+        }
     }
+
     // A click anywhere but on the menu closes it.
     MouseArea {
         anchors.fill: parent
@@ -2328,12 +2698,27 @@ FocusScope {
         onWheel: wheel => wheel.accepted = true
     }
 
+    ElevationShadow {
+        x: menuBox.x
+        y: menuBox.y
+        z: 8
+        width: menuBox.width
+        height: menuBox.height
+        visible: menuBox.visible
+        ratio: root.ratio
+        cornerRadius: menuBox.radius
+        layers: 4
+        step: 4 * root.ratio
+        offset: 10 * root.ratio
+        strength: 0.09
+    }
+
     // The menu of a row: what applies to it, each line with the keys that do the same.
     NativeRoundedRectangle {
         id: menuBox
 
         readonly property real pad: 4 * root.ratio
-        readonly property real lineHeight: Math.round(Math.max(root.typography.smallRow, (root.tinyGrid.cellHeight ?? 14) + 8 * root.ratio))
+        readonly property real lineHeight: Math.round(26 * root.ratio)
         readonly property real ruleHeight: 9 * root.ratio
         // Where the pointer asked for it, or below the selected row when the keys did.
         readonly property point asked: {
@@ -2397,9 +2782,13 @@ FocusScope {
                         color: root.colors.surface1
                     }
 
+                    HoverHandler {
+                        id: menuHover
+                    }
+
                     NativeRoundedRectangle {
                         anchors.fill: parent
-                        visible: !menuLine.modelData.rule && menuLine.modelData.current
+                        visible: !menuLine.modelData.rule && (menuLine.modelData.current || (menuHover.hovered && menuLine.modelData.enabled))
                         radius: 4 * root.ratio
                         color: root.colors.surface1
                     }
@@ -2411,8 +2800,8 @@ FocusScope {
                         height: parent.height
                         visible: !menuLine.modelData.rule
                         text: menuLine.modelData.label ?? ""
-                        pixelSize: root.labelSize
-                        color: menuLine.modelData.enabled ? root.colors.text : root.colors.overlay0
+                        pixelSize: 12 * root.ratio
+                        color: menuLine.modelData.enabled ? root.colors.text : root.colors.overlay1
                         elide: Text.ElideNone
                     }
 
@@ -2423,8 +2812,8 @@ FocusScope {
                         height: parent.height
                         visible: !menuLine.modelData.rule
                         text: menuLine.modelData.keys ?? ""
-                        grid: root.tinyGrid
-                        color: menuLine.modelData.enabled ? root.colors.subtext0 : root.colors.overlay0
+                        grid: root.smallGrid
+                        color: root.colors.subtext0
                     }
 
                     ActionPointer {

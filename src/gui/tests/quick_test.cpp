@@ -2000,6 +2000,7 @@ return {api_version = 2, client = {
       press(QStringLiteral("cw"));
       QCOMPARE(explorer->line().value(QStringLiteral("mode")).toString(), QStringLiteral("insert"));
       QCOMPARE(explorer->line().value(QStringLiteral("prefill")).toString(), QStringLiteral("usage.md"));
+      shoot(QStringLiteral("explorer-name"));
       explorer->submit(QStringLiteral("guide.md"));
       QVERIFY(named(QStringLiteral("guide.md")).value(QStringLiteral("renamed")).toBool());
       QVERIFY(QFile::exists(root + QStringLiteral("/docs/usage.md")));
