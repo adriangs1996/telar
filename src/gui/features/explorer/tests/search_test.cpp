@@ -297,12 +297,41 @@ namespace {
     check(explorer.selected() == chosen);
   }
 
+  void testARowMarksTheLettersTheFilterFound() {
+    Searching explorer;
+
+    explorer.filter("usage");
+
+    const auto found = explorer.row("usage.md");
+
+    // `docs/usage.md`: the letters stand after the five of what leads to the name.
+    check(found.hit_count == 5 && found.hits[0] == 5 && found.hits[4] == 9, "each letter where it stands in the path as the row draws it");
+
+    // Where the runtime does not search, the rows the window narrows mark them too; a directory
+    // kept for what it holds has none of its own.
+    Explorer narrowed;
+
+    narrowed.start();
+    check(narrowed.row("assets").hit_count == 0, "none without a filter");
+    narrowed.type("l/");
+    typed(narrowed.view, narrowed.state, narrowed.context(), "SAGE");
+    narrowed.answer();
+
+    check(narrowed.names() == Names{"docs/", "usage.md"}, "the rows the window holds, narrowed");
+
+    const auto kept = narrowed.row("usage.md");
+
+    check(kept.hit_count == 4 && kept.hits[0] == 1 && kept.hits[3] == 4, "whatever the case of what was typed");
+    check(narrowed.row("docs").hit_count == 0);
+  }
+
   const telar::testing::Case case_step{"search.the_selection_moves_while_the_filter_is_typed", testTheSelectionMovesWhileTheFilterIsTyped};
   const telar::testing::Case case_asks{"search.the_filter_asks_the_runtime_below_the_root", testTheFilterAsksTheRuntimeBelowTheRoot};
   const telar::testing::Case case_parts{"search.an_answer_comes_in_parts_and_a_later_query_replaces_it", testAnAnswerComesInPartsAndALaterQueryReplacesIt};
   const telar::testing::Case case_around{"search.n_and_N_go_around_the_matches", testNAndNGoAroundTheMatches};
   const telar::testing::Case case_match{"search.a_match_is_handed_and_changed_as_an_entry_is", testAMatchIsHandedAndChangedAsAnEntryIs};
   const telar::testing::Case case_fallback{"search.a_filter_narrows_the_list_where_the_runtime_does_not_search", testAFilterNarrowsTheListWhereTheRuntimeDoesNotSearch};
+  const telar::testing::Case case_hits{"search.a_row_marks_the_letters_the_filter_found", testARowMarksTheLettersTheFilterFound};
   const telar::testing::Case case_tab{"search.tab_completes_the_directory_a_command_goes_to", testTabCompletesTheDirectoryACommandGoesTo};
 
 }

@@ -73,6 +73,8 @@ export namespace telar::gui::features::explorer {
   };
 
   inline constexpr std::size_t actor_capacity = 3;
+  // The letters of a filter a row marks in its path: a longer filter marks its first ones.
+  inline constexpr std::size_t hit_capacity = 32;
 
   // How the editors hold a file: in a buffer, and in one with changes that were not written.
   enum class Hold : std::uint8_t {
@@ -145,6 +147,10 @@ export namespace telar::gui::features::explorer {
     // In the lens of touches: with which command or tool, and how long ago.
     ShortText verb;
     ShortText ago;
+    // In the tree under a filter: where its letters stand in `lead` and `name` read as one
+    // text, each at the first place after the one before it; none when not all of them are there.
+    ds::Array<std::uint16_t, hit_capacity> hits{};
+    std::uint8_t hit_count = 0;
   };
 
   [[nodiscard]] RowLook look(const View& view, const State& state, const Context& context, const Pick& pick);

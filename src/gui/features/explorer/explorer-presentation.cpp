@@ -477,6 +477,30 @@ namespace telar::gui::features::explorer {
     }
 
     // A path the filter found: what git says of it, and the changes typed on it, as of an entry.
+    constexpr char foldedLetter(char letter) noexcept {
+      return letter >= 'A' && letter <= 'Z' ? static_cast<char>(letter - 'A' + 'a') : letter;
+    }
+
+    // Marks in `look` the letters of `filter` its path has, read as a fuzzy match reads them.
+    void noteHits(RowLook& look, std::string_view filter) noexcept {
+      const auto lead = look.lead.view();
+      const auto name = look.name.view();
+      const auto length = lead.size() + name.size();
+      std::size_t next = 0;
+      std::uint8_t count = 0;
+
+      for (std::size_t place = 0; place < length && next < filter.size() && count < hit_capacity; ++place) {
+        const char letter = place < lead.size() ? lead[place] : name[place - lead.size()];
+
+        if (foldedLetter(letter) == foldedLetter(filter[next])) {
+          look.hits.atMut(count++) = static_cast<std::uint16_t>(place);
+          ++next;
+        }
+      }
+
+      look.hit_count = next == filter.size() || count == hit_capacity ? count : 0;
+    }
+
     void matchLook(RowLook& look, const Seen& seen) {
       const auto& row = seen.row;
       const auto& search = seen.state.search;
@@ -1360,6 +1384,10 @@ namespace telar::gui::features::explorer {
     case RowKind::note:
     case RowKind::diff:
       break;
+    }
+
+    if (window.lens == Lens::tree && !window.filter.empty() && (row.kind == RowKind::entry || row.kind == RowKind::match)) {
+      noteHits(result, window.filter.view());
     }
 
     return result;

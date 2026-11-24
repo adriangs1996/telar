@@ -103,6 +103,34 @@ namespace telar::gui::qt {
       return result;
     }
 
+    // The letters of a row's path a filter found, each where it stands in the path as the row
+    // draws it, and a space wherever the filter found none: the row draws them over its name.
+    QString hitLetters(const explorer::RowLook& look) {
+      constexpr unsigned char continuation_mask = 0xC0;
+      constexpr unsigned char continuation_bits = 0x80;
+      const auto lead = look.lead.view();
+      const auto name = look.name.view();
+      const auto path = toQString(lead) + toQString(name);
+      QString result{path.size(), QLatin1Char{' '}};
+      qsizetype letter = -1;
+      std::size_t hit = 0;
+
+      for (std::size_t place = 0; place < lead.size() + name.size() && hit < look.hit_count; ++place) {
+        const auto byte = static_cast<unsigned char>(place < lead.size() ? lead[place] : name[place - lead.size()]);
+
+        // A byte that continues a letter stands where its letter does.
+        letter += (byte & continuation_mask) == continuation_bits ? 0 : 1;
+        if (look.hits[hit] == place) {
+          ++hit;
+          if (letter < path.size()) {
+            result[letter] = path[letter];
+          }
+        }
+      }
+
+      return result;
+    }
+
     // A key a hint spells by its name, as the help does: `<CR>`, `<Esc>`, `<C-w>`.
     struct NamedKey {
       QLatin1StringView name;
@@ -690,6 +718,10 @@ namespace telar::gui::qt {
 
     if (entry) {
       putIcon(result, look.directory ? directoryIcon() : fileIcon(look.name.view()));
+    }
+
+    if (look.hit_count > 0) {
+      result.insert(QStringLiteral("hit"), hitLetters(look));
     }
 
     return result;
