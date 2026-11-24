@@ -361,11 +361,14 @@ Legend: `[ ]` todo, `[x]` done, `[~]` not a bug / dropped (with reason).
   What follows replaces the line from its start rather than overwriting it byte by byte, so a
   multi-byte character is never cut; progress bars redraw the whole line anyway.
 
-- [ ] **T35 (runtime extras). Two small runtime limits.**
+- [x] **T35 (runtime extras). Two small runtime limits.**
   - `HistoryStatsEntry::command` is `Text16<65535>` but a command can be 65536 bytes: align
     the field with the command limit.
   - `workspaces()` (`store.cpp:778-801`) counts skipped empty paths against
     `LIMIT maximum_paths+1`: filter them in SQL (`WHERE path != ''`).
+  Decision for the first: the wire field stays (a layout change for older peers); the
+  runtime cuts the stats group to the 65,535 bytes it carries, at a character. The second
+  filters every path the loop skips (empty, too long, with NUL) in SQL.
 
 ## P2: editor engine
 

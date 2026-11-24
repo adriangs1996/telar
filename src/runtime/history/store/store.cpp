@@ -9,6 +9,7 @@ import telar.native.sqlite;
 import telar.tbc;
 import telar.base.diagnostics;
 import telar.base.history;
+import telar.base.text.utf8;
 import telar.wire.runtime;
 import telar.base.ds;
 
@@ -881,10 +882,12 @@ END;
 
   void HistoryStore::workspaces(const QueryHistoryWorkspaces& request, EncodedReply<ConcurrentMemory>& reply) {
     rows_.clear();
-    Statement recorded{database_, "SELECT DISTINCT workspace_path FROM session LIMIT ?1"};
+    // The paths that name no directory are left out here, not counted against the limit.
+    Statement recorded{database_, "SELECT DISTINCT workspace_path FROM session WHERE workspace_path != '' AND length(CAST(workspace_path AS BLOB)) < ?2 AND instr(workspace_path, char(0)) = 0 LIMIT ?1"};
 
     // One more than a reply lists, to tell a full reply from a truncated one.
     recorded.bind(1, static_cast<std::int64_t>(HistoryWorkspaces::maximum_paths) + 1);
+    recorded.bind(2, static_cast<std::int64_t>(max_path_bytes));
     ds::Vec<std::string_view, ConcurrentMemory> paths{memory_};
     HistoryWorkspaces result{.request_id = request.request_id};
     std::size_t bytes = 0;
@@ -946,7 +949,9 @@ END;
     std::size_t count = 0;
 
     while (top.next()) {
-      const auto group = historyGroup(top.text(0));
+      // A command longer than a stats entry carries, a 16-bit length, groups under what of it fits.
+      constexpr std::size_t entry_command_bytes = std::numeric_limits<std::uint16_t>::max();
+      const auto group = utf8Prefix(historyGroup(top.text(0)), entry_command_bytes);
       const auto occurrences = static_cast<std::uint64_t>(top.integer(1));
       const auto existing = groups.view().first(count);
       const auto found = static_cast<std::size_t>(std::ranges::find(existing, group, &HistoryStatsEntry::command) - existing.begin());

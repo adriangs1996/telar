@@ -358,6 +358,44 @@ INSERT INTO command VALUES (1, x'01', 1, 0, 1, 1, 'legacy command', 0, '/legacy'
     check(listed.request_id == 2 && !listed.truncated && paths == std::vector<std::string>{"/project-a", "/project-b"}, "each workspace a session ran in must be listed once");
   }
 
+  // Paths that name no workspace are left out before the listing's limit, not counted against
+  // it: every real one still fits.
+  void testWorkspacesSkipNoPathsAgainstTheLimit() {
+    telar::testing::TestMemory adapter;
+    ConcurrentMemory& memory = adapter;
+    HistoryStore store{memory, ":memory:"};
+    EncodedReply reply{memory};
+    std::vector<Byte> storage(2 * 1024 * 1024);
+
+    finished(store, session(1, ""), "nowhere", "/");
+    finished(store, session(2, "/" + std::string(5000, 'x')), "too long", "/");
+    for (std::size_t index = 0; index < HistoryWorkspaces::maximum_paths; ++index) {
+      const auto path = std::format("/w{}", index);
+
+      finished(store, HistorySession{.id = {static_cast<Byte>(index % 256), static_cast<Byte>(index / 256), 1}, .pane = 1, .workspace_path = path, .shell = "/bin/sh"}, "work", path);
+    }
+
+    store.workspaces(QueryHistoryWorkspaces{.request_id = 1}, reply);
+    const auto listed = decodeReply<HistoryWorkspaces>(reply, storage);
+
+    check(listed.paths.size() == HistoryWorkspaces::maximum_paths && !listed.truncated, "every workspace is listed");
+  }
+
+  // A command too long to group past what a stats entry carries still has its stats.
+  void testStatsOfALongCommand() {
+    telar::testing::TestMemory adapter;
+    ConcurrentMemory& memory = adapter;
+    HistoryStore store{memory, ":memory:"};
+    EncodedReply reply{memory};
+    std::vector<Byte> storage(256 * 1024);
+
+    finished(store, session(1, "/work"), std::string(std::size_t{64} * 1024, 'x'), "/work");
+    store.stats(HistoryStatsQuery{.request_id = 1}, reply);
+    const auto stats = decodeReply<HistoryStatsResult>(reply, storage);
+
+    check(stats.total == 1 && stats.top.size() == 1 && stats.top.front().command.size() < std::size_t{64} * 1024, "the group is cut to what its entry carries");
+  }
+
   // The failure code `run` threw, or nothing when it returned.
   template <typename Run>
   ds::Option<FailureCode> requestFailure(Run run) {
@@ -617,6 +655,8 @@ INSERT INTO command VALUES (1, x'01', 1, 0, 1, 1, 'legacy command', 0, '/legacy'
   const telar::testing::Case case_fuzzy_cap_counts_commands{"history_store.fuzzy_cap_counts_commands", testFuzzyCapCountsCommands};
   const telar::testing::Case case_folds_case_at_any_length{"history_store.folds_case_at_any_length", testFoldsCaseAtAnyLength};
   const telar::testing::Case case_scope_matches_the_same_directory{"history_store.scope_matches_the_same_directory", testScopeMatchesTheSameDirectory};
+  const telar::testing::Case case_workspaces_skip_no_paths_against_the_limit{"history_store.workspaces_skip_no_paths_against_the_limit", testWorkspacesSkipNoPathsAgainstTheLimit};
+  const telar::testing::Case case_stats_of_a_long_command{"history_store.stats_of_a_long_command", testStatsOfALongCommand};
   const telar::testing::Case case_failed_write_rolls_back{"history_store.failed_write_rolls_back", testFailedWriteRollsBack};
   const telar::testing::Case case_page_respects_payload_cap{"history_store.page_respects_payload_cap", testPageRespectsPayloadCap};
   const telar::testing::Case case_prune_failed_only{"history_store.prune_failed_only", testPruneFailedOnly};
