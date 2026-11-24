@@ -40,6 +40,8 @@ namespace {
         DraggedOut{.text = "box:/home/ops/deploy.sh", .promised = "deploy.sh", .row = 7},
         DraggedOut{.text = "box:/home/ops/logs"},
         DraggedOut{.text = "box:/home/ops/LICENSE", .promised = "LICENSE", .row = 9},
+        DraggedOut{.text = "box:/home/ops/site.app", .promised = "site.app", .row = 11, .directory = true},
+        DraggedOut{.text = "box:/home/ops/tool.app", .promised = "tool.app", .row = 12},
     };
 
     // No button is held: nothing is dragged, and what the rows would be is there all the same.
@@ -63,6 +65,10 @@ namespace {
     check([[promise pasteboardPropertyListForType:NSPasteboardTypeString] isEqualToString:@"box:/home/ops/deploy.sh"], "its text names the machine");
     check([[UTType typeWithIdentifier:promise.fileType] conformsToType:UTTypeShellScript], "its type is the one its name says");
     check([static_cast<NSFilePromiseProvider*>(writers[3]).fileType isEqualToString:UTTypeData.identifier], "a name that says none is data");
+    check([static_cast<NSFilePromiseProvider*>(writers[4]).fileType isEqualToString:UTTypeFolder.identifier] && [UTTypeFolder conformsToType:UTTypeDirectory], "a directory is a folder, whatever its name says");
+    UTType* const of_file = [UTType typeWithIdentifier:static_cast<NSFilePromiseProvider*>(writers[5]).fileType];
+
+    check([of_file conformsToType:UTTypeData] && ![of_file conformsToType:UTTypeDirectory], "and a file is data, whatever its name says");
     [pasteboard releaseGlobally];
 
     const id<NSFilePromiseProviderDelegate> source = promise.delegate;
@@ -96,6 +102,15 @@ namespace {
     drag.end(asked[1].ticket, "it was stopped");
     check(answers == 2 && failure != nil && [failure.localizedDescription isEqualToString:@"it was stopped"], "the system is told why");
 
+    // A directory is asked for as a file is: where, and under which name.
+    NSFilePromiseProvider* const folder = static_cast<NSFilePromiseProvider*>(writers[4]);
+
+    check([[source filePromiseProvider:folder fileNameForType:folder.fileType] isEqualToString:@"site.app"], "it keeps its name");
+    [source filePromiseProvider:folder writePromiseToURL:[NSURL fileURLWithPath:@"/tmp/telar drop/site.app" isDirectory:YES] completionHandler:handler];
+    check(asked.size() == 3 && asked[2].row == 11 && asked[2].directory == "/tmp/telar drop" && asked[2].name == "site.app", "the directory the system wants is the one to make");
+    drag.end(asked[2].ticket, "");
+    check(answers == 3 && failure == nil, "a tree that is whole ends with no error");
+
     // What is no file in a directory is refused at once, and nobody is asked to write it.
     for (NSURL* const url in @[ [NSURL URLWithString:@"https://example.com/deploy.sh"], [NSURL fileURLWithPath:@"/"] ]) {
       failure = nil;
@@ -103,13 +118,13 @@ namespace {
       check(failure != nil, "a place that is no file of a directory");
     }
 
-    check(asked.size() == 2 && answers == 4, "each was answered once");
+    check(asked.size() == 3 && answers == 5, "each was answered once");
 
     // Other rows replace them, and a promise of the ones before is asked for no more.
     check(!drag.give(window, {}, {}) && writersOf(drag).count == 0, "no rows are no writers");
     failure = nil;
     [source filePromiseProvider:promise writePromiseToURL:[NSURL fileURLWithPath:@"/tmp/deploy.sh"] completionHandler:handler];
-    check(failure != nil && asked.size() == 2, "rows that were replaced promise nothing");
+    check(failure != nil && asked.size() == 3, "rows that were replaced promise nothing");
 
     // When the rows go, the system is told of the files it still waits for.
     {

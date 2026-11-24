@@ -116,12 +116,13 @@ export namespace telar::gui::features::explorer {
 
   // What the window can make of a file of another machine that is dragged out of it.
   enum class Outside : std::uint8_t {
-    // The system asks for the file once it is let go, and it is carried then.
+    // The system asks for the file once it is let go, and it is carried then; a directory is
+    // asked for and carried the same way, as its tree.
     promises,
-    // The file is carried first to a directory of the machine the window runs on, while what
-    // is dragged is small.
+    // A file is carried first to a directory of the machine the window runs on, while what is
+    // dragged is small; a directory is not.
     caches,
-    // Nothing of the file: its machine and its path, as text.
+    // Nothing of it: its machine and its path, as text.
     names,
   };
 
@@ -144,9 +145,9 @@ export namespace telar::gui::features::explorer {
   // last that did, and the explorer drags them no more. Returns how many.
   std::size_t takeOut(View& view);
 
-  // What the row `index` of the ones that left is outside the window. Only a file is carried:
-  // a directory or a link of another machine is named, and so is every file when the window
-  // reaches no runtime of the machine it runs on.
+  // What the row `index` of the ones that left is outside the window. A link of another machine
+  // is named, which says nothing there; so is a directory where nothing is promised, and so is
+  // every row when the window reaches no runtime of the machine it runs on.
   [[nodiscard]] Leaves leaves(const View& view, const Context& context, std::size_t index, Outside outside) noexcept;
 
   // Where a file that left the window is asked for: the directory of the machine the window
@@ -157,10 +158,10 @@ export namespace telar::gui::features::explorer {
     std::string_view name;
   };
 
-  // Starts to carry the file `index` of the ones that left to where it is asked for. Returns
-  // its transfer's id, and 0 when it starts none: the row is not a file of another machine, the
-  // name is no name of one entry, the directory is no absolute path, or the explorer keeps as
-  // many transfers as it can.
+  // Starts to carry the row `index` of the ones that left to where it is asked for, a directory
+  // as its tree. Returns its transfer's id, and 0 when it starts none: the row is no file and no
+  // directory of another machine, the name is no name of one entry, the directory is no absolute
+  // path, or the explorer keeps as many transfers as it can.
   std::uint32_t fetch(View& view, const Context& context, const Fetched& fetched);
 
   // How the transfer `id` stands: on its way, whole where it goes, or not arrived, which is
@@ -172,6 +173,10 @@ export namespace telar::gui::features::explorer {
   };
 
   [[nodiscard]] Fetching fetching(const View& view, std::uint32_t id) noexcept;
+
+  // Where the transfer `id` put what it carried: the path it was asked for, or another beside
+  // it when that name was taken. Empty before it is there.
+  [[nodiscard]] tbc::val_a<std::string_view> placedOf(tbc::ref_a<View> view, std::uint32_t id) noexcept;
 
   // Why the transfer `id` did not arrive; empty when it says nothing.
   [[nodiscard]] tbc::val_a<std::string_view> saidOf(tbc::ref_a<View> view, std::uint32_t id) noexcept;

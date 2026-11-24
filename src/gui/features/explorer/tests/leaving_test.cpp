@@ -3,6 +3,8 @@
 #include <cstdint>
 #include <string_view>
 
+import telar.base.ds;
+
 namespace {
 
   using telar::testing::check;
@@ -40,15 +42,18 @@ namespace {
     check(leaves(explorer.view, explorer.context(), 0, Outside::names) == Leaves::named);
     check(leaves(explorer.view, explorer.context(), 1, Outside::promises) == Leaves::file, "a row that is not there is carried as nothing");
 
-    // A directory of another machine is named: only a file is carried out.
+    // A directory of another machine is promised too, and carried as its tree once it is asked
+    // for. Nothing carries one before: where no file is promised it is named.
     check(carryOut(explorer, "logs") == 1 && explorer.view.left[0].directory);
-    check(leaves(explorer.view, explorer.context(), 0, Outside::promises) == Leaves::named && leaves(explorer.view, explorer.context(), 0, Outside::caches) == Leaves::named);
+    check(leaves(explorer.view, explorer.context(), 0, Outside::promises) == Leaves::promised);
+    check(leaves(explorer.view, explorer.context(), 0, Outside::caches) == Leaves::named && leaves(explorer.view, explorer.context(), 0, Outside::names) == Leaves::named);
 
-    // So is a link, which is of its own machine alone.
+    // A link is of its own machine alone: it is named, whatever the window can do.
     explorer.type(":");
     explorer.enter("e box:~/site");
     check(carryOut(explorer, "latest") == 1 && explorer.view.left[0].link);
-    check(leaves(explorer.view, explorer.context(), 0, Outside::promises) == Leaves::named);
+    check(leaves(explorer.view, explorer.context(), 0, Outside::promises) == Leaves::named && leaves(explorer.view, explorer.context(), 0, Outside::caches) == Leaves::named);
+    check(fetch(explorer.view, explorer.context(), {.index = 0, .directory = "/Users/dev/Desktop"}) == 0, "and is not carried");
 
     // A row of the machine the window runs on is its own file, whatever the window can do.
     explorer.type("<C-w>h");
@@ -151,6 +156,34 @@ namespace {
     check(fetching(explorer.view, 4096) == Fetching::failed && saidOf(explorer.view, 4096).empty());
   }
 
+  void testADirectoryThatLeftIsFetchedAsItsTree() {
+    Explorer explorer;
+
+    splitToBox(explorer);
+    check(carryOut(explorer, "logs") == 1);
+
+    const auto started = fetch(explorer.view, explorer.context(), {.index = 0, .directory = "/Users/dev/Desktop", .name = "logs 2"});
+
+    check(started != 0 && explorer.view.transfers.size() == 1);
+
+    const auto& transfer = explorer.view.transfers[0];
+
+    check(transfer.tree && !transfer.link && transfer.kind == TransferKind::copy && transfer.from == Explorer::box && transfer.source.view() == "/home/ops/logs", "the directory is carried as its tree");
+    check(transfer.to == Explorer::machine && transfer.directory.view() == "/Users/dev/Desktop" && transfer.name.view() == "logs 2" && transfer.identity == explorer.view.left[0].identity);
+    // Its directory is made where it was asked for before anything of it is read, as any tree's.
+    check(asks(explorer.view, 0) == Asking{.ask = TransferAsk::make, .machine = Explorer::machine});
+
+    ds::String<Memory> made{explorer.view.memory};
+
+    pathOf(made, transfer, TransferAsk::make);
+    check(made.view() == "/Users/dev/Desktop/logs 2" && placedOf(explorer.view, started).empty(), "nothing is there yet");
+    check(fetching(explorer.view, started) == Fetching::carried);
+
+    // The name is checked as a file's is.
+    check(fetch(explorer.view, explorer.context(), {.index = 0, .directory = "/Users/dev/Desktop", .name = "../logs"}) == 0);
+    check(fetch(explorer.view, explorer.context(), {.index = 0, .directory = "/Users/dev/Desktop", .name = "a/b"}) == 0);
+  }
+
   void testAsManyAreFetchedAsTheExplorerKeeps() {
     Explorer explorer;
 
@@ -166,6 +199,7 @@ namespace {
   const telar::testing::Case case_kinds{"leaving.what_leaves_the_window_is_a_file_a_promise_or_a_name", testWhatLeavesTheWindowIsAFileAPromiseOrAName};
   const telar::testing::Case case_bound{"leaving.what_is_carried_first_is_bounded", testWhatIsCarriedFirstIsBounded};
   const telar::testing::Case case_fetch{"leaving.a_file_that_left_is_fetched_where_it_is_asked_for", testAFileThatLeftIsFetchedWhereItIsAskedFor};
+  const telar::testing::Case case_tree{"leaving.a_directory_that_left_is_fetched_as_its_tree", testADirectoryThatLeftIsFetchedAsItsTree};
   const telar::testing::Case case_kept{"leaving.as_many_are_fetched_as_the_explorer_keeps", testAsManyAreFetchedAsTheExplorerKeeps};
 
 }

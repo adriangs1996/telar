@@ -463,6 +463,9 @@ namespace {
     std::span<const DirectoryEntry> entries;
     std::string_view branch;
     std::span<const FileChange> changes;
+    // A directory below it, and what that one lists.
+    std::string_view below;
+    std::span<const DirectoryEntry> below_entries;
     std::size_t homes = 0;
     std::size_t listings = 0;
     std::size_t queries = 0;
@@ -488,7 +491,8 @@ namespace {
       if (asked(ClientTag::list_directory, listings)) {
         const auto listing = runtime.last<ListDirectory>();
         const std::string path{listing.path};
-        const auto listed = path == directory ? entries : std::span<const DirectoryEntry>{};
+        const auto listed = path == directory ? entries : !below.empty() && path == below ? below_entries
+                                                                                          : std::span<const DirectoryEntry>{};
 
         runtime.send(DirectoryContents{.request_id = listing.request_id, .path = path, .total = static_cast<std::uint32_t>(listed.size()), .entries = listed});
       }
@@ -2562,7 +2566,11 @@ namespace {
       };
       const ds::Array near_changes{FileChange{.path = "README.md", .unstaged = FileState::modified, .added = 2, .removed = 1}};
       ExplorerReplies near{.runtime = *fixture.local_runtime, .home = "/home/dev", .directory = "/work/project", .entries = near_entries.view(), .branch = "main", .changes = near_changes.view()};
-      ExplorerReplies far{.runtime = *fixture.remote_runtime, .home = "/home/ops", .directory = "/home/ops", .entries = far_entries.view()};
+      const ds::Array logs_entries{
+          DirectoryEntry{.name = "app.log", .kind = FileKind::file, .size = 300, .identity = {.inode = 21, .modified_seconds = 25}},
+          DirectoryEntry{.name = "latest", .kind = FileKind::link, .identity = {.inode = 22, .modified_seconds = 26}},
+      };
+      ExplorerReplies far{.runtime = *fixture.remote_runtime, .home = "/home/ops", .directory = "/home/ops", .entries = far_entries.view(), .below = "/home/ops/logs", .below_entries = logs_entries.view()};
       auto* explorer = application.explorer();
       const auto shows = [&](auto shown) {
         return waitForGuiCondition([&] {
@@ -2988,6 +2996,152 @@ namespace {
 
       QVERIFY(askPromisedFile(explorer->draggedOut(), 0, (desktop.path() + QStringLiteral("/..")).toStdString(), refused));
       QVERIFY(refused->answered && !refused->failure.empty());
+
+      // A directory of the other machine is a promise too, and what the system asks for is its
+      // tree: the directory made where the system wants it, then what it holds, a link as a
+      // link and a file as its bytes, each below the directory that was made and nowhere else.
+      const auto changesHere = [&] {
+        return fixture.local_runtime->count(ClientTag::change_files);
+      };
+      const ds::Array done_once{FileResult{.outcome = FileOutcome::done}};
+      // Answers the directory the tree asks this machine to make; says where that was.
+      const auto makeRoot = [&](std::size_t before) {
+        if (!shows([&] {
+              return changesHere() == before + 1;
+            })) {
+          return std::string{};
+        }
+
+        const auto made = fixture.local_runtime->last<ChangeFiles>();
+
+        if (made.operations.size() != 1 || made.operations[0].kind != FileOperationKind::create_directory) {
+          return std::string{};
+        }
+
+        const std::string root{made.operations[0].target};
+        const ds::Array created{FileResult{.outcome = FileOutcome::done, .path = root}};
+
+        fixture.local_runtime->send(FilesChanged{.request_id = made.request_id, .undoable = true, .results = created.view()});
+        return root;
+      };
+      const auto whole_tree = std::make_shared<PromiseAnswer>();
+      const auto wanted_tree = desktop.filePath(QStringLiteral("logs 2")).toStdString();
+      auto tree_changes = changesHere();
+      auto tree_reads = fixture.remote_runtime->count(ClientTag::read_file);
+      const auto tree_writes = fixture.local_runtime->count(ClientTag::write_file);
+      const auto tree_ends = fixture.local_runtime->count(ClientTag::end_file_write);
+
+      QCOMPARE(explorer->grab(1, 0), 1);
+      explorer->dragOut(window);
+      QCOMPARE(promisedName(explorer->draggedOut(), 0), std::string{"logs"});
+      QVERIFY(askPromisedFile(explorer->draggedOut(), 0, wanted_tree, whole_tree));
+      QCOMPARE(makeRoot(tree_changes), wanted_tree);
+      // Its link is read as what it says, and made as a link that says it.
+      QVERIFY(shows([&] {
+        return fixture.remote_runtime->count(ClientTag::read_file) == tree_reads + 1;
+      }));
+
+      const auto says = fixture.remote_runtime->last<ReadFile>();
+      const std::string_view link_text = "app.log";
+      const std::vector<Byte> said(link_text.begin(), link_text.end());
+
+      QVERIFY(says.path == "/home/ops/logs/latest" && says.link && says.identity.inode == 22);
+      fixture.remote_runtime->send(FileChunk{.request_id = says.request_id, .offset = 0, .size = said.size(), .end = true, .bytes = said});
+      QVERIFY(shows([&] {
+        return changesHere() == tree_changes + 2;
+      }));
+
+      const auto linked = fixture.local_runtime->last<ChangeFiles>();
+
+      QVERIFY(linked.operations.size() == 1 && linked.operations[0].kind == FileOperationKind::link && linked.operations[0].source == link_text);
+      QCOMPARE(std::string{linked.operations[0].target}, wanted_tree + "/latest");
+      fixture.local_runtime->send(FilesChanged{.request_id = linked.request_id, .undoable = true, .results = done_once.view()});
+      // Its file is read whole and written below the directory.
+      QVERIFY(shows([&] {
+        return fixture.remote_runtime->count(ClientTag::read_file) == tree_reads + 2;
+      }));
+
+      const auto nested = fixture.remote_runtime->last<ReadFile>();
+      const std::vector<Byte> nested_bytes(300, Byte{'l'});
+
+      QVERIFY(nested.path == "/home/ops/logs/app.log" && !nested.link && nested.identity.inode == 21);
+      QVERIFY(!whole_tree->answered);
+      QCOMPARE(running().value(QStringLiteral("name")).toString(), QStringLiteral("logs 2"));
+      fixture.remote_runtime->send(FileChunk{.request_id = nested.request_id, .offset = 0, .size = 300, .end = true, .bytes = nested_bytes});
+      QVERIFY(shows([&] {
+        return fixture.local_runtime->count(ClientTag::write_file) == tree_writes + 1;
+      }));
+
+      const auto nested_write = fixture.local_runtime->last<WriteFile>();
+      const auto nested_target = wanted_tree + "/app.log";
+      const auto nested_partial = wanted_tree + "/.telar-partial-0123456789abcdef";
+
+      QCOMPARE(std::string{nested_write.target}, nested_target);
+      fixture.local_runtime->send(FileWritten{.request_id = nested_write.request_id, .partial = nested_partial, .size = 300});
+      QVERIFY(shows([&] {
+        return fixture.local_runtime->count(ClientTag::end_file_write) == tree_ends + 1;
+      }));
+
+      const auto nested_end = fixture.local_runtime->last<EndFileWrite>();
+
+      QVERIFY(nested_end.keep && nested_end.partial == nested_partial && nested_end.target == nested_target);
+      fixture.local_runtime->send(FileWriteEnded{.request_id = nested_end.request_id, .outcome = FileOutcome::done, .path = nested_target});
+      QVERIFY(shows([&] {
+        return whole_tree->answered;
+      }));
+      QVERIFY2(whole_tree->failure.empty(), whole_tree->failure.c_str());
+      // A copy leaves the directory it came from.
+      QCOMPARE(fixture.remote_runtime->count(ClientTag::change_files), 1);
+
+      // Stopped on its way, the directory it had made goes to the trash with what had arrived,
+      // and the system is told the tree did not come.
+      const auto stopped_tree = std::make_shared<PromiseAnswer>();
+
+      tree_changes = changesHere();
+      tree_reads = fixture.remote_runtime->count(ClientTag::read_file);
+      QVERIFY(askPromisedFile(explorer->draggedOut(), 0, wanted_tree, stopped_tree));
+      QCOMPARE(makeRoot(tree_changes), wanted_tree);
+      QVERIFY(shows([&] {
+        return fixture.remote_runtime->count(ClientTag::read_file) == tree_reads + 1;
+      }));
+      QVERIFY(!running().isEmpty());
+      explorer->cancelTransfer(running().value(QStringLiteral("id")).toInt());
+      fixture.remote_runtime->send(FileChunk{.request_id = fixture.remote_runtime->last<ReadFile>().request_id, .offset = 0, .size = said.size(), .end = true, .bytes = said});
+      QVERIFY(shows([&] {
+        return changesHere() == tree_changes + 2;
+      }));
+
+      const auto cleared = fixture.local_runtime->last<ChangeFiles>();
+
+      QVERIFY(cleared.operations.size() == 1 && cleared.operations[0].kind == FileOperationKind::trash);
+      QCOMPARE(std::string{cleared.operations[0].source}, wanted_tree);
+      QVERIFY(!stopped_tree->answered);
+      fixture.local_runtime->send(FilesChanged{.request_id = cleared.request_id, .undoable = true, .results = done_once.view()});
+      QVERIFY(shows([&] {
+        return stopped_tree->answered;
+      }));
+      QVERIFY(!stopped_tree->failure.empty());
+
+      // A name that was taken where the system wanted the directory leaves the tree beside it,
+      // under another: the system is told it is not where it asked.
+      const auto beside_tree = std::make_shared<PromiseAnswer>();
+
+      tree_changes = changesHere();
+      QVERIFY(askPromisedFile(explorer->draggedOut(), 0, wanted_tree, beside_tree));
+      QVERIFY(shows([&] {
+        return changesHere() == tree_changes + 1;
+      }));
+
+      const auto taken = fixture.local_runtime->last<ChangeFiles>();
+      const auto other_root = wanted_tree + "-1";
+      const ds::Array renamed{FileResult{.outcome = FileOutcome::renamed, .path = other_root}};
+
+      far.below_entries = {};
+      fixture.local_runtime->send(FilesChanged{.request_id = taken.request_id, .undoable = true, .results = renamed.view()});
+      QVERIFY(shows([&] {
+        return beside_tree->answered;
+      }));
+      QVERIFY(!beside_tree->failure.empty());
 #endif
     }
   };

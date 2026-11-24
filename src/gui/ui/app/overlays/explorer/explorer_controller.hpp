@@ -129,8 +129,9 @@ namespace telar::gui::qt {
     Q_INVOKABLE void drop(int window, int row, bool copy, bool move);
     // The rows dragged left `window`: another program takes them from here on, and the explorer
     // holds them no more. A file of another machine is carried to this one for it: once the
-    // system asks for it, where it promises files, or before the rows are given to the system
-    // where it does not, while what is dragged is small.
+    // system asks for it, where it promises files, and a directory the same way, as its tree;
+    // or before the rows are given to the system where it promises none, while what is dragged
+    // is files and small.
     Q_INVOKABLE void dragOut(QQuickWindow* window);
     // What a program outside the window is given of the rows dragged, or of the ones that last
     // left: a line of text each, the path of a file of the machine the window runs on and

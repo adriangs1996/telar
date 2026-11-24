@@ -1175,6 +1175,7 @@ namespace telar::gui::qt {
           .path = kind == explorer::Leaves::file ? item.path.view() : std::string_view{},
           .promised = kind == explorer::Leaves::promised ? explorer::baseOf(item.path.view()) : std::string_view{},
           .row = static_cast<std::uint32_t>(index),
+          .directory = item.directory,
       });
     }
 
@@ -1196,7 +1197,7 @@ namespace telar::gui::qt {
       return;
     }
 
-    promised_.push({.transfer = transfer, .ticket = file.ticket, .path = {}});
+    promised_.push({.transfer = transfer, .ticket = file.ticket, .path = toQString(file.directory) + QLatin1Char{'/'} + toQString(file.name)});
     synchronize();
   }
 
@@ -1243,13 +1244,18 @@ namespace telar::gui::qt {
 
       const auto said = explorer::saidOf(view_, transfer);
       const QByteArray why{said.data(), static_cast<qsizetype>(said.size())};
+      // A name that was taken leaves what arrived beside it, under another: not where the
+      // system was told it would be.
+      const bool elsewhere = state == explorer::Fetching::arrived && toQString(explorer::placedOf(view_, transfer)) != promised_[index].path;
       const auto ticket = promised_.remove(index).ticket;
 
       // The system is told last: what it does then may ask for another file.
-      if (state == explorer::Fetching::arrived) {
+      if (elsewhere) {
+        drag_.end(ticket, "its name was taken there, and it arrived under another beside it");
+      } else if (state == explorer::Fetching::arrived) {
         drag_.end(ticket, {});
       } else {
-        drag_.end(ticket, why.isEmpty() ? std::string_view{"the file did not arrive"} : bytesOf(why));
+        drag_.end(ticket, why.isEmpty() ? std::string_view{"it did not arrive"} : bytesOf(why));
       }
     }
 
@@ -1261,10 +1267,11 @@ namespace telar::gui::qt {
       return;
     }
 
-    // One that did not arrive is still named by its line of text.
+    // One that did not arrive is still named by its line of text; one that did is where its
+    // transfer put it.
     for (const auto& awaited : waited_) {
       if (explorer::fetching(view_, awaited.transfer) == explorer::Fetching::arrived) {
-        fetched_.push_back(QUrl::fromLocalFile(awaited.path));
+        fetched_.push_back(QUrl::fromLocalFile(toQString(explorer::placedOf(view_, awaited.transfer))));
       }
     }
 

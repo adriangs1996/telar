@@ -18,15 +18,17 @@ namespace telar::gui::platform {
     // A file or a directory of the machine the window runs on: its path. Empty for one that is
     // elsewhere.
     std::string_view path;
-    // A file of another machine the system is promised, under this name: it asks for the file
-    // once the row is let go. Empty for a row that promises none.
+    // A file or a directory of another machine the system is promised, under this name: it asks
+    // for it once the row is let go. Empty for a row that promises none.
     std::string_view promised;
-    // What names the promise to whoever writes its file.
+    // What names the promise to whoever writes what it promised.
     std::uint32_t row = 0;
+    // Whether what is promised is a directory, which is written as one with what it holds.
+    bool directory = false;
   };
 
-  // A file the system asked for, of a row that promised it: where it wants it, under which
-  // name, and the ticket that tells it how writing the file ended.
+  // A file or a directory the system asked for, of a row that promised it: where it wants it,
+  // under which name, and the ticket that tells it how writing it ended.
   struct PromisedFile {
     std::uint32_t row = 0;
     std::uint64_t ticket = 0;

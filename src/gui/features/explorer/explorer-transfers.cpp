@@ -783,9 +783,10 @@ namespace telar::gui::features::explorer {
       });
     }
 
-    // Whether a row that left is a file of another machine: what the window can carry out.
+    // Whether a row that left is a file or a directory of another machine: what the window can
+    // carry out, the directory as its tree. A link is of its own machine alone.
     bool carriedOut(const Context& context, const Yanked& item) noexcept {
-      return !item.directory && !item.link && !isHere(context, item.machine);
+      return !item.link && !isHere(context, item.machine);
     }
 
     // Whether the files of another machine among the rows that left are few and small enough
@@ -795,7 +796,7 @@ namespace telar::gui::features::explorer {
       std::uint64_t bytes = 0;
 
       for (const auto& item : view.left) {
-        if (carriedOut(context, item)) {
+        if (carriedOut(context, item) && !item.directory) {
           ++files;
           // A sum past what a number holds is past the bound as well.
           bytes = item.size > LeavingLimits::cached_bytes ? LeavingLimits::cached_bytes + 1 : bytes + item.size;
@@ -831,7 +832,8 @@ namespace telar::gui::features::explorer {
     case Outside::promises:
       return Leaves::promised;
     case Outside::caches:
-      return carriedFirst(view, context) ? Leaves::cached : Leaves::named;
+      // A tree is not carried before it is asked for: only what is small is.
+      return !view.left[index].directory && carriedFirst(view, context) ? Leaves::cached : Leaves::named;
     case Outside::names:
       return Leaves::named;
     }
@@ -862,6 +864,7 @@ namespace telar::gui::features::explorer {
     transfer.to = here;
     transfer.directory.assign(fetched.directory.size() > 1 && fetched.directory.ends_with('/') ? fetched.directory.substr(0, fetched.directory.size() - 1) : fetched.directory);
     transfer.name.assign(name);
+    transfer.tree = item.directory;
     transfer.batch = view.next_batch++;
 
     const auto started = transfer.id;
@@ -880,6 +883,12 @@ namespace telar::gui::features::explorer {
     }
 
     return transfer->phase == TransferPhase::arrived ? Fetching::arrived : Fetching::carried;
+  }
+
+  tbc::val_a<std::string_view> placedOf(tbc::ref_a<View> view, std::uint32_t id) noexcept {
+    const auto* const transfer = std::ranges::find(view.transfers, id, &Transfer::id);
+
+    return transfer == view.transfers.end() ? std::string_view{} : transfer->placed.view();
   }
 
   tbc::val_a<std::string_view> saidOf(tbc::ref_a<View> view, std::uint32_t id) noexcept {

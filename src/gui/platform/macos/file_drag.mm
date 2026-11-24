@@ -36,9 +36,14 @@ namespace telar::gui::platform {
     std::uint64_t ticket = 0;
     tbc::val_a<PromiseAsked> asked;
 
-    // The system asked for the file `row` promised at `path`, and `handler` tells it how
-    // writing it ended.
+    // The system asked for what `row` promised at `path`, and `handler` tells it how writing
+    // it ended.
     void ask(std::uint32_t row, std::string_view path, void (^handler)(NSError*)) {
+      // A directory's path may end in a slash, which is no part of its name.
+      while (path.size() > 1 && path.ends_with('/')) {
+        path.remove_suffix(1);
+      }
+
       const auto split = path.rfind('/');
 
       if (!asked || split == std::string_view::npos || split == 0 || split + 1 == path.size()) {
@@ -148,11 +153,18 @@ namespace telar::gui::platform {
 
     constexpr CGFloat icon_side = 32;
 
-    UTType* typeNamed(NSString* name) {
+    // The type a promise says it is of. AppKit takes a promise of data or of a directory and
+    // throws for any other (NSFilePromiseProvider.h, on `fileType`): a directory is a folder
+    // whatever it is called, and a file is the kind of data its name says, or data.
+    UTType* typeNamed(NSString* name, bool directory) {
+      if (directory) {
+        return UTTypeFolder;
+      }
+
       NSString* const extension = name.pathExtension;
       UTType* const known = extension.length == 0 ? nil : [UTType typeWithFilenameExtension:extension];
 
-      return known == nil ? UTTypeData : known;
+      return known == nil || ![known conformsToType:UTTypeData] ? UTTypeData : known;
     }
 
     // The event a drag begins with: the one being handled when the pointer holds the rows, or
@@ -190,7 +202,7 @@ namespace telar::gui::platform {
     Written written(const DraggedOut& row, TelarDragSource* source) {
       if (!row.promised.empty()) {
         NSString* const name = textOf(row.promised);
-        UTType* const type = typeNamed(name);
+        UTType* const type = typeNamed(name, row.directory);
         TelarFilePromise* const promise = [[TelarFilePromise alloc] initWithFileType:type.identifier delegate:source];
 
         promise.name = name;
