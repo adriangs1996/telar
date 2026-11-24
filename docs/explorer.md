@@ -13,7 +13,8 @@ Open it with the prefix and `o`, with **Open explorer** in the palette, or with
 
 It moves with Neovim's keys, and it changes files the way [oil.nvim](https://github.com/stevearc/oil.nvim)
 does: a rename, a new entry or a cut is a change typed on the listing, and nothing is written
-until `:w` shows the plan and you accept it. `?` lists every key.
+until `:w` shows the plan and you accept it. `?` lists every key, on a sheet over the windows
+that the wheel scrolls when it does not show whole.
 
 ## Move in the listing
 
@@ -49,7 +50,8 @@ what a hidden directory holds until `g.` lists it.
 
 `/` asks the runtime of the machine for the paths below the window's root that match what you
 type, with the search the path picker of `Ctrl+b` `f` uses: the letters in their order, wherever
-they are in the path. It reaches what the window never unfolded.
+they are in the path. It reaches what the window never unfolded, and each row shows the letters
+it was found by, lit where they stand in its path.
 
 ![A filter that found a file in a directory the window never unfolded](images/telar-explorer-filter.png)
 
@@ -435,8 +437,8 @@ other, 256 KiB at a time, and holds one such piece of it and no more.
 
 - A file that arrives shows as a row where it will be, with how much of it arrived, until
   its directory is read again. The status line of a window counts the files on their way to
-  or from its machine, and the sidebar lists them under TRANSFERS with their route, how much
-  arrived, the rate, and a control that cancels one.
+  or from its machine, and the sidebar lists them under TRANSFERS, a card each, with its route,
+  how much arrived, the rate, and `cancel` while it is on its way.
 - Two files travel at once and the rest wait their turn. A transfer goes on while the
   explorer is closed.
 - A directory is carried as its tree, as one transfer. Its own directory is made where it
