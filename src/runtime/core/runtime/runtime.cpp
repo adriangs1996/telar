@@ -2700,7 +2700,7 @@ namespace telar::runtime {
     requires BackgroundExecutor<Background, ConcurrentMemory>
   void Runtime<Poller, Background>::handle(std::uint64_t identity, const NvimPreview& message) {
     panes_.editorRequest(model_, requireClient(clients_, identity), message.pane_id, [&](NvimEditor& editor) {
-      return editor.preview({.path = message.path, .line = message.line}, {.row = message.row, .column = message.column, .columns = message.columns, .rows = message.rows});
+      return editor.preview({.path = message.path, .line = message.line, .column = message.match_column}, {.row = message.row, .column = message.column, .columns = message.columns, .rows = message.rows}, message.match_bytes);
     });
   }
 

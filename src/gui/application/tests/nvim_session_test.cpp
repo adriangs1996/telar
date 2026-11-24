@@ -322,6 +322,13 @@ namespace {
 
     check(text.query == "needle" && text.root == "/srv/app");
     check(deliver(client, TextResults{.request_id = text.request_id, .root = "/srv/app", .matches = lines.view()}) == application::Change::editor && editor->picker.matches.size() == 2 && editor->picker.matches[1].line == 9);
+    application::nvim::preview(client, editor_pane, std::size_t{0}, {.row = 2, .column = 40, .columns = 60, .rows = 20});
+    check(transport.last<NvimPreview>().line == 4 && transport.last<NvimPreview>().match_column == 2 && transport.last<NvimPreview>().match_bytes == 6, "a line's preview marks what the query matched, where the search says it starts");
+    application::nvim::search(client, editor_pane, "needles");
+    application::nvim::preview(client, editor_pane, std::size_t{0}, {.row = 2, .column = 40, .columns = 60, .rows = 20});
+    check(transport.last<NvimPreview>().line == 4 && transport.last<NvimPreview>().match_bytes == 0, "and nothing while the lines answer a query typed before");
+    application::nvim::search(client, editor_pane, "needle");
+    check(deliver(client, TextResults{.request_id = transport.last<FindText>().request_id, .root = "/srv/app", .matches = lines.view()}) == application::Change::editor);
 
     const ds::Array<std::uint32_t, 2> marked{0, 1};
 

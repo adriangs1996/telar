@@ -116,35 +116,14 @@ namespace telar::gui::qt {
       return {{QStringLiteral("text"), shown(text)}, {QStringLiteral("bold"), matched}};
     }
 
-    // A line of a file in parts, each place the query is in it bold, as the search found it: by
-    // its bytes, and regardless of case when the query has no capital letter. None when the
-    // query is not in it, as when the line answers a query typed before.
+    // A line of a file in parts, each place the query is in it bold, as the search found it.
+    // None when the query is not in it, as when the line answers a query typed before.
     QVariantList textRuns(std::string_view text, std::string_view query) {
       QVariantList runs;
-
-      if (query.empty()) {
-        return runs;
-      }
-
-      const auto lower = [](char character) {
-        return character >= 'A' && character <= 'Z' ? static_cast<char>(character - 'A' + 'a') : character;
-      };
-      const bool folded = std::ranges::none_of(query, [](char character) {
-        return character >= 'A' && character <= 'Z';
-      });
-      const auto same = [&](char left, char right) {
-        return folded ? lower(left) == lower(right) : left == right;
-      };
       std::size_t written = 0;
 
-      while (written + query.size() <= text.size()) {
-        const auto rest = text.substr(written);
-        const auto found = std::ranges::search(rest, query, same);
-        if (found.empty()) {
-          break;
-        }
-
-        const auto start = written + static_cast<std::size_t>(found.begin() - rest.begin());
+      while (const auto found = nvim::findInLine(text, query, written)) {
+        const auto start = *found;
 
         if (start > written) {
           runs.append(textRun(text.substr(written, start - written), false));

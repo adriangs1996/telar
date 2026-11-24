@@ -55,9 +55,9 @@ export {
       // MeasureDirectory, QueryChanges, InspectFile, ChangeFiles, UndoFileChanges, CommitChanges,
       // LocateHome, ReadFile, WriteFile, EndFileWrite, QueryTouches, KeepPlaces and QueryPlaces, with their answers,
       // what an editor tells the explorer: NvimOpenFiles and NvimExplore, and the explorer as a
-      // pane: CreateExplorerPane, KeepExplorer and ExplorerKept. Peers without them reject the
-      // messages.
-      inline constexpr SchemaId schema_id{'c', 'q', 'p', '0', '0', '0', '1', '1'};
+      // pane: CreateExplorerPane, KeepExplorer and ExplorerKept; cqp00012 gives NvimPreview where
+      // the query matched its line. Peers without them reject the messages.
+      inline constexpr SchemaId schema_id{'c', 'q', 'p', '0', '0', '0', '1', '2'};
 
       // The schemas a client of this build can speak with a runtime, oldest first. Each added
       // messages to the one before it and left the layouts of the others alone, so a client that
@@ -75,11 +75,12 @@ export {
         cqp00009,
         cqp00010,
         cqp00011,
+        cqp00012,
       };
 
-      inline constexpr Dialect current_dialect = Dialect::cqp00011;
+      inline constexpr Dialect current_dialect = Dialect::cqp00012;
 
-      inline constexpr ds::Array<SchemaId, 11> dialect_schemas{
+      inline constexpr ds::Array<SchemaId, 12> dialect_schemas{
           SchemaId{'8', '7', '6', 'b', '4', '8', '0', 'd'},
           SchemaId{'c', 'q', 'p', '0', '0', '0', '0', '2'},
           SchemaId{'c', 'q', 'p', '0', '0', '0', '0', '3'},
@@ -90,6 +91,7 @@ export {
           SchemaId{'c', 'q', 'p', '0', '0', '0', '0', '8'},
           SchemaId{'c', 'q', 'p', '0', '0', '0', '0', '9'},
           SchemaId{'c', 'q', 'p', '0', '0', '0', '1', '0'},
+          SchemaId{'c', 'q', 'p', '0', '0', '0', '1', '1'},
           schema_id,
       };
 
@@ -140,7 +142,8 @@ export {
           Addition{.tag = ClientTag::nvim_menu_select, .dialect = Dialect::cqp00009},
           Addition{.tag = ClientTag::find_text, .dialect = Dialect::cqp00009},
           Addition{.tag = ClientTag::nvim_buffers, .dialect = Dialect::cqp00009},
-          Addition{.tag = ClientTag::nvim_preview, .dialect = Dialect::cqp00009},
+          // Its layout gained where the query matched the line it shows.
+          Addition{.tag = ClientTag::nvim_preview, .dialect = Dialect::cqp00012},
           Addition{.tag = ClientTag::nvim_list, .dialect = Dialect::cqp00009},
           Addition{.tag = ClientTag::nvim_configuration, .dialect = Dialect::cqp00010},
           Addition{.tag = ClientTag::list_directory, .dialect = Dialect::cqp00011},

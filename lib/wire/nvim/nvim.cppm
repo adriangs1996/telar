@@ -246,7 +246,9 @@ export extern "C++" {
         : Schema<Direction::client, ClientTag::nvim_buffers, Field<&NvimBuffers::request_id, NonzeroU64, "request_id">, Field<&NvimBuffers::pane_id, NonzeroU64, "pane_id">, Field<&NvimBuffers::query, SizedText<u16, FindPaths::maximum_query_bytes, true, TextRule::utf8_no_nul>, "query">, Field<&NvimBuffers::limit, BoundedInteger<u16, 1, FindPaths::maximum_limit>, "limit">> {};
 
     // Shows a file in a float of the editor that takes no focus, over the cells a picker leaves
-    // for it, with `line` in view. Without columns or rows, the float is closed.
+    // for it, with `line` in view. Without columns or rows, the float is closed. What a search
+    // of text matched on `line` is marked: `match_bytes` bytes from the byte `match_column`,
+    // counted from one; none without them.
     struct NvimPreview {
       std::uint64_t pane_id{};
       std::string_view path;
@@ -255,11 +257,13 @@ export extern "C++" {
       std::uint16_t column{};
       std::uint16_t columns{};
       std::uint16_t rows{};
+      std::uint32_t match_column{};
+      std::uint16_t match_bytes{};
     };
 
     template <>
     struct MessageSchema<NvimPreview>
-        : Schema<Direction::client, ClientTag::nvim_preview, Field<&NvimPreview::pane_id, NonzeroU64, "pane_id">, Field<&NvimPreview::path, Text16<max_nvim_path_bytes>, "path">, Field<&NvimPreview::line, u32, "line">, Field<&NvimPreview::row, u16, "row">, Field<&NvimPreview::column, u16, "column">, Field<&NvimPreview::columns, u16, "columns">, Field<&NvimPreview::rows, u16, "rows">> {};
+        : Schema<Direction::client, ClientTag::nvim_preview, Field<&NvimPreview::pane_id, NonzeroU64, "pane_id">, Field<&NvimPreview::path, Text16<max_nvim_path_bytes>, "path">, Field<&NvimPreview::line, u32, "line">, Field<&NvimPreview::row, u16, "row">, Field<&NvimPreview::column, u16, "column">, Field<&NvimPreview::columns, u16, "columns">, Field<&NvimPreview::rows, u16, "rows">, Field<&NvimPreview::match_column, u32, "match_column">, Field<&NvimPreview::match_bytes, u16, "match_bytes">> {};
 
     // Fills the editor's quickfix list with places and opens it.
     struct NvimList {

@@ -922,10 +922,10 @@ end
     return queued;
   }
 
-  bool NvimEditor::preview(const NvimPlace& place, NvimArea area) {
+  bool NvimEditor::preview(const NvimPlace& place, NvimArea area, std::uint16_t marked) {
     constexpr std::string_view script = "__telar_preview(...)";
-    constexpr std::uint32_t argument_count = 6;
-    constexpr std::size_t room = 96;
+    constexpr std::uint32_t argument_count = 8;
+    constexpr std::size_t room = 112;
 
     if (state_ != NvimState::attached || place.path.size() > max_nvim_path_bytes) {
       return false;
@@ -940,6 +940,8 @@ end
       writer.unsignedInteger(area.column);
       writer.unsignedInteger(area.columns);
       writer.unsignedInteger(area.rows);
+      writer.unsignedInteger(place.column);
+      writer.unsignedInteger(marked);
     });
   }
 

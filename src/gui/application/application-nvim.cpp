@@ -294,11 +294,17 @@ namespace telar::gui::application::nvim {
     }
 
     const auto& match = editor->picker.matches[*index];
+    const auto& picker = editor->picker;
     ds::String<Memory> path{editor->memory};
 
-    locate(path, editor->picker, match);
+    // What the query matched on a line of text, when the line is one it matches: the search
+    // says where its first match starts in the line, and the query how long it is.
+    const auto query = picker.query.view();
+    const bool matched = match.line > 0 && match.column > 0 && query.size() <= std::numeric_limits<std::uint16_t>::max() && findInLine(match.text.of({picker.text.data(), picker.text.size()}), query);
+
+    locate(path, picker, match);
     if (path.size() <= max_nvim_path_bytes) {
-      session.link.send(NvimPreview{.pane_id = pane_id, .path = path.view(), .line = match.line, .row = area.row, .column = area.column, .columns = area.columns, .rows = area.rows});
+      session.link.send(NvimPreview{.pane_id = pane_id, .path = path.view(), .line = match.line, .row = area.row, .column = area.column, .columns = area.columns, .rows = area.rows, .match_column = matched ? match.column : 0, .match_bytes = matched ? static_cast<std::uint16_t>(query.size()) : std::uint16_t{0}});
     }
   }
 

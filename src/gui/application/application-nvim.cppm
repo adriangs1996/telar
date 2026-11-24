@@ -43,6 +43,7 @@ export namespace telar::gui::application::nvim {
   using telar::NvimPlacement;
   using telar::NvimPromptKind;
 
+  using features::nvim::findInLine;
   using features::nvim::notation;
   using features::nvim::readStatusLine;
 

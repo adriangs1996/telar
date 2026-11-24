@@ -158,7 +158,8 @@ export {
       // for before is dropped when it arrives.
       bool listBuffers(std::uint64_t token);
       // Shows a file in a float that takes no focus over `area`; without an area, closes it.
-      bool preview(const NvimPlace& place, NvimArea area);
+      // `marked` bytes from the place's column, on its line, are marked as a search's match.
+      bool preview(const NvimPlace& place, NvimArea area, std::uint16_t marked = 0);
       // Fills the quickfix list with places and opens it.
       bool list(std::span<const TextMatch> places);
       // Hands the user's answer to whatever asked. False for a prompt that is no longer open.

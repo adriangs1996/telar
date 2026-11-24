@@ -999,4 +999,27 @@ namespace telar::gui::features::nvim {
     return editor->pane_id;
   }
 
+  ds::Option<std::size_t> findInLine(std::string_view line, std::string_view query, std::size_t from) noexcept {
+    if (query.empty() || from > line.size() || query.size() > line.size() - from) {
+      return ds::none;
+    }
+
+    const auto capital = [](char character) {
+      return character >= 'A' && character <= 'Z';
+    };
+    const auto lower = [&](char character) {
+      return capital(character) ? static_cast<char>(character - 'A' + 'a') : character;
+    };
+    const bool folded = std::ranges::none_of(query, capital);
+    const auto rest = line.substr(from);
+    const auto found = std::ranges::search(rest, query, [&](char left, char right) {
+      return folded ? lower(left) == lower(right) : left == right;
+    });
+    if (found.empty()) {
+      return ds::none;
+    }
+
+    return ds::Option<std::size_t>{from + static_cast<std::size_t>(found.begin() - rest.begin())};
+  }
+
 }

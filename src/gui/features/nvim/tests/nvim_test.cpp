@@ -392,6 +392,15 @@ namespace {
     check(receive(fixture.state, NvimFrame{.pane_id = pane_id, .frame_id = 2, .base_frame_id = 1}) == Received::presented && !find(fixture.state, pane_id)->status_row, "and when there is none");
   }
 
+  // A query is found in a line as the search of text matches it: regardless of case only while
+  // it has no capital letter.
+  void queryIsFoundAsTheSearchMatchesIt() {
+    check(findInLine("void open(WireRuntime& runtime)", "wire") == std::size_t{10}, "a query without capitals matches any case");
+    check(findInLine("void open(wireRuntime& runtime)", "Wire") == ds::none, "one with a capital matches it exactly");
+    check(findInLine("a wire, another wire", "wire", 3) == std::size_t{16}, "the next match is found after the one before");
+    check(findInLine("a line", "") == ds::none && findInLine("a line", "line", 7) == ds::none && findInLine("ab", "abc") == ds::none, "nothing is found for nothing, past the end or for more than the line");
+  }
+
   const telar::testing::Case case_status{"nvim.status_line_is_read_from_its_cells", statusLineIsReadFromItsCells};
   const telar::testing::Case case_status_row{"nvim.frame_says_where_the_status_line_is", frameSaysWhereTheStatusLineIs};
   const telar::testing::Case case_keys{"nvim.keys_are_written_as_neovim_names_them", keysAreWrittenAsNeovimNamesThem};
@@ -404,5 +413,6 @@ namespace {
   const telar::testing::Case case_prompt{"nvim.prompt_is_answered_once", promptIsAnsweredOnce};
   const telar::testing::Case case_detached{"nvim.detached_editor_takes_the_screen_again", detachedEditorTakesTheScreenAgain};
   const telar::testing::Case case_dismissed{"nvim.dismissed_message_stays_gone", dismissedMessageStaysGone};
+  const telar::testing::Case case_found{"nvim.query_is_found_as_the_search_matches_it", queryIsFoundAsTheSearchMatchesIt};
 
 }

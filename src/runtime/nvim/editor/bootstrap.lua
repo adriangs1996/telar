@@ -446,8 +446,9 @@ function _G.__telar_buffers(token)
   vim.rpcnotify(channel, "telar_buffers", token, names)
 end
 
--- A file shown in a float that takes no focus, over the cells a picker leaves for it. The
--- buffers it loads only to show are dropped when it closes.
+-- A file shown in a float that takes no focus, over the cells a picker leaves for it, with
+-- what a search matched on its line marked in that window alone. The buffers it loads only to
+-- show are dropped when it closes.
 local preview, loaded = nil, {}
 local function close_preview()
   if preview ~= nil and vim.api.nvim_win_is_valid(preview) then
@@ -464,7 +465,7 @@ local function close_preview()
   loaded = {}
 end
 
-function _G.__telar_preview(path, line, row, column, columns, rows)
+function _G.__telar_preview(path, line, row, column, columns, rows, match_column, match_bytes)
   if columns == 0 or rows == 0 or path == "" then
     close_preview()
     return
@@ -492,6 +493,11 @@ function _G.__telar_preview(path, line, row, column, columns, rows)
   vim.wo[preview].number = true
   vim.wo[preview].wrap = false
   vim.wo[preview].cursorline = line > 0
+  vim.fn.clearmatches(preview)
+  if line > 0 and (match_column or 0) > 0 and (match_bytes or 0) > 0 then
+    vim.fn.matchaddpos("Search", { { line, match_column, match_bytes } }, 10, -1, { window = preview })
+  end
+
   if line > 0 then
     pcall(vim.api.nvim_win_set_cursor, preview, { line, 0 })
     vim.api.nvim_win_call(preview, function()

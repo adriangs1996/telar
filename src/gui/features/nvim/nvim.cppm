@@ -467,6 +467,11 @@ export namespace telar::gui::features::nvim {
   [[nodiscard]] std::uint64_t receive(State& state, const PathResults& message);
   [[nodiscard]] std::uint64_t receive(State& state, const TextResults& message);
 
+  // Where `query` is in a line a search of text found, from its byte `from`, as the search
+  // matches it: by its bytes, and regardless of case when the query has no capital letter.
+  // None when it is not there, as in a line that answers a query typed before.
+  [[nodiscard]] ds::Option<std::size_t> findInLine(std::string_view line, std::string_view query, std::size_t from = 0) noexcept;
+
 }
 
 namespace telar::gui::features::nvim {
