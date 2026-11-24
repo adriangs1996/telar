@@ -34,7 +34,10 @@ that the wheel scrolls when it does not show whole.
 | `S`, `g.`, `gi` | Sort by name, size or time; show dotfiles; show what git ignores. |
 | `R` | Read the directories again. |
 
-A click selects a row, a double click acts as Enter, and the wheel scrolls. A click on the row
+A click selects a row, a double click acts as Enter, and the wheel scrolls. The rows are not
+all as tall: a heading of the changes is taller than a file's row and a line of a diff shorter,
+and the list shows the rows that fit whole, with a heading above its first row and what the
+tree leaves out below its last. A click on the row
 that is already selected folds or unfolds its directory, and on a file git says changed it
 shows or hides its diff below it. Shift and a click selects up to that row, Cmd or Ctrl and a
 click picks rows one by one, and Cmd or Ctrl with `a` picks every row. A click on a directory
@@ -94,7 +97,8 @@ The preview beside the listing says the size, the time of the last change, what 
 the last commit of the selection, which editor pane holds it and the marks set on it, and shows
 its diff when it has changes not committed, or the head of its text. A row that is no file has
 a preview of its own: a pane says what it is and where, and an entry a change adds, or a file
-on its way from another machine, says what waits to be done.
+on its way from another machine, says what waits to be done. What does not fit is reached with
+the wheel over the preview, and another selection starts at its top.
 
 Of a directory it says how many of its entries the window lists, as `17 of 19 visible`, and
 lists the seven that weigh the most under **Heaviest**, each with its size and its part of all
@@ -214,7 +218,8 @@ with Backspace, cuts.
 
 ![Changes typed on the listing, not yet written](images/telar-explorer-pending.png)
 
-`:w` shows what the runtime will be asked to do, and `y` sends it. `n`, `q` or Escape leave the
+`:w` shows what the runtime will be asked to do, a long path on as many lines as it needs, and
+`y` sends it. `n`, `q` or Escape leave the
 plan with the changes still pending, and any other key is no answer:
 
 ![The plan of :w](images/telar-explorer-plan.png)
