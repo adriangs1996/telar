@@ -655,6 +655,52 @@ command = "switch" : "Switch branches" , { @branch } | "status" : "Show the work
     prompt::key(client, 1, prompt::KeyPress{.key = prompt::Key::escape});
   }
 
+  // The command after sudo, env or time completes as the command; history offers the command
+  // a line ran, not an assignment or a wrapper before it.
+  template <typename Client>
+  void completesWrappedCommands(Client& client, Transport& transport) {
+    prompt::key(client, 1, prompt::KeyPress{.key = prompt::Key::character, .character = 'u', .modifiers = {.control = true}});
+    typeKeys(client, "sudo -E git sw");
+    tab(client);
+    check(prompt::line(client, 1)->text() == "sudo -E git switch ", "the command after a wrapper and its options completes from its spec");
+
+    prompt::key(client, 1, prompt::KeyPress{.key = prompt::Key::character, .character = 'u', .modifiers = {.control = true}});
+    typeKeys(client, "env tel");
+    tab(client);
+    check(transport.last<CompleteWords>().provider == CompletionProvider::command && transport.last<CompleteWords>().prefix == "tel", "the word after env is a command's position");
+    prompt::key(client, 1, prompt::KeyPress{.key = prompt::Key::escape});
+  }
+
+  // History at a command's position offers the command each line ran.
+  template <typename Client>
+  void completesCommandsFromHistory(Client& client) {
+    prompt::key(client, 1, prompt::KeyPress{.key = prompt::Key::character, .character = 'u', .modifiers = {.control = true}});
+    for (const auto* command : {"FOO=1 zmake all", "sudo zapt install"}) {
+      typeKeys(client, command);
+      enter(client);
+    }
+
+    typeKeys(client, "z");
+    tab(client);
+    const auto& menu = prompt::line(client, 1)->menu();
+    const auto offers = [&](std::string_view text) {
+      return menu && std::ranges::any_of(menu->all, [&](const auto& choice) {
+        return choice.text == text;
+      });
+    };
+
+    check(offers("zmake") && offers("zapt"), "the command each line ran is offered");
+    prompt::key(client, 1, prompt::KeyPress{.key = prompt::Key::escape});
+    prompt::key(client, 1, prompt::KeyPress{.key = prompt::Key::character, .character = 'u', .modifiers = {.control = true}});
+    typeKeys(client, "FO");
+    tab(client);
+    check(!prompt::line(client, 1)->menu() || std::ranges::none_of(prompt::line(client, 1)->menu()->all, [](const auto& choice) {
+      return choice.text == "FOO=1";
+    }),
+        "not an assignment before it");
+    prompt::key(client, 1, prompt::KeyPress{.key = prompt::Key::escape});
+  }
+
   void lineCompletes() {
     SystemAllocator memory;
     Transport transport;
@@ -680,6 +726,8 @@ command = "switch" : "Switch branches" , { @branch } | "status" : "Show the work
     fallsBackToFiles(client, transport);
     completesPaths(client, transport);
     completesJoinedOptions(client, transport);
+    completesWrappedCommands(client, transport);
+    completesCommandsFromHistory(client);
 
     // After a command the pane asks again, with the digest of the spec it holds: an unchanged
     // spec is not sent twice.

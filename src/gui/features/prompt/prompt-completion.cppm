@@ -57,9 +57,10 @@ export namespace telar::gui::features::prompt {
   };
 
   // The literal choices and the providers for `context`, from the command's `spec` when the
-  // runtime has one for it. At a command's position, the commands in `history` whose names start
-  // with the partial word; the runtime adds the ones the shell runs.
-  tbc::val_a<Completion> complete(tbc::mut_a<Memory> memory, const CompletionContext& context, const ebnf::command_spec* spec, ebnf::match_scratch& scratch, History history);
+  // runtime has one for it. At a command's position, the commands the lines of `history` ran, as
+  // the `syntax`'s shell reads them, whose names start with the partial word; the runtime adds
+  // the ones the shell runs.
+  tbc::val_a<Completion> complete(tbc::mut_a<Memory> memory, const CompletionContext& context, const ebnf::command_spec* spec, ebnf::match_scratch& scratch, History history, shell::Syntax syntax = {});
 
   // Writes `text` as one shell word: characters the shell would read specially are escaped.
   tbc::val_a<ds::String<Memory>> quoteWord(tbc::mut_a<Memory> memory, std::string_view text, shell::Dialect dialect);

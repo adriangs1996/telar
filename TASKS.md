@@ -194,7 +194,7 @@ Legend: `[ ]` todo, `[x]` done, `[~]` not a bug / dropped (with reason).
   Fix: follow `Include` with `glob(3)`, relative to `~/.ssh`, depth at most 16 as ssh does,
   through the existing `readSmall`; skip `Host` patterns with wildcards.
 
-- [ ] **T15 (C minor). Small completion fixes.**
+- [x] **T15 (C minor). Small completion fixes.**
   - Commands from history at command position take the raw first word (`FOO=1`, `sudo`):
     extract the command word with the lexer, as `learn()` does.
   - `sudo`, `env`, `time` do not complete the command after them: in `completionContext`, a
@@ -202,6 +202,9 @@ Legend: `[ ]` todo, `[x]` done, `[~]` not a bug / dropped (with reason).
     to the next non-option word.
   - Names over 64 bytes never complete (`longest_name`): with the provider of T6 use
     `NAME_MAX` (255).
+  The third needed nothing more: T6's providers bound the partial by the 256 bytes
+  CompleteWords carries, so a name up to NAME_MAX completes; `longest_name` stays for the
+  older runtime's FindPaths and for spec names.
 
 ## P1: history and the editor
 

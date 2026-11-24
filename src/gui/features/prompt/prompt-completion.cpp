@@ -10,6 +10,64 @@ import telar.base.memory.allocators;
 
 namespace telar::gui::features::prompt {
 
+  namespace {
+
+    // Commands that run the command after them: completion reads that one.
+    constexpr ds::Array<std::string_view, 7> wrappers{"sudo", "env", "time", "nohup", "nice", "exec", "command"};
+
+    // The command a simple command runs, past the wrappers before it and their options (and the
+    // assignments env takes), but never past `limit`, the word being completed.
+    std::size_t wrappedCommand(std::span<const shell::Word> words, std::size_t command_word, std::size_t limit) noexcept {
+      while (command_word < limit && std::ranges::contains(wrappers, words[command_word].text)) {
+        const bool env = words[command_word].text == "env";
+        auto next = command_word + 1;
+
+        while (next < limit && (words[next].text.starts_with('-') || (env && words[next].text.contains('=')))) {
+          ++next;
+        }
+
+        command_word = next;
+      }
+
+      return command_word;
+    }
+
+    // Lexes lines into buffers that grow to the longest one, for the command each runs.
+    class CommandReader {
+    public:
+      explicit CommandReader(tbc::mut_a<Memory> memory)
+          : tokens_(memory),
+            words_(memory),
+            unquoted_(memory) {}
+
+      // The command `line`'s first simple command runs, as the shell reads it; empty when none.
+      [[nodiscard]] std::string_view first(std::string_view line, shell::Syntax syntax) {
+        tokens_.resize(line.size() + 1);
+        words_.resize(line.size() + 1);
+        unquoted_.resize((2 * line.size()) + 2);
+        const auto lexed = shell::lex(line, syntax, tokens_.viewMut(), 0);
+        if (!lexed.cursor_completable) {
+          return {};
+        }
+
+        const auto located = shell::commandAt(line, syntax, tokens_.view().first(lexed.tokens), lexed, words_.viewMut(), unquoted_.viewMut());
+        if (located.overflow || located.command_word == shell::no_word) {
+          return {};
+        }
+
+        const auto command = wrappedCommand(words_.view(), located.command_word, located.words);
+
+        return command < located.words ? words_[command].text : std::string_view{};
+      }
+
+    private:
+      ds::Vec<shell::Token, Memory> tokens_;
+      ds::Vec<shell::Word, Memory> words_;
+      ds::Vec<char, Memory> unquoted_;
+    };
+
+  }
+
   tbc::val_a<Choice> Choice::clone() const {
     return {.text = text.clone(), .description = description.clone(), .directory = directory, .joined = joined};
   }
@@ -44,16 +102,18 @@ namespace telar::gui::features::prompt {
     }
 
     CompletionContext context{memory};
+    // The command after a wrapper (sudo, env…) is the one completed.
+    const auto command_word = located.command_word == shell::no_word ? shell::no_word : wrappedCommand(words.view(), located.command_word, std::min(located.current, located.words));
 
     context.partial.assign(located.prefix);
     context.replace_begin = located.replace.begin;
     context.replace_end = located.replace.end;
-    context.command_position = located.command_word == shell::no_word || located.current <= located.command_word;
+    context.command_position = command_word == shell::no_word || located.current <= command_word;
     if (!context.command_position) {
-      auto name = words[located.command_word].text;
+      auto name = words[command_word].text;
 
       context.command.assign(name.substr(name.rfind('/') + 1));
-      for (auto index = located.command_word + 1; index < located.current && index < located.words; ++index) {
+      for (auto index = command_word + 1; index < located.current && index < located.words; ++index) {
         context.words.emplace(memory, words[index].text);
       }
     }
@@ -61,7 +121,7 @@ namespace telar::gui::features::prompt {
     return std::move(context);
   }
 
-  tbc::val_a<Completion> complete(tbc::mut_a<Memory> memory, const CompletionContext& context, const ebnf::command_spec* spec, ebnf::match_scratch& scratch, History history) {
+  tbc::val_a<Completion> complete(tbc::mut_a<Memory> memory, const CompletionContext& context, const ebnf::command_spec* spec, ebnf::match_scratch& scratch, History history, shell::Syntax syntax) {
     Completion result{memory};
     const auto add = [&](std::string_view text, std::string_view description, bool joined = false) {
       if (text.starts_with(context.partial.view()) && std::ranges::none_of(result.choices, [&](const Choice& choice) {
@@ -77,12 +137,13 @@ namespace telar::gui::features::prompt {
 
     if (context.command_position) {
       constexpr std::size_t max_history_choices = 64;
+      CommandReader reader{memory};
 
       for (auto entry = history.rbegin(); entry != history.rend() && result.choices.size() < max_history_choices; ++entry) {
-        const auto line = entry->view();
-        const auto end = line.find_first_of(" \t\n|;&");
-
-        add(line.substr(0, end), {});
+        // Only a line that holds the word typed can run a command that starts with it.
+        if (const auto line = entry->view(); line.contains(context.partial.view())) {
+          add(reader.first(line, syntax), {});
+        }
       }
 
       return result;

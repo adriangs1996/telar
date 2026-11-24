@@ -757,7 +757,7 @@ namespace telar::gui::features::prompt {
     CompletionPlan result{memory};
     auto& completion = result.completion;
 
-    completion = complete(memory, context, found, state.scratch.lend(), line.line.recent());
+    completion = complete(memory, context, found, state.scratch.lend(), line.line.recent(), shell::Syntax{.dialect = dialect});
 
     auto partial = context.partial.view();
     if (partial.starts_with(completion.provider_prefix.view())) {
