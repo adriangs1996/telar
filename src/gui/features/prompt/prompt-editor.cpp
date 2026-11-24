@@ -1646,7 +1646,9 @@ namespace telar::gui::features::prompt {
 
   Request Editor::visualCommand(char32_t character) {
     auto start = text_.selectionStart();
-    auto end = text_.next(text_.selectionEnd());
+    // Read before the cursor moves: moving it collapses the selection.
+    const auto selection_end = text_.selectionEnd();
+    auto end = text_.next(selection_end);
     const bool lines = mode_ == Mode::visual_line;
 
     switch (character) {
@@ -1669,7 +1671,7 @@ namespace telar::gui::features::prompt {
 
       mode_ = Mode::normal;
       text_.moveTo(start);
-      operate(start, lines ? text_.selectionEnd() : end, lines);
+      operate(start, lines ? selection_end : end, lines);
       return Request::none;
     }
     case 'o': {

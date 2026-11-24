@@ -409,6 +409,18 @@ namespace {
     require(text(editor).ends_with("pasted"), "the + register reads it");
   }
 
+  // Behaviours that differed from vim's, each as vim has it.
+  void vimFixes() {
+    // Vjd deletes both lines the selection spans.
+    {
+      Editor editor{Keymap::vim};
+
+      type(editor, "one\ntwo\nthree");
+      type(editor, "\x1bggVjd");
+      require(text(editor) == "three", "Vjd deletes the two lines");
+    }
+  }
+
   void routing() {
     // The line discipline's defaults: Ctrl-C, Ctrl-\, Ctrl-Z and Ctrl-D.
     constexpr telar::Byte interrupt = 0x03;
@@ -613,6 +625,7 @@ namespace {
 
   const telar::testing::Case case_write_starts_history_over{"prompt_editor.write_starts_history_over", writeStartsHistoryOver};
   const telar::testing::Case case_grapheme_motions{"prompt_editor.grapheme_motions", graphemeMotions};
+  const telar::testing::Case case_vim_fixes{"prompt_editor.vim_fixes", vimFixes};
   const telar::testing::Case case_memory_returns{"prompt_editor.memory_returns", memoryReturns};
   const telar::testing::Case case_layout_and_styles{"prompt_editor.layout_and_styles", layoutAndStyles};
   const telar::testing::Case case_routing{"prompt_editor.routing", routing};

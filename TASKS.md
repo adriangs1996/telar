@@ -387,7 +387,7 @@ Legend: `[ ]` todo, `[x]` done, `[~]` not a bug / dropped (with reason).
 
 ## P2: vim (expected: what vim does)
 
-- [ ] **T38 (V24).** `Vjd` deletes one line: in `visualCommand` read `selectionEnd()` before
+- [x] **T38 (V24).** `Vjd` deletes one line: in `visualCommand` read `selectionEnd()` before
   `moveTo(start)`.
 - [ ] **T39 (V25).** `dd` on the last line stores `"\nb"`: store a linewise register `b\n`;
   `p`/`P` paste whole lines for linewise registers.
