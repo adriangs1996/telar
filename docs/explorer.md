@@ -60,8 +60,8 @@ pane, `cw` renames it, `dd` cuts it, the preview shows it. The window did not li
 so before the plan of `:w` shows, the runtime says which file each one is, and that is the file
 it then checks.
 
-In the changes and the panes, and with a runtime that has no path search, `/` narrows the rows
-the window already lists.
+In the changes, the touches and the panes, and with a runtime that has no path search, `/`
+narrows the rows the window already lists.
 
 ## What a row says
 
@@ -96,7 +96,7 @@ on its way from another machine, says what waits to be done.
 
 Of a directory it says how many of its entries the window lists, as `17 of 19 visible`, and
 lists the seven that weigh the most under **Heaviest**, each with its size and its part of all
-the directory holds. It does so from what the window already holds: a directory it lists whole,
+the directory holds, and `hidden` or `ignored` beside one the window leaves out of its rows. It does so from what the window already holds: a directory it lists whole,
 as an unfolded one, and for the heaviest with every directory in it measured. Until then it
 says neither, since the heaviest of a part is not the heaviest.
 
@@ -108,8 +108,9 @@ says neither, since the heaviest of a part is not the heaviest.
 `:touched` and `:panes` do.
 
 - **tree**: the directories, unfolded as you ask.
-- **changes**: what git says changed, in three groups: staged, unstaged and untracked. `=`
-  unfolds the diff of a file below its row here too, and in the lens of what was touched.
+- **changes**: what git says changed below the window's root, in three groups: staged,
+  unstaged and untracked, each path from that root. The number beside the lens counts them.
+  `=` unfolds the diff of a file below its row here too, and in the lens of what was touched.
 
   ![The lens of changes](images/telar-explorer-changes.png)
 
@@ -120,7 +121,11 @@ says neither, since the heaviest of a part is not the heaviest.
 
   ![The lens of what the panes touched](images/telar-explorer-touched.png)
 
-- **panes**: the panes of the tab, each with its directory. Enter goes to the pane.
+- **panes**: the panes of the window's machine, of every workspace and tab of it, each with
+  its workspace and its directory; an editor is listed by the file it is on. Enter goes to
+  the pane, whose tab comes into view, and whose machine does when it is another one. The
+  preview says what kind of pane it is, the file an editor is on and what an agent is doing.
+  A pane of a tab the window never showed has no directory: its runtime lists it without one.
 
 ## Who touched a file
 
@@ -150,11 +155,13 @@ that machine starts or ends a program or its agent reports. A machine with no wi
 ## Follow a pane
 
 A window follows the focused pane until you send it somewhere else: its root is the pane's
-workspace, and the selection is the pane's directory. `gp` roots it at the pane's directory
+workspace, and the pane's directory is unfolded and selected. With an editor pane it is the
+file the editor is on that is selected, in its directory, and the window goes with the editor
+from one file to the next. `gp` roots it at the pane's directory
 instead, `gw` at the workspace's and `gh` at the home of the machine, as `:scope pane`,
 `:scope workspace` and `:scope machine` do. Enter on a directory,
-`-` or `:e` take the window where you say, and the status line says `[fixed]`; `F` follows the
-pane again.
+`-` or `:e` take the window where you say, and the status line says `[fixed]`; `F`, `:follow`
+or a click on that part of the status line follows the pane again, and the same stops it.
 
 ## Hand a file to a pane
 
@@ -166,7 +173,7 @@ pane again.
 | `gf` | Opens it in the tab's [editor pane](editor.md). |
 | `cd` | Changes the directory of the focused shell to the row's. `:cd PATH` does it with a path, as the window reads one, and `:cd` alone with the window's root. |
 | `s` | Opens a new shell in the row's directory, in a split. |
-| `yy` `yr` `yn` | Copy the path, the path from the root, or the name to the clipboard. |
+| `yy` `yr` `yn` | Copy the path, the path from the root, or the name to the clipboard. `yy` also takes the rows for `p`; `yr` and `yn` copy text and leave what `yy` took. |
 | `.` | Repeats the last of these, and of the ones that change files or git's index, on the row selected now. |
 
 The explorer closes when a file goes to a pane, so what the pane did with it shows. [Beside
@@ -187,7 +194,17 @@ Enter and Escape both end a name: what was typed is the change, and so does a cl
 another row. An empty name leaves a rename undone and adds no entry. A new entry keeps the
 selection once it has its name.
 
-A count takes that many rows: `3dd`. `V` selects rows for `d`, `y`, `ga` and `gu`.
+A count takes that many rows: `3dd`. `V` selects rows for `d`, `y`, `ga` and `gu`. A
+selection also takes the keys of normal mode it has none of its own for, `:` and `?` among
+them: one that only moves keeps the selection, and any other ends it once it ran. `q` leaves
+the selection, not the explorer.
+
+`p` puts what was taken in the tree: the lists of changes, of touches and of panes have no
+directory to take it. Nothing is put where it already is, nor a directory into itself. While
+rows wait for a place, the hints say how many and whether `p` moves or copies them.
+
+Keys that name nothing say so under the windows, and the keys that change how a window lists,
+`S`, `g.`, `gi`, `zM`, `zR` and `F`, say what they did.
 
 The shortcuts of a file manager name the same commands: Cmd or Ctrl with `c`, `x`, `v`, `z`,
 `s` and `a` are `yy`, `dd`, `p`, `u`, `:w` and every row picked; F2 renames, and Delete, or Cmd
@@ -195,7 +212,8 @@ with Backspace, cuts.
 
 ![Changes typed on the listing, not yet written](images/telar-explorer-pending.png)
 
-`:w` shows what the runtime will be asked to do, and `y` sends it:
+`:w` shows what the runtime will be asked to do, and `y` sends it. `n`, `q` or Escape leave the
+plan with the changes still pending, and any other key is no answer:
 
 ![The plan of :w](images/telar-explorer-plan.png)
 
@@ -213,8 +231,12 @@ with Backspace, cuts.
   directory goes to the trash with all it holds. A name is known as taken from the listings
   the window holds: one in a directory it never listed is found by the runtime, which gives
   the file another.
+- Below its paths a line says what it does besides: that it is carried from one machine to
+  another through the window, the trash a delete goes to, what a restore discards.
+- Once the runtimes answered, the line under the windows says how many of the plan's
+  operations they applied, `2 of 3`, and what became of the others.
 - `u` with nothing typed asks whether to take the last plan back, and `y` does: what it
-  deleted returns from the trash.
+  deleted returns from the trash. The hints say `undo :w` while that is what `u` would do.
 - A plan holds 64 operations at most.
 
 `q` and `:q` do not close the last window while changes wait; `:q!` and `:e!` discard them.
@@ -276,7 +298,7 @@ on its own leaves as its text alone, and so does a directory on Linux.
 | `=` | Unfold the diff of the file below its row. |
 | `ga` `gu` | Stage and unstage, at once. |
 | `gX` | Discard the changes the working tree holds of a file, or of every file below a directory; what the index holds stays. It is a change typed, written by `:w`, as it loses work. |
-| `gc` | Commit what is staged: it opens `:commit` for the message. |
+| `gc` | Commit what is staged: it opens `:commit` for the message, which may stand between quotes. |
 
 The head of a window says the branch, how far it is from its base, as `↑6 main`, and how many
 paths are staged, changed and untracked. The base is the branch the remote has as its head,
@@ -289,15 +311,17 @@ fetch that moves the base shows a little later.
 
 ## Windows
 
-The explorer splits into three windows at most, each on its own directory.
+The explorer splits into three windows at most, each on its own directory. The status line of
+the window that takes the keys says its mode; the others say which they are, `1` to `3`. A
+window on another machine than the one telar runs on names it before its root, `box:~/logs`.
 
 | Keys | What they do |
 | --- | --- |
 | `Ctrl+w` `v`, `Ctrl+w` `s` | Another window, beside or below. |
 | `Ctrl+w` `w`, `Ctrl+w` `h` `j` `k` `l` | Go to the next window, around the last; or to the one on that side, where there is one: `h` and `l` between windows side by side, `k` and `j` between one below the other. |
 | `Ctrl+w` `q`, `Ctrl+w` `o` | Close this window, or every other one. |
-| `:e PATH`, `:vs PATH`, `:sp PATH` | Take this window, or a new one, to a path. `~` is the home, and a relative path starts at the window's root. A path of [another machine](#machines) starts with its label and a colon. |
-| `Tab` | On the command line, complete the name of a command; and on one of those lines and on `:cd`, the directory being typed: the one that matches, or the start that several share, which it lists beside the line. |
+| `:e PATH`, `:vs PATH`, `:sp PATH` | Take this window, or a new one, to a path. `~` is the home, and a relative path starts at the window's root. A directory becomes the root; a file is selected in its own directory, in the tree where it is below the root. A path where nothing is says so, and the window stays where it was. A path of [another machine](#machines) starts with its label and a colon. |
+| `Tab` | On the command line, complete the name of a command; and on one of those lines the directory or the file being typed, on `:cd` the directory alone: the one that matches, or the start that several share, which it lists beside the line. |
 
 Alt with `w` starts the same sequences as `Ctrl+w`, for a system that keeps that key for
 itself, unless a configuration binds it.
@@ -356,7 +380,7 @@ comes from the runtime of its own machine; a machine with no window is asked for
 | Keys | What they do |
 | --- | --- |
 | `:e LABEL:PATH`, `:vs LABEL:PATH`, `:sp LABEL:PATH` | Take this window, or a new one, to a path of the machine with that label: `:vs box:~/logs`. `~` is the home of the account there, which its runtime says. |
-| `:machine LABEL` | Take this window to that machine: where this explorer last was on it, or its home. `:machine` alone lists the machines. |
+| `:machine LABEL` | Take this window to that machine: where this explorer last was on it, or its home. `:machine` alone goes to the next one, as `gm` does, and a label that is no machine's is answered with the ones there are. A machine keeps what a window had unfolded on it, for the window that next goes there. |
 | `gm`, or a click on the machine in the head | The next machine that answers, around. |
 | `Tab` | Complete the label of a machine before its colon, where no directory starts that way; and after the colon, the directory being typed, from what that machine lists: `:e box:~/lo` becomes `:e box:~/logs/`. A path that starts nowhere starts at the home there. |
 
@@ -405,7 +429,7 @@ other, 256 KiB at a time, and holds one such piece of it and no more.
 | A drag onto a window of another machine | A copy; with Shift held, a move. On its own machine a drag moves, and copies with Alt. |
 | A file of another machine dragged out of the window | A copy where it is let go: on macOS where the system asks for it, a directory too, as its tree; on Linux a file, through the cache. See [the pointer](#with-the-pointer). |
 | Enter on a file, or on rows chosen with `V`, with the focused pane on another machine; or those rows let go on a pane of another machine | The line under the windows asks `bring a copy there? [y/N]`, of each row when they are several. With `y` each goes to `~/Downloads/telar/LABEL/` on the pane's machine, in a directory made when it is missing, a directory as its tree, and its path is typed at the pane once it is whole, as a mention for an agent. Any other key leaves it. An editor's pane is brought nothing: `gf` opens the file where it is. |
-| `:cancel` | Stops the files on their way to or from the machine of this window; `:cancel!` stops every one. |
+| `:cancel` | Stops the transfer started last that still runs; `:cancel N` the one of that number, and `:cancel!` every one. |
 
 ![A file on its way from one machine to another](images/telar-explorer-transfer.png)
 
