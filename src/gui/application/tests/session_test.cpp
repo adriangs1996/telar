@@ -838,6 +838,13 @@ namespace {
 
     configuration.history = {.show_agent_commands = true, .enter_runs = true, .match_fts = true};
     application::configuration::configure(client, configuration);
+    // Enter runs the paste only where the shell waits for a command: a program in front, as vim
+    // or an agent, gets the text alone.
+    deliver(client, PaneShell{.pane_id = 1, .shell = IntegratedShell::zsh, .phase = ShellPhase::running, .shell_foreground = false, .commands = 1});
+    first_message = transport.sent.size();
+    application::history::paste(client, 1);
+    check(transport.inputSince(first_message) == "echo safe", "a running program gets the paste without Enter");
+    deliver(client, PaneShell{.pane_id = 1, .shell = IntegratedShell::zsh, .phase = ShellPhase::prompt, .shell_foreground = true, .commands = 1});
     first_message = transport.sent.size();
     application::history::paste(client, 1);
     check(transport.inputSince(first_message) == "echo safe\r", "configured run must append Enter after the complete paste");
@@ -1083,6 +1090,7 @@ namespace {
     const ds::Array entries{HistoryEntry{.id = 1, .pane_id = 1, .command = "echo first\necho\tsecond"}};
 
     deliver(client, HistoryResults{.request_id = transport.last<QueryHistory>().request_id, .snapshot_id = 1, .entries = entries});
+    deliver(client, PaneShell{.pane_id = 1, .shell = IntegratedShell::zsh, .phase = ShellPhase::prompt, .shell_foreground = true});
     const auto first_message = transport.sent.size();
 
     application::history::paste(client, 1, true);

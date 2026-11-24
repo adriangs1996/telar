@@ -285,12 +285,14 @@ Legend: `[ ]` todo, `[x]` done, `[~]` not a bug / dropped (with reason).
   The row is gone from the page, so no action reaches it; a page that arrives drops rows still
   pending deletion. With T23: a later page its deletes emptied gives way to the one before.
 
-- [ ] **T25 (H6). The dialog pastes into whatever is in the foreground.**
+- [x] **T25 (H6). The dialog pastes into whatever is in the foreground.**
   `application-history.cpp:169` checks only that the pane is alive: it concatenates with
   what the shell has typed, and with `enter_runs` sends `\r` into vim or an agent.
   Expected: it runs only when the shell is at its prompt.
   Fix: in `paste()`, send `\r` only when `shell.phase == prompt`; otherwise paste without
   running, or refuse with a message.
+  Decision: paste without running. A shell without integration cannot tell its phase: there
+  Enter is held back only from a full-screen program, as the window cases' plain shell needs.
 
 - [ ] **T26 (H7). Fuzzy search only sees the 10,000 newest runs.**
   `store.cpp:865-869` limits candidates before scoring and deduping; `has_more` is false.

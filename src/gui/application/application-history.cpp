@@ -167,7 +167,13 @@ namespace telar::gui::application::history {
 
     HistoryText::validate(command, bracketed);
     session.paste(pane_id, command);
-    if (runs) {
+    // Enter runs the command only where the shell waits for one: a program in front, as vim or an
+    // agent, would take it as its own key. Without shell integration only a full-screen program
+    // tells that the shell is not in front.
+    const bool integrated = pane->shell.shell != IntegratedShell::none;
+    const bool at_prompt = integrated ? pane->shell.phase == ShellPhase::prompt : !pane->screen.modes().alternate_screen;
+
+    if (runs && at_prompt) {
       session.input(pane_id, "\r");
     }
   }
