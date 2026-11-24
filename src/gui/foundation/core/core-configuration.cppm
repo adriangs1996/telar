@@ -114,6 +114,9 @@ export {
       PromptMotion motion = PromptMotion::spring;
       PromptKeymap keymap = PromptKeymap::emacs;
       bool ghost = true;
+      // On macOS, Option+key sends Meta (Alt) with the key under it instead of the character
+      // the layout gives it, in the editor and the terminal alike.
+      bool macos_option_as_alt = false;
       std::uint8_t max_lines = default_max_lines;
       PromptBindings bindings;
 

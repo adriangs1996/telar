@@ -2102,6 +2102,7 @@ export {
       ds::Option<PromptMotion> motion;
       ds::Option<PromptKeymap> keymap;
       ds::Option<bool> ghost;
+      ds::Option<bool> macos_option_as_alt;
       ds::Option<std::uint8_t> max_lines;
       // Whether it lists bindings, which replace the defaults even when empty.
       bool bindings = false;

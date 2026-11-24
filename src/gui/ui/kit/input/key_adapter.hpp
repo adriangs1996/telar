@@ -54,7 +54,10 @@ namespace telar::gui::qt {
       return event.isAutoRepeat() ? KeyPhase::repeat : KeyPhase::press;
     }
 
-    [[nodiscard]] static ds::Option<TerminalKey> terminalKey(const QKeyEvent& event) {
+    // On macOS Option is a layout's third level: Option+2 is `@` on a Spanish keyboard. A key
+    // whose Option text is printable and not its own key types that text without Alt, unless
+    // `option_as_alt` makes Option Meta: then it is Alt with the key under it.
+    [[nodiscard]] static ds::Option<TerminalKey> terminalKey(const QKeyEvent& event, bool option_as_alt = false) {
       TerminalKey result{.modifiers = modifiers(event.modifiers()), .phase = phase(event)};
       const auto* const named = std::ranges::find(named_keys, event.key(), &decltype(named_keys)::value_type::first);
       if (named != named_keys.end()) {
@@ -81,6 +84,18 @@ namespace telar::gui::qt {
 
       if (!modified) {
         result.modifiers &= ~static_cast<unsigned>(Modifier::shift);
+      }
+
+      if constexpr (Convention == system::KeyboardConvention::apple) {
+        if (!modified && ascii_key && result.has(Modifier::alt) && text && *text >= first_printable && *text != delete_character) {
+          const auto base = baseCharacter(event);
+          if (*text != base) {
+            result.codepoint = option_as_alt ? base : *text;
+            if (!option_as_alt) {
+              result.modifiers &= ~static_cast<unsigned>(Modifier::alt);
+            }
+          }
+        }
       }
 
       return result;
@@ -149,6 +164,19 @@ namespace telar::gui::qt {
         NamedKey{Qt::Key_Tab, Code::tab},
         NamedKey{Qt::Key_Backtab, Code::tab},
     };
+
+    static constexpr std::uint32_t first_printable = 0x20;
+    static constexpr std::uint32_t delete_character = 0x7f;
+
+    // The character of an ASCII key as typed without Option: lowercase unless Shift is held.
+    static std::uint32_t baseCharacter(const QKeyEvent& event) noexcept {
+      auto character = static_cast<std::uint32_t>(event.key());
+      if (character >= 'A' && character <= 'Z' && !event.modifiers().testFlag(Qt::ShiftModifier)) {
+        character += 'a' - 'A';
+      }
+
+      return character;
+    }
 
     static void normalizeTab(TerminalKey& key, bool backwards) noexcept {
       if (key.code != Code::tab) {

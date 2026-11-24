@@ -1169,7 +1169,7 @@ namespace telar::gui::qt {
       // telar's command editor takes the key; the terminal gets what it hands back, and at the
       // prompt nothing the editor cannot use reaches the shell's own line editor.
       QByteArray text;
-      const auto key = promptKey(event, text);
+      const auto key = promptKey(event, text, controller_->configuration().prompt.macos_option_as_alt);
       const bool taken = key && controller_->prompt().key(pane_id_, *key);
       if (!taken && (key || controller_->prompt().surface(pane_id_) != application::prompt::Surface::editor)) {
         typed = sendKeyPress(event, current->screen.modes());
@@ -1196,7 +1196,7 @@ namespace telar::gui::qt {
   }
 
   ds::Option<TerminalKey> TerminalItem::sendKeyPress(const QKeyEvent& event, const InputModes& modes) {
-    const auto semantic = NativeKeyAdapter::terminalKey(event);
+    const auto semantic = NativeKeyAdapter::terminalKey(event, controller_->configuration().prompt.macos_option_as_alt);
     const auto bytes = semantic ? encodeKey(*semantic, modes) : encodeKey(event, modes);
     if (bytes.isEmpty()) {
       return ds::none;

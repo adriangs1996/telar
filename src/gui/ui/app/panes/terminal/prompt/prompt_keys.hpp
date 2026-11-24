@@ -18,8 +18,9 @@ namespace telar::gui::qt {
   // A key for telar's command editor, from the same normalized key the terminal would encode.
   // `text` keeps the typed characters alive while the editor reads them. Keys the editor has no
   // use for, and every combination with Command (super), stay with the terminal and bindings.
-  inline tbc::val_a<ds::Option<application::prompt::KeyPress>> promptKey(const QKeyEvent& event, tbc::mut_a<QByteArray> text) {
-    const auto key = NativeKeyAdapter::terminalKey(event);
+  // `option_as_alt` makes macOS's Option Meta, as for the terminal.
+  inline tbc::val_a<ds::Option<application::prompt::KeyPress>> promptKey(const QKeyEvent& event, tbc::mut_a<QByteArray> text, bool option_as_alt) {
+    const auto key = NativeKeyAdapter::terminalKey(event, option_as_alt);
     if (!key || key->has(KeyChord::Modifier::super)) {
       return ds::none;
     }
@@ -30,7 +31,7 @@ namespace telar::gui::qt {
     case KeyChord::Key::character:
       result.key = application::prompt::Key::character;
       result.character = key->codepoint;
-      // Option changes the text on macOS; the editor binds the key under it.
+      // Alt that stays is Meta: the editor binds the key under it.
       if (result.modifiers.alt && event.key() >= Qt::Key_Space && event.key() <= Qt::Key_AsciiTilde) {
         result.character = static_cast<char32_t>(event.key() >= Qt::Key_A && event.key() <= Qt::Key_Z ? event.key() - Qt::Key_A + 'a' : event.key());
       } else if (!result.modifiers.control) {

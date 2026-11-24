@@ -61,8 +61,9 @@ namespace {
     char character{};
   };
 
-  template <typename Adapter>
+  template <system::KeyboardConvention Convention>
   void altPhaseKeepsTerminalText(const AltCase& entry, KeyPhase phase) {
+    using Adapter = KeyAdapter<Convention>;
     const QKeyEvent event{phase == KeyPhase::release ? QEvent::KeyRelease : QEvent::KeyPress, entry.key, Qt::AltModifier, entry.text, phase == KeyPhase::repeat};
     const auto chord = Adapter::chord(event);
 
@@ -76,7 +77,8 @@ namespace {
     check(text && text->codepoint == static_cast<unsigned>(entry.text.front().unicode()), "binding recognition must preserve the original Option text for terminal input");
     if (phase == KeyPhase::press) {
       KeyEncoder encoder;
-      const auto expected = QByteArray{"\x1b"} + entry.text.toUtf8();
+      // macOS's Option types its text; elsewhere Alt is Meta before it.
+      const auto expected = (Convention == system::KeyboardConvention::apple ? QByteArray{} : QByteArray{"\x1b"}) + entry.text.toUtf8();
 
       check(encoder.encode(*text, {}) == std::string_view{expected.constData(), static_cast<std::size_t>(expected.size())}, "unbound Alt input must keep its existing terminal encoding");
     }
@@ -99,7 +101,7 @@ namespace {
 
     for (const auto& entry : cases) {
       for (const auto phase : {KeyPhase::press, KeyPhase::repeat, KeyPhase::release}) {
-        altPhaseKeepsTerminalText<Adapter>(entry, phase);
+        altPhaseKeepsTerminalText<Convention>(entry, phase);
       }
 
       const QKeyEvent shortcut{QEvent::ShortcutOverride, entry.key, Qt::AltModifier, entry.text};
@@ -124,6 +126,31 @@ namespace {
     const QKeyEvent unicode{QEvent::KeyPress, Qt::Key_unknown, Qt::AltModifier, QStringLiteral("ñ")};
 
     check(Adapter::fromChord(Adapter::chord(unicode)).codepoint == U'ñ', "keys without an ASCII base must retain their Unicode shortcut representation");
+  }
+
+  // A layout's Option characters, as `@` is Option+2 on a Spanish keyboard: macOS types them,
+  // and Alt is Meta with the key under it only when the configuration asks for it.
+  void optionTypesLayoutCharacters() {
+    using Apple = KeyAdapter<system::KeyboardConvention::apple>;
+    using Standard = KeyAdapter<system::KeyboardConvention::standard>;
+    KeyEncoder encoder;
+
+    for (const auto& [key, text] : {std::pair{Qt::Key_2, QStringLiteral("@")}, std::pair{Qt::Key_1, QStringLiteral("|")}, std::pair{Qt::Key_QuoteLeft, QStringLiteral("[")}, std::pair{Qt::Key_F, QStringLiteral("ƒ")}}) {
+      const QKeyEvent option{QEvent::KeyPress, key, Qt::AltModifier, text};
+      const auto typed = Apple::terminalKey(option);
+
+      check(typed && typed->codepoint == static_cast<unsigned>(text.front().unicode()) && !typed->has(Modifier::alt), "Option types the character the layout gives it");
+      check(typed && encoder.encode(*typed, {}) == std::string_view{text.toUtf8().constData()}, "the terminal gets the character alone");
+      const auto meta = Apple::terminalKey(option, true);
+      const auto base = static_cast<std::uint32_t>(key >= Qt::Key_A && key <= Qt::Key_Z ? key - Qt::Key_A + 'a' : key);
+
+      check(meta && meta->codepoint == base && meta->has(Modifier::alt), "Option as Alt is Meta with the key under it");
+      check(Standard::terminalKey(option)->has(Modifier::alt), "Alt stays Meta away from macOS");
+    }
+
+    const QKeyEvent same{QEvent::KeyPress, Qt::Key_B, Qt::AltModifier, QStringLiteral("b")};
+
+    check(Apple::terminalKey(same)->has(Modifier::alt), "Option whose text is its own key stays Alt");
   }
 
   void unicodeAndSyntheticInput() {
@@ -157,6 +184,7 @@ namespace {
   const telar::testing::Case case_platform_conventions_apple{"key_adapter.platform_conventions_apple", platformConventions<system::KeyboardConvention::apple>};
   const telar::testing::Case case_alt_shortcuts_standard{"key_adapter.alt_shortcuts_use_the_key_without_changing_terminal_text_standard", altShortcutsUseTheKeyWithoutChangingTerminalText<system::KeyboardConvention::standard>};
   const telar::testing::Case case_alt_shortcuts_apple{"key_adapter.alt_shortcuts_use_the_key_without_changing_terminal_text_apple", altShortcutsUseTheKeyWithoutChangingTerminalText<system::KeyboardConvention::apple>};
+  const telar::testing::Case case_option_types_layout_characters{"key_adapter.option_types_layout_characters", optionTypesLayoutCharacters};
   const telar::testing::Case case_unicode_and_synthetic_input{"key_adapter.unicode_and_synthetic_input", unicodeAndSyntheticInput};
   const telar::testing::Case case_fallback_input{"key_adapter.fallback_input", fallbackInput};
 

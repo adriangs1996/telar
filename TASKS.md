@@ -57,7 +57,7 @@ Legend: `[ ]` todo, `[x]` done, `[~]` not a bug / dropped (with reason).
   Make the editor's limit match `HistoryText::maximum_bytes`, and drop C1 controls in
   `insert()` (`prompt.cpp:~252`).
 
-- [ ] **T3 (E19). On macOS every character typed with Option is swallowed.**
+- [x] **T3 (E19). On macOS every character typed with Option is swallowed.**
   `src/gui/ui/app/panes/terminal/prompt/prompt_keys.hpp:30-37` replaces the character with
   the base key and drops the text when Alt is held; `Editor::meta` returns `unhandled`, the
   line returns `ignored` and `PromptController::key` reports it taken. Spanish layout:
@@ -68,6 +68,8 @@ Legend: `[ ]` todo, `[x]` done, `[~]` not a bug / dropped (with reason).
   treat it as a plain character without Alt. Add `prompt.macos_option_as_alt` (default
   off) to the configuration for users who want Meta. Check that `NativeKeyAdapter` applies
   the same rule for the terminal.
+  Decision: the rule lives in `KeyAdapter::terminalKey` (macOS convention only), so the
+  terminal and the editor share it; `client.prompt.macos_option_as_alt` governs both.
 
 - [ ] **T4 (H4). The shell integration token is stored in captured output.**
   `src/runtime/terminal/command_capture/tracker/tracker.cpp:1328-1342` `afterOutput` appends
