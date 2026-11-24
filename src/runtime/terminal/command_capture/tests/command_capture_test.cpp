@@ -75,6 +75,45 @@ namespace {
     }
   };
 
+  // The marks the pane's shell signs end the command's output, but what is stored holds none of
+  // them, nor the token they carry, however the bytes arrive.
+  void testOutputDropsIntegrationMarks() {
+    for (const std::size_t piece : {std::size_t{1}, std::size_t{5}, std::size_t{4096}}) {
+      telar::testing::TestMemory adapter;
+      ConcurrentMemory& memory = adapter;
+      const auto token = ShellToken::generate();
+      const auto signature = ";telar=" + std::string{token.text()};
+      Terminal terminal{memory, {20, 4, 8, 16}, TerminalPurpose::observation};
+      CommandTracker tracker{memory, terminal, "/initial", true, token};
+      std::vector<std::string> outputs;
+
+      struct Sink {
+        std::vector<std::string>& outputs;
+
+        void emit(const CapturedCommand& command) {
+          outputs.emplace_back(reinterpret_cast<const char*>(command.output.data()), command.output.size());
+        }
+      } sink{outputs};
+
+      const auto output = [&](std::string_view text) {
+        for (std::size_t offset = 0; offset < text.size(); offset += piece) {
+          tracker.output({byteSpan(text.substr(offset, piece)), {110, 110'000'000}, true}, sink);
+        }
+      };
+
+      output("\x1b]133;A" + signature + "\x07$ \x1b]133;B" + signature + "\x07");
+      tracker.input({byteSpan("ls\r"), {100, 100'000'000}, true}, sink);
+      output("ls\r\n\x1b]133;C" + signature + "\x07"
+                                              "file\r\n\x1b]133;D;0" +
+             signature + "\x07\x1b]133;A" + signature + "\x07$ ");
+      check(outputs.size() == 1, "the signed D mark ends the command");
+      check(!outputs.front().contains("telar="), "the stored output never holds the token");
+      // The echo before the newline that commits the command is kept only when it arrives with it.
+      check(outputs.front().ends_with("\nfile\r\n") && !outputs.front().contains('\x1b'), "the stored output is what the command printed, up to its end");
+      check(piece == 1 || outputs.front() == "ls\r\nfile\r\n", "the stored output is what the command printed");
+    }
+  }
+
   void testInputBoundaries() {
     CommandInputScanner scanner;
 
@@ -531,6 +570,7 @@ namespace {
     check(!zones.running());
   }
 
+  const telar::testing::Case case_output_drops_integration_marks{"command_capture.output_drops_integration_marks", testOutputDropsIntegrationMarks};
   const telar::testing::Case case_signed_marks{"command_capture.signed_marks", testSignedMarks};
   const telar::testing::Case case_nested_marks{"command_capture.nested_marks", testNestedMarks};
   const telar::testing::Case case_input_boundaries{"command_capture.input_boundaries", testInputBoundaries};

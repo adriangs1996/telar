@@ -80,4 +80,69 @@ namespace telar::runtime {
     return head(command, static_cast<std::size_t>(remainder.data() - command.data()) + std::min(second_end, remainder.size()));
   }
 
+  void IntegrationMarkFilter::reset() noexcept {
+    state_ = State::ground;
+    held_count_ = 0;
+    number_ = 0;
+  }
+
+  IntegrationMarkFilter::Step IntegrationMarkFilter::step(std::uint8_t byte) noexcept {
+    constexpr std::uint8_t bell = 0x07;
+    constexpr std::uint8_t cancel = 0x18;
+    constexpr std::uint8_t substitute = 0x1a;
+    constexpr std::uint32_t prompt_mark = 133;
+    constexpr std::uint32_t private_mark = 6973;
+    constexpr std::uint32_t decimal = 10;
+
+    switch (state_) {
+    case State::ground:
+      held_.atMut(0) = byte;
+      held_count_ = 1;
+      state_ = State::escape;
+      return Step::consumed;
+    case State::escape:
+      if (byte != ']') {
+        state_ = State::ground;
+        return Step::release;
+      }
+
+      held_.atMut(held_count_++) = byte;
+      number_ = 0;
+      state_ = State::number;
+      return Step::consumed;
+    case State::number: {
+      const bool digit = byte >= '0' && byte <= '9';
+      if (digit && held_count_ < held_.size()) {
+        held_.atMut(held_count_++) = byte;
+        number_ = (number_ * decimal) + (byte - '0');
+        return Step::consumed;
+      }
+
+      const bool ends = byte == ';' || byte == bell || byte == escape;
+      if (digit || !ends || (number_ != prompt_mark && number_ != private_mark)) {
+        state_ = State::ground;
+        return Step::release;
+      }
+
+      held_count_ = 0;
+      state_ = byte == ';' ? State::mark : (byte == bell ? State::ground : State::mark_escape);
+      return Step::consumed;
+    }
+    case State::mark:
+      if (byte == bell || byte == cancel || byte == substitute) {
+        state_ = State::ground;
+      } else if (byte == escape) {
+        state_ = State::mark_escape;
+      }
+
+      return Step::consumed;
+    case State::mark_escape:
+      // ESC \ ends the mark; ESC before anything else ends it too, and that byte is read anew.
+      state_ = State::ground;
+      return byte == '\\' ? Step::consumed : Step::release;
+    }
+
+    return Step::consumed;
+  }
+
 }

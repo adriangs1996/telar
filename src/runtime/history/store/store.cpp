@@ -212,6 +212,42 @@ namespace telar::runtime {
       return enableHistoryIndex(database);
     }
 
+    // Outputs stored before the tracker dropped the shell integration's marks keep them, and the
+    // pane's token they carry: version 6 strips them, once.
+    void stripOutputMarks(Database& database, ConcurrentMemory& memory) {
+      constexpr std::int64_t stripped_version = 6;
+
+      {
+        Statement version{database, "SELECT version FROM history_schema"};
+        if (!version.next() || version.integer(0) >= stripped_version) {
+          return;
+        }
+      }
+
+      Transaction transaction{database};
+      Statement rows{database, "SELECT command_id, content FROM command_output WHERE instr(content, char(27) || ']133') > 0 OR instr(content, char(27) || ']6973') > 0"};
+      Statement update{database, "UPDATE command_output SET content = ?2 WHERE command_id = ?1"};
+      ds::String<ConcurrentMemory> kept{memory};
+
+      while (rows.next()) {
+        const auto content = rows.text(1);
+        IntegrationMarkFilter marks;
+
+        kept.clear();
+        marks.feed(byteView(content), [&](std::span<const std::uint8_t> run) {
+          kept.append({reinterpret_cast<const char*>(run.data()), run.size()});
+        });
+
+        update.reset();
+        update.bind(1, rows.integer(0));
+        update.bind(2, kept.view());
+        update.finish();
+      }
+
+      database.execute("UPDATE history_schema SET version = 6 WHERE version < 6");
+      transaction.commit();
+    }
+
   }
 
   AgentCommandWriter::AgentCommandWriter(Database& database)
@@ -582,7 +618,9 @@ END;
         filters_(filters),
         database_(path),
         rows_(memory),
-        indexed_(prepareHistory(database_)) {}
+        indexed_(prepareHistory(database_)) {
+    stripOutputMarks(database_, memory_);
+  }
 
   void HistoryStore::reportAgentCommand(const ReportAgentCommand& request, const RequestContext& context, EncodedReply<ConcurrentMemory>& reply) {
     if (!filters_.allowsAgent(request.command, request.cwd)) {

@@ -1147,24 +1147,42 @@ namespace telar::runtime {
   // CommandTrackerCore
 
   // Hears the completions the shell's marks report, for the command that runs.
+  // Hears the marks in `bytes` as they are scanned: a mark that ends the running command ends
+  // its output there, and what follows is the next prompt's.
   class CommandTrackerCore::CompletionRelay final : public CommandZoneSink {
   public:
-    CompletionRelay(tbc::mut_a<CommandTrackerCore> tracker, tbc::mut_a<CapturedCommandEmitter> emitter) noexcept
+    CompletionRelay(tbc::mut_a<CommandTrackerCore> tracker, tbc::mut_a<CapturedCommandEmitter> emitter, tbc::val_a<std::span<const Byte>> bytes) noexcept
         : tracker_(tracker),
-          emitter_(emitter) {}
+          emitter_(emitter),
+          bytes_(bytes) {}
 
     void complete(CommandCompletion completion) override;
 
-    void mark([[maybe_unused]] CommandMark mark) override {}
+    void mark(CommandMark mark) override {
+      mark_end_ = mark.end;
+    }
+
+    // The bytes the output has not taken yet.
+    [[nodiscard]] std::span<const Byte> rest() const noexcept {
+      return bytes_.subspan(appended_);
+    }
 
   private:
     tbc::mut_a<CommandTrackerCore> tracker_;
     tbc::mut_a<CapturedCommandEmitter> emitter_;
+    tbc::val_a<std::span<const Byte>> bytes_;
+    std::size_t appended_ = 0;
+    std::size_t mark_end_ = 0;
   };
 
   void CommandTrackerCore::CompletionRelay::complete(CommandCompletion completion) {
     if (tracker_.phase_ == Phase::running) {
       TELAR_DIAGNOSTIC(diagnostics::accumulate(tracker_.metrics_.auxiliary_completions));
+      if (mark_end_ > appended_) {
+        tracker_.appendOutput(bytes_.subspan(appended_, mark_end_ - appended_));
+        appended_ = mark_end_;
+      }
+
       tracker_.complete(completion, emitter_);
     }
   }
@@ -1284,11 +1302,18 @@ namespace telar::runtime {
     reset();
   }
 
+  void CommandTrackerCore::appendOutput(std::span<const Byte> bytes) noexcept {
+    marks_.feed(bytes, [&](std::span<const std::uint8_t> kept) {
+      output_.append(outputStorage(), kept);
+    });
+  }
+
   void CommandTrackerCore::reset() noexcept {
     phase_ = Phase::idle;
     clearCommand();
     input_.reset();
     output_.clear();
+    marks_.reset();
     truncated_ = false;
     saw_foreground_child_ = false;
   }
@@ -1335,13 +1360,13 @@ namespace telar::runtime {
       selection_.rebase(screen(), input_.typedText());
     }
 
-    if (phase_ == Phase::running) {
-      output_.append(outputStorage(), observation.bytes);
-    }
-
-    CompletionRelay relay{*this, emitter};
+    CompletionRelay relay{*this, emitter, observation.bytes};
 
     zones_.scan(observation.bytes, observation.time, relay);
+    if (phase_ == Phase::running) {
+      appendOutput(relay.rest());
+    }
+
     if (phase_ != Phase::running || !observation.shell_foreground) {
       return;
     }

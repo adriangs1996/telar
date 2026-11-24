@@ -19,6 +19,7 @@ import telar.runtime.terminal.shell_integration.token;
 import telar.runtime.terminal.text_reader;
 import telar.base.memory.allocators;
 import telar.base.memory.containers;
+import telar.base.history;
 import telar.runtime.terminal.ghostty;
 import telar.base.ds;
 
@@ -545,12 +546,16 @@ export namespace telar::runtime {
 
     void afterOutput(const CommandByteObservation& observation, CapturedCommandEmitter& emitter);
 
+    // Keeps `bytes` of the running command's output, without the shell integration's marks.
+    void appendOutput(std::span<const Byte> bytes) noexcept;
+
 #if TELAR_DIAGNOSTICS
     diagnostics::CommandCaptureCounters metrics_;
 #endif
     CommandSelection selection_;
     CommandZones zones_;
     CommandOutputWindow output_;
+    IntegrationMarkFilter marks_;
     CommandInputScanner input_;
     FixedText<directory_capacity> command_directory_;
     ObservationTime started_;

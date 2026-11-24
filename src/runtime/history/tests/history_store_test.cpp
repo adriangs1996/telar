@@ -119,6 +119,45 @@ INSERT INTO command VALUES (1, x'01', 1, 0, 1, 1, 'legacy command', 0, '/legacy'
     check(commands(store, reply, QueryHistory{.request_id = 2, .limit = 10}) == std::vector<std::string>{"legacy command", "new command"});
   }
 
+  // Outputs stored before the tracker dropped the shell integration's marks keep them, and the
+  // pane's token: opening the history strips them once.
+  void testStripsMarksFromStoredOutput() {
+    telar::testing::TestMemory adapter;
+    ConcurrentMemory& memory = adapter;
+    Directory directory;
+    const auto path = directory.file("history.db");
+    const std::string signature = ";telar=0123456789abcdef0123456789abcdef";
+    const auto marked = "\x1b]133;C" + signature + "\x07"
+                                                   "file\r\n\x1b]133;D;0" +
+                        signature + "\x1b\\";
+
+    {
+      HistoryStore store{memory, path.c_str()};
+
+      finished(store, session(1, "/work"), "ls", "/work");
+    }
+
+    {
+      Database database{path.c_str()};
+      Statement output{database, "INSERT INTO command_output (command_id, content, truncated, observed_bytes) VALUES (1, ?1, 0, 0)"};
+
+      output.bind(1, std::string_view{marked});
+      output.finish();
+      database.execute("UPDATE history_schema SET version = 5");
+    }
+
+    HistoryStore store{memory, path.c_str()};
+    EncodedReply reply{memory};
+    std::vector<Byte> storage(64 * 1024);
+
+    store.readOutput(ReadHistoryOutput{.request_id = 1, .id = 1}, reply);
+    const auto result = decodeReply<HistoryOutput>(reply, storage);
+    const std::string_view content{reinterpret_cast<const char*>(result.content.data()), result.content.size()};
+
+    check(!content.contains("telar="), "a stored output keeps the token");
+    check(content == "file\r\n", "the stored output is what the command printed");
+  }
+
   void testFailedWriteRollsBack() {
     telar::testing::TestMemory adapter;
     ConcurrentMemory& memory = adapter;
@@ -495,6 +534,7 @@ INSERT INTO command VALUES (1, x'01', 1, 0, 1, 1, 'legacy command', 0, '/legacy'
   }
 
   const telar::testing::Case case_migrates_legacy_schema{"history_store.migrates_legacy_schema", testMigratesLegacySchema};
+  const telar::testing::Case case_strips_marks_from_stored_output{"history_store.strips_marks_from_stored_output", testStripsMarksFromStoredOutput};
   const telar::testing::Case case_failed_write_rolls_back{"history_store.failed_write_rolls_back", testFailedWriteRollsBack};
   const telar::testing::Case case_page_respects_payload_cap{"history_store.page_respects_payload_cap", testPageRespectsPayloadCap};
   const telar::testing::Case case_prune_failed_only{"history_store.prune_failed_only", testPruneFailedOnly};

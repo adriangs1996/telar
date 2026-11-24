@@ -71,7 +71,7 @@ Legend: `[ ]` todo, `[x]` done, `[~]` not a bug / dropped (with reason).
   Decision: the rule lives in `KeyAdapter::terminalKey` (macOS convention only), so the
   terminal and the editor share it; `client.prompt.macos_option_as_alt` governs both.
 
-- [ ] **T4 (H4). The shell integration token is stored in captured output.**
+- [x] **T4 (H4). The shell integration token is stored in captured output.**
   `src/runtime/terminal/command_capture/tracker/tracker.cpp:1328-1342` `afterOutput` appends
   the bytes before `zones_.scan`, so the `133;D;…;telar=<token>` mark (and the next `A`) end
   in `command_output.content`, served by `ReadHistoryOutput`.
@@ -79,6 +79,9 @@ Legend: `[ ]` todo, `[x]` done, `[~]` not a bug / dropped (with reason).
   Fix: append only the bytes before the start of the mark that completes the command (the
   zone scanner knows its offset), or filter OSC 133/6973 when appending to `output_`. Add a
   migration that strips the marks from outputs already stored.
+  Done both: the relay cuts the output at the end of the mark that completes the command,
+  and `IntegrationMarkFilter` (lib/base/history) drops OSC 133/6973, also the C mark inside
+  the output. Schema version 6 strips them from stored outputs.
 
 ## P1: Tab completion (GUI and runtime)
 
