@@ -109,9 +109,13 @@ namespace telar::gui::qt {
         store_(store) {
     constexpr int debounce_ms = 60;
 
+    constexpr int age_ms = 30'000;
+
     search_timer_.setSingleShot(true);
     search_timer_.setInterval(debounce_ms);
     connect(&search_timer_, &QTimer::timeout, this, &HistoryController::query);
+    age_timer_.setInterval(age_ms);
+    connect(&age_timer_, &QTimer::timeout, this, &HistoryController::age);
   }
 
   void HistoryController::open() {
@@ -129,10 +133,12 @@ namespace telar::gui::qt {
     }
 
     search(seed);
+    age_timer_.start();
   }
 
   void HistoryController::forget() {
     search_timer_.stop();
+    age_timer_.stop();
     pending_submit_.reset();
     rows_.reconcile({});
     synchronized_.reset();
@@ -412,6 +418,36 @@ namespace telar::gui::qt {
     if (measured.bytes < measured.requested_bytes) {
       reportQueryLimit(static_cast<qulonglong>(measured.requested_bytes));
     }
+  }
+
+  void HistoryController::age() {
+    if (!isOpen()) {
+      age_timer_.stop();
+      return;
+    }
+
+    if (busy()) {
+      return;
+    }
+
+    // A row still running is read again, which brings its duration and end; the others only need
+    // their ages told anew.
+    const auto& rows = application::history::view(store_.session()).rows();
+    const bool running = std::ranges::any_of(rows, [](const auto& row) {
+      return row.status == HistoryStatus::running;
+    });
+
+    if (running) {
+      interact([&] {
+        application::history::refresh(store_.sessionMut());
+      });
+      return;
+    }
+
+    buildRows();
+    state_ = buildState();
+    inspection_ = buildInspection();
+    emit changed();
   }
 
   void HistoryController::query() {

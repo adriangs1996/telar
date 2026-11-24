@@ -231,6 +231,7 @@ namespace telar::gui::qt {
     void moveRows(std::int32_t steps);
     void notifyHover();
     void query();
+    void age();
 
     // Runs a user's mutation of the session and commits it to the store; a failure shows in the
     // dialog instead.
@@ -244,6 +245,8 @@ namespace telar::gui::qt {
     Store& store_;
     ListModel rows_;
     QTimer search_timer_;
+    // While the dialog is open, ages move on and a running command's row is read again.
+    QTimer age_timer_;
     // Enter pressed while the search loaded, with its alternate flag: it runs the first row of
     // the page that arrives.
     ds::Option<bool> pending_submit_;

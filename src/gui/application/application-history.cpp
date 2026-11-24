@@ -211,16 +211,20 @@ namespace telar::gui::application::history {
     return features::history::receive(session.history, output) ? Change::history : Change::none;
   }
 
-  Change receive(Session& session, const HistoryPruned& pruned) {
+  void refresh(Session& session) {
     auto& state = session.history;
-    if (!features::history::receive(state, pruned)) {
-      return Change::none;
-    }
-
     const auto request = features::history::refresh(state, session.link.nextRequest());
     const auto refused = refusal(session.link, request);
 
     settle(state, request.request_id, refused);
+  }
+
+  Change receive(Session& session, const HistoryPruned& pruned) {
+    if (!features::history::receive(session.history, pruned)) {
+      return Change::none;
+    }
+
+    refresh(session);
 
     return Change::history;
   }

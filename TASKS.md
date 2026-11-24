@@ -348,7 +348,7 @@ Legend: `[ ]` todo, `[x]` done, `[~]` not a bug / dropped (with reason).
   The full command read keeps its rule of no retry until the row is selected again, which a
   test guards against a retry loop.
 
-- [ ] **T33 (H16). Ages and "running" freeze while the dialog is open.**
+- [x] **T33 (H16). Ages and "running" freeze while the dialog is open.**
   `history_controller.cpp:222` samples the clock once per rows rebuild.
   Fix: a 30 s timer while open recomputes the labels without fetching; refresh the page
   while some row is running.

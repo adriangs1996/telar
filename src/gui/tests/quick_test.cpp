@@ -6920,6 +6920,26 @@ return {api_version=2, client={keybindings={
       QTRY_COMPARE_WITH_TIMEOUT(search->property("text").toString(), QStringLiteral("GUI_HISTORY_FIXTURE"), runtime_wait_ms);
     }
 
+    // While the history is open its ages move on, and a running command is read again; closing
+    // it stops both.
+    Q_SLOT void historyAgesMoveOnWhileOpen() {
+      client_->commands()->execute(window_actions::Action::history);
+      client_->history()->search(QStringLiteral("GUI_HISTORY_FIXTURE"));
+      QTRY_VERIFY_WITH_TIMEOUT(!client_->history()->loading() && client_->history()->rows()->rowCount() > 0, runtime_wait_ms);
+      QVERIFY(test::HistoryPresentation::aging(*client_));
+      int changes = 0;
+      const auto counted = connect(client_->history(), &HistoryController::changed, [&] {
+        ++changes;
+      });
+
+      test::HistoryPresentation::age(*client_);
+      disconnect(counted);
+      QVERIFY(changes > 0);
+      QTRY_VERIFY_WITH_TIMEOUT(!client_->history()->loading() && client_->history()->rows()->rowCount() > 0, runtime_wait_ms);
+      client_->commands()->execute(window_actions::Action::cancel);
+      QVERIFY(!test::HistoryPresentation::aging(*client_));
+    }
+
     // Closing the history stops the search its debounce still held: none goes out after it.
     Q_SLOT void historyCloseStopsThePendingSearch() {
       client_->commands()->execute(window_actions::Action::history);

@@ -19,6 +19,15 @@ import telar.base.ds;
 namespace telar::gui::test {
 
   struct HistoryPresentation {
+    // Whether the dialog's ages move on, and one step of them, without waiting for the timer.
+    [[nodiscard]] static bool aging(qt::ApplicationController& application) {
+      return application.history()->age_timer_.isActive();
+    }
+
+    static void age(qt::ApplicationController& application) {
+      application.history()->age();
+    }
+
     static void renameTab(qt::ApplicationController& application, std::string_view label) {
       application::workbench::renameTab(application.sessionMut(), label);
     }
