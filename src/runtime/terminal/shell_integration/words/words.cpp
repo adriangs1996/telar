@@ -938,7 +938,7 @@ namespace telar::runtime {
     }
 
     // An alias completes as the command it stands for.
-    if (request.names) {
+    if (request.names && !request.remote) {
       result.expansion = expand(memory_, request.names->view(), name);
       if (!result.expansion.empty()) {
         name = result.expansion.view().substr(0, result.expansion.view().find(' '));
@@ -949,7 +949,7 @@ namespace telar::runtime {
       }
     }
 
-    if (!runs(request, name)) {
+    if (!request.remote && !runs(request, name)) {
       result.expansion.clear();
       return;
     }

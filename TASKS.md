@@ -135,7 +135,7 @@ Legend: `[ ]` todo, `[x]` done, `[~]` not a bug / dropped (with reason).
   `Line::receive` and `refine`. On accept, escape only the added part, and when the word
   opened a quote close it instead of backslash-escaping.
 
-- [ ] **T8 (C5). Remote (ssh) panes complete nothing.**
+- [x] **T8 (C5). Remote (ssh) panes complete nothing.**
   `src/gui/application/application-prompt.cpp:95` `asks = ready && !remote` also stops the
   spec from being asked, so not even the spec's literals appear, although the comment in
   `plan()` says they should.

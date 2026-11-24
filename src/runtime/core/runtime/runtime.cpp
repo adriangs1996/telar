@@ -2458,13 +2458,10 @@ namespace telar::runtime {
       throw RequestError{FailureCode::pane_not_found, "Could not find a command spec"};
     }
 
-    if (pane->body.shell_state.remote) {
-      client.connection.send(CommandSpec{.request_id = message.request_id, .command = message.command, .state = CommandSpecState::unavailable, .digest = 0, .source = {}});
-      return;
-    }
-
     auto request = makeWordRequest(client, message.request_id, CompletionProvider::command, message.command, pane->body);
 
+    // A remote shell's commands are not this host's to find: the spec of any command it names.
+    request.remote = pane->body.shell_state.remote;
     request.spec = true;
     request.known_digest = message.known_digest;
     words_.request(request);

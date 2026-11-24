@@ -225,8 +225,25 @@ namespace {
     std::filesystem::remove_all(root);
   }
 
+  // A shell `ssh` reached runs commands this host cannot see: their specs are offered anyway, so
+  // a remote line completes its subcommands and flags.
+  void testRemoteSpecs() {
+    telar::testing::TestMemory adapter;
+    telar::ConcurrentMemory& memory = adapter;
+    WordReader reader{memory};
+    WordRequest request{.client = 1, .request = 2, .provider = CompletionProvider::command, .prefix = {}, .directory = {}, .home = {}, .path = {}};
+
+    request.spec = true;
+    request.prefix.assign("git");
+    request.path.assign("/nonexistent");
+    check(reader.observe(request).spec_state == CommandSpecState::unavailable, "a command this shell does not run has no spec");
+    request.remote = true;
+    check(reader.observe(request).spec_state == CommandSpecState::available, "a remote shell's command has its spec");
+  }
+
   const telar::testing::Case case_reply_cap{"shell_words.reply_cap", testReplyCap};
   const telar::testing::Case case_directory_words{"shell_words.directory_words", testDirectoryWords};
+  const telar::testing::Case case_remote_specs{"shell_words.remote_specs", testRemoteSpecs};
   const telar::testing::Case case_token_parse{"shell_words.token_parse", testTokenParse};
   const telar::testing::Case case_ignores_special_and_oversized_files{"shell_words.ignores_special_and_oversized_files", testIgnoresSpecialAndOversizedFiles};
   const telar::testing::Case case_cuts_descriptions_at_characters{"shell_words.cuts_descriptions_at_characters", testCutsDescriptionsAtCharacters};

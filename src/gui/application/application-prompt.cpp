@@ -91,12 +91,13 @@ namespace telar::gui::application::prompt {
         return;
       }
 
-      // A command's spec comes from the runtime, for the commands this pane's shell runs; while
-      // it is on its way, Tab waits for it and completes once it arrives.
+      // A command's spec comes from the runtime, for the commands this pane's shell runs, a remote
+      // one's too; while it is on its way, Tab waits for it and completes once it arrives. Files,
+      // commands and providers only for a shell on this host.
       const bool asks = ready && !pane->shell.remote;
       bool specified = false;
 
-      if (!context->command_position && asks) {
+      if (!context->command_position && ready) {
         switch (specState(state, session.link, *pane, context->command)) {
         case SpecState::available:
           specified = true;

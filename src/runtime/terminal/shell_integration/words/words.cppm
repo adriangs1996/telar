@@ -39,6 +39,9 @@ export namespace telar::runtime {
     // digest of the spec the client already holds.
     bool spec = false;
     std::uint64_t known_digest = 0;
+    // A shell on another host, which `ssh` reached: what it runs and what its aliases stand for
+    // are not this host's to tell, so a spec is offered for any command named.
+    bool remote = false;
   };
 
   struct Word {

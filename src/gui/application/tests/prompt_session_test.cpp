@@ -669,7 +669,8 @@ command = "switch" : "Switch branches" , { @branch } | "status" : "Show the work
     check(prompt::line(client, 1)->text() == "git stash " || (prompt::line(client, 1)->menu() && prompt::line(client, 1)->menu()->choices.size() == 2), "the spec it held completes");
     prompt::key(client, 1, prompt::KeyPress{.key = prompt::Key::escape});
 
-    // A shell ssh reached: its files and commands are not this host's to offer.
+    // A shell ssh reached: its files and commands are not this host's to offer, but its specs'
+    // subcommands and flags complete.
     auto remote = atPrompt();
 
     remote.remote = true;
@@ -677,14 +678,18 @@ command = "switch" : "Switch branches" , { @branch } | "status" : "Show the work
     prompt::key(client, 1, prompt::KeyPress{.key = prompt::Key::character, .character = 'u', .modifiers = {.control = true}});
     const auto paths = transport.count(ClientTag::find_paths);
     const auto words = transport.count(ClientTag::complete_words);
-    const auto specs = transport.count(ClientTag::request_command_spec);
 
-    typeKeys(client, "cat sr");
+    typeKeys(client, "git sw");
     tab(client);
+    const auto remote_spec = transport.last<RequestCommandSpec>();
+
+    check(remote_spec.command == "git", "a remote line asks for the spec of its command");
+    deliver(client, CommandSpec{.request_id = remote_spec.request_id, .command = "git", .state = CommandSpecState::unchanged, .digest = git_spec_digest, .source = {}});
+    check(prompt::line(client, 1)->text() == "git switch ", "the spec's subcommand completes");
     prompt::key(client, 1, prompt::KeyPress{.key = prompt::Key::character, .character = 'u', .modifiers = {.control = true}});
     typeKeys(client, "tel");
     tab(client);
-    check(transport.count(ClientTag::find_paths) == paths && transport.count(ClientTag::complete_words) == words && transport.count(ClientTag::request_command_spec) == specs, "a remote shell asks the runtime for nothing");
+    check(transport.count(ClientTag::find_paths) == paths && transport.count(ClientTag::complete_words) == words, "a remote shell asks the runtime for no files, commands or providers");
     check(prompt::surface(client, 1) == prompt::Surface::editor, "its prompt is still edited");
   }
 
