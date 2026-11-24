@@ -628,6 +628,23 @@ command = "switch" : "Switch branches" , { @branch } | "status" : "Show the work
     check(prompt::line(client, 1)->text() == "cat \"Some file.txt\" ", "a quote the word opened is closed");
   }
 
+  // An option that takes its value in the same word is written joined, and the value completes.
+  template <typename Client>
+  void completesJoinedOptions(Client& client, Transport& transport) {
+    prompt::key(client, 1, prompt::KeyPress{.key = prompt::Key::character, .character = 'u', .modifiers = {.control = true}});
+    typeKeys(client, "ls --col");
+    tab(client);
+    const auto asked = transport.last<RequestCommandSpec>();
+    constexpr std::string_view ls_spec = R"(ls = { "--color=" : "When to color" ~ ( "always" | "never" ) } ;)";
+
+    check(asked.command == "ls", "Tab asks for the spec of ls");
+    deliver(client, CommandSpec{.request_id = asked.request_id, .command = "ls", .state = CommandSpecState::available, .digest = 3, .source = ls_spec});
+    check(prompt::line(client, 1)->text() == "ls --color=", "an option ending in = is written without a space");
+    tab(client);
+    check(prompt::line(client, 1)->menu() && prompt::line(client, 1)->menu()->choices.size() == 2, "its values complete");
+    prompt::key(client, 1, prompt::KeyPress{.key = prompt::Key::escape});
+  }
+
   void lineCompletes() {
     SystemAllocator memory;
     Transport transport;
@@ -652,6 +669,7 @@ command = "switch" : "Switch branches" , { @branch } | "status" : "Show the work
     completesFromProviders(client, transport);
     fallsBackToFiles(client, transport);
     completesPaths(client, transport);
+    completesJoinedOptions(client, transport);
 
     // After a command the pane asks again, with the digest of the spec it holds: an unchanged
     // spec is not sent twice.

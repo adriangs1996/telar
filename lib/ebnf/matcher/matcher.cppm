@@ -59,6 +59,8 @@ export {
       std::string_view prefix{};
       std::string_view text{};
       std::string_view description{};
+      // The literal of `prefix ~ value`, which its value follows in the same word.
+      bool glued{};
     };
 
     class command_spec;
@@ -565,6 +567,7 @@ export {
             .prefix = prefix,
             .text = text(shown.text),
             .description = text(shown.description),
+            .glued = shown.kind == detail::terminal_kind::glue,
         };
       }
 

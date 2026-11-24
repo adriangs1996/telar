@@ -406,7 +406,7 @@ namespace telar::gui::features::prompt {
       if (quote == 0) {
         word.append(quoteWord(memory, added, menu.dialect));
       } else if (appendQuoted(word, added, quote, menu.dialect)) {
-        if (!choice.directory) {
+        if (!choice.directory && !choice.joined) {
           word.push(quote);
         }
       } else {
@@ -418,7 +418,7 @@ namespace telar::gui::features::prompt {
       word = quoteWord(memory, choice.text, menu.dialect);
     }
 
-    if (!choice.directory) {
+    if (!choice.directory && !choice.joined) {
       word.push(' ');
     }
 

@@ -18,6 +18,8 @@ export namespace telar::gui::features::prompt {
     tbc::val_a<ds::String<Memory>> text;
     tbc::val_a<ds::String<Memory>> description;
     bool directory = false;
+    // An option whose value follows in the same word, as `--color=`: no space after it.
+    bool joined = false;
 
     // The copy lives in the strings' memory, region `a`, and borrows nothing else of this choice.
     [[nodiscard]] tbc::val_a<Choice> clone() const;

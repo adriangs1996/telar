@@ -154,7 +154,7 @@ Legend: `[ ]` todo, `[x]` done, `[~]` not a bug / dropped (with reason).
   Fix: insert the shell's names and builtins first, then PATH; or collect, dedupe, sort and
   cut at the end.
 
-- [ ] **T10 (C9). Options ending in `=` get a space after them.**
+- [x] **T10 (C9). Options ending in `=` get a space after them.**
   `prompt-line.cpp:349` `accept()` always appends a space unless the choice is a directory:
   `--git-dir=`, `--color=`, `--track=` become `--git-dir= `.
   Expected: the option is written joined, the caret stays for the value, and the value

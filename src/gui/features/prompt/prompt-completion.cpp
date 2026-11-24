@@ -11,7 +11,7 @@ import telar.base.memory.allocators;
 namespace telar::gui::features::prompt {
 
   tbc::val_a<Choice> Choice::clone() const {
-    return {.text = text.clone(), .description = description.clone(), .directory = directory};
+    return {.text = text.clone(), .description = description.clone(), .directory = directory, .joined = joined};
   }
 
   CompletionContext::CompletionContext(Memory& memory)
@@ -63,13 +63,14 @@ namespace telar::gui::features::prompt {
 
   tbc::val_a<Completion> complete(tbc::mut_a<Memory> memory, const CompletionContext& context, const ebnf::command_spec* spec, ebnf::match_scratch& scratch, History history) {
     Completion result{memory};
-    const auto add = [&](std::string_view text, std::string_view description) {
+    const auto add = [&](std::string_view text, std::string_view description, bool joined = false) {
       if (text.starts_with(context.partial.view()) && std::ranges::none_of(result.choices, [&](const Choice& choice) {
             return choice.text == text;
           })) {
         result.choices.push(Choice{
             .text = ds::String<Memory>{memory, text},
             .description = ds::String<Memory>{memory, description},
+            .joined = joined,
         });
       }
     };
@@ -111,7 +112,7 @@ namespace telar::gui::features::prompt {
 
     for (const auto& candidate : std::span{candidates}.first(matched.count)) {
       if (candidate.kind == ebnf::candidate_kind::literal) {
-        add(ds::format(memory, "{}{}", candidate.prefix, candidate.text), candidate.description);
+        add(ds::format(memory, "{}{}", candidate.prefix, candidate.text), candidate.description, candidate.glued);
       } else if (std::ranges::find(result.providers, candidate.text) == result.providers.end()) {
         result.providers.emplace(memory, candidate.text);
         result.provider_prefix.assign(candidate.prefix);
