@@ -393,7 +393,7 @@ Legend: `[ ]` todo, `[x]` done, `[~]` not a bug / dropped (with reason).
   `p`/`P` paste whole lines for linewise registers.
 - [x] **T40 (V26).** `~`, `>>`, `<<` overwrite the unnamed register: only `d c y x s` call
   `store()`.
-- [ ] **T41 (V27).** `dw` on a line's last word joins the lines: when `w` crosses into the
+- [x] **T41 (V27).** `dw` on a line's last word joins the lines: when `w` crosses into the
   next line, stop at the end of the line (vim's special case).
 - [ ] **T42 (V28).** `ge`/`dge` go to a word start: add a `wordEndBackward` motion.
 - [ ] **T43 (V29).** `T,` then `;` never moves: make `findBefore` symmetric with `findAfter`

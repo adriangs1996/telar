@@ -442,6 +442,15 @@ namespace {
       type(editor, "$p");
       require(text(editor) == "Abca", "~, >> and << leave the unnamed register alone");
     }
+
+    // dw on a line's last word stops at the line's end instead of joining the next line.
+    {
+      Editor editor{Keymap::vim};
+
+      type(editor, "one two\nthree");
+      type(editor, "\x1bgg$bdw");
+      require(text(editor) == "one \nthree", "dw deletes the last word alone");
+    }
   }
 
   void routing() {

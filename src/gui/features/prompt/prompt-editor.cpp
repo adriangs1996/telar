@@ -835,9 +835,17 @@ namespace telar::gui::features::prompt {
     }
 
     auto position = cursor;
+    auto last = cursor;
 
     for (std::size_t index = 0; index < repeat; ++index) {
+      last = position;
       position = nextWord(position, big);
+    }
+
+    // With an operator, the last word moved over ends the text when it ends its line, as vim
+    // has it: dw on a line's last word does not join the next line.
+    if (operator_ != 0 && position > text_.lineEnd(last)) {
+      position = text_.lineEnd(last);
     }
 
     return Motion{.target = position};
