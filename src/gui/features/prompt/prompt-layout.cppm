@@ -85,10 +85,12 @@ export namespace telar::gui::features::prompt {
     std::span<const std::uint8_t> groups;
   };
 
-  // The caret's byte and the selection's other end; nothing is selected when they meet.
+  // The caret's byte and the selection's other end; nothing is selected when they meet. `range`,
+  // when given, is what is highlighted instead, as vim's visual modes take more than that.
   struct Selection {
     std::size_t cursor = 0;
     std::size_t anchor = 0;
+    ds::Option<std::pair<std::size_t, std::size_t>> range;
   };
 
   // Lays out `styled` in rows of `columns` cells into `result`, replacing what it held. A run

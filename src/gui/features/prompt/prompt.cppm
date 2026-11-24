@@ -137,6 +137,11 @@ export namespace telar::gui::features::prompt {
       return line_->editor().text().anchor();
     }
 
+    // What vim's visual modes highlight, which is more than the selection; none outside them.
+    [[nodiscard]] TBC_HOT_PATH inline ds::Option<std::pair<std::size_t, std::size_t>> highlight() const noexcept {
+      return line_->editor().visualRange();
+    }
+
     [[nodiscard]] TBC_HOT_PATH inline Keymap keymap() const noexcept {
       return line_->editor().keymap();
     }

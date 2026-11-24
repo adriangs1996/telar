@@ -559,6 +559,27 @@ namespace {
       type(editor, "ggP");
       require(text(editor) == "oneone\n\none\n", "the replaced text, charwise, is in the unnamed register");
     }
+
+    // What a visual mode highlights is what d takes: v both ends' characters, V whole lines.
+    {
+      Editor editor{Keymap::vim};
+
+      type(editor, "abc\ndef");
+      type(editor, "\x1bgg0vl");
+      const auto characters = editor.view().highlight();
+
+      require(characters && characters->first == 0 && characters->second == 2, "v highlights both ends' characters");
+      type(editor, "o");
+      const auto swapped = editor.view().highlight();
+
+      require(swapped && swapped->first == 0 && swapped->second == 2, "and the anchor's after o");
+      type(editor, "\x1bVj");
+      const auto lines = editor.view().highlight();
+
+      require(lines && lines->first == 0 && lines->second == 7, "V highlights whole lines");
+      type(editor, "\x1b");
+      require(!editor.view().highlight(), "nothing is highlighted outside them");
+    }
   }
 
   void routing() {

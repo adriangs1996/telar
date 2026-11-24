@@ -54,6 +54,18 @@ namespace telar::gui::features::prompt {
     return mode_;
   }
 
+  ds::Option<std::pair<std::size_t, std::size_t>> Editor::visualRange() const noexcept {
+    if (mode_ != Mode::visual && mode_ != Mode::visual_line) {
+      return ds::none;
+    }
+
+    if (mode_ == Mode::visual_line) {
+      return std::pair{text_.lineStart(text_.selectionStart()), text_.lineEnd(text_.selectionEnd())};
+    }
+
+    return std::pair{text_.selectionStart(), text_.next(text_.selectionEnd())};
+  }
+
   bool Editor::pending() const noexcept {
     return count_ != 0 || operator_ != 0 || pending_ != Pending::none || register_pending_;
   }
@@ -1731,10 +1743,9 @@ namespace telar::gui::features::prompt {
   }
 
   Request Editor::visualCommand(char32_t character) {
-    auto start = text_.selectionStart();
-    // Read before the cursor moves: moving it collapses the selection.
-    const auto selection_end = text_.selectionEnd();
-    auto end = text_.next(selection_end);
+    // Read before the cursor moves: moving it collapses the selection. What the commands take is
+    // what the mode highlights.
+    const auto [start, end] = *visualRange();
     const bool lines = mode_ == Mode::visual_line;
 
     switch (character) {
@@ -1757,7 +1768,7 @@ namespace telar::gui::features::prompt {
 
       mode_ = Mode::normal;
       text_.moveTo(start);
-      operate(start, lines ? selection_end : end, lines);
+      operate(start, end, lines);
       return Request::none;
     }
     case 'o': {
@@ -1781,13 +1792,8 @@ namespace telar::gui::features::prompt {
       // Copied: storing the replaced text may overwrite the register it comes from.
       const auto loaded = load();
       const ds::String<Memory> value{memory(), loaded.text};
-      auto from = start;
+      const auto from = start;
       auto to = end;
-
-      if (lines) {
-        from = text_.lineStart(start);
-        to = text_.lineEnd(selection_end);
-      }
 
       ds::String<Memory> replaced{memory(), text_.view().substr(from, to - from)};
       ds::String<Memory> put{memory()};

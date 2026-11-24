@@ -161,13 +161,14 @@ namespace telar::gui::features::prompt {
 
   void layout(Layout& result, const StyledText& styled, Selection selection, std::uint32_t columns) {
     const auto& [text, styles, groups] = styled;
-    const auto [cursor, anchor] = selection;
+    const auto cursor = selection.cursor;
+    const auto anchor = selection.anchor;
 
     reset(result);
 
     columns = std::max<std::uint32_t>(columns, Layout::indent + 1);
-    const auto selection_start = std::min(cursor, anchor);
-    const auto selection_end = std::max(cursor, anchor);
+    const auto selection_start = selection.range ? selection.range->first : std::min(cursor, anchor);
+    const auto selection_end = selection.range ? selection.range->second : std::max(cursor, anchor);
 
     // A text of fewer bytes than the runs a layout keeps fits whole; a longer one keeps the rows
     // around the caret's, which a first walk finds.

@@ -46,6 +46,12 @@ namespace telar::gui::features::prompt {
 
     [[nodiscard]] Mode mode() const noexcept;
 
+    // What a visual mode takes, and highlights: from one end's character through the other's for v,
+
+    // the lines they are on for V; none outside them.
+
+    [[nodiscard]] ds::Option<std::pair<std::size_t, std::size_t>> visualRange() const noexcept;
+
     // An operator or count is waiting for the rest of the command.
     [[nodiscard]] bool pending() const noexcept;
 

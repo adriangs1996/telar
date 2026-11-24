@@ -408,7 +408,7 @@ Legend: `[ ]` todo, `[x]` done, `[~]` not a bug / dropped (with reason).
 - [x] **T47 (V33).** Smaller ones: `3.` replaces the original count; `yy`/`Y` keep the
   cursor; `5j` with fewer lines goes to the last line; visual `l` stops at the last
   character; visual `p` honours linewise registers and stores the replaced text.
-- [ ] **T48 (V34).** Visual mode is highlighted wrong: the highlighted range comes from the
+- [x] **T48 (V34).** Visual mode is highlighted wrong: the highlighted range comes from the
   same function that computes `d`'s range; `V` marks whole lines, `v` is inclusive (the
   anchor character after `o` too).
 
