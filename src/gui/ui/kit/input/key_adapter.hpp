@@ -87,14 +87,8 @@ namespace telar::gui::qt {
       }
 
       if constexpr (Convention == system::KeyboardConvention::apple) {
-        if (!modified && ascii_key && result.has(Modifier::alt) && text && *text >= first_printable && *text != delete_character) {
-          const auto base = baseCharacter(event);
-          if (*text != base) {
-            result.codepoint = option_as_alt ? base : *text;
-            if (!option_as_alt) {
-              result.modifiers &= ~static_cast<unsigned>(Modifier::alt);
-            }
-          }
+        if (!modified && ascii_key) {
+          optionCharacter(result, event, text, option_as_alt);
         }
       }
 
@@ -167,6 +161,24 @@ namespace telar::gui::qt {
 
     static constexpr std::uint32_t first_printable = 0x20;
     static constexpr std::uint32_t delete_character = 0x7f;
+
+    // An ASCII key typed with Option whose text is printable and not the key's own: that text
+    // without Alt, or, when `option_as_alt` makes Option Meta, Alt with the key under it.
+    static void optionCharacter(TerminalKey& result, const QKeyEvent& event, ds::Option<std::uint32_t> text, bool option_as_alt) noexcept {
+      if (!result.has(Modifier::alt) || !text || *text < first_printable || *text == delete_character) {
+        return;
+      }
+
+      const auto base = baseCharacter(event);
+      if (*text == base) {
+        return;
+      }
+
+      result.codepoint = option_as_alt ? base : *text;
+      if (!option_as_alt) {
+        result.modifiers &= ~static_cast<unsigned>(Modifier::alt);
+      }
+    }
 
     // The character of an ASCII key as typed without Option: lowercase unless Shift is held.
     static std::uint32_t baseCharacter(const QKeyEvent& event) noexcept {

@@ -121,6 +121,7 @@ namespace telar::gui::features::prompt {
     return std::move(context);
   }
 
+  // NOLINTNEXTLINE(readability-function-size): the spec's matcher needs its scratch, and the words their shell's syntax
   tbc::val_a<Completion> complete(tbc::mut_a<Memory> memory, const CompletionContext& context, const ebnf::command_spec* spec, ebnf::match_scratch& scratch, History history, shell::Syntax syntax) {
     Completion result{memory};
     const auto add = [&](std::string_view text, std::string_view description, bool joined = false) {

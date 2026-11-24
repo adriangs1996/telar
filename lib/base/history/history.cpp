@@ -14,68 +14,78 @@ namespace telar::runtime {
       std::size_t bytes = 1;
     };
 
+    // UTF-8's sequences by their length: the bits that mark a lead byte, those of the character
+    // it carries, and the first character past what the sequence holds.
+    struct Sequence {
+      unsigned lead_mask;
+      unsigned lead_bits;
+      unsigned payload;
+      std::uint32_t end;
+    };
+
+    constexpr ds::Array<Sequence, 4> sequences{
+        {
+            {.lead_mask = 0x80, .lead_bits = 0x00, .payload = 0x7f, .end = 0x80},
+            {.lead_mask = 0xe0, .lead_bits = 0xc0, .payload = 0x1f, .end = 0x800},
+            {.lead_mask = 0xf0, .lead_bits = 0xe0, .payload = 0x0f, .end = 0x10000},
+            {.lead_mask = 0xf8, .lead_bits = 0xf0, .payload = 0x07, .end = 0x110000},
+        },
+    };
+
+    constexpr std::uint32_t first_non_ascii = 0x80;
+    constexpr unsigned continuation_mask = 0xc0U;
+    constexpr unsigned continuation_bits = 0x80U;
+    constexpr unsigned continuation_payload = 0x3fU;
+    constexpr unsigned continuation_shift = 6U;
+    // Past Unicode's last character, where a byte that starts no character goes.
+    constexpr std::uint32_t outside = 0x110000;
+
     Decoded decode(std::string_view text) noexcept {
-      constexpr std::uint32_t outside = 0x110000;
       const auto lead = static_cast<unsigned char>(text.front());
-      const auto continuation = [&](std::size_t index) {
-        return index < text.size() && (static_cast<unsigned char>(text[index]) & 0xc0U) == 0x80U;
-      };
-
-      if (lead < 0x80U) {
-        return {.character = lead};
-      }
-
       std::size_t length = 0;
-      std::uint32_t character = 0;
 
-      if ((lead & 0xe0U) == 0xc0U) {
-        length = 2;
-        character = lead & 0x1fU;
-      } else if ((lead & 0xf0U) == 0xe0U) {
-        length = 3;
-        character = lead & 0x0fU;
-      } else if ((lead & 0xf8U) == 0xf0U) {
-        length = 4;
-        character = lead & 0x07U;
-      } else {
-        return {.character = outside + lead};
-      }
-
-      for (std::size_t index = 1; index < length; ++index) {
-        if (!continuation(index)) {
-          return {.character = outside + lead};
+      for (const auto& sequence : sequences) {
+        ++length;
+        if ((lead & sequence.lead_mask) != sequence.lead_bits) {
+          continue;
         }
 
-        character = (character << 6U) | (static_cast<unsigned char>(text[index]) & 0x3fU);
+        std::uint32_t character = lead & sequence.payload;
+
+        for (std::size_t index = 1; index < length; ++index) {
+          if (index >= text.size() || (static_cast<unsigned char>(text[index]) & continuation_mask) != continuation_bits) {
+            return {.character = outside + lead};
+          }
+
+          character = (character << continuation_shift) | (static_cast<unsigned char>(text[index]) & continuation_payload);
+        }
+
+        return {.character = character, .bytes = length};
       }
 
-      return {.character = character, .bytes = length};
+      return {.character = outside + lead};
     }
 
+    // Writes `character`, one of Unicode's, at the start of `out`, and says how many bytes.
     std::size_t encode(std::uint32_t character, std::span<char> out) noexcept {
-      if (character < 0x80U) {
-        out[0] = static_cast<char>(character);
-        return 1;
+      std::size_t length = 0;
+      unsigned lead_bits = 0;
+
+      for (const auto& sequence : sequences) {
+        ++length;
+        lead_bits = sequence.lead_bits;
+        if (character < sequence.end) {
+          break;
+        }
       }
 
-      if (character < 0x800U) {
-        out[0] = static_cast<char>(0xc0U | (character >> 6U));
-        out[1] = static_cast<char>(0x80U | (character & 0x3fU));
-        return 2;
+      for (std::size_t index = length; index-- > 1;) {
+        out[index] = static_cast<char>(continuation_bits | (character & continuation_payload));
+        character >>= continuation_shift;
       }
 
-      if (character < 0x10000U) {
-        out[0] = static_cast<char>(0xe0U | (character >> 12U));
-        out[1] = static_cast<char>(0x80U | ((character >> 6U) & 0x3fU));
-        out[2] = static_cast<char>(0x80U | (character & 0x3fU));
-        return 3;
-      }
-
-      out[0] = static_cast<char>(0xf0U | (character >> 18U));
-      out[1] = static_cast<char>(0x80U | ((character >> 12U) & 0x3fU));
-      out[2] = static_cast<char>(0x80U | ((character >> 6U) & 0x3fU));
-      out[3] = static_cast<char>(0x80U | (character & 0x3fU));
-      return 4;
+      out[0] = static_cast<char>(lead_bits | character);
+      return length;
     }
 
     // A run of capitals [first, last] whose small letters are `offset` away.
@@ -91,38 +101,53 @@ namespace telar::runtime {
       std::uint32_t last;
     };
 
-    constexpr ds::Array<FoldRange, 18> fold_ranges{{
-        {.first = 'A', .last = 'Z', .offset = 32},
-        {.first = 0xc0, .last = 0xd6, .offset = 32},
-        {.first = 0xd8, .last = 0xde, .offset = 32},
-        {.first = 0x386, .last = 0x386, .offset = 38},
-        {.first = 0x388, .last = 0x38a, .offset = 37},
-        {.first = 0x38c, .last = 0x38c, .offset = 64},
-        {.first = 0x38e, .last = 0x38f, .offset = 63},
-        {.first = 0x391, .last = 0x3a1, .offset = 32},
-        {.first = 0x3a3, .last = 0x3ab, .offset = 32},
-        {.first = 0x3c2, .last = 0x3c2, .offset = 1},
-        {.first = 0x400, .last = 0x40f, .offset = 80},
-        {.first = 0x410, .last = 0x42f, .offset = 32},
-        {.first = 0x531, .last = 0x556, .offset = 48},
-        {.first = 0x10a0, .last = 0x10c5, .offset = 0x2d00 - 0x10a0},
-        {.first = 0x2126, .last = 0x2126, .offset = 0x3c9 - 0x2126},
-        {.first = 0x212a, .last = 0x212a, .offset = 'k' - 0x212a},
-        {.first = 0x212b, .last = 0x212b, .offset = 0xe5 - 0x212b},
-        {.first = 0xff21, .last = 0xff3a, .offset = 32},
-    }};
+    constexpr ds::Array<FoldRange, 18> fold_ranges{
+        {
+            {.first = 'A', .last = 'Z', .offset = 32},
+            {.first = 0xc0, .last = 0xd6, .offset = 32},
+            {.first = 0xd8, .last = 0xde, .offset = 32},
+            {.first = 0x386, .last = 0x386, .offset = 38},
+            {.first = 0x388, .last = 0x38a, .offset = 37},
+            {.first = 0x38c, .last = 0x38c, .offset = 64},
+            {.first = 0x38e, .last = 0x38f, .offset = 63},
+            {.first = 0x391, .last = 0x3a1, .offset = 32},
+            {.first = 0x3a3, .last = 0x3ab, .offset = 32},
+            {.first = 0x3c2, .last = 0x3c2, .offset = 1},
+            {.first = 0x400, .last = 0x40f, .offset = 80},
+            {.first = 0x410, .last = 0x42f, .offset = 32},
+            {.first = 0x531, .last = 0x556, .offset = 48},
+            {.first = 0x10a0, .last = 0x10c5, .offset = 0x2d00 - 0x10a0},
+            {.first = 0x2126, .last = 0x2126, .offset = 0x3c9 - 0x2126},
+            {.first = 0x212a, .last = 0x212a, .offset = 'k' - 0x212a},
+            {.first = 0x212b, .last = 0x212b, .offset = 0xe5 - 0x212b},
+            {.first = 0xff21, .last = 0xff3a, .offset = 32},
+        },
+    };
 
-    constexpr ds::Array<FoldPairs, 9> fold_pairs{{
-        {.first = 0x100, .last = 0x12f},
-        {.first = 0x132, .last = 0x137},
-        {.first = 0x14a, .last = 0x177},
-        {.first = 0x3d8, .last = 0x3ef},
-        {.first = 0x460, .last = 0x481},
-        {.first = 0x48a, .last = 0x4bf},
-        {.first = 0x4d0, .last = 0x52f},
-        {.first = 0x1e00, .last = 0x1e95},
-        {.first = 0x1ea0, .last = 0x1eff},
-    }};
+    constexpr ds::Array<FoldPairs, 9> fold_pairs{
+        {
+            {.first = 0x100, .last = 0x12f},
+            {.first = 0x132, .last = 0x137},
+            {.first = 0x14a, .last = 0x177},
+            {.first = 0x3d8, .last = 0x3ef},
+            {.first = 0x460, .last = 0x481},
+            {.first = 0x48a, .last = 0x4bf},
+            {.first = 0x4d0, .last = 0x52f},
+            {.first = 0x1e00, .last = 0x1e95},
+            {.first = 0x1ea0, .last = 0x1eff},
+        },
+    };
+
+    // Runs where capital and small letter alternate, the capital odd.
+    constexpr ds::Array<FoldPairs, 3> odd_fold_pairs{
+        {
+            {.first = 0x139, .last = 0x148},
+            {.first = 0x179, .last = 0x17e},
+            {.first = 0x4c1, .last = 0x4ce},
+        },
+    };
+
+    constexpr std::uint32_t small_letter_offset = 'a' - 'A';
 
   }
 
@@ -130,11 +155,14 @@ namespace telar::runtime {
     // Latin Extended-A's odd runs, where the capital is odd, and its outliers.
     constexpr std::uint32_t long_s = 0x17f;
     constexpr std::uint32_t y_diaeresis = 0x178;
+    constexpr std::uint32_t small_y_diaeresis = 0xff;
     constexpr std::uint32_t capital_sharp_s = 0x1e9e;
+    constexpr std::uint32_t small_sharp_s = 0xdf;
     constexpr std::uint32_t cyrillic_palochka = 0x4c0;
+    constexpr std::uint32_t cyrillic_small_palochka = 0x4cf;
 
-    if (character < 0x80U) {
-      return character >= 'A' && character <= 'Z' ? character + 32 : character;
+    if (character < first_non_ascii) {
+      return character >= 'A' && character <= 'Z' ? character + small_letter_offset : character;
     }
 
     for (const auto& range : fold_ranges) {
@@ -149,19 +177,21 @@ namespace telar::runtime {
       }
     }
 
-    if ((character >= 0x139 && character <= 0x148) || (character >= 0x179 && character <= 0x17e) || (character >= 0x4c1 && character <= 0x4ce)) {
-      return (character & 1U) != 0 ? character + 1 : character;
+    for (const auto& pairs : odd_fold_pairs) {
+      if (character >= pairs.first && character <= pairs.last) {
+        return (character & 1U) != 0 ? character + 1 : character;
+      }
     }
 
     switch (character) {
     case long_s:
       return 's';
     case y_diaeresis:
-      return 0xff;
+      return small_y_diaeresis;
     case capital_sharp_s:
-      return 0xdf;
+      return small_sharp_s;
     case cyrillic_palochka:
-      return 0x4cf;
+      return cyrillic_small_palochka;
     default:
       return character;
     }
@@ -172,10 +202,10 @@ namespace telar::runtime {
 
     while (!text.empty()) {
       const auto decoded = decode(text);
-      const auto folded = decoded.character > 0x10ffffU ? decoded.character : historyFold(decoded.character);
+      const auto folded = decoded.character >= outside ? decoded.character : historyFold(decoded.character);
 
-      if (decoded.character > 0x10ffffU || folded == decoded.character) {
-        std::copy_n(text.data(), decoded.bytes, out.data() + written);
+      if (folded == decoded.character) {
+        std::ranges::copy_n(text.begin(), static_cast<std::ptrdiff_t>(decoded.bytes), out.subspan(written).begin());
         written += decoded.bytes;
       } else {
         written += encode(folded, out.subspan(written));
@@ -187,6 +217,7 @@ namespace telar::runtime {
     return written;
   }
 
+  // NOLINTNEXTLINE(bugprone-easily-swappable-parameters): the command is scored for the query, as the declaration names them
   ds::Option<std::uint32_t> historyScore(std::string_view command, std::string_view query) noexcept {
     if (query.empty()) {
       return 1;
@@ -323,7 +354,12 @@ namespace telar::runtime {
       }
 
       held_count_ = 0;
-      state_ = byte == ';' ? State::mark : (byte == bell ? State::ground : State::mark_escape);
+      if (byte == ';') {
+        state_ = State::mark;
+      } else {
+        state_ = byte == bell ? State::ground : State::mark_escape;
+      }
+
       return Step::consumed;
     }
     case State::mark:

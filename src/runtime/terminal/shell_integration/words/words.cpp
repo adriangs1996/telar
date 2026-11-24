@@ -529,7 +529,7 @@ namespace telar::runtime {
 
     // The words after `keyword` when `line` starts with it, as ssh_config reads it: any case, then
     // a blank or `=`; none for another line.
-    tbc::val_a<ds::Option<std::string_view>> sshArguments(tbc::val_a<std::string_view> line, std::string_view keyword) noexcept {
+    tbc::val_a<ds::Option<std::string_view>> sshArguments(tbc::val_a<std::string_view> line, std::string_view keyword) {
       if (line.size() <= keyword.size() || !asciiStartsWithIgnoreCase(line, keyword)) {
         return ds::none;
       }
@@ -559,65 +559,75 @@ namespace telar::runtime {
       }
     }
 
-    // `Host` names in one ssh config file, without patterns, and in the files its `Include`s
-    // name: relative to ~/.ssh or from ~, globbed, at most 16 deep as ssh reads them, and at most
-    // `budget` files in all.
-    template <typename Add>
-    void sshConfig(ConcurrentMemory& memory, int ssh_directory, std::string_view home, const char* name, int depth, std::size_t& budget, Add& add) {
-      constexpr int maximum_depth = 16;
+    // ssh reads `Include`s at most 16 deep; telar reads at most 256 files in all.
+    constexpr int maximum_ssh_depth = 16;
+    constexpr std::size_t maximum_ssh_files = 256;
 
-      if (budget == 0) {
-        return;
-      }
+    // An ssh config file still to read, under ~/.ssh or from /, and how deep in the includes.
+    struct SshFile {
+      Text path;
+      int depth = 0;
+    };
 
-      --budget;
-      const auto text = readSmall(memory, ssh_directory, name);
+    // The files an `Include` line names, relative to ~/.ssh or from ~, globbed, queued in
+    // `pending` at `depth` while it has room.
+    // NOLINTNEXTLINE(bugprone-easily-swappable-parameters): the line's words, then the home they are read from
+    void sshIncludes(tbc::mut_a<ConcurrentMemory> memory, std::string_view arguments, std::string_view home, int depth, ds::Vec<SshFile, ConcurrentMemory>& pending) {
       Text pattern{memory};
 
-      lines(text, [&](std::string_view line) {
-        line = trimText(line, " \t");
-        if (const auto included = sshArguments(line, "include"); included && depth < maximum_depth) {
-          sshWords(*included, [&](std::string_view file) {
-            if (file.starts_with("~/")) {
-              pattern.assign(home);
-              pattern.append(file.substr(1));
-            } else if (file.starts_with('/')) {
-              pattern.assign(file);
-            } else {
-              pattern.assign(home);
-              pattern.append("/.ssh/");
-              pattern.append(file);
-            }
-
-            glob_t found{};
-
-            if (::glob(pattern.data(), 0, nullptr, &found) == 0) {
-              for (std::size_t index = 0; index < found.gl_pathc; ++index) {
-                sshConfig(memory, ssh_directory, home, found.gl_pathv[index], depth + 1, budget, add);
-              }
-            }
-
-            ::globfree(&found);
-          });
-
-          return;
+      sshWords(arguments, [&](std::string_view file) {
+        if (file.starts_with("~/")) {
+          pattern.assign(home);
+          pattern.append(file.substr(1));
+        } else if (file.starts_with('/')) {
+          pattern.assign(file);
+        } else {
+          pattern.assign(home);
+          pattern.append("/.ssh/");
+          pattern.append(file);
         }
 
-        if (const auto names = sshArguments(line, "host")) {
-          sshWords(*names, [&](std::string_view host) {
-            if (!host.empty() && host.find_first_of("*?!=") == std::string_view::npos) {
-              add(host);
-            }
-          });
+        glob_t found{};
+
+        if (::glob(pattern.data(), 0, nullptr, &found) == 0) { // NOLINT(concurrency-mt-unsafe): the word reader's one thread globs
+          // NOLINTNEXTLINE(clang-diagnostic-unsafe-buffer-usage-in-container): glob's paths, as many as it counts
+          const std::span<char*> paths{found.gl_pathv, found.gl_pathc};
+
+          for (std::size_t index = 0; index < paths.size() && pending.size() < maximum_ssh_files; ++index) {
+            pending.push(SshFile{.path = Text{memory, paths[index]}, .depth = depth});
+          }
+        }
+
+        ::globfree(&found);
+      });
+    }
+
+    // The names a `Host` line gives, without patterns.
+    template <typename Add>
+    void sshHostNames(std::string_view names, Add& add) {
+      sshWords(names, [&](std::string_view host) {
+        if (!host.empty() && host.find_first_of("*?!=") == std::string_view::npos) {
+          add(host);
         }
       });
     }
 
-    // `Host` names in ~/.ssh/config and the files it includes.
+    // The names git takes for `count` stashes: stash@{0}, stash@{1}, and on.
+    template <typename Add>
+    void stashNames(std::size_t count, Add& add) {
+      constexpr std::size_t stash_name_bytes = 32;
+
+      for (std::size_t index = 0; index < count; ++index) {
+        ds::Array<char, stash_name_bytes> stash{};
+        const auto written = std::format_to_n(stash.dataMut(), stash.size(), "stash@{{{}}}", index);
+
+        add(std::string_view{stash.data(), static_cast<std::size_t>(written.out - stash.data())});
+      }
+    }
+
+    // `Host` names in ~/.ssh/config and the files it includes, without patterns.
     template <typename Add>
     void sshHosts(ConcurrentMemory& memory, std::string_view home, Add& add) {
-      constexpr std::size_t maximum_files = 256;
-
       if (home.empty() || home.front() != '/') {
         return;
       }
@@ -630,9 +640,26 @@ namespace telar::runtime {
         return;
       }
 
-      std::size_t budget = maximum_files;
+      ds::Vec<SshFile, ConcurrentMemory> pending{memory};
 
-      sshConfig(memory, directory.get(), home, "config", 0, budget, add);
+      pending.push(SshFile{.path = Text{memory, "config"}, .depth = 0});
+      for (std::size_t read = 0; read < maximum_ssh_files; ++read) {
+        const auto file = pending.pop();
+        if (!file) {
+          return;
+        }
+
+        const auto text = readSmall(memory, directory.get(), file->path.data());
+
+        lines(text, [&](std::string_view line) {
+          line = trimText(line, " \t");
+          if (const auto included = sshArguments(line, "include"); included && file->depth < maximum_ssh_depth) {
+            sshIncludes(memory, *included, home, file->depth + 1, pending);
+          } else if (const auto names = sshArguments(line, "host")) {
+            sshHostNames(*names, add);
+          }
+        });
+      }
     }
 
     // The explicit targets of the makefile make would read in `directory`.
@@ -749,6 +776,7 @@ namespace telar::runtime {
     // The directory a typed path's directory part names, NUL-terminated in `resolved`: `~` or
     // `~user` at its start is a home, and a relative one is under `directory`. False for a
     // directory part with a variable, which only the shell can expand, or one that does not fit.
+    // NOLINTNEXTLINE(bugprone-easily-swappable-parameters): what was typed, then where it is read from
     bool typedDirectory(std::string_view typed, std::string_view directory, std::string_view home, ds::Array<char, PATH_MAX>& resolved) {
       if (typed.contains('$')) {
         return false;
@@ -760,7 +788,7 @@ namespace telar::runtime {
           return false;
         }
 
-        std::ranges::copy(part, resolved.dataMut() + length);
+        std::ranges::copy(part, resolved.viewMut().subspan(length).begin());
         length += part.size();
         return true;
       };
@@ -841,9 +869,9 @@ namespace telar::runtime {
 
         // Followed: a link to a directory lists as one. A dangling link is a file.
         struct stat state{};
-        const bool listed = ::fstatat(entries.descriptor(), entry->d_name, &state, 0) == 0;
+        const bool listed = ::fstatat(entries.descriptor(), std::data(entry->d_name), &state, 0) == 0;
         const bool is_directory = listed && S_ISDIR(state.st_mode);
-        const bool executable = listed && S_ISREG(state.st_mode) && ::faccessat(entries.descriptor(), entry->d_name, X_OK, 0) == 0;
+        const bool executable = listed && S_ISREG(state.st_mode) && ::faccessat(entries.descriptor(), std::data(entry->d_name), X_OK, 0) == 0;
         if ((request.provider == CompletionProvider::directory && !is_directory) || (request.provider == CompletionProvider::executable && !is_directory && !executable)) {
           continue;
         }
@@ -958,21 +986,10 @@ namespace telar::runtime {
       git_.refs(request.directory.view());
       git_.remotes(add_word);
       break;
-    case CompletionProvider::stash: {
-      constexpr std::size_t stash_name_bytes = 32;
-
+    case CompletionProvider::stash:
       git_.refs(request.directory.view());
-      const auto count = git_.stashes(maximum_words);
-
-      for (std::size_t index = 0; index < count; ++index) {
-        ds::Array<char, stash_name_bytes> stash{};
-        const auto written = std::format_to_n(stash.dataMut(), stash.size(), "stash@{{{}}}", index);
-
-        add(std::string_view{stash.data(), static_cast<std::size_t>(written.out - stash.data())});
-      }
-
+      stashNames(git_.stashes(maximum_words), add);
       break;
-    }
     case CompletionProvider::process:
       processes(memory_, add);
       break;

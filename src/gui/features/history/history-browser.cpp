@@ -528,7 +528,7 @@ namespace telar::gui::features::history {
 
   template <Allocator Memory>
   bool HistoryBrowser<Memory>::forgetDelete(std::uint64_t request_id) noexcept {
-    const auto found = std::ranges::find(delete_requests_, request_id);
+    const auto* const found = std::ranges::find(delete_requests_, request_id);
     if (found == delete_requests_.end()) {
       return false;
     }

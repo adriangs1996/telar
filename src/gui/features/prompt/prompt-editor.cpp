@@ -1832,52 +1832,57 @@ namespace telar::gui::features::prompt {
 
       return Request::none;
     case 'p':
-    case 'P': {
-      // Copied: storing the replaced text may overwrite the register it comes from.
-      const auto loaded = load();
-      const ds::String<Memory> value{memory(), loaded.text};
-      const auto from = start;
-      auto to = end;
-
-      ds::String<Memory> replaced{memory(), text_.view().substr(from, to - from)};
-      ds::String<Memory> put{memory()};
-
-      // Whole lines for whole lines; a line register over characters goes on lines of its own.
-      if (lines) {
-        const bool through_newline = to < text_.size();
-
-        replaced.push('\n');
-        put.assign(value);
-        if (!put.view().ends_with('\n')) {
-          put.push('\n');
-        }
-
-        if (through_newline) {
-          ++to;
-        } else {
-          put.truncate(put.size() - 1);
-        }
-      } else if (loaded.linewise) {
-        put.push('\n');
-        put.append(value);
-      } else {
-        put.assign(value);
-      }
-
-      text_.replace(from, to, put);
-      // The text it replaced is the unnamed register's, as vim keeps it.
-      register_ = '"';
-      store(replaced, lines);
-      mode_ = Mode::normal;
-      text_.moveTo(lines || loaded.linewise ? firstNonBlank(text_.lineStart(std::min(from + (lines ? 0 : 1), text_.size()))) : text_.cursor());
-      clampNormal();
-      reset();
-      return Request::none;
-    }
+    case 'P':
+      return visualPut(start, end, lines);
     default:
       reset();
       return Request::none;
     }
+  }
+
+  // Visual mode's p and P: the selection's text is replaced by the register's, and goes to the
+  // unnamed register.
+  Request Editor::visualPut(std::size_t start, std::size_t end, bool lines) {
+    // Copied: storing the replaced text may overwrite the register it comes from.
+    const auto loaded = load();
+    const ds::String<Memory> value{memory(), loaded.text};
+    const auto from = start;
+    auto until = end;
+
+    ds::String<Memory> replaced{memory(), text_.view().substr(from, until - from)};
+    ds::String<Memory> put{memory()};
+
+    // Whole lines for whole lines; a line register over characters goes on lines of its own.
+    if (lines) {
+      const bool through_newline = until < text_.size();
+
+      replaced.push('\n');
+      put.assign(value);
+      if (!put.view().ends_with('\n')) {
+        put.push('\n');
+      }
+
+      if (through_newline) {
+        ++until;
+      } else {
+        put.truncate(put.size() - 1);
+      }
+    } else if (loaded.linewise) {
+      put.push('\n');
+      put.append(value);
+    } else {
+      put.assign(value);
+    }
+
+    text_.replace(from, until, put);
+    // The text it replaced is the unnamed register's, as vim keeps it.
+    register_ = '"';
+    store(replaced, lines);
+    mode_ = Mode::normal;
+    text_.moveTo(lines || loaded.linewise ? firstNonBlank(text_.lineStart(std::min(from + (lines ? 0 : 1), text_.size()))) : text_.cursor());
+    clampNormal();
+    reset();
+    return Request::none;
   }
 
   void Editor::startRecording(const KeyPress& key) {

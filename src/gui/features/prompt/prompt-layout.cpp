@@ -120,32 +120,73 @@ namespace telar::gui::features::prompt {
 
   namespace {
 
+    struct CharacterRange {
+      std::uint32_t first;
+      std::uint32_t last;
+    };
+
     // The bidi controls and zero-width characters a pasted command can hide behind: the zero
-    // width joiners, which emoji sequences need, are left out. The code point, when `grapheme` is
-    // one of them.
+    // width joiners, which emoji sequences need, are left out.
+    constexpr ds::Array<CharacterRange, 7> hidden_characters{
+        {
+            {.first = 0x61c, .last = 0x61c},
+            {.first = 0x200b, .last = 0x200b},
+            {.first = 0x200e, .last = 0x200f},
+            {.first = 0x202a, .last = 0x202e},
+            {.first = 0x2060, .last = 0x2064},
+            {.first = 0x2066, .last = 0x2069},
+            {.first = 0xfeff, .last = 0xfeff},
+        },
+    };
+
+    // A UTF-8 sequence of two or three bytes, the lengths the hidden characters take: the bits
+    // that mark its lead byte and those of the character it carries.
+    struct Sequence {
+      std::size_t bytes;
+      unsigned lead_mask;
+      unsigned lead_bits;
+      unsigned payload;
+    };
+
+    constexpr ds::Array<Sequence, 2> hidden_sequences{
+        {
+            {.bytes = 2, .lead_mask = 0xe0, .lead_bits = 0xc0, .payload = 0x1f},
+            {.bytes = 3, .lead_mask = 0xf0, .lead_bits = 0xe0, .payload = 0x0f},
+        },
+    };
+
+    constexpr unsigned continuation_payload = 0x3fU;
+    constexpr unsigned continuation_shift = 6U;
+
+    // The code point, when `grapheme` is one of the hidden characters.
     ds::Option<std::uint32_t> hiddenCharacter(std::string_view grapheme) noexcept {
-      constexpr std::size_t three_bytes = 3;
-      constexpr std::size_t two_bytes = 2;
+      for (const auto& sequence : hidden_sequences) {
+        if (grapheme.size() != sequence.bytes || (static_cast<unsigned char>(grapheme.front()) & sequence.lead_mask) != sequence.lead_bits) {
+          continue;
+        }
 
-      std::uint32_t character = 0;
+        std::uint32_t character = static_cast<unsigned char>(grapheme.front()) & sequence.payload;
 
-      if (grapheme.size() == three_bytes && (static_cast<unsigned char>(grapheme[0]) & 0xf0U) == 0xe0U) {
-        character = ((static_cast<unsigned char>(grapheme[0]) & 0x0fU) << 12U) | ((static_cast<unsigned char>(grapheme[1]) & 0x3fU) << 6U) | (static_cast<unsigned char>(grapheme[2]) & 0x3fU);
-      } else if (grapheme.size() == two_bytes && (static_cast<unsigned char>(grapheme[0]) & 0xe0U) == 0xc0U) {
-        character = ((static_cast<unsigned char>(grapheme[0]) & 0x1fU) << 6U) | (static_cast<unsigned char>(grapheme[1]) & 0x3fU);
-      } else {
+        for (const auto byte : std::span{grapheme}.subspan(1)) {
+          character = (character << continuation_shift) | (static_cast<unsigned char>(byte) & continuation_payload);
+        }
+
+        if (std::ranges::any_of(hidden_characters, [character](const CharacterRange& range) {
+              return character >= range.first && character <= range.last;
+            })) {
+          return character;
+        }
+
         return ds::none;
       }
 
-      const bool hidden = character == 0x61c || character == 0x200b || character == 0x200e || character == 0x200f || (character >= 0x202a && character <= 0x202e) || (character >= 0x2060 && character <= 0x2064) || (character >= 0x2066 && character <= 0x2069) || character == 0xfeff;
-
-      return hidden ? ds::Option{character} : ds::none;
+      return ds::none;
     }
 
     // Each grapheme of `text` laid out in rows of `columns` cells: `visit(start, end, cell,
     // newline)`. The row and column after the last.
     template <typename Visit>
-    CellRange walk(std::string_view text, std::uint32_t columns, Visit&& visit) {
+    CellRange walk(std::string_view text, std::uint32_t columns, Visit visit) {
       std::uint32_t row = 0;
       std::uint32_t column = Layout::indent;
       GraphemeCursor graphemes{text};
@@ -180,6 +221,25 @@ namespace telar::gui::features::prompt {
       return {.row = row, .column = column};
     }
 
+    // The first and last rows a layout keeps. A text of fewer bytes than the runs it holds fits
+    // whole; a longer one keeps the rows around the caret's, which a first walk finds.
+    // NOLINTNEXTLINE(bugprone-easily-swappable-parameters): the width it lays out in, then the caret's byte
+    std::pair<std::uint32_t, std::uint32_t> keptRows(std::string_view text, std::uint32_t columns, std::size_t cursor) {
+      if (text.size() <= Layout::maximum_runs) {
+        return {0, std::numeric_limits<std::uint32_t>::max()};
+      }
+
+      ds::Option<std::uint32_t> caret_row;
+      const auto end = walk(text, columns, [&](std::size_t start, std::size_t finish, CellRange cell, bool) {
+        if (!caret_row && cursor >= start && cursor < finish) {
+          caret_row = cell.row;
+        }
+      });
+
+      const auto caret = caret_row.valueOr(end.column >= columns ? end.row + 1 : end.row);
+
+      return {caret > Layout::kept_rows ? caret - Layout::kept_rows : 0, caret + Layout::kept_rows};
+    }
   }
 
   void layout(Layout& result, const StyledText& styled, Selection selection, std::uint32_t columns) {
@@ -193,24 +253,16 @@ namespace telar::gui::features::prompt {
     const auto selection_start = selection.range ? selection.range->first : std::min(cursor, anchor);
     const auto selection_end = selection.range ? selection.range->second : std::max(cursor, anchor);
 
-    // A text of fewer bytes than the runs a layout keeps fits whole; a longer one keeps the rows
-    // around the caret's, which a first walk finds.
-    std::uint32_t first_kept = 0;
-    std::uint32_t last_kept = std::numeric_limits<std::uint32_t>::max();
+    const auto [first_kept, last_kept] = keptRows(text, columns, cursor);
 
-    if (text.size() > Layout::maximum_runs) {
-      ds::Option<std::uint32_t> caret_row;
-      const auto end = walk(text, columns, [&](std::size_t start, std::size_t finish, CellRange cell, bool) {
-        if (!caret_row && cursor >= start && cursor < finish) {
-          caret_row = cell.row;
-        }
-      });
+    // A hidden character is drawn as its mark, whatever style its bytes have.
+    const auto style = [&](std::string_view grapheme, std::size_t start) {
+      if (hiddenCharacter(grapheme)) {
+        return Style::hidden;
+      }
 
-      const auto caret = caret_row.valueOr(end.column >= columns ? end.row + 1 : end.row);
-
-      first_kept = caret > Layout::kept_rows ? caret - Layout::kept_rows : 0;
-      last_kept = caret + Layout::kept_rows;
-    }
+      return start < styles.size() ? styles[start] : Style::plain;
+    };
 
     const auto end = walk(text, columns, [&](std::size_t start, std::size_t finish, CellRange cell, bool newline) {
       const bool kept = cell.row >= first_kept && cell.row <= last_kept;
@@ -237,7 +289,7 @@ namespace telar::gui::features::prompt {
                 .columns = cell.columns,
                 .start = start,
                 .end = finish,
-                .style = hiddenCharacter(text.substr(start, finish - start)) ? Style::hidden : (start < styles.size() ? styles[start] : Style::plain),
+                .style = style(text.substr(start, finish - start), start),
                 .group = start < groups.size() ? groups[start] : std::uint8_t{0},
             }
         );

@@ -130,7 +130,7 @@ namespace telar::gui::features::prompt {
     group_ = Group::none;
   }
 
-  std::size_t Text::next(std::size_t offset) const noexcept {
+  std::size_t Text::next(std::size_t offset) const noexcept { // NOLINT(bugprone-exception-escape): substr is given offsets within the text, which cannot throw
     if (offset >= bytes_.size()) {
       return bytes_.size();
     }
@@ -141,7 +141,7 @@ namespace telar::gui::features::prompt {
     return offset + std::max<std::size_t>(graphemes.position(), 1);
   }
 
-  std::size_t Text::previous(std::size_t offset) const noexcept {
+  std::size_t Text::previous(std::size_t offset) const noexcept { // NOLINT(bugprone-exception-escape): substr is given offsets within the text, which cannot throw
     // Graphemes are read from a code point a bounded way back, which holds any cluster a line
     // shows, or from the line's start.
     constexpr std::size_t lookback = 256;
@@ -246,16 +246,16 @@ namespace telar::gui::features::prompt {
     // the step began from.
     auto& step = undo_.backMut();
     const auto from = std::min(step.start, start);
-    const auto to = std::max(step.end, end);
+    const auto until = std::max(step.end, end);
     ds::String<Memory> removed{memory};
 
-    removed.reserve((step.start - from) + step.removed.size() + (to - step.end));
+    removed.reserve((step.start - from) + step.removed.size() + (until - step.end));
     removed.append(view.substr(from, step.start - from));
     removed.append(step.removed);
-    removed.append(view.substr(step.end, to - step.end));
+    removed.append(view.substr(step.end, until - step.end));
     step.removed = std::move(removed);
     step.start = from;
-    step.end = to - (end - start) + inserted;
+    step.end = until - (end - start) + inserted;
   }
 
   bool Text::travel(bool back) {
@@ -266,7 +266,7 @@ namespace telar::gui::features::prompt {
       return false;
     }
 
-    auto step = source.remove(source.size() - 1);
+    const auto step = source.remove(source.size() - 1);
     Snapshot inverse{.start = step.start, .end = step.start + step.removed.size(), .removed = ds::String<Memory>{bytes_.memory(), bytes_.view().substr(step.start, step.end - step.start)}, .cursor = cursor_};
 
     bytes_.replace(step.start, step.end - step.start, step.removed);

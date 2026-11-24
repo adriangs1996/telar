@@ -6,6 +6,7 @@ module telar.runtime.history.store;
 import std;
 import telar.sys.posix;
 import telar.native.sqlite;
+import telar.platform.primitives;
 import telar.tbc;
 import telar.base.diagnostics;
 import telar.base.history;
@@ -241,7 +242,7 @@ namespace telar::runtime {
 
     // telar_fold(text): the text with historyFold's case fold, which a short query matches with
     // as the index's trigrams fold a longer one. Its scratch is the store's memory.
-    void foldText(sqlite3_context* context, int count, sqlite3_value** values) {
+    void foldText(sqlite3_context* context, int count, sqlite3_value** values) { // NOLINT(misc-const-correctness): SQLite's function signature
       constexpr std::size_t small_text = 1024;
 
       if (count != 1 || sqlite3_value_type(values[0]) == SQLITE_NULL) {
@@ -249,7 +250,7 @@ namespace telar::runtime {
         return;
       }
 
-      const auto* bytes = reinterpret_cast<const char*>(sqlite3_value_text(values[0]));
+      const auto* bytes = reinterpret_cast<const char*>(sqlite3_value_text(values[0])); // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast): SQLite's text is unsigned char
       const std::string_view text{bytes == nullptr ? "" : bytes, static_cast<std::size_t>(sqlite3_value_bytes(values[0]))};
 
       try {
@@ -299,7 +300,7 @@ namespace telar::runtime {
 
         kept.clear();
         marks.feed(byteView(content), [&](std::span<const std::uint8_t> run) {
-          kept.append({reinterpret_cast<const char*>(run.data()), run.size()});
+          kept.append({reinterpret_cast<const char*>(run.data()), run.size()}); // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast): the output's bytes as text
         });
 
         update.reset();
@@ -762,7 +763,7 @@ END;
         indexed_(prepareHistory(database_)) {
     stripOutputMarks(database_, memory_);
     keyDirectories(database_, memory_);
-    checkSqlite(sqlite3_create_function_v2(database_.handle(), "telar_fold", 1, SQLITE_UTF8 | SQLITE_DETERMINISTIC | SQLITE_INNOCUOUS, &memory_, foldText, nullptr, nullptr, nullptr));
+    checkSqlite(sqlite3_create_function_v2(database_.handle(), "telar_fold", 1, combineFlags(SQLITE_UTF8, SQLITE_DETERMINISTIC, SQLITE_INNOCUOUS), &memory_, foldText, nullptr, nullptr, nullptr));
   }
 
   void HistoryStore::reportAgentCommand(const ReportAgentCommand& request, const RequestContext& context, EncodedReply<ConcurrentMemory>& reply) {

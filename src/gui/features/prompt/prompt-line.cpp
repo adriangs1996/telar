@@ -15,8 +15,8 @@ namespace telar::gui::features::prompt {
     tbc::val_a<ds::Option<CompletionContext>> menuContext(tbc::mut_a<Memory> memory, const Editor& editor, const Menu& menu) {
       const auto& text = editor.text();
       auto context = completionContext(memory, text.view(), text.cursor(), shell::Syntax{.dialect = menu.dialect});
-      if (!context || context->replace_begin != menu.begin) {
-        return ds::none;
+      if (context && context->replace_begin != menu.begin) {
+        context.reset();
       }
 
       return context;
@@ -353,7 +353,7 @@ namespace telar::gui::features::prompt {
       return Outcome::edited;
     case Request::submit:
       // An answer is the running program's to read, not the shell's to continue.
-      return submit(surface, !(surface == Surface::running && answering_) && incomplete.incomplete(editor_.text().view()));
+      return submit(surface, (surface != Surface::running || !answering_) && incomplete.incomplete(editor_.text().view()));
     case Request::history_previous:
       return travel(-1, history);
     case Request::history_next:

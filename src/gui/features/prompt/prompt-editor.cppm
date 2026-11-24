@@ -281,6 +281,7 @@ namespace telar::gui::features::prompt {
     void undoChanges();
 
     Request visualCommand(char32_t character);
+    Request visualPut(std::size_t start, std::size_t end, bool lines);
 
     // ---- dot repeat ------------------------------------------------------------------------
 

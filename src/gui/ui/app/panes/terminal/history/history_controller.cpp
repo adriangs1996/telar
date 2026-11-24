@@ -24,6 +24,21 @@ namespace telar::gui::qt {
 
   namespace {
 
+    // The query without the ! that leads it and the blanks after, which ask for failed commands.
+    QString withoutFailedMark(const QString& query) {
+      if (!query.startsWith(QLatin1Char('!'))) {
+        return query;
+      }
+
+      qsizetype start = 1;
+
+      while (start < query.size() && query[start] == QLatin1Char(' ')) {
+        ++start;
+      }
+
+      return query.mid(start);
+    }
+
     QString scopeName(HistoryScope scope) {
       switch (scope) {
       case HistoryScope::cwd:
@@ -489,14 +504,8 @@ namespace telar::gui::qt {
       if (filters.contains(QStringLiteral("failedOnly"))) {
         next.failed_only = filters.value(QStringLiteral("failedOnly")).toBool();
         // The chip turns off what a leading ! turned on too: the ! leaves the search.
-        if (!next.failed_only && query.startsWith(QLatin1Char('!'))) {
-          qsizetype start = 1;
-
-          while (start < query.size() && query[start] == QLatin1Char(' ')) {
-            ++start;
-          }
-
-          query = query.mid(start);
+        if (!next.failed_only) {
+          query = withoutFailedMark(query);
         }
       }
 

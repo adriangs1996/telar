@@ -34,7 +34,7 @@ namespace telar::gui::platform {
     const auto* const identifier = static_cast<CFStringRef>(TISGetInputSourceProperty(source.get(), kTISPropertyInputSourceID));
 
     // ABC is U.S. under the name macOS gives it outside the U.S., with the same Option layer.
-    return identifier != nullptr && (CFEqual(identifier, CFSTR("com.apple.keylayout.US")) || CFEqual(identifier, CFSTR("com.apple.keylayout.ABC")) || CFEqual(identifier, CFSTR("com.apple.keylayout.USInternational")));
+    return identifier != nullptr && (CFEqual(identifier, CFSTR("com.apple.keylayout.US")) != 0U || CFEqual(identifier, CFSTR("com.apple.keylayout.ABC")) != 0U || CFEqual(identifier, CFSTR("com.apple.keylayout.USInternational")) != 0U);
   }
 
 }

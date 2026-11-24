@@ -135,7 +135,7 @@ namespace telar::gui::application::prompt {
     // The text is copied first: sending it reaches the line again, for a secret prompt's dots.
     void deliver(Session& session, std::uint64_t pane_id, Outcome outcome) {
       const auto* pane = findPane(session.panes, pane_id);
-      auto* line = features::prompt::find(session.prompt_lines, pane_id);
+      const auto* line = features::prompt::find(session.prompt_lines, pane_id);
       if (pane == nullptr || line == nullptr || !pane->attached || pane->exited) {
         return;
       }

@@ -999,7 +999,7 @@ namespace telar::gui::features::nvim {
     return editor->pane_id;
   }
 
-  ds::Option<std::size_t> findInLine(std::string_view line, std::string_view query, std::size_t from) noexcept {
+  ds::Option<std::size_t> findInLine(std::string_view line, std::string_view query, std::size_t from) noexcept { // NOLINT(bugprone-exception-escape): substr is given an offset within the line, checked first
     if (query.empty() || from > line.size() || query.size() > line.size() - from) {
       return ds::none;
     }
