@@ -265,6 +265,30 @@ FocusScope {
         settleFocus();
     }
 
+    // The rows a key moves the selection by while a filter is typed: the arrows, and Control
+    // with n or p, whichever modifier the system reports Control as.
+    function stepOf(event) {
+        const control = (event.modifiers & (Qt.ControlModifier | Qt.MetaModifier)) !== 0;
+
+        if (event.key === Qt.Key_Down || (control && event.key === Qt.Key_N))
+            return 1;
+        if (event.key === Qt.Key_Up || (control && event.key === Qt.Key_P))
+            return -1;
+        return 0;
+    }
+
+    // The directory of the root's path under a place of the head, counted in cells from where
+    // the path is drawn: the path as far as the name there; none past its end.
+    function crumbAt(path, shown, cell) {
+        const index = path.length - (shown.length - cell);
+        if (cell < 0 || cell >= shown.length || index < 0)
+            return "";
+
+        const slash = path.charAt(index) === "/" ? index : path.indexOf("/", index);
+
+        return slash < 0 ? path : slash === 0 ? "/" : path.slice(0, slash);
+    }
+
     function toneColor(tone) {
         return tone === "added" ? colors.green : tone === "removed" ? colors.red : tone === "hunk" ? colors.blue : colors.subtext0;
     }
@@ -280,6 +304,31 @@ FocusScope {
         settleFocus();
     }
 
+    // Where the caret stands in the name that starts being typed: on the name up to its
+    // extension, on all of it, or before or after it.
+    function placeCaret() {
+        const name = nameField.text;
+        const dot = name.lastIndexOf(".");
+
+        if (line.caret === "all") {
+            nameField.selectAll();
+        } else if (line.caret === "start" || line.caret === "end") {
+            nameField.deselect();
+            nameField.cursorPosition = line.caret === "start" ? 0 : name.length;
+        } else {
+            nameField.select(0, dot > 0 ? dot : name.length);
+        }
+    }
+
+    // What ends the typing of a name: the name is what was typed, as Enter leaves it; a filter
+    // or a command line is left as Escape leaves it.
+    function endTyping() {
+        if (mode === "insert")
+            controller.submit(nameField.text);
+        else
+            controller.cancel();
+    }
+
     function settleFocus() {
         if (!visible || !active)
             return;
@@ -289,7 +338,7 @@ FocusScope {
         } else if (mode === "insert") {
             nameField.text = line.prefill ?? "";
             nameField.forceActiveFocus();
-            nameField.selectAll();
+            placeCaret();
         } else {
             keys.forceActiveFocus();
         }
@@ -304,12 +353,15 @@ FocusScope {
             commandField.text = line.completion ?? "";
     }
 
-    // What is behind the explorer takes no pointer while it shows.
+    // What is behind the explorer takes no pointer while it shows. A press where nothing else
+    // takes it ends a name that is being typed, as one on a row does.
     MouseArea {
         anchors.fill: parent
         acceptedButtons: Qt.AllButtons
         onPressed: mouse => {
             mouse.accepted = true;
+            if (root.mode === "insert")
+                root.endTyping();
             root.claim();
         }
         onWheel: wheel => wheel.accepted = true
@@ -735,6 +787,7 @@ FocusScope {
                         clip: true
 
                         CellText {
+                            id: crumbsLead
                             width: implicitWidth
                             height: parent.height
                             text: root.tail(pane.modelData.lead ?? "", crumbs.width - (pane.modelData.last ?? "").length * (root.smallGrid.cellWidth ?? 8), root.smallGrid)
@@ -749,6 +802,27 @@ FocusScope {
                             grid: root.smallGrid
                             color: pane.current ? root.colors.text : root.colors.subtext0
                             bold: true
+                        }
+                    }
+
+                    // A click on a directory of the path roots the window there.
+                    ActionPointer {
+                        id: crumbsPointer
+                        objectName: "explorerCrumbs"
+                        property real pressedX: 0
+
+                        x: crumbs.x
+                        width: Math.min(crumbs.width, (crumbsLead.text.length + (pane.modelData.last ?? "").length) * (root.smallGrid.cellWidth ?? 8))
+                        height: parent.height
+                        identity: "crumbs:" + pane.index
+                        onCaptureStarted: pressedX = mouseX
+                        onActivated: {
+                            const shown = crumbsLead.text + (pane.modelData.last ?? "");
+                            const directory = root.crumbAt(pane.modelData.rootPath ?? "", shown, Math.floor(pressedX / Math.max(1, root.smallGrid.cellWidth ?? 8)));
+
+                            if (directory.length > 0)
+                                root.controller.climb(pane.index, directory);
+                            root.claim();
                         }
                     }
                 }
@@ -1000,7 +1074,7 @@ FocusScope {
                                         visible: !below.visible
                                         text: row.record.staged ?? ""
                                         grid: root.smallGrid
-                                        color: root.colors.green
+                                        color: row.record.staged === "?" ? root.colors.blue : root.colors.green
                                         bold: true
                                     }
 
@@ -1011,7 +1085,7 @@ FocusScope {
                                         visible: !below.visible
                                         text: row.record.unstaged ?? ""
                                         grid: root.smallGrid
-                                        color: row.record.unstaged === "U" ? root.colors.blue : row.record.unstaged === "!" ? root.colors.red : root.colors.yellow
+                                        color: row.record.unstaged === "?" ? root.colors.blue : row.record.unstaged === "!" ? root.colors.red : root.colors.yellow
                                         bold: true
                                     }
                                 }
@@ -1139,7 +1213,9 @@ FocusScope {
                             const extend = (mouse.modifiers & Qt.ShiftModifier) !== 0;
                             const pick = (mouse.modifiers & (Qt.ControlModifier | Qt.MetaModifier)) !== 0;
 
-                            if (root.typing || root.mode === "menu")
+                            if (root.typing)
+                                root.endTyping();
+                            else if (root.mode === "menu")
                                 root.controller.cancel();
                             if (mouse.button === Qt.RightButton) {
                                 const place = mapToItem(root, mouse.x, mouse.y);
@@ -1208,6 +1284,8 @@ FocusScope {
                             pressedRow = -1;
                         }
                         onDoubleClicked: mouse => {
+                            // It is no second click on the row: Enter is what it asks for.
+                            waiting = false;
                             if (mouse.button === Qt.LeftButton)
                                 root.controller.activate(pane.index, rowOf(mouse));
                         }
@@ -1403,15 +1481,16 @@ FocusScope {
                     ChromeIcon {
                         id: previewIcon
                         y: Math.round((parent.height - height) / 2)
-                        width: Math.round((root.grid.cellHeight ?? 16) * 1.05)
-                        height: width
+                        width: (root.preview.icon ?? "").length > 0 ? Math.round((root.grid.cellHeight ?? 16) * 1.05) : 0
+                        height: Math.round((root.grid.cellHeight ?? 16) * 1.05)
+                        visible: width > 0
                         glyph: root.preview.icon ?? ""
                         pixelSize: width
                         color: root.colors[root.preview.iconTone ?? "subtext0"] ?? root.colors.subtext0
                     }
 
                     CellText {
-                        x: previewIcon.width + 6 * root.ratio
+                        x: previewIcon.visible ? previewIcon.width + 6 * root.ratio : 0
                         width: parent.width - x
                         height: parent.height
                         text: (root.preview.name ?? "") + (root.preview.directory ? "/" : "")
@@ -1706,6 +1785,30 @@ FocusScope {
                     }
                 }
 
+                // What is worth knowing of a row that is a pane, or no file yet: on two lines.
+                Column {
+                    id: previewNote
+                    readonly property var lines: root.folded(root.preview.note ?? "", width, root.tinyGrid)
+
+                    width: parent.width
+                    visible: (root.preview.note ?? "").length > 0
+
+                    Repeater {
+                        model: previewNote.lines
+
+                        delegate: CellText {
+                            required property string modelData
+
+                            width: previewNote.width
+                            height: Math.round((root.tinyGrid.cellHeight ?? 14) * 1.25)
+                            visible: modelData.length > 0
+                            text: modelData
+                            grid: root.tinyGrid
+                            color: root.colors.overlay1
+                        }
+                    }
+                }
+
                 ChromeText {
                     width: parent.width
                     height: root.typography.smallRow
@@ -1795,6 +1898,9 @@ FocusScope {
                     event.accepted = true;
                 } else if (event.key === Qt.Key_Escape) {
                     root.controller.cancel();
+                    event.accepted = true;
+                } else if (root.mode === "search" && root.stepOf(event) !== 0) {
+                    root.controller.step(root.stepOf(event));
                     event.accepted = true;
                 } else if (event.key === Qt.Key_Tab && root.mode === "command") {
                     // The path a command goes to is completed; what it completes arrives in `line`.
@@ -1938,12 +2044,10 @@ FocusScope {
         formControl: false
         maximumBytes: 255
         Accessible.name: "Name"
+        // Enter and Escape both end the name: it is the change, unless it is empty.
         Keys.onPressed: event => {
-            if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter) {
+            if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter || event.key === Qt.Key_Escape) {
                 root.controller.submit(text);
-                event.accepted = true;
-            } else if (event.key === Qt.Key_Escape) {
-                root.controller.cancel();
                 event.accepted = true;
             }
         }

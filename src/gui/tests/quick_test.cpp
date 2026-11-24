@@ -74,6 +74,7 @@ static_assert(true);
 #include <QSignalSpy>
 #include <QSizeF>
 #include <QStandardPaths>
+#include <QStyleHints>
 #include <QTemporaryDir>
 #include <QThreadPool>
 #include <QTimer>
@@ -1863,13 +1864,28 @@ return {api_version = 2, client = {
       press(QStringLiteral("gg"));
       QCOMPARE(selected(), QStringLiteral("assets"));
 
-      // The selection goes to the changed document, whose preview shows its diff.
-      press(QStringLiteral("]c"));
+      // The preview of a directory the window lists whole says what weighs the most in it, and
+      // how many of its entries the window lists.
+      press(QStringLiteral("3j"));
       QCOMPARE(selected(), QStringLiteral("docs"));
-      // The preview of a directory the window lists whole says what weighs the most in it.
       QTRY_VERIFY_WITH_TIMEOUT(!explorer->preview().value(QStringLiteral("heavy")).toList().isEmpty(), runtime_wait_ms);
-      QVERIFY(explorer->preview().value(QStringLiteral("heavy")).toList().size() <= 5);
+      QVERIFY(explorer->preview().value(QStringLiteral("heavy")).toList().size() <= 7);
+      QVERIFY(std::ranges::any_of(explorer->preview().value(QStringLiteral("facts")).toList(), [](const QVariant& fact) {
+        return fact.toMap().value(QStringLiteral("label")) == QStringLiteral("Entries") && fact.toMap().value(QStringLiteral("value")).toString().endsWith(QStringLiteral("visible"));
+      }));
       shoot(QStringLiteral("explorer-heaviest"));
+
+      // `]c` goes to the next path git says something of, in the tree's order, and unfolds the
+      // directory that hides it: a file git does not track, marked in both of its columns.
+      press(QStringLiteral("]c"));
+      QTRY_COMPARE_WITH_TIMEOUT(selected(), QStringLiteral("notes.lua"), runtime_wait_ms);
+      QCOMPARE(named(QStringLiteral("notes.lua")).value(QStringLiteral("staged")).toString(), QStringLiteral("?"));
+      QCOMPARE(named(QStringLiteral("notes.lua")).value(QStringLiteral("unstaged")).toString(), QStringLiteral("?"));
+      QVERIFY(named(QStringLiteral("examples")).value(QStringLiteral("expanded")).toBool());
+      // `zc` folds the directory it is in, and selects it: the tree is as it was.
+      press(QStringLiteral("zc"));
+      QCOMPARE(selected(), QStringLiteral("examples"));
+      QVERIFY(!named(QStringLiteral("examples")).value(QStringLiteral("expanded")).toBool() && named(QStringLiteral("notes.lua")).isEmpty());
       for (int step = 0; step < 40 && selected() != QStringLiteral("usage.md"); ++step) {
         press(QStringLiteral("j"));
       }
@@ -1981,8 +1997,11 @@ return {api_version = 2, client = {
       QTRY_COMPARE_WITH_TIMEOUT(explorer->line().value(QStringLiteral("edits")).toInt(), 0, runtime_wait_ms);
       QTRY_VERIFY_WITH_TIMEOUT(!named(QStringLiteral("guide.md")).isEmpty() && named(QStringLiteral("usage.md")).isEmpty(), runtime_wait_ms);
 
-      // `u` with nothing pending takes the plan back.
+      // `u` with nothing pending takes the plan back, once a yes says so.
       press(QStringLiteral("u"));
+      QCOMPARE(explorer->line().value(QStringLiteral("mode")).toString(), QStringLiteral("question"));
+      QCOMPARE(explorer->line().value(QStringLiteral("tone")).toString(), QStringLiteral("ask"));
+      press(QStringLiteral("y"));
       QTRY_VERIFY_WITH_TIMEOUT(QFile::exists(root + QStringLiteral("/docs/usage.md")) && QFile::exists(root + QStringLiteral("/docs/sidebar.md")), runtime_wait_ms);
       QVERIFY(!QFile::exists(root + QStringLiteral("/docs/guide.md")));
       QTRY_VERIFY_WITH_TIMEOUT(!named(QStringLiteral("usage.md")).isEmpty(), runtime_wait_ms);
@@ -2029,6 +2048,67 @@ return {api_version = 2, client = {
 
         return rows_area->mapToScene({rows_area->width() / 3, (rows_inset * overlay->property("ratio").toReal()) + ((shown_row + half_row) * overlay->property("rowHeight").toReal())}).toPoint();
       };
+
+      // A click on the row that is selected folds its directory, and one more unfolds it; far
+      // enough apart not to be the two halves of a double click.
+      const auto apart_ms = QGuiApplication::styleHints()->mouseDoubleClickInterval() + 100;
+
+      QCOMPARE(selected(), QStringLiteral("assets"));
+      QVERIFY(named(QStringLiteral("assets")).value(QStringLiteral("expanded")).toBool());
+      QTest::qWait(apart_ms);
+      QTest::mouseClick(window_, Qt::LeftButton, Qt::NoModifier, over(QStringLiteral("assets")));
+      QTRY_VERIFY(!named(QStringLiteral("assets")).value(QStringLiteral("expanded")).toBool() && named(QStringLiteral("logo.svg")).isEmpty());
+      QTest::qWait(apart_ms);
+      QTest::mouseClick(window_, Qt::LeftButton, Qt::NoModifier, over(QStringLiteral("assets")));
+      QTRY_VERIFY_WITH_TIMEOUT(!named(QStringLiteral("logo.svg")).isEmpty(), runtime_wait_ms);
+      QTest::qWait(apart_ms);
+
+      // A click on a directory of the path the head shows roots the window there, and `<C-o>`
+      // comes back from it.
+      {
+        const auto* crumbs = test::visualItems(*window_->contentItem(), QStringLiteral("explorerCrumbs")).value(0);
+
+        QVERIFY(crumbs != nullptr);
+        QTest::mouseClick(window_, Qt::LeftButton, Qt::NoModifier, crumbs->mapToScene({crumbs->width() / 3, crumbs->height() / 2}).toPoint());
+
+        const auto climbed = window().value(QStringLiteral("rootPath")).toString();
+
+        QVERIFY2(climbed != root && root.startsWith(climbed + QLatin1Char('/')), qPrintable(climbed));
+        QVERIFY(explorer->key(Qt::Key_O, QStringLiteral("o"), static_cast<int>(NativeKeyAdapter::control_modifier)));
+        QCOMPARE(window().value(QStringLiteral("rootPath")).toString(), root);
+        QTRY_VERIFY_WITH_TIMEOUT(!named(QStringLiteral("logo.svg")).isEmpty(), runtime_wait_ms);
+        explorer->type(QStringLiteral("gg"));
+        QTRY_COMPARE(listed(QStringLiteral("assets")), 0);
+      }
+
+      // The name of a row starts being typed with the caret where its key puts it, and Escape
+      // ends it as Enter does: what was typed is the change.
+      {
+        auto* name_field = window_->findChild<QQuickItem*>(QStringLiteral("explorerName"));
+
+        QVERIFY(name_field != nullptr);
+        explorer->type(QStringLiteral("G"));
+        QCOMPARE(selected(), QStringLiteral("README.md"));
+        press(QStringLiteral("cw"));
+        QTRY_COMPARE(name_field->property("selectedText").toString(), QStringLiteral("README"));
+        explorer->cancel();
+        press(QStringLiteral("a"));
+        QTRY_COMPARE(name_field->property("cursorPosition").toInt(), 9);
+        QVERIFY(name_field->property("selectedText").toString().isEmpty());
+        explorer->cancel();
+        press(QStringLiteral("i"));
+        QTRY_COMPARE(name_field->property("cursorPosition").toInt(), 0);
+        QVERIFY(name_field->property("activeFocus").toBool());
+        name_field->setProperty("text", QStringLiteral("READ.md"));
+        QTest::keyClick(window_, Qt::Key_Escape);
+        QCOMPARE(explorer->line().value(QStringLiteral("mode")).toString(), QStringLiteral("normal"));
+        QCOMPARE(explorer->line().value(QStringLiteral("edits")).toInt(), 1);
+        QVERIFY(named(QStringLiteral("READ.md")).value(QStringLiteral("renamed")).toBool());
+        press(QStringLiteral("u"));
+        QCOMPARE(explorer->line().value(QStringLiteral("edits")).toInt(), 0);
+        explorer->type(QStringLiteral("gg"));
+        QTRY_COMPARE(listed(QStringLiteral("assets")), 0);
+      }
 
       QTest::mouseClick(window_, Qt::RightButton, Qt::NoModifier, over(QStringLiteral("agents.md")));
       QCOMPARE(explorer->line().value(QStringLiteral("mode")).toString(), QStringLiteral("menu"));
@@ -2134,6 +2214,19 @@ return {api_version = 2, client = {
       shoot(QStringLiteral("explorer-filter"));
       explorer->typed(QStringLiteral("USAGE"));
       QTRY_VERIFY_WITH_TIMEOUT(!named(QStringLiteral("usage.md")).isEmpty() && named(QStringLiteral("base.cppm")).isEmpty(), runtime_wait_ms);
+      // While the filter is typed, the arrows and Control with n and p move among what it found.
+      explorer->typed(QStringLiteral("md"));
+      QTRY_VERIFY_WITH_TIMEOUT(explorer->rows(0)->rowCount() > 2 && !selected().isEmpty(), runtime_wait_ms);
+      {
+        const auto first = selected();
+
+        QTest::keyClick(window_, Qt::Key_Down);
+        QTRY_VERIFY(selected() != first);
+        QTest::keyClick(window_, Qt::Key_P, NativeKeyAdapter::control_modifier);
+        QTRY_COMPARE(selected(), first);
+        QCOMPARE(explorer->line().value(QStringLiteral("mode")).toString(), QStringLiteral("search"));
+      }
+
       explorer->cancel();
       QTRY_VERIFY_WITH_TIMEOUT(!named(QStringLiteral("agents.md")).isEmpty(), runtime_wait_ms);
 

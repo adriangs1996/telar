@@ -106,8 +106,13 @@ namespace telar::gui::qt {
     Q_INVOKABLE void cancel();
     // `<Tab>` on the command line `text`: what it completes arrives in `line`.
     Q_INVOKABLE void complete(const QString& text);
-    // The pointer on row `row` of a window, counted from the first row of its listing.
+    // While a filter is typed, the selection moves `rows` rows among what it found.
+    Q_INVOKABLE void step(int rows);
+    // The pointer on row `row` of a window, counted from the first row of its listing: a click
+    // alone on the row that was selected folds or unfolds it, or its diff.
     Q_INVOKABLE void select(int window, int row, bool extend, bool toggle);
+    // The pointer chose a directory of the path a window's head shows.
+    Q_INVOKABLE void climb(int window, const QString& directory);
     Q_INVOKABLE void activate(int window, int row);
     Q_INVOKABLE void toggleRow(int window, int row);
     // The pointer asked for the menu of a row, at a place of the explorer; a row below zero is

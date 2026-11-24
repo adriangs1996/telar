@@ -43,6 +43,8 @@ namespace telar::gui::qt {
     // How often the transfers are looked at again with nothing arriving.
     constexpr int transfers_tick_ms = 250;
     constexpr ds::Array<const char*, 3> tone_names{"info", "error", "ask"};
+    // Where the caret stands in a name that starts being typed, in the order of explorer::Caret.
+    constexpr ds::Array<const char*, 4> caret_names{"stem", "all", "start", "end"};
     constexpr ds::Array<const char*, 3> follow_scopes{"pane", "workspace", "machine"};
     constexpr ds::Array<const char*, 4> actor_tones{"you", "claude", "codex", "agent"};
     // How an editor holds a row's file, in the order of explorer::Hold.
@@ -68,7 +70,7 @@ namespace telar::gui::qt {
       return result;
     }
 
-    // The letter git's short status gives a state, as the pickers write it.
+    // The letter git's short status gives a state; a file it does not track has `?` in both columns.
     QString letter(FileState state) {
       switch (state) {
       case FileState::modified:
@@ -80,7 +82,7 @@ namespace telar::gui::qt {
       case FileState::renamed:
         return QStringLiteral("R");
       case FileState::untracked:
-        return QStringLiteral("U");
+        return QStringLiteral("?");
       case FileState::conflicted:
         return QStringLiteral("!");
       case FileState::unchanged:
@@ -350,6 +352,7 @@ namespace telar::gui::qt {
           {QStringLiteral("following"), fixedText(status.following)},
           {QStringLiteral("follows"), status.follows},
           {QStringLiteral("root"), fixedText(status.root)},
+          {QStringLiteral("rootPath"), toQString(window.root.view())},
           {QStringLiteral("pending"), status.pending},
           {QStringLiteral("flags"), fixedText(status.flags)},
           {QStringLiteral("filter"), fixedText(status.filter)},
@@ -411,6 +414,7 @@ namespace telar::gui::qt {
         {QStringLiteral("said"), fixedText(view_.message)},
         {QStringLiteral("tone"), QString::fromLatin1(tone_names[static_cast<std::size_t>(view_.tone)])},
         {QStringLiteral("prefill"), toQString(view_.mode == Mode::insert ? view_.draft.view() : view_.prefill.view())},
+        {QStringLiteral("caret"), QString::fromLatin1(caret_names[static_cast<std::size_t>(view_.caret)])},
         {QStringLiteral("overwrite"), view_.overwrite},
         {QStringLiteral("edits"), static_cast<int>(view_.edits.size())},
         {QStringLiteral("revision"), static_cast<qulonglong>(view_.revision)},
@@ -526,9 +530,14 @@ namespace telar::gui::qt {
         {QStringLiteral("lines"), lines},
         {QStringLiteral("diff"), look.diff},
         {QStringLiteral("waiting"), look.waiting},
+        {QStringLiteral("note"), toQString(look.note)},
     };
 
-    putIcon(result, look.directory ? directoryIcon() : fileIcon(look.name.view()));
+    // A pane is no file: its preview has no icon.
+    if (look.kind != RowKind::pane) {
+      putIcon(result, look.directory ? directoryIcon() : fileIcon(look.name.view()));
+    }
+
     return result;
   }
 
@@ -658,7 +667,7 @@ namespace telar::gui::qt {
         {QStringLiteral("lead"), fixedText(look.lead)},
         {QStringLiteral("name"), fixedText(look.name)},
         {QStringLiteral("tone"), QString::fromLatin1(diff_tones[static_cast<std::size_t>(look.tone)])},
-        {QStringLiteral("staged"), letter(look.staged)},
+        {QStringLiteral("staged"), letter(look.unstaged == FileState::untracked ? look.unstaged : look.staged)},
         {QStringLiteral("unstaged"), letter(look.unstaged)},
         {QStringLiteral("below"), look.below},
         {QStringLiteral("linesAdded"), look.lines_added},
@@ -935,7 +944,33 @@ namespace telar::gui::qt {
     const auto around = explorer::around(scene_);
     const auto machine = machineOf(static_cast<std::size_t>(window));
 
-    explorer::select(view_, cacheOf(machine), explorer::contextOf(around, machine), {.window = static_cast<std::size_t>(window), .row = static_cast<std::size_t>(row), .extend = extend, .toggle = toggle});
+    explorer::click(view_, cacheOf(machine), explorer::contextOf(around, machine), {.window = static_cast<std::size_t>(window), .row = static_cast<std::size_t>(row), .extend = extend, .toggle = toggle});
+    finish(Effect::none);
+  }
+
+  void ExplorerController::climb(int window, const QString& directory) {
+    if (window < 0 || static_cast<std::size_t>(window) >= view_.windows.size()) {
+      return;
+    }
+
+    const auto bytes = directory.toUtf8();
+
+    observe();
+
+    const auto around = explorer::around(scene_);
+    const auto machine = machineOf(static_cast<std::size_t>(window));
+
+    explorer::climb(view_, cacheOf(machine), explorer::contextOf(around, machine), {.window = static_cast<std::size_t>(window), .directory = {bytes.constData(), static_cast<std::size_t>(bytes.size())}});
+    finish(Effect::none);
+  }
+
+  void ExplorerController::step(int rows) {
+    observe();
+
+    const auto around = explorer::around(scene_);
+    const auto machine = machineOf(view_.current);
+
+    explorer::step(view_, cacheOf(machine), explorer::contextOf(around, machine), rows);
     finish(Effect::none);
   }
 

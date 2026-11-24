@@ -86,6 +86,8 @@ export namespace telar::gui::application::explorer {
   using features::explorer::bringIn;
   using features::explorer::cancel;
   using features::explorer::chooseMenu;
+  using features::explorer::click;
+  using features::explorer::climb;
   using features::explorer::close;
   using features::explorer::complete;
   using features::explorer::configure;
@@ -115,6 +117,7 @@ export namespace telar::gui::application::explorer {
   using features::explorer::scroll;
   using features::explorer::select;
   using features::explorer::status;
+  using features::explorer::step;
   using features::explorer::submit;
   using features::explorer::toggle;
   using features::explorer::toward;
