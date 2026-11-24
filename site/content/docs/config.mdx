@@ -425,7 +425,8 @@ An action is a string with a built-in action name, a value from a
 | `resize-sidebar-left`, `resize-sidebar-right` | Narrow or widen the sidebar. |
 | `toggle-workspace-list` | Records a legacy preference that the window does not use. |
 | `copy-mode` | Enter copy mode in the focused pane. |
-| `goto-picker` | Open the goto picker. |
+| `goto-picker` | Open the palette on contexts, tabs and agents, with `@` typed. |
+| `palette` | Open the palette on everything: contexts, tabs, agents, actions and machines. |
 | `history-palette` | Search command history. |
 | `path-picker` | Insert a path from the pane's directory. |
 | `suggest-command` | Ask the runtime's [engine](#runtimeengine) for a command. |
@@ -437,7 +438,7 @@ An action is a string with a built-in action name, a value from a
 names, with dashes turned into underscores: `toggle_pane_fullscreen`,
 `toggle_sidebar`, `toggle_workspace_list`, `leave_worktree`,
 `new_workspace`, `rename_workspace`, `close_pane`, `new_tab`, `rename_tab`,
-`close_tab`, `detach`, `copy_mode`, `history_palette`, `path_picker`,
+`close_tab`, `detach`, `copy_mode`, `palette`, `history_palette`, `path_picker`,
 `suggest_command`, `close_panel`, `refresh_panel`, `next_machine`,
 `previous_machine`, `machine_picker` and `add_machine`. For example,
 `telar.action.toggle_sidebar()` is the same as `"toggle-sidebar"`. These

@@ -1179,8 +1179,11 @@ shortcuts; unbound Super chords are not sent to the shell. Native text-editing
 and clipboard shortcuts retain priority. For example, open the palette with ⌘P:
 
 ```lua
-telar.bind_global({ "cmd+p" }, "goto-picker"),
+telar.bind_global({ "cmd+p" }, "palette"),
 ```
+
+`palette` searches everything; `goto-picker` opens the same palette with `@`
+typed, which narrows it to contexts, tabs and agents.
 
 Some combinations are rejected by the key parser. In particular,
 `ctrl+shift+b` produces `UnrepresentableKey`; use a supported alternative such

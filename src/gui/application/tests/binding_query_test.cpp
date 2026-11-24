@@ -213,11 +213,29 @@ namespace {
     check(missing, "queries outside configured bindings must fail instead of exposing merged builtin defaults");
   }
 
+  void paletteIsNamedAction() {
+    telar::testing::TestMemory adapter;
+    telar::ConcurrentMemory& memory = adapter;
+    const application::ConfigurationSourceText source{
+        .source = R"(
+        return {api_version=2,client={keybindings={telar.bind_global({'cmd+p'},'palette'),
+          telar.bind({'a'},telar.action.palette())}}}
+      )",
+        .directory = {},
+        .profile = {},
+    };
+
+    const application::ConfigurationGeneration generation{memory, source};
+
+    check(query(generation, 0).contains(R"("type":"palette","value":null)") && query(generation, 1).contains(R"("type":"palette","value":null)"), "the whole palette must be bindable by its name and by its action function");
+  }
+
   const telar::testing::Case case_configured_order_and_callback_references{"binding_query.configured_order_and_callback_references", configuredOrderAndCallbackReferences};
   const telar::testing::Case case_retained_command_and_plugin_descriptions{"binding_query.retained_command_and_plugin_descriptions", retainedCommandAndPluginDescriptions};
   const telar::testing::Case case_notification_values_and_definition_indices{"binding_query.notification_values_and_definition_indices", notificationValuesAndDefinitionIndices};
   const telar::testing::Case case_bounded_replies_and_skipped_actions{"binding_query.bounded_replies_and_skipped_actions", boundedRepliesAndSkippedActions};
   const telar::testing::Case case_byte_arguments_remain_queryable{"binding_query.byte_arguments_remain_queryable", byteArgumentsRemainQueryable};
   const telar::testing::Case case_command_labels_follow_posix_paths{"binding_query.command_labels_follow_posix_paths", commandLabelsFollowPosixPaths};
+  const telar::testing::Case case_palette_is_named_action{"binding_query.palette_is_named_action", paletteIsNamedAction};
 
 }

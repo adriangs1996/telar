@@ -360,7 +360,7 @@ namespace telar::gui::features::configuration {
     }
 
     using VoidAction = std::pair<BindingActionKind, std::string_view>;
-    constexpr auto voids = ds::Array<VoidAction, 38>{
+    constexpr auto voids = ds::Array<VoidAction, 39>{
         VoidAction{BindingActionKind::toggle_pane_fullscreen, "toggle_pane_fullscreen"},
         VoidAction{BindingActionKind::toggle_sidebar, "toggle_sidebar"},
         VoidAction{BindingActionKind::toggle_workspace_list, "toggle_workspace_list"},
@@ -379,6 +379,7 @@ namespace telar::gui::features::configuration {
         VoidAction{BindingActionKind::close_tab, "close_tab"},
         VoidAction{BindingActionKind::detach, "detach"},
         VoidAction{BindingActionKind::goto_picker, "goto_picker"},
+        VoidAction{BindingActionKind::palette, "palette"},
         VoidAction{BindingActionKind::history_palette, "history_palette"},
         VoidAction{BindingActionKind::path_picker, "path_picker"},
         VoidAction{BindingActionKind::suggest_command, "suggest_command"},

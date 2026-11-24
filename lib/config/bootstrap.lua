@@ -301,6 +301,7 @@ for _, name in ipairs({
 	"close-tab",
 	"detach",
 	"copy-mode",
+	"palette",
 	"history-palette",
 	"path-picker",
 	"suggest-command",

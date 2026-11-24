@@ -92,7 +92,7 @@ export {
       bool operator==(const BindingAction&) const = default;
     };
 
-    inline constexpr auto builtin_binding_actions = ds::Array<std::pair<std::string_view, BindingActionKind>, 62>{
+    inline constexpr auto builtin_binding_actions = ds::Array<std::pair<std::string_view, BindingActionKind>, 63>{
         {
             {"scroll-pane-up", BindingActionKind::scroll_pane_up},
             {"scroll-pane-down", BindingActionKind::scroll_pane_down},
@@ -135,6 +135,7 @@ export {
             {"detach", BindingActionKind::detach},
             {"copy-mode", BindingActionKind::copy_mode},
             {"goto-picker", BindingActionKind::goto_picker},
+            {"palette", BindingActionKind::palette},
             {"history-palette", BindingActionKind::history_palette},
             {"path-picker", BindingActionKind::path_picker},
             {"suggest-command", BindingActionKind::suggest_command},
