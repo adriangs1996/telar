@@ -334,7 +334,7 @@ Legend: `[ ]` todo, `[x]` done, `[~]` not a bug / dropped (with reason).
   Fix: toggling the chip also removes the leading `!` from the search text; `\!` searches a
   literal `!`.
 
-- [ ] **T31 (H13). Closing does not stop the pending search.**
+- [x] **T31 (H13). Closing does not stop the pending search.**
   `dialogs.cpp:61` calls `retire()`, not `forget()`; the debounce fires `query()` with the
   dialog closed, and `query()` reports to the status bar even with it open.
   Fix: in `Dialogs::show`, when the new dialog is not the history, call `history_.forget()`;

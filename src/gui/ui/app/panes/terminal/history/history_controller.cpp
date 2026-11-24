@@ -420,7 +420,7 @@ namespace telar::gui::qt {
 
       application::history::search(store_.sessionMut(), std::string_view{query.constData(), static_cast<std::size_t>(query.size())}, filters_);
     } catch (const std::exception& error) {
-      emit failed(QString::fromUtf8(error.what()));
+      fail(error);
     }
 
     synchronize();

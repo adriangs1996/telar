@@ -6920,6 +6920,20 @@ return {api_version=2, client={keybindings={
       QTRY_COMPARE_WITH_TIMEOUT(search->property("text").toString(), QStringLiteral("GUI_HISTORY_FIXTURE"), runtime_wait_ms);
     }
 
+    // Closing the history stops the search its debounce still held: none goes out after it.
+    Q_SLOT void historyCloseStopsThePendingSearch() {
+      client_->commands()->execute(window_actions::Action::history);
+      QTRY_VERIFY_WITH_TIMEOUT(!client_->history()->loading(), runtime_wait_ms);
+      client_->history()->search(QStringLiteral("GUI_HISTORY_CLOSED_BEFORE_SENT"));
+      QVERIFY(client_->history()->loading());
+      client_->commands()->execute(window_actions::Action::cancel);
+      QCOMPARE(client_->dialogs()->kind(), telar::gui::qt::ApplicationController::Dialog::none);
+      QVERIFY(!client_->history()->loading());
+      QTest::qWait(200);
+      QVERIFY(!client_->history()->loading());
+      QCOMPARE(client_->status()->error(), QString{});
+    }
+
     Q_SLOT void historyQueryOverflowPublishesTheExistingLimitNotice() {
       client_->commands()->execute(window_actions::Action::history);
       const auto restore = qScopeGuard([this] {
