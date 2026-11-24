@@ -593,6 +593,10 @@ return {api_version = 2, client = {
       environment.insert(QStringLiteral("TELAR_HISTORY"), directory_.filePath(QStringLiteral("history.db")));
       environment.insert(QStringLiteral("HISTFILE"), directory_.filePath(QStringLiteral("shell-history")));
       environment.insert(QStringLiteral("XDG_DATA_HOME"), directory_.filePath(QStringLiteral("data")));
+      // What the runtime sends to the trash goes to the one of its account's home, on macOS: a
+      // home of the test's own, so nothing of a run is left in the trash of whoever runs it.
+      QVERIFY(QDir{}.mkpath(directory_.filePath(QStringLiteral("home"))));
+      environment.insert(QStringLiteral("HOME"), directory_.filePath(QStringLiteral("home")));
       // An editor pane's Neovim reads the layer under telar's configuration directory: never
       // the one of whoever runs the tests.
       environment.insert(QStringLiteral("XDG_CONFIG_HOME"), directory_.filePath(QStringLiteral("config")));
@@ -2003,6 +2007,14 @@ return {api_version = 2, client = {
       press(QStringLiteral("u"));
       QCOMPARE(explorer->line().value(QStringLiteral("edits")).toInt(), 0);
 
+      // The directory that took the row was unfolded to show it there, and lists its entry once
+      // the runtime answers, which moves every row below it. The pointer goes to rows once that
+      // is so, from the top of the window, where each of them is in view.
+      QTRY_VERIFY_WITH_TIMEOUT(!named(QStringLiteral("logo.svg")).isEmpty(), runtime_wait_ms);
+      explorer->type(QStringLiteral("gg"));
+      QTRY_COMPARE(listed(QStringLiteral("assets")), 0);
+      QVERIFY(listed(QStringLiteral("remote.md")) > 0 && listed(QStringLiteral("sidebar.md")) > 0);
+
       // The pointer itself: a right click asks for the menu where it is, a click elsewhere closes
       // it, and a press, a move and a release drag the row under it.
       const auto* overlay = test::visualItems(*window_->contentItem(), QStringLiteral("explorerOverlay")).value(0);
@@ -2023,7 +2035,7 @@ return {api_version = 2, client = {
       QCOMPARE(selected(), QStringLiteral("agents.md"));
       QTest::mouseClick(window_, Qt::LeftButton, Qt::NoModifier, over(QStringLiteral("assets")));
       QCOMPARE(explorer->line().value(QStringLiteral("mode")).toString(), QStringLiteral("normal"));
-      QTest::mousePress(window_, Qt::LeftButton, Qt::NoModifier, over(QStringLiteral("usage.md")));
+      QTest::mousePress(window_, Qt::LeftButton, Qt::NoModifier, over(QStringLiteral("remote.md")));
       QTest::mouseMove(window_, over(QStringLiteral("sidebar.md")));
       QTest::mouseMove(window_, over(QStringLiteral("assets")));
       QTRY_VERIFY(overlay->property("dragging").toBool());
@@ -2033,7 +2045,7 @@ return {api_version = 2, client = {
       QTest::mouseRelease(window_, Qt::LeftButton, Qt::NoModifier, over(QStringLiteral("assets")));
       QVERIFY(!overlay->property("dragging").toBool());
       QCOMPARE(explorer->line().value(QStringLiteral("edits")).toInt(), 1);
-      QVERIFY(QFile::exists(root + QStringLiteral("/docs/usage.md")));
+      QVERIFY(QFile::exists(root + QStringLiteral("/docs/remote.md")));
       press(QStringLiteral("u"));
       QCOMPARE(explorer->line().value(QStringLiteral("edits")).toInt(), 0);
 
@@ -2159,6 +2171,21 @@ return {api_version = 2, client = {
       QTRY_VERIFY(explorer->showing() && !explorer->focused());
       QCOMPARE(focusedPane(), shell);
       QCOMPARE(client_->dialogs()->kind(), Store::Dialog::none);
+
+      // The command line sees it as a pane of the tab, and is told it is of another kind when it
+      // asks for what only a terminal has.
+      {
+        QProcess listed;
+        QProcess read;
+
+        listed.start(runtime_.program(), {QStringLiteral("pane"), QStringLiteral("get"), QString::number(stood), QStringLiteral("--socket"), socket_});
+        QVERIFY(listed.waitForFinished(runtime_wait_ms));
+        QVERIFY2(listed.exitStatus() == QProcess::NormalExit && listed.exitCode() == 0, listed.readAllStandardError().constData());
+        read.start(runtime_.program(), {QStringLiteral("pane"), QStringLiteral("read"), QString::number(stood), QStringLiteral("--socket"), socket_});
+        QVERIFY(read.waitForFinished(runtime_wait_ms));
+        QVERIFY(read.exitStatus() == QProcess::NormalExit && read.exitCode() == 1);
+        QVERIFY(read.readAllStandardError().contains("of another kind"));
+      }
 
       const auto at_rest = selected();
 
