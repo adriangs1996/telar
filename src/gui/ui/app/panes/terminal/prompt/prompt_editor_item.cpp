@@ -751,7 +751,18 @@ namespace telar::gui::qt {
     auto* item = runs_[index];
 
     item->setGrid(grid_);
-    item->setText(QString::fromUtf8(display_.view().substr(run.start, run.end - run.start).data(), static_cast<qsizetype>(run.end - run.start)));
+    const auto bytes = display_.view().substr(run.start, run.end - run.start);
+
+    // A hidden character shows as the mark that names it, never as itself.
+    if (run.style == application::prompt::Style::hidden) {
+      ds::String<Memory> marks{adapter_};
+
+      application::prompt::hiddenMarks(bytes, marks);
+      item->setText(QString::fromUtf8(marks.view().data(), static_cast<qsizetype>(marks.size())));
+    } else {
+      item->setText(QString::fromUtf8(bytes.data(), static_cast<qsizetype>(bytes.size())));
+    }
+
     item->setColor(look.color);
     item->setPosition({run.column * cell.width(), ((static_cast<int>(run.row) - first_row_) * cell.height()) + look.lift});
     item->setOpacity(look.opacity);
@@ -840,6 +851,7 @@ namespace telar::gui::qt {
       return role("subtext0", "muted");
     case application::prompt::Style::error:
     case application::prompt::Style::missing:
+    case application::prompt::Style::hidden:
       return role("red", "failure");
     case application::prompt::Style::ghost: {
       constexpr float ghost_alpha = 0.7F;

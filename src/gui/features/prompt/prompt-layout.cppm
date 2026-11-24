@@ -27,7 +27,16 @@ export namespace telar::gui::features::prompt {
     // An argument naming a file, and a command the shell does not run.
     path,
     missing,
+    // A bidi control or a zero-width character, drawn as the mark that names it: hidden, it
+    // would make the command shown differ from the one that runs.
+    hidden,
   };
+
+  // The cells of a hidden character's mark, ⟨U+202E⟩.
+  inline constexpr std::uint32_t hidden_mark_columns = 8;
+
+  // The marks of the hidden characters of `text`, a hidden run's, appended to `out`.
+  void hiddenMarks(std::string_view text, ds::String<Memory>& out);
 
   struct Run {
     std::uint32_t row = 0;

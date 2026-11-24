@@ -17,6 +17,7 @@ export namespace telar::gui::application::prompt {
   using features::prompt::Choice;
   using features::prompt::classify;
   using features::prompt::CommandPresence;
+  using features::prompt::hiddenMarks;
   using features::prompt::Key;
   using features::prompt::Keymap;
   using features::prompt::KeyPress;

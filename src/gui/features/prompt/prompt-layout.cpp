@@ -120,6 +120,27 @@ namespace telar::gui::features::prompt {
 
   namespace {
 
+    // The bidi controls and zero-width characters a pasted command can hide behind: the zero
+    // width joiners, which emoji sequences need, are left out. The code point, when `grapheme` is
+    // one of them.
+    ds::Option<std::uint32_t> hiddenCharacter(std::string_view grapheme) noexcept {
+      constexpr std::size_t three_bytes = 3;
+      constexpr std::size_t two_bytes = 2;
+
+      std::uint32_t character = 0;
+      if (grapheme.size() == three_bytes && (static_cast<unsigned char>(grapheme[0]) & 0xf0U) == 0xe0U) {
+        character = ((static_cast<unsigned char>(grapheme[0]) & 0x0fU) << 12U) | ((static_cast<unsigned char>(grapheme[1]) & 0x3fU) << 6U) | (static_cast<unsigned char>(grapheme[2]) & 0x3fU);
+      } else if (grapheme.size() == two_bytes && (static_cast<unsigned char>(grapheme[0]) & 0xe0U) == 0xc0U) {
+        character = ((static_cast<unsigned char>(grapheme[0]) & 0x1fU) << 6U) | (static_cast<unsigned char>(grapheme[1]) & 0x3fU);
+      } else {
+        return ds::none;
+      }
+
+      const bool hidden = character == 0x61c || character == 0x200b || character == 0x200e || character == 0x200f || (character >= 0x202a && character <= 0x202e) || (character >= 0x2060 && character <= 0x2064) || (character >= 0x2066 && character <= 0x2069) || character == 0xfeff;
+
+      return hidden ? ds::Option{character} : ds::none;
+    }
+
     // Each grapheme of `text` laid out in rows of `columns` cells: `visit(start, end, cell,
     // newline)`. The row and column after the last.
     template <typename Visit>
@@ -144,7 +165,8 @@ namespace telar::gui::features::prompt {
           continue;
         }
 
-        const auto width = static_cast<std::uint32_t>(graphemes.columns());
+        // A hidden character takes the cells of the mark the view draws for it.
+        const auto width = hiddenCharacter(*grapheme) ? hidden_mark_columns : static_cast<std::uint32_t>(graphemes.columns());
         if (column + width > columns) {
           ++row;
           column = Layout::indent;
@@ -213,7 +235,7 @@ namespace telar::gui::features::prompt {
                 .columns = cell.columns,
                 .start = start,
                 .end = finish,
-                .style = start < styles.size() ? styles[start] : Style::plain,
+                .style = hiddenCharacter(text.substr(start, finish - start)) ? Style::hidden : (start < styles.size() ? styles[start] : Style::plain),
                 .group = start < groups.size() ? groups[start] : std::uint8_t{0},
             }
         );
@@ -236,6 +258,19 @@ namespace telar::gui::features::prompt {
 
     result.rows = row + 1;
     result.width = std::max(result.width, std::min(columns, result.caret_column + 1));
+  }
+
+  void hiddenMarks(std::string_view text, ds::String<Memory>& out) {
+    GraphemeCursor graphemes{text};
+    std::size_t offset = 0;
+
+    while (const auto grapheme = graphemes.nextReplacingInvalid()) {
+      if (const auto character = hiddenCharacter(text.substr(offset, graphemes.position() - offset))) {
+        out.append(ds::format(out.memory(), "⟨U+{:04X}⟩", *character));
+      }
+
+      offset = graphemes.position();
+    }
   }
 
 }

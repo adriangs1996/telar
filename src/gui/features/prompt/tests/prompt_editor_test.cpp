@@ -826,6 +826,19 @@ namespace {
 
     require(inside.caret_column == Layout::indent + 3, "the caret sits on the grapheme it is inside");
 
+    // A bidi or zero-width character takes the cells of a mark naming it, in a run of its own the
+    // view draws as that mark: what runs is what shows.
+    const std::string_view trojan = "echo a\u202Eb\u200Bc";
+    const auto marked = layout({.text = trojan, .styles = styled(trojan).view()}, {.cursor = trojan.size(), .anchor = trojan.size()}, 80);
+    const auto hidden = std::ranges::count_if(marked.runs, [](const Run& run) {
+      return run.style == Style::hidden;
+    });
+    telar::ds::String<Memory> marks{arena.memory};
+
+    hiddenMarks("\u202E\u200B", marks);
+    require(hidden == 2 && marked.caret_column == Layout::indent + 6 + (2 * hidden_mark_columns) + 2, "each takes a mark's cells, in a run of its own");
+    require(marks.view() == "⟨U+202E⟩⟨U+200B⟩", "the mark names the character");
+
     // A command of more runs than a layout keeps still shows the rows around its caret.
     std::string long_command;
 

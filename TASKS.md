@@ -426,5 +426,6 @@ Legend: `[ ]` todo, `[x]` done, `[~]` not a bug / dropped (with reason).
   256 KiB register tries ~2.5 GB): check `count * size` against the capacity first.
 - [x] **T52.** Each undo group clones the whole buffer (up to 64 MiB per pane): store diffs
   (range and previous text) instead.
-- [ ] **T53.** Pasted bidi and zero-width characters (U+202E) make the shown command differ
+- [x] **T53.** Pasted bidi and zero-width characters (U+202E) make the shown command differ
   from the one that runs: draw them as visible marks (`⟨U+202E⟩`) in the editor.
+  The zero-width joiners (U+200C, U+200D) are left as they are: emoji sequences need them.
