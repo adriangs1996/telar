@@ -11,6 +11,7 @@ import telar.testing.test_memory;
 import telar.runtime.terminal.shell_integration.token;
 import telar.runtime.terminal.shell_integration.words;
 import telar.wire.editor;
+import telar.wire.vocabulary;
 import telar.base.ds;
 import telar.base.memory.allocators;
 import telar.base.text.utf8;
@@ -52,6 +53,45 @@ namespace {
     check(result.words.size() == WordReader::maximum_words, "a reply carries more words than the wire allows");
     check(result.truncated);
     check(std::ranges::is_sorted(result.words) && result.words.front().text == "capcmd000");
+    std::filesystem::remove_all(root);
+  }
+
+  // More executables than the reader keeps before sorting: the shell's own names and builtins
+  // are not crowded out, and the reply is the first of everything, sorted.
+  void testNamesSurviveLongPaths() {
+    telar::testing::TestMemory adapter;
+    telar::ConcurrentMemory& memory = adapter;
+    ds::Array<char, 64> directory{};
+
+    std::strcpy(directory.dataMut(), "/tmp/telar-word-names-XXXXXX");
+    check(::mkdtemp(directory.dataMut()) != nullptr);
+    const std::string root{directory.data()};
+
+    for (int index = 0; index < 1100; ++index) {
+      const auto path = root + "/" + std::format("cmd{:04}", index);
+      auto* file = std::fopen(path.c_str(), "w");
+
+      check(file != nullptr);
+      std::fclose(file);
+      check(::chmod(path.c_str(), 0700) == 0);
+    }
+
+    WordReader reader{memory};
+    WordRequest request{.client = 1, .request = 2, .provider = CompletionProvider::command, .prefix = {}, .directory = {}, .home = {}, .path = {}};
+
+    request.path.assign(root);
+    request.shell = IntegratedShell::zsh;
+    request.names = std::allocate_shared<ds::String<telar::ConcurrentMemory>>(telar::AllocatorRef<ds::String<telar::ConcurrentMemory>, telar::ConcurrentMemory>{memory}, memory, "aafunc gst=git%20status");
+    const auto result = reader.observe(request);
+    const auto has = [&](std::string_view word) {
+      return std::ranges::any_of(result.words, [&](const Word& found) {
+        return found.text.view() == word;
+      });
+    };
+
+    check(result.truncated && result.words.size() == WordReader::maximum_words, "the reply is cut to what the wire carries");
+    check(has("aafunc") && has("cd"), "a function and a builtin are kept whatever PATH holds");
+    check(std::ranges::is_sorted(result.words), "sorted");
     std::filesystem::remove_all(root);
   }
 
@@ -244,6 +284,7 @@ namespace {
   const telar::testing::Case case_reply_cap{"shell_words.reply_cap", testReplyCap};
   const telar::testing::Case case_directory_words{"shell_words.directory_words", testDirectoryWords};
   const telar::testing::Case case_remote_specs{"shell_words.remote_specs", testRemoteSpecs};
+  const telar::testing::Case case_names_survive_long_paths{"shell_words.names_survive_long_paths", testNamesSurviveLongPaths};
   const telar::testing::Case case_token_parse{"shell_words.token_parse", testTokenParse};
   const telar::testing::Case case_ignores_special_and_oversized_files{"shell_words.ignores_special_and_oversized_files", testIgnoresSpecialAndOversizedFiles};
   const telar::testing::Case case_cuts_descriptions_at_characters{"shell_words.cuts_descriptions_at_characters", testCutsDescriptionsAtCharacters};

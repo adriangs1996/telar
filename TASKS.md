@@ -144,7 +144,7 @@ Legend: `[ ]` todo, `[x]` done, `[~]` not a bug / dropped (with reason).
   Fix: ask the spec whenever the session is ready; ask providers and paths only when the
   pane is not remote.
 
-- [ ] **T9 (C8). The 1024 cap drops builtins, aliases and functions.**
+- [x] **T9 (C8). The 1024 cap drops builtins, aliases and functions.**
   `src/runtime/terminal/shell_integration/words/words.cpp:732` caps on insert, and PATH is
   read first (`:746`), builtins and names after (`:747-749`). With 1100 executables and an
   empty prefix `cd`, `gst`, `myfunc` are missing; the 256 returned are the first of an

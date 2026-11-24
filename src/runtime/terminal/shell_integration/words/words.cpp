@@ -844,7 +844,8 @@ namespace telar::runtime {
         return;
       }
 
-      if (result.words.size() >= maximum_words * 4) {
+      // A bound on memory only: the reply is cut once everything is sorted.
+      if (result.words.size() >= maximum_entries) {
         result.truncated = true;
         return;
       }
@@ -858,7 +859,7 @@ namespace telar::runtime {
 
     switch (request.provider) {
     case CompletionProvider::command:
-      commands({.path = request.path.view(), .prefix = prefix}, add);
+      // The shell's own names first, so no PATH, however long, crowds them out.
       builtins(request.shell, add_word);
       if (request.names) {
         words(request.names->view(), add_word);
@@ -866,6 +867,7 @@ namespace telar::runtime {
         result.truncated = true;
       }
 
+      commands({.path = request.path.view(), .prefix = prefix}, add);
       break;
     case CompletionProvider::branch:
       git_.read(request.directory.view());
