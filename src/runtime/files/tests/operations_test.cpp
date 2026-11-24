@@ -217,6 +217,12 @@ namespace {
     const auto inside = change(changer, memory, {{.kind = FileOperationKind::move, .source = home.work(""), .target = home.work("inner/work")}});
 
     check(inside.results[0].outcome == FileOutcome::refused, "a directory does not go inside itself");
+
+    // Onto itself a file neither moves nor is copied over: it stays as it is, whatever asked.
+    const auto onto = change(changer, memory, {{.kind = FileOperationKind::move, .source = source, .target = source}, {.kind = FileOperationKind::copy, .source = source, .target = source}}, true);
+
+    check(onto.results.size() == 2 && onto.results[0].outcome == FileOutcome::done && onto.results[1].outcome == FileOutcome::done && read(source) == "new", "and one put onto itself is left where it is");
+    check(home.trashed() == std::vector<std::string>{}, "with nothing sent to the trash for it");
   }
 
   void testTheNameBesideATarget() {
