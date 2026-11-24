@@ -216,7 +216,7 @@ INSERT INTO command VALUES (1, x'01', 1, 0, 1, 1, 'legacy command', 0, '/legacy'
   }
 
   // A directory matches however it was written: with a slash at its end, or through a link to it
-  // (/tmp is one to /private/tmp on macOS).
+  // (/tmp is one to /private/tmp on macOS). It is shown as it was written.
   void testScopeMatchesTheSameDirectory() {
     telar::testing::TestMemory adapter;
     ConcurrentMemory& memory = adapter;
@@ -228,12 +228,48 @@ INSERT INTO command VALUES (1, x'01', 1, 0, 1, 1, 'legacy command', 0, '/legacy'
     std::filesystem::create_directory_symlink(path, linked);
     HistoryStore store{memory, ":memory:"};
     EncodedReply reply{memory};
+    std::vector<Byte> storage(64 * 1024);
 
-    finished(store, session(1, path + "/"), "in the tree", path + "/");
+    finished(store, session(1, linked + "/"), "in the tree", linked + "/");
+    store.query(QueryHistory{.request_id = 1, .limit = 10}, reply);
+    const auto shown = decodeReply<HistoryResults>(reply, storage);
+
+    check(shown.entries.size() == 1 && shown.entries[0].cwd == linked && shown.entries[0].workspace_path == linked, "the directory is shown as it was written");
     for (const auto& written : {path, path + "/", linked, linked + "/"}) {
-      check(commands(store, reply, QueryHistory{.request_id = 1, .scope = HistoryScope::cwd, .scope_value = std::string_view{written}, .limit = 10}) == std::vector<std::string>{"in the tree"}, "the directory matches as " + written);
-      check(commands(store, reply, QueryHistory{.request_id = 2, .scope = HistoryScope::workspace, .scope_value = std::string_view{written}, .limit = 10}) == std::vector<std::string>{"in the tree"}, "the workspace matches as " + written);
+      check(commands(store, reply, QueryHistory{.request_id = 2, .scope = HistoryScope::cwd, .scope_value = std::string_view{written}, .limit = 10}) == std::vector<std::string>{"in the tree"}, "the directory matches as " + written);
+      check(commands(store, reply, QueryHistory{.request_id = 3, .scope = HistoryScope::workspace, .scope_value = std::string_view{written}, .limit = 10}) == std::vector<std::string>{"in the tree"}, "the workspace matches as " + written);
     }
+  }
+
+  // Commands stored before the history kept a key for their directories match a scope by it
+  // too: opening the history gives them their keys, once.
+  void testKeysStoredDirectories() {
+    telar::testing::TestMemory adapter;
+    ConcurrentMemory& memory = adapter;
+    Directory directory;
+    const auto path = directory.file("work");
+    const auto linked = directory.file("linked");
+    const auto file = directory.file("history.db");
+
+    std::filesystem::create_directory(path);
+    std::filesystem::create_directory_symlink(path, linked);
+    {
+      HistoryStore store{memory, file.c_str()};
+
+      finished(store, session(1, linked), "before the keys", linked);
+    }
+
+    {
+      Database database{file.c_str()};
+
+      database.execute("UPDATE command SET cwd_key = '', workspace_key = ''; UPDATE history_schema SET version = 6");
+    }
+
+    HistoryStore store{memory, file.c_str()};
+    EncodedReply reply{memory};
+
+    check(commands(store, reply, QueryHistory{.request_id = 1, .scope = HistoryScope::cwd, .scope_value = std::string_view{path}, .limit = 10}) == std::vector<std::string>{"before the keys"}, "a stored command matches its directory's real path");
+    check(commands(store, reply, QueryHistory{.request_id = 2, .scope = HistoryScope::workspace, .scope_value = std::string_view{path}, .limit = 10}) == std::vector<std::string>{"before the keys"}, "and its workspace's");
   }
 
   void testFailedWriteRollsBack() {
@@ -655,6 +691,7 @@ INSERT INTO command VALUES (1, x'01', 1, 0, 1, 1, 'legacy command', 0, '/legacy'
   const telar::testing::Case case_fuzzy_cap_counts_commands{"history_store.fuzzy_cap_counts_commands", testFuzzyCapCountsCommands};
   const telar::testing::Case case_folds_case_at_any_length{"history_store.folds_case_at_any_length", testFoldsCaseAtAnyLength};
   const telar::testing::Case case_scope_matches_the_same_directory{"history_store.scope_matches_the_same_directory", testScopeMatchesTheSameDirectory};
+  const telar::testing::Case case_keys_stored_directories{"history_store.keys_stored_directories", testKeysStoredDirectories};
   const telar::testing::Case case_workspaces_skip_no_paths_against_the_limit{"history_store.workspaces_skip_no_paths_against_the_limit", testWorkspacesSkipNoPathsAgainstTheLimit};
   const telar::testing::Case case_stats_of_a_long_command{"history_store.stats_of_a_long_command", testStatsOfALongCommand};
   const telar::testing::Case case_failed_write_rolls_back{"history_store.failed_write_rolls_back", testFailedWriteRollsBack};

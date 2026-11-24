@@ -120,7 +120,9 @@ SET command = ?1,
     exit_code = ?4,
     status = 0,
     workspace_path = ?7,
-    provider = ?8
+    provider = ?8,
+    cwd_key = ?9,
+    workspace_key = ?10
 WHERE session_id = ?5 AND tool_call_id = ?6
 )sql";
 
@@ -128,11 +130,11 @@ WHERE session_id = ?5 AND tool_call_id = ?6
 INSERT INTO command (
   session_id, pane_id, location_kind, location_id, tab_id, sequence,
   command, cwd, workspace_path, started_at_ms, duration_ns,
-  exit_code, status, author, origin, provider, tool_call_id
+  exit_code, status, author, origin, provider, tool_call_id, cwd_key, workspace_key
 ) VALUES (
   ?1, ?2, ?3, ?4, ?5,
   (SELECT COALESCE(MAX(sequence), 0) + 1 FROM command WHERE session_id = ?1),
-  ?6, ?7, ?8, ?9, 0, ?10, ?11, 1, 1, ?12, ?13
+  ?6, ?7, ?8, ?9, 0, ?10, ?11, 1, 1, ?12, ?13, ?14, ?15
 )
 ON CONFLICT(session_id, tool_call_id) WHERE tool_call_id IS NOT NULL DO NOTHING
 )sql";
@@ -215,11 +217,11 @@ WHERE session.shell = ''
 INSERT INTO command (
   session_id, pane_id, location_kind, location_id, tab_id, workspace_path,
   sequence, command, command_truncated, cwd, started_at_ms, duration_ns,
-  exit_code, status, author, origin
+  exit_code, status, author, origin, cwd_key, workspace_key
 ) VALUES (
   ?1, ?2, ?3, ?4, ?5, ?6,
   (SELECT COALESCE(MAX(sequence), 0) + 1 FROM command WHERE session_id = ?1),
-  ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, 0
+  ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, 0, ?15, ?16
 )
 )sql";
 
@@ -328,6 +330,9 @@ CREATE TABLE IF NOT EXISTS command (
   origin INTEGER NOT NULL DEFAULT 0,
   provider TEXT,
   tool_call_id TEXT,
+  -- What a scope matches the directories by: cwd and workspace_path as directoryKey makes them.
+  cwd_key TEXT NOT NULL DEFAULT '',
+  workspace_key TEXT NOT NULL DEFAULT '',
   UNIQUE(session_id, sequence)
 );
 CREATE TABLE IF NOT EXISTS command_output (
@@ -338,8 +343,6 @@ CREATE TABLE IF NOT EXISTS command_output (
 );
 CREATE INDEX IF NOT EXISTS command_started_at ON command(started_at_ms DESC);
 CREATE INDEX IF NOT EXISTS command_session_started ON command(session_id, started_at_ms DESC);
-CREATE INDEX IF NOT EXISTS command_cwd_started ON command(cwd, started_at_ms DESC);
-CREATE INDEX IF NOT EXISTS command_workspace_started ON command(workspace_path, started_at_ms DESC);
 CREATE INDEX IF NOT EXISTS command_pane_started ON command(pane_id, started_at_ms DESC);
 CREATE INDEX IF NOT EXISTS command_exit_started ON command(exit_code, started_at_ms DESC);
 CREATE INDEX IF NOT EXISTS session_pane_started ON session(pane_id, started_at_ms DESC);

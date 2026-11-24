@@ -42,6 +42,8 @@ namespace telar::runtime {
       constexpr int tool_call = 6;
       constexpr int workspace_path = 7;
       constexpr int provider = 8;
+      constexpr int cwd_key = 9;
+      constexpr int workspace_key = 10;
     }
 
     // Past the context's tab.
@@ -54,6 +56,8 @@ namespace telar::runtime {
       constexpr int status = 11;
       constexpr int provider = 12;
       constexpr int tool_call = 13;
+      constexpr int cwd_key = 14;
+      constexpr int workspace_key = 15;
     }
 
     namespace launch_parameter {
@@ -84,6 +88,8 @@ namespace telar::runtime {
       constexpr int exit_code = 12;
       constexpr int status = 13;
       constexpr int author = 14;
+      constexpr int cwd_key = 15;
+      constexpr int workspace_key = 16;
     }
 
     namespace import_command_parameter {
@@ -208,10 +214,19 @@ namespace telar::runtime {
       };
     }
 
-    // A directory as the history keeps and matches it: its real path when it exists, so a link to
-    // it and the slash it may end with name it the same way, else the path without the slashes
-    // it ends with. Viewed in `buffer` or in `path`.
-    std::string_view canonicalDirectory(std::string_view path, ds::Array<char, PATH_MAX>& buffer) noexcept {
+    // A directory as the history shows it: as it was written, without the slashes it ends with.
+    std::string_view writtenDirectory(std::string_view path) noexcept {
+      while (path.size() > 1 && path.ends_with('/')) {
+        path.remove_suffix(1);
+      }
+
+      return path;
+    }
+
+    // The key a scope matches a directory by: its real path when it exists, so a link to it and
+    // the slash it may end with name it the same way, else the path as it is shown. Viewed in
+    // `buffer` or in `path`.
+    std::string_view directoryKey(std::string_view path, ds::Array<char, PATH_MAX>& buffer) noexcept {
       ds::Array<char, PATH_MAX> terminated{};
 
       if (path.starts_with('/') && path.size() < terminated.size() && !path.contains('\0')) {
@@ -221,11 +236,7 @@ namespace telar::runtime {
         }
       }
 
-      while (path.size() > 1 && path.ends_with('/')) {
-        path.remove_suffix(1);
-      }
-
-      return path;
+      return writtenDirectory(path);
     }
 
     // telar_fold(text): the text with historyFold's case fold, which a short query matches with
@@ -300,6 +311,57 @@ namespace telar::runtime {
       transaction.commit();
     }
 
+    // Commands stored before the history kept their directories' keys have none, and a scope
+    // would miss them: version 7 gives each its keys, once. Read in the order of the directory,
+    // each one is resolved once however many commands ran in it.
+    void keyDirectories(Database& database, ConcurrentMemory& memory) {
+      constexpr std::int64_t keyed_version = 7;
+
+      {
+        Statement version{database, "SELECT version FROM history_schema"};
+        if (!version.next() || version.integer(0) >= keyed_version) {
+          return;
+        }
+      }
+
+      struct KeyedColumn {
+        std::string_view rows;
+        std::string_view update;
+      };
+
+      constexpr ds::Array columns{
+          KeyedColumn{.rows = "SELECT id, cwd FROM command WHERE cwd_key = '' AND cwd != '' ORDER BY cwd", .update = "UPDATE command SET cwd_key = ?2 WHERE id = ?1"},
+          KeyedColumn{.rows = "SELECT id, workspace_path FROM command WHERE workspace_key = '' AND workspace_path != '' ORDER BY workspace_path", .update = "UPDATE command SET workspace_key = ?2 WHERE id = ?1"},
+      };
+      Transaction transaction{database};
+      ds::String<ConcurrentMemory> path{memory};
+      ds::String<ConcurrentMemory> key{memory};
+
+      for (const auto& column : columns) {
+        Statement rows{database, column.rows};
+        Statement update{database, column.update};
+
+        path.clear();
+        key.clear();
+        while (rows.next()) {
+          if (const auto directory = rows.text(1); key.view().empty() || directory != path.view()) {
+            ds::Array<char, PATH_MAX> buffer; // NOLINT(cppcoreguidelines-pro-type-member-init): directoryKey writes what it views
+
+            path.assign(directory);
+            key.assign(directoryKey(directory, buffer));
+          }
+
+          update.reset();
+          update.bind(1, rows.integer(0));
+          update.bind(2, key.view());
+          update.finish();
+        }
+      }
+
+      database.execute("UPDATE history_schema SET version = 7 WHERE version < 7");
+      transaction.commit();
+    }
+
   }
 
   AgentCommandWriter::AgentCommandWriter(Database& database)
@@ -315,10 +377,12 @@ namespace telar::runtime {
     }
 
     Transaction transaction{database_};
-    ds::Array<char, PATH_MAX> workspace_buffer; // NOLINT(cppcoreguidelines-pro-type-member-init): canonicalDirectory writes what it views
-    ds::Array<char, PATH_MAX> cwd_buffer;       // NOLINT(cppcoreguidelines-pro-type-member-init): canonicalDirectory writes what it views
-    const auto workspace_path = canonicalDirectory(context.workspace_path, workspace_buffer);
-    const auto cwd = canonicalDirectory(request.cwd, cwd_buffer);
+    ds::Array<char, PATH_MAX> workspace_buffer; // NOLINT(cppcoreguidelines-pro-type-member-init): directoryKey writes what it views
+    ds::Array<char, PATH_MAX> cwd_buffer;       // NOLINT(cppcoreguidelines-pro-type-member-init): directoryKey writes what it views
+    const auto workspace_path = writtenDirectory(context.workspace_path);
+    const auto cwd = writtenDirectory(request.cwd);
+    const auto workspace_key = directoryKey(context.workspace_path, workspace_buffer);
+    const auto cwd_key = directoryKey(request.cwd, cwd_buffer);
     const auto now = context.received_at_ms != 0 ? context.received_at_ms : wallMilliseconds();
 
     session_.reset();
@@ -346,6 +410,8 @@ namespace telar::runtime {
       finish_.bind(agent_finish_parameter::tool_call, request.tool_call_id);
       finish_.bind(agent_finish_parameter::workspace_path, workspace_path);
       finish_.bind(agent_finish_parameter::provider, request.provider);
+      finish_.bind(agent_finish_parameter::cwd_key, cwd_key);
+      finish_.bind(agent_finish_parameter::workspace_key, workspace_key);
       finish_.finish();
       if (sqlite3_changes(database_.handle()) != 0) {
         transaction.commit();
@@ -371,6 +437,8 @@ namespace telar::runtime {
 
     insert_.bind(agent_insert_parameter::status, static_cast<std::int64_t>(request.phase == AgentCommandPhase::started ? HistoryStatus::running : HistoryStatus::completed));
     insert_.bind(agent_insert_parameter::provider, request.provider);
+    insert_.bind(agent_insert_parameter::cwd_key, cwd_key);
+    insert_.bind(agent_insert_parameter::workspace_key, workspace_key);
     if (request.tool_call_id.empty()) {
       insert_.bindNull(agent_insert_parameter::tool_call);
     } else {
@@ -491,9 +559,12 @@ namespace telar::runtime {
     bindContext(command_, session);
     command_.bind(pane_command_parameter::command, command.command);
     command_.bind(pane_command_parameter::truncated, static_cast<std::int64_t>(command.truncated));
-    ds::Array<char, PATH_MAX> directory; // NOLINT(cppcoreguidelines-pro-type-member-init): canonicalDirectory writes what it views
+    ds::Array<char, PATH_MAX> directory; // NOLINT(cppcoreguidelines-pro-type-member-init): directoryKey writes what it views
+    ds::Array<char, PATH_MAX> workspace; // NOLINT(cppcoreguidelines-pro-type-member-init): directoryKey writes what it views
 
-    command_.bind(pane_command_parameter::cwd, canonicalDirectory(command.directory, directory));
+    command_.bind(pane_command_parameter::cwd, writtenDirectory(command.directory));
+    command_.bind(pane_command_parameter::cwd_key, directoryKey(command.directory, directory));
+    command_.bind(pane_command_parameter::workspace_key, directoryKey(session.workspace_path, workspace));
     command_.bind(pane_command_parameter::started_at, command.started.milliseconds);
     command_.bind(pane_command_parameter::duration, command.duration_ns);
     if (command.exit_code) {
@@ -524,9 +595,7 @@ namespace telar::runtime {
     statement.bind(context_parameter::location_kind, static_cast<std::int64_t>(session.location.workspace.kind));
     statement.bind(context_parameter::location_id, static_cast<std::int64_t>(session.location.workspace.id));
     statement.bind(context_parameter::tab, static_cast<std::int64_t>(session.location.tab_id));
-    ds::Array<char, PATH_MAX> workspace; // NOLINT(cppcoreguidelines-pro-type-member-init): canonicalDirectory writes what it views
-
-    statement.bind(context_parameter::workspace_path, canonicalDirectory(session.workspace_path, workspace));
+    statement.bind(context_parameter::workspace_path, writtenDirectory(session.workspace_path));
   }
 
   HistoryRows::HistoryRows(ConcurrentMemory& memory)
@@ -624,6 +693,8 @@ namespace telar::runtime {
         Migration{.table = "command", .column = "origin", .sql = "ALTER TABLE command ADD COLUMN origin INTEGER NOT NULL DEFAULT 0"},
         Migration{.table = "command", .column = "provider", .sql = "ALTER TABLE command ADD COLUMN provider TEXT"},
         Migration{.table = "command", .column = "tool_call_id", .sql = "ALTER TABLE command ADD COLUMN tool_call_id TEXT"},
+        Migration{.table = "command", .column = "cwd_key", .sql = "ALTER TABLE command ADD COLUMN cwd_key TEXT NOT NULL DEFAULT ''"},
+        Migration{.table = "command", .column = "workspace_key", .sql = "ALTER TABLE command ADD COLUMN workspace_key TEXT NOT NULL DEFAULT ''"},
     };
 
     for (const auto& migration : migrations) {
@@ -636,7 +707,15 @@ namespace telar::runtime {
       }
     }
 
-    database.execute("CREATE UNIQUE INDEX IF NOT EXISTS command_tool_call ON command(session_id, tool_call_id) WHERE tool_call_id IS NOT NULL; UPDATE history_schema SET version = 5 WHERE version < 5;");
+    // A scope reads the directories' keys, so the indexes over the directories as written go.
+    database.execute(R"sql(
+CREATE UNIQUE INDEX IF NOT EXISTS command_tool_call ON command(session_id, tool_call_id) WHERE tool_call_id IS NOT NULL;
+DROP INDEX IF EXISTS command_cwd_started;
+DROP INDEX IF EXISTS command_workspace_started;
+CREATE INDEX IF NOT EXISTS command_cwd_key_started ON command(cwd_key, started_at_ms DESC);
+CREATE INDEX IF NOT EXISTS command_workspace_key_started ON command(workspace_key, started_at_ms DESC);
+UPDATE history_schema SET version = 5 WHERE version < 5;
+)sql");
   }
 
   bool enableHistoryIndex(Database& database) {
@@ -680,6 +759,7 @@ END;
         rows_(memory),
         indexed_(prepareHistory(database_)) {
     stripOutputMarks(database_, memory_);
+    keyDirectories(database_, memory_);
     checkSqlite(sqlite3_create_function_v2(database_.handle(), "telar_fold", 1, SQLITE_UTF8 | SQLITE_DETERMINISTIC | SQLITE_INNOCUOUS, &memory_, foldText, nullptr, nullptr, nullptr));
   }
 
@@ -1108,10 +1188,10 @@ END;
     case HistoryScope::global:
       break;
     case HistoryScope::cwd:
-      sql.append(" AND cwd = ?6");
+      sql.append(" AND cwd_key = ?6");
       break;
     case HistoryScope::workspace:
-      sql.append(" AND workspace_path = ?6");
+      sql.append(" AND workspace_key = ?6");
       break;
     case HistoryScope::pane:
       sql.append(" AND pane_id = ?6");
@@ -1123,10 +1203,10 @@ END;
     if (scope == HistoryScope::pane) {
       statement.bind(query_parameter::scope, integer(std::get<std::uint64_t>(value)));
     } else if (scope != HistoryScope::global) {
-      // Matched as it is kept, however the query wrote it.
-      ds::Array<char, PATH_MAX> directory; // NOLINT(cppcoreguidelines-pro-type-member-init): canonicalDirectory writes what it views
+      // Matched by its key, however the query wrote it.
+      ds::Array<char, PATH_MAX> directory; // NOLINT(cppcoreguidelines-pro-type-member-init): directoryKey writes what it views
 
-      statement.bind(query_parameter::scope, canonicalDirectory(std::get<std::string_view>(value), directory));
+      statement.bind(query_parameter::scope, directoryKey(std::get<std::string_view>(value), directory));
     }
   }
 

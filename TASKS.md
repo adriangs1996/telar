@@ -327,7 +327,9 @@ Legend: `[ ]` todo, `[x]` done, `[~]` not a bug / dropped (with reason).
   Expected: the same directory matches however it was written.
   Fix: normalize on store and on query (drop trailing slash, canonicalize). Keep `cwd`
   exact: `workspace` already covers the tree.
-  Rows stored before keep the path as it was written; only new rows are canonical.
+  Decision: `cwd` and `workspace_path` keep the directory as written (without trailing
+  slashes) for display; `cwd_key` and `workspace_key` hold its real path and scopes match
+  them. Schema version 7 gives the rows stored before their keys, once.
 
 - [x] **T30 (H10). The "Failed" chip sticks when the query starts with `!`.**
   `history_controller.cpp:328` shows `parsed.failed_only` and `HistoryPanel.qml:108`
