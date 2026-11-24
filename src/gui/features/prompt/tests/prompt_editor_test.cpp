@@ -512,6 +512,53 @@ namespace {
       type(editor, "0rx");
       require(text(editor) == "xbc", "r still replaces with a character");
     }
+
+    // The smaller ones.
+    {
+      Editor editor{Keymap::vim};
+
+      start(editor, "a b c d e f g");
+      type(editor, "02dw3.");
+      require(text(editor) == "f g", "a count before . replaces the change's own");
+    }
+
+    {
+      Editor editor{Keymap::vim};
+
+      start(editor, "one two");
+      type(editor, "0wyy");
+      require(cursor(editor) == 4, "yy keeps the cursor");
+      type(editor, "Y");
+      require(cursor(editor) == 4, "Y keeps the cursor");
+    }
+
+    {
+      Editor editor{Keymap::vim};
+
+      type(editor, "a\nb\nc");
+      type(editor, "\x1bgg5j");
+      require(cursor(editor) == 4, "5j with fewer lines below goes to the last");
+    }
+
+    {
+      Editor editor{Keymap::vim};
+
+      start(editor, "ab");
+      type(editor, "0vlllld");
+      require(text(editor).empty(), "visual l stops at the last character");
+    }
+
+    {
+      Editor editor{Keymap::vim};
+
+      type(editor, "one\ntwo");
+      type(editor, "\x1bggyyjVp");
+      require(text(editor) == "one\none", "V with a line register replaces the line with it");
+      type(editor, "ggyyGvep");
+      require(text(editor) == "one\n\none\n", "v with a line register puts the line apart");
+      type(editor, "ggP");
+      require(text(editor) == "oneone\n\none\n", "the replaced text, charwise, is in the unnamed register");
+    }
   }
 
   void routing() {

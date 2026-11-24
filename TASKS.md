@@ -405,7 +405,7 @@ Legend: `[ ]` todo, `[x]` done, `[~]` not a bug / dropped (with reason).
   `iabc<BS>d<Esc>u`).
 - [x] **T46 (V32).** `r` followed by BS, an arrow or Delete deletes the character: cancel the
   `r` without changes.
-- [ ] **T47 (V33).** Smaller ones: `3.` replaces the original count; `yy`/`Y` keep the
+- [x] **T47 (V33).** Smaller ones: `3.` replaces the original count; `yy`/`Y` keep the
   cursor; `5j` with fewer lines goes to the last line; visual `l` stops at the last
   character; visual `p` honours linewise registers and stores the replaced text.
 - [ ] **T48 (V34).** Visual mode is highlighted wrong: the highlighted range comes from the

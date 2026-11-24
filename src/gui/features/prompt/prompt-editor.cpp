@@ -807,7 +807,11 @@ namespace telar::gui::features::prompt {
     case ' ':
       return Motion{
           .target = apply([&](std::size_t offset) {
-            return offset < text_.lineEnd(cursor) ? text_.next(offset) : offset;
+            // A visual selection stops on the line's last character, as vim's does.
+            const auto line_end = text_.lineEnd(cursor);
+            const auto last = (mode_ == Mode::visual || mode_ == Mode::visual_line) && line_end > text_.lineStart(cursor) ? text_.previous(line_end) : line_end;
+
+            return offset < last ? text_.next(offset) : offset;
           }),
       };
     case 'w':
@@ -913,9 +917,14 @@ namespace telar::gui::features::prompt {
     auto line = text_.lineStart(cursor);
 
     for (std::size_t index = 0; index < repeat; ++index) {
+      // A count past the last line goes as far as there are lines; none at all moves nowhere.
       const bool edge = down ? text_.lineEnd(line) == text_.size() : line == 0;
       if (edge) {
-        return Motion{.target = cursor, .inclusive = false, .linewise = true, .valid = operator_ != 0 && index > 0};
+        if (index == 0) {
+          return Motion{.target = cursor, .inclusive = false, .linewise = true, .valid = false};
+        }
+
+        break;
       }
 
       line = down ? text_.lineEnd(line) + 1 : text_.lineStart(line - 1);
@@ -1245,6 +1254,7 @@ namespace telar::gui::features::prompt {
 
   void Editor::operate(std::size_t start, std::size_t end, bool linewise) {
     const auto action = operator_;
+    const auto cursor = text_.cursor();
     // Only what deletes, changes or yanks fills a register; case and indent leave it alone.
     const bool stores = action == 'd' || action == 'c' || action == 'y';
 
@@ -1290,7 +1300,11 @@ namespace telar::gui::features::prompt {
       mode_ = Mode::insert;
       break;
     case 'y':
-      text_.moveTo(start);
+      // A yank of the lines the cursor is on leaves it there, as yy and Y do.
+      if (!linewise || cursor < start || cursor >= end) {
+        text_.moveTo(start);
+      }
+
       mode_ = Mode::normal;
       clampNormal();
       break;
@@ -1764,11 +1778,50 @@ namespace telar::gui::features::prompt {
       return Request::none;
     case 'p':
     case 'P': {
-      const auto value = load();
+      // Copied: storing the replaced text may overwrite the register it comes from.
+      const auto loaded = load();
+      const ds::String<Memory> value{memory(), loaded.text};
+      auto from = start;
+      auto to = end;
 
-      text_.replace(start, end, value.text);
+      if (lines) {
+        from = text_.lineStart(start);
+        to = text_.lineEnd(selection_end);
+      }
+
+      ds::String<Memory> replaced{memory(), text_.view().substr(from, to - from)};
+      ds::String<Memory> put{memory()};
+
+      // Whole lines for whole lines; a line register over characters goes on lines of its own.
+      if (lines) {
+        const bool through_newline = to < text_.size();
+
+        replaced.push('\n');
+        put.assign(value);
+        if (!put.view().ends_with('\n')) {
+          put.push('\n');
+        }
+
+        if (through_newline) {
+          ++to;
+        } else {
+          put.truncate(put.size() - 1);
+        }
+      } else if (loaded.linewise) {
+        put.push('\n');
+        put.append(value);
+      } else {
+        put.assign(value);
+      }
+
+      text_.replace(from, to, put);
+      // The text it replaced is the unnamed register's, as vim keeps it.
+      register_ = '"';
+      store(replaced, lines);
       mode_ = Mode::normal;
+      text_.moveTo(lines || loaded.linewise ? firstNonBlank(text_.lineStart(std::min(from + (lines ? 0 : 1), text_.size()))) : text_.cursor());
       clampNormal();
+      reset();
       return Request::none;
     }
     default:
@@ -1826,15 +1879,39 @@ namespace telar::gui::features::prompt {
 
   void Editor::repeat() {
     repeat_requested_ = false;
+    // A count typed before the dot replaces the change's own.
+    const auto given = count_;
     // Copied: pressing the keys records them again.
     const auto changes = last_change_.clone();
+    std::size_t first = 0;
 
     ++replaying_;
     reset();
-    for (const auto& entry : changes) {
-      auto key = entry.key;
+    if (given != 0) {
+      const auto digit = [&](std::size_t index) {
+        const auto& key = changes[index].key;
 
-      key.text = entry.text;
+        return key.key == Key::character && !key.modifiers.control && key.character >= (index == 0 ? U'1' : U'0') && key.character <= U'9';
+      };
+
+      while (first < changes.size() && digit(first)) {
+        ++first;
+      }
+
+      // Room for any std::size_t in decimal.
+      constexpr std::size_t count_digits = 24;
+      ds::Array<char, count_digits> digits{};
+      auto* const end = std::to_chars(digits.dataMut(), std::to_address(digits.viewMut().end()), given).ptr;
+
+      for (const auto character : std::string_view{digits.data(), end}) {
+        dispatch(KeyPress{.key = Key::character, .character = static_cast<char32_t>(character)});
+      }
+    }
+
+    for (std::size_t index = first; index < changes.size(); ++index) {
+      auto key = changes[index].key;
+
+      key.text = changes[index].text;
       dispatch(key);
     }
 
