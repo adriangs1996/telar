@@ -117,6 +117,10 @@ namespace telar::gui::features::prompt {
     // Writes `text` over [begin, end) of the line, as a path chosen for the word there does.
     void replaceText(std::size_t begin, std::size_t end, std::string_view text);
 
+    // `command` replaces the line, the caret at its end, as a history entry pasted does: Up and
+    // Down start over from it, and the menu closes.
+    void write(std::string_view command);
+
     [[nodiscard]] const ds::Option<Menu>& menu() const noexcept;
 
     // Offers `choices` for the `word`: one is written at once, more open the menu. While

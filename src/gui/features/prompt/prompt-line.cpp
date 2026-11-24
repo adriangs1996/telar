@@ -207,6 +207,15 @@ namespace telar::gui::features::prompt {
     editor_.textMut().replace(begin, end, text);
   }
 
+  void Line::write(std::string_view command) {
+    auto& text = editor_.textMut();
+
+    closeMenu();
+    history_index_.reset();
+    text.assign(command);
+    text.moveTo(text.size());
+  }
+
   const ds::Option<Menu>& Line::menu() const noexcept {
     return menu_;
   }

@@ -201,6 +201,26 @@ namespace {
     require(text(bounded).empty(), "refuses text beyond the capacity");
   }
 
+  // A command pasted from the history search starts Up and Down over: Down keeps it instead of
+  // bringing back a draft from before the paste.
+  void writeStartsHistoryOver() {
+    Editor editor;
+
+    for (const auto* command : {"echo one", "echo two"}) {
+      type(editor, command);
+      static_cast<void>(editor.press({.key = Key::enter}));
+    }
+
+    static_cast<void>(editor.press({.key = Key::up}));
+    static_cast<void>(editor.press({.key = Key::up}));
+    require(text(editor) == "echo one", "Up walks back");
+    editor.write("ls -la");
+    static_cast<void>(editor.press({.key = Key::down}));
+    require(text(editor) == "ls -la", "Down after a paste keeps it");
+    static_cast<void>(editor.press({.key = Key::up}));
+    require(text(editor) == "echo two", "Up after a paste starts from the newest");
+  }
+
   void emacs() {
     Editor editor;
 
@@ -555,6 +575,7 @@ namespace {
     require(arena.budget.liveBytes() == 0, "the line gives all of it back");
   }
 
+  const telar::testing::Case case_write_starts_history_over{"prompt_editor.write_starts_history_over", writeStartsHistoryOver};
   const telar::testing::Case case_memory_returns{"prompt_editor.memory_returns", memoryReturns};
   const telar::testing::Case case_layout_and_styles{"prompt_editor.layout_and_styles", layoutAndStyles};
   const telar::testing::Case case_routing{"prompt_editor.routing", routing};

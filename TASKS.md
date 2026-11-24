@@ -234,7 +234,7 @@ Legend: `[ ]` todo, `[x]` done, `[~]` not a bug / dropped (with reason).
   `runtime.history` of its own configuration with the new `readHistoryFilters`. A runtime on
   another machine keeps filtering by its own configuration.
 
-- [ ] **T19 (E18). Pasting from Ctrl+R does not reset Up/Down.**
+- [x] **T19 (E18). Pasting from Ctrl+R does not reset Up/Down.**
   `prompt::write` (`prompt.cpp:267`) keeps `history_index_`; a later Down restores an old
   draft over the pasted command.
   Expected: after a paste, Up/Down start from the end.

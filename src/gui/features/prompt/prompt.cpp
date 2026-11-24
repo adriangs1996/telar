@@ -278,10 +278,7 @@ namespace telar::gui::features::prompt {
   }
 
   void write(State& state, PaneLine& line, std::string_view command) {
-    auto& text = line.line.editorMut().textMut();
-
-    text.assign(command);
-    text.moveTo(text.size());
+    line.line.write(command);
     state.written = line.pane_id;
   }
 
