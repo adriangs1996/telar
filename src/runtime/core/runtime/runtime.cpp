@@ -2719,7 +2719,7 @@ namespace telar::runtime {
 
     // Only an editor is told where a file went: without one nothing is kept.
     if (edits) {
-      file_moves_.asked(identity, message);
+      file_moves_.asked(client.id, message);
     }
 
     submitBackground(background_, client, message);

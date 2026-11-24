@@ -1563,6 +1563,12 @@ return {api_version = 2, client = {
     // followed by its buffer, with its changes; and the focus leaves the editor's last window
     // for the explorer beside the panes.
     Q_SLOT void editorAndExplorerKnowOfEachOther() {
+      // The whole program runs close to the time its test is given: this case runs when it is
+      // asked for by its name, as the test `gui-quick-editor-explorer` asks.
+      if (!QCoreApplication::arguments().contains(QStringLiteral("editorAndExplorerKnowOfEachOther"))) {
+        QSKIP("Runs when asked for by its name, as the test gui-quick-editor-explorer does");
+      }
+
       if (QStandardPaths::findExecutable(QStringLiteral("nvim")).isEmpty()) {
         QSKIP("Neovim is not installed on this host");
       }
@@ -1690,8 +1696,9 @@ return {api_version = 2, client = {
       explorer->giveFocus(false);
       client_->commands()->execute(window_actions::Action::focus_right);
       QVERIFY(explorer->focused());
-      // Not left behind for the next case's editor.
-      editorView()->send(QStringLiteral("<Cmd>bwipeout!<CR>"));
+      // Over the panes again, as the cases after this one find it.
+      explorer->type(QStringLiteral("<C-w>T"));
+      QVERIFY(!explorer->pinned());
     }
 
     Q_SLOT void explorerListsAndChangesFiles() {

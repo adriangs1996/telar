@@ -61,13 +61,15 @@ Each row has the icon of its type, the same the editor's surfaces use. To its ri
   changed below it, as `●3`;
 - the panes whose shell is in that directory, by their number in the tab;
 - the marks set on it;
+- a ring, `○`, when an [editor pane](#with-the-editor) of its machine has the file in a
+  buffer, and a yellow dot, `●`, while that buffer has changes that were not written;
 - its size, with a bar that says its share of the largest entry beside it. The runtime
   measures a directory after it lists it, for two seconds at most: a size still to come shows
   as `…`, and one it did not finish ends in `+`.
 
 The preview beside the listing says the size, the time of the last change, what git says and
-the last commit of the selection, and shows its diff when it has changes not committed, or the
-head of its text.
+the last commit of the selection, which editor pane holds it, and shows its diff when it has
+changes not committed, or the head of its text.
 
 Of a directory it lists the five entries that weigh the most under **Heaviest**, each with its
 size and its part of all the directory holds. It does so from what the window already holds: a
@@ -174,9 +176,11 @@ The shortcuts of a file manager name the same commands: Cmd or Ctrl with `c`, `x
 - A line says the size of what it changes, when the window knows it, and in yellow what to
   know before a yes: that the name it goes to is taken, and so it takes another or, with
   `:w!`, replaces what is there; that an agent named the file after the time its listing
-  gave it, so the runtime may find another file and skip it; that a directory goes to the
-  trash with all it holds. A name is known as taken from the listings the window holds: one
-  in a directory it never listed is found by the runtime, which gives the file another.
+  gave it, so the runtime may find another file and skip it; that an editor holds the file,
+  or one below the directory, in a buffer with changes that were not written; that a
+  directory goes to the trash with all it holds. A name is known as taken from the listings
+  the window holds: one in a directory it never listed is found by the runtime, which gives
+  the file another.
 - `u` with nothing typed takes the last plan back.
 - A plan holds 64 operations at most.
 
@@ -251,7 +255,9 @@ Beside the panes the explorer takes the keys only while it has the focus:
 
 - the prefix and `o` give it the focus, and return it to the pane; a click in it gives it too;
 - the keys that move the focus between panes enter it from the pane that has none at its right,
-  go from one of its windows to the other, and leave it at the left of the first;
+  go from one of its windows to the other, and leave it at the left of the first. From an
+  editor pane `navigate_pane` asks Neovim first for a window on that side, and enters the
+  explorer when it has none;
 - `q` closes it, and it opens beside the panes again in that workspace, for as long as the
   window lives. Another workspace has it where it was left there.
 
@@ -342,6 +348,31 @@ other, 256 KiB at a time, and holds one such piece of it and no more.
   until the next file arrives on that machine, which removes the ones no piece reached for a
   quarter of an hour.
 
+## With the editor
+
+The explorer and the [editor panes](editor.md) of a machine know of each other.
+
+- **Which files are open.** Each editor says which files its listed buffers show, and which
+  of them have changes that were not written. A row of such a file is marked, `○` or `●`,
+  and its preview says which pane holds it: `pane 2 · changes not written`, or `another tab`
+  for an editor of a tab that does not show.
+- **Before a file is taken from under a buffer.** A line of the plan that moves, deletes or
+  restores a file an editor holds with changes not written, or with `:w!` replaces it, says
+  so in yellow. It is a warning: the runtime does what the plan says when you answer `y`.
+- **A buffer follows its file.** When a plan moves or renames a file, or a directory above
+  it, the runtime tells every editor of the machine, and the buffer that shows the file shows
+  it under its new name, as after Neovim's `:file`: its changes and its undo are kept, and
+  nothing is written for it. A buffer without changes reads the file again where it is. One
+  with changes asks for `:w!` the first time it is written there, as Neovim does after
+  `:file`. `u` with nothing typed, which takes the plan back, takes the buffer back too. A
+  file that was deleted leaves its buffer as Neovim leaves one whose file is gone.
+- **From the editor.** `:Telar explore` opens the explorer on the directory of the file being
+  edited, fixed there and with that file selected; in a buffer without a file, on the
+  editor's directory. Beside the panes it takes the keys.
+
+Neovim names a file by the real path of its directory. A row reached through a symbolic link
+has another name, and is not marked; its buffer still follows a move.
+
 ## Change its keys
 
 The keys of normal and visual mode are the ones above until a configuration changes them:
@@ -358,6 +389,10 @@ by its name, or to nothing. The help, the hints and the menus then show the keys
 - Beside the panes the explorer is the window's own: the runtime does not know of it as a
   pane, so it is not part of a tab's layout, is not split or moved with the panes, and does not
   return when the window is opened again.
-- From an editor pane the keys that move the focus do not enter the explorer beside it: the
-  editor is asked for its own window on that side. The prefix and `o`, or a click, do.
+- The files an editor holds are the ones the window last saw it hold, and it sees an editor
+  while its tab shows: what an editor of another tab opened or wrote since is not marked,
+  nor warned of in the plan, until its tab shows again. Its buffers follow a move all the
+  same, which the runtime sees to. No more than 64 files of an editor are told.
+- A file moved from one machine to another is a copy there and a deletion here: its buffer
+  does not follow it.
 - `Tab` completes no path of another machine than the window's.

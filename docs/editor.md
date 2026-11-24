@@ -124,6 +124,17 @@ is the real buffer, with its highlighting. `Enter` opens the entry, `Control+Ent
 `Command+Enter` in a split, and `Option+Enter` in a tab page. `Tab` marks entries, and `Enter`
 then sends the marked ones to the quickfix list. `Shift+Tab` changes what is listed.
 
+## The explorer
+
+`:Telar explore` opens the [explorer](explorer.md#with-the-editor) on the directory of the file
+you are editing, with that file selected. In a buffer without a file it opens on the editor's
+directory.
+
+The explorer knows which files the editor has open: it marks their rows, apart while a buffer
+has changes that were not written, and its plan warns before it moves or deletes such a file.
+When it moves or renames a file, the buffer that shows it shows it under its new name, with
+its changes and its undo, and nothing is written for it.
+
 ## telar's theme
 
 The editor's colorscheme is the theme of the window that shows it: the same colors color the
@@ -148,7 +159,9 @@ by it again. `vim.g.telar_tint` takes the options of the theme's engine, such as
   `vim.ui.open` always did. Text whose highlight names a URL, as a link of a Markdown file
   does, is underlined, and the pointer over it is the one of a link.
 - Moving the focus to a side with `navigate_pane` asks the editor first for a window on that
-  side, and moves to the pane there when it has none. No plugin is needed for it.
+  side, and moves to the pane there when it has none, or into the
+  [explorer](explorer.md#beside-the-panes) that stands beside the panes on that side. No
+  plugin is needed for it.
 - The pane's directory is the one of Neovim's current window, `:lcd` and `:tcd` included.
 
 Nothing is installed in Neovim for any of this: the runtime teaches it when it starts, before
