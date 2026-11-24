@@ -143,6 +143,8 @@ namespace telar::gui::features::prompt {
 
     // vim's e: the last character of the current or next word.
     [[nodiscard]] std::size_t endOfWord(std::size_t offset, bool big) const noexcept;
+    // The end of the word before the one at `offset`, as vim's ge goes back to it.
+    [[nodiscard]] std::size_t wordEndBackward(std::size_t offset, bool big) const noexcept;
 
     // ---- vim -------------------------------------------------------------------------------
 

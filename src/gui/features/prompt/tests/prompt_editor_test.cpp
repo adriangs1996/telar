@@ -451,6 +451,17 @@ namespace {
       type(editor, "\x1bgg$bdw");
       require(text(editor) == "one \nthree", "dw deletes the last word alone");
     }
+
+    // ge goes back to the end of the word before, and dge deletes through it.
+    {
+      Editor editor{Keymap::vim};
+
+      start(editor, "one two three");
+      type(editor, "0fhge");
+      require(cursor(editor) == 6, "ge goes to the end of the word before");
+      type(editor, "fhdge");
+      require(text(editor) == "one twree", "dge deletes from there through the cursor");
+    }
   }
 
   void routing() {

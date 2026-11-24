@@ -491,6 +491,30 @@ namespace telar::gui::features::prompt {
     return position;
   }
 
+  std::size_t Editor::wordEndBackward(std::size_t offset, bool big) const noexcept {
+    auto position = offset;
+
+    // Out of the word the cursor is on, then over the blanks before it.
+    if (!blank(position)) {
+      const auto run = kind(position, big);
+
+      while (position > 0 && kind(text_.previous(position), big) == run) {
+        position = text_.previous(position);
+      }
+    }
+
+    if (position == 0) {
+      return 0;
+    }
+
+    position = text_.previous(position);
+    while (position > 0 && blank(position)) {
+      position = text_.previous(position);
+    }
+
+    return position;
+  }
+
   std::size_t Editor::endOfWord(std::size_t offset, bool big) const noexcept {
     auto position = text_.next(offset);
 
@@ -656,7 +680,13 @@ namespace telar::gui::features::prompt {
     }
 
     if (character == 'e' || character == 'E') {
-      return applyMotion(Motion{.target = wordStart(text_.cursor(), character == 'E'), .inclusive = true});
+      auto target = text_.cursor();
+
+      for (std::size_t index = 0; index < count(); ++index) {
+        target = wordEndBackward(target, character == 'E');
+      }
+
+      return applyMotion(Motion{.target = target, .inclusive = true});
     }
 
     reset();

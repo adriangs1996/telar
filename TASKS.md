@@ -395,7 +395,7 @@ Legend: `[ ]` todo, `[x]` done, `[~]` not a bug / dropped (with reason).
   `store()`.
 - [x] **T41 (V27).** `dw` on a line's last word joins the lines: when `w` crosses into the
   next line, stop at the end of the line (vim's special case).
-- [ ] **T42 (V28).** `ge`/`dge` go to a word start: add a `wordEndBackward` motion.
+- [x] **T42 (V28).** `ge`/`dge` go to a word start: add a `wordEndBackward` motion.
 - [ ] **T43 (V29).** `T,` then `;` never moves: make `findBefore` symmetric with `findAfter`
   (`substr(from)`), and let `;` after `T` skip the adjacent character.
 - [ ] **T44 (V30).** `d$`/`c$`/`y$` on an empty line take the newline: `lineEndMotion` is a
