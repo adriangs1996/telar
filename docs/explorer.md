@@ -75,8 +75,18 @@ Each row has the icon of its type, the same the editor's surfaces use. To its ri
 - a ring, `○`, when an [editor pane](#with-the-editor) of its machine has the file in a
   buffer, and a yellow dot, `●`, while that buffer has changes that were not written;
 - its size, with a bar that says its share of the largest entry beside it. The runtime
-  measures a directory after it lists it, for two seconds at most: a size still to come shows
-  as `…`, and one it did not finish ends in `+`.
+  measures a directory after it lists it, for two seconds at most each time it is asked: a
+  size still to come shows as `…`, and one it did not finish ends in `+`. It is asked again
+  for the ones it did not finish, four times at most, and goes further each time, since it
+  remembers the directories it finished; a tree too large for that stays with its `+`.
+
+The runtime remembers what a directory weighed for thirty seconds, 16 384 of them at most,
+while the directory itself is the one it was: an entry that came or went is seen at once,
+and what changed deeper within those thirty seconds is not. A change the runtime itself
+applies, a plan or a file that arrived, makes it forget every size. A directory that holds a
+file with several names is measured each time, as that file counts where it is met first.
+A directory newly asked for waits behind no sizes: the measure that runs for the window ends,
+keeping what it finished, and the window asks again for the ones it still shows.
 
 The preview beside the listing says the size, the time of the last change, what git says and
 the last commit of the selection, which editor pane holds it and the marks set on it, and shows
@@ -268,8 +278,14 @@ on its own leaves as its text alone, and so does a directory on Linux.
 | `gX` | Discard the changes the working tree holds of a file, or of every file below a directory; what the index holds stays. It is a change typed, written by `:w`, as it loses work. |
 | `gc` | Commit what is staged: it opens `:commit` for the message. |
 
-The head of a window says the branch, how far it is from its upstream, and how many paths are
-staged, changed and untracked.
+The head of a window says the branch, how far it is from its base, as `↑6 main`, and how many
+paths are staged, changed and untracked. The base is the branch the remote has as its head,
+`origin/HEAD`, of the remote the branch follows or of `origin`; where the remote names none,
+as in a repository that was not cloned, it is the branch this one follows; and with neither
+the head says no distance. It is shown by its name without the remote, and the number is the
+commits the branch has that the base lacks. On the base itself it shows only when there are
+some. The runtime asks git for it once for a commit and keeps it for fifteen seconds, so a
+fetch that moves the base shows a little later.
 
 ## Windows
 
@@ -342,12 +358,22 @@ comes from the runtime of its own machine; a machine with no window is asked for
 | `:e LABEL:PATH`, `:vs LABEL:PATH`, `:sp LABEL:PATH` | Take this window, or a new one, to a path of the machine with that label: `:vs box:~/logs`. `~` is the home of the account there, which its runtime says. |
 | `:machine LABEL` | Take this window to that machine: where this explorer last was on it, or its home. `:machine` alone lists the machines. |
 | `gm`, or a click on the machine in the head | The next machine that answers, around. |
-| `Tab` | Complete the label of a machine before its colon, where no directory starts that way. |
+| `Tab` | Complete the label of a machine before its colon, where no directory starts that way; and after the colon, the directory being typed, from what that machine lists: `:e box:~/lo` becomes `:e box:~/logs/`. A path that starts nowhere starts at the home there. |
 
 - A machine that is disabled or not connected, or whose runtime is too old to answer for
   files, says so in its window, and is asked for nothing until it answers.
-- A window on another machine than the one the window shows follows no pane: `gp` and `gw`
-  are refused there, and `gh` goes to the home of its machine.
+- A machine that goes away while a window lists it keeps what it last listed there, to be
+  read: the dot of its head turns red and says `away`, and the status line says `[stale]`.
+  The selection moves, a path is copied, and what was already listed below unfolds; a change
+  typed there, `cw`, `o`, `dd`, `p`, `ga`, `gu`, `gX` or `gc`, is refused with a line that
+  says why. Once the machine is back the window reads it again.
+
+  ![A window on a machine that went away](images/telar-explorer-stale.png)
+- A window on another machine than the one the window shows follows no pane. What it hands
+  over goes to the tab its own machine has in view: `_`, `gw` and `gp` take it to the root of
+  the workspace of that tab, `gh` to the home of its machine, `@` mentions the files to the
+  agent of that tab, the focused pane when it is one, and `s` opens a shell there in the
+  directory of the row. They say so when that machine has no tab in view, or no agent in it.
 - A mark in lower case belongs to the machine it was set on; from another one, `'a` says so
   and goes nowhere. A mark in upper case keeps its machine: `'B` takes the window there in
   one jump, which `Ctrl+o` takes back. The jumps go back and forward across machines.
@@ -358,9 +384,10 @@ comes from the runtime of its own machine; a machine with no window is asked for
   restores them with it. A place of a machine the next window does not keep is kept all the
   same: `:marks` lists it, and going to it says its machine is none of the window's.
 - A path names a file on its own machine alone. With the file on one machine and the
-  focused pane on another, Enter and `@` type nothing and ask whether to
-  [bring a copy](#between-machines); `cd` is refused. `gf` opens the file in an editor of its
-  machine and shows that machine; `yy` copies `LABEL:/absolute/path`.
+  focused pane on another, Enter types nothing and asks whether to
+  [bring a copy](#between-machines), and so do rows let go on a pane; `cd` is refused. `gf`
+  opens the file in an editor of its machine and shows that machine; `yy` copies
+  `LABEL:/absolute/path`.
 - `:w` shows one plan for every window, and each line says its machine when they are of more
   than one. Accepting it sends each runtime the operations on its own files; the line under
   the windows counts what all of them did, and `u` takes the plan back on every machine it
@@ -377,7 +404,7 @@ other, 256 KiB at a time, and holds one such piece of it and no more.
 | `dd`, `p` on another machine, `:w` | A MOVE line. The original goes to the trash of its machine once the copy is whole and has its name, and not before. |
 | A drag onto a window of another machine | A copy; with Shift held, a move. On its own machine a drag moves, and copies with Alt. |
 | A file of another machine dragged out of the window | A copy where it is let go: on macOS where the system asks for it, a directory too, as its tree; on Linux a file, through the cache. See [the pointer](#with-the-pointer). |
-| Enter or `@` on a file, with the focused pane on another machine | The line under the windows asks `bring a copy there? [y/N]`. With `y` the file goes to `~/Downloads/telar/LABEL/` on the pane's machine, in a directory made when it is missing, and its path is typed at the pane once it is whole. Any other key leaves it. |
+| Enter on a file, or on rows chosen with `V`, with the focused pane on another machine; or those rows let go on a pane of another machine | The line under the windows asks `bring a copy there? [y/N]`, of each row when they are several. With `y` each goes to `~/Downloads/telar/LABEL/` on the pane's machine, in a directory made when it is missing, a directory as its tree, and its path is typed at the pane once it is whole, as a mention for an agent. Any other key leaves it. An editor's pane is brought nothing: `gf` opens the file where it is. |
 | `:cancel` | Stops the files on their way to or from the machine of this window; `:cancel!` stops every one. |
 
 ![A file on its way from one machine to another](images/telar-explorer-transfer.png)
@@ -462,4 +489,7 @@ by its name, or to nothing. The help, the hints and the menus then show the keys
   same, which the runtime sees to. No more than 64 files of an editor are told.
 - A file moved from one machine to another is a copy there and a deletion here: its buffer
   does not follow it.
-- `Tab` completes no path of another machine than the window's.
+- The tab another machine has in view is the one its session in this window shows: a window
+  of the explorer on that machine does not choose another workspace of it to act in.
+- The directories made above what is brought for a pane, `~/Downloads/telar/LABEL/`, stay
+  when the copy is taken back or cancelled.
