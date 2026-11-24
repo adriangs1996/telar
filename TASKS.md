@@ -424,7 +424,7 @@ Legend: `[ ]` todo, `[x]` done, `[~]` not a bug / dropped (with reason).
 
 - [x] **T51.** `put()` builds count × register before the capacity check (`9999p` with a
   256 KiB register tries ~2.5 GB): check `count * size` against the capacity first.
-- [ ] **T52.** Each undo group clones the whole buffer (up to 64 MiB per pane): store diffs
+- [x] **T52.** Each undo group clones the whole buffer (up to 64 MiB per pane): store diffs
   (range and previous text) instead.
 - [ ] **T53.** Pasted bidi and zero-width characters (U+202E) make the shown command differ
   from the one that runs: draw them as visible marks (`⟨U+202E⟩`) in the editor.

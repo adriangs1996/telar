@@ -247,6 +247,49 @@ namespace {
     require(cursor(editor) == 16, "after Ctrl-E, Down goes from the line's end, not the column before");
   }
 
+  // An undo step keeps what it changed, not the whole text: many small edits of a long command
+  // hold little, and undo and redo still bring each state back.
+  void undoKeepsChanges() {
+    constexpr std::size_t budget = std::size_t{2} * 1024 * 1024;
+    constexpr std::size_t length = std::size_t{60} * 1024;
+    Editor editor{Keymap::emacs, budget};
+    const std::string long_text(length, 'x');
+
+    editor.write(long_text);
+    for (int index = 0; index < 200; ++index) {
+      control(editor, 'a');
+      type(editor, "y");
+    }
+
+    require(text(editor).size() == length + 200, "every edit took");
+    for (int index = 0; index < 200; ++index) {
+      control(editor, '_');
+    }
+
+    require(text(editor) == long_text, "undo brings the text back");
+    type(editor, "ab");
+    static_cast<void>(editor.press({.key = Key::backspace}));
+    type(editor, "c");
+    control(editor, '_');
+    require(text(editor) == "a" + long_text, "undo takes the last typing back");
+    control(editor, '_');
+    require(text(editor) == "ab" + long_text, "then the erasure");
+    control(editor, '_');
+    require(text(editor) == long_text, "then the first typing");
+
+    // Redo brings each step forward again.
+    Editor vim{Keymap::vim};
+
+    type(vim, "one two");
+    type(vim, "\x1b"
+              "0dwxu");
+    require(text(vim) == "two", "undo takes the last change back");
+    control(vim, 'r');
+    require(text(vim) == "wo", "redo brings it again");
+    type(vim, "uu");
+    require(text(vim) == "one two", "undo goes back through every step");
+  }
+
   // Kills in a row join one kill ring entry, the ones backward before it, as readline's do.
   void emacsKillsAccumulate() {
     Editor backward;
@@ -855,6 +898,7 @@ namespace {
   const telar::testing::Case case_vim_fixes{"prompt_editor.vim_fixes", vimFixes};
   const telar::testing::Case case_emacs_goal_column{"prompt_editor.emacs_goal_column", emacsGoalColumn};
   const telar::testing::Case case_emacs_kills_accumulate{"prompt_editor.emacs_kills_accumulate", emacsKillsAccumulate};
+  const telar::testing::Case case_undo_keeps_changes{"prompt_editor.undo_keeps_changes", undoKeepsChanges};
   const telar::testing::Case case_memory_returns{"prompt_editor.memory_returns", memoryReturns};
   const telar::testing::Case case_layout_and_styles{"prompt_editor.layout_and_styles", layoutAndStyles};
   const telar::testing::Case case_routing{"prompt_editor.routing", routing};
