@@ -64,6 +64,12 @@ namespace telar::gui::features::prompt {
     // Ends the current undo group, as moving the cursor does.
     void seal() noexcept;
 
+    // Every change until release() is one undo step, the text before the first restored by it:
+    // vim's insert, from the command that began it to Escape.
+    void hold() noexcept;
+
+    void release() noexcept;
+
     // Code point navigation.
     [[nodiscard]] std::size_t next(std::size_t offset) const noexcept;
 
@@ -117,6 +123,9 @@ namespace telar::gui::features::prompt {
     std::size_t anchor_ = 0;
     std::uint64_t revision_ = 0;
     Group group_ = Group::none;
+    bool holding_ = false;
+    // Whether the held step took its snapshot, at its first change.
+    bool held_ = false;
   };
 
   // Word classes as vim and readline use them: letters, digits and underscore form words,

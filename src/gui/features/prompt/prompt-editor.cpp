@@ -160,6 +160,7 @@ namespace telar::gui::features::prompt {
     case Action::insert_mode:
       if (keymap_ == Keymap::vim && mode_ != Mode::insert) {
         mode_ = Mode::insert;
+        text_.hold();
         reset();
       }
 
@@ -547,7 +548,7 @@ namespace telar::gui::features::prompt {
 
   void Editor::enterNormal() {
     mode_ = Mode::normal;
-    text_.seal();
+    text_.release();
     const auto cursor = text_.cursor();
     if (cursor > text_.lineStart(cursor)) {
       text_.moveTo(text_.previous(cursor));
@@ -563,6 +564,7 @@ namespace telar::gui::features::prompt {
     mode_ = Mode::insert;
     text_.moveTo(offset);
     text_.seal();
+    text_.hold();
   }
 
   void Editor::clampNormal() noexcept {
@@ -1276,6 +1278,8 @@ namespace telar::gui::features::prompt {
         --end;
       }
 
+      // What it deletes and what is typed after it undo as one step.
+      text_.hold();
       text_.replace(start, end, {});
       mode_ = Mode::insert;
       break;
@@ -1597,6 +1601,8 @@ namespace telar::gui::features::prompt {
 
   void Editor::openLine(bool above) {
     const auto cursor = text_.cursor();
+
+    text_.hold();
 
     if (above) {
       const auto start = text_.lineStart(cursor);

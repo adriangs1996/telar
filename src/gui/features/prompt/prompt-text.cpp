@@ -77,7 +77,12 @@ namespace telar::gui::features::prompt {
     }
 
     const bool joined = kind != Group::none && kind == group_ && !undo_.empty() && (kind == Group::insert ? start == cursor_ : end == cursor_ || start == cursor_);
-    if (!joined) {
+    if (holding_) {
+      if (!held_) {
+        record();
+        held_ = true;
+      }
+    } else if (!joined) {
       record();
     }
 
@@ -112,6 +117,17 @@ namespace telar::gui::features::prompt {
 
   bool Text::redo() {
     return travel(false);
+  }
+
+  void Text::hold() noexcept {
+    holding_ = true;
+    held_ = false;
+  }
+
+  void Text::release() noexcept {
+    holding_ = false;
+    held_ = false;
+    group_ = Group::none;
   }
 
   void Text::seal() noexcept {
@@ -239,6 +255,8 @@ namespace telar::gui::features::prompt {
     bytes_ = std::move(snapshot.bytes);
     cursor_ = anchor_ = std::min(snapshot.cursor, bytes_.size());
     group_ = Group::none;
+    holding_ = false;
+    held_ = false;
     ++revision_;
     return true;
   }

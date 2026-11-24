@@ -400,7 +400,7 @@ Legend: `[ ]` todo, `[x]` done, `[~]` not a bug / dropped (with reason).
   (`substr(from)`), and let `;` after `T` skip the adjacent character.
 - [x] **T44 (V30).** `d$`/`c$`/`y$` on an empty line take the newline: `lineEndMotion` is a
   no-op when `end == line`.
-- [ ] **T45 (V31).** Undo grouping: one group per insert, from the operator (`c`, `o`, `s`)
+- [x] **T45 (V31).** Undo grouping: one group per insert, from the operator (`c`, `o`, `s`)
   to Esc; a Backspace inside the insert does not split it (`cwxyz<Esc>u`, `oabc<Esc>u`,
   `iabc<BS>d<Esc>u`).
 - [ ] **T46 (V32).** `r` followed by BS, an arrow or Delete deletes the character: cancel the

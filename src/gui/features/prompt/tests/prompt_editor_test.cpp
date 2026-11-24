@@ -482,6 +482,21 @@ namespace {
       type(editor, "\x1bggjd$");
       require(text(editor) == "a\n\nb", "d$ on an empty line deletes nothing");
     }
+
+    // An insert is one undo step, from the command that began it to Escape, erasures included.
+    {
+      Editor editor{Keymap::vim};
+
+      start(editor, "one two");
+      type(editor, "0cwxyz\x1bu");
+      require(text(editor) == "one two", "cw and what it typed undo together");
+      type(editor, "oabc\x1bu");
+      require(text(editor) == "one two", "o and what it typed undo together");
+      type(editor, "$aabc");
+      static_cast<void>(editor.press({.key = Key::backspace}));
+      type(editor, "d\x1bu");
+      require(text(editor) == "one two", "a Backspace inside the insert does not split it");
+    }
   }
 
   void routing() {
