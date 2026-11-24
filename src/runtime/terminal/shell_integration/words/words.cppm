@@ -114,10 +114,14 @@ export namespace telar::runtime {
   // One query at a time; later ones wait in order, at most a few per client.
   class WordService {
   public:
+    static constexpr std::size_t waiting_per_client = 4;
+
     explicit WordService(tbc::mut_a<ConcurrentMemory> memory, std::string_view configuration_directory = {});
 
-    // The service keeps the request, and the names it shares, until its turn comes.
-    void request(tbc::holds<const WordRequest&, tbc::lt::a> request);
+    // The service keeps the request, and the names it shares, until its turn comes. A client
+    // with as many waiting as it keeps makes room: the id of its oldest waiting request, which
+    // will not be answered and the caller fails, comes back.
+    [[nodiscard]] ds::Option<std::uint64_t> request(tbc::holds<const WordRequest&, tbc::lt::a> request);
 
     // The consumer is the caller's type; the queue's collect is a template over it too.
     template <typename Consumer>

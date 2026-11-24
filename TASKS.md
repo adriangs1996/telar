@@ -162,7 +162,7 @@ Legend: `[ ]` todo, `[x]` done, `[~]` not a bug / dropped (with reason).
   Fix: mark `Choice` as joined when the candidate is a spec option followed by `~` (the
   matcher knows) and skip the space for it.
 
-- [ ] **T11 (C10). Requests dropped without an answer hang Tab.**
+- [x] **T11 (C10). Requests dropped without an answer hang Tab.**
   `words.cpp:914` returns silently when a client has 4 requests waiting. A dropped
   `RequestCommandSpec` leaves the GUI's spec `pending`, so Tab does nothing for that command
   until the shell runs another; a dropped completion leaves the menu at "…".

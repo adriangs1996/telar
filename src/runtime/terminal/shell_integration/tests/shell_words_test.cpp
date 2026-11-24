@@ -95,6 +95,30 @@ namespace {
     std::filesystem::remove_all(root);
   }
 
+  // A client with as many requests waiting as the service keeps makes room by failing its
+  // oldest, which the runtime answers, instead of losing the new one without a word.
+  void testFullQueueFailsOldest() {
+    telar::testing::TestMemory adapter;
+    telar::ConcurrentMemory& memory = adapter;
+    WordService service{memory};
+    WordRequest request{.client = 1, .request = 1, .provider = CompletionProvider::make_target, .prefix = {}, .directory = {}, .home = {}, .path = {}};
+
+    request.directory.assign("/nonexistent");
+    // The first runs until it is collected; the next four wait.
+    for (std::uint64_t id = 1; id <= 5; ++id) {
+      request.request = id;
+      check(!service.request(request), "a request with room drops none");
+    }
+
+    request.request = 6;
+    const auto dropped = service.request(request);
+
+    check(dropped && *dropped == 2, "the oldest waiting request is failed to make room");
+    request.client = 2;
+    request.request = 7;
+    check(!service.request(request), "another client's requests have room of their own");
+  }
+
   void testTokenParse() {
     const auto valid = std::string(16, 'a') + "0123456789abcdef";
     const auto token = ShellToken::parse(valid);
@@ -285,6 +309,7 @@ namespace {
   const telar::testing::Case case_directory_words{"shell_words.directory_words", testDirectoryWords};
   const telar::testing::Case case_remote_specs{"shell_words.remote_specs", testRemoteSpecs};
   const telar::testing::Case case_names_survive_long_paths{"shell_words.names_survive_long_paths", testNamesSurviveLongPaths};
+  const telar::testing::Case case_full_queue_fails_oldest{"shell_words.full_queue_fails_oldest", testFullQueueFailsOldest};
   const telar::testing::Case case_token_parse{"shell_words.token_parse", testTokenParse};
   const telar::testing::Case case_ignores_special_and_oversized_files{"shell_words.ignores_special_and_oversized_files", testIgnoresSpecialAndOversizedFiles};
   const telar::testing::Case case_cuts_descriptions_at_characters{"shell_words.cuts_descriptions_at_characters", testCutsDescriptionsAtCharacters};

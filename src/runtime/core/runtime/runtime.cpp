@@ -2445,7 +2445,7 @@ namespace telar::runtime {
 
     request.directory.assign(pane->body.shell_zones && !pane->body.shell_zones->directory().empty() ? pane->body.shell_zones->directory() : std::string_view{pane->core.cwd});
     request.home.assign(processHome());
-    words_.request(request);
+    queueWords(client, request);
   }
 
   template <EventLoop Poller, typename Background>
@@ -2464,7 +2464,16 @@ namespace telar::runtime {
     request.remote = pane->body.shell_state.remote;
     request.spec = true;
     request.known_digest = message.known_digest;
-    words_.request(request);
+    queueWords(client, request);
+  }
+
+  template <EventLoop Poller, typename Background>
+    requires BackgroundExecutor<Background, ConcurrentMemory>
+  void Runtime<Poller, Background>::queueWords(ClientSession& client, const WordRequest& request) {
+    // Every request is answered: the oldest one the service let go to make room fails.
+    if (const auto dropped = words_.request(request)) {
+      client.connection.send(RequestFailed{.request_id = *dropped, .code = FailureCode::resource_limit, .message = "Too many completion requests are waiting"});
+    }
   }
 
   template <EventLoop Poller, typename Background>

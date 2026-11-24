@@ -1032,12 +1032,21 @@ namespace telar::runtime {
       : worker_(std::in_place, memory, configuration_directory),
         queue_(memory) {}
 
-  void WordService::request(tbc::holds<const WordRequest&, tbc::lt::a> request) {
-    if (std::ranges::count(queue_.waiting(), request.client, &WordRequest::client) >= 4) {
-      return;
+  ds::Option<std::uint64_t> WordService::request(tbc::holds<const WordRequest&, tbc::lt::a> request) {
+    ds::Option<std::uint64_t> dropped;
+    const auto waiting = queue_.waiting();
+
+    if (std::cmp_greater_equal(std::ranges::count(waiting, request.client, &WordRequest::client), waiting_per_client)) {
+      const auto oldest = std::ranges::find(waiting, request.client, &WordRequest::client)->request;
+
+      queue_.dropWaiting([&](const WordRequest& entry) {
+        return entry.client == request.client && entry.request == oldest;
+      });
+      dropped = oldest;
     }
 
     queue_.request(worker_, request);
+    return dropped;
   }
 
   int WordService::descriptor() const noexcept {
