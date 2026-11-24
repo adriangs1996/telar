@@ -373,10 +373,12 @@ export {
       // The workspaces a session was recorded in, each path once.
       void workspaces(const QueryHistoryWorkspaces& request, EncodedReply<ConcurrentMemory>& reply);
 
+      // The most a fuzzy search scores: runs, or for a list of each command once, commands.
+      static constexpr std::size_t maximum_fuzzy_candidates = 10'000;
+
     private:
       static constexpr auto entry_columns = "id, pane_id, started_at_ms, duration_ns, exit_code, status, command, cwd, workspace_path, author, origin, provider, command_truncated";
       static constexpr std::uint64_t command_hash_seed = 0x74656c6172;
-      static constexpr std::size_t maximum_fuzzy_candidates = 10'000;
       static constexpr std::string_view fuzzy_candidate_limit = "10000";
       // The SQL spells the cap out, so both must name the same number.
       static_assert(unsignedNumber<std::size_t>(fuzzy_candidate_limit).value_or(0) == maximum_fuzzy_candidates);
@@ -389,12 +391,6 @@ export {
         std::int64_t id;
         std::uint32_t score;
         std::uint32_t order;
-      };
-
-      struct FuzzyCandidate {
-        std::int64_t id;
-        std::uint64_t command_hash = 0;
-        ds::Option<std::uint32_t> score;
       };
 
       void queryFuzzy(const QueryHistory& request, EncodedReply<ConcurrentMemory>& reply);

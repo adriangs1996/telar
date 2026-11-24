@@ -276,10 +276,12 @@ namespace {
       check(result.snapshot_id == entry_count && !result.has_more && result.entries.size() == 3);
       check(result.entries[0].id == entry_count && result.entries[1].id == 2 && result.entries[2].id == 3);
 
+      // A list of each command once counts commands toward the cap, not runs: the oldest "gb",
+      // past 10,000 runs, is found, and scores first.
       query.distinct = true;
       store.query(query, reply);
       result = decodeReply<HistoryResults>(reply, storage.viewMut());
-      check(result.entries.size() == 2 && result.entries[0].id == entry_count && result.entries[1].id == 3 && !result.has_more);
+      check(result.entries.size() == 3 && result.entries[0].id == 1 && result.entries[1].id == entry_count && result.entries[2].id == 3 && !result.has_more);
 
       query.snapshot_id = candidate_limit;
       store.query(query, reply);

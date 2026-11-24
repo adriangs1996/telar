@@ -177,6 +177,23 @@ INSERT INTO command VALUES (1, x'01', 1, 0, 1, 1, 'legacy command', 0, '/legacy'
     check(commands(store, reply, QueryHistory{.request_id = 2, .limit = 10}) == std::vector<std::string>{"pwd"}, "the other commands stay");
   }
 
+  // A command run more than the fuzzy search reads, again and again, does not hide an older
+  // one: the cap counts distinct commands.
+  void testFuzzyCapCountsCommands() {
+    telar::testing::TestMemory adapter;
+    ConcurrentMemory& memory = adapter;
+    HistoryStore store{memory, ":memory:"};
+    EncodedReply reply{memory};
+    const auto owner = session(1, "/work");
+
+    finished(store, owner, "needle in the haystack", "/work");
+    for (std::size_t index = 0; index <= HistoryStore::maximum_fuzzy_candidates; ++index) {
+      finished(store, owner, "make", "/work");
+    }
+
+    check(commands(store, reply, QueryHistory{.request_id = 1, .query = "needle", .match = HistoryMatch::fuzzy, .distinct = true, .limit = 10}) == std::vector<std::string>{"needle in the haystack"}, "an older command is found past the runs of a newer one");
+  }
+
   void testFailedWriteRollsBack() {
     telar::testing::TestMemory adapter;
     ConcurrentMemory& memory = adapter;
@@ -555,6 +572,7 @@ INSERT INTO command VALUES (1, x'01', 1, 0, 1, 1, 'legacy command', 0, '/legacy'
   const telar::testing::Case case_migrates_legacy_schema{"history_store.migrates_legacy_schema", testMigratesLegacySchema};
   const telar::testing::Case case_strips_marks_from_stored_output{"history_store.strips_marks_from_stored_output", testStripsMarksFromStoredOutput};
   const telar::testing::Case case_removes_every_run_of_a_command{"history_store.removes_every_run_of_a_command", testRemovesEveryRunOfACommand};
+  const telar::testing::Case case_fuzzy_cap_counts_commands{"history_store.fuzzy_cap_counts_commands", testFuzzyCapCountsCommands};
   const telar::testing::Case case_failed_write_rolls_back{"history_store.failed_write_rolls_back", testFailedWriteRollsBack};
   const telar::testing::Case case_page_respects_payload_cap{"history_store.page_respects_payload_cap", testPageRespectsPayloadCap};
   const telar::testing::Case case_prune_failed_only{"history_store.prune_failed_only", testPruneFailedOnly};

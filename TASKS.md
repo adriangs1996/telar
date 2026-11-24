@@ -294,11 +294,14 @@ Legend: `[ ]` todo, `[x]` done, `[~]` not a bug / dropped (with reason).
   Decision: paste without running. A shell without integration cannot tell its phase: there
   Enter is held back only from a full-screen program, as the window cases' plain shell needs.
 
-- [ ] **T26 (H7). Fuzzy search only sees the 10,000 newest runs.**
+- [x] **T26 (H7). Fuzzy search only sees the 10,000 newest runs.**
   `store.cpp:865-869` limits candidates before scoring and deduping; `has_more` is false.
   Expected: it finds any command.
   Fix: dedupe in SQL before the limit (`GROUP BY command` with `MAX(id)`, ordered by
   time) so the cap is 10,000 distinct commands; set `has_more` when it is reached.
+  Decision: deduped while reading the started_at index instead of a `GROUP BY` over the
+  whole table on every keystroke: same cap of 10,000 distinct commands, and the scan still
+  stops there.
 
 - [ ] **T27 (H9). One history query cancels an unrelated one.**
   `src/runtime/workers/request_worker/request_worker.cpp:9` `supersededBy` compares only

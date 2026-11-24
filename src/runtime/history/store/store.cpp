@@ -906,13 +906,18 @@ END;
   }
 
   void HistoryStore::queryFuzzy(const QueryHistory& request, EncodedReply<ConcurrentMemory>& reply) {
-    // The newest candidates, newest first: SQLite stops at the limit through the started_at
-    // index instead of every command being read and scored on each keystroke.
+    // The newest candidates, newest first: SQLite walks the started_at index and stops at the
+    // cap instead of every command being read and scored on each keystroke. For a list of each
+    // command once, the cap counts commands, not runs: a run of a command already read is
+    // passed over as it is read, so no command run often hides an older one.
     auto sql = string("SELECT id, command FROM command WHERE id <= ?1");
 
     appendFilters(sql, request);
-    sql.append(" ORDER BY started_at_ms DESC, id DESC LIMIT ");
-    sql.append(fuzzy_candidate_limit);
+    sql.append(" ORDER BY started_at_ms DESC, id DESC");
+    if (!request.distinct) {
+      sql.append(" LIMIT ");
+      sql.append(fuzzy_candidate_limit);
+    }
 
     Statement statement{database_, sql};
 
@@ -922,31 +927,25 @@ END;
 
     ranked.reserve(maximum_fuzzy_candidates);
     HashSet seen{memory_};
-
-    ds::Vec<FuzzyCandidate, ConcurrentMemory> candidates{memory_};
-
-    candidates.reserve(maximum_fuzzy_candidates);
-    while (statement.next()) {
-      FuzzyCandidate candidate{.id = statement.integer(0)};
-      const auto command = statement.text(1);
-
-      if (request.distinct) {
-        candidate.command_hash = ImportIdentity::hash(command_hash_seed, command);
-      }
-
-      candidate.score = historyScore(command, request.query);
-      candidates.push(candidate);
-    }
-
+    std::size_t read = 0;
+    bool capped = false;
     std::uint32_t order = 0;
 
-    for (const auto& candidate : candidates) {
-      if (request.distinct && !seen.insert(candidate.command_hash, true)) {
+    while (statement.next()) {
+      const auto command = statement.text(1);
+
+      if (request.distinct && !seen.insert(ImportIdentity::hash(command_hash_seed, command), true)) {
         continue;
       }
 
-      if (candidate.score) {
-        ranked.push(RankedEntry{.id = candidate.id, .score = *candidate.score, .order = order++});
+      if (read == maximum_fuzzy_candidates) {
+        capped = true;
+        break;
+      }
+
+      ++read;
+      if (const auto score = historyScore(command, request.query)) {
+        ranked.push(RankedEntry{.id = statement.integer(0), .score = *score, .order = order++});
       }
     }
 
@@ -975,7 +974,8 @@ END;
       detail.reset();
     }
 
-    reply.send(HistoryResults{.request_id = request.request_id, .snapshot_id = request.snapshot_id, .has_more = start + rows_.entries().size() < ranked.size(), .entries = rows_.entries()});
+    // Past the cap there are commands the search did not read.
+    reply.send(HistoryResults{.request_id = request.request_id, .snapshot_id = request.snapshot_id, .has_more = capped || start + rows_.entries().size() < ranked.size(), .entries = rows_.entries()});
   }
 
   ds::String<ConcurrentMemory> HistoryStore::string(std::string_view value) const {
