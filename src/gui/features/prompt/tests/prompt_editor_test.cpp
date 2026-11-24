@@ -462,6 +462,17 @@ namespace {
       type(editor, "fhdge");
       require(text(editor) == "one twree", "dge deletes from there through the cursor");
     }
+
+    // ; after T skips the character T stopped after, as it does after t.
+    {
+      Editor editor{Keymap::vim};
+
+      start(editor, "a,b,c");
+      type(editor, "$T,");
+      require(cursor(editor) == 4, "T, right after the comma stays");
+      type(editor, ";");
+      require(cursor(editor) == 2, "; goes on to the comma before");
+    }
   }
 
   void routing() {

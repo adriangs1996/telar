@@ -993,7 +993,13 @@ namespace telar::gui::features::prompt {
   ds::Option<std::size_t> Editor::findBefore(std::size_t position, std::string_view needle, bool skip, std::size_t start) const {
     const auto view = text_.view();
     auto from = text_.previous(position);
-    if (skip && from > start && view.substr(text_.previous(from), needle.size()) == needle) {
+
+    // As findAfter does: the character right before the cursor, which T stopped after, is passed.
+    if (skip && position > start && view.substr(from, needle.size()) == needle) {
+      if (from <= start) {
+        return ds::none;
+      }
+
       from = text_.previous(from);
     }
 
