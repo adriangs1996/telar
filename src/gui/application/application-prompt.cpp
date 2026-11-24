@@ -110,7 +110,7 @@ namespace telar::gui::application::prompt {
         }
       }
 
-      auto plan = features::prompt::plan(state, *line, std::move(context.getMut()), {.specified = specified, .asks = asks, .directory = std::string_view{pane->cwd}, .dialect = dialect, .reads_directories = session.speaks(handshake::directory_words)});
+      auto plan = features::prompt::plan(state, *line, std::move(context.getMut()), {.specified = specified, .asks = asks, .directory = std::string_view{pane->cwd}, .dialect = dialect, .reads_directories = session.speaks(handshake::directory_words), .reads_references = session.speaks(handshake::reference_words)});
 
       for (std::size_t index = 0; index < features::prompt::questions(plan); ++index) {
         const auto request_id = session.link.nextRequest();

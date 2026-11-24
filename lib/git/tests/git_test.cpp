@@ -371,6 +371,39 @@ namespace {
       check(limited == 2, "stops at the limit");
     }
 
+    // Remote-tracking branches and tags, loose and packed, read with the refs alone: listing
+    // them never compares the working tree.
+    void testRemoteBranchesAndTags(Reader& reader) {
+      const auto directory = initialize("references");
+
+      write(directory + "/file.txt", "one\n");
+      commitAll(directory, "first");
+      run(directory, "git update-ref refs/remotes/origin/main HEAD && git update-ref refs/remotes/origin/only-remote HEAD && git symbolic-ref refs/remotes/origin/HEAD refs/remotes/origin/main");
+      run(directory, "git tag v1 && git tag -a v2 -m two && git pack-refs --all && git tag v3 && git update-ref refs/remotes/upstream/loose HEAD");
+      write(directory + "/file.txt", "dirty\n");
+
+      const auto& status = reader.refs(directory);
+      const auto list = [&](auto visit) {
+        std::set<std::string> names;
+
+        visit([&](std::string_view name) {
+          names.emplace(name);
+        });
+        return names;
+      };
+
+      check(status.repository == telar::git::RepositoryState::ready, "the refs are read");
+      check(status.changes.unstaged_modified == 0, "reading the refs compares no working tree");
+      check(list([&](auto&& visit) {
+        reader.remoteBranches(100, visit);
+      }) == std::set<std::string>{"origin/main", "origin/only-remote", "upstream/loose"},
+          "lists remote-tracking branches, packed and loose, without HEAD");
+      check(list([&](auto&& visit) {
+        reader.tags(100, visit);
+      }) == std::set<std::string>{"v1", "v2", "v3"},
+          "lists tags, packed and loose");
+    }
+
     void testUnborn(Reader& reader) {
       const auto directory = initialize("unborn");
 
@@ -1478,6 +1511,7 @@ namespace {
   };
   const telar::testing::Case case_plain_branch{"git.plain_branch", readsWithGit<testPlainBranch>};
   const telar::testing::Case case_detached_and_packed_refs{"git.detached_and_packed_refs", readsWithGit<testDetachedAndPackedRefs>};
+  const telar::testing::Case case_remote_branches_and_tags{"git.remote_branches_and_tags", readsWithGit<testRemoteBranchesAndTags>};
   const telar::testing::Case case_unborn{"git.unborn", readsWithGit<testUnborn>};
   const telar::testing::Case case_upstream{"git.upstream", readsWithGit<testUpstream>};
   const telar::testing::Case case_worktree{"git.worktree", readsWithGit<testWorktree>};

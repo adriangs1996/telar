@@ -170,7 +170,7 @@ Legend: `[ ]` todo, `[x]` done, `[~]` not a bug / dropped (with reason).
   Fix: fail the client's oldest waiting request with `RequestFailed{resource_limit}` and
   queue the new one. The GUI already handles `fail`.
 
-- [ ] **T12 (C11). The branch provider lists only local branches and runs a full status.**
+- [x] **T12 (C11). The branch provider lists only local branches and runs a full status.**
   `git.cpp:237-275` reads only `refs/heads` and packed-refs; `words.cpp:756/760/766` call
   `git_.read()`, which runs `readChanges()` and `readDivergence()` (`git.cpp:426-427`).
   Expected: `checkout`/`switch` offer local and remote branches (`origin/x`, and `x` when it
@@ -178,6 +178,9 @@ Legend: `[ ]` todo, `[x]` done, `[~]` not a bug / dropped (with reason).
   Fix: read `refs/remotes` and `refs/tags` too (loose and packed); split
   `StatusReader::read` into `refs()` and `status()` and use `refs()` for the branch,
   remote and stash providers.
+  Decision: `read()` stays (refs and status) and `refs()` joins it. Tags come through a
+  new `reference` provider for a spec's `@ref`, in the same cqp00012; merge and rebase now
+  take `@ref`, so `switch` is not offered tags.
 
 - [ ] **T13 (C12). A `#`-only line in a justfile empties the recipe list.**
   `words.cpp:328` `line.substr(line.find_first_not_of('#'))` throws on `npos`; `observe`

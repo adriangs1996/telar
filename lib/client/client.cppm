@@ -56,8 +56,8 @@ export {
       // LocateHome, ReadFile, WriteFile, EndFileWrite, QueryTouches, KeepPlaces and QueryPlaces, with their answers,
       // what an editor tells the explorer: NvimOpenFiles and NvimExplore, and the explorer as a
       // pane: CreateExplorerPane, KeepExplorer and ExplorerKept; cqp00012 adds the providers of
-      // CompleteWords that read one directory: path, directory and executable. Peers without them
-      // reject the messages.
+      // CompleteWords that read one directory, path, directory and executable, and reference,
+      // which names revisions. Peers without them reject the messages.
       inline constexpr SchemaId schema_id{'c', 'q', 'p', '0', '0', '0', '1', '2'};
 
       // The schemas a client of this build can speak with a runtime, oldest first. Each added
@@ -84,6 +84,10 @@ export {
       // The first dialect whose runtime completes from one directory, CompleteWords' path,
       // directory and executable providers; an older one is asked with FindPaths.
       inline constexpr Dialect directory_words = Dialect::cqp00012;
+
+      // The first dialect whose runtime names revisions, CompleteWords' reference provider; an
+      // older one is asked for branches.
+      inline constexpr Dialect reference_words = Dialect::cqp00012;
 
       inline constexpr ds::Array<SchemaId, 12> dialect_schemas{
           SchemaId{'8', '7', '6', 'b', '4', '8', '0', 'd'},

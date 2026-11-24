@@ -870,17 +870,30 @@ namespace telar::runtime {
       commands({.path = request.path.view(), .prefix = prefix}, add);
       break;
     case CompletionProvider::branch:
-      git_.read(request.directory.view());
+    case CompletionProvider::reference: {
+      // A branch only a remote has checks out by its own name too, as git checkout does.
+      const auto remote_branch = [&](std::string_view name) {
+        add(name);
+        add(name.substr(name.find('/') + 1));
+      };
+
+      git_.refs(request.directory.view());
       git_.branches(maximum_entries, add_word);
+      git_.remoteBranches(maximum_entries, remote_branch);
+      if (request.provider == CompletionProvider::reference) {
+        git_.tags(maximum_entries, add_word);
+      }
+
       break;
+    }
     case CompletionProvider::remote:
-      git_.read(request.directory.view());
+      git_.refs(request.directory.view());
       git_.remotes(add_word);
       break;
     case CompletionProvider::stash: {
       constexpr std::size_t stash_name_bytes = 32;
 
-      git_.read(request.directory.view());
+      git_.refs(request.directory.view());
       const auto count = git_.stashes(maximum_words);
 
       for (std::size_t index = 0; index < count; ++index) {

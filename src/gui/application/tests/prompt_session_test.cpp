@@ -643,6 +643,16 @@ command = "switch" : "Switch branches" , { @branch } | "status" : "Show the work
     tab(client);
     check(prompt::line(client, 1)->menu() && prompt::line(client, 1)->menu()->choices.size() == 2, "its values complete");
     prompt::key(client, 1, prompt::KeyPress{.key = prompt::Key::escape});
+
+    // A revision asks for references, which name tags and remote branches as well.
+    prompt::key(client, 1, prompt::KeyPress{.key = prompt::Key::character, .character = 'u', .modifiers = {.control = true}});
+    typeKeys(client, "tig v");
+    tab(client);
+    const auto tig = transport.last<RequestCommandSpec>();
+
+    deliver(client, CommandSpec{.request_id = tig.request_id, .command = "tig", .state = CommandSpecState::available, .digest = 5, .source = "tig = { @ref } ;"});
+    check(transport.last<CompleteWords>().provider == CompletionProvider::reference && transport.last<CompleteWords>().prefix == "v", "a spec's @ref asks for references");
+    prompt::key(client, 1, prompt::KeyPress{.key = prompt::Key::escape});
   }
 
   void lineCompletes() {

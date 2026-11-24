@@ -438,6 +438,9 @@ export namespace telar::gui::features::prompt {
     std::string_view directory;
     shell::Dialect dialect = shell::Dialect::posix;
     bool reads_directories = false;
+    // The runtime names revisions, tags too, where a spec expects a @ref; an older one lists
+    // branches there.
+    bool reads_references = false;
   };
 
   // The choices for `context` in `line`, from `sources`.

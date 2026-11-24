@@ -148,6 +148,9 @@ export extern "C++" {
       path = 10,
       directory = 11,
       executable = 12,
+      // A revision by name: branches, remote-tracking branches and tags. Since cqp00012, as is
+      // branch's listing of remote-tracking branches.
+      reference = 13,
     };
 
     // Asks for the values of `provider` that start with `prefix`, for the pane's integrated shell.
@@ -162,7 +165,7 @@ export extern "C++" {
 
     template <>
     struct MessageSchema<CompleteWords>
-        : Schema<Direction::client, ClientTag::complete_words, Field<&CompleteWords::request_id, NonzeroU64, "request_id">, Field<&CompleteWords::pane_id, NonzeroU64, "pane_id">, Field<&CompleteWords::provider, EnumByte<CompletionProvider, std::to_underlying(CompletionProvider::executable)>, "provider">, Field<&CompleteWords::prefix, DisplayText16<CompleteWords::maximum_prefix_bytes>, "prefix">> {};
+        : Schema<Direction::client, ClientTag::complete_words, Field<&CompleteWords::request_id, NonzeroU64, "request_id">, Field<&CompleteWords::pane_id, NonzeroU64, "pane_id">, Field<&CompleteWords::provider, EnumByte<CompletionProvider, std::to_underlying(CompletionProvider::reference)>, "provider">, Field<&CompleteWords::prefix, DisplayText16<CompleteWords::maximum_prefix_bytes>, "prefix">> {};
 
     struct CompletionWords {
       static constexpr std::size_t maximum_words = 256;

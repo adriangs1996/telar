@@ -696,14 +696,19 @@ namespace telar::gui::features::prompt {
     }
 
     // Commands on the shell's PATH, branches, SSH hosts and make targets come from the runtime.
-    // A spec's @ref is a branch name as far as the editor completes it.
-    void askProviders(tbc::mut_a<CompletionPlan> result, tbc::mut_a<Memory> memory, bool command_position, std::string_view partial) {
-      static constexpr ds::Array<std::pair<std::string_view, CompletionProvider>, 10> providers{{{"command", CompletionProvider::command}, {"branch", CompletionProvider::branch}, {"ssh_host", CompletionProvider::ssh_host}, {"make_target", CompletionProvider::make_target}, {"remote", CompletionProvider::remote}, {"stash", CompletionProvider::stash}, {"process", CompletionProvider::process}, {"just_recipe", CompletionProvider::just_recipe}, {"package_script", CompletionProvider::package_script}, {"compose_service", CompletionProvider::compose_service}}};
+    // A spec's @ref is a revision, which a runtime that `names_references` lists with tags; an
+    // older one lists branches for it.
+    void askProviders(tbc::mut_a<CompletionPlan> result, tbc::mut_a<Memory> memory, bool command_position, std::string_view partial, bool names_references) {
+      static constexpr ds::Array<std::pair<std::string_view, CompletionProvider>, 11> providers{{{"command", CompletionProvider::command}, {"branch", CompletionProvider::branch}, {"ref", CompletionProvider::reference}, {"ssh_host", CompletionProvider::ssh_host}, {"make_target", CompletionProvider::make_target}, {"remote", CompletionProvider::remote}, {"stash", CompletionProvider::stash}, {"process", CompletionProvider::process}, {"just_recipe", CompletionProvider::just_recipe}, {"package_script", CompletionProvider::package_script}, {"compose_service", CompletionProvider::compose_service}}};
 
       const auto& completion = result.completion;
+      const bool references = wants(completion, "ref");
 
       for (const auto& [name, provider] : providers) {
-        const bool wanted = command_position ? provider == CompletionProvider::command : wants(completion, name) || (provider == CompletionProvider::branch && wants(completion, "ref"));
+        const bool listed = wants(completion, name) && (provider != CompletionProvider::reference || names_references);
+        // An older runtime lists branches for a revision.
+        const bool branches = provider == CompletionProvider::branch && references && !names_references;
+        const bool wanted = command_position ? provider == CompletionProvider::command : listed || branches;
         if (!wanted || partial.size() > longest_word) {
           continue;
         }
@@ -719,7 +724,7 @@ namespace telar::gui::features::prompt {
 
     // The heading names where the choices come from.
     tbc::val_b<std::string_view> sourceLabel(tbc::ref_b<CompletionContext> context, const Completion& completion) {
-      static constexpr ds::Array<std::pair<std::string_view, std::string_view>, 12> sources{{{"branch", "branches · git"}, {"ref", "branches · git"}, {"remote", "remotes · git"}, {"stash", "stashes · git"}, {"ssh_host", "hosts · ssh"}, {"make_target", "targets · make"}, {"just_recipe", "recipes · just"}, {"package_script", "scripts · package.json"}, {"compose_service", "services · compose"}, {"process", "processes"}, {"file", "files"}, {"directory", "directories"}}};
+      static constexpr ds::Array<std::pair<std::string_view, std::string_view>, 12> sources{{{"branch", "branches · git"}, {"ref", "refs · git"}, {"remote", "remotes · git"}, {"stash", "stashes · git"}, {"ssh_host", "hosts · ssh"}, {"make_target", "targets · make"}, {"just_recipe", "recipes · just"}, {"package_script", "scripts · package.json"}, {"compose_service", "services · compose"}, {"process", "processes"}, {"file", "files"}, {"directory", "directories"}}};
 
       if (context.command_position) {
         return "commands";
@@ -737,7 +742,7 @@ namespace telar::gui::features::prompt {
   }
 
   tbc::val_a<CompletionPlan> plan(State& state, const PaneLine& line, tbc::val_a<CompletionContext> context, const CompletionSources& sources) {
-    const auto& [specified, asks, directory, dialect, reads_directories] = sources;
+    const auto& [specified, asks, directory, dialect, reads_directories, reads_references] = sources;
     auto& memory = state.memory;
     const auto& specs = state.specs;
     const ebnf::command_spec* found = nullptr;
@@ -768,13 +773,13 @@ namespace telar::gui::features::prompt {
       askDirectory(result, memory, partial, CompletionProvider::executable);
     } else if (asks && reads_directories && (files || wants(completion, "directory"))) {
       askDirectory(result, memory, partial, files ? CompletionProvider::path : CompletionProvider::directory);
-      askProviders(result, memory, context.command_position, partial);
+      askProviders(result, memory, context.command_position, partial, reads_references);
     } else if (asks) {
       if (files || wants(completion, "directory")) {
         askPaths(result, directory, memory, partial);
       }
 
-      askProviders(result, memory, context.command_position, partial);
+      askProviders(result, memory, context.command_position, partial, reads_references);
     }
 
     result.label.assign(sourceLabel(context, completion));

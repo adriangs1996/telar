@@ -33,8 +33,8 @@ command =
   | "push" : "Update remote refs along with associated objects" , { push_option } , [ @remote , { push_option | @branch } ]
   | "pull" : "Fetch from and integrate with another repository or a local branch" , { pull_option } , [ @remote , { pull_option | @branch } ]
   | "fetch" : "Download objects and refs from another repository" , { fetch_option } , [ @remote , { fetch_option | @branch } ]
-  | "merge" : "Join two or more development histories together" , { merge_option | @branch }
-  | "rebase" : "Reapply commits on top of another base tip" , { rebase_option | @branch }
+  | "merge" : "Join two or more development histories together" , { merge_option | @ref }
+  | "rebase" : "Reapply commits on top of another base tip" , { rebase_option | @ref }
   | "stash" : "Stash the changes in a dirty working directory away" , [ stash_command ]
   | "log" : "Show commit logs" , { log_option | @ref } , [ "--" , { @file } ]
   | "diff" : "Show changes between commits, commit and working tree, etc" , { diff_option | @ref | @file } , [ "--" , { @file } ]

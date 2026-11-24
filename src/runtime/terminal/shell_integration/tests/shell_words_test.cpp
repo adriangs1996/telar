@@ -119,6 +119,42 @@ namespace {
     check(!service.request(request), "another client's requests have room of their own");
   }
 
+  // Branches come with the remote-tracking ones, and a branch only a remote has by its own name
+  // too, as git checkout takes it; a revision also names tags.
+  void testReferenceWords() {
+    if (std::system("git --version >/dev/null 2>&1") != 0) {
+      return;
+    }
+
+    telar::testing::TestMemory adapter;
+    telar::ConcurrentMemory& memory = adapter;
+    ds::Array<char, 64> directory{};
+
+    std::strcpy(directory.dataMut(), "/tmp/telar-word-refs-XXXXXX");
+    check(::mkdtemp(directory.dataMut()) != nullptr);
+    const std::string root{directory.data()};
+    const auto script = "cd '" + root + "' && git init -q -b main && git -c user.name=t -c user.email=t@t commit -q --allow-empty -m one && git update-ref refs/remotes/origin/main HEAD && git update-ref refs/remotes/origin/only-remote HEAD && git tag v1";
+
+    check(std::system(script.c_str()) == 0);
+    const auto words = [&](CompletionProvider provider) {
+      WordReader reader{memory};
+      WordRequest request{.client = 1, .request = 2, .provider = provider, .prefix = {}, .directory = {}, .home = {}, .path = {}};
+
+      request.directory.assign(root);
+      std::vector<std::string> found;
+
+      for (const auto& word : reader.observe(request).words) {
+        found.emplace_back(word.text.view());
+      }
+
+      return found;
+    };
+
+    check(words(CompletionProvider::branch) == std::vector<std::string>{"main", "only-remote", "origin/main", "origin/only-remote"}, "local and remote branches, and the remote one by its own name");
+    check(words(CompletionProvider::reference) == std::vector<std::string>{"main", "only-remote", "origin/main", "origin/only-remote", "v1"}, "a revision names tags too");
+    std::filesystem::remove_all(root);
+  }
+
   void testTokenParse() {
     const auto valid = std::string(16, 'a') + "0123456789abcdef";
     const auto token = ShellToken::parse(valid);
@@ -310,6 +346,7 @@ namespace {
   const telar::testing::Case case_remote_specs{"shell_words.remote_specs", testRemoteSpecs};
   const telar::testing::Case case_names_survive_long_paths{"shell_words.names_survive_long_paths", testNamesSurviveLongPaths};
   const telar::testing::Case case_full_queue_fails_oldest{"shell_words.full_queue_fails_oldest", testFullQueueFailsOldest};
+  const telar::testing::Case case_reference_words{"shell_words.reference_words", testReferenceWords};
   const telar::testing::Case case_token_parse{"shell_words.token_parse", testTokenParse};
   const telar::testing::Case case_ignores_special_and_oversized_files{"shell_words.ignores_special_and_oversized_files", testIgnoresSpecialAndOversizedFiles};
   const telar::testing::Case case_cuts_descriptions_at_characters{"shell_words.cuts_descriptions_at_characters", testCutsDescriptionsAtCharacters};
