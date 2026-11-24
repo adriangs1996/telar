@@ -13,6 +13,7 @@ import telar.runtime.terminal.shell_integration.words;
 import telar.wire.editor;
 import telar.base.ds;
 import telar.base.memory.allocators;
+import telar.base.text.utf8;
 
 namespace {
 
@@ -105,8 +106,61 @@ namespace {
     std::filesystem::remove_all(root);
   }
 
+  // A description past the field is cut at a character, never inside one: the wire refuses
+  // text that is not UTF-8.
+  void testCutsDescriptionsAtCharacters() {
+    // What a completion word's description holds on the wire.
+    constexpr std::size_t description_bytes = 256;
+    telar::testing::TestMemory adapter;
+    telar::ConcurrentMemory& memory = adapter;
+    ds::Array<char, 64> directory{};
+
+    std::strcpy(directory.dataMut(), "/tmp/telar-word-cut-XXXXXX");
+    check(::mkdtemp(directory.dataMut()) != nullptr);
+    const std::string root{directory.data()};
+    std::string command{"x"};
+
+    // One byte, then two-byte characters: the 256th byte starts one.
+    for (int index = 0; index < 200; ++index) {
+      command += "\u00e9";
+    }
+
+    std::ofstream{root + "/package.json"} << R"({"scripts": {"build": ")" << command << R"("}})";
+    WordReader reader{memory};
+    WordRequest request{.client = 1, .request = 2, .provider = CompletionProvider::package_script, .prefix = {}, .directory = {}, .home = {}, .path = {}};
+
+    request.directory.assign(root);
+    const auto result = reader.observe(request);
+
+    check(result.words.size() == 1);
+    const auto description = result.words.front().description.view();
+
+    check(!description.empty() && description.size() <= description_bytes, "the description was not cut to the field");
+    check(inspectUtf8(description) == Utf8Validation::valid, "the description was cut inside a character");
+    std::filesystem::remove_all(root);
+  }
+
+  // An alias of an alias can stand for more words than the reply's field holds: it is dropped,
+  // not sent over the limit.
+  void testDropsLongAliasExpansions() {
+    telar::testing::TestMemory adapter;
+    telar::ConcurrentMemory& memory = adapter;
+    const auto names = "g=h%20" + std::string(250, 'a') + " h=git%20" + std::string(250, 'b') + " git";
+    WordReader reader{memory};
+    WordRequest request{.client = 1, .request = 2, .provider = CompletionProvider::command, .prefix = {}, .directory = {}, .home = {}, .path = {}};
+
+    request.spec = true;
+    request.prefix.assign("g");
+    request.names = std::allocate_shared<ds::String<telar::ConcurrentMemory>>(telar::AllocatorRef<ds::String<telar::ConcurrentMemory>, telar::ConcurrentMemory>{memory}, memory, names);
+    const auto result = reader.observe(request);
+
+    check(result.expansion.size() <= CommandSpec::maximum_expansion_bytes, "the expansion is longer than the reply carries");
+  }
+
   const telar::testing::Case case_reply_cap{"shell_words.reply_cap", testReplyCap};
   const telar::testing::Case case_token_parse{"shell_words.token_parse", testTokenParse};
   const telar::testing::Case case_ignores_special_and_oversized_files{"shell_words.ignores_special_and_oversized_files", testIgnoresSpecialAndOversizedFiles};
+  const telar::testing::Case case_cuts_descriptions_at_characters{"shell_words.cuts_descriptions_at_characters", testCutsDescriptionsAtCharacters};
+  const telar::testing::Case case_drops_long_alias_expansions{"shell_words.drops_long_alias_expansions", testDropsLongAliasExpansions};
 
 }

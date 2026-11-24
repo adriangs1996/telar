@@ -6,6 +6,7 @@ import telar.sys.posix;
 import telar.sys.apple;
 #endif
 import telar.base.text;
+import telar.base.text.utf8;
 import telar.base.text.json;
 import telar.platform.fs;
 import telar.platform.primitives;
@@ -36,12 +37,15 @@ namespace telar::runtime {
 
     }
 
+    // UTF-8 without control bytes: what the wire carries as display text.
     bool printable(std::string_view word) noexcept {
-      return std::ranges::none_of(word, [](char byte) {
+      const auto control = std::ranges::any_of(word, [](char byte) {
         const auto value = static_cast<unsigned char>(byte);
 
         return value < first_printable || value == delete_byte;
       });
+
+      return !control && inspectUtf8(word) == Utf8Validation::valid;
     }
 
     // FNV-1a: names a spec's text, so a client asks again only for one that changed.
@@ -234,7 +238,8 @@ namespace telar::runtime {
         }
       }
 
-      if (!expanded) {
+      // Words past what a reply carries are dropped, not cut.
+      if (!expanded || words.size() > maximum_text_bytes) {
         words.clear();
       }
 
@@ -438,7 +443,7 @@ namespace telar::runtime {
           command.clear();
         }
 
-        add(std::string_view{name}, std::string_view{command}.substr(0, maximum_text_bytes));
+        add(std::string_view{name}, utf8Prefix(std::string_view{command}, maximum_text_bytes));
       });
     }
 
@@ -734,7 +739,7 @@ namespace telar::runtime {
         return;
       }
 
-      result.words.push(Word{.text = Text{memory_, word}, .description = Text{memory_, printable(description) ? description.substr(0, maximum_text_bytes) : std::string_view{}}});
+      result.words.push(Word{.text = Text{memory_, word}, .description = Text{memory_, printable(description) ? utf8Prefix(description, maximum_text_bytes) : std::string_view{}}});
     };
 
     const auto add_word = [&](std::string_view word) {

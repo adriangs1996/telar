@@ -3446,19 +3446,30 @@ namespace telar::runtime {
       return;
     }
 
-    if (result.spec) {
-      client->connection.send(CommandSpec{.request_id = result.request, .command = result.command, .state = result.spec_state, .digest = result.digest, .source = result.source, .expansion = result.expansion});
-      return;
+    // A reply the wire refuses fails its request alone; a client that cannot take even that is dropped.
+    try {
+      if (result.spec) {
+        client->connection.send(CommandSpec{.request_id = result.request, .command = result.command, .state = result.spec_state, .digest = result.digest, .source = result.source, .expansion = result.expansion});
+        return;
+      }
+
+      ds::Vec<CompletionWord, ConcurrentMemory> words{memory_};
+
+      words.reserve(result.words.size());
+      for (const auto& word : result.words) {
+        words.push({.text = word.text.view(), .description = word.description.view()});
+      }
+
+      client->connection.send(CompletionWords{.request_id = result.request, .truncated = result.truncated, .words = words.view()});
+    } catch (const EncodingError& error) {
+      if (!client->connection.trySend(RequestFailed{.request_id = result.request, .code = FailureCode::internal, .message = error.what()})) {
+        dropClient(result.client);
+      }
+    } catch (...) {
+      if (!client->connection.trySend(RequestFailed{.request_id = result.request, .code = FailureCode::resource_limit, .message = "Runtime memory or capacity limit reached"})) {
+        dropClient(result.client);
+      }
     }
-
-    ds::Vec<CompletionWord, ConcurrentMemory> words{memory_};
-
-    words.reserve(result.words.size());
-    for (const auto& word : result.words) {
-      words.push({.text = word.text.view(), .description = word.description.view()});
-    }
-
-    client->connection.send(CompletionWords{.request_id = result.request, .truncated = result.truncated, .words = words.view()});
   }
 
   template <EventLoop Poller, typename Background>

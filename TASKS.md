@@ -34,7 +34,7 @@ Legend: `[ ]` todo, `[x]` done, `[~]` not a bug / dropped (with reason).
 
 ## P0: crashes and lost work
 
-- [ ] **T1 (C14). A completion reply that breaks the wire schema kills the runtime.**
+- [x] **T1 (C14). A completion reply that breaks the wire schema kills the runtime.**
   `src/runtime/core/runtime/runtime.cpp:3245-3266` `deliverWords` sends without `try`; the
   exception reaches `main` and every pane dies. Triggers: `words.cpp:737` cuts descriptions
   with `substr(0, 256)` in the middle of a UTF-8 sequence; `expand()` (`words.cpp:188-242`)
