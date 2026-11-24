@@ -537,6 +537,28 @@ namespace {
     const auto cjk = layout({.text = wide, .styles = styled(wide).view()}, {.cursor = wide.size(), .anchor = wide.size()}, 80);
 
     require(cjk.caret_column == Layout::indent + echo_cells + cjk_cells, "wide characters take two cells");
+
+    // A caret inside a grapheme is drawn on that grapheme, never at the line's start.
+    const std::string_view accented = "cafe\u0301";
+    const auto inside = layout({.text = accented, .styles = styled(accented).view()}, {.cursor = accented.size() - 1, .anchor = accented.size() - 1}, 80);
+
+    require(inside.caret_column == Layout::indent + 3, "the caret sits on the grapheme it is inside");
+  }
+
+  // Left, Right and Backspace move over a grapheme, an accent written apart or a flag whole.
+  void graphemeMotions() {
+    Editor editor;
+
+    editor.insert("cafe\u0301");
+    static_cast<void>(editor.press({.key = Key::left}));
+    require(cursor(editor) == 3, "Left steps over the accented letter");
+    static_cast<void>(editor.press({.key = Key::right}));
+    require(cursor(editor) == text(editor).size(), "Right steps over it");
+    static_cast<void>(editor.press({.key = Key::backspace}));
+    require(text(editor) == "caf", "Backspace erases the letter with its accent");
+    editor.insert("\U0001F1EA\U0001F1F8");
+    static_cast<void>(editor.press({.key = Key::left}));
+    require(cursor(editor) == 3, "a flag is one step");
   }
 
   // What the line holds (its text, undo, registers and the commands it ran) lives in the memory
@@ -576,6 +598,7 @@ namespace {
   }
 
   const telar::testing::Case case_write_starts_history_over{"prompt_editor.write_starts_history_over", writeStartsHistoryOver};
+  const telar::testing::Case case_grapheme_motions{"prompt_editor.grapheme_motions", graphemeMotions};
   const telar::testing::Case case_memory_returns{"prompt_editor.memory_returns", memoryReturns};
   const telar::testing::Case case_layout_and_styles{"prompt_editor.layout_and_styles", layoutAndStyles};
   const telar::testing::Case case_routing{"prompt_editor.routing", routing};

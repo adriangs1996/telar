@@ -129,8 +129,9 @@ namespace telar::gui::features::prompt {
     std::uint32_t column = Layout::indent;
     const auto selection_start = std::min(cursor, anchor);
     const auto selection_end = std::max(cursor, anchor);
-    const auto place = [&](std::size_t offset, CellRange cell) {
-      if (offset == cursor) {
+    // A caret inside a grapheme, as one an accent written apart follows, is drawn on it.
+    const auto place = [&](std::size_t offset, std::size_t end, CellRange cell) {
+      if (cursor >= offset && cursor < end) {
         placeCaret(result, cell);
       }
 
@@ -151,7 +152,7 @@ namespace telar::gui::features::prompt {
 
       offset = graphemes.position();
       if (text[start] == '\n') {
-        place(start, CellRange{.row = row, .column = column, .columns = 1});
+        place(start, offset, CellRange{.row = row, .column = column, .columns = 1});
         ++row;
         column = Layout::indent;
         continue;
@@ -163,7 +164,7 @@ namespace telar::gui::features::prompt {
         column = Layout::indent;
       }
 
-      place(start, CellRange{.row = row, .column = column, .columns = width});
+      place(start, offset, CellRange{.row = row, .column = column, .columns = width});
       addRun(
           result,
           Run{

@@ -1,6 +1,7 @@
 module telar.gui.features.prompt;
 
 import std;
+import telar.gui.foundation.text;
 
 import telar.tbc;
 
@@ -122,25 +123,39 @@ namespace telar::gui::features::prompt {
       return bytes_.size();
     }
 
-    ++offset;
-    while (offset < bytes_.size() && continuation(bytes_[offset])) {
-      ++offset;
-    }
+    GraphemeCursor graphemes{view().substr(offset)};
 
-    return offset;
+    static_cast<void>(graphemes.nextReplacingInvalid());
+    return offset + std::max<std::size_t>(graphemes.position(), 1);
   }
 
   std::size_t Text::previous(std::size_t offset) const noexcept {
+    // Graphemes are read from a code point a bounded way back, which holds any cluster a line
+    // shows, or from the line's start.
+    constexpr std::size_t lookback = 256;
+
     if (offset == 0) {
       return 0;
     }
 
-    --offset;
-    while (offset > 0 && continuation(bytes_[offset])) {
-      --offset;
+    auto from = std::max(lineStart(offset - 1), offset > lookback ? offset - lookback : 0);
+
+    while (from > 0 && continuation(bytes_[from])) {
+      --from;
     }
 
-    return offset;
+    GraphemeCursor graphemes{view().substr(from, offset - from)};
+    auto boundary = from;
+
+    while (graphemes.nextReplacingInvalid()) {
+      if (from + graphemes.position() >= offset) {
+        break;
+      }
+
+      boundary = from + graphemes.position();
+    }
+
+    return boundary;
   }
 
   std::size_t Text::lineStart(std::size_t offset) const noexcept {

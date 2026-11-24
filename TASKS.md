@@ -372,7 +372,7 @@ Legend: `[ ]` todo, `[x]` done, `[~]` not a bug / dropped (with reason).
 
 ## P2: editor engine
 
-- [ ] **T36 (E22). The caret can sit inside a grapheme.**
+- [x] **T36 (E22). The caret can sit inside a grapheme.**
   `prompt-layout.cpp:145-166` places the caret only at grapheme starts while `Text` moves by
   code point: with NFD `café` or a flag emoji, Left draws the caret at column 0, and
   Backspace leaves the accent alone.
