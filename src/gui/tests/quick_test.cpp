@@ -1878,7 +1878,9 @@ return {api_version = 2, client = {
       // is touched, which its row and its preview say.
       {
         const auto pane_id = firstPane()->id;
-        const auto agent = QStringLiteral("stty -echo; %1 --report-blocked %2 %3 %4\r").arg(shellLiteral(QCoreApplication::applicationFilePath()), shellLiteral(socket_)).arg(pane_id).arg(firstPane()->generation);
+        // The screen is cleared of the line typed, which names where this program is, so a picture
+        // taken with the pane in view shows nothing of the machine the test runs on.
+        const auto agent = QStringLiteral("printf '\\033[H\\033[2J'; stty -echo; %1 --report-blocked %2 %3 %4\r").arg(shellLiteral(QCoreApplication::applicationFilePath()), shellLiteral(socket_)).arg(pane_id).arg(firstPane()->generation);
 
         client_->terminals()->input(pane_id, agent.toUtf8());
         QTRY_VERIFY2_WITH_TIMEOUT(screenText(client_->pane(pane_id)->screen, ScreenTextLayout::logical).contains(QStringLiteral("GUI_ATTENTION_READY")), qPrintable(screenText(client_->pane(pane_id)->screen)), runtime_wait_ms);
