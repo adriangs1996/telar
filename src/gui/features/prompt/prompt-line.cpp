@@ -18,6 +18,45 @@ namespace telar::gui::features::prompt {
       return (key.key == Key::character && key.modifiers.alt && key.character == 'f') || (key.key == Key::right && key.modifiers.alt);
     }
 
+    // The quote a word opens and leaves open: its first byte, when nothing closes it after.
+    char openQuote(std::string_view word) noexcept {
+      if (word.empty() || (word.front() != '"' && word.front() != '\'')) {
+        return 0;
+      }
+
+      const char quote = word.front();
+
+      for (std::size_t index = 1; index < word.size(); ++index) {
+        if (quote == '"' && word[index] == '\\') {
+          ++index;
+        } else if (word[index] == quote) {
+          return 0;
+        }
+      }
+
+      return quote;
+    }
+
+    // `text` as it reads inside the `quote` a word left open, appended to `word`; false when it
+    // cannot be written there, as a single quote inside single quotes.
+    bool appendQuoted(ds::String<Memory>& word, std::string_view text, char quote, shell::Dialect dialect) {
+      const std::string_view escaped = dialect == shell::Dialect::fish ? "\"\\$" : "\"\\$`";
+
+      for (const auto byte : text) {
+        if (byte == quote && quote == '\'') {
+          return false;
+        }
+
+        if (quote == '"' && escaped.contains(byte)) {
+          word.push('\\');
+        }
+
+        word.push(byte);
+      }
+
+      return true;
+    }
+
     // The first word of `rest`, with the blanks before it and through a slash that ends it.
     std::string_view nextWord(std::string_view rest) {
       const auto start = rest.find_first_not_of(' ');
@@ -203,8 +242,9 @@ namespace telar::gui::features::prompt {
     }
 
     menu_.getMut().whole = menu_->whole && !truncated && menu_->all.size() + paths.size() <= Menu::capacity;
-    // Answers to an older word join, narrowed to the word as it is now.
-    const auto word = typedWord();
+    // Answers to an older word join, narrowed to the word as it is now, as the shell reads it.
+    const auto typed = menuWord();
+    const auto word = typed ? typed->partial.view() : typedWord();
 
     for (auto& path : paths.viewMut()) {
       if (menu_->all.size() < Menu::capacity && std::ranges::none_of(menu_->all, [&](const Choice& choice) {
@@ -346,16 +386,41 @@ namespace telar::gui::features::prompt {
   }
 
   void Line::accept() {
+    const auto typed = menuWord();
     const auto& menu = *menu_;
     const auto& choice = menu.choices[menu.selected];
-    auto word = quoteWord(draft_.memory(), choice.text, menu.dialect);
+    const auto begin = menu.begin;
+    auto end = std::min(menu.end, editor_.text().size());
+    auto& memory = draft_.memory();
+    ds::String<Memory> word{memory};
+    const auto cursor = editor_.text().cursor();
+
+    // A choice that goes on from what was typed keeps how it was typed: only what it adds is
+    // escaped, inside the quote the word opened if it did, which closes once the word ends.
+    if (typed && typed->replace_end == cursor && choice.text.view().starts_with(typed->partial.view())) {
+      const auto raw = editor_.text().view().substr(begin, cursor - begin);
+      const auto added = choice.text.view().substr(typed->partial.size());
+      const char quote = openQuote(raw);
+
+      word.assign(raw);
+      if (quote == 0) {
+        word.append(quoteWord(memory, added, menu.dialect));
+      } else if (appendQuoted(word, added, quote, menu.dialect)) {
+        if (!choice.directory) {
+          word.push(quote);
+        }
+      } else {
+        word = quoteWord(memory, choice.text, menu.dialect);
+      }
+
+      end = cursor;
+    } else {
+      word = quoteWord(memory, choice.text, menu.dialect);
+    }
 
     if (!choice.directory) {
       word.push(' ');
     }
-
-    const auto begin = menu.begin;
-    const auto end = std::min(menu.end, editor_.text().size());
 
     menu_.reset();
     editor_.textMut().replace(begin, end, word);
@@ -408,10 +473,10 @@ namespace telar::gui::features::prompt {
   }
 
   Outcome Line::refine(Outcome outcome) {
+    const auto typed = menuWord();
     auto& menu = menu_.getMut();
-    const auto& text = editor_.text();
-    const auto cursor = text.cursor();
-    if (cursor < menu.begin || text.view().substr(menu.begin, cursor - menu.begin).find_first_of(" \t\n") != std::string_view::npos) {
+    const auto cursor = editor_.text().cursor();
+    if (cursor < menu.begin || !typed) {
       closeMenu();
       return outcome;
     }
@@ -424,7 +489,7 @@ namespace telar::gui::features::prompt {
       return Outcome::complete;
     }
 
-    const auto word = typedWord();
+    const auto word = typed->partial.view();
 
     menu.choices.clear();
     for (const auto& choice : menu.all) {
@@ -441,6 +506,16 @@ namespace telar::gui::features::prompt {
 
     ++revision_;
     return outcome;
+  }
+
+  ds::Option<CompletionContext> Line::menuWord() {
+    const auto& text = editor_.text();
+    auto context = completionContext(draft_.memory(), text.view(), text.cursor(), shell::Syntax{.dialect = menu_->dialect});
+    if (!context || context->replace_begin != menu_->begin) {
+      return ds::none;
+    }
+
+    return context;
   }
 
   Outcome Line::submit(Surface surface, bool incomplete) {

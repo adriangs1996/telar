@@ -605,6 +605,27 @@ command = "switch" : "Switch branches" , { @branch } | "status" : "Show the work
     check(prompt::commandPresence(client, 1, "./gradlew") == prompt::CommandPresence::pending && transport.last<CompleteWords>().provider == CompletionProvider::executable, "whether it runs is asked the same way");
     deliver(client, CompletionWords{.request_id = transport.last<CompleteWords>().request_id, .words = gradle});
     check(prompt::commandPresence(client, 1, "./gradlew") == prompt::CommandPresence::found, "an executable listed there is found");
+
+    // A word typed with escapes or quotes completes as the shell reads it, and keeps its quoting.
+    prompt::key(client, 1, prompt::KeyPress{.key = prompt::Key::character, .character = 'u', .modifiers = {.control = true}});
+    typeKeys(client, "cat My\\ Do");
+    tab(client);
+    const auto escaped = transport.last<CompleteWords>();
+
+    check(escaped.prefix == "My Do", "the runtime is asked for the word as the shell reads it");
+    const ds::Array spaced{CompletionWord{.text = "My Documents/"}};
+
+    deliver(client, CompletionWords{.request_id = escaped.request_id, .words = spaced});
+    check(prompt::line(client, 1)->text() == "cat My\\ Documents/", "an escaped word completes, escaped");
+
+    prompt::key(client, 1, prompt::KeyPress{.key = prompt::Key::character, .character = 'u', .modifiers = {.control = true}});
+    typeKeys(client, "cat \"Some fi");
+    tab(client);
+    const auto quoted = transport.last<CompleteWords>();
+    const ds::Array file{CompletionWord{.text = "Some file.txt"}};
+
+    deliver(client, CompletionWords{.request_id = quoted.request_id, .words = file});
+    check(prompt::line(client, 1)->text() == "cat \"Some file.txt\" ", "a quote the word opened is closed");
   }
 
   void lineCompletes() {

@@ -163,6 +163,10 @@ namespace telar::gui::features::prompt {
     // The word the menu completes, as typed so far.
     [[nodiscard]] std::string_view typedWord() const noexcept;
 
+    // The word under the cursor as the shell reads it, quotes and escapes removed; none when the
+    // cursor left the word the menu completes.
+    [[nodiscard]] ds::Option<CompletionContext> menuWord();
+
     // After a key typed or erased in the word: the choices that still start with it. Erasing
     // past where they were offered asks for them again; leaving the word closes the menu.
     Outcome refine(Outcome outcome);

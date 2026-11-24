@@ -126,7 +126,7 @@ Legend: `[ ]` todo, `[x]` done, `[~]` not a bug / dropped (with reason).
   searching with `FindPaths`. The runtime does not know the pane's environment, so `$VAR`
   completes nothing.
 
-- [ ] **T7 (C4). A word with escapes or quotes never completes.**
+- [x] **T7 (C4). A word with escapes or quotes never completes.**
   `prompt-line.cpp:213` and `:426` filter the answers with the raw typed text (`My\ Do`,
   `"src/fo`) against unquoted choices (`My Docs/`); nothing is left and the menu closes.
   Expected: `cd My\ Do<Tab>` gives `cd My\ Documents/`; `cat "Some fi<Tab>` gives
