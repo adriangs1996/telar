@@ -215,6 +215,27 @@ INSERT INTO command VALUES (1, x'01', 1, 0, 1, 1, 'legacy command', 0, '/legacy'
     check(commands(store, reply, QueryHistory{.request_id = 4, .query = "é", .match = HistoryMatch::fuzzy, .limit = 10}) == both, "and never matches the bytes of other characters");
   }
 
+  // A directory matches however it was written: with a slash at its end, or through a link to it
+  // (/tmp is one to /private/tmp on macOS).
+  void testScopeMatchesTheSameDirectory() {
+    telar::testing::TestMemory adapter;
+    ConcurrentMemory& memory = adapter;
+    Directory directory;
+    const auto path = directory.file("work");
+    const auto linked = directory.file("linked");
+
+    std::filesystem::create_directory(path);
+    std::filesystem::create_directory_symlink(path, linked);
+    HistoryStore store{memory, ":memory:"};
+    EncodedReply reply{memory};
+
+    finished(store, session(1, path + "/"), "in the tree", path + "/");
+    for (const auto& written : {path, path + "/", linked, linked + "/"}) {
+      check(commands(store, reply, QueryHistory{.request_id = 1, .scope = HistoryScope::cwd, .scope_value = std::string_view{written}, .limit = 10}) == std::vector<std::string>{"in the tree"}, "the directory matches as " + written);
+      check(commands(store, reply, QueryHistory{.request_id = 2, .scope = HistoryScope::workspace, .scope_value = std::string_view{written}, .limit = 10}) == std::vector<std::string>{"in the tree"}, "the workspace matches as " + written);
+    }
+  }
+
   void testFailedWriteRollsBack() {
     telar::testing::TestMemory adapter;
     ConcurrentMemory& memory = adapter;
@@ -595,6 +616,7 @@ INSERT INTO command VALUES (1, x'01', 1, 0, 1, 1, 'legacy command', 0, '/legacy'
   const telar::testing::Case case_removes_every_run_of_a_command{"history_store.removes_every_run_of_a_command", testRemovesEveryRunOfACommand};
   const telar::testing::Case case_fuzzy_cap_counts_commands{"history_store.fuzzy_cap_counts_commands", testFuzzyCapCountsCommands};
   const telar::testing::Case case_folds_case_at_any_length{"history_store.folds_case_at_any_length", testFoldsCaseAtAnyLength};
+  const telar::testing::Case case_scope_matches_the_same_directory{"history_store.scope_matches_the_same_directory", testScopeMatchesTheSameDirectory};
   const telar::testing::Case case_failed_write_rolls_back{"history_store.failed_write_rolls_back", testFailedWriteRollsBack};
   const telar::testing::Case case_page_respects_payload_cap{"history_store.page_respects_payload_cap", testPageRespectsPayloadCap};
   const telar::testing::Case case_prune_failed_only{"history_store.prune_failed_only", testPruneFailedOnly};

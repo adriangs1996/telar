@@ -4,6 +4,7 @@ module;
 module telar.runtime.history.store;
 
 import std;
+import telar.sys.posix;
 import telar.native.sqlite;
 import telar.tbc;
 import telar.base.diagnostics;
@@ -206,6 +207,26 @@ namespace telar::runtime {
       };
     }
 
+    // A directory as the history keeps and matches it: its real path when it exists, so a link to
+    // it and the slash it may end with name it the same way, else the path without the slashes
+    // it ends with. Viewed in `buffer` or in `path`.
+    std::string_view canonicalDirectory(std::string_view path, ds::Array<char, PATH_MAX>& buffer) noexcept {
+      ds::Array<char, PATH_MAX> terminated{};
+
+      if (path.starts_with('/') && path.size() < terminated.size() && !path.contains('\0')) {
+        *std::ranges::copy(path, terminated.dataMut()).out = '\0';
+        if (::realpath(terminated.data(), buffer.dataMut()) != nullptr) {
+          return std::string_view{buffer.data()};
+        }
+      }
+
+      while (path.size() > 1 && path.ends_with('/')) {
+        path.remove_suffix(1);
+      }
+
+      return path;
+    }
+
     // telar_fold(text): the text with historyFold's case fold, which a short query matches with
     // as the index's trigrams fold a longer one. Its scratch is the store's memory.
     void foldText(sqlite3_context* context, int count, sqlite3_value** values) {
@@ -293,6 +314,10 @@ namespace telar::runtime {
     }
 
     Transaction transaction{database_};
+    ds::Array<char, PATH_MAX> workspace_buffer; // NOLINT(cppcoreguidelines-pro-type-member-init): canonicalDirectory writes what it views
+    ds::Array<char, PATH_MAX> cwd_buffer;       // NOLINT(cppcoreguidelines-pro-type-member-init): canonicalDirectory writes what it views
+    const auto workspace_path = canonicalDirectory(context.workspace_path, workspace_buffer);
+    const auto cwd = canonicalDirectory(request.cwd, cwd_buffer);
     const auto now = context.received_at_ms != 0 ? context.received_at_ms : wallMilliseconds();
 
     session_.reset();
@@ -301,14 +326,14 @@ namespace telar::runtime {
     session_.bind(context_parameter::location_kind, static_cast<std::int64_t>(context.location.workspace.kind));
     session_.bind(context_parameter::location_id, static_cast<std::int64_t>(context.location.workspace.id));
     session_.bind(context_parameter::tab, static_cast<std::int64_t>(context.location.tab_id));
-    session_.bind(context_parameter::workspace_path, context.workspace_path);
+    session_.bind(context_parameter::workspace_path, workspace_path);
     session_.bind(agent_session_parameter::started_at, now);
     session_.finish();
 
     if (request.phase == AgentCommandPhase::finished && !request.tool_call_id.empty()) {
       finish_.reset();
       finish_.bind(agent_finish_parameter::command, request.command);
-      finish_.bind(agent_finish_parameter::cwd, request.cwd);
+      finish_.bind(agent_finish_parameter::cwd, cwd);
       finish_.bind(agent_finish_parameter::finished_at, now);
       if (request.exit_code) {
         finish_.bind(agent_finish_parameter::exit_code, *request.exit_code);
@@ -318,7 +343,7 @@ namespace telar::runtime {
 
       finish_.bind(agent_finish_parameter::session, std::span{context.history_session});
       finish_.bind(agent_finish_parameter::tool_call, request.tool_call_id);
-      finish_.bind(agent_finish_parameter::workspace_path, context.workspace_path);
+      finish_.bind(agent_finish_parameter::workspace_path, workspace_path);
       finish_.bind(agent_finish_parameter::provider, request.provider);
       finish_.finish();
       if (sqlite3_changes(database_.handle()) != 0) {
@@ -334,8 +359,8 @@ namespace telar::runtime {
     insert_.bind(context_parameter::location_id, static_cast<std::int64_t>(context.location.workspace.id));
     insert_.bind(context_parameter::tab, static_cast<std::int64_t>(context.location.tab_id));
     insert_.bind(agent_insert_parameter::command, request.command);
-    insert_.bind(agent_insert_parameter::cwd, request.cwd);
-    insert_.bind(agent_insert_parameter::workspace_path, context.workspace_path);
+    insert_.bind(agent_insert_parameter::cwd, cwd);
+    insert_.bind(agent_insert_parameter::workspace_path, workspace_path);
     insert_.bind(agent_insert_parameter::started_at, now);
     if (request.exit_code) {
       insert_.bind(agent_insert_parameter::exit_code, *request.exit_code);
@@ -465,7 +490,9 @@ namespace telar::runtime {
     bindContext(command_, session);
     command_.bind(pane_command_parameter::command, command.command);
     command_.bind(pane_command_parameter::truncated, static_cast<std::int64_t>(command.truncated));
-    command_.bind(pane_command_parameter::cwd, command.directory);
+    ds::Array<char, PATH_MAX> directory; // NOLINT(cppcoreguidelines-pro-type-member-init): canonicalDirectory writes what it views
+
+    command_.bind(pane_command_parameter::cwd, canonicalDirectory(command.directory, directory));
     command_.bind(pane_command_parameter::started_at, command.started.milliseconds);
     command_.bind(pane_command_parameter::duration, command.duration_ns);
     if (command.exit_code) {
@@ -496,7 +523,9 @@ namespace telar::runtime {
     statement.bind(context_parameter::location_kind, static_cast<std::int64_t>(session.location.workspace.kind));
     statement.bind(context_parameter::location_id, static_cast<std::int64_t>(session.location.workspace.id));
     statement.bind(context_parameter::tab, static_cast<std::int64_t>(session.location.tab_id));
-    statement.bind(context_parameter::workspace_path, session.workspace_path);
+    ds::Array<char, PATH_MAX> workspace; // NOLINT(cppcoreguidelines-pro-type-member-init): canonicalDirectory writes what it views
+
+    statement.bind(context_parameter::workspace_path, canonicalDirectory(session.workspace_path, workspace));
   }
 
   HistoryRows::HistoryRows(ConcurrentMemory& memory)
@@ -1089,7 +1118,10 @@ END;
     if (scope == HistoryScope::pane) {
       statement.bind(query_parameter::scope, integer(std::get<std::uint64_t>(value)));
     } else if (scope != HistoryScope::global) {
-      statement.bind(query_parameter::scope, std::get<std::string_view>(value));
+      // Matched as it is kept, however the query wrote it.
+      ds::Array<char, PATH_MAX> directory; // NOLINT(cppcoreguidelines-pro-type-member-init): canonicalDirectory writes what it views
+
+      statement.bind(query_parameter::scope, canonicalDirectory(std::get<std::string_view>(value), directory));
     }
   }
 

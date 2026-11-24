@@ -320,11 +320,12 @@ Legend: `[ ]` todo, `[x]` done, `[~]` not a bug / dropped (with reason).
   a simple fold of the common scripts (Latin, Greek, Cyrillic, Armenian, Georgian, fullwidth);
   a letter outside them still folds only in queries of three characters or more.
 
-- [ ] **T29 (H5). Scope matches only the exact path string.**
+- [x] **T29 (H5). Scope matches only the exact path string.**
   `store.cpp:995-1009`: `/tmp/` and `/private/tmp`, or a trailing slash, do not match.
   Expected: the same directory matches however it was written.
   Fix: normalize on store and on query (drop trailing slash, canonicalize). Keep `cwd`
   exact: `workspace` already covers the tree.
+  Rows stored before keep the path as it was written; only new rows are canonical.
 
 - [ ] **T30 (H10). The "Failed" chip sticks when the query starts with `!`.**
   `history_controller.cpp:328` shows `parsed.failed_only` and `HistoryPanel.qml:108`
