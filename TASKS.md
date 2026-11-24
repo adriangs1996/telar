@@ -353,11 +353,13 @@ Legend: `[ ]` todo, `[x]` done, `[~]` not a bug / dropped (with reason).
   Fix: a 30 s timer while open recomputes the labels without fetching; refresh the page
   while some row is running.
 
-- [ ] **T34 (H17). Carriage returns are dropped from output.**
+- [x] **T34 (H17). Carriage returns are dropped from output.**
   `history-browser.cpp:118` `PlainText::strip` drops `\r`, so progress bars concatenate.
   Expected: the final state of each progress line shows.
   Fix: a `\r` not followed by `\n` returns to the start of the line and what follows
   overwrites it.
+  What follows replaces the line from its start rather than overwriting it byte by byte, so a
+  multi-byte character is never cut; progress bars redraw the whole line anyway.
 
 - [ ] **T35 (runtime extras). Two small runtime limits.**
   - `HistoryStatsEntry::command` is `Text16<65535>` but a command can be 65536 bytes: align

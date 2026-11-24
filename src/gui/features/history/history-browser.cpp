@@ -106,6 +106,10 @@ namespace telar::gui::features::history {
   std::size_t PlainText::strip(std::span<const Byte> bytes, std::span<char> output) noexcept {
     State state = State::ground;
     std::size_t written = 0;
+    // Where the line being written starts, and whether a carriage return went back to it: what
+    // follows on the line replaces it, as a progress bar's last state does.
+    std::size_t line_start = 0;
+    bool returned = false;
 
     for (const auto byte : bytes) {
       if (state != State::ground) {
@@ -120,15 +124,31 @@ namespace telar::gui::features::history {
         continue;
       }
 
+      if (byte == '\r') {
+        returned = true;
+
+        continue;
+      }
+
       if (byte != '\n' && byte != '\t' && (byte < first_printable || byte == delete_control)) {
         continue;
       }
 
+      // A carriage return before a newline ends the line it is on; before anything else it
+      // takes the line back to its start.
+      if (returned && byte != '\n') {
+        written = line_start;
+      }
+
+      returned = false;
       if (written == output.size()) {
         return written;
       }
 
       output[written++] = static_cast<char>(byte);
+      if (byte == '\n') {
+        line_start = written;
+      }
     }
 
     return written;

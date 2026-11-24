@@ -590,12 +590,16 @@ namespace {
       std::string_view expected;
     };
 
-    constexpr auto examples = ds::Array<Example, 5>{
+    constexpr auto examples = ds::Array<Example, 8>{
         Example{.input = "\x1b[31mfail\x1b[0m\r\n", .expected = "fail\n"},
         Example{.input = "before\x1b]52;c;hidden\aafter", .expected = "beforeafter"},
         Example{.input = "a\x1bPpayload\x1b\\b\x1bXhidden\x1b\\c\x1b^private\ad\x1b_graphics\x1b\\e", .expected = "abcde"},
         Example{.input = "a\x1b(Bb\x1b[12;", .expected = "ab"},
         Example{.input = "café\t🌱\n", .expected = "café\t🌱\n"},
+        // A progress line rewritten with carriage returns shows its last state.
+        Example{.input = "10%\r50%\r100%\ndone\n", .expected = "100%\ndone\n"},
+        Example{.input = "first\nloading…\r\x1b[2Kready\r\n", .expected = "first\nready\n"},
+        Example{.input = "end\r", .expected = "end"},
     };
 
     constexpr std::size_t output_capacity = 128;
