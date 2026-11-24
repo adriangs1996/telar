@@ -215,7 +215,11 @@ namespace telar::gui::features::history {
 
   template <Allocator Memory>
   QueryHistory HistoryBrowser<Memory>::refresh(std::uint64_t request_id) {
-    return requestPage({.request_id = request_id});
+    // The same page from a new insertion boundary, the selection kept where it was.
+    auto request = requestPage({.request_id = request_id, .offset = state_.page_offset});
+
+    kept_selection_ = state_.selection;
+    return request;
   }
 
   template <Allocator Memory>
@@ -254,6 +258,7 @@ namespace telar::gui::features::history {
     auto incoming = copyPage(message.entries);
 
     const bool newer = pending_offset_ < state_.page_offset;
+    const auto kept = std::exchange(kept_selection_, ds::none);
 
     page_.exchangeWith(incoming);
     state_.phase = HistoryPhase::ready;
@@ -261,7 +266,11 @@ namespace telar::gui::features::history {
     state_.has_more = message.has_more;
     state_.has_page = true;
     state_.page_offset = pending_offset_;
-    state_.selection = newer && !page_.rows().empty() ? page_.rows().size() - 1 : 0;
+    if (kept && !page_.rows().empty()) {
+      state_.selection = std::min(*kept, page_.rows().size() - 1);
+    } else {
+      state_.selection = newer && !page_.rows().empty() ? page_.rows().size() - 1 : 0;
+    }
     page_request_ = 0;
     ++rows_version_;
     contentChanged();
@@ -689,6 +698,7 @@ namespace telar::gui::features::history {
   template <Allocator Memory>
   QueryHistory HistoryBrowser<Memory>::requestPage(PageRequest page) {
     track(page.request_id);
+    kept_selection_.reset();
     page_request_ = page.request_id;
     pending_offset_ = page.offset;
     state_.phase = HistoryPhase::loading;

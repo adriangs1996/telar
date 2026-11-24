@@ -131,6 +131,36 @@ namespace {
     check(refreshed.offset == 0 && refreshed.snapshot_id == 0, "a refresh must choose a new insertion boundary");
   }
 
+  // After a delete the list stays on its page, with the selection on the row that took the
+  // deleted one's place, or the last when the deleted one was last.
+  void deleteKeepsThePosition() {
+    SystemAllocator memory;
+    telar::MemoryAdapter adapted{memory};
+    Browser browser{adapted};
+    const ds::Array first{HistoryEntry{.id = 1, .command = "a"}, HistoryEntry{.id = 2, .command = "b"}};
+    const ds::Array second{HistoryEntry{.id = 3, .command = "c"}, HistoryEntry{.id = 4, .command = "d"}, HistoryEntry{.id = 5, .command = "e"}};
+    const ds::Array after{HistoryEntry{.id = 3, .command = "c"}, HistoryEntry{.id = 5, .command = "e"}};
+
+    static_cast<void>(browser.begin({.request_id = 1}));
+    browser.apply(HistoryResults{.request_id = 1, .snapshot_id = 7, .has_more = true, .entries = first});
+    static_cast<void>(browser.page(HistoryPage::older, 2));
+    browser.apply(HistoryResults{.request_id = 2, .snapshot_id = 7, .entries = second});
+    browser.select(1);
+    static_cast<void>(browser.erase(4, 3));
+    browser.apply(HistoryPruned{.request_id = 3, .removed = 1});
+    const auto refreshed = browser.refresh(4);
+
+    check(refreshed.offset == first.size() && refreshed.snapshot_id == 0, "the refresh reads the same page anew");
+    browser.apply(HistoryResults{.request_id = 4, .snapshot_id = 8, .entries = after});
+    check(browser.reads().state().page_offset == first.size() && browser.reads().state().selection == 1, "the selection stays on the next row");
+    browser.select(1);
+    static_cast<void>(browser.erase(5, 5));
+    browser.apply(HistoryPruned{.request_id = 5, .removed = 1});
+    static_cast<void>(browser.refresh(6));
+    browser.apply(HistoryResults{.request_id = 6, .snapshot_id = 9, .entries = std::span{after}.first(1)});
+    check(browser.reads().state().selection == 0, "the last row deleted selects the one before it");
+  }
+
   void renderedChoicesNeverRetargetACommand() {
     SystemAllocator memory;
     telar::MemoryAdapter adapted{memory};
@@ -604,6 +634,7 @@ namespace {
   }
 
   const telar::testing::Case case_owned_search_and_pages{"history.owned_search_and_pages", ownedSearchAndPages};
+  const telar::testing::Case case_delete_keeps_the_position{"history.delete_keeps_the_position", deleteKeepsThePosition};
   const telar::testing::Case case_rendered_choices_never_retarget_a_command{"history.rendered_choices_never_retarget_a_command", renderedChoicesNeverRetargetACommand};
   const telar::testing::Case case_bounded_requests_and_stale_failures{"history.bounded_requests_and_stale_failures", boundedRequestsAndStaleFailures};
   const telar::testing::Case case_allocation_failure_is_atomic{"history.allocation_failure_is_atomic", allocationFailureIsAtomic};

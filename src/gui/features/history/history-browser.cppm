@@ -193,6 +193,8 @@ namespace telar::gui::features::history {
     std::uint64_t command_request_ = 0;
     std::uint64_t output_request_ = 0;
     std::uint64_t delete_request_ = 0;
+    // The row a refresh keeps selected once its page arrives.
+    ds::Option<std::size_t> kept_selection_;
     std::uint64_t revision_ = 0;
     std::uint64_t view_version_ = 0;
     std::uint64_t rows_version_ = 0;

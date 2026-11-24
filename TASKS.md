@@ -270,7 +270,7 @@ Legend: `[ ]` todo, `[x]` done, `[~]` not a bug / dropped (with reason).
   request, `DeleteHistoryCommand`, in cqp00012; the window sends it (it always searches
   distinct) and DeleteHistory to an older runtime.
 
-- [ ] **T23 (H3). After a delete the position is lost.**
+- [x] **T23 (H3). After a delete the position is lost.**
   `application-history.cpp:203` refreshes offset 0; `history-browser.cpp:256` then selects
   row 0, or the last row of page 1 when coming from a later page.
   Expected: same page, selection on the next row.
