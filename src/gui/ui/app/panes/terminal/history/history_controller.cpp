@@ -133,6 +133,7 @@ namespace telar::gui::qt {
 
   void HistoryController::forget() {
     search_timer_.stop();
+    pending_submit_.reset();
     rows_.reconcile({});
     synchronized_.reset();
     rows_version_ = 0;
@@ -174,6 +175,17 @@ namespace telar::gui::qt {
   }
 
   void HistoryController::synchronize() {
+    if (pending_submit_ && !busy()) {
+      const bool alternate = *pending_submit_;
+      const auto& rows = application::history::view(store_.session()).rows();
+
+      pending_submit_.reset();
+      if (!rows.empty()) {
+        submit(rows.front().id, alternate);
+        return;
+      }
+    }
+
     auto next = inputs();
     if (synchronized_ == next) {
       return;
@@ -391,6 +403,8 @@ namespace telar::gui::qt {
       query_ = QString::fromUtf8(query_.toUtf8());
     }
 
+    // Typing again takes back an Enter that waited for the search.
+    pending_submit_.reset();
     search_timer_.start();
     ++search_version_;
     synchronize();
@@ -445,6 +459,7 @@ namespace telar::gui::qt {
   }
 
   void HistoryController::select(int row) {
+    pending_submit_.reset();
     if (row < 0 || busy()) {
       return;
     }
@@ -471,6 +486,10 @@ namespace telar::gui::qt {
   }
 
   void HistoryController::execute(Action action, const QString& entry_id) {
+    if (action == Action::older || action == Action::newer) {
+      pending_submit_.reset();
+    }
+
     if (!isOpen() || (busy() && action != Action::inspect)) {
       return;
     }
@@ -517,6 +536,22 @@ namespace telar::gui::qt {
   }
 
   void HistoryController::use(int row, bool alternate) {
+    if (!isOpen()) {
+      return;
+    }
+
+    // The rows shown are of an older query: the search runs now, and its first row once it
+    // arrives, as fzf runs its best match.
+    if (busy()) {
+      pending_submit_ = alternate;
+      if (search_timer_.isActive()) {
+        search_timer_.stop();
+        query();
+      }
+
+      return;
+    }
+
     const auto& entries = application::history::view(store_.session()).rows();
     if (row < 0 || static_cast<std::size_t>(row) >= entries.size()) {
       return;

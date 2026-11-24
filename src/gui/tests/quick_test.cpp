@@ -7508,6 +7508,30 @@ return {api_version=2, client={keybindings={
       client_->terminals()->input(pane->id, "\x15");
     }
 
+    // Enter while the search is still loading runs the best match of what was typed once its
+    // page arrives, as fzf does; typing again first cancels it.
+    Q_SLOT void historyEnterWhileLoading() {
+      client_->commands()->execute(window_actions::Action::history);
+      QTRY_VERIFY_WITH_TIMEOUT(!client_->history()->loading(), runtime_wait_ms);
+
+      client_->history()->search(QStringLiteral("GUI_HISTORY_FIXTURE"));
+      QVERIFY(client_->history()->loading());
+      client_->history()->use(0);
+      client_->history()->search(QStringLiteral("GUI_HISTORY_FIXTURE "));
+      QTRY_VERIFY_WITH_TIMEOUT(!client_->history()->loading(), runtime_wait_ms);
+      QCOMPARE(client_->dialogs()->kind(), telar::gui::qt::ApplicationController::Dialog::history);
+
+      client_->history()->search(QStringLiteral("GUI_HISTORY_FIXTURE"));
+      client_->history()->use(0);
+      QTRY_COMPARE_WITH_TIMEOUT(client_->dialogs()->kind(), telar::gui::qt::ApplicationController::Dialog::none, runtime_wait_ms);
+      const auto* pane = firstPane();
+      if (pane == nullptr) {
+        QFAIL("Required terminal fixture is missing");
+      }
+
+      client_->terminals()->input(pane->id, "\x15");
+    }
+
     Q_SLOT void historyLongCommands() {
       using Storage = application::history::HistoryLimits;
       constexpr std::size_t command_bytes = std::size_t{48} * 1024;

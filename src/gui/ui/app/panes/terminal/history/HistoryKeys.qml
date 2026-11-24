@@ -70,7 +70,7 @@ QtObject {
     function submit(event) {
         if ((event.modifiers & Qt.AltModifier) !== 0) {
             root.controller.execute(HistoryController.Action.visit);
-        } else if (!root.controller.loading) {
+        } else {
             root.controller.use(root.state.selection, (event.modifiers & Qt.ShiftModifier) !== 0);
         }
     }

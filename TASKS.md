@@ -249,7 +249,7 @@ Legend: `[ ]` todo, `[x]` done, `[~]` not a bug / dropped (with reason).
 
 ## P1: Ctrl+R history
 
-- [ ] **T21 (H2). Enter is dropped while the search loads.**
+- [x] **T21 (H2). Enter is dropped while the search loads.**
   `HistoryKeys.qml:73` acts only when `!controller.loading`, which is true during the 60 ms
   debounce and the round trip. `Ctrl+L` and the hosted double click (`PromptLine.qml:1340`)
   call `use()` without the guard and show "History search is still loading" (H11).
