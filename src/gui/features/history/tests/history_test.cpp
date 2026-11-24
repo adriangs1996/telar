@@ -191,6 +191,48 @@ namespace {
     check(browser.apply(HistoryPruned{.request_id = second.request_id, .removed = 1}) && !browser.reads().deleting(), "the second confirmation ends the deletes");
   }
 
+  // A detail that failed is read again for the same row, and one that does not fit the request
+  // table fails alone, never the page.
+  void detailsRetryAndFailAlone() {
+    SystemAllocator memory;
+    telar::MemoryAdapter adapted{memory};
+    Browser browser{adapted};
+    const ds::Array entries{HistoryEntry{.id = 1, .command = "a"}, HistoryEntry{.id = 2, .command = "b"}};
+    std::uint64_t sequence = 0;
+
+    static_cast<void>(browser.begin({.request_id = ++sequence}));
+    browser.apply(HistoryResults{.request_id = sequence, .snapshot_id = 1, .entries = entries});
+    browser.setInspecting(true);
+    const auto first = browser.readOutput(++sequence);
+
+    check(first.hasValue(), "inspecting reads the output");
+    browser.fail(first->request_id, "output failed");
+    const auto again = browser.readOutput(++sequence);
+
+    check(again && again->id == first->id, "a failed output is read again for the same row");
+
+    // Searches that never answered fill the table; the last one's page arrives, and a delete
+    // takes the slot its answer freed.
+    while (sequence < decltype(browser)::maximum_requests + 2) {
+      static_cast<void>(browser.begin({.request_id = ++sequence}));
+    }
+
+    browser.apply(HistoryResults{.request_id = sequence, .snapshot_id = 2, .entries = entries});
+    static_cast<void>(browser.erase(1, ++sequence));
+    browser.setInspecting(false);
+    browser.setInspecting(true);
+    bool refused = false;
+
+    try {
+      static_cast<void>(browser.readOutput(++sequence));
+    } catch (const std::exception&) {
+      refused = true;
+    }
+
+    check(refused && browser.reads().state().output_phase == HistoryPhase::failed, "the output that does not fit fails");
+    check(browser.reads().state().phase == HistoryPhase::ready, "the page it was for stays");
+  }
+
   void renderedChoicesNeverRetargetACommand() {
     SystemAllocator memory;
     telar::MemoryAdapter adapted{memory};
@@ -670,6 +712,7 @@ namespace {
   const telar::testing::Case case_owned_search_and_pages{"history.owned_search_and_pages", ownedSearchAndPages};
   const telar::testing::Case case_delete_keeps_the_position{"history.delete_keeps_the_position", deleteKeepsThePosition};
   const telar::testing::Case case_deletes_queue{"history.deletes_queue", deletesQueue};
+  const telar::testing::Case case_details_retry_and_fail_alone{"history.details_retry_and_fail_alone", detailsRetryAndFailAlone};
   const telar::testing::Case case_rendered_choices_never_retarget_a_command{"history.rendered_choices_never_retarget_a_command", renderedChoicesNeverRetargetACommand};
   const telar::testing::Case case_bounded_requests_and_stale_failures{"history.bounded_requests_and_stale_failures", boundedRequestsAndStaleFailures};
   const telar::testing::Case case_allocation_failure_is_atomic{"history.allocation_failure_is_atomic", allocationFailureIsAtomic};

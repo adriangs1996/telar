@@ -340,11 +340,13 @@ Legend: `[ ]` todo, `[x]` done, `[~]` not a bug / dropped (with reason).
   Fix: in `Dialogs::show`, when the new dialog is not the history, call `history_.forget()`;
   `query()` uses `fail()`.
 
-- [ ] **T32 (H14, with H15). Detail requests fail too broadly or never retry.**
+- [x] **T32 (H14, with H15). Detail requests fail too broadly or never retry.**
   `readOutput` never retries a failed output for the same row (`history-browser.cpp:390`);
   `track()` marks the whole page failed when the request table is full.
   Fix: allow re-reading when the output phase is `failed`; `track()` fails only the phase of
   the request that did not fit (command, output or delete).
+  The full command read keeps its rule of no retry until the row is selected again, which a
+  test guards against a retry loop.
 
 - [ ] **T33 (H16). Ages and "running" freeze while the dialog is open.**
   `history_controller.cpp:222` samples the clock once per rows rebuild.

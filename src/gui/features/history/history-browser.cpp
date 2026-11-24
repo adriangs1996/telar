@@ -373,7 +373,15 @@ namespace telar::gui::features::history {
       return {};
     }
 
-    track(request_id);
+    try {
+      track(request_id);
+    } catch (...) {
+      state_.command_id = row.id;
+      state_.command_phase = HistoryPhase::failed;
+      contentChanged();
+      throw;
+    }
+
     command_request_ = request_id;
     state_.command_id = row.id;
     state_.command_phase = HistoryPhase::loading;
@@ -416,12 +424,21 @@ namespace telar::gui::features::history {
       return {};
     }
 
+    // A failed output is read again; one read or on its way is not.
     const auto id = page_.rows()[state_.selection].id;
-    if (state_.output_id == id) {
+    if (state_.output_id == id && state_.output_phase != HistoryPhase::failed) {
       return {};
     }
 
-    track(request_id);
+    try {
+      track(request_id);
+    } catch (...) {
+      state_.output_id = id;
+      state_.output_phase = HistoryPhase::failed;
+      contentChanged();
+      throw;
+    }
+
     output_request_ = request_id;
     state_.output_id = id;
     state_.output_phase = HistoryPhase::loading;
@@ -735,7 +752,14 @@ namespace telar::gui::features::history {
 
   template <Allocator Memory>
   QueryHistory HistoryBrowser<Memory>::requestPage(PageRequest page) {
-    track(page.request_id);
+    try {
+      track(page.request_id);
+    } catch (...) {
+      state_.phase = HistoryPhase::failed;
+      contentChanged();
+      throw;
+    }
+
     kept_selection_.reset();
     page_request_ = page.request_id;
     pending_offset_ = page.offset;
@@ -752,9 +776,8 @@ namespace telar::gui::features::history {
   void HistoryBrowser<Memory>::track(std::uint64_t request_id) {
     const auto requests = requests_.viewMut();
     const auto slot = std::ranges::find(requests, std::uint64_t{0});
+    // The caller fails the phase of the request that did not fit, never another one's.
     if (request_id == 0 || slot == requests.end() || owns(request_id)) {
-      state_.phase = HistoryPhase::failed;
-      contentChanged();
       throw EncodingError{"History is busy; retry the search"};
     }
 
