@@ -719,14 +719,50 @@ FocusScope {
                         spacing: 6 * root.ratio
                         visible: pane.modelData.repository
 
-                        ChromeIcon {
+                        Item {
+                            // The mark of a branch, drawn and not typed: the design's page took
+                            // it from whichever font the system had, so no font here gives its
+                            // shape at its size. `unit` is one pixel of the design's picture.
                             id: gitIcon
-                            anchors.verticalCenter: parent.verticalCenter
-                            width: Math.round((root.smallGrid.cellHeight ?? 16) * 0.9)
-                            height: width
-                            glyph: ""
-                            pixelSize: width
-                            color: root.colors.subtext0
+                            readonly property real unit: root.ratio / 1.25
+                            readonly property real stroke: Math.max(1, Math.round(unit))
+
+                            y: Math.round((parent.height - height) / 2 + 1.5 * unit)
+                            width: Math.round(13 * unit)
+                            height: Math.round(10 * unit)
+
+                            Rectangle {
+                                y: parent.height - height
+                                width: 4.2 * gitIcon.unit
+                                height: gitIcon.stroke
+                                color: root.colors.text
+                            }
+
+                            Rectangle {
+                                x: 8.2 * gitIcon.unit
+                                y: parent.height - height
+                                width: 4.6 * gitIcon.unit
+                                height: gitIcon.stroke
+                                color: root.colors.text
+                            }
+
+                            Rectangle {
+                                x: 7.4 * gitIcon.unit
+                                width: 4.6 * gitIcon.unit
+                                height: gitIcon.stroke
+                                color: root.colors.text
+                            }
+
+                            Rectangle {
+                                // From the end of the lower stroke up to the start of the upper one.
+                                x: 6.1 * gitIcon.unit - width / 2
+                                y: (parent.height - height) / 2
+                                width: 1.4 * gitIcon.unit
+                                height: 9.4 * gitIcon.unit
+                                rotation: 22
+                                antialiasing: true
+                                color: root.colors.text
+                            }
                         }
 
                         CellText {
