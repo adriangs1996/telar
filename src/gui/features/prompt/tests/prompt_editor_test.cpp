@@ -234,6 +234,34 @@ namespace {
     require(cursor(editor) == 16, "after Ctrl-E, Down goes from the line's end, not the column before");
   }
 
+  // Kills in a row join one kill ring entry, the ones backward before it, as readline's do.
+  void emacsKillsAccumulate() {
+    Editor backward;
+
+    type(backward, "one two three");
+    control(backward, 'w');
+    control(backward, 'w');
+    require(text(backward) == "one ", "two words killed");
+    control(backward, 'y');
+    require(text(backward) == "one two three", "two Ctrl-W in a row yank back as one");
+
+    Editor forward;
+
+    forward.write("a\nb");
+    control(forward, 'p');
+    control(forward, 'a');
+    control(forward, 'k');
+    control(forward, 'k');
+    require(text(forward) == "b", "the line and its newline killed");
+    control(forward, 'y');
+    require(text(forward) == "a\nb", "Ctrl-K in a row append to one kill");
+
+    control(forward, 'e');
+    control(forward, 'w');
+    control(forward, 'y');
+    require(text(forward) == "a\nb", "a kill after another key starts anew");
+  }
+
   void emacs() {
     Editor editor;
 
@@ -801,6 +829,7 @@ namespace {
   const telar::testing::Case case_grapheme_motions{"prompt_editor.grapheme_motions", graphemeMotions};
   const telar::testing::Case case_vim_fixes{"prompt_editor.vim_fixes", vimFixes};
   const telar::testing::Case case_emacs_goal_column{"prompt_editor.emacs_goal_column", emacsGoalColumn};
+  const telar::testing::Case case_emacs_kills_accumulate{"prompt_editor.emacs_kills_accumulate", emacsKillsAccumulate};
   const telar::testing::Case case_memory_returns{"prompt_editor.memory_returns", memoryReturns};
   const telar::testing::Case case_layout_and_styles{"prompt_editor.layout_and_styles", layoutAndStyles};
   const telar::testing::Case case_routing{"prompt_editor.routing", routing};

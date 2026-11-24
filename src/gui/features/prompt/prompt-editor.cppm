@@ -308,6 +308,9 @@ namespace telar::gui::features::prompt {
     ds::Option<std::size_t> goal_column_;
     // Whether the key or action being handled moved Up or Down, which keeps the goal column.
     bool vertical_ = false;
+    // Whether the key being handled killed text, and whether the one before did.
+    bool killing_ = false;
+    bool killed_ = false;
     Find last_find_;
     std::size_t count_ = 0;
     std::size_t operator_count_ = 0;

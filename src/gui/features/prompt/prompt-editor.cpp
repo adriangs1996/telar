@@ -95,11 +95,14 @@ namespace telar::gui::features::prompt {
   Request Editor::perform(Action action) {
     // Run as a key is: the column Up and Down keep lasts only as long as they follow each other.
     vertical_ = false;
+    killing_ = false;
     const auto request = performAction(action);
 
     if (!vertical_) {
       goal_column_.reset();
     }
+
+    killed_ = killing_;
 
     return request;
   }
@@ -200,12 +203,16 @@ namespace telar::gui::features::prompt {
     }
 
     vertical_ = false;
+    killing_ = false;
     const auto request = dispatch(key);
 
-    // The column Up and Down keep lasts only as long as they follow each other.
+    // The column Up and Down keep lasts only as long as they follow each other, as kills join
+    // only while they do.
     if (!vertical_) {
       goal_column_.reset();
     }
+
+    killed_ = killing_;
 
     if (repeat_requested_) {
       repeat();
@@ -421,7 +428,19 @@ namespace telar::gui::features::prompt {
       return;
     }
 
-    kill_ring_.assign(text_.view().substr(start, end - start));
+    // Kills in a row join one entry, as readline's do: one backward of the cursor goes before
+    // what the others took, one forward of it after.
+    const auto killed = text_.view().substr(start, end - start);
+
+    if (!killed_) {
+      kill_ring_.assign(killed);
+    } else if (end == text_.cursor() && start < end) {
+      kill_ring_.insert(0, killed);
+    } else {
+      kill_ring_.append(killed);
+    }
+
+    killing_ = true;
     text_.replace(start, end, {});
   }
 
