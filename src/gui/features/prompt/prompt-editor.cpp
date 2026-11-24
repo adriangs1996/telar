@@ -1466,6 +1466,12 @@ namespace telar::gui::features::prompt {
       return;
     }
 
+    // What could never fit is not built: a count of copies past the text's capacity puts none.
+    const auto room = Text::capacity - std::min(text_.size(), Text::capacity);
+    if (value.text.size() + 1 > room / count()) {
+      return;
+    }
+
     ds::String<Memory> text{memory()};
 
     for (std::size_t index = 0; index < count(); ++index) {

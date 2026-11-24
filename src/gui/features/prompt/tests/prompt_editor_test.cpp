@@ -25,6 +25,11 @@ namespace {
   // The memory a test's prompt lives in, counted so a test can tell it all came back.
   struct Arena {
     Arena() = default;
+
+    // An arena that refuses what passes `limit` bytes.
+    explicit Arena(std::size_t limit)
+        : budget{system, limit} {}
+
     ~Arena() = default;
     Arena(const Arena&) = delete;
     Arena& operator=(const Arena&) = delete;
@@ -43,6 +48,14 @@ namespace {
   public:
     explicit Editor(Keymap keymap = Keymap::emacs)
         : state_(memory),
+          lines_(memory) {
+      static_cast<void>(feature::open(state_, lines_, pane_id, keymap));
+    }
+
+    // An editor whose memory refuses what passes `limit` bytes.
+    Editor(Keymap keymap, std::size_t limit)
+        : Arena(limit),
+          state_(memory),
           lines_(memory) {
       static_cast<void>(feature::open(state_, lines_, pane_id, keymap));
     }
@@ -552,6 +565,18 @@ namespace {
 
       type(editor, "0rx");
       require(text(editor) == "xbc", "r still replaces with a character");
+    }
+
+    // A put that could not fit builds nothing first: 9999p of a large register does not try to
+    // hold thousands of copies of it.
+    {
+      constexpr std::size_t budget = std::size_t{4} * 1024 * 1024;
+      Editor editor{Keymap::vim, budget};
+
+      editor.write(std::string(std::size_t{32} * 1024, 'x'));
+      type(editor, "\x1b"
+                   "0yy9999p");
+      require(text(editor).size() == std::size_t{32} * 1024, "a put past the capacity changes nothing");
     }
 
     // The smaller ones.

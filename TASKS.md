@@ -422,7 +422,7 @@ Legend: `[ ]` todo, `[x]` done, `[~]` not a bug / dropped (with reason).
 
 ## P3: resources
 
-- [ ] **T51.** `put()` builds count × register before the capacity check (`9999p` with a
+- [x] **T51.** `put()` builds count × register before the capacity check (`9999p` with a
   256 KiB register tries ~2.5 GB): check `count * size` against the capacity first.
 - [ ] **T52.** Each undo group clones the whole buffer (up to 64 MiB per pane): store diffs
   (range and previous text) instead.
