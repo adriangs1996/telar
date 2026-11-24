@@ -52,8 +52,11 @@ namespace telar::runtime {
     } else if (tag == ClientTag::inspect_file) {
       repository_.inspect(Codec::decode<InspectFile>(payload, storage), cancelled, reply);
     } else if (tag == ClientTag::change_files) {
+      // What is below a directory changes without the directory changing: no size stands.
+      directory_.forget();
       changer_.change(Codec::decode<ChangeFiles>(payload, storage), cancelled, reply);
     } else if (tag == ClientTag::undo_file_changes) {
+      directory_.forget();
       changer_.undo(Codec::decode<UndoFileChanges>(payload, storage), reply);
     } else if (tag == ClientTag::commit_changes) {
       changer_.commit(Codec::decode<CommitChanges>(payload, storage), cancelled, reply);
@@ -62,6 +65,7 @@ namespace telar::runtime {
     } else if (tag == ClientTag::write_file) {
       changer_.write(Codec::decode<WriteFile>(payload, storage), reply);
     } else if (tag == ClientTag::end_file_write) {
+      directory_.forget();
       changer_.end(Codec::decode<EndFileWrite>(payload, storage), reply);
     } else if (tag == ClientTag::query_touches) {
       touches_.answer(Codec::decode<QueryTouches>(payload, storage), reply);

@@ -17,11 +17,25 @@ namespace telar::runtime {
 
     // The files with several names a measure remembers, so each counts once.
     constexpr std::size_t remembered_links = std::size_t{64} * 1024;
+    constexpr const char* gave_way = "The sizes gave way to a listing";
     // A block of `st_blocks`, whatever the file system's own.
     constexpr std::uint64_t block_bytes = 512;
 
     constexpr char lowered(char character) noexcept {
       return character >= 'A' && character <= 'Z' ? static_cast<char>(character - 'A' + 'a') : character;
+    }
+
+    // What `status` says a directory is, as the reader remembers one.
+    template <typename Seen>
+    Seen seenAs(const struct stat& status) noexcept {
+      const auto identity = identityOf(status);
+
+      return {
+          .device = static_cast<std::uint64_t>(status.st_dev),
+          .inode = identity.inode,
+          .modified_seconds = identity.modified_seconds,
+          .modified_nanoseconds = identity.modified_nanoseconds,
+      };
     }
 
     [[noreturn]] void refuse(int error) {
@@ -50,7 +64,12 @@ namespace telar::runtime {
       : path_(memory),
         names_(memory),
         items_(memory),
-        counted_(memory) {}
+        counted_(memory),
+        sizes_(memory) {}
+
+  void DirectoryReader::forget() noexcept {
+    sizes_.clear();
+  }
 
   std::string_view DirectoryReader::nameOf(const Item& item) const {
     return std::string_view{names_.data(), names_.size()}.substr(item.name, item.name_size);
@@ -154,6 +173,7 @@ namespace telar::runtime {
 
     if (depth == measured_depth) {
       measure.complete = false;
+      ++measure.flaws;
       return;
     }
 
@@ -163,6 +183,7 @@ namespace telar::runtime {
     while (const auto* entry = stream.next()) {
       if (measure.cancelled.load(std::memory_order_relaxed) || Clock::now() >= measure.deadline) {
         measure.complete = false;
+        ++measure.flaws;
         return;
       }
 
@@ -175,6 +196,8 @@ namespace telar::runtime {
       // A file with several names takes its blocks once.
       if (status.st_nlink > 1 && !S_ISDIR(status.st_mode)) {
         const auto inode = static_cast<std::uint64_t>(status.st_ino);
+
+        ++measure.flaws;
         if (counted_.contains(inode)) {
           continue;
         }
@@ -186,12 +209,42 @@ namespace telar::runtime {
 
       measure.bytes += static_cast<std::uint64_t>(std::max<std::int64_t>(0, status.st_blocks)) * block_bytes;
       if (S_ISDIR(status.st_mode)) {
-        add(descriptor, terminated, depth + 1, measure);
+        addSized(descriptor, terminated, seenAs<Seen>(status), depth + 1, measure);
       }
     }
   }
 
+  void DirectoryReader::addSized(int parent, const char* name, const Seen& seen, std::size_t depth, Measure& measure) { // NOLINT(misc-no-recursion): a tree is walked measured_depth directories deep at most
+    const auto now = Clock::now();
+
+    if (const auto* kept = sizes_.find(seen.inode); kept != nullptr && kept->seen == seen && now - kept->measured < remembered_time) {
+      measure.bytes += kept->bytes;
+      return;
+    }
+
+    const auto before = measure.bytes;
+    const auto flaws = measure.flaws;
+
+    add(parent, name, depth, measure);
+    if (measure.flaws != flaws) {
+      return;
+    }
+
+    // Full, it starts over: what it held was measured at least as long ago as what it takes now.
+    if (sizes_.size() >= remembered_sizes) {
+      sizes_.clear();
+    }
+
+    static_cast<void>(sizes_.assign(seen.inode, Sized{.seen = seen, .bytes = measure.bytes - before, .measured = now}));
+  }
+
   void DirectoryReader::measure(const MeasureDirectory& request, const std::atomic<bool>& cancelled, EncodedReply<ConcurrentMemory>& reply) {
+    // Told to end before it began, it reads nothing: the listing held is left for whoever
+    // asked for it.
+    if (cancelled.load(std::memory_order_relaxed)) {
+      throw RequestError{FailureCode::resource_limit, gave_way};
+    }
+
     read(request.path, true);
 
     const FileDescriptor directory{::open(path_.data(), combineFlags(O_RDONLY, O_DIRECTORY, O_CLOEXEC))}; // NOLINT(cppcoreguidelines-pro-type-vararg): open's C signature is variadic
@@ -219,13 +272,19 @@ namespace telar::runtime {
       Measure measure{.deadline = deadline, .cancelled = cancelled};
 
       counted_.clear();
-      if (cancelled.load(std::memory_order_relaxed) || Clock::now() >= deadline) {
+      if (struct stat status{}; cancelled.load(std::memory_order_relaxed) || Clock::now() >= deadline) {
         measure.complete = false;
-      } else {
-        add(directory.get(), terminated.data(), 0, measure);
+      } else if (::fstatat(directory.get(), terminated.data(), &status, AT_SYMLINK_NOFOLLOW) == 0 && S_ISDIR(status.st_mode)) {
+        addSized(directory.get(), terminated.data(), seenAs<Seen>(status), 0, measure);
       }
 
       sizes.atMut(measured++) = {.name = name, .bytes = measure.bytes, .complete = measure.complete};
+    }
+
+    // Told to end on its way, it answers as one told before it began: what it finished is
+    // remembered, and the window asks again for what it still shows.
+    if (cancelled.load(std::memory_order_relaxed)) {
+      throw RequestError{FailureCode::resource_limit, gave_way};
     }
 
     reply.send(DirectorySizes{.request_id = request.request_id, .path = request.path, .sizes = sizes.view().first(measured)});

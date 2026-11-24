@@ -24,6 +24,10 @@ export namespace telar::runtime {
     static constexpr auto measure_time = std::chrono::seconds{2};
     // The levels below a directory it follows while measuring it.
     static constexpr std::size_t measured_depth = 64;
+    // The directories whose size it remembers, and for how long: what is below a directory
+    // changes without the directory changing, so a size stands for a short while and no more.
+    static constexpr std::size_t remembered_sizes = std::size_t{16} * 1024;
+    static constexpr auto remembered_time = std::chrono::seconds{30};
 
     explicit DirectoryReader(ConcurrentMemory& memory);
 
@@ -32,8 +36,12 @@ export namespace telar::runtime {
     void list(const ListDirectory& request, EncodedReply<ConcurrentMemory>& reply);
 
     // Sends the DirectorySizes of the directories in the page `request` names, measured until
-    // `measure_time` passed or `cancelled` is set: the ones it did not finish say so.
+    // `measure_time` passed: the ones it did not finish say so. With `cancelled` set, before it
+    // begins or on its way, it throws RequestError: its sizes gave way to another request.
     void measure(const MeasureDirectory& request, const std::atomic<bool>& cancelled, EncodedReply<ConcurrentMemory>& reply);
+
+    // Forgets the sizes it remembers: the files changed under them.
+    void forget() noexcept;
 
   private:
     using Clock = std::chrono::steady_clock;
@@ -54,6 +62,26 @@ export namespace telar::runtime {
       const std::atomic<bool>& cancelled;
       std::uint64_t bytes = 0;
       bool complete = true;
+      // How many times something below made a size unfit to remember: a directory not walked
+      // whole, or a file with several names, which counts once wherever it is met first.
+      std::uint32_t flaws = 0;
+    };
+
+    // What says a directory is the one it was: where it is, and the time of its last change.
+    struct Seen {
+      std::uint64_t device = 0;
+      std::uint64_t inode = 0;
+      std::uint64_t modified_seconds = 0;
+      std::uint32_t modified_nanoseconds = 0;
+
+      bool operator==(const Seen&) const noexcept = default;
+    };
+
+    // What a directory held when it was measured.
+    struct Sized {
+      Seen seen;
+      std::uint64_t bytes = 0;
+      Clock::time_point measured;
     };
 
     // Reads `path` into `items_`, in a listing's order. `continued` says the request goes on with
@@ -64,6 +92,10 @@ export namespace telar::runtime {
     [[nodiscard]] std::string_view nameOf(const Item& item) const;
     // Adds to `measure` what the directory `name` of `parent` holds on disk, `depth` levels down.
     void add(int parent, const char* name, std::size_t depth, Measure& measure);
+    // The same, of a directory seen as `seen`: from what is remembered of it while it is the
+    // same directory and was measured lately; else it is walked, and remembered when the walk
+    // was whole.
+    void addSized(int parent, const char* name, const Seen& seen, std::size_t depth, Measure& measure);
 
     ds::String<ConcurrentMemory> path_;
     // What the directory was when `items_` was read from it; none while no listing is held whole.
@@ -74,6 +106,8 @@ export namespace telar::runtime {
     std::uint32_t total_ = 0;
     // The files with more than one name already counted in the directory being measured.
     ds::Map<std::uint64_t, std::monostate, ConcurrentMemory> counted_;
+    // The sizes remembered, by inode.
+    ds::Map<std::uint64_t, Sized, ConcurrentMemory> sizes_;
   };
 
 }

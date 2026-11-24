@@ -193,12 +193,68 @@ namespace {
     check(sizes.sizes[1].name == "empty" && sizes.sizes[1].complete && sizes.sizes[1].bytes == 0);
 
     const std::atomic<bool> already{true};
+    bool refused = false;
 
-    reader.measure(MeasureDirectory{.request_id = 10, .path = root, .skip = 0, .limit = FileLimits::maximum_entries}, already, reply);
+    try {
+      reader.measure(MeasureDirectory{.request_id = 10, .path = root, .skip = 0, .limit = FileLimits::maximum_entries}, already, reply);
+    } catch (const RequestError&) {
+      refused = true;
+    }
 
-    const auto unfinished = Codec::decode<DirectorySizes>(reply.payload(), storage);
+    check(refused, "a measure told to end before it began reads nothing, and is refused");
+  }
 
-    check(unfinished.sizes.size() == 2 && !unfinished.sizes[0].complete, "a measure that was cancelled says what it did not finish");
+  void testASizeIsRememberedWhileItsDirectoryIsTheSame() {
+    telar::testing::TestMemory adapter;
+    ConcurrentMemory& memory = adapter;
+    TemporaryDirectory directory{"/tmp/telar-files-XXXXXX"};
+    const std::string root{directory.path()};
+    const std::string large(256 * 1024, 'x');
+
+    std::filesystem::create_directories(root + "/kept/deep");
+    std::filesystem::create_directories(root + "/linked/deep");
+    write(root + "/kept/deep/one", large);
+    write(root + "/linked/deep/one", large);
+    std::filesystem::create_hard_link(root + "/linked/deep/one", root + "/linked/deep/again");
+
+    const std::atomic<bool> cancelled{false};
+    DirectoryReader reader{memory};
+    EncodedReply reply{memory};
+    std::vector<Byte> scratch(256 * 1024);
+    DecodeStorage storage{scratch};
+    std::uint64_t request = 0;
+    const auto measured = [&](std::string_view name) {
+      reader.measure(MeasureDirectory{.request_id = ++request, .path = root, .skip = 0, .limit = FileLimits::maximum_entries}, cancelled, reply);
+
+      for (const auto& size : Codec::decode<DirectorySizes>(reply.payload(), storage).sizes) {
+        if (size.name == name) {
+          check(size.complete);
+          return size.bytes;
+        }
+      }
+
+      return std::uint64_t{0};
+    };
+
+    const auto first = measured("kept");
+
+    check(first >= large.size() && first < 2 * large.size());
+    // What changes below a directory leaves the directory as it was: its size stands for a while.
+    write(root + "/kept/deep/two", large);
+    check(measured("kept") == first, "a size measured lately is the one remembered");
+    reader.forget();
+    check(measured("kept") >= 2 * large.size(), "forgotten, it is measured again");
+
+    // An entry that comes or goes changes the directory, which is then another to measure.
+    write(root + "/kept/three", large);
+    std::filesystem::last_write_time(root + "/kept", std::filesystem::file_time_type::clock::now() + std::chrono::seconds{2});
+    check(measured("kept") >= 3 * large.size(), "a directory that changed is measured again");
+
+    // A file with two names counts where it is met first, so what holds one is never remembered.
+    const auto linked = measured("linked");
+
+    write(root + "/linked/deep/two", large);
+    check(measured("linked") >= linked + large.size(), "a directory with a file of two names is measured each time");
   }
 
   void testTheOrderOfAListing() {
@@ -208,6 +264,7 @@ namespace {
     check(!listsBefore("same", false, "same", false));
   }
 
+  const telar::testing::Case case_remembered{"directory.a_size_is_remembered_while_its_directory_is_the_same", testASizeIsRememberedWhileItsDirectoryIsTheSame};
   const telar::testing::Case case_order{"directory.the_order_of_a_listing", testTheOrderOfAListing};
   const telar::testing::Case case_listing{"directory.a_listing_puts_directories_first_and_folds_case", testAListingPutsDirectoriesFirstAndFoldsCase};
   const telar::testing::Case case_pages{"directory.a_listing_is_read_a_page_at_a_time", testAListingIsReadAPageAtATime};
