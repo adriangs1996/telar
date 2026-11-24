@@ -303,7 +303,7 @@ Legend: `[ ]` todo, `[x]` done, `[~]` not a bug / dropped (with reason).
   whole table on every keystroke: same cap of 10,000 distinct commands, and the scan still
   stops there.
 
-- [ ] **T27 (H9). One history query cancels an unrelated one.**
+- [x] **T27 (H9). One history query cancels an unrelated one.**
   `src/runtime/workers/request_worker/request_worker.cpp:9` `supersededBy` compares only
   `distinct`; the editor's history query and the dialog's first page supersede each other.
   Expected: only a query of the same kind is replaced.
