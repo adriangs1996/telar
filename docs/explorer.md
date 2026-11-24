@@ -19,21 +19,31 @@ until `:w` shows the plan and you accept it. `?` lists every key.
 
 | Keys | What they do |
 | --- | --- |
-| `j` `k`, `gg` `G`, `Ctrl+d` `Ctrl+u` | Move by a row, to the first or the last, by half a page. A count applies: `5j`, `12G`. |
+| `j` `k`, `gg` `G`, `Ctrl+d` `Ctrl+u` | Move by a row, to the first or the last, by half a page. A count applies: `5j`, `12G`. `Ctrl+n` and `Ctrl+p` move as `j` and `k`, and `:12` goes to a row as `12G`. |
 | `h` `l` | Fold and unfold a directory. `h` on a file goes to its directory; `l` on an unfolded directory moves into it. |
-| `za` `zM` `zR` | Toggle a fold, fold every directory, unfold the directories that show. |
+| `za` `zo` `zc` | Toggle a fold, unfold, fold. `zc` on what is in a directory folds that directory, and selects it. |
+| `zM` `zR` | Fold every directory; unfold every one, each as its listing arrives. `zR` stops when a window has 64 directories unfolded. |
 | `Enter` | On a directory, make it the root of the window. |
-| `-` `_` `~` | Go to the directory above, to the workspace's, to the home. |
+| `-` `_` `~` | Go to the directory above, to the workspace's, to the home. Backspace goes up as `-` does. |
 | `Ctrl+o` `Ctrl+i` | Go back and forward through the roots visited. |
-| `ma` `'a` | Set a mark on the selection, and return to it. `:marks` lists them. |
-| `/` | Filter as you type; Enter keeps the filter, Escape drops it. `n` and `N` go to the next and the previous match, around the ends. |
-| `]c` `[c` | Go to the next or the previous row git says changed. |
+| `ma` `'a` | Set a mark on the selected row, and go to it; `` `a `` goes there too. The mark of a directory makes it the root of the window; the mark of a file selects it where the window listed it. `:marks` lists them. |
+| `/` | Filter as you type; Enter keeps the filter, Escape drops it. While you type, the arrows and `Ctrl+n` `Ctrl+p` move among what it found. `n` and `N` go to the next and the previous match, around the ends. |
+| `]c` `[c` | Go to the next or the previous path git says changed below the root, in the tree, unfolding the directories that lead to it. Past the last one it starts again. |
 | `]a` `[a` | Go to the next or the previous file an agent touched, in the tree, unfolding the directories that lead to it. Past the last one it starts again. |
 | `S`, `g.`, `gi` | Sort by name, size or time; show dotfiles; show what git ignores. |
 | `R` | Read the directories again. |
 
-A click selects a row, a double click acts as Enter, and the wheel scrolls. Shift and a click
-selects up to that row, and Cmd or Ctrl and a click picks rows one by one.
+A click selects a row, a double click acts as Enter, and the wheel scrolls. A click on the row
+that is already selected folds or unfolds its directory, and on a file git says changed it
+shows or hides its diff below it. Shift and a click selects up to that row, Cmd or Ctrl and a
+click picks rows one by one, and Cmd or Ctrl with `a` picks every row. A click on a directory
+of the path the head of a window shows roots the window there.
+
+The tree ends with a row that says how many entries of its root the window does not list,
+dotfiles and what git ignores, with the keys that list them.
+
+`]c` and `[c` follow the tree's order by name, whatever the window is sorted by, and step over
+what a hidden directory holds until `g.` lists it.
 
 ## Filter every path below the root
 
@@ -57,8 +67,9 @@ the window already lists.
 
 Each row has the icon of its type, the same the editor's surfaces use. To its right:
 
-- the state git gives the file, `M` `A` `D` `R` `U` `C`, and for a directory how many paths
-  changed below it, as `●3`;
+- the state git gives the file, in the two columns of `git status -s`: what the index holds,
+  then what the working tree does, `M` `A` `D` `R`, and `??` for a file git does not track; for
+  a directory, how many paths changed below it, as `●3`;
 - the panes whose shell is in that directory, by their number in the tab;
 - the marks set on it;
 - a ring, `○`, when an [editor pane](#with-the-editor) of its machine has the file in a
@@ -68,13 +79,16 @@ Each row has the icon of its type, the same the editor's surfaces use. To its ri
   as `…`, and one it did not finish ends in `+`.
 
 The preview beside the listing says the size, the time of the last change, what git says and
-the last commit of the selection, which editor pane holds it, and shows its diff when it has
-changes not committed, or the head of its text.
+the last commit of the selection, which editor pane holds it and the marks set on it, and shows
+its diff when it has changes not committed, or the head of its text. A row that is no file has
+a preview of its own: a pane says what it is and where, and an entry a change adds, or a file
+on its way from another machine, says what waits to be done.
 
-Of a directory it lists the five entries that weigh the most under **Heaviest**, each with its
-size and its part of all the directory holds. It does so from what the window already holds: a
-directory it lists whole, as an unfolded one, with every directory in it measured. Until then
-it lists none, since the heaviest of a part is not the heaviest.
+Of a directory it says how many of its entries the window lists, as `17 of 19 visible`, and
+lists the seven that weigh the most under **Heaviest**, each with its size and its part of all
+the directory holds. It does so from what the window already holds: a directory it lists whole,
+as an unfolded one, and for the heaviest with every directory in it measured. Until then it
+says neither, since the heaviest of a part is not the heaviest.
 
 ![The preview of a directory, with its heaviest entries](images/telar-explorer-heaviest.png)
 
@@ -84,7 +98,8 @@ it lists none, since the heaviest of a part is not the heaviest.
 `:touched` and `:panes` do.
 
 - **tree**: the directories, unfolded as you ask.
-- **changes**: what git says changed, in three groups: staged, unstaged and untracked.
+- **changes**: what git says changed, in three groups: staged, unstaged and untracked. `=`
+  unfolds the diff of a file below its row here too, and in the lens of what was touched.
 
   ![The lens of changes](images/telar-explorer-changes.png)
 
@@ -126,7 +141,8 @@ that machine starts or ends a program or its agent reports. A machine with no wi
 
 A window follows the focused pane until you send it somewhere else: its root is the pane's
 workspace, and the selection is the pane's directory. `gp` roots it at the pane's directory
-instead, `gw` at the workspace's and `gh` at the home of the machine. Enter on a directory,
+instead, `gw` at the workspace's and `gh` at the home of the machine, as `:scope pane`,
+`:scope workspace` and `:scope machine` do. Enter on a directory,
 `-` or `:e` take the window where you say, and the status line says `[fixed]`; `F` follows the
 pane again.
 
@@ -138,9 +154,10 @@ pane again.
 | `V`, then `Enter` | The same with every row selected. |
 | `@` | Mentions the file to the agent of the tab. |
 | `gf` | Opens it in the tab's [editor pane](editor.md). |
-| `cd` | Changes the directory of the focused shell to the row's. |
+| `cd` | Changes the directory of the focused shell to the row's. `:cd PATH` does it with a path, as the window reads one, and `:cd` alone with the window's root. |
 | `s` | Opens a new shell in the row's directory, in a split. |
 | `yy` `yr` `yn` | Copy the path, the path from the root, or the name to the clipboard. |
+| `.` | Repeats the last of these, and of the ones that change files or git's index, on the row selected now. |
 
 The explorer closes when a file goes to a pane, so what the pane did with it shows. [Beside
 the panes](#beside-the-panes) it stays.
@@ -149,17 +166,22 @@ the panes](#beside-the-panes) it stays.
 
 | Keys | What they do |
 | --- | --- |
-| `cw` `i` `a` | Rename on the row. |
+| `cw` `cc` `i` `a` | Rename on the row: with the name selected up to its extension, with all of it selected, with the caret before it, or after it. `I` and `A` are `i` and `a`. |
 | `o` | Add an entry in the row's directory. A name that ends in `/` is a directory. |
 | `dd` | Cut: the row goes to the trash, or moves where `p` pastes it. |
 | `yy`, then `p` | Copy into the directory of the selection, in this window or in another. |
 | `u` | Take the last change typed back. |
-| `:w` | Show the plan. `:w!` lets a move or a copy replace what exists. |
+| `:w` | Show the plan. `:w!` lets a move or a copy replace what exists. `:wq` is `:w`, and `:wa!` is `:w!`. |
+
+Enter and Escape both end a name: what was typed is the change, and so does a click on
+another row. An empty name leaves a rename undone and adds no entry. A new entry keeps the
+selection once it has its name.
 
 A count takes that many rows: `3dd`. `V` selects rows for `d`, `y`, `ga` and `gu`.
 
-The shortcuts of a file manager name the same commands: Cmd or Ctrl with `c`, `x`, `v`, `z` and
-`s` are `yy`, `dd`, `p`, `u` and `:w`, and F2 renames.
+The shortcuts of a file manager name the same commands: Cmd or Ctrl with `c`, `x`, `v`, `z`,
+`s` and `a` are `yy`, `dd`, `p`, `u`, `:w` and every row picked; F2 renames, and Delete, or Cmd
+with Backspace, cuts.
 
 ![Changes typed on the listing, not yet written](images/telar-explorer-pending.png)
 
@@ -181,7 +203,8 @@ The shortcuts of a file manager name the same commands: Cmd or Ctrl with `c`, `x
   directory goes to the trash with all it holds. A name is known as taken from the listings
   the window holds: one in a directory it never listed is found by the runtime, which gives
   the file another.
-- `u` with nothing typed takes the last plan back.
+- `u` with nothing typed asks whether to take the last plan back, and `y` does: what it
+  deleted returns from the trash.
 - A plan holds 64 operations at most.
 
 `q` and `:q` do not close the last window while changes wait; `:q!` and `:e!` discard them.
@@ -242,7 +265,7 @@ on its own leaves as its text alone, and so does a directory on Linux.
 | --- | --- |
 | `=` | Unfold the diff of the file below its row. |
 | `ga` `gu` | Stage and unstage, at once. |
-| `gX` | Discard the changes of a file. It is a change typed, written by `:w`, as it loses work. |
+| `gX` | Discard the changes the working tree holds of a file, or of every file below a directory; what the index holds stays. It is a change typed, written by `:w`, as it loses work. |
 | `gc` | Commit what is staged: it opens `:commit` for the message. |
 
 The head of a window says the branch, how far it is from its upstream, and how many paths are
@@ -255,10 +278,13 @@ The explorer splits into three windows at most, each on its own directory.
 | Keys | What they do |
 | --- | --- |
 | `Ctrl+w` `v`, `Ctrl+w` `s` | Another window, beside or below. |
-| `Ctrl+w` `w`, `Ctrl+w` `h` `j` `k` `l` | Go to the next window, or to the one that way. |
+| `Ctrl+w` `w`, `Ctrl+w` `h` `j` `k` `l` | Go to the next window, around the last; or to the one on that side, where there is one: `h` and `l` between windows side by side, `k` and `j` between one below the other. |
 | `Ctrl+w` `q`, `Ctrl+w` `o` | Close this window, or every other one. |
 | `:e PATH`, `:vs PATH`, `:sp PATH` | Take this window, or a new one, to a path. `~` is the home, and a relative path starts at the window's root. A path of [another machine](#machines) starts with its label and a colon. |
-| `Tab` | On one of those lines and on `:cd`, complete the directory being typed: the one that matches, or the start that several share, which it lists beside the line. |
+| `Tab` | On the command line, complete the name of a command; and on one of those lines and on `:cd`, the directory being typed: the one that matches, or the start that several share, which it lists beside the line. |
+
+Alt with `w` starts the same sequences as `Ctrl+w`, for a system that keeps that key for
+itself, unless a configuration binds it.
 
 `yy` in one window and `p` in another copies between two directories; `dd` and `p` moves.
 

@@ -1359,22 +1359,26 @@ The commands, by what they do:
 | Commands | |
 | --- | --- |
 | `down` `up` `top` `bottom` `half_page_down` `half_page_up` | Move the selection. |
-| `collapse` `expand` `toggle_fold` `fold_all` `unfold_all` | Fold and unfold directories. |
+| `collapse` `expand` `toggle_fold` `unfold` `fold` `fold_all` `unfold_all` | Fold and unfold directories. |
 | `next_change` `previous_change` `next_touch` `previous_touch` | Go to the next file git or an agent changed. |
 | `enter` `parent` `workspace_root` `home` | Root the window somewhere else. |
 | `scope_pane` `scope_workspace` `scope_machine` `next_machine` `toggle_follow` | What the window follows, and its machine. |
 | `mark` `jump_to_mark` `jump_back` `jump_forward` | Marks and the jump list. `mark` and `jump_to_mark` take the letter typed after their keys. |
 | `next_lens` `previous_lens` | The lens. |
-| `rename` `rename_whole` `create` `create_directory` `cut` `yank` `yank_relative` `yank_name` `paste` `undo` `write` | Change files as text. |
+| `rename` `rename_whole` `rename_start` `rename_end` `create` `create_directory` `cut` `yank` `yank_relative` `yank_name` `paste` `undo` `write` | Change files as text. The four that rename differ in where the caret starts: on the name up to its extension, on all of it, before it, after it. |
 | `split_vertical` `split_horizontal` `split_here` `next_window` `previous_window` `window_left` `window_right` `window_up` `window_down` `close_window` `only_window` `pin` | Windows. |
 | `open` `change_directory` `split_shell` `mention` `repeat` | Hand a file to a pane. |
 | `toggle_diff` `stage` `unstage` `discard` `commit` | Git. |
 | `cycle_sort` `toggle_hidden` `toggle_ignored` `refresh` | What is listed. |
-| `visual` `search` `next_match` `previous_match` `command_line` `help` `quit` `escape` | Modes. |
+| `visual` `select_all` `search` `next_match` `previous_match` `command_line` `help` `quit` `escape` | Modes, and every row picked at once. |
 
 `telar config check` refuses a name that is no command and a sequence that
 cannot be typed, and says which. The keys of the other modes, as `y` and `n`
 on a plan, the keys of `:` and the ones of a menu, are not changed here.
+
+Two keys are read before the map. Command with Backspace is `<Del>`, the Delete
+of a keyboard that has none. And `<M-w>`, Alt with `w`, starts the sequences
+of `<C-w>` while no sequence you bound starts with it.
 
 `telar.action.monitor()` opens the monitor over the window: the processors,
 memory, disks and network of the window's machine, and every process it runs.
