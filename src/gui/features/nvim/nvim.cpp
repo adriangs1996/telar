@@ -884,7 +884,7 @@ namespace telar::gui::features::nvim {
     auto& held = editor->files;
     const std::string_view text{held.text.data(), held.text.size()};
     const bool same = std::ranges::equal(held.files, message.files, [&](const OpenFile& kept, const NvimOpenFile& file) {
-      return kept.modified == file.modified && kept.path.of(text) == file.path;
+      return kept.modified == file.modified && kept.current == file.current && kept.path.of(text) == file.path;
     });
 
     if (same) {
@@ -896,7 +896,7 @@ namespace telar::gui::features::nvim {
     for (const auto& file : message.files) {
       const auto path = append(held.text, file.path);
 
-      held.files.push({.path = path, .modified = file.modified});
+      held.files.push({.path = path, .modified = file.modified, .current = file.current});
     }
 
     ++Access::filesRevision(state);

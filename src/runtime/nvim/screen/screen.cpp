@@ -853,7 +853,7 @@ namespace telar::runtime {
     const auto shown = files.first(std::min(files.size(), max_nvim_open_files));
     const std::string_view text{files_.text.data(), files_.text.size()};
     const bool same = std::ranges::equal(files_.files, shown, [&](const NvimShownFiles::Entry& held, const NvimOpenFile& file) {
-      return held.modified == file.modified && held.path.of(text) == file.path;
+      return held.modified == file.modified && held.current == file.current && held.path.of(text) == file.path;
     });
 
     if (same) {
@@ -864,7 +864,7 @@ namespace telar::runtime {
     files_.text.clear();
     files_.files.clear();
     for (const auto& file : shown) {
-      files_.files.push({.path = {.offset = static_cast<std::uint32_t>(files_.text.size()), .size = static_cast<std::uint32_t>(file.path.size())}, .modified = file.modified});
+      files_.files.push({.path = {.offset = static_cast<std::uint32_t>(files_.text.size()), .size = static_cast<std::uint32_t>(file.path.size())}, .modified = file.modified, .current = file.current});
       files_.text.extend(std::span<const char>{file.path});
     }
 

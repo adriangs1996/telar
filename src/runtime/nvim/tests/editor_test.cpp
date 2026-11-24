@@ -402,18 +402,22 @@ namespace {
       NvimEditor editor{memory, {.columns = 80, .rows = 24}, {}};
       const auto shown = [](msgpack::Writer& writer) {
         writer.array(4);
-        writer.array(2);
+        writer.array(3);
         writer.string("/work/main.cpp");
         writer.boolean(true);
-        writer.array(2);
+        writer.boolean(false);
+        writer.array(3);
         writer.string("relative/notes.md");
         writer.boolean(true);
-        writer.array(2);
+        writer.boolean(false);
+        writer.array(3);
         writer.string("/work/bad\x01name");
         writer.boolean(false);
-        writer.array(2);
+        writer.boolean(false);
+        writer.array(3);
         writer.string("/work/README.md");
         writer.boolean(false);
+        writer.boolean(true);
       };
 
       attach(editor);
@@ -426,6 +430,7 @@ namespace {
 
       check(editor.takePulse().flushed && files.files.size() == 2 && files.changed_at != 0, "the files are kept, and told at once");
       check(files.files[0].path.of(text) == "/work/main.cpp" && files.files[0].modified && files.files[1].path.of(text) == "/work/README.md" && !files.files[1].modified);
+      check(!files.files[0].current && files.files[1].current, "with the one being edited");
       check(tell(editor, "telar_files", 1, shown));
       check(!editor.takePulse().flushed, "the same again changes nothing");
 
@@ -433,8 +438,9 @@ namespace {
       check(tell(editor, "telar_files", 1, [](msgpack::Writer& writer) {
         writer.array(max_nvim_open_files + 1);
         for (std::size_t index = 0; index <= max_nvim_open_files; ++index) {
-          writer.array(2);
+          writer.array(3);
           writer.string("/work/many.cpp");
+          writer.boolean(false);
           writer.boolean(false);
         }
       }));

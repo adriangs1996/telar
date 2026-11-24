@@ -240,18 +240,19 @@ local function tell_tabs()
 end
 
 -- The files the listed buffers show, for what lists files beside the editor: each by its
--- absolute path, with whether its buffer has changes not written. Told when the list changes,
--- and no more of it than the runtime takes.
+-- absolute path, with whether its buffer has changes not written and whether it is the one
+-- being edited. Told when the list changes, and no more of it than the runtime takes.
 local most_files, most_file_bytes = 64, 32768
 local filed = nil
 local function tell_files()
   local files, key, bytes = {}, {}, 0
+  local edited = vim.api.nvim_get_current_buf()
   for _, buffer in ipairs(vim.api.nvim_list_bufs()) do
     local name = vim.api.nvim_buf_get_name(buffer)
     if vim.bo[buffer].buflisted and vim.bo[buffer].buftype == "" and name:sub(1, 1) == "/" and #files < most_files and bytes + #name <= most_file_bytes then
       local modified = vim.bo[buffer].modified
-      files[#files + 1] = { name, modified }
-      key[#key + 1] = name .. (modified and "+" or "-")
+      files[#files + 1] = { name, modified, buffer == edited }
+      key[#key + 1] = name .. (modified and "+" or "-") .. (buffer == edited and "*" or "")
       bytes = bytes + #name
     end
   end

@@ -180,11 +180,12 @@ export namespace telar::gui::features::nvim {
     ds::Vec<Tab, Memory> buffers;
   };
 
-  // A file one of the editor's listed buffers shows, by its path on the editor's machine, and
-  // whether that buffer has changes not written.
+  // A file one of the editor's listed buffers shows, by its path on the editor's machine,
+  // whether that buffer has changes not written, and whether it is the one being edited.
   struct OpenFile {
     Slice path;
     bool modified = false;
+    bool current = false;
   };
 
   struct OpenFiles {

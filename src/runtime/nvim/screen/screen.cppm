@@ -365,6 +365,7 @@ export {
       struct Entry {
         NvimSlice path;
         bool modified = false;
+        bool current = false;
       };
 
       explicit NvimShownFiles(ConcurrentMemory& memory);

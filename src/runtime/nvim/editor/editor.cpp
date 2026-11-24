@@ -535,20 +535,21 @@ end
     }
 
     for (std::uint32_t index = 0; index < count; ++index) {
-      if (!reader.tuple(2)) {
+      if (!reader.tuple(3)) {
         return;
       }
 
       const auto path = reader.string();
       bool modified = false;
+      bool current = false;
 
-      if (!path || !reader.boolean(modified)) {
+      if (!path || !reader.boolean(modified) || !reader.boolean(current)) {
         return;
       }
 
       // Only what can be a file of this machine and a client can show: an absolute path.
       if (path->starts_with('/') && path->size() <= max_nvim_path_bytes && displayable(*path)) {
-        files.atMut(kept++) = {.path = *path, .modified = modified};
+        files.atMut(kept++) = {.path = *path, .modified = modified, .current = current};
       }
     }
 

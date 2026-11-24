@@ -565,7 +565,7 @@ namespace telar::runtime {
     const auto count = std::min(shown.files.size(), max_nvim_open_files);
 
     for (std::size_t index = 0; index < count; ++index) {
-      files.atMut(index) = {.path = shown.files[index].path.of(text), .modified = shown.files[index].modified};
+      files.atMut(index) = {.path = shown.files[index].path.of(text), .modified = shown.files[index].modified, .current = shown.files[index].current};
     }
 
     write(payload_, NvimOpenFiles{.pane_id = pane_, .files = files.view().first(count)});

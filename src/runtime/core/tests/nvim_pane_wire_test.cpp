@@ -148,11 +148,13 @@ namespace {
         if (keys == "<F10>") {
           tell("telar_files", 1, [](msgpack::Writer& writer) {
             writer.array(2);
-            writer.array(2);
+            writer.array(3);
             writer.string("/work/main.cpp");
             writer.boolean(true);
-            writer.array(2);
+            writer.boolean(true);
+            writer.array(3);
             writer.string("/work/README.md");
+            writer.boolean(false);
             writer.boolean(false);
           });
           return;

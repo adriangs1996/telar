@@ -301,14 +301,16 @@ export extern "C++" {
     struct MessageSchema<NvimLink> : Schema<Direction::server, ServerTag::nvim_link, Field<&NvimLink::pane_id, NonzeroU64, "pane_id">, Field<&NvimLink::uri, Text16<max_nvim_path_bytes, false>, "uri">> {};
 
     // A file a listed buffer of the editor shows, by its absolute path on the editor's machine,
-    // and whether that buffer has changes that were not written.
+    // whether that buffer has changes that were not written, and whether it is the buffer the
+    // editor's current window shows.
     struct NvimOpenFile {
       std::string_view path;
       bool modified{};
+      bool current{};
     };
 
     template <>
-    struct BodySchema<NvimOpenFile> : Serializer<Field<&NvimOpenFile::path, Text16<max_nvim_path_bytes, false>, "path">, Field<&NvimOpenFile::modified, BoolByte, "modified">> {};
+    struct BodySchema<NvimOpenFile> : Serializer<Field<&NvimOpenFile::path, Text16<max_nvim_path_bytes, false>, "path">, Field<&NvimOpenFile::modified, BoolByte, "modified">, Field<&NvimOpenFile::current, BoolByte, "current">> {};
 
     // The files the editor's listed buffers show, sent whole when the list or what is written of
     // one changes. What lists files beside the editor marks them, and warns before it moves or
