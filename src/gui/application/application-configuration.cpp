@@ -152,7 +152,10 @@ namespace telar::gui::application {
     }
 
     prompt.ghost = settings.ghost.valueOr(prompt.ghost);
-    prompt.macos_option_as_alt = settings.macos_option_as_alt.valueOr(prompt.macos_option_as_alt);
+    if (settings.macos_option_as_alt) {
+      prompt.macos_option_as_alt = *settings.macos_option_as_alt;
+    }
+
     prompt.max_lines = settings.max_lines.valueOr(prompt.max_lines);
   }
 

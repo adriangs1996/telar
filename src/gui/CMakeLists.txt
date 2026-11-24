@@ -107,7 +107,7 @@ if(TELAR_GUI_NATIVE)
       target_compile_options(gui-platform-native PRIVATE "$<$<COMPILE_LANGUAGE:OBJC,OBJCXX>:-fno-objc-msgsend-class-selector-stubs>")
     endif()
 
-    target_link_libraries(gui-platform-native PRIVATE "-framework AppKit" "-framework CoreText" "-framework CoreGraphics" "-framework ImageIO" "-framework UniformTypeIdentifiers")
+    target_link_libraries(gui-platform-native PRIVATE "-framework AppKit" "-framework Carbon" "-framework CoreText" "-framework CoreGraphics" "-framework ImageIO" "-framework UniformTypeIdentifiers")
     # The clipboard image source test checks this source under the sanitizers.
     if(BUILD_TESTING AND TELAR_SANITIZERS)
       set_property(SOURCE platform/macos/clipboard_image_source.mm APPEND PROPERTY COMPILE_OPTIONS -fsanitize=address,undefined -fno-omit-frame-pointer)

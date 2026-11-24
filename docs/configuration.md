@@ -1419,11 +1419,14 @@ with, as do panes the runtime restores from a saved session. A command run from
 the editor reaches the runtime whole, which types it at the shell's prompt and
 records that text in the history.
 
-On macOS, Option types the character the keyboard layout gives the key, as
-Option+2 types `@` on a Spanish layout, in the editor and in the terminal. Set
-`client.prompt.macos_option_as_alt = true` for Option to act as Meta instead:
-Option+F then sends Alt with `f`, which readline and the editor read as a word
-forward. Option keys whose character is the key itself stay Alt either way.
+On macOS, Option follows the keyboard layout in use, as in Ghostty. On the U.S.,
+ABC and U.S. International layouts it acts as Meta: Option+F sends Alt with `f`,
+which readline and the editor read as a word forward. On any other layout it
+types the character the layout gives the key, as Option+2 types `@` on a
+Spanish one, in the editor and in the terminal. Set
+`client.prompt.macos_option_as_alt = true` for Meta on every layout, or `false`
+for the layout's characters on every layout. Option keys whose character is the
+key itself stay Alt either way.
 
 While the focused pane's shell waits for a command, the history search and the
 path picker open under the command instead of in a dialog. The command becomes

@@ -74,7 +74,7 @@ namespace {
     const auto configuration = read({.source = R"(return {api_version = 2, client = {prompt = {mode = "telar", keymap = "vim", motion = "none", ghost = false, macos_option_as_alt = true, max_lines = 4}}})", .profile = {}});
     const auto& prompt = configuration.prompt;
 
-    check(prompt.mode == PromptMode::telar && prompt.keymap == PromptKeymap::vim && prompt.motion == PromptMotion::none && !prompt.ghost && prompt.macos_option_as_alt && prompt.max_lines == 4, "every prompt field must be read");
+    check(prompt.mode == PromptMode::telar && prompt.keymap == PromptKeymap::vim && prompt.motion == PromptMotion::none && !prompt.ghost && prompt.macos_option_as_alt == telar::ds::Option{true} && prompt.max_lines == 4, "every prompt field must be read");
     check(read({.source = R"(return {api_version = 2, client = {prompt = {mode = "telar", skin = "glass"}}})", .profile = {}}).prompt.mode == PromptMode::telar, "client.prompt.skin is accepted as the documentation describes it");
     check(read({.source = "return {api_version = 2}", .profile = {}}).prompt == PromptConfiguration(), "the prompt stays classic by default");
     const auto filtered = read({.source = R"(return {api_version = 2, runtime = {history = {secrets_filter = false, command_filters = {"deploy"}}}})", .profile = {}});

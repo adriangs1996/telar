@@ -70,6 +70,8 @@ Legend: `[ ]` todo, `[x]` done, `[~]` not a bug / dropped (with reason).
   the same rule for the terminal.
   Decision: the rule lives in `KeyAdapter::terminalKey` (macOS convention only), so the
   terminal and the editor share it; `client.prompt.macos_option_as_alt` governs both.
+  Unset, it follows the keyboard layout as Ghostty does (Meta on U.S., ABC and U.S.
+  International, characters elsewhere), so U.S. users keep Option+B/F as Meta.
 
 - [x] **T4 (H4). The shell integration token is stored in captured output.**
   `src/runtime/terminal/command_capture/tracker/tracker.cpp:1328-1342` `afterOutput` appends

@@ -115,9 +115,11 @@ export {
       PromptMotion motion = PromptMotion::spring;
       PromptKeymap keymap = PromptKeymap::emacs;
       bool ghost = true;
-      // On macOS, Option+key sends Meta (Alt) with the key under it instead of the character
-      // the layout gives it, in the editor and the terminal alike.
-      bool macos_option_as_alt = false;
+      // On macOS, whether Option+key sends Meta (Alt) with the key under it instead of the
+      // character the layout gives it, in the editor and the terminal alike. Unset, it follows
+      // the keyboard layout in use, as Ghostty does: Meta on U.S. ones and ABC, characters on
+      // others.
+      ds::Option<bool> macos_option_as_alt;
       std::uint8_t max_lines = default_max_lines;
       PromptBindings bindings;
 

@@ -1,4 +1,5 @@
 #include "platform/text_input.hpp"
+#include "cf_reference.hpp"
 #include <AppKit/AppKit.h>
 #include <Carbon/Carbon.h>
 #include <QWindow>
@@ -22,6 +23,18 @@ namespace telar::gui::platform {
     const auto* const view = (__bridge NSView*)handle;
 
     return event.window == view.window;
+  }
+
+  bool layoutTakesOptionForAlt() noexcept {
+    const NativeReference<TISInputSourceRef> source{TISCopyCurrentKeyboardLayoutInputSource()};
+    if (!source) {
+      return false;
+    }
+
+    const auto* const identifier = static_cast<CFStringRef>(TISGetInputSourceProperty(source.get(), kTISPropertyInputSourceID));
+
+    // ABC is U.S. under the name macOS gives it outside the U.S., with the same Option layer.
+    return identifier != nullptr && (CFEqual(identifier, CFSTR("com.apple.keylayout.US")) || CFEqual(identifier, CFSTR("com.apple.keylayout.ABC")) || CFEqual(identifier, CFSTR("com.apple.keylayout.USInternational")));
   }
 
 }
