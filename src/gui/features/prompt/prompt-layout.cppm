@@ -50,6 +50,9 @@ export namespace telar::gui::features::prompt {
     // The prompt mark takes the first columns of every row, so wrapped lines align with it.
     static constexpr std::uint32_t indent = 2;
     static constexpr std::size_t maximum_runs = 4096;
+    // A text that could hold more runs keeps those of the rows this far around the caret's, more
+    // than a view of the most lines the editor shows reaches: the rest it scrolls to.
+    static constexpr std::uint32_t kept_rows = 64;
 
     explicit Layout(Memory& memory);
 

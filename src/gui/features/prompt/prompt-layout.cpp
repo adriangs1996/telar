@@ -118,6 +118,47 @@ namespace telar::gui::features::prompt {
 
   }
 
+  namespace {
+
+    // Each grapheme of `text` laid out in rows of `columns` cells: `visit(start, end, cell,
+    // newline)`. The row and column after the last.
+    template <typename Visit>
+    CellRange walk(std::string_view text, std::uint32_t columns, Visit&& visit) {
+      std::uint32_t row = 0;
+      std::uint32_t column = Layout::indent;
+      GraphemeCursor graphemes{text};
+      std::size_t offset = 0;
+
+      while (true) {
+        const auto start = offset;
+        const auto grapheme = graphemes.nextReplacingInvalid();
+        if (!grapheme) {
+          break;
+        }
+
+        offset = graphemes.position();
+        if (text[start] == '\n') {
+          visit(start, offset, CellRange{.row = row, .column = column, .columns = 1}, true);
+          ++row;
+          column = Layout::indent;
+          continue;
+        }
+
+        const auto width = static_cast<std::uint32_t>(graphemes.columns());
+        if (column + width > columns) {
+          ++row;
+          column = Layout::indent;
+        }
+
+        visit(start, offset, CellRange{.row = row, .column = column, .columns = width}, false);
+        column += width;
+      }
+
+      return {.row = row, .column = column};
+    }
+
+  }
+
   void layout(Layout& result, const StyledText& styled, Selection selection, std::uint32_t columns) {
     const auto& [text, styles, groups] = styled;
     const auto [cursor, anchor] = selection;
@@ -125,61 +166,63 @@ namespace telar::gui::features::prompt {
     reset(result);
 
     columns = std::max<std::uint32_t>(columns, Layout::indent + 1);
-    std::uint32_t row = 0;
-    std::uint32_t column = Layout::indent;
     const auto selection_start = std::min(cursor, anchor);
     const auto selection_end = std::max(cursor, anchor);
-    // A caret inside a grapheme, as one an accent written apart follows, is drawn on it.
-    const auto place = [&](std::size_t offset, std::size_t end, CellRange cell) {
-      if (cursor >= offset && cursor < end) {
+
+    // A text of fewer bytes than the runs a layout keeps fits whole; a longer one keeps the rows
+    // around the caret's, which a first walk finds.
+    std::uint32_t first_kept = 0;
+    std::uint32_t last_kept = std::numeric_limits<std::uint32_t>::max();
+
+    if (text.size() > Layout::maximum_runs) {
+      ds::Option<std::uint32_t> caret_row;
+      const auto end = walk(text, columns, [&](std::size_t start, std::size_t finish, CellRange cell, bool) {
+        if (!caret_row && cursor >= start && cursor < finish) {
+          caret_row = cell.row;
+        }
+      });
+      const auto caret = caret_row.valueOr(end.column >= columns ? end.row + 1 : end.row);
+
+      first_kept = caret > Layout::kept_rows ? caret - Layout::kept_rows : 0;
+      last_kept = caret + Layout::kept_rows;
+    }
+
+    const auto end = walk(text, columns, [&](std::size_t start, std::size_t finish, CellRange cell, bool newline) {
+      const bool kept = cell.row >= first_kept && cell.row <= last_kept;
+
+      // A caret inside a grapheme, as one an accent written apart follows, is drawn on it.
+      if (cursor >= start && cursor < finish) {
         placeCaret(result, cell);
       }
 
-      if (offset >= selection_start && offset < selection_end) {
+      if (kept && start >= selection_start && start < selection_end) {
         select(result, cell);
       }
-    };
 
-    GraphemeCursor graphemes{text};
-    std::size_t offset = 0;
-
-    while (true) {
-      const auto start = offset;
-      const auto grapheme = graphemes.nextReplacingInvalid();
-      if (!grapheme) {
-        break;
+      if (newline) {
+        return;
       }
 
-      offset = graphemes.position();
-      if (text[start] == '\n') {
-        place(start, offset, CellRange{.row = row, .column = column, .columns = 1});
-        ++row;
-        column = Layout::indent;
-        continue;
+      if (kept) {
+        addRun(
+            result,
+            Run{
+                .row = cell.row,
+                .column = cell.column,
+                .columns = cell.columns,
+                .start = start,
+                .end = finish,
+                .style = start < styles.size() ? styles[start] : Style::plain,
+                .group = start < groups.size() ? groups[start] : std::uint8_t{0},
+            }
+        );
       }
 
-      const auto width = static_cast<std::uint32_t>(graphemes.columns());
-      if (column + width > columns) {
-        ++row;
-        column = Layout::indent;
-      }
+      result.width = std::max(result.width, cell.column + cell.columns);
+    });
 
-      place(start, offset, CellRange{.row = row, .column = column, .columns = width});
-      addRun(
-          result,
-          Run{
-              .row = row,
-              .column = column,
-              .columns = width,
-              .start = start,
-              .end = offset,
-              .style = start < styles.size() ? styles[start] : Style::plain,
-              .group = start < groups.size() ? groups[start] : std::uint8_t{0},
-          }
-      );
-      column += width;
-      result.width = std::max(result.width, column);
-    }
+    auto row = end.row;
+    auto column = end.column;
 
     if (cursor >= text.size()) {
       if (column >= columns) {

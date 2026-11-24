@@ -543,6 +543,20 @@ namespace {
     const auto inside = layout({.text = accented, .styles = styled(accented).view()}, {.cursor = accented.size() - 1, .anchor = accented.size() - 1}, 80);
 
     require(inside.caret_column == Layout::indent + 3, "the caret sits on the grapheme it is inside");
+
+    // A command of more runs than a layout keeps still shows the rows around its caret.
+    std::string long_command;
+
+    for (int index = 0; index < 3000; ++index) {
+      long_command += "a 'b' ";
+    }
+
+    const auto far = layout({.text = long_command, .styles = styled(long_command).view()}, {.cursor = long_command.size(), .anchor = long_command.size()}, 40);
+    const auto shown = std::ranges::count_if(far.runs, [&](const Run& run) {
+      return run.row == far.caret_row;
+    });
+
+    require(far.caret_row + 1 == far.rows && shown > 0, "the caret's row has its runs");
   }
 
   // Left, Right and Backspace move over a grapheme, an accent written apart or a flag whole.

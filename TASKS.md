@@ -380,7 +380,7 @@ Legend: `[ ]` todo, `[x]` done, `[~]` not a bug / dropped (with reason).
   Fix: `Text::previous`/`next` by grapheme with `GraphemeCursor` from `foundation/text`;
   the layout draws a caret inside a grapheme at that grapheme's column, never at 0.
 
-- [ ] **T37 (E23). Past 4096 runs the command stops rendering.**
+- [x] **T37 (E23). Past 4096 runs the command stops rendering.**
   `Layout::maximum_runs = 4096`; `addRun` drops runs while rows keep counting.
   Expected: the whole command shows and scrolls.
   Fix: lay out only the rows visible around the caret instead of the whole text.
