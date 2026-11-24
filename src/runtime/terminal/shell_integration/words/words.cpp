@@ -330,7 +330,9 @@ namespace telar::runtime {
       }
 
       if (line.front() == '#') {
-        notes.comment = trimText(line.substr(line.find_first_not_of('#')), " \t");
+        const auto text = line.find_first_not_of('#');
+
+        notes.comment = text == std::string_view::npos ? std::string_view{} : trimText(line.substr(text), " \t");
         return true;
       }
 

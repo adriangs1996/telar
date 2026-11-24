@@ -182,7 +182,7 @@ Legend: `[ ]` todo, `[x]` done, `[~]` not a bug / dropped (with reason).
   new `reference` provider for a spec's `@ref`, in the same cqp00012; merge and rebase now
   take `@ref`, so `switch` is not offered tags.
 
-- [ ] **T13 (C12). A `#`-only line in a justfile empties the recipe list.**
+- [x] **T13 (C12). A `#`-only line in a justfile empties the recipe list.**
   `words.cpp:328` `line.substr(line.find_first_not_of('#'))` throws on `npos`; `observe`
   catches and clears the words.
   Expected: empty comment lines are skipped.

@@ -155,6 +155,27 @@ namespace {
     std::filesystem::remove_all(root);
   }
 
+  // A comment line of only #, as a justfile's dividers, is skipped, not the end of the recipes.
+  void testJustfileDividers() {
+    telar::testing::TestMemory adapter;
+    telar::ConcurrentMemory& memory = adapter;
+    ds::Array<char, 64> directory{};
+
+    std::strcpy(directory.dataMut(), "/tmp/telar-word-just-XXXXXX");
+    check(::mkdtemp(directory.dataMut()) != nullptr);
+    const std::string root{directory.data()};
+
+    std::ofstream{root + "/justfile"} << "#\n####\n# Build it\nbuild:\n    make\n\n#\ntest:\n    make test\n";
+    WordReader reader{memory};
+    WordRequest request{.client = 1, .request = 2, .provider = CompletionProvider::just_recipe, .prefix = {}, .directory = {}, .home = {}, .path = {}};
+
+    request.directory.assign(root);
+    const auto words = reader.observe(request).words;
+
+    check(words.size() == 2 && words[0].text == "build" && words[0].description == "Build it" && words[1].text == "test", "the recipes after a divider are listed");
+    std::filesystem::remove_all(root);
+  }
+
   void testTokenParse() {
     const auto valid = std::string(16, 'a') + "0123456789abcdef";
     const auto token = ShellToken::parse(valid);
@@ -347,6 +368,7 @@ namespace {
   const telar::testing::Case case_names_survive_long_paths{"shell_words.names_survive_long_paths", testNamesSurviveLongPaths};
   const telar::testing::Case case_full_queue_fails_oldest{"shell_words.full_queue_fails_oldest", testFullQueueFailsOldest};
   const telar::testing::Case case_reference_words{"shell_words.reference_words", testReferenceWords};
+  const telar::testing::Case case_justfile_dividers{"shell_words.justfile_dividers", testJustfileDividers};
   const telar::testing::Case case_token_parse{"shell_words.token_parse", testTokenParse};
   const telar::testing::Case case_ignores_special_and_oversized_files{"shell_words.ignores_special_and_oversized_files", testIgnoresSpecialAndOversizedFiles};
   const telar::testing::Case case_cuts_descriptions_at_characters{"shell_words.cuts_descriptions_at_characters", testCutsDescriptionsAtCharacters};
