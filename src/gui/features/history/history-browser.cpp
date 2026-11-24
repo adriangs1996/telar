@@ -60,6 +60,11 @@ namespace telar::gui::features::history {
   }
 
   template <Allocator Memory>
+  void HistoryPageStorage<Memory>::remove(std::size_t index) {
+    static_cast<void>(rows_.remove(index));
+  }
+
+  template <Allocator Memory>
   std::size_t HistoryPageStorage<Memory>::commandBytes(std::span<const HistoryEntry> entries) {
     std::size_t bytes = 0;
 
@@ -215,10 +220,13 @@ namespace telar::gui::features::history {
 
   template <Allocator Memory>
   QueryHistory HistoryBrowser<Memory>::refresh(std::uint64_t request_id) {
-    // The same page from a new insertion boundary, the selection kept where it was.
-    auto request = requestPage({.request_id = request_id, .offset = state_.page_offset});
+    // The same page from a new insertion boundary, the selection kept where it was; a later page
+    // its deletes emptied gives way to the one before it, its last row selected.
+    const bool emptied = page_.rows().empty() && state_.page_offset != 0;
+    const auto offset = emptied ? state_.page_offset - std::min<std::uint32_t>(state_.page_offset, page_entries) : state_.page_offset;
+    auto request = requestPage({.request_id = request_id, .offset = offset});
 
-    kept_selection_ = state_.selection;
+    kept_selection_ = emptied ? std::numeric_limits<std::size_t>::max() : state_.selection;
     return request;
   }
 
@@ -256,6 +264,13 @@ namespace telar::gui::features::history {
     }
 
     auto incoming = copyPage(message.entries);
+
+    // A page read before a delete the runtime has yet to confirm still holds its row.
+    for (std::size_t index = incoming.rows().size(); index-- > 0;) {
+      if (std::ranges::contains(deleted_ids_, incoming.rows()[index].id)) {
+        incoming.remove(index);
+      }
+    }
 
     const bool newer = pending_offset_ < state_.page_offset;
     const auto kept = std::exchange(kept_selection_, ds::none);
@@ -442,13 +457,20 @@ namespace telar::gui::features::history {
 
   template <Allocator Memory>
   DeleteHistory HistoryBrowser<Memory>::erase(std::uint64_t id, std::uint64_t request_id) {
-    static_cast<void>(entry(id));
-    if (delete_request_ != 0) {
-      throw EncodingError{"A history deletion is already pending"};
-    }
+    const auto index = entryIndex(id);
+    const auto slot = static_cast<std::size_t>(std::ranges::find(delete_requests_, std::uint64_t{0}) - delete_requests_.begin());
 
     track(request_id);
-    delete_request_ = request_id;
+    // track bounds the requests in flight by the same count as the slots.
+    delete_requests_.atMut(slot) = request_id;
+    deleted_ids_.atMut(slot) = id;
+
+    // The row leaves at once, and the selection moves to the one that takes its place.
+    page_.remove(index);
+    state_.selection = std::min(state_.selection, page_.rows().empty() ? 0 : page_.rows().size() - 1);
+    clearCommand();
+    clearOutput();
+    ++rows_version_;
     contentChanged();
 
     return {.request_id = request_id, .id = id};
@@ -457,13 +479,21 @@ namespace telar::gui::features::history {
   template <Allocator Memory>
   bool HistoryBrowser<Memory>::apply(const HistoryPruned& message) {
     retire(message.request_id);
-    if (message.request_id == 0 || message.request_id != delete_request_) {
+    return message.request_id != 0 && forgetDelete(message.request_id);
+  }
+
+  template <Allocator Memory>
+  bool HistoryBrowser<Memory>::forgetDelete(std::uint64_t request_id) noexcept {
+    const auto found = std::ranges::find(delete_requests_, request_id);
+    if (found == delete_requests_.end()) {
       return false;
     }
 
-    delete_request_ = 0;
-    contentChanged();
+    const auto slot = static_cast<std::size_t>(found - delete_requests_.begin());
 
+    delete_requests_.atMut(slot) = 0;
+    deleted_ids_.atMut(slot) = 0;
+    contentChanged();
     return true;
   }
 
@@ -490,9 +520,7 @@ namespace telar::gui::features::history {
     } else if (request_id != 0 && request_id == command_request_) {
       state_.command_phase = HistoryPhase::failed;
       command_request_ = 0;
-    } else if (request_id != 0 && request_id == delete_request_) {
-      delete_request_ = 0;
-    } else {
+    } else if (request_id == 0 || !forgetDelete(request_id)) {
       return false;
     }
 
@@ -506,7 +534,8 @@ namespace telar::gui::features::history {
   void HistoryBrowser<Memory>::suspend() noexcept {
     requests_.fill(0);
     page_request_ = 0;
-    delete_request_ = 0;
+    delete_requests_.fill(0);
+    deleted_ids_.fill(0);
     state_.phase = HistoryPhase::idle;
     clearCommand();
     clearOutput();
@@ -579,7 +608,9 @@ namespace telar::gui::features::history {
 
   template <Allocator Memory>
   bool HistoryBrowser<Memory>::deleting() const noexcept {
-    return delete_request_ != 0;
+    return std::ranges::any_of(delete_requests_, [](std::uint64_t request) {
+      return request != 0;
+    });
   }
 
   template <Allocator Memory>
@@ -617,7 +648,8 @@ namespace telar::gui::features::history {
         .distinct = query.distinct,
     };
 
-    delete_request_ = 0;
+    delete_requests_.fill(0);
+    deleted_ids_.fill(0);
 
     return requestPage({.request_id = query.request_id});
   }

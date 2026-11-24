@@ -276,12 +276,14 @@ Legend: `[ ]` todo, `[x]` done, `[~]` not a bug / dropped (with reason).
   Expected: same page, selection on the next row.
   Fix: refresh at the same offset (snapshot 0) and select `min(previous selection, rows-1)`.
 
-- [ ] **T24 (H12). Two quick deletes error out.**
+- [x] **T24 (H12). Two quick deletes error out.**
   `history-browser.cpp:438` throws "A history deletion is already pending"; the deleted row
   stays visible and runnable until the reply.
   Expected: deletes queue and the row disappears at once.
   Fix: remove the row locally when sending, allow several deletes in flight, and block
   actions on a row pending deletion.
+  The row is gone from the page, so no action reaches it; a page that arrives drops rows still
+  pending deletion. With T23: a later page its deletes emptied gives way to the one before.
 
 - [ ] **T25 (H6). The dialog pastes into whatever is in the foreground.**
   `application-history.cpp:169` checks only that the pane is alive: it concatenates with

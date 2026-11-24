@@ -187,6 +187,8 @@ namespace telar::gui::application::history {
     const auto refused = session.speaks(ClientTag::delete_history_command) ? refusal(session.link, DeleteHistoryCommand{.request_id = request.request_id, .id = request.id}) : refusal(session.link, request);
 
     settle(session.history, request.request_id, refused);
+    // The row that took the deleted one's place is selected now.
+    readDetails(session);
   }
 
   Change receive(Session& session, const HistoryResults& results) {

@@ -904,7 +904,7 @@ namespace {
 
     check(deletion.id == 1, "the list shows each command once: deleting one deletes every run of it");
 
-    check(application::history::view(client).rows().size() == entries.size(), "queued deletion must preserve rows until confirmation");
+    check(application::history::view(client).rows().size() == entries.size() - 1, "a deleted row leaves the list at once");
     check(deliver(client, HistoryPruned{.request_id = deletion.request_id, .removed = 1}) == application::Change::history, "deletion confirmation must refresh the history projection");
     const auto refreshed = transport.last<QueryHistory>();
 

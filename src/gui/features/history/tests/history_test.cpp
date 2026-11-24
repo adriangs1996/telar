@@ -159,6 +159,36 @@ namespace {
     static_cast<void>(browser.refresh(6));
     browser.apply(HistoryResults{.request_id = 6, .snapshot_id = 9, .entries = std::span{after}.first(1)});
     check(browser.reads().state().selection == 0, "the last row deleted selects the one before it");
+
+    // The only row of a later page deleted: the page before it, at its last row.
+    static_cast<void>(browser.erase(3, 7));
+    browser.apply(HistoryPruned{.request_id = 7, .removed = 1});
+    const auto back = browser.refresh(8);
+
+    check(back.offset == 0, "an emptied page gives way to the one before it");
+    browser.apply(HistoryResults{.request_id = 8, .snapshot_id = 10, .entries = first});
+    check(browser.reads().state().page_offset == 0 && browser.reads().state().selection == first.size() - 1, "at its last row");
+  }
+
+  // Deletes queue: a second before the first is confirmed goes too, and no page that arrives
+  // meanwhile brings a deleted row back.
+  void deletesQueue() {
+    SystemAllocator memory;
+    telar::MemoryAdapter adapted{memory};
+    Browser browser{adapted};
+    const ds::Array entries{HistoryEntry{.id = 1, .command = "a"}, HistoryEntry{.id = 2, .command = "b"}, HistoryEntry{.id = 3, .command = "c"}};
+
+    static_cast<void>(browser.begin({.request_id = 1}));
+    browser.apply(HistoryResults{.request_id = 1, .snapshot_id = 1, .entries = entries});
+    const auto first = browser.erase(1, 2);
+    const auto second = browser.erase(2, 3);
+
+    check(browser.reads().rows().size() == 1 && browser.reads().rows().front().id == 3, "both rows leave at once");
+    check(browser.apply(HistoryPruned{.request_id = first.request_id, .removed = 1}) && browser.reads().deleting(), "the first confirmation leaves the second waiting");
+    static_cast<void>(browser.refresh(4));
+    browser.apply(HistoryResults{.request_id = 4, .snapshot_id = 2, .entries = std::span{entries}.last(2)});
+    check(browser.reads().rows().size() == 1 && browser.reads().rows().front().id == 3, "a page read before the second delete does not bring its row back");
+    check(browser.apply(HistoryPruned{.request_id = second.request_id, .removed = 1}) && !browser.reads().deleting(), "the second confirmation ends the deletes");
   }
 
   void renderedChoicesNeverRetargetACommand() {
@@ -353,7 +383,8 @@ namespace {
 
     const auto deletion = browser.erase(2, ++sequence);
 
-    check(browser.reads().rows().size() == 2 && browser.reads().deleting(), "deletion must leave rows present until runtime confirmation");
+    check(browser.reads().rows().size() == 1 && browser.reads().rows().front().id == 1 && browser.reads().deleting(), "a deleted row leaves the list at once");
+    check(browser.reads().state().selection == 0, "the selection moves to a row still there");
     check(browser.apply(HistoryPruned{.request_id = deletion.request_id, .removed = 1}), "only the matching deletion confirmation may trigger refresh");
     const auto stale_deletion = browser.erase(1, ++sequence);
 
@@ -635,6 +666,7 @@ namespace {
 
   const telar::testing::Case case_owned_search_and_pages{"history.owned_search_and_pages", ownedSearchAndPages};
   const telar::testing::Case case_delete_keeps_the_position{"history.delete_keeps_the_position", deleteKeepsThePosition};
+  const telar::testing::Case case_deletes_queue{"history.deletes_queue", deletesQueue};
   const telar::testing::Case case_rendered_choices_never_retarget_a_command{"history.rendered_choices_never_retarget_a_command", renderedChoicesNeverRetargetACommand};
   const telar::testing::Case case_bounded_requests_and_stale_failures{"history.bounded_requests_and_stale_failures", boundedRequestsAndStaleFailures};
   const telar::testing::Case case_allocation_failure_is_atomic{"history.allocation_failure_is_atomic", allocationFailureIsAtomic};

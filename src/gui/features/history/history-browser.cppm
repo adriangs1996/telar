@@ -34,6 +34,9 @@ namespace telar::gui::features::history {
 
     [[nodiscard]] std::string_view command(std::size_t index) const;
 
+    // Row `index` leaves the page; a cached command it held stays in the cache, unread.
+    void remove(std::size_t index);
+
   private:
     static std::size_t commandBytes(std::span<const HistoryEntry> entries);
 
@@ -158,6 +161,9 @@ namespace telar::gui::features::history {
 
     void contentChanged() noexcept;
 
+    // Delete `request_id` is done with; false when it is none of the pending ones.
+    bool forgetDelete(std::uint64_t request_id) noexcept;
+
     QueryHistory prepareQuery(QueryHistory query);
 
     // The request views the stored query text and scope path.
@@ -192,7 +198,10 @@ namespace telar::gui::features::history {
     std::uint64_t page_request_ = 0;
     std::uint64_t command_request_ = 0;
     std::uint64_t output_request_ = 0;
-    std::uint64_t delete_request_ = 0;
+    // The deletes the runtime has not confirmed, and the entries they delete, by slot: 0 is free.
+    // Their rows left the page when they were sent, and no page that arrives brings them back.
+    ds::Array<std::uint64_t, maximum_requests> delete_requests_{};
+    ds::Array<std::uint64_t, maximum_requests> deleted_ids_{};
     // The row a refresh keeps selected once its page arrives.
     ds::Option<std::size_t> kept_selection_;
     std::uint64_t revision_ = 0;
