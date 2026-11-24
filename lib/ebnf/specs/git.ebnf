@@ -38,7 +38,42 @@ command =
   | "stash" : "Stash the changes in a dirty working directory away" , [ stash_command ]
   | "log" : "Show commit logs" , { log_option | @ref } , [ "--" , { @file } ]
   | "diff" : "Show changes between commits, commit and working tree, etc" , { diff_option | @ref | @file } , [ "--" , { @file } ]
-  | "status" : "Show the working tree status" , { status_option | @file } , [ "--" , { @file } ] ;
+  | "status" : "Show the working tree status" , { status_option | @file } , [ "--" , { @file } ]
+  | "show" : "Show various types of objects" , { @ref | @file } , [ "--" , { @file } ]
+  | "reset" : "Reset current HEAD to the specified state" , { reset_mode | @ref | @file } , [ "--" , { @file } ]
+  | "rm" : "Remove files from the working tree and from the index" , { @file } , [ "--" , { @file } ]
+  | "mv" : "Move or rename a file, a directory, or a symlink" , { @file }
+  | "tag" : "Create, list, delete or verify a tag object" , { @ref }
+  | "worktree" : "Manage multiple working trees" , [ worktree_command ] , { @ref | @directory }
+  | "cherry-pick" : "Apply the changes introduced by some existing commits" , { @ref }
+  | "revert" : "Revert some existing commits" , { @ref }
+  | "remote" : "Manage set of tracked repositories" , [ remote_command ] , { @remote }
+  | "clone" : "Clone a repository into a new directory" , { @directory }
+  | "blame" : "Show what revision and author last modified each line of a file" , { @ref | @file } , [ "--" , { @file } ]
+  | "bisect" : "Use binary search to find the commit that introduced a bug" , [ bisect_command ] , { @ref }
+  | "clean" : "Remove untracked files from the working tree" , { @file } , [ "--" , { @file } ]
+  | "grep" : "Print lines matching a pattern" , { @ref | @file } , [ "--" , { @file } ]
+  | "config" : "Get and set repository or global options" , { @any } ;
+
+(* The subcommands git adds that are modelled by their arguments alone. *)
+
+reset_mode =
+    "--soft" : "Move HEAD only" | "--mixed" : "Reset the index but not the working tree"
+  | "--hard" : "Reset the index and the working tree" | "--keep" : "Keep local changes"
+  | "--merge" : "Reset, keeping changes not in the index" ;
+worktree_command =
+    "add" : "Create a working tree" | "list" : "List the working trees" | "remove" : "Remove a working tree"
+  | "move" : "Move a working tree" | "prune" : "Prune working tree information" | "lock" : "Lock a working tree"
+  | "unlock" : "Unlock a working tree" | "repair" : "Repair working tree administrative files" ;
+remote_command =
+    "add" : "Add a remote" | "remove" : "Remove a remote" | "rename" : "Rename a remote"
+  | "set-url" : "Change a remote's URL" | "get-url" : "Print a remote's URL" | "show" : "Show a remote"
+  | "prune" : "Delete stale remote-tracking branches" | "-v" : "List the remotes with their URLs" ;
+bisect_command =
+    "start" : "Start a bisect session" | "bad" : "Mark a revision bad" | "good" : "Mark a revision good"
+  | "new" : "Mark a revision new" | "old" : "Mark a revision old" | "skip" : "Skip a revision"
+  | "reset" : "End the bisect session" | "log" : "Show the bisect log" | "run" : "Bisect with a script"
+  | "visualize" : "Show the remaining revisions" ;
 
 (* Options shared by several commands. *)
 

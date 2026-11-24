@@ -565,6 +565,19 @@ command = "switch" : "Switch branches" , { @branch } | "status" : "Show the work
     check(prompt::suggestion(client, 1) == "e test-runtime", "a command sent from the line is suggested next");
   }
 
+  // Where the spec does not accept the line, Tab offers files, as zsh and fish fall back to
+  // theirs.
+  template <typename Client>
+  void fallsBackToFiles(Client& client, Transport& transport) {
+    prompt::key(client, 1, prompt::KeyPress{.key = prompt::Key::character, .character = 'u', .modifiers = {.control = true}});
+    const auto before = transport.count(ClientTag::find_paths);
+
+    typeKeys(client, "git reset fi");
+    tab(client);
+    check(transport.count(ClientTag::find_paths) == before + 1 && transport.last<FindPaths>().query == "fi", "a subcommand the spec does not know completes files");
+    prompt::key(client, 1, prompt::KeyPress{.key = prompt::Key::escape});
+  }
+
   void lineCompletes() {
     SystemAllocator memory;
     Transport transport;
@@ -587,6 +600,7 @@ command = "switch" : "Switch branches" , { @branch } | "status" : "Show the work
     completesFromSpecs(client, transport);
     completesFromRuntime(client, transport);
     completesFromProviders(client, transport);
+    fallsBackToFiles(client, transport);
 
     // After a command the pane asks again, with the digest of the spec it holds: an unchanged
     // spec is not sent twice.

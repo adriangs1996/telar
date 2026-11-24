@@ -101,8 +101,11 @@ namespace telar::gui::features::prompt {
 
     constexpr std::size_t max_candidates = 128;
     ds::Array<ebnf::candidate, max_candidates> candidates{};
+    // A line the spec does not accept, or cannot tell, completes files, as zsh and fish fall back
+    // to theirs.
     const auto matched = spec->complete(words.view(), context.partial, scratch, candidates.viewMut());
     if (matched.status != ebnf::match_status::valid) {
+      result.providers.emplace(memory, "file");
       return result;
     }
 

@@ -85,7 +85,7 @@ Legend: `[ ]` todo, `[x]` done, `[~]` not a bug / dropped (with reason).
 
 ## P1: Tab completion (GUI and runtime)
 
-- [ ] **T5 (C1). When the spec does not accept the line, Tab offers nothing, not even files.**
+- [x] **T5 (C1). When the spec does not accept the line, Tab offers nothing, not even files.**
   `src/gui/features/prompt/prompt-completion.cpp:105` returns empty for any status other
   than `valid`. `lib/ebnf/specs/git.ebnf` models only 15 subcommands, so `git sh<Tab>`,
   `git reset fi<Tab>`, `git rm <Tab>`, `git worktree …<Tab>` complete nothing.
