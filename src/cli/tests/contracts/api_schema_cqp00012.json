@@ -38,6 +38,7 @@
     "create_tab": 13,
     "create_workspace": 21,
     "delete_history": 35,
+    "delete_history_command": 116,
     "detach_client": 52,
     "detach_pane": 6,
     "execution_request": 70,

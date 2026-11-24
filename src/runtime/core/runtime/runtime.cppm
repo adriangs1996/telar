@@ -856,6 +856,7 @@ export {
       void handle(std::uint64_t identity, const ImportHistory& message);
 
       void handle(std::uint64_t identity, const DeleteHistory& message);
+      void handle(std::uint64_t identity, const DeleteHistoryCommand& message);
 
       void handle(std::uint64_t identity, const PruneHistory& message);
 

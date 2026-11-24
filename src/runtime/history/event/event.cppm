@@ -119,7 +119,7 @@ export {
     TBC_GENERIC void replyHistoryFailure(const Message& request, EncodedReply<Memory>& reply, bool available) {
       if constexpr (std::same_as<Message, ImportHistory> || std::same_as<Message, ReportAgentCommand>) {
         reply.send(RequestCompleted{.request_id = request.request_id});
-      } else if constexpr (std::same_as<Message, DeleteHistory> || std::same_as<Message, PruneHistory>) {
+      } else if constexpr (std::same_as<Message, DeleteHistory> || std::same_as<Message, DeleteHistoryCommand> || std::same_as<Message, PruneHistory>) {
         reply.send(HistoryPruned{.request_id = request.request_id, .removed = 0});
       } else if constexpr (std::same_as<Message, QueryHistoryWorkspaces>) {
         // A runtime that keeps no history recorded no workspace; one whose history failed says so.

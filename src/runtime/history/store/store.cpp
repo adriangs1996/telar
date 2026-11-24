@@ -769,6 +769,14 @@ END;
     reply.send(HistoryPruned{.request_id = request.request_id, .removed = static_cast<std::uint64_t>(sqlite3_changes64(database_.handle()))});
   }
 
+  void HistoryStore::removeCommand(const DeleteHistoryCommand& request, EncodedReply<ConcurrentMemory>& reply) {
+    Statement statement{database_, "DELETE FROM command WHERE command = (SELECT command FROM command WHERE id = ?1)"};
+
+    statement.bind(1, integer(request.id));
+    statement.finish();
+    reply.send(HistoryPruned{.request_id = request.request_id, .removed = static_cast<std::uint64_t>(sqlite3_changes64(database_.handle()))});
+  }
+
   void HistoryStore::prune(const PruneHistory& request, EncodedReply<ConcurrentMemory>& reply) {
     auto sql = string("DELETE FROM command WHERE 1=1");
 

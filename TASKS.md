@@ -259,13 +259,16 @@ Legend: `[ ]` todo, `[x]` done, `[~]` not a bug / dropped (with reason).
   the user types or moves. Centralize the guard and the pending submit in
   `HistoryController::submit`, not in QML.
 
-- [ ] **T22 (H1). Deleting a command does not remove it: it comes back.**
+- [x] **T22 (H1). Deleting a command does not remove it: it comes back.**
   `src/runtime/history/store/store.cpp:725` deletes one run by id; with `distinct` the next
   older run with the same text takes its place.
   Expected: in the distinct view, delete removes every run of that command.
   Fix: add `all_runs` to `DeleteHistory`; the runtime runs
   `DELETE FROM command WHERE command = (SELECT command FROM command WHERE id = ?1)`; the GUI
   sets it whenever it searches with `distinct`.
+  Decision: a field would change DeleteHistory's layout for older runtimes, so it is a new
+  request, `DeleteHistoryCommand`, in cqp00012; the window sends it (it always searches
+  distinct) and DeleteHistory to an older runtime.
 
 - [ ] **T23 (H3). After a delete the position is lost.**
   `application-history.cpp:203` refreshes offset 0; `history-browser.cpp:256` then selects

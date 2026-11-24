@@ -121,6 +121,7 @@ namespace telar {
     query_places = 0x71,
     create_explorer_pane = 0x72,
     keep_explorer = 0x73,
+    delete_history_command = 0x74,
   };
 
   enum class ServerTag : Byte {
@@ -568,6 +569,8 @@ namespace telar {
       return "create_explorer_pane";
     case ClientTag::keep_explorer:
       return "keep_explorer";
+    case ClientTag::delete_history_command:
+      return "delete_history_command";
     }
 
     return {};

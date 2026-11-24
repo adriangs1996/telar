@@ -210,6 +210,8 @@ namespace telar::runtime {
           store->importEntries(request, reply);
         } else if constexpr (std::same_as<Message, DeleteHistory>) {
           store->remove(request, reply);
+        } else if constexpr (std::same_as<Message, DeleteHistoryCommand>) {
+          store->removeCommand(request, reply);
         } else if constexpr (std::same_as<Message, PruneHistory>) {
           store->prune(request, reply);
         } else if constexpr (std::same_as<Message, ReadHistoryOutput>) {

@@ -57,7 +57,7 @@ export {
       // what an editor tells the explorer: NvimOpenFiles and NvimExplore, and the explorer as a
       // pane: CreateExplorerPane, KeepExplorer and ExplorerKept; cqp00012 adds the providers of
       // CompleteWords that read one directory, path, directory and executable, and reference,
-      // which names revisions. Peers without them reject the messages.
+      // which names revisions, and DeleteHistoryCommand. Peers without them reject the messages.
       inline constexpr SchemaId schema_id{'c', 'q', 'p', '0', '0', '0', '1', '2'};
 
       // The schemas a client of this build can speak with a runtime, oldest first. Each added
@@ -170,6 +170,7 @@ export {
           Addition{.tag = ClientTag::query_places, .dialect = Dialect::cqp00011},
           Addition{.tag = ClientTag::create_explorer_pane, .dialect = Dialect::cqp00011},
           Addition{.tag = ClientTag::keep_explorer, .dialect = Dialect::cqp00011},
+          Addition{.tag = ClientTag::delete_history_command, .dialect = Dialect::cqp00012},
       };
 
       // The first dialect whose runtime understands `tag`.

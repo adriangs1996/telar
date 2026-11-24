@@ -158,6 +158,25 @@ INSERT INTO command VALUES (1, x'01', 1, 0, 1, 1, 'legacy command', 0, '/legacy'
     check(content == "file\r\n", "the stored output is what the command printed");
   }
 
+  // A list of each command once deletes a command with every run of it, so no older run takes
+  // its place.
+  void testRemovesEveryRunOfACommand() {
+    telar::testing::TestMemory adapter;
+    ConcurrentMemory& memory = adapter;
+    HistoryStore store{memory, ":memory:"};
+    EncodedReply reply{memory};
+    std::vector<Byte> storage(64 * 1024);
+    const auto owner = session(1, "/work");
+
+    for (const auto* command : {"ls", "pwd", "ls", "ls"}) {
+      finished(store, owner, command, "/work");
+    }
+
+    store.removeCommand(DeleteHistoryCommand{.request_id = 1, .id = 4}, reply);
+    check(decodeReply<HistoryPruned>(reply, storage).removed == 3, "every run of the command goes");
+    check(commands(store, reply, QueryHistory{.request_id = 2, .limit = 10}) == std::vector<std::string>{"pwd"}, "the other commands stay");
+  }
+
   void testFailedWriteRollsBack() {
     telar::testing::TestMemory adapter;
     ConcurrentMemory& memory = adapter;
@@ -535,6 +554,7 @@ INSERT INTO command VALUES (1, x'01', 1, 0, 1, 1, 'legacy command', 0, '/legacy'
 
   const telar::testing::Case case_migrates_legacy_schema{"history_store.migrates_legacy_schema", testMigratesLegacySchema};
   const telar::testing::Case case_strips_marks_from_stored_output{"history_store.strips_marks_from_stored_output", testStripsMarksFromStoredOutput};
+  const telar::testing::Case case_removes_every_run_of_a_command{"history_store.removes_every_run_of_a_command", testRemovesEveryRunOfACommand};
   const telar::testing::Case case_failed_write_rolls_back{"history_store.failed_write_rolls_back", testFailedWriteRollsBack};
   const telar::testing::Case case_page_respects_payload_cap{"history_store.page_respects_payload_cap", testPageRespectsPayloadCap};
   const telar::testing::Case case_prune_failed_only{"history_store.prune_failed_only", testPruneFailedOnly};

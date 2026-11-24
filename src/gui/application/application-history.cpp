@@ -182,8 +182,11 @@ namespace telar::gui::application::history {
 
   void remove(Session& session, std::uint64_t entry_id) {
     const auto request = features::history::erase(session.history, entry_id, session.link.nextRequest());
+    // The search lists each command once, at its newest run: deleting it deletes every run, or
+    // the next older one would take its place. A runtime before cqp00012 deletes the one run.
+    const auto refused = session.speaks(ClientTag::delete_history_command) ? refusal(session.link, DeleteHistoryCommand{.request_id = request.request_id, .id = request.id}) : refusal(session.link, request);
 
-    settle(session.history, request.request_id, refusal(session.link, request));
+    settle(session.history, request.request_id, refused);
   }
 
   Change receive(Session& session, const HistoryResults& results) {

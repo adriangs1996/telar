@@ -200,6 +200,7 @@ export {
         ClientRequest<QueryHistory, ClientRole::control, RequestLane::history>,
         ClientRequest<ImportHistory, ClientRole::control, RequestLane::history>,
         ClientRequest<DeleteHistory, ClientRole::control, RequestLane::history>,
+        ClientRequest<DeleteHistoryCommand, ClientRole::control, RequestLane::history>,
         ClientRequest<PruneHistory, ClientRole::control, RequestLane::history>,
         ClientRequest<ReadHistoryOutput, ClientRole::control, RequestLane::history>,
         ClientRequest<HistoryStatsQuery, ClientRole::control, RequestLane::history>,

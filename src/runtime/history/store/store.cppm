@@ -365,6 +365,8 @@ export {
       void importEntries(const ImportHistory& request, EncodedReply<ConcurrentMemory>& reply);
       void query(QueryHistory request, EncodedReply<ConcurrentMemory>& reply);
       void remove(const DeleteHistory& request, EncodedReply<ConcurrentMemory>& reply);
+      // Every run of the command the entry ran.
+      void removeCommand(const DeleteHistoryCommand& request, EncodedReply<ConcurrentMemory>& reply);
       void prune(const PruneHistory& request, EncodedReply<ConcurrentMemory>& reply);
       void readOutput(const ReadHistoryOutput& request, EncodedReply<ConcurrentMemory>& reply);
       void stats(const HistoryStatsQuery& request, EncodedReply<ConcurrentMemory>& reply);
