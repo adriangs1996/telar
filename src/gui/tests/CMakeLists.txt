@@ -90,15 +90,15 @@ if(TELAR_GUI_NATIVE)
     BASE "${TELAR_PROCESS_SOURCE_DIR}/ui/design/controls/tests/fixtures/shapes"
     FILES "${TELAR_PROCESS_SOURCE_DIR}/ui/design/controls/tests/fixtures/shapes/cases.json"
           "${TELAR_PROCESS_SOURCE_DIR}/ui/design/controls/tests/fixtures/shapes/rounded-rectangles.png")
-  # surface_command drives gui-surface-command, whose telar-gui-command lands beside the program.
   telar_add_tests(gui-ui-app-tests LABEL gui.ui.app DIRECTORY ../ui/app RECURSE QT MAIN gui-testing-main
-    LINK gui-quick gui-quickplugin Qt6::Test gui-test-window-activation gui-test-fixtures gui-surface-command TIMEOUT 30)
+    LINK gui-quick gui-quickplugin Qt6::Test gui-test-window-activation gui-test-fixtures TIMEOUT 30)
   set_target_properties(gui-ui-app-tests PROPERTIES AUTOMOC ON)
   target_include_directories(gui-ui-app-tests PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}")
   # native_pointer_events observes Qt's private window system interface, and on macOS
   # optical_text compares against the CoreText rasterizer of platform/macos.
+  # surface_command drives gui-surface-command, whose telar-gui-command lands beside the program.
   telar_add_tests(gui-ui-kit-tests LABEL gui.ui.kit DIRECTORY ../ui/kit RECURSE QT MAIN gui-testing-main
-    LINK gui-quick gui-quickplugin Qt6::Test Qt6::GuiPrivate TIMEOUT 30)
+    LINK gui-quick gui-quickplugin Qt6::Test Qt6::GuiPrivate gui-surface-command TIMEOUT 30)
   set_target_properties(gui-ui-kit-tests PROPERTIES AUTOMOC ON)
   target_include_directories(gui-ui-kit-tests PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}")
   if(APPLE)

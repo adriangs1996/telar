@@ -4,8 +4,8 @@ static_assert(true);
 #endif
 
 #include "tbc/view.hpp"
-#include "ui/app/chrome/components/surface_command.hpp"
 #include "ui/kit/config/configuration_source.hpp"
+#include "ui/kit/process/surface_command.hpp"
 #include <QByteArray>
 #include <QList>
 #include <QObject>

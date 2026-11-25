@@ -970,7 +970,7 @@
     "src/gui/ui/app/chrome/components/components_controller.hpp": "Qt moc/QML integration",
     "src/gui/ui/kit/plugins/plugin_runner.hpp": "Qt moc/QML integration",
     "src/gui/ui/kit/store/store.hpp": "Qt moc/QML integration",
-    "src/gui/ui/app/chrome/components/surface_command.hpp": "Qt moc/QML integration",
+    "src/gui/ui/kit/process/surface_command.hpp": "Qt moc/QML integration",
     "src/gui/ui/app/overlays/notifications/system_notifier.hpp": "Qt moc/QML integration",
     "src/gui/ui/app/chrome/tabs/tab_strip_layout.hpp": "Qt moc/QML integration",
     "src/gui/ui/app/panes/nvim/nvim_controller.hpp": "Qt moc/QML integration",
