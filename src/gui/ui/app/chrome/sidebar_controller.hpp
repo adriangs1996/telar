@@ -19,8 +19,7 @@ import telar.gui.application;
 
 namespace telar::gui::qt {
 
-  // The sidebar: its regions, the list of the other machines it folds, and the width an
-  // automatic sidebar fits to.
+  // The sidebar: its regions and the width an automatic sidebar fits to.
   //
   // It reads the store, the workspaces it lists and the activity cards it measures. The window
   // pushes the display it lays the sidebar out in and the window whose fonts measure its text;
@@ -30,8 +29,6 @@ namespace telar::gui::qt {
     QML_NAMED_ELEMENT(SidebarController)
     QML_UNCREATABLE("Use the window's sidebar")
     Q_PROPERTY(QVariantMap regions READ regions NOTIFY changed)
-    Q_PROPERTY(bool machineListCollapsed READ machineListCollapsed NOTIFY changed)
-    Q_PROPERTY(int machineCount READ machineCount NOTIFY machinesChanged)
 
   public:
     SidebarController(Store& store, WorkspacesController& workspaces, ActivityController& activity, QObject* parent = nullptr);
@@ -43,28 +40,20 @@ namespace telar::gui::qt {
 
     void setDisplay(const application::window::DisplayMetrics& display);
     void setWindow(QQuickWindow& window);
-    // The machines moved: the list's rows and the count follow.
-    void publishMachines();
     // Fits an automatic sidebar once the active session is ready and a window measures it. It
     // fits once; refit() asks for it again, as a reload of the configuration does.
     void fitWhenReady();
     void refit();
     [[nodiscard]] QVariantMap regions() const;
-    [[nodiscard]] bool machineListCollapsed() const noexcept;
-    [[nodiscard]] int machineCount() const noexcept;
-    Q_INVOKABLE void toggleMachineList();
     // Asks for the width that shows the content whole.
     Q_INVOKABLE void fit();
 
   signals:
     void changed();
-    void machinesChanged();
     // The logical width the sidebar fits its content in.
     void widthRequested(qreal width);
 
   private:
-    // The active machine is named in the top bar; the sidebar lists the others.
-    [[nodiscard]] application::SidebarMachines machines() const noexcept;
     [[nodiscard]] float naturalWidth() const;
 
     Store& store_;
@@ -72,8 +61,6 @@ namespace telar::gui::qt {
     ActivityController& activity_;
     application::window::DisplayMetrics display_;
     QPointer<QQuickWindow> window_;
-    application::SidebarMachines machines_{};
-    bool machine_list_collapsed_ = false;
     bool fit_pending_ = true;
   };
 

@@ -9,6 +9,8 @@ MachineChromeLayout {
 
     required property var colors
     property var typography: ({})
+    // A row of the list was chosen; the menu that holds the list closes on it.
+    signal chosen()
 
     visible: shown
     clip: true
@@ -30,14 +32,34 @@ MachineChromeLayout {
             focusPolicy: Qt.TabFocus
             padding: 0
             contentItem: null
+            // The roster marks the machine the window shows; the sidebar's list never holds it.
+            readonly property bool current: record.active ?? false
             background: NativeRoundedRectangle {
-                color: row.hovered || row.visualFocus ? root.style.hoverBackground : "transparent"
+                color: row.current ? root.style.activeBackground : row.hovered || row.visualFocus ? root.style.hoverBackground : "transparent"
                 radius: root.style.rowRadius
                 borderColor: root.colors.accent
                 borderAlpha: ChromeStyle.focusAlpha
                 borderWidth: row.visualFocus ? 1 / Screen.devicePixelRatio : 0
             }
-            onClicked: root.activate(record.key)
+            onClicked: {
+                root.activate(record.key);
+                root.chosen();
+            }
+
+            ChromeIcon {
+                objectName: "machineCurrentMark"
+                readonly property real side: Math.round(row.record.avatarBounds.height * 0.7)
+                x: row.width - side - (row.record.avatarBounds.x - row.record.bounds.x)
+                y: (row.height - side) / 2
+                width: side
+                height: side
+                glyph: "✓"
+                color: root.colors.subtext0
+                pixelSize: side
+                primaryFamily: root.typography.primaryFamily ?? ""
+                primaryStyle: root.typography.primaryStyle ?? ""
+                visible: row.current
+            }
 
             HoverHandler { cursorShape: Qt.PointingHandCursor }
 

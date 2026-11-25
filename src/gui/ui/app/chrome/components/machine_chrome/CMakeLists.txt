@@ -6,6 +6,8 @@ telar_add_qml_sources(gui-quick
     machine_chrome_layout.hpp
   QML_FILES
     MachineChrome.qml
+    MachineMenu.qml
+    MachineSwitch.qml
   FP_CONTRACT_OFF
     machine_chrome_layout.cpp
   REGISTERS)

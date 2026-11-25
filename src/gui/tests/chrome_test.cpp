@@ -180,11 +180,12 @@ namespace {
     return rows;
   }
 
-  QVariantMap projectSwitcherProperties(ListModel& workspaces, int width, int selected) {
+  // A workspace track with `room` to draw in; it sizes itself to what that room holds.
+  QVariantMap workspaceTrackProperties(ListModel& workspaces, int room, int selected) {
     const ChromeMetrics chrome;
 
     return {
-        {QStringLiteral("width"), width},
+        {QStringLiteral("room"), room},
         {QStringLiteral("height"), chrome.top_bar},
         {QStringLiteral("model"), QVariant::fromValue(static_cast<QAbstractItemModel*>(&workspaces))},
         {QStringLiteral("selectedIndex"), selected},
@@ -441,23 +442,27 @@ namespace {
       QCOMPARE(tabBounds(*layout->items(), 1), before[1]);
     }
 
-    Q_SLOT static void workspaceAndMachineStayVisibleInBothSidebarModes() {
+    Q_SLOT static void machineWorkspacesAndTabsReadInThatOrderInBothSidebarModes() {
       ApplicationMemory application_memory;
       ApplicationAllocator& memory = application_memory.memory();
       ApplicationController application{memory};
       QQuickWindow window;
       QQmlEngine engine;
       ListModel tabs;
+      ListModel workspaces;
 
       constexpr int width = 1000;
       constexpr int controls_inset = 80;
+      constexpr std::size_t workspace_count = 3;
 
       tabs.reconcile(tabRecords({.count = 3, .active = 0}));
+      workspaces.reconcile(workspaceRecords({.count = workspace_count, .active = 1}));
       auto properties = navigationProperties(tabs, width);
 
       properties.insert(QStringLiteral("tabs"), QVariant::fromValue(application.tabs()));
-      properties.insert(QStringLiteral("machineContext"), application.machines()->context());
-      properties.insert(QStringLiteral("workspace"), QVariantMap{{QStringLiteral("name"), QStringLiteral("telar")}});
+      properties.insert(QStringLiteral("machineChrome"), QVariant::fromValue(application.machineChrome()));
+      properties.insert(QStringLiteral("workspaceModel"), QVariant::fromValue(static_cast<QAbstractItemModel*>(&workspaces)));
+      properties.insert(QStringLiteral("workspace"), QVariantMap{{QStringLiteral("name"), QStringLiteral("project-1")}, {QStringLiteral("index"), 1}});
       properties.insert(QStringLiteral("controlsInset"), controls_inset);
       const auto navigation = createChrome(engine, QStringLiteral("NavigationBar"), properties);
 
@@ -468,27 +473,40 @@ namespace {
       const auto* layout = navigation->findChild<TabStripLayout*>(QStringLiteral("tabStripLayout"));
 
       QVERIFY(layout != nullptr);
-      const auto names = visualItems(*navigation, QStringLiteral("workspaceContextName"));
       const auto machines = visualItems(*navigation, QStringLiteral("topBarMachineLabel"));
+      const auto tracks = visualItems(*navigation, QStringLiteral("workspaceTrack"));
 
-      QCOMPARE(names.size(), 1);
       QCOMPARE(machines.size(), 1);
-      const auto* name = names.front();
+      QCOMPARE(tracks.size(), 1);
       const auto* machine = machines.front();
+      auto* track = tracks.front();
+      const auto active = application.machineChrome()->active();
 
-      QCOMPARE(name->property("text").toString(), QStringLiteral("telar"));
       QVERIFY(!machine->property("text").toString().isEmpty());
-      QCOMPARE(machine->property("text").toString(), application.machines()->context().value(QStringLiteral("label")).toString());
+      QCOMPARE(machine->property("text").toString(), active.value(QStringLiteral("label")).toString());
+      QCOMPARE(active.value(QStringLiteral("initial")).toString(), machine->property("text").toString().left(1).toUpper());
+      QTRY_COMPARE_WITH_TIMEOUT(visualItems(*track, QStringLiteral("workspaceSegment")).size(), static_cast<qsizetype>(workspace_count), fixture_wait_ms);
+      // No breadcrumb names the workspace a second time, and nothing lists the projects on the right.
+      QVERIFY(visualItems(*navigation, QStringLiteral("workspaceContextName")).isEmpty());
+      QVERIFY(visualItems(*navigation, QStringLiteral("projectSwitcher")).isEmpty());
       for (const bool rail : {false, true}) {
         QVERIFY(navigation->setProperty("rail", rail));
         QVERIFY(test::waitForSynchronizedFrame(window, fixture_wait_ms));
-        QVERIFY(name->isVisible() && machine->isVisible());
-        const auto name_bounds = name->mapRectToItem(navigation.get(), name->boundingRect());
+        QVERIFY(track->isVisible() && machine->isVisible());
+        const auto track_bounds = track->mapRectToItem(navigation.get(), track->boundingRect());
         const auto machine_bounds = machine->mapRectToItem(navigation.get(), machine->boundingRect());
 
         QVERIFY(machine_bounds.left() >= controls_inset);
-        QVERIFY(machine_bounds.right() <= name_bounds.left());
-        QVERIFY(name_bounds.right() < layout->mapToItem(navigation.get(), QPointF{}).x());
+        QVERIFY(machine_bounds.right() <= track_bounds.left());
+        QVERIFY(track_bounds.right() < layout->mapToItem(navigation.get(), QPointF{}).x());
+        for (auto* name : visualItems(*track, QStringLiteral("workspaceSegmentName"))) {
+          QVERIFY(name->isVisible());
+        }
+
+        const auto segments = visualItems(*track, QStringLiteral("workspaceSegment"));
+
+        QTest::mouseMove(&window, segments.front()->mapRectToScene(segments.front()->boundingRect()).center().toPoint());
+        QTRY_COMPARE_WITH_TIMEOUT(window.cursor().shape(), Qt::PointingHandCursor, fixture_wait_ms);
       }
     }
 
@@ -1191,103 +1209,109 @@ namespace {
       QCOMPARE(tabBounds(*layout->items(), 0), bounds);
     }
 
-    Q_SLOT static void projectSwitcherBoundsItsDelegatesAndRevealsTheSelection() {
+    Q_SLOT static void workspaceTrackShortensToItsRoomAndKeepsTheSelectionInView() {
       QQuickWindow window;
       QQmlEngine engine;
       ListModel workspaces;
       constexpr int workspace_count = 128;
-      constexpr int width = 180;
+      constexpr int room = 240;
+      constexpr int wide_window = 1400;
 
       workspaces.reconcile(workspaceRecords({.count = workspace_count, .active = workspace_count - 1}));
-      const auto switcher = createChrome(engine, QStringLiteral("ProjectSwitcher"), projectSwitcherProperties(workspaces, width, workspace_count - 1));
+      const auto track = createChrome(engine, QStringLiteral("WorkspaceTrack"), workspaceTrackProperties(workspaces, room, workspace_count - 1));
 
-      switcher->setParentItem(window.contentItem());
-      window.resize(width, static_cast<int>(ChromeMetrics::logical_top_bar));
+      track->setParentItem(window.contentItem());
+      window.resize(wide_window, static_cast<int>(ChromeMetrics::logical_top_bar));
       window.show();
       QVERIFY(test::waitForSynchronizedFrame(window, fixture_wait_ms));
       const auto selected = [&] -> QQuickItem* {
-        for (auto* mark : visualItems(*switcher, QStringLiteral("projectSwitcherMark"))) {
-          if (mark->property("record").toMap().value(QStringLiteral("selected")).toBool()) {
-            return mark;
+        for (auto* segment : visualItems(*track, QStringLiteral("workspaceSegment"))) {
+          if (segment->property("record").toMap().value(QStringLiteral("selected")).toBool()) {
+            return segment;
           }
         }
 
         return nullptr;
       };
+      const auto inView = [&] {
+        const auto* segment = selected();
 
-      QTRY_VERIFY_WITH_TIMEOUT(selected() != nullptr, fixture_wait_ms);
-      const auto marks = visualItems(*switcher, QStringLiteral("projectSwitcherMark"));
+        return segment != nullptr && track->boundingRect().contains(segment->mapRectToItem(track.get(), segment->boundingRect()));
+      };
+      const auto shownNames = [&] {
+        qsizetype count = 0;
 
-      QVERIFY(marks.size() <= 8);
-      QVERIFY(switcher->boundingRect().contains(selected()->mapRectToItem(switcher.get(), selected()->boundingRect())));
-      const auto overflow = visualItems(*switcher, QStringLiteral("projectSwitcherOverflow"));
+        for (const auto* name : visualItems(*track, QStringLiteral("workspaceSegmentName"))) {
+          count += static_cast<qsizetype>(name->isVisible());
+        }
 
-      QCOMPARE(overflow.size(), 1);
-      QVERIFY(overflow.front()->isVisible());
-      const auto signal = switcher->metaObject()->method(switcher->metaObject()->indexOfSignal("overflowRequested()"));
+        return count;
+      };
+
+      // More workspaces than the room holds: it never grows past the room, the one in front keeps
+      // its name and stays in view, and the control at the end counts the ones it hides.
+      QTRY_VERIFY_WITH_TIMEOUT(inView(), fixture_wait_ms);
+      QVERIFY(track->width() <= room);
+      QCOMPARE(shownNames(), qsizetype{1});
+      const auto more = visualItems(*track, QStringLiteral("workspaceTrackMore"));
+      const auto counts = visualItems(*track, QStringLiteral("workspaceTrackMoreLabel"));
+
+      QCOMPARE(more.size(), 1);
+      QCOMPARE(counts.size(), 1);
+      QVERIFY(counts.front()->isVisible());
+      QVERIFY(counts.front()->property("text").toString().startsWith(QLatin1Char('+')));
+      QVERIFY(track->property("shownCount").toInt() < workspace_count);
+      const auto signal = track->metaObject()->method(track->metaObject()->indexOfSignal("listRequested()"));
 
       QVERIFY(signal.isValid());
-      const QSignalSpy requested{switcher.get(), signal};
+      const QSignalSpy requested{track.get(), signal};
 
-      QTest::mouseClick(&window, Qt::LeftButton, Qt::NoModifier, overflow.front()->mapRectToScene(overflow.front()->boundingRect()).center().toPoint());
+      QTest::mouseClick(&window, Qt::LeftButton, Qt::NoModifier, more.front()->mapRectToScene(more.front()->boundingRect()).center().toPoint());
       QTRY_COMPARE_WITH_TIMEOUT(requested.size(), 1, fixture_wait_ms);
       workspaces.reconcile(workspaceRecords({.count = workspace_count, .active = 0}));
-      QVERIFY(switcher->setProperty("selectedIndex", 0));
-      QTRY_VERIFY_WITH_TIMEOUT(selected() != nullptr && switcher->boundingRect().contains(selected()->mapRectToItem(switcher.get(), selected()->boundingRect())), fixture_wait_ms);
-      constexpr qreal squeezed_width = 20;
+      QVERIFY(track->setProperty("selectedIndex", 0));
+      QTRY_VERIFY_WITH_TIMEOUT(inView(), fixture_wait_ms);
 
-      switcher->setWidth(squeezed_width);
+      // A few workspaces in a room that holds their marks but not their names: every mark shows.
+      constexpr int few = 4;
+
+      workspaces.reconcile(workspaceRecords({.count = few, .active = 0}));
+      QTRY_COMPARE_WITH_TIMEOUT(visualItems(*track, QStringLiteral("workspaceSegment")).size(), qsizetype{few}, fixture_wait_ms);
+      QTRY_VERIFY_WITH_TIMEOUT(!counts.front()->isVisible(), fixture_wait_ms);
+      QCOMPARE(shownNames(), qsizetype{1});
+      QCOMPARE(track->property("shownCount").toInt(), few);
+
+      // Room for every name: each segment shows its own, and choosing another moves none of them.
+      QVERIFY(track->setProperty("room", wide_window));
+      QTRY_COMPARE_WITH_TIMEOUT(shownNames(), qsizetype{few}, fixture_wait_ms);
+      // Each segment's bounds in the track, by its position in the list.
+      const auto bounds = [&] {
+        telar::ds::Array<QRectF, few> placed{};
+
+        for (const auto* segment : visualItems(*track, QStringLiteral("workspaceSegment"))) {
+          placed.atMut(static_cast<std::size_t>(segment->property("index").toInt())) = segment->mapRectToItem(track.get(), segment->boundingRect());
+        }
+
+        return placed;
+      };
+      // The list places its segments on the frame after their widths change.
       QVERIFY(test::waitForSynchronizedFrame(window, fixture_wait_ms));
-      QCOMPARE(overflow.front()->width(), squeezed_width);
-      QTest::mouseClick(&window, Qt::LeftButton, Qt::NoModifier, overflow.front()->mapRectToScene(overflow.front()->boundingRect()).center().toPoint());
-      QTRY_COMPARE_WITH_TIMEOUT(requested.size(), 2, fixture_wait_ms);
-      workspaces.reconcile({});
-      QVERIFY(switcher->setProperty("selectedIndex", -1));
-      QTRY_VERIFY_WITH_TIMEOUT(!overflow.front()->isVisible(), fixture_wait_ms);
-      QTRY_VERIFY_WITH_TIMEOUT(visualItems(*switcher, QStringLiteral("projectSwitcherMark")).isEmpty(), fixture_wait_ms);
-    }
+      const auto before = bounds();
 
-    Q_SLOT static void projectsLiveOnTheRightOfNavigationWithoutOverlappingTabs() {
-      QQuickWindow window;
-      QQmlEngine engine;
-      ListModel tabs;
-      ListModel workspaces;
-
-      tabs.reconcile(tabRecords({.count = 4, .active = 0}));
-      constexpr int width = 1000;
-
-      workspaces.reconcile(workspaceRecords({.count = 3, .active = 0}));
-      auto properties = navigationProperties(tabs, width);
-
-      properties.insert(QStringLiteral("workspaceModel"), QVariant::fromValue(static_cast<QAbstractItemModel*>(&workspaces)));
-      properties.insert(QStringLiteral("workspace"), QVariantMap{{QStringLiteral("index"), 0}});
-      const auto navigation = createChrome(engine, QStringLiteral("NavigationBar"), properties);
-
-      navigation->setParentItem(window.contentItem());
-      window.resize(width, static_cast<int>(ChromeMetrics::logical_top_bar));
-      window.show();
+      workspaces.reconcile(workspaceRecords({.count = few, .active = few - 1}));
+      QVERIFY(track->setProperty("selectedIndex", few - 1));
       QVERIFY(test::waitForSynchronizedFrame(window, fixture_wait_ms));
-      const auto* strip = navigation->findChild<TabStripLayout*>(QStringLiteral("tabStripLayout"));
+      const auto after = bounds();
 
-      QVERIFY(strip != nullptr);
-      const auto switchers = visualItems(*navigation, QStringLiteral("projectSwitcher"));
-
-      QCOMPARE(switchers.size(), 1);
-      auto* switcher = switchers.front();
-
-      for (const bool rail : {false, true}) {
-        QVERIFY(navigation->setProperty("rail", rail));
-        QVERIFY(test::waitForSynchronizedFrame(window, fixture_wait_ms));
-        const auto bounds = switcher->mapRectToItem(navigation.get(), switcher->boundingRect());
-
-        QCOMPARE(bounds.right(), qreal{924});
-        QVERIFY(strip->mapRectToItem(navigation.get(), strip->boundingRect()).right() < bounds.left());
-        const auto marks = visualItems(*switcher, QStringLiteral("projectSwitcherMark"));
-
-        QCOMPARE(marks.size(), 3);
-        QTest::mouseMove(&window, marks.front()->mapRectToScene(marks.front()->boundingRect()).center().toPoint());
-        QTRY_COMPARE_WITH_TIMEOUT(window.cursor().shape(), Qt::PointingHandCursor, fixture_wait_ms);
+      for (std::size_t index = 0; index < before.size(); ++index) {
+        QCOMPARE(after[index], before[index]);
       }
+
+      // No workspace, no track.
+      workspaces.reconcile({});
+      QVERIFY(track->setProperty("selectedIndex", -1));
+      QTRY_COMPARE_WITH_TIMEOUT(track->implicitWidth(), qreal{0}, fixture_wait_ms);
+      QVERIFY(!track->isVisible());
     }
 
     Q_SLOT static void tabsShowThePointingCursor() {
@@ -1375,32 +1399,33 @@ namespace {
       QTRY_COMPARE_WITH_TIMEOUT(window.cursor().shape(), Qt::ArrowCursor, fixture_wait_ms);
     }
 
-    Q_SLOT static void aProjectClickEmitsOnlyItsWorkspaceIdentity() {
+    Q_SLOT static void aWorkspaceClickEmitsOnlyItsWorkspaceIdentity() {
       QQuickWindow window;
       QQmlEngine engine;
       ListModel workspaces;
 
-      constexpr int width = 120;
+      constexpr int room = 600;
 
       workspaces.reconcile(workspaceRecords({.count = 3, .active = 0}));
-      const auto switcher = createChrome(engine, QStringLiteral("ProjectSwitcher"), projectSwitcherProperties(workspaces, width, 0));
+      const auto track = createChrome(engine, QStringLiteral("WorkspaceTrack"), workspaceTrackProperties(workspaces, room, 0));
 
-      switcher->setParentItem(window.contentItem());
-      window.resize(width, static_cast<int>(ChromeMetrics::logical_top_bar));
-      const auto signal = switcher->metaObject()->method(switcher->metaObject()->indexOfSignal("selected(QString)"));
+      track->setParentItem(window.contentItem());
+      window.resize(room, static_cast<int>(ChromeMetrics::logical_top_bar));
+      const auto signal = track->metaObject()->method(track->metaObject()->indexOfSignal("selected(QString)"));
 
       QVERIFY(signal.isValid());
-      const QSignalSpy selected{switcher.get(), signal};
+      const QSignalSpy selected{track.get(), signal};
 
       window.show();
       QVERIFY(test::waitForSynchronizedFrame(window, fixture_wait_ms));
-      const auto marks = visualItems(*switcher, QStringLiteral("projectSwitcherMark"));
+      QTRY_COMPARE_WITH_TIMEOUT(visualItems(*track, QStringLiteral("workspaceSegment")).size(), qsizetype{3}, fixture_wait_ms);
+      const auto segments = visualItems(*track, QStringLiteral("workspaceSegment"));
+      const auto* last = *std::ranges::max_element(segments, {}, [](const QQuickItem* segment) {
+        return segment->property("index").toInt();
+      });
+      const auto record = last->property("record").toMap();
 
-      QCOMPARE(marks.size(), 3);
-      const auto* mark = marks.back();
-      const auto record = mark->property("record").toMap();
-
-      QTest::mouseClick(&window, Qt::LeftButton, Qt::NoModifier, mark->mapRectToScene(mark->boundingRect()).center().toPoint());
+      QTest::mouseClick(&window, Qt::LeftButton, Qt::NoModifier, last->mapRectToScene(last->boundingRect()).center().toPoint());
       QTRY_COMPARE_WITH_TIMEOUT(selected.size(), 1, fixture_wait_ms);
       QCOMPARE(selected.front().front().toString(), record.value(QStringLiteral("key")).toString());
     }

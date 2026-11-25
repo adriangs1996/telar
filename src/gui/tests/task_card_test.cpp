@@ -139,7 +139,7 @@ namespace {
       auto record = processRecord(pane, "telar", workspace);
 
       QCOMPARE(record.value(QStringLiteral("commandState")).toString(), QStringLiteral("none"));
-      QVERIFY(record.value(QStringLiteral("command")).toString().isEmpty());
+      QVERIFY(record.value(QStringLiteral("commandLine")).toString().isEmpty());
       QVERIFY(!record.value(QStringLiteral("exitCode")).isValid());
       QVERIFY(record.value(QStringLiteral("commandDuration")).toString().isEmpty());
       QVERIFY(record.value(QStringLiteral("cwd")).toString().isEmpty());
@@ -156,7 +156,7 @@ namespace {
       pane.facts.branch.assign("feature");
       record = processRecord(pane, "telar", workspace);
       QCOMPARE(record.value(QStringLiteral("commandState")).toString(), QStringLiteral("finished"));
-      QCOMPARE(record.value(QStringLiteral("command")).toString(), QStringLiteral("just gui-case sidebar"));
+      QCOMPARE(record.value(QStringLiteral("commandLine")).toString(), QStringLiteral("just gui-case sidebar"));
       QCOMPARE(record.value(QStringLiteral("exitCode")).toInt(), 1);
       QCOMPARE(record.value(QStringLiteral("commandDuration")).toString(), QStringLiteral("12s"));
       QCOMPARE(record.value(QStringLiteral("cwd")).toString(), QStringLiteral("~/sandbox/telar"));
@@ -180,7 +180,7 @@ namespace {
       pane.facts.duration_ms = 0;
       record = processRecord(pane, "telar", workspace);
       QCOMPARE(record.value(QStringLiteral("commandState")).toString(), QStringLiteral("running"));
-      QCOMPARE(record.value(QStringLiteral("command")).toString(), QStringLiteral("npm run dev"));
+      QCOMPARE(record.value(QStringLiteral("commandLine")).toString(), QStringLiteral("npm run dev"));
       QVERIFY(record.value(QStringLiteral("commandTruncated")).toBool());
       QVERIFY(!record.value(QStringLiteral("exitCode")).isValid());
       QVERIFY(record.value(QStringLiteral("commandDuration")).toString().isEmpty());
@@ -334,7 +334,8 @@ namespace {
       QQmlEngine engine;
       auto card = createChrome(engine, QStringLiteral("AgentCard"), properties(taskRecord(agent, task, {.machine = "host", .branch = {}})));
       constexpr qreal wide = 1000;
-      constexpr qreal narrow = 200;
+      // The facts have the third row to themselves, so they give way on a narrower card.
+      constexpr qreal narrow = 130;
       const auto shown = [&card](const QString& name) {
         return visualItems(*card, name).front()->isVisible();
       };
@@ -356,7 +357,9 @@ namespace {
       const auto* context = visualItems(*card, QStringLiteral("agentContext")).front();
       const auto* signal = visualItems(*card, QStringLiteral("agentSignal")).front();
 
-      QVERIFY(signal->mapToItem(card.get(), QPointF{signal->width(), 0}).x() <= context->mapToItem(card.get(), QPointF{}).x());
+      // What happens keeps its own row, above where it happens.
+      QVERIFY(signal->mapToItem(card.get(), QPointF{0, signal->height()}).y() <= context->mapToItem(card.get(), QPointF{}).y());
+      QCOMPARE(signal->mapToItem(card.get(), QPointF{}).x(), context->mapToItem(card.get(), QPointF{}).x());
     }
 
     Q_SLOT static void trackedCommandsKeepTheirOutcomeAndNavigationIdentity() {

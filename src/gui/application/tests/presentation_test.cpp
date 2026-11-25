@@ -171,24 +171,6 @@ namespace {
     const auto crowded = application::SidebarGeometry::measure(sidebar, chrome, 128);
 
     check(crowded.activity == geometry.activity, "project count must not reduce the activity viewport");
-    const auto machines = application::SidebarGeometry::measure(sidebar, chrome, 128, {.shown = true, .rows = 2});
-    constexpr Rect expected_rows{.x = 8, .y = 40, .width = 264, .height = 86};
-    // The activity heading under the machine rows and a section gap, and under the machines'
-    // heading alone once the list collapses.
-    constexpr float activity_heading_y = 142;
-    constexpr float collapsed_activity_heading_y = 56;
-
-    check(machines.machines_header == expected_heading && machines.machines == expected_rows && machines.activity_header.y == activity_heading_y && machines.activity.y == activity_heading_y + expected_heading.height, "the other machines must list above the activity section, a section gap apart");
-    const auto collapsed = application::SidebarGeometry::measure(sidebar, chrome, 128, {.shown = true, .rows = 0});
-
-    check(collapsed.machines_header == expected_heading && collapsed.machines.empty() && collapsed.activity_header.y == collapsed_activity_heading_y, "a collapsed machine list keeps only its header and the gap under it");
-    constexpr Rect cramped_area{.width = sidebar.width, .height = 180};
-    const auto cramped = application::SidebarGeometry::measure(cramped_area, chrome, 1, {.shown = true, .rows = 4});
-
-    constexpr float machine_row_height = expected_rows.height / 2;
-    constexpr float activity_room = 32;
-
-    check(cramped.machines.height == machine_row_height && cramped.activity.height >= activity_room, "machine rows that do not fit stay out whole, so activity keeps its room");
     constexpr Rect short_area{.width = sidebar.width, .height = 60};
     const auto short_sidebar = application::SidebarGeometry::measure(short_area, chrome, 1);
 

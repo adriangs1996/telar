@@ -78,7 +78,6 @@ namespace telar::gui::qt {
     Q_OBJECT
     QML_NAMED_ELEMENT(MachinesCoordinator)
     QML_UNCREATABLE("Use the window's machines")
-    Q_PROPERTY(QVariantMap context READ context NOTIFY listChanged)
 
   public:
     struct Parts {
@@ -129,8 +128,6 @@ namespace telar::gui::qt {
     void publishList();
     // The desktop finished the sound a client's agent asked for.
     void soundFinished(ds::Option<CommandFailure> failure);
-
-    [[nodiscard]] QVariantMap context() const;
 
   signals:
     // The window is about to show another machine.

@@ -21,14 +21,6 @@ export {
 export {
   namespace telar::gui::application {
 
-    // Whether the sidebar shows its machine section, and how many machine rows it lists.
-    struct SidebarMachines {
-      bool shown = false;
-      std::size_t rows = 0;
-
-      bool operator==(const SidebarMachines&) const = default;
-    };
-
     struct SidebarGeometry {
       static constexpr float margin = 8;
       static constexpr float workspace_vertical_padding = 20;
@@ -37,15 +29,13 @@ export {
 
       [[nodiscard]] static float sectionGap(const ChromeMetrics& chrome) noexcept;
 
-      Rect machines_header;
-      Rect machines;
       Rect projects_header;
       Rect projects;
       Rect activity_header;
       Rect activity;
 
       [[nodiscard]] static float workspaceHeight(const ChromeMetrics& chrome) noexcept;
-      [[nodiscard]] static SidebarGeometry measure(Rect area, const ChromeMetrics& chrome, std::size_t, SidebarMachines machines = {}) noexcept;
+      [[nodiscard]] static SidebarGeometry measure(Rect area, const ChromeMetrics& chrome, std::size_t) noexcept;
     };
 
   }

@@ -26,7 +26,15 @@ namespace telar::gui::features::activity {
   }
 
   float AgentCardGeometry::agentHeight() const noexcept {
-    return title_row + small_row + px(title_gap) + (2 * px(vertical_padding));
+    return agentWhereTop() + small_row + px(vertical_padding);
+  }
+
+  float AgentCardGeometry::agentSignalTop() const noexcept {
+    return px(vertical_padding) + title_row + px(title_gap);
+  }
+
+  float AgentCardGeometry::agentWhereTop() const noexcept {
+    return agentSignalTop() + small_row + px(detail_gap);
   }
 
   float AgentCardGeometry::cardWidth(float list_width) const noexcept {

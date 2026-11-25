@@ -28,7 +28,7 @@ Window {
 
     NavigationBar {
         tabs: telar.tabs
-        machineContext: telar.machines.context
+        machineChrome: telar.machineChrome
         drawn: telar.components.elementBars.top_bar ?? null
         x: root.geometry.navigation.x
         y: root.geometry.navigation.y
@@ -47,13 +47,12 @@ Window {
         rail: root.geometry.rail
         onSidebarToggled: telar.commands.execute(WindowActions.Action.toggle_sidebar)
         onWorkspaceSelected: key => telar.commands.execute(WindowActions.Action.select_workspace, key)
-        onWorkspacePickerRequested: telar.commands.execute(WindowActions.Action.goto_picker)
+        onWorkspaceCreated: telar.commands.execute(WindowActions.Action.new_workspace)
         onTabSelected: key => telar.commands.execute(WindowActions.Action.select_tab, key)
         onTabClosed: key => telar.commands.execute(WindowActions.Action.close_tab, key)
         onTabRenamed: telar.commands.execute(WindowActions.Action.rename_tab)
         onTabCreated: telar.commands.execute(WindowActions.Action.new_tab)
         onPaletteRequested: telar.commands.execute(WindowActions.Action.palette)
-        onMachinePickerRequested: telar.commands.execute(WindowActions.Action.machine_picker)
         onElementActivated: (slot, key, revision, element) => telar.commands.activateElement(slot, key, revision, element)
     }
 
@@ -61,8 +60,6 @@ Window {
         id: sidebar
         controller: telar.sidebar
         activity: telar.activity
-        machineChrome: telar.machineChrome
-        machineContext: telar.machines.context
 
         x: root.geometry.sidebar.x
         y: root.geometry.sidebar.y

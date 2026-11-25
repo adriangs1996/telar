@@ -79,16 +79,22 @@ namespace telar::gui::qt {
     };
   }
 
-  // The lowest listening port, and how many more there are: `:3000`, `:3000 +2`.
+  // The two lowest listening ports, and how many more there are, a space between each:
+  // `:3000`, `:3000 :9229`, `:3000 :9229 +2`. The card draws each word on its own.
   inline QString portsLabel(std::span<const std::uint16_t> ports) {
-    if (ports.empty()) {
-      return {};
+    constexpr std::size_t written = 2;
+    QString label;
+
+    for (const auto port : ports.first(std::min(ports.size(), written))) {
+      if (!label.isEmpty()) {
+        label += QLatin1Char(' ');
+      }
+
+      label += QLatin1Char(':') + QString::number(port);
     }
 
-    auto label = QLatin1Char(':') + QString::number(ports.front());
-
-    if (ports.size() > 1) {
-      label += QStringLiteral(" +") + QString::number(ports.size() - 1);
+    if (ports.size() > written) {
+      label += QStringLiteral(" +") + QString::number(ports.size() - written);
     }
 
     return label;
@@ -125,7 +131,7 @@ namespace telar::gui::qt {
     AgentCardLabels::Project project;
 
     return {
-        {QStringLiteral("command"), toQString(facts.command.view())},
+        {QStringLiteral("commandLine"), toQString(facts.command.view())},
         {QStringLiteral("commandState"), commandStateName(facts.command_state)},
         {QStringLiteral("commandTruncated"), facts.command_truncated},
         // The status the command exited with; invalid while it runs and when its shell reported none.

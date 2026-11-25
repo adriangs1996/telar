@@ -2,7 +2,6 @@ module telar.gui.application;
 
 import std;
 import telar.gui.foundation.core;
-import telar.gui.features.machines;
 
 namespace telar::gui::application {
 
@@ -26,31 +25,15 @@ namespace telar::gui::application {
     return ChromeMetrics::lineHeight(chrome.body) + ChromeMetrics::lineHeight(chrome.small) + chrome.px(workspace_vertical_padding);
   }
 
-  SidebarGeometry SidebarGeometry::measure(Rect area, const ChromeMetrics& chrome, std::size_t /*unused*/, SidebarMachines machines) noexcept {
+  SidebarGeometry SidebarGeometry::measure(Rect area, const ChromeMetrics& chrome, std::size_t /*unused*/) noexcept {
     const auto inset = std::round(chrome.textPx(margin));
-    Rect content{.x = area.x + inset, .y = area.y + inset, .width = std::max(0.0F, area.width - 2 * inset), .height = std::max(0.0F, area.height - 2 * inset)};
+    const Rect content{.x = area.x + inset, .y = area.y + inset, .width = std::max(0.0F, area.width - 2 * inset), .height = std::max(0.0F, area.height - 2 * inset)};
     const auto header = chrome.pane_header;
     const auto gap = 0.0F;
     SidebarGeometry geometry;
 
     if (content.width <= 0 || content.height < header) {
       return geometry;
-    }
-
-    constexpr float minimum_machine_headers = 3;
-    if (machines.shown && content.height >= minimum_machine_headers * header) {
-      geometry.machines_header = {.x = content.x, .y = content.y, .width = content.width, .height = header};
-      content.y += header;
-      content.height -= header;
-      // Activity keeps two headers of room; machine rows that do not fit stay out whole.
-      const auto row = features::machines::MachineChromeGeometry::listRowHeight(chrome);
-      const auto section = sectionGap(chrome);
-      const auto room = std::max(0.0F, content.height - ((minimum_machine_headers - 1) * header) - section);
-      const auto rows = std::min(static_cast<float>(machines.rows), std::floor(room / row));
-
-      geometry.machines = {.x = content.x, .y = content.y, .width = content.width, .height = rows * row};
-      content.y += geometry.machines.height + section;
-      content.height -= geometry.machines.height + section;
     }
 
     geometry.activity_header = {.x = content.x, .y = content.y, .width = content.width, .height = header};

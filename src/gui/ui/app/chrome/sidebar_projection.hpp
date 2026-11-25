@@ -29,7 +29,8 @@ namespace telar::gui::qt {
         {QStringLiteral("height"), static_cast<double>(bounds.height) / density},
         {QStringLiteral("agentHeight"), static_cast<double>(geometry.agentHeight()) / density},
         {QStringLiteral("agentTitleRow"), static_cast<double>(geometry.title_row) / density},
-        {QStringLiteral("agentDetailY"), (static_cast<double>(geometry.px(application::activity::AgentCardGeometry::vertical_padding) + geometry.title_row + geometry.px(application::activity::AgentCardGeometry::title_gap))) / density},
+        {QStringLiteral("agentDetailY"), static_cast<double>(geometry.agentSignalTop()) / density},
+        {QStringLiteral("agentWhereY"), static_cast<double>(geometry.agentWhereTop()) / density},
         {QStringLiteral("agentDetailRow"), static_cast<double>(geometry.small_row) / density},
         {QStringLiteral("padding"), static_cast<double>(geometry.px(application::activity::AgentCardGeometry::horizontal_padding)) / density},
         {QStringLiteral("tileWidth"), static_cast<double>(geometry.px(application::activity::AgentCardGeometry::tile_width)) / density},
@@ -58,14 +59,12 @@ namespace telar::gui::qt {
     };
   }
 
-  inline QVariantMap sidebarRegionsRecord(Rect area, const application::window::DisplayMetrics& display, std::size_t count, application::SidebarMachines machines = {}) {
+  inline QVariantMap sidebarRegionsRecord(Rect area, const application::window::DisplayMetrics& display, std::size_t count) {
     const auto& chrome = display.chrome;
     const auto density = display.density;
-    const auto geometry = application::SidebarGeometry::measure(area, chrome, count, machines);
+    const auto geometry = application::SidebarGeometry::measure(area, chrome, count);
 
     return {
-        {QStringLiteral("machinesHeader"), toQRectF(geometry.machines_header, density)},
-        {QStringLiteral("machines"), toQRectF(geometry.machines, density)},
         {QStringLiteral("projectsHeader"), toQRectF(geometry.projects_header, density)},
         {QStringLiteral("projects"), toQRectF(geometry.projects, density)},
         {QStringLiteral("activityHeader"), toQRectF(geometry.activity_header, density)},

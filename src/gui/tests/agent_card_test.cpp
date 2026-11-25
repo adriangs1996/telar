@@ -162,26 +162,38 @@ namespace {
       card->setParentItem(window.contentItem());
       window.resize(static_cast<int>(list_width), viewport_height);
       const auto title = visualItems(*card, QStringLiteral("agentTitleLabel"));
+      const auto signal_text = visualItems(*card, QStringLiteral("agentSignal"));
       const auto project = visualItems(*card, QStringLiteral("agentProjectLabel"));
       const auto background = visualItems(*card, QStringLiteral("agentCardBackground"));
 
       QCOMPARE(title.size(), 1);
+      QCOMPARE(signal_text.size(), 1);
       QCOMPARE(project.size(), 1);
       QCOMPARE(background.size(), 1);
-      constexpr qreal expected_height = 55;
+      // Three rows: the title's, then a small one for what happens and one for where.
+      constexpr qreal expected_height = 73;
       // Past the card's inset, its mark column and the gap after it.
       constexpr QPointF title_origin{38, 8};
-      constexpr qreal detail_origin_y = 31;
+      constexpr qreal signal_origin_y = 31;
+      constexpr qreal where_origin_y = 49;
+      constexpr qreal small_row = 16;
 
       QCOMPARE(card->height(), expected_height);
       QCOMPARE(title.front()->position(), title_origin);
       QCOMPARE(title.front()->height(), qreal{19});
-      const auto* detail = project.front()->parentItem()->parentItem();
+      const auto* happening = signal_text.front()->parentItem();
+      const auto* where = project.front()->parentItem();
 
-      QCOMPARE(detail->y(), detail_origin_y);
-      QCOMPARE(detail->x(), title_origin.x());
-      // The project closes the second row on the right; the signal takes the room before it.
-      QCOMPARE(project.front()->parentItem()->x() + project.front()->parentItem()->width(), detail->width());
+      QCOMPARE(happening->position(), QPointF(title_origin.x(), signal_origin_y));
+      QCOMPARE(happening->height(), small_row);
+      QCOMPARE(where->position(), QPointF(title_origin.x(), where_origin_y));
+      QCOMPARE(where->height(), small_row);
+      QCOMPARE(where->width(), happening->width());
+      // An agent that said nothing still fills its second row, with what is missing.
+      QCOMPARE(signal_text.front()->property("text").toString(), QStringLiteral("No signal"));
+      // The place starts at the row's left edge and takes the row when no branch closes it.
+      QCOMPARE(project.front()->x(), qreal{0});
+      QCOMPARE(project.front()->width(), where->width());
       const auto colors = themeColors(Configuration{});
       auto selection_color = colors.value(QStringLiteral("text")).value<QColor>();
 

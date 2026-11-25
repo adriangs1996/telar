@@ -93,8 +93,10 @@ export {
 
       struct Activity {
         std::string_view text;
-        PaletteRole color = PaletteRole::overlay1;
+        PaletteRole color = PaletteRole::subtext0;
         bool plan = false;
+        // The agent said nothing for this state: the text names what is missing, so the row is never blank.
+        bool placeholder = false;
       };
 
       // A worktree's facts in the pieces a card gives up one by one when its row runs short.

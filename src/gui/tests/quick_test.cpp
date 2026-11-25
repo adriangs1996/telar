@@ -3488,9 +3488,9 @@ return {api_version = 2, client = {
         QVERIFY(test::waitForSynchronizedFrame(*window_, runtime_wait_ms));
         const QQuickItem* target = nullptr;
 
-        for (const auto* mark : test::visualItems(*window_->contentItem(), QStringLiteral("projectSwitcherMark"))) {
-          if (mark->property("record").toMap().value(QStringLiteral("key")).toString() == key) {
-            target = mark;
+        for (const auto* segment : test::visualItems(*window_->contentItem(), QStringLiteral("workspaceSegment"))) {
+          if (segment->property("record").toMap().value(QStringLiteral("key")).toString() == key) {
+            target = segment;
             break;
           }
         }
@@ -3571,10 +3571,10 @@ return {api_version = 2, client = {
       QVERIFY(test::waitForSynchronizedFrame(*window_, runtime_wait_ms));
       QTRY_VERIFY(!client_->display()->geometry().value(QStringLiteral("rail")).toBool());
       QVERIFY(window_->findChild<QQuickItem*>(QStringLiteral("workspaceList")) == nullptr);
-      const auto* projects = window_->findChild<QQuickItem*>(QStringLiteral("projectSwitcher"));
+      const auto* projects = window_->findChild<QQuickItem*>(QStringLiteral("workspaceTrack"));
       auto* terminal = terminalIn(window_->contentItem());
       if (projects == nullptr || terminal == nullptr) {
-        QFAIL("Required project switcher and terminal fixtures are missing");
+        QFAIL("Required workspace track and terminal fixtures are missing");
       }
 
       QTRY_VERIFY(projects->isVisible());
