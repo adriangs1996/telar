@@ -179,6 +179,20 @@ namespace telar::remote {
       }
     }
 
+    // Waits a turn for the holder of a connection; false once the holder closed it. A holder has
+    // nothing to say, so what wakes the wait is its end, which a read tells by its count alone:
+    // the end of a connection leaves the last error as some earlier call set it.
+    bool holderStays(int socket) noexcept {
+      if (!waitReady(socket, POLLIN, Clock::now() + hold_interval)) {
+        return true;
+      }
+
+      char byte = 0;
+      const auto count = ::read(socket, &byte, 1);
+
+      return count > 0 || (count < 0 && runtime::socketWouldBlock(sys::lastError()));
+    }
+
     // The terminal of this process in raw mode while a command there uses it, as it was after.
     class RawTerminal {
     public:
@@ -791,11 +805,7 @@ namespace telar::remote {
 
     // The machine is held while its holder keeps this connection.
     while (held && !stopping_.load()) {
-      char byte = 0;
-
-      if (waitReady(socket, POLLIN, Clock::now() + hold_interval)) {
-        held = ::read(socket, &byte, 1) > 0 || runtime::socketWouldBlock(sys::lastError());
-      }
+      held = holderStays(socket);
 
       const std::scoped_lock lock{mutex_};
 
@@ -998,16 +1008,12 @@ namespace telar::remote {
 
     // The forward lasts while its holder keeps this connection and the port stays open there.
     while (held && !stopping_.load()) {
-      char byte = 0;
-
       if (!stillOpen(forward)) {
         static_cast<void>(writeAll(socket, "closed\n"));
         return;
       }
 
-      if (waitReady(socket, POLLIN, Clock::now() + hold_interval)) {
-        held = ::read(socket, &byte, 1) > 0 || runtime::socketWouldBlock(sys::lastError());
-      }
+      held = holderStays(socket);
     }
 
     releaseForward(forward, false);
