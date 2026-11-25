@@ -104,6 +104,10 @@ export namespace telar::gui::features::prompt {
     Line line;
     std::uint64_t pane_id;
     std::int64_t output = 0;
+    // A key typed at a program's question reached it: the rest of the answer follows, whatever
+    // the echo of each key prints, until Enter, a signal or end-of-file key, or the program
+    // stops reading a line.
+    bool forwarding = false;
     // The command block selected from the editor's normal mode, by its index among the pane's
     // blocks, and the row the live prompt started on when the selection began.
     ds::Option<std::size_t> block;
@@ -312,10 +316,17 @@ export namespace telar::gui::features::prompt {
 
   // Whether a key typed while a program runs reaches the program instead of the queue: the signal
   // and end-of-file keys of `shell`'s line discipline, and any key while the program seems to ask
-  // a question, its cursor at `cursor_column` and quiet since its last output. `now` reads the
-  // clock, only when the line is empty.
+  // a question, its cursor at `cursor_column` and quiet since its last output. Once a key reached
+  // it, the rest of the answer follows it until Enter: the echo of each key is output too, and
+  // would send the next one to the queue. `now` reads the clock, only when the line is empty and
+  // no answer is under way.
   template <typename Now>
-  [[nodiscard]] TBC_GENERIC bool toProgram(const PaneLine& line, const KeyPress& key, const PaneShell& shell, std::uint32_t cursor_column, Now&& now);
+  [[nodiscard]] TBC_GENERIC bool toProgram(PaneLine& line, const KeyPress& key, const PaneShell& shell, std::uint32_t cursor_column, Now&& now);
+
+  // Whether text an input method committed or a paste reaches the program instead of the queue,
+  // as a key would: during an answer, or as its start. A newline at its end ends the answer.
+  template <typename Now>
+  [[nodiscard]] TBC_GENERIC bool toProgram(PaneLine& line, std::string_view text, std::uint32_t cursor_column, Now&& now);
 
   // How the line reads a key: the bindings of `configuration`, and the `dialect` of the shell that
   // runs the command.
@@ -581,10 +592,20 @@ namespace telar::gui::features::prompt {
     return action ? edited.perform(surface, *action, incomplete, history(state)) : edited.press(surface, key, incomplete, history(state));
   }
 
+  // An answer under way, or a program that seems to ask a question. The echo of each key it
+  // takes is output too, so its quiet is only read before the first one.
   template <typename Now>
-  bool toProgram(const PaneLine& line, const KeyPress& key, const PaneShell& shell, std::uint32_t cursor_column, Now&& now) {
-    const auto& typed = line.line;
-    if (typed.answering()) {
+  TBC_GENERIC bool answers(const PaneLine& line, std::uint32_t cursor_column, Now&& now) {
+    if (line.forwarding) {
+      return true;
+    }
+
+    return line.line.editor().text().empty() && PendingPrompt::likely(cursor_column, std::chrono::nanoseconds{std::forward<Now>(now)() - line.output});
+  }
+
+  template <typename Now>
+  bool toProgram(PaneLine& line, const KeyPress& key, const PaneShell& shell, std::uint32_t cursor_column, Now&& now) {
+    if (line.line.answering()) {
       return false;
     }
 
@@ -592,16 +613,31 @@ namespace telar::gui::features::prompt {
     constexpr char32_t ascii_end = 0x80;
     constexpr char32_t control_bits = 0x1f;
 
-    // Signal and end-of-file keys always reach the program, as does typing while it seems to ask
-    // a question.
+    // Signal and end-of-file keys always reach the program, and end the line it was reading.
     if (key.key == Key::character && key.modifiers.control && !key.modifiers.alt && key.character < ascii_end) {
       const char control = static_cast<char>(key.character & control_bits);
       if (controlKey(shell, {&control, 1})) {
+        line.forwarding = false;
         return true;
       }
     }
 
-    return typed.editor().text().empty() && PendingPrompt::likely(cursor_column, std::chrono::nanoseconds{std::forward<Now>(now)() - line.output});
+    if (!answers(line, cursor_column, std::forward<Now>(now))) {
+      return false;
+    }
+
+    line.forwarding = key.key != Key::enter;
+    return true;
+  }
+
+  template <typename Now>
+  bool toProgram(PaneLine& line, std::string_view text, std::uint32_t cursor_column, Now&& now) {
+    if (line.line.answering() || !answers(line, cursor_column, std::forward<Now>(now))) {
+      return false;
+    }
+
+    line.forwarding = !text.ends_with('\n') && !text.ends_with('\r');
+    return true;
   }
 
   inline std::string_view delivery(const PaneLine& line) noexcept {

@@ -105,8 +105,12 @@ namespace telar::gui::qt {
     }
 
     const auto bytes = text.toUtf8();
+    const std::string_view typed{bytes.constData(), static_cast<std::size_t>(bytes.size())};
+    if (application::prompt::toProgram(session, pane_id, typed)) {
+      return false;
+    }
 
-    application::prompt::text(session, pane_id, {bytes.constData(), static_cast<std::size_t>(bytes.size())});
+    application::prompt::text(session, pane_id, typed);
     publishWrite();
     return true;
   }

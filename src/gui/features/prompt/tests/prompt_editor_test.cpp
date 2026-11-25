@@ -95,6 +95,36 @@ namespace {
       return feature::delivery(line());
     }
 
+    // The pane printed at `now`, in nanoseconds of the clock the routing reads.
+    void output(std::int64_t now) {
+      feature::output(lines_, pane_id, [now] {
+        return now;
+      });
+    }
+
+    // Whether `key`, typed at `now` with the program's cursor at `column`, reaches the program.
+    [[nodiscard]] bool toProgram(const KeyPress& key, const telar::PaneShell& shell, std::uint32_t column, std::int64_t now) {
+      return feature::toProgram(line(), key, shell, column, [now] {
+        return now;
+      });
+    }
+
+    // Whether `text`, committed or pasted at `now`, reaches the program.
+    [[nodiscard]] bool toProgram(std::string_view text, std::uint32_t column, std::int64_t now) {
+      return feature::toProgram(line(), text, column, [now] {
+        return now;
+      });
+    }
+
+    void follow(const telar::PaneShell& previous, const telar::PaneShell& current) {
+      static_cast<void>(feature::follow(line(), previous, current));
+    }
+
+    // A key while a program runs, as the queue reads it.
+    Outcome pressRunning(const KeyPress& key) {
+      return feature::press(state_, line(), Surface::running, key, {.configuration = configuration_, .dialect = telar::shell::Dialect::posix});
+    }
+
   private:
     static constexpr std::uint64_t pane_id = 1;
 
@@ -734,6 +764,68 @@ namespace {
     require(PendingPrompt::likely(prompt_column, quiet) && !PendingPrompt::likely(0, quiet) && !PendingPrompt::likely(prompt_column, busy), "a quiet unfinished line looks like a prompt");
   }
 
+  // A program's question takes the whole answer typed at it, however fast: the echo of each key
+  // is output, which must not send the next one to the queue.
+  void answerFollowsItsFirstKey() {
+    using namespace std::chrono_literals;
+
+    constexpr std::uint32_t question_column = 17;
+    constexpr std::int64_t asked = 0;
+    constexpr std::int64_t quiet = std::chrono::nanoseconds{400ms}.count();
+    constexpr std::int64_t moment = std::chrono::nanoseconds{10ms}.count();
+    const telar::PaneShell shell{.pane_id = 1, .shell = telar::IntegratedShell::zsh, .phase = telar::ShellPhase::running, .canonical = true, .echo = true, .signal_keys = true, .interrupt = 0x03, .quit = 0x1c, .suspend = 0x1a, .end_of_file = 0x04};
+    const auto key = [](char character) {
+      return KeyPress{.key = Key::character, .character = static_cast<char32_t>(character)};
+    };
+    const KeyPress enter{.key = Key::enter};
+    Editor editor;
+
+    // terraform's "Enter a value: ", quiet; "yes" typed as each key's echo arrives.
+    editor.output(asked);
+    require(editor.toProgram(key('y'), shell, question_column, quiet), "the first key answers the quiet question");
+    editor.output(quiet + moment);
+    require(editor.toProgram(key('e'), shell, question_column + 1, quiet + (2 * moment)), "the key after the echo follows it");
+    editor.output(quiet + (3 * moment));
+    require(editor.toProgram(key('s'), shell, question_column + 2, quiet + (4 * moment)), "so does the rest of the answer");
+    require(editor.toProgram(enter, shell, question_column + 3, quiet + (5 * moment)), "Enter sends the answer");
+    editor.output(quiet + (6 * moment));
+    require(!editor.toProgram(key('l'), shell, question_column, quiet + (7 * moment)), "after Enter, a program that prints queues the keys again");
+
+    // A signal ends the line being read, and so does a program that stops reading one.
+    editor.output(asked);
+    require(editor.toProgram(key('n'), shell, question_column, quiet), "a new answer starts");
+    require(editor.toProgram(KeyPress{.key = Key::character, .character = U'c', .modifiers = {.control = true}}, shell, question_column, quiet + moment), "Ctrl-C reaches the program");
+    editor.output(quiet + (2 * moment));
+    require(!editor.toProgram(key('a'), shell, question_column, quiet + (3 * moment)), "Ctrl-C ends the answer");
+    editor.output(asked);
+    require(editor.toProgram(key('n'), shell, question_column, quiet), "another answer starts");
+
+    auto raw = shell;
+
+    raw.canonical = false;
+    editor.follow(shell, raw);
+    editor.output(quiet + moment);
+    require(!editor.toProgram(key('a'), shell, question_column, quiet + (2 * moment)), "a program that reads keys raw ends the answer");
+
+    // A paste or an input method's text answers as keys do; a newline at its end ends it.
+    editor.output(asked);
+    require(editor.toProgram("ye", question_column, quiet), "a paste answers the quiet question");
+    editor.output(quiet + moment);
+    require(editor.toProgram(key('s'), shell, question_column + 2, quiet + (2 * moment)), "keys follow the paste");
+    require(editor.toProgram(enter, shell, question_column + 3, quiet + (3 * moment)), "Enter ends it");
+    editor.output(asked);
+    require(editor.toProgram("yes\n", question_column, quiet), "a paste with its newline answers");
+    editor.output(quiet + moment);
+    require(!editor.toProgram("ls", question_column, quiet + (2 * moment)), "and ends the answer");
+
+    // Text in the queue keeps the keys there.
+    editor.output(asked);
+    static_cast<void>(editor.pressRunning({.key = Key::character, .character = U'l', .text = "l"}));
+    require(!text(editor).empty(), "the key queues");
+    require(!editor.toProgram(key('s'), shell, question_column, quiet), "a command being queued keeps its keys");
+    require(editor.toProgram(KeyPress{.key = Key::character, .character = U'c', .modifiers = {.control = true}}, shell, question_column, quiet), "Ctrl-C still reaches the program");
+  }
+
   telar::ds::Vec<Style, Memory> styleOf(Memory& memory, std::string_view text) {
     telar::ds::Vec<Style, Memory> styles{memory};
     telar::ds::Vec<telar::shell::Token, Memory> tokens{memory};
@@ -915,6 +1007,7 @@ namespace {
   const telar::testing::Case case_memory_returns{"prompt_editor.memory_returns", memoryReturns};
   const telar::testing::Case case_layout_and_styles{"prompt_editor.layout_and_styles", layoutAndStyles};
   const telar::testing::Case case_routing{"prompt_editor.routing", routing};
+  const telar::testing::Case case_answer_follows_its_first_key{"prompt_editor.answer_follows_its_first_key", answerFollowsItsFirstKey};
   const telar::testing::Case case_text_model{"prompt_editor.text_model", textModel};
   const telar::testing::Case case_emacs{"prompt_editor.emacs", emacs};
   const telar::testing::Case case_vim_basics{"prompt_editor.vim_basics", vimBasics};

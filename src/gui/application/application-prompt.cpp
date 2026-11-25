@@ -212,6 +212,23 @@ namespace telar::gui::application::prompt {
     return where == Surface::editor || where == Surface::running;
   }
 
+  bool toProgram(Session& session, std::uint64_t pane_id, std::string_view text) {
+    if (surface(session, pane_id) != Surface::running) {
+      return false;
+    }
+
+    static_cast<void>(open(session, pane_id));
+
+    const auto column = findPane(session.panes, pane_id)->screen.cursor().x;
+    auto& line = *features::prompt::find(session.prompt_lines, pane_id);
+    const auto clock = Access::clock(session);
+    const auto now = [clock] {
+      return clock();
+    };
+
+    return features::prompt::toProgram(line, text, column, now);
+  }
+
   bool hidesTerminalCursor(const Session& session, std::uint64_t pane_id) noexcept {
     const auto* pane = findPane(session.panes, pane_id);
     if (pane == nullptr) {

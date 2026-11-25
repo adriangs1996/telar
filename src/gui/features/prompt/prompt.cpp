@@ -313,6 +313,12 @@ namespace telar::gui::features::prompt {
       typed.clearSecret();
     }
 
+    // An answer ends with the line its program read: the program is gone, or reads keys raw
+    // or unseen.
+    if (current.phase != ShellPhase::running || !current.canonical || !current.echo) {
+      line.forwarding = false;
+    }
+
     if (previous.phase != ShellPhase::running || current.phase != ShellPhase::prompt) {
       return ds::none;
     }
