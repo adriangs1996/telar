@@ -509,6 +509,63 @@ namespace {
     check(shown.back().command.ends_with("command65"));
   }
 
+  // What a pane's shell runs or last ran is kept apart from the blocks: how it ended, and still
+  // there once the scrollback dropped the rows its block was anchored to.
+  void testLatestCommand() {
+    telar::testing::TestMemory adapter;
+    ConcurrentMemory& memory = adapter;
+    Terminal terminal{memory, TerminalSize{40, 12, 8, 16}};
+    CommandBlocks blocks{memory, terminal};
+    const auto started = std::chrono::steady_clock::now();
+    const auto run = [&](std::string_view command) {
+      terminal.feed(byteSpan("\x1b]133;A\x07"));
+      blocks.mark('A', started);
+      terminal.feed(byteSpan("$ \x1b]133;B\x07"));
+      blocks.mark('B', started);
+      terminal.feed(byteSpan(command));
+      terminal.feed(byteSpan("\r\n\x1b]133;C\x07"));
+      blocks.mark('C', started);
+    };
+
+    check(!blocks.latest() && blocks.commandRevision() == 0, "a shell that ran nothing has no command");
+
+    run("make test");
+    check(blocks.latest().hasValue() && blocks.commandRevision() == 1);
+    check(blocks.latest()->state == CommandBlockState::running && blocks.latest()->command.view().ends_with("make test") && !blocks.latest()->truncated);
+
+    blocks.finished(3, started + std::chrono::milliseconds{2500});
+    check(blocks.commandRevision() == 2 && blocks.latest()->state == CommandBlockState::failed && blocks.latest()->status == 3 && blocks.latest()->duration_ms == 2500);
+    blocks.finished(0, started + std::chrono::seconds{9});
+    check(blocks.commandRevision() == 2 && blocks.latest()->status == 3, "a command ends once");
+
+    // A prompt with no D mark interrupts the command: it reported no status.
+    run("sleep 100");
+    check(blocks.commandRevision() == 3 && blocks.latest()->state == CommandBlockState::running);
+    terminal.feed(byteSpan("^C\r\n\x1b]133;A\x07"));
+    blocks.mark('A', started + std::chrono::seconds{1});
+    check(blocks.commandRevision() == 4 && blocks.latest()->state == CommandBlockState::interrupted && blocks.latest()->command.view().ends_with("sleep 100"));
+
+    // The scrollback drops every row: the blocks go with them, the last command stays.
+    const std::size_t limit = 1;
+
+    check(ghostty_terminal_set(terminal.handle(), GHOSTTY_TERMINAL_OPT_SCROLLBACK_MAX_BYTES, &limit) == GHOSTTY_SUCCESS);
+    for (std::size_t batch = 0; batch < 4000 && terminal.scrollbackTrimmed() == 0; ++batch) {
+      terminal.feed(byteSpan("scrollback line\r\nscrollback line\r\nscrollback line\r\nscrollback line\r\n"));
+      terminal.followScrollback();
+    }
+
+    for (std::size_t line = 0; line < 64; ++line) {
+      terminal.feed(byteSpan("scrollback line\r\n"));
+    }
+
+    terminal.followScrollback();
+    blocks.follow();
+    ds::Array<CommandBlock, PaneBlocks::capacity> storage;
+
+    check(terminal.scrollbackTrimmed() > 0 && blocks.message(7, storage).blocks.empty(), "the blocks were not dropped");
+    check(blocks.commandRevision() == 4 && blocks.latest()->command.view().ends_with("sleep 100"), "the last command went with its block");
+  }
+
   // An OSC longer than the 16 KiB a pane keeps is dropped whole: its kept prefix is never read.
   void testOverlongOscIgnored() {
     SystemAllocator zone_system;
@@ -585,6 +642,7 @@ namespace {
   const telar::testing::Case case_osc_fragments{"command_capture.osc_fragments", testOscFragments};
   const telar::testing::Case case_private_report_without_token_ignored{"command_capture.private_report_without_token_ignored", testPrivateReportWithoutToken};
   const telar::testing::Case case_block_ring_keeps_newest{"command_capture.block_ring_keeps_newest", testBlockRingKeepsNewest};
+  const telar::testing::Case case_latest_command{"command_capture.latest_command", testLatestCommand};
   const telar::testing::Case case_overlong_osc_ignored{"command_capture.overlong_osc_ignored", testOverlongOscIgnored};
   const telar::testing::Case case_prompt_while_running_interrupts{"command_capture.prompt_while_running_interrupts", testPromptWhileRunningInterrupts};
 
