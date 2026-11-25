@@ -289,7 +289,7 @@ namespace telar::gui::qt {
 
       const auto target = activityTarget(source, entry);
       const auto key = identity(target);
-      const AgentRecordContext context{.machine = machine_label(*version, slot), .branch = {}, .connected = version->connected, .coordinator = entry.coordinator, .starts_project = entry.first_in_project, .depth = entry.depth};
+      const AgentRecordContext context{.machine = machine_label(*version, slot), .branch = {}, .connected = version->connected, .coordinator = entry.coordinator};
       auto record = activityRecord(source.session, entry, context, slot == active);
 
       keyAgentRecord(record, key, elements_);

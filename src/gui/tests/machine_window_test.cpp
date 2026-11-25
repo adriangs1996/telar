@@ -1756,7 +1756,7 @@ namespace {
       window.resize(size);
       application.setWindow(window);
       const auto geometry = application.sidebar()->regions().value(QStringLiteral("cards")).toMap();
-      QVariantMap record{{QStringLiteral("key"), QStringLiteral("owned")}, {QStringLiteral("enabled"), true}, {QStringLiteral("selected"), false}, {QStringLiteral("depth"), 0}, {QStringLiteral("command"), false}};
+      QVariantMap record{{QStringLiteral("key"), QStringLiteral("owned")}, {QStringLiteral("enabled"), true}, {QStringLiteral("selected"), false}, {QStringLiteral("command"), false}};
       constexpr qreal card_width = 200;
       constexpr qreal card_height = 80;
       auto frame = createChrome(engine, QStringLiteral("ActivityFrame"), {{QStringLiteral("colors"), application.colors()}, {QStringLiteral("geometry"), geometry}, {QStringLiteral("record"), record}, {QStringLiteral("width"), card_width}, {QStringLiteral("height"), card_height}});

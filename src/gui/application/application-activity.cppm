@@ -10,7 +10,6 @@ import telar.wire.agents;
 
 export namespace telar::gui::application::activity {
 
-  using features::activity::ActivityCard;
   using features::activity::ActivityOrder;
   using features::activity::AgentAnimation;
   using features::activity::AgentCardGeometry;

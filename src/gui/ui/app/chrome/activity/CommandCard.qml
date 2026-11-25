@@ -10,7 +10,7 @@ ActivityFrame {
 
     ChromeText {
         objectName: "commandFacts"
-        x: root.textX
+        x: root.geometry.textInset
         y: root.geometry.context.y
         width: Math.max(0, root.width - x - root.geometry.context.x)
         height: root.geometry.context.height
@@ -21,7 +21,7 @@ ActivityFrame {
 
     ChromeText {
         objectName: "commandTitle"
-        x: root.textX
+        x: root.geometry.textInset
         y: root.geometry.title.y
         width: Math.max(0, root.width - x - root.geometry.title.x)
         height: root.geometry.title.height
@@ -32,7 +32,7 @@ ActivityFrame {
 
     ChromeText {
         objectName: "commandLabel"
-        x: root.textX
+        x: root.geometry.textInset
         y: root.geometry.detail.y
         width: Math.max(0, root.width - x - root.geometry.detail.x)
         height: root.geometry.detail.height

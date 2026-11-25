@@ -74,8 +74,6 @@ namespace telar::gui::qt {
         {QStringLiteral("detail"), toQString(task.command_label)},
         {QStringLiteral("enabled"), context.connected && task.workspace.hasValue()},
         {QStringLiteral("selected"), false},
-        {QStringLiteral("startsProject"), context.starts_project},
-        {QStringLiteral("depth"), static_cast<qulonglong>(context.depth)},
     };
   }
 
@@ -169,8 +167,6 @@ namespace telar::gui::qt {
         {QStringLiteral("ports"), portsLabel(pane.ports())},
         {QStringLiteral("selected"), context.connected && context.selected},
         {QStringLiteral("enabled"), context.connected},
-        {QStringLiteral("startsProject"), false},
-        {QStringLiteral("depth"), qulonglong{0}},
     };
   }
 

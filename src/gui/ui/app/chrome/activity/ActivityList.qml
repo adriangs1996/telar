@@ -31,18 +31,17 @@ ListView {
         id: entry
         required property var record
         required property int index
-        readonly property real groupGap: index === 0 ? 0 : record.header ? Math.max(root.sectionGap, root.geometry.groupGap) : record.startsProject ? root.geometry.groupGap : 0
+        readonly property real gapAbove: index > 0 && record.header ? root.sectionGap : 0
         readonly property real cardHeight: record.header ? root.headerHeight : record.command ? root.geometry.height : root.geometry.agentHeight
-        readonly property real indentation: Math.min(root.geometry.width / 3, (record.depth ?? 0) * root.geometry.taskIndent)
         readonly property bool animate: y + height > root.contentY && y < root.contentY + root.height
 
         width: root.geometry.width
-        height: cardHeight + groupGap
+        height: cardHeight + gapAbove
 
         Rectangle {
             objectName: "activitySectionSeparator"
             x: root.geometry.padding
-            y: Math.round(entry.groupGap / 2)
+            y: Math.round(entry.gapAbove / 2)
             width: Math.max(0, root.geometry.width - 2 * x)
             height: 1 / Screen.devicePixelRatio
             color: Qt.alpha(root.colors.text, ChromeStyle.outlineAlpha)
@@ -50,9 +49,8 @@ ListView {
         }
 
         Loader {
-            x: entry.indentation
-            y: entry.groupGap
-            width: Math.max(0, root.geometry.width - x)
+            y: entry.gapAbove
+            width: root.geometry.width
             height: entry.cardHeight
             sourceComponent: entry.record.header ? sectionHeader : entry.record.command ? commandCard : agentCard
         }

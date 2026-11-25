@@ -1,21 +1,9 @@
-// The kind of card an agent or a task shows, and the mark of the application an agent runs.
+// The mark of the application an agent runs.
 export module telar.gui.features.activity:mark;
 
 import std;
 
 import telar.wire.vocabulary;
-
-// Interface: presentation/activity_card.cppm
-export {
-  namespace telar::gui::features::activity {
-
-    enum class ActivityCard : std::uint8_t {
-      agent,
-      task,
-    };
-
-  }
-}
 
 // Interface: presentation/application_mark.cppm
 export {

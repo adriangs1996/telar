@@ -300,7 +300,7 @@ namespace {
       QTRY_VERIFY_WITH_TIMEOUT(!background.front()->isVisible(), wait_ms);
     }
 
-    Q_SLOT static void projectsKeepTheirOrderBeforeAgentAttention() {
+    Q_SLOT static void attentionOrdersTheInboxAcrossProjects() {
       SystemAllocator system;
       telar::MemoryAdapter adapter{system};
       telar::ConcurrentMemory& memory = adapter;
@@ -316,18 +316,25 @@ namespace {
         agents.atMut(index).location.workspace = first;
       }
 
+      constexpr std::uint32_t older_age = 30;
+
       agents.atMut(1).status = AgentStatus::working;
       agents.atMut(2).status = AgentStatus::blocked;
+      agents.atMut(2).status_age_s = older_age;
       agents.atMut(2).location.workspace = second;
       agents.atMut(3).status = AgentStatus::blocked;
-      const auto plan = AgentOrder::arrange(std::span<const Agent<telar::ConcurrentMemory>>{agents}, workspaces);
+      agents.atMut(3).status_age_s = 5;
+      using Order = ActivityOrder<telar::ConcurrentMemory>;
+      const telar::ds::Array sources{Order::Source{.agents = std::span<const Agent<telar::ConcurrentMemory>>{agents}, .workspaces = workspaces}};
+      Order::Plan plan;
 
+      Order::write(sources, 0, plan);
       QCOMPARE(plan.count, agents.size());
-      const telar::ds::Array<std::size_t, 4> expected{3, 1, 0, 2};
+      // Waiting agents lead whatever their project, the newest first; the unknown one closes.
+      const telar::ds::Array<std::size_t, 4> expected{3, 2, 1, 0};
 
       for (std::size_t index = 0; index < expected.size(); ++index) {
         QCOMPARE(plan.entries[index].agent, expected[index]);
-        QCOMPARE(plan.entries[index].first_in_project, index == 0 || index == expected.size() - 1);
       }
     }
 

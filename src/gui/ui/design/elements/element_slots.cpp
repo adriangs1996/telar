@@ -445,7 +445,6 @@ namespace telar::gui::qt {
         {QStringLiteral("provider"), record.value(QStringLiteral("provider"))},
         {QStringLiteral("status"), statusName(record.value(QStringLiteral("statusCode")))},
         {QStringLiteral("selected"), record.value(QStringLiteral("selected"))},
-        {QStringLiteral("depth"), record.value(QStringLiteral("depth"))},
         {
             QStringLiteral("plan"),
             QVariantMap{

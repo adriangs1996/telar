@@ -1,10 +1,9 @@
-// The order agent and task cards take: by attention, project and age, and as the forest of the
-// agents that started others across the machines a window shows.
+// The order agent and task cards take: one inbox across the machines a window shows, by
+// attention, then by how recently each card changed.
 export module telar.gui.features.activity:order;
 
 import std;
 
-import :mark;
 import telar.tbc;
 import telar.base.memory.allocators;
 import telar.wire.vocabulary;
@@ -18,7 +17,6 @@ export {
 
     struct AgentOrder {
       static constexpr std::size_t maximum_agents = 64;
-      static constexpr std::size_t unknown_project = std::numeric_limits<std::size_t>::max();
 
       enum class Attention : std::uint8_t {
         needs_input,
@@ -28,23 +26,9 @@ export {
         unknown,
       };
 
-      struct Entry {
-        std::size_t agent = 0;
-        ds::Option<std::uint64_t> project = ds::none;
-        ds::Option<std::size_t> creator = ds::none;
-        ActivityCard card = ActivityCard::agent;
-        bool first_in_project = false;
-      };
-
-      // What arrange sorts agents by: attention first, then age and pane.
-      using Priority = std::tuple<Attention, std::uint32_t, std::uint64_t, std::uint64_t>;
-
-      struct Plan {
-        ds::Array<Entry, maximum_agents> entries{};
-        std::size_t count = 0;
-
-        [[nodiscard]] std::span<const Entry> view() const noexcept;
-      };
+      // What agents sort by: attention first, then the newest status change on the window's
+      // clock, then the age the runtime reported, then the pane.
+      using Priority = std::tuple<Attention, std::int64_t, std::uint32_t, std::uint64_t, std::uint64_t>;
 
       [[nodiscard]] static Attention attention(AgentStatus status) noexcept;
 
@@ -57,30 +41,12 @@ export {
 
       template <Allocator Memory>
       [[nodiscard]] static Priority priority(const Agent<Memory>& agent) noexcept;
-
-      template <Allocator Memory>
-      [[nodiscard]] static Plan arrange(std::span<const Agent<Memory>> agents, const WorkspaceReplica<Memory>& workspaces) noexcept;
-
-    private:
-      template <Allocator Memory>
-      [[nodiscard]] static std::size_t projectRank(ds::Option<std::uint64_t> identity, std::span<const Workspace<Memory>> workspaces) noexcept;
-
-      template <Allocator Memory>
-      [[nodiscard]] static ds::Option<std::uint64_t> projectOf(const WorkspaceReplica<Memory>& workspaces, const Agent<Memory>& agent) noexcept;
-
-      template <Allocator Memory>
-      [[nodiscard]] static ds::Option<std::size_t> creatorOf(std::span<const Agent<Memory>> agents, const WorkspaceReplica<Memory>& workspaces, std::span<const Entry> entries, const Entry& entry) noexcept;
-
-      template <Allocator Memory>
-      [[nodiscard]] static bool lessThan(std::span<const Agent<Memory>> agents, const WorkspaceReplica<Memory>& workspaces, const Entry& left, const Entry& right) noexcept;
     };
 
     extern template tbc::val_a<const Worktree<Memory>*> AgentOrder::taskRow<Memory>(tbc::ref_a<WorkspaceReplica<Memory>> workspaces, const Agent<Memory>& agent) noexcept;
     extern template tbc::val_a<const Worktree<ConcurrentMemory>*> AgentOrder::taskRow<ConcurrentMemory>(tbc::ref_a<WorkspaceReplica<ConcurrentMemory>> workspaces, const Agent<ConcurrentMemory>& agent) noexcept;
     extern template AgentOrder::Priority AgentOrder::priority<Memory>(const Agent<Memory>& agent) noexcept;
     extern template AgentOrder::Priority AgentOrder::priority<ConcurrentMemory>(const Agent<ConcurrentMemory>& agent) noexcept;
-    extern template AgentOrder::Plan AgentOrder::arrange<Memory>(std::span<const Agent<Memory>> agents, const WorkspaceReplica<Memory>& workspaces) noexcept;
-    extern template AgentOrder::Plan AgentOrder::arrange<ConcurrentMemory>(std::span<const Agent<ConcurrentMemory>> agents, const WorkspaceReplica<ConcurrentMemory>& workspaces) noexcept;
 
   }
 }
@@ -104,13 +70,11 @@ export {
       struct Entry {
         std::size_t source = 0;
         ds::Option<std::size_t> agent = ds::none;
+        // The task's row: set for an agent in a worktree and for a tracked command.
         ds::Option<std::size_t> worktree = ds::none;
         ds::Option<std::uint64_t> project = ds::none;
-        ActivityCard card = ActivityCard::agent;
-        ds::Option<std::size_t> parent = ds::none;
-        std::size_t depth = 0;
+        // Another card's worktree names this agent as its coordinator or creator.
         bool coordinator = false;
-        bool first_in_project = false;
       };
 
       struct Plan {
@@ -123,42 +87,30 @@ export {
       static void write(std::span<const Source> sources, std::uint8_t active_slot, Plan& output);
 
     private:
-      enum class Visit : std::uint8_t {
-        unseen,
-        visiting,
-        finished,
-      };
+      // What the inbox sorts by: the agent's priority, or a command's attention as the oldest of
+      // its group; then commands after agents, then the source and the card's identity.
+      using Rank = std::tuple<AgentOrder::Attention, std::int64_t, std::uint32_t, bool, std::size_t, std::uint64_t, std::uint64_t>;
 
       explicit ActivityOrder(std::span<const Source> sources, Plan& output);
 
       void collect(std::uint8_t active_slot);
 
+      [[nodiscard]] static ds::Option<std::uint64_t> projectOf(const WorkspaceReplica<Memory>& workspaces, const Agent<Memory>& agent) noexcept;
+
       [[nodiscard]] auto identityAt(std::size_t index) const noexcept;
 
       [[nodiscard]] const Worktree<Memory>* rowOf(const Entry& entry) const noexcept;
 
-      [[nodiscard]] ds::Option<std::size_t> parentOf(std::span<const std::size_t> agents, std::size_t index) const noexcept;
+      [[nodiscard]] ds::Option<std::size_t> coordinatorOf(std::span<const std::size_t> agents, std::size_t index) const noexcept;
 
-      void findParents();
+      void markCoordinators() noexcept;
 
-      void breakChainCycle(std::size_t start, std::span<Visit> visits, std::span<std::size_t> path) noexcept;
+      [[nodiscard]] Rank rank(const Entry& entry) const noexcept;
 
-      void breakCycles() noexcept;
-
-      struct Children {
-        ds::Array<ds::Option<std::size_t>, maximum_entries> first;
-        ds::Array<ds::Option<std::size_t>, maximum_entries> last;
-        ds::Array<ds::Option<std::size_t>, maximum_entries> next;
-      };
-
-      [[nodiscard]] Children linkChildren() noexcept;
-
-      void emitForest() noexcept;
+      void sort() noexcept;
 
       std::span<const Source> sources_;
       Plan& output_;
-      ds::Array<Entry, maximum_entries> nodes_;
-      std::size_t count_ = 0;
     };
 
     extern template class ActivityOrder<Memory>;

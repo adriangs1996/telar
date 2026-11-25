@@ -109,7 +109,7 @@ namespace {
     check(budget.liveBytes() == 0, "workspace replicas must release all injected allocations");
   }
 
-  void activityNestsTasksAndCommands() {
+  void activityListsCardsByAttention() {
     SystemAllocator upstream;
     BudgetAllocator allocator{upstream, std::numeric_limits<std::size_t>::max()};
     telar::MemoryAdapter adapter{allocator};
@@ -122,6 +122,7 @@ namespace {
     tasks.atMut(tasks.size() - 1).worktree = command_worktree_id;
     tasks.atMut(tasks.size() - 1).workspace.reset();
     tasks.atMut(tasks.size() - 1).command_state = CommandState::exited;
+    tasks.atMut(tasks.size() - 1).command_exit = 1;
     tasks.atMut(tasks.size() - 1).command_label = "test";
     check(workspaces.apply({.revision = 1, .entries = projects, .worktrees = tasks}), "activity workspaces must commit");
     ds::Array reports{agentSnapshotEntry(), agentSnapshotEntry()};
@@ -138,12 +139,12 @@ namespace {
 
     Order::write(sources, 0, plan);
     check(allocator.allocations() == allocations, "activity ordering must not allocate");
-    check(plan.count == 3 && plan.entries.front().agent == 0U && plan.entries.front().coordinator, "the root agent must own its task and tracked command");
-    check(plan.entries[1].agent == 1U && plan.entries[1].parent == 0U && plan.entries[1].depth == 1 && plan.entries[1].card == ActivityCard::task, "tasks must be nested under their creator");
-    check(!plan.entries[2].agent && plan.entries[2].worktree == 1U && plan.entries[2].parent == 0U, "an unrepresented tracked command must remain visible under its creator");
+    check(plan.count == 3 && plan.entries[0].agent == 1U && plan.entries[0].worktree == 0U, "a blocked task must lead above the working agent that created it");
+    check(!plan.entries[1].agent && plan.entries[1].worktree == 1U, "a failed tracked command must wait on the person after the waiting agents");
+    check(plan.entries[2].agent == 0U && plan.entries[2].coordinator, "the creator must keep its coordinator mark in its own place");
   }
 
-  void exactReferencesAndCycles() {
+  void exactReferencesMarkCoordinators() {
     telar::testing::TestMemory adapter;
     telar::ConcurrentMemory& memory = adapter;
     WorkspaceReplica workspaces{memory};
@@ -169,11 +170,11 @@ namespace {
     Order::Plan plan;
 
     Order::write(sources, 0, plan);
-    check(plan.count == 2 && !plan.entries[0].parent && plan.entries[1].parent == 0U && plan.entries[1].depth == 1, "cyclic attribution must break only its cyclic edge without losing cards");
+    check(plan.count == 2 && plan.entries[0].coordinator && plan.entries[1].coordinator, "agents that coordinate each other must both keep their cards and their marks");
     tasks.atMut(0).coordinator = coordinatorReference(2, 2);
     check(workspaces.apply({.revision = 2, .entries = projects, .worktrees = tasks}), "stale coordinator references remain representable");
     Order::write(sources, 0, plan);
-    check(!plan.entries[0].parent, "an explicit stale reference must not fall back to a coincident pane id");
+    check(plan.entries[0].coordinator && !plan.entries[1].coordinator, "an explicit stale reference must not fall back to a coincident pane id");
     Agent agent{memory};
 
     agent.final_message.assign("\n \t\n  Final answer\t\nother");
@@ -219,7 +220,44 @@ namespace {
     Order::Plan plan;
 
     Order::write(sources, 0, plan);
-    check(plan.count == 3 && plan.entries[1].source == 2 && plan.entries[1].parent == 0U && plan.entries[2].source == 1, "aliased runtime identities must choose the first exact coordinator without hiding either alias");
+    check(plan.count == 3 && plan.entries[0].source == 0 && plan.entries[1].source == 1 && plan.entries[2].source == 2, "equal attention and age must fall back to the source");
+    check(plan.entries[0].coordinator && !plan.entries[1].coordinator, "aliased runtime identities must choose the first exact coordinator without hiding either alias");
+  }
+
+  void inboxMergesMachinesOnOneClock() {
+    telar::testing::TestMemory adapter;
+    telar::ConcurrentMemory& memory = adapter;
+    WorkspaceReplica workspaces{memory};
+    AgentReplica local{memory};
+    AgentReplica remote{memory};
+    const ds::Array projects{WorkspaceListEntry{.workspace = 1, .name = "project", .path = "/project"}};
+    constexpr std::uint64_t nanoseconds = 1'000'000'000;
+    constexpr std::uint32_t local_age = 10;
+    constexpr std::uint64_t local_sample = 20 * nanoseconds;
+    ds::Array local_reports{agentSnapshotEntry(), agentSnapshotEntry(local_age)};
+
+    local_reports.atMut(0).status = AgentStatus::ready;
+    local_reports.atMut(1).pane_id = 2;
+    local_reports.atMut(1).status = AgentStatus::blocked;
+    ds::Array remote_reports{agentSnapshotEntry()};
+
+    remote_reports.atMut(0).status = AgentStatus::blocked;
+    check(workspaces.apply({.revision = 1, .entries = projects}), "workspaces must commit");
+    // The remote agent blocked when its snapshot arrived, at 0 s; the local one at 20 - 10 = 10 s.
+    check(remote.apply({.revision = 1, .entries = remote_reports}, 0), "remote agents must commit");
+    check(local.apply({.revision = 1, .entries = local_reports}, local_sample), "local agents must commit");
+    using Order = ActivityOrder<telar::ConcurrentMemory>;
+    const ds::Array sources{
+        Order::Source{.slot = 0, .agents = remote.entries(), .workspaces = workspaces},
+        Order::Source{.slot = 1, .agents = local.entries(), .workspaces = workspaces},
+    };
+
+    Order::Plan plan;
+
+    Order::write(sources, 1, plan);
+    check(plan.count == 3, "the active machine keeps every agent and another its waiting one");
+    check(plan.entries[0].source == 1 && plan.entries[0].agent == 1U, "the newest waiting agent must lead whatever the age its snapshot reported");
+    check(plan.entries[1].source == 0 && plan.entries[2].source == 1 && plan.entries[2].agent == 0U, "another machine's waiting agent must come before the active machine's idle one");
   }
 
   void otherMachinesListOnlyAgentsThatWait() {
@@ -295,9 +333,10 @@ namespace {
 
   const telar::testing::Case case_workspace_metadata_and_revisions{"activity.workspace_metadata_and_revisions", workspaceMetadataAndRevisions};
   const telar::testing::Case case_path_pool_and_allocation_failure{"activity.path_pool_and_allocation_failure", pathPoolAndAllocationFailure};
-  const telar::testing::Case case_activity_nests_tasks_and_commands{"activity.activity_nests_tasks_and_commands", activityNestsTasksAndCommands};
-  const telar::testing::Case case_exact_references_and_cycles{"activity.exact_references_and_cycles", exactReferencesAndCycles};
+  const telar::testing::Case case_activity_lists_cards_by_attention{"activity.activity_lists_cards_by_attention", activityListsCardsByAttention};
+  const telar::testing::Case case_exact_references_mark_coordinators{"activity.exact_references_mark_coordinators", exactReferencesMarkCoordinators};
   const telar::testing::Case case_cross_machine_aliases_resolve_deterministically{"activity.cross_machine_aliases_resolve_deterministically", crossMachineAliasesResolveDeterministically};
+  const telar::testing::Case case_inbox_merges_machines_on_one_clock{"activity.inbox_merges_machines_on_one_clock", inboxMergesMachinesOnOneClock};
   const telar::testing::Case case_other_machines_list_only_agents_that_wait{"activity.other_machines_list_only_agents_that_wait", otherMachinesListOnlyAgentsThatWait};
   const telar::testing::Case case_command_navigation_uses_the_current_workspace{"activity.command_navigation_uses_the_current_workspace", commandNavigationUsesTheCurrentWorkspace};
 

@@ -39,7 +39,6 @@ namespace telar::gui::qt {
         {QStringLiteral("textInset"), static_cast<double>(geometry.textInset()) / density},
         // What one design pixel measures beside the chrome text, in logical pixels.
         {QStringLiteral("ratio"), static_cast<double>(geometry.scale) / density},
-        {QStringLiteral("taskIndent"), static_cast<double>(geometry.px(application::activity::AgentCardGeometry::task_indent)) / density},
         {QStringLiteral("badgeSide"), static_cast<double>(geometry.px(application::activity::AgentCardGeometry::badge_side)) / density},
         {QStringLiteral("planBarHeight"), static_cast<double>(geometry.px(application::activity::AgentCardGeometry::plan_bar_height)) / density},
         {QStringLiteral("attentionAlpha"), application::activity::AgentCardGeometry::attention_alpha},
@@ -54,7 +53,6 @@ namespace telar::gui::qt {
         {QStringLiteral("providerSide"), static_cast<double>(geometry.px(application::activity::AgentCardGeometry::mark_side)) / density},
         {QStringLiteral("providerAlpha"), application::activity::AgentCardGeometry::provider_alpha},
         {QStringLiteral("spacing"), static_cast<double>(geometry.px(application::activity::AgentCardGeometry::spacing)) / density},
-        {QStringLiteral("groupGap"), static_cast<double>(geometry.px(application::activity::AgentCardGeometry::group_gap)) / density},
         {QStringLiteral("scrollbarWidth"), static_cast<double>(geometry.px(application::activity::AgentCardGeometry::scrollbar_width)) / density},
     };
   }

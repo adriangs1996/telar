@@ -15,7 +15,6 @@ export {
     struct AgentCardGeometry {
       static constexpr float horizontal_padding = 8;
       static constexpr float vertical_padding = 8;
-      static constexpr float task_indent = 12;
       static constexpr float spacing = 3;
       static constexpr float radius = ChromeStyle::surface_radius;
       static constexpr float gap = 6;
@@ -29,7 +28,6 @@ export {
       // Between an agent card's second row and its third.
       static constexpr float detail_gap = 2;
       static constexpr float total_row_spacing = 6;
-      static constexpr float group_gap = 8;
       static constexpr float scrollbar_width = 3;
       static constexpr float icon_size_ratio = 0.85F;
       static constexpr float provider_alpha = 0.6F;

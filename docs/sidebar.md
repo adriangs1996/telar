@@ -38,9 +38,19 @@ never authorize an answer on the agent's behalf.
 
 One comparator orders agents for every surface: the sidebar list, "next
 agent that needs me" and toast order. Groups from first to last: needs input (`blocked`, `failed`), working,
-ready-unseen (`done`), idle (`ready`), `unknown`. Inside a group the smallest
-`status_age_s` comes first; equal ages fall back to pane id and generation so
-the order is stable across revisions. It is pure and allocation-free.
+ready-unseen (`done`), idle (`ready`), `unknown`. Inside a group the newest
+status change comes first. The window's clock dates it: the age the snapshot
+reported, taken from the moment the window applied that snapshot, so agents of
+machines whose snapshots arrived at different times still compare. Equal
+moments fall back to `status_age_s`, then pane id and generation, so the order
+is stable across revisions. It is pure and allocation-free.
+
+The sidebar is an inbox: one flat list in that order across every machine it
+shows, never grouped by project, machine or coordinator. A task sits where its
+own state puts it, not under the agent that started it; that agent's card
+reads `coordinator`. A tracked command takes the group of its state (running
+is working, a failure needs input, a success is done) and follows the agents
+of that group. Equal cards fall back to the machine's slot.
 
 `agent_snapshot.applyAgentSnapshot` is the protocol adapter. It maps borrowed
 wire entries to `AgentInput` values. The model's `agent_snapshot.reconcile`
@@ -287,9 +297,8 @@ they are written for a 14-pixel font and grow with `font.size` and
 title. The sidebar margin follows the same ratio.
 
 Every card keeps its mark in a 24-pixel column and starts its title and its
-detail row after it, so the text of machine rows, agents and processes shares
-one left edge. A command one level under an agent leads with its status glyph
-in a column that ends on that same edge.
+detail row after it, so the text of machine rows, agents, commands and
+processes shares one left edge.
 
 Every agent card has the same three rows, whether the agent runs in a worktree
 or not, focused or not; the state changes what the rows say, never the card's
@@ -320,8 +329,9 @@ when it reads like the title. When the row runs short the commits ahead give
 way first, then the branch, the files and the command's outcome, while the
 machine and the diff stay. A plan's progress is a thin line under the rows. A
 blocked or failed agent tints its card in its state's color. The header reads
-`agents`. One array of at most 64 replica indices is sorted by
-`agent_attention.lessThan` when snapshot identity changes, never per frame.
+`agents`. The list is sorted by `ActivityOrder` when a machine's agents,
+workspaces or panes advance their revision, or the active machine, tab or pane
+changes, never per frame.
 
 The top-right state reads `Working`, `Approval`, `Question`, `Review plan`,
 `Needs input`, `Done`, `Failed` or `Unknown`, followed by how long the agent

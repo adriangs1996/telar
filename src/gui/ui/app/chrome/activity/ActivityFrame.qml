@@ -17,10 +17,6 @@ Item {
     readonly property bool hovered: enabled && (heldHover || (!semanticHover && pointer.containsMouse))
     readonly property real outlinePhysicalWidth: 1
     readonly property real density: Screen.devicePixelRatio
-    // A nested card's status glyph has this column, wide enough that a card one level under an
-    // agent starts its text where the agent's card does.
-    readonly property real glyphColumn: Math.max(geometry.projectSide, geometry.markColumn - geometry.taskIndent)
-    readonly property real textX: geometry.context.x + glyphColumn + geometry.gap
     default property alias content: cardContent.data
     signal selected(string key)
     signal peekRequested(string key)
@@ -60,15 +56,6 @@ Item {
         borderColor: role.length > 0 ? root.colors[role] : "transparent"
         borderAlpha: root.geometry.attentionOutlineAlpha
         visible: role.length > 0
-    }
-
-    Rectangle {
-        objectName: "activityTreeGuide"
-        x: -root.geometry.taskIndent / 2
-        width: root.outlinePhysicalWidth / root.density
-        height: root.height
-        color: root.colors.surface1
-        visible: (root.record.depth ?? 0) > 0
     }
 
     // Above the card's pointer area: a mod element with its own click takes it first,

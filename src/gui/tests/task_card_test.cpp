@@ -218,7 +218,7 @@ namespace {
       task.command_label.assign("test");
       QQuickWindow window;
       QQmlEngine engine;
-      auto record = taskRecord(agent, task, {.machine = "host", .branch = {}, .selected = true, .depth = 1});
+      auto record = taskRecord(agent, task, {.machine = "host", .branch = {}, .selected = true});
       auto card = createChrome(engine, QStringLiteral("AgentCard"), properties(record));
 
       card->setParentItem(window.contentItem());
@@ -240,7 +240,6 @@ namespace {
       const auto* bar = visualItems(*card, QStringLiteral("agentPlanBar")).front();
 
       QCOMPARE(visualItems(*card, QStringLiteral("agentPlanProgress")).front()->width(), bar->width() / 2);
-      QVERIFY(visualItems(*card, QStringLiteral("activityTreeGuide")).front()->isVisible());
       const auto selection = card->metaObject()->method(card->metaObject()->indexOfSignal("selected(QString)"));
       const QSignalSpy selected{card.get(), selection};
       constexpr QPoint title_point{200, 34};
@@ -255,7 +254,6 @@ namespace {
       QTRY_COMPARE_WITH_TIMEOUT(text(*card, QStringLiteral("agentSignal")), QStringLiteral("Final answer"), wait_ms);
       QVERIFY(!visualItems(*card, QStringLiteral("agentPlanBar")).front()->isVisible());
       QVERIFY(!visualItems(*card, QStringLiteral("agentPlanCount")).front()->isVisible());
-      QVERIFY(!visualItems(*card, QStringLiteral("activityTreeGuide")).front()->isVisible());
       task.title.clear();
       record = taskRecord(agent, task, {.machine = {}, .branch = {}});
       // A task named after its branch does not repeat it.
@@ -431,7 +429,7 @@ namespace {
       QList<QVariantMap> records;
 
       for (const auto& entry : plan.view()) {
-        const AgentRecordContext context{.machine = "host", .branch = {}, .coordinator = entry.coordinator, .starts_project = entry.first_in_project, .depth = entry.depth};
+        const AgentRecordContext context{.machine = "host", .branch = {}, .coordinator = entry.coordinator};
 
         if (entry.agent) {
           const auto& agent = agents.entries()[*entry.agent];
@@ -467,7 +465,8 @@ namespace {
       auto* const task = *found;
 
       QCOMPARE(task->height(), geometry.value(QStringLiteral("agentHeight")).toReal());
-      QCOMPARE(task->mapToItem(list.get(), QPointF{}).x(), geometry.value(QStringLiteral("taskIndent")).toReal());
+      // The inbox is flat: a task starts on the agents' edge.
+      QCOMPARE(task->mapToItem(list.get(), QPointF{}).x(), 0.0);
       const auto* title = visualItems(*task, QStringLiteral("agentTitleLabel")).front();
 
       QVERIFY(title->width() < task->width());

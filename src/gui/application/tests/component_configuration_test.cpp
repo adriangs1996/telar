@@ -461,7 +461,7 @@ return {api_version = 2, client = {
     constexpr telar::ds::Array samples{
         Sample{features::components::Slot::tab, R"({"index":1,"key":"4","title":"nvim","label":"nvim","path":"~/src","application":"nvim","selected":true,"attention":true,"panes":[{"key":"1","program":"nvim","focused":false,"attention":true},{"key":"2","program":"git","focused":true,"attention":false}]})"},
         Sample{features::components::Slot::pane_header, R"({"id":"2","index":1,"program":"claude","context":"~/src","focused":true,"fullscreen":false,"images_paused":false,"needs_attention":false,"progress":""})"},
-        Sample{features::components::Slot::agent_card, R"({"key":"a","title":"Fix","project":"telar","detail":"","provider":"Claude","status":"working","selected":false,"depth":0,"plan":{"done":1,"total":3,"step":"Test"}})"},
+        Sample{features::components::Slot::agent_card, R"({"key":"a","title":"Fix","project":"telar","detail":"","provider":"Claude","status":"working","selected":false,"plan":{"done":1,"total":3,"step":"Test"}})"},
         Sample{features::components::Slot::top_bar, R"({"workspace":"telar","machine":"laptop","tab_count":2,"sidebar_visible":true})"},
         Sample{features::components::Slot::bottom_bar, R"({"workspace":"telar","machine":"laptop","tab_count":2,"sidebar_visible":true})"},
     };

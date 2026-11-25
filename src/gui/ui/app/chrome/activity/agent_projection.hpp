@@ -46,8 +46,6 @@ namespace telar::gui::qt {
     bool selected = false;
     bool connected = true;
     bool coordinator = false;
-    bool starts_project = false;
-    std::size_t depth = 0;
   };
 
   template <Allocator Memory>
@@ -100,8 +98,6 @@ namespace telar::gui::qt {
         {QStringLiteral("ink"), toQString(tile.ink)},
         {QStringLiteral("selected"), context.connected && context.selected},
         {QStringLiteral("enabled"), context.connected},
-        {QStringLiteral("startsProject"), context.starts_project},
-        {QStringLiteral("depth"), static_cast<qulonglong>(context.depth)},
         {QStringLiteral("planStep"), toQString(agent.plan_step)},
         {QStringLiteral("planDone"), agent.plan_done},
         {QStringLiteral("planTotal"), agent.plan_total},
