@@ -10,8 +10,8 @@ Commands:
 Files per agent, under the agent's own directory ($CLAUDE_CONFIG_DIR, $CODEX_HOME,
 $PI_CODING_AGENT_DIR, $XDG_CONFIG_HOME/opencode; Cursor always under ~):
   claude    ~/.claude/settings.json hooks (SessionStart, UserPromptSubmit, PreToolUse,
-            PostToolUse, Stop, Notification, SessionEnd, CwdChanged, WorktreeCreate,
-            WorktreeRemove)
+            PermissionRequest, PostToolUse, Stop, StopFailure, Notification, SessionEnd,
+            CwdChanged, WorktreeCreate, WorktreeRemove)
   codex     ~/.codex/hooks.json hooks; Codex must run with --no-daemon to be in a pane
   cursor    ~/.cursor/hooks.json hooks
   pi        ~/.pi/agent/extensions/telar.ts, an extension

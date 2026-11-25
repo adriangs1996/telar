@@ -237,10 +237,8 @@ namespace {
     agents.refresh(model, panes, clients, layouts, now + std::chrono::seconds{5});
     agents.refresh(model, panes, clients, layouts, now + std::chrono::milliseconds{5600});
     agents.query(model, reporter.session());
-    check(reporter.receive<AgentSnapshot>().entries[0].status == AgentStatus::done);
-    agents.acknowledge(AcknowledgeAgent{pane.core.id, pane.core.generation});
-    agents.query(model, reporter.session());
-    check(reporter.receive<AgentSnapshot>().entries[0].status == AgentStatus::ready);
+    // The turn telar stopped is idle, with no result to read.
+    check(reporter.receive<AgentSnapshot>().entries[0].status == AgentStatus::ready, "a turn telar interrupted reads as done");
     inspector.active = AgentProvider::codex;
     ++inspector.current.started_seconds;
     agents.observeProcess(pane.core, inspector.current, inspector.active);

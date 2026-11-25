@@ -49,6 +49,38 @@ namespace telar::runtime::cli::hooks {
       }
     }
 
+    // A permission Claude asks for blocks it until the user answers; a question or a plan keeps its own reason.
+    void claudePermission(tbc::ref_a<Payload> input, tbc::mut_a<FixedText<display_line_bytes>> event, ReportAgent& report) {
+      const auto tool = input.fields().text("tool_name");
+
+      toolEvent(event, input);
+      report.state = AgentReportState::blocked;
+      report.blocked_reason = AgentBlockedReason::permission;
+      if (tool == "AskUserQuestion") {
+        report.blocked_reason = AgentBlockedReason::question;
+        questionEvent(event, input);
+      } else if (tool == "ExitPlanMode") {
+        report.blocked_reason = AgentBlockedReason::plan;
+      }
+    }
+
+    // A turn that ended on an API error, named by Claude's error and its details when they are text.
+    void claudeFailure(tbc::ref_a<Payload> input, tbc::mut_a<FixedText<display_line_bytes>> event, ReportAgent& report) {
+      report.state = AgentReportState::failed;
+      std::string_view details;
+
+      try {
+        details = input.fields().text("error_details");
+      } catch (const std::exception&) { // NOLINT(bugprone-empty-catch): details that are not text leave the error alone
+      }
+
+      ds::Array<char, display_line_bytes> buffer{};
+      const auto error = input.fields().text("error");
+      const auto written = details.empty() ? std::format_to_n(buffer.dataMut(), static_cast<std::ptrdiff_t>(buffer.size()), "{}", error.empty() ? "unknown error" : error) : std::format_to_n(buffer.dataMut(), static_cast<std::ptrdiff_t>(buffer.size()), "{}: {}", error.empty() ? "error" : error, details);
+
+      eventLine(event, {buffer.data(), std::min(static_cast<std::size_t>(written.size), buffer.size())});
+    }
+
     // Whether the notification is one of Claude's states: idle, or blocked on the user.
     bool claudeNotification(tbc::ref_a<Payload> input, tbc::mut_a<FixedText<display_line_bytes>> event, ReportAgent& report) {
       const auto notification = input.fields().text("notification_type");
@@ -76,7 +108,7 @@ namespace telar::runtime::cli::hooks {
 
       auto path = input.fields().text("transcript_path");
       const auto session = input.session();
-      if (name == "SubagentStop" && input.runningSubagents() == 0 && !session.empty() && path.ends_with(".jsonl")) {
+      if (name == "SubagentStop" && input.backgroundWork() == 0 && !session.empty() && path.ends_with(".jsonl")) {
         path.remove_suffix(sizeof(".jsonl") - 1);
         if (path.ends_with(session) && path.substr(0, path.size() - session.size()).ends_with('-')) {
           return ReportAgent{.state = AgentReportState::released};
@@ -88,15 +120,44 @@ namespace telar::runtime::cli::hooks {
 
   }
 
+  namespace {
+
+    // A subagent's tool calls keep its session working, and a decision it waits for shows in the
+    // session's pane, so it blocks the session.
+    tbc::val_a<ds::Option<ReportAgent>> claudeSubagent(tbc::ref_a<Payload> input, tbc::mut_a<FixedText<display_line_bytes>> event) {
+      const auto name = input.event();
+      if (name == "PreToolUse" || name == "PostToolUse") {
+        return ReportAgent{.state = AgentReportState::continuing};
+      }
+
+      ReportAgent report;
+
+      if (name == "PermissionRequest") {
+        claudePermission(input, event, report);
+      } else if (name != "Notification" || !claudeNotification(input, event, report) || report.state != AgentReportState::blocked) {
+        return ds::none;
+      }
+
+      report.event = event.view();
+      return report;
+    }
+
+  }
+
   tbc::val_a<ds::Option<ReportAgent>> claudeLifecycle(tbc::ref_a<Payload> input, tbc::mut_a<FixedText<display_line_bytes>> event) {
     const auto name = input.event();
 
     if (input.subagent()) {
-      return name == "PreToolUse" || name == "PostToolUse" ? ds::Option{ReportAgent{.state = AgentReportState::continuing}} : ds::none;
+      return claudeSubagent(input, event);
     }
 
     const auto file = input.fields().text("transcript_path");
     ReportAgent report{.session = sessionReference(input.session()), .session_file = file.size() <= session_file_bytes ? file : ""};
+
+    if (name == "SessionStart" && input.fields().text("source") == "compact") {
+      // Compaction keeps the turn it ran in: it renews a working one and leaves an idle one alone.
+      return ReportAgent{.state = AgentReportState::continuing};
+    }
 
     if (name == "SessionStart") {
       report.state = AgentReportState::ready;
@@ -104,13 +165,17 @@ namespace telar::runtime::cli::hooks {
       report.state = AgentReportState::working;
     } else if (name == "PreToolUse" || name == "PostToolUse") {
       claudeToolUse(input, event, report);
+    } else if (name == "PermissionRequest") {
+      claudePermission(input, event, report);
     } else if (name == "Stop") {
-      report.state = input.runningSubagents() == 0 ? AgentReportState::ready : AgentReportState::waiting;
-      if (input.runningSubagents() == 0) {
+      report.state = input.backgroundWork() == 0 ? AgentReportState::ready : AgentReportState::waiting;
+      if (input.backgroundWork() == 0) {
         eventLine(event, input.fields().text("last_assistant_message"));
       } else {
-        backgroundEvent(event, input.runningSubagents());
+        backgroundEvent(event, input.backgroundWork(), "task");
       }
+    } else if (name == "StopFailure") {
+      claudeFailure(input, event, report);
     } else if (name == "SessionEnd") {
       report.state = AgentReportState::exited;
       report.session = {};
@@ -135,9 +200,9 @@ namespace telar::runtime::cli::hooks {
 
     ReportAgent report{.session = sessionReference(input.session()), .session_file = database.size() <= session_file_bytes ? database : "", .session_file_kind = AgentSessionFileKind::codex_state};
 
-    if ((name == "Stop" || name == "Interrupt") && input.runningSubagents() != 0) {
+    if ((name == "Stop" || name == "Interrupt") && input.backgroundWork() != 0) {
       report.state = AgentReportState::waiting;
-      backgroundEvent(event, input.runningSubagents());
+      backgroundEvent(event, input.backgroundWork(), "agent");
     } else if (name == "SessionStart") {
       report.state = input.fields().text("source") == "compact" ? AgentReportState::working : AgentReportState::ready;
     } else if (name == "UserPromptSubmit") {
@@ -149,7 +214,7 @@ namespace telar::runtime::cli::hooks {
     } else if (name == "Stop") {
       report.state = AgentReportState::settling;
     } else if (name == "Interrupt") {
-      report.state = AgentReportState::ready;
+      report.state = AgentReportState::interrupted;
     } else if (name == "SessionEnd") {
       report.state = AgentReportState::exited;
       report.session = {};
@@ -232,7 +297,23 @@ namespace telar::runtime::cli::hooks {
     const auto name = input.event();
     ReportAgent report{.session = sessionReference(input.session()), .session_file = metadata.size() <= session_file_bytes ? metadata : "", .session_file_kind = AgentSessionFileKind::cursor_meta};
 
-    if (name == "sessionStart" || name == "stop") {
+    if (name == "stop") {
+      // A loop the user aborted is idle with nothing new to read; one that errored failed.
+      std::string_view status;
+
+      try {
+        status = input.fields().text("status");
+      } catch (const std::exception&) { // NOLINT(bugprone-empty-catch): a status that is not text reads as a completed loop
+      }
+
+      report.state = AgentReportState::ready;
+      if (status == "error") {
+        report.state = AgentReportState::failed;
+        eventLine(event, "the agent loop stopped on an error");
+      } else if (status == "aborted") {
+        report.state = AgentReportState::interrupted;
+      }
+    } else if (name == "sessionStart") {
       report.state = AgentReportState::ready;
     } else if (name == "beforeSubmitPrompt") {
       report.state = AgentReportState::working;
@@ -411,7 +492,7 @@ namespace telar::runtime::cli::hooks {
         CodexSubagents children;
 
         children.read(input.fields().text("transcript_path"));
-        input.setRunningSubagents(children.countExcept(input.fields().optionalText("agent_id").valueOr("")));
+        input.setBackgroundWork(children.countExcept(input.fields().optionalText("agent_id").valueOr("")));
       }
 
       const auto database = files.codex(environment);

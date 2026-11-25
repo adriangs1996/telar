@@ -7,6 +7,7 @@ import telar.config.runtime;
 import telar.runtime.history.event;
 import telar.runtime.agents.observation.processor;
 import telar.runtime.host.process_probe;
+import telar.runtime.terminal.text_reader;
 import telar.sys.process;
 import telar.wire.vocabulary;
 
@@ -147,8 +148,43 @@ namespace {
     }
   }
 
+  // Bytes the observer has no room for reset its screen: drawn again from the pane's, an agent
+  // that redraws only what changes still reads right.
+  void testResyncKeepsTheScreen() {
+    telar::testing::TestMemory adapter;
+    ConcurrentMemory& memory = adapter;
+    const TerminalSize size{100, 32, 8, 16};
+    Terminal pane{memory, size};
+    // Codex's approval, read from its footer alone: the title outlives a reset.
+    constexpr std::string_view approval = "\x1b[28;1H\xe2\x80\xba 1. Yes, proceed (y)\x1b[32;3HPress enter to confirm or esc to cancel\x1b[?25l";
+    // What Codex draws next: one cell, nothing else.
+    constexpr std::string_view update = "\x1b[1;1H ";
+
+    pane.feed(bytes(approval));
+    pane.feed(bytes(update));
+    for (const bool resync : {false, true}) {
+      PaneObserver observer{memory, size};
+
+      observer.bytes(ObservationKind::output, bytes(approval), false);
+      check(observer.seal());
+      check(observer.observe(builtinManifests(), AgentProvider::codex).signal->status == AgentStatus::blocked);
+      observer.complete();
+
+      const auto room = observer.resyncRoom(update.size());
+
+      observer.resynced(resync ? pane.drawScreen(room).size() : 0);
+      observer.bytes(ObservationKind::output, bytes(update), false);
+      check(observer.seal());
+      const auto signal = observer.observe(builtinManifests(), AgentProvider::codex).signal;
+
+      observer.complete();
+      check((signal && signal->status == AgentStatus::blocked) == resync, resync ? "a resynced observer loses the approval on screen" : "an observer reset without a picture still reads the screen");
+    }
+  }
+
   const telar::testing::Case case_injected_submission_authored_by_agent{"observation.injected_submission_authored_by_agent", testInjectedSubmissionAuthoredByAgent};
   const telar::testing::Case case_configure_history_enables_output_capture{"observation.configure_history_enables_output_capture", testConfigureHistoryEnablesOutputCapture};
   const telar::testing::Case case_processor_routes_process_results_by_pane{"observation.processor_routes_process_results_by_pane", testProcessorRoutesProcessResultsByPane};
+  const telar::testing::Case case_resync_keeps_the_screen{"observation.resync_keeps_the_screen", testResyncKeepsTheScreen};
 
 }

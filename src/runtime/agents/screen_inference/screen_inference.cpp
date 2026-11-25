@@ -27,6 +27,11 @@ namespace telar::runtime {
     constexpr std::uint32_t box_horizontal = 0x2500;
     constexpr std::uint32_t braille_first = 0x2800;
     constexpr std::uint32_t braille_last = 0x28ff;
+    constexpr std::uint32_t ellipsis = 0x2026;
+    // The quarter circles Claude Code spins in its title while a turn runs: U+25D0 to U+25D3.
+    constexpr ds::Array<std::string_view, 4> claude_title_spinners{"\u25d0", "\u25d1", "\u25d2", "\u25d3"};
+    // The glyphs Claude Code's status line starts with while a turn runs.
+    constexpr ds::Array<std::uint32_t, 7> claude_spinners{'*', 0x00b7, 0x2722, 0x2733, 0x2736, 0x273b, 0x273d};
 
     unsigned sequenceLength(Byte first) noexcept {
       if (first < single_end) {
@@ -57,6 +62,43 @@ namespace telar::runtime {
       }
 
       return column;
+    }
+
+    // Claude Code's status line of a running turn, "✶ Processing… (4s · ↓ 103 tokens)": a spinner,
+    // a word and an ellipsis before the turn's clock. The line a turn ends with has no ellipsis.
+    bool claudeStatusLine(std::span<const ScreenCell> cells) noexcept {
+      const auto start = firstVisible(cells);
+      if (start == cells.size() || !std::ranges::contains(claude_spinners, cellCodepoint(cells[start]))) {
+        return false;
+      }
+
+      for (auto column = start + 1; column + 2 < cells.size(); ++column) {
+        if (cellCodepoint(cells[column]) == ellipsis && cellCodepoint(cells[column + 1]) == ' ' && cellCodepoint(cells[column + 2]) == '(') {
+          return true;
+        }
+      }
+
+      return false;
+    }
+
+    bool claudeTitleSpins(std::string_view title) noexcept {
+      return std::ranges::any_of(claude_title_spinners, [&](std::string_view spinner) {
+        return title.starts_with(spinner);
+      });
+    }
+
+    // How many of the screen's last rows with text the phrases of a known provider read. Claude
+    // and Codex draw their dialogs' footers and their status lines there; the rows above them are
+    // the conversation, which may quote any phrase. Cursor's questions sit above its composer.
+    std::size_t phraseRows(AgentProvider provider) noexcept {
+      constexpr std::size_t claude_rows = 4;
+      constexpr std::size_t cursor_rows = 12;
+
+      if (provider == AgentProvider::claude || provider == AgentProvider::codex) {
+        return claude_rows;
+      }
+
+      return provider == AgentProvider::cursor ? cursor_rows : std::numeric_limits<std::size_t>::max();
     }
 
     // A draft Claude restored shows at full intensity; its placeholder is faint.
@@ -256,7 +298,7 @@ namespace telar::runtime {
     constexpr Byte claude_confidence = 96;
     constexpr Byte screen_confidence = 94;
     const auto observation = observe(provider);
-    if (!observation.status || (provider == AgentProvider::claude && observation.status == AgentStatus::working)) {
+    if (!observation.status) {
       return ds::none;
     }
 
@@ -291,8 +333,18 @@ namespace telar::runtime {
   AgentScreenObservation AgentScreenReader::claude() const noexcept {
     constexpr unsigned prompt_rows = 12;
 
-    if (title_.starts_with("◐") || title_.starts_with("◑")) {
+    if (claudeTitleSpins(title_)) {
       return {.status = AgentStatus::working};
+    }
+
+    // The composer stays on screen, with the cursor in it, while a turn runs: the status line above
+    // it, and above the turn's task list, tells a running turn from an idle one.
+    constexpr unsigned status_rows = 24;
+
+    for (std::size_t screen_row = screen_.rows; screen_row-- > screen_.rows - std::min<unsigned>(screen_.rows, status_rows);) {
+      if (claudeStatusLine(rowCells(screen_row))) {
+        return {.status = AgentStatus::working};
+      }
     }
 
     AgentScreenObservation result;
@@ -330,8 +382,10 @@ namespace telar::runtime {
   }
 
   bool AgentScreenReader::cursorAtClaudePrompt() const noexcept {
-    // How many cells left of the cursor the prompt may sit.
+    // How many blank cells may separate the cursor from the prompt or the draft before it.
     constexpr unsigned prompt_reach = 8;
+    // How many rows a draft may wrap over below the prompt.
+    constexpr unsigned draft_rows = 6;
 
     if (!screen_.cursor.visible || screen_.cursor.y >= screen_.rows) {
       return false;
@@ -339,11 +393,31 @@ namespace telar::runtime {
 
     const auto cells = rowCells(screen_.cursor.y);
     std::size_t column = std::min<std::size_t>(static_cast<std::size_t>(screen_.cursor.x) + 1, cells.size());
+    unsigned blanks = 0;
 
-    for (unsigned distance = 0; column != 0 && distance < prompt_reach; ++distance) {
+    // Left of the cursor: blanks, then the draft typed into the prompt, if any, then the prompt.
+    while (column != 0) {
       const auto codepoint = cellCodepoint(cells[--column]);
-      if (!blank(codepoint)) {
-        return codepoint == claude_prompt;
+      if (codepoint == claude_prompt && column == firstVisible(cells)) {
+        return true;
+      }
+
+      blanks = blank(codepoint) ? blanks + 1 : 0;
+      if (blanks == prompt_reach) {
+        return false;
+      }
+    }
+
+    // A draft that wraps: the cursor is on a later row of it, below the prompt's row.
+    for (std::size_t row = screen_.cursor.y, rows = 0; row-- != 0 && rows < draft_rows; ++rows) {
+      const auto above = rowCells(row);
+      const auto first = firstVisible(above);
+      if (first == above.size() || cellCodepoint(above[first]) == box_horizontal) {
+        return false;
+      }
+
+      if (cellCodepoint(above[first]) == claude_prompt) {
+        return true;
       }
     }
 
@@ -370,11 +444,36 @@ namespace telar::runtime {
     return digits != 0 && digits != std::string_view::npos && (clock[digits] == 's' || clock[digits] == 'm' || clock[digits] == 'h');
   }
 
+  bool AgentScreenReader::codexApproval(const AgentManifest& manifest) const noexcept {
+    // An approval Codex waits for: its title asks for action, and its footer names the keys.
+    if (title_.contains("Action Required")) {
+      return true;
+    }
+
+    for (std::size_t screen_row = screen_.rows, seen = 0; screen_row-- != 0 && seen < phraseRows(AgentProvider::codex);) {
+      const auto line = row(screen_row);
+      if (line.first == 0) {
+        continue;
+      }
+
+      ++seen;
+      if (manifest.blocked.matches(line.text())) {
+        return true;
+      }
+    }
+
+    return false;
+  }
+
   AgentScreenObservation AgentScreenReader::codex() const noexcept {
     constexpr unsigned composer_rows = 32;
     const auto* manifest = manifests_.find(AgentProvider::codex);
     if (manifest == nullptr) {
       return {};
+    }
+
+    if (codexApproval(*manifest)) {
+      return {.status = AgentStatus::blocked};
     }
 
     const auto first = screen_.rows - std::min<unsigned>(screen_.rows, composer_rows);
@@ -451,14 +550,20 @@ namespace telar::runtime {
     return provider == AgentProvider::claude || provider == AgentProvider::codex || provider == AgentProvider::cursor;
   }
 
-  std::string_view AgentScreenSample::capture(AgentScreenView screen) noexcept {
+  std::string_view AgentScreenSample::capture(AgentScreenView screen, std::size_t row_limit) noexcept {
     start_ = bytes_.size();
-    for (std::size_t row = screen.rows; row-- != 0;) {
+    std::size_t taken = 0;
+
+    for (std::size_t row = screen.rows; row-- != 0 && taken < row_limit;) {
+      const auto cells = trimmedCells(screen.cells.subspan(row * screen.cols, screen.cols));
+      if (cells.empty()) {
+        continue;
+      }
+
+      ++taken;
       if (start_ != bytes_.size() && (screen.row_flags[row] & static_cast<Byte>(RowFlag::wrap)) == 0 && !prepend(" ")) {
         break;
       }
-
-      const auto cells = trimmedCells(screen.cells.subspan(row * screen.cols, screen.cols));
 
       for (std::size_t column = cells.size(); column-- != 0;) {
         if (!prepend(cellText(cells[column]))) {
@@ -484,7 +589,7 @@ namespace telar::runtime {
     return textAfter({bytes_.data(), bytes_.size()}, start_);
   }
 
-  ds::Option<AgentSignal> AgentScreenInference::observe(Terminal& terminal, const AgentManifests& manifests, AgentProvider provider, ObservationTime now) {
+  ds::Option<AgentSignal> AgentScreenInference::observe(Terminal& terminal, const AgentManifests& manifests, AgentProvider provider) {
     if (!terminal.outputSettled()) {
       return ds::none;
     }
@@ -493,58 +598,78 @@ namespace telar::runtime {
 
     const auto screen = agentScreenView(terminal.screen());
 
-    return infer(AgentScreenReader{screen, terminal.effects().title(), manifests}, screen, manifests, provider, now);
+    return infer(AgentScreenReader{screen, terminal.effects().title(), manifests}, screen, manifests, provider);
   }
 
-  ds::Option<AgentSignal> AgentScreenInference::infer(const AgentScreenReader& reader, AgentScreenView screen, const AgentManifests& manifests, AgentProvider provider, ObservationTime now) {
+  ds::Option<AgentSignal> AgentScreenInference::infer(const AgentScreenReader& reader, AgentScreenView screen, const AgentManifests& manifests, AgentProvider provider) {
     const auto signal = screenSignal(reader, screen, manifests, provider);
     if (composerLost(signal)) {
       return ds::none;
     }
 
+    // The screen no longer shows what it last did: said once, so the agent stops trusting it.
     if (!signal) {
-      last_signal_.reset();
-      return ds::none;
+      if (!last_signal_ || last_signal_->status == AgentStatus::unknown) {
+        return ds::none;
+      }
+
+      last_signal_ = AgentSignal{.provider = last_signal_->provider, .status = AgentStatus::unknown};
+      return last_signal_;
     }
 
-    if (signal == last_signal_ && (signal->provider != AgentProvider::codex || !signal->ready_confirmed) && now.milliseconds - last_signal_time_ < signal_refresh.count()) {
+    // What the screen still shows is said once. Codex's idle composer is said again, for the report
+    // of a turn that settles after it.
+    if (signal == last_signal_ && (signal->provider != AgentProvider::codex || !signal->ready_confirmed)) {
       return ds::none;
     }
 
     last_signal_ = signal;
-    last_signal_time_ = now.milliseconds;
     return last_signal_;
   }
 
   ds::Option<AgentSignal> AgentScreenInference::screenSignal(const AgentScreenReader& reader, AgentScreenView screen, const AgentManifests& manifests, AgentProvider provider) {
-    const auto phrases = provider == AgentProvider::codex ? ds::none : manifests.detect(sample_.capture(screen));
-    const auto codex = provider == AgentProvider::unknown || provider == AgentProvider::codex ? reader.signal(AgentProvider::codex) : ds::none;
+    if (provider == AgentProvider::codex) {
+      return reader.signal(AgentProvider::codex);
+    }
 
-    auto signal = phrases;
+    // A known agent's own phrases, where it draws them; an unknown one's, of any manifest, anywhere.
+    const auto phrases = manifests.detect(sample_.capture(screen, phraseRows(provider)), provider);
 
-    if (provider == AgentProvider::codex || (provider == AgentProvider::unknown && codex && codex->identity_confirmed)) {
-      signal = codex;
-    } else if (provider == AgentProvider::unknown && phrases && phrases->provider == AgentProvider::codex) {
-      signal.reset();
-    } else if (provider == AgentProvider::cursor) {
-      if (!phrases || phrases->status != AgentStatus::blocked) {
-        signal = reader.signal(AgentProvider::cursor);
+    if (provider == AgentProvider::unknown) {
+      if (const auto codex = reader.signal(AgentProvider::codex); codex && codex->identity_confirmed) {
+        return ds::Option{*codex};
       }
-    } else {
-      const auto* manifest = phrases ? manifests.find(phrases->provider) : nullptr;
-      if (!phrases || (phrases->status != AgentStatus::blocked && (manifest == nullptr || manifest->ready_prompt.entries().empty()))) {
-        if (auto prompt = reader.signal(AgentProvider::claude)) {
-          prompt.getMut().identity_confirmed = phrases && phrases->provider == prompt->provider && phrases->identity_confirmed;
-          signal = prompt;
-        }
+
+      if (phrases && phrases->provider == AgentProvider::codex) {
+        return ds::none;
       }
     }
 
-    return signal;
+    if (phrases && phrases->status == AgentStatus::blocked) {
+      return ds::Option{*phrases};
+    }
+
+    if (provider == AgentProvider::cursor) {
+      return reader.signal(AgentProvider::cursor);
+    }
+
+    const auto* manifest = phrases ? manifests.find(phrases->provider) : nullptr;
+    const bool own_prompt = manifest != nullptr && !manifest->ready_prompt.entries().empty();
+    if ((provider == AgentProvider::claude || provider == AgentProvider::unknown) && !own_prompt) {
+      if (const auto prompt = reader.signal(AgentProvider::claude)) {
+        auto signal = *prompt;
+
+        signal.identity_confirmed = phrases && phrases->provider == signal.provider && phrases->identity_confirmed;
+        return ds::Option{signal};
+      }
+    }
+
+    return phrases ? ds::Option{*phrases} : ds::none;
   }
 
   bool AgentScreenInference::composerLost(const ds::Option<AgentSignal>& signal) noexcept {
-    if (!signal || (signal->provider != AgentProvider::codex && signal->provider != AgentProvider::cursor)) {
+    // A question on screen is the user's to answer whatever came before it.
+    if (!signal || (signal->provider != AgentProvider::codex && signal->provider != AgentProvider::cursor) || signal->status == AgentStatus::blocked) {
       return false;
     }
 
@@ -555,10 +680,9 @@ namespace telar::runtime {
     return composer_lost_;
   }
 
-  void AgentScreenInference::reset() noexcept {
+  void AgentScreenInference::reset(bool lost_screen) noexcept {
     last_signal_.reset();
-    last_signal_time_ = 0;
-    composer_lost_ = true;
+    composer_lost_ = lost_screen;
   }
 
 }

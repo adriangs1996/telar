@@ -7,6 +7,7 @@ namespace telar::runtime {
     byte_count = 0;
     event_count = 0;
     reset_before = false;
+    resynced = false;
   }
 
   std::span<const Byte> ObservationBatch::bytesOf(const ObservationEvent& event) const noexcept {
@@ -61,6 +62,30 @@ namespace telar::runtime {
     std::ranges::copy(bytes, batch.bytes.viewMut().subspan(offset).begin());
     batch.byte_count += bytes.size();
     batch.events.atMut(batch.event_count++) = {.kind = kind, .time = ObservationTime::now(), .offset = static_cast<std::uint32_t>(offset), .length = static_cast<std::uint32_t>(bytes.size()), .shell_foreground = shell_foreground};
+  }
+
+  bool PaneObserver::overflows(std::size_t incoming) const noexcept {
+    const auto& batch = batches_[active_];
+
+    return batch.event_count == ObservationBatch::event_capacity || incoming > ObservationBatch::byte_capacity - batch.byte_count;
+  }
+
+  std::span<Byte> PaneObserver::resyncRoom(std::size_t incoming) noexcept {
+    drop(incoming);
+    // Room for the picture and the bytes after it, and an event for each.
+    return incoming >= ObservationBatch::byte_capacity ? std::span<Byte>{} : batches_.atMut(active_).bytes.viewMut().first(ObservationBatch::byte_capacity - incoming);
+  }
+
+  void PaneObserver::resynced(std::size_t length) noexcept {
+    if (length == 0) {
+      return;
+    }
+
+    auto& batch = batches_.atMut(active_);
+
+    batch.events.atMut(batch.event_count++) = {.kind = ObservationKind::resync, .time = ObservationTime::now(), .offset = 0, .length = static_cast<std::uint32_t>(length)};
+    batch.byte_count = length;
+    batch.resynced = true;
   }
 
   void PaneObserver::resize(TerminalSize size) noexcept {

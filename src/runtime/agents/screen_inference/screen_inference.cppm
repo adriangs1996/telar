@@ -10,7 +10,6 @@ import telar.wire.vocabulary;
 import telar.platform.primitives;
 import telar.runtime.terminal.control;
 import telar.runtime.host.session_host;
-import telar.platform.events;
 import telar.base.memory.containers;
 import telar.base.ds;
 
@@ -113,6 +112,8 @@ export {
       // Whether Claude's prompt sits just left of the visible cursor.
       [[nodiscard]] bool cursorAtClaudePrompt() const noexcept;
       static bool codexStatus(const AgentScreenRow& row) noexcept;
+      // Whether Codex shows an approval it waits for.
+      [[nodiscard]] bool codexApproval(const AgentManifest& manifest) const noexcept;
       [[nodiscard]] AgentScreenObservation codex() const noexcept;
       [[nodiscard]] AgentScreenObservation cursor() const noexcept;
 
@@ -133,7 +134,8 @@ export {
 
     class AgentScreenSample {
     public:
-      std::string_view capture(AgentScreenView screen) noexcept;
+      // The text of the screen's last `row_limit` rows with text, wrapped rows joined.
+      std::string_view capture(AgentScreenView screen, std::size_t row_limit = std::numeric_limits<std::size_t>::max()) noexcept;
 
     private:
       bool prepend(std::string_view bytes) noexcept;
@@ -146,21 +148,22 @@ export {
 
     class AgentScreenInference {
     public:
-      ds::Option<AgentSignal> observe(Terminal& terminal, const AgentManifests& manifests, AgentProvider provider, ObservationTime now);
+      // What the screen says, once per change; a signal of unknown status when the screen stops
+      // showing what it said.
+      ds::Option<AgentSignal> observe(Terminal& terminal, const AgentManifests& manifests, AgentProvider provider);
 
-      void reset() noexcept;
+      // Forgets what the screen said; a screen the reset lost waits for the agent's composer.
+      void reset(bool lost_screen = true) noexcept;
 
     private:
-      ds::Option<AgentSignal> infer(const AgentScreenReader& reader, AgentScreenView screen, const AgentManifests& manifests, AgentProvider provider, ObservationTime now);
+      ds::Option<AgentSignal> infer(const AgentScreenReader& reader, AgentScreenView screen, const AgentManifests& manifests, AgentProvider provider);
       // What the screen says for the provider, before the signal is deduplicated.
       ds::Option<AgentSignal> screenSignal(const AgentScreenReader& reader, AgentScreenView screen, const AgentManifests& manifests, AgentProvider provider);
       // Whether a composer's signal waits for the work that brings the composer back.
       bool composerLost(const ds::Option<AgentSignal>& signal) noexcept;
 
-      static constexpr std::chrono::milliseconds signal_refresh{15'000};
       AgentScreenSample sample_;
       ds::Option<AgentSignal> last_signal_;
-      std::int64_t last_signal_time_ = 0;
       bool composer_lost_ = false;
     };
 

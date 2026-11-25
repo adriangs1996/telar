@@ -33,6 +33,13 @@ export {
       bool applyReport(const ReportAgent& incoming, ObservationTime now);
       bool applyScreen(AgentSignal signal, ObservationTime now, AgentStatus projected, bool interrupted) noexcept;
       [[nodiscard]] ds::Option<AgentEvidence> choose(std::int64_t now) const noexcept;
+      // The report that still holds: an unexpired one, or a settling one no screen confirmed,
+      // which ends the turn when it expires.
+      [[nodiscard]] ds::Option<AgentEvidence> activeReport(std::int64_t now) const noexcept;
+      // Whether what the screen shows now replaces the report: a question on screen while the
+      // report says the agent works, work on screen while it says the agent waits, and Claude's
+      // idle prompt after a turn the user stopped, which no hook reports.
+      [[nodiscard]] bool supersedes(const AgentEvidence& reported, std::int64_t now) const noexcept;
       void expire(std::int64_t now) noexcept;
       void clearReport() noexcept;
 
@@ -45,7 +52,19 @@ export {
       AgentReportState report_state = AgentReportState::ready;
       AgentBlockedReason report_reason = AgentBlockedReason::none;
       FixedText<agent_report_event_bytes> report_event;
+      // The last status the agent settled in, ready or failed, which outlives its evidence while
+      // the agent's process runs; unknown once work starts again.
+      AgentStatus settled = AgentStatus::unknown;
+      // Whether the latest screen the observer read still shows the screen evidence, and since when
+      // it does not.
+      bool screen_current = false;
+      std::int64_t screen_lost_at = 0;
       bool hooks_seen = false;
+
+      // How long Claude's idle prompt shows before it ends a turn no hook ended.
+      static constexpr std::chrono::milliseconds ready_settle{1'500};
+      // How long the working phrases of an agent no reader knows may be gone before its work ends.
+      static constexpr std::chrono::milliseconds lost_working{3'000};
 
     private:
       // Codex's own screen and reports: whether the screen's signal may replace what the report says.
@@ -175,6 +194,8 @@ export {
       std::int64_t changed_at = 0;
       std::int64_t expires_at = 0;
       bool acknowledged = true;
+      // Whether the screen ended the running turn, which a later Stop then finishes as done.
+      bool screen_ended_turn = false;
       bool in_pane = false;
       ds::Option<ProcessIdentity> process_identity;
       ds::Option<ProcessIdentity> projected_process;

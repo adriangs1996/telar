@@ -86,7 +86,7 @@ export extern "C++" {
               Field<&ReportAgent::pane_id, NonzeroU64, "pane_id">,
               Field<&ReportAgent::pane_generation, u64, "pane_generation">,
               Field<&ReportAgent::provider, EnumByte<AgentProvider, max_agent_provider_index>, "provider">,
-              Field<&ReportAgent::state, EnumByte<AgentReportState, std::to_underlying(AgentReportState::released)>, "state">,
+              Field<&ReportAgent::state, EnumByte<AgentReportState, std::to_underlying(AgentReportState::interrupted)>, "state">,
               Field<&ReportAgent::session, Text16<agent_report_session_bytes>, "session">,
               Field<&ReportAgent::session_file, Text16<agent_report_session_file_bytes>, "session_file">,
               Field<&ReportAgent::session_file_kind, EnumByte<AgentSessionFileKind, 2>, "session_file_kind">,

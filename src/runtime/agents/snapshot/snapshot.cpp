@@ -10,6 +10,7 @@ import telar.base.text.json;
 import telar.base.text.utf8;
 import telar.runtime.history.store;
 import telar.platform.error;
+import telar.runtime.agents.screen_inference;
 import telar.base.ds;
 
 namespace telar::runtime {
@@ -101,6 +102,8 @@ namespace telar::runtime {
       work = report;
     }
 
+    settled = report->status == AgentStatus::ready || report->status == AgentStatus::failed ? report->status : AgentStatus::unknown;
+
     if (authority != AgentAuthority::resumed) {
       authority = AgentAuthority::active;
     }
@@ -114,6 +117,22 @@ namespace telar::runtime {
       return false;
     }
 
+    // From here on the screen shows something else than the evidence it gave before: a screen
+    // this signal does not replace no longer backs that evidence.
+    const bool was_current = screen_current;
+    const auto lose = [&] {
+      screen_current = false;
+      if (was_current) {
+        screen_lost_at = now.milliseconds;
+      }
+
+      return was_current;
+    };
+
+    if (signal.status == AgentStatus::unknown) {
+      return lose();
+    }
+
     auto known = provider();
 
     if (process_provider != AgentProvider::unknown) {
@@ -123,20 +142,29 @@ namespace telar::runtime {
     }
 
     if (known == AgentProvider::unknown || (signal.status == AgentStatus::ready && !signal.identity_confirmed && provider() != signal.provider)) {
-      return false;
+      return lose();
     }
 
     if (signal.status == AgentStatus::ready && projected == AgentStatus::working && !signal.ready_confirmed) {
-      return false;
+      return lose();
     }
 
     if (known == AgentProvider::codex && !applyCodexScreen(signal, now, interrupted)) {
-      return false;
+      return lose();
     }
 
     screen = AgentEvidence::screen(known, signal, now);
+    screen_current = true;
     if (signal.status == AgentStatus::blocked) {
       authority = AgentAuthority::obscured;
+    } else if (authority == AgentAuthority::obscured) {
+      authority = AgentAuthority::active;
+    }
+
+    if (signal.status == AgentStatus::ready) {
+      settled = AgentStatus::ready;
+    } else if (signal.status == AgentStatus::working || signal.status == AgentStatus::blocked) {
+      settled = AgentStatus::unknown;
     }
 
     return true;
@@ -173,34 +201,96 @@ namespace telar::runtime {
   ds::Option<AgentEvidence> AgentEvidenceState::choose(std::int64_t now) const noexcept {
     const bool shown = screen && !screen->expired(now);
 
-    if (report && !report->expired(now)) {
-      const auto since = work ? work->observed : report->observed;
-      if (shown && screen->status == AgentStatus::blocked && provider() == AgentProvider::cursor && since.before(screen->observed)) {
-        return screen;
-      }
-
-      return report;
+    if (const auto reported = activeReport(now)) {
+      return shown && screen_current && supersedes(*reported, now) ? screen : reported;
     }
 
-    if (shown) {
+    // Working phrases an agent's screen no longer shows end its work after a while; a screen
+    // reader's working evidence holds until the screen shows the agent's next state.
+    if (shown && (screen_current || screen->status != AgentStatus::working || hasIdleScreen(provider()) || now - screen_lost_at < lost_working.count())) {
       return screen;
     }
 
     auto presence = process;
-    if (presence && completionRequiresSignal(presence->provider)) {
+    if (presence && settled != AgentStatus::unknown) {
+      presence.getMut().status = settled;
+    } else if (presence && completionRequiresSignal(presence->provider)) {
       presence.getMut().status = AgentStatus::unknown;
     }
 
     return presence;
   }
 
+  ds::Option<AgentEvidence> AgentEvidenceState::activeReport(std::int64_t now) const noexcept {
+    if (!report) {
+      return ds::none;
+    }
+
+    if (!report->expired(now)) {
+      return report;
+    }
+
+    if (report_state != AgentReportState::settling) {
+      return ds::none;
+    }
+
+    auto ended = *report;
+
+    ended.status = AgentStatus::ready;
+    ended.expires_at = report->expires_at + AgentEvidence::settled_expiry.count();
+    return ended;
+  }
+
+  bool AgentEvidenceState::supersedes(const AgentEvidence& reported, std::int64_t now) const noexcept {
+    const auto known = provider();
+    if (!screen || !hasIdleScreen(known)) {
+      return false;
+    }
+
+    switch (screen->status) {
+    case AgentStatus::blocked:
+      // Cursor's question, read from its phrases, holds until its next work: its loop stops while
+      // it waits on the user, so its stop leaves the question on screen.
+      if (known == AgentProvider::cursor) {
+        return reported.status != AgentStatus::blocked && (work ? work->observed : reported.observed).before(screen->observed);
+      }
+
+      // Claude's and Codex's dialogs, read from their footers, hold while they show, though a tool
+      // that runs beside the one they ask about reports work.
+      return reported.status == AgentStatus::working;
+    case AgentStatus::working:
+      return reported.status == AgentStatus::blocked;
+    case AgentStatus::ready:
+      // Claude ends a turn the user interrupts, or a permission the user denies, with no hook. A
+      // turn waiting on background work shows the idle prompt until that work wakes it.
+      return known == AgentProvider::claude && report_state != AgentReportState::waiting && (reported.status == AgentStatus::working || reported.status == AgentStatus::blocked) && reported.observed.before(screen->observed) && now - screen->observed.milliseconds >= ready_settle.count();
+    case AgentStatus::unknown:
+    case AgentStatus::failed:
+    case AgentStatus::done:
+      return false;
+    }
+
+    return false;
+  }
+
   void AgentEvidenceState::expire(std::int64_t now) noexcept {
+    // A screen the observer still reads as it was keeps its evidence: nothing on it changed.
     if (screen && screen->expired(now)) {
-      screen.reset();
+      if (screen_current) {
+        screen.getMut().expires_at = now + (screen->status == AgentStatus::working ? AgentEvidence::screen_working_expiry : AgentEvidence::settled_expiry).count();
+      } else {
+        screen.reset();
+      }
     }
 
     if (report && report->expired(now)) {
-      report.reset();
+      if (const auto ended = activeReport(now)) {
+        report = ended;
+        report_state = AgentReportState::ready;
+        settled = AgentStatus::ready;
+      } else {
+        report.reset();
+      }
     }
   }
 
@@ -361,6 +451,12 @@ namespace telar::runtime {
       interrupt_at.reset();
       interrupt_idle_at.reset();
       interrupt_draft_cleared = false;
+      // The screen showed the turn end before its Stop came: the turn finished, it was not stopped.
+      if (incoming.state == AgentReportState::ready && screen_ended_turn) {
+        acknowledged = false;
+      }
+
+      screen_ended_turn = false;
     }
 
     return project(now.milliseconds);
@@ -378,10 +474,13 @@ namespace telar::runtime {
 
     if (replacing) {
       evidence.screen.reset();
+      evidence.screen_current = false;
       evidence.report.reset();
       evidence.work.reset();
+      evidence.settled = AgentStatus::unknown;
       evidence.hooks_seen = false;
       unreported_work_at.reset();
+      screen_ended_turn = false;
     }
 
     evidence.reporter = AgentProvider::unknown;
@@ -397,6 +496,10 @@ namespace telar::runtime {
   bool Agent::observeScreen(AgentSignal signal, ObservationTime now) {
     if (!evidence.applyScreen(signal, now, status, interrupt_at.hasValue())) {
       return false;
+    }
+
+    if (signal.status == AgentStatus::unknown) {
+      return project(now.milliseconds);
     }
 
     if (!evidence.report) {
@@ -443,11 +546,21 @@ namespace telar::runtime {
     }
 
     auto next_status = selected->status;
-    if (next_status != AgentStatus::ready) {
+    // The screen over a report that holds, or a report of a stopped turn: idle, nothing new to read.
+    const bool over_report = selected->source == AgentSource::screen && evidence.activeReport(now).hasValue();
+    const bool stopped = over_report || (selected->source == AgentSource::lifecycle_report && evidence.report_state == AgentReportState::interrupted);
+
+    // New work replaces the result the user has not seen; a question or a failure in between does not.
+    if (next_status == AgentStatus::working) {
       acknowledged = true;
-    } else {
-      if (status == AgentStatus::working) {
+      screen_ended_turn = false;
+    } else if (next_status == AgentStatus::ready) {
+      if (status == AgentStatus::working && !stopped) {
         acknowledged = false;
+      }
+
+      if (status == AgentStatus::working && over_report) {
+        screen_ended_turn = true;
       }
 
       next_status = acknowledged ? AgentStatus::ready : AgentStatus::done;

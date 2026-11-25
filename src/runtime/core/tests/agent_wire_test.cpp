@@ -89,6 +89,7 @@ namespace {
         report(3, AgentReportState::ready);
         report(4, AgentReportState::working);
         report(5, AgentReportState::blocked);
+        report(6, AgentReportState::failed);
       } else if (workload == "progress") {
         peer.exchange<RequestCompleted>(ReportAgentProgress{.request_id = 2, .pane_id = pane, .pane_generation = generation, .provider = AgentProvider::codex, .cwd = argument + "/src", .work_tree_path = argument});
       } else if (workload == "register") {
@@ -179,13 +180,15 @@ namespace {
     listener.send(RequestRuntimeState{.client_identity = 61, .interactive = true});
     const FixtureAgent agent{host, control, "sounds"};
 
-    // Done after working, then waiting on the user: one sound each, for windows that listen.
+    // Done after working, then waiting on the user, then failed: one sound each, for windows that listen.
     listener.deadline(std::chrono::seconds{15});
     const auto ready = listener.receive<AgentSoundNotification>();
     const auto needs_input = listener.receive<AgentSoundNotification>();
+    const auto failed = listener.receive<AgentSoundNotification>();
 
     check(ready.pane_id == agent.opened.pane_id && ready.sound == AgentSound::ready);
     check(needs_input.pane_id == agent.opened.pane_id && needs_input.sound == AgentSound::needs_input);
+    check(failed.pane_id == agent.opened.pane_id && failed.sound == AgentSound::needs_input, "a failed turn makes no sound");
     agent.wait("reported");
     bystander.send(QueryClients{.request_id = 2});
     check(std::holds_alternative<ClientList>(bystander.receiveAny<AgentSoundNotification, ClientList>()), "a client that does not listen heard the agent");

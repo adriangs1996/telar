@@ -139,7 +139,7 @@ export {
       tbc::val_a<ds::String<Memory>> root(tbc::mut_a<Memory> memory, const EnvironmentSource& source, bool legacy = false) const;
 
     private:
-      static constexpr auto claude_events = ds::Array<std::string_view, 8>{"SessionStart", "UserPromptSubmit", "PreToolUse", "PostToolUse", "Stop", "Notification", "SessionEnd", "CwdChanged"};
+      static constexpr auto claude_events = ds::Array<std::string_view, 10>{"SessionStart", "UserPromptSubmit", "PreToolUse", "PermissionRequest", "PostToolUse", "Stop", "StopFailure", "Notification", "SessionEnd", "CwdChanged"};
       static constexpr auto claude_worktree_events = ds::Array<std::string_view, 2>{"WorktreeCreate", "WorktreeRemove"};
       static constexpr auto codex_events = ds::Array<std::string_view, 9>{"SessionStart", "UserPromptSubmit", "PermissionRequest", "PreToolUse", "PostToolUse", "Stop", "Interrupt", "SubagentStop", "SessionEnd"};
       static constexpr auto cursor_events = ds::Array<std::string_view, 7>{"sessionStart", "beforeSubmitPrompt", "preToolUse", "postToolUse", "postToolUseFailure", "stop", "sessionEnd"};

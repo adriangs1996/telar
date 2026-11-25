@@ -52,9 +52,16 @@ telar agent list --json
 | `working` | The agent is executing or waiting for its model. |
 | `blocked` | It needs input, such as a permission decision or answer. Read its pane before responding. |
 | `done` | A turn finished and its result has not yet been acknowledged. This is not proof that its task or tests succeeded. |
-| `ready` | The agent is idle and has no unseen completed turn. |
-| `failed` | Telar observed a failure. Inspect the agent's output for the cause. |
+| `ready` | The agent is idle and has no unseen completed turn. A turn stopped with Esc or `telar agent interrupt` ends here, not in `done`. |
+| `failed` | The turn ended on an error the agent reported, such as a failed model request in Claude Code or an errored loop in Cursor. `last_event` names it. |
 | `unknown` | Telar does not have enough evidence to classify the current state. |
+
+Hooks and the screen complement each other. A permission dialog blocks the
+agent as soon as it shows, and the work after you answer it reads as
+`working` again. A turn ended by Esc or by a denied permission, which Claude
+Code reports to no hook, reads as `ready` once its idle prompt shows. After
+updating Telar, reinstall the integration so Claude Code also reports
+permission requests and failed turns.
 
 Without hooks, process and screen observations provide best-effort status.
 Not every provider reports the same details. `final_message` may be empty or

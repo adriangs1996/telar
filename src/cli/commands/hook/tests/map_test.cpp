@@ -240,13 +240,46 @@ namespace {
     check(lifecycle(end.reports, AgentReportState::exited) && end.reports.lifecycle->session.empty());
   }
 
+  // Claude's events that block it at once, end its turn on an error, and keep a turn through compaction.
+  void claudeDecisionsAndFailures() {
+    Mapped permission{AgentProvider::claude, R"({"hook_event_name":"PermissionRequest","session_id":"s1","tool_name":"Bash","tool_input":{"command":"touch marker.txt"}})"};
+
+    check(lifecycle(permission.reports, AgentReportState::blocked, AgentBlockedReason::permission), "a permission Claude asks for blocks it at once");
+    check(permission.reports.lifecycle->event.contains("touch marker.txt"), "the blocked report names the command");
+    check(lifecycle(Mapped{AgentProvider::claude, R"({"hook_event_name":"PermissionRequest","tool_name":"AskUserQuestion","tool_input":{"questions":[{"question":"Red or blue?"}]}})"}.reports, AgentReportState::blocked, AgentBlockedReason::question));
+    check(lifecycle(Mapped{AgentProvider::claude, R"({"hook_event_name":"PermissionRequest","tool_name":"ExitPlanMode","tool_input":{}})"}.reports, AgentReportState::blocked, AgentBlockedReason::plan));
+
+    Mapped failure{AgentProvider::claude, R"({"hook_event_name":"StopFailure","session_id":"s1","error":"rate_limit","error_details":"429 Too Many Requests"})"};
+
+    check(lifecycle(failure.reports, AgentReportState::failed), "a turn that ends on an API error fails");
+    check(failure.reports.lifecycle->event == "rate_limit: 429 Too Many Requests", failure.reports.lifecycle->event);
+    check(Mapped{AgentProvider::claude, R"({"hook_event_name":"StopFailure","error":"server_error","error_details":{"status":529}})"}.reports.lifecycle->event == "server_error");
+    check(encodes(failure.reports));
+
+    // Auto compaction happens inside a turn and manual compaction between turns: neither changes it.
+    check(lifecycle(Mapped{AgentProvider::claude, R"({"hook_event_name":"SessionStart","session_id":"s1","source":"compact"})"}.reports, AgentReportState::continuing));
+    check(lifecycle(Mapped{AgentProvider::claude, R"({"hook_event_name":"SessionStart","session_id":"s1","source":"resume"})"}.reports, AgentReportState::ready));
+
+    // A background shell wakes Claude when it ends, as a subagent does; a finished task does not.
+    Mapped shell{AgentProvider::claude, R"({"hook_event_name":"Stop","session_id":"s1","background_tasks":[{"id":"b1","type":"shell","status":"running"},{"id":"b2","type":"subagent","status":"completed"}]})"};
+
+    check(lifecycle(shell.reports, AgentReportState::waiting), "a turn with a background shell left waits for it");
+    check(shell.reports.lifecycle->event == "waiting for 1 background task", shell.reports.lifecycle->event);
+    check(lifecycle(Mapped{AgentProvider::claude, R"({"hook_event_name":"Stop","background_tasks":[{"id":"b2","type":"subagent","status":"completed"}]})"}.reports, AgentReportState::ready));
+
+    // A subagent's dialog shows in its session's pane and blocks the session; its other events do not reach it.
+    check(lifecycle(Mapped{AgentProvider::claude, R"({"hook_event_name":"PermissionRequest","agent_id":"sub","tool_name":"Bash","tool_input":{"command":"rm x"}})"}.reports, AgentReportState::blocked, AgentBlockedReason::permission));
+    check(lifecycle(Mapped{AgentProvider::claude, R"({"hook_event_name":"Notification","agent_id":"sub","notification_type":"permission_prompt","message":"Allow?"})"}.reports, AgentReportState::blocked, AgentBlockedReason::permission));
+    check(!Mapped{AgentProvider::claude, R"({"hook_event_name":"Notification","agent_id":"sub","notification_type":"idle_prompt"})"}.reports.lifecycle);
+  }
+
   void codexLifecycle() {
     ::setenv("CODEX_HOME", "/nonexistent-telar-hook-test", 1);
     check(lifecycle(Mapped{AgentProvider::codex, R"({"hook_event_name":"SessionStart","source":"compact"})"}.reports, AgentReportState::working));
     check(lifecycle(Mapped{AgentProvider::codex, R"({"hook_event_name":"SessionStart","source":"startup"})"}.reports, AgentReportState::ready));
     check(lifecycle(Mapped{AgentProvider::codex, R"({"hook_event_name":"PermissionRequest","tool_name":"Bash","tool_input":{"command":"rm x"}})"}.reports, AgentReportState::blocked, AgentBlockedReason::permission));
     check(lifecycle(Mapped{AgentProvider::codex, R"({"hook_event_name":"Stop"})"}.reports, AgentReportState::settling));
-    check(lifecycle(Mapped{AgentProvider::codex, R"({"hook_event_name":"Interrupt"})"}.reports, AgentReportState::ready));
+    check(lifecycle(Mapped{AgentProvider::codex, R"({"hook_event_name":"Interrupt"})"}.reports, AgentReportState::interrupted));
 
     Mapped end{AgentProvider::codex, R"({"hook_event_name":"SessionEnd","session_id":"s1"})"};
 
@@ -349,9 +382,14 @@ namespace {
 
   void cursorLifecycle() {
     ::setenv("CURSOR_CONFIG_DIR", "/nonexistent-telar-hook-test", 1);
-    for (const auto input : {std::string_view{R"({"hook_event_name":"sessionStart"})"}, std::string_view{R"({"hook_event_name":"stop"})"}}) {
+    for (const auto input : {std::string_view{R"({"hook_event_name":"sessionStart"})"}, std::string_view{R"({"hook_event_name":"stop"})"}, std::string_view{R"({"hook_event_name":"stop","status":"completed"})"}}) {
       check(lifecycle(Mapped{AgentProvider::cursor, input}.reports, AgentReportState::ready), input);
     }
+
+    // The loop's end says how it ended: the user aborted it, or it stopped on an error.
+    check(lifecycle(Mapped{AgentProvider::cursor, R"({"hook_event_name":"stop","status":"aborted"})"}.reports, AgentReportState::interrupted));
+    check(lifecycle(Mapped{AgentProvider::cursor, R"({"hook_event_name":"stop","status":"error"})"}.reports, AgentReportState::failed));
+    check(lifecycle(Mapped{AgentProvider::cursor, R"({"hook_event_name":"stop","status":3})"}.reports, AgentReportState::ready));
 
     for (const auto input : {
              std::string_view{R"({"hook_event_name":"beforeSubmitPrompt"})"},
@@ -474,6 +512,7 @@ namespace {
   const telar::testing::Case case_command_report_phases{"hooks.command_report_phases", commandReportPhases};
   const telar::testing::Case case_subagent_events_stay_out_of_parent{"hooks.subagent_events_stay_out_of_parent", subagentEventsStayOutOfParent};
   const telar::testing::Case case_claude_lifecycle{"hooks.claude_lifecycle", claudeLifecycle};
+  const telar::testing::Case case_claude_decisions_and_failures{"hooks.claude_decisions_and_failures", claudeDecisionsAndFailures};
   const telar::testing::Case case_codex_lifecycle{"hooks.codex_lifecycle", codexLifecycle};
   const telar::testing::Case case_codex_running_subagents{"hooks.codex_running_subagents", codexRunningSubagents};
   const telar::testing::Case case_pi_lifecycle_and_title{"hooks.pi_lifecycle_and_title", piLifecycleAndTitle};

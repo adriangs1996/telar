@@ -34,6 +34,10 @@ namespace telar::runtime {
         return AgentStatus::working;
       }
 
+      if (state == AgentReportState::failed) {
+        return AgentStatus::failed;
+      }
+
       return state == AgentReportState::blocked ? AgentStatus::blocked : AgentStatus::ready;
     }
 
@@ -213,7 +217,28 @@ namespace telar::runtime {
     return AgentProvider::unknown;
   }
 
-  ds::Option<AgentSignal> AgentManifests::detect(std::string_view text) const noexcept {
+  ds::Option<AgentSignal> AgentManifests::detect(std::string_view text, AgentProvider provider) const noexcept {
+    if (provider != AgentProvider::unknown) {
+      const auto* entry = find(provider);
+      if (entry == nullptr) {
+        return ds::none;
+      }
+
+      if (entry->blocked.matches(text)) {
+        return AgentSignal{.provider = provider, .status = AgentStatus::blocked, .confidence = blocked_confidence};
+      }
+
+      if (entry->working.matches(text)) {
+        return AgentSignal{.provider = provider, .status = AgentStatus::working, .confidence = working_confidence};
+      }
+
+      if (entry->ready_prompt.matches(text)) {
+        return AgentSignal{.provider = provider, .status = AgentStatus::ready, .confidence = ready_prompt_confidence, .identity_confirmed = true, .ready_confirmed = true};
+      }
+
+      return entry->identity.matches(text) ? ds::Option{AgentSignal{.provider = provider, .status = AgentStatus::ready, .confidence = identity_confidence, .identity_confirmed = true, .ready_confirmed = false}} : ds::none;
+    }
+
     for (const auto& entry : entries()) {
       if (entry.blocked.matches(text)) {
         return AgentSignal{.provider = inferProvider(text), .status = AgentStatus::blocked, .confidence = blocked_confidence};
@@ -280,7 +305,8 @@ namespace telar::runtime {
     claude.identity.append("claude code");
     claude.addCommandTool("Bash", "command");
     claude.interrupt = AgentInterruptKey::control_c;
-    for (const auto* const phrase : {"press enter to confirm", "enter to submit answer", "enter to select", "allow command?", "[y/n]", "do you want to proceed?", "waiting for permission", "yes, and don't ask again"}) {
+    // The footers of Claude Code's dialogs: a permission, a question and the workspace's trust.
+    for (const auto* const phrase : {"esc to cancel \u00b7 tab to amend", "enter to select \u00b7 \u2191/\u2193 to navigate", "enter to confirm \u00b7 esc to cancel", "press enter to confirm", "enter to submit answer", "enter to select", "allow command?", "[y/n]", "do you want to proceed?", "waiting for permission", "yes, and don't ask again"}) {
       claude.blocked.append(phrase);
     }
 
@@ -294,6 +320,8 @@ namespace telar::runtime {
     codex.process_paths.append(R"(\@openai\codex\)");
     codex.brand.append("codex");
     codex.ready_prompt.append("ask codex to do anything");
+    // The footer of Codex's approval of a command or an edit.
+    codex.blocked.append("press enter to confirm or esc to cancel");
     codex.addCommandTool("Bash", "command");
     codex.addCommandTool("exec_command", "cmd");
     codex.addCommandTool("shell", "command");

@@ -129,8 +129,10 @@ export {
       [[nodiscard]] AgentProvider provider() const noexcept;
       [[nodiscard]] const Object& fields() const noexcept;
       [[nodiscard]] const Object& tools() const noexcept;
-      [[nodiscard]] std::size_t runningSubagents() const noexcept;
-      void setRunningSubagents(std::size_t count) noexcept;
+      // The background work that wakes the agent again when it ends: Codex's subagents, and
+      // Claude's background tasks of every kind.
+      [[nodiscard]] std::size_t backgroundWork() const noexcept;
+      void setBackgroundWork(std::size_t count) noexcept;
 
     private:
       void validateTools();
@@ -146,7 +148,7 @@ export {
       AgentProvider provider_;
       Object fields_;
       tbc::val_self<Object> tools_;
-      std::size_t running_subagents_ = 0;
+      std::size_t background_work_ = 0;
       ds::Option<ds::String<Memory>> workspace_;
     };
 
@@ -202,7 +204,8 @@ export {
 
     bool questionEvent(FixedText<display_line_bytes>& output, const Payload& input);
 
-    void backgroundEvent(FixedText<display_line_bytes>& output, std::size_t count);
+    // "waiting for N background NOUNs", the noun singular.
+    void backgroundEvent(FixedText<display_line_bytes>& output, std::size_t count, std::string_view noun);
 
   }
 }

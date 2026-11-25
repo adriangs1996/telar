@@ -597,13 +597,20 @@ namespace telar::runtime {
       const bool settled = agent->interrupt_at && terminal && settleInterrupt(panes, focused(clients, layouts, pane->id), *terminal, *agent, now);
       const auto current_time = wallMilliseconds();
 
+      const auto previous = agent->status;
+
       agent->evidence.expire(current_time);
       if (!agent->evidence.report) {
         agent->interrupt_at.reset();
         agent->interrupt_idle_at.reset();
       }
 
+      // A turn that ends with time, as a settling report or a screen that outlasts its report, is heard as any other.
       if (agent->project(current_time) || settled) {
+        if (alerts(*agent, previous)) {
+          sounds_.push(*agent);
+        }
+
         projected(agent->pane, agent->generation);
       }
 
@@ -647,7 +654,7 @@ namespace telar::runtime {
 
   template <EventLoop Poller, HistoryEventSink History>
   bool AgentService<Poller, History>::alerts(const Agent& agent, AgentStatus previous) noexcept {
-    return (agent.status == AgentStatus::done && previous == AgentStatus::working) || (agent.status == AgentStatus::blocked && previous != AgentStatus::blocked);
+    return (agent.status == AgentStatus::done && previous == AgentStatus::working) || (agent.status == AgentStatus::blocked && previous != AgentStatus::blocked) || (agent.status == AgentStatus::failed && previous != AgentStatus::failed);
   }
 
   template <EventLoop Poller, HistoryEventSink History>
@@ -694,13 +701,14 @@ namespace telar::runtime {
     }
 
     if (settled) {
+      // The turn telar stopped is idle, with no result to read.
       agent.interrupt_at.reset();
       agent.interrupt_idle_at.reset();
-      agent.evidence.report.reset();
+      agent.evidence.applyReport(ReportAgent{.state = AgentReportState::interrupted, .event = "Interrupted by telar"}, ObservationTime::now());
       if (hasIdleScreen(agent.provider)) {
         constexpr Byte idle_screen_confidence = 94;
 
-        agent.evidence.applyScreen(AgentSignal{.provider = agent.provider, .status = AgentStatus::ready, .confidence = idle_screen_confidence, .identity_confirmed = true, .ready_confirmed = true}, ObservationTime::now(), agent.status, false);
+        agent.evidence.applyScreen(AgentSignal{.provider = agent.provider, .status = AgentStatus::ready, .confidence = idle_screen_confidence, .identity_confirmed = true, .ready_confirmed = true}, ObservationTime::now(), agent.status, true);
       }
 
       return agent.project(wallMilliseconds());
@@ -745,7 +753,7 @@ namespace telar::runtime {
       entries_.atMut(count_++) = AgentSoundNotification{
           .pane_id = agent.pane,
           .pane_generation = agent.generation,
-          .sound = agent.status == AgentStatus::blocked ? AgentSound::needs_input : AgentSound::ready,
+          .sound = agent.status == AgentStatus::blocked || agent.status == AgentStatus::failed ? AgentSound::needs_input : AgentSound::ready,
       };
     }
   }

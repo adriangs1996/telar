@@ -208,7 +208,7 @@ namespace telar::runtime::cli {
   template PaneDirection choice<PaneDirection>(std::string_view text, const char* error, const EnumNames<PaneDirection::down>& names);
   template AgentStatus choice<AgentStatus>(std::string_view text, const char* error, const EnumNames<AgentStatus::done>& names);
   template AgentSessionFileKind choice<AgentSessionFileKind>(std::string_view text, const char* error, const EnumNames<AgentSessionFileKind::cursor_meta>& names);
-  template AgentReportState choice<AgentReportState>(std::string_view text, const char* error, const EnumNames<AgentReportState::released>& names);
+  template AgentReportState choice<AgentReportState>(std::string_view text, const char* error, const EnumNames<AgentReportState::interrupted>& names);
   template AgentCommandPhase choice<AgentCommandPhase>(std::string_view text, const char* error, const EnumNames<AgentCommandPhase::finished>& names);
   template AgentBlockedReason choice<AgentBlockedReason>(std::string_view text, const char* error, const EnumNames<AgentBlockedReason::other>& names);
 

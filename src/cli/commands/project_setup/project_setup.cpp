@@ -40,7 +40,7 @@ namespace telar::runtime::cli::pane_agents {
   // The status an agent command that timed out ends with.
   constexpr int timed_out_status = 3;
 
-  constexpr ds::Array<std::string_view, 9> report_states{"working", "blocked", "ready", "exited", "settling", "continuing", "waiting", "idle", "released"};
+  constexpr ds::Array<std::string_view, 11> report_states{"working", "blocked", "ready", "exited", "settling", "continuing", "waiting", "idle", "released", "failed", "interrupted"};
   constexpr ds::Array<std::string_view, 3> session_file_kinds{"claude_transcript", "codex_state", "cursor_meta"};
 
   namespace {
