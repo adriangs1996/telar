@@ -182,6 +182,7 @@ NativeRoundedRectangle {
         model: root.tabModel
         x: root.tabsLeft
         width: root.tabsWidth
+        centered: true
         createBounds: Qt.rect(createTab.x - x, createTab.y, createTab.width, createTab.height)
         height: root.height
         colors: root.colors

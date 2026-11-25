@@ -400,7 +400,12 @@ namespace {
       QTRY_COMPARE_WITH_TIMEOUT(visualItems(*navigation, QStringLiteral("tabPill")).size(), 2, fixture_wait_ms);
       QVERIFY(navigation->setProperty("rail", true));
       QTRY_VERIFY_WITH_TIMEOUT(strip->width() > 0, fixture_wait_ms);
-      QVERIFY(strip->mapToItem(navigation.get(), QPointF{}).x() < fixture_sidebar_width);
+      // The room of the tabs starts above the sidebar, and the tabs sit in the middle of it.
+      const auto* room = strip->parentItem();
+
+      QVERIFY(room->mapToItem(navigation.get(), QPointF{}).x() < fixture_sidebar_width);
+      QVERIFY(room->mapToItem(navigation.get(), QPointF{room->width(), 0}).x() <= width);
+      QTRY_VERIFY_WITH_TIMEOUT(strip->x() > room->width() / 4, fixture_wait_ms);
 
       const QVariantMap bottom_properties{
           {QStringLiteral("controller"), QVariant::fromValue(static_cast<QObject*>(nullptr))},
@@ -451,7 +456,8 @@ namespace {
       ListModel tabs;
       ListModel workspaces;
 
-      constexpr int width = 1000;
+      // Wide enough that the tabs do not fill their room.
+      constexpr int width = 1200;
       constexpr int controls_inset = 80;
       constexpr std::size_t workspace_count = 3;
 
@@ -499,6 +505,13 @@ namespace {
         QVERIFY(machine_bounds.left() >= controls_inset);
         QVERIFY(machine_bounds.right() <= track_bounds.left());
         QVERIFY(track_bounds.right() < layout->mapToItem(navigation.get(), QPointF{}).x());
+        // The tabs sit in the middle of the room the bar leaves them after the track.
+        const auto* well = visualItems(*navigation, QStringLiteral("tabWell")).front();
+        const auto* strip = well->parentItem();
+
+        QVERIFY(well->width() < strip->width());
+        QVERIFY2(qAbs(well->x() + well->width() / 2 - strip->width() / 2) <= 1, qPrintable(QStringLiteral("well %1+%2 in %3").arg(well->x()).arg(well->width()).arg(strip->width())));
+        QVERIFY(strip->mapToItem(navigation.get(), QPointF{}).x() > track_bounds.right());
         // Three workspaces: the one in front keeps its name, the others their mark.
         qsizetype named = 0;
 

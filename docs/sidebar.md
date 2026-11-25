@@ -424,7 +424,8 @@ navigation still uses the shared client intents; the GUI keeps only bounded
 disposable scroll and pointer state. Configured metrics and other widgets
 belong in the bottom status bar.
 
-The tab strip packs tabs from the left, each a
+The tab strip sits in the middle of the room the bar leaves it, between the
+workspace track and the palette button, and packs its tabs side by side, each a
 30 px pill with a 10 px radius: a 20 px translucent chip holding the
 application mark (`tab_label.mark`, the focused application's even for a
 renamed tab), the caption and a trailing status. While the prefix waits for a
@@ -450,7 +451,8 @@ room is left over. Truncated captions fade over their last 20 px instead of
 ending in an ellipsis. Past the chips, the tabs farthest from the selection
 hide behind a `+N` counter that selects the nearest hidden tab and keeps
 their attention dot, and `+` follows the last visible control. While the
-pointer rests on the strip, widths stay laid out around the tab they were
+pointer rests on the strip, the strip stays where it is and its widths stay
+laid out around the tab they were
 built for, so a click changes the selection without moving tabs under the
 pointer; leaving the strip relayouts it, and a selection the frozen layout
 would hide rebuilds it at once.
