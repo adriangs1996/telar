@@ -131,40 +131,65 @@ that pane index while rendering. No widget rewrites the runtime replica.
 
 ## Machines
 
-The top bar names the active machine beside the telar mark, as `machine /
-workspace` on one line. Clicking the machine opens the machine picker and
-clicking the workspace opens the workspace picker; when the line is narrow the
-machine elides first.
+The top bar names the machine the window shows right after the telar mark, as
+one control: the machine's avatar (its color and the first character of its
+label) with a dot for its link, its label and a chevron. A yellow dot before
+the chevron says an agent on another machine waits on the person. The control
+is there with one machine too.
 
-With more than one machine, the sidebar lists the others under `Machines`,
-above the agents. A row shows the machine's avatar (its color and the first
-character of its label) with a dot for its link, its label over a status line
-and, on the right, a stack of its agents that work or wait on the person, in
-attention order, at most three. The status line reads `Offline`, `No active
+Clicking it opens the machine menu under it: every machine of the window in a
+fixed order, one row each, the one the window shows marked. A row shows the
+avatar with its link dot, the label over a status line and, on the right, a
+stack of its agents that work or wait on the person, in attention order, at
+most three. The row of the machine the window shows keeps only their count,
+since the sidebar lists them. The status line reads `Offline`, `No active
 agents` or the number of agents that work or wait, in yellow when one of them
 waits on the person. The cards are the tab strip's: the same tiles, provider
 colors and resting poses. A row has no focused pane, so a waiting agent's card
-is tinted even when it is in front. Clicking a row switches to that machine.
-Rows that do not fit leave whole, so the agents keep at least two headers of
-room.
+is tinted even when it is in front. Clicking a row switches to that machine and
+closes the menu. The last row, `Add or manage machines…`, opens the machine
+picker, where a machine is added, set up, enabled or disabled.
 
-Every section header (`Machines`, `Agents`, `Processes`) reads its name in
-capitals at the small size, after a line icon in the cards' mark column and
-before its count. The icons are Lucide's (`assets/icons`, ISC), rasterized
-from SVG and tinted with `subtext0`. A hairline halves the gap between two
-sections.
-
-The header collapses the list; its chevron follows the label, so the count
-keeps the column the cards' ages use. A collapsed header shows a yellow dot when
-another machine needs attention. The collapse belongs to the window, not to
-any machine's runtime, since the list spans every connected machine.
+The sidebar lists no machine. Its section headers (`Agents`, `Processes`) read
+their name in capitals at the small size, after a line icon in the cards' mark
+column and before their count. The icons are Lucide's (`assets/icons`, ISC),
+rasterized from SVG and tinted with `subtext0`. A hairline halves the gap
+between two sections.
 
 The agent list holds every agent and tracked command of the active machine,
 and only the agents that wait on the person (`blocked`, `failed`) from the
-others: their working agents are the row's stack, and a waiting agent keeps a
-card because the stack does not show what it asks and clicking the card goes
-straight to its pane. Cards from the active machine name only their workspace;
-a waiting agent from another machine prefixes it with `machine · `.
+others: their working agents are the stack of their row in the machine menu,
+and a waiting agent keeps a card because the stack does not show what it asks
+and clicking the card goes straight to its pane. Cards from the active machine
+name only their workspace; a waiting agent from another machine prefixes it
+with `machine · `.
+
+## Workspaces
+
+After the machine, the top bar holds the workspace track: one segmented control
+with every workspace of the machine in the runtime's order, each segment the
+workspace's mark (a tile in a hue its name picks from the palette's accents,
+holding its initial) and its name. The segment of the workspace in front is
+filled and ringed; a segment keeps the width of its name in the heavier weight,
+so choosing a workspace moves none of the others. A workspace with an agent
+that waits on the person shows a dot in that state's color after its name.
+Clicking a segment switches to its workspace, and the tabs beside the track
+are then that workspace's. Hovering a segment shows its name and its path.
+
+The track shortens before the tabs do. With room for every name it shows them
+all. Short of that, the workspace in front keeps its name and the others keep
+only their mark, with the state's dot on the mark's corner. Short of that too,
+the marks that do not fit hide, the row moves just enough to hold the workspace
+in front, and the control at the end of the track counts the hidden ones as
+`+N`.
+
+That control, a chevron while nothing is hidden, opens the workspace menu under
+the track: every workspace in the track's order, each with its mark, its name,
+its path (or what its worktrees' agents do) and its branch, a dot after the
+branch while it has changes, and `! N` in the state's color while agents wait.
+The workspace in front is marked. Typing filters the rows by name, Up and Down
+move the selection, Enter chooses it and Escape closes the menu. The last row,
+`New workspace…`, opens the form that creates one.
 
 ## Processes
 
@@ -205,7 +230,7 @@ every pane then shows as one that ran nothing.
 
 The window keeps the facts with the pane in its list replica; a newer list
 that still names the pane leaves them, and a list from a runtime that
-replaced the previous one drops them. A process card reads `command`,
+replaced the previous one drops them. A process card reads `commandLine`,
 `commandState` (`none`, `running`, `finished`), `commandTruncated`,
 `exitCode` (absent unless a finished command reported one),
 `commandDuration` (`12s`, `3m`, as the ages are written), `cwd`, `branch`
@@ -224,70 +249,74 @@ another process group is not counted.
 
 Under `Processes`, the sidebar lists every pane of the active machine that no
 agent snapshot entry holds by `(pane_id, generation)`, so agents and processes
-together cover every pane of that machine; the other machines are their rows
-under `Machines`. Programs come before idle shells, and
-the newest foreground comes first inside each group. A card shows the
-program's mark (a terminal glyph when the program is unknown), its name,
-its workspace and the foreground age, which advances locally between
-revisions. A program that listens shows its lowest port in a green chip at
-the end of the title row (`:3000`, or `:3000 +2` with more). Idle shells dim
-their name. Clicking a card visits its pane the
-way an agent card does; a process card has no peek.
+together cover every pane of that machine; the other machines are the rows of
+the machine menu. Programs come before idle shells, and the newest foreground
+comes first inside each group.
+
+A process card has the three rows of an agent card. The first names the
+program, after its mark (a terminal glyph when the program is unknown), and
+says on the right `running` or, for an idle shell, `idle`, with the foreground
+age, which advances locally between revisions; an idle shell's mark and name
+recede. The second is the command the pane's shell runs or ran last, and what
+that left closes it on the right: the ports the program listens on while it
+serves, each as the terminal writes it and in the terminal's face (`:3000`,
+`:3000 :9229`, then `+N` for the rest), a green mark and how long the command
+took when it ended well (`✓ 12s`), a red mark and its exit status when it
+failed (`✕ 1`). A pane whose shell ran nothing reads `No commands yet`, and a
+program without a command of the shell reads `No command`. The third says
+where: the workspace, then the pane's directory, and on the right the branch
+with a dot while it has changes. Clicking a card visits its pane the way an
+agent card does; a process card has no peek.
 
 ## Rendering boundary
 
 The window draws the sidebar in device pixels. The terminal client's cell
 sidebar and its Kitty graphics layer left with it.
 
-Each agent card stays three rows high:
-
-1. workspace name, with a right-aligned readable state and working duration;
-2. session title in the regular face at body size;
-3. latest event while `working`, otherwise the branch from that agent's
-   workspace snapshot, with a small, dimmed provider symbol on the right.
-
-The third row reads only the existing replicas. Workspace identity selects
-its branch, independent of the focused workspace. Missing Git observations,
-non-repository workspaces and worktree-only locations without a workspace-list
-entry leave the row empty. A working agent with no event also leaves it empty.
-A workspace-list revision can update the branch without an agent revision.
-The card shows no location row (`workspace › tab › pane N`) and no cwd;
-the project rows above the agents show workspace paths instead.
-
-The window draws cards in device pixels inside the sidebar band. Text uses the `small`, `title`,
-`small` line boxes. The title is body-sized without the pane header's height cap. Insets are 10 horizontal and 8 vertical logical pixels,
-with 4 logical pixels before the title and 2 before the detail. Card spacing
+The window draws cards in device pixels inside the sidebar band. Text uses the `title`, `small`,
+`small` line boxes. The title is body-sized without the pane header's height cap. Insets are 8 horizontal and 8 vertical logical pixels,
+with 4 logical pixels before the second row and 2 before the third. Card spacing
 is 3, sidebar margins 8, radius 8 and provider symbols 14 logical pixels.
 These lengths follow the chrome's display/font ratio before being rounded:
 they are written for a 14-pixel font and grow with `font.size` and
 `chrome.scale` as the chrome text does, so a mark keeps its size beside its
-title. Machine rows and the sidebar margin follow the same ratio.
+title. The sidebar margin follows the same ratio.
 
 Every card keeps its mark in a 24-pixel column and starts its title and its
 detail row after it, so the text of machine rows, agents and processes shares
 one left edge. A command one level under an agent leads with its status glyph
 in a column that ends on that same edge.
 
-Every agent card has the same two rows, whether the agent runs in a worktree
+Every agent card has the same three rows, whether the agent runs in a worktree
 or not, focused or not; the state changes what the rows say, never the card's
-shape. The first row holds the provider's tile, the title and the state. A
-badge on the tile's lower right corner carries the state's glyph in its color,
-the working one pulsing; an agent at rest has none. An agent in a worktree
+shape. No row is left blank.
+
+The first row says who it is and in what state: the provider's tile, the title
+and, on the right, the state with how long the agent has held it. A badge on
+the tile's lower right corner carries the state's glyph in its color, the
+working one pulsing; an agent at rest has none, and its tile and title recede,
+as do those of an agent telar cannot read (`unknown`). An agent in a worktree
 takes its task's title, or its branch when it has none, as its title; any other
-agent takes the title its session reports, or its provider's name. The second row starts with the signal, the line that matters in the
-current state: the question or request in yellow while the agent is blocked,
-the error in red when it failed, the plan's count and step while it works on a
-plan, its latest event while it works without one, and its final answer once it
-is done or at rest. The context closes the row on the right: the project, or
-for a worktree the machine, the branch, the lines it added (green) and removed
-(red), its files, its commits ahead and its command's outcome. The branch is
-left out when it reads like the title, and a worktree with none of these shows
-its project instead. The context may take half the row, less
-while the agent waits on the person and more once it rests; when it runs short,
-the commits ahead give way first, then the branch, the files and the command's
-outcome, while the machine and the diff stay. A plan's progress is a thin line
-under the rows. A blocked or failed agent tints its card in its state's color.
-The header reads `agents`. One array of at most 64 replica indices is sorted by
+agent takes the title its session reports, or its provider's name.
+
+The second row says what happens there, and has the row to itself: the question
+or request in yellow while the agent is blocked, the error in red when it
+failed, the plan's step while it works on a plan with the plan's count on the
+right, its latest event while it works without one, and its final answer once
+it is done or at rest. When the agent said nothing for its state the row names
+what is missing, in a receding ink: `No event yet`, `No request text`, `No
+error text`, `No final message`, `No signal`.
+
+The third row says where: the project, then the tab when it is named after
+neither the card nor the project, then the directory, and on the right the
+branch with a dot while it has changes. For a worktree the row holds its facts
+instead: the machine, the branch, the lines it added (green) and removed (red),
+its files, its commits ahead and its command's outcome. The branch is left out
+when it reads like the title. When the row runs short the commits ahead give
+way first, then the branch, the files and the command's outcome, while the
+machine and the diff stay. A plan's progress is a thin line under the rows. A
+blocked or failed agent tints its card in its state's color. The header reads
+`agents`. One array of at most 64 replica indices is sorted by
 `agent_attention.lessThan` when snapshot identity changes, never per frame.
 
 The top-right state reads `Working`, `Approval`, `Question`, `Review plan`,
@@ -381,15 +410,16 @@ stay visible over a transparent titlebar: `TelarWindow` centres them on the
 navigation row the frame reports (`telar_gui_frame.navigation`) at a 14 pt
 lead and 20 pt pitch, and reports the points they cover through
 `telar_gui_viewport.controls`, zero in fullscreen, with the native titlebar
-and on Linux. After that room comes the sidebar toggle, a glyph with a quiet
-hover surface. Above the rail the context name follows, the listed project's
-name or the unlisted workspace or worktree label, then a separator, then the
-tabs; with the sidebar expanded the tabs start where the workbench starts.
-Only a window too narrow for the rail, or an expanded sidebar too short for
-project rows, falls back to the compact top-bar indicators
-(`WorkspaceIndicators`). All navigation still uses the shared client intents;
-the GUI keeps only bounded disposable scroll and pointer state. Configured
-metrics and other widgets belong in the bottom status bar.
+and on Linux. After that room come the sidebar toggle, a glyph with a quiet
+hover surface, the telar mark, the machine switcher, the workspace track and
+the tabs, which end before the palette button and the new tab button. The bar
+reads in the order of what holds what: the machine, its workspaces, the tabs of
+the workspace in front. The tabs keep 220 logical px before the other two get
+any room, so a narrow window shortens those first: the machine's label down to
+72 px, then the workspaces' names, then the workspaces that do not fit. All
+navigation still uses the shared client intents; the GUI keeps only bounded
+disposable scroll and pointer state. Configured metrics and other widgets
+belong in the bottom status bar.
 
 The tab strip packs tabs from the left, each a
 30 px pill with a 10 px radius: a 20 px translucent chip holding the
