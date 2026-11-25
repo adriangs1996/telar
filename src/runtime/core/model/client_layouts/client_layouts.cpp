@@ -140,6 +140,7 @@ namespace telar::runtime {
         location(tab),
         cwd(memory, command.cwd()),
         launch(memory),
+        restored_final_message(memory),
         extent(settings.size),
         body(std::in_place_type<TerminalBody>, memory, identity, command, settings) {
     randomBytes(history_session.dataMut(), history_session.size());
@@ -155,6 +156,7 @@ namespace telar::runtime {
         location(tab),
         cwd(memory, command.cwd()),
         launch(memory),
+        restored_final_message(memory),
         extent(size),
         body(std::in_place_type<NvimBody>, memory, size) {
     randomBytes(history_session.dataMut(), history_session.size());
@@ -169,6 +171,7 @@ namespace telar::runtime {
         location(tab),
         cwd(memory, explorer.directory),
         launch(memory),
+        restored_final_message(memory),
         extent(explorer.size),
         foreground_shell(false),
         body(std::in_place_type<ExplorerBody>, memory) {

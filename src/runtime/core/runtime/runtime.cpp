@@ -510,10 +510,14 @@ namespace telar::runtime {
           agent->finishTitleCapture();
         }
 
+        // What it last said shows on its card until it says something else.
+        agent->progress.restore(pane.restored_final_message.view());
         agents_.changed();
       }
 
       pane.restored_agent.reset();
+      pane.restored_final_message.clear();
+      pane.restored_final_message.shrinkToFit();
     }
 
     if (changed) {

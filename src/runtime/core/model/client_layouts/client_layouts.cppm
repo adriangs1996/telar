@@ -582,6 +582,8 @@ export {
       ds::Option<ConfigurePaneDesktop> desktop_theme;
       ProcessCache process_cache;
       ds::Option<AgentResume> restored_agent;
+      // What that agent last said before the runtime restarted, until it is seen again.
+      ds::String<ConcurrentMemory> restored_final_message;
       // The repository the pane works in, read after each command; zero until read.
       ShellGitSummary git{};
       FixedText<PATH_MAX> git_directory;

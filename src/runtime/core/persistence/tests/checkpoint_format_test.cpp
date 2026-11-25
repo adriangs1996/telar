@@ -54,8 +54,9 @@ namespace {
 
     // A pane as `version` wrote it: arguments in a 16-bit length before version 9, no title
     // before 2, the dropped flag of version 4, the in-pane flag from version 8 and what kind of
-    // pane it is from version 11, and the windows of an explorer from version 13.
-    Encoder& pane(std::uint64_t id, std::uint16_t count, std::string_view arguments, bool dropped = false, Byte pane_kind = 1, std::string_view explorer = {}) { // NOLINT(readability-function-size): one branch per version that changed the record
+    // pane it is from version 11, the windows of an explorer from version 13 and what its agent
+    // last said from version 14.
+    Encoder& pane(std::uint64_t id, std::uint16_t count, std::string_view arguments, bool dropped = false, Byte pane_kind = 1, std::string_view explorer = {}, std::string_view final_message = {}) { // NOLINT(readability-function-size): one branch per version that changed the record
       kind(checkpoint::Kind::pane).integer(id).integer(std::uint64_t{1}).integer(std::uint64_t{7}).text16("/tmp");
       integer(std::uint16_t{80}).integer(std::uint16_t{24}).integer(count);
       if (version_ >= 9) {
@@ -83,6 +84,10 @@ namespace {
 
       if (version_ >= 13) {
         integer(static_cast<std::uint32_t>(explorer.size())).raw(explorer);
+      }
+
+      if (version_ >= 14) {
+        text16(final_message);
       }
 
       return *this;
@@ -235,6 +240,21 @@ namespace {
     Encoder before{12};
 
     check(decode(before.workspace(1, "Shells").pane(2, 1, cat).finish()).panes.at(0).explorer.empty(), "a pane of a checkpoint before explorers has no windows");
+
+    // What a pane's agent last said ends its record, lines and all; a pane of a kind unknown is
+    // passed over with it, and a checkpoint from before it was kept has none.
+    Encoder said{checkpoint::current_version};
+    const auto spoken = decode(said.workspace(1, "Shells").pane(2, 1, cat, false, 1, {}, "Parser fixed.\nTwo tests added.").pane(4, 1, cat, false, 9, {}, "unknown").pane(5, 1, cat).finish());
+
+    check(spoken.panes.size() == 2 && spoken.panes[0].final_message == "Parser fixed.\nTwo tests added." && spoken.panes[1].id == 5 && spoken.panes[1].final_message.empty(), "what an agent last said, and the pane after one passed over");
+
+    Encoder silent{13};
+
+    check(decode(silent.workspace(1, "Shells").pane(2, 1, cat).finish()).panes.at(0).final_message.empty(), "a pane of a checkpoint before final messages has none");
+
+    Encoder control{checkpoint::current_version};
+
+    check(rejected(control.workspace(1, "Shells").pane(2, 1, cat, false, 1, {}, "bell\a").finish()), "a final message with a control byte was read");
   }
 
   void testPaneCap() {
