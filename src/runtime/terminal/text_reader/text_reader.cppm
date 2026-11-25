@@ -411,6 +411,11 @@ export {
 
       bool mode(GhosttyMode mode) const;
 
+      // The bytes that draw the screen it shows on a terminal of its size just reset: its title,
+      // the alternate screen when it shows that, its rows with their styles, its modes and its
+      // cursor. Written into `room`; empty when they do not fit.
+      [[nodiscard]] tbc::val_a<std::span<const Byte>> drawScreen(tbc::val_a<std::span<Byte>> room) const;
+
       bool outputSettled() const;
 
       void refresh();

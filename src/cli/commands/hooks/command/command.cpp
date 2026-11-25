@@ -271,14 +271,14 @@ namespace telar::runtime::cli::hooks {
   }
 
   void Payload::readClaudeFields() {
-    readTexts(fields_, {"session_title", "notification_type", "message", "last_assistant_message", "new_cwd"});
+    readTexts(fields_, {"session_title", "notification_type", "message", "last_assistant_message", "new_cwd", "error"});
+    // Every running background task, a shell as a subagent, wakes Claude again when it ends.
     if (const auto tasks = fields_.value("background_tasks")) {
       tasks->eachElement([&](JsonValue value) {
         const Object task{memory_, value, true};
-        const auto type = task.text("type");
         const auto status = task.text("status");
 
-        running_subagents_ += type == "subagent" && status == "running";
+        background_work_ += !task.text("type").empty() && status == "running";
       });
     }
   }
@@ -299,12 +299,12 @@ namespace telar::runtime::cli::hooks {
     return tools_;
   }
 
-  std::size_t Payload::runningSubagents() const noexcept {
-    return running_subagents_;
+  std::size_t Payload::backgroundWork() const noexcept {
+    return background_work_;
   }
 
-  void Payload::setRunningSubagents(std::size_t count) noexcept {
-    running_subagents_ = count;
+  void Payload::setBackgroundWork(std::size_t count) noexcept {
+    background_work_ = count;
   }
 
   std::string_view Payload::event() const {
@@ -600,9 +600,9 @@ namespace telar::runtime::cli::hooks {
     };
   }
 
-  void backgroundEvent(FixedText<display_line_bytes>& output, std::size_t count) {
+  void backgroundEvent(FixedText<display_line_bytes>& output, std::size_t count, std::string_view noun) {
     ds::Array<char, display_line_bytes> buffer{};
-    const auto written = std::format_to_n(buffer.dataMut(), static_cast<std::ptrdiff_t>(buffer.size()), "waiting for {} background {}", count, count == 1 ? "agent" : "agents");
+    const auto written = std::format_to_n(buffer.dataMut(), static_cast<std::ptrdiff_t>(buffer.size()), "waiting for {} background {}{}", count, noun, count == 1 ? "" : "s");
 
     output.assign({buffer.data(), std::min(static_cast<std::size_t>(written.size), buffer.size())});
   }

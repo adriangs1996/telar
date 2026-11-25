@@ -473,6 +473,11 @@ namespace telar::runtime {
     const auto in_foreground = needs_foreground_observation ? shellForeground() : ds::none;
 
     expireProgress(in_foreground);
+    // Bytes the observer has no room for drop what it holds: it starts again from this screen.
+    if (observer->overflows(bytes.size())) {
+      observer->resynced(terminal.drawScreen(observer->resyncRoom(bytes.size())).size());
+    }
+
     observer->bytes(ObservationKind::output, bytes, in_foreground);
     ShellCompletions completions{.state = shell_state};
 

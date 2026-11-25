@@ -141,7 +141,9 @@ export {
       [[nodiscard]] AgentProvider named(std::string_view name) const noexcept;
       [[nodiscard]] AgentProvider fromExecutable(std::string_view name) const noexcept;
       [[nodiscard]] AgentProvider fromPath(std::string_view path) const noexcept;
-      [[nodiscard]] ds::Option<AgentSignal> detect(std::string_view text) const noexcept;
+      // The state the phrases of the provider's manifest name in the text; for an unknown provider,
+      // the phrases of every manifest, and the provider the text's brand names.
+      [[nodiscard]] ds::Option<AgentSignal> detect(std::string_view text, AgentProvider provider = AgentProvider::unknown) const noexcept;
       [[nodiscard]] std::span<const AgentManifest> entries() const noexcept;
 
       static constexpr Byte first_custom_provider = first_custom_agent_provider;

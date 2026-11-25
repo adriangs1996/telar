@@ -1691,6 +1691,10 @@ namespace telar {
     waiting = 6,
     idle = 7,
     released = 8,
+    // The turn ended on an error, such as a failed model request.
+    failed = 9,
+    // The turn was stopped before it finished: idle, with no unseen result.
+    interrupted = 10,
   };
 
   enum class AgentSessionFileKind : Byte {

@@ -802,6 +802,76 @@ namespace telar::runtime {
     return query.value;
   }
 
+  tbc::val_a<std::span<const Byte>> Terminal::drawScreen(tbc::val_a<std::span<Byte>> room) const {
+    struct Room {
+      std::span<Byte> bytes;
+      std::size_t length = 0;
+      bool full = false;
+
+      bool append(std::span<const Byte> data) noexcept {
+        if (full || data.size() > bytes.size() - length) {
+          full = true;
+          return false;
+        }
+
+        std::ranges::copy(data, bytes.subspan(length).begin());
+        length += data.size();
+        return true;
+      }
+
+      bool append(std::string_view text) noexcept {
+        return append(byteView(text));
+      }
+    };
+
+    Room drawn{.bytes = room};
+    // The alternate screen is entered before its rows are drawn, so they land on it.
+    constexpr std::uint16_t alternate_screen = 1049;
+    constexpr std::uint16_t alternate_screen_plain = 1047;
+    const bool alternate = mode(telar::ghostty::mode(alternate_screen, false)) || mode(telar::ghostty::mode(alternate_screen_plain, false));
+
+    drawn.append("\x1b]0;");
+    drawn.append(effects_.title());
+    drawn.append("\x1b\\");
+    if (alternate) {
+      drawn.append("\x1b[?1049h");
+    }
+
+    drawn.append("\x1b[H\x1b[2J");
+    auto options = ghosttySized<GhosttyFormatterTerminalOptions>();
+
+    options.emit = GHOSTTY_FORMATTER_FORMAT_VT;
+    options.extra = ghosttySized<GhosttyFormatterTerminalExtra>();
+    options.extra.modes = true;
+    options.extra.scrolling_region = true;
+    options.extra.screen = ghosttySized<GhosttyFormatterScreenExtra>();
+    options.extra.screen.cursor = true;
+    options.extra.screen.style = true;
+    options.extra.screen.charsets = true;
+    auto selection = ghosttySized<GhosttySelection>();
+
+    selection.start = gridReference(terminal_.get(), GHOSTTY_POINT_TAG_ACTIVE, {.x = 0, .y = 0});
+    selection.end = gridReference(terminal_.get(), GHOSTTY_POINT_TAG_ACTIVE, {.x = static_cast<std::uint16_t>(screen_.cols - 1), .y = static_cast<std::uint32_t>(screen_.rows - 1)});
+    options.selection = &selection;
+    FormatterHandle formatter;
+
+    checkGhostty(ghostty_formatter_terminal_new(allocator(), formatter.output(), terminal_.get(), options));
+    const auto write = [](void* userdata, const std::uint8_t* data, std::size_t length) noexcept {
+    // GhosttyWriter hands the bytes as a C pointer and length.
+#pragma clang unsafe_buffer_usage begin
+      const std::span<const Byte> bytes{data, length};
+#pragma clang unsafe_buffer_usage end
+
+      return static_cast<Room*>(userdata)->append(bytes);
+    };
+
+    if (ghostty_formatter_format(formatter.get(), GhosttyWriter{.write = write, .userdata = &drawn}) != GHOSTTY_SUCCESS || drawn.full) {
+      return {};
+    }
+
+    return room.first(drawn.length);
+  }
+
   bool Terminal::outputSettled() const {
     bool ground = false;
 

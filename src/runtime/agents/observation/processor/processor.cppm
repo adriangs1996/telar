@@ -45,6 +45,8 @@ export {
       resize,
       shell_exit,
       session_end,
+      // A picture of the terminal's screen, which draws the observer's after it lost bytes.
+      resync,
     };
 
     struct ObservationEvent {
@@ -69,6 +71,8 @@ export {
       std::size_t byte_count = 0;
       std::size_t event_count = 0;
       bool reset_before = false;
+      // Whether the batch starts with a picture of the screen the reset lost.
+      bool resynced = false;
     };
 
   }
@@ -110,6 +114,16 @@ export {
 
       void bytes(ObservationKind kind, std::span<const Byte> bytes, ds::Option<bool> shell_foreground) noexcept;
 
+      // Whether `incoming` more bytes overflow the batch, which drops what it holds.
+      [[nodiscard]] bool overflows(std::size_t incoming) const noexcept;
+
+      // Drops the batch before `incoming` bytes that overflow it and starts the next from a picture
+      // of the terminal's screen: the caller draws it into the room this returns, then sizes it with
+      // `resynced`. Without it the observer's screen starts empty and an agent that redraws only
+      // what changed is read wrong until it redraws everything.
+      std::span<Byte> resyncRoom(std::size_t incoming) noexcept;
+      void resynced(std::size_t length) noexcept;
+
       void resize(TerminalSize size) noexcept;
 
       void shellExit(int code) noexcept;
@@ -144,7 +158,7 @@ export {
             tracker_.resetObservation();
             ghostty_terminal_reset(terminal_.handle());
             terminal_.resize(initial_size_);
-            inference_.reset();
+            inference_.reset(!batch.resynced || reset_needed_);
             reset_needed_ = false;
             TELAR_DIAGNOSTIC(result.metrics.resets = 1);
           }
@@ -152,7 +166,7 @@ export {
           const bool output = replay(batch, commands, result);
 
           if (output && inspect_screen) {
-            result.signal = inference_.observe(terminal_, manifests, provider, result.time);
+            result.signal = inference_.observe(terminal_, manifests, provider);
           }
 
           result.shell_markers = tracker_.markersReady();
@@ -226,6 +240,10 @@ export {
           }
           case ObservationKind::command:
             tracker_.submitCommand(batch.bytesOf(event));
+            break;
+          case ObservationKind::resync:
+            // Drawn on the screen alone: none of it is a command's output.
+            terminal_.feed(batch.bytesOf(event));
             break;
           case ObservationKind::shell_exit:
             tracker_.complete({event.time, event.exit_code}, commands);
