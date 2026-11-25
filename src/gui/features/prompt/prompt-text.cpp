@@ -222,8 +222,35 @@ namespace telar::gui::features::prompt {
   }
 
   std::size_t Text::boundary(std::size_t offset) const noexcept {
-    while (offset > 0 && offset < bytes_.size() && continuation(bytes_[offset])) {
-      --offset;
+    // Back to the lead byte of the sequence the offset falls in. A continuation byte no lead
+    // reaches, as Latin-1 a history kept brings, stands for itself: going back past it would
+    // keep the caret from ever crossing it.
+    constexpr std::size_t longest = 4;
+    constexpr unsigned char two_byte_lead = 0xc0;
+    constexpr unsigned char three_byte_lead = 0xe0;
+    constexpr unsigned char four_byte_lead = 0xf0;
+
+    if (offset == 0 || offset >= bytes_.size() || !continuation(bytes_[offset])) {
+      return offset;
+    }
+
+    for (std::size_t back = 1; back < longest && back <= offset; ++back) {
+      const auto lead = static_cast<unsigned char>(bytes_[offset - back]);
+      if (continuation(static_cast<char>(lead))) {
+        continue;
+      }
+
+      std::size_t length = 1;
+
+      if (lead >= four_byte_lead) {
+        length = 4;
+      } else if (lead >= three_byte_lead) {
+        length = 3;
+      } else if (lead >= two_byte_lead) {
+        length = 2;
+      }
+
+      return back < length ? offset - back : offset;
     }
 
     return offset;

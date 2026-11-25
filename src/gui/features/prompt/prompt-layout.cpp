@@ -74,7 +74,10 @@ namespace telar::gui::features::prompt {
     ds::Vec<shell::Token, Memory> tokens{memory};
 
     tokens.resize(text.size() + 1);
-    return shell::lex(text, syntax, tokens.viewMut()).completeness != shell::Completeness::complete;
+    const auto completeness = shell::lex(text, syntax, tokens.viewMut()).completeness;
+
+    // Past what the lexer follows (nesting, heredocs) it cannot tell: the shell judges.
+    return completeness != shell::Completeness::complete && completeness != shell::Completeness::limit;
   }
 
   namespace {

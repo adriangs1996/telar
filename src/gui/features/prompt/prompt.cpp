@@ -306,18 +306,42 @@ namespace telar::gui::features::prompt {
     return written == 0 ? ds::none : ds::Option{written};
   }
 
-  ds::Option<Outcome> follow(PaneLine& line, const PaneShell& previous, const PaneShell& current) {
+  bool BetweenCommands::now(const PaneLine& line, std::int64_t now) noexcept {
+    return line.ended && std::chrono::nanoseconds{now - *line.ended} < limit;
+  }
+
+  ds::Option<Outcome> follow(PaneLine& line, const PaneShell& previous, const PaneShell& current, std::int64_t now) {
     auto& typed = line.line;
 
     if (current.phase != ShellPhase::running || current.echo) {
       typed.clearSecret();
     }
 
-    if (previous.phase != ShellPhase::running || current.phase != ShellPhase::prompt) {
+    // An answer ends with the line its program read: the program is gone, or reads keys raw
+    // or unseen.
+    if (current.phase != ShellPhase::running || !current.canonical || !current.echo) {
+      line.forwarding = false;
+    }
+
+    // A command ended, or another began: whether the queue may run is known from here, though
+    // the shell may run its hooks before its prompt is back.
+    if (current.commands != previous.commands) {
+      line.succeeded = current.status == 0;
+    } else if (current.phase == ShellPhase::running && previous.phase != ShellPhase::running) {
+      line.succeeded = false;
+    }
+
+    if (current.phase != ShellPhase::unknown) {
+      line.ended.reset();
+    } else if (current.commands != previous.commands) {
+      line.ended = now;
+    }
+
+    if (previous.phase == ShellPhase::prompt || current.phase != ShellPhase::prompt) {
       return ds::none;
     }
 
-    return typed.promptReturned(current.commands != previous.commands && current.status == 0);
+    return typed.promptReturned(std::exchange(line.succeeded, false));
   }
 
   void useClipboard(tbc::mut_a<PaneLine> line, tbc::val_a<Clipboard> clipboard) {
@@ -878,6 +902,12 @@ namespace telar::gui::features::prompt {
 
     line->line.receive(message.request_id, std::move(paths), message.truncated);
     return pane_id;
+  }
+
+  bool asksAgain(Lines& lines, std::uint64_t pane_id) noexcept {
+    auto* line = find(lines, pane_id);
+
+    return line != nullptr && line->line.takeAskAgain();
   }
 
   // ---- requests that fail -----------------------------------------------------------------------
