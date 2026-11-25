@@ -5,8 +5,10 @@ import QtQuick.Controls.Basic
 import Telar.Gui
 
 // The workspaces of the machine as one segmented control, in the runtime's order: each segment a
-// mark and a name, the active one filled. When the bar runs short the others keep only their mark,
-// and past that the ones that do not fit hide behind the control that opens the whole list.
+// mark and a name, the active one filled. From three workspaces on, or when the bar runs short,
+// only the active one keeps its name and the others their mark, so the track leaves the tabs
+// their room; past that the ones that do not fit hide behind the control that opens the whole
+// list.
 Item {
     id: root
 
@@ -40,10 +42,13 @@ Item {
         return count === 0 ? 0 : total + (count - 1) * spacing;
     }
     readonly property real chrome: 2 * inset + spacing + moreWidth
-    readonly property real preferredWidth: count === 0 ? 0 : namedTotal + chrome
+    // The most workspaces that all show their name.
+    readonly property int namedLimit: 2
+    readonly property bool few: count <= namedLimit
+    readonly property real preferredWidth: count === 0 ? 0 : (few ? namedTotal : compactTotal) + chrome
     readonly property real activeWidth: selectedIndex >= 0 && selectedIndex < namedWidths.length ? (namedWidths[selectedIndex] ?? compactWidth) : compactWidth
     readonly property real compactTotal: count === 0 ? 0 : activeWidth + Math.max(0, count - (selectedIndex >= 0 ? 1 : 0)) * compactWidth + Math.max(0, count - 1) * spacing
-    readonly property bool named: namedTotal + chrome <= room
+    readonly property bool named: few && namedTotal + chrome <= room
     readonly property real listRoom: Math.max(0, room - chrome)
     readonly property real listWidth: Math.min(named ? namedTotal : compactTotal, listRoom)
     readonly property bool overflowing: !named && compactTotal > listRoom

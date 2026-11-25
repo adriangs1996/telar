@@ -499,9 +499,15 @@ namespace {
         QVERIFY(machine_bounds.left() >= controls_inset);
         QVERIFY(machine_bounds.right() <= track_bounds.left());
         QVERIFY(track_bounds.right() < layout->mapToItem(navigation.get(), QPointF{}).x());
-        for (auto* name : visualItems(*track, QStringLiteral("workspaceSegmentName"))) {
-          QVERIFY(name->isVisible());
+        // Three workspaces: the one in front keeps its name, the others their mark.
+        qsizetype named = 0;
+
+        for (const auto* name : visualItems(*track, QStringLiteral("workspaceSegmentName"))) {
+          named += static_cast<qsizetype>(name->isVisible());
         }
+
+        QCOMPARE(named, qsizetype{1});
+        QVERIFY(visualItems(*navigation, QStringLiteral("topBarTelarMark")).isEmpty());
 
         const auto segments = visualItems(*track, QStringLiteral("workspaceSegment"));
 
@@ -1272,8 +1278,10 @@ namespace {
       QVERIFY(track->setProperty("selectedIndex", 0));
       QTRY_VERIFY_WITH_TIMEOUT(inView(), fixture_wait_ms);
 
-      // A few workspaces in a room that holds their marks but not their names: every mark shows.
+      // Three workspaces or more: every mark shows and only the one in front keeps its name,
+      // whatever the room, so the track leaves the tabs theirs.
       constexpr int few = 4;
+      constexpr int pair = 2;
 
       workspaces.reconcile(workspaceRecords({.count = few, .active = 0}));
       QTRY_COMPARE_WITH_TIMEOUT(visualItems(*track, QStringLiteral("workspaceSegment")).size(), qsizetype{few}, fixture_wait_ms);
@@ -1281,12 +1289,19 @@ namespace {
       QCOMPARE(shownNames(), qsizetype{1});
       QCOMPARE(track->property("shownCount").toInt(), few);
 
-      // Room for every name: each segment shows its own, and choosing another moves none of them.
       QVERIFY(track->setProperty("room", wide_window));
-      QTRY_COMPARE_WITH_TIMEOUT(shownNames(), qsizetype{few}, fixture_wait_ms);
+      QVERIFY(test::waitForSynchronizedFrame(window, fixture_wait_ms));
+      QCOMPARE(shownNames(), qsizetype{1});
+      QCOMPARE(track->property("shownCount").toInt(), few);
+
+      // Two workspaces with room for both names: each shows its own, and choosing the other
+      // moves neither.
+      workspaces.reconcile(workspaceRecords({.count = pair, .active = 0}));
+      QVERIFY(track->setProperty("selectedIndex", 0));
+      QTRY_COMPARE_WITH_TIMEOUT(shownNames(), qsizetype{pair}, fixture_wait_ms);
       // Each segment's bounds in the track, by its position in the list.
       const auto bounds = [&] {
-        telar::ds::Array<QRectF, few> placed{};
+        telar::ds::Array<QRectF, pair> placed{};
 
         for (const auto* segment : visualItems(*track, QStringLiteral("workspaceSegment"))) {
           placed.atMut(static_cast<std::size_t>(segment->property("index").toInt())) = segment->mapRectToItem(track.get(), segment->boundingRect());
@@ -1298,8 +1313,8 @@ namespace {
       QVERIFY(test::waitForSynchronizedFrame(window, fixture_wait_ms));
       const auto before = bounds();
 
-      workspaces.reconcile(workspaceRecords({.count = few, .active = few - 1}));
-      QVERIFY(track->setProperty("selectedIndex", few - 1));
+      workspaces.reconcile(workspaceRecords({.count = pair, .active = pair - 1}));
+      QVERIFY(track->setProperty("selectedIndex", pair - 1));
       QVERIFY(test::waitForSynchronizedFrame(window, fixture_wait_ms));
       const auto after = bounds();
 

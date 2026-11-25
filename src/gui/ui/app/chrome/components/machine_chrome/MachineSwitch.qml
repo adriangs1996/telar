@@ -3,10 +3,10 @@ pragma ComponentBehavior: Bound
 import QtQuick
 import Telar.Gui
 
-// The telar mark, then the machine the window shows as one control: its avatar with the dot of
-// its link, its label and a chevron. It opens the menu of every machine. A dot before the
-// chevron says another machine needs the person. When the row is narrow the label elides, and
-// the avatar still tells which machine it is.
+// The machine the window shows as one control: its avatar with the dot of its link, its label
+// and a chevron. It opens the menu of every machine. A dot before the chevron says another
+// machine needs the person. When the row is narrow the label elides, and the avatar still tells
+// which machine it is.
 Item {
     id: root
 
@@ -15,13 +15,11 @@ Item {
     // The machine chrome's `active`: label, initial, ink, live and attention.
     required property var machine
     property real ratio: 1
-    property real markSide: 18 * ratio
     // The menu is open: the control stays pressed under it.
     property bool open: false
     readonly property string label: machine.label ?? ""
     readonly property bool attention: machine.attention ?? false
     readonly property color ink: (machine.ink?.a ?? 0) > 0 ? machine.ink : colors.accent
-    readonly property real gap: Math.round(markSide * 0.3)
     readonly property real inset: Math.round(5 * ratio)
     readonly property real avatarSide: Math.round(20 * ratio)
     readonly property real labelGap: Math.round(7 * ratio)
@@ -30,7 +28,7 @@ Item {
     readonly property real dotRoom: attention ? dotSide + labelGap : 0
     // The control with no label: what is left when the bar has no room for one.
     readonly property real bareWidth: inset + avatarSide + dotRoom + labelGap + chevronSide + inset
-    readonly property real minimumWidth: markSide + gap + bareWidth
+    readonly property real minimumWidth: bareWidth
     readonly property real preferredWidth: minimumWidth + (label.length > 0 ? labelGap + Math.ceil(labelText.implicitWidth) : 0)
     // Where the menu hangs from, in this item's coordinates.
     readonly property rect anchor: Qt.rect(control.x, control.y, control.width, control.height)
@@ -39,23 +37,10 @@ Item {
     implicitWidth: preferredWidth
     implicitHeight: Math.round(28 * ratio)
 
-    ProviderMark {
-        objectName: "topBarTelarMark"
-        x: 0
-        y: (root.height - height) / 2
-        width: root.markSide
-        height: root.markSide
-        telarMark: true
-        theme: root.colors.theme ?? -1
-        color: root.colors.chromeText
-        ratio: root.ratio
-    }
-
     ChromeButton {
         id: control
         objectName: "topBarMachine"
-        x: root.markSide + root.gap
-        width: Math.max(0, Math.min(root.preferredWidth, root.width) - x)
+        width: Math.max(0, Math.min(root.preferredWidth, root.width))
         height: root.height
         visible: width >= root.bareWidth
         colors: root.colors

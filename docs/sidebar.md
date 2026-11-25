@@ -131,8 +131,8 @@ that pane index while rendering. No widget rewrites the runtime replica.
 
 ## Machines
 
-The top bar names the machine the window shows right after the telar mark, as
-one control: the machine's avatar (its color and the first character of its
+The top bar names the machine the window shows right after the sidebar toggle,
+as one control: the machine's avatar (its color and the first character of its
 label) with a dot for its link, its label and a chevron. A yellow dot before
 the chevron says an agent on another machine waits on the person. The control
 is there with one machine too.
@@ -170,15 +170,17 @@ After the machine, the top bar holds the workspace track: one segmented control
 with every workspace of the machine in the runtime's order, each segment the
 workspace's mark (a tile in a hue its name picks from the palette's accents,
 holding its initial) and its name. The segment of the workspace in front is
-filled and ringed; a segment keeps the width of its name in the heavier weight,
-so choosing a workspace moves none of the others. A workspace with an agent
-that waits on the person shows a dot in that state's color after its name.
+filled and ringed. A workspace with an agent that waits on the person shows a
+dot in that state's color after its name, or on its mark's corner when the
+segment shows no name.
 Clicking a segment switches to its workspace, and the tabs beside the track
 are then that workspace's. Hovering a segment shows its name and its path.
 
-The track shortens before the tabs do. With room for every name it shows them
-all. Short of that, the workspace in front keeps its name and the others keep
-only their mark, with the state's dot on the mark's corner. Short of that too,
+The track leaves the tabs their room. One or two workspaces show their names
+when the bar has room for them, each segment as wide as its name in the heavier
+weight, so choosing one moves neither. With three or more, or without that
+room, the workspace in front keeps its name and the others keep only their
+mark. Short of that too,
 the marks that do not fit hide, the row moves just enough to hold the workspace
 in front, and the control at the end of the track counts the hidden ones as
 `+N`.
@@ -411,12 +413,11 @@ navigation row the frame reports (`telar_gui_frame.navigation`) at a 14 pt
 lead and 20 pt pitch, and reports the points they cover through
 `telar_gui_viewport.controls`, zero in fullscreen, with the native titlebar
 and on Linux. After that room come the sidebar toggle, a glyph with a quiet
-hover surface, the telar mark, the machine switcher, the workspace track and
-the tabs, which end before the palette button and the new tab button. The bar
+hover surface, the machine switcher, the workspace track and the tabs, which end before the palette button and the new tab button. The bar
 reads in the order of what holds what: the machine, its workspaces, the tabs of
 the workspace in front. The tabs keep 220 logical px before the other two get
 any room, so a narrow window shortens those first: the machine's label down to
-72 px, then the workspaces' names, then the workspaces that do not fit. All
+72 px, then the names of two workspaces, then the workspaces that do not fit. All
 navigation still uses the shared client intents; the GUI keeps only bounded
 disposable scroll and pointer state. Configured metrics and other widgets
 belong in the bottom status bar.

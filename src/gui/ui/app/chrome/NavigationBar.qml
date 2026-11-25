@@ -34,10 +34,9 @@ NativeRoundedRectangle {
     signal elementActivated(string slot, string key, string revision, int element)
 
     readonly property real padding: 8 * ratio
-    // Controls and the telar mark follow the bar's height, which follows the font size:
+    // Controls follow the bar's height, which follows the font size:
     // 28-point controls on the default 44-point bar.
     readonly property real toggleSide: Math.round(height * 0.635)
-    readonly property real markSide: Math.round(toggleSide * 0.92)
     readonly property real identityGap: Math.round(height * 0.26)
     readonly property real glyphSide: Math.round(toggleSide * 0.6)
     readonly property real controlGap: 8 * ratio
@@ -89,7 +88,6 @@ NativeRoundedRectangle {
         y: (parent.height - height) / 2
         width: root.machineRoom
         height: Math.min(parent.height, root.toggleSide)
-        markSide: root.markSide
         colors: root.colors
         typography: root.typography
         ratio: root.ratio
@@ -237,7 +235,6 @@ NativeRoundedRectangle {
         id: identityPiece
         MachineSwitch {
             implicitHeight: root.toggleSide
-            markSide: root.markSide
             colors: root.colors
             typography: root.typography
             ratio: root.ratio

@@ -1425,7 +1425,10 @@ namespace {
         });
       };
 
-      QCOMPARE(named(), static_cast<qsizetype>(projects.size()));
+      // Five workspaces: every mark shows, and only the one in front keeps its name.
+      QCOMPARE(named(), qsizetype{1});
+      QCOMPARE(track->property("shownCount").toInt(), static_cast<int>(projects.size()));
+      QVERIFY(visualItems(*content, QStringLiteral("topBarTelarMark")).isEmpty());
       QVERIFY(visualItems(*content, QStringLiteral("projectSwitcher")).isEmpty());
       QVERIFY(visualItems(*content, QStringLiteral("sidebarMachineList")).isEmpty());
 
@@ -1534,9 +1537,11 @@ namespace {
       QVERIFY(QMetaObject::invokeMethod(workspaces, "close"));
       QTRY_VERIFY_WITH_TIMEOUT(!workspaces->property("visible").toBool(), wait_ms);
 
-      // A narrow bar keeps every workspace's mark and the name of the one in front.
+      // A narrow bar still holds every workspace's mark and the name of the one in front.
       window->resize(narrow);
-      QTRY_COMPARE_WITH_TIMEOUT(named(), qsizetype{1}, wait_ms);
+      QVERIFY(waitForSynchronizedFrame(*window, wait_ms));
+      QCOMPARE(named(), qsizetype{1});
+      QCOMPARE(track->property("shownCount").toInt(), static_cast<int>(projects.size()));
       QVERIFY(track->mapToScene({track->width(), 0}).x() <= strip->mapToScene({0, 0}).x());
       QVERIFY(capture("chrome-narrow.png"));
     }
