@@ -6,6 +6,9 @@ Popup {
     id: root
 
     property real ratio: 1
+    // The palette and the forms frame their text by it: their width, insets and rows grow with
+    // the chrome's font, so a larger font does not crowd or cut what they say.
+    property real textRatio: 1
     readonly property bool historyMode: telar.dialogs.kind === Store.Dialog.history
     readonly property bool pathMode: telar.dialogs.kind === Store.Dialog.paths
     readonly property bool machineMode: telar.dialogs.kind === Store.Dialog.machine
@@ -84,11 +87,11 @@ Popup {
     y: peekMode ? peekBounds.y : machineMode ? machineBounds.y : pathMode ? pathBounds.y : historyMode ? historyBounds.y + historyEntranceOffset * (1 - historyMotion.reveal) : paletteMode ? paletteBounds.y : (parent.height - height) / 2 + promptEntranceOffset * (1 - promptMotion.reveal)
     opacity: reveal
     scale: promptMode ? promptEntranceScale + (1 - promptEntranceScale) * promptMotion.reveal : 1
-    width: peekMode ? peekBounds.width : machineMode ? machineBounds.width : pathMode ? pathBounds.width : historyMode ? historyBounds.width : paletteMode ? paletteBounds.width : Math.min(parent.width - 32, (wizardMode ? 640 : workspaceMode ? 520 : 480) * ratio)
+    width: peekMode ? peekBounds.width : machineMode ? machineBounds.width : pathMode ? pathBounds.width : historyMode ? historyBounds.width : paletteMode ? paletteBounds.width : Math.min(parent.width - 32, (wizardMode ? 640 : workspaceMode ? 520 : 480) * textRatio)
     height: peekMode ? peekBounds.height : machineMode ? machineBounds.height : pathMode ? pathBounds.height : historyMode ? historyBounds.height : paletteMode ? paletteBounds.height : contentItem.implicitHeight + topPadding + bottomPadding
     modal: true
     focus: true
-    padding: customMode ? 0 : 22 * ratio
+    padding: customMode ? 0 : 22 * textRatio
     closePolicy: customMode ? Popup.CloseOnPressOutside : Popup.CloseOnEscape | Popup.CloseOnPressOutside
     onClosed: {
         if (telar.dialogs.kind !== Store.Dialog.none && !root.lineHosted)
@@ -218,7 +221,7 @@ Popup {
                 colors: telar.colors
                 typography: telar.display.geometry.typography
                 controlModifier: telar.controlModifier
-                ratio: root.ratio
+                ratio: root.textRatio
                 onCancelled: telar.commands.execute(WindowActions.Action.cancel)
                 onMachineEdited: (choice, action) => telar.commands.editMachineResult(choice, action)
             }
@@ -277,7 +280,7 @@ Popup {
             dialog: telar.dialogs.kind
             searchScope: telar.copy.searchScope
             searchScopes: telar.copy.searchScopes
-            ratio: root.ratio
+            ratio: root.textRatio
             onSubmitted: input => telar.commands.submitDialog(input)
             onCancelled: telar.commands.execute(WindowActions.Action.cancel)
             onSearchScopeToggled: telar.copy.toggleSearchScope()
@@ -292,7 +295,7 @@ Popup {
                 controller: telar.machineWizard
                 colors: telar.colors
                 typography: telar.display.geometry.typography
-                ratio: root.ratio
+                ratio: root.textRatio
                 onCancelled: telar.commands.execute(WindowActions.Action.cancel)
             }
         }
@@ -304,7 +307,7 @@ Popup {
             controller: telar.workspaceForm
             colors: telar.colors
             typography: telar.display.geometry.typography
-            ratio: root.ratio
+            ratio: root.textRatio
             onSubmitted: input => telar.commands.submitDialog(input)
             onCancelled: telar.commands.execute(WindowActions.Action.cancel)
         }
