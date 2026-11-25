@@ -2192,7 +2192,7 @@ namespace telar::runtime::config {
       return settings;
     }
 
-    client.onlyFields({"prefix", "theme", "icons", "sidebar", "pane_gaps", "editor", "window_title", "sound", "notifications", "appearance", "input", "keybindings", "bars", "panels", "picks", "history", "components", "prompt", "explorer"});
+    client.onlyFields({"prefix", "theme", "icons", "sidebar", "pane_gaps", "editor", "window_title", "sound", "notifications", "appearance", "input", "keybindings", "bars", "panels", "picks", "history", "components", "prompt", "explorer", "theme_picker"});
     settings.input = input(client);
     settings.pane_gaps = optionalBoolean(client.field("pane_gaps"));
     settings.editor = printableText(client.field("editor"), maximum_editor_bytes, false);
@@ -2202,7 +2202,29 @@ namespace telar::runtime::config {
     notifications(client.field("notifications"), settings);
     history(client.field("history"), settings.history);
     explorer(client.field("explorer"), settings.explorer_keys);
+    themePicker(client.field("theme_picker"), settings.theme_picker);
     return settings;
+  }
+
+  void ClientReader::themePicker(const lua::Value& table, ClientSettings::ThemePicker& picker) {
+    if (!table.present()) {
+      return;
+    }
+
+    table.onlyFields({"on_select", "timeout_ms"});
+    const auto on_select = table.field("on_select");
+    if (on_select.present()) {
+      if (!CommandArgumentsValidator::validate(on_select)) {
+        on_select.fail("requires a theme placeholder after the program");
+      }
+
+      picker.on_select = true;
+    }
+
+    const auto timeout = table.field("timeout_ms");
+    if (timeout.present()) {
+      picker.timeout_ms = static_cast<std::uint32_t>(boundedWhole(timeout, SourceSetting::default_timeout_ms, PickSetting::timeout_ms_bounds));
+    }
   }
 
   std::size_t ClientReader::slot(std::string_view name, const lua::Value& entry) {

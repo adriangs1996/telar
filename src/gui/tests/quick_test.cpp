@@ -1490,6 +1490,143 @@ return {api_version = 2, client = {
       QCOMPARE(errors_, QString{});
     }
 
+    // The theme picker dresses the window in each theme it focuses and puts the window's theme back
+    // on escape. Choosing one saves it for every window and runs the configured command with its
+    // name; a window follows the saved choice when another one changes it, and the configuration's
+    // slot forgets it. With TELAR_THEME_PICKER_SHOT naming a directory, each step is saved there.
+    Q_SLOT void themePickerPreviewsChoosesAndReverts() {
+      QTRY_VERIFY_WITH_TIMEOUT(terminalReady(), runtime_wait_ms);
+      const QTemporaryDir directory;
+      QVERIFY(directory.isValid());
+      const auto cleanup = qScopeGuard([this] {
+        client_->themes()->cancel();
+        client_->loadConfiguration({}, {}, {});
+      });
+      const auto path = directory.filePath(QStringLiteral("config.lua"));
+      const auto choice = directory.filePath(QStringLiteral("state/telar/theme"));
+      const auto applied = directory.filePath(QStringLiteral("applied"));
+      writeTestFile(path, qPrintable(QStringLiteral(R"(
+      return {api_version=2,theme='zenburn',
+        themes={['osaka-jade']={base='vesper',colors={accent='#a8c98c'},terminal={background='#111c18',foreground='#d1d1cf'}}},
+        client={theme_picker={on_select={'/bin/sh','-c','printf %s "$1" > "$2"','theme','{}','%1'}}}}
+    )")
+                                  .arg(applied)));
+      client_->loadConfiguration(path, {}, {}, {}, choice);
+      QVERIFY2(client_->status()->error().isEmpty(), qPrintable(client_->status()->error()));
+      const auto configured = client_->configuration().theme;
+      const auto osaka = themeRgb(ThemeRgb{17, 28, 24});
+      const auto shot = qEnvironmentVariable("TELAR_THEME_PICKER_SHOT");
+      int shots = 0;
+      const auto save = [&](const QString& name) {
+        if (!shot.isEmpty()) {
+          // The slices settle in 180 ms.
+          constexpr int settle_ms = 400;
+
+          QTest::qWait(settle_ms);
+          QVERIFY(window_->grabWindow().save(QDir{shot}.filePath(QStringLiteral("%1-%2.png").arg(++shots, 2, 10, QLatin1Char('0')).arg(name))));
+        }
+      };
+      // Saved at the size of a laptop's window, with a pane that shows the terminal's colors.
+      const auto original_size = window_->size();
+      const auto restore = qScopeGuard([&] {
+        window_->resize(original_size);
+      });
+
+      if (!shot.isEmpty()) {
+        constexpr int shot_width = 1440;
+        constexpr int shot_height = 900;
+        const auto sample = directory.filePath(QStringLiteral("sample.sh"));
+
+        window_->showNormal();
+        window_->resize(shot_width, shot_height);
+        QTRY_COMPARE(window_->size(), QSize(shot_width, shot_height));
+        writeTestFile(sample, R"(c() { printf '\033[%sm%s\033[0m' "$1" "$2"; }
+p() { c 34 '~/src/telar'; printf ' '; c 35 'main'; printf ' '; c 32 '>'; printf ' %s\n' "$1"; }
+clear
+p 'git log --oneline -3'
+c 33 '17bb5c5e2'; printf ' Release 0.0.3\n'
+c 33 'f3b763b10'; printf ' Pass clang-tidy on the merged fixes\n'
+c 33 'cf0e335f3'; printf ' Pass the lifetime checks\n'
+p 'just domain-test runtime.terminal'
+printf ' '; c 92 PASS; printf ' runtime.terminal.grid.resize     '; c 90 '12 ms'; printf '\n'
+printf ' '; c 92 PASS; printf ' runtime.terminal.osc.palette     '; c 90 ' 4 ms'; printf '\n'
+printf ' '; c 91 FAIL; printf ' runtime.terminal.osc.title       '; c 90 ' 7 ms'; printf '\n'
+printf '   '; c 31 'expected "build" got ""'; printf '\n'
+p 'ls src'
+c 94 cli; printf '  '; c 94 gateway; printf '  '; c 94 gui; printf '  '; c 94 runtime; printf '  '; c 96 CMakeLists.txt; printf '\n'
+for i in 0 1 2 3 4 5 6 7; do printf '\033[4%sm    ' "$i"; done; printf '\033[0m\n'
+for i in 0 1 2 3 4 5 6 7; do printf '\033[10%sm    ' "$i"; done; printf '\033[0m\n'
+)");
+        QVERIFY(client_->terminals()->input(firstPane()->id, QStringLiteral("sh '%1'\r").arg(sample).toUtf8()));
+        QTRY_VERIFY_WITH_TIMEOUT(screenText(firstPane()->screen).contains(QStringLiteral("CMakeLists.txt")), runtime_wait_ms);
+      }
+
+      auto* picker = client_->themes();
+      const auto type = [this](const char* text) {
+        for (const auto* character = text; *character != '\0'; ++character) {
+          QTest::keyClick(window_, *character);
+        }
+      };
+      const auto focusedName = [&] {
+        return picker->themes().at(picker->focus()).toMap().value(QStringLiteral("name")).toString();
+      };
+
+      save(QStringLiteral("window"));
+      client_->commands()->execute(window_actions::Action::theme_picker);
+      QCOMPARE(client_->dialogs()->kind(), Store::Dialog::themes);
+      QVERIFY(picker->isOpen());
+      QCOMPARE(picker->focus(), 0);
+      QCOMPARE(picker->themes().size(), qsizetype{13});
+      auto* overlay = test::visualItems(*window_->contentItem(), QStringLiteral("themePickerOverlay")).value(0);
+      QVERIFY(overlay != nullptr);
+      QTRY_VERIFY(overlay->isVisible() && overlay->hasActiveFocus());
+      save(QStringLiteral("picker"));
+
+      // Each focused theme dresses the window at once; escape puts its own theme back.
+      type("tok");
+      QCOMPARE(focusedName(), QStringLiteral("tokyo-night"));
+      QTRY_VERIFY(client_->configuration().theme != configured);
+      save(QStringLiteral("preview-tokyo-night"));
+      QTest::keyClick(window_, Qt::Key_Right);
+      QCOMPARE(focusedName(), QStringLiteral("vesper"));
+      save(QStringLiteral("preview-vesper"));
+      QTest::keyClick(window_, Qt::Key_Escape);
+      QCOMPARE(client_->dialogs()->kind(), Store::Dialog::none);
+      QVERIFY(client_->configuration().theme == configured);
+      QVERIFY(!QFileInfo::exists(choice));
+
+      // Choosing a theme keeps it, saves it for every window and runs on_select with its name.
+      client_->commands()->execute(window_actions::Action::theme_picker);
+      type("osa");
+      QCOMPARE(focusedName(), QStringLiteral("osaka-jade"));
+      save(QStringLiteral("preview-osaka-jade"));
+      QTest::keyClick(window_, Qt::Key_Return);
+      QCOMPARE(client_->dialogs()->kind(), Store::Dialog::none);
+      QVERIFY(client_->configuration().theme.background == osaka);
+      QCOMPARE(QFile::permissions(choice), QFileDevice::ReadOwner | QFileDevice::WriteOwner | QFileDevice::ReadUser | QFileDevice::WriteUser);
+      QVERIFY(readTestFile(choice).startsWith("osaka-jade\n"));
+      QTRY_COMPARE_WITH_TIMEOUT(readTestFile(applied), QByteArray{"osaka-jade"}, runtime_wait_ms);
+      save(QStringLiteral("chosen-osaka-jade"));
+
+      // Another window forgot the choice: this one follows it.
+      QVERIFY(QFile::remove(choice));
+      QTRY_VERIFY_WITH_TIMEOUT(client_->configuration().theme == configured, runtime_wait_ms);
+
+      // The configuration's slot forgets a choice.
+      client_->commands()->execute(window_actions::Action::theme_picker);
+      type("osa");
+      QTest::keyClick(window_, Qt::Key_Return);
+      QTRY_VERIFY(QFileInfo::exists(choice));
+      client_->commands()->execute(window_actions::Action::theme_picker);
+      QCOMPARE(focusedName(), QStringLiteral("osaka-jade"));
+      QTest::keyClick(window_, Qt::Key_Home);
+      QCOMPARE(picker->focus(), 0);
+      QTest::keyClick(window_, Qt::Key_Return);
+      QVERIFY(!QFileInfo::exists(choice));
+      QVERIFY(client_->configuration().theme == configured);
+      QCOMPARE(client_->status()->error(), QString{});
+    }
+
     // The monitor lists every process its runtime reads, says which ones telar runs, and shows the
     // detail of the one selected; with TELAR_MONITOR_SHOT set, the window as it shows them is saved
     // there, and its tree and owner listings beside it.
@@ -5557,7 +5694,7 @@ return {api_version=2, client={keybindings={
     Q_SLOT void paletteActionsUseOriginalLabelsAndReorderExistingTabs() {
       const auto commands = client_->commands()->list();
 
-      QCOMPARE(commands.size(), qsizetype{47});
+      QCOMPARE(commands.size(), qsizetype{48});
       QCOMPARE(commands.front().toMap().value(QStringLiteral("label")).toString(), QStringLiteral("Split right"));
       const QStringList tail{QStringLiteral("Copy process command"), QStringLiteral("Go to process pane"), QStringLiteral("Review process stack"), QStringLiteral("Review process open files"), QStringLiteral("Review process logs")};
 

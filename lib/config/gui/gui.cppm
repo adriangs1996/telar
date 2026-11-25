@@ -1,3 +1,6 @@
+module;
+#include "tbc/annotations.hpp"
+
 export module telar.config.gui;
 
 import std;
@@ -168,9 +171,38 @@ export {
 
     class ThemeReader {
     public:
+      // `themes`, the named themes the theme picker lists beside the presets.
+      static constexpr std::size_t maximum_named_themes = 64;
+      static constexpr std::size_t maximum_theme_name_bytes = 64;
+
       // The settings view the strings the Lua state holds, region `a`.
       [[nodiscard]] static tbc::val_a<ThemeSelectionSettings> selection(const lua::Value& configuration);
       [[nodiscard]] static tbc::val_a<ds::Option<ThemeSettings>> read(const lua::Value& theme);
+
+      // Hands `consume` each theme of the configuration's `themes` table with its name, in the
+      // table's order. Both view the strings the Lua state holds. Stays in the interface because
+      // it is a template over the caller's callable.
+      template <typename Consume>
+      TBC_GENERIC static void named(const lua::Value& configuration, const Consume& consume) {
+        const auto themes = configuration.field("themes");
+        if (!themes.present()) {
+          return;
+        }
+
+        std::size_t count = 0;
+
+        themes.eachField([&](std::string_view name, const lua::Value& theme) {
+          if (++count > maximum_named_themes) {
+            themes.fail("has more than 64 themes");
+          }
+
+          if (!validName(name)) {
+            theme.fail("has an invalid name: use 1..64 letters, digits, '-' or '_'");
+          }
+
+          consume(name, *read(theme));
+        });
+      }
 
     private:
       // Each name a theme may give, with the preset it selects.
@@ -198,6 +230,7 @@ export {
           },
       };
 
+      static bool validName(std::string_view name) noexcept;
       static tbc::val_a<ds::Option<std::string_view>> preset(const lua::Value& value);
       static ThemeColor color(const lua::Value& value, bool allow_default);
       static ds::Option<ThemeRgb> rgb(const lua::Value& value);

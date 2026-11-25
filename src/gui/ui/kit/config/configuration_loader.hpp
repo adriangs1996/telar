@@ -36,6 +36,8 @@ namespace telar::gui::qt {
     QString profile;
     QString theme;
     QString trust_path{};
+    // Where the theme picker keeps its choice for every window; none keeps no choice.
+    QString theme_choice_path{};
   };
 
   struct ConfigurationDependency {

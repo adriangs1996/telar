@@ -1064,6 +1064,7 @@ namespace telar::gui::qt {
     case Action::explorer:
     case Action::monitor:
     case Action::process_picker:
+    case Action::theme_picker:
       return false;
     }
 

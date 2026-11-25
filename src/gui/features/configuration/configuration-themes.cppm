@@ -771,6 +771,10 @@ export {
 
       static void apply(const runtime::config::ThemeSelectionSettings& settings, ThemeSelection& selection);
 
+      // A theme of the configuration's `themes` table: its preset, or the default theme, with
+      // its values over it.
+      [[nodiscard]] static ThemeValues named(const Settings& settings);
+
     private:
       static CellColor color(const runtime::config::ThemeColor& color) noexcept;
       static void applyVariant(const ds::Option<Settings>& settings, ds::Option<ThemeValues>& variant, const ThemeValues& base);

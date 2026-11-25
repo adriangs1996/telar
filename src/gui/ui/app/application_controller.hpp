@@ -29,6 +29,7 @@ static_assert(true);
 #include "ui/app/overlays/notifications/system_notifier.hpp"
 #include "ui/app/overlays/palette/palette_controller.hpp"
 #include "ui/app/overlays/peek/peek_controller.hpp"
+#include "ui/app/overlays/theme_picker/theme_picker_controller.hpp"
 #include "ui/app/overlays/workspace_form/workspace_form_controller.hpp"
 #include "ui/app/panes/attachments/attachments_controller.hpp"
 #include "ui/app/panes/documents/documents_controller.hpp"
@@ -129,6 +130,7 @@ namespace telar::gui::qt {
     Q_PROPERTY(telar::gui::qt::PeekController* peek READ peek CONSTANT)
     Q_PROPERTY(telar::gui::qt::MonitorController* monitor READ monitor CONSTANT)
     Q_PROPERTY(telar::gui::qt::ExplorerController* explorer READ explorer CONSTANT)
+    Q_PROPERTY(telar::gui::qt::ThemePickerController* themes READ themes CONSTANT)
     Q_PROPERTY(telar::gui::qt::PromptController* prompt READ prompt CONSTANT)
     Q_PROPERTY(telar::gui::qt::DocumentsController* documents READ documents CONSTANT)
     Q_PROPERTY(telar::gui::qt::LinkStatusController* linkStatus READ linkStatus CONSTANT)
@@ -147,7 +149,7 @@ namespace telar::gui::qt {
     ApplicationController& operator=(ApplicationController&&) = delete;
 
     [[nodiscard]] AttachmentsController* attachments() noexcept;
-    void loadConfiguration(const QString& path, const QString& profile, const QString& theme, const QString& trust_path = {});
+    void loadConfiguration(const QString& path, const QString& profile, const QString& theme, const QString& trust_path = {}, const QString& theme_choice_path = {});
     void setWindow(QQuickWindow& window);
     bool eventFilter(QObject* watched, QEvent* event) override;
     [[nodiscard]] const application::Pane<Memory>* pane(std::uint64_t identity) const noexcept;
@@ -237,6 +239,10 @@ namespace telar::gui::qt {
       return &explorer_;
     }
 
+    ThemePickerController* themes() noexcept {
+      return &theme_picker_;
+    }
+
     PromptController* prompt() noexcept {
       return &prompt_;
     }
@@ -293,6 +299,7 @@ namespace telar::gui::qt {
     void initializeOverlays();
     void initializeMachineChrome();
     void initializePeekAndMonitor();
+    void initializeThemePicker();
     // The explorer changed: who takes the keys.
     void settleExplorer();
     // What the editor of a pane asked of the explorer since it was last seen to.
@@ -389,6 +396,7 @@ namespace telar::gui::qt {
     tbc::val_self<PeekController> peek_;
     tbc::val_self<MonitorController> monitor_;
     tbc::val_self<ExplorerController> explorer_;
+    tbc::val_self<ThemePickerController> theme_picker_;
     tbc::val_self<PromptController> prompt_;
     tbc::val_self<DocumentsController> documents_;
     tbc::val_self<LinkStatusController> link_status_;

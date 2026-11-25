@@ -179,6 +179,7 @@ namespace telar::gui::qt {
     void monitorRequested(telar::gui::qt::window_actions::Action action);
     // The explorer over the panes: to open it, or to close the one that shows.
     void explorerRequested();
+    void themesRequested();
 
   private:
     [[nodiscard]] BindingContext context() const;
@@ -200,6 +201,8 @@ namespace telar::gui::qt {
     bool executePane(window_actions::Action action, std::uint64_t identity);
     void executeWindowAction(window_actions::Action action);
     bool executeMachineAction(window_actions::Action action);
+    // Hands the action to the overlay that owns it: the explorer or the theme picker.
+    bool requestOverlay(window_actions::Action action);
     void cancelCurrentInteraction();
     [[nodiscard]] bool insideTakes(window_actions::Action action);
     [[nodiscard]] static bool answerConfiguration(tbc::mut_a<WindowCommands> commands, const ClientCommand& message, tbc::mut_a<CompleteClientCommand> reply);

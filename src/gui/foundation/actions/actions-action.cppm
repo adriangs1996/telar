@@ -78,6 +78,8 @@ export {
       process_review_stack,
       process_review_files,
       process_review_logs,
+      // The theme picker over the window, which previews each theme as it is chosen.
+      theme_picker,
       palette,
       callback,
       expression,
@@ -94,7 +96,7 @@ export {
       bool operator==(const BindingAction&) const = default;
     };
 
-    inline constexpr auto builtin_binding_actions = ds::Array<std::pair<std::string_view, BindingActionKind>, 64>{
+    inline constexpr auto builtin_binding_actions = ds::Array<std::pair<std::string_view, BindingActionKind>, 65>{
         {
             {"scroll-pane-up", BindingActionKind::scroll_pane_up},
             {"scroll-pane-down", BindingActionKind::scroll_pane_down},
@@ -160,6 +162,7 @@ export {
             {"process-review-stack", BindingActionKind::process_review_stack},
             {"process-review-files", BindingActionKind::process_review_files},
             {"process-review-logs", BindingActionKind::process_review_logs},
+            {"theme-picker", BindingActionKind::theme_picker},
         },
     };
 

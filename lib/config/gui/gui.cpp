@@ -175,6 +175,12 @@ namespace telar::runtime::config {
     return result;
   }
 
+  bool ThemeReader::validName(std::string_view name) noexcept {
+    return !name.empty() && name.size() <= maximum_theme_name_bytes && std::ranges::all_of(name, [](char byte) {
+      return (byte >= 'a' && byte <= 'z') || (byte >= 'A' && byte <= 'Z') || (byte >= '0' && byte <= '9') || byte == '_' || byte == '-';
+    });
+  }
+
   tbc::val_a<ds::Option<std::string_view>> ThemeReader::preset(const lua::Value& value) {
     if (!value.present()) {
       return ds::none;

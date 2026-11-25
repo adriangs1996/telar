@@ -358,6 +358,75 @@ These colors are compiled into the presets; Neovim is not a runtime dependency.
 Select them with `theme = "kanagawa"` or `theme = "kanagawa-dragon"`, or the
 corresponding `--theme` argument.
 
+### Theme picker
+
+`telar.action.theme_picker()`, or `Choose theme` in the palette, opens the
+theme picker over the window: a row of slices, one per theme, with the
+configuration's theme first. The focused slice opens to show the window itself
+in that theme, and the window behind it wears the theme too. Left and Right
+(also Up, Down, Tab, the wheel or a click on a slice) focus another theme, and
+typing jumps to the first theme whose name starts with what you typed. Enter,
+or a click on the open slice, chooses the focused theme. Escape, or a click
+outside the slices, puts back the theme the window had. The action has no
+default binding.
+
+![The theme picker previews Osaka Jade on the window while the other themes wait as slices beside it](images/telar-theme-picker.png)
+
+The picker lists every preset and the themes the configuration names in
+`themes`:
+
+```lua
+themes = {
+  ["osaka-jade"] = require("themes.osaka-jade"), -- returns telar.theme({...})
+  paper = telar.theme({
+    base = "zenburn",
+    terminal = { background = "#f2ecbc", foreground = "#3c3836" },
+  }),
+},
+```
+
+A name is 1 to 64 letters, digits, `-` or `_`, and the picker shows it with
+its words capitalized: `osaka-jade` is "Osaka Jade". Each theme is read as
+`theme` is, and a table without `base` starts from Zenburn. A name that names a
+preset or one of its aliases, such as `kanagawa-wave` or `catppuccin-mocha`,
+takes that preset's place in the list. A profile's `themes` add to the root's.
+A table holds at most 64 themes.
+
+The chosen theme is saved in `$XDG_STATE_HOME/telar/theme`, or
+`~/.local/state/telar/theme` without that variable. Only its owner can read or
+replace the file. Every open window reads it again within about a second, so a
+choice made in one window changes them all. The choice holds while the
+configuration names the theme it named when you chose: edit `theme` in the
+configuration and the configuration wins again. The `Configuration` slot
+forgets the choice. Choosing a theme also replaces the one `--theme` started
+that window with; a window started with `--theme` does not follow choices made
+in other windows.
+
+`client.theme_picker.on_select` runs a command once a theme is chosen, so the
+rest of the system can follow it:
+
+```lua
+client = {
+  theme_picker = {
+    on_select = { "/bin/sh", "-c", 'exec "$HOME/bin/system-theme" apply "$1"', "theme", "{}" },
+    timeout_ms = 60000,
+  },
+},
+```
+
+It runs as a pick's `on_select` does: an argv without a shell, the chosen
+theme's name in place of each argument that is exactly `"{}"`, and at least
+one `"{}"` after the program. The name is the one the configuration or the
+preset gives the theme, `osaka-jade` or `kanagawa`. `timeout_ms` is 100 to
+60000 and defaults to 2000. The command's output is discarded; a nonzero
+status, a signal or a timeout shows a client diagnostic. Choosing the
+`Configuration` slot runs nothing. A profile's `theme_picker` replaces the
+root's `on_select` and `timeout_ms`.
+
+The preview recolors Telar's chrome and the terminal's default colors, cursor
+and 16 ANSI colors. A program that sets its own colors, with truecolor or OSC
+sequences, keeps them.
+
 ## Graphical application
 
 `gui` configures the window, fonts and cursor behavior in `telar gui`. Colors come from the
@@ -1394,6 +1463,9 @@ the process selected in the monitor, opening it when it is closed:
 which split the focused pane beside one running `telar process review`. They
 have no default binding, and plugins cannot run them. `telar process` and
 `telar monitor` do the same from a shell.
+
+`telar.action.theme_picker()` opens the [theme picker](#theme-picker) over the
+window. It has no default binding, and plugins cannot run it.
 
 `telar.action.path_picker()` opens a fuzzy finder over the files and
 directories under the focused pane's directory, anchored at its cursor. Enter

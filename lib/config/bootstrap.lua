@@ -324,6 +324,7 @@ for _, name in ipairs({
 	"process-review-stack",
 	"process-review-files",
 	"process-review-logs",
+	"theme-picker",
 }) do
 	local stable_name = name
 	telar.action[name:gsub("-", "_")] = function()
