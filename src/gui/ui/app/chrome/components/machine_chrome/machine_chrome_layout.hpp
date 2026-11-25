@@ -42,8 +42,13 @@ namespace telar::gui::qt {
     Q_PROPERTY(telar::gui::qt::MachineChromeController* controller READ controller WRITE setController NOTIFY controllerChanged)
     Q_PROPERTY(bool segment READ segment WRITE setSegment NOTIFY segmentChanged)
     Q_PROPERTY(bool inlineFacts READ inlineFacts WRITE setInlineFacts NOTIFY inlineFactsChanged)
+    // The list with every machine, the active one marked, for the switcher's menu; without it
+    // the list holds the machines other than the active one.
+    Q_PROPERTY(bool roster READ roster WRITE setRoster NOTIFY rosterChanged)
     Q_PROPERTY(bool shown READ shown NOTIFY shownChanged)
     Q_PROPERTY(qreal preferredWidth READ preferredWidth NOTIFY layoutChanged)
+    // The height of every row of the list, which the item needs before it can lay any out.
+    Q_PROPERTY(qreal preferredHeight READ preferredHeight NOTIFY rowsChanged)
     Q_PROPERTY(QAbstractItemModel* items READ items CONSTANT)
     Q_PROPERTY(QVariantMap style READ style NOTIFY layoutChanged)
 
@@ -55,8 +60,11 @@ namespace telar::gui::qt {
     void setSegment(bool segment);
     [[nodiscard]] bool inlineFacts() const noexcept;
     void setInlineFacts(bool enabled);
+    [[nodiscard]] bool roster() const noexcept;
+    void setRoster(bool roster);
     [[nodiscard]] bool shown() const noexcept;
     [[nodiscard]] qreal preferredWidth() const noexcept;
+    [[nodiscard]] qreal preferredHeight() const noexcept;
     [[nodiscard]] QAbstractItemModel* items() noexcept;
     [[nodiscard]] QVariantMap style() const;
     Q_INVOKABLE void activate(const QString& identity);
@@ -65,6 +73,8 @@ namespace telar::gui::qt {
     void controllerChanged();
     void segmentChanged();
     void inlineFactsChanged();
+    void rosterChanged();
+    void rowsChanged();
     void shownChanged();
     void layoutChanged();
 
@@ -112,6 +122,11 @@ namespace telar::gui::qt {
 
     void setMode(Mode mode);
     void observeSources();
+    // What the chrome shows of the machine in `slot`; a list row also carries the agents that
+    // work or wait there.
+    [[nodiscard]] Source observe(application::machines::Machines::Slot slot) const;
+    // The list asks for the height of `rows` rows.
+    void publishRows(std::size_t rows);
     void invalidate();
     void bindWindow();
     void rebuild();
@@ -137,7 +152,9 @@ namespace telar::gui::qt {
     ChromeMetrics chrome_;
     qreal density_ = 1;
     qreal preferred_width_ = 0;
+    qreal preferred_height_ = 0;
     Mode mode_ = Mode::list;
+    bool roster_ = false;
     bool shown_ = false;
     bool attention_elsewhere_ = false;
   };

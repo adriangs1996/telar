@@ -628,6 +628,29 @@ command = "switch" : "Switch branches" | "status" : "Show the working tree statu
     QTRY_VERIFY_WITH_TIMEOUT(!editor->suggesting(), runtime_wait_ms);
   }
 
+  // The process card of the pane reads what its shell ran last through the runtime: the command,
+  // how it ended and where the pane works.
+  void cardReadsTheLastCommand(ApplicationController& application, const QString& marker) {
+    const auto card = [&] {
+      const auto* rows = application.activity()->rows();
+
+      for (int row = 0; row < rows->rowCount(); ++row) {
+        const auto record = rows->data(rows->index(row, 0), ListModel::record_role).toMap();
+        if (record.value(QStringLiteral("process")).toBool()) {
+          return record;
+        }
+      }
+
+      return QVariantMap{};
+    };
+
+    QTRY_VERIFY2_WITH_TIMEOUT(card().value(QStringLiteral("commandLine")).toString().endsWith(QStringLiteral("touch ") + marker), qPrintable(card().value(QStringLiteral("commandLine")).toString() + QStringLiteral(" / ") + card().value(QStringLiteral("commandState")).toString()), runtime_wait_ms);
+    QTRY_COMPARE_WITH_TIMEOUT(card().value(QStringLiteral("commandState")).toString(), QStringLiteral("finished"), runtime_wait_ms);
+    QCOMPARE(card().value(QStringLiteral("exitCode")), QVariant{0});
+    QVERIFY(!card().value(QStringLiteral("commandDuration")).toString().isEmpty());
+    QVERIFY(!card().value(QStringLiteral("cwd")).toString().isEmpty());
+  }
+
   // A command that fails: its block says so, and its separator offers the way to its error. The
   // runtime finds the commands the shell runs, and only those.
   void marksFailuresAndPresence(ApplicationController& application, QQuickWindow& window, TerminalItem& terminal, const QQuickItem& line, std::uint64_t pane) {
@@ -1201,6 +1224,8 @@ command = "switch" : "Switch branches" | "status" : "Show the working tree statu
       terminal.forceActiveFocus();
 
       runsAndSuggests(application, terminal, *line, pane, directory.filePath(QStringLiteral("ran-by-line")));
+      QVERIFY(!QTest::currentTestFailed());
+      cardReadsTheLastCommand(application, directory.filePath(QStringLiteral("ran-by-line")));
       QVERIFY(!QTest::currentTestFailed());
       marksFailuresAndPresence(application, window, terminal, *line, pane);
       QVERIFY(!QTest::currentTestFailed());

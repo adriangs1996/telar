@@ -106,6 +106,8 @@ namespace telar::gui::qt {
         {QStringLiteral("index"), QString::number(index)},
         {QStringLiteral("program"), pane.foreground.empty() ? QStringLiteral("shell") : toQString(pane.foreground)},
         {QStringLiteral("context"), context.empty() ? displayPath(pane.cwd) : toQString(safe_context.view())},
+        // The context is the pane's directory, which its tab shows beside its caption.
+        {QStringLiteral("contextIsDirectory"), context.empty()},
         {QStringLiteral("git"), gitSummary(pane.git)},
         {QStringLiteral("remote"), remoteSummary(pane)},
         {QStringLiteral("glyph"), toQString(mark.glyph)},

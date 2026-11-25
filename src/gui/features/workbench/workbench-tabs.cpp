@@ -84,11 +84,16 @@ namespace telar::gui::features::workbench {
     const auto& metrics = room.metrics;
     Plan result{.first = 0, .end = sizes.size(), .focus = focus, .count = sizes.size()};
     const auto gaps = metrics.gap * static_cast<float>(sizes.size() - 1);
-    // Equal tabs keep the row still while the selection slides across it.
-    const auto equal = std::floor((room.width - gaps) / static_cast<float>(sizes.size()));
-    if (std::ranges::all_of(sizes, [&](const Measure& size) {
-          return size.whole(metrics) <= equal;
-        })) {
+    // Equal tabs keep the row still while the selection slides across it. They are as wide as
+    // the widest of them needs, not as their share of the strip: a row of short captions leaves
+    // the bar the room it does not use.
+    const auto even = std::floor((room.width - gaps) / static_cast<float>(sizes.size()));
+    const auto widest = std::ranges::max(sizes, {}, [&](const Measure& size) {
+      return size.whole(metrics);
+    }).whole(metrics);
+    if (widest <= even) {
+      const auto equal = std::min(even, std::ceil(widest));
+
       for (std::size_t index = 0; index < sizes.size(); ++index) {
         result.widths.atMut(index) = equal;
         result.fits.atMut(index) = Fit::full;

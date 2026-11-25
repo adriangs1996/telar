@@ -136,6 +136,8 @@ namespace telar::gui::inline foundation::inline model {
     agent.title.assign(entry.session_title);
     agent.provider_name.assign(entry.provider_name);
     agent.workspace_label.assign(entry.workspace_label);
+    agent.tab_label.assign(entry.tab_label);
+    agent.cwd_label.assign(entry.cwd_label);
     agent.display_name.assign(entry.display_name);
     agent.icon.assign(entry.icon);
     agent.detail.assign(entry.last_event);
@@ -150,9 +152,14 @@ namespace telar::gui::inline foundation::inline model {
     return std::span{port_values}.first(port_count);
   }
 
+  bool ListedPaneFacts::same(const PaneFacts& message) const noexcept {
+    return command_state == message.command_state && command_truncated == message.command_truncated && in_workspace == message.in_workspace && dirty == message.dirty && exit_code == message.exit_code && duration_ms == message.duration_ms && command.view() == message.command && directory.view() == message.directory && branch.view() == message.branch && document.view() == message.document;
+  }
+
   template <Allocator Memory>
   PaneListReplica<Memory>::PaneListReplica(Memory& memory)
-      : entries_(memory) {}
+      : entries_(memory),
+        staging_(memory) {}
 
   template <Allocator Memory>
   std::span<const ListedPane> PaneListReplica<Memory>::entries() const noexcept {
@@ -174,8 +181,14 @@ namespace telar::gui::inline foundation::inline model {
   }
 
   template <Allocator Memory>
+  std::uint64_t PaneListReplica<Memory>::factsRevision() const noexcept {
+    return facts_revision_;
+  }
+
+  template <Allocator Memory>
   void PaneListReplica<Memory>::resetSource() noexcept {
     revision_ = 0;
+    inherits_ = false;
   }
 
   template <Allocator Memory>
@@ -199,10 +212,10 @@ namespace telar::gui::inline foundation::inline model {
     }
 
     // Reserving first keeps the previous list whole when storage runs out.
-    entries_.reserve(list.entries.size());
-    entries_.clear();
+    staging_.reserve(list.entries.size());
+    staging_.clear();
     for (const auto& entry : list.entries) {
-      auto& pane = entries_.emplace();
+      auto& pane = staging_.emplace();
 
       pane.pane_id = entry.pane_id;
       pane.pane_generation = entry.pane_generation;
@@ -212,9 +225,43 @@ namespace telar::gui::inline foundation::inline model {
       pane.shell = entry.shell;
       pane.port_count = static_cast<std::uint8_t>(std::min(entry.ports.size(), pane.port_values.size()));
       std::ranges::copy(entry.ports.first(pane.port_count), pane.port_values.viewMut().begin());
+      // The runtime sends a pane's facts when they change, not with each list: the pane keeps
+      // the ones it has, unless another runtime, which may reuse the pane's identity, sent the list.
+      if (const auto* known = inherits_ ? find(entry.pane_id, entry.pane_generation) : nullptr) {
+        pane.facts = known->facts;
+      }
     }
 
+    std::swap(entries_, staging_);
     revision_ = list.revision;
+    inherits_ = true;
+
+    return true;
+  }
+
+  template <Allocator Memory>
+  bool PaneListReplica<Memory>::apply(const PaneFacts& facts) {
+    const auto panes = entries_.viewMut();
+    const auto found = std::ranges::find_if(panes, [&](const auto& entry) {
+      return entry.pane_id == facts.pane_id && entry.pane_generation == facts.pane_generation;
+    });
+    if (found == panes.end() || found->facts.same(facts)) {
+      return false;
+    }
+
+    auto& known = found->facts;
+
+    known.command_state = facts.command_state;
+    known.command_truncated = facts.command_truncated;
+    known.in_workspace = facts.in_workspace;
+    known.dirty = facts.dirty;
+    known.exit_code = facts.exit_code;
+    known.duration_ms = facts.duration_ms;
+    known.command.assign(facts.command);
+    known.directory.assign(facts.directory);
+    known.branch.assign(facts.branch);
+    known.document.assign(facts.document);
+    ++facts_revision_;
 
     return true;
   }

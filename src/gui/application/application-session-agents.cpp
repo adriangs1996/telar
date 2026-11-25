@@ -19,6 +19,10 @@ namespace telar::gui::application {
     return activity::receive(*this, message);
   }
 
+  Change Session::apply(const PaneFacts& message) {
+    return activity::receive(*this, message);
+  }
+
   Change Session::apply(const Notification& message) {
     return notifications::receive(*this, message);
   }

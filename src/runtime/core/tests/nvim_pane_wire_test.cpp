@@ -329,7 +329,12 @@ namespace {
       writer.array(3);
       writer.unsignedInteger(2);
       writer.string("redraw");
-      writer.array(resized ? 5 : 4);
+      writer.array(resized ? 6 : 5);
+      // Neovim titles itself after the file its focused window shows.
+      writer.array(2);
+      writer.string("set_title");
+      writer.array(1);
+      writer.string("notes.md");
       if (resized) {
         writer.array(2);
         writer.string("grid_resize");
@@ -590,6 +595,31 @@ namespace {
     Editor editor{.pane = created.root_pane_id};
 
     editor.until(peer, "ready");
+  }
+
+  void testEditorPaneNamesItsDocument() {
+    EditorHost editor_host;
+    ProtocolPeer peer{editor_host.host->socket()};
+    const auto terminal = openTerminal(peer);
+    auto editor = openEditor(peer, terminal);
+
+    editor.until(peer, "ready");
+    // A client that lists the panes hears, with each pane's facts, the file the editor shows.
+    ProtocolPeer listener{editor_host.host->socket()};
+    bool named = false;
+
+    listener.send(RequestRuntimeState{.client_identity = 71});
+    listener.deadline(std::chrono::seconds{10});
+    while (!named) {
+      const auto facts = listener.receive<PaneFacts>();
+      if (facts.pane_id != editor.pane) {
+        check(facts.document.empty(), "a terminal names no document");
+        continue;
+      }
+
+      check(facts.document == "notes.md" && facts.command_state == PaneCommandState::none && facts.command.empty(), "an editor's facts name the file it shows, and no command");
+      named = true;
+    }
   }
 
   void testSecondClientIsSentTheScreenWhole() {
@@ -1012,6 +1042,7 @@ namespace {
   const telar::testing::Case case_draws{"nvim_pane_wire.editor_pane_draws_and_takes_input", testEditorPaneDrawsAndTakesInput};
   const telar::testing::Case case_size{"nvim_pane_wire.editor_pane_follows_its_size", testEditorPaneFollowsItsSize};
   const telar::testing::Case case_tab{"nvim_pane_wire.editor_tab_is_announced", testEditorTabIsAnnounced};
+  const telar::testing::Case case_document{"nvim_pane_wire.editor_pane_names_its_document", testEditorPaneNamesItsDocument};
   const telar::testing::Case case_second{"nvim_pane_wire.second_client_is_sent_the_screen_whole", testSecondClientIsSentTheScreenWhole};
   const telar::testing::Case case_refused{"nvim_pane_wire.requests_of_another_kind_are_refused", testRequestsOfAnotherKindAreRefused};
   const telar::testing::Case case_prompt{"nvim_pane_wire.prompt_is_shown_and_answered", testPromptIsShownAndAnswered};

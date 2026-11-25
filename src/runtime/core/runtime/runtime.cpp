@@ -68,20 +68,6 @@ namespace telar::runtime {
 
   }
 
-  void AgentSnapshotBuilder::labelDirectory(FixedText<label_bytes>& label, std::string_view cwd) {
-    const auto home = processHome();
-    if (!home.empty() && cwd.starts_with(home) && (cwd.size() == home.size() || cwd[home.size()] == '/')) {
-      ds::Array<char, label_bytes> shortened{'~'};
-      const auto suffix = utf8Prefix(cwd.substr(home.size()), label_bytes - 1);
-
-      std::ranges::copy(suffix, shortened.viewMut().subspan(1).begin());
-      label.assign({shortened.data(), suffix.size() + 1});
-      return;
-    }
-
-    label.assign(utf8Prefix(cwd, label_bytes));
-  }
-
   void AgentSnapshotBuilder::publish(ClientSession& client, const RuntimeModel& model, const AgentRegistry<ConcurrentMemory>& registry) {
     // The entries view the model, the registry and these texts only while the snapshot is sent.
     ds::Array<AgentSnapshotEntry, AgentRegistry<ConcurrentMemory>::capacity> entries;
@@ -524,10 +510,14 @@ namespace telar::runtime {
           agent->finishTitleCapture();
         }
 
+        // What it last said shows on its card until it says something else.
+        agent->progress.restore(pane.restored_final_message.view());
         agents_.changed();
       }
 
       pane.restored_agent.reset();
+      pane.restored_final_message.clear();
+      pane.restored_final_message.shrinkToFit();
     }
 
     if (changed) {

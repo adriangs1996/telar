@@ -37,7 +37,7 @@ ActivityFrame {
         width: Math.max(0, root.width - x - root.geometry.detail.x)
         height: root.geometry.detail.height
         text: root.record.detail
-        color: root.colors.overlay1
+        color: root.colors.subtext0
         pixelSize: root.typography.small
     }
 

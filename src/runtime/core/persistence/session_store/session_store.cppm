@@ -30,8 +30,9 @@ export {
   namespace telar::runtime::checkpoint {
 
     inline constexpr std::string_view magic = "TELARCKP";
-    // 12 added the places of the explorer; 13 the windows of a pane that is one.
-    inline constexpr std::uint16_t current_version = 13;
+    // 12 added the places of the explorer; 13 the windows of a pane that is one; 14 what the
+    // agent of a pane last said.
+    inline constexpr std::uint16_t current_version = 14;
     inline constexpr std::size_t maximum_bytes = std::size_t{4} * 1024 * 1024;
 
     enum class Kind : Byte {
@@ -84,6 +85,9 @@ export {
       // The windows of an explorer, as the KeepExplorer that gave them encodes; empty for a pane
       // of another kind, and for an explorer no window gave any.
       std::span<const Byte> explorer;
+      // The final message of the agent the pane resumes, which its card shows while it rests;
+      // empty for a pane without one, and for an agent that reported none.
+      std::string_view final_message;
     };
 
     struct LayoutRecord {
@@ -460,6 +464,9 @@ export {
 
         pane.core.launch.restore(record.arguments, record.argument_count);
         pane.core.restored_agent = resume;
+        if (resume) {
+          pane.core.restored_final_message.assign(record.final_message);
+        }
 
         if (resume && !direct) {
           writeResume(pane.body.input, resumed);
@@ -670,6 +677,7 @@ export {
             }
 
             record.in_pane = agent->in_pane;
+            record.final_message = agent->progress.finalMessage();
           } else if (pane->restored_agent) {
             const auto& resume = *pane->restored_agent;
 
@@ -678,6 +686,7 @@ export {
             record.title = resume.title.view();
             record.title_source = resume.title_source;
             record.in_pane = resume.in_pane;
+            record.final_message = pane->restored_final_message.view();
           }
 
           writer.append(record);

@@ -246,6 +246,12 @@ namespace telar::runtime {
     return true;
   }
 
+  void AgentProgress::restore(std::string_view final_message) {
+    if (final_message_.view().empty()) {
+      final_message_.assign(utf8Prefix(final_message, agent_report_message_bytes));
+    }
+  }
+
   std::uint16_t AgentProgress::done() const noexcept {
     if (!uses_tasks_) {
       return done_;

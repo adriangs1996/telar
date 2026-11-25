@@ -15,7 +15,14 @@ Item {
     property real textScale: 1
     property bool prefixPending: false
     property rect createBounds
+    // The strip sits in the middle of its room instead of at its start. It stays where it is
+    // while the pointer rests on it, as its widths do, so closing or choosing a tab moves none
+    // from under the pointer; it settles when the pointer leaves.
+    property bool centered: false
     readonly property real wellPadding: 3 * ratio
+    readonly property real slack: Math.max(0, width - 2 * wellPadding - layout.stripBounds.width)
+    readonly property real middle: centered ? Math.round(slack / 2) : 0
+    property real offset: 0
     readonly property real captionSize: typography.title
     readonly property real scaling: typography.title / 14
     signal selected(string key)
@@ -27,7 +34,8 @@ Item {
     TabStripLayout {
         id: layout
         objectName: "tabStripLayout"
-        x: root.wellPadding
+        // A held offset never pushes the strip past the room a narrower bar leaves.
+        x: root.wellPadding + Math.min(root.offset, root.slack)
         width: Math.max(0, root.width - 2 * root.wellPadding)
         height: root.height
         model: root.model
@@ -43,9 +51,13 @@ Item {
 
     HoverHandler {
         id: pointer
+        onHoveredChanged: if (!hovered) root.offset = root.middle
     }
 
+    onMiddleChanged: if (!pointer.hovered) offset = middle
+
     Component.onCompleted: {
+        root.offset = root.middle;
         if (root.controller && root.visible) root.controller.registerStrip(layout);
     }
     // A mod may place its own strip; the visible one owns dragging.
@@ -76,7 +88,8 @@ Item {
         visible: width > 0 && height > 0
     }
 
-    // The selection is a lens: its rim carries the signal, its fill stays close to the surface.
+    // The selection is a lens: its rim and a fill lighter than the well's tell it from the tabs
+    // beside it, as the workspace track's segment is told from its own.
     NativeRoundedRectangle {
         objectName: "tabSelection"
         x: layout.x + layout.selectionBounds.x
@@ -84,7 +97,7 @@ Item {
         width: layout.selectionBounds.width
         height: layout.selectionBounds.height
         radius: layout.style.pillRadius
-        color: Qt.alpha(root.colors.chromeText, 0.05)
+        color: Qt.alpha(root.colors.chromeText, 0.1)
         borderColor: root.colors.chromeText
         borderAlpha: 0.32
         borderWidth: root.ratio

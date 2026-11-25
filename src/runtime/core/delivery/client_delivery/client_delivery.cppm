@@ -24,6 +24,7 @@ import telar.runtime.terminal.control.clipboard;
 import telar.runtime.terminal.text_reader;
 import telar.base.diagnostics;
 import telar.base.memory.allocators;
+import telar.base.memory.containers;
 import telar.runtime.diagnostics.runtime_counters;
 import telar.runtime.core.model.slot_store;
 import telar.runtime.nvim.frames;
@@ -290,6 +291,10 @@ export {
 export {
   namespace telar::runtime {
 
+    // A pane's directory as a card labels it, the user's home shown as `~`: the pane facts and
+    // the agent snapshot say it the same way.
+    void labelDirectory(FixedText<max_pane_directory_bytes>& label, std::string_view cwd);
+
     template <typename Source>
     concept RuntimeStateSource = requires(Source& source, ClientSession& client, const RuntimeModel& model, DeliveryLane lane) {
       { source.prepare(client, model, lane) } -> std::same_as<bool>;
@@ -362,7 +367,8 @@ export {
           }
         }
 
-        if (queued_lane <= DeliveryLane::panes || paneList(client, now)) {
+        // The list first: a client takes the facts of a pane the list named.
+        if (queued_lane <= DeliveryLane::panes || paneList(client, now) || paneFacts(client)) {
           return;
         }
 
@@ -382,6 +388,9 @@ export {
       bool clipboard(ClientSession& client);
 
       bool paneList(ClientSession& client, Clock::time_point now);
+
+      // The command, directory and repository of one pane whose facts the client has not heard.
+      bool paneFacts(ClientSession& client);
 
       bool foreground(ClientSession& client);
 

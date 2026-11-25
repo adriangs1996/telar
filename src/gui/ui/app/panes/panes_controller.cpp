@@ -130,6 +130,12 @@ namespace telar::gui::qt {
                                       .arg(tab->location.tab_id)
                                       .arg(tab->fullscreen);
 
+      std::size_t leaves = 0;
+
+      forEachLeaf(*tab, false, [&]([[maybe_unused]] const ClientLayoutPane& leaf) {
+        ++leaves;
+      });
+
       for (const auto& placement : tab->layout.arrange(geometry.cellArea(), geometry.layout_metrics, fullscreen)) {
         const auto* pane = session.findPane(placement.pane_id);
         if (pane == nullptr) {
@@ -150,6 +156,8 @@ namespace telar::gui::qt {
 
         auto chrome = paneChromeRecord(*pane, std::span<const Agent<Memory>>{session.agents()}, placement.display_index, application::terminal::graphics::paused(session, pane->id));
 
+        // A tab's only pane works where the tab says: its header does not repeat the directory.
+        chrome.insert(QStringLiteral("aloneInTab"), leaves == 1);
         if (elements_.active()) {
           chrome.insert(QStringLiteral("elements"), elements_.elements(ElementSlots::pane_slots, record.value(QStringLiteral("key")).toString(), ElementSlots::paneItem(record, chrome)));
         }

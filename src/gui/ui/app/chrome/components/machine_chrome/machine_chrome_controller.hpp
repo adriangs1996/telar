@@ -3,11 +3,16 @@
 static_assert(true);
 #endif
 
+#include "telar_wire/serializers/telar_cells.hpp"
 #include "ui/kit/store/store.hpp"
+#include <QColor>
 #include <QObject>
 #include <QPointer>
 #include <QQuickWindow>
+#include <QString>
+#include <QVariantMap>
 #include <QtQml/qqmlregistration.h>
+#include <string_view>
 
 #pragma once
 
@@ -26,6 +31,10 @@ namespace telar::gui::qt {
     Q_OBJECT
     QML_NAMED_ELEMENT(MachineChromeController)
     QML_UNCREATABLE("Use the window's machine chrome")
+    // The machine the window shows, as the top bar's switcher draws it: its label, its
+    // initial and its color, whether its link is up, whether another machine needs the
+    // person, and how many machines the window has.
+    Q_PROPERTY(QVariantMap active READ active NOTIFY activeChanged)
 
   public:
     explicit MachineChromeController(const Store& store, QObject* parent = nullptr);
@@ -42,13 +51,20 @@ namespace telar::gui::qt {
     [[nodiscard]] const application::window::DisplayMetrics& display() const noexcept;
     // The window the chrome activates machines in; activations from any other are ignored.
     [[nodiscard]] QQuickWindow* window() const noexcept;
-    void pick();
+    [[nodiscard]] QVariantMap active() const;
+    // A machine's written color in the window's theme; the accent when it names none.
+    [[nodiscard]] QColor ink(std::string_view written) const;
+    [[nodiscard]] QColor fill(CellColor value) const;
+    // What a machine's avatar reads: its label's first character, whole when it is a surrogate pair.
+    [[nodiscard]] static QString initial(const QString& label);
+    Q_INVOKABLE void pick();
     void select(application::machines::MachineToken token);
 
   signals:
     // The display moved, and with it the configuration it measures.
     void changed();
     void machinesChanged();
+    void activeChanged();
     void pickerRequested();
     void selectRequested(telar::gui::application::machines::MachineToken token);
 

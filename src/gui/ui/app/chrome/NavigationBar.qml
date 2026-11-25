@@ -12,8 +12,10 @@ NativeRoundedRectangle {
     required property real controlsInset
     // The tab strip's controller, which takes the strip that drags tabs.
     property TabsController tabs: null
-    // The active machine: its label, and whether one needs attention.
-    property var machineContext: ({})
+    // The window's machine chrome: the switcher reads the machine it shows from it, and its menu
+    // lists every machine.
+    property MachineChromeController machineChrome: null
+    readonly property var machine: machineChrome?.active ?? ({})
     // A mod's top bar, which replaces every control; the window buttons keep their inset.
     property var drawn: null
     property real ratio: 1
@@ -22,35 +24,36 @@ NativeRoundedRectangle {
     property bool prefixPending: false
     signal sidebarToggled()
     signal workspaceSelected(string key)
-    signal workspacePickerRequested()
+    signal workspaceCreated()
     signal tabSelected(string key)
     signal tabClosed(string key)
     signal tabRenamed()
     signal tabCreated()
     signal paletteRequested()
-    signal machinePickerRequested()
     // A click on an element a mod drew in the bar or a tab.
     signal elementActivated(string slot, string key, string revision, int element)
 
     readonly property real padding: 8 * ratio
-    // Controls and the telar mark follow the bar's height, which follows the font size:
+    // Controls follow the bar's height, which follows the font size:
     // 28-point controls on the default 44-point bar.
     readonly property real toggleSide: Math.round(height * 0.635)
-    readonly property real markSide: Math.round(toggleSide * 0.92)
     readonly property real identityGap: Math.round(height * 0.26)
     readonly property real glyphSide: Math.round(toggleSide * 0.6)
     readonly property real controlGap: 8 * ratio
-    readonly property real contextMaximum: 280 * ratio
-    readonly property real tabsShare: 0.64
-    readonly property real tabsMinimum: identity.x + identity.width + 2 * controlGap
-    readonly property real tabsMaximum: projects.x - (projects.width > 0 ? 2 * controlGap : controlGap)
-    readonly property real tabsWidth: Math.max(0, Math.min(width * tabsShare, tabsMaximum - tabsMinimum))
-    readonly property real tabsLeft: Math.max(tabsMinimum, Math.min((width - tabsWidth) / 2, tabsMaximum - tabsWidth))
-    // The tabs keep this much before the identity and the project switcher get any room,
-    // so a narrow window drops those two first.
+    // The bar reads in the order of what holds what: the machine, its workspaces, then the tabs
+    // of the workspace in front. The tabs keep tabsFloor before the other two get any room, so
+    // a narrow window shortens those first: the machine's label down to labelFloor, then the
+    // workspaces' names, then the workspaces that do not fit.
     readonly property real tabsFloor: 220 * ratio
+    readonly property real machineMaximum: 240 * ratio
+    readonly property real labelFloor: 72 * ratio
     readonly property real sideRoom: Math.max(0, paletteButton.x - identity.x - 3 * controlGap - tabsFloor)
-    readonly property real contextRoom: Math.max(0, Math.min(contextMaximum, (width - padding - identity.x) * 0.28, sideRoom))
+    readonly property real machineWanted: Math.min(identity.preferredWidth, machineMaximum)
+    readonly property real machineFloor: Math.min(machineWanted, identity.minimumWidth + labelFloor)
+    readonly property real machineRoom: Math.min(sideRoom, Math.max(machineFloor, Math.min(machineWanted, sideRoom - controlGap - track.preferredWidth)))
+    readonly property real trackRoom: Math.max(0, sideRoom - identity.width - controlGap)
+    readonly property real tabsLeft: (track.width > 0 ? track.x + track.width : identity.x + identity.width) + 2 * controlGap
+    readonly property real tabsWidth: Math.max(0, paletteButton.x - controlGap - tabsLeft)
 
     color: colors.topbarBackground
     replaceBackground: true
@@ -77,41 +80,63 @@ NativeRoundedRectangle {
         onClicked: root.sidebarToggled()
     }
 
-    WorkspaceIdentity {
+    MachineSwitch {
         id: identity
         objectName: "topBarIdentity"
         visible: root.drawn === null
         x: toggle.x + toggle.width + root.identityGap
         y: (parent.height - height) / 2
-        width: Math.min(root.contextRoom, preferredWidth)
+        width: root.machineRoom
         height: Math.min(parent.height, root.toggleSide)
-        markSide: root.markSide
         colors: root.colors
         typography: root.typography
         ratio: root.ratio
-        machine: root.machineContext.label || ""
-        workspace: root.workspace.name || "workspace"
-        attention: root.rail && (root.machineContext.attention ?? false)
-        onMachineRequested: {
-            root.machinePickerRequested();
-        }
-        onWorkspaceRequested: root.workspacePickerRequested()
+        machine: root.machine
+        open: machineMenu.visible
+        onRequested: machineMenu.open()
     }
 
-    ProjectSwitcher {
-        id: projects
-        objectName: "projectSwitcher"
-        visible: root.drawn === null
-        x: paletteButton.x - (width > 0 ? root.controlGap : 0) - width
-        width: Math.max(0, Math.min(preferredWidth, root.width * 0.14, root.sideRoom - identity.width))
-        height: root.height
+    WorkspaceTrack {
+        id: track
+        objectName: "workspaceTrack"
+        visible: root.drawn === null && implicitWidth > 0
+        x: identity.x + identity.width + root.controlGap
+        y: (parent.height - height) / 2
+        width: implicitWidth
+        height: Math.min(parent.height, implicitHeight)
+        room: root.drawn === null ? root.trackRoom : 0
         model: root.workspaceModel
         selectedIndex: root.workspace.index ?? -1
         colors: root.colors
         typography: root.typography
         ratio: root.ratio
         onSelected: key => root.workspaceSelected(key)
-        onOverflowRequested: root.workspacePickerRequested()
+        onListRequested: workspaceMenu.open()
+    }
+
+    MachineMenu {
+        id: machineMenu
+        parent: root
+        x: Math.max(root.padding, Math.min(identity.x + identity.anchor.x, root.width - width - root.padding))
+        y: root.height - 2 * root.ratio
+        controller: root.machineChrome
+        colors: root.colors
+        typography: root.typography
+        ratio: root.ratio
+    }
+
+    WorkspaceMenu {
+        id: workspaceMenu
+        parent: root
+        x: Math.max(root.padding, Math.min(track.x, root.width - width - root.padding))
+        y: root.height - 2 * root.ratio
+        maximumHeight: Math.max(rowHeight, (root.Window.height ?? 600) - root.height - 24 * root.ratio)
+        model: root.workspaceModel
+        colors: root.colors
+        typography: root.typography
+        ratio: root.ratio
+        onSelected: key => root.workspaceSelected(key)
+        onCreateRequested: root.workspaceCreated()
     }
 
     ChromeButton {
@@ -157,6 +182,7 @@ NativeRoundedRectangle {
         model: root.tabModel
         x: root.tabsLeft
         width: root.tabsWidth
+        centered: true
         createBounds: Qt.rect(createTab.x - x, createTab.y, createTab.width, createTab.height)
         height: root.height
         colors: root.colors
@@ -208,34 +234,30 @@ NativeRoundedRectangle {
 
     Component {
         id: identityPiece
-        WorkspaceIdentity {
+        MachineSwitch {
             implicitHeight: root.toggleSide
-            markSide: root.markSide
             colors: root.colors
             typography: root.typography
             ratio: root.ratio
-            machine: root.machineContext.label || ""
-            workspace: root.workspace.name || "workspace"
-            attention: root.rail && (root.machineContext.attention ?? false)
-            onMachineRequested: {
-                root.machinePickerRequested();
-            }
-            onWorkspaceRequested: root.workspacePickerRequested()
+            machine: root.machine
+            open: machineMenu.visible
+            onRequested: machineMenu.open()
         }
     }
 
+    // A mod's bar keeps the name it was written with: its project switcher is the workspace
+    // track, which asks for every name and draws what the width it is given holds.
     Component {
         id: projectsPiece
-        ProjectSwitcher {
-            implicitWidth: preferredWidth
-            implicitHeight: root.height
+        WorkspaceTrack {
+            room: width > 0 ? width : preferredWidth
             model: root.workspaceModel
             selectedIndex: root.workspace.index ?? -1
             colors: root.colors
             typography: root.typography
             ratio: root.ratio
             onSelected: key => root.workspaceSelected(key)
-            onOverflowRequested: root.workspacePickerRequested()
+            onListRequested: workspaceMenu.open()
         }
     }
 

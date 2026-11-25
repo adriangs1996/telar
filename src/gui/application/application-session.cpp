@@ -384,6 +384,7 @@ namespace telar::gui::application {
         std::type_identity<PaneText>{},
         std::type_identity<AgentSnapshot>{},
         std::type_identity<PaneList>{},
+        std::type_identity<PaneFacts>{},
         std::type_identity<AgentSoundNotification>{},
         std::type_identity<HistoryResults>{},
         std::type_identity<HistoryOutput>{},
@@ -518,6 +519,10 @@ namespace telar::gui::application {
 
   std::uint64_t Session::paneListRevision() const noexcept {
     return pane_list_.revision();
+  }
+
+  std::uint64_t Session::paneFactsRevision() const noexcept {
+    return pane_list_.factsRevision();
   }
 
   std::string_view Session::clipboard() const noexcept {

@@ -178,6 +178,17 @@ export {
         std::uint64_t revision = 0;
       };
 
+      // The facts of a pane the client last heard: the pane, where it is, and the count of the
+      // changes to its command, its directory and its repository.
+      struct FactsStamp {
+        std::uint64_t pane = 0;
+        std::uint64_t generation = 0;
+        std::uint64_t workspace = 0;
+        std::uint64_t revision = 0;
+
+        bool operator==(const FactsStamp&) const noexcept = default;
+      };
+
       explicit ClientSession(ConcurrentMemory& memory, std::uint64_t session_id, FileDescriptor descriptor);
 
       [[nodiscard]] std::size_t availableAttachmentSlot() const;
@@ -232,6 +243,7 @@ export {
       std::uint64_t pane_workspace_revision = 0;
       ds::Option<ResyncRequired> workspace_resync;
       ds::Array<ForegroundStamp, pane_capacity> foregrounds;
+      ds::Array<FactsStamp, pane_capacity> facts;
       ds::Option<TextSearch> search;
       ConfigureTerminalColors colors{};
       // The client draws telar's editor in place of the shell's prompt: shells it starts print none.
@@ -570,6 +582,8 @@ export {
       ds::Option<ConfigurePaneDesktop> desktop_theme;
       ProcessCache process_cache;
       ds::Option<AgentResume> restored_agent;
+      // What that agent last said before the runtime restarted, until it is seen again.
+      ds::String<ConcurrentMemory> restored_final_message;
       // The repository the pane works in, read after each command; zero until read.
       ShellGitSummary git{};
       FixedText<PATH_MAX> git_directory;

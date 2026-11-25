@@ -40,7 +40,9 @@ namespace telar::gui::qt {
 
   struct AgentRecordContext {
     std::string_view machine;
+    // The branch of the workspace the card's pane is in, and whether it has changes.
     std::string_view branch;
+    bool dirty = false;
     bool selected = false;
     bool connected = true;
     bool coordinator = false;
@@ -70,6 +72,11 @@ namespace telar::gui::qt {
         {QStringLiteral("provider"), toQString(provider_label)},
         {QStringLiteral("project"), toQString(project_label)},
         {QStringLiteral("detail"), toQString(agent.status == AgentStatus::working ? std::string_view{agent.detail} : context.branch)},
+        // Where the agent works: its tab, its pane's directory and its workspace's repository.
+        {QStringLiteral("tab"), toQString(agent.tab_label)},
+        {QStringLiteral("cwd"), toQString(agent.cwd_label)},
+        {QStringLiteral("branch"), toQString(context.branch)},
+        {QStringLiteral("dirty"), context.dirty && !context.branch.empty()},
         {QStringLiteral("status"), toQString(label.view())},
         {QStringLiteral("statusWord"), toQString(word)},
         {QStringLiteral("statusColor"), color},
