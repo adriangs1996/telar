@@ -101,6 +101,7 @@ namespace telar::gui::qt {
         peek_(store_),
         monitor_(store_),
         explorer_(store_, memory),
+        theme_picker_(configuration_source_),
         prompt_(store_, memory),
         documents_(store_),
         link_status_(store_),
@@ -249,6 +250,7 @@ namespace telar::gui::qt {
     initializeOverlays();
     initializeMachineChrome();
     initializePeekAndMonitor();
+    initializeThemePicker();
     connect(&panes_, &PanesController::failed, &status_, &WindowStatus::report);
     connect(&machines_, &MachinesCoordinator::changed, &link_status_, &LinkStatusController::publish);
     connect(&machines_, &MachinesCoordinator::linkChanged, &link_status_, &LinkStatusController::publish);
@@ -461,6 +463,33 @@ namespace telar::gui::qt {
     });
   }
 
+  void ApplicationController::initializeThemePicker() {
+    connect(&commands_, &WindowCommands::themesRequested, this, [this] {
+      if (store_.dialog().kind == Dialog::themes) {
+        theme_picker_.cancel();
+        return;
+      }
+
+      dialogs_.show(Dialog::themes);
+      theme_picker_.open();
+    });
+
+    connect(&theme_picker_, &ThemePickerController::closeRequested, this, [this] {
+      if (store_.dialog().kind == Dialog::themes) {
+        dialogs_.show(Dialog::none);
+      }
+    });
+
+    // Another dialog took the picker's place: the window wears its own theme again.
+    connect(&dialogs_, &Dialogs::changed, this, [this] {
+      if (store_.dialog().kind != Dialog::themes) {
+        theme_picker_.dismiss();
+      }
+    });
+
+    connect(&theme_picker_, &ThemePickerController::failed, &status_, &WindowStatus::report);
+  }
+
   void ApplicationController::initializeConfigurationSource() {
     connect(&configuration_source_, &ConfigurationSource::changed, this, [this] {
       status_.clear();
@@ -609,8 +638,8 @@ namespace telar::gui::qt {
     return static_cast<int>(NativeKeyAdapter::super_modifier);
   }
 
-  void ApplicationController::loadConfiguration(const QString& path, const QString& profile, const QString& theme, const QString& trust_path) {
-    configuration_source_.open({.path = path, .profile = profile, .theme = theme, .trust_path = trust_path});
+  void ApplicationController::loadConfiguration(const QString& path, const QString& profile, const QString& theme, const QString& trust_path, const QString& theme_choice_path) {
+    configuration_source_.open({.path = path, .profile = profile, .theme = theme, .trust_path = trust_path, .theme_choice_path = theme_choice_path});
   }
 
   ApplicationController::~ApplicationController() {

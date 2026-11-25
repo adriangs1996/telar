@@ -17,9 +17,9 @@ Popup {
     // inspector still opens here, over it.
     readonly property bool lineHosted: telar.dialogs.lineSearch !== Store.Dialog.none && !(historyMode && telar.history.state.inspecting)
     readonly property bool listing: historyMode || paletteMode
-    // The monitor and the explorer draw themselves over the window; this popup stays closed while
-    // either shows.
-    readonly property bool monitorMode: telar.dialogs.kind === Store.Dialog.monitor || telar.dialogs.kind === Store.Dialog.explorer
+    // The monitor, the explorer and the theme picker draw themselves over the window; this popup
+    // stays closed while any of them shows.
+    readonly property bool monitorMode: telar.dialogs.kind === Store.Dialog.monitor || telar.dialogs.kind === Store.Dialog.explorer || telar.dialogs.kind === Store.Dialog.themes
     readonly property bool promptMode: telar.dialogs.kind !== Store.Dialog.none && !customMode && !monitorMode
     readonly property bool workspaceMode: telar.dialogs.kind === Store.Dialog.new_workspace
     readonly property bool wizardMode: telar.dialogs.kind === Store.Dialog.machine_wizard

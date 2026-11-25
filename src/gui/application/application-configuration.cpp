@@ -61,6 +61,36 @@ namespace telar::gui::application {
     return result;
   }
 
+  void ConfigurationReader::themePicker(const runtime::lua::Value& root, std::string_view profile, features::configuration::ThemePicker& picker) {
+    runtime::config::ConfigurationLayers::each(root, profile, [&](const runtime::lua::Value& configuration) {
+      runtime::config::ThemeReader::named(configuration, [&](std::string_view name, const runtime::config::ThemeSettings& settings) {
+        picker.catalog.add(name, features::configuration::ThemeReader::named(settings));
+      });
+
+      const auto client = configuration.field("client");
+      if (!client.is(LUA_TTABLE)) {
+        return;
+      }
+
+      const auto table = client.field("theme_picker");
+      if (!table.present()) {
+        return;
+      }
+
+      // A layer's command replaces the one it inherits.
+      if (table.field("on_select").present()) {
+        picker.on_select.clear();
+        runtime::config::CommandArgumentsReader::read(table, "on_select", [&](std::string_view argument) {
+          picker.on_select.append(argument);
+        });
+      }
+
+      if (const auto timeout = table.field("timeout_ms"); timeout.present()) {
+        picker.on_select.setTimeoutMs(static_cast<std::uint32_t>(timeout.integer()));
+      }
+    });
+  }
+
   void ConfigurationReader::gui(const runtime::config::GuiSettings& gui, Configuration& configuration) {
     using Settings = runtime::config::GuiSettings;
 
@@ -424,6 +454,7 @@ namespace telar::gui::application {
         machine_(memory),
         runtime_(ds::makeBox<runtime::config::RuntimeValues<Memory>>(memory, memory)),
         components_(ds::makeBox<ComponentConfiguration>(memory, *machine_.state())),
+        theme_picker_(ds::makeBox<features::configuration::ThemePicker>(memory)),
         descriptions_(memory),
         number_(source.generation) {
     profile_.assign(source.profile);
@@ -445,6 +476,11 @@ namespace telar::gui::application {
   template <Allocator Memory>
   std::uint64_t ConfigurationGeneration<Memory>::number() const noexcept {
     return number_;
+  }
+
+  template <Allocator Memory>
+  const features::configuration::ThemePicker& ConfigurationGeneration<Memory>::themePicker() const noexcept {
+    return *theme_picker_;
   }
 
   template <Allocator Memory>
@@ -903,6 +939,7 @@ namespace telar::gui::application {
     validateUtf8(runtime_->session_path);
     validateUtf8(runtime_->proxy.authority_directory);
     configuration_ = ConfigurationReader::read(root, profile_.view());
+    ConfigurationReader::themePicker(root, profile_.view(), theme_picker_.getMut());
     root.pushCopy();
     root_reference_ = luaL_ref(machine_.state(), LUA_REGISTRYINDEX);
     runtime::config::ConfigurationLayers::clients(root, profile_.view(), [&](const runtime::lua::Value& client, const runtime::lua::Value* inherited) {

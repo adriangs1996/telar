@@ -68,6 +68,14 @@ namespace telar::gui::features::configuration {
     applyVariant(settings.dark, selection.dark, selection.base);
   }
 
+  ThemeValues ThemeReader::named(const Settings& settings) {
+    auto theme = default_theme_values;
+
+    applyTheme(settings, theme);
+
+    return theme;
+  }
+
   CellColor ThemeReader::color(const runtime::config::ThemeColor& color) noexcept {
     if (!color.rgb) {
       return {};

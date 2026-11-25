@@ -107,7 +107,7 @@ export {
       bool destructive = false;
     };
 
-    inline constexpr auto palette_actions = ds::Array<PaletteAction, 47>{
+    inline constexpr auto palette_actions = ds::Array<PaletteAction, 48>{
         PaletteAction{.action = BindingActionKind::split_horizontal, .label = "Split right"},
         PaletteAction{.action = BindingActionKind::split_vertical, .label = "Split down"},
         PaletteAction{.action = BindingActionKind::focus_left, .label = "Focus pane left"},
@@ -132,6 +132,7 @@ export {
         PaletteAction{.action = BindingActionKind::rename_workspace, .label = "Rename context"},
         PaletteAction{.action = BindingActionKind::toggle_sidebar, .label = "Toggle sidebar"},
         PaletteAction{.action = BindingActionKind::toggle_workspace_list, .label = "Toggle context list"},
+        PaletteAction{.action = BindingActionKind::theme_picker, .label = "Choose theme"},
         PaletteAction{.action = BindingActionKind::leave_worktree, .label = "Leave worktree for its project"},
         PaletteAction{.action = BindingActionKind::forget_gone_worktrees, .label = "Forget gone worktrees", .destructive = true},
         PaletteAction{.action = BindingActionKind::copy_mode, .label = "Enter copy mode"},

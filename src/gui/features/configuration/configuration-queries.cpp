@@ -360,7 +360,7 @@ namespace telar::gui::features::configuration {
     }
 
     using VoidAction = std::pair<BindingActionKind, std::string_view>;
-    constexpr auto voids = ds::Array<VoidAction, 40>{
+    constexpr auto voids = ds::Array<VoidAction, 41>{
         VoidAction{BindingActionKind::toggle_pane_fullscreen, "toggle_pane_fullscreen"},
         VoidAction{BindingActionKind::toggle_sidebar, "toggle_sidebar"},
         VoidAction{BindingActionKind::toggle_workspace_list, "toggle_workspace_list"},
@@ -401,6 +401,7 @@ namespace telar::gui::features::configuration {
         VoidAction{BindingActionKind::process_review_stack, "process_review_stack"},
         VoidAction{BindingActionKind::process_review_files, "process_review_files"},
         VoidAction{BindingActionKind::process_review_logs, "process_review_logs"},
+        VoidAction{BindingActionKind::theme_picker, "theme_picker"},
     };
 
     for (const auto& [action_kind, type] : voids) {
@@ -493,6 +494,7 @@ namespace telar::gui::features::configuration {
     case BindingActionKind::process_review_stack:
     case BindingActionKind::process_review_files:
     case BindingActionKind::process_review_logs:
+    case BindingActionKind::theme_picker:
     case BindingActionKind::palette:
     case BindingActionKind::callback:
     case BindingActionKind::expression:

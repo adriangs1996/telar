@@ -221,6 +221,7 @@ namespace telar::gui::features::plugins {
     case Kind::process_review_stack:
     case Kind::process_review_files:
     case Kind::process_review_logs:
+    case Kind::theme_picker:
     case Kind::palette:
     case Kind::callback:
     case Kind::expression:

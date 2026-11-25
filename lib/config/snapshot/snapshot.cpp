@@ -68,7 +68,7 @@ namespace telar::runtime::config {
   template <Allocator Memory>
   template <CommandTabStore Commands>
   void SnapshotReader<Memory>::read(const lua::Value& root, std::string_view selected_profile, BasicClientValidationState<Commands>& client_state) {
-    root.onlyFields({"api_version", "theme", "client", "gui", "runtime", "plugins", "profiles"});
+    root.onlyFields({"api_version", "theme", "themes", "client", "gui", "runtime", "plugins", "profiles"});
     if (root.field("api_version").integer() != 2) {
       root.fail("requires api_version = 2");
     }
@@ -76,6 +76,7 @@ namespace telar::runtime::config {
     const auto base_client = root.field("client");
 
     static_cast<void>(ThemeReader::selection(root));
+    ThemeReader::named(root, [](std::string_view, const ThemeSettings&) {});
     ClientValidator::validate(base_client, values_.limits, client_state);
     static_cast<void>(GuiReader::read(root.field("gui")));
     RuntimeReader{values_}.read(root.field("runtime"));
@@ -131,8 +132,9 @@ namespace telar::runtime::config {
   template <Allocator Memory>
   template <CommandTabStore Commands>
   void SnapshotReader<Memory>::readProfile(const lua::Value& profile, RuntimeValues<Memory>& values, const lua::Value& base_client, BasicClientValidationState<Commands>& client_state) {
-    profile.onlyFields({"theme", "client", "gui", "runtime", "plugins"});
+    profile.onlyFields({"theme", "themes", "client", "gui", "runtime", "plugins"});
     static_cast<void>(ThemeReader::selection(profile));
+    ThemeReader::named(profile, [](std::string_view, const ThemeSettings&) {});
     ClientValidator::validate(profile.field("client"), values.limits, client_state, &base_client);
     static_cast<void>(GuiReader::read(profile.field("gui")));
     RuntimeReader{values}.read(profile.field("runtime"));

@@ -71,6 +71,7 @@ namespace telar::gui::qt {
       : QObject(parent),
         memory_(memory),
         fonts_(memory),
+        default_theme_picker_(ds::makeBox<application::configuration::ThemePicker>(memory)),
         default_keymap_(default_input_.compile()) {
     debounce_.setSingleShot(true);
     constexpr int reload_debounce_ms = 100;
@@ -472,6 +473,8 @@ namespace telar::gui::qt {
     profile_name_ = selection.profile.toUtf8();
     theme_ = selection.theme;
     trust_path_ = selection.trust_path.isEmpty() ? QString{} : QFileInfo{selection.trust_path}.absoluteFilePath();
+    theme_choice_file_.open(selection.theme_choice_path);
+    theme_choice_ = theme_choice_file_.read();
     const QPointer<ConfigurationSource> lifetime{this};
 
     try {
@@ -480,7 +483,7 @@ namespace telar::gui::qt {
       fail(error);
     }
 
-    if (lifetime != nullptr && !path_.isEmpty()) {
+    if (lifetime != nullptr && (!path_.isEmpty() || theme_choice_file_.enabled())) {
       poll_.start();
     }
   }
@@ -565,6 +568,7 @@ namespace telar::gui::qt {
   }
 
   void ConfigurationSource::poll() {
+    followThemeChoice();
     if (!debounce_.isActive() && !path_.isEmpty()) {
       schedule(false);
     }
@@ -666,9 +670,10 @@ namespace telar::gui::qt {
     static_cast<void>(fonts_.resolve(result->configuration.font, 1));
     configuration_ = std::move(result.getMut().configuration);
     locked_theme_ = result->locked_theme;
-    configuration_.theme = projectTheme(configuration_.themes.resolve(appearance_, locked_theme_));
     retire();
     generation_ = std::move(result.getMut().generation);
+    // The picker's choice is found in the new generation's catalog.
+    configuration_.theme = projectTheme(resolvedTheme());
     commands_ = std::move(result.getMut().snapshot.commands);
     fixed_bars_ = std::move(result.getMut().snapshot.fixed_bars);
     arguments_ = std::move(result.getMut().snapshot.arguments);
@@ -697,13 +702,84 @@ namespace telar::gui::qt {
 
   void ConfigurationSource::updateAppearance(Appearance appearance) {
     appearance_ = appearance;
-    const auto selected = projectTheme(configuration_.themes.resolve(appearance_, locked_theme_));
+    showTheme();
+  }
+
+  const application::configuration::ThemePicker& ConfigurationSource::themePicker() const noexcept {
+    return generation_ ? generation_->themePicker() : *default_theme_picker_;
+  }
+
+  const application::configuration::ThemeEntry* ConfigurationSource::chosenTheme() const {
+    // A choice made over another theme of the configuration gives way to the configuration.
+    if (locked_theme_ || !theme_choice_ || theme_choice_->fingerprint != application::configuration::themeFingerprint(configuration_.themes)) {
+      return nullptr;
+    }
+
+    return themePicker().catalog.find(theme_choice_->name.view());
+  }
+
+  ThemeValues ConfigurationSource::configuredTheme() const {
+    return configuration_.themes.resolve(appearance_);
+  }
+
+  ThemeValues ConfigurationSource::resolvedTheme() const {
+    if (preview_theme_) {
+      return *preview_theme_;
+    }
+
+    if (const auto* chosen = chosenTheme()) {
+      return chosen->values;
+    }
+
+    return configuration_.themes.resolve(appearance_, locked_theme_);
+  }
+
+  void ConfigurationSource::showTheme() {
+    const auto selected = projectTheme(resolvedTheme());
     if (selected == configuration_.theme) {
       return;
     }
 
     configuration_.theme = selected;
     emit themeChanged();
+  }
+
+  void ConfigurationSource::previewTheme(const ds::Option<ThemeValues>& theme) {
+    preview_theme_ = theme;
+    showTheme();
+  }
+
+  void ConfigurationSource::chooseTheme(ds::Option<std::string_view> name) {
+    if (!name) {
+      theme_choice_file_.remove();
+      theme_choice_.reset();
+    } else {
+      const auto* entry = themePicker().catalog.find(*name);
+      if (entry == nullptr) {
+        throw std::invalid_argument{"The theme is no longer configured"};
+      }
+
+      application::configuration::ThemeChoice choice;
+
+      choice.name.assign(entry->name.view());
+      choice.fingerprint = application::configuration::themeFingerprint(configuration_.themes);
+      theme_choice_file_.write(choice);
+      theme_choice_ = choice;
+    }
+
+    // A theme chosen in the window outranks the one it was started with.
+    theme_.clear();
+    locked_theme_.reset();
+    showTheme();
+  }
+
+  void ConfigurationSource::followThemeChoice() {
+    if (!theme_choice_file_.changed()) {
+      return;
+    }
+
+    theme_choice_ = theme_choice_file_.read();
+    showTheme();
   }
 
 }

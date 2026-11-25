@@ -159,6 +159,7 @@ namespace telar::gui::qt {
       case window_actions::Action::process_review_stack:
       case window_actions::Action::process_review_files:
       case window_actions::Action::process_review_logs:
+      case window_actions::Action::theme_picker:
         return PaneDirection::down;
       }
 
@@ -235,6 +236,7 @@ namespace telar::gui::qt {
       case window_actions::Action::process_review_stack:
       case window_actions::Action::process_review_files:
       case window_actions::Action::process_review_logs:
+      case window_actions::Action::theme_picker:
         return Dialog::none;
       }
 
@@ -245,7 +247,7 @@ namespace telar::gui::qt {
     ds::Option<window_actions::Action> nativeAction(BindingActionKind kind) noexcept {
       using Native = window_actions::Action;
       using Binding = BindingActionKind;
-      constexpr auto actions = ds::Array<std::pair<Binding, Native>, 54>{
+      constexpr auto actions = ds::Array<std::pair<Binding, Native>, 55>{
           {
               {Binding::new_tab, Native::new_tab},
               {Binding::new_editor, Native::new_editor},
@@ -301,6 +303,7 @@ namespace telar::gui::qt {
               {Binding::process_review_stack, Native::process_review_stack},
               {Binding::process_review_files, Native::process_review_files},
               {Binding::process_review_logs, Native::process_review_logs},
+              {Binding::theme_picker, Native::theme_picker},
           },
       };
 
@@ -644,6 +647,7 @@ namespace telar::gui::qt {
     case BindingActionKind::process_review_stack:
     case BindingActionKind::process_review_files:
     case BindingActionKind::process_review_logs:
+    case BindingActionKind::theme_picker:
     case BindingActionKind::palette:
     case BindingActionKind::callback:
     case BindingActionKind::expression:
@@ -1061,8 +1065,7 @@ namespace telar::gui::qt {
       return;
     }
 
-    if (action == window_actions::Action::explorer) {
-      emit explorerRequested();
+    if (requestOverlay(action)) {
       return;
     }
 
@@ -1099,6 +1102,21 @@ namespace telar::gui::qt {
     } else if (action == window_actions::Action::cancel) {
       cancelCurrentInteraction();
     }
+  }
+
+  bool WindowCommands::requestOverlay(window_actions::Action action) {
+    // The explorer and the theme picker belong to controllers of their own.
+    if (action == window_actions::Action::explorer) {
+      emit explorerRequested();
+      return true;
+    }
+
+    if (action == window_actions::Action::theme_picker) {
+      emit themesRequested();
+      return true;
+    }
+
+    return false;
   }
 
   void WindowCommands::cancelCurrentInteraction() {
@@ -1190,6 +1208,7 @@ namespace telar::gui::qt {
     case window_actions::Action::process_review_stack:
     case window_actions::Action::process_review_files:
     case window_actions::Action::process_review_logs:
+    case window_actions::Action::theme_picker:
       return false;
     }
 

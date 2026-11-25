@@ -17,6 +17,7 @@ static_assert(true);
 #include "telar_wire/serializers/telar_cells.hpp"
 #include "telar_wire/serializers/telar_frame.hpp"
 #include "telar_wire/serializers/telar_messages.hpp"
+#include "theme_choice_file.hpp"
 #include "ui/kit/fonts/font_cache.hpp"
 #include <algorithm>
 #include <array>
@@ -130,6 +131,20 @@ namespace telar::gui::qt {
     [[nodiscard]] application::plugins::PluginInvocation pluginInvocation(PluginActionDescription action, BindingContext context) const;
     void authorizePlugin(const application::plugins::PluginInvocation& invocation, const application::plugins::PluginEffects& effects) const;
 
+    // The themes the picker lists and the command it runs, for the loaded configuration.
+    [[nodiscard]] const application::configuration::ThemePicker& themePicker() const noexcept;
+    // The catalog's theme the window shows by the picker's choice, or none when it shows the
+    // configuration's or the one --theme names.
+    [[nodiscard]] const application::configuration::ThemeEntry* chosenTheme() const;
+    // The configuration's theme for the system's appearance, whatever the window shows.
+    [[nodiscard]] ThemeValues configuredTheme() const;
+    // Shows `theme` over every other theme until it is called with none.
+    void previewTheme(const ds::Option<ThemeValues>& theme);
+    // Saves the choice every window follows: the catalog's theme `name`, or none to follow the
+    // configuration again. It also lets go of the theme --theme named. Throws when the choice
+    // cannot be saved.
+    void chooseTheme(ds::Option<std::string_view> name);
+
   signals:
     void changed();
     void themeChanged();
@@ -151,6 +166,13 @@ namespace telar::gui::qt {
     void fail(const std::exception& error);
     void updateAppearance(Appearance appearance);
     void reload();
+    // The theme the window shows: the preview, the one --theme names, the picker's choice, then
+    // the configuration's for the appearance.
+    [[nodiscard]] ThemeValues resolvedTheme() const;
+    // Shows the theme resolvedTheme gives, and says so when it changed.
+    void showTheme();
+    // Reads the picker's choice again when another window replaced it.
+    void followThemeChoice();
 
     tbc::mut_a<ApplicationAllocator> memory_;
     tbc::val_a<FontCache<ApplicationAllocator>> fonts_;
@@ -160,6 +182,11 @@ namespace telar::gui::qt {
     Configuration configuration_;
     Appearance appearance_ = Appearance::unknown;
     ds::Option<ThemeValues> locked_theme_;
+    ds::Option<ThemeValues> preview_theme_;
+    ThemeChoiceFile theme_choice_file_;
+    ds::Option<application::configuration::ThemeChoice> theme_choice_;
+    // The presets alone, for a window without a configuration.
+    tbc::val_a<ds::Box<application::configuration::ThemePicker, ApplicationAllocator>> default_theme_picker_;
     InputConfiguration default_input_;
     // The default keymap is compiled from the input beside it, so the source stays where Qt made it.
     tbc::val_self<BindingMap<BindingAction>> default_keymap_;
