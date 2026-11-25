@@ -36,5 +36,23 @@ namespace telar {
     }
   }
 
+  void PaneFacts::validate() const {
+    if ((command_state == PaneCommandState::none) != command.empty()) {
+      throw EncodingError{"A pane's command and its state disagree"};
+    }
+
+    if (command_state != PaneCommandState::finished && (exit_code || duration_ms != 0)) {
+      throw EncodingError{"Only a finished command has an exit code and a duration"};
+    }
+
+    if (command.empty() && command_truncated) {
+      throw EncodingError{"An empty command cannot be truncated"};
+    }
+
+    if (dirty && branch.empty()) {
+      throw EncodingError{"Changes without a repository"};
+    }
+  }
+
 }
 }

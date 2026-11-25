@@ -55,6 +55,25 @@ export {
 export {
   namespace telar::gui::inline foundation::inline model {
 
+    // What the runtime's PaneFacts say of a listed pane: the command its integrated shell runs or
+    // last ran, where the pane works and the repository there. As made until the first arrives,
+    // and for every pane of a runtime older than the message.
+    struct ListedPaneFacts {
+      PaneCommandState command_state = PaneCommandState::none;
+      bool command_truncated = false;
+      bool in_workspace = false;
+      bool dirty = false;
+      // The status a finished command exited with, when its shell reported one.
+      ds::Option<std::int32_t> exit_code;
+      std::uint32_t duration_ms = 0;
+      runtime::FixedText<max_pane_command_bytes> command;
+      runtime::FixedText<max_pane_directory_bytes> directory;
+      runtime::FixedText<max_pane_branch_bytes> branch;
+
+      // Whether these are the facts `message` carries.
+      [[nodiscard]] bool same(const PaneFacts& message) const noexcept;
+    };
+
     // A live pane of the runtime and the process holding its terminal.
     struct ListedPane {
       static constexpr std::size_t foreground_capacity = 48;
@@ -68,11 +87,13 @@ export {
       ds::Array<std::uint16_t, max_listed_ports> port_values{};
       std::uint8_t port_count = 0;
       bool shell = false;
+      ListedPaneFacts facts;
 
       [[nodiscard]] std::span<const std::uint16_t> ports() const noexcept;
     };
 
-    // The runtime's pane list, replaced whole by each newer revision.
+    // The runtime's pane list, replaced whole by each newer revision. A pane a newer list still
+    // names keeps the facts it had.
     template <Allocator Memory>
     class PaneListReplica {
     public:
@@ -82,13 +103,22 @@ export {
 
       [[nodiscard]] std::span<const ListedPane> entries() const noexcept;
       [[nodiscard]] std::uint64_t revision() const noexcept;
+      // Counts the facts the list took, for what shows them.
+      [[nodiscard]] std::uint64_t factsRevision() const noexcept;
       [[nodiscard]] const ListedPane* find(std::uint64_t pane_id, std::uint64_t generation) const noexcept;
       void resetSource() noexcept;
       bool apply(const PaneList& list, std::uint64_t now_ns);
+      // False when the list names no such pane, or it has these facts already.
+      bool apply(const PaneFacts& facts);
 
     private:
       ds::Vec<ListedPane, Memory> entries_;
+      // The list being built, so the one shown stays whole until it is.
+      ds::Vec<ListedPane, Memory> staging_;
       std::uint64_t revision_ = 0;
+      std::uint64_t facts_revision_ = 0;
+      // The next list comes from the runtime that sent the one shown.
+      bool inherits_ = false;
     };
 
     extern template class PaneListReplica<Memory>;

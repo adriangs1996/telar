@@ -86,7 +86,10 @@ namespace {
     ds::Array entries{agentSnapshotEntry(initial_age), agentSnapshotEntry(initial_age)};
 
     entries.atMut(entries.size() - 1).pane_id = 2;
+    entries.atMut(0).tab_label = "server";
+    entries.atMut(0).cwd_label = "~/sandbox/telar";
     check(replica.apply({.revision = 1, .entries = entries}, second), "first revision must be accepted");
+    check(std::string_view{replica.entries().front().tab_label} == "server" && std::string_view{replica.entries().front().cwd_label} == "~/sandbox/telar" && std::string_view{replica.entries().back().cwd_label} == entries.back().cwd_label, "an agent must keep the tab and the directory the runtime names");
     check(!replica.apply({.revision = 1, .entries = {}}, stale_delivery_ns), "duplicate revisions must not erase agents");
     check(replica.entries().size() == 2 && replica.revision() == 1, "duplicate revisions must preserve the replica");
     std::swap(entries.atMut(0), entries.atMut(entries.size() - 1));
@@ -342,6 +345,69 @@ namespace {
     check(session.paneListRevision() == 1 && session.paneList().size() == 1, "a replacement runtime may restart its revision counter");
   }
 
+  // The facts of a listed pane arrive apart from the list: they survive the lists that still name
+  // the pane, count their own changes, and are not taken for a pane the list does not name or
+  // from a runtime that replaced the one that sent them.
+  void paneFacts() {
+    SystemAllocator memory;
+    telar::gui::application::tests::session_fixture::Transport transport;
+    TestSession session{memory, transport, &FakeClock::nowNanoseconds};
+    const TabLocation location{.workspace = {.kind = WorkspaceLocation::Kind::workspace, .id = 1}, .tab_id = 1};
+    const ds::Array entries{
+        PaneListEntry{.pane_id = 1, .pane_generation = 1, .location = location, .foreground = "zsh", .shell = true},
+        PaneListEntry{.pane_id = 2, .pane_generation = 4, .location = location, .foreground = "node"},
+    };
+    const PaneFacts failed{.pane_id = 1, .pane_generation = 1, .command_state = PaneCommandState::finished, .command = "just gui-case sidebar", .exit_code = 1, .duration_ms = 12'400, .directory = "~/sandbox/telar", .in_workspace = true, .branch = "main", .dirty = true};
+
+    telar::gui::application::tests::session_fixture::deliver(session, PaneList{.revision = 2, .entries = entries});
+    const auto& idle = session.paneList().front().facts;
+
+    check(session.paneFactsRevision() == 0 && idle.command_state == PaneCommandState::none && idle.command.view().empty() && idle.directory.view().empty() && idle.branch.view().empty(), "a listed pane starts without facts");
+
+    telar::gui::application::tests::session_fixture::deliver(session, failed);
+    const auto& known = session.paneList().front().facts;
+
+    check(session.paneFactsRevision() == 1 && session.paneListRevision() == 2, "the facts count their own changes");
+    check(known.command_state == PaneCommandState::finished && known.command.view() == "just gui-case sidebar" && known.exit_code == 1 && known.duration_ms == 12'400);
+    check(known.directory.view() == "~/sandbox/telar" && known.in_workspace && known.branch.view() == "main" && known.dirty);
+    check(session.paneList().back().facts.command_state == PaneCommandState::none, "the facts of one pane reached another");
+
+    telar::gui::application::tests::session_fixture::deliver(session, failed);
+    check(session.paneFactsRevision() == 1, "the same facts counted as a change");
+    telar::gui::application::tests::session_fixture::deliver(session, PaneFacts{.pane_id = 1, .pane_generation = 2, .directory = "/elsewhere"});
+    telar::gui::application::tests::session_fixture::deliver(session, PaneFacts{.pane_id = 9, .pane_generation = 1, .directory = "/elsewhere"});
+    check(session.paneFactsRevision() == 1 && session.paneList().front().facts.directory.view() == "~/sandbox/telar", "facts of a pane the list does not name were taken");
+
+    // The next list still names the pane, in another place of it.
+    const ds::Array reordered{entries[1], entries[0]};
+
+    telar::gui::application::tests::session_fixture::deliver(session, PaneList{.revision = 3, .entries = reordered});
+    check(session.paneList().back().pane_id == 1 && session.paneList().back().facts.command.view() == "just gui-case sidebar", "a pane lost its facts to a newer list");
+    check(session.paneList().front().facts.command_state == PaneCommandState::none);
+
+    const PaneFacts running{.pane_id = 1, .pane_generation = 1, .command_state = PaneCommandState::running, .command = "npm run dev", .command_truncated = true, .directory = "~/sandbox/telar"};
+
+    telar::gui::application::tests::session_fixture::deliver(session, running);
+    const auto& current = session.paneList().back().facts;
+
+    check(session.paneFactsRevision() == 2 && current.command_state == PaneCommandState::running && current.command.view() == "npm run dev" && current.command_truncated && !current.exit_code && current.duration_ms == 0 && current.branch.view().empty() && !current.dirty && !current.in_workspace);
+
+    // Another runtime may give a pane of its own the same identity.
+    session.disconnected();
+    telar::gui::application::tests::session_fixture::deliver(session, PaneList{.revision = 1, .entries = entries});
+    check(session.paneList().front().facts.command.view().empty() && session.paneList().front().facts.directory.view().empty(), "a replacement runtime's pane kept the facts of the previous one");
+
+    bool rejected = false;
+
+    try {
+      telar::gui::application::tests::session_fixture::deliver(session, PaneFacts{.pane_id = 1, .pane_generation = 1, .command_state = PaneCommandState::running});
+    } catch (const EncodingError&) {
+      rejected = true;
+    }
+
+    check(rejected, "a running command without its text must be rejected");
+  }
+
   void animationBoundaries() {
     constexpr auto interval = AgentAnimation::pulse_interval_ns;
 
@@ -363,6 +429,7 @@ namespace {
   const telar::testing::Case case_warmed_snapshots_reuse_storage{"agent_replica.warmed_snapshots_reuse_storage", warmedSnapshotsReuseStorage};
   const telar::testing::Case case_session_uses_the_injected_clock{"agent_replica.session_uses_the_injected_clock", sessionUsesTheInjectedClock};
   const telar::testing::Case case_pane_list_revisions{"agent_replica.pane_list_revisions", paneListRevisions};
+  const telar::testing::Case case_pane_facts{"agent_replica.pane_facts", paneFacts};
   const telar::testing::Case case_animation_boundaries{"agent_replica.animation_boundaries", animationBoundaries};
 
 }

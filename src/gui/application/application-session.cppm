@@ -327,6 +327,10 @@ export {
 
       [[nodiscard]] std::uint64_t paneListRevision() const noexcept;
 
+      // Counts the changes to the facts of the listed panes: their commands, directories and
+      // repositories, which the list's revision does not count.
+      [[nodiscard]] std::uint64_t paneFactsRevision() const noexcept;
+
       [[nodiscard]] std::string_view clipboard() const noexcept;
 
       // Changes with what a pane's header and its tab show: title, directory, program, progress,
@@ -627,6 +631,8 @@ export {
       Change apply(const AgentSnapshot& message);
 
       Change apply(const PaneList& message);
+
+      Change apply(const PaneFacts& message);
 
       Change apply(const HistoryResults& message);
 

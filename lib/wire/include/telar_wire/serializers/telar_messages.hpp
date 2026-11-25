@@ -218,6 +218,7 @@ namespace telar {
     nvim_open_files = 0xdf,
     nvim_explore = 0xe0,
     explorer_kept = 0xe1,
+    pane_facts = 0xe2,
   };
 
   struct RequestRuntimeState {
@@ -762,6 +763,8 @@ namespace telar {
       return "nvim_explore";
     case ServerTag::explorer_kept:
       return "explorer_kept";
+    case ServerTag::pane_facts:
+      return "pane_facts";
     case ServerTag::pane_theme:
       return "pane_theme";
     }
@@ -1510,6 +1513,14 @@ namespace telar {
     interrupted = 3,
     // An ssh whose remote shell has taken over the pane: it ends when that shell does.
     session = 4,
+  };
+
+  // The command a pane's integrated shell runs or last ran, as PaneFacts reports it.
+  enum class PaneCommandState : Byte {
+    // The pane has no integrated shell, or its shell ran nothing yet.
+    none = 0,
+    running = 1,
+    finished = 2,
   };
 
   // Where a command ran: in the pane's own shell, as the ssh that opened a remote shell, or

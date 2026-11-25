@@ -97,10 +97,8 @@ export {
       static constexpr std::size_t label_bytes = 48;
       static constexpr std::size_t title_bytes = 96;
 
-      // The pane's directory as the snapshot labels it, the user's home shown as `~`.
-      static void labelDirectory(FixedText<label_bytes>& label, std::string_view cwd);
-
-      ds::Array<FixedText<label_bytes>, AgentRegistry<ConcurrentMemory>::capacity> directories_;
+      // Each pane's directory as `labelDirectory` says it.
+      ds::Array<FixedText<max_pane_directory_bytes>, AgentRegistry<ConcurrentMemory>::capacity> directories_;
       ds::Array<FixedText<title_bytes>, AgentRegistry<ConcurrentMemory>::capacity> placeholders_;
     };
 

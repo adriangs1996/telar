@@ -171,6 +171,10 @@ export {
       ds::String<Memory> title;
       ds::String<Memory> provider_name;
       ds::String<Memory> workspace_label;
+      // The label of the agent's tab, empty for a tab nobody named.
+      ds::String<Memory> tab_label;
+      // Where the agent's pane works, as the runtime labels it: the home as `~`.
+      ds::String<Memory> cwd_label;
       ds::String<Memory> display_name;
       ds::String<Memory> icon;
       ds::String<Memory> detail;

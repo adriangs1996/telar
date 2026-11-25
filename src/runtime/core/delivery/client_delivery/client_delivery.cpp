@@ -13,11 +13,86 @@ import telar.render.document;
 import telar.wire.nvim;
 import telar.wire.pane_io;
 import telar.runtime.diagnostics.line;
+import telar.platform.paths;
+import telar.base.text.utf8;
 import telar.base.ds;
 
 namespace telar::runtime {
 
   namespace {
+
+    // Whether the wire takes `text` as display text: valid UTF-8 without control bytes.
+    bool displayable(std::string_view text) noexcept {
+      constexpr unsigned char first_printable = 0x20;
+      constexpr unsigned char delete_byte = 0x7f;
+
+      return inspectUtf8(text) == Utf8Validation::valid && std::ranges::none_of(text, [](char character) {
+        const auto byte = static_cast<unsigned char>(character);
+
+        return byte < first_printable || byte == delete_byte;
+      });
+    }
+
+    // The command blocks of a pane with an integrated shell; null for every other pane.
+    const auto* commandBlocks(const Pane& pane) noexcept {
+      const auto* terminal = pane.template as<TerminalBody>();
+
+      return terminal == nullptr || !terminal->blocks ? nullptr : &*terminal->blocks;
+    }
+
+    // What a client that heard the pane's facts now has heard: the pane, where it is, and the
+    // count of the changes to its command, its directory and its repository. Each count only
+    // grows, so their sum moves when any of them does.
+    ClientSession::FactsStamp factsStamp(const Pane& pane) noexcept {
+      const auto* blocks = commandBlocks(pane);
+
+      return {.pane = pane.id, .generation = pane.generation, .workspace = pane.location.workspace.id, .revision = pane.cwd_revision + pane.git_revision + (blocks == nullptr ? 0 : blocks->commandRevision())};
+    }
+
+    // Whether `cwd` is the workspace's directory, or lies in it.
+    bool worksIn(std::string_view cwd, const Workspace* workspace) {
+      if (workspace == nullptr || workspace->path.view().empty() || !cwd.starts_with(workspace->path.view())) {
+        return false;
+      }
+
+      const auto rest = cwd.substr(workspace->path.view().size());
+
+      return rest.empty() || rest.front() == '/' || workspace->path.view().ends_with('/');
+    }
+
+    // The facts of `pane`, which view it and `directory`, its label. Text the wire would refuse
+    // is left out: every client that lists the panes is sent this, and what one pane's shell
+    // printed must not end their delivery.
+    tbc::val_a<PaneFacts> describe(tbc::ref_a<Pane> pane, const Workspace* workspace, tbc::val_a<std::string_view> directory) {
+      PaneFacts facts{.pane_id = pane.id, .pane_generation = pane.generation, .in_workspace = worksIn(pane.cwd, workspace)};
+
+      if (displayable(directory)) {
+        facts.directory = directory;
+      }
+
+      const auto* blocks = commandBlocks(pane);
+      const auto command = blocks == nullptr || !blocks->latest() ? std::string_view{} : utf8Prefix(blocks->latest()->command.view(), max_pane_command_bytes);
+      if (!command.empty() && displayable(command)) {
+        const auto& latest = *blocks->latest();
+        const bool running = latest.state == CommandBlockState::running || latest.state == CommandBlockState::session;
+
+        facts.command_state = running ? PaneCommandState::running : PaneCommandState::finished;
+        facts.command = command;
+        facts.command_truncated = latest.truncated || command.size() < latest.command.view().size();
+        facts.duration_ms = running ? 0 : latest.duration_ms;
+        // An interrupted command reported no status.
+        if (latest.state == CommandBlockState::succeeded || latest.state == CommandBlockState::failed) {
+          facts.exit_code = latest.status;
+        }
+      }
+
+      if (const auto branch = utf8Prefix(pane.git.branch.view(), max_pane_branch_bytes); pane.git.repository && displayable(branch)) {
+        facts.branch = branch;
+        facts.dirty = !branch.empty() && pane.git.changes_known && (pane.git.staged != 0 || pane.git.unstaged != 0 || pane.git.conflicted != 0);
+      }
+
+      return facts;
+    }
 
     // Tells the client that held the pane's clipboard request that it is withdrawn; the client being gone
     // withdraws it too.
@@ -641,6 +716,20 @@ namespace telar::runtime {
     return cwd.size() <= maximum_bytes && !cwd.contains('\0') ? cwd : std::string_view{};
   }
 
+  void labelDirectory(FixedText<max_pane_directory_bytes>& label, std::string_view cwd) {
+    const auto home = processHome();
+    if (!home.empty() && cwd.starts_with(home) && (cwd.size() == home.size() || cwd[home.size()] == '/')) {
+      ds::Array<char, max_pane_directory_bytes> shortened{'~'};
+      const auto suffix = utf8Prefix(cwd.substr(home.size()), max_pane_directory_bytes - 1);
+
+      std::ranges::copy(suffix, shortened.viewMut().subspan(1).begin());
+      label.assign({shortened.data(), suffix.size() + 1});
+      return;
+    }
+
+    label.assign(utf8Prefix(cwd, max_pane_directory_bytes));
+  }
+
   ClientDelivery::ClientDelivery(ConcurrentMemory& memory, RuntimeModel& model)
       : memory_(memory),
         model_(model) {}
@@ -715,6 +804,36 @@ namespace telar::runtime {
     client.pane_revision = model_.pane_revision;
     client.pane_workspace_revision = model_.workspace_revision;
     return true;
+  }
+
+  bool ClientDelivery::paneFacts(ClientSession& client) {
+    if (!client.subscribed) {
+      return false;
+    }
+
+    const auto panes = model_.panes.items();
+
+    for (std::size_t slot = 0; slot < panes.size(); ++slot) {
+      const auto* pane = panes[slot];
+      if (pane == nullptr || pane->exit_status || pane->close_requested) {
+        continue;
+      }
+
+      const auto stamp = factsStamp(*pane);
+      auto& sent = client.facts.atMut(slot);
+      if (sent == stamp) {
+        continue;
+      }
+
+      FixedText<max_pane_directory_bytes> directory;
+
+      labelDirectory(directory, pane->cwd);
+      client.connection.send(describe(*pane, model_.workspaces.find(pane->location.workspace.id), directory.view()));
+      sent = stamp;
+      return true;
+    }
+
+    return false;
   }
 
   bool ClientDelivery::foreground(ClientSession& client) {

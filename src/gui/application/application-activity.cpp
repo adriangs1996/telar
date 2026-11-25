@@ -75,4 +75,8 @@ namespace telar::gui::application::activity {
     return Access::paneList(session).apply(message, Access::now(session)) ? Change::model : Change::none;
   }
 
+  Change receive(Session& session, const PaneFacts& message) {
+    return Access::paneList(session).apply(message) ? Change::model : Change::none;
+  }
+
 }
