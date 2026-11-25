@@ -138,7 +138,7 @@ inside a mod's layout:
 - `tab_cards`, `tab_title`, `tab_path` and `tab_activity` in a `tab`.
 - `pane_mark`, `pane_program`, `pane_context`, `pane_status`, `pane_progress` and `pane_actions` in a `pane_header`.
 - `agent_mark`, `agent_title`, `agent_project` and `agent_status` in an `agent_card`.
-- `sidebar_toggle`, `workspace_identity`, `project_switcher`, `tabs`, `palette_button` and `new_tab` in the `top_bar`; give `tabs` a `grow` or a `width`.
+- `sidebar_toggle`, `workspace_identity`, `project_switcher`, `tabs`, `palette_button` and `new_tab` in the `top_bar`; give `tabs` a `grow` or a `width`. `workspace_identity` is the machine switcher, and `project_switcher` is the workspace track, which draws as many names as the width it gets holds.
 - `metrics`, `bar_left`, `bar_center` and `bar_right` in the `bottom_bar`. The last three show the [`bars.bottom`](configuration.md#bars) sources.
 
 ### Canvas

@@ -104,6 +104,16 @@ export namespace telar::gui::features::prompt {
     Line line;
     std::uint64_t pane_id;
     std::int64_t output = 0;
+    // A key typed at a program's question reached it: the rest of the answer follows, whatever
+    // the echo of each key prints, until Enter, a signal or end-of-file key, or the program
+    // stops reading a line.
+    bool forwarding = false;
+    // The command the queue waits for ended well: the shell may report its end before it is
+    // back at its prompt, where the queued command runs.
+    bool succeeded = false;
+    // When the shell reported a command's end without its prompt back yet, as `now` reads the
+    // clock: keys typed in between wait in the line, for a while. None outside that gap.
+    ds::Option<std::int64_t> ended;
     // The command block selected from the editor's normal mode, by its index among the pane's
     // blocks, and the row the live prompt started on when the selection began.
     ds::Option<std::size_t> block;
@@ -312,10 +322,18 @@ export namespace telar::gui::features::prompt {
 
   // Whether a key typed while a program runs reaches the program instead of the queue: the signal
   // and end-of-file keys of `shell`'s line discipline, and any key while the program seems to ask
-  // a question, its cursor at `cursor_column` and quiet since its last output. `now` reads the
-  // clock, only when the line is empty.
+  // a question, its cursor at `cursor_column` and quiet since its last output. Once a key reached
+  // it, the rest of the answer follows it until Enter: the echo of each key is output too, and
+  // would send the next one to the queue. `now` reads the clock, only when the line is empty and
+  // no answer is under way.
   template <typename Now>
-  [[nodiscard]] TBC_GENERIC bool toProgram(const PaneLine& line, const KeyPress& key, const PaneShell& shell, std::uint32_t cursor_column, Now&& now);
+  [[nodiscard]] TBC_GENERIC bool toProgram(PaneLine& line, const KeyPress& key, const PaneShell& shell, std::uint32_t cursor_column, Now&& now);
+
+  // Whether text an input method committed or a paste reaches the program instead of the queue,
+  // as a key would: during an answer, or as its start. Only one line does (oneLine), and a line
+  // end after it ends the answer.
+  template <typename Now>
+  [[nodiscard]] TBC_GENERIC bool toProgram(PaneLine& line, std::string_view text, std::uint32_t cursor_column, Now&& now);
 
   // How the line reads a key: the bindings of `configuration`, and the `dialect` of the shell that
   // runs the command.
@@ -365,10 +383,21 @@ export namespace telar::gui::features::prompt {
   // A key at a secret prompt, `byte` the first it sends: one more dot, or none after an erase.
   TBC_HOT_PATH inline void typeSecret(PaneLine& line, char byte) noexcept;
 
-  // The pane's shell went from `previous` to `current`: a secret prompt ends once it echoes again,
-  // and back at its prompt the command queued runs if the last one succeeded. What the line
-  // hands its owner then; none while the shell was not back.
-  [[nodiscard]] ds::Option<Outcome> follow(PaneLine& line, const PaneShell& previous, const PaneShell& current);
+  // The pane's shell went from `previous` to `current` at `now`: a secret prompt ends once it
+  // echoes again, and back at its prompt, from a command or from the gap after its end, the
+  // command queued runs if the last one succeeded. What the line hands its owner then; none
+  // while the shell was not back.
+  [[nodiscard]] ds::Option<Outcome> follow(PaneLine& line, const PaneShell& previous, const PaneShell& current, std::int64_t now);
+
+  // Whether keys typed at `now` fall in the gap between a command's end and the shell's prompt,
+  // which hooks such as direnv's can make long: the line takes them, as it does while a command
+  // runs, instead of the shell's own line editor behind telar's. A gap longer than this is a
+  // shell that stopped reporting its prompt, which gets the keys back.
+  struct BetweenCommands {
+    static constexpr std::chrono::milliseconds limit{2000};
+
+    [[nodiscard]] static bool now(const PaneLine& line, std::int64_t now) noexcept;
+  };
 
   // The system clipboard behind vim's "+ and "* registers.
   void useClipboard(tbc::mut_a<PaneLine> line, tbc::val_a<Clipboard> clipboard);
@@ -477,6 +506,10 @@ export namespace telar::gui::features::prompt {
 
   [[nodiscard]] ds::Option<std::uint64_t> receive(tbc::mut_a<State> state, tbc::mut_a<Lines> lines, const PathResults& message);
 
+  // Whether pane `pane_id`'s Tab asks again: an answer cut short arrived after typing narrowed
+  // the word, and the choices it narrows to may be past the cut. Once per answer.
+  [[nodiscard]] bool asksAgain(Lines& lines, std::uint64_t pane_id) noexcept;
+
   // ---- requests that fail -----------------------------------------------------------------------
 
   // Request `request_id` failed, or a lost connection will never answer it: it settles as one that
@@ -581,27 +614,65 @@ namespace telar::gui::features::prompt {
     return action ? edited.perform(surface, *action, incomplete, history(state)) : edited.press(surface, key, incomplete, history(state));
   }
 
+  // An answer under way, or a program that seems to ask a question. The echo of each key it
+  // takes is output too, so its quiet is only read before the first one.
   template <typename Now>
-  bool toProgram(const PaneLine& line, const KeyPress& key, const PaneShell& shell, std::uint32_t cursor_column, Now&& now) {
-    const auto& typed = line.line;
-    if (typed.answering()) {
-      return false;
+  TBC_GENERIC bool answers(const PaneLine& line, std::uint32_t cursor_column, Now&& now) {
+    if (line.forwarding) {
+      return true;
     }
 
+    return line.line.editor().text().empty() && PendingPrompt::likely(cursor_column, std::chrono::nanoseconds{std::forward<Now>(now)() - line.output});
+  }
+
+  template <typename Now>
+  bool toProgram(PaneLine& line, const KeyPress& key, const PaneShell& shell, std::uint32_t cursor_column, Now&& now) {
     // Ctrl with an ASCII character types the control byte that shares its low five bits.
     constexpr char32_t ascii_end = 0x80;
     constexpr char32_t control_bits = 0x1f;
 
-    // Signal and end-of-file keys always reach the program, as does typing while it seems to ask
-    // a question.
+    // Signal and end-of-file keys always reach the program, even while the line composes an
+    // answer, and end the line it was reading: an answer composed for it goes too, as the line
+    // discipline drops what it had of the line.
     if (key.key == Key::character && key.modifiers.control && !key.modifiers.alt && key.character < ascii_end) {
       const char control = static_cast<char>(key.character & control_bits);
       if (controlKey(shell, {&control, 1})) {
+        if (line.line.answering()) {
+          line.line.committed({});
+        }
+
+        line.forwarding = false;
         return true;
       }
     }
 
-    return typed.editor().text().empty() && PendingPrompt::likely(cursor_column, std::chrono::nanoseconds{std::forward<Now>(now)() - line.output});
+    if (line.line.answering()) {
+      return false;
+    }
+
+    // Enter on an empty line queues nothing: it is the program's, as for one that printed its
+    // question on a line of its own (`echo "Press Enter"; read`), its cursor at the line's start.
+    const bool enter = key.key == Key::enter && !key.modifiers.alt;
+    if (enter && !line.forwarding && line.line.editor().text().empty()) {
+      return true;
+    }
+
+    if (!answers(line, cursor_column, std::forward<Now>(now))) {
+      return false;
+    }
+
+    line.forwarding = !enter;
+    return true;
+  }
+
+  template <typename Now>
+  bool toProgram(PaneLine& line, std::string_view text, std::uint32_t cursor_column, Now&& now) {
+    if (line.line.answering() || !oneLine(text) || !answers(line, cursor_column, std::forward<Now>(now))) {
+      return false;
+    }
+
+    line.forwarding = !text.ends_with('\n') && !text.ends_with('\r');
+    return true;
   }
 
   inline std::string_view delivery(const PaneLine& line) noexcept {

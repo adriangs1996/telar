@@ -72,7 +72,9 @@ PaneHeaderLayout {
         y: root.nameBounds.y
         width: Math.max(0, root.nameBounds.x + root.nameBounds.width - x)
         height: root.nameBounds.height
-        text: (root.record.remote ? root.record.remote + "   " : "") + (root.record.context ?? "") + (root.record.git ? "   " + root.record.git : "") + (root.detail.length > 0 ? "   " + root.detail : "")
+        // The tab of a pane that is alone in it already shows the pane's directory.
+        readonly property string place: (root.record.aloneInTab ?? false) && (root.record.contextIsDirectory ?? false) ? "" : (root.record.context ?? "")
+        text: [root.record.remote ?? "", place, root.record.git ?? "", root.detail].filter(part => part.length > 0).join("   ")
         pixelSize: root.typography.small
         color: root.colors.subtext0
         visible: !root.elements.pane_context && width >= 4 * root.typography.body && text.length > 0

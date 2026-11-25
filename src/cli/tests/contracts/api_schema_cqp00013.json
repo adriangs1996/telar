@@ -224,6 +224,7 @@
     "places_kept": 222,
     "nvim_open_files": 223,
     "nvim_explore": 224,
-    "explorer_kept": 225
+    "explorer_kept": 225,
+    "pane_facts": 226
   }
 }

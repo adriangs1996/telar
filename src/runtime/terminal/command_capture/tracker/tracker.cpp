@@ -1005,6 +1005,14 @@ namespace telar::runtime {
     return revision_;
   }
 
+  const ds::Option<CommandBlockRing::Latest>& CommandBlockRing::latest() const noexcept {
+    return latest_;
+  }
+
+  std::uint64_t CommandBlockRing::commandRevision() const noexcept {
+    return command_revision_;
+  }
+
   tbc::val_b<PaneBlocks> CommandBlockRing::message(std::uint64_t pane_id, tbc::mut_b<ds::Array<CommandBlock, capacity>> storage) const {
     for (std::size_t index = 0; index < count_; ++index) {
       const auto& current = entry(index);
@@ -1107,6 +1115,7 @@ namespace telar::runtime {
     added.row = *first;
     added.rows = static_cast<std::uint16_t>(std::min<std::uint32_t>(*last - *first, std::numeric_limits<std::uint16_t>::max()));
     added.lines = static_cast<std::uint16_t>(std::min<std::size_t>(lines, std::numeric_limits<std::uint16_t>::max()));
+    added.cut = kept.size() < line.size();
     added.state = CommandBlockState::running;
     added.nest = nested_ ? CommandBlockNest::inside : CommandBlockNest::none;
     added.status = 0;
@@ -1115,6 +1124,13 @@ namespace telar::runtime {
     added.command.assign({clean.data(), clean_size});
     running_ = true;
     ++revision_;
+
+    auto& latest = latest_.emplace();
+
+    latest.truncated = added.lines != 0 || added.cut;
+    latest.started = now;
+    latest.command.assign({clean.data(), clean_size});
+    ++command_revision_;
   }
 
   void CommandBlockRing::finish(CommandBlockState state, std::int32_t status, std::chrono::steady_clock::time_point now) {
@@ -1122,6 +1138,8 @@ namespace telar::runtime {
     if (count_ != 0) {
       end(entryMut(count_ - 1), state, status, now);
     }
+
+    settle(state, status, now);
   }
 
   // Ends the block whose ssh hosted the session that just closed; at most one is open.
@@ -1130,9 +1148,23 @@ namespace telar::runtime {
     for (auto index = count_; index > 0; --index) {
       if (auto& current = entryMut(index - 1); current.state == CommandBlockState::session) {
         end(current, state, status, now);
+
+        // The ssh is the command the pane's own shell just finished, after any its session ran.
+        auto& latest = latest_.emplace();
+
+        latest.state = current.state;
+        latest.status = current.status;
+        latest.duration_ms = current.duration_ms;
+        latest.truncated = current.lines != 0 || current.cut;
+        latest.started = current.started;
+        latest.command.assign(current.command.view());
+        ++command_revision_;
         return;
       }
     }
+
+    // The scrollback dropped the ssh's block: the command still running is that ssh.
+    settle(state, status, now);
   }
 
   void CommandBlockRing::end(Entry& block, CommandBlockState state, std::int32_t status, std::chrono::steady_clock::time_point now) {
@@ -1142,6 +1174,20 @@ namespace telar::runtime {
 
     block.duration_ms = static_cast<std::uint32_t>(std::clamp<std::int64_t>(elapsed, 0, std::numeric_limits<std::uint32_t>::max()));
     ++revision_;
+  }
+
+  void CommandBlockRing::settle(CommandBlockState state, std::int32_t status, std::chrono::steady_clock::time_point now) {
+    if (!latest_ || latest_->state != CommandBlockState::running) {
+      return;
+    }
+
+    auto& latest = latest_.getMut();
+    const auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(now - latest.started).count();
+
+    latest.state = state;
+    latest.status = status;
+    latest.duration_ms = static_cast<std::uint32_t>(std::clamp<std::int64_t>(elapsed, 0, std::numeric_limits<std::uint32_t>::max()));
+    ++command_revision_;
   }
 
   // CommandTrackerCore

@@ -40,4 +40,6 @@ namespace telar::gui::application::activity {
 
   Change receive(Session& session, const PaneList& message);
 
+  Change receive(Session& session, const PaneFacts& message);
+
 }

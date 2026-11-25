@@ -81,9 +81,10 @@ namespace telar::gui::qt {
       return std::tie(left.source, left.pane->pane_id) < std::tie(right.source, right.pane->pane_id);
     }
 
-    tbc::val_a<std::string_view> workspaceName(tbc::ref_a<GuiSession> session, const ListedPane& pane) {
+    // The workspace the pane is in, when the list names it.
+    tbc::val_a<const Workspace<Memory>*> listedWorkspace(tbc::ref_a<GuiSession> session, const ListedPane& pane) {
       if (pane.location.workspace.kind != WorkspaceLocation::Kind::workspace) {
-        return {};
+        return nullptr;
       }
 
       const auto& workspaces = session.workspace_list.entries();
@@ -91,7 +92,7 @@ namespace telar::gui::qt {
         return sameWorkspace(workspace.location, pane.location.workspace);
       });
 
-      return found == workspaces.end() ? std::string_view{} : std::string_view{found->name};
+      return found == workspaces.end() ? nullptr : &*found;
     }
 
     QVariantMap activityRecord(const GuiSession& session, const Order::Entry& entry, AgentRecordContext context, bool active_source) {
@@ -110,6 +111,7 @@ namespace telar::gui::qt {
       });
 
       context.branch = workspace == workspaces.end() ? std::string_view{} : std::string_view{workspace->branch};
+      context.dirty = workspace != workspaces.end() && workspace->dirty;
       const auto* tab = active_source ? session.activeTab() : nullptr;
 
       context.selected = tab != nullptr && agent.pane_id == tab->focused_pane && sameTab(agent.location, tab->location);
@@ -154,8 +156,12 @@ namespace telar::gui::qt {
     QVariantMap processRow(const GuiSession& session, const ListedPane& pane, AgentRecordContext context, bool active_source, const QString& key) {
       const auto* tab = active_source ? session.activeTab() : nullptr;
 
+      const auto* workspace = listedWorkspace(session, pane);
+
       context.selected = tab != nullptr && pane.pane_id == tab->focused_pane && sameTab(pane.location, tab->location);
-      auto record = processRecord(pane, workspaceName(session, pane), context);
+      context.branch = workspace == nullptr ? std::string_view{} : std::string_view{workspace->branch};
+      context.dirty = workspace != nullptr && workspace->dirty;
+      auto record = processRecord(pane, workspace == nullptr ? std::string_view{} : std::string_view{workspace->name}, context);
 
       record.insert(QStringLiteral("key"), key);
 
@@ -237,7 +243,7 @@ namespace telar::gui::qt {
       const auto& client = store_.clients()[index];
       const auto& row = store_.machines().row(static_cast<application::machines::Machines::Slot>(index));
       if (row.used && row.live && client) {
-        versions.atMut(index) = SourceVersion{.source = (*client)->key, .runtime_generation = (*client)->runtime_generation, .agents = (*client)->session.agentRevision(), .workspaces = (*client)->session.workspace_list.revision(), .panes = (*client)->session.paneListRevision(), .connected = row.enabled && (*client)->phase == application::machines::MachinePhase::connected && (*client)->session.ready(), .label = row.label};
+        versions.atMut(index) = SourceVersion{.source = (*client)->key, .runtime_generation = (*client)->runtime_generation, .agents = (*client)->session.agentRevision(), .workspaces = (*client)->session.workspace_list.revision(), .panes = (*client)->session.paneListRevision(), .facts = (*client)->session.paneFactsRevision(), .connected = row.enabled && (*client)->phase == application::machines::MachinePhase::connected && (*client)->session.ready(), .label = row.label};
       }
     }
 

@@ -58,7 +58,8 @@ export {
       // pane: CreateExplorerPane, KeepExplorer and ExplorerKept; cqp00012 gives NvimPreview where
       // the query matched its line, adds the providers of CompleteWords that read one directory,
       // path, directory and executable, and reference, which names revisions, and
-      // DeleteHistoryCommand; cqp00013 lets ReportAgent say a turn failed or was interrupted.
+      // DeleteHistoryCommand; cqp00013 adds PaneFacts, the command, directory and repository of
+      // every pane the pane list names, and lets ReportAgent say a turn failed or was interrupted.
       // Peers without them reject the messages.
       inline constexpr SchemaId schema_id{'c', 'q', 'p', '0', '0', '0', '1', '3'};
 

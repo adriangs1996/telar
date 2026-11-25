@@ -36,8 +36,13 @@ export namespace telar::gui::application::prompt {
   // queue while a command runs, or the program behind a secret prompt.
   [[nodiscard]] Surface surface(const Session& session, std::uint64_t pane_id) noexcept;
 
-  // Whether text meant for the pane belongs in telar's editor instead.
+  // Whether text meant for the pane belongs in telar's editor instead. While a program runs, the
+  // editor still decides, key by key, which of them answer it (key, toProgram).
   [[nodiscard]] bool edits(const Session& session, std::uint64_t pane_id) noexcept;
+
+  // Whether text an input method committed or a paste, meant for the editor, goes to the running
+  // program instead, as its keys would: it answers the question the program seems to ask.
+  [[nodiscard]] bool toProgram(Session& session, std::uint64_t pane_id, std::string_view text);
 
   // Whether the terminal's cursor marks a place no key reaches, so it is not drawn: at the prompt
   // telar's editor has the keys; while a command runs, typing queues the next one unless the

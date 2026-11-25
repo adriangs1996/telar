@@ -72,8 +72,28 @@ namespace telar::gui::qt {
     return shown_;
   }
 
+  bool MachineChromeLayout::roster() const noexcept {
+    return roster_;
+  }
+
+  void MachineChromeLayout::setRoster(bool roster) {
+    if (roster_ == roster) {
+      return;
+    }
+
+    roster_ = roster;
+    items_.reconcile({});
+    observeSources();
+    invalidate();
+    emit rosterChanged();
+  }
+
   qreal MachineChromeLayout::preferredWidth() const noexcept {
     return preferred_width_;
+  }
+
+  qreal MachineChromeLayout::preferredHeight() const noexcept {
+    return preferred_height_;
   }
 
   QAbstractItemModel* MachineChromeLayout::items() noexcept {
@@ -96,6 +116,8 @@ namespace telar::gui::qt {
     controller_ = controller;
     if (controller_ != nullptr) {
       connect(controller_, &MachineChromeController::machinesChanged, this, &MachineChromeLayout::observeSources);
+      // The display sizes the rows the list asks room for, so it is read again with the sources.
+      connect(controller_, &MachineChromeController::changed, this, &MachineChromeLayout::observeSources);
       connect(controller_, &MachineChromeController::changed, this, &MachineChromeLayout::invalidate);
       connect(controller_, &QObject::destroyed, this, [this] {
         controller_ = nullptr;
@@ -141,10 +163,42 @@ namespace telar::gui::qt {
     }
   }
 
+  MachineChromeLayout::Source MachineChromeLayout::observe(application::machines::Machines::Slot slot) const {
+    const auto& machines = controller_->store().machines();
+    const auto& row = machines.row(slot);
+    Source source{.token = machines.token(slot), .label = row.label, .color = row.color, .active = slot == machines.active(), .attention = row.attention, .live = row.live, .phase = inlineFacts() ? row.phase : application::machines::MachinePhase::connecting, .cpu_percent = inlineFacts() ? row.cpu_percent : ds::none};
+
+    if (mode_ == Mode::list && (roster_ || !source.active)) {
+      collectCards(slot, source);
+    }
+
+    // The sidebar already lists the active machine's agents: its row keeps their count only.
+    if (source.active) {
+      source.card_count = 0;
+    }
+
+    return source;
+  }
+
+  void MachineChromeLayout::publishRows(std::size_t rows) {
+    qreal height = 0;
+
+    if (mode_ == Mode::list && controller_ != nullptr && controller_->display().density > 0) {
+      height = static_cast<qreal>(application::machines::MachineChromeGeometry::listHeight(controller_->display().chrome, rows)) / controller_->display().density;
+    }
+
+    if (std::not_equal_to<>{}(height, preferred_height_)) {
+      preferred_height_ = height;
+      emit rowsChanged();
+    }
+  }
+
   void MachineChromeLayout::observeSources() {
     ds::Array<ds::Option<Source>, application::machines::MachineLimits::window_slots> incoming;
-    const bool shown = controller_ != nullptr && controller_->store().machines().count() > 1;
+    // The roster names the only machine too: its menu is where another one is added.
+    const bool shown = controller_ != nullptr && controller_->store().machines().count() > (roster_ ? 0U : 1U);
     const bool attention = controller_ != nullptr && controller_->store().machines().attentionElsewhere();
+    std::size_t rows = 0;
 
     if (controller_ != nullptr) {
       for (std::size_t index = 0; index < incoming.size(); ++index) {
@@ -153,15 +207,12 @@ namespace telar::gui::qt {
           continue;
         }
 
-        const auto& row = controller_->store().machines().row(slot);
-
-        incoming.atMut(index) = Source{.token = controller_->store().machines().token(slot), .label = row.label, .color = row.color, .active = slot == controller_->store().machines().active(), .attention = row.attention, .live = row.live, .phase = inlineFacts() ? row.phase : application::machines::MachinePhase::connecting, .cpu_percent = inlineFacts() ? row.cpu_percent : ds::none};
-        if (mode_ == Mode::list && !incoming[index]->active) {
-          collectCards(slot, incoming.atMut(index).getMut());
-        }
+        incoming.atMut(index) = observe(slot);
+        rows += static_cast<std::size_t>(roster_ || !incoming[index]->active);
       }
     }
 
+    publishRows(shown ? rows : 0);
     if (incoming != sources_ || attention != attention_elsewhere_) {
       sources_ = std::move(incoming);
       attention_elsewhere_ = attention;
@@ -202,18 +253,11 @@ namespace telar::gui::qt {
   }
 
   QColor MachineChromeLayout::ink(std::string_view written) const {
-    const auto& theme = controller_->configuration().theme;
-    const auto parsed = ColorName::parse(written).valueOr(ColorName::Value{PaletteRole::accent});
-    const auto* role = std::get_if<PaletteRole>(&parsed);
-    const auto value = role != nullptr ? theme.chrome[static_cast<std::size_t>(*role)] : std::get<CellColor>(parsed);
-
-    return fill(value);
+    return controller_->ink(written);
   }
 
   QColor MachineChromeLayout::fill(CellColor value) const {
-    const auto& theme = controller_->configuration().theme;
-
-    return value.kind == CellColor::Kind::default_color ? QColor{Qt::transparent} : toQColor(theme.resolve(value, theme.background));
+    return controller_->fill(value);
   }
 
   QVariantMap MachineChromeLayout::geometryRecord(const application::machines::MachineChromeGeometry::Control& geometry) const {
@@ -399,11 +443,11 @@ namespace telar::gui::qt {
         {QStringLiteral("statusBounds"), toQRectF(row.status, density_)},
         {QStringLiteral("stackBounds"), toQRectF(row.stack, density_)},
         {QStringLiteral("text"), label},
-        // The avatar reads the label's first character, whole when it is a surrogate pair.
-        {QStringLiteral("initial"), label.left(label.size() > 1 && label.at(0).isHighSurrogate() ? 2 : 1).toUpper()},
+        {QStringLiteral("initial"), MachineChromeController::initial(label)},
         {QStringLiteral("status"), toQString(status)},
         {QStringLiteral("ink"), ink(source.color.view())},
         {QStringLiteral("enabled"), source.live},
+        {QStringLiteral("active"), source.active},
         {QStringLiteral("attention"), source.attention},
         {QStringLiteral("cards"), cards},
         {QStringLiteral("accessible"), label + (source.attention ? QStringLiteral(", needs attention") : QString{}) + (source.card_count == 0 ? QString{} : QStringLiteral(", ") + QString::number(source.card_count) + QStringLiteral(" agents active"))},
@@ -416,7 +460,7 @@ namespace telar::gui::qt {
     std::size_t index = 0;
 
     for (const auto& source : sources_) {
-      if (!source || source->active) {
+      if (!source || (source->active && !roster_)) {
         continue;
       }
 

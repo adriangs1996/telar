@@ -81,6 +81,9 @@ export {
     class AgentProgress {
     public:
       bool apply(const ReportAgentProgress& report);
+      // Takes the final message a session restored after a restart had reported before it,
+      // unless the agent has said one since.
+      void restore(std::string_view final_message);
       [[nodiscard]] std::uint16_t done() const noexcept;
       [[nodiscard]] std::uint16_t total() const noexcept;
       [[nodiscard]] std::string_view step() const noexcept;

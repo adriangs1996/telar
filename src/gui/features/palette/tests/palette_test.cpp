@@ -127,6 +127,26 @@ namespace {
     }
   }
 
+  // A larger chrome font widens the palette and its rows with the text, up to the window's margin.
+  void thePaletteGrowsWithItsText() {
+    constexpr float growth = 1.5F;
+    const ChromeMetrics design;
+    ChromeMetrics grown;
+    grown.text_ratio = growth;
+    constexpr float viewport_width = 1600;
+    constexpr float viewport_height = 1000;
+    const auto reference = PaletteGeometry::measure({.width = viewport_width, .height = viewport_height}, design, {});
+    const auto geometry = PaletteGeometry::measure({.width = viewport_width, .height = viewport_height}, grown, {});
+
+    check(geometry.bounds.width == PaletteGeometry::maximum_width * growth, "the palette's width must grow with its text");
+    check(geometry.row_height >= reference.row_height && geometry.search.height >= reference.search.height, "the palette's rows must not shrink as its text grows");
+
+    constexpr float narrow_width = 700;
+    const auto narrow = PaletteGeometry::measure({.width = narrow_width, .height = viewport_height}, grown, {});
+
+    check(narrow.bounds.x >= PaletteGeometry::margin && narrow.bounds.right() <= narrow_width - PaletteGeometry::margin, "a grown palette must keep the window's margin");
+  }
+
   void theVisibleWindowContainsItsSelectionAndGroupHeading() {
     const ChromeMetrics chrome;
     constexpr float viewport_width = 900;
@@ -169,6 +189,7 @@ namespace {
     }
   }
 
+  const telar::testing::Case case_the_palette_grows_with_its_text{"palette.the_palette_grows_with_its_text", thePaletteGrowsWithItsText};
   const telar::testing::Case case_the_visible_window_contains_its_selection_and_group_heading{"palette.the_visible_window_contains_its_selection_and_group_heading", theVisibleWindowContainsItsSelectionAndGroupHeading};
   const telar::testing::Case case_monitor_operations{"palette.monitor_operations_reach_the_palette", monitorOperationsReachThePalette};
 

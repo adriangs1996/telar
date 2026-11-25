@@ -59,6 +59,7 @@ import telar.testing.test_memory;
 import telar.runtime.core.persistence.session_store;
 import telar.runtime.workers.request_worker;
 import telar.runtime.core.execution_service;
+import telar.wire.agents;
 import telar.wire.vocabulary;
 import telar.wire.worktrees;
 import telar.wire.files;
@@ -617,6 +618,7 @@ namespace {
         agent->setSession(session_id);
         check(agent->reportTitle("Fix the parser"));
         agent->title_source = AgentTitleSource::manual;
+        check(agent->progress.apply(ReportAgentProgress{.final_message = "Parser fixed.\nTwo tests added."}));
         agents.agents.push_back(std::move(agent));
       }
 
@@ -635,6 +637,7 @@ namespace {
       RestoredSession restored{memory};
 
       restored.restore(memory, session, false);
+      check(restored.model.panes.find(1)->restored_final_message.view().empty(), "a pane that resumes no agent kept what one said");
       check(written(root + "/direct", std::chrono::seconds{5}) == " ", "the agent program did not start as it was");
       check(!std::filesystem::exists(root + "/typed-first") && !std::filesystem::exists(root + "/typed-second"), "a resume was typed although resuming is off");
     }
@@ -647,19 +650,27 @@ namespace {
     check(written(root + "/direct", std::chrono::seconds{5}) == "--resume " + std::string{direct_session} + " ", "the agent program was not relaunched on its session");
     check(written(root + "/typed-second", std::chrono::milliseconds{500}).empty(), "one session was resumed twice");
 
+    // A resumed pane holds what its agent last said until the agent is seen again.
+    check(restored.model.panes.find(1)->restored_final_message.view() == "Parser fixed.\nTwo tests added.", "the resumed agent's last words were not restored");
+    check(restored.model.panes.find(2)->restored_final_message.view().empty(), "a pane whose session another resumed kept its last words");
+
     // The next checkpoint keeps what the restored panes resume, before their agents report again.
     std::vector<Byte> again(64 * 1024);
     std::size_t dropped = 0;
     std::vector<std::tuple<std::uint64_t, std::string, std::string>> kept;
+    std::size_t messages = 0;
     checkpoint::Reader reader{checkpoint::Snapshot<SnapshotAgents>::encode(restored.model, restored.layouts, SnapshotAgents{}, again, dropped)};
 
     reader.read([&]<typename Record>(const Record& record) {
       if constexpr (std::same_as<Record, checkpoint::PaneRecord>) {
         if (!record.session.empty()) {
           kept.emplace_back(record.id, std::string{record.session}, std::string{record.title});
+          messages += static_cast<std::size_t>(record.final_message == "Parser fixed.\nTwo tests added.");
         }
       }
     });
+
+    check(messages == kept.size() && messages == 2, "a checkpoint of restored panes lost what their agents last said");
 
     check(std::ranges::count(kept, std::tuple<std::uint64_t, std::string, std::string>{1, std::string{first_session}, "Fix the parser"}) == 1);
     check(std::ranges::count(kept, std::tuple<std::uint64_t, std::string, std::string>{3, std::string{direct_session}, "Fix the parser"}) == 1);

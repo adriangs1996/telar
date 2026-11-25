@@ -13,13 +13,11 @@ static_assert(true);
 #include <QString>
 #include <QtCore/qstringliteral.h>
 #include <algorithm>
-#include <array>
 #include <cmath>
 #include <cstddef>
 #include <string_view>
 
 import telar.gui.application;
-import telar.base.ds;
 
 namespace telar::gui::qt {
 
@@ -44,36 +42,6 @@ namespace telar::gui::qt {
     window_ = &window;
   }
 
-  bool SidebarController::machineListCollapsed() const noexcept {
-    return machine_list_collapsed_;
-  }
-
-  int SidebarController::machineCount() const noexcept {
-    return static_cast<int>(store_.machines().count());
-  }
-
-  application::SidebarMachines SidebarController::machines() const noexcept {
-    const auto count = store_.machines().count();
-
-    return {.shown = count > 1, .rows = count > 1 && !machine_list_collapsed_ ? count - 1 : 0};
-  }
-
-  void SidebarController::publishMachines() {
-    const auto machines = this->machines();
-    if (machines != machines_) {
-      machines_ = machines;
-      emit changed();
-    }
-
-    emit machinesChanged();
-  }
-
-  void SidebarController::toggleMachineList() {
-    machine_list_collapsed_ = !machine_list_collapsed_;
-    machines_ = machines();
-    emit changed();
-  }
-
   QVariantMap SidebarController::regions() const {
     const auto& geometry = display_.geometry;
 
@@ -82,7 +50,7 @@ namespace telar::gui::qt {
         .height = geometry.sidebar.height,
     };
 
-    auto result = sidebarRegionsRecord(area, display_, static_cast<std::size_t>(workspaces_.count()), machines());
+    auto result = sidebarRegionsRecord(area, display_, static_cast<std::size_t>(workspaces_.count()));
 
     result.insert(QStringLiteral("typography"), chromeTypographyRecord(display_, store_.session().configuration.font));
 
@@ -115,8 +83,7 @@ namespace telar::gui::qt {
     }
   }
 
-  // The logical width that shows the longest card and machine row whole, at most a third of
-  // the window. The cards are measured from their records, so the ones scrolled out count too.
+  // The logical width that shows the longest card whole, at most a third of the window. The cards are measured from their records, so the ones scrolled out count too.
   float SidebarController::naturalWidth() const {
     const auto& display = display_;
     const auto& chrome = display.chrome;
@@ -148,41 +115,15 @@ namespace telar::gui::qt {
 
     for (int row = 0; row < cards.rowCount(); ++row) {
       const auto record = cards.data(cards.index(row), ListModel::record_role).toMap();
-      const auto ports = record.value(QStringLiteral("ports")).toString();
       const auto status = record.value(QStringLiteral("status")).toString();
-      const auto title = padding + mark + gap + measure(record.value(QStringLiteral("title")).toString(), chrome.body, true) + (ports.isEmpty() ? 0 : gap + measure(ports, chrome.small, false) + padding) + gap + measure(status.isEmpty() ? age : status, chrome.small, false);
+      const auto title = padding + mark + gap + measure(record.value(QStringLiteral("title")).toString(), chrome.body, true) + gap + measure(status.isEmpty() ? age : status, chrome.small, false);
       const auto detail = padding + mark + gap + measure(record.value(QStringLiteral("project")).toString(), chrome.small, false);
 
       card_width = std::max({card_width, title, detail});
     }
 
-    float machines_width = 0;
-
-    for (std::size_t index = 0; index < store_.clients().size() && !machine_list_collapsed_; ++index) {
-      const auto slot = static_cast<application::machines::Machines::Slot>(index);
-      if (slot == store_.machines().active() || !store_.machines().shown(slot)) {
-        continue;
-      }
-
-      const auto& client = store_.clients()[index];
-      const auto& row = store_.machines().row(slot);
-      std::size_t active = 0;
-
-      if (client) {
-        active = static_cast<std::size_t>(std::ranges::count_if((*client)->session.agents(), [](const auto& agent) {
-          return application::activity::AgentOrder::stacked(agent.status);
-        }));
-      }
-
-      ds::Array<char, application::machines::MachineChromeGeometry::list_status_capacity> storage{};
-      const auto status = application::machines::MachineChromeGeometry::listStatus(row.live, active, storage.viewMut());
-      const auto advance = std::max(measure(toQString(row.label.view()), chrome.body, true), measure(toQString(status), chrome.small, false));
-
-      machines_width = std::max(machines_width, application::machines::MachineChromeGeometry::listNaturalWidth(chrome, advance, active != 0));
-    }
-
     const auto scale = display.viewport.scale;
-    const auto content = std::max(card.listWidth(card_width), machines_width) + (2 * std::round(chrome.textPx(application::SidebarGeometry::margin)));
+    const auto content = card.listWidth(card_width) + (2 * std::round(chrome.textPx(application::SidebarGeometry::margin)));
     const auto third = static_cast<float>(display.viewport.width) / scale / 3;
 
     return std::clamp(std::ceil(content / scale), Configuration::minimum_sidebar_width, std::max(Configuration::minimum_sidebar_width, third));

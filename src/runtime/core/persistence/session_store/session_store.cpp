@@ -1,5 +1,6 @@
 module telar.runtime.core.persistence.session_store;
 
+import telar.wire.agents;
 import telar.platform.error;
 import telar.platform.fs;
 import telar.sys.posix;
@@ -22,6 +23,8 @@ namespace telar::runtime::checkpoint {
     constexpr std::uint16_t kinds_version = 11;
     // Since when a pane's record ends with the windows of an explorer.
     constexpr std::uint16_t explorer_version = 13;
+    // Since when the final message of the pane's agent follows them.
+    constexpr std::uint16_t final_message_version = 14;
 
     constexpr std::size_t maximum_title_bytes = 96;
 
@@ -271,6 +274,11 @@ namespace telar::runtime::checkpoint {
         }
       }
 
+      if (version_ >= final_message_version) {
+        record.final_message = text16();
+        MessageText16<agent_report_message_bytes>::validate(record.final_message);
+      }
+
       if (!known) {
         return ds::none;
       }
@@ -434,6 +442,7 @@ namespace telar::runtime::checkpoint {
   void Writer::write(const PaneRecord& record) {
     validatePath(record.cwd);
     validateTitle(record.title, record.title_source);
+    MessageText16<agent_report_message_bytes>::validate(record.final_message);
     if (record.argument_count == 0 || record.argument_count > maximum_arguments || record.arguments.size() > maximum_argument_bytes || record.session.size() > maximum_session_bytes || record.explorer.size() > maximum_explorer_bytes) {
       throw EncodingError{"Invalid checkpoint launch record"};
     }
@@ -454,6 +463,7 @@ namespace telar::runtime::checkpoint {
     integer(static_cast<Byte>(record.in_pane));
     integer(static_cast<Byte>(record.kind));
     text32(textView(record.explorer));
+    text16(record.final_message);
   }
 
   void Writer::write(const WorktreeRecord& record) {

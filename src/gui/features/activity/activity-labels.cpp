@@ -169,24 +169,37 @@ namespace telar::gui::features::activity {
 
   template <Allocator Memory>
   auto TaskCardLabels::activity(const Agent<Memory>& agent) noexcept -> Activity {
+    const auto said = [](std::string_view text, PaletteRole color, std::string_view missing) noexcept {
+      return text.empty() ? Activity{.text = missing} : Activity{.text = text, .color = color};
+    };
+
     switch (agent.status) {
     case AgentStatus::blocked:
-      return {.text = agent.detail, .color = PaletteRole::yellow};
+      return said(agent.detail, PaletteRole::yellow, "No request text");
     case AgentStatus::failed:
-      return {.text = agent.detail, .color = PaletteRole::red};
+      return said(agent.detail, PaletteRole::red, "No error text");
     case AgentStatus::done:
     case AgentStatus::ready: {
       const auto final = agent.finalLine();
 
-      return {.text = final.empty() ? std::string_view{agent.detail} : final, .color = PaletteRole::subtext0};
+      return said(final.empty() ? std::string_view{agent.detail} : final, PaletteRole::subtext0, "No final message");
     }
     case AgentStatus::unknown:
+      return said(agent.detail, PaletteRole::subtext0, "No signal");
     case AgentStatus::working:
       break;
     }
 
-    // An unknown or working agent, or a status outside the enum.
-    return agent.plan_total == 0 ? Activity{.text = agent.detail} : Activity{.text = agent.plan_step, .color = PaletteRole::subtext0, .plan = true};
+    // A working agent, or a status outside the enum.
+    if (agent.plan_total != 0 && !std::string_view{agent.plan_step}.empty()) {
+      return {.text = agent.plan_step, .color = PaletteRole::subtext0, .plan = true};
+    }
+
+    auto activity = said(agent.detail, PaletteRole::subtext0, "No event yet");
+
+    activity.plan = agent.plan_total != 0;
+
+    return activity;
   }
 
   float TaskCardLabels::contextShare(AgentStatus state, bool signal) noexcept {

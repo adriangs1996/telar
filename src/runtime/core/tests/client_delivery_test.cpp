@@ -41,8 +41,10 @@ static_assert(true);
 
 import std;
 import telar.base.memory.allocators;
+import telar.base.memory.containers;
 import telar.base.text;
 import telar.base.text.utf8;
+import telar.platform.paths;
 import telar.platform.primitives;
 import telar.render.document;
 import telar.runtime.terminal.control;
@@ -265,6 +267,113 @@ namespace {
 
       check(state.pane_id == pane.core.id && state.shell == IntegratedShell::zsh && state.phase == ShellPhase::prompt);
       check(!AttachmentDelivery{model, client}.prepare(model, client, DeliveryLane::shell, now, timeout));
+    }
+
+    // The command, the directory and the repository of a pane follow the list that names it, and
+    // are sent again once for each change: a command that starts or ends, another repository
+    // state, another directory.
+    void paneFacts() {
+      telar::testing::TestMemory adapter;
+      ConcurrentMemory& memory = adapter;
+      RuntimeModel model{memory};
+      ClientStore clients{memory};
+      LimitService limits;
+      NativeEventLoop<ConcurrentMemory> poller{memory};
+      PaneService panes{memory, poller, limits, PaneLaunchOptions{.socket = "/unused/facts-delivery.sock"}};
+      WorkspaceService<decltype(poller)> workspaces{memory};
+      ClientPeer peer{memory, model, clients, ClientRole::interactive};
+      auto& client = peer.session();
+      ClientDelivery delivery{memory, model};
+      NoState state;
+      const ds::Array<std::string_view, 1> arguments{"/bin/cat"};
+      const auto now = std::chrono::steady_clock::now();
+      const auto quiet = [&] {
+        return delivery.write(client, state, now).timeout == std::chrono::nanoseconds::max();
+      };
+      const auto facts = [&] {
+        delivery.write(client, state, now);
+        return peer.receive<PaneFacts>();
+      };
+
+      workspaces.open(model, panes, clients, client.id, OpenPane{.request_id = 1, .size = {80, 24, 0, 0}, .launch = Launch{.cwd = "/tmp", .arguments = arguments}});
+      const auto pane = panes.requireTerminal(model.panes, peer.receive<PaneOpened>().pane_id);
+
+      // Without an attachment only what lists the panes is left to send.
+      panes.detachAll(model, clients, client.id);
+      check(quiet(), "a client that did not subscribe was sent the panes");
+      client.subscribed = true;
+      delivery.write(client, state, now);
+      check(peer.receive<PaneList>().entries.size() == 1);
+
+      FixedText<max_pane_directory_bytes> directory;
+
+      labelDirectory(directory, pane.core.cwd);
+      const auto idle = facts();
+
+      check(idle.pane_id == pane.core.id && idle.pane_generation == pane.core.generation);
+      check(idle.command_state == PaneCommandState::none && idle.command.empty() && !idle.exit_code && idle.duration_ms == 0, "a pane without an integrated shell has no command");
+      check(!directory.view().empty() && idle.directory == directory.view() && idle.in_workspace && idle.branch.empty() && !idle.dirty);
+      delivery.write(client, state, now);
+      check(peer.receive<PaneForeground>().pane_id == pane.core.id);
+      check(quiet(), "facts that did not change were sent again");
+
+      // Its shell runs a command, which fails.
+      pane.body.blocks.emplace(memory, pane.body.terminal);
+      auto& blocks = pane.body.blocks.getMut();
+      const auto mark = [&](char action, std::string_view sequence) {
+        pane.body.terminal.feed({reinterpret_cast<const Byte*>(sequence.data()), sequence.size()}, *pane.body.media);
+        if (action != 0) {
+          blocks.mark(action, now);
+        }
+      };
+
+      mark('A', "\x1b]133;A\x07");
+      mark('B', "$ \x1b]133;B\x07");
+      mark(0, "make test\r\n");
+      mark('C', "\x1b]133;C\x07");
+      const auto running = facts();
+
+      check(running.command_state == PaneCommandState::running && running.command.ends_with("make test") && !running.command_truncated && !running.exit_code && running.duration_ms == 0);
+      check(quiet());
+      blocks.finished(3, now + std::chrono::milliseconds{2500});
+      const auto failed = facts();
+
+      check(failed.command_state == PaneCommandState::finished && failed.command.ends_with("make test") && failed.exit_code == 3 && failed.duration_ms == 2500);
+
+      // The worker read the repository its shell works in.
+      pane.core.git.repository = true;
+      pane.core.git.branch.assign("trunk");
+      pane.core.git.changes_known = true;
+      pane.core.git.unstaged = 2;
+      ++pane.core.git_revision;
+      const auto repository = facts();
+
+      check(repository.branch == "trunk" && repository.dirty && repository.command_state == PaneCommandState::finished);
+
+      // It works elsewhere: under the home, which the label shows as `~`, and out of its workspace.
+      const auto elsewhere = std::string{processHome()} + "/telar-facts/work";
+
+      pane.core.cwd.assign(elsewhere);
+      ++pane.core.cwd_revision;
+      const auto moved = facts();
+
+      check(!moved.in_workspace && (processHome().empty() || moved.directory == "~/telar-facts/work"), "the directory is not the one the pane works in");
+      check(quiet());
+
+      // A path holds what display text does not take: the card names no directory.
+      pane.core.cwd.assign("/tmp/bell\a");
+      ++pane.core.cwd_revision;
+      check(facts().directory.empty());
+
+      // Another client hears every pane's facts from the start.
+      ClientPeer second{memory, model, clients, ClientRole::interactive};
+
+      second.session().subscribed = true;
+      delivery.write(second.session(), state, now);
+      check(second.receive<PaneList>().entries.size() == 1);
+      delivery.write(second.session(), state, now);
+      check(second.receive<PaneFacts>().branch == "trunk");
+      panes.remove(model, clients, pane.core.id);
     }
 
     // How the scrollback numbers its rows reaches each attachment once per change, ahead of its
@@ -663,6 +772,7 @@ namespace {
     currentState();
     attachmentRotation();
     shellState();
+    paneFacts();
     scrollbackOrigin();
     paneDocument();
   }

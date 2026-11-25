@@ -8,8 +8,8 @@ return {
       gap = 8, align = "center",
       ui.builtin("sidebar_toggle"),
       ui.builtin("workspace_identity"),
-      ui.builtin({ name = "tabs", grow = 1 }),
       ui.builtin("project_switcher"),
+      ui.builtin({ name = "tabs", grow = 1 }),
       ui.builtin("palette_button"),
       ui.builtin("new_tab"),
     })

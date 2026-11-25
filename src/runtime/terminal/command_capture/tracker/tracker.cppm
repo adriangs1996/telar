@@ -408,6 +408,24 @@ export namespace telar::runtime {
     // The blocks view their commands in the ring, region `b`, through `storage`.
     tbc::val_b<PaneBlocks> message(std::uint64_t pane_id, tbc::mut_b<ds::Array<CommandBlock, capacity>> storage) const;
 
+    // The command the shell runs or last ran. It outlives its block, which the ring drops with
+    // the rows the scrollback loses: a pane's card still says what ran after `clear`.
+    struct Latest {
+      // running, also while an ssh hosts a remote shell, or how the command ended.
+      CommandBlockState state = CommandBlockState::running;
+      std::int32_t status = 0;
+      std::uint32_t duration_ms = 0;
+      // The command had lines after the first, or more of that line than `command` holds.
+      bool truncated = false;
+      std::chrono::steady_clock::time_point started;
+      FixedText<command_bytes> command;
+    };
+
+    // Nothing until the shell runs a command.
+    [[nodiscard]] const ds::Option<Latest>& latest() const noexcept;
+    // Counts the times `latest` changed: a command started or ended.
+    [[nodiscard]] std::uint64_t commandRevision() const noexcept;
+
   protected:
     explicit CommandBlockRing(tbc::val_a<GhosttyTerminal> terminal);
     ~CommandBlockRing() = default;
@@ -437,6 +455,8 @@ export namespace telar::runtime {
       std::uint32_t row = 0;
       std::uint16_t rows = 1;
       std::uint16_t lines = 0;
+      // `command` holds less than the command's first line.
+      bool cut = false;
       CommandBlockState state = CommandBlockState::running;
       CommandBlockNest nest = CommandBlockNest::none;
       std::int32_t status = 0;
@@ -460,6 +480,8 @@ export namespace telar::runtime {
     void finish(CommandBlockState state, std::int32_t status, std::chrono::steady_clock::time_point now);
     void closeSession(CommandBlockState state, std::int32_t status, std::chrono::steady_clock::time_point now);
     void end(Entry& block, CommandBlockState state, std::int32_t status, std::chrono::steady_clock::time_point now);
+    // Ends `latest_`, the command that ran until now.
+    void settle(CommandBlockState state, std::int32_t status, std::chrono::steady_clock::time_point now);
 
     // The terminal the selection reads, region `a`.
     tbc::val_a<CommandSelection> selection_;
@@ -468,6 +490,8 @@ export namespace telar::runtime {
     std::size_t first_ = 0;
     std::size_t count_ = 0;
     std::uint64_t revision_ = 0;
+    ds::Option<Latest> latest_;
+    std::uint64_t command_revision_ = 0;
     bool running_ = false;
     // Commands run in the shell ssh reached; that shell just left, and ssh's D ends its block.
     bool nested_ = false;

@@ -127,6 +127,8 @@ namespace telar::gui::inline foundation::inline model {
       : title(memory),
         provider_name(memory),
         workspace_label(memory),
+        tab_label(memory),
+        cwd_label(memory),
         display_name(memory),
         icon(memory),
         detail(memory),

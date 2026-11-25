@@ -202,6 +202,7 @@ export {
       case ServerTag::workspace_list:
         return DeliveryLane::workspaces;
       case ServerTag::pane_list:
+      case ServerTag::pane_facts:
         return DeliveryLane::panes;
       case ServerTag::pane_cwd:
         return DeliveryLane::cwd;

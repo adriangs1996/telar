@@ -393,4 +393,46 @@ namespace telar {
   struct MessageSchema<PaneGit>
       : Schema<Direction::server, ServerTag::pane_git, Field<&PaneGit::pane_id, NonzeroU64, "pane_id">, Field<&PaneGit::repository, BoolByte, "repository">, Field<&PaneGit::detached, BoolByte, "detached">, Field<&PaneGit::branch, DisplayText16<max_git_branch_bytes>, "branch">, Field<&PaneGit::divergence_known, BoolByte, "divergence_known">, Field<&PaneGit::ahead, u32, "ahead">, Field<&PaneGit::behind, u32, "behind">, Field<&PaneGit::changes_known, BoolByte, "changes_known">, Field<&PaneGit::staged, u32, "staged">, Field<&PaneGit::unstaged, u32, "unstaged">, Field<&PaneGit::conflicted, u32, "conflicted">> {};
 
+  // The command a pane's integrated shell runs or last ran, where the pane works and the
+  // repository there: what a client lists beside a pane it has not opened. Sent for every live
+  // pane to the clients that take the pane list, after the list that names the pane and again
+  // whenever one of these changes. Since cqp00013.
+  inline constexpr std::size_t max_pane_command_bytes = 160;
+  // The directory is labelled as the agent snapshot labels an agent's.
+  inline constexpr std::size_t max_pane_directory_bytes = max_cwd_label_bytes;
+  inline constexpr std::size_t max_pane_branch_bytes = 96;
+  inline constexpr std::size_t max_pane_document_bytes = max_pane_command_bytes;
+
+  struct PaneFacts {
+    std::uint64_t pane_id{};
+    std::uint64_t pane_generation{};
+    PaneCommandState command_state = PaneCommandState::none;
+    // The command's first line, cut to max_pane_command_bytes; `command_truncated` says it had more.
+    std::string_view command;
+    bool command_truncated = false;
+    // The status a finished command exited with; none while it runs and when the shell never
+    // reported one, as for a command its prompt interrupted.
+    ds::Option<std::int32_t> exit_code;
+    // How long a finished command ran; 0 otherwise.
+    std::uint32_t duration_ms = 0;
+    // The pane's working directory, the user's home shown as `~`, cut to max_pane_directory_bytes.
+    std::string_view directory;
+    // Whether that directory is the pane's workspace's, or lies in it.
+    bool in_workspace = false;
+    // The branch of the repository the integrated shell works in, cut to max_pane_branch_bytes;
+    // empty outside a repository and for a pane without an integrated shell.
+    std::string_view branch;
+    // That repository has staged, unstaged or conflicted changes.
+    bool dirty = false;
+    // What an editor pane titles itself: the file its focused window shows, and a mark while it
+    // has unwritten changes. Cut to max_pane_document_bytes; empty for every other pane.
+    std::string_view document;
+
+    void validate() const;
+  };
+
+  template <>
+  struct MessageSchema<PaneFacts>
+      : Schema<Direction::server, ServerTag::pane_facts, Field<&PaneFacts::pane_id, NonzeroU64, "pane_id">, Field<&PaneFacts::pane_generation, NonzeroU64, "pane_generation">, Field<&PaneFacts::command_state, EnumByte<PaneCommandState, 2>, "command_state">, Field<&PaneFacts::command, DisplayText16<max_pane_command_bytes>, "command">, Field<&PaneFacts::command_truncated, BoolByte, "command_truncated">, Field<&PaneFacts::exit_code, OptionalValue<i32>, "exit_code">, Field<&PaneFacts::duration_ms, u32, "duration_ms">, Field<&PaneFacts::directory, DisplayText16<max_pane_directory_bytes>, "directory">, Field<&PaneFacts::in_workspace, BoolByte, "in_workspace">, Field<&PaneFacts::branch, DisplayText16<max_pane_branch_bytes>, "branch">, Field<&PaneFacts::dirty, BoolByte, "dirty">, Field<&PaneFacts::document, DisplayText16<max_pane_document_bytes>, "document">> {};
+
 } // namespace telar

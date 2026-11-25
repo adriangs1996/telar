@@ -276,7 +276,6 @@ namespace telar::gui::qt {
     initializePrompt();
     initializeConfigurationSource();
     connect(&refresh_timer_, &QTimer::timeout, this, &ApplicationController::refresh);
-    connect(&machines_, &MachinesCoordinator::listChanged, &sidebar_, &SidebarController::publishMachines);
     connect(&machines_, &MachinesCoordinator::listChanged, this, [this] {
       if (!refresh_timer_.isActive()) {
         refresh_timer_.start();
@@ -948,7 +947,7 @@ namespace telar::gui::qt {
   void ApplicationController::refreshElementBars() {
     components_.refreshElementBars({
         {QStringLiteral("workspace"), workspaces_.context().value(QStringLiteral("name"))},
-        {QStringLiteral("machine"), machines_.context().value(QStringLiteral("label"))},
+        {QStringLiteral("machine"), machine_chrome_.active().value(QStringLiteral("label"))},
         {QStringLiteral("tab_count"), tabs_.count()},
         {QStringLiteral("sidebar_visible"), display_.sidebarVisible()},
     });

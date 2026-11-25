@@ -181,6 +181,16 @@ namespace telar::gui::test {
       return client.key;
     }
 
+    // Names and colors a machine of the window, as its profile would.
+    static void label(qt::ApplicationController& application, Machines::Slot slot, std::string_view label, std::string_view color) {
+      const auto& row = application.store_.machines().row(slot);
+      // The row's own text is what the update writes over.
+      const std::string destination{row.destination.view()};
+
+      application.store_.machinesMut().update(slot, {.id = row.id, .label = label, .destination = destination, .color = color, .enabled = row.enabled});
+      emit application.machines_.listChanged();
+    }
+
     static void select(qt::ApplicationController& application, MachineToken target) {
       application.machines_.select(target);
     }
@@ -1260,6 +1270,286 @@ namespace {
       QTRY_VERIFY_WITH_TIMEOUT(MachineWindow::client(fixture.application, fixture.remote.machine.slot).session.presented(), wait_ms);
       QVERIFY(!MachineWindow::client(fixture.application, Machines::local_slot).session.presented());
       QTRY_VERIFY_WITH_TIMEOUT(row().value(QStringLiteral("text")).toString() != QStringLiteral("Build"), wait_ms);
+    }
+
+    // The top bar reads machine, workspaces, tabs; the sidebar lists no machine; and every card
+    // fills its three rows whatever its agent or process does. TELAR_GUI_TEST_CHROME_SCREENSHOTS
+    // names a directory that receives the window as each assertion finds it.
+    Q_SLOT static void chromeOrdersMachineWorkspacesAndTabsAndFillsEveryCardRow() {
+      MachineFixture fixture;
+      auto& application = fixture.application;
+      QQmlApplicationEngine engine;
+
+      engine.rootContext()->setContextProperty(QStringLiteral("telar"), &application);
+      engine.loadFromModule(QStringLiteral("Telar.Gui"), QStringLiteral("Main"));
+      QCOMPARE(engine.rootObjects().size(), 1);
+      auto* window = qobject_cast<QQuickWindow*>(engine.rootObjects().front());
+
+      QVERIFY(window != nullptr);
+      constexpr QSize wide{1440, 1320};
+      constexpr QSize narrow{900, 1320};
+      constexpr qreal sidebar_width = 300;
+
+      window->resize(wide);
+      application.setWindow(*window);
+      QVERIFY(fixture.start());
+      fixture.local_runtime->send(ClientLayoutSnapshot{});
+      fixture.remote_runtime->send(ClientLayoutSnapshot{});
+      QVERIFY(finishOpening(*fixture.local_runtime));
+      window->show();
+      QVERIFY(QTest::qWaitForWindowExposed(window));
+      application.display()->setSidebarWidth(sidebar_width);
+      MachineWindow::label(application, Machines::local_slot, "Workstation", "teal");
+      MachineWindow::label(application, fixture.remote.machine.slot, "Build", "mauve");
+      const ds::Array projects{
+          WorkspaceListEntry{.workspace = 1, .name = "telar", .path = "/home/dev/telar", .tab_count = 2, .branch = "main", .dirty = true},
+          WorkspaceListEntry{.workspace = 2, .name = "storefront", .path = "/home/dev/storefront", .tab_count = 3, .branch = "main"},
+          WorkspaceListEntry{.workspace = 3, .name = "labs", .path = "/home/dev/labs", .tab_count = 1},
+          WorkspaceListEntry{.workspace = 4, .name = "billing", .path = "/home/dev/billing", .tab_count = 1, .branch = "release"},
+          WorkspaceListEntry{.workspace = 5, .name = "fleet", .path = "/home/dev/fleet", .tab_count = 2, .branch = "main"},
+      };
+      const auto placed = [](std::uint64_t pane, std::uint64_t workspace, std::string_view title, std::string_view project) {
+        auto agent = activityAgent(title);
+
+        agent.pane_id = pane;
+        agent.location = {.workspace = {.kind = WorkspaceLocation::Kind::workspace, .id = workspace}, .tab_id = pane};
+        agent.workspace_label = project;
+        agent.provider = AgentProvider::claude;
+        agent.provider_name = "claude";
+        agent.session_id.atMut(0) = static_cast<Byte>(pane);
+
+        return agent;
+      };
+
+      ds::Array agents{
+          placed(11, 2, "Migrate the orders table", "storefront"),
+          placed(12, 1, "Sidebar cards", "telar"),
+          placed(13, 2, "Review payments", "storefront"),
+          placed(14, 4, "Invoice exporter", "billing"),
+          placed(15, 5, "Set up the dev machines", "fleet"),
+          placed(16, 2, "Stop the staging cluster", "storefront"),
+          placed(17, 2, "Queue reviews", "storefront"),
+          placed(18, 3, "Challenge notes", "labs"),
+      };
+
+      agents.atMut(0).last_event = "» Bash W=\"$(mktemp -d /private/tmp/migrate)\"";
+      agents.atMut(0).status_age_s = 300;
+      agents.atMut(0).tab_label = "db";
+      agents.atMut(0).cwd_label = "~/storefront";
+      agents.atMut(1).plan_step = "Lay out the third row";
+      agents.atMut(1).plan_done = 3;
+      agents.atMut(1).plan_total = 7;
+      agents.atMut(1).status_age_s = 180;
+      agents.atMut(1).cwd_label = "~/telar";
+      agents.atMut(2).status = AgentStatus::blocked;
+      agents.atMut(2).blocked_reason = AgentBlockedReason::permission;
+      agents.atMut(2).last_event = "Bash: rails db:migrate RAILS_ENV=production";
+      agents.atMut(2).status_age_s = 120;
+      agents.atMut(2).tab_label = "payments";
+      agents.atMut(3).status = AgentStatus::failed;
+      agents.atMut(3).last_event = "API Error: 529 Overloaded";
+      agents.atMut(3).status_age_s = 60;
+      agents.atMut(4).status = AgentStatus::done;
+      agents.atMut(4).final_message = "Both machines start with the new profile.";
+      agents.atMut(4).status_age_s = 200;
+      agents.atMut(5).status = AgentStatus::ready;
+      agents.atMut(5).final_message = "Cluster stopped, billing at zero.";
+      agents.atMut(5).status_age_s = 54000;
+      agents.atMut(6).status = AgentStatus::unknown;
+      agents.atMut(6).provider = AgentProvider::pi;
+      agents.atMut(6).provider_name = "pi";
+      agents.atMut(7).status = AgentStatus::ready;
+      agents.atMut(7).status_age_s = 54000;
+      ds::Array waiting{activityAgent("Deploy staging")};
+
+      waiting.atMut(0).status = AgentStatus::blocked;
+      waiting.atMut(0).blocked_reason = AgentBlockedReason::question;
+      waiting.atMut(0).last_event = "Promote the build to staging?";
+      waiting.atMut(0).session_id.atMut(0) = 99;
+      const ds::Array<std::uint16_t, 3> served{3000, 9229, 9230};
+      const ds::Array panes{
+          PaneListEntry{.pane_id = pane_id, .pane_generation = 1, .location = location, .foreground = "zsh", .foreground_age_s = 5, .shell = true},
+          PaneListEntry{.pane_id = 21, .pane_generation = 1, .location = {.workspace = {.kind = WorkspaceLocation::Kind::workspace, .id = 2}, .tab_id = 21}, .foreground = "node", .foreground_age_s = 720, .ports = served.view()},
+          PaneListEntry{.pane_id = 22, .pane_generation = 1, .location = {.workspace = {.kind = WorkspaceLocation::Kind::workspace, .id = 5}, .tab_id = 22}, .foreground = "zsh", .foreground_age_s = 46800, .shell = true},
+          PaneListEntry{.pane_id = 23, .pane_generation = 1, .location = {.workspace = {.kind = WorkspaceLocation::Kind::workspace, .id = 3}, .tab_id = 23}, .foreground = "zsh", .foreground_age_s = 8, .shell = true},
+          PaneListEntry{.pane_id = 24, .pane_generation = 1, .location = {.workspace = {.kind = WorkspaceLocation::Kind::workspace, .id = 1}, .tab_id = 24}, .foreground = "nvim", .foreground_age_s = 1500},
+      };
+      constexpr std::uint32_t failed_ms = 4000;
+      constexpr std::uint32_t console_ms = 12000;
+
+      fixture.local_runtime->send(WorkspaceList{.revision = 1, .entries = projects});
+      fixture.remote_runtime->send(WorkspaceList{.revision = 1, .entries = projects});
+      fixture.local_runtime->send(AgentSnapshot{.revision = 1, .entries = agents});
+      fixture.remote_runtime->send(AgentSnapshot{.revision = 1, .entries = waiting});
+      fixture.local_runtime->send(PaneList{.revision = 1, .entries = panes});
+      // What each pane's shell runs or ran last and where; the last pane's shell ran nothing yet.
+      fixture.local_runtime->send(PaneFacts{.pane_id = pane_id, .pane_generation = 1, .command_state = PaneCommandState::finished, .command = "just gui-case sidebar", .exit_code = 1, .duration_ms = failed_ms, .directory = "~/telar", .in_workspace = true, .branch = "main", .dirty = true});
+      fixture.local_runtime->send(PaneFacts{.pane_id = 21, .pane_generation = 1, .command_state = PaneCommandState::running, .command = "npm run dev -- --inspect", .directory = "~/storefront/web", .in_workspace = true, .branch = "main"});
+      fixture.local_runtime->send(PaneFacts{.pane_id = 22, .pane_generation = 1, .command_state = PaneCommandState::finished, .command = "ansible-playbook site.yml", .exit_code = 0, .duration_ms = console_ms, .directory = "~/fleet", .in_workspace = true, .branch = "main"});
+      fixture.local_runtime->send(PaneFacts{.pane_id = 23, .pane_generation = 1, .directory = "~/labs", .in_workspace = true});
+      // An editor has no command: its facts name the file its focused window shows.
+      fixture.local_runtime->send(PaneFacts{.pane_id = 24, .pane_generation = 1, .directory = "~/telar/docs", .in_workspace = true, .document = "sidebar.md +"});
+      // Eight agents here, the one that waits elsewhere, the processes' header and five processes.
+      constexpr int listed = 15;
+
+      QTRY_COMPARE_WITH_TIMEOUT(application.activity()->rows()->rowCount(), listed, wait_ms);
+      QVERIFY(waitForSynchronizedFrame(*window, wait_ms));
+      const auto shots = qEnvironmentVariable("TELAR_GUI_TEST_CHROME_SCREENSHOTS");
+      const auto capture = [&](const char* name) {
+        return shots.isEmpty() || (waitForSynchronizedFrame(*window, wait_ms) && window->grabWindow().save(QDir{shots}.filePath(QString::fromLatin1(name)), "PNG"));
+      };
+      const auto textOf = [](const QQuickItem* item) {
+        return item->property("text").toString();
+      };
+      auto* content = window->contentItem();
+      const auto one = [&](const char* name) -> QQuickItem* {
+        const auto found = visualItems(*content, QString::fromLatin1(name));
+
+        return found.size() == 1 ? found.front() : nullptr;
+      };
+
+      // The bar, left to right: the machine, its workspaces, the tabs of the one in front.
+      auto* machine = one("topBarMachine");
+      auto* track = one("workspaceTrack");
+      auto* strip = one("tabStripLayout");
+
+      QVERIFY(machine != nullptr && track != nullptr && strip != nullptr);
+      QVERIFY(machine->isVisible() && track->isVisible());
+      QCOMPARE(textOf(one("topBarMachineLabel")), QStringLiteral("Workstation"));
+      QCOMPARE(textOf(one("topBarMachineInitial")), QStringLiteral("W"));
+      QVERIFY(machine->mapToScene({machine->width(), 0}).x() <= track->mapToScene({0, 0}).x());
+      QVERIFY(track->mapToScene({track->width(), 0}).x() <= strip->mapToScene({0, 0}).x());
+      const auto segments = visualItems(*track, QStringLiteral("workspaceSegment"));
+
+      QCOMPARE(segments.size(), projects.size());
+      const auto named = [&] {
+        return std::ranges::count_if(visualItems(*track, QStringLiteral("workspaceSegmentName")), [](const QQuickItem* name) {
+          return name->isVisible();
+        });
+      };
+
+      // Five workspaces: every mark shows, and only the one in front keeps its name.
+      QCOMPARE(named(), qsizetype{1});
+      QCOMPARE(track->property("shownCount").toInt(), static_cast<int>(projects.size()));
+      QVERIFY(visualItems(*content, QStringLiteral("topBarTelarMark")).isEmpty());
+      QVERIFY(visualItems(*content, QStringLiteral("projectSwitcher")).isEmpty());
+      QVERIFY(visualItems(*content, QStringLiteral("sidebarMachineList")).isEmpty());
+
+      // Every card says what happens and where, in every state.
+      const auto cards = visualItems(*content, QStringLiteral("agentCard"));
+
+      QVERIFY(!cards.isEmpty());
+      for (auto* card : cards) {
+        const auto signal = visualItems(*card, QStringLiteral("agentSignal"));
+        const auto where = visualItems(*card, QStringLiteral("agentProjectLabel"));
+        const auto title = textOf(visualItems(*card, QStringLiteral("agentTitleLabel")).front());
+
+        QCOMPARE(signal.size(), 1);
+        QCOMPARE(where.size(), 1);
+        QVERIFY2(!textOf(signal.front()).isEmpty(), qPrintable(title));
+        QVERIFY2(!textOf(where.front()).isEmpty(), qPrintable(title));
+        QVERIFY2(signal.front()->mapToScene({0, 0}).y() < where.front()->mapToScene({0, 0}).y(), qPrintable(title));
+      }
+
+      // What a card says of the pane with `title`: its second row, its place and its branch.
+      const auto said = [&](const QString& title, const char* piece) {
+        for (auto* card : cards) {
+          if (textOf(visualItems(*card, QStringLiteral("agentTitleLabel")).front()) == title) {
+            return textOf(visualItems(*card, QString::fromLatin1(piece)).front());
+          }
+        }
+
+        return QString{};
+      };
+      const auto shown = [&](const QString& signal, const char* piece) {
+        qsizetype count = 0;
+
+        for (auto* card : cards) {
+          if (textOf(visualItems(*card, QStringLiteral("agentSignal")).front()) == signal) {
+            for (const auto* item : visualItems(*card, QString::fromLatin1(piece))) {
+              count += static_cast<qsizetype>(item->isVisible());
+            }
+          }
+        }
+
+        return count;
+      };
+
+      // An agent's place is its project, its tab and its directory, and its workspace's branch closes the row.
+      QCOMPARE(said(QStringLiteral("Migrate the orders table"), "agentProjectLabel"), QStringLiteral("storefront · db · ~/storefront"));
+      QCOMPARE(said(QStringLiteral("Migrate the orders table"), "agentBranchLabel"), QStringLiteral("main"));
+      QCOMPARE(said(QStringLiteral("Sidebar cards"), "agentProjectLabel"), QStringLiteral("telar · ~/telar"));
+      QCOMPARE(said(QStringLiteral("Challenge notes"), "agentSignal"), QStringLiteral("No final message"));
+      QCOMPARE(said(QStringLiteral("Stop the staging cluster"), "agentSignal"), QStringLiteral("Cluster stopped, billing at zero."));
+      // A process's second row is its command and what that left: its ports while it serves,
+      // a mark and how long it took when it ended well, its exit status when it failed.
+      QCOMPARE(said(QStringLiteral("node"), "agentSignal"), QStringLiteral("npm run dev -- --inspect"));
+      QCOMPARE(said(QStringLiteral("node"), "agentProjectLabel"), QStringLiteral("storefront · ~/storefront/web"));
+      // An editor's second row is the file it shows, where another program would say `No command`.
+      QCOMPARE(said(QStringLiteral("nvim"), "agentSignal"), QStringLiteral("sidebar.md +"));
+      QCOMPARE(said(QStringLiteral("nvim"), "agentProjectLabel"), QStringLiteral("telar · ~/telar/docs"));
+      QCOMPARE(shown(QStringLiteral("npm run dev -- --inspect"), "processPort"), qsizetype{3});
+      QCOMPARE(shown(QStringLiteral("npm run dev -- --inspect"), "processResult"), qsizetype{0});
+      QCOMPARE(shown(QStringLiteral("just gui-case sidebar"), "processResultGlyph"), qsizetype{1});
+      QCOMPARE(shown(QStringLiteral("ansible-playbook site.yml"), "processResultGlyph"), qsizetype{1});
+      QCOMPARE(shown(QStringLiteral("No commands yet"), "processResult"), qsizetype{0});
+      const auto results = [&](const QString& signal) {
+        for (auto* card : cards) {
+          if (textOf(visualItems(*card, QStringLiteral("agentSignal")).front()) == signal) {
+            return textOf(visualItems(*card, QStringLiteral("processResult")).front());
+          }
+        }
+
+        return QString{};
+      };
+
+      QCOMPARE(results(QStringLiteral("just gui-case sidebar")), QStringLiteral("1"));
+      QCOMPARE(results(QStringLiteral("ansible-playbook site.yml")), QStringLiteral("12s"));
+      QVERIFY(capture("chrome-wide.png"));
+
+      // The machine's menu lists both machines, the one in front marked.
+      QTest::mouseClick(window, Qt::LeftButton, Qt::NoModifier, machine->mapToScene({machine->width() / 2, machine->height() / 2}).toPoint());
+      auto* menu = window->findChild<QObject*>(QStringLiteral("machineMenu"));
+
+      QVERIFY(menu != nullptr);
+      QTRY_VERIFY_WITH_TIMEOUT(menu->property("opened").toBool(), wait_ms);
+      auto* roster = window->findChild<MachineChromeLayout*>(QStringLiteral("machineMenuList"));
+
+      QVERIFY(roster != nullptr);
+      QTRY_COMPARE_WITH_TIMEOUT(roster->items()->rowCount(), 2, wait_ms);
+      const auto machineRow = [&](int row) {
+        return roster->items()->data(roster->items()->index(row, 0), ListModel::record_role).toMap();
+      };
+
+      QVERIFY(machineRow(0).value(QStringLiteral("active")).toBool());
+      QVERIFY(!machineRow(1).value(QStringLiteral("active")).toBool());
+      QCOMPARE(machineRow(1).value(QStringLiteral("text")).toString(), QStringLiteral("Build"));
+      QVERIFY(machineRow(1).value(QStringLiteral("attention")).toBool());
+      QVERIFY(capture("machine-menu.png"));
+      QVERIFY(QMetaObject::invokeMethod(menu, "close"));
+      QTRY_VERIFY_WITH_TIMEOUT(!menu->property("visible").toBool(), wait_ms);
+
+      // The workspaces' menu holds what the track has no room for.
+      auto* more = one("workspaceTrackMore");
+
+      QVERIFY(more != nullptr);
+      QTest::mouseClick(window, Qt::LeftButton, Qt::NoModifier, more->mapToScene({more->width() / 2, more->height() / 2}).toPoint());
+      auto* workspaces = window->findChild<QObject*>(QStringLiteral("workspaceMenu"));
+
+      QVERIFY(workspaces != nullptr);
+      QTRY_VERIFY_WITH_TIMEOUT(workspaces->property("opened").toBool(), wait_ms);
+      QTRY_COMPARE_WITH_TIMEOUT(workspaces->property("rows").toList().size(), static_cast<qsizetype>(projects.size()), wait_ms);
+      QVERIFY(capture("workspace-menu.png"));
+      QVERIFY(QMetaObject::invokeMethod(workspaces, "close"));
+      QTRY_VERIFY_WITH_TIMEOUT(!workspaces->property("visible").toBool(), wait_ms);
+
+      // A narrow bar still holds every workspace's mark and the name of the one in front.
+      window->resize(narrow);
+      QVERIFY(waitForSynchronizedFrame(*window, wait_ms));
+      QCOMPARE(named(), qsizetype{1});
+      QCOMPARE(track->property("shownCount").toInt(), static_cast<int>(projects.size()));
+      QVERIFY(track->mapToScene({track->width(), 0}).x() <= strip->mapToScene({0, 0}).x());
+      QVERIFY(capture("chrome-narrow.png"));
     }
 
     Q_SLOT static void machineInlineFactsTrackHiddenSources() {

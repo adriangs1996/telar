@@ -145,6 +145,7 @@ export namespace telar {
   using telar::notificationLinkHost;
   using telar::NotificationTarget;
   using telar::OptionalValue;
+  using telar::PaneCommandState;
   using telar::PaneDescriptor;
   using telar::PaneDirection;
   using telar::PaneFocusOutcome;

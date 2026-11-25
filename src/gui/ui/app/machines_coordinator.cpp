@@ -369,13 +369,6 @@ namespace telar::gui::qt {
     client.connection.open(endpoint);
   }
 
-  QVariantMap MachinesCoordinator::context() const {
-    return {
-        {QStringLiteral("label"), toQString(store_.machines().row(store_.machines().active()).label.view())},
-        {QStringLiteral("attention"), store_.machines().attentionElsewhere()},
-    };
-  }
-
   void MachinesCoordinator::soundFinished([[maybe_unused]] ds::Option<CommandFailure> failure) {
     const auto owner = sound_owner_.take();
     auto* client = owner ? findClientMut(*owner) : nullptr;

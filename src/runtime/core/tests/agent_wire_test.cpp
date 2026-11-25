@@ -28,6 +28,8 @@ namespace {
   constexpr TerminalSize size{80, 24, 8, 16};
   constexpr ds::Array<std::string_view, 1> cat{"/bin/cat"};
   constexpr std::string_view session_id = "0123abcd-4567-89ef-0123-456789abcdef";
+  // What the titled fixture agent says when its turn ends.
+  constexpr std::string_view final_message = "The parser takes nested lists now.\nTwo tests cover them.";
 
   // A codex the runtime identifies by its executable, running `workload` in a pane: argv is
   // {<directory>/codex, --wire-agent, SOCKET, RESULT, WORKLOAD, ARGUMENT}. What it did goes to RESULT.
@@ -99,6 +101,7 @@ namespace {
         }
       } else if (workload == "titled") {
         peer.exchange<RequestCompleted>(ReportAgentTitle{.request_id = 2, .pane_id = pane, .pane_generation = generation, .provider = AgentProvider::codex, .title = "Fix the parser"});
+        peer.exchange<RequestCompleted>(ReportAgentProgress{.request_id = 3, .pane_id = pane, .pane_generation = generation, .provider = AgentProvider::codex, .final_message = final_message});
       } else if (workload == "working") {
         termios mode{};
 
@@ -317,6 +320,23 @@ namespace {
     return found;
   }
 
+  // The final message the checkpoint keeps for `pane`'s agent.
+  std::string checkpointedMessage(const RuntimeHost& host, std::uint64_t pane) {
+    const auto bytes = readFile(host.directory() + "/session.ckpt");
+    std::string found;
+    telar::runtime::checkpoint::Reader reader{std::span{reinterpret_cast<const Byte*>(bytes.data()), bytes.size()}};
+
+    reader.read([&]<typename Record>(const Record& record) {
+      if constexpr (std::same_as<Record, telar::runtime::checkpoint::PaneRecord>) {
+        if (record.id == pane) {
+          found = record.final_message;
+        }
+      }
+    });
+
+    return found;
+  }
+
   void testReportSessionAndRestoredAgent() {
     RuntimeHost host{RuntimeHostOptions{.session = true, .resume_agents = true}};
     const auto restarted = host.directory() + "/restarted";
@@ -343,7 +363,10 @@ namespace {
 
     check(saved && saved->first == session_id && saved->second == "Fix the parser", "the reported session was not kept");
 
-    // After a restart the agent comes back under its session and title before it reports again.
+    check(checkpointedMessage(host, pane) == final_message, "what the agent last said was not kept");
+
+    // After a restart the agent comes back under its session and title, saying what it last
+    // said, before it reports again.
     std::ofstream{restarted} << "restarted";
     host.start();
     ProtocolPeer control{host.socket()};
@@ -352,6 +375,7 @@ namespace {
     for (std::uint64_t request = 10;; ++request) {
       const auto* entry = agentOf(control.exchange<AgentSnapshot>(QueryAgents{request}), pane);
       if (entry != nullptr && entry->provider == AgentProvider::codex && entry->session_title == "Fix the parser") {
+        check(entry->final_message == final_message, "the restored agent lost what it last said");
         break;
       }
 

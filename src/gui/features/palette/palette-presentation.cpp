@@ -10,20 +10,20 @@ namespace telar::gui::features::palette {
 
   PaletteGeometry PaletteGeometry::measure(Rect viewport, const ChromeMetrics& chrome, Options options) noexcept {
     const auto inset = std::min(chrome.px(margin), std::min(viewport.width, viewport.height) / margin_divisor);
-    const auto width = std::max(0.0F, std::min(chrome.px(maximum_width), viewport.width - (inset * 2)));
-    const auto row_height = std::max(chrome.px(row_minimum), ChromeMetrics::lineHeight(chrome.body) + chrome.px(row_padding));
-    const auto agent_height = std::max(chrome.px(agent_minimum), ChromeMetrics::lineHeight(chrome.body) + ChromeMetrics::lineHeight(chrome.small) + chrome.px(agent_padding));
-    const auto group_height = std::max(chrome.px(group_minimum), ChromeMetrics::lineHeight(chrome.small) + chrome.px(group_padding));
+    const auto width = std::max(0.0F, std::min(chrome.textPx(maximum_width), viewport.width - (inset * 2)));
+    const auto row_height = std::max(chrome.textPx(row_minimum), ChromeMetrics::lineHeight(chrome.body) + chrome.textPx(row_padding));
+    const auto agent_height = std::max(chrome.textPx(agent_minimum), ChromeMetrics::lineHeight(chrome.body) + ChromeMetrics::lineHeight(chrome.small) + chrome.textPx(agent_padding));
+    const auto group_height = std::max(chrome.textPx(group_minimum), ChromeMetrics::lineHeight(chrome.small) + chrome.textPx(group_padding));
     const bool nested = options.pick_rows.hasValue() || options.suggest;
-    const auto heading_height = nested ? std::max(chrome.px(heading_minimum), ChromeMetrics::lineHeight(chrome.small) + chrome.px(heading_padding)) : 0;
-    const auto search_height = std::max(chrome.px(search_minimum), ChromeMetrics::lineHeight(chrome.title) + chrome.px(search_padding));
-    const auto footer_height = std::max(chrome.px(footer_minimum), ChromeMetrics::lineHeight(chrome.small) + chrome.px(footer_padding));
-    auto list_height = (row_height * maximum_pick_rows) + chrome.px(list_padding);
+    const auto heading_height = nested ? std::max(chrome.textPx(heading_minimum), ChromeMetrics::lineHeight(chrome.small) + chrome.textPx(heading_padding)) : 0;
+    const auto search_height = std::max(chrome.textPx(search_minimum), ChromeMetrics::lineHeight(chrome.title) + chrome.textPx(search_padding));
+    const auto footer_height = std::max(chrome.textPx(footer_minimum), ChromeMetrics::lineHeight(chrome.small) + chrome.textPx(footer_padding));
+    auto list_height = (row_height * maximum_pick_rows) + chrome.textPx(list_padding);
 
     if (options.suggest) {
-      list_height = chrome.px(suggestion_height);
+      list_height = chrome.textPx(suggestion_height);
     } else if (options.pick_rows) {
-      list_height = (row_height * static_cast<float>(std::clamp(*options.pick_rows, minimum_pick_rows, maximum_pick_rows))) + chrome.px(pick_padding);
+      list_height = (row_height * static_cast<float>(std::clamp(*options.pick_rows, minimum_pick_rows, maximum_pick_rows))) + chrome.textPx(pick_padding);
     }
 
     const auto height = std::max(0.0F, std::min(heading_height + search_height + list_height + footer_height, viewport.height - (inset * 2)));
@@ -62,7 +62,7 @@ namespace telar::gui::features::palette {
       return result;
     }
 
-    const auto bounds = PaletteGeometry::inset(geometry.results, chrome.px(content_inset));
+    const auto bounds = PaletteGeometry::inset(geometry.results, chrome.textPx(content_inset));
     const auto selected = std::min(selection, kinds.size() - 1);
     auto start = selected;
     auto used = rowHeight(kinds[selected], geometry) + (grouped ? geometry.group_height : 0);
@@ -116,11 +116,11 @@ namespace telar::gui::features::palette {
   }
 
   SuggestionGeometry SuggestionGeometry::measure(const PaletteGeometry& palette, const ChromeMetrics& chrome, bool has_parent) noexcept {
-    auto title = PaletteGeometry::inset(palette.heading, chrome.px(title_inset));
+    auto title = PaletteGeometry::inset(palette.heading, chrome.textPx(title_inset));
     Rect back;
 
     if (has_parent) {
-      const auto width = std::min(title.width, chrome.px(back_width));
+      const auto width = std::min(title.width, chrome.textPx(back_width));
 
       back = {.x = title.x, .y = palette.heading.y, .width = width, .height = palette.heading.height};
       title.x += width;
@@ -129,17 +129,17 @@ namespace telar::gui::features::palette {
 
     const auto results = palette.results;
     const auto footer = palette.footer;
-    const auto content = PaletteGeometry::inset(results, chrome.px(content_inset));
-    const auto heading_height = std::min(content.height, ChromeMetrics::lineHeight(chrome.body) + chrome.px(heading_padding));
+    const auto content = PaletteGeometry::inset(results, chrome.textPx(content_inset));
+    const auto heading_height = std::min(content.height, ChromeMetrics::lineHeight(chrome.body) + chrome.textPx(heading_padding));
     const Rect heading{.x = content.x, .y = content.y, .width = content.width, .height = heading_height};
-    const auto gap = chrome.px(body_gap);
+    const auto gap = chrome.textPx(body_gap);
     const Rect body{.x = content.x, .y = content.y + heading_height + gap, .width = content.width, .height = std::max(0.0F, content.height - heading_height - gap)};
     auto message = body;
 
     message.height = std::min(body.height, ChromeMetrics::lineHeight(chrome.body));
-    const auto width = std::min(chrome.px(button_width), footer.width / 2);
-    const auto inset = std::min(chrome.px(footer_inset), footer.width / 8);
-    const Rect button{.x = footer.right() - width - inset, .y = footer.y + chrome.px(button_vertical_inset), .width = width, .height = std::max(0.0F, footer.height - chrome.px(button_vertical_inset * 2))};
+    const auto width = std::min(chrome.textPx(button_width), footer.width / 2);
+    const auto inset = std::min(chrome.textPx(footer_inset), footer.width / 8);
+    const Rect button{.x = footer.right() - width - inset, .y = footer.y + chrome.textPx(button_vertical_inset), .width = width, .height = std::max(0.0F, footer.height - chrome.textPx(button_vertical_inset * 2))};
 
     return {
         .title = title,
@@ -147,10 +147,10 @@ namespace telar::gui::features::palette {
         .heading = heading,
         .body = body,
         .message = message,
-        .preview = PaletteGeometry::inset(body, chrome.px(preview_inset)),
+        .preview = PaletteGeometry::inset(body, chrome.textPx(preview_inset)),
         .footer_caption = {.x = footer.x + inset, .y = footer.y, .width = std::max(0.0F, footer.width - width - (inset * footer_gap_count)), .height = footer.height},
         .button = button,
-        .separator = {.x = footer.x, .y = footer.y, .width = footer.width, .height = std::min(chrome.px(footer_separator_height), footer.height)},
+        .separator = {.x = footer.x, .y = footer.y, .width = footer.width, .height = std::min(chrome.textPx(footer_separator_height), footer.height)},
     };
   }
 

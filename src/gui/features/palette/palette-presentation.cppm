@@ -12,6 +12,8 @@ import telar.base.ds;
 export {
   namespace telar::gui::features::palette {
 
+    // Lengths are at the design font: the ones that frame text grow with the chrome's text
+    // (ChromeMetrics::textPx), and only the margin to the window's edge follows the display.
     struct PaletteGeometry {
       struct Options {
         ds::Option<std::uint16_t> pick_rows;

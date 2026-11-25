@@ -26,6 +26,8 @@ export {
       static constexpr float mark_column = 24;
       static constexpr float project_label_gap = 4;
       static constexpr float title_gap = 4;
+      // Between an agent card's second row and its third.
+      static constexpr float detail_gap = 2;
       static constexpr float total_row_spacing = 6;
       static constexpr float group_gap = 8;
       static constexpr float scrollbar_width = 3;
@@ -54,7 +56,11 @@ export {
       // Where a card's text starts: past its inset, its mark column and the gap after it.
       [[nodiscard]] float textInset() const noexcept;
       [[nodiscard]] float height() const noexcept;
+      // An agent or process card: its title row, then what happens and where, a small row each.
       [[nodiscard]] float agentHeight() const noexcept;
+      // Where the second and third rows of that card start, from its top.
+      [[nodiscard]] float agentSignalTop() const noexcept;
+      [[nodiscard]] float agentWhereTop() const noexcept;
       [[nodiscard]] float cardWidth(float list_width) const noexcept;
       // The list width whose cards are `card_width` wide.
       [[nodiscard]] float listWidth(float card_width) const noexcept;

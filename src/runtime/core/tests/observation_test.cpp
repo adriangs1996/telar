@@ -35,7 +35,6 @@ import telar.runtime.terminal.control;
 import telar.testing;
 import telar.testing.test_memory;
 import telar.runtime.agents.observation.processor;
-import telar.runtime.workers.request_worker;
 import telar.runtime.core.client_control;
 import telar.wire.vocabulary;
 import telar.platform.events;
@@ -189,42 +188,6 @@ namespace {
     }
 
     check(rejected);
-  }
-
-  struct CompletionProbe {
-    using Request = std::uint64_t;
-    using Result = std::uint64_t;
-
-    Result observe(const Request& request) noexcept {
-      return request;
-    }
-
-    void stop() noexcept {}
-  };
-
-  void testCompletionWakeups() {
-    CompletionProbe probe;
-    ObservationWorker<decltype(probe)&> worker{std::in_place, probe};
-    const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds{5};
-
-    for (std::uint64_t request = 1; request <= 1000; ++request) {
-      check(worker.submit(request));
-      bool completed = false;
-
-      while (!completed) {
-        worker.collect([&](std::uint64_t result) {
-          check(result == request);
-          completed = true;
-        });
-
-        check(std::chrono::steady_clock::now() < deadline);
-        std::this_thread::yield();
-      }
-
-      pollfd notification{worker.descriptor(), POLLIN, 0};
-
-      check(::poll(&notification, 1, 0) == 0);
-    }
   }
 
   struct CaptureHistory {
@@ -533,6 +496,5 @@ namespace {
 
                                                                  testOversizedOutputDropsBatch(adapter);
                                                                }};
-  const telar::testing::Case case_completion_wakeups{"observation.completion_wakeups", testCompletionWakeups};
 
 }

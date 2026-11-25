@@ -95,6 +95,36 @@ namespace {
       return feature::delivery(line());
     }
 
+    // The pane printed at `now`, in nanoseconds of the clock the routing reads.
+    void output(std::int64_t now) {
+      feature::output(lines_, pane_id, [now] {
+        return now;
+      });
+    }
+
+    // Whether `key`, typed at `now` with the program's cursor at `column`, reaches the program.
+    [[nodiscard]] bool toProgram(const KeyPress& key, const telar::PaneShell& shell, std::uint32_t column, std::int64_t now) {
+      return feature::toProgram(line(), key, shell, column, [now] {
+        return now;
+      });
+    }
+
+    // Whether `text`, committed or pasted at `now`, reaches the program.
+    [[nodiscard]] bool toProgram(std::string_view text, std::uint32_t column, std::int64_t now) {
+      return feature::toProgram(line(), text, column, [now] {
+        return now;
+      });
+    }
+
+    void follow(const telar::PaneShell& previous, const telar::PaneShell& current) {
+      static_cast<void>(feature::follow(line(), previous, current, 0));
+    }
+
+    // A key while a program runs, as the queue reads it.
+    Outcome pressRunning(const KeyPress& key) {
+      return feature::press(state_, line(), Surface::running, key, {.configuration = configuration_, .dialect = telar::shell::Dialect::posix});
+    }
+
   private:
     static constexpr std::uint64_t pane_id = 1;
 
@@ -734,6 +764,203 @@ namespace {
     require(PendingPrompt::likely(prompt_column, quiet) && !PendingPrompt::likely(0, quiet) && !PendingPrompt::likely(prompt_column, busy), "a quiet unfinished line looks like a prompt");
   }
 
+  // A program's question takes the whole answer typed at it, however fast: the echo of each key
+  // is output, which must not send the next one to the queue.
+  void answerFollowsItsFirstKey() {
+    using namespace std::chrono_literals;
+
+    constexpr std::uint32_t question_column = 17;
+    constexpr std::int64_t asked = 0;
+    constexpr std::int64_t quiet = std::chrono::nanoseconds{400ms}.count();
+    constexpr std::int64_t moment = std::chrono::nanoseconds{10ms}.count();
+    const telar::PaneShell shell{.pane_id = 1, .shell = telar::IntegratedShell::zsh, .phase = telar::ShellPhase::running, .canonical = true, .echo = true, .signal_keys = true, .interrupt = 0x03, .quit = 0x1c, .suspend = 0x1a, .end_of_file = 0x04};
+    const auto key = [](char character) {
+      return KeyPress{.key = Key::character, .character = static_cast<char32_t>(character)};
+    };
+    const KeyPress enter{.key = Key::enter};
+    Editor editor;
+
+    // terraform's "Enter a value: ", quiet; "yes" typed as each key's echo arrives.
+    editor.output(asked);
+    require(editor.toProgram(key('y'), shell, question_column, quiet), "the first key answers the quiet question");
+    editor.output(quiet + moment);
+    require(editor.toProgram(key('e'), shell, question_column + 1, quiet + (2 * moment)), "the key after the echo follows it");
+    editor.output(quiet + (3 * moment));
+    require(editor.toProgram(key('s'), shell, question_column + 2, quiet + (4 * moment)), "so does the rest of the answer");
+    require(editor.toProgram(enter, shell, question_column + 3, quiet + (5 * moment)), "Enter sends the answer");
+    editor.output(quiet + (6 * moment));
+    require(!editor.toProgram(key('l'), shell, question_column, quiet + (7 * moment)), "after Enter, a program that prints queues the keys again");
+
+    // A signal ends the line being read, and so does a program that stops reading one.
+    editor.output(asked);
+    require(editor.toProgram(key('n'), shell, question_column, quiet), "a new answer starts");
+    require(editor.toProgram(KeyPress{.key = Key::character, .character = U'c', .modifiers = {.control = true}}, shell, question_column, quiet + moment), "Ctrl-C reaches the program");
+    editor.output(quiet + (2 * moment));
+    require(!editor.toProgram(key('a'), shell, question_column, quiet + (3 * moment)), "Ctrl-C ends the answer");
+    editor.output(asked);
+    require(editor.toProgram(key('n'), shell, question_column, quiet), "another answer starts");
+
+    auto raw = shell;
+
+    raw.canonical = false;
+    editor.follow(shell, raw);
+    editor.output(quiet + moment);
+    require(!editor.toProgram(key('a'), shell, question_column, quiet + (2 * moment)), "a program that reads keys raw ends the answer");
+
+    // A paste or an input method's text answers as keys do; a newline at its end ends it.
+    editor.output(asked);
+    require(editor.toProgram("ye", question_column, quiet), "a paste answers the quiet question");
+    editor.output(quiet + moment);
+    require(editor.toProgram(key('s'), shell, question_column + 2, quiet + (2 * moment)), "keys follow the paste");
+    require(editor.toProgram(enter, shell, question_column + 3, quiet + (3 * moment)), "Enter ends it");
+    editor.output(asked);
+    require(editor.toProgram("yes\n", question_column, quiet), "a paste with its newline answers");
+    editor.output(quiet + moment);
+    require(!editor.toProgram("ls", question_column, quiet + (2 * moment)), "and ends the answer");
+    editor.output(asked);
+    require(!editor.toProgram("yes\nrm -rf ~", question_column, quiet), "lines after the first stay in the line, which the shell would run");
+    require(oneLine("yes\r\n") == std::string_view{"yes"} && !oneLine("a\nb") && oneLine("") == std::string_view{}, "one line is what is left without its ends");
+
+    // Text in the queue keeps the keys there.
+    editor.output(asked);
+    static_cast<void>(editor.pressRunning({.key = Key::character, .character = U'l', .text = "l"}));
+    require(!text(editor).empty(), "the key queues");
+    require(!editor.toProgram(key('s'), shell, question_column, quiet), "a command being queued keeps its keys");
+    require(editor.toProgram(KeyPress{.key = Key::character, .character = U'c', .modifiers = {.control = true}}, shell, question_column, quiet), "Ctrl-C still reaches the program");
+  }
+
+  // Up walks past a command of several lines, between whose lines it moves first, and Down comes
+  // back to what was being written; moving the caret in what Up brought back keeps its place.
+  void historyCrossesLongCommands() {
+    Editor editor;
+    const KeyPress up{.key = Key::up};
+    const KeyPress down{.key = Key::down};
+
+    editor.write("older");
+    require(editor.press({.key = Key::enter}) == Outcome::run, "a command runs");
+    editor.write("echo 'a\nb'");
+    require(editor.press({.key = Key::enter}) == Outcome::run, "a command of two lines runs");
+    type(editor, "draft");
+    editor.press(up);
+    require(text(editor) == "echo 'a\nb'", "Up brings back the last command");
+    editor.press(up);
+    require(text(editor) == "echo 'a\nb'" && cursor(editor) < 7, "Up moves to its first line");
+    editor.press(up);
+    require(text(editor) == "older", "and then past it");
+    editor.press(down);
+    editor.press(down);
+    require(text(editor) == "draft", "Down comes back to the draft");
+
+    editor.press(up);
+    editor.press(up);
+    editor.press(up);
+    editor.press({.key = Key::left});
+    editor.press(up);
+    require(text(editor) == "older", "moving the caret keeps the place in the history");
+    type(editor, "x");
+    editor.press(up);
+    require(text(editor) == "echo 'a\nb'", "an edit makes it the line being written");
+  }
+
+  // Fixes to vim's keys: Enter on a command that goes on, counts, registers, the case operators
+  // and the dot.
+  void vimCommands() {
+    {
+      Editor editor{Keymap::vim};
+
+      type(editor, "echo \"foo\x1b");
+      require(editor.press({.key = Key::enter}) == Outcome::edited && text(editor) == "echo \"foo\n" && editor.view().mode() == Mode::insert, "Enter in normal mode goes on after the text, in insert mode");
+    }
+    {
+      Editor editor{Keymap::vim};
+
+      type(editor, "abc\x1b"
+                   "0");
+      type(editor, "9999d9999l");
+      require(text(editor).empty(), "a count past what is there stops at the line's end");
+    }
+    {
+      Editor editor{Keymap::vim};
+
+      type(editor, "one two\x1b"
+                   "0\"ayww\"Ayw0\"aP");
+      require(text(editor) == "one twoone two", "an uppercase register appends");
+    }
+    {
+      Editor editor{Keymap::vim};
+
+      type(editor, "a b c d e f g\x1b"
+                   "0d3w");
+      require(text(editor) == "d e f g", "d3w deletes three words");
+      type(editor, "2.");
+      require(text(editor) == "f g", "2. deletes two, its count replacing the operator's");
+    }
+    {
+      Editor editor{Keymap::vim};
+
+      type(editor, "ABC def\x1b"
+                   "0guw");
+      require(text(editor) == "abc def", "gu lowers a word");
+      type(editor, "wgUiw");
+      require(text(editor) == "abc DEF", "gU raises one");
+      type(editor, "0g~~");
+      require(text(editor) == "ABC def", "g~~ swaps the line's case");
+      type(editor, "0gUw");
+      type(editor, "w.");
+      require(text(editor) == "ABC DEF", "the dot repeats a case operator");
+      type(editor, "0vegu");
+      require(text(editor) == "abc DEF", "gu over a selection lowers it");
+    }
+    {
+      Editor editor{Keymap::vim};
+
+      type(editor, "ls -la\r\x1b");
+      editor.press({.key = Key::character, .character = U'k', .text = "k"});
+      require(text(editor) == "ls -la" && cursor(editor) == 5, "a command k brings back sits on its last character");
+      type(editor, "x");
+      require(text(editor) == "ls -l", "where x deletes it");
+    }
+  }
+
+  // Ctrl-_ takes back a word typed at a time, as readline does.
+  void emacsUndoesWords() {
+    Editor editor;
+
+    type(editor, "echo hello world");
+    control(editor, '_');
+    require(text(editor) == "echo hello ", "undo takes back the last word");
+    control(editor, '_');
+    require(text(editor) == "echo ", "and the one before");
+  }
+
+  // A byte that starts no character, as Latin-1 a history kept brings, is one to move over and
+  // delete.
+  void invalidBytesAreCharacters() {
+    Editor editor;
+
+    editor.write("a\x80"
+                 "b");
+    editor.press({.key = Key::home});
+    editor.press({.key = Key::right});
+    editor.press({.key = Key::right});
+    require(cursor(editor) == 2, "Right crosses the stray byte");
+    editor.press({.key = Key::left});
+    editor.press({.key = Key::delete_forward});
+    require(text(editor) == "ab", "Delete removes it");
+  }
+
+  // A command the lexer cannot follow to its end is the shell's to judge: Enter runs it.
+  void deepCommandsRun() {
+    constexpr std::size_t deeper_than_followed = 70;
+    Editor editor;
+    std::string command(deeper_than_followed, '(');
+
+    command += "true";
+    command.append(deeper_than_followed, ')');
+    editor.write(command);
+    require(editor.press({.key = Key::enter}) == Outcome::run, "a command nested past the lexer's depth runs");
+  }
+
   telar::ds::Vec<Style, Memory> styleOf(Memory& memory, std::string_view text) {
     telar::ds::Vec<Style, Memory> styles{memory};
     telar::ds::Vec<telar::shell::Token, Memory> tokens{memory};
@@ -915,6 +1142,12 @@ namespace {
   const telar::testing::Case case_memory_returns{"prompt_editor.memory_returns", memoryReturns};
   const telar::testing::Case case_layout_and_styles{"prompt_editor.layout_and_styles", layoutAndStyles};
   const telar::testing::Case case_routing{"prompt_editor.routing", routing};
+  const telar::testing::Case case_history_crosses_long_commands{"prompt_editor.history_crosses_long_commands", historyCrossesLongCommands};
+  const telar::testing::Case case_vim_commands{"prompt_editor.vim_commands", vimCommands};
+  const telar::testing::Case case_emacs_undoes_words{"prompt_editor.emacs_undoes_words", emacsUndoesWords};
+  const telar::testing::Case case_invalid_bytes_are_characters{"prompt_editor.invalid_bytes_are_characters", invalidBytesAreCharacters};
+  const telar::testing::Case case_deep_commands_run{"prompt_editor.deep_commands_run", deepCommandsRun};
+  const telar::testing::Case case_answer_follows_its_first_key{"prompt_editor.answer_follows_its_first_key", answerFollowsItsFirstKey};
   const telar::testing::Case case_text_model{"prompt_editor.text_model", textModel};
   const telar::testing::Case case_emacs{"prompt_editor.emacs", emacs};
   const telar::testing::Case case_vim_basics{"prompt_editor.vim_basics", vimBasics};

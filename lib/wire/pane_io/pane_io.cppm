@@ -29,11 +29,16 @@ export namespace telar {
   using telar::CreatePane;
   using telar::DetachPane;
   using telar::FrameAck;
+  using telar::max_pane_branch_bytes;
+  using telar::max_pane_command_bytes;
+  using telar::max_pane_directory_bytes;
+  using telar::max_pane_document_bytes;
   using telar::max_pane_list_entries;
   using telar::OpenPane;
   using telar::PaneCommand;
   using telar::PaneCwd;
   using telar::PaneExited;
+  using telar::PaneFacts;
   using telar::PaneForeground;
   using telar::PaneFrame;
   using telar::PaneGit;

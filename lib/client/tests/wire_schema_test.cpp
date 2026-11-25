@@ -142,7 +142,8 @@ namespace {
               {"AgentSnapshot", 0x0d98295029aede63},
           }},
       },
-      // Widens ReportAgent's state with failed and interrupted; the layouts are unchanged.
+      // Adds PaneFacts and widens ReportAgent's state with failed and interrupted; the layouts of
+      // the others are unchanged.
       SchemaLayouts{
           .schema = {'c', 'q', 'p', '0', '0', '0', '1', '3'},
           .layouts = {{

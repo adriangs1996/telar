@@ -21,6 +21,9 @@ Item {
     required property var typography
     // The height of a pane's header band.
     required property real headerHeight
+    // The header follows the chrome's text, and its buttons follow the header: they are drawn
+    // for the 32-point band of the default font and keep that share of a taller one.
+    readonly property real actionRatio: Math.max(ratio, headerHeight / 32)
     // The dialog open over the workbench, a Store.Dialog.
     required property int dialog
     // The search a prompt line hosts, {kind: a Store.Dialog, pane: the key of the pane whose line
@@ -223,7 +226,7 @@ Item {
                 paneKey: pane.record.key
                 colors: root.colors
                 typography: root.typography
-                ratio: root.ratio
+                ratio: root.actionRatio
                 entries: pane.fullscreenEntries
                 prefixPending: root.prefixPending
                 entryRoom: pane.selectorRoom
@@ -267,7 +270,7 @@ Item {
                     paneKey: pane.record.key
                     colors: root.colors
                     typography: root.typography
-                    ratio: root.ratio
+                    ratio: root.actionRatio
                     entries: pane.fullscreenEntries
                     prefixPending: root.prefixPending
                     entryRoom: pane.selectorRoom

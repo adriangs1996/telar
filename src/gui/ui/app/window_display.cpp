@@ -71,6 +71,12 @@ namespace telar::gui::qt {
     return static_cast<qreal>(configuration().chrome_scale);
   }
 
+  qreal WindowDisplay::chromeTextRatio() const {
+    const auto density = this->density();
+
+    return static_cast<qreal>(metrics(density).chrome.text_ratio) / density;
+  }
+
   QVariantMap WindowDisplay::geometry() const {
     const auto& font = configuration().font;
     const auto density = this->density();

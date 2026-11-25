@@ -493,7 +493,7 @@ namespace telar::gui::application {
       return;
     }
 
-    if (prompt::edits(*this, pane_id)) {
+    if (prompt::edits(*this, pane_id) && !prompt::toProgram(*this, pane_id, bytes)) {
       prompt::text(*this, pane_id, bytes);
       return;
     }

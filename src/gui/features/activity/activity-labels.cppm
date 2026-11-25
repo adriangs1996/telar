@@ -93,7 +93,7 @@ export {
 
       struct Activity {
         std::string_view text;
-        PaletteRole color = PaletteRole::overlay1;
+        PaletteRole color = PaletteRole::subtext0;
         bool plan = false;
       };
 
