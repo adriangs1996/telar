@@ -92,6 +92,19 @@ Only the validated title, source, and state are persisted by `session_id` in
 the history database. Prompt bytes are cleared when the job starts or is
 discarded.
 
+## What survives a restart
+
+The session checkpoint keeps, for each pane whose agent it resumes, the
+session, the title a person or the agent gave it, and the agent's final
+message, whole. When the runtime starts again and sees that agent in its
+pane, the agent takes them back before its hooks report anything: its card
+shows what it last said while it rests, and the message it reports next
+replaces it. A checkpoint written before the final message was kept restores
+none.
+
+The last event and the plan are not kept. The event line is projected from
+evidence that expires, and a plan belongs to the turn the restart ended.
+
 ## Focus projection
 
 The focused pane is the sole source of truth for the agent highlight. Sidebar
@@ -166,6 +179,40 @@ place of the launching shell, so it is not a shell. The list holds at most
 which advances when a pane joins or leaves the list or its foreground group,
 name, shell state or ports change, plus the workspace revision, so tab moves
 resend it.
+
+For every pane of that list the runtime also publishes `PaneFacts` (since
+schema `cqp00013`), one message per pane:
+
+| Field | Bound | Source |
+| --- | --- | --- |
+| `command_state` | `none`, `running`, `finished` | The newest command of the pane's integrated shell, from its signed marks. `none` for a pane without an integrated shell, and until its shell runs one. An `ssh` that hosts a remote shell is `running` until it returns. |
+| `command`, `command_truncated` | first line, at most 160 bytes | The text the shell ran, as its command block reads it. `command_truncated` is set when the command had more lines or a longer first one. |
+| `exit_code` | optional `i32` | The status a finished command reported; none while it runs and for a command a new prompt interrupted. |
+| `duration_ms` | `u32` | How long a finished command ran; 0 otherwise. |
+| `directory` | at most 48 bytes | The pane's working directory as an agent's `cwd_label` writes it, the home as `~`; empty when the path holds what display text does not take. |
+| `in_workspace` | flag | The directory is the pane's workspace's, or lies in it. |
+| `branch`, `dirty` | at most 96 bytes, flag | The branch of the repository the integrated shell works in, read after each command, and whether it has staged, unstaged or conflicted changes; empty outside a repository and for a pane without an integrated shell. |
+
+A pane's facts follow the list that names it and are sent again, for that
+pane alone, when a command starts or ends, its directory changes or its
+repository reads differently. A command or a branch that is not display text
+is left out like the directory, so one pane never ends the delivery to every
+client that lists the panes. The command is kept apart from the pane's
+command blocks, so it stays after `clear` drops the rows a block was anchored
+to. A shell builtin counts like any command: the marks are the shell's, not
+the foreground process's. A runtime older than `cqp00013` sends none, and
+every pane then shows as one that ran nothing.
+
+The window keeps the facts with the pane in its list replica; a newer list
+that still names the pane leaves them, and a list from a runtime that
+replaced the previous one drops them. A process card reads `command`,
+`commandState` (`none`, `running`, `finished`), `commandTruncated`,
+`exitCode` (absent unless a finished command reported one),
+`commandDuration` (`12s`, `3m`, as the ages are written), `cwd`, `branch`
+and `dirty`. When a pane's shell read no repository and the pane works in
+its workspace, `branch` and `dirty` are its workspace's. An agent card
+reads `tab` and `cwd` from its snapshot entry and `branch` and `dirty` from
+its workspace.
 
 The observation worker reads the ports when the foreground changes and every
 2 seconds while a program holds the terminal; idle shells and agent panes
