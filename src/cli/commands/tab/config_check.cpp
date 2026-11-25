@@ -52,7 +52,7 @@ namespace telar::runtime::cli {
         diagnostic("InvalidConfig", "config.lua must return a table");
       }
 
-      constexpr ds::Array allowed{"api_version", "theme", "client", "gui", "runtime", "plugins", "profiles"};
+      constexpr ds::Array allowed{"api_version", "theme", "themes", "client", "gui", "runtime", "plugins", "profiles"};
 
       root.eachField([&](std::string_view name, const lua::Value&) {
         if (std::ranges::find(allowed, name) == allowed.end()) {
