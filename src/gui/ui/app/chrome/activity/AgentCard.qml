@@ -20,7 +20,8 @@ ActivityFrame {
     // The title takes what the state leaves of its row.
     readonly property real titleWidth: Math.max(0, rowWidth - (status.visible ? status.usedWidth + (status.usedWidth > 0 ? geometry.gap : 0) : rowWidth / 2 + geometry.gap))
     // What happens in the pane: the agent's signal, or the command a process runs or ran last.
-    readonly property string commandLine: record.commandLine ?? ""
+    // An editor has no command: it shows the file its focused window holds.
+    readonly property string commandLine: (record.commandLine ?? "").length > 0 ? record.commandLine : (record.document ?? "")
     readonly property string happening: !process ? (record.signal ?? "") : commandLine.length > 0 ? commandLine : (record.dim ?? false) ? "No commands yet" : "No command"
     // Where it runs, most general first. A tab named after the card or its project says nothing.
     readonly property string tab: record.tab ?? ""

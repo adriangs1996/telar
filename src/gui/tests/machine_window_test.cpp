@@ -1372,6 +1372,7 @@ namespace {
           PaneListEntry{.pane_id = 21, .pane_generation = 1, .location = {.workspace = {.kind = WorkspaceLocation::Kind::workspace, .id = 2}, .tab_id = 21}, .foreground = "node", .foreground_age_s = 720, .ports = served.view()},
           PaneListEntry{.pane_id = 22, .pane_generation = 1, .location = {.workspace = {.kind = WorkspaceLocation::Kind::workspace, .id = 5}, .tab_id = 22}, .foreground = "zsh", .foreground_age_s = 46800, .shell = true},
           PaneListEntry{.pane_id = 23, .pane_generation = 1, .location = {.workspace = {.kind = WorkspaceLocation::Kind::workspace, .id = 3}, .tab_id = 23}, .foreground = "zsh", .foreground_age_s = 8, .shell = true},
+          PaneListEntry{.pane_id = 24, .pane_generation = 1, .location = {.workspace = {.kind = WorkspaceLocation::Kind::workspace, .id = 1}, .tab_id = 24}, .foreground = "nvim", .foreground_age_s = 1500},
       };
       constexpr std::uint32_t failed_ms = 4000;
       constexpr std::uint32_t console_ms = 12000;
@@ -1386,8 +1387,10 @@ namespace {
       fixture.local_runtime->send(PaneFacts{.pane_id = 21, .pane_generation = 1, .command_state = PaneCommandState::running, .command = "npm run dev -- --inspect", .directory = "~/storefront/web", .in_workspace = true, .branch = "main"});
       fixture.local_runtime->send(PaneFacts{.pane_id = 22, .pane_generation = 1, .command_state = PaneCommandState::finished, .command = "ansible-playbook site.yml", .exit_code = 0, .duration_ms = console_ms, .directory = "~/fleet", .in_workspace = true, .branch = "main"});
       fixture.local_runtime->send(PaneFacts{.pane_id = 23, .pane_generation = 1, .directory = "~/labs", .in_workspace = true});
-      // Eight agents here, the one that waits elsewhere, the processes' header and four processes.
-      constexpr int listed = 14;
+      // An editor has no command: its facts name the file its focused window shows.
+      fixture.local_runtime->send(PaneFacts{.pane_id = 24, .pane_generation = 1, .directory = "~/telar/docs", .in_workspace = true, .document = "sidebar.md +"});
+      // Eight agents here, the one that waits elsewhere, the processes' header and five processes.
+      constexpr int listed = 15;
 
       QTRY_COMPARE_WITH_TIMEOUT(application.activity()->rows()->rowCount(), listed, wait_ms);
       QVERIFY(waitForSynchronizedFrame(*window, wait_ms));
@@ -1482,6 +1485,9 @@ namespace {
       // a mark and how long it took when it ended well, its exit status when it failed.
       QCOMPARE(said(QStringLiteral("node"), "agentSignal"), QStringLiteral("npm run dev -- --inspect"));
       QCOMPARE(said(QStringLiteral("node"), "agentProjectLabel"), QStringLiteral("storefront · ~/storefront/web"));
+      // An editor's second row is the file it shows, where another program would say `No command`.
+      QCOMPARE(said(QStringLiteral("nvim"), "agentSignal"), QStringLiteral("sidebar.md +"));
+      QCOMPARE(said(QStringLiteral("nvim"), "agentProjectLabel"), QStringLiteral("telar · ~/telar/docs"));
       QCOMPARE(shown(QStringLiteral("npm run dev -- --inspect"), "processPort"), qsizetype{3});
       QCOMPARE(shown(QStringLiteral("npm run dev -- --inspect"), "processResult"), qsizetype{0});
       QCOMPARE(shown(QStringLiteral("just gui-case sidebar"), "processResultGlyph"), qsizetype{1});

@@ -401,6 +401,7 @@ namespace telar {
   // The directory is labelled as the agent snapshot labels an agent's.
   inline constexpr std::size_t max_pane_directory_bytes = max_cwd_label_bytes;
   inline constexpr std::size_t max_pane_branch_bytes = 96;
+  inline constexpr std::size_t max_pane_document_bytes = max_pane_command_bytes;
 
   struct PaneFacts {
     std::uint64_t pane_id{};
@@ -423,12 +424,15 @@ namespace telar {
     std::string_view branch;
     // That repository has staged, unstaged or conflicted changes.
     bool dirty = false;
+    // What an editor pane titles itself: the file its focused window shows, and a mark while it
+    // has unwritten changes. Cut to max_pane_document_bytes; empty for every other pane.
+    std::string_view document;
 
     void validate() const;
   };
 
   template <>
   struct MessageSchema<PaneFacts>
-      : Schema<Direction::server, ServerTag::pane_facts, Field<&PaneFacts::pane_id, NonzeroU64, "pane_id">, Field<&PaneFacts::pane_generation, NonzeroU64, "pane_generation">, Field<&PaneFacts::command_state, EnumByte<PaneCommandState, 2>, "command_state">, Field<&PaneFacts::command, DisplayText16<max_pane_command_bytes>, "command">, Field<&PaneFacts::command_truncated, BoolByte, "command_truncated">, Field<&PaneFacts::exit_code, OptionalValue<i32>, "exit_code">, Field<&PaneFacts::duration_ms, u32, "duration_ms">, Field<&PaneFacts::directory, DisplayText16<max_pane_directory_bytes>, "directory">, Field<&PaneFacts::in_workspace, BoolByte, "in_workspace">, Field<&PaneFacts::branch, DisplayText16<max_pane_branch_bytes>, "branch">, Field<&PaneFacts::dirty, BoolByte, "dirty">> {};
+      : Schema<Direction::server, ServerTag::pane_facts, Field<&PaneFacts::pane_id, NonzeroU64, "pane_id">, Field<&PaneFacts::pane_generation, NonzeroU64, "pane_generation">, Field<&PaneFacts::command_state, EnumByte<PaneCommandState, 2>, "command_state">, Field<&PaneFacts::command, DisplayText16<max_pane_command_bytes>, "command">, Field<&PaneFacts::command_truncated, BoolByte, "command_truncated">, Field<&PaneFacts::exit_code, OptionalValue<i32>, "exit_code">, Field<&PaneFacts::duration_ms, u32, "duration_ms">, Field<&PaneFacts::directory, DisplayText16<max_pane_directory_bytes>, "directory">, Field<&PaneFacts::in_workspace, BoolByte, "in_workspace">, Field<&PaneFacts::branch, DisplayText16<max_pane_branch_bytes>, "branch">, Field<&PaneFacts::dirty, BoolByte, "dirty">, Field<&PaneFacts::document, DisplayText16<max_pane_document_bytes>, "document">> {};
 
 } // namespace telar

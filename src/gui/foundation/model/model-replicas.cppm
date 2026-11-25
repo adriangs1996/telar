@@ -69,6 +69,8 @@ export {
       runtime::FixedText<max_pane_command_bytes> command;
       runtime::FixedText<max_pane_directory_bytes> directory;
       runtime::FixedText<max_pane_branch_bytes> branch;
+      // The file an editor pane shows in its focused window; empty for every other pane.
+      runtime::FixedText<max_pane_document_bytes> document;
 
       // Whether these are the facts `message` carries.
       [[nodiscard]] bool same(const PaneFacts& message) const noexcept;

@@ -134,6 +134,8 @@ namespace telar::gui::qt {
         {QStringLiteral("commandLine"), toQString(facts.command.view())},
         {QStringLiteral("commandState"), commandStateName(facts.command_state)},
         {QStringLiteral("commandTruncated"), facts.command_truncated},
+        // The file an editor pane shows in its focused window, which stands for the command it has not.
+        {QStringLiteral("document"), toQString(facts.document.view())},
         // The status the command exited with; invalid while it runs and when its shell reported none.
         {QStringLiteral("exitCode"), finished && facts.exit_code ? QVariant{*facts.exit_code} : QVariant{}},
         // How long a finished command ran, as the cards write an age: `12s`, `3m`, `2h`.

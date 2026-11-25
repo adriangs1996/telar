@@ -392,10 +392,14 @@ namespace {
 
     check(session.paneFactsRevision() == 2 && current.command_state == PaneCommandState::running && current.command.view() == "npm run dev" && current.command_truncated && !current.exit_code && current.duration_ms == 0 && current.branch.view().empty() && !current.dirty && !current.in_workspace);
 
+    // An editor's facts name the file its focused window shows, and no command.
+    telar::gui::application::tests::session_fixture::deliver(session, PaneFacts{.pane_id = 1, .pane_generation = 1, .directory = "~/sandbox/telar", .document = "notes.md +"});
+    check(session.paneFactsRevision() == 3 && session.paneList().back().facts.document.view() == "notes.md +" && session.paneList().back().facts.command.view().empty(), "an editor's document must replace the command the pane had");
+
     // Another runtime may give a pane of its own the same identity.
     session.disconnected();
     telar::gui::application::tests::session_fixture::deliver(session, PaneList{.revision = 1, .entries = entries});
-    check(session.paneList().front().facts.command.view().empty() && session.paneList().front().facts.directory.view().empty(), "a replacement runtime's pane kept the facts of the previous one");
+    check(session.paneList().front().facts.command.view().empty() && session.paneList().front().facts.directory.view().empty() && session.paneList().front().facts.document.view().empty(), "a replacement runtime's pane kept the facts of the previous one");
 
     bool rejected = false;
 

@@ -218,11 +218,12 @@ schema `cqp00013`), one message per pane:
 | `duration_ms` | `u32` | How long a finished command ran; 0 otherwise. |
 | `directory` | at most 48 bytes | The pane's working directory as an agent's `cwd_label` writes it, the home as `~`; empty when the path holds what display text does not take. |
 | `in_workspace` | flag | The directory is the pane's workspace's, or lies in it. |
+| `document` | at most 160 bytes | What an editor pane titles itself: the file its focused window shows, with `+` while it has unwritten changes. Empty for every other pane, whose title is its program's to set. |
 | `branch`, `dirty` | at most 96 bytes, flag | The branch of the repository the integrated shell works in, read after each command, and whether it has staged, unstaged or conflicted changes; empty outside a repository and for a pane without an integrated shell. |
 
 A pane's facts follow the list that names it and are sent again, for that
-pane alone, when a command starts or ends, its directory changes or its
-repository reads differently. A command or a branch that is not display text
+pane alone, when a command starts or ends, its directory changes, its
+repository reads differently or its editor shows another file. A command or a branch that is not display text
 is left out like the directory, so one pane never ends the delivery to every
 client that lists the panes. The command is kept apart from the pane's
 command blocks, so it stays after `clear` drops the rows a block was anchored
@@ -235,8 +236,8 @@ that still names the pane leaves them, and a list from a runtime that
 replaced the previous one drops them. A process card reads `commandLine`,
 `commandState` (`none`, `running`, `finished`), `commandTruncated`,
 `exitCode` (absent unless a finished command reported one),
-`commandDuration` (`12s`, `3m`, as the ages are written), `cwd`, `branch`
-and `dirty`. When a pane's shell read no repository and the pane works in
+`commandDuration` (`12s`, `3m`, as the ages are written), `document`, `cwd`,
+`branch` and `dirty`. When a pane's shell read no repository and the pane works in
 its workspace, `branch` and `dirty` are its workspace's. An agent card
 reads `tab` and `cwd` from its snapshot entry and `branch` and `dirty` from
 its workspace.
@@ -264,8 +265,9 @@ that left closes it on the right: the ports the program listens on while it
 serves, each as the terminal writes it and in the terminal's face (`:3000`,
 `:3000 :9229`, then `+N` for the rest), a green mark and how long the command
 took when it ended well (`✓ 12s`), a red mark and its exit status when it
-failed (`✕ 1`). A pane whose shell ran nothing reads `No commands yet`, and a
-program without a command of the shell reads `No command`. The third says
+failed (`✕ 1`). An editor pane has no command: its second row is the file its
+focused window shows. A pane whose shell ran nothing reads `No commands yet`,
+and any other program without a command of the shell reads `No command`. The third says
 where: the workspace, then the pane's directory, and on the right the branch
 with a dot while it has changes. Clicking a card visits its pane the way an
 agent card does; a process card has no peek.

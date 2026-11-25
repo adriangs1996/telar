@@ -153,7 +153,7 @@ namespace telar::gui::inline foundation::inline model {
   }
 
   bool ListedPaneFacts::same(const PaneFacts& message) const noexcept {
-    return command_state == message.command_state && command_truncated == message.command_truncated && in_workspace == message.in_workspace && dirty == message.dirty && exit_code == message.exit_code && duration_ms == message.duration_ms && command.view() == message.command && directory.view() == message.directory && branch.view() == message.branch;
+    return command_state == message.command_state && command_truncated == message.command_truncated && in_workspace == message.in_workspace && dirty == message.dirty && exit_code == message.exit_code && duration_ms == message.duration_ms && command.view() == message.command && directory.view() == message.directory && branch.view() == message.branch && document.view() == message.document;
   }
 
   template <Allocator Memory>
@@ -260,6 +260,7 @@ namespace telar::gui::inline foundation::inline model {
     known.command.assign(facts.command);
     known.directory.assign(facts.directory);
     known.branch.assign(facts.branch);
+    known.document.assign(facts.document);
     ++facts_revision_;
 
     return true;

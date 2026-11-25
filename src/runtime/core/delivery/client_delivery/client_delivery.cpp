@@ -40,13 +40,20 @@ namespace telar::runtime {
       return terminal == nullptr || !terminal->blocks ? nullptr : &*terminal->blocks;
     }
 
+    // What an editor pane titles itself, which names the file its focused window shows, and the
+    // count of the times it changed; nothing for any other pane, whose title is its program's to
+    // set as it likes.
+    ProgramTitle documentOf(const Pane& pane) noexcept {
+      return pane.template as<NvimBody>() == nullptr ? ProgramTitle{} : programTitle(pane);
+    }
+
     // What a client that heard the pane's facts now has heard: the pane, where it is, and the
-    // count of the changes to its command, its directory and its repository. Each count only
-    // grows, so their sum moves when any of them does.
+    // count of the changes to its command, its directory, its repository and its document. Each
+    // count only grows, so their sum moves when any of them does.
     ClientSession::FactsStamp factsStamp(const Pane& pane) noexcept {
       const auto* blocks = commandBlocks(pane);
 
-      return {.pane = pane.id, .generation = pane.generation, .workspace = pane.location.workspace.id, .revision = pane.cwd_revision + pane.git_revision + (blocks == nullptr ? 0 : blocks->commandRevision())};
+      return {.pane = pane.id, .generation = pane.generation, .workspace = pane.location.workspace.id, .revision = pane.cwd_revision + pane.git_revision + documentOf(pane).revision + (blocks == nullptr ? 0 : blocks->commandRevision())};
     }
 
     // Whether `cwd` is the workspace's directory, or lies in it.
@@ -89,6 +96,10 @@ namespace telar::runtime {
       if (const auto branch = utf8Prefix(pane.git.branch.view(), max_pane_branch_bytes); pane.git.repository && displayable(branch)) {
         facts.branch = branch;
         facts.dirty = !branch.empty() && pane.git.changes_known && (pane.git.staged != 0 || pane.git.unstaged != 0 || pane.git.conflicted != 0);
+      }
+
+      if (const auto document = utf8Prefix(documentOf(pane).text, max_pane_document_bytes); displayable(document)) {
+        facts.document = document;
       }
 
       return facts;
