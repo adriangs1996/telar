@@ -186,6 +186,8 @@ The presets are:
 | `tokyo-night` | `tokyonight` is an alias. |
 | `kanagawa` | Kanagawa Wave. `kanagawa-wave` is an alias. |
 | `kanagawa-dragon` | |
+| `gruvbox` | Gruvbox dark on `#282828`, with `#fe8019` accents. |
+| `gruvbox-hard` | Gruvbox dark on the hard `#1d2021` background, with `#fe8019` accents. |
 | `pierre-dark` | |
 | `pierre-dark-soft` | |
 | `terminal` | A neutral palette. `default` is an alias. |
@@ -932,9 +934,9 @@ The actions: `submit`, `newline`, `cancel`, `complete`, `accept_suggestion`,
 ### `runtime.agents`
 
 A list of agent manifests: how Telar recognizes a coding agent in a pane and
-how it shows it. Telar ships manifests for `claude`, `codex`, `pi`, `cursor`
-and `opencode`. An entry with one of those names changes only the fields it
-sets. Any other name adds a new agent, up to 27.
+how it shows it. Telar ships manifests for `claude`, `codex`, `pi`, `cursor`,
+`opencode` and `antigravity`. An entry with one of those names changes only the
+fields it sets. Any other name adds a new agent, up to 26.
 
 ```lua
 runtime = {

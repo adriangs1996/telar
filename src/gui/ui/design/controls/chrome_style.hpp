@@ -24,6 +24,7 @@ namespace telar::gui::qt {
     Q_PROPERTY(qreal selectionAlpha READ selectionAlpha CONSTANT)
     Q_PROPERTY(qreal outlineAlpha READ outlineAlpha CONSTANT)
     Q_PROPERTY(qreal focusAlpha READ focusAlpha CONSTANT)
+    Q_PROPERTY(qreal wellAlpha READ wellAlpha CONSTANT)
 
   public:
     explicit ChromeStyle(QObject* parent = nullptr)
@@ -59,6 +60,10 @@ namespace telar::gui::qt {
 
     [[nodiscard]] qreal focusAlpha() const noexcept {
       return gui::ChromeStyle::focus_alpha;
+    }
+
+    [[nodiscard]] qreal wellAlpha() const noexcept {
+      return gui::ChromeStyle::well_alpha;
     }
   };
 

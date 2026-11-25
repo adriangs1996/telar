@@ -309,16 +309,17 @@ namespace telar {
     pi = 3,
     cursor = 4,
     opencode = 5,
+    antigravity = 6,
     last_custom = 32,
   };
 
-  inline constexpr Byte first_custom_agent_provider = 6;
+  inline constexpr Byte first_custom_agent_provider = 7;
   inline constexpr Byte max_agent_provider_index = static_cast<Byte>(AgentProvider::last_custom);
 
   // The agents telar knows without a manifest, in the order of their values: the one list of them,
   // which the configuration, the hooks and the window walk. A built-in added to the enum joins it,
   // or the assertions below fail.
-  inline constexpr ds::Array built_in_agent_providers{AgentProvider::claude, AgentProvider::codex, AgentProvider::pi, AgentProvider::cursor, AgentProvider::opencode};
+  inline constexpr ds::Array built_in_agent_providers{AgentProvider::claude, AgentProvider::codex, AgentProvider::pi, AgentProvider::cursor, AgentProvider::opencode, AgentProvider::antigravity};
 
   static_assert(built_in_agent_providers.size() + 1 == first_custom_agent_provider);
   static_assert(static_cast<Byte>(built_in_agent_providers.back()) + 1 == first_custom_agent_provider);

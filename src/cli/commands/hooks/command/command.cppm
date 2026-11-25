@@ -123,6 +123,8 @@ export {
       [[nodiscard]] bool subagent() const;
       [[nodiscard]] std::string_view workspace() const noexcept;
       [[nodiscard]] std::string_view toolEvent() const;
+      [[nodiscard]] std::string_view toolName() const;
+      [[nodiscard]] std::string_view toolCallId() const;
       [[nodiscard]] AgentBlockedReason blockedReason() const;
 
       [[nodiscard]] Memory& memory() const noexcept;
@@ -141,12 +143,17 @@ export {
       void readHookFields();
       void readCursorFields();
       void readClaudeFields();
+      void readAntigravityFields();
       void strictBoolean(std::string_view name);
-      static JsonValue toolObject(const Object& fields);
+      // The arguments of the tool the event names, which Antigravity nests in its toolCall.
+      [[nodiscard]] ds::Option<JsonValue> toolInput() const;
+      static JsonValue objectOrEmpty(ds::Option<JsonValue> value);
 
       Memory& memory_;
       AgentProvider provider_;
       Object fields_;
+      // Antigravity's toolCall: the tool's name, id and arguments. Empty for the other agents.
+      tbc::val_self<Object> call_;
       tbc::val_self<Object> tools_;
       std::size_t background_work_ = 0;
       ds::Option<ds::String<Memory>> workspace_;

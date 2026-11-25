@@ -293,6 +293,39 @@ namespace telar::runtime::cli::hooks {
     return report;
   }
 
+  tbc::val_a<ds::Option<ReportAgent>> antigravityLifecycle(tbc::ref_a<Payload> input, tbc::mut_a<FixedText<display_line_bytes>> event) {
+    const auto name = input.event();
+    ReportAgent report{.session = sessionReference(input.session())};
+
+    // Antigravity starts a conversation with its first prompt, and calls the model right after;
+    // neither an interrupt nor a permission the user denies reaches a hook, so the screen ends those turns.
+    if (name == "SessionStart") {
+      report.state = AgentReportState::ready;
+    } else if (name == "PreInvocation") {
+      report.state = AgentReportState::working;
+    } else if (name == "PreToolUse" || name == "PostToolUse") {
+      // A tool call runs before the permission it may ask for, which the screen reads.
+      report.state = AgentReportState::working;
+      toolEvent(event, input);
+    } else if (name == "Stop") {
+      const auto reason = input.fields().text("terminationReason");
+      const auto error = input.fields().text("error");
+
+      report.state = AgentReportState::ready;
+      if (reason == "USER_CANCELED") {
+        report.state = AgentReportState::interrupted;
+      } else if (reason == "ERROR" || !error.empty()) {
+        report.state = AgentReportState::failed;
+        eventLine(event, error.empty() ? "the agent loop stopped on an error" : error);
+      }
+    } else {
+      return ds::none;
+    }
+
+    report.event = event.view();
+    return report;
+  }
+
   tbc::val_a<ds::Option<ReportAgent>> cursorLifecycle(tbc::ref_a<Payload> input, tbc::mut_a<FixedText<display_line_bytes>> event, tbc::val_a<std::string_view> metadata) {
     const auto name = input.event();
     ReportAgent report{.session = sessionReference(input.session()), .session_file = metadata.size() <= session_file_bytes ? metadata : "", .session_file_kind = AgentSessionFileKind::cursor_meta};
@@ -415,7 +448,7 @@ namespace telar::runtime::cli::hooks {
 
   tbc::val_a<ds::Option<ReportAgentProgress>> progressReport(tbc::ref_a<Payload> input, tbc::mut_a<ReportTexts> texts) {
     const bool from_pi = input.provider() == AgentProvider::pi;
-    if ((input.provider() != AgentProvider::claude && input.provider() != AgentProvider::codex && !from_pi) || input.subagent()) {
+    if ((input.provider() != AgentProvider::claude && input.provider() != AgentProvider::codex && input.provider() != AgentProvider::antigravity && !from_pi) || input.subagent()) {
       return ds::none;
     }
 
@@ -509,6 +542,9 @@ namespace telar::runtime::cli::hooks {
       break;
     case AgentProvider::cursor:
       reports.lifecycle = cursorLifecycle(input, texts.event, files.cursor(input, environment));
+      break;
+    case AgentProvider::antigravity:
+      reports.lifecycle = antigravityLifecycle(input, texts.event);
       break;
     // Unknown and custom providers report no lifecycle. Custom providers take the values between
     // the named ones, which only the default reaches.

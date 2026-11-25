@@ -11,7 +11,7 @@ Arguments:
   --session-file   The transcript or state file, with its kind.
 
 Effects: an official report outranks what the runtime infers from the process and
-the screen; this is how `telar hook` reports for Claude Code, Codex, Pi, Cursor and
-OpenCode. Needs a running runtime; never starts one.
+the screen; this is how `telar hook` reports for Claude Code, Codex, Pi, Cursor,
+OpenCode and Antigravity. Needs a running runtime; never starts one.
 
 Results: nothing; with --json `pane_id`, `pane_generation`, `accepted`. Exit 0.

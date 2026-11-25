@@ -103,8 +103,11 @@ export {
     private:
       [[nodiscard]] bool isOwnCommand(const JsonNode<Memory>& hook) const noexcept;
 
+      // Whether the event's entries are hooks themselves rather than groups of them.
+      [[nodiscard]] bool flat(std::string_view event) const noexcept;
+
       template <typename Node>
-      tbc::val_a<Node*> findHook(tbc::mut_a<Node> entry) const noexcept;
+      tbc::val_a<Node*> findHook(tbc::mut_a<Node> entry, bool flat) const noexcept;
 
       bool installEvents(JsonNode<Memory>& hooks, std::span<const std::string_view> events, std::string_view command, std::string_view timeout) const;
 
@@ -114,7 +117,7 @@ export {
         std::string_view timeout;
       };
 
-      [[nodiscard]] JsonNode<Memory> newEntry(HookCommand command) const;
+      [[nodiscard]] JsonNode<Memory> newEntry(HookCommand command, bool flat) const;
 
       bool removeEvents(JsonNode<Memory>& hooks, std::span<const std::string_view> events) const;
       // Erases telar's own hooks from a list of them, noting in `changed` whether it erased any;

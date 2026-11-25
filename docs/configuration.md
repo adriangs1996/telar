@@ -264,7 +264,7 @@ theme = "cybervenom"
 Each preset defines Telar's chrome roles and the native terminal's foreground,
 background, ANSI palette and cursor colors. Built-ins are `zenburn` (the default),
 `shade`, `cybervenom`, `vesper`, `catppuccin` (Mocha), `tokyo-night`, `kanagawa` (Wave),
-`kanagawa-dragon`, `pierre-dark`,
+`kanagawa-dragon`, `gruvbox`, `gruvbox-hard`, `pierre-dark`,
 `pierre-dark-soft`, and `terminal`. The Pierre presets use the dark and dark-soft
 palettes from Adrian's Neovim theme, including syntax and ANSI colors.
 Shade is Nord on a `#191c22` polar night with `#d8dee9` text: control
@@ -279,6 +279,11 @@ surface on Zenburn's own grey scale. Roles are told apart by hue, not weight:
 keywords `#f0dfaf`, functions `#bde0f3`, types `#a7d1ce`, properties `#dfaf8f`,
 constants and numbers `#bfebbf`, strings `#cc9393`. It uses `#f0dfaf` accents
 and no italics or bold.
+The Gruvbox presets take gruvbox.nvim's dark palette, syntax and ANSI colors,
+with `#ebdbb2` text and `#fe8019` accents. `gruvbox` paints panes `#282828`;
+`gruvbox-hard` paints them `#1d2021`, where red clears 4.5:1 and comments reach
+4.47:1. Functions and strings share Gruvbox's green and are told apart by
+weight: functions bold, strings and comments italic.
 The window uses the preset's terminal
 colors; child truecolor and OSC overrides still apply. The `terminal` preset
 uses host-relative chrome roles and a neutral explicit palette, since the
@@ -593,10 +598,10 @@ Ghostty configuration files.
 `runtime.agents` is an array of agent manifests. A manifest is everything
 Telar knows about one coding agent without code: how to recognize it, how to
 show it, and which client capability it supports. Telar ships manifests for
-`claude`, `codex`, `pi`, `cursor` and `opencode`. Naming one of them extends or overrides the
+`claude`, `codex`, `pi`, `cursor`, `opencode` and `antigravity`. Naming one of them extends or overrides the
 shipped manifest; any other name creates a new agent that the sidebar, the
 `telar agent` command, notifications and the image shelf treat exactly like a
-built-in one. Up to 27 agents can be configured besides the built-in ones,
+built-in one. Up to 26 agents can be configured besides the built-in ones,
 32 in all.
 
 A manifest past a limit keeps what fits and the rest of the configuration
@@ -681,11 +686,11 @@ agents = {
 Three things stay in code and are not configurable, because each needs an
 agent-specific program rather than data:
 
-- **Session resume.** Only `claude`, `codex`, `pi`, `cursor` and `opencode` are resumed from a
+- **Session resume.** Only `claude`, `codex`, `pi`, `cursor`, `opencode` and `antigravity` are resumed from a
   checkpoint. A configured agent restores as
   a plain shell.
 - **Lifecycle hooks.** `telar integration <agent>` and `telar hook <agent>`
-  know the hook formats of the five built-ins (`src/cli/commands/hooks/`).
+  know the hook formats of the six built-ins (`src/cli/commands/hooks/`).
 
 Diagnostics name the entry and the field, for example
 `config.runtime.agents[2].icon must be exactly one cell wide`.

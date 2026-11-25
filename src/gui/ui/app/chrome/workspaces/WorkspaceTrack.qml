@@ -5,10 +5,9 @@ import QtQuick.Controls.Basic
 import Telar.Gui
 
 // The workspaces of the machine as one segmented control, in the runtime's order: each segment a
-// mark and a name, the active one filled. From three workspaces on, or when the bar runs short,
-// only the active one keeps its name and the others their mark, so the track leaves the tabs
-// their room; past that the ones that do not fit hide behind the control that opens the whole
-// list.
+// mark and a name, the active one filled. While the room holds every name they all show; when
+// it does not, only the active one keeps its name and the others their mark; past that the ones
+// that do not fit hide behind the control that opens the whole list.
 Item {
     id: root
 
@@ -42,13 +41,14 @@ Item {
         return count === 0 ? 0 : total + (count - 1) * spacing;
     }
     readonly property real chrome: 2 * inset + spacing + moreWidth
-    // The most workspaces that all show their name.
-    readonly property int namedLimit: 2
-    readonly property bool few: count <= namedLimit
-    readonly property real preferredWidth: count === 0 ? 0 : (few ? namedTotal : compactTotal) + chrome
+    // The track with every name, and with only the active one's: the bar gives it the first when
+    // it has the room, else the second.
+    readonly property real namedWidth: count === 0 ? 0 : namedTotal + chrome
+    readonly property real shortWidth: count === 0 ? 0 : compactTotal + chrome
+    readonly property real preferredWidth: namedWidth
     readonly property real activeWidth: selectedIndex >= 0 && selectedIndex < namedWidths.length ? (namedWidths[selectedIndex] ?? compactWidth) : compactWidth
     readonly property real compactTotal: count === 0 ? 0 : activeWidth + Math.max(0, count - (selectedIndex >= 0 ? 1 : 0)) * compactWidth + Math.max(0, count - 1) * spacing
-    readonly property bool named: few && namedTotal + chrome <= room
+    readonly property bool named: count > 0 && namedWidth <= room
     readonly property real listRoom: Math.max(0, room - chrome)
     readonly property real listWidth: Math.min(named ? namedTotal : compactTotal, listRoom)
     readonly property bool overflowing: !named && compactTotal > listRoom
@@ -77,7 +77,7 @@ Item {
         width: root.width
         height: root.trackHeight
         radius: height / 2
-        color: Qt.alpha(root.colors.chromeText, 0.07)
+        color: Qt.alpha(root.colors.chromeText, ChromeStyle.wellAlpha)
     }
 
     ListView {
@@ -137,10 +137,12 @@ Item {
             background: NativeRoundedRectangle {
                 objectName: "workspaceSegmentSurface"
                 radius: height / 2
-                color: segment.current ? Qt.alpha(root.colors.chromeText, 0.1) : segment.hovered || segment.visualFocus ? Qt.alpha(root.colors.chromeText, ChromeStyle.hoverAlpha) : "transparent"
-                borderColor: segment.visualFocus ? root.colors.accent : root.colors.chromeText
-                borderAlpha: segment.visualFocus ? ChromeStyle.focusAlpha : 0.32
-                borderWidth: segment.current || segment.visualFocus ? root.ratio : 0
+                // The active segment is raised by its fill alone, so the well draws the only
+                // outline; a border marks keyboard focus.
+                color: segment.current ? Qt.alpha(root.colors.chromeText, 0.14) : segment.hovered || segment.visualFocus ? Qt.alpha(root.colors.chromeText, ChromeStyle.hoverAlpha) : "transparent"
+                borderColor: root.colors.accent
+                borderAlpha: ChromeStyle.focusAlpha
+                borderWidth: segment.visualFocus ? root.ratio : 0
             }
 
             HoverHandler { cursorShape: Qt.PointingHandCursor }
@@ -222,7 +224,7 @@ Item {
 
             ChromeToolTip {
                 visible: segment.hovered
-                text: segment.record.name + "\n" + (segment.record.detail ?? segment.record.path ?? "")
+                text: segment.record.name + "\n" + (segment.record.shownPath ?? segment.record.path ?? "")
                 colors: root.colors
                 typography: root.typography
                 ratio: root.ratio
@@ -273,7 +275,7 @@ Item {
         ProviderMark {
             objectName: "workspaceTrackMoreChevron"
             anchors.centerIn: parent
-            width: Math.round(14 * root.ratio)
+            width: Math.round(12 * root.ratio)
             height: width
             symbol: "chevron-down"
             color: root.colors.subtext0

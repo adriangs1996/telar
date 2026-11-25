@@ -53,7 +53,7 @@ namespace {
     using Geometry = MachineChromeGeometry;
     const ChromeMetrics chrome;
     constexpr Rect area{.x = 8, .y = 40, .width = 224, .height = 86};
-    const auto first = Geometry::listRow(area, chrome, 0, true);
+    const auto first = Geometry::listRow(area, chrome, 0, true, false);
     constexpr Rect bounds{.x = 8, .y = 40, .width = 224, .height = 43};
     constexpr Rect avatar{.x = 16, .y = 50, .width = 24, .height = 24};
     constexpr Rect dot{.x = 35, .y = 69, .width = 7, .height = 7};
@@ -63,7 +63,7 @@ namespace {
 
     check(first.bounds == bounds && first.avatar == avatar && first.dot == dot && first.stack == stack, "a machine row keeps its avatar, link dot and agent stack apart");
     check(first.label == label && first.status == status, "the status line sits under the label in the cards' text column");
-    const auto second = Geometry::listRow(area, chrome, 1, false);
+    const auto second = Geometry::listRow(area, chrome, 1, false, false);
     constexpr Rect wide_label{.x = 46, .y = 88, .width = 178, .height = 17};
 
     check(second.bounds.y == bounds.y + bounds.height && second.stack.empty() && second.label == wide_label, "a row without agents gives the stack's room to its text");
@@ -72,11 +72,28 @@ namespace {
     constexpr float natural_width = 146;
     constexpr float natural_width_with_stack = 194;
 
-    check(Geometry::listNaturalWidth(chrome, text_advance, false) == natural_width && Geometry::listNaturalWidth(chrome, text_advance, true) == natural_width_with_stack, "the natural width holds the whole text and, when shown, the stack");
+    check(Geometry::listNaturalWidth(chrome, text_advance, false, false) == natural_width && Geometry::listNaturalWidth(chrome, text_advance, true, false) == natural_width_with_stack, "the natural width holds the whole text and, when shown, the stack");
+    constexpr float natural_width_with_mark = 166;
+
+    check(Geometry::listNaturalWidth(chrome, text_advance, false, true) == natural_width_with_mark, "the roster's natural width keeps the mark's column past the text");
+    const auto marked = Geometry::listRow(area, chrome, 0, true, true);
+    constexpr Rect mark{.x = 210, .y = 55, .width = 14, .height = 14};
+    constexpr Rect marked_stack{.x = 162, .y = 40, .width = 42, .height = 43};
+
+    check(marked.mark == mark && marked.stack == marked_stack && marked.label.right() == marked_stack.x - 6, "the roster's mark ends the row, and the stack and the text stand before it");
+    check(second.mark.empty(), "a list with no mark keeps no column for one");
     ChromeMetrics enlarged;
 
     enlarged.text_ratio = 2;
-    check(Geometry::listRow(area, enlarged, 0, false).avatar.width == avatar.width * enlarged.text_ratio && Geometry::listRow(area, chrome, 0, false).avatar.width == avatar.width, "rows follow the chrome text, whatever the display ratio is");
+    check(Geometry::listRow(area, enlarged, 0, false, false).avatar.width == avatar.width * enlarged.text_ratio && Geometry::listRow(area, chrome, 0, false, false).avatar.width == avatar.width, "rows follow the chrome text, whatever the display ratio is");
+  }
+
+  void machineLabelsDropTheLinkLocalDomain() {
+    using Geometry = MachineChromeGeometry;
+
+    check(Geometry::shownLabel("Adrians-MacBook-Pro.local") == "Adrians-MacBook-Pro" && Geometry::shownLabel("studio.LOCAL") == "studio", "a macOS host name shows without its link-local domain, whatever its case");
+    check(Geometry::shownLabel("dev-01") == "dev-01" && Geometry::shownLabel(".local") == ".local" && Geometry::shownLabel("local") == "local", "a label with nothing before the domain, or without it, stays whole");
+    check(Geometry::shownLabel("build.localhost") == "build.localhost" && Geometry::shownLabel("box.example.com") == "box.example.com", "only the link-local domain is dropped");
   }
 
   void machineListStatusCountsActiveAgents() {
@@ -165,6 +182,7 @@ namespace {
 
   const telar::testing::Case case_color_names_keep_written_semantics{"machine_chrome.color_names_keep_written_semantics", colorNamesKeepWrittenSemantics};
   const telar::testing::Case case_machine_list_rows_place_avatar_text_and_stack{"machine_chrome.machine_list_rows_place_avatar_text_and_stack", machineListRowsPlaceAvatarTextAndStack};
+  const telar::testing::Case case_machine_labels_drop_the_link_local_domain{"machine_chrome.machine_labels_drop_the_link_local_domain", machineLabelsDropTheLinkLocalDomain};
   const telar::testing::Case case_machine_list_status_counts_active_agents{"machine_chrome.machine_list_status_counts_active_agents", machineListStatusCountsActiveAgents};
   const telar::testing::Case case_machine_control_ink_areas_keep_original_insets{"machine_chrome.machine_control_ink_areas_keep_original_insets", machineControlInkAreasKeepOriginalInsets};
   const telar::testing::Case case_inline_machine_facts_keep_original_state_and_geometry{"machine_chrome.inline_machine_facts_keep_original_state_and_geometry", inlineMachineFactsKeepOriginalStateAndGeometry};

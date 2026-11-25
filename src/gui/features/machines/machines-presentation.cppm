@@ -72,6 +72,8 @@ export {
       static constexpr float list_gap = 6;
       static constexpr float list_dot = 7;
       static constexpr float list_dot_overhang = 2;
+      // The column the roster keeps at the end of every row for the mark of the machine shown.
+      static constexpr float list_mark = 14;
       // The tab strip's front card and the two slivers behind it, with room for their tilt.
       static constexpr float stack_width = 42;
 
@@ -82,6 +84,7 @@ export {
         Rect label;
         Rect status;
         Rect stack;
+        Rect mark;
       };
 
       struct Control {
@@ -105,8 +108,13 @@ export {
       [[nodiscard]] static float listHeight(const ChromeMetrics& chrome, std::size_t rows) noexcept;
 
       // The width that shows a row's whole label and status line, whichever advances further.
-      [[nodiscard]] static float listNaturalWidth(const ChromeMetrics& chrome, float text_advance, bool stacked) noexcept;
-      [[nodiscard]] static ListRow listRow(Rect area, const ChromeMetrics& chrome, std::size_t index, bool stacked) noexcept;
+      // `marked` keeps the column of the roster's current mark.
+      [[nodiscard]] static float listNaturalWidth(const ChromeMetrics& chrome, float text_advance, bool stacked, bool marked) noexcept;
+      [[nodiscard]] static ListRow listRow(Rect area, const ChromeMetrics& chrome, std::size_t index, bool stacked, bool marked) noexcept;
+
+      // A label as the chrome shows it: without the `.local` a macOS host name ends in, which
+      // names the link-local domain and tells one machine from no other.
+      [[nodiscard]] static std::string_view shownLabel(std::string_view label) noexcept;
       [[nodiscard]] static float preferredSegment(const ChromeMetrics& chrome, float advance) noexcept;
       [[nodiscard]] static Control control(Rect area, const ChromeMetrics& chrome, Kind kind, float advance, bool attention) noexcept;
     };

@@ -178,6 +178,24 @@ namespace {
 
     check(zenburn.terminal.background == zenburn_bg_1, "Zenburn must paint the terminal zenburn-bg-1");
     check(default_theme_values == zenburn, "Zenburn must be the default theme");
+    const auto gruvbox = themeValuesByName("Gruvbox");
+    const auto gruvbox_hard = themeValuesByName("gruvbox_hard");
+    constexpr ThemeRgb dark0{40, 40, 40};
+    constexpr ThemeRgb dark0_hard{29, 32, 33};
+
+    check(gruvbox.base == ThemeName::gruvbox && gruvbox.terminal.background == dark0, "Gruvbox must paint the terminal dark0");
+    check(gruvbox_hard.base == ThemeName::gruvbox_hard && gruvbox_hard.terminal.background == dark0_hard, "Gruvbox hard must paint the terminal dark0_hard");
+    const auto gruvbox_func = gruvbox.syntaxStyle(SyntaxRole::func);
+    const auto gruvbox_string = gruvbox.syntaxStyle(SyntaxRole::string);
+
+    check(gruvbox_func.color == gruvbox_string.color && gruvbox_func.bold && !gruvbox_func.italic && gruvbox_string.italic && !gruvbox_string.bold, "Gruvbox must tell functions from strings by weight, as their green is shared");
+    auto hardened = gruvbox;
+
+    hardened.base = ThemeName::gruvbox_hard;
+    hardened.palette.atMut(static_cast<std::size_t>(PaletteRole::panel_bg)) = gruvbox_hard.color(PaletteRole::panel_bg);
+    hardened.terminal.background = dark0_hard;
+    hardened.terminal.cursor_text_color = dark0_hard;
+    check(hardened == gruvbox_hard, "the Gruvbox presets must differ only in the pane background");
   }
 
   // Zenburn's numbers and properties have no ANSI color: a pane's programs get them from the

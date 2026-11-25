@@ -261,9 +261,9 @@ namespace telar::runtime {
     case AgentStatus::working:
       return reported.status == AgentStatus::blocked;
     case AgentStatus::ready:
-      // Claude ends a turn the user interrupts, or a permission the user denies, with no hook. A
-      // turn waiting on background work shows the idle prompt until that work wakes it.
-      return known == AgentProvider::claude && report_state != AgentReportState::waiting && (reported.status == AgentStatus::working || reported.status == AgentStatus::blocked) && reported.observed.before(screen->observed) && now - screen->observed.milliseconds >= ready_settle.count();
+      // Claude and Antigravity end a turn the user interrupts, or a permission the user denies,
+      // with no hook. A turn waiting on background work shows the idle prompt until that work wakes it.
+      return (known == AgentProvider::claude || known == AgentProvider::antigravity) && report_state != AgentReportState::waiting && (reported.status == AgentStatus::working || reported.status == AgentStatus::blocked) && reported.observed.before(screen->observed) && now - screen->observed.milliseconds >= ready_settle.count();
     case AgentStatus::unknown:
     case AgentStatus::failed:
     case AgentStatus::done:

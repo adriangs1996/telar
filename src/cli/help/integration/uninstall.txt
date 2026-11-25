@@ -1,6 +1,6 @@
 telar integration uninstall: Remove telar's hooks (or extension/plugin) and skills for an agent, or its Neovim plugin
 
-Usage: telar integration uninstall claude|codex|pi|cursor|opencode|neovim|editor [--settings PATH | --legacy]
+Usage: telar integration uninstall claude|codex|pi|cursor|opencode|antigravity|neovim|editor [--settings PATH | --legacy]
 
 Arguments:
   --settings PATH  The file to edit instead of the default.

@@ -116,6 +116,7 @@ export {
       [[nodiscard]] bool codexApproval(const AgentManifest& manifest) const noexcept;
       [[nodiscard]] AgentScreenObservation codex() const noexcept;
       [[nodiscard]] AgentScreenObservation cursor() const noexcept;
+      [[nodiscard]] AgentScreenObservation antigravity() const noexcept;
 
       static constexpr std::uint32_t claude_prompt = 0x276f;
       AgentScreenView screen_;

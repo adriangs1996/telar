@@ -40,6 +40,7 @@ namespace {
     check(resume(AgentProvider::codex, uuid, true) == std::vector<std::string>{"codex", "resume", "--no-daemon", std::string{uuid}});
     check(resume(AgentProvider::codex, uuid) == std::vector<std::string>{"codex", "resume", std::string{uuid}});
     check(resume(AgentProvider::cursor, uuid) == std::vector<std::string>{"cursor-agent", "--resume", std::string{uuid}});
+    check(resume(AgentProvider::antigravity, uuid) == std::vector<std::string>{"agy", "--resume", std::string{uuid}});
     check(resume(AgentProvider::claude, "--dangerously-skip-permissions").empty(), "an invalid session produced arguments");
   }
 

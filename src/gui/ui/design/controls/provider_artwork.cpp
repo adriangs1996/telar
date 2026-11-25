@@ -37,7 +37,7 @@ namespace telar::gui::qt {
 
     const QByteArray& providerSheet() {
       [[clang::no_destroy]] static const auto pixels = [] {
-        QFile source{QStringLiteral(":/telar/fonts/provider-symbols-320x64.rgba")};
+        QFile source{QStringLiteral(":/telar/fonts/provider-symbols-384x64.rgba")};
         if (!source.open(QIODevice::ReadOnly)) {
           return QByteArray{};
         }
@@ -73,6 +73,8 @@ namespace telar::gui::qt {
           ThemedMark{.theme = ThemeName::terminal, .source = u":/telar/fonts/telar-mark-terminal.svg"},
           ThemedMark{.theme = ThemeName::cybervenom, .source = u":/telar/fonts/telar-mark-cybervenom.svg"},
           ThemedMark{.theme = ThemeName::zenburn, .source = u":/telar/fonts/telar-mark-zenburn.svg"},
+          ThemedMark{.theme = ThemeName::gruvbox, .source = u":/telar/fonts/telar-mark-gruvbox.svg"},
+          ThemedMark{.theme = ThemeName::gruvbox_hard, .source = u":/telar/fonts/telar-mark-gruvbox-hard.svg"},
       };
 
       const auto* const found = std::ranges::find_if(marks, [theme](const ThemedMark& mark) {
@@ -117,7 +119,7 @@ namespace telar::gui::qt {
   }
 
   QImage ProviderArtwork::symbol(QStringView name, int side) {
-    static constexpr ds::Array<QStringView, 6> names{u"bot", u"chevron-down", u"chevron-right", u"git-branch", u"server", u"square-terminal"};
+    static constexpr ds::Array<QStringView, 9> names{u"bot", u"check", u"chevron-down", u"chevron-right", u"git-branch", u"plus", u"search", u"server", u"square-terminal"};
     const auto* const found = std::ranges::find(names, name);
 
     return found == names.end() ? QImage{} : vector(QStringLiteral(":/telar/icons/%1.svg").arg(name), side);

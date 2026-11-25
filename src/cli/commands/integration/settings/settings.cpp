@@ -747,21 +747,27 @@ namespace telar::runtime::cli::integration {
     marker_.append(provider.name);
     worktree_command_.assign("telar_hook_bin=${TELAR_BIN_PATH:-'");
     worktree_command_.append(executable);
-    worktree_command_.append("'}; exec \"$telar_hook_bin\"");
+    // A hook that fails, even because the pane's telar predates the agent, succeeds: the shell
+    // stays to exit 0 instead of handing its status to telar.
+    worktree_command_.append(provider.fail_open ? "'}; \"$telar_hook_bin\"" : "'}; exec \"$telar_hook_bin\"");
     worktree_command_.append(marker_);
     command_.assign(R"([ -n "$TELAR_PANE_ID" ] && [ -n "$TELAR_PANE_GENERATION" ] || exit 0; )");
+    if (provider.fail_open) {
+      command_.append("trap 'exit 0' EXIT; ");
+    }
+
     command_.append(worktree_command_);
   }
 
   bool HookSettings::installed(const JsonNode<Memory>& settings, std::string_view event) const noexcept {
-    const auto* hooks = settings.find("hooks");
+    const auto* hooks = settings.find(provider_.hooks_key);
     const auto* entries = hooks == nullptr ? nullptr : hooks->find(event);
     if (entries == nullptr || entries->kind() != JsonKind::array) {
       return false;
     }
 
     return std::ranges::any_of(entries->children(), [&](const auto& entry) {
-      return findHook(entry) != nullptr;
+      return findHook(entry, flat(event)) != nullptr;
     });
   }
 
@@ -773,11 +779,11 @@ namespace telar::runtime::cli::integration {
       changed = true;
     }
 
-    if (const auto* hooks = settings.find("hooks"); (hooks != nullptr) && hooks->kind() != JsonKind::object) {
+    if (const auto* hooks = settings.find(provider_.hooks_key); (hooks != nullptr) && hooks->kind() != JsonKind::object) {
       throw CommandError{"SettingsFieldNotAnObject"};
     }
 
-    auto& hooks = settings.ensure("hooks", JsonKind::object);
+    auto& hooks = settings.ensure(provider_.hooks_key, JsonKind::object);
 
     changed = installEvents(hooks, provider_.events, command_, provider_.timeout) || changed;
     changed = installEvents(hooks, provider_.worktree_events, worktree_command_, worktree_timeout) || changed;
@@ -785,13 +791,18 @@ namespace telar::runtime::cli::integration {
   }
 
   bool HookSettings::uninstall(JsonNode<Memory>& settings) const {
-    auto* hooks = settings.findMut("hooks");
+    auto* hooks = settings.findMut(provider_.hooks_key);
     if (hooks == nullptr || hooks->kind() != JsonKind::object) {
       return false;
     }
 
     const bool lifecycle_changed = removeEvents(*hooks, provider_.events);
     const bool worktrees_changed = removeEvents(*hooks, provider_.worktree_events);
+
+    // A block of hooks named after telar is telar's alone: emptied, it goes too.
+    if (provider_.hooks_key != "hooks" && hooks->children().empty()) {
+      settings.remove(provider_.hooks_key);
+    }
 
     return lifecycle_changed || worktrees_changed;
   }
@@ -802,9 +813,13 @@ namespace telar::runtime::cli::integration {
     return command != nullptr && command->kind() == JsonKind::string && command->text().ends_with(marker_);
   }
 
+  bool HookSettings::flat(std::string_view event) const noexcept {
+    return provider_.flat_hooks || std::ranges::contains(provider_.flat_events, event);
+  }
+
   template <typename Node>
-  tbc::val_a<Node*> HookSettings::findHook(tbc::mut_a<Node> entry) const noexcept {
-    if (provider_.flat_hooks) {
+  tbc::val_a<Node*> HookSettings::findHook(tbc::mut_a<Node> entry, bool flat) const noexcept {
+    if (flat) {
       return isOwnCommand(entry) ? &entry : nullptr;
     }
 
@@ -849,7 +864,7 @@ namespace telar::runtime::cli::integration {
       bool present = false;
 
       for (auto& entry : entries.childrenMut()) {
-        auto* hook = findHook(entry);
+        auto* hook = findHook(entry, flat(event));
         if (hook == nullptr) {
           continue;
         }
@@ -862,7 +877,7 @@ namespace telar::runtime::cli::integration {
       }
 
       if (!present) {
-        entries.append(newEntry({.command = command, .timeout = timeout}));
+        entries.append(newEntry({.command = command, .timeout = timeout}, flat(event)));
         changed = true;
       }
     }
@@ -870,7 +885,7 @@ namespace telar::runtime::cli::integration {
     return changed;
   }
 
-  JsonNode<Memory> HookSettings::newEntry(HookCommand command) const {
+  JsonNode<Memory> HookSettings::newEntry(HookCommand command, bool flat) const {
     const auto hook = [&] {
       JsonNode<Memory> node{memory_};
 
@@ -883,11 +898,15 @@ namespace telar::runtime::cli::integration {
       return node;
     };
 
-    if (provider_.flat_hooks) {
+    if (flat) {
       return hook();
     }
 
     JsonNode<Memory> entry{memory_};
+
+    if (!provider_.matcher.empty()) {
+      entry.setString({.name = "matcher", .value = provider_.matcher});
+    }
 
     entry.ensure("hooks", JsonKind::array).append(hook());
     return entry;
@@ -919,7 +938,7 @@ namespace telar::runtime::cli::integration {
         auto& entry = entries->childrenMut()[index];
         bool empty = false;
 
-        if (provider_.flat_hooks) {
+        if (flat(event)) {
           empty = isOwnCommand(entry);
           changed = empty || changed;
         } else if (auto* commands = entry.findMut("hooks"); commands != nullptr && commands->kind() == JsonKind::array) {

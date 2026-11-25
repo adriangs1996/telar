@@ -1,6 +1,6 @@
 telar integration: Register telar's lifecycle hooks and skills with an agent CLI, or its plugin with Neovim; remove and inspect them
 
-Usage: telar integration install|uninstall|status claude|codex|pi|cursor|opencode|neovim [--settings PATH] [--legacy]
+Usage: telar integration install|uninstall|status claude|codex|pi|cursor|opencode|antigravity|neovim [--settings PATH] [--legacy]
 
 Commands:
   install         Add telar's hooks (or extension/plugin) and skills for an agent, or its Neovim plugin
@@ -8,7 +8,7 @@ Commands:
   status          Report which hooks, files and skills are installed for an agent, or for Neovim
 
 Files per agent, under the agent's own directory ($CLAUDE_CONFIG_DIR, $CODEX_HOME,
-$PI_CODING_AGENT_DIR, $XDG_CONFIG_HOME/opencode; Cursor always under ~):
+$PI_CODING_AGENT_DIR, $XDG_CONFIG_HOME/opencode; Cursor and Antigravity always under ~):
   claude    ~/.claude/settings.json hooks (SessionStart, UserPromptSubmit, PreToolUse,
             PermissionRequest, PostToolUse, Stop, StopFailure, Notification, SessionEnd,
             CwdChanged, WorktreeCreate, WorktreeRemove)
@@ -16,6 +16,8 @@ $PI_CODING_AGENT_DIR, $XDG_CONFIG_HOME/opencode; Cursor always under ~):
   cursor    ~/.cursor/hooks.json hooks
   pi        ~/.pi/agent/extensions/telar.ts, an extension
   opencode  ~/.config/opencode/plugins/telar.ts, a plugin
+  antigravity ~/.gemini/config/hooks.json, its own `telar` block of hooks
+            (SessionStart, PreInvocation, PreToolUse, PostToolUse, Stop)
 and beside them `skills/telar/SKILL.md` (how to discover and drive telar) and
 `skills/telar-coordinator/SKILL.md` (delegating tasks to worktree agents), each
 marked as telar's so only telar's copies are ever replaced or removed.

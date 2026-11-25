@@ -16,6 +16,9 @@ export {
       static constexpr float selection_alpha = 0.09F;
       static constexpr float outline_alpha = 0.12F;
       static constexpr float focus_alpha = 0.65F;
+      // The well the top bar's selectors sit on at rest: the machine switch and the workspace
+      // track.
+      static constexpr float well_alpha = 0.07F;
     };
 
   }

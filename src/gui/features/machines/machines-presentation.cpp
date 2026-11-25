@@ -118,6 +118,21 @@ namespace telar::gui::features::machines {
     return {storage.data(), static_cast<std::size_t>(end - storage.data()) + suffix.size()};
   }
 
+  std::string_view MachineChromeGeometry::shownLabel(std::string_view label) noexcept {
+    constexpr std::string_view link_local = ".local";
+
+    if (label.size() <= link_local.size()) {
+      return label;
+    }
+
+    const auto suffix = label.substr(label.size() - link_local.size());
+    const bool matches = std::ranges::equal(suffix, link_local, [](char left, char right) {
+      return (left >= 'A' && left <= 'Z' ? static_cast<char>(left - 'A' + 'a') : left) == right;
+    });
+
+    return matches ? label.substr(0, label.size() - link_local.size()) : label;
+  }
+
   float MachineChromeGeometry::listRowHeight(const ChromeMetrics& chrome) noexcept {
     return ChromeMetrics::lineHeight(chrome.body) + ChromeMetrics::lineHeight(chrome.small) + std::round(chrome.textPx(2 * list_vertical_padding));
   }
@@ -126,11 +141,11 @@ namespace telar::gui::features::machines {
     return listRowHeight(chrome) * static_cast<float>(rows);
   }
 
-  float MachineChromeGeometry::listNaturalWidth(const ChromeMetrics& chrome, float text_advance, bool stacked) noexcept {
-    return chrome.textPx((2 * list_padding) + list_avatar + list_gap) + (stacked ? chrome.textPx(list_gap + stack_width) : 0) + text_advance;
+  float MachineChromeGeometry::listNaturalWidth(const ChromeMetrics& chrome, float text_advance, bool stacked, bool marked) noexcept {
+    return chrome.textPx((2 * list_padding) + list_avatar + list_gap) + (stacked ? chrome.textPx(list_gap + stack_width) : 0) + (marked ? chrome.textPx(list_gap + list_mark) : 0) + text_advance;
   }
 
-  MachineChromeGeometry::ListRow MachineChromeGeometry::listRow(Rect area, const ChromeMetrics& chrome, std::size_t index, bool stacked) noexcept {
+  MachineChromeGeometry::ListRow MachineChromeGeometry::listRow(Rect area, const ChromeMetrics& chrome, std::size_t index, bool stacked, bool marked) noexcept {
     const auto height = listRowHeight(chrome);
     const auto padding = std::round(chrome.textPx(list_padding));
     const auto avatar = std::round(chrome.textPx(list_avatar));
@@ -145,16 +160,27 @@ namespace telar::gui::features::machines {
     const auto overhang = std::round(chrome.textPx(list_dot_overhang));
 
     row.dot = {.x = row.avatar.right() - dot + overhang, .y = row.avatar.bottom() - dot + overhang, .width = dot, .height = dot};
+
+    // The columns at the end, from the edge in: the current mark, then the stack.
+    auto end = area.right() - padding;
+
+    if (marked) {
+      const auto side = std::round(chrome.textPx(list_mark));
+
+      row.mark = {.x = end - side, .y = row.bounds.y + std::round((height - side) / 2), .width = side, .height = side};
+      end = row.mark.x - gap;
+    }
+
     if (stacked) {
       const auto width = std::round(chrome.textPx(stack_width));
 
-      row.stack = {.x = area.right() - padding - width, .y = row.bounds.y, .width = width, .height = height};
+      row.stack = {.x = end - width, .y = row.bounds.y, .width = width, .height = height};
+      end = row.stack.x - gap;
     }
 
     const auto left = row.avatar.right() + gap;
-    const auto right = stacked ? row.stack.x - gap : area.right() - padding;
     const auto top = row.bounds.y + std::round(chrome.textPx(list_vertical_padding));
-    const auto width = std::max(0.0F, right - left);
+    const auto width = std::max(0.0F, end - left);
 
     row.label = {.x = left, .y = top, .width = width, .height = label_height};
     row.status = {.x = left, .y = top + label_height, .width = width, .height = ChromeMetrics::lineHeight(chrome.small)};

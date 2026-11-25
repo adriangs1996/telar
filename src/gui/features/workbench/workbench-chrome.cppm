@@ -83,6 +83,10 @@ export {
       PaletteRole hue = hues.front();
 
       [[nodiscard]] static WorkspaceMark resolve(std::string_view name);
+      // Gives the marks of one machine's workspaces, in the order they were made, hues no two
+      // share until the palette runs out: each keeps the hue its name hashes to while no older
+      // mark holds it, and otherwise takes the next free one.
+      static void distinguish(std::span<WorkspaceMark> marks) noexcept;
 
     private:
       [[nodiscard]] static std::uint32_t hash(std::string_view name) noexcept;

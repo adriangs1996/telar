@@ -184,7 +184,7 @@ namespace telar::runtime::config {
   }
 
   void uiIcon(const lua::Value& value) {
-    constexpr ds::Array names{std::string_view{"sidebar_collapse"}, "sidebar_expand", "workspace_menu", "proxy_active", "cpu", "memory", "battery_empty", "battery_quarter", "battery_half", "battery_three_quarters", "battery_full", "provider_unknown", "provider_claude", "provider_codex", "provider_pi", "provider_cursor", "provider_opencode", "app_terminal", "app_editor", "app_git", "agent_unknown", "agent_working_0", "agent_working_1", "agent_working_2", "agent_working_3", "agent_blocked", "agent_ready", "agent_done", "agent_failed", "close", "pane_fullscreen", "telar_mark"};
+    constexpr ds::Array names{std::string_view{"sidebar_collapse"}, "sidebar_expand", "workspace_menu", "proxy_active", "cpu", "memory", "battery_empty", "battery_quarter", "battery_half", "battery_three_quarters", "battery_full", "provider_unknown", "provider_claude", "provider_codex", "provider_pi", "provider_cursor", "provider_opencode", "provider_antigravity", "app_terminal", "app_editor", "app_git", "agent_unknown", "agent_working_0", "agent_working_1", "agent_working_2", "agent_working_3", "agent_blocked", "agent_ready", "agent_done", "agent_failed", "close", "pane_fullscreen", "telar_mark"};
     const auto text = value.string();
     if (!std::ranges::any_of(names, [text](std::string_view name) {
           return equalUiName(text, name);
@@ -225,6 +225,8 @@ namespace telar::runtime {
       return {.name = "cursor", .display_name = "Cursor Agent", .placeholder = "New Cursor Agent session", .attachments = AgentAttachmentMarkers::none, .process_names = {"cursor-agent", {}}};
     case AgentProvider::opencode:
       return {.name = "opencode", .display_name = "OpenCode", .placeholder = "New OpenCode session", .attachments = AgentAttachmentMarkers::none, .process_names = {"opencode", {}}};
+    case AgentProvider::antigravity:
+      return {.name = "antigravity", .display_name = "Antigravity", .placeholder = "New Antigravity session", .attachments = AgentAttachmentMarkers::none, .process_names = {"agy", {}}};
     case AgentProvider::unknown:
     case AgentProvider::last_custom:
       break;
@@ -274,6 +276,8 @@ namespace telar::runtime::config {
       return {.name = "pi", .environment = "PI_CODING_AGENT_DIR", .home_directory = ".pi/agent", .file = "extensions/telar.ts"};
     case AgentProvider::opencode:
       return {.name = "opencode", .environment = "XDG_CONFIG_HOME", .home_directory = ".config/opencode", .environment_suffix = "/opencode", .file = "plugins/telar.ts"};
+    case AgentProvider::antigravity:
+      return {.name = "antigravity", .home_directory = ".gemini/config", .file = "hooks.json", .events = antigravity_events, .flat_events = antigravity_flat_events, .timeout = "30", .hooks_key = "telar", .matcher = "*", .fail_open = true};
     case AgentProvider::unknown:
     case AgentProvider::last_custom:
       break;

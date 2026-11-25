@@ -1,6 +1,6 @@
 telar integration status: Report which hooks, files and skills are installed for an agent, or for Neovim
 
-Usage: telar integration status claude|codex|pi|cursor|opencode|neovim|editor [--settings PATH]
+Usage: telar integration status claude|codex|pi|cursor|opencode|antigravity|neovim|editor [--settings PATH]
 
 Effects: reads the files; changes nothing.
 

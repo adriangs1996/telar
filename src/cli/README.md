@@ -52,7 +52,7 @@ interfaces and preprocessor contracts retain documented textual boundaries.
 
 ## Agent hooks
 
-`telar hook claude|codex|pi|cursor|opencode [--socket PATH]` consumes the
+`telar hook claude|codex|pi|cursor|opencode|antigravity [--socket PATH]` consumes the
 provider's JSON from standard input. It connects to an existing runtime and
 verifies the reporter's pane ancestry before sending progress, lifecycle, title
 and command observations. Lifecycle failures leave the agent running and exit

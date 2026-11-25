@@ -6,7 +6,6 @@ import telar.gui.foundation.agents;
 import telar.gui.foundation.core;
 import telar.gui.foundation.drawing;
 import telar.gui.foundation.model;
-import telar.gui.foundation.text;
 import telar.base.ds;
 
 namespace telar::gui::features::activity {
@@ -45,22 +44,29 @@ namespace telar::gui::features::activity {
 
   tbc::val_a<ds::Option<std::string_view>> ProjectActivity::summary(tbc::mut_a<Text> storage) const {
     storage.truncate(0);
-    if (worktrees == 0 || !path) {
+    if (!path) {
       return ds::none;
     }
 
-    storage.append("\u2387 ");
-    storage.appendDecimal(worktrees);
-    storage.append(" \u00b7 \u25cc ");
-    storage.appendDecimal(working);
-    storage.append(" \u2713 ");
-    storage.appendDecimal(finished);
-    storage.append("  ");
-    if (path->size() > label_text_capacity - storage.view().size()) {
+    const auto fact = [&](std::size_t count, std::string_view one, std::string_view many) {
+      if (count == 0) {
+        return;
+      }
+
+      if (!storage.view().empty()) {
+        storage.append(" \u00b7 ");
+      }
+
+      storage.appendDecimal(count);
+      storage.append(count == 1 ? one : many);
+    };
+
+    fact(worktrees, " worktree", " worktrees");
+    fact(working, " working", " working");
+    fact(finished, " done", " done");
+    if (storage.view().empty()) {
       return ds::none;
     }
-
-    storage.append(*path);
 
     return storage.view();
   }

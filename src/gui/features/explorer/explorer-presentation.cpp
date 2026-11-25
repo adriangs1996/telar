@@ -286,6 +286,8 @@ namespace telar::gui::features::explorer {
         return "Cursor";
       case AgentProvider::opencode:
         return "OpenCode";
+      case AgentProvider::antigravity:
+        return "Antigravity";
       case AgentProvider::unknown:
       case AgentProvider::last_custom:
         return "Agent";

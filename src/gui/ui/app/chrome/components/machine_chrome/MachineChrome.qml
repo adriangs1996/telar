@@ -9,19 +9,43 @@ MachineChromeLayout {
 
     required property var colors
     property var typography: ({})
+    // The row the arrows of the roster's menu move to, -1 for none.
+    property int selection: -1
     // A row of the list was chosen; the menu that holds the list closes on it.
     signal chosen()
+
+    function move(delta) {
+        if (listRows.count > 0) selection = Math.max(0, Math.min(listRows.count - 1, selection + delta));
+    }
+
+    // The roster starts on the machine the window shows.
+    function selectCurrent() {
+        selection = -1;
+        for (let index = 0; index < listRows.count; ++index) {
+            if (listRows.itemAt(index)?.current) selection = index;
+        }
+    }
+
+    function chooseSelection() {
+        const row = listRows.itemAt(selection);
+        if (!row || !row.enabled) return;
+
+        root.activate(row.record.key);
+        root.chosen();
+    }
 
     visible: shown
     clip: true
 
     Repeater {
+        id: listRows
         model: !root.inlineFacts && !root.segment ? root.items : []
 
         delegate: AbstractButton {
             id: row
             objectName: "machineListRow"
             required property var record
+            required property int index
 
             x: record.bounds.x
             y: record.bounds.y
@@ -34,8 +58,10 @@ MachineChromeLayout {
             contentItem: null
             // The roster marks the machine the window shows; the sidebar's list never holds it.
             readonly property bool current: record.active ?? false
+            // The rows can arrive after the menu opens: the roster then starts on this one.
+            Component.onCompleted: if (current && root.selection < 0) root.selection = index
             background: NativeRoundedRectangle {
-                color: row.current ? root.style.activeBackground : row.hovered || row.visualFocus ? root.style.hoverBackground : "transparent"
+                color: row.index === root.selection ? root.style.activeBackground : row.hovered || row.visualFocus ? root.style.hoverBackground : "transparent"
                 radius: root.style.rowRadius
                 borderColor: root.colors.accent
                 borderAlpha: ChromeStyle.focusAlpha
@@ -46,24 +72,21 @@ MachineChromeLayout {
                 root.chosen();
             }
 
-            ChromeIcon {
+            ProviderMark {
                 objectName: "machineCurrentMark"
-                readonly property real side: Math.round(row.record.avatarBounds.height * 0.7)
-                x: row.width - side - (row.record.avatarBounds.x - row.record.bounds.x)
-                y: (row.height - side) / 2
-                width: side
-                height: side
-                glyph: "✓"
-                color: root.colors.subtext0
-                pixelSize: side
-                primaryFamily: root.typography.primaryFamily ?? ""
-                primaryStyle: root.typography.primaryStyle ?? ""
-                visible: row.current
+                x: row.record.markBounds.x - row.record.bounds.x
+                y: row.record.markBounds.y - row.record.bounds.y
+                width: row.record.markBounds.width
+                height: row.record.markBounds.height
+                symbol: "check"
+                color: root.colors.chromeText
+                visible: row.current && width > 0
             }
 
             HoverHandler { cursorShape: Qt.PointingHandCursor }
 
-            // The machine's color and initial, with the dot of its link at the corner.
+            // The machine's color and initial in a disc, which no workspace's square mark takes
+            // for a machine, with the dot of its link at the corner.
             NativeRoundedRectangle {
                 id: avatar
                 objectName: "machineAvatar"
@@ -72,7 +95,7 @@ MachineChromeLayout {
                 y: row.record.avatarBounds.y - row.record.bounds.y
                 width: row.record.avatarBounds.width
                 height: row.record.avatarBounds.height
-                radius: root.style.avatarRadius
+                radius: width / 2
                 color: Qt.alpha(ink, 0.16)
                 borderColor: ink
                 borderAlpha: 0.4

@@ -1,6 +1,6 @@
 telar hook: The entry point an agent's installed hook runs: reads the event on stdin and reports it
 
-Usage: telar hook claude|codex|pi|cursor|opencode [--socket PATH]
+Usage: telar hook claude|codex|pi|cursor|opencode|antigravity [--socket PATH]
 
 Not meant to be typed: `telar integration install AGENT` registers it with the agent,
 which runs it with the event's JSON on standard input. It maps the event to one

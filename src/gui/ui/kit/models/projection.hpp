@@ -72,24 +72,6 @@ namespace telar::gui::qt {
     return kind + QString::number(location.id);
   }
 
-  template <Allocator Memory>
-  QVariantMap workspaceRecord(const Workspace<Memory>& workspace, bool selected) {
-    QVariantMap record;
-
-    record.insert(QStringLiteral("key"), workspaceKey(workspace.location));
-    record.insert(QStringLiteral("name"), toQString(workspace.name));
-    record.insert(QStringLiteral("path"), toQString(workspace.path));
-    record.insert(QStringLiteral("branch"), toQString(workspace.branch));
-    record.insert(QStringLiteral("dirty"), workspace.dirty);
-    record.insert(QStringLiteral("selected"), selected);
-    const auto mark = application::workbench::WorkspaceMark::resolve(workspace.name);
-
-    record.insert(QStringLiteral("initial"), toQString(mark.initial.view()));
-    record.insert(QStringLiteral("markHue"), QString::fromLatin1(palette_names[static_cast<std::size_t>(mark.hue)]));
-
-    return record;
-  }
-
   // Paths read as the shell prompt does: the home directory is `~`.
   inline QString displayPath(std::string_view path) {
     auto text = toQString(path);
@@ -99,6 +81,24 @@ namespace telar::gui::qt {
     }
 
     return text;
+  }
+
+  // `mark` is the workspace's own, or the one its machine's marks gave it apart from the others.
+  template <Allocator Memory>
+  QVariantMap workspaceRecord(const Workspace<Memory>& workspace, bool selected, const application::workbench::WorkspaceMark& mark) {
+    QVariantMap record;
+
+    record.insert(QStringLiteral("key"), workspaceKey(workspace.location));
+    record.insert(QStringLiteral("name"), toQString(workspace.name));
+    record.insert(QStringLiteral("path"), toQString(workspace.path));
+    record.insert(QStringLiteral("shownPath"), displayPath(workspace.path));
+    record.insert(QStringLiteral("branch"), toQString(workspace.branch));
+    record.insert(QStringLiteral("dirty"), workspace.dirty);
+    record.insert(QStringLiteral("selected"), selected);
+    record.insert(QStringLiteral("initial"), toQString(mark.initial.view()));
+    record.insert(QStringLiteral("markHue"), QString::fromLatin1(palette_names[static_cast<std::size_t>(mark.hue)]));
+
+    return record;
   }
 
   inline QVariantMap applicationMarkRecord(std::string_view application) {

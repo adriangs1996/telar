@@ -405,6 +405,54 @@ namespace {
   }
 
   // The task list a pane shows follows Claude's and Codex's plan tools.
+  // Payloads as Antigravity CLI 1.5.17 sends them: camelCase, with the tool call nested.
+  void antigravityLifecycle() {
+    Mapped start{AgentProvider::antigravity, R"({"conversationId":"dba6456e-2313-4a85-bf65-f11b9dd59f09","cwd":"/w","hookEventName":"SessionStart","lastUserInput":"hi","modelName":"m","transcriptPath":"/t/transcript_full.jsonl","workspacePaths":["/w"]})"};
+
+    check(lifecycle(start.reports, AgentReportState::ready));
+    check(start.reports.lifecycle->session == "dba6456e-2313-4a85-bf65-f11b9dd59f09" && start.reports.lifecycle->session_file.empty());
+    check(start.reports.progress && start.reports.progress->cwd == "/w");
+    check(lifecycle(Mapped{AgentProvider::antigravity, R"({"hookEventName":"PreInvocation","invocationNum":0,"initialNumSteps":1})"}.reports, AgentReportState::working));
+    check(!Mapped{AgentProvider::antigravity, R"({"hookEventName":"PostInvocation","invocationNum":0})"}.reports.lifecycle);
+
+    Mapped started{AgentProvider::antigravity, R"({"hookEventName":"PreToolUse","conversationId":"c1","cwd":"/w","stepIdx":2,"toolCall":{"args":{"CommandLine":"echo hola","WaitMsBeforeAsync":5000,"toolSummary":"Run echo hola"},"id":"call_1","name":"run_command"}})"};
+
+    check(lifecycle(started.reports, AgentReportState::working));
+    check(started.reports.lifecycle->event == "» run_command echo hola");
+    check(started.reports.command && started.reports.command->phase == AgentCommandPhase::started && started.reports.command->command == "echo hola");
+    check(started.reports.command->tool_call_id == "call_1" && started.reports.command->cwd == "/w" && started.reports.command->provider == "antigravity");
+
+    Mapped finished{AgentProvider::antigravity, R"({"hookEventName":"PostToolUse","error":"","toolCall":{"args":{"CommandLine":"echo hola"},"id":"call_1","name":"run_command"}})"};
+
+    check(finished.reports.command && finished.reports.command->phase == AgentCommandPhase::finished && finished.reports.command->exit_code == 0);
+
+    Mapped failed_command{AgentProvider::antigravity, R"({"hookEventName":"PostToolUse","error":"exit status 2","toolCall":{"args":{"CommandLine":"false"},"id":"call_2","name":"run_command"}})"};
+
+    check(failed_command.reports.command && failed_command.reports.command->exit_code == 2);
+
+    Mapped read{AgentProvider::antigravity, R"({"hookEventName":"PreToolUse","toolCall":{"args":{"Path":"/w/a.md","StartLine":1},"id":"call_3","name":"read_file"}})"};
+
+    check(!read.reports.command && read.reports.lifecycle->event == "» read_file /w/a.md");
+
+    check(lifecycle(Mapped{AgentProvider::antigravity, R"({"hookEventName":"Stop","terminationReason":"NO_TOOL_CALL","error":"","fullyIdle":true})"}.reports, AgentReportState::ready));
+    check(lifecycle(Mapped{AgentProvider::antigravity, R"({"hookEventName":"Stop","terminationReason":"USER_CANCELED","error":""})"}.reports, AgentReportState::interrupted));
+
+    Mapped error{AgentProvider::antigravity, R"({"hookEventName":"Stop","terminationReason":"ERROR","error":"model unavailable"})"};
+
+    check(lifecycle(error.reports, AgentReportState::failed) && error.reports.lifecycle->event == "model unavailable");
+
+    // A tool name that is not text fails the payload, which the hook then leaves unreported.
+    bool refused = false;
+
+    try {
+      Mapped{AgentProvider::antigravity, R"({"hookEventName":"PreToolUse","toolCall":{"name":7}})"};
+    } catch (const std::exception&) {
+      refused = true;
+    }
+
+    check(refused);
+  }
+
   void progressPlanOps() {
     Mapped created{AgentProvider::claude, R"({"hook_event_name":"PostToolUse","tool_name":"TaskCreate","tool_input":{"subject":"Write the tests"}})"};
 
@@ -518,6 +566,7 @@ namespace {
   const telar::testing::Case case_pi_lifecycle_and_title{"hooks.pi_lifecycle_and_title", piLifecycleAndTitle};
   const telar::testing::Case case_opencode_lifecycle_and_title{"hooks.opencode_lifecycle_and_title", openCodeLifecycleAndTitle};
   const telar::testing::Case case_cursor_lifecycle{"hooks.cursor_lifecycle", cursorLifecycle};
+  const telar::testing::Case case_antigravity_lifecycle{"hooks.antigravity_lifecycle", antigravityLifecycle};
   const telar::testing::Case case_progress_plan_ops{"hooks.progress_plan_ops", progressPlanOps};
   const telar::testing::Case case_progress_cwd_and_worktree{"hooks.progress_cwd_and_worktree", progressCwdAndWorktree};
   const telar::testing::Case case_codex_session_file_newest{"hooks.codex_session_file_newest", codexSessionFileNewest};

@@ -44,6 +44,8 @@ export {
       terminal,
       cybervenom,
       zenburn,
+      gruvbox,
+      gruvbox_hard,
     };
 
     enum class Appearance : std::uint8_t {
@@ -89,7 +91,7 @@ export {
       punctuation,
     };
 
-    inline constexpr ds::Array theme_names{"shade", "vesper", "catppuccin", "tokyo_night", "pierre_dark", "pierre_dark_soft", "kanagawa", "kanagawa_dragon", "terminal", "cybervenom", "zenburn"};
+    inline constexpr ds::Array theme_names{"shade", "vesper", "catppuccin", "tokyo_night", "pierre_dark", "pierre_dark_soft", "kanagawa", "kanagawa_dragon", "terminal", "cybervenom", "zenburn", "gruvbox", "gruvbox_hard"};
     inline constexpr ds::Array palette_names{"accent", "panel_bg", "surface0", "surface1", "surface_dim", "overlay0", "overlay1", "text", "subtext0", "mauve", "green", "yellow", "red", "blue", "teal", "peach"};
     inline constexpr ds::Array syntax_names{"plain", "keyword", "string", "number", "comment", "constant", "builtin_constant", "builtin", "func", "type", "parameter", "property", "namespace", "operator", "punctuation"};
 

@@ -128,6 +128,38 @@ namespace {
       return output;
     }
 
+    // Antigravity merges every named block of hooks.json: telar's is its own, beside the user's,
+    // with the tool events grouped under a matcher and the others listing their hooks directly.
+    template <Allocator Memory>
+    void testAntigravityBlock(Memory& memory) {
+      auto settings = JsonNode<Memory>::parse(memory, R"({"lint":{"PostToolUse":[{"matcher":"run_command","hooks":[{"command":"./lint.sh"}]}]}})");
+      const auto specification = integration::Provider::describe(AgentProvider::antigravity);
+      const integration::HookSettings hooks{memory, specification, "/fixture/telar"};
+
+      check(hooks.install(settings) && !hooks.install(settings));
+      const auto* block = settings.find("telar");
+
+      check(block != nullptr && settings.find("hooks") == nullptr);
+      for (const auto event : specification.events) {
+        check(hooks.installed(settings, event));
+        const auto& entry = block->find(event)->children().front();
+        const bool grouped = event == "PreToolUse" || event == "PostToolUse";
+        const auto& hook = grouped ? entry.find("hooks")->children().front() : entry;
+
+        check(!grouped || entry.find("matcher")->text() == "*", event);
+        check(hook.find("command")->text().ends_with(" hook antigravity") && hook.find("type")->text() == "command", event);
+        check(hook.find("timeout")->text() == "30", event);
+      }
+
+      // Antigravity refuses a tool whose hook fails: telar's exits 0 even when its executable is gone.
+      const auto& command = block->find("PreToolUse")->children().front().find("hooks")->children().front().find("command")->text();
+
+      check(ranInPane("(" + std::string{command} + ") </dev/null; echo \"status=$?\"") == "status=0\n");
+
+      check(hooks.uninstall(settings) && !hooks.uninstall(settings));
+      check(settings.find("telar") == nullptr && settings.find("lint")->find("PostToolUse")->children().size() == 1);
+    }
+
     // The executable reaches the shell as one quoted word: spaces and `$(…)` in its path run
     // nothing, and a quote, which would close the word, is refused.
     template <Allocator Memory>
@@ -222,6 +254,12 @@ namespace {
       "integration.mixed_hooks",
       budgeted<[](auto& memory) {
         testMixedHooks(memory);
+      }>,
+  };
+  static const telar::testing::Case case_antigravity_block{
+      "integration.antigravity_block",
+      budgeted<[](auto& memory) {
+        testAntigravityBlock(memory);
       }>,
   };
   static const telar::testing::Case case_executable_quoting{

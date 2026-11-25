@@ -1428,8 +1428,8 @@ namespace {
         });
       };
 
-      // Five workspaces: every mark shows, and only the one in front keeps its name.
-      QCOMPARE(named(), qsizetype{1});
+      // Five workspaces in a wide bar: every name fits, so every one shows.
+      QCOMPARE(named(), static_cast<qsizetype>(projects.size()));
       QCOMPARE(track->property("shownCount").toInt(), static_cast<int>(projects.size()));
       QVERIFY(visualItems(*content, QStringLiteral("topBarTelarMark")).isEmpty());
       QVERIFY(visualItems(*content, QStringLiteral("projectSwitcher")).isEmpty());
@@ -1526,6 +1526,15 @@ namespace {
       QCOMPARE(machineRow(1).value(QStringLiteral("text")).toString(), QStringLiteral("Build"));
       QVERIFY(machineRow(1).value(QStringLiteral("attention")).toBool());
       QVERIFY(capture("machine-menu.png"));
+      // The arrows move through the machines as they do through the workspaces, starting on the
+      // one in front.
+      QCOMPARE(roster->property("selection").toInt(), 0);
+      QTest::keyClick(window, Qt::Key_Down);
+      QTRY_COMPARE_WITH_TIMEOUT(roster->property("selection").toInt(), 1, wait_ms);
+      QTest::keyClick(window, Qt::Key_Down);
+      QCOMPARE(roster->property("selection").toInt(), 1);
+      QTest::keyClick(window, Qt::Key_Up);
+      QTRY_COMPARE_WITH_TIMEOUT(roster->property("selection").toInt(), 0, wait_ms);
       QVERIFY(QMetaObject::invokeMethod(menu, "close"));
       QTRY_VERIFY_WITH_TIMEOUT(!menu->property("visible").toBool(), wait_ms);
 
@@ -1543,7 +1552,8 @@ namespace {
       QVERIFY(QMetaObject::invokeMethod(workspaces, "close"));
       QTRY_VERIFY_WITH_TIMEOUT(!workspaces->property("visible").toBool(), wait_ms);
 
-      // A narrow bar still holds every workspace's mark and the name of the one in front.
+      // A narrow bar has no room for every name: it holds every workspace's mark and the name
+      // of the one in front.
       window->resize(narrow);
       QVERIFY(waitForSynchronizedFrame(*window, wait_ms));
       QCOMPARE(named(), qsizetype{1});

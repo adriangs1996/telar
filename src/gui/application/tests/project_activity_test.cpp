@@ -80,13 +80,16 @@ namespace {
     check(activity.waiting == 2 && activity.urgent == 4U, "project attention must use the shared priority rather than status severity");
     ProjectActivity::Text text;
 
-    check(activity.summary(text) == "\u2387 2 \u00b7 \u25cc 1 \u2713 1  /project", "project facts must preserve the original symbols and spacing");
+    check(activity.summary(text) == "2 worktrees \u00b7 1 working \u00b7 1 done", "project facts read in words, without the path the menu shows apart");
     check(activity.attentionLabel().view() == "! 2", "attention must count both blocked and failed agents");
     agents.atMut(3).location.workspace.kind = WorkspaceLocation::Kind::worktree;
     agents.atMut(4).location.workspace.id = 3;
     const auto filtered = ProjectActivity::derive(workspaces, std::span<const Agent<telar::ConcurrentMemory>>{agents}, 1);
 
     check(filtered.waiting == 0 && !filtered.urgent, "unattached worktree locations and other projects must not request attention here");
+    const auto idle = ProjectActivity::derive(workspaces, std::span<const Agent<telar::ConcurrentMemory>>{agents}, 3);
+
+    check(idle.worktrees == 1 && idle.summary(text) == "1 worktree", "a count of one reads in the singular and the zero ones drop out");
   }
 
   void summaryOverflowAndWarmReuse() {
@@ -112,7 +115,7 @@ namespace {
         const auto activity = ProjectActivity::derive(workspaces, std::span<const Agent<std::remove_reference_t<std::remove_reference_t<decltype(memory)>>>>{}, 1);
         ProjectActivity::Text text;
 
-        check(!activity.summary(text), "an overflowing summary must preserve the original path fallback");
+        check(activity.summary(text) == "1 worktree", "a path of any length leaves the counts whole, and the zero ones out");
         check(activity.attentionLabel().view().empty(), "a project without waiting agents must reserve no title space");
       }
 

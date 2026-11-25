@@ -129,8 +129,16 @@ export {
       std::string_view file;
       std::span<const std::string_view> events;
       std::span<const std::string_view> worktree_events;
+      // Events whose entries are hooks themselves, where the others wrap them in a group.
+      std::span<const std::string_view> flat_events;
       std::string_view timeout;
       bool flat_hooks = false;
+      // The settings' member that holds the events: Antigravity names each block of hooks, so telar's is its own.
+      std::string_view hooks_key = "hooks";
+      // The tools a group of hooks applies to, when the agent wants them named.
+      std::string_view matcher;
+      // The agent refuses the tool a hook fails or times out on, so telar's hook always succeeds.
+      bool fail_open = false;
       std::string_view launch_note;
 
       static IntegrationProvider describe(AgentProvider provider);
@@ -143,6 +151,8 @@ export {
       static constexpr auto claude_worktree_events = ds::Array<std::string_view, 2>{"WorktreeCreate", "WorktreeRemove"};
       static constexpr auto codex_events = ds::Array<std::string_view, 9>{"SessionStart", "UserPromptSubmit", "PermissionRequest", "PreToolUse", "PostToolUse", "Stop", "Interrupt", "SubagentStop", "SessionEnd"};
       static constexpr auto cursor_events = ds::Array<std::string_view, 7>{"sessionStart", "beforeSubmitPrompt", "preToolUse", "postToolUse", "postToolUseFailure", "stop", "sessionEnd"};
+      static constexpr auto antigravity_events = ds::Array<std::string_view, 5>{"SessionStart", "PreInvocation", "PreToolUse", "PostToolUse", "Stop"};
+      static constexpr auto antigravity_flat_events = ds::Array<std::string_view, 3>{"SessionStart", "PreInvocation", "Stop"};
     };
 
   }

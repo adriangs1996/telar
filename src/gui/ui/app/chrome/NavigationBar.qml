@@ -45,12 +45,14 @@ NativeRoundedRectangle {
     // a narrow window shortens those first: the machine's label down to labelFloor, then the
     // workspaces' names, then the workspaces that do not fit.
     readonly property real tabsFloor: 220 * ratio
-    readonly property real machineMaximum: 240 * ratio
     readonly property real labelFloor: 72 * ratio
     readonly property real sideRoom: Math.max(0, paletteButton.x - identity.x - 3 * controlGap - tabsFloor)
-    readonly property real machineWanted: Math.min(identity.preferredWidth, machineMaximum)
+    readonly property real machineWanted: identity.preferredWidth
     readonly property real machineFloor: Math.min(machineWanted, identity.minimumWidth + labelFloor)
-    readonly property real machineRoom: Math.min(sideRoom, Math.max(machineFloor, Math.min(machineWanted, sideRoom - controlGap - track.preferredWidth)))
+    // Every workspace's name while they fit beside the machine's shortest label, else only the
+    // active one's.
+    readonly property real trackWanted: sideRoom - controlGap - machineFloor >= track.namedWidth ? track.namedWidth : track.shortWidth
+    readonly property real machineRoom: Math.min(sideRoom, Math.max(machineFloor, Math.min(machineWanted, sideRoom - controlGap - trackWanted)))
     readonly property real trackRoom: Math.max(0, sideRoom - identity.width - controlGap)
     readonly property real tabsLeft: (track.width > 0 ? track.x + track.width : identity.x + identity.width) + 2 * controlGap
     readonly property real tabsWidth: Math.max(0, paletteButton.x - controlGap - tabsLeft)

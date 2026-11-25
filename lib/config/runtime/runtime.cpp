@@ -60,7 +60,7 @@ namespace telar::runtime {
   }
 
   bool completionRequiresSignal(AgentProvider provider) noexcept {
-    return provider == AgentProvider::codex || provider == AgentProvider::pi || provider == AgentProvider::cursor || provider == AgentProvider::opencode;
+    return provider == AgentProvider::codex || provider == AgentProvider::pi || provider == AgentProvider::cursor || provider == AgentProvider::opencode || provider == AgentProvider::antigravity;
   }
 
   bool containsInsensitive(std::string_view text, std::string_view phrase) noexcept {
@@ -346,6 +346,17 @@ namespace telar::runtime {
 
     opencode.interrupt = AgentInterruptKey::escape_twice;
     opencode.addCommandTool("bash", "command");
+
+    auto& antigravity = table.add("antigravity");
+
+    antigravity.addCommandTool("run_command", "CommandLine");
+    // Antigravity's dialogs, by their footers: a command, an edit, the workspace's trust, and the
+    // bare one of a file outside the workspace, right above Antigravity's own footer. Its menus
+    // name other keys after "navigate", and no menu offers to deny.
+    for (const auto* const phrase : {"\u2191/\u2193 navigate \u00b7 tab amend", "\u2191/\u2193 navigate \u00b7 f full diff", "\u2191/\u2193 navigate \u00b7 enter confirm", "\u2191/\u2193 navigate esc to cancel", "no, deny"}) {
+      antigravity.blocked.append(phrase);
+    }
+
     return table;
   }
 

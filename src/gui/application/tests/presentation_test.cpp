@@ -85,6 +85,36 @@ namespace {
     }
   }
 
+  void workspaceMarksOfOneMachineShareNoHue() {
+    using telar::gui::features::workbench::WorkspaceMark;
+    constexpr auto hue_count = WorkspaceMark::hues.size();
+    constexpr std::size_t hashed = 2;
+    telar::ds::Array<WorkspaceMark, hue_count + 1> marks{};
+
+    // Every name hashing to the same hue: the worst case for a hash alone.
+    for (auto& mark : marks.viewMut()) {
+      mark.hue = WorkspaceMark::hues[hashed];
+    }
+
+    WorkspaceMark::distinguish(marks.viewMut());
+    check(marks[0].hue == WorkspaceMark::hues[hashed], "the oldest workspace keeps the hue its name hashes to");
+    for (std::size_t index = 0; index < hue_count; ++index) {
+      for (std::size_t other = index + 1; other < hue_count; ++other) {
+        check(marks[index].hue != marks[other].hue, "no two workspaces share a hue while the palette lasts");
+      }
+    }
+
+    check(marks[hue_count].hue == WorkspaceMark::hues[hashed], "past the palette, the hues start over");
+    telar::ds::Array<WorkspaceMark, 2> apart{};
+    constexpr std::size_t first = 1;
+    constexpr std::size_t second = 4;
+
+    apart.atMut(0).hue = WorkspaceMark::hues[first];
+    apart.atMut(1).hue = WorkspaceMark::hues[second];
+    WorkspaceMark::distinguish(apart.viewMut());
+    check(apart[0].hue == WorkspaceMark::hues[first] && apart[1].hue == WorkspaceMark::hues[second], "workspaces whose hues differ keep their own");
+  }
+
   void chromeSurfacesPreserveThemeAndTransparency() {
     using namespace telar::gui;
     using namespace telar::gui::features::workbench;
@@ -300,6 +330,7 @@ namespace {
   const telar::testing::Case case_title_bounds_and_suffix{"presentation.title_bounds_and_suffix", titleBoundsAndSuffix};
   const telar::testing::Case case_sidebar_column_bounds{"presentation.sidebar_column_bounds", sidebarColumnBounds};
   const telar::testing::Case case_workspace_marks_preserve_the_original_initial{"presentation.workspace_marks_preserve_the_original_initial", workspaceMarksPreserveTheOriginalInitial};
+  const telar::testing::Case case_workspace_marks_of_one_machine_share_no_hue{"presentation.workspace_marks_of_one_machine_share_no_hue", workspaceMarksOfOneMachineShareNoHue};
   const telar::testing::Case case_chrome_surfaces_preserve_theme_and_transparency{"presentation.chrome_surfaces_preserve_theme_and_transparency", chromeSurfacesPreserveThemeAndTransparency};
   const telar::testing::Case case_pane_surfaces_use_only_existing_chrome_space{"presentation.pane_surfaces_use_only_existing_chrome_space", paneSurfacesUseOnlyExistingChromeSpace};
   const telar::testing::Case case_sidebar_lists_follow_the_reference_bands{"presentation.sidebar_lists_follow_the_reference_bands", sidebarListsFollowTheReferenceBands};

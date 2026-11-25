@@ -39,6 +39,7 @@ telar_add_qml_sources(gui-quick
     FormButton.qml
     FormTextField.qml
     KeyboardAction.qml
+    MenuFooter.qml
     OverlayHeader.qml
     PaletteKeycap.qml
     PaletteRow.qml

@@ -537,7 +537,8 @@ namespace telar::runtime::cli::pane_agents {
       constexpr std::size_t pane_width = 6;
       constexpr std::size_t generation_width = 5;
       constexpr std::size_t status_width = 9;
-      constexpr std::size_t provider_width = 8;
+      // "antigravity", the longest built-in name, and the gap after it.
+      constexpr std::size_t provider_width = 13;
       constexpr std::size_t workspace_width = 18;
       constexpr std::size_t tab_width = 14;
 
@@ -550,7 +551,7 @@ namespace telar::runtime::cli::pane_agents {
       out.text(agent.session_title).text("\n");
     }
 
-    constexpr std::string_view agent_header = "PANE  GEN  STATUS   PROV    WORKSPACE         TAB           TITLE\n";
+    constexpr std::string_view agent_header = "PANE  GEN  STATUS   PROV         WORKSPACE         TAB           TITLE\n";
 
     void writeOne(Output& out, const AgentSnapshotEntry& agent, bool json) {
       if (!json) {

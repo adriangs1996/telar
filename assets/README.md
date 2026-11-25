@@ -144,7 +144,7 @@ theme's background, the spider its text tones and the thread, feet and cursor
 its accent. Any theme without its own file uses `telar-mark.svg`, in Zenburn's
 colors. One per theme: `shade`, `cybervenom`, `vesper`, `catppuccin`,
 `tokyo-night`, `pierre-dark`, `pierre-dark-soft`, `kanagawa`,
-`kanagawa-dragon`, `zenburn` and `terminal`.
+`kanagawa-dragon`, `gruvbox`, `gruvbox-hard`, `zenburn` and `terminal`.
 
 `telar-mark-64.png` is the mark's 64 x 64 RGBA rasterization, SHA-256
 `868bb574daa2dc12544877e8cbc7504d94e84607148f7ce374fa987361a48a88`, and
@@ -160,12 +160,13 @@ sources. The hashes above come from librsvg 2.63.2 and Pillow 12.2.0.
 
 ## Sidebar provider symbols
 
-`provider-symbols-320x64.rgba` contains five 64 × 64 RGBA symbols in
-Claude, OpenAI, Pi, Cursor, OpenCode order. Its SHA-256 is
-`1bb36717ae9900fb25e81487f93de8993af5fbeefd2ae99a7a3884e842861dc0`.
-The window embeds this 81,920-byte atlas. The GUI box-filters the symbols
+`provider-symbols-384x64.rgba` contains six 64 × 64 RGBA symbols in
+Claude, OpenAI, Pi, Cursor, OpenCode, Antigravity order, the order of
+`built_in_agent_providers`. Its SHA-256 is
+`aa60269b44e7660e2326ce1ec6a5c74cac34dc8b940d019f2e77809dbe16a221`.
+The window embeds this 98,304-byte atlas. The GUI box-filters the symbols
 into its existing sprite page, premultiplies them, and draws them at 60%
-opacity. OpenAI, Pi, Cursor and OpenCode follow the theme's `text` color;
+opacity. OpenAI, Pi, Cursor, OpenCode and Antigravity follow the theme's `text` color;
 Claude retains its source colors. Tint and opacity are quad attributes; changing selection or theme does not rebuild
 or upload the symbols. Workspace favicons retain their own colors.
 
@@ -210,5 +211,19 @@ the no-op full-size mask and clip, paints the frame white for tinting and the
 inner block white at 31% opacity, the ratio of those two greys; the file's
 SHA-256 is `95d1509e96cececc54baf28a6285b69877ca2d9108dfbe6f09a0de735056bb41`.
 
-It was rendered with librsvg 2.62.3 and Pillow 12.2.0 (librsvg 2.63.0
-produces the same bytes).
+`Antigravity-symbol.svg` preserves the path of the white icon in Google
+Antigravity's press kit, `antigravity-icon__white.svg`, linked from
+<https://www.antigravity.google/press> and downloaded on 2026-11-25 from
+`https://www.antigravity.google/assets/image/brand/antigravity-icon__white.svg`.
+The source SVG SHA-256 is
+`5b8121138dcb017642ccf15d9f5cda738e61d8d70a12277c9cf5aeec3e575e81`. Telar
+crops the 180 × 180 viewBox to the mark so it fills the cell like the other
+symbols; the file's SHA-256 is
+`af93de9866446e8e414eb0abeff08f9d2323120af2c32b731089ae0a5da1256c`.
+Antigravity is a product of Google LLC.
+
+Each symbol is rendered with `rsvg-convert -w 64 -h 64 -a` and centered in its
+64 × 64 cell. The first five were rendered with librsvg 2.62.3 and Pillow 12.2.0
+(librsvg 2.63.0 produces the same bytes); the atlas with Antigravity was
+rendered with librsvg 2.63.2 and Pillow 12.3.0, which reproduce those five
+byte for byte.

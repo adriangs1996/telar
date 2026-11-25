@@ -184,6 +184,34 @@ namespace telar::gui::features::workbench {
     return mark;
   }
 
+  void WorkspaceMark::distinguish(std::span<WorkspaceMark> marks) noexcept {
+    static_assert(hues.size() < 32);
+    constexpr std::uint32_t every = (1U << hues.size()) - 1;
+    std::uint32_t taken = 0;
+
+    for (auto& mark : marks) {
+      // Past as many workspaces as hues, the palette starts over.
+      if (taken == every) {
+        taken = 0;
+      }
+
+      std::size_t slot = 0;
+
+      while (slot < hues.size() && hues[slot] != mark.hue) {
+        ++slot;
+      }
+
+      slot %= hues.size();
+
+      while ((taken & (1U << slot)) != 0) {
+        slot = (slot + 1) % hues.size();
+      }
+
+      taken |= 1U << slot;
+      mark.hue = hues[slot];
+    }
+  }
+
   std::uint32_t WorkspaceMark::hash(std::string_view name) noexcept {
     constexpr std::uint32_t offset_basis = 2166136261U;
     constexpr std::uint32_t prime = 16777619U;

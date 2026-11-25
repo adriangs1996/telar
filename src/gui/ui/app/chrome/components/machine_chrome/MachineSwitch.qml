@@ -27,7 +27,9 @@ Item {
     readonly property real dotSide: Math.round(6 * ratio)
     readonly property real dotRoom: attention ? dotSide + labelGap : 0
     // The control with no label: what is left when the bar has no room for one.
-    readonly property real bareWidth: inset + avatarSide + dotRoom + labelGap + chevronSide + inset
+    // The pill's round end needs more room past the chevron than the avatar's disc does.
+    readonly property real endInset: Math.round(9 * ratio)
+    readonly property real bareWidth: inset + avatarSide + dotRoom + labelGap + chevronSide + endInset
     readonly property real minimumWidth: bareWidth
     readonly property real preferredWidth: minimumWidth + (label.length > 0 ? labelGap + Math.ceil(labelText.implicitWidth) : 0)
     // Where the menu hangs from, in this item's coordinates.
@@ -45,12 +47,21 @@ Item {
         visible: width >= root.bareWidth
         colors: root.colors
         pixelSize: root.typography.body
-        cornerRadius: ChromeStyle.controlRadius * root.ratio
         checked: root.open
         Accessible.name: root.label + ", switch machine" + (root.attention ? ", another machine needs attention" : "")
         onClicked: root.requested()
+        // At rest it sits on the same well as the workspace track beside it.
+        background: NativeRoundedRectangle {
+            objectName: "topBarMachineWell"
+            color: Qt.alpha(root.colors.chromeText, ChromeStyle.wellAlpha + (control.down || control.checked ? ChromeStyle.selectionAlpha : control.hovered || control.visualFocus ? ChromeStyle.hoverAlpha : 0))
+            radius: height / 2
+            borderColor: root.colors.accent
+            borderAlpha: ChromeStyle.focusAlpha
+            borderWidth: control.visualFocus ? 1 / Screen.devicePixelRatio : 0
+        }
         contentItem: Item {
-            // The machine's color and initial, with the dot of its link at the corner.
+            // The machine's color and initial in a disc, which no workspace's square mark takes
+            // for a machine, with the dot of its link at the corner.
             NativeRoundedRectangle {
                 id: avatar
                 objectName: "topBarMachineAvatar"
@@ -58,7 +69,7 @@ Item {
                 y: (parent.height - height) / 2
                 width: root.avatarSide
                 height: root.avatarSide
-                radius: Math.round(6 * root.ratio)
+                radius: width / 2
                 color: Qt.alpha(root.ink, 0.16)
                 borderColor: root.ink
                 borderAlpha: 0.4
@@ -117,7 +128,7 @@ Item {
             ProviderMark {
                 id: chevron
                 objectName: "topBarMachineChevron"
-                x: parent.width - root.inset - width
+                x: parent.width - root.endInset - width
                 y: (parent.height - height) / 2
                 width: root.chevronSide
                 height: root.chevronSide

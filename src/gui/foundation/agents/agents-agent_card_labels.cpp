@@ -31,6 +31,8 @@ namespace telar::gui::inline foundation::inline agents {
       return "\u2b22";
     case AgentProvider::opencode:
       return "\u25a3";
+    case AgentProvider::antigravity:
+      return "\u2227";
     case AgentProvider::unknown:
     case AgentProvider::last_custom:
       break;

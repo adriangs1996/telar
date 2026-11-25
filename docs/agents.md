@@ -16,6 +16,7 @@ new agent session inside a Telar pane.
 | Pi | `telar integration install pi` | `pi` |
 | Cursor Agent | `telar integration install cursor` | `cursor-agent` |
 | OpenCode | `telar integration install opencode` | `opencode` |
+| Antigravity | `telar integration install antigravity` | `agy` |
 
 Integrations add hooks or a Telar extension/plugin in the agent's configuration.
 They report lifecycle events and supported shell-tool calls. The Codex flag
@@ -62,6 +63,11 @@ agent as soon as it shows, and the work after you answer it reads as
 Code reports to no hook, reads as `ready` once its idle prompt shows. After
 updating Telar, reinstall the integration so Claude Code also reports
 permission requests and failed turns.
+
+Antigravity has no hook for its permission and trust dialogs or for Esc
+either: its integration, a `telar` block in `~/.gemini/config/hooks.json`,
+reports turns and tool calls, and Telar reads those dialogs and the idle
+composer from its screen.
 
 Without hooks, process and screen observations provide best-effort status.
 Not every provider reports the same details. `final_message` may be empty or

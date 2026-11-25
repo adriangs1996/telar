@@ -28,6 +28,10 @@ namespace telar::gui::features::configuration {
       return "kanagawa-dragon";
     }
 
+    if (name == "gruvbox_hard") {
+      return "gruvbox-hard";
+    }
+
     if (name == "default") {
       return "terminal";
     }
