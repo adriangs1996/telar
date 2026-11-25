@@ -208,7 +208,18 @@ namespace {
 
     check(wide.first == 0 && wide.end == tab_count && wide.hidden() == 0, "a wide strip must keep every natural caption");
     for (const auto width : std::span{wide.widths}.first(tab_count)) {
-      check(width == wide_room / tab_count, "tabs must share the strip equally so the selection slides over a still row");
+      check(width == sizes[0].whole(metrics), "tabs of one caption must be as wide as it needs, not as their share of the strip");
+    }
+
+    // One longer caption widens every tab to it, so the selection still slides over a still row.
+    constexpr float long_caption = 180;
+    auto uneven = sizes;
+
+    uneven.atMut(1).caption = long_caption;
+    const auto level = Geometry::arrange(uneven, 0, {.width = wide_room, .metrics = metrics});
+
+    for (const auto width : std::span{level.widths}.first(tab_count)) {
+      check(width == uneven[1].whole(metrics), "equal tabs must take the width of the widest caption");
     }
 
     constexpr float narrow_room = 215;

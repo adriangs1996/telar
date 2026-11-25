@@ -21,8 +21,6 @@ ActivityFrame {
     readonly property real titleWidth: Math.max(0, rowWidth - (status.visible ? status.usedWidth + (status.usedWidth > 0 ? geometry.gap : 0) : rowWidth / 2 + geometry.gap))
     // What happens in the pane: the agent's signal, or the command a process runs or ran last.
     readonly property string commandLine: record.commandLine ?? ""
-    // A process with no command says so in a receding ink; an agent's signal brings its own.
-    readonly property bool unsaid: process && commandLine.length === 0
     readonly property string happening: !process ? (record.signal ?? "") : commandLine.length > 0 ? commandLine : (record.dim ?? false) ? "No commands yet" : "No command"
     // Where it runs, most general first. A tab named after the card or its project says nothing.
     readonly property string tab: record.tab ?? ""
@@ -153,7 +151,7 @@ ActivityFrame {
             width: Math.max(0, detailRow.width - (outcome.width > 0 ? outcome.width + root.geometry.gap : 0))
             height: detailRow.height
             text: root.happening
-            color: root.unsaid ? root.colors.overlay1 : root.process ? root.colors.subtext0 : root.colors[root.record.signalColor]
+            color: root.process ? root.colors.subtext0 : root.colors[root.record.signalColor]
             pixelSize: root.typography.small
         }
 

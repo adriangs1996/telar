@@ -40,7 +40,9 @@ NativeAgentStatus {
         width: root.usedWidth
         height: root.height
         text: root.label
-        color: root.process ? (root.idle || !(root.record.enabled ?? true) ? root.colors.subtext0 : root.colors.green) : root.colors[root.record.statusColor]
+        // A state at rest names its age in the secondary text's ink: the overlay roles are too
+        // faint to read at this size.
+        color: root.process ? (root.idle || !(root.record.enabled ?? true) ? root.colors.subtext0 : root.colors.green) : root.record.statusColor === "overlay1" || root.record.statusColor === "overlay0" ? root.colors.subtext0 : root.colors[root.record.statusColor]
         pixelSize: root.typography.small
         elide: Text.ElideNone
         visible: root.usedWidth > 0

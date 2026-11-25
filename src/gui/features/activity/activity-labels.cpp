@@ -170,7 +170,7 @@ namespace telar::gui::features::activity {
   template <Allocator Memory>
   auto TaskCardLabels::activity(const Agent<Memory>& agent) noexcept -> Activity {
     const auto said = [](std::string_view text, PaletteRole color, std::string_view missing) noexcept {
-      return text.empty() ? Activity{.text = missing, .color = PaletteRole::overlay1, .placeholder = true} : Activity{.text = text, .color = color};
+      return text.empty() ? Activity{.text = missing} : Activity{.text = text, .color = color};
     };
 
     switch (agent.status) {

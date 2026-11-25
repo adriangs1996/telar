@@ -166,7 +166,6 @@ Item {
                 borderColor: segment.hue
                 borderAlpha: 0.4
                 borderWidth: 1 / Screen.devicePixelRatio
-                opacity: segment.current || segment.hovered ? 1 : 0.75
 
                 ChromeText {
                     anchors.fill: parent

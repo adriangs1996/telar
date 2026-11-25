@@ -76,7 +76,8 @@ Item {
         visible: width > 0 && height > 0
     }
 
-    // The selection is a lens: its rim carries the signal, its fill stays close to the surface.
+    // The selection is a lens: its rim and a fill lighter than the well's tell it from the tabs
+    // beside it, as the workspace track's segment is told from its own.
     NativeRoundedRectangle {
         objectName: "tabSelection"
         x: layout.x + layout.selectionBounds.x
@@ -84,7 +85,7 @@ Item {
         width: layout.selectionBounds.width
         height: layout.selectionBounds.height
         radius: layout.style.pillRadius
-        color: Qt.alpha(root.colors.chromeText, 0.05)
+        color: Qt.alpha(root.colors.chromeText, 0.1)
         borderColor: root.colors.chromeText
         borderAlpha: 0.32
         borderWidth: root.ratio

@@ -174,10 +174,49 @@ namespace {
       auto record = paneChromeRecord(pane, std::span<const Agent<Memory>>{agents}, 1);
 
       QCOMPARE(record.value(QStringLiteral("context")).toString(), QStringLiteral("Fix session restore"));
+      // A session title is the pane's own; only a directory is what its tab already shows.
+      QVERIFY(!record.value(QStringLiteral("contextIsDirectory")).toBool());
       QCOMPARE(record.value(QStringLiteral("program")).toString(), QStringLiteral("zsh"));
       ++agent.pane_generation;
       record = paneChromeRecord(pane, std::span<const Agent<Memory>>{agents}, 1);
       QCOMPARE(record.value(QStringLiteral("context")).toString(), QStringLiteral("/projects/telar"));
+      QVERIFY(record.value(QStringLiteral("contextIsDirectory")).toBool());
+    }
+
+    Q_SLOT static void aTabsOnlyPaneDoesNotRepeatTheDirectoryItsTabShows() {
+      QQmlEngine engine;
+      QQuickWindow window;
+
+      window.resize(header_width, header_height);
+      const ChromeMetrics chrome;
+      const QVariantMap typography{{QStringLiteral("body"), chrome.body}, {QStringLiteral("small"), chrome.small}, {QStringLiteral("title"), chrome.title}};
+      auto record = headerRecord();
+
+      record.insert(QStringLiteral("context"), QStringLiteral("~/projects/telar"));
+      record.insert(QStringLiteral("contextIsDirectory"), true);
+      record.insert(QStringLiteral("git"), QStringLiteral("⎇ main"));
+      record.insert(QStringLiteral("aloneInTab"), false);
+      auto item = createChrome(engine, QStringLiteral("PaneHeader"), {{QStringLiteral("record"), record}, {QStringLiteral("colors"), themeColors(Configuration{})}, {QStringLiteral("typography"), typography}});
+
+      item->setParentItem(window.contentItem());
+      item->setSize({header_width, header_height});
+      window.show();
+      QTRY_VERIFY_WITH_TIMEOUT(window.isExposed(), wait_ms);
+      const auto* context = named(*item, QStringLiteral("paneContext"));
+
+      QVERIFY(context != nullptr);
+      // Beside other panes the header says where this one works.
+      QTRY_VERIFY_WITH_TIMEOUT(context->property("text").toString().contains(QStringLiteral("~/projects/telar")), wait_ms);
+      QVERIFY(context->property("text").toString().contains(QStringLiteral("main")));
+      // Alone in its tab it keeps the branch and leaves the directory to the tab.
+      record.insert(QStringLiteral("aloneInTab"), true);
+      QVERIFY(item->setProperty("record", record));
+      QTRY_COMPARE_WITH_TIMEOUT(context->property("text").toString(), QStringLiteral("⎇ main"), wait_ms);
+      // A session title is not the tab's directory: it stays.
+      record.insert(QStringLiteral("context"), QStringLiteral("Fix session restore"));
+      record.insert(QStringLiteral("contextIsDirectory"), false);
+      QVERIFY(item->setProperty("record", record));
+      QTRY_VERIFY_WITH_TIMEOUT(context->property("text").toString().startsWith(QStringLiteral("Fix session restore")), wait_ms);
     }
 
     Q_SLOT static void routineStatesStayQuietAndInactiveTitlesStayReadable() {

@@ -432,9 +432,14 @@ session title once it is no longer a placeholder, else the focused directory
 beside the foreground application (`replay-web · fish`). The status is the
 selected pane's progress report, else the tab's most urgent agent: a spinner
 stepping every 120 ms while it works, a dot in the attention colour when it
-waits, fails or is done. Only the selected tab is filled, with no outline or
-shadow; hover gives the others a quieter fill and brightens their mark.
-The selected tab keeps its whole caption up to 300 px or 55 % of the strip.
+waits, fails or is done. The spinner's ring is drawn whole behind its arc, so
+at a tab's size it reads as a ring and not as a chevron. The tabs sit in one
+well, and the selected one is a lens over it: a ring and a fill lighter than
+the well's; hover gives the others a quieter fill and brightens their mark.
+When every caption fits, the tabs are all as wide as the widest of them needs,
+so the selection slides over a still row and short captions leave the bar the
+room they do not use. Otherwise
+the selected tab keeps its whole caption up to 300 px or 55 % of the strip.
 The others share the rest at the richest fit that holds all of them: whole
 captions up to 220 px, then captions truncated to a common cap no shorter
 than 56 px of text. When not every caption fits, the tabs nearest the

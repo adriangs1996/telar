@@ -242,7 +242,13 @@ namespace telar::gui::qt {
       } else if (kind_ == application::activity::TabActivity::Kind::spinner) {
         const auto side = std::min(application::activity::TabActivity::spinner_side * ratio, area.width);
 
-        ProgressRing{.area = {.x = area.x + area.width - side, .y = area.y + ((area.height - side) / 2), .width = side, .height = side}, .color = color, .fraction = fraction_, .rotation = turns_}.visit(append);
+        // At a tab's size the default track is too faint to close the ring, and the arc alone
+        // reads as a chevron: the track is drawn strong enough to show the whole circle.
+        constexpr float spinner_track_alpha = 0.4F;
+        auto track = color;
+
+        track.a *= spinner_track_alpha;
+        ProgressRing{.area = {.x = area.x + area.width - side, .y = area.y + ((area.height - side) / 2), .width = side, .height = side}, .color = color, .fraction = fraction_, .rotation = turns_, .track = track}.visit(append);
       } else if (kind_ == application::activity::TabActivity::Kind::progress) {
         ProgressCapsule{.area = area, .color = color, .ratio = ratio, .state = progress_.state, .fraction = fraction_, .rotation = turns_, .compact = compact_}.visit(append);
       }
