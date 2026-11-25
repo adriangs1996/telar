@@ -30,6 +30,9 @@ namespace telar::gui::qt {
     Q_PROPERTY(QVariantMap geometry READ geometry NOTIFY changed)
     Q_PROPERTY(qreal chromeRatio READ chromeRatio NOTIFY changed)
     Q_PROPERTY(qreal chromeTextScale READ chromeTextScale NOTIFY changed)
+    // How much the chrome's text has grown over its design size. A dialog scales the lengths
+    // that frame its text by it, so the text keeps its room at any font size.
+    Q_PROPERTY(qreal chromeTextRatio READ chromeTextRatio NOTIFY changed)
     Q_PROPERTY(qreal windowControls READ windowControls NOTIFY changed)
     Q_PROPERTY(bool sidebarVisible READ sidebarVisible NOTIFY changed)
     Q_PROPERTY(qreal sidebarWidth READ sidebarWidth NOTIFY changed)
@@ -55,6 +58,7 @@ namespace telar::gui::qt {
     [[nodiscard]] QVariantMap geometry() const;
     [[nodiscard]] static qreal chromeRatio();
     [[nodiscard]] qreal chromeTextScale() const;
+    [[nodiscard]] qreal chromeTextRatio() const;
     [[nodiscard]] qreal windowControls() const;
     [[nodiscard]] bool sidebarVisible() const;
     [[nodiscard]] qreal sidebarWidth() const;

@@ -277,7 +277,7 @@ namespace telar::gui::qt {
         {QStringLiteral("bounds"), toQRectF(geometry.bounds, density)},
         {QStringLiteral("heading"), local(geometry.heading)},
         {QStringLiteral("search"), local(geometry.search)},
-        {QStringLiteral("results"), local(application::palette::PaletteGeometry::inset(geometry.results, display_.chrome.px(application::palette::PaletteRowWindow::content_inset)))},
+        {QStringLiteral("results"), local(application::palette::PaletteGeometry::inset(geometry.results, display_.chrome.textPx(application::palette::PaletteRowWindow::content_inset)))},
         {QStringLiteral("footer"), local(geometry.footer)},
         {QStringLiteral("rowHeight"), static_cast<double>(geometry.row_height) / density},
     };

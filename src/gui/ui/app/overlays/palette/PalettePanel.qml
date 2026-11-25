@@ -191,7 +191,7 @@ Item {
         Rectangle {
             y: parent.height - height
             width: parent.width
-            height: Math.min(root.ratio, parent.height)
+            height: Math.min(1, parent.height)
             color: root.colors.surface1
         }
     }

@@ -871,7 +871,7 @@ namespace telar::gui::qt {
         {QStringLiteral("footer"), local(geometry.footer_caption)},
         {QStringLiteral("button"), local(geometry.button)},
         {QStringLiteral("separator"), local(geometry.separator)},
-        {QStringLiteral("previewRadius"), static_cast<double>(display_.chrome.px(application::palette::SuggestionGeometry::preview_radius)) / density},
+        {QStringLiteral("previewRadius"), static_cast<double>(display_.chrome.textPx(application::palette::SuggestionGeometry::preview_radius)) / density},
         {QStringLiteral("messageAlpha"), application::palette::SuggestionGeometry::message_alpha},
         {QStringLiteral("titleAlpha"), application::palette::SuggestionGeometry::title_alpha},
         {QStringLiteral("grid"), std::move(grid)},

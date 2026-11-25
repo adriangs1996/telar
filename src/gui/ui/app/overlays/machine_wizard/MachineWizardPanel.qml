@@ -423,7 +423,10 @@ Item {
                 }
             }
 
-            Row {
+            // The facts wrap to the panel's width, and a value longer than the panel is cut.
+            Flow {
+                id: facts
+                width: parent.width
                 spacing: 8 * root.ratio
                 visible: root.state.parsed?.host !== undefined && !root.state.failure
 
@@ -433,7 +436,7 @@ Item {
                     Item {
                         id: fact
                         required property var modelData
-                        width: Math.max(factName.implicitWidth, factValue.implicitWidth) + 20 * root.ratio
+                        width: Math.min(facts.width, Math.max(factName.implicitWidth, factValue.implicitWidth) + 20 * root.ratio)
                         height: 2 * root.smallRow + 12 * root.ratio
 
                         NativeRoundedRectangle {
@@ -446,7 +449,7 @@ Item {
                             id: factName
                             x: 10 * root.ratio
                             y: 6 * root.ratio
-                            width: implicitWidth
+                            width: Math.max(0, fact.width - 20 * root.ratio)
                             height: root.smallRow
                             text: fact.modelData[0]
                             color: root.colors.subtext0
@@ -457,7 +460,7 @@ Item {
                             id: factValue
                             x: 10 * root.ratio
                             y: 6 * root.ratio + root.smallRow
-                            width: implicitWidth
+                            width: Math.max(0, fact.width - 20 * root.ratio)
                             height: root.smallRow
                             text: fact.modelData[1]
                             color: root.colors.text

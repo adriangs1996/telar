@@ -13,6 +13,7 @@ Window {
     color: "transparent"
 
     readonly property real ratio: telar.display.chromeRatio
+    readonly property real textRatio: telar.display.chromeTextRatio
     readonly property var geometry: telar.display.geometry
     readonly property real sidebarWidth: geometry.sidebar.width
 
@@ -158,6 +159,7 @@ Window {
             id: commandDialog
 
             ratio: root.ratio
+            textRatio: root.textRatio
         }
 
         ComponentPanel {
@@ -177,7 +179,7 @@ Window {
             controller: telar.components
             colors: telar.colors
             typography: root.geometry.typography
-            ratio: root.ratio
+            ratio: root.textRatio
         }
 
         NotificationOverlay {
