@@ -4,6 +4,7 @@ import std;
 
 import telar.wire.pane_io;
 import telar.wire.vocabulary;
+import telar.base.ds;
 
 namespace telar::gui::features::prompt {
 
@@ -40,6 +41,16 @@ namespace telar::gui::features::prompt {
     }
 
     return shell.canonical && byte == shell.end_of_file;
+  }
+
+  ds::Option<std::string_view> oneLine(std::string_view text) noexcept {
+    const auto end = text.find_last_not_of("\r\n");
+    const auto line = end == std::string_view::npos ? std::string_view{} : text.substr(0, end + 1);
+    if (line.find_first_of("\r\n") != std::string_view::npos) {
+      return ds::none;
+    }
+
+    return line;
   }
 
   bool PendingPrompt::likely(std::uint32_t cursor_column, std::chrono::nanoseconds since_output) noexcept {

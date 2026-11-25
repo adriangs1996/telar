@@ -117,7 +117,7 @@ namespace {
     }
 
     void follow(const telar::PaneShell& previous, const telar::PaneShell& current) {
-      static_cast<void>(feature::follow(line(), previous, current));
+      static_cast<void>(feature::follow(line(), previous, current, 0));
     }
 
     // A key while a program runs, as the queue reads it.
@@ -817,6 +817,9 @@ namespace {
     require(editor.toProgram("yes\n", question_column, quiet), "a paste with its newline answers");
     editor.output(quiet + moment);
     require(!editor.toProgram("ls", question_column, quiet + (2 * moment)), "and ends the answer");
+    editor.output(asked);
+    require(!editor.toProgram("yes\nrm -rf ~", question_column, quiet), "lines after the first stay in the line, which the shell would run");
+    require(oneLine("yes\r\n") == std::string_view{"yes"} && !oneLine("a\nb") && oneLine("") == std::string_view{}, "one line is what is left without its ends");
 
     // Text in the queue keeps the keys there.
     editor.output(asked);

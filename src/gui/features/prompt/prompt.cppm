@@ -108,6 +108,12 @@ export namespace telar::gui::features::prompt {
     // the echo of each key prints, until Enter, a signal or end-of-file key, or the program
     // stops reading a line.
     bool forwarding = false;
+    // The command the queue waits for ended well: the shell may report its end before it is
+    // back at its prompt, where the queued command runs.
+    bool succeeded = false;
+    // When the shell reported a command's end without its prompt back yet, as `now` reads the
+    // clock: keys typed in between wait in the line, for a while. None outside that gap.
+    ds::Option<std::int64_t> ended;
     // The command block selected from the editor's normal mode, by its index among the pane's
     // blocks, and the row the live prompt started on when the selection began.
     ds::Option<std::size_t> block;
@@ -324,7 +330,8 @@ export namespace telar::gui::features::prompt {
   [[nodiscard]] TBC_GENERIC bool toProgram(PaneLine& line, const KeyPress& key, const PaneShell& shell, std::uint32_t cursor_column, Now&& now);
 
   // Whether text an input method committed or a paste reaches the program instead of the queue,
-  // as a key would: during an answer, or as its start. A newline at its end ends the answer.
+  // as a key would: during an answer, or as its start. Only one line does (oneLine), and a line
+  // end after it ends the answer.
   template <typename Now>
   [[nodiscard]] TBC_GENERIC bool toProgram(PaneLine& line, std::string_view text, std::uint32_t cursor_column, Now&& now);
 
@@ -376,10 +383,21 @@ export namespace telar::gui::features::prompt {
   // A key at a secret prompt, `byte` the first it sends: one more dot, or none after an erase.
   TBC_HOT_PATH inline void typeSecret(PaneLine& line, char byte) noexcept;
 
-  // The pane's shell went from `previous` to `current`: a secret prompt ends once it echoes again,
-  // and back at its prompt the command queued runs if the last one succeeded. What the line
-  // hands its owner then; none while the shell was not back.
-  [[nodiscard]] ds::Option<Outcome> follow(PaneLine& line, const PaneShell& previous, const PaneShell& current);
+  // The pane's shell went from `previous` to `current` at `now`: a secret prompt ends once it
+  // echoes again, and back at its prompt, from a command or from the gap after its end, the
+  // command queued runs if the last one succeeded. What the line hands its owner then; none
+  // while the shell was not back.
+  [[nodiscard]] ds::Option<Outcome> follow(PaneLine& line, const PaneShell& previous, const PaneShell& current, std::int64_t now);
+
+  // Whether keys typed at `now` fall in the gap between a command's end and the shell's prompt,
+  // which hooks such as direnv's can make long: the line takes them, as it does while a command
+  // runs, instead of the shell's own line editor behind telar's. A gap longer than this is a
+  // shell that stopped reporting its prompt, which gets the keys back.
+  struct BetweenCommands {
+    static constexpr std::chrono::milliseconds limit{2000};
+
+    [[nodiscard]] static bool now(const PaneLine& line, std::int64_t now) noexcept;
+  };
 
   // The system clipboard behind vim's "+ and "* registers.
   void useClipboard(tbc::mut_a<PaneLine> line, tbc::val_a<Clipboard> clipboard);
@@ -605,34 +623,47 @@ namespace telar::gui::features::prompt {
 
   template <typename Now>
   bool toProgram(PaneLine& line, const KeyPress& key, const PaneShell& shell, std::uint32_t cursor_column, Now&& now) {
-    if (line.line.answering()) {
-      return false;
-    }
-
     // Ctrl with an ASCII character types the control byte that shares its low five bits.
     constexpr char32_t ascii_end = 0x80;
     constexpr char32_t control_bits = 0x1f;
 
-    // Signal and end-of-file keys always reach the program, and end the line it was reading.
+    // Signal and end-of-file keys always reach the program, even while the line composes an
+    // answer, and end the line it was reading: an answer composed for it goes too, as the line
+    // discipline drops what it had of the line.
     if (key.key == Key::character && key.modifiers.control && !key.modifiers.alt && key.character < ascii_end) {
       const char control = static_cast<char>(key.character & control_bits);
       if (controlKey(shell, {&control, 1})) {
+        if (line.line.answering()) {
+          line.line.committed({});
+        }
+
         line.forwarding = false;
         return true;
       }
+    }
+
+    if (line.line.answering()) {
+      return false;
+    }
+
+    // Enter on an empty line queues nothing: it is the program's, as for one that printed its
+    // question on a line of its own (`echo "Press Enter"; read`), its cursor at the line's start.
+    const bool enter = key.key == Key::enter && !key.modifiers.alt;
+    if (enter && !line.forwarding && line.line.editor().text().empty()) {
+      return true;
     }
 
     if (!answers(line, cursor_column, std::forward<Now>(now))) {
       return false;
     }
 
-    line.forwarding = key.key != Key::enter;
+    line.forwarding = !enter;
     return true;
   }
 
   template <typename Now>
   bool toProgram(PaneLine& line, std::string_view text, std::uint32_t cursor_column, Now&& now) {
-    if (line.line.answering() || !answers(line, cursor_column, std::forward<Now>(now))) {
+    if (line.line.answering() || !oneLine(text) || !answers(line, cursor_column, std::forward<Now>(now))) {
       return false;
     }
 

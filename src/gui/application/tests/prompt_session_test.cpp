@@ -70,6 +70,24 @@ namespace {
     return PaneShell{.pane_id = 1, .shell = IntegratedShell::zsh, .phase = ShellPhase::running, .canonical = true, .echo = echo, .signal_keys = true, .interrupt = interrupt_key, .quit = quit_key, .suspend = suspend_key, .end_of_file = end_of_file_key, .commands = commands};
   }
 
+  // The clock a session reads, set by the test.
+  struct Clock {
+    static inline std::uint64_t now_ns = 0;
+
+    static std::uint64_t nowNanoseconds() noexcept {
+      return now_ns;
+    }
+  };
+
+  // The shell reported a command's end and runs its hooks before its prompt.
+  PaneShell afterCommand(std::uint32_t commands, std::int32_t status) {
+    return PaneShell{.pane_id = 1, .shell = IntegratedShell::zsh, .phase = ShellPhase::unknown, .shell_foreground = true, .commands = commands, .status = status};
+  }
+
+  prompt::KeyPress control(char32_t character) {
+    return prompt::KeyPress{.key = prompt::Key::character, .character = character, .modifiers = {.control = true}};
+  }
+
   void lineRunsCommands() {
     SystemAllocator memory;
     Transport transport;
@@ -1201,6 +1219,99 @@ command = "switch" : "Switch branches" , { @branch } | "status" : "Show the work
     check(prompt::key(client, 1, prompt::KeyPress{.key = prompt::Key::character, .character = 'r', .modifiers = {.control = true}}) == prompt::Outcome::edited, "Ctrl-R while a command runs stays in the queue");
   }
 
+  // The shell's hooks run between a command's end and its prompt: the queue waits for the prompt
+  // all the same, and keys typed in between wait in the line instead of the shell's own editor.
+  void lineQueuesAcrossTheHooks() {
+    using namespace std::chrono_literals;
+
+    SystemAllocator memory;
+    Transport transport;
+    TestSession client{memory, transport, &Clock::nowNanoseconds};
+    constexpr auto hooks = static_cast<std::uint64_t>(std::chrono::nanoseconds{100ms}.count());
+    constexpr auto stuck = static_cast<std::uint64_t>(std::chrono::nanoseconds{3s}.count());
+
+    Clock::now_ns = 0;
+    openFirstPane(client, transport);
+    auto configuration = client.configuration;
+
+    configuration.prompt.mode = PromptMode::telar;
+    application::configuration::configure(client, configuration);
+    deliver(client, atPrompt());
+
+    // A success reported before the prompt still runs the queue once it is back.
+    deliver(client, running(1));
+    auto before = transport.sent.size();
+
+    typeKeys(client, "make test");
+    enter(client);
+    deliver(client, afterCommand(2, 0));
+    check(transport.commandsSince(before).empty(), "the queue waits for the prompt");
+    deliver(client, atPrompt(2, 0));
+    check(transport.commandsSince(before) == std::vector<std::string>{"make test"}, "a success reported before the prompt runs the queued command");
+
+    // A failure keeps it as a draft, and leaves nothing armed for the next command.
+    deliver(client, running(2));
+    typeKeys(client, "deploy");
+    enter(client);
+    deliver(client, afterCommand(3, 1));
+    deliver(client, atPrompt(3, 1));
+    check(prompt::line(client, 1)->text() == "deploy" && !prompt::line(client, 1)->queued(), "a failure keeps the queued command as an unarmed draft");
+    prompt::key(client, 1, control(U'u'));
+
+    // Keys typed while the hooks run wait in the line, and Enter there queues.
+    deliver(client, running(3));
+    Clock::now_ns = hooks;
+    deliver(client, afterCommand(4, 0));
+    before = transport.sent.size();
+    typeKeys(client, "git status");
+    check(transport.inputSince(before).empty() && prompt::line(client, 1)->text() == "git status", "keys typed before the prompt wait in the line");
+    check(enter(client) == prompt::Outcome::edited && prompt::line(client, 1)->queued(), "Enter there queues the command");
+    deliver(client, atPrompt(4, 0));
+    check(transport.commandsSince(before) == std::vector<std::string>{"git status"}, "and the prompt runs it");
+
+    // A shell that never brings its prompt back gets its keys again.
+    deliver(client, running(4));
+    deliver(client, afterCommand(5, 0));
+    Clock::now_ns = hooks + stuck;
+    check(prompt::key(client, 1, prompt::KeyPress{.key = prompt::Key::character, .character = 'l', .text = "l"}) == prompt::Outcome::terminal, "a gap that lasts goes back to the terminal");
+  }
+
+  // Keys a running program reads: Enter on an empty line, and the signal keys while the line
+  // composes an answer.
+  void runningProgramTakesItsKeys() {
+    SystemAllocator memory;
+    Transport transport;
+    TestSession client{memory, transport};
+
+    openFirstPane(client, transport);
+    auto configuration = client.configuration;
+
+    configuration.prompt.mode = PromptMode::telar;
+    application::configuration::configure(client, configuration);
+    deliver(client, atPrompt());
+    deliver(client, running(1));
+
+    check(enter(client) == prompt::Outcome::terminal, "Enter on an empty line reaches the program");
+    typeKeys(client, "next");
+    check(enter(client) == prompt::Outcome::edited && prompt::line(client, 1)->queued(), "Enter after text still queues it");
+    prompt::key(client, 1, control(U'u'));
+
+    prompt::key(client, 1, prompt::KeyPress{.key = prompt::Key::enter, .modifiers = {.alt = true}});
+    typeKeys(client, "partial");
+    check(prompt::line(client, 1)->answering(), "Alt-Enter answers the program");
+    check(prompt::key(client, 1, control(U'z')) == prompt::Outcome::terminal && prompt::key(client, 1, control(U'\\')) == prompt::Outcome::terminal, "Ctrl-Z and Ctrl-\\ reach it while an answer is composed");
+    check(prompt::key(client, 1, control(U'c')) == prompt::Outcome::terminal && prompt::line(client, 1)->text().empty(), "so does Ctrl-C, which drops the answer as the line discipline does");
+
+    // An answer is one line: a copied line's end is the Enter, a tab is the program's.
+    auto before = transport.sent.size();
+
+    client.paste(1, "yes\n");
+    check(enter(client) == prompt::Outcome::answer && transport.inputSince(before) == "yes\r", "a pasted line's end is dropped");
+    before = transport.sent.size();
+    client.paste(1, "a\tb");
+    check(enter(client) == prompt::Outcome::answer && transport.inputSince(before) == "a\tb\r", "a tab reaches the program");
+  }
+
   const telar::testing::Case case_line_runs_commands{"prompt_session.line_runs_commands", lineRunsCommands};
   const telar::testing::Case case_line_keeps_unsendable_commands{"prompt_session.line_keeps_unsendable_commands", lineKeepsUnsendableCommands};
   const telar::testing::Case case_line_recalls_history{"prompt_session.line_recalls_history", lineRecallsHistory};
@@ -1215,6 +1326,8 @@ command = "switch" : "Switch branches" , { @branch } | "status" : "Show the work
   const telar::testing::Case case_pane_removal_forgets_prompt{"prompt_session.pane_removal_forgets_prompt", paneRemovalForgetsPrompt};
   const telar::testing::Case case_prompt_history_stays_bounded{"prompt_session.prompt_history_stays_bounded", promptHistoryStaysBounded};
   const telar::testing::Case case_line_blocks{"prompt_session.line_blocks", lineBlocks};
+  const telar::testing::Case case_line_queues_across_the_hooks{"prompt_session.line_queues_across_the_hooks", lineQueuesAcrossTheHooks};
+  const telar::testing::Case case_running_program_takes_its_keys{"prompt_session.running_program_takes_its_keys", runningProgramTakesItsKeys};
   const telar::testing::Case case_line_block_motions{"prompt_session.line_block_motions", lineBlockMotions};
 
 }
