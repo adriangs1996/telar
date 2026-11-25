@@ -218,6 +218,8 @@ def check_configuration(binary, root):
         ('client={prefix="ctrl+b",keybindings={t.bind({"x"},"detach"),t.bind_global({"ctrl+a","x"},"detach")}}', [], 0, b'telar config: OK'),
         (plugin + 'client={keybindings={t.bind({"o"},t.action.plugin({plugin="dev.telar.sample",action="toggle"}))}}', [], 0, b'telar config: OK'),
         (plugin + 'client={keybindings={t.bind({"o"},t.action.plugin({plugin="dev.telar.sample",action="nope"}))}}', [], 1, b'UnknownPluginAction'),
+        # The theme picker's named themes and command, at the root as the window reads them.
+        ('themes={["osaka-jade"]=t.theme({base="vesper"})},client={theme_picker={on_select={"apply","{}"}}}', [], 0, b'telar config: OK'),
     ]
     config = root / 'checked.lua'
     for fields, options, status, diagnostic in cases:

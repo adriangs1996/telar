@@ -69,7 +69,7 @@ if(TELAR_GUI_NATIVE)
   find_package(Qt6GuiPrivate ${TELAR_QT_VERSION} EXACT REQUIRED CONFIG
     PATHS "${TELAR_GUI_QT_PREFIX}/lib/cmake/Qt6GuiPrivate" NO_DEFAULT_PATH)
   qt_standard_project_setup(REQUIRES 6.7)
-  add_library(gui-surface-command STATIC ui/app/chrome/components/surface_command.cpp)
+  add_library(gui-surface-command STATIC ui/kit/process/surface_command.cpp)
   target_link_libraries(gui-surface-command PUBLIC gui-posix gui-platform Qt6::Core)
   add_dependencies(gui-surface-command telar-gui-command)
 

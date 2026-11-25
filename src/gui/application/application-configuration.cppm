@@ -68,6 +68,9 @@ export {
       // Maps a configuration runtime::config::SnapshotReader already validated, profile included.
       static Configuration read(const runtime::lua::Value& root, std::string_view profile);
 
+      // The themes the picker lists and the command it runs, from every layer in order.
+      static void themePicker(const runtime::lua::Value& root, std::string_view profile, features::configuration::ThemePicker& picker);
+
     private:
       using ClientSettings = runtime::config::ClientSettings;
 
@@ -108,6 +111,9 @@ export {
       explicit ConfigurationGeneration(tbc::mut_a<Memory> memory, ConfigurationSourceText source);
 
       [[nodiscard]] const Configuration& configuration() const noexcept;
+
+      // Safe on the window thread: fixed when the generation loads.
+      [[nodiscard]] const features::configuration::ThemePicker& themePicker() const noexcept;
 
       [[nodiscard]] std::uint64_t number() const noexcept;
 
@@ -255,6 +261,7 @@ export {
       tbc::val_a<runtime::lua::Vm<Memory>> machine_;
       tbc::val_a<ds::Box<runtime::config::RuntimeValues<Memory>, Memory>> runtime_;
       tbc::val_a<ds::Box<ComponentConfiguration, Memory>> components_;
+      tbc::val_a<ds::Box<features::configuration::ThemePicker, Memory>> theme_picker_;
       ds::Option<runtime::config::LocalModules> modules_;
       runtime::config::LimitNotices notices_;
       runtime::config::RetainedClientValidationState client_state_;
@@ -315,6 +322,13 @@ export namespace telar::gui::application::configuration {
   using features::configuration::commandTabReference;
   using features::configuration::ConfigurationQuery;
   using features::configuration::default_theme_values;
+  using features::configuration::lightTheme;
+  using features::configuration::ThemeCatalog;
+  using features::configuration::ThemeChoice;
+  using features::configuration::ThemeCommand;
+  using features::configuration::ThemeEntry;
+  using features::configuration::themeFingerprint;
+  using features::configuration::ThemePicker;
   using features::configuration::themeValuesByName;
 
   // The session shows `configuration` from now on; a new prompt mode configures the shells again.

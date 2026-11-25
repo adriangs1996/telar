@@ -625,6 +625,52 @@ namespace {
         "a shared port is forwarded only while something holds its machine");
   }
 
+  // A holder is let go when it closes its connection, also one whose request came after the
+  // link first looked for it: the end of a connection is told from one with nothing to say yet.
+  void theLinkLetsGoOfAHolderWhoseRequestCameLate() {
+    const Pair pair;
+    const LocalLink local{pair};
+    const auto control = local.paths().control();
+    auto listener = listenTcp("127.0.0.1", 0);
+    const auto port = listener.port;
+    const EchoServer echo{std::move(listener.socket)};
+    const auto prefix = std::to_string(port) + " ";
+    const auto listed = [&](const std::string& text) {
+      return text.starts_with(prefix);
+    };
+    const auto none = [](const std::string& text) {
+      return text.empty();
+    };
+    // Connects, and asks only once the link has found the connection silent.
+    const auto askLate = [&](const std::string& request) {
+      auto socket = connectUnix(control.view());
+
+      check(static_cast<bool>(socket));
+      std::this_thread::sleep_for(std::chrono::milliseconds{100});
+      writeAll(socket.get(), request);
+      check(readSome(socket.get(), 16).starts_with("ok"), "the link accepts the request");
+      return socket;
+    };
+
+    auto sharing = connectUnix(std::string{pair.server.directory.path()} + "/" + std::string{Server::sharing_socket});
+
+    check(static_cast<bool>(sharing));
+    writeAll(sharing.get(), "share " + std::to_string(port) + " late holder\n");
+    check(readSome(sharing.get(), 3) == "ok\n");
+
+    auto held = askLate("hold " + std::string{pair.destination} + "\n");
+
+    check(awaitForwards(local, pair.destination, listed).ends_with(" shared late holder\n"));
+    held.reset();
+    check(awaitForwards(local, pair.destination, none).empty(), "a machine is no longer held once its holder closed");
+
+    auto forward = askLate("forward " + std::string{pair.destination} + " " + std::to_string(port) + " late holder\n");
+
+    check(awaitForwards(local, pair.destination, listed).ends_with(" asked late holder\n"));
+    forward.reset();
+    check(awaitForwards(local, pair.destination, none).empty(), "a forward ends once its holder closed");
+  }
+
   // A command that goes through the link finds, from the second on, a connection the link
   // made while the one before ran; it runs the same either way.
   void commandsThroughTheLinkRunOnAConnectionKeptReady() {
@@ -669,6 +715,7 @@ namespace {
   const telar::testing::Case case_the_link_offers_a_machines_runtime_on_a_local_socket{"gateway.the_link_offers_a_machines_runtime_on_a_local_socket", theLinkOffersAMachinesRuntimeOnALocalSocket};
   const telar::testing::Case case_the_link_forwards_a_port_until_it_closes_there{"gateway.the_link_forwards_a_port_until_it_closes_there", theLinkForwardsAPortUntilItClosesThere};
   const telar::testing::Case case_a_port_a_machine_shares_is_forwarded_to_whoever_holds_it{"gateway.a_port_a_machine_shares_is_forwarded_to_whoever_holds_it", aPortAMachineSharesIsForwardedToWhoeverHoldsIt};
+  const telar::testing::Case case_the_link_lets_go_of_a_holder_whose_request_came_late{"gateway.the_link_lets_go_of_a_holder_whose_request_came_late", theLinkLetsGoOfAHolderWhoseRequestCameLate};
   const telar::testing::Case case_a_forward_opened_right_after_another_ended_is_told_its_port_closed_too{"gateway.a_forward_opened_right_after_another_ended_is_told_its_port_closed_too", aForwardOpenedRightAfterAnotherEndedIsToldItsPortClosedToo};
   const telar::testing::Case case_a_forward_to_a_port_that_just_opened_stays_open{"gateway.a_forward_to_a_port_that_just_opened_stays_open", aForwardToAPortThatJustOpenedStaysOpen};
   const telar::testing::Case case_the_link_stops_watching_a_port_its_holder_left{"gateway.the_link_stops_watching_a_port_its_holder_left", theLinkStopsWatchingAPortItsHolderLeft};

@@ -6,10 +6,10 @@ static_assert(true);
 #include "component_surface_state.hpp"
 #include "foundation/core/application_memory.hpp"
 #include "pick_controller.hpp"
-#include "surface_command.hpp"
 #include "tbc/view.hpp"
 #include "ui/design/elements/element_slots.hpp"
 #include "ui/kit/config/configuration_source.hpp"
+#include "ui/kit/process/surface_command.hpp"
 #include "ui/kit/store/store.hpp"
 #include <QObject>
 #include <QPointF>

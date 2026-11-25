@@ -22,8 +22,8 @@ static_assert(true);
 import telar.gui.features.components;
 
 #include "ui/app/chrome/components/pick_controller.hpp"
-#include "ui/app/chrome/components/surface_command.hpp"
 #include "ui/kit/config/lua_host.hpp"
+#include "ui/kit/process/surface_command.hpp"
 #include <QByteArray>
 #include <QCoreApplication>
 #include <QEventLoop>

@@ -48,6 +48,7 @@ namespace telar::gui::qt {
       monitor,
       machine_wizard,
       explorer,
+      themes,
     };
     Q_ENUM(Dialog)
 

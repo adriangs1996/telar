@@ -276,7 +276,7 @@ export {
       // "horizontal"} is "split-horizontal".
       static tbc::val_a<std::string_view> builtinName(const lua::Value& action, tbc::val_a<std::string_view> kind);
 
-      static constexpr ds::Array<std::string_view, 64> builtin_names{"new-editor", "new-editor-tab", "editor-files", "editor-grep", "editor-buffers", "next-machine", "previous-machine", "machine-picker", "add-machine", "explorer", "monitor", "process-picker", "process-terminate", "process-kill", "process-stop", "process-continue", "process-lower-priority", "process-copy-command", "process-focus-pane", "process-review-stack", "process-review-files", "process-review-logs", "scroll-pane-up", "scroll-pane-down", "split-horizontal", "split-vertical", "focus-left", "focus-right", "focus-up", "focus-down", "navigate-left", "navigate-right", "navigate-up", "navigate-down", "resize-left", "resize-right", "resize-up", "resize-down", "toggle-pane-fullscreen", "toggle-sidebar", "resize-sidebar-left", "resize-sidebar-right", "toggle-workspace-list", "leave-worktree", "forget-gone-worktrees", "new-workspace", "rename-workspace", "close-pane", "new-tab", "next-tab", "previous-tab", "rename-tab", "close-tab", "move-tab-previous", "move-tab-next", "detach", "copy-mode", "goto-picker", "palette", "history-palette", "path-picker", "suggest-command", "close-panel", "refresh-panel"};
+      static constexpr ds::Array<std::string_view, 65> builtin_names{"new-editor", "new-editor-tab", "editor-files", "editor-grep", "editor-buffers", "next-machine", "previous-machine", "machine-picker", "add-machine", "explorer", "monitor", "process-picker", "process-terminate", "process-kill", "process-stop", "process-continue", "process-lower-priority", "process-copy-command", "process-focus-pane", "process-review-stack", "process-review-files", "process-review-logs", "scroll-pane-up", "scroll-pane-down", "split-horizontal", "split-vertical", "focus-left", "focus-right", "focus-up", "focus-down", "navigate-left", "navigate-right", "navigate-up", "navigate-down", "resize-left", "resize-right", "resize-up", "resize-down", "toggle-pane-fullscreen", "toggle-sidebar", "resize-sidebar-left", "resize-sidebar-right", "toggle-workspace-list", "leave-worktree", "forget-gone-worktrees", "new-workspace", "rename-workspace", "close-pane", "new-tab", "next-tab", "previous-tab", "rename-tab", "close-tab", "move-tab-previous", "move-tab-next", "detach", "copy-mode", "goto-picker", "palette", "history-palette", "path-picker", "suggest-command", "close-panel", "refresh-panel", "theme-picker"};
 
       static void builtin(const lua::Value& value);
       static bool validIndex(std::string_view number) noexcept;
@@ -2426,6 +2426,13 @@ export {
         ds::Option<bool> needs_input;
       };
 
+      // `client.theme_picker`: the command the theme picker runs with the chosen theme's name.
+      struct ThemePicker {
+        // Whether `on_select` is set; CommandArgumentsReader reads its arguments from the table.
+        bool on_select = false;
+        ds::Option<std::uint32_t> timeout_ms;
+      };
+
       ds::Option<bool> sidebar_visible;
       ds::Option<bool> pane_gaps;
       // Views of the configuration's strings, alive while its table is.
@@ -2437,6 +2444,7 @@ export {
       ClientInputSettings input;
       PromptSettings prompt;
       ExplorerKeys explorer_keys;
+      ThemePicker theme_picker;
     };
 
     class ClientReader {
@@ -2498,6 +2506,7 @@ export {
       static void history(const lua::Value& table, ClientSettings::History& history);
       static void explorer(const lua::Value& table, ExplorerKeys& keys);
       static void explorerKeys(const lua::Value& table, bool visual, ExplorerKeys& keys);
+      static void themePicker(const lua::Value& table, ClientSettings::ThemePicker& picker);
     };
 
     class ClientValidator {

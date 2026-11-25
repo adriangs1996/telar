@@ -103,6 +103,15 @@ tabs and agents, `>` for actions and `:` for machines. For example, `>split`
 searches actions only.
 See [remote machines](remote.md) to pair another machine.
 
+## Change the theme
+
+Type `theme` in the palette and choose `Choose theme`, or bind
+`telar.action.theme_picker()`. Each theme you move to with Left and Right
+dresses the window at once; Enter keeps it for every window and Escape puts
+back the one you had. See [the theme picker](configuration.md#theme-picker).
+
+![The theme picker previews Osaka Jade on the window while the other themes wait as slices beside it](images/telar-theme-picker.png)
+
 ## Explore the files
 
 Press `Ctrl+b`, then `o`, to list the files of the window's machine over the

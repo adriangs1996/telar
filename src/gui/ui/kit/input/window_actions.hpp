@@ -79,6 +79,7 @@ namespace telar::gui::qt::window_actions {
     process_review_stack,
     process_review_files,
     process_review_logs,
+    theme_picker,
   };
   Q_ENUM_NS(Action)
 

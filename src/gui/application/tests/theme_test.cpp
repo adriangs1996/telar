@@ -272,11 +272,90 @@ namespace {
     }
   }
 
+  // The picker lists every preset and the configuration's named themes in the order of the names
+  // they show; a named theme that names a preset or its alias takes that preset's place, and a
+  // profile's command replaces the root's.
+  void themePickerCatalogAndCommand() {
+    telar::testing::TestMemory adapter;
+    telar::ConcurrentMemory& memory = adapter;
+    const application::ConfigurationSourceText source{
+        .source = R"(
+        return {api_version=2,theme='shade',
+          themes={['osaka-jade']={base='vesper',terminal={background='#111c18'}},['kanagawa-wave']={colors={accent='#7e9cd8'}},paper={terminal={background='#f2ecbc'}}},
+          client={theme_picker={on_select={'root-apply','{}'}}},
+          profiles={work={themes={night='tokyo-night'},client={theme_picker={on_select={'/bin/sh','-c','apply "$1"','theme','{}'},timeout_ms=60000}}}}}
+      )",
+        .directory = {},
+        .profile = "work",
+    };
+
+    const application::ConfigurationGeneration generation{memory, source};
+    const auto& picker = generation.themePicker();
+    const auto entries = picker.catalog.entries();
+
+    check(entries.size() == theme_presets.size() + 3, "named themes must add to the presets, and one that names a preset must replace it");
+    check(std::ranges::is_sorted(entries, {}, [](const ThemeEntry& entry) {
+      return entry.label.view();
+    }),
+        "the catalog must be ordered by the names it shows");
+    const auto* osaka = picker.catalog.find("osaka-jade");
+
+    check(osaka != nullptr && osaka->label.view() == "Osaka Jade" && osaka->values.base == ThemeName::vesper, "a named theme must start from its base and show its words capitalized");
+    check(osaka->values.terminal.background == ThemeRgb{17, 28, 24}, "a named theme must keep its own values over its base");
+    const auto* wave = picker.catalog.find("kanagawa");
+
+    check(wave != nullptr && wave->name.view() == "kanagawa-wave" && wave->label.view() == "Kanagawa Wave", "a named theme for a preset's alias must stand for that preset");
+    check(picker.catalog.find("catppuccin-mocha") != nullptr && picker.catalog.find("catppuccin")->label.view() == "Catppuccin Mocha", "a preset must be found by its aliases and show its own name");
+    check(picker.catalog.find("paper") != nullptr && picker.catalog.find("paper")->light, "a light background must read as a light theme");
+    check(picker.catalog.find("night") != nullptr, "a profile must add its own named themes");
+    check(picker.catalog.find("missing") == nullptr, "a name the catalog lacks must find nothing");
+    check(picker.catalog.startingWith("osa") && entries[*picker.catalog.startingWith("OSA")].name.view() == "osaka-jade", "typing must find the first theme whose shown name starts with it, ignoring case");
+
+    std::string arguments;
+
+    picker.on_select.each("osaka-jade", [&](std::string_view argument) {
+      arguments.append(argument).push_back('|');
+    });
+    check(arguments == "/bin/sh|-c|apply \"$1\"|theme|osaka-jade|", "a profile's command must replace the root's and receive the theme's name in place of {}");
+    check(picker.on_select.timeoutMs() == 60000, "the command must keep its configured timeout");
+  }
+
+  // The saved choice is the theme's name and the configuration theme's fingerprint, and reads back
+  // as it was written; anything else holds no choice.
+  void themeChoiceRoundTripsAndFollowsTheConfiguration() {
+    ThemeChoice choice;
+
+    choice.name.assign("osaka-jade");
+    choice.fingerprint = 0x0123456789abcdefULL;
+    telar::ds::Array<char, ThemeChoice::file_bytes> buffer{};
+    const auto text = choice.format(buffer);
+
+    check(text == "osaka-jade\n0123456789abcdef\n", "a choice must be written as its name and sixteen hexadecimal digits");
+    check(ThemeChoice::parse(text) == choice, "a written choice must read back unchanged");
+    check(!ThemeChoice::parse("osaka-jade\n0123\n"), "a short fingerprint must hold no choice");
+    check(!ThemeChoice::parse("../etc\n0123456789abcdef\n"), "a name outside the theme names must hold no choice");
+    check(!ThemeChoice::parse(""), "an empty file must hold no choice");
+
+    ThemeSelection selection;
+
+    selection.base = default_theme_values;
+    const auto before = themeFingerprint(selection);
+
+    check(themeFingerprint(selection) == before, "the same theme must give the same fingerprint");
+    selection.base.terminal.background = ThemeRgb{1, 2, 3};
+    check(themeFingerprint(selection) != before, "another configured theme must give another fingerprint");
+    selection.base = default_theme_values;
+    selection.dark = default_theme_values;
+    check(themeFingerprint(selection) != before, "an appearance variant must count in the fingerprint");
+  }
+
   const telar::testing::Case case_complete_theme_inheritance_and_projection{"theme.complete_theme_inheritance_and_projection", completeThemeInheritanceAndProjection};
   const telar::testing::Case case_theme_queries_retain_values_without_allocation{"theme.theme_queries_retain_values_without_allocation", themeQueriesRetainValuesWithoutAllocation};
   const telar::testing::Case case_syntax_fallback_and_aliases{"theme.syntax_fallback_and_aliases", syntaxFallbackAndAliases};
   const telar::testing::Case case_terminal_colors_carry_the_editor_colors{"theme.terminal_colors_carry_the_editor_colors", terminalColorsCarryTheEditorColors};
   const telar::testing::Case case_session_gives_the_runtime_its_theme{"theme.session_gives_the_runtime_its_theme", sessionGivesTheRuntimeItsTheme};
+  const telar::testing::Case case_theme_picker_catalog_and_command{"theme.theme_picker_catalog_and_command", themePickerCatalogAndCommand};
+  const telar::testing::Case case_theme_choice_round_trips{"theme.theme_choice_round_trips_and_follows_the_configuration", themeChoiceRoundTripsAndFollowsTheConfiguration};
   const telar::testing::Case case_utf8_inspection_preserves_validation_errors{"theme.utf8_inspection_preserves_validation_errors", utf8InspectionPreservesValidationErrors};
 
 }

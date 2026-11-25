@@ -6,3 +6,4 @@ export module telar.gui.features.configuration;
 
 export import :queries;
 export import :themes;
+export import :theme_picker;

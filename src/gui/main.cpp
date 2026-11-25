@@ -102,6 +102,15 @@ namespace {
     return telarConfigFile(QStringLiteral("trust.json"));
   }
 
+  // Where the theme picker keeps its choice for every window: `telar/theme` under
+  // XDG_STATE_HOME, else ~/.local/state; empty without either.
+  QString themeChoicePath() {
+    telar::SystemAllocator memory;
+    const auto directory = telar::runtime::cli::xdgDirectory(memory, telar::runtime::process_environment, "XDG_STATE_HOME", "/.local/state");
+
+    return directory.empty() ? QString{} : QString::fromUtf8(directory.data(), static_cast<qsizetype>(directory.size())) + QStringLiteral("/telar/theme");
+  }
+
   QString runtimeEndpoint(const QCommandLineParser& parser, telar::gui::ApplicationAllocator& memory) {
     auto endpoint = parser.value(QStringLiteral("socket"));
     if (endpoint.isEmpty()) {
@@ -229,7 +238,7 @@ int main(int argc, char** argv) {
       client.roster()->configureRemoteLaunch(*remote, parser.positionalArguments());
     }
 
-    client.loadConfiguration(configurationPath(parser), parser.value(QStringLiteral("profile")), parser.value(QStringLiteral("theme")), trustStorePath());
+    client.loadConfiguration(configurationPath(parser), parser.value(QStringLiteral("profile")), parser.value(QStringLiteral("theme")), trustStorePath(), themeChoicePath());
     QQmlApplicationEngine engine;
 
     engine.rootContext()->setContextProperty(QStringLiteral("telar"), &client);

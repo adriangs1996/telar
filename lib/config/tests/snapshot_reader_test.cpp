@@ -196,6 +196,23 @@ namespace {
     check(accepted("return {api_version = 2, client = {theme = 'shade'}}"));
   }
 
+  // `themes` names themes for the picker, at the root or in a profile; a name is a word of
+  // letters, digits, '-' and '_', and each theme is read as `theme` is.
+  // `client.theme_picker.on_select` is a command that receives the chosen theme's name.
+  void testNamedThemesAndThemePicker() {
+    check(accepted("return {api_version = 2, themes = {['osaka-jade'] = {base = 'vesper', colors = {accent = '#a8c98c'}}, mono = 'shade'}}"));
+    check(accepted("return {api_version = 2, profiles = {work = {themes = {night = 'kanagawa'}}}}", "work"));
+    check(!accepted("return {api_version = 2, themes = {['two words'] = 'shade'}}"));
+    check(!accepted("return {api_version = 2, themes = {mono = 'not-a-preset'}}"));
+    check(!accepted("return {api_version = 2, themes = {mono = {colors = {accent = '#12345g'}}}}"));
+    check(!accepted("local themes = {} for i = 1, 65 do themes['t' .. i] = 'shade' end return {api_version = 2, themes = themes}"));
+    check(accepted("local themes = {} for i = 1, 64 do themes['t' .. i] = 'shade' end return {api_version = 2, themes = themes}"));
+    check(accepted("return {api_version = 2, client = {theme_picker = {on_select = {'apply-theme', '{}'}, timeout_ms = 60000}}}"));
+    check(!accepted("return {api_version = 2, client = {theme_picker = {on_select = {'apply-theme'}}}}"));
+    check(!accepted("return {api_version = 2, client = {theme_picker = {on_select = {'apply-theme', '{}'}, timeout_ms = 60001}}}"));
+    check(!accepted("return {api_version = 2, client = {theme_picker = {command = {'apply-theme', '{}'}}}}"));
+  }
+
   // `gui.window.background_blur` is either a switch or a radius in 0..255.
   void testGuiBackgroundBlur() {
     const auto window = [](std::string_view blur) {
@@ -224,6 +241,7 @@ namespace {
   const telar::testing::Case case_agent_descriptions{"snapshot.agent_descriptions_helper", testAgentDescriptionsHelper};
   const telar::testing::Case case_agent_screen{"snapshot.configured_agent_screen_detection", testConfiguredAgentScreenDetection};
   const telar::testing::Case case_theme_colors{"snapshot.theme_rejects_malformed_colors", testThemeRejectsMalformedColors};
+  const telar::testing::Case case_named_themes{"snapshot.named_themes_and_theme_picker", testNamedThemesAndThemePicker};
   const telar::testing::Case case_gui_blur{"snapshot.gui_background_blur", testGuiBackgroundBlur};
 
 }
