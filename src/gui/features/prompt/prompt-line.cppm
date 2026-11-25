@@ -132,6 +132,10 @@ namespace telar::gui::features::prompt {
 
     [[nodiscard]] bool pending(std::uint64_t request) const noexcept;
 
+    // Whether an answer that receive took closed the menu to ask for the word again, as Tab
+    // does; once.
+    [[nodiscard]] bool takeAskAgain() noexcept;
+
     // The shell is back at its prompt after `succeeded` (or not): a queued command runs only
     // after a success, and otherwise stays as a draft.
     Outcome promptReturned(bool succeeded);
@@ -186,8 +190,10 @@ namespace telar::gui::features::prompt {
     tbc::val_a<ds::Vec<ds::String<Memory>, Memory>> recent_;
     tbc::val_a<ds::String<Memory>> draft_;
     tbc::val_a<ds::String<Memory>> delivery_;
-    // How many commands back Up went; none at the line being written.
+    // How many commands back Up went; none at the line being written, or once what Up brought
+    // back was edited: the text's revision then was `recalled_`.
     ds::Option<std::size_t> history_index_;
+    std::uint64_t recalled_ = 0;
     tbc::val_a<ds::Option<Menu>> menu_;
     std::uint64_t revision_ = 0;
     // The next offer refines the menu typing reopened: one choice left is not written.
@@ -195,6 +201,7 @@ namespace telar::gui::features::prompt {
     std::uint32_t secret_keys_ = 0;
     bool armed_ = false;
     bool answering_ = false;
+    bool asks_again_ = false;
   };
 
 }

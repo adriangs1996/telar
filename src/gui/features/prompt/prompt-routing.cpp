@@ -45,7 +45,7 @@ namespace telar::gui::features::prompt {
 
   ds::Option<std::string_view> oneLine(std::string_view text) noexcept {
     const auto end = text.find_last_not_of("\r\n");
-    const auto line = end == std::string_view::npos ? std::string_view{} : text.substr(0, end + 1);
+    const auto line = end == std::string_view::npos ? std::string_view{} : std::string_view{text.data(), end + 1};
     if (line.find_first_of("\r\n") != std::string_view::npos) {
       return ds::none;
     }

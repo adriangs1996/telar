@@ -61,7 +61,12 @@ namespace telar::gui::features::prompt {
     // Starts a new line, back in insert mode.
     void clear() noexcept;
 
+    // The command goes on on a new line, after the text outside vim's insert mode.
     void newline();
+
+    // The caret after the text, as a command recalled leaves it: on its last character in vim's
+    // normal mode, where it sits on one.
+    void placeAtEnd() noexcept;
 
     // Text an input method committed or the user pasted.
     void insertText(std::string_view text);
@@ -166,6 +171,11 @@ namespace telar::gui::features::prompt {
     // In normal mode the cursor sits on a character, never on a line's end, unless it is empty.
     void clampNormal() noexcept;
 
+    // A count's digits, and the product of a count and an operator's: past four digits, a
+    // count only makes vim slower.
+    static constexpr std::size_t maximum_count = 9999;
+
+    // The count before the command times the operator's, at most maximum_count.
     [[nodiscard]] std::size_t count() const noexcept;
 
     Request normal(const KeyPress& key);
@@ -236,7 +246,12 @@ namespace telar::gui::features::prompt {
 
     void changeCase(std::size_t start, std::size_t end, char action);
 
+    // What a delete, change or yank takes goes in the register named, at the end of its text for
+    // an uppercase name, and in the unnamed one.
     void store(std::string_view text, bool linewise);
+
+    // The index of register `name` among a to z, whatever its case.
+    [[nodiscard]] static ds::Option<std::size_t> namedRegister(char name) noexcept;
 
     struct Register {
       tbc::val_a<ds::String<Memory>> text;
@@ -292,6 +307,20 @@ namespace telar::gui::features::prompt {
     void finishRecording();
 
     void repeat();
+
+    // A key that starts an operator, g for the case ones: a count given to a dot replaces the
+    // one typed after it.
+    [[nodiscard]] static bool operatorKey(const KeyPress& key) noexcept;
+
+    // The keys of a recorded change that hold its counts, which a count given to a dot replaces:
+    // [0, first) before it, and the operator's, [operator_begin, operator_end).
+    struct Counts {
+      std::size_t first = 0;
+      std::size_t operator_begin = 0;
+      std::size_t operator_end = 0;
+    };
+
+    [[nodiscard]] static Counts countsOf(std::span<const Recorded> changes) noexcept;
 
     static std::size_t encode(char32_t value, ds::Array<char, 4>& output) noexcept;
 

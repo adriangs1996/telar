@@ -765,6 +765,35 @@ command = "switch" : "Switch branches" , { @branch } | "status" : "Show the work
 
     deliver(client, CompletionWords{.request_id = quoted.request_id, .words = file});
     check(prompt::line(client, 1)->text() == "cat \"Some file.txt\" ", "a quote the word opened is closed");
+
+    // A quote opened inside the word is the one the choice goes on in.
+    prompt::key(client, 1, prompt::KeyPress{.key = prompt::Key::character, .character = 'u', .modifiers = {.control = true}});
+    typeKeys(client, "cat x=\"Some fi");
+    tab(client);
+    const auto inner = transport.last<CompleteWords>();
+    const ds::Array assigned{CompletionWord{.text = "x=Some file.txt"}};
+
+    check(inner.prefix == "x=Some fi", "the runtime is asked for the word as the shell reads it");
+    deliver(client, CompletionWords{.request_id = inner.request_id, .words = assigned});
+    check(prompt::line(client, 1)->text() == "cat x=\"Some file.txt\" ", "a quote opened inside the word is closed, its spaces left alone");
+
+    // Typing while a cut list is on its way: the word as typed is asked for again, as its
+    // choices may be past the cut.
+    prompt::key(client, 1, prompt::KeyPress{.key = prompt::Key::character, .character = 'u', .modifiers = {.control = true}});
+    typeKeys(client, "cat ");
+    tab(client);
+    const auto cut = transport.last<CompleteWords>();
+    const ds::Array firsts{CompletionWord{.text = "a1"}, CompletionWord{.text = "a2"}};
+    const auto asked = transport.count(ClientTag::complete_words);
+
+    typeKeys(client, "z");
+    deliver(client, CompletionWords{.request_id = cut.request_id, .truncated = true, .words = firsts});
+    check(transport.count(ClientTag::complete_words) == asked + 1 && transport.last<CompleteWords>().prefix == "z", "a cut answer that typing outran asks again");
+    const ds::Array zeta{CompletionWord{.text = "zeta"}};
+
+    deliver(client, CompletionWords{.request_id = transport.last<CompleteWords>().request_id, .words = zeta});
+    check(prompt::line(client, 1)->menu() && prompt::line(client, 1)->menu()->choices.size() == 1 && prompt::line(client, 1)->menu()->choices[0].text == "zeta", "and its answer is offered, as typing refines it");
+    prompt::key(client, 1, prompt::KeyPress{.key = prompt::Key::escape});
   }
 
   // An option that takes its value in the same word is written joined, and the value completes.

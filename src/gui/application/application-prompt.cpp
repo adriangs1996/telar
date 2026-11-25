@@ -38,7 +38,7 @@ namespace telar::gui::application::prompt {
       const auto* pane = findPane(session.panes, pane_id);
       const auto* line = session.prompt_lines.find(pane_id);
 
-      return pane != nullptr && line != nullptr && afterCommand(session, *pane) && features::prompt::BetweenCommands::now(**line, Access::clock(session)());
+      return pane != nullptr && line != nullptr && afterCommand(session, *pane) && features::prompt::BetweenCommands::now(**line, static_cast<std::int64_t>(Access::clock(session)()));
     }
 
     // Pane `pane_id`'s line changed when it is not 0, for its view to redraw.
@@ -143,6 +143,14 @@ namespace telar::gui::application::prompt {
       features::prompt::offer(state, *line, std::move(plan));
     }
 
+    // An answer the line took narrowed nothing it could trust: Tab asks again for the word.
+    void askAgain(Session& session, std::uint64_t pane_id) {
+      const auto* pane = findPane(session.panes, pane_id);
+      if (pane != nullptr && features::prompt::asksAgain(session.prompt_lines, pane_id)) {
+        complete(session, pane_id, dialect(*pane));
+      }
+    }
+
     // Sends what pane `pane_id`'s line decided: a command to run, a line for the running program,
     // or raw bytes the shell reads as keys. Commands are validated like a pasted history entry,
     // and the line lets go of one only once it is sent: one that cannot be stays in the editor.
@@ -155,7 +163,7 @@ namespace telar::gui::application::prompt {
       }
 
       const bool bracketed = pane->screen.modes().bracketed_paste;
-      ds::String<Memory> text{session.memory, features::prompt::delivery(*line)};
+      const ds::String<Memory> text{session.memory, features::prompt::delivery(*line)};
 
       switch (outcome) {
       case Outcome::run: {
@@ -405,7 +413,7 @@ namespace telar::gui::application::prompt {
 
     const bool back_at_prompt = current.phase == ShellPhase::prompt && previous.phase != ShellPhase::prompt;
 
-    if (const auto outcome = features::prompt::follow(*line, previous, current, Access::clock(session)())) {
+    if (const auto outcome = features::prompt::follow(*line, previous, current, static_cast<std::int64_t>(Access::clock(session)()))) {
       deliver(session, pane_id, *outcome);
     }
 
@@ -449,7 +457,10 @@ namespace telar::gui::application::prompt {
       return settle(session, *settled);
     }
 
-    return changed(session, features::prompt::receive(session.prompt, session.prompt_lines, message).valueOr(0));
+    const auto pane_id = features::prompt::receive(session.prompt, session.prompt_lines, message).valueOr(0);
+
+    askAgain(session, pane_id);
+    return changed(session, pane_id);
   }
 
   ds::Option<Change> receive(Session& session, const PathResults& message) {
@@ -462,6 +473,7 @@ namespace telar::gui::application::prompt {
       return ds::none;
     }
 
+    askAgain(session, *pane_id);
     return changed(session, *pane_id);
   }
 

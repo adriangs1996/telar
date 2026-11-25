@@ -506,6 +506,10 @@ export namespace telar::gui::features::prompt {
 
   [[nodiscard]] ds::Option<std::uint64_t> receive(tbc::mut_a<State> state, tbc::mut_a<Lines> lines, const PathResults& message);
 
+  // Whether pane `pane_id`'s Tab asks again: an answer cut short arrived after typing narrowed
+  // the word, and the choices it narrows to may be past the cut. Once per answer.
+  [[nodiscard]] bool asksAgain(Lines& lines, std::uint64_t pane_id) noexcept;
+
   // ---- requests that fail -----------------------------------------------------------------------
 
   // Request `request_id` failed, or a lost connection will never answer it: it settles as one that

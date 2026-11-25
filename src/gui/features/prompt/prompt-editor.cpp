@@ -81,7 +81,21 @@ namespace telar::gui::features::prompt {
   }
 
   void Editor::newline() {
+    // Outside vim's insert mode the caret sits on a character, or a selection covers some: the
+    // command goes on after the text, typed in insert mode, without taking either.
+    if (keymap_ == Keymap::vim && mode_ != Mode::insert) {
+      reset();
+      enterInsert(text_.size());
+    }
+
     text_.insert("\n");
+  }
+
+  void Editor::placeAtEnd() noexcept {
+    text_.moveTo(text_.size());
+    if (keymap_ == Keymap::vim && mode_ != Mode::insert) {
+      clampNormal();
+    }
   }
 
   void Editor::insertText(std::string_view text) {
@@ -240,6 +254,12 @@ namespace telar::gui::features::prompt {
     switch (key.key) {
     case Key::character:
       if (!key.text.empty()) {
+        // readline takes back a word at a time: one typed after a blank starts a step of its
+        // own. Vim's insert stays one step, as its u takes it back whole.
+        if (keymap_ == Keymap::emacs && cursor > 0 && blank(cursor - 1) && classify(key.text.front()) != CharacterClass::blank) {
+          text_.seal();
+        }
+
         text_.insert(key.text, true);
       }
 
@@ -626,7 +646,7 @@ namespace telar::gui::features::prompt {
   }
 
   std::size_t Editor::count() const noexcept {
-    return std::max<std::size_t>(1, count_) * std::max<std::size_t>(1, operator_count_);
+    return std::min(std::max<std::size_t>(1, count_) * std::max<std::size_t>(1, operator_count_), maximum_count);
   }
 
   namespace {
@@ -737,6 +757,34 @@ namespace telar::gui::features::prompt {
       return applyMotion(Motion{.target = 0, .inclusive = false, .linewise = true});
     }
 
+    // gu, gU and g~ are the case operators; doubled, or with the operator's last letter again
+    // (guu, gUgU), they take whole lines.
+    if (character == 'u' || character == 'U' || character == '~') {
+      // Over a selection they act on it, as u, U and ~ do there.
+      if (mode_ == Mode::visual || mode_ == Mode::visual_line) {
+        return visualCommand(character);
+      }
+
+      if (operator_ != 0) {
+        if (operator_ == static_cast<char>(character)) {
+          operateOnLines();
+        } else {
+          reset();
+        }
+
+        return Request::none;
+      }
+
+      // The g came before the change began: the change starts from it.
+      if (replaying_ == 0) {
+        startRecording(KeyPress{.key = Key::character, .character = U'g'});
+        record(KeyPress{.key = Key::character, .character = character});
+      }
+
+      operator_ = static_cast<char>(character);
+      return Request::none;
+    }
+
     if (character == 'e' || character == 'E') {
       auto target = text_.cursor();
 
@@ -752,9 +800,7 @@ namespace telar::gui::features::prompt {
   }
 
   bool Editor::countDigit(char32_t character) noexcept {
-    // A count's digits; past four, more digits only make vim slower.
     constexpr std::size_t decimal_base = 10;
-    constexpr std::size_t maximum_count = 9999;
     auto& target = operator_ != 0 ? operator_count_ : count_;
 
     if ((character < '1' || character > '9') && (character != '0' || target == 0)) {
@@ -839,8 +885,14 @@ namespace telar::gui::features::prompt {
     const auto apply = [&](auto step) {
       auto position = cursor;
 
+      // A step that no longer moves, at either end of the text, ends the count.
       for (std::size_t index = 0; index < repeat; ++index) {
-        position = step(position);
+        const auto next = step(position);
+        if (next == position) {
+          break;
+        }
+
+        position = next;
       }
 
       return position;
@@ -1434,15 +1486,39 @@ namespace telar::gui::features::prompt {
         clipboard_.write(text);
       }
     } else if (register_ != '_') {
-      auto& target = register_ >= 'a' && register_ <= 'z' ? registers_.atMut(static_cast<std::size_t>(register_ - 'a')) : unnamed_;
+      const auto named = namedRegister(register_);
+      auto& target = named ? registers_.atMut(*named) : unnamed_;
 
-      target.text.assign(text);
-      target.linewise = linewise;
+      // An uppercase name appends to its register, the lines after its text when they are lines.
+      if (register_ >= 'A' && register_ <= 'Z') {
+        if (linewise && !target.linewise && !target.text.empty()) {
+          target.text.push('\n');
+        }
+
+        target.text.append(text);
+        target.linewise = target.linewise || linewise;
+      } else {
+        target.text.assign(text);
+        target.linewise = linewise;
+      }
+
       if (register_ != '"') {
         unnamed_.text.assign(target.text);
         unnamed_.linewise = target.linewise;
       }
     }
+  }
+
+  ds::Option<std::size_t> Editor::namedRegister(char name) noexcept {
+    if (name >= 'a' && name <= 'z') {
+      return static_cast<std::size_t>(name - 'a');
+    }
+
+    if (name >= 'A' && name <= 'Z') {
+      return static_cast<std::size_t>(name - 'A');
+    }
+
+    return ds::none;
   }
 
   Editor::Loaded Editor::load() {
@@ -1455,7 +1531,8 @@ namespace telar::gui::features::prompt {
       return {.text = pasted_.view(), .linewise = false};
     }
 
-    const auto& source = register_ >= 'a' && register_ <= 'z' ? registers_[static_cast<std::size_t>(register_ - 'a')] : unnamed_;
+    const auto named = namedRegister(register_);
+    const auto& source = named ? registers_[*named] : unnamed_;
 
     return {.text = source.text.view(), .linewise = source.linewise};
   }
@@ -1885,6 +1962,39 @@ namespace telar::gui::features::prompt {
     return Request::none;
   }
 
+  Editor::Counts Editor::countsOf(std::span<const Recorded> changes) noexcept {
+    const auto digit = [&](std::size_t index, bool leading) {
+      const auto& key = changes[index].key;
+
+      return key.key == Key::character && !key.modifiers.control && key.character >= (leading ? U'1' : U'0') && key.character <= U'9';
+    };
+
+    Counts counts;
+
+    while (counts.first < changes.size() && digit(counts.first, counts.first == 0)) {
+      ++counts.first;
+    }
+
+    // The count typed right after the operator: 2. after d3w deletes two words. A case operator
+    // is two keys, g and its letter.
+    if (counts.first < changes.size() && operatorKey(changes[counts.first].key)) {
+      counts.operator_begin = counts.first + (changes[counts.first].key.character == U'g' ? 2 : 1);
+      counts.operator_end = counts.operator_begin;
+
+      while (counts.operator_end < changes.size() && digit(counts.operator_end, counts.operator_end == counts.operator_begin)) {
+        ++counts.operator_end;
+      }
+    }
+
+    return counts;
+  }
+
+  bool Editor::operatorKey(const KeyPress& key) noexcept {
+    constexpr std::u32string_view operators = U"dcy<>g";
+
+    return key.key == Key::character && !key.modifiers.control && !key.modifiers.alt && operators.contains(key.character);
+  }
+
   void Editor::startRecording(const KeyPress& key) {
     if (replaying_ != 0) {
       return;
@@ -1938,21 +2048,12 @@ namespace telar::gui::features::prompt {
     const auto given = count_;
     // Copied: pressing the keys records them again.
     const auto changes = last_change_.clone();
-    std::size_t first = 0;
+    // Without a count given, the change replays with its own.
+    const auto counts = given != 0 ? countsOf(changes.view()) : Counts{};
 
     ++replaying_;
     reset();
     if (given != 0) {
-      const auto digit = [&](std::size_t index) {
-        const auto& key = changes[index].key;
-
-        return key.key == Key::character && !key.modifiers.control && key.character >= (index == 0 ? U'1' : U'0') && key.character <= U'9';
-      };
-
-      while (first < changes.size() && digit(first)) {
-        ++first;
-      }
-
       // Room for any std::size_t in decimal.
       constexpr std::size_t count_digits = 24;
       ds::Array<char, count_digits> digits{};
@@ -1963,7 +2064,11 @@ namespace telar::gui::features::prompt {
       }
     }
 
-    for (std::size_t index = first; index < changes.size(); ++index) {
+    for (std::size_t index = counts.first; index < changes.size(); ++index) {
+      if (index >= counts.operator_begin && index < counts.operator_end) {
+        continue;
+      }
+
       auto key = changes[index].key;
 
       key.text = changes[index].text;

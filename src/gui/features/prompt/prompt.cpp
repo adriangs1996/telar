@@ -904,6 +904,12 @@ namespace telar::gui::features::prompt {
     return pane_id;
   }
 
+  bool asksAgain(Lines& lines, std::uint64_t pane_id) noexcept {
+    auto* line = find(lines, pane_id);
+
+    return line != nullptr && line->line.takeAskAgain();
+  }
+
   // ---- requests that fail -----------------------------------------------------------------------
 
   ds::Option<std::uint64_t> fail(tbc::mut_a<State> state, tbc::mut_a<Lines> lines, std::uint64_t request_id) {

@@ -30,19 +30,20 @@ namespace telar::gui::features::prompt {
       return (key.key == Key::character && key.modifiers.alt && key.character == 'f') || (key.key == Key::right && key.modifiers.alt);
     }
 
-    // The quote a word opens and leaves open: its first byte, when nothing closes it after.
+    // The quote a word leaves open at its end, wherever it opened (`--file="My Do`); 0 when none
+    // is.
     char openQuote(std::string_view word) noexcept {
-      if (word.empty() || (word.front() != '"' && word.front() != '\'')) {
-        return 0;
-      }
+      char quote = 0;
 
-      const char quote = word.front();
-
-      for (std::size_t index = 1; index < word.size(); ++index) {
-        if (quote == '"' && word[index] == '\\') {
+      for (std::size_t index = 0; index < word.size(); ++index) {
+        const char byte = word[index];
+        if (quote == 0 && (byte == '"' || byte == '\'')) {
+          quote = byte;
+        } else if (quote == byte) {
+          quote = 0;
+        } else if (byte == '\\' && quote != '\'') {
+          // Outside quotes and inside double ones, a backslash takes the byte after it.
           ++index;
-        } else if (word[index] == quote) {
-          return 0;
         }
       }
 
@@ -225,7 +226,7 @@ namespace telar::gui::features::prompt {
     auto& text = editor_.textMut();
 
     text.assign(command);
-    text.moveTo(text.size());
+    editor_.placeAtEnd();
   }
 
   const ds::Option<Menu>& Line::menu() const noexcept {
@@ -263,6 +264,16 @@ namespace telar::gui::features::prompt {
     }
 
     menu_.getMut().whole = menu_->whole && !truncated && menu_->all.size() + paths.size() <= Menu::capacity;
+    // Typing narrowed the word while the choices were on their way, which come cut short: the
+    // ones it narrows to may be past the cut, so the word as it is now is asked for again.
+    if (!menu_->whole && menu_->requests.empty() && editor_.text().cursor() != menu_->floor) {
+      menu_.reset();
+      refining_ = true;
+      asks_again_ = true;
+      ++revision_;
+      return true;
+    }
+
     // Answers to an older word join, narrowed to the word as it is now, as the shell reads it.
     // The word is owned, as the menu grows while it is compared.
     auto typed = menuContext(draft_.memory(), editor_, *menu_);
@@ -283,6 +294,10 @@ namespace telar::gui::features::prompt {
     settle();
     ++revision_;
     return true;
+  }
+
+  bool Line::takeAskAgain() noexcept {
+    return std::exchange(asks_again_, false);
   }
 
   bool Line::pending(std::uint64_t request) const noexcept {
@@ -349,7 +364,6 @@ namespace telar::gui::features::prompt {
   Outcome Line::handle(Request request, Surface surface, const Continuation& incomplete, History history) {
     switch (request) {
     case Request::none:
-      history_index_.reset();
       return Outcome::edited;
     case Request::submit:
       // An answer is the running program's to read, not the shell's to continue.
@@ -565,6 +579,12 @@ namespace telar::gui::features::prompt {
   }
 
   Outcome Line::travel(int direction, History history) {
+    // An edit of what Up brought back makes it the line being written: moving through it, as
+    // between the lines of a command of several, does not.
+    if (history_index_ && editor_.text().revision() != recalled_) {
+      history_index_.reset();
+    }
+
     if (!history_index_) {
       if (direction > 0) {
         return Outcome::edited;
@@ -593,7 +613,8 @@ namespace telar::gui::features::prompt {
       return Outcome::edited;
     }
 
-    editor_.textMut().moveTo(editor_.textMut().size());
+    editor_.placeAtEnd();
+    recalled_ = editor_.text().revision();
     ++revision_;
     return Outcome::edited;
   }
