@@ -104,6 +104,97 @@ namespace {
       QTest::failOnWarning(QRegularExpression{QStringLiteral(".*")});
     }
 
+    // What the cards read about where a pane works and what its shell ran: an agent's tab and
+    // directory with its workspace's repository, and a process's command with how it ended and
+    // the repository of its own directory.
+    Q_SLOT static void recordsSayWhereAPaneWorksAndWhatItRan() {
+      SystemAllocator system;
+      telar::MemoryAdapter adapter{system};
+      telar::ConcurrentMemory& memory = adapter;
+      Agent agent{memory};
+
+      agent.pane_id = 2;
+      agent.pane_generation = 1;
+      agent.status = AgentStatus::ready;
+      agent.tab_label.assign("server");
+      agent.cwd_label.assign("~/sandbox/telar");
+      const auto resting = agentRecord(agent, {.machine = {}, .branch = "main", .dirty = true});
+
+      QCOMPARE(resting.value(QStringLiteral("tab")).toString(), QStringLiteral("server"));
+      QCOMPARE(resting.value(QStringLiteral("cwd")).toString(), QStringLiteral("~/sandbox/telar"));
+      QCOMPARE(resting.value(QStringLiteral("branch")).toString(), QStringLiteral("main"));
+      QVERIFY(resting.value(QStringLiteral("dirty")).toBool());
+      agent.status = AgentStatus::working;
+      QCOMPARE(agentRecord(agent, {.machine = {}, .branch = "main"}).value(QStringLiteral("branch")).toString(), QStringLiteral("main"));
+      QVERIFY(!agentRecord(agent, {.machine = {}, .branch = {}, .dirty = true}).value(QStringLiteral("dirty")).toBool());
+
+      // A shell that ran nothing, out of its workspace: no command and no repository.
+      ListedPane pane;
+      const AgentRecordContext workspace{.machine = {}, .branch = "main", .dirty = true};
+
+      pane.pane_id = 3;
+      pane.pane_generation = 1;
+      pane.foreground.assign("zsh");
+      pane.shell = true;
+      auto record = processRecord(pane, "telar", workspace);
+
+      QCOMPARE(record.value(QStringLiteral("commandState")).toString(), QStringLiteral("none"));
+      QVERIFY(record.value(QStringLiteral("command")).toString().isEmpty());
+      QVERIFY(!record.value(QStringLiteral("exitCode")).isValid());
+      QVERIFY(record.value(QStringLiteral("commandDuration")).toString().isEmpty());
+      QVERIFY(record.value(QStringLiteral("cwd")).toString().isEmpty());
+      QVERIFY(record.value(QStringLiteral("branch")).toString().isEmpty());
+      QVERIFY(!record.value(QStringLiteral("dirty")).toBool());
+      QCOMPARE(record.value(QStringLiteral("title")).toString(), QStringLiteral("zsh"));
+
+      // Its last command failed, in a repository its shell read.
+      pane.facts.command_state = PaneCommandState::finished;
+      pane.facts.command.assign("just gui-case sidebar");
+      pane.facts.exit_code = 1;
+      pane.facts.duration_ms = 12'400;
+      pane.facts.directory.assign("~/sandbox/telar");
+      pane.facts.branch.assign("feature");
+      record = processRecord(pane, "telar", workspace);
+      QCOMPARE(record.value(QStringLiteral("commandState")).toString(), QStringLiteral("finished"));
+      QCOMPARE(record.value(QStringLiteral("command")).toString(), QStringLiteral("just gui-case sidebar"));
+      QCOMPARE(record.value(QStringLiteral("exitCode")).toInt(), 1);
+      QCOMPARE(record.value(QStringLiteral("commandDuration")).toString(), QStringLiteral("12s"));
+      QCOMPARE(record.value(QStringLiteral("cwd")).toString(), QStringLiteral("~/sandbox/telar"));
+      QCOMPARE(record.value(QStringLiteral("branch")).toString(), QStringLiteral("feature"));
+      QVERIFY(!record.value(QStringLiteral("dirty")).toBool());
+      QVERIFY(!record.value(QStringLiteral("commandTruncated")).toBool());
+
+      // A prompt interrupted it: it ended without a status.
+      pane.facts.exit_code.reset();
+      pane.facts.duration_ms = 185'000;
+      pane.facts.dirty = true;
+      record = processRecord(pane, "telar", workspace);
+      QVERIFY(!record.value(QStringLiteral("exitCode")).isValid());
+      QCOMPARE(record.value(QStringLiteral("commandDuration")).toString(), QStringLiteral("3m"));
+      QVERIFY(record.value(QStringLiteral("dirty")).toBool());
+
+      // A command that runs has no status and no duration yet.
+      pane.facts.command_state = PaneCommandState::running;
+      pane.facts.command.assign("npm run dev");
+      pane.facts.command_truncated = true;
+      pane.facts.duration_ms = 0;
+      record = processRecord(pane, "telar", workspace);
+      QCOMPARE(record.value(QStringLiteral("commandState")).toString(), QStringLiteral("running"));
+      QCOMPARE(record.value(QStringLiteral("command")).toString(), QStringLiteral("npm run dev"));
+      QVERIFY(record.value(QStringLiteral("commandTruncated")).toBool());
+      QVERIFY(!record.value(QStringLiteral("exitCode")).isValid());
+      QVERIFY(record.value(QStringLiteral("commandDuration")).toString().isEmpty());
+
+      // A pane whose shell read no repository takes its workspace's, when it works there.
+      pane.facts.branch.assign(std::string_view{});
+      pane.facts.dirty = false;
+      QVERIFY(processRecord(pane, "telar", workspace).value(QStringLiteral("branch")).toString().isEmpty());
+      pane.facts.in_workspace = true;
+      record = processRecord(pane, "telar", workspace);
+      QCOMPARE(record.value(QStringLiteral("branch")).toString(), QStringLiteral("main"));
+      QVERIFY(record.value(QStringLiteral("dirty")).toBool());
+    }
+
     Q_SLOT static void taskCardShowsFactsPlanAndFinalAnswer() {
       SystemAllocator system;
       telar::MemoryAdapter adapter{system};

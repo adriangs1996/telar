@@ -94,14 +94,47 @@ namespace telar::gui::qt {
     return label;
   }
 
-  // A pane no agent holds: its foreground program, where it runs, how long it has held the terminal
-  // and the ports it listens on.
+  // The command a pane's integrated shell runs or last ran: `none` for a pane without one, and
+  // until its shell runs its first.
+  inline QString commandStateName(PaneCommandState state) {
+    switch (state) {
+    case PaneCommandState::running:
+      return QStringLiteral("running");
+    case PaneCommandState::finished:
+      return QStringLiteral("finished");
+    case PaneCommandState::none:
+      break;
+    }
+
+    // No command, or a state outside the enum.
+    return QStringLiteral("none");
+  }
+
+  // A pane no agent holds: its foreground program, where it runs, how long it has held the terminal,
+  // the ports it listens on, the command its shell runs or last ran and the repository it works in.
+  // `context` names the branch of the pane's workspace, which stands for a pane that works in that
+  // workspace and has no integrated shell to read its own repository.
   inline QVariantMap processRecord(const ListedPane& pane, std::string_view workspace, const AgentRecordContext& context) {
+    constexpr std::uint32_t milliseconds_per_second = 1000;
     const auto name = pane.foreground.view();
     const auto mark = application::activity::ApplicationMark::forApplication(name);
+    const auto& facts = pane.facts;
+    const bool finished = facts.command_state == PaneCommandState::finished;
+    const bool inherited = facts.branch.view().empty() && facts.in_workspace;
+    const auto branch = inherited ? context.branch : facts.branch.view();
     AgentCardLabels::Project project;
 
     return {
+        {QStringLiteral("command"), toQString(facts.command.view())},
+        {QStringLiteral("commandState"), commandStateName(facts.command_state)},
+        {QStringLiteral("commandTruncated"), facts.command_truncated},
+        // The status the command exited with; invalid while it runs and when its shell reported none.
+        {QStringLiteral("exitCode"), finished && facts.exit_code ? QVariant{*facts.exit_code} : QVariant{}},
+        // How long a finished command ran, as the cards write an age: `12s`, `3m`, `2h`.
+        {QStringLiteral("commandDuration"), finished ? toQString(AgentStatusPresentation::age(facts.duration_ms / milliseconds_per_second, true).view()) : QString{}},
+        {QStringLiteral("cwd"), toQString(facts.directory.view())},
+        {QStringLiteral("branch"), toQString(branch)},
+        {QStringLiteral("dirty"), !branch.empty() && (inherited ? context.dirty : facts.dirty)},
         {QStringLiteral("process"), true},
         {QStringLiteral("title"), toQString(name)},
         {QStringLiteral("provider"), toQString(name)},

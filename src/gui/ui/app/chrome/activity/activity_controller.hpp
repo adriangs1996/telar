@@ -91,11 +91,13 @@ namespace telar::gui::qt {
       std::uint64_t agents;
       std::uint64_t workspaces;
       std::uint64_t panes;
+      // The facts of those panes: their commands, directories and repositories.
+      std::uint64_t facts;
       bool connected;
       runtime::FixedText<application::machines::MachineLimits::label_bytes> label;
 
       bool operator==(const SourceVersion& other) const noexcept {
-        return source == other.source && runtime_generation == other.runtime_generation && agents == other.agents && workspaces == other.workspaces && panes == other.panes && connected == other.connected && label.view() == other.label.view();
+        return source == other.source && runtime_generation == other.runtime_generation && agents == other.agents && workspaces == other.workspaces && panes == other.panes && facts == other.facts && connected == other.connected && label.view() == other.label.view();
       }
     };
 
