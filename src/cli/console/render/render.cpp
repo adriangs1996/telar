@@ -205,16 +205,6 @@ namespace telar::runtime::cli::render_command {
       bool entered_ = false;
     };
 
-    // strerror_r is POSIX's, which returns a status, on macOS and musl, and GNU's, which returns
-    // the text, on glibc.
-    [[maybe_unused]] const char* errorMessage(int status, const char* buffer) noexcept {
-      return status == 0 ? buffer : "Unknown error";
-    }
-
-    [[maybe_unused]] const char* errorMessage(const char* text, const char* /*buffer*/) noexcept {
-      return text;
-    }
-
     // Writes `telar render: ` and the formatted line to stderr, ignoring a failed write as stdio does.
     template <Allocator Memory, typename... Arguments>
     void report(Memory& memory, std::format_string<Arguments...> format, Arguments&&... arguments) {
@@ -230,10 +220,7 @@ namespace telar::runtime::cli::render_command {
     void reportError(Memory& memory, std::string_view what, int code) {
       constexpr std::size_t error_text_bytes = 128;
       ds::Array<char, error_text_bytes> text{};
-      // strerror_r writes at most the size it is given.
-#pragma clang unsafe_buffer_usage begin
-      const auto* const message = errorMessage(::strerror_r(code, text.dataMut(), text.size()), text.data());
-#pragma clang unsafe_buffer_usage end
+      const auto* const message = sys::errorText(code, text.dataMut(), text.size());
 
       report(memory, "{}: {}", what, std::string_view{message});
     }
