@@ -4,6 +4,13 @@
 #include <stdint.h>
 
 #ifdef __cplusplus
+#include "tbc/annotations.hpp"
+#define TELAR_GUI_GLYPH_RAW TBC_RAW
+#else
+#define TELAR_GUI_GLYPH_RAW
+#endif
+
+#ifdef __cplusplus
 extern "C" {
 #endif
 
@@ -39,12 +46,14 @@ typedef struct {
 typedef struct telar_glyph_rasterizer telar_glyph_rasterizer; // NOLINT(readability-identifier-naming): a C type, named as the header's others.
 
 // Borrowed font bytes and atlas storage outlive the single-owner rasterizer.
-telar_glyph_rasterizer* telarGlyphRasterizerCreate(const telar_glyph_rasterizer_options* options);
+TELAR_GUI_GLYPH_RAW telar_glyph_rasterizer* telarGlyphRasterizerCreate(const telar_glyph_rasterizer_options* options);
 void telarGlyphRasterizerDestroy(const telar_glyph_rasterizer* self);
 int telarGlyphRasterizerSelect(telar_glyph_rasterizer* self, uint32_t pixel_height);
-int telarGlyphRasterizerMeasure(const telar_glyph_rasterizer* self, telar_glyph_raster* glyph);
-void telarGlyphRasterizerDraw(const telar_glyph_rasterizer* self, const telar_glyph_raster* glyph);
+TELAR_GUI_GLYPH_RAW int telarGlyphRasterizerMeasure(const telar_glyph_rasterizer* self, telar_glyph_raster* glyph);
+TELAR_GUI_GLYPH_RAW void telarGlyphRasterizerDraw(const telar_glyph_rasterizer* self, const telar_glyph_raster* glyph);
 
 #ifdef __cplusplus
 }
 #endif
+
+#undef TELAR_GUI_GLYPH_RAW

@@ -16,7 +16,7 @@ namespace telar::runtime {
       : memory_(&memory),
         budget_(&budget) {
     TELAR_TRACE("media.freezeImage");
-    if (!budget_->reserve(pixels.size())) {
+    if (!budget.reserve(pixels.size())) {
       throw std::bad_alloc{};
     }
 
@@ -28,7 +28,7 @@ namespace telar::runtime {
         return;
       }
 
-      pixels_ = static_cast<std::uint8_t*>(memory_->allocate(byte_count_, alignof(std::uint8_t)));
+      pixels_ = static_cast<std::uint8_t*>(memory.allocate(byte_count_, alignof(std::uint8_t)));
       if (pixels_ == nullptr) {
         throw std::bad_alloc{};
       }
@@ -113,12 +113,12 @@ namespace telar::runtime {
 
   void FrozenImage::reset() noexcept {
     removeName();
-    if (pixels_ != nullptr) {
+    if (pixels_ != nullptr && memory_ != nullptr) {
       memory_->deallocate(pixels_, byte_count_, alignof(std::uint8_t));
       pixels_ = nullptr;
     }
 
-    if (reserved_bytes_ != 0) {
+    if (reserved_bytes_ != 0 && budget_ != nullptr) {
       budget_->release(std::exchange(reserved_bytes_, 0));
     }
 

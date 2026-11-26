@@ -4,6 +4,7 @@ static_assert(true);
 #endif
 
 #include "window_animation_clock.hpp"
+#include "tbc/annotations.hpp"
 #include <QEvent>
 #include <QObject>
 #include <QPointer>
@@ -33,10 +34,14 @@ namespace telar::gui::qt {
 
   namespace {
 
-    std::span<const WindowAnimationLane::Make>& composition() noexcept {
-      static std::span<const WindowAnimationLane::Make> lanes;
+    struct TBC_SHARED Composition {
+      std::span<const WindowAnimationLane::Make> lanes;
+    };
 
-      return lanes;
+    std::span<const WindowAnimationLane::Make>& composition() noexcept {
+      static Composition state;
+
+      return state.lanes;
     }
 
   }

@@ -295,7 +295,7 @@ namespace telar::git {
 
       auto&& visitor = std::forward<Output>(output);
 
-      return visitParents(commit, maximum, const_cast<std::remove_const_t<Target>*>(std::addressof(visitor)), [](void* target, std::uint32_t parent) {
+      return visitParents(commit, maximum, tbc::raw(const_cast<std::remove_const_t<Target>*>(std::addressof(visitor))), [](void* target, std::uint32_t parent) {
         (*static_cast<Target*>(target))(parent);
       });
     }

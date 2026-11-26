@@ -1,5 +1,6 @@
 module telar.runtime.host.system_certificates;
 
+import telar.tbc;
 import telar.sys.posix;
 import telar.tls;
 import telar.platform.error;
@@ -119,7 +120,7 @@ namespace telar::runtime {
         throw SystemError{"Invalid system certificate entry", EINVAL};
       }
 
-      auto* const certificate = static_cast<SecCertificateRef>(const_cast<void*>(item)); // NOLINT(cppcoreguidelines-pro-type-const-cast): CFArray hands its objects out as const void*, and Security takes a certificate as a mutable reference
+      auto* const certificate = static_cast<SecCertificateRef>(tbc::raw(const_cast<void*>(item))); // NOLINT(cppcoreguidelines-pro-type-const-cast): CFArray hands its objects out as const void*, and Security takes a certificate as a mutable reference
       const Resource encoded{SecCertificateCopyData(certificate), &CFRelease};
       if (!encoded) {
         throw std::bad_alloc{};

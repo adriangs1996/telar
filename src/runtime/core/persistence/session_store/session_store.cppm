@@ -384,7 +384,9 @@ export {
         const auto registered = model_.worktrees.registerEntry(record.registration, record.id);
 
         if (record.workspace != 0) {
-          model_.worktrees.find(registered.worktree)->workspace = record.workspace;
+          if (auto* worktree = model_.worktrees.find(registered.worktree)) {
+            worktree->workspace = record.workspace;
+          }
         }
       }
 
@@ -392,7 +394,12 @@ export {
         const TerminalSize size{.cols = record.columns == 0 ? std::uint16_t{80} : record.columns, .rows = record.rows == 0 ? std::uint16_t{24} : record.rows, .cell_width_px = 0, .cell_height_px = 0};
         const auto restored = panes_.launchExplorer(model_, {.location = TabLocation{.workspace = {.id = record.workspace}, .tab_id = record.tab}, .size = size}, record.cwd, record.id).core.id;
 
-        model_.workspaces.find(record.workspace)->tabMut(record.tab)->panes.push(restored);
+        if (auto* workspace = model_.workspaces.find(record.workspace)) {
+          if (auto* tab = workspace->tabMut(record.tab)) {
+            tab->panes.push(restored);
+          }
+        }
+
         if (record.explorer.empty()) {
           return;
         }
@@ -450,7 +457,12 @@ export {
         if (record.kind == PaneKind::nvim) {
           const auto restored = panes_.launchEditor(model_, {.location = TabLocation{.workspace = {.id = record.workspace}, .tab_id = record.tab}, .size = size}, Launch{.cwd = record.cwd, .arguments = std::span<const std::string_view>{original}.first(record.argument_count)}, record.id).core.id;
 
-          model_.workspaces.find(record.workspace)->tabMut(record.tab)->panes.push(restored);
+          if (auto* target_workspace = model_.workspaces.find(record.workspace)) {
+            if (auto* target_tab = target_workspace->tabMut(record.tab)) {
+              target_tab->panes.push(restored);
+            }
+          }
+
           return;
         }
 
@@ -458,7 +470,12 @@ export {
         // No client asked for it: its shell keeps its prompt, which telar's editor covers.
         const auto identity = panes_.launch(model_, {.location = TabLocation{.workspace = {.id = record.workspace}, .tab_id = record.tab}, .size = size}, command, record.id).core.id;
 
-        model_.workspaces.find(record.workspace)->tabMut(record.tab)->panes.push(identity);
+        if (auto* target_workspace = model_.workspaces.find(record.workspace)) {
+          if (auto* target_tab = target_workspace->tabMut(record.tab)) {
+            target_tab->panes.push(identity);
+          }
+        }
+
         // A restored pane is a terminal: its record is the command that runs on its PTY.
         auto pane = requireTerminal(model_.panes, identity);
 

@@ -360,18 +360,26 @@ namespace telar::gui::application {
     link.sendOpeningRequest(RequestKind::restore_machine, OpenPane{.target = {.kind = PaneTarget::Kind::pane, .id = *saved}, .size = features::workbench::launchSize(workbench)}, location, fallback);
   }
 
+  namespace {
+
+    void confirmPaneAttachment(std::uint64_t& attachment_generation, std::uint64_t& chrome_revision, Pane<Memory>& pane) {
+      if (pane.attached) {
+        return;
+      }
+
+      if (attachment_generation == std::numeric_limits<std::uint64_t>::max()) {
+        throw std::overflow_error{"AttachmentGenerationExhausted"};
+      }
+
+      pane.attachment_generation = ++attachment_generation;
+      pane.attached = true;
+      ++chrome_revision;
+    }
+
+  }
+
   void Session::confirmAttachment(Pane<Memory>& pane) {
-    if (pane.attached) {
-      return;
-    }
-
-    if (attachment_generation_ == std::numeric_limits<std::uint64_t>::max()) {
-      throw std::overflow_error{"AttachmentGenerationExhausted"};
-    }
-
-    pane.attachment_generation = ++attachment_generation_;
-    pane.attached = true;
-    ++chrome_revision_;
+    confirmPaneAttachment(attachment_generation_, chrome_revision_, pane);
   }
 
   void Session::synchronizeAttachments() {
@@ -526,7 +534,7 @@ namespace telar::gui::application {
     }
 
     reserveAppend(panes, maximum_panes);
-    confirmAttachment(pane.getMut());
+    confirmPaneAttachment(attachment_generation_, chrome_revision_, pane.getMut());
 
     if (discovered) {
       tabs.atMut(cached_index) = std::move(tab);

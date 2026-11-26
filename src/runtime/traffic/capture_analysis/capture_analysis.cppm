@@ -222,6 +222,10 @@ export {
             return first->created < second->created;
           })
                                        : &*free;
+          if (slot == nullptr) {
+            return;
+          }
+
           if (*slot && (*slot)->storage) {
             failure(slot->getMut(), "ip_fragment_capacity", report);
           }
@@ -491,6 +495,10 @@ export {
 
           static_cast<void>(flows_.insert(key, Flow{memory_, capture_flow_bit | ++next_, initial_reverse, event.offline}));
           found = flows_.findMut(key);
+          if (found == nullptr) {
+            return;
+          }
+
           publish(key, *found, event, {.kind = Kind::flow_open}, emit);
           if ((packet.flags & syn) == 0) {
             publish(key, *found, event, {.kind = Kind::flow_gap, .item = {.reason = "capture_started_midstream"}}, emit);

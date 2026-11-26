@@ -113,7 +113,7 @@ namespace telar::gui::qt {
     }
 
     QThreadPool& conversionWorkers() {
-      struct Workers {
+      struct TBC_SHARED Workers {
         QThreadPool pool;
 
         Workers() {

@@ -200,8 +200,8 @@ export {
           return ReportDecision::accepted;
         }
 
-        auto& report = client.deferred_report;
         const auto rejection = reportingRejection(agents, client, *pane);
+        auto& report = client.deferred_report;
 
         if (report.answering) {
           if (report.answer_rechecked && rejection) {
@@ -406,7 +406,9 @@ export {
 
         pending_ = true;
         for (const auto& check : std::span{request.checks}.first(request.count)) {
-          clients.find(check.client)->descent_running = true;
+          if (auto* client = clients.find(check.client)) {
+            client->descent_running = true;
+          }
         }
       }
 
@@ -992,7 +994,7 @@ export {
       inline void observe(RuntimeModel& model, Agents& agents, std::uint64_t pane_id) {
         collect(model, agents);
         auto* found = model.panes.find(pane_id);
-        if (pending_ || !asTerminal(found)) {
+        if (pending_ || found == nullptr || !asTerminal(found)) {
           return;
         }
 

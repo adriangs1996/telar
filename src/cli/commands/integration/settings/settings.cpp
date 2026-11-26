@@ -654,12 +654,12 @@ description: Delegate tasks to agents in their own Git worktrees and steer them 
     // them as if it would change them, and does not.
     constexpr std::size_t word_count = 7;
     ds::Array<char*, word_count> words{
-        const_cast<char*>("sh"),                                        // NOLINT(cppcoreguidelines-pro-type-const-cast): see above
-        const_cast<char*>("-c"),                                        // NOLINT(cppcoreguidelines-pro-type-const-cast): see above
-        const_cast<char*>(assets::editor_installer.data()),             // NOLINT(cppcoreguidelines-pro-type-const-cast): see above
-        const_cast<char*>("sh"),                                        // NOLINT(cppcoreguidelines-pro-type-const-cast): see above
-        const_cast<char*>(actions[std::to_underlying(options.action)]), // NOLINT(cppcoreguidelines-pro-type-const-cast): see above
-        const_cast<char*>(packaged.c_str()),                            // NOLINT(cppcoreguidelines-pro-type-const-cast): see above
+        tbc::raw(const_cast<char*>("sh")),                                        // NOLINT(cppcoreguidelines-pro-type-const-cast): see above
+        tbc::raw(const_cast<char*>("-c")),                                        // NOLINT(cppcoreguidelines-pro-type-const-cast): see above
+        tbc::raw(const_cast<char*>(assets::editor_installer.data())),             // NOLINT(cppcoreguidelines-pro-type-const-cast): see above
+        tbc::raw(const_cast<char*>("sh")),                                        // NOLINT(cppcoreguidelines-pro-type-const-cast): see above
+        tbc::raw(const_cast<char*>(actions[std::to_underlying(options.action)])), // NOLINT(cppcoreguidelines-pro-type-const-cast): see above
+        tbc::raw(const_cast<char*>(packaged.c_str())),                            // NOLINT(cppcoreguidelines-pro-type-const-cast): see above
         nullptr,
     };
 
@@ -855,7 +855,8 @@ namespace telar::runtime::cli::integration {
         }
 
         present = true;
-        if (hook->find("command")->text() != command) {
+        const auto* current = hook->find("command");
+        if (current == nullptr || current->text() != command) {
           hook->setString({.name = "command", .value = command});
           changed = true;
         }

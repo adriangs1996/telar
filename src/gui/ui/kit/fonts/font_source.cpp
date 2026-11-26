@@ -88,9 +88,10 @@ namespace telar::gui::qt {
   }
 
   ds::Option<FontData> loadFallbackFontData(const fonts::FontQuery& query) {
+    const auto* codepoints = query.codepoints();
     FallbackRequest request{.query = query, .candidate = {}};
     fonts::FontMatch match{};
-    if (telarGuiFindValidatedFallbackFont(query.codepoints(), &match, acceptFallbackFont, &request) != telar_font_found) {
+    if (telarGuiFindValidatedFallbackFont(codepoints, &match, acceptFallbackFont, &request) != telar_font_found) {
       return ds::none;
     }
 

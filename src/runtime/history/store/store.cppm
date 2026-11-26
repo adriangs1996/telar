@@ -1,3 +1,6 @@
+module;
+#include "tbc/annotations.hpp"
+
 export module telar.runtime.history.store;
 
 import std;
@@ -262,8 +265,21 @@ export {
 
       static constexpr std::size_t maximum_entries = 1000;
       static constexpr std::size_t result_header_bytes = sizeof(Byte) + (sizeof(std::uint64_t) * 2) + sizeof(std::uint16_t) + sizeof(Byte);
+
       // Reserved whole and bounded before each copy, so the texts the entries view never move.
-      mutable ByteQueue<ConcurrentMemory> text_;
+      class TBC_SHARED TextArena {
+      public:
+        explicit TextArena(ConcurrentMemory& memory, std::size_t limit);
+
+        void reserve(std::size_t capacity);
+        void clear() noexcept;
+        std::string_view copy(std::string_view text) const;
+
+      private:
+        mutable ByteQueue<ConcurrentMemory> storage_;
+      };
+
+      TextArena text_;
       tbc::val_self<ds::Vec<HistoryEntry, ConcurrentMemory>> entries_;
       std::size_t encoded_bytes_ = result_header_bytes;
     };

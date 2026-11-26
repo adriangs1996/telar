@@ -77,7 +77,11 @@ namespace telar::gui::qt {
     }
 
     [[nodiscard]] std::span<const CellValue> row(std::size_t index) const noexcept {
-      return !view_rows.empty() ? view_rows[index].cells : screen->row(index);
+      if (!view_rows.empty()) {
+        return view_rows[index].cells;
+      }
+
+      return screen != nullptr ? screen->row(index) : std::span<const CellValue>{};
     }
 
     // The drawn row of `row`, counted from the top of the scrollback; nothing when a fold hides it.

@@ -56,6 +56,12 @@ export {
     // showing it to interactive clients. Nothing the service holds moves, so many services keep it.
     class TBC_SHARED LimitService {
     public:
+      LimitService() = default;
+      LimitService(const LimitService&) = delete;
+      LimitService& operator=(const LimitService&) = delete;
+      LimitService(LimitService&&) = delete;
+      LimitService& operator=(LimitService&&) = delete;
+
       // Records a client's report at once, so a query in the same batch sees it; a control client's report
       // that is due is shown at the next delivery.
       void receive(RuntimeLimits& limits, ClientSession& client, const ReportLimit& message);
@@ -778,7 +784,7 @@ export {
         const auto pane = requireTerminalGeneration(model.panes, request.pane_id, request.pane_generation).core.id;
         auto* client = clients.find(client_id);
         auto* attachment = client == nullptr ? nullptr : client->attachmentMut(pane);
-        if (attachment == nullptr || client->connection.flags().closing) {
+        if (client == nullptr || attachment == nullptr || client->connection.flags().closing) {
           throw RequestError{FailureCode::invalid_request, "Desktop state requires a live pane attachment"};
         }
 

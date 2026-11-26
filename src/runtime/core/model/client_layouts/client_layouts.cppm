@@ -647,7 +647,9 @@ export {
         return;
       }
 
-      std::forward<Visitor>(visitor)(*std::get_if<ExplorerBody>(&pane.body));
+      if (auto* explorer = std::get_if<ExplorerBody>(&pane.body)) {
+        std::forward<Visitor>(visitor)(*explorer);
+      }
     }
 
     template <typename Visitor>
@@ -664,7 +666,9 @@ export {
         return;
       }
 
-      std::forward<Visitor>(visitor)(*std::get_if<ExplorerBody>(&pane.body));
+      if (const auto* explorer = std::get_if<ExplorerBody>(&pane.body)) {
+        std::forward<Visitor>(visitor)(*explorer);
+      }
     }
 
     // Calls `visitor` with the pane as the kind it is, for what works on a kind's state and on
@@ -679,16 +683,30 @@ export {
     // The pane as the kind `Body` names; none for no pane and for a pane of another kind.
     template <typename Body>
     TBC_HOT_PATH [[nodiscard]] inline tbc::val_a<ds::Option<PaneRef<Body>>> paneAs(tbc::val_a<Pane*> pane) noexcept {
-      auto* const body = pane == nullptr ? nullptr : pane->asMut<Body>();
+      if (pane == nullptr) {
+        return {};
+      }
 
-      return body == nullptr ? ds::Option<PaneRef<Body>>{} : ds::Option<PaneRef<Body>>{PaneRef<Body>{.core = *pane, .body = *body}};
+      auto* const body = pane->asMut<Body>();
+      if (body == nullptr) {
+        return {};
+      }
+
+      return PaneRef<Body>{.core = *pane, .body = *body};
     }
 
     template <typename Body>
     TBC_HOT_PATH [[nodiscard]] inline tbc::val_a<ds::Option<PaneRef<const Body>>> paneAs(tbc::val_a<const Pane*> pane) noexcept {
-      const auto* const body = pane == nullptr ? nullptr : pane->template as<Body>();
+      if (pane == nullptr) {
+        return {};
+      }
 
-      return body == nullptr ? ds::Option<PaneRef<const Body>>{} : ds::Option<PaneRef<const Body>>{PaneRef<const Body>{.core = *pane, .body = *body}};
+      const auto* const body = pane->template as<Body>();
+      if (body == nullptr) {
+        return {};
+      }
+
+      return PaneRef<const Body>{.core = *pane, .body = *body};
     }
 
     // The terminal a pane is; none for no pane and for a pane of another kind.

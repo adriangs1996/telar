@@ -230,23 +230,22 @@ namespace telar::runtime {
   template <EventLoop Poller>
   ds::Option<FileDescriptor> ClientAdmission<Poller>::advance(const Event& event) {
     const auto slot = eventIdentity(event.token) % capacity;
-    auto& pending = pending_.atMut(slot);
-    if (!pending || event.token != token(slot) || event.descriptor != pending->descriptor()) {
+    if (!pending_[slot] || event.token != token(slot) || event.descriptor != pending_[slot]->descriptor()) {
       return ds::none;
     }
 
     try {
       if (event.kind == EventKind::readable) {
-        pending.getMut().read();
+        pending_.atMut(slot).getMut().read();
       }
 
-      pending.getMut().write();
-      switch (pending->stage()) {
+      pending_.atMut(slot).getMut().write();
+      switch (pending_[slot]->stage()) {
       case ClientHandshake::Stage::accepted: {
-        poller_.remove(pending->descriptor());
-        auto descriptor = pending.getMut().takeDescriptor();
+        poller_.remove(pending_[slot]->descriptor());
+        auto descriptor = pending_.atMut(slot).getMut().takeDescriptor();
 
-        pending.reset();
+        pending_.atMut(slot).reset();
         --count_;
         return descriptor;
       }
@@ -254,15 +253,15 @@ namespace telar::runtime {
         drop(slot);
         break;
       case ClientHandshake::Stage::reply:
-        poller_.readInterest(pending->descriptor(), event.token, false);
-        poller_.writeInterest(pending->descriptor(), event.token, true);
+        poller_.readInterest(pending_[slot]->descriptor(), event.token, false);
+        poller_.writeInterest(pending_[slot]->descriptor(), event.token, true);
         break;
       case ClientHandshake::Stage::prefix:
       case ClientHandshake::Stage::hello:
         break;
       }
     } catch (const std::exception&) {
-      if (pending) {
+      if (pending_[slot]) {
         drop(slot);
       }
     }
@@ -396,7 +395,8 @@ namespace telar::runtime {
 
     auto* execution = find(request.execution_id);
     const bool started = execution == nullptr;
-    if (started) {
+
+    if (execution == nullptr) {
       if (request.action != ExecutionAction::start) {
         throw RequestError{FailureCode::invalid_request, "ExecutionNotFound"};
       }
@@ -567,7 +567,12 @@ namespace telar::runtime {
     }
 
     executions_.insert(token, std::move(execution));
-    return *executions_.find(token);
+    auto* stored = executions_.find(token);
+    if (stored == nullptr) {
+      throw RequestError{FailureCode::internal, "ExecutionMissing"};
+    }
+
+    return *stored;
   }
 
   template <EventLoop Poller>

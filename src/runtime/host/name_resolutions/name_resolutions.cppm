@@ -72,7 +72,7 @@ export {
 
       static constexpr std::size_t maximum_subscribers = 128;
 
-      struct State {
+      struct TBC_SHARED State {
         pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
         ds::Array<Row, capacity> rows;
         ds::Array<CompletionSignal*, maximum_subscribers> subscribers{};

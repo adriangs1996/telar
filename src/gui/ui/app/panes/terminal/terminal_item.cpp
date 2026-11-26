@@ -366,7 +366,7 @@ namespace telar::gui::qt {
     }
 
     const auto* current = pane();
-    if (current == nullptr || !font_catalog_) {
+    if (current == nullptr || controller_ == nullptr || !font_catalog_) {
       return;
     }
 
@@ -1207,6 +1207,10 @@ namespace telar::gui::qt {
   }
 
   ds::Option<TerminalKey> TerminalItem::sendKeyPress(const QKeyEvent& event, const InputModes& modes) {
+    if (controller_ == nullptr) {
+      return ds::none;
+    }
+
     const auto semantic = NativeKeyAdapter::terminalKey(event, optionAsAlt(controller_->configuration().prompt.macos_option_as_alt, event));
     const auto bytes = semantic ? encodeKey(*semantic, modes) : encodeKey(event, modes);
     if (bytes.isEmpty()) {
@@ -1379,8 +1383,8 @@ namespace telar::gui::qt {
       }
     }
 
-    const auto blinks = keyboard && current != nullptr && !controller_->copy().active() && current->screen.cursor().visible && current->screen.cursor().blink && (current->screen.cursor().shape != CursorShape::default_shape || controller_->configuration().cursor_blink);
-    if (blinks) {
+    const auto blinks = keyboard && current != nullptr && controller_ != nullptr && !controller_->copy().active() && current->screen.cursor().visible && current->screen.cursor().blink && (current->screen.cursor().shape != CursorShape::default_shape || controller_->configuration().cursor_blink);
+    if (blinks && controller_ != nullptr) {
       blink_.setInterval(static_cast<int>(controller_->configuration().blink_interval.count()));
       if (!blink_.isActive()) {
         blink_.start();

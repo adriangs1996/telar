@@ -160,7 +160,7 @@ export namespace telar::runtime::control {
     Cached<std::uint8_t> keyboard_cache_;
     Cached<GhosttyStyle> style_cache_;
     Cached<GhosttyRenderStateCursor> visual_cursor_cache_;
-    mutable ds::Array<ModeCache, mode_cache_slots> modes_;
+    ds::Array<ds::Cell<ModeCache>, mode_cache_slots> modes_;
     ds::Array<ds::Option<GhosttyColorRgb>, 3> colors_;
     ds::Array<bool, 3> color_valid_{};
     tbc::val_a<GhosttyTerminal> terminal_ = nullptr;

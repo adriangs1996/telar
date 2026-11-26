@@ -1,6 +1,13 @@
 #pragma once
 
 #ifdef __cplusplus
+#include "tbc/annotations.hpp"
+#define TELAR_GUI_CLIPBOARD_RAW TBC_RAW
+#else
+#define TELAR_GUI_CLIPBOARD_RAW
+#endif
+
+#ifdef __cplusplus
 extern "C" {
 #endif
 
@@ -10,8 +17,10 @@ typedef struct TelarGuiClipboardImagePipe {
 } TelarGuiClipboardImagePipe;
 
 int telarGuiOpenClipboardImagePipe(TelarGuiClipboardImagePipe* pipe);
-int telarGuiOpenClipboardImageFile(const char* path);
+TELAR_GUI_CLIPBOARD_RAW int telarGuiOpenClipboardImageFile(const char* path);
 
 #ifdef __cplusplus
 }
 #endif
+
+#undef TELAR_GUI_CLIPBOARD_RAW

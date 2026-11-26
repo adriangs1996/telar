@@ -6,7 +6,10 @@ namespace telar::gui::qt {
       : QObject(parent),
         worker_(new QObject) {
     thread_.setObjectName(QStringLiteral("telar-lua"));
-    worker_->moveToThread(&thread_);
+    if (worker_ != nullptr) {
+      worker_->moveToThread(&thread_);
+    }
+
     thread_.start();
   }
 

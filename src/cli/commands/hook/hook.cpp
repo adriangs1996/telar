@@ -845,11 +845,13 @@ namespace telar::runtime::cli::hooks {
 
       const auto event = fields.text("hook_event_name");
       if (event == "WorktreeCreate" || event == "WorktreeRemove") {
+        const std::string_view action = event == "WorktreeCreate" ? "WorktreeCreate" : "WorktreeRemove";
+
         try {
           Worktrees{memory, environment, socket}.answer(fields);
           return 0;
         } catch (const std::exception& error) {
-          writeFormatted(STDERR_FILENO, "telar hook: {} failed: {}\n", event, error.what());
+          writeFormatted(STDERR_FILENO, "telar hook: {} failed: {}\n", action, error.what());
           return 1;
         }
       }
@@ -916,10 +918,10 @@ namespace telar::runtime::cli {
       status = worktree_status.valueOr(0);
       const auto target = hooks::paneTarget(environment, options.provider);
       if (!worktree_status && target) {
-        hooks::Payload payload{memory, options.provider, std::move(fields)};
-        hooks::Reports reports;
         hooks::ReportTexts texts;
         hooks::SessionFiles files;
+        hooks::Reports reports;
+        hooks::Payload payload{memory, options.provider, std::move(fields)};
 
         hooks::map(payload, reports, texts, files, environment);
         if (!reports.empty()) {

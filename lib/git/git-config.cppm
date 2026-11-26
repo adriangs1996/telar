@@ -6,6 +6,7 @@ export module telar.git:config;
 import std;
 import telar.base.memory.allocators;
 import telar.base.ds;
+import telar.tbc;
 
 // A strict reader of git's config syntax. It only reports variables: nothing
 // it reads is executed, and include/includeIf are ordinary, ignored entries.
@@ -31,7 +32,7 @@ namespace telar::git {
 
     auto&& visitor = std::forward<Visitor>(visit);
 
-    return parseConfigEntries(text, scratch, const_cast<std::remove_const_t<Target>*>(std::addressof(visitor)), [](void* target, const ConfigEntry& entry) -> bool {
+    return parseConfigEntries(text, scratch, tbc::raw(const_cast<std::remove_const_t<Target>*>(std::addressof(visitor))), [](void* target, const ConfigEntry& entry) -> bool {
       return (*static_cast<Target*>(target))(entry);
     });
   }

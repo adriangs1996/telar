@@ -213,7 +213,7 @@ export {
       static int allocationSize(void* pointer) noexcept;
       static int roundedSize(int bytes) noexcept;
 
-      inline static ConcurrentMemory* active_memory = nullptr;
+      inline static std::atomic<ConcurrentMemory*> active_memory{nullptr};
       sqlite3_mem_methods previous_{};
     };
 

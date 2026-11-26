@@ -232,7 +232,7 @@ export {
       // so the constness, the consumer came with.
       template <typename Object>
       TBC_GENERIC static void* erasedAddress(const Object& object) noexcept {
-        return const_cast<void*>(static_cast<const void*>(std::addressof(object))); // NOLINT(cppcoreguidelines-pro-type-const-cast): the trampoline restores the consumer's own type and constness
+        return tbc::raw(const_cast<void*>(static_cast<const void*>(std::addressof(object)))); // NOLINT(cppcoreguidelines-pro-type-const-cast): the trampoline restores the consumer's own type and constness
       }
 
       void* consumer_;

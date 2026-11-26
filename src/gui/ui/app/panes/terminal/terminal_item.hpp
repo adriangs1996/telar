@@ -487,13 +487,25 @@ namespace telar::gui::qt {
     QVariantList rail_matches_;
     int fold_from_ = -1;
     qreal fold_offset_ = 0;
-    mutable ds::Option<Screen<Memory>> drawn_screen_;
-    mutable std::uint64_t drawn_screen_key_ = 0;
-    mutable ds::Vec<std::span<const CellValue>, Memory> drawn_spans_{adapter_};
-    mutable ds::Vec<Byte, Memory> drawn_flags_{adapter_};
-    mutable ds::Vec<MetadataLink, Memory> drawn_links_{adapter_};
-    mutable ds::Vec<MetadataRun, Memory> drawn_runs_{adapter_};
-    mutable ds::Vec<Byte, Memory> drawn_uris_{adapter_};
+
+    struct TBC_SHARED DrawnCache {
+      explicit DrawnCache(Memory& memory)
+          : spans(memory),
+            flags(memory),
+            links(memory),
+            runs(memory),
+            uris(memory) {}
+
+      ds::Option<Screen<Memory>> screen;
+      std::uint64_t screen_key = 0;
+      ds::Vec<std::span<const CellValue>, Memory> spans;
+      ds::Vec<Byte, Memory> flags;
+      ds::Vec<MetadataLink, Memory> links;
+      ds::Vec<MetadataRun, Memory> runs;
+      ds::Vec<Byte, Memory> uris;
+    };
+
+    mutable DrawnCache drawn_{adapter_};
     ds::Vec<float, Memory> revealed_rows_{adapter_};
     TerminalFont font_;
     FontGrid font_grid_;

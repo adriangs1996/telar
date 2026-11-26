@@ -86,7 +86,11 @@ namespace telar::runtime {
       }
 
       const auto* workspace = model.workspaces.find(pane->location.workspace.id);
-      const auto* tab = workspace == nullptr ? nullptr : workspace->tab(pane->location.tab_id);
+      if (workspace == nullptr) {
+        continue;
+      }
+
+      const auto* tab = workspace->tab(pane->location.tab_id);
       if (tab == nullptr) {
         continue;
       }
@@ -1432,9 +1436,17 @@ namespace telar::runtime {
 
   template <EventLoop Poller, HistoryEventSink History>
   TabClosed WorkspaceService<Poller, History>::removeTab(RuntimeModel& model, TabLocation location) {
+    if (location.workspace.kind != WorkspaceLocation::Kind::workspace) {
+      throw RequestError{FailureCode::tab_not_found, "tab not found"};
+    }
+
     auto* workspace = model.workspaces.find(location.workspace.id);
-    const auto* tab = workspace == nullptr ? nullptr : workspace->tab(location.tab_id);
-    if (location.workspace.kind != WorkspaceLocation::Kind::workspace || tab == nullptr) {
+    if (workspace == nullptr) {
+      throw RequestError{FailureCode::tab_not_found, "tab not found"};
+    }
+
+    const auto* tab = workspace->tab(location.tab_id);
+    if (tab == nullptr) {
       throw RequestError{FailureCode::tab_not_found, "tab not found"};
     }
 
@@ -1492,10 +1504,10 @@ namespace telar::runtime {
     const auto exit_code = pane.core.exitCode();
 
     try {
+      const auto rows = pane.body.terminal.totalRows();
       TextReader reader{memory_, pane.body.terminal, ExitedPanes::maximum_bytes};
 
       reader.read(PaneTextSource::recent, ExitedPanes::kept_rows);
-      const auto rows = pane.body.terminal.totalRows();
 
       exited.record({.id = pane.core.id, .generation = pane.core.generation}, PaneText{
                                                                                   .truncated = reader.truncated() || rows > ExitedPanes::kept_rows,
@@ -1528,7 +1540,10 @@ namespace telar::runtime {
       const auto* requester = clients.find(client_id);
 
       pane = panes.launch(model, {.bare_prompt = requester != nullptr && requester->bare_prompt, .location = location, .size = size}, launch).core.id;
-      model.workspaces.find(workspace_id)->tabs.atMut(0).panes.push(*pane);
+      if (auto* created = model.workspaces.find(workspace_id)) {
+        created->tabs.atMut(0).panes.push(*pane);
+      }
+
       if (replace_view) {
         panes.detachAll(model, clients, client_id);
       }
@@ -3854,6 +3869,7 @@ namespace telar::runtime {
 
       client->connection.exchange(frames);
       bool answered = false;
+      bool failed_dispatch = false;
 
       try {
         if (!client->connection.flags().closing) {
@@ -3863,12 +3879,14 @@ namespace telar::runtime {
           answered = true;
         }
       } catch (...) {
-        if (auto* failed = clients_.find(identity)) {
-          failed->connection.closeImmediately();
-        }
+        failed_dispatch = true;
       }
 
       if (auto* current = clients_.find(identity)) {
+        if (failed_dispatch) {
+          current->connection.closeImmediately();
+        }
+
         current->connection.exchange(frames);
         DeferredReports<Agents>::close(*current, payload);
         if (answered) {

@@ -407,7 +407,8 @@ namespace telar::runtime::control {
   }
 
   bool VtState::mode(std::uint16_t number, bool ansi) const {
-    auto& entry = modes_.atMut((number ^ (ansi ? mode_ansi_hash : 0)) % modes_.size());
+    const auto& slot = modes_[(number ^ (ansi ? mode_ansi_hash : 0)) % modes_.size()];
+    auto entry = slot.get();
     if (entry.epoch != epoch_ || entry.number != number || entry.ansi != ansi) {
       GhosttyTerminalModeConfig query{.mode = ghostty::mode(number, ansi), .value = false};
 
@@ -415,6 +416,7 @@ namespace telar::runtime::control {
       entry.number = number;
       entry.ansi = ansi;
       entry.epoch = epoch_;
+      slot.set(entry);
     }
 
     return entry.value;
@@ -571,8 +573,8 @@ namespace telar::runtime::control {
     keyboard_cache_.reset();
     style_cache_.reset();
     visual_cursor_cache_.reset();
-    for (auto& entry : modes_.viewMut()) {
-      entry.epoch = 0;
+    for (const auto& entry : modes_) {
+      entry.set({});
     }
   }
 
@@ -585,9 +587,7 @@ namespace telar::runtime::control {
     const auto& result = snapshot.state;
 
     margin_cache_.store(epoch_, {.top = result.top, .bottom = result.bottom, .left = result.left, .right = result.right});
-    auto& origin = modes_.atMut(origin_mode % modes_.size());
-
-    origin = {.epoch = epoch_, .number = origin_mode, .ansi = false, .value = result.origin != 0};
+    modes_[origin_mode % modes_.size()].set({.epoch = epoch_, .number = origin_mode, .ansi = false, .value = result.origin != 0});
     return result;
   }
 

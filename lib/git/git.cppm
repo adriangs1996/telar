@@ -13,6 +13,7 @@ import :history;
 import telar.sys.posix;
 export import :worktree;
 import telar.base.ds;
+import telar.tbc;
 
 // A native, read-only reader of a repository's state: the branch, its
 // upstream and divergence, and the counts git status reports. It never runs
@@ -183,7 +184,7 @@ export namespace telar::git {
 
       auto&& visitor = std::forward<Visit>(visit);
 
-      visitRemotes(const_cast<std::remove_const_t<Target>*>(std::addressof(visitor)), [](void* target, std::string_view name) {
+      visitRemotes(tbc::raw(const_cast<std::remove_const_t<Target>*>(std::addressof(visitor))), [](void* target, std::string_view name) {
         (*static_cast<Target*>(target))(name);
       });
     }
@@ -229,7 +230,7 @@ export namespace telar::git {
 
       auto&& visitor = std::forward<Visit>(visit);
 
-      visitReferences(space, limit, const_cast<std::remove_const_t<Target>*>(std::addressof(visitor)), [](void* target, std::string_view name) {
+      visitReferences(space, limit, tbc::raw(const_cast<std::remove_const_t<Target>*>(std::addressof(visitor))), [](void* target, std::string_view name) {
         (*static_cast<Target*>(target))(name);
       });
     }

@@ -7,6 +7,7 @@ static_assert(true);
 
 #include "foundation/core/memory.hpp"
 #include "prompt_controller.hpp"
+#include "tbc/annotations.hpp"
 #include "ui/design/controls/cell_text_grid.hpp"
 #include "ui/kit/scene/ancestor_geometry.hpp"
 #include <QColor>
@@ -284,10 +285,15 @@ namespace telar::gui::qt {
     };
 
     Laid laid_{adapter_};
+
     // The menu's choices as QML last read them, for the line and revision they came from.
-    mutable QVariantList choices_;
-    mutable const void* choices_line_ = nullptr;
-    mutable std::uint64_t choices_revision_ = 0;
+    struct TBC_SHARED ChoicesCache {
+      QVariantList choices;
+      const void* line = nullptr;
+      std::uint64_t revision = 0;
+    };
+
+    mutable ChoicesCache choices_;
   };
 
 }

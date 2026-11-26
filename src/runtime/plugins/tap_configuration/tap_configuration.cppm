@@ -6,6 +6,7 @@ export module telar.runtime.plugins.tap_configuration;
 import std;
 import telar.lua;
 import telar.sys.posix;
+import telar.tbc;
 
 import telar.config.client;
 import telar.plugins;
@@ -154,8 +155,8 @@ export {
 
       inline void write(std::span<const std::uint8_t> prefix, std::span<const std::uint8_t> payload) {
         ds::Array vectors{
-            iovec{.iov_base = const_cast<std::uint8_t*>(prefix.data()), .iov_len = prefix.size()},   // NOLINT(cppcoreguidelines-pro-type-const-cast): writev's iovec takes a mutable base it only reads
-            iovec{.iov_base = const_cast<std::uint8_t*>(payload.data()), .iov_len = payload.size()}, // NOLINT(cppcoreguidelines-pro-type-const-cast): writev's iovec takes a mutable base it only reads
+            iovec{.iov_base = tbc::raw(const_cast<std::uint8_t*>(prefix.data())), .iov_len = prefix.size()},   // NOLINT(cppcoreguidelines-pro-type-const-cast): writev's iovec takes a mutable base it only reads
+            iovec{.iov_base = tbc::raw(const_cast<std::uint8_t*>(payload.data())), .iov_len = payload.size()}, // NOLINT(cppcoreguidelines-pro-type-const-cast): writev's iovec takes a mutable base it only reads
         };
 
         std::size_t first = 0;

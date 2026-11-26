@@ -30,14 +30,12 @@ namespace telar::gui::application::notifications {
     }
 
     void startSound(Session& session, AgentSound sound) {
-      auto& state = session.notifications;
-
       try {
         if (!Access::effects(session).playSound(sound)) {
-          feature::soundFailed(state);
+          feature::soundFailed(session.notifications);
         }
       } catch (...) {
-        feature::soundFailed(state);
+        feature::soundFailed(session.notifications);
         throw;
       }
     }
@@ -106,9 +104,9 @@ namespace telar::gui::application::notifications {
   }
 
   feature::LimitRecorded countLimitReach(Session& session, LimitReach reach) {
-    auto& state = session.notifications;
     const auto awake_ms = static_cast<std::int64_t>(Access::now(session) / NotificationInput::nanoseconds_per_millisecond);
     const feature::LimitTime sampled{.awake_ms = awake_ms, .real_ms = runtime::ObservationTime::now().milliseconds};
+    auto& state = session.notifications;
     const auto recorded = feature::record(state, reach, sampled);
     if (const auto report = feature::takeReport(state, recorded.slot, awake_ms)) {
       bool delivered = false;

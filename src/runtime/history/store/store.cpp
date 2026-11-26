@@ -601,6 +601,24 @@ namespace telar::runtime {
     statement.bind(context_parameter::workspace_path, writtenDirectory(session.workspace_path));
   }
 
+  HistoryRows::TextArena::TextArena(ConcurrentMemory& memory, std::size_t limit)
+      : storage_(memory, limit) {}
+
+  void HistoryRows::TextArena::reserve(std::size_t capacity) {
+    storage_.reserve(capacity);
+  }
+
+  void HistoryRows::TextArena::clear() noexcept {
+    storage_.clear();
+  }
+
+  std::string_view HistoryRows::TextArena::copy(std::string_view text) const {
+    const auto offset = storage_.size();
+
+    storage_.append(byteView(text));
+    return textView(storage_.readable().subspan(offset, text.size()));
+  }
+
   HistoryRows::HistoryRows(ConcurrentMemory& memory)
       : text_(memory, max_payload_size),
         entries_(memory) {
@@ -635,10 +653,7 @@ namespace telar::runtime {
   }
 
   std::string_view HistoryRows::copy(std::string_view text) const {
-    const auto offset = text_.size();
-
-    text_.append(byteView(text));
-    return textView(text_.readable().subspan(offset, text.size()));
+    return text_.copy(text);
   }
 
   std::span<const HistoryEntry> HistoryRows::entries() const noexcept {

@@ -90,6 +90,12 @@ export {
     struct TBC_SHARED GraphicsBudget {
       static constexpr std::size_t global_capacity = runtime::GraphicsLimits::maximum_global_bytes;
       std::size_t used = 0;
+
+      GraphicsBudget() = default;
+      GraphicsBudget(const GraphicsBudget&) = delete;
+      GraphicsBudget& operator=(const GraphicsBudget&) = delete;
+      GraphicsBudget(GraphicsBudget&&) = delete;
+      GraphicsBudget& operator=(GraphicsBudget&&) = delete;
     };
 
     template <Allocator Memory>

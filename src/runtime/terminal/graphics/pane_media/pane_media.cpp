@@ -76,7 +76,7 @@ namespace telar::runtime {
         auto entries = selected.viewMut().first(count);
 
         choose(entries, text, target);
-        output(bytes.subspan(emitted, first->start - emitted), sink);
+        output(bytes.subspan(emitted, first->start - emitted), target.sink);
         auto position = first->start;
 
         while (position < end) {

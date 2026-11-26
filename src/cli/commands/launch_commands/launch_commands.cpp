@@ -2,6 +2,7 @@ module telar.cli.commands.launch_commands;
 
 import std;
 import telar.sys.posix;
+import telar.tbc;
 
 import telar.cli.commands.plugin;
 import telar.cli.session.server;
@@ -165,7 +166,7 @@ namespace telar::runtime::cli {
     // read their arguments and never write through them.
     arguments.reserve(decoded.size());
     for (const auto& word : decoded) {
-      arguments.push(const_cast<char*>(word.data())); // NOLINT(cppcoreguidelines-pro-type-const-cast): Dispatch takes argv's char*; a mutable borrow of each word would end the previous one's
+      arguments.push(tbc::raw(const_cast<char*>(word.data()))); // NOLINT(cppcoreguidelines-pro-type-const-cast): Dispatch takes argv's char*; a mutable borrow of each word would end the previous one's
     }
 
     return dispatch(arguments.view());

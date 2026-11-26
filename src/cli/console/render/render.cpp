@@ -131,10 +131,10 @@ namespace telar::runtime::cli::render_command {
       return default_width;
     }
 
-    volatile std::sig_atomic_t stop_signal = 0; // NOLINT(cppcoreguidelines-avoid-non-const-global-variables): a signal handler reaches only a global
+    std::atomic<int> stop_signal{0}; // NOLINT(cppcoreguidelines-avoid-non-const-global-variables): a signal handler reaches only a global
 
     void onStopSignal(int signal) noexcept {
-      stop_signal = signal;
+      stop_signal.store(signal, std::memory_order_relaxed);
     }
 
     // Holds the controlling terminal in raw mode on the alternate screen, and
@@ -181,7 +181,7 @@ namespace telar::runtime::cli::render_command {
         constexpr std::size_t key_bytes = 64;
         ds::Array<char, key_bytes> keys{};
 
-        while (stop_signal == 0) {
+        while (stop_signal.load(std::memory_order_relaxed) == 0) {
           const auto got = ::read(descriptor_, keys.dataMut(), keys.size());
           if (got < 0 && (sys::lastError() == EINTR || sys::lastError() == EAGAIN)) {
             continue;

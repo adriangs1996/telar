@@ -1,5 +1,6 @@
 #pragma once
 
+#include "tbc/annotations.hpp"
 #include "telar_base/ds/values.hpp"
 #include <QByteArray>
 #include <QHash>
@@ -14,7 +15,7 @@ namespace telar::gui::qt {
   public:
     [[nodiscard]] ds::Option<std::string_view> operator()(const char* name) const {
       const QByteArray key{name};
-      if (const auto found = values_.constFind(key); found != values_.cend()) {
+      if (const auto found = values_.entries.constFind(key); found != values_.entries.cend()) {
         return view(found.value());
       }
 
@@ -23,7 +24,7 @@ namespace telar::gui::qt {
         return {};
       }
 
-      return view(values_.insert(key, value).value());
+      return view(values_.entries.insert(key, value).value());
     }
 
   private:
@@ -31,7 +32,11 @@ namespace telar::gui::qt {
       return {value.constData(), static_cast<std::size_t>(value.size())};
     }
 
-    mutable QHash<QByteArray, QByteArray> values_;
+    struct TBC_SHARED Values {
+      QHash<QByteArray, QByteArray> entries;
+    };
+
+    mutable Values values_;
   };
 
 }

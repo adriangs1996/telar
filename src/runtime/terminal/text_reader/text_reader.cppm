@@ -305,9 +305,15 @@ export {
       static constexpr std::size_t maximum_spans = 4096;
       static constexpr std::size_t maximum_metadata_bytes = 153098 + (maximum_spans * 12) + 62;
 #if TELAR_DIAGNOSTICS
+      struct TBC_SHARED Counters {
+        diagnostics::FrameCounters take() const noexcept;
+
+        mutable diagnostics::FrameCounters value;
+      };
+
       void recordFrame(std::size_t bytes, bool snapshot) noexcept;
 
-      mutable diagnostics::FrameCounters counters_;
+      Counters counters_;
 #endif
       std::uint64_t pane_id_;
       tbc::val_a<ds::Vec<ScreenCell, ConcurrentMemory>> baseline_;
@@ -565,7 +571,7 @@ export {
       const TerminalMedia* media_ = nullptr;
       static constexpr std::size_t control_input_limit = std::size_t{128} * 1024;
       // The engine keeps the queue responses_ owns, a shared type, so the terminal stays where it was built.
-      tbc::val_a<control::Engine> control_;
+      tbc::val_self<control::Engine> control_;
       tbc::val_a<ByteQueue<ConcurrentMemory>> pending_control_input_;
       TerminalPurpose purpose_;
       CellProjection projection_;

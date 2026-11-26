@@ -24,9 +24,8 @@ namespace telar::gui::application::palette {
 
   bool submit(Session& session, std::string_view task) {
     using Kind = features::palette::Submission::Kind;
-    auto& state = session.palette;
     const auto* pane = focusedPane(session.panes, session.tabs, session.active_tab);
-    const auto submission = features::palette::submit(state, task);
+    const auto submission = features::palette::submit(session.palette, task);
 
     if (submission.kind == Kind::insert) {
       if (!session.ready() || pane == nullptr || !pane->attached || pane->exited || terminal::copy_mode::view(session).active()) {
@@ -58,7 +57,7 @@ namespace telar::gui::application::palette {
     }
 
     if (!session.ready() || pane == nullptr || !pane->attached || pane->exited) {
-      features::palette::fail(state);
+      features::palette::fail(session.palette);
 
       return false;
     }
@@ -66,7 +65,7 @@ namespace telar::gui::application::palette {
     const SuggestCommand request{.request_id = session.link.nextRequest(), .pane_id = pane->id, .text = submission.text};
 
     session.link.send(request);
-    features::palette::wait(state, request.request_id);
+    features::palette::wait(session.palette, request.request_id);
 
     return false;
   }

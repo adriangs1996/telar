@@ -1807,6 +1807,22 @@ namespace telar::runtime::config {
     return setting;
   }
 
+  namespace {
+
+    template <CommandTabStore Commands>
+    void validateBindingEntries(const lua::Value& bindings, BasicActionValidator<Commands>& actions, BindingKeymap& keymap) {
+      BindingReader::read(bindings, keymap.prefix(), [&](const BindingSetting& binding, const lua::Value& action) {
+        BindingKeymap::Sequence sequence{.length = binding.length, .prefixed = binding.prefixed};
+
+        std::ranges::copy(std::span{binding.keys}.first(std::min(binding.length, sequence.keys.size())), sequence.keys.viewMut().begin());
+        if (actions.validate(action, binding.expression)) {
+          keymap.append(sequence);
+        }
+      });
+    }
+
+  }
+
   template <CommandTabStore Commands>
   void BindingValidator::validate(const lua::Value& bindings, BasicActionValidator<Commands>& actions, BindingKeymap& keymap, LimitNotices& limits) {
     if (!bindings.present()) {
@@ -1821,14 +1837,7 @@ namespace telar::runtime::config {
       limits.add({.name = "config.max_bindings", .noun = "key bindings", .value = maximum_bindings, .requested = listed, .route = {}});
     }
 
-    BindingReader::read(bindings, keymap.prefix(), [&](const BindingSetting& binding, const lua::Value& action) {
-      BindingKeymap::Sequence sequence{.length = binding.length, .prefixed = binding.prefixed};
-
-      std::ranges::copy(std::span{binding.keys}.first(std::min(binding.length, sequence.keys.size())), sequence.keys.viewMut().begin());
-      if (actions.validate(action, binding.expression)) {
-        keymap.append(sequence);
-      }
-    });
+    validateBindingEntries(bindings, actions, keymap);
   }
 
   PluginWorkerOptions PluginWorkerOptions::parse(std::span<char* const> arguments) {
@@ -2494,10 +2503,25 @@ namespace telar::runtime::config {
     }
 
     static_cast<void>(ClientDefinitionsReader::read(client, limits, [](std::size_t, const PanelSetting&, const lua::Value&) {}, [](std::size_t, const PickSetting&, const lua::Value&) {}));
+    const auto keybindings = client.field("keybindings");
+    const bool has_keybindings = keybindings.present();
+    if (has_keybindings) {
+      constexpr auto maximum_bindings = BindingReader::maximum_bindings;
+      const auto listed = keybindings.listLength();
+
+      state.keymap.clear();
+      if (listed > maximum_bindings) {
+        limits.add({.name = "config.max_bindings", .noun = "key bindings", .value = maximum_bindings, .requested = listed, .route = {}});
+      }
+    }
+
     const ClientDefinitions definitions{client, inherited};
     BasicActionValidator<Commands> actions{definitions, limits, state.commands};
 
-    BindingValidator::validate(client.field("keybindings"), actions, state.keymap, limits);
+    if (has_keybindings) {
+      validateBindingEntries(keybindings, actions, state.keymap);
+    }
+
     BarsValidator<Commands>{actions, limits}.validate(client.field("bars"));
     ClientReader::slots(client, [](std::size_t, const lua::Value&) {});
   }

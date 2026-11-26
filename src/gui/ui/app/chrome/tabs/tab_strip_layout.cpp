@@ -669,7 +669,7 @@ namespace telar::gui::qt {
       }
 
       QRectF bounds{static_cast<qreal>(left), static_cast<qreal>(top), static_cast<qreal>(plan.widths[index]), static_cast<qreal>(height)};
-      const auto& record = records[static_cast<qsizetype>(index)];
+      const auto& record = records.at(static_cast<qsizetype>(index));
       const auto id = record.value(QStringLiteral("key")).toString().toULongLong();
       const auto dragging = dragged_ == id;
       const auto target = bounds;
@@ -686,7 +686,7 @@ namespace telar::gui::qt {
 
       entry.insert(QStringLiteral("dragging"), dragging);
       entry.insert(QStringLiteral("cards"), placeCards(record, frame));
-      entry.insert(QStringLiteral("separator"), position + 1 < shown && !record.value(QStringLiteral("selected")).toBool() && !records[static_cast<qsizetype>(order[position + 1])].value(QStringLiteral("selected")).toBool());
+      entry.insert(QStringLiteral("separator"), position + 1 < shown && !record.value(QStringLiteral("selected")).toBool() && !records.at(static_cast<qsizetype>(order[position + 1])).value(QStringLiteral("selected")).toBool());
       positioned.append(std::move(entry));
       drop_slots_.atMut(drop_slot_count_++) = {.id = id, .bounds = {.x = static_cast<float>(bounds.x()), .y = static_cast<float>(bounds.y()), .width = static_cast<float>(bounds.width()), .height = static_cast<float>(bounds.height())}};
       left += plan.widths[index];

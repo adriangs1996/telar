@@ -6,6 +6,7 @@ static_assert(true);
 #include "chrome_fonts.hpp"
 #include "font_source.hpp"
 #include "foundation/core/memory.hpp"
+#include "tbc/annotations.hpp"
 #include "telar_base/ds/containers.hpp"
 #include <QByteArray>
 #include <QtCore/qstringliteral.h>
@@ -57,15 +58,19 @@ namespace telar::gui::qt {
   }
 
   std::shared_ptr<ChromeFonts> ChromeFonts::shared() {
+    struct TBC_SHARED Cache {
+      std::weak_ptr<ChromeFonts> fonts;
+    };
+
 // A thread that exits must drop its weak reference, or the fonts' shared allocation leaks with it.
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wexit-time-destructors"
-    thread_local std::weak_ptr<ChromeFonts> cached;
+    thread_local Cache cached;
 #pragma clang diagnostic pop
-    auto fonts = cached.lock();
+    auto fonts = cached.fonts.lock();
     if (!fonts) {
       fonts = std::make_shared<ChromeFonts>();
-      cached = fonts;
+      cached.fonts = fonts;
     }
 
     return fonts;

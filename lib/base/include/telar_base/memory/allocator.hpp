@@ -108,10 +108,12 @@ namespace telar {
   private:
 #if TELAR_DIAGNOSTICS
     void recordAllocation(std::size_t size) noexcept {
+      const auto path = current_allocation_path.get();
+
       ++statistics_.live_allocations;
       statistics_.total.record(size);
-      statistics_.paths.atMut(static_cast<std::size_t>(current_allocation_path)).record(size);
-      if (current_allocation_path == AllocationPath::interactive && terminal_allocation) {
+      statistics_.paths.atMut(static_cast<std::size_t>(path)).record(size);
+      if (path == AllocationPath::interactive && terminal_allocation.get()) {
         statistics_.interactive_terminal.record(size);
       }
     }

@@ -107,12 +107,18 @@ namespace telar::runtime {
   }
 
   ds::Option<traffic::FlowControl::Time> FlowState::deadline() const noexcept {
+    if (control_ == nullptr) {
+      return ds::none;
+    }
+
     ds::Option<traffic::FlowControl::Time> soonest;
 
-    for (const auto* gate : {&outbound_, &inbound_}) {
-      if (const auto due = (gate->ticket_ != 0U) ? control_->deadline(gate->ticket_) : ds::none) {
-        soonest = earliest(soonest, due);
-      }
+    if (const auto due = (outbound_.ticket_ != 0U) ? control_->deadline(outbound_.ticket_) : ds::none) {
+      soonest = earliest(soonest, due);
+    }
+
+    if (const auto due = (inbound_.ticket_ != 0U) ? control_->deadline(inbound_.ticket_) : ds::none) {
+      soonest = earliest(soonest, due);
     }
 
     return soonest;

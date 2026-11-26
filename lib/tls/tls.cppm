@@ -180,8 +180,8 @@ export {
       static void* reallocate(void* pointer, std::size_t size, const char* file, int line) noexcept;
 
       // OpenSSL cannot be reinitialized after cleanup, and its callbacks have no context argument.
-      inline static ConcurrentMemory* configured_memory = nullptr;
-      inline static bool configured = false;
+      inline static std::atomic<ConcurrentMemory*> configured_memory{nullptr};
+      inline static std::atomic<bool> configured{false};
     };
 
   }
