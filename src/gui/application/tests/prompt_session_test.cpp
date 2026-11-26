@@ -156,6 +156,20 @@ namespace {
     deliver(client, atPrompt(3, 1));
     check(transport.inputSince(before).empty() && prompt::line(client, 1)->text() == "deploy", "a failure keeps the queued command as a draft");
 
+    // A key that reaches the program after the line was queued, as the end-of-file that ends
+    // `cat`, keeps the line from running: it may have been meant for the program.
+    prompt::key(client, 1, prompt::KeyPress{.key = prompt::Key::character, .character = 'u', .modifiers = {.control = true}});
+    deliver(client, running(2));
+    before = transport.sent.size();
+    typeKeys(client, "rm -rf build");
+    enter(client);
+    check(prompt::line(client, 1)->queued(), "Enter arms the line");
+    prompt::key(client, 1, prompt::KeyPress{.key = prompt::Key::character, .character = 'd', .modifiers = {.control = true}});
+    check(!prompt::line(client, 1)->queued(), "end-of-file to the program disarms it");
+    deliver(client, atPrompt(3, 0));
+    check(transport.commandsSince(before).empty() && prompt::line(client, 1)->text() == "rm -rf build", "the line waits instead of running");
+    prompt::key(client, 1, prompt::KeyPress{.key = prompt::Key::character, .character = 'u', .modifiers = {.control = true}});
+
     // A password prompt gets the keys; the line only counts them.
     deliver(client, running(3, false));
     check(prompt::surface(client, 1) == prompt::Surface::secret, "echo off is a secret");
@@ -163,6 +177,12 @@ namespace {
     client.input(1, "a");
     client.input(1, "b");
     check(prompt::line(client, 1)->secretKeys() == 2, "the line counts the hidden keys");
+    client.input(1, "\x7f");
+    check(prompt::line(client, 1)->secretKeys() == 1, "Backspace erases one of them");
+    client.input(1, "\xc3\xb1");
+    check(prompt::line(client, 1)->secretKeys() == 2, "a character of several bytes is one key");
+    client.input(1, "\x15");
+    check(prompt::line(client, 1)->secretKeys() == 0, "Ctrl-U erases them all");
     deliver(client, atPrompt(4, 0));
     check(prompt::line(client, 1)->secretKeys() == 0, "the count clears with the prompt");
 
@@ -202,18 +222,27 @@ namespace {
       return false;
     };
 
-    // Without bracketed paste the shell would run each line of it on its own.
-    const auto before = transport.sent.size();
+    // Without bracketed paste a line break is Enter: the shell reads the command a line at a
+    // time, asking for the rest as it does for one typed, so it runs whole.
+    auto before = transport.sent.size();
 
     typeKeys(client, "echo 'a");
     check(enter(client) == prompt::Outcome::edited, "an open quote continues on a new line");
     typeKeys(client, "b'");
-    check(refused(), "a multi-line command the shell cannot take whole is refused");
-    check(transport.commandsSince(before).empty() && transport.inputSince(before).empty(), "nothing reaches the shell");
-    check(prompt::line(client, 1)->text() == "echo 'a\nb'", "the command stays in the editor");
-    check(prompt::line(client, 1)->recent().empty() && prompt::history(client).empty(), "a command never sent is not remembered");
+    check(enter(client) == prompt::Outcome::run && transport.commandsSince(before) == std::vector<std::string>{"echo 'a\nb'"}, "a multi-line command reaches the shell");
 
-    // An answer to a running program is checked the same way.
+    // A tab would complete: a command with one is refused, and stays in the editor.
+    before = transport.sent.size();
+    client.paste(1, "printf 'a\tb'");
+    check(refused(), "a command with a tab the shell cannot take whole is refused");
+    check(transport.commandsSince(before).empty() && transport.inputSince(before).empty(), "nothing reaches the shell");
+    check(prompt::line(client, 1)->text() == "printf 'a\tb'", "the command stays in the editor");
+    prompt::key(client, 1, prompt::KeyPress{.key = prompt::Key::character, .character = 'u', .modifiers = {.control = true}});
+    typeKeys(client, "echo 'a");
+    enter(client);
+    typeKeys(client, "b'");
+
+    // An answer to a running program is checked as before: a line break would end it early.
     deliver(client, running(1));
     prompt::key(client, 1, prompt::KeyPress{.key = prompt::Key::enter, .modifiers = {.alt = true}});
     check(prompt::line(client, 1)->answering(), "Alt-Enter answers the program");

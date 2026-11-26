@@ -106,6 +106,12 @@ namespace telar::gui::features::prompt {
     return armed_;
   }
 
+  void Line::disarm() noexcept {
+    if (std::exchange(armed_, false)) {
+      ++revision_;
+    }
+  }
+
   bool Line::answering() const noexcept {
     return answering_;
   }
@@ -153,6 +159,14 @@ namespace telar::gui::features::prompt {
     }
 
     return {};
+  }
+
+  bool Line::claims(const KeyPress& key, History history) const noexcept {
+    if (menu_) {
+      return true;
+    }
+
+    return (takesSuggestion(key) || takesSuggestedWord(key)) && !suggestion(history).empty();
   }
 
   Outcome Line::pressKey(Surface surface, const KeyPress& key, const Continuation& incomplete, History history) {
@@ -332,6 +346,13 @@ namespace telar::gui::features::prompt {
   void Line::countSecretKey() noexcept {
     ++secret_keys_;
     ++revision_;
+  }
+
+  void Line::eraseSecretKey() noexcept {
+    if (secret_keys_ != 0) {
+      --secret_keys_;
+      ++revision_;
+    }
   }
 
   void Line::clearSecret() noexcept {

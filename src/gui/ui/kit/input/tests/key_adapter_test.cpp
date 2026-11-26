@@ -151,6 +151,18 @@ namespace {
     const QKeyEvent same{QEvent::KeyPress, Qt::Key_B, Qt::AltModifier, QStringLiteral("b")};
 
     check(Apple::terminalKey(same)->has(Modifier::alt), "Option whose text is its own key stays Alt");
+
+    // A Spanish layout's keys of no ASCII character: Option+ñ is `~` and Option+ç is `}`.
+    for (const auto& [key, text] : {std::pair{Qt::Key_Ntilde, QStringLiteral("~")}, std::pair{Qt::Key_Ccedilla, QStringLiteral("}")}, std::pair{Qt::Key_masculine, QStringLiteral("\\")}}) {
+      const QKeyEvent option{QEvent::KeyPress, key, Qt::AltModifier, text};
+      const auto typed = Apple::terminalKey(option);
+
+      check(typed && typed->codepoint == static_cast<unsigned>(text.front().unicode()) && !typed->has(Modifier::alt), "Option types the character a key of no ASCII character gives it");
+    }
+
+    const QKeyEvent own{QEvent::KeyPress, Qt::Key_Ntilde, Qt::AltModifier, QStringLiteral("ñ")};
+
+    check(Apple::terminalKey(own)->has(Modifier::alt), "Option whose text is its own key stays Alt, ASCII or not");
   }
 
   void unicodeAndSyntheticInput() {

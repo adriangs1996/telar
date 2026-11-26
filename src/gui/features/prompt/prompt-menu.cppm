@@ -23,7 +23,8 @@ export namespace telar::gui::features::prompt {
     bytes,
     // The key belongs to the terminal: encode and send it as usual.
     terminal,
-    // Neither the line nor the terminal: telar's own binding may take it.
+    // Neither the line nor the terminal: nothing happens. The window's bindings saw the key
+    // before the line, so none of them took it; at the prompt it does not reach the shell either.
     ignored,
     // Tab: the owner works out the choices and offers them.
     complete,

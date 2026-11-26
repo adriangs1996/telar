@@ -168,7 +168,10 @@ namespace telar::gui::application::prompt {
 
       switch (outcome) {
       case Outcome::run: {
-        features::history::HistoryText::validate(text.view(), bracketed);
+        // At the shell's prompt a line break typed without bracketed paste is Enter, which runs
+        // each line in turn as the shell asks for the next, as bash 3.2 does with its PS2; only a
+        // tab, which would complete, needs the paste.
+        features::history::HistoryText::validate(text.view(), bracketed || text.view().find('\t') == std::string_view::npos);
         // What the history does not keep, the suggestions do not offer.
         const bool kept = session.configuration.history_filters.allowsPane(text.view(), std::string_view{pane->cwd});
 

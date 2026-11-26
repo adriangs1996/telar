@@ -73,6 +73,9 @@ namespace telar::gui::features::prompt {
 
     // The command typed while another runs waits for it; Enter arms it to run when that one
     // succeeds.
+    // Keys reached the running program: what the queue holds may have been meant for it, so it
+    // waits in the line instead of running when the shell is back.
+    void disarm() noexcept;
     [[nodiscard]] bool queued() const noexcept;
 
     // While a program runs, typed lines go to it instead of the queue.
@@ -88,6 +91,10 @@ namespace telar::gui::features::prompt {
     // `history`, newest first. Only while typing at the end of a non-empty line.
     // From the commands sent from this line or from the history, both in region `a`.
     [[nodiscard]] tbc::val_a<std::string_view> suggestion(tbc::val_a<History> history) const noexcept;
+
+    // Whether the line has a use for `key` ahead of any binding: the menu of choices that shows
+    // takes every key, and the suggestion the keys that take it.
+    [[nodiscard]] bool claims(const KeyPress& key, History history) const noexcept;
 
     // A key in the editor or the queue. `incomplete` tells whether the shell would wait for more
     // of the command, so Enter continues it on a new line.
@@ -146,6 +153,9 @@ namespace telar::gui::features::prompt {
     void countSecretKey() noexcept;
 
     void clearSecret() noexcept;
+
+    // The last key of the secret erased, as the line discipline's erase character erases it.
+    void eraseSecretKey() noexcept;
 
     void remember(std::string_view command);
 

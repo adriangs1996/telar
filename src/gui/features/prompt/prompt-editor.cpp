@@ -99,11 +99,27 @@ namespace telar::gui::features::prompt {
   }
 
   void Editor::insertText(std::string_view text) {
-    if (keymap_ == Keymap::vim && mode_ != Mode::insert) {
+    if (keymap_ != Keymap::vim || mode_ == Mode::insert) {
+      text_.insert(text, true);
       return;
     }
 
+    // Outside insert mode, a paste or a character an input method composed goes in after the
+    // cursor, as `p` puts a register: the editor stays in normal mode, on the last one put.
+    if (text.empty()) {
+      return;
+    }
+
+    reset();
+    text_.release();
+    mode_ = Mode::normal;
+    const auto cursor = text_.cursor();
+    const auto position = text_.empty() || cursor == text_.lineEnd(cursor) ? cursor : text_.next(cursor);
+
+    text_.moveTo(position);
     text_.insert(text, true);
+    text_.moveTo(text_.previous(text_.cursor()));
+    clampNormal();
   }
 
   Request Editor::perform(Action action) {

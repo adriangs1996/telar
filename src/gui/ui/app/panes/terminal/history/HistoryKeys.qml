@@ -94,12 +94,17 @@ QtObject {
 
         const control = (event.modifiers & root.controlModifier) !== 0;
         const command = (event.modifiers & root.superModifier) !== 0;
-        if (command && event.key === Qt.Key_Backspace) {
+        const shift = (event.modifiers & Qt.ShiftModifier) !== 0;
+        // Deleting takes Command+Backspace, or Control with Shift and D: Control+D alone is the
+        // shell's delete-forward, which must not delete a command from the history.
+        if ((command && event.key === Qt.Key_Backspace) || (control && shift && event.key === Qt.Key_D)) {
             root.controller.execute(HistoryController.Action.erase);
             return true;
         }
 
-        if ((control || command) && event.key === Qt.Key_C) {
+        // Copying takes Command+C, or Control with Shift and C as terminals copy; Control+C
+        // alone cancels, as it cancels the shell's own search.
+        if ((command || (control && shift)) && event.key === Qt.Key_C) {
             if (root.queryField && root.queryField.selectionStart !== root.queryField.selectionEnd) {
                 root.queryField.copy();
             } else {
@@ -114,8 +119,17 @@ QtObject {
         }
 
         switch (event.key) {
-        case Qt.Key_D:
-            root.controller.execute(HistoryController.Action.erase);
+        case Qt.Key_C:
+        case Qt.Key_G:
+            root.cancel();
+            return true;
+        // Control+R again goes to an older match and Control+S to a newer one, as the shell's own
+        // search steps.
+        case Qt.Key_R:
+            root.moveSelection(root.downward ? 1 : -1);
+            return true;
+        case Qt.Key_S:
+            root.moveSelection(root.downward ? -1 : 1);
             return true;
         case Qt.Key_O:
             root.controller.execute(HistoryController.Action.inspect);

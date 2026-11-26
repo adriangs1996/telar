@@ -615,7 +615,8 @@ namespace telar::gui::features::prompt {
       return prompt::incomplete(memory, text, syntax);
     };
 
-    const auto action = bound(key, edited.editor(), reading.configuration);
+    // The menu that shows and the suggestion keep their keys from the bindings.
+    const auto action = edited.claims(key, history(state)) ? ds::none : bound(key, edited.editor(), reading.configuration);
 
     return action ? edited.perform(surface, *action, incomplete, history(state)) : edited.press(surface, key, incomplete, history(state));
   }
@@ -647,6 +648,7 @@ namespace telar::gui::features::prompt {
           line.line.committed({});
         }
 
+        line.line.disarm();
         line.forwarding = false;
         return true;
       }
@@ -667,6 +669,7 @@ namespace telar::gui::features::prompt {
       return false;
     }
 
+    line.line.disarm();
     line.forwarding = !enter;
     return true;
   }
@@ -677,6 +680,7 @@ namespace telar::gui::features::prompt {
       return false;
     }
 
+    line.line.disarm();
     line.forwarding = !text.ends_with('\n') && !text.ends_with('\r');
     return true;
   }
@@ -686,18 +690,26 @@ namespace telar::gui::features::prompt {
   }
 
   inline void typeSecret(PaneLine& line, char byte) noexcept {
-    // DEL, Backspace and Ctrl-U erase what was typed; any other control types nothing.
+    // DEL and Backspace erase the last key typed, as the line discipline does; Ctrl-U erases them
+    // all, and Ctrl-W too, as the dots cannot tell where a word began. Any other control types
+    // nothing.
     constexpr unsigned char delete_control = 0x7f;
     constexpr unsigned char backspace = 0x08;
     constexpr unsigned char kill_line = 0x15;
+    constexpr unsigned char kill_word = 0x17;
     constexpr unsigned char first_printable = 0x20;
+    // A character is a dot, whatever its length: its continuation bytes add none.
+    constexpr unsigned char continuation_mask = 0xc0;
+    constexpr unsigned char continuation = 0x80;
 
     const auto value = static_cast<unsigned char>(byte);
     auto& typed = line.line;
 
-    if (value == delete_control || value == backspace || value == kill_line) {
+    if (value == delete_control || value == backspace) {
+      typed.eraseSecretKey();
+    } else if (value == kill_line || value == kill_word) {
       typed.clearSecret();
-    } else if (value >= first_printable) {
+    } else if (value >= first_printable && (value & continuation_mask) != continuation) {
       typed.countSecretKey();
     }
   }

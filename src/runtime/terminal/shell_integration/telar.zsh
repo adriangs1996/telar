@@ -14,6 +14,9 @@ fi
 builtin typeset -gi _telar_status=0
 builtin typeset -g _telar_path _telar_names
 builtin typeset -g _telar_input_mark=$'%{\e]133;B;telar='$_telar_token$'\a%}'
+# Spelling correction asks before preexec: its question starts the command, so the answer
+# reaches zsh instead of telar's editor.
+builtin typeset -g _telar_start_mark=$'%{\e]133;C;telar='$_telar_token$'\a%}'
 
 # First precmd hook, so it reads the command's status before other hooks change it.
 _telar_save_status() {
@@ -52,6 +55,7 @@ _telar_prompt() {
   if [[ -n $_telar_mode ]]; then
     # Only the input mark, so no theme spends time drawing what telar's editor covers.
     PS1=$_telar_input_mark RPROMPT=
+    [[ ${SPROMPT-} == "$_telar_start_mark"* ]] || SPROMPT=$_telar_start_mark${SPROMPT-"zsh: correct '%R' to '%r' [nyae]? "}
   else
     [[ $PS1 == *$_telar_input_mark ]] || PS1=${PS1//$_telar_input_mark}$_telar_input_mark
   fi

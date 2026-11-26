@@ -538,6 +538,17 @@ namespace {
 
   // Behaviours that differed from vim's, each as vim has it.
   void vimFixes() {
+    // A paste in normal mode goes in after the cursor, as p puts, and the mode stays.
+    {
+      Editor editor{Keymap::vim};
+
+      type(editor, "ls");
+      type(editor, "\x1b"
+                   "0");
+      editor.insert(" -la");
+      require(text(editor) == "l -las" && editor.view().mode() == Mode::normal, "a paste in normal mode goes after the cursor");
+    }
+
     // Vjd deletes both lines the selection spans.
     {
       Editor editor{Keymap::vim};
