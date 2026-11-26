@@ -40,9 +40,7 @@ namespace telar::gui::qt {
     constexpr int decimal = 10;
     constexpr int least_nice = -20;
     constexpr int most_nice = 20;
-    constexpr double whole_percent = 100;
-    // The interfaces, children and ancestors a panel and a detail name before they say how many more.
-    constexpr std::size_t shown_interfaces = 4;
+    // The children and ancestors a detail names before it says how many more.
     constexpr std::size_t shown_children = 3;
     constexpr std::size_t shown_lineage = 3;
 
@@ -126,12 +124,13 @@ namespace telar::gui::qt {
       return whole == 0 ? 0.0 : std::clamp(static_cast<double>(part) / static_cast<double>(whole), 0.0, 1.0);
     }
 
-    QVariantMap meter(const QString& label, double share, const QString& value) {
+    // A measure of a panel. Its tone says how much is taken, or left, or nothing, for a rate.
+    QVariantMap meter(const QString& label, double share, const QString& value, Tone shown) {
       return {
           {QStringLiteral("label"), label},
           {QStringLiteral("fraction"), share},
           {QStringLiteral("value"), value},
-          {QStringLiteral("tone"), tone(monitor::meterTone(share))},
+          {QStringLiteral("tone"), tone(shown)},
       };
     }
 
@@ -216,6 +215,12 @@ namespace telar::gui::qt {
     emit changed();
   }
 
+  QString MonitorController::cell(Column column, std::string_view value, std::string_view mark) const {
+    const auto& span = columns_[static_cast<std::size_t>(column)];
+
+    return text(monitor::fit(value, span.cells, span.right, mark));
+  }
+
   void MonitorController::synchronize() {
     const auto& state = monitor::state(store_.session());
     if (state.revision == revision_) {
@@ -272,12 +277,8 @@ namespace telar::gui::qt {
 
   QVariantMap MonitorController::processRecord(const monitor::ProcessRow& row) const {
     const auto& session = store_.session();
-    const auto& view = monitor::state(session).view;
-    const auto cell = [&](Column column, std::string_view value, std::string_view mark = "…") {
-      const auto& span = columns_[static_cast<std::size_t>(column)];
-
-      return text(monitor::fit(value, span.cells, span.right, mark));
-    };
+    const auto& state = monitor::state(session);
+    const auto& view = state.view;
 
     const auto owner = row.owner;
     const auto prefix = view.layout == MonitorLayout::tree ? monitor::treePrefix({.depth = row.depth, .guides = row.guides, .children = row.children, .folded = row.folded}) : monitor::CellText{};
@@ -294,7 +295,7 @@ namespace telar::gui::qt {
         cell(Column::program, utf8(name)),
         cell(Column::command, command.view()),
         cell(Column::threads, row.measured ? std::string_view{threads} : "-"),
-        cell(Column::user, row.user.view(), "+"),
+        cell(Column::user, row.user.view()),
         cell(Column::memory, row.measured ? monitor::bytes(row.resident_bytes).view() : "-"),
         cell(Column::cpu, row.measured ? monitor::percent(cpu).view() : "-"),
         cell(Column::owner, owner_text.view()),
@@ -311,7 +312,35 @@ namespace telar::gui::qt {
         {QStringLiteral("cells"), cells},
         {QStringLiteral("cpuTone"), row.measured ? tone(monitor::cpuTone(cpu)) : QStringLiteral("normal")},
         {QStringLiteral("owner"), ownership(owner)},
+        // The runtime's own user reads quieter than another's.
+        {QStringLiteral("ownUser"), row.user_id == state.user_id},
     };
+  }
+
+  QVariantMap MonitorController::unattributed() const {
+    const auto& state = monitor::state(store_.session());
+    const auto& view = state.view;
+    // It stands above a listing of the whole machine, which a filter or a scope narrows.
+    if (state.revision == 0 || view.scope != MonitorScope::all || !view.filter.view().empty() || (state.unattributed_cpu_permille == 0 && state.unmeasured_count == 0)) {
+      return {};
+    }
+
+    // Without other users' processes it can not read, what the runtime misses is the kernel's time
+    // and that of processes that ended between two readings.
+    const auto hidden = state.unmeasured_count > 0;
+    const auto note = hidden ? QByteArray::number(state.unmeasured_count) + " processes of other users this user may not read" : QByteArrayLiteral("time no process listed spent");
+    const QStringList cells{
+        cell(Column::pid, {}),
+        cell(Column::program, hidden ? "other users & kernel" : "kernel & ended"),
+        cell(Column::command, utf8(note)),
+        cell(Column::threads, "-"),
+        cell(Column::user, "-"),
+        cell(Column::memory, "-"),
+        cell(Column::cpu, monitor::percent(state.unattributed_cpu_permille).view()),
+        cell(Column::owner, "·"),
+    };
+
+    return {{QStringLiteral("cells"), cells}};
   }
 
   QVariantMap MonitorController::groupRecord(const monitor::GroupRow& group) const {
@@ -333,14 +362,25 @@ namespace telar::gui::qt {
   QVariantMap MonitorController::header() const {
     const auto& state = monitor::state(store_.session());
     const auto& machines = store_.machines();
-    auto note = text(machines.row(machines.active()).label);
+    // The chips name the machine shown when there is more than one.
+    const auto chips = std::ranges::count_if(machines.rows(), [](const auto& row) {
+      return row.used;
+    }) > 1;
+
+    auto note = chips ? QString{} : text(machines.row(machines.active()).label);
+    const auto add = [&](const QString& part) {
+      note += note.isEmpty() ? part : QStringLiteral(" · ") + part;
+    };
+
+    // The threads of the processes the runtime may not read are not counted.
+    const auto threads = state.unmeasured_count > 0 ? QStringLiteral("threads readable") : QStringLiteral("threads");
 
     if (state.revision != 0) {
-      note += QStringLiteral(" · %1 processes · %2 threads").arg(state.process_count).arg(state.thread_count);
+      add(QStringLiteral("%1 processes · %2 %3").arg(state.process_count).arg(state.thread_count).arg(threads));
     } else if (available()) {
-      note += QStringLiteral(" · reading the processes…");
+      add(QStringLiteral("reading the processes…"));
     } else {
-      note += QStringLiteral(" · this machine's runtime has no monitor; update telar there");
+      add(QStringLiteral("this machine's runtime has no monitor; update telar there"));
     }
 
     return {{QStringLiteral("note"), note}, {QStringLiteral("ready"), state.revision != 0}};
@@ -362,7 +402,7 @@ namespace telar::gui::qt {
       if (!row.live) {
         status = QStringLiteral("offline");
       } else if (row.cpu_percent) {
-        status = QStringLiteral("%1 %").arg(*row.cpu_percent);
+        status = text(monitor::wholePercent(std::uint32_t{*row.cpu_percent} * decimal));
       }
 
       result.push_back(QVariantMap{
@@ -388,52 +428,53 @@ namespace telar::gui::qt {
       history.push_back(static_cast<double>(share) / decimal);
     }
 
+    // What is taken of a core, a disk or the memory reads warm and hot as it fills.
+    const auto taken = [](double share) {
+      return monitor::meterTone(share);
+    };
+
     for (std::size_t core = 0; core < state.cores.size(); ++core) {
       const auto share = static_cast<double>(state.cores[core]) / monitor::MonitorLimits::whole_permille;
 
-      cores.push_back(meter(QString::number(core), share, QStringLiteral("%1%").arg(std::lround(share * whole_percent))));
+      cores.push_back(meter(QString::number(core), share, text(monitor::wholePercent(state.cores[core])), taken(share)));
     }
 
     for (const auto& disk : state.disks) {
-      disks.push_back(meter(text(disk.path), fraction(disk.used_bytes, disk.total_bytes), portion(disk.used_bytes, disk.total_bytes)));
+      const auto share = fraction(disk.used_bytes, disk.total_bytes);
+
+      disks.push_back(meter(text(monitor::mountLabel(disk.path.view())), share, portion(disk.used_bytes, disk.total_bytes), taken(share)));
     }
 
-    // Reads and writes against the larger of the two, so the busier one fills its meter.
-    const auto busiest = std::max({state.disk_read_per_second, state.disk_written_per_second, std::uint64_t{1}});
+    // A rate fills against the highest of the last readings, never less than a floor, and has no
+    // tone: much traffic is no shortage.
+    const auto disk_scale = state.disk_peaks.scale(monitor::disk_rate_floor);
+    const auto network_scale = state.network_peaks.scale(monitor::network_rate_floor);
 
-    disks.push_back(meter(QStringLiteral("read ↓"), fraction(state.disk_read_per_second, busiest), rate(state.disk_read_per_second)));
-    disks.push_back(meter(QStringLiteral("written ↑"), fraction(state.disk_written_per_second, busiest), rate(state.disk_written_per_second)));
+    disks.push_back(meter(QStringLiteral("read ↓"), fraction(state.disk_read_per_second, disk_scale), rate(state.disk_read_per_second), Tone::normal));
+    disks.push_back(meter(QStringLiteral("write ↑"), fraction(state.disk_written_per_second, disk_scale), rate(state.disk_written_per_second), Tone::normal));
 
-    // An interface that never carried a byte stays out, so the list keeps its shape between answers.
-    std::uint64_t loudest = 1;
+    ds::Array<std::uint8_t, monitor::shown_interfaces> shown{};
 
-    for (const auto& interface : state.interfaces) {
-      loudest = std::max(loudest, interface.received_per_second + interface.sent_per_second);
-    }
-
-    for (const auto& interface : state.interfaces) {
-      if (interface.received_bytes == 0 && interface.sent_bytes == 0) {
-        continue;
-      }
-
-      if (std::cmp_equal(network.size(), shown_interfaces)) {
-        break;
-      }
-
+    for (const auto index : shown.view().first(monitor::shownInterfaces(state.interfaces.view(), shown.viewMut()))) {
+      const auto& interface = state.interfaces[index];
       const auto total = interface.received_per_second + interface.sent_per_second;
 
-      network.push_back(meter(text(interface.name), fraction(total, loudest), QStringLiteral("↓%1 ↑%2").arg(text(monitor::bytes(interface.received_per_second)), text(monitor::bytes(interface.sent_per_second)))));
+      network.push_back(meter(text(interface.name), fraction(total, network_scale), QStringLiteral("↓%1 ↑%2").arg(rate(interface.received_per_second), rate(interface.sent_per_second)), Tone::normal));
     }
 
+    const auto used = fraction(state.memory_used_bytes, state.memory_total_bytes);
+    const auto available = fraction(state.memory_available_bytes, state.memory_total_bytes);
+    const auto swap = fraction(state.swap_used_bytes, state.swap_total_bytes);
+    // What is available warns as it empties; the cache is memory the system takes back.
     const QVariantList memory{
-        meter(QStringLiteral("used"), fraction(state.memory_used_bytes, state.memory_total_bytes), portion(state.memory_used_bytes, state.memory_total_bytes)),
-        meter(QStringLiteral("available"), fraction(state.memory_available_bytes, state.memory_total_bytes), text(monitor::bytes(state.memory_available_bytes))),
-        meter(QStringLiteral("cached"), fraction(state.memory_cached_bytes, state.memory_total_bytes), text(monitor::bytes(state.memory_cached_bytes))),
-        meter(QStringLiteral("swap"), fraction(state.swap_used_bytes, state.swap_total_bytes), portion(state.swap_used_bytes, state.swap_total_bytes)),
+        meter(QStringLiteral("used"), used, portion(state.memory_used_bytes, state.memory_total_bytes), taken(used)),
+        meter(QStringLiteral("available"), available, text(monitor::bytes(state.memory_available_bytes)), monitor::headroomTone(available)),
+        meter(QStringLiteral("cached"), fraction(state.memory_cached_bytes, state.memory_total_bytes), text(monitor::bytes(state.memory_cached_bytes)), Tone::normal),
+        meter(QStringLiteral("swap"), swap, portion(state.swap_used_bytes, state.swap_total_bytes), taken(swap)),
     };
 
     return {
-        {QStringLiteral("cpu"), text(monitor::percent(state.cpu_permille)) + QStringLiteral(" %")},
+        {QStringLiteral("cpu"), text(monitor::wholePercent(state.cpu_permille))},
         {QStringLiteral("history"), history},
         {QStringLiteral("cores"), cores},
         {QStringLiteral("memoryTotal"), text(monitor::bytes(state.memory_total_bytes))},
@@ -457,6 +498,8 @@ namespace telar::gui::qt {
         {QStringLiteral("all"), state.process_count},
         {QStringLiteral("telar"), state.telar_count},
         {QStringLiteral("agents"), state.agent_count},
+        // The agents, and the processes they run with them when there are more.
+        {QStringLiteral("agentsNote"), state.agent_count == state.agents ? QString::number(state.agents) : QStringLiteral("%1 · %2 procs").arg(state.agents).arg(state.agent_count)},
     };
   }
 
