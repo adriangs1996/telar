@@ -2,6 +2,7 @@ module telar.runtime.host.proc_file;
 
 import telar.base.ds;
 import telar.base.text;
+import telar.tbc;
 
 namespace telar::runtime {
 
@@ -27,7 +28,7 @@ namespace telar::runtime {
     return status.st_uid;
   }
 
-  ds::Option<std::string_view> ProcDirectory::read(const char* name, std::span<char> buffer) const noexcept {
+  tbc::val_a<ds::Option<std::string_view>> ProcDirectory::read(const char* name, tbc::val_a<std::span<char>> buffer) const noexcept {
     FileDescriptor file{::openat(directory_.get(), name, O_RDONLY | O_CLOEXEC | O_NOFOLLOW)};
     if (!file) {
       return ds::none;
@@ -50,7 +51,7 @@ namespace telar::runtime {
     return ds::none;
   }
 
-  ds::Option<std::string_view> ProcDirectory::link(const char* name, std::span<char> buffer) const noexcept {
+  tbc::val_a<ds::Option<std::string_view>> ProcDirectory::link(const char* name, tbc::val_a<std::span<char>> buffer) const noexcept {
     const auto count = ::readlinkat(directory_.get(), name, buffer.data(), buffer.size());
     if (count <= 0 || static_cast<std::size_t>(count) >= buffer.size()) {
       return ds::none;

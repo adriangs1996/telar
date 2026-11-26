@@ -89,14 +89,18 @@ export {
   namespace telar::runtime {
     namespace linux_signals {
 
-      struct Registration {
+      struct [[tbc::shared]] Registration {
         std::atomic<int> destination{0};
         std::atomic<unsigned> writers{0};
         std::atomic<bool> pending{false};
       };
 
+      struct [[tbc::shared]] Registrations {
+        ds::Array<Registration, NSIG> slots;
+      };
+
       static_assert(std::atomic<int>::is_always_lock_free && std::atomic<unsigned>::is_always_lock_free && std::atomic<bool>::is_always_lock_free);
-      inline ds::Array<Registration, NSIG> registrations;
+      inline Registrations registrations;
 
       void notify(int number) noexcept;
 

@@ -5,6 +5,7 @@ module telar.runtime.host.host_metrics;
 
 import std;
 import telar.sys.posix;
+import telar.tbc;
 
 import telar.platform.fs;
 import telar.platform.primitives;
@@ -79,7 +80,7 @@ namespace telar::runtime {
       count,
     };
     ds::Array<unsigned long long, static_cast<std::size_t>(CpuField::count)> ticks{};
-    const auto found = std::sscanf(buffer.data(), "cpu %llu %llu %llu %llu %llu %llu %llu %llu", &ticks[0], &ticks[1], &ticks[2], &ticks[3], &ticks[4], &ticks[5], &ticks[6], &ticks[7]);
+    const auto found = std::sscanf(buffer.data(), "cpu %llu %llu %llu %llu %llu %llu %llu %llu", &ticks.atMut(0), &ticks.atMut(1), &ticks.atMut(2), &ticks.atMut(3), &ticks.atMut(4), &ticks.atMut(5), &ticks.atMut(6), &ticks.atMut(7));
     if (found < static_cast<int>(CpuField::idle) + 1) {
       return ds::none;
     }
@@ -126,7 +127,7 @@ namespace telar::runtime {
     constexpr std::uint64_t sector_bytes = 512;
 
     // The whole of a /proc file into the buffer, which must hold it; none when it does not.
-    ds::Option<std::string_view> readWhole(const char* path, std::span<char> buffer) noexcept {
+    tbc::val_a<ds::Option<std::string_view>> readWhole(const char* path, tbc::val_a<std::span<char>> buffer) noexcept {
       FileDescriptor file{::open(path, O_RDONLY | O_CLOEXEC)};
       if (!file) {
         return ds::none;
@@ -166,7 +167,7 @@ namespace telar::runtime {
 
     // The words of a line, separated by spaces, into `words`; returns how many it found.
     template <std::size_t Capacity>
-    std::size_t splitWords(std::string_view line, ds::Array<std::string_view, Capacity>& words) noexcept {
+    std::size_t splitWords(tbc::val_a<std::string_view> line, tbc::mut_a<ds::Array<std::string_view, Capacity>> words) noexcept {
       std::size_t count = 0;
 
       while (count < Capacity) {
@@ -308,7 +309,7 @@ namespace telar::runtime {
           return;
         }
 
-        auto& usage = detail.mounts.atMut(detail.mount_count);
+        MountUsage usage{};
         if (!unescape(words[1], usage.path) || !unescape(words[0], usage.device)) {
           return;
         }
@@ -334,7 +335,7 @@ namespace telar::runtime {
         usage.total_bytes = status.f_blocks * block;
         usage.used_bytes = (status.f_blocks - std::min<std::uint64_t>(status.f_bfree, status.f_blocks)) * block;
         usage.available_bytes = status.f_bavail * block;
-        ++detail.mount_count;
+        detail.mounts.atMut(detail.mount_count++) = usage;
       });
     }
 
