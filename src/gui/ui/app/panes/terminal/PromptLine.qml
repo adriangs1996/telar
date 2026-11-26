@@ -495,7 +495,7 @@ Item {
                 // vim's normal and visual modes turn the mark around.
                 CellText {
                     anchors.centerIn: parent
-                    text: editor.mode === "normal" || editor.mode.startsWith("visual") ? "❮" : "❯"
+                    text: editor.mode === "normal" || editor.mode.startsWith("visual") ? "‹" : "›"
                     grid: root.grid
                     color: pill.tone
                     bold: true
@@ -544,22 +544,30 @@ Item {
                     action: "close"
                 }
 
+                // A block selected by a click or the window's arrows takes only these keys; one
+                // selected from vim's keys takes them all.
                 Hint {
                     visible: trailing.selecting
-                    key: "⌃U ⌃D"
+                    key: "↑↓"
                     action: "move"
                 }
 
                 Hint {
                     visible: trailing.selecting
-                    key: "v"
-                    action: "select"
+                    key: editor.blockTyping ? (Qt.platform.os === "osx" ? "⌘C" : "⇧⌃C") : "Y"
+                    action: "copy output"
                 }
 
                 Hint {
-                    visible: trailing.selecting
-                    key: "Y"
-                    action: "copy"
+                    visible: trailing.selecting && !editor.blockTyping
+                    key: "yc"
+                    action: "copy command"
+                }
+
+                Hint {
+                    visible: trailing.selecting && !editor.blockTyping
+                    key: "v"
+                    action: "select"
                 }
 
                 Hint {

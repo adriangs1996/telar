@@ -685,6 +685,7 @@ namespace telar::gui::qt {
           {QStringLiteral("status"), block.status},
           {QStringLiteral("duration"), static_cast<qulonglong>(block.duration_ms)},
           {QStringLiteral("index"), static_cast<int>(index)},
+          {QStringLiteral("key"), static_cast<qulonglong>(GuiSession::blockKey(pane, index))},
           {QStringLiteral("selected"), context.selected == index},
           {QStringLiteral("folded"), context.session.folded({.pane_id = context.pane_id, .index = index})},
           {QStringLiteral("rows"), static_cast<int>(output_end - output_first)},
@@ -700,7 +701,7 @@ namespace telar::gui::qt {
       for (std::size_t index = 0; index < pane.blocks.size(); ++index) {
         const auto& block = pane.blocks[index];
 
-        lists.rail.push_back(QVariantMap{{QStringLiteral("state"), blockState(block.state)}, {QStringLiteral("index"), static_cast<int>(index)}, {QStringLiteral("selected"), context.selected == index}});
+        lists.rail.push_back(QVariantMap{{QStringLiteral("state"), blockState(block.state)}, {QStringLiteral("index"), static_cast<int>(index)}, {QStringLiteral("key"), static_cast<qulonglong>(GuiSession::blockKey(pane, index))}, {QStringLiteral("selected"), context.selected == index}});
         // On the command's first row, which the separator stands in for; the rows of a command
         // that runs on past it, wrapped or on lines of its own, show the rest of it.
         const auto separator = GuiSession::separatorRow(pane, index);
@@ -901,6 +902,13 @@ namespace telar::gui::qt {
     BlockLists lists;
     RowPlaces places;
 
+    if (controller_ != nullptr) {
+      if (const auto& note = controller_->session().lastBlockCopy(); note.serial != block_copy_serial_ && note.pane_id == pane_id_) {
+        block_copy_serial_ = note.serial;
+        emit blockCopied(static_cast<int>(note.index), note.what == application::BlockCopy::command ? QStringLiteral("command") : QStringLiteral("output"), note.copied);
+      }
+    }
+
     hidden_rows_.clear();
     if (current != nullptr && controller_ != nullptr) {
       const auto& screen = current->screen;
@@ -1013,6 +1021,13 @@ namespace telar::gui::qt {
       controller_->host().focusPane(*this);
       forceActiveFocus(Qt::MouseFocusReason);
       controller_->selectBlock(pane_id_, static_cast<std::size_t>(index), true);
+    }
+  }
+
+  void TerminalItem::copyBlock(int index, bool command) {
+    const auto* current = pane();
+    if (current != nullptr && controller_ != nullptr && index >= 0 && std::cmp_less(index, current->blocks.size())) {
+      controller_->copyBlock(pane_id_, static_cast<std::size_t>(index), command ? application::BlockCopy::command : application::BlockCopy::output);
     }
   }
 
@@ -1175,8 +1190,17 @@ namespace telar::gui::qt {
     const auto& copy = controller_->copy().state();
     const auto selected = copy && copy->pane_id == pane_id_ && copy->pointer && copy->anchor;
 
+    // The platform's copy key copies the selected command's output when nothing else is
+    // selected; its arrows step through the commands from any keymap.
+    const auto block = controller_->prompt().selectedBlock(pane_id_);
+    const bool blocks = controller_->prompt().surface(pane_id_) == application::prompt::Surface::editor && controller_->configuration().prompt.mode == PromptMode::telar && !current->blocks.empty();
+
     if (clipboard_shortcut && event.key() == Qt::Key_C && selected) {
       controller_->copy().copySelection(pane_id_);
+    } else if (clipboard_shortcut && event.key() == Qt::Key_C && block) {
+      controller_->copyBlock(pane_id_, *block, application::BlockCopy::output);
+    } else if (clipboard_shortcut && blocks && (event.key() == Qt::Key_Up || event.key() == Qt::Key_Down)) {
+      controller_->stepBlock(pane_id_, event.key() == Qt::Key_Up ? application::BlockStep::up : application::BlockStep::down);
     } else if (clipboard_shortcut && event.key() == Qt::Key_V) {
       controller_->paste(pane_id_, QGuiApplication::clipboard()->text());
     } else if (preedit_.isEmpty() && controller_->prompt().edits(pane_id_)) {

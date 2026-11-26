@@ -181,6 +181,8 @@ namespace telar::gui::qt {
     Q_INVOKABLE void selectBlock(int index);
     // Folds or unfolds the output of the command at `index`.
     Q_INVOKABLE void toggleFold(int index);
+    // Copies the command at `index`, or its output.
+    Q_INVOKABLE void copyBlock(int index, bool command);
     // Glides back to the live end and follows the output again.
     Q_INVOKABLE void scrollToEnd();
     // Glides to show the scrollback's `fraction`, its middle there; or moves there at once, as
@@ -267,6 +269,9 @@ namespace telar::gui::qt {
     void scrollChanged();
     void stickyChanged();
     void matchesChanged();
+    // A command's command or output was copied, or had nothing to copy: `what` is "command" or
+    // "output".
+    void blockCopied(int index, const QString& what, bool copied);
 
   protected:
     void updatePolish() override;
@@ -463,6 +468,8 @@ namespace telar::gui::qt {
     ds::Option<std::uint64_t> left_end_rows_;
     ds::Vec<std::uint64_t, Memory> away_running_{adapter_};
     int rows_arrived_ = 0;
+    // The serial of the last block copy this view announced.
+    std::uint64_t block_copy_serial_ = 0;
     QVariantList finished_below_;
     QVariantMap sticky_block_;
     QVariantList rail_segments_;

@@ -51,6 +51,10 @@ namespace telar::gui::qt {
     return store_.session().selectedBlock(pane_id);
   }
 
+  bool PromptController::typingLeavesBlock(std::uint64_t pane_id) const noexcept {
+    return store_.session().typingLeavesBlock(pane_id);
+  }
+
   const application::Pane<Memory>* PromptController::pane(std::uint64_t pane_id) const noexcept {
     return store_.session().findPane(pane_id);
   }

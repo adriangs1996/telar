@@ -160,7 +160,14 @@ namespace telar::gui::application::terminal::copy_mode {
         static_cast<void>(feature::clearPointer(session.copy_mode));
       } else if (auto* copy_pane = pane(session.copy_mode, session.panes); copy_pane != nullptr) {
         if (const auto plan = move(session.copy_mode, decision, input.kind == CopyPointerKind::release, *copy_pane)) {
-          apply(session.copy_mode, session.link, session.view_version, *plan, *copy_pane);
+          // Letting go copies only where the configuration says so; the copy key copies always.
+          auto staged = *plan;
+
+          if (!session.configuration.copy_on_select) {
+            staged.selection.reset();
+          }
+
+          apply(session.copy_mode, session.link, session.view_version, staged, *copy_pane);
         }
       }
     } catch (...) {

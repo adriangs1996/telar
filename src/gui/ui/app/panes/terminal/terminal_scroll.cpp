@@ -898,6 +898,7 @@ namespace telar::gui::qt {
 
     return QVariantMap{
         {QStringLiteral("index"), static_cast<int>(index)},
+        {QStringLiteral("key"), static_cast<qulonglong>(GuiSession::blockKey(*current, index))},
         {QStringLiteral("command"), QString::fromUtf8(block.command.data(), static_cast<qsizetype>(block.command.size()))},
         {QStringLiteral("lines"), static_cast<int>(block.lines)},
         {QStringLiteral("state"), stateName(block.state)},

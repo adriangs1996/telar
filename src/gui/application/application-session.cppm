@@ -120,6 +120,22 @@ export {
       down = 1,
     };
 
+    // What a copy of a command block takes.
+    enum class BlockCopy : std::uint8_t {
+      command,
+      output,
+    };
+
+    // The last copy of a block, for its view to say so: `copied` false when there was nothing to
+    // copy, and `serial` counting the copies from 1.
+    struct BlockCopyNote {
+      std::uint64_t pane_id = 0;
+      std::size_t index = 0;
+      BlockCopy what = BlockCopy::output;
+      bool copied = false;
+      std::uint64_t serial = 0;
+    };
+
     class Session {
       // The use cases of application::<feature> reach the members below through it.
       friend struct Access;
@@ -275,10 +291,23 @@ export {
 
       [[nodiscard]] ds::Option<std::size_t> selectedBlock(std::uint64_t pane_id) const noexcept;
 
+      // Whether the keys that type let the pane's selected block go, as after a click on it.
+      [[nodiscard]] bool typingLeavesBlock(std::uint64_t pane_id) const noexcept;
+
       // Selects the block at `index`, or none: the pane's live end. The view moves only when the
-      // block's separator is out of it, to the pane's top. `by_pointer` for a click: the keys that
+      // block's separator is out of it, to the pane's top. `typing_leaves` for a click or the window's step: the keys that
       // type still go to the editor.
-      void selectBlock(std::uint64_t pane_id, ds::Option<std::size_t> index, bool by_pointer = false);
+      void selectBlock(std::uint64_t pane_id, ds::Option<std::size_t> index, bool typing_leaves = false);
+
+      // Copies block `index`'s command or output; false when it has none to copy.
+      bool copyBlock(BlockAt block, BlockCopy what);
+
+      [[nodiscard]] const BlockCopyNote& lastBlockCopy() const noexcept;
+
+      // The window's own step through the blocks, Cmd+Up and Cmd+Down, from any keymap or mode:
+      // the block above or below the selected one, or the last from the live end. The keys that
+      // type still go to the editor.
+      void stepBlockFromWindow(std::uint64_t pane_id, BlockStep direction);
 
       // prefix+[ where telar's editor stands in for the prompt: the last command block, selected,
       // instead of copy mode from the live end.
@@ -767,9 +796,9 @@ export {
       // The z chord ended by `character` on block `index`; false when `character` ends none.
       bool foldChord(BlockAt block, char32_t character);
 
-      // A key while the pointer holds a block selected outside vim's normal mode: Escape leaves it,
+      // A key on a block that typing leaves, outside vim's normal mode: Escape leaves it,
       // the arrows step through the blocks, and any other key leaves it for the editor.
-      ds::Option<features::prompt::Outcome> pointerBlockKey(std::uint64_t pane_id, const features::prompt::KeyPress& key);
+      ds::Option<features::prompt::Outcome> typingBlockKey(std::uint64_t pane_id, const features::prompt::KeyPress& key);
 
       // The selected block of `pane`, by its stable key, before its blocks change; `restoreBlock`
       // selects it again at its new index, or nothing when it is gone.
@@ -900,6 +929,7 @@ export {
       // prompt's, which the copy leaves out. Empty when no such copy is on its way.
       tbc::val_a<ds::String<Memory>> command_copy_;
       std::uint64_t command_copy_pane_ = 0;
+      BlockCopyNote block_copy_;
       tbc::val_a<ds::String<Memory>> error_;
       tbc::val_a<ds::String<Memory>> command_response_;
 

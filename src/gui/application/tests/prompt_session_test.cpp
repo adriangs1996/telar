@@ -1217,7 +1217,7 @@ command = "switch" : "Switch branches" , { @branch } | "status" : "Show the work
 
   // A block the pointer selected leaves the keys that type to the editor, and a selected block
   // stays selected as rows drop from the top of the scrollback.
-  void lineBlocksByPointer() {
+  void lineBlocksTypingLeaves() {
     SystemAllocator memory;
     Transport transport;
     TestSession client{memory, transport};
@@ -1406,6 +1406,6 @@ command = "switch" : "Switch branches" , { @branch } | "status" : "Show the work
   const telar::testing::Case case_line_queues_across_the_hooks{"prompt_session.line_queues_across_the_hooks", lineQueuesAcrossTheHooks};
   const telar::testing::Case case_running_program_takes_its_keys{"prompt_session.running_program_takes_its_keys", runningProgramTakesItsKeys};
   const telar::testing::Case case_line_block_motions{"prompt_session.line_block_motions", lineBlockMotions};
-  const telar::testing::Case case_line_blocks_by_pointer{"prompt_session.line_blocks_by_pointer", lineBlocksByPointer};
+  const telar::testing::Case case_line_blocks_typing_leaves{"prompt_session.line_blocks_typing_leaves", lineBlocksTypingLeaves};
 
 }

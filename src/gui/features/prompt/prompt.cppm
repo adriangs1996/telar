@@ -116,8 +116,9 @@ export namespace telar::gui::features::prompt {
     // The command block selected from the editor's normal mode, by its index among the pane's
     // blocks.
     ds::Option<std::size_t> block;
-    // The pointer selected the block: the keys that type still go to the editor.
-    bool block_by_pointer = false;
+    // The block was selected from outside the editor's keys, by a click or the window's own
+    // step: the keys that type still go to the editor, and let the block go.
+    bool typing_leaves_block = false;
     // The first half of `[[`, `]]`, `[f`, `]f`, `gg`, `z.` or `yc`.
     char chord = 0;
     // Where jumps left from, by stable row at the view's top, oldest first, and which of them
@@ -545,14 +546,16 @@ export namespace telar::gui::features::prompt {
   [[nodiscard]] ds::Option<std::size_t> selectedBlock(const PaneLine& line) noexcept;
 
   // Block `index` is selected, or none: the line is back at the live end.
-  void selectBlock(PaneLine& line, ds::Option<std::size_t> index, bool by_pointer = false) noexcept;
+  void selectBlock(PaneLine& line, ds::Option<std::size_t> index, bool typing_leaves = false) noexcept;
 
   // The selected block is now at `index` among the pane's blocks, or gone: blocks before it were
   // dropped, or came again.
   void moveBlock(PaneLine& line, ds::Option<std::size_t> index) noexcept;
 
-  // Whether the pointer selected the block, rather than a key.
-  [[nodiscard]] bool blockByPointer(const PaneLine& line) noexcept;
+  // Whether the keys that type let the selected block go, as after a click on it.
+  [[nodiscard]] bool typingLeavesBlock(const PaneLine& line) noexcept;
+
+  [[nodiscard]] bool typingLeavesBlock(const Lines& lines, std::uint64_t pane_id) noexcept;
 
   // The first key of a two-key command (`[[`, `gg`, `zt`, `yc`…), which the next key takes.
   void beginChord(PaneLine& line, char first) noexcept;

@@ -53,6 +53,8 @@ namespace telar::gui::qt {
     // are; and copy mode on this pane: "" when off, else "copy", "visual" or "visual-line".
     Q_PROPERTY(int block READ block NOTIFY stateChanged)
     Q_PROPERTY(int blocks READ blocks NOTIFY stateChanged)
+    // Whether the keys that type let the selected block go, as after a click on it.
+    Q_PROPERTY(bool blockTyping READ blockTyping NOTIFY stateChanged)
     Q_PROPERTY(QString copying READ copying NOTIFY stateChanged)
     Q_PROPERTY(bool queued READ queued NOTIFY stateChanged)
     Q_PROPERTY(bool answering READ answering NOTIFY stateChanged)
@@ -119,6 +121,7 @@ namespace telar::gui::qt {
     [[nodiscard]] bool suggesting() const noexcept;
     [[nodiscard]] int block() const noexcept;
     [[nodiscard]] int blocks() const noexcept;
+    [[nodiscard]] bool blockTyping() const noexcept;
     [[nodiscard]] QString copying() const;
     [[nodiscard]] bool queued() const noexcept;
     [[nodiscard]] bool answering() const noexcept;

@@ -102,7 +102,11 @@ namespace telar::gui::application {
     return *block;
   }
 
-  void Session::selectBlock(std::uint64_t pane_id, ds::Option<std::size_t> index, bool by_pointer) {
+  bool Session::typingLeavesBlock(std::uint64_t pane_id) const noexcept {
+    return selectedBlock(pane_id) && features::prompt::typingLeavesBlock(prompt_lines, pane_id);
+  }
+
+  void Session::selectBlock(std::uint64_t pane_id, ds::Option<std::size_t> index, bool typing_leaves) {
     const auto* pane = findPane(pane_id);
     if (pane == nullptr) {
       return;
@@ -114,7 +118,7 @@ namespace telar::gui::application {
       // Stepping from a block the pointer selected keeps the keys for the editor.
       const auto selected = features::prompt::selectedBlock(line);
 
-      features::prompt::selectBlock(line, index, by_pointer || (selected && features::prompt::blockByPointer(line)));
+      features::prompt::selectBlock(line, index, typing_leaves || (selected && features::prompt::typingLeavesBlock(line)));
       const auto separator = pane->folds.display(separatorRow(*pane, *index));
       const auto top = shownTop(*pane);
       // The separator and a row of its output in view, clear of the line docked at the bottom:
@@ -242,8 +246,8 @@ namespace telar::gui::application {
       return ds::none;
     }
 
-    if (selection && !normal && features::prompt::blockByPointer(*found)) {
-      return pointerBlockKey(pane_id, key);
+    if (selection && !normal && features::prompt::typingLeavesBlock(*found)) {
+      return typingBlockKey(pane_id, key);
     }
 
     const bool plain = key.key == features::prompt::Key::character && !key.modifiers.control && !key.modifiers.alt;
@@ -307,7 +311,7 @@ namespace telar::gui::application {
     return ds::none;
   }
 
-  ds::Option<features::prompt::Outcome> Session::pointerBlockKey(std::uint64_t pane_id, const features::prompt::KeyPress& key) {
+  ds::Option<features::prompt::Outcome> Session::typingBlockKey(std::uint64_t pane_id, const features::prompt::KeyPress& key) {
     using features::prompt::Outcome;
     const bool bare = !key.modifiers.control && !key.modifiers.alt && !key.modifiers.shift;
 
@@ -461,7 +465,7 @@ namespace telar::gui::application {
         return false;
       }
 
-      copyBlockCommand(*pane, index);
+      static_cast<void>(copyBlock(block, BlockCopy::command));
       return true;
     case 'g':
       if (character != 'g') {
@@ -569,7 +573,7 @@ namespace telar::gui::application {
       selectBlockOutput(*pane, index, character == 'V');
       return true;
     case 'Y':
-      copyBlockOutput(*pane, index);
+      static_cast<void>(copyBlock(block, BlockCopy::output));
       return true;
     case 'q':
       selectBlock(pane_id, ds::none);
@@ -683,6 +687,38 @@ namespace telar::gui::application {
     command_copy_.assign(block.command.substr(0, std::min(start_bytes, block.command.size())));
     command_copy_pane_ = pane.id;
     link.send(CopySelection{.pane_id = pane.id, .start_x = 0, .start_y = block.row, .end_x = static_cast<std::uint16_t>(columns == 0 ? 0 : columns - 1), .end_y = block.row + block.rows - 1U, .linewise = true});
+  }
+
+  bool Session::copyBlock(BlockAt block, BlockCopy what) {
+    const auto [pane_id, index] = block;
+    const auto* pane = findPane(pane_id);
+    if (pane == nullptr || index >= pane->blocks.size()) {
+      return false;
+    }
+
+    const bool copied = what == BlockCopy::command || blockOutput(*pane, index).hasValue();
+
+    if (copied && what == BlockCopy::command) {
+      copyBlockCommand(*pane, index);
+    } else if (copied) {
+      copyBlockOutput(*pane, index);
+    }
+
+    block_copy_ = {.pane_id = pane_id, .index = index, .what = what, .copied = copied, .serial = block_copy_.serial + 1};
+    changed_pane_ = pane_id;
+    block_changed_ = true;
+    return copied;
+  }
+
+  const BlockCopyNote& Session::lastBlockCopy() const noexcept {
+    return block_copy_;
+  }
+
+  void Session::stepBlockFromWindow(std::uint64_t pane_id, BlockStep direction) {
+    stepBlock(pane_id, direction);
+    if (auto* line = features::prompt::find(prompt_lines, pane_id); line != nullptr && features::prompt::selectedBlock(*line)) {
+      features::prompt::selectBlock(*line, features::prompt::selectedBlock(*line), true);
+    }
   }
 
   bool Session::takeBlockChange() noexcept {

@@ -220,6 +220,10 @@ namespace telar::gui::qt {
     return selected ? static_cast<int>(*selected) + 1 : 0;
   }
 
+  bool PromptEditorItem::blockTyping() const noexcept {
+    return controller_ != nullptr && controller_->typingLeavesBlock(pane_id_);
+  }
+
   int PromptEditorItem::blocks() const noexcept {
     const auto* pane = controller_ == nullptr ? nullptr : controller_->pane(pane_id_);
 

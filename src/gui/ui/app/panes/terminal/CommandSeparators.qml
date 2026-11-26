@@ -6,8 +6,9 @@ import Telar.Gui
 // The commands the shell ran, each drawn over the rows its prompt and command line took: how
 // it ended, its first line, a rule and how long it ran. The one running turns its ring, sends a
 // light along its rule and counts its time. An ssh whose remote shell took over the pane names
-// the host and counts the session's time, and an edge marks the rows that session covers. It
-// only draws; the terminal under it keeps the pointer and the keyboard.
+// the host and counts the session's time, and an edge marks the rows that session covers. Only
+// its chevron, its status and command, and the buttons it shows under the pointer take clicks;
+// the terminal under it keeps the rest of the pointer and the keyboard.
 Item {
     id: root
 
@@ -27,29 +28,51 @@ Item {
     property real pinnedOffset: 0
     readonly property bool pinning: root.view !== null && root.view.stickyBlock.index !== undefined
     // What the pinned separator shows while no command is pinned.
-    readonly property var unpinned: ({index: -1, row: 0, command: "", lines: 0, state: "succeeded", status: 0, duration: 0, selected: false, folded: false, foldable: false, rows: 0, push: 0})
+    readonly property var unpinned: ({index: -1, key: -1, row: 0, command: "", lines: 0, state: "succeeded", status: 0, duration: 0, selected: false, folded: false, foldable: false, rows: 0, push: 0})
     // How each command was last drawn, so a separator built again does not replay its entrance,
-    // and when each running one was first seen, for its time.
+    // and when each running one was first seen, for its time. Commands are known by their stable
+    // key, which stays as older commands drop from the scrollback; what was kept for a command
+    // gone goes with it.
     property var drawn: ({})
     property var started: ({})
-    // Commands are known by their index, which a clear hands to the next ones: what was kept for
-    // a command gone, as `clear` itself before it was seen to end, goes with it, or the next
-    // command at its index would start with its clock and its last look.
-    readonly property int blockCount: root.view ? root.view.rail.length : 0
-    onBlockCountChanged: {
-        for (const index of Object.keys(root.started)) {
-            if (Number(index) >= root.blockCount) {
-                delete root.started[index];
+    readonly property var rail: root.view ? root.view.rail : []
+    onRailChanged: {
+        const kept = {};
+        for (const block of root.rail) {
+            kept[String(block.key)] = true;
+        }
+        for (const key of Object.keys(root.started)) {
+            if (!(key in kept)) {
+                delete root.started[key];
             }
         }
-        for (const index of Object.keys(root.drawn)) {
-            if (Number(index) >= root.blockCount) {
-                delete root.drawn[index];
+        for (const key of Object.keys(root.drawn)) {
+            if (!(key in kept)) {
+                delete root.drawn[key];
             }
         }
     }
 
-    readonly property int last: root.view ? root.view.rail.length - 1 : -1
+    // The command whose copy was last asked for, and what to say about it, for a moment.
+    property int copiedIndex: -1
+    property string copiedText: ""
+    property bool copiedOk: true
+    Timer {
+        id: copiedShown
+        interval: 1400
+        onTriggered: root.copiedIndex = -1
+    }
+    Connections {
+        target: root.view
+        function onBlockCopied(index, what, copied) {
+            root.copiedIndex = index;
+            root.copiedOk = copied;
+            root.copiedText = copied ? (what === "command" ? "command copied" : "output copied") : "no output to copy";
+            copiedShown.restart();
+        }
+    }
+
+    readonly property int last: root.rail.length - 1
     readonly property bool anyRunning: root.anyIn("running")
     // A session's clock only needs its seconds.
     readonly property bool anySession: root.anyIn("session")
@@ -107,6 +130,37 @@ Item {
         triggeredOnStart: true
         running: root.anyRunning || root.anySession
         onTriggered: root.now = Date.now()
+    }
+
+    // A small framed action on a separator, such as copying its command.
+    component Action: Rectangle {
+        id: action
+        property alias text: actionLabel.text
+        property real line: 0
+        property color tone: root.colors.subtext0
+        signal activated
+        width: actionLabel.implicitWidth + root.view.cell.width
+        height: action.line * 0.8
+        radius: ChromeStyle.smallRadius * root.ratio
+        color: actionArea.containsMouse ? Qt.alpha(action.tone, 0.15) : "transparent"
+        border.width: Math.max(1, root.ratio)
+        border.color: Qt.alpha(action.tone, 0.45)
+
+        CellText {
+            id: actionLabel
+            anchors.centerIn: parent
+            text: ""
+            grid: root.grid
+            color: action.tone
+        }
+
+        MouseArea {
+            id: actionArea
+            anchors.fill: parent
+            hoverEnabled: true
+            cursorShape: Qt.PointingHandCursor
+            onClicked: action.activated()
+        }
     }
 
     // A key the user can press, framed.
@@ -194,7 +248,8 @@ Item {
             readonly property color tone: separator.failed ? root.colors.red : separator.outcome === "succeeded" ? root.colors.green : separator.session ? root.colors.mauve : separator.running && separator.revealed ? (separator.current && root.secret ? root.colors.peach : root.colors.accent) : root.colors.overlay1
             // The host of the session the pane is in: where it went, or where it ran.
             readonly property string host: separator.modelData.host ?? ""
-            readonly property int command: separator.modelData.index
+            readonly property string blockKey: String(separator.modelData.key ?? separator.modelData.index)
+            readonly property bool copiedHere: root.copiedIndex === separator.modelData.index
             // When it was first seen running, for its time.
             property double since: 0
             // It has run long enough to show it runs: its ring, light, clock and interrupt key.
@@ -209,7 +264,7 @@ Item {
             // A separator stays as its command's rows move, so what it does on first showing a
             // command it does again when it shows another, or the same one ending.
             Component.onCompleted: separator.settle()
-            onCommandChanged: separator.settle()
+            onBlockKeyChanged: separator.settle()
             onOutcomeChanged: separator.settle()
 
             function settle() {
@@ -218,7 +273,7 @@ Item {
                 }
                 // Read from the record itself: a change handler runs before the bindings derived
                 // from it are brought up to date.
-                const index = separator.modelData.index;
+                const index = String(separator.modelData.key ?? separator.modelData.index);
                 const outcome = separator.modelData.state;
                 const going = outcome === "running" || outcome === "session";
                 // What this command looked like the last time it was drawn.
@@ -227,8 +282,7 @@ Item {
                     root.started[index] = Date.now();
                 }
                 separator.since = root.started[index] ?? 0;
-                // An ended command forgets when it started: after a clear its index names the
-                // next command, whose clock starts afresh.
+                // An ended command forgets when it started.
                 const ran = going ? 0 : Date.now() - (root.started[index] ?? 0);
                 if (!going) {
                     delete root.started[index];
@@ -278,9 +332,18 @@ Item {
                 }
             }
 
-            // A click selects the block, as stepping to it from the editor does.
+            // The pointer over the row shows the command's actions, without taking the pointer
+            // from the terminal under it.
+            HoverHandler {
+                id: hover
+            }
+
+            // A click on its status or command selects the block, as stepping to it from the
+            // editor does; elsewhere on the row a drag selects the terminal's text.
             MouseArea {
-                anchors.fill: parent
+                x: pill.x
+                width: Math.max(0, command.x + command.width - pill.x)
+                height: parent.height
                 cursorShape: Qt.PointingHandCursor
                 onClicked: root.view.selectBlock(separator.modelData.index)
             }
@@ -330,7 +393,7 @@ Item {
                     x: chevron.width
                     anchors.verticalCenter: parent.verticalCenter
                     height: Math.round(separator.line * 0.72)
-                    width: Math.max(height, mark.implicitWidth + separator.cell)
+                    width: Math.max(height, mark.width + separator.cell)
                     radius: height / 2
                     color: Qt.alpha(separator.tone, separator.running && separator.revealed ? root.breath : 0.2)
 
@@ -344,14 +407,76 @@ Item {
                         rotation: root.spin
                     }
 
-                    CellText {
+                    // Drawn, not taken from a font: a check, a cross and the exit status, or a mark
+                    // for a session or a command that was interrupted.
+                    Row {
                         id: mark
                         anchors.centerIn: parent
                         visible: !separator.running
-                        text: separator.failed ? "✗ " + separator.modelData.status : separator.outcome === "succeeded" ? "✓" : separator.session ? "⇄" : "–"
-                        grid: root.grid
-                        color: separator.tone
-                        bold: true
+                        spacing: separator.cell * 0.3
+                        readonly property real stroke: Math.max(1.5, 1.6 * root.ratio)
+                        readonly property real size: pill.height * 0.56
+
+                        Item {
+                            id: check
+                            visible: separator.outcome === "succeeded"
+                            width: mark.size
+                            height: mark.size
+                            anchors.verticalCenter: parent.verticalCenter
+
+                            // Its two strokes, from the elbow at (0.4, 0.78) of its box.
+                            Rectangle {
+                                x: check.width * 0.14
+                                y: check.height * 0.52 - mark.stroke / 2
+                                width: check.width * 0.37
+                                height: mark.stroke
+                                radius: height / 2
+                                rotation: 45
+                                transformOrigin: Item.Left
+                                color: separator.tone
+                            }
+
+                            Rectangle {
+                                x: check.width * 0.4
+                                y: check.height * 0.78 - mark.stroke / 2
+                                width: check.width * 0.72
+                                height: mark.stroke
+                                radius: height / 2
+                                rotation: -50
+                                transformOrigin: Item.Left
+                                color: separator.tone
+                            }
+                        }
+
+                        Item {
+                            id: cross
+                            visible: separator.failed
+                            width: mark.size * 0.85
+                            height: mark.size * 0.85
+                            anchors.verticalCenter: parent.verticalCenter
+
+                            Repeater {
+                                model: [45, -45]
+                                delegate: Rectangle {
+                                    required property int modelData
+                                    anchors.centerIn: parent
+                                    width: cross.width * 1.3
+                                    height: mark.stroke
+                                    radius: height / 2
+                                    rotation: modelData
+                                    color: separator.tone
+                                }
+                            }
+                        }
+
+                        CellText {
+                            anchors.verticalCenter: parent.verticalCenter
+                            visible: !check.visible
+                            text: separator.failed ? String(separator.modelData.status) : separator.session ? "→" : cross.visible ? "" : "–"
+                            grid: root.grid
+                            color: separator.tone
+                            bold: true
+                        }
                     }
 
                     NumberAnimation {
@@ -366,21 +491,38 @@ Item {
                     }
                 }
 
-                // The command's first line, cut where the rule and what follows it need the room.
+                // The command's first line, cut with an ellipsis where the rule and what follows it
+                // need the room.
                 Item {
                     id: command
+                    readonly property real room: Math.max(0, trail.x - x - (place.visible ? place.implicitWidth + separator.cell : 0) - (more.visible ? more.implicitWidth + separator.cell : 0) - separator.cell * 6)
+                    readonly property bool cut: commandText.implicitWidth > command.room
                     x: pill.x + pill.width + separator.cell
                     height: parent.height
-                    width: Math.min(commandText.implicitWidth, Math.max(0, trail.x - x - (place.visible ? place.implicitWidth + separator.cell : 0) - (more.visible ? more.implicitWidth + separator.cell : 0) - separator.cell * 6))
-                    clip: true
+                    width: command.cut ? command.room : commandText.implicitWidth
+
+                    Item {
+                        width: command.cut ? Math.max(0, command.room - separator.cell) : commandText.implicitWidth
+                        height: parent.height
+                        clip: true
+
+                        CellText {
+                            id: commandText
+                            anchors.verticalCenter: parent.verticalCenter
+                            text: separator.modelData.command
+                            grid: root.grid
+                            color: separator.session ? root.colors.mauve : root.colors.text
+                            bold: true
+                        }
+                    }
 
                     CellText {
-                        id: commandText
+                        x: Math.max(0, command.room - separator.cell)
                         anchors.verticalCenter: parent.verticalCenter
-                        text: separator.modelData.command
+                        visible: command.cut
+                        text: "…"
                         grid: root.grid
-                        color: separator.session ? root.colors.mauve : root.colors.text
-                        bold: true
+                        color: root.colors.subtext0
                     }
                 }
 
@@ -402,7 +544,7 @@ Item {
                     x: (place.visible ? place.x + place.implicitWidth : command.x + command.width) + separator.cell
                     anchors.verticalCenter: parent.verticalCenter
                     visible: more.hidden > 0 || separator.modelData.lines > 0
-                    text: more.hidden > 0 ? "⋯ " + more.hidden + (more.hidden === 1 ? " row folded" : " rows folded") : "+" + separator.modelData.lines + (separator.modelData.lines === 1 ? " line" : " lines")
+                    text: more.hidden > 0 ? "… " + more.hidden + (more.hidden === 1 ? " row folded" : " rows folded") : "+" + separator.modelData.lines + (separator.modelData.lines === 1 ? " line" : " lines")
                     grid: root.grid
                     color: more.hidden > 0 ? root.colors.peach : root.colors.subtext0
                 }
@@ -468,9 +610,36 @@ Item {
                     height: parent.height
                     spacing: separator.cell
 
+                    // What a copy of it did, for a moment.
                     CellText {
                         anchors.verticalCenter: parent.verticalCenter
-                        visible: !separator.going
+                        visible: separator.copiedHere
+                        text: root.copiedText
+                        grid: root.grid
+                        color: root.copiedOk ? root.colors.green : root.colors.peach
+                    }
+
+                    // Its actions, under the pointer or while it is selected.
+                    Action {
+                        anchors.verticalCenter: parent.verticalCenter
+                        visible: (hover.hovered || separator.modelData.selected) && !separator.copiedHere
+                        line: separator.line
+                        text: "copy command"
+                        onActivated: root.view.copyBlock(separator.modelData.index, true)
+                    }
+
+                    Action {
+                        anchors.verticalCenter: parent.verticalCenter
+                        visible: (hover.hovered || separator.modelData.selected) && !separator.copiedHere && !separator.going && (separator.modelData.rows ?? 0) > 0
+                        line: separator.line
+                        text: "copy output"
+                        onActivated: root.view.copyBlock(separator.modelData.index, false)
+                    }
+
+                    // How long it ran, once that is long enough to matter.
+                    CellText {
+                        anchors.verticalCenter: parent.verticalCenter
+                        visible: !separator.going && separator.modelData.duration >= root.revealDelay
                         text: separator.going ? "" : root.duration(separator.modelData.duration)
                         grid: root.grid
                         color: root.colors.subtext0

@@ -53,6 +53,7 @@ namespace telar::gui::qt {
     [[nodiscard]] application::prompt::CommandPresence commandPresence(std::uint64_t pane_id, std::string_view word);
     // The command block selected in the pane, by index among its blocks.
     [[nodiscard]] ds::Option<std::size_t> selectedBlock(std::uint64_t pane_id) const noexcept;
+    [[nodiscard]] bool typingLeavesBlock(std::uint64_t pane_id) const noexcept;
 
     // What an editor shows around the line: its pane, the configuration and copy mode.
     [[nodiscard]] const application::Pane<Memory>* pane(std::uint64_t pane_id) const noexcept;

@@ -1040,22 +1040,28 @@ namespace telar::gui::features::prompt {
     return line.block;
   }
 
-  void selectBlock(PaneLine& line, ds::Option<std::size_t> index, bool by_pointer) noexcept {
+  void selectBlock(PaneLine& line, ds::Option<std::size_t> index, bool typing_leaves) noexcept {
     line.chord = 0;
-    line.block_by_pointer = index && by_pointer;
+    line.typing_leaves_block = index && typing_leaves;
     line.block = index;
   }
 
   void moveBlock(PaneLine& line, ds::Option<std::size_t> index) noexcept {
     line.block = index;
     if (!index) {
-      line.block_by_pointer = false;
+      line.typing_leaves_block = false;
       line.chord = 0;
     }
   }
 
-  bool blockByPointer(const PaneLine& line) noexcept {
-    return line.block && line.block_by_pointer;
+  bool typingLeavesBlock(const PaneLine& line) noexcept {
+    return line.block && line.typing_leaves_block;
+  }
+
+  bool typingLeavesBlock(const Lines& lines, std::uint64_t pane_id) noexcept {
+    const auto* found = lines.find(pane_id);
+
+    return found != nullptr && typingLeavesBlock(std::as_const(**found));
   }
 
   void beginChord(PaneLine& line, char first) noexcept {
