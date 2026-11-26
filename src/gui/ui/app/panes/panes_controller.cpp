@@ -5,7 +5,6 @@ static_assert(true);
 
 #include "panes_controller.hpp"
 #include "pane_projection.hpp"
-#include "telar_base/ds/values.hpp"
 #include "ui/kit/models/projection.hpp"
 #include <QList>
 #include <QString>
@@ -19,6 +18,7 @@ static_assert(true);
 #include <utility>
 
 import telar.wire.vocabulary;
+import telar.base.ds;
 
 namespace telar::gui::qt {
 

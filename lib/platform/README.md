@@ -15,7 +15,7 @@ family:
 | `telar.platform.net` | nonblocking byte streams, socket addresses and options, peer credentials and `SocketStream` |
 | `telar.platform.sha256` | SHA-256 on OpenSSL, which its consumers link |
 | `telar.platform.graphics` | shared memory for images handed to the GUI |
-| `telar.platform.primitives` | random bytes, debug tracing, and the owner of the textual headers for owned descriptors, mapped regions and graphics shared memory |
+| `telar.platform.primitives` | owned descriptors (`FileDescriptor`), mapped regions, graphics shared memory, random bytes and debug tracing |
 
 There is no `telar.platform` module: import the family a file uses. Git checkout files and hardened git
 commands live in `telar.git.checkout`, in `lib/git/checkout`.
@@ -29,7 +29,7 @@ target_link_libraries(your_target PRIVATE telar::platform)
 ```
 
 ```cpp
-#include "telar_platform/file_descriptor.hpp"
+import telar.platform.primitives;
 ```
 
 ## Editor

@@ -5,7 +5,6 @@ static_assert(true);
 
 #include "surface_command.hpp"
 #include "tbc/view.hpp"
-#include "telar_base/text/utf8.hpp"
 #include <QByteArray>
 #include <QCoreApplication>
 #include <QIODevice>
@@ -28,6 +27,7 @@ static_assert(true);
 
 import telar.gui.foundation.system;
 import telar.base.ds;
+import telar.base.text.utf8;
 
 namespace telar::gui::qt {
 

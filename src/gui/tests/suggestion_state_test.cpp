@@ -3,7 +3,6 @@
 static_assert(true);
 #endif
 #include "assertions.hpp"
-#include "telar_base/memory/fixed_text.hpp"
 #include <algorithm>
 #include <array>
 #include <bit>

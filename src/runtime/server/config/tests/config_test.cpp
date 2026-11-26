@@ -3,7 +3,6 @@
 static_assert(true);
 #endif
 
-#include "telar_base/memory/allocator.hpp"
 #include <algorithm>
 #include <array>
 #include <cerrno>
@@ -35,6 +34,7 @@ import telar.lua;
 import telar.platform.paths;
 import telar.base.ds;
 import telar.wire.vocabulary;
+import telar.base.memory.allocators;
 
 namespace {
 

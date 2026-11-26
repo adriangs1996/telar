@@ -41,6 +41,7 @@ static_assert(true);
 
 import telar.gui.foundation.core;
 import telar.wire.vocabulary;
+import telar.base.ds;
 
 namespace {
 
@@ -553,5 +554,3 @@ namespace {
 }
 
 #include "font_resolver_test.moc"
-#include "telar_base/ds/containers.hpp"
-#include "telar_base/ds/values.hpp"

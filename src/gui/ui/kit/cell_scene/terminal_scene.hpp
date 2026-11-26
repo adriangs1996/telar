@@ -5,7 +5,6 @@ static_assert(true);
 
 #include "graphics_scene.hpp"
 #include "tbc/view.hpp"
-#include "telar_base/memory/fixed_text.hpp"
 #include "ui/kit/fonts/terminal_font.hpp"
 #include "ui/kit/scene/cell_glyphs.hpp"
 #include "ui/kit/scene/text_scene.hpp"

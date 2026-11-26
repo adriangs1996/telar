@@ -865,6 +865,7 @@ namespace telar::runtime::cli::history {
     int importHistory(Memory& memory, ControlSession& session, const ImportSource& input) {
       constexpr ds::Array kind_names{"auto", "zsh", "bash", "fish"};
       const auto source = ds::format(memory, "{}:{}", kind_names.at(static_cast<std::size_t>(input.kind)), input.path);
+      ImportParser parser{memory, input.kind};
       ds::Vec<ImportedLine, Memory> batch{memory};
 
       batch.reserve(max_import_entries);
@@ -900,7 +901,6 @@ namespace telar::runtime::cli::history {
         batch.push(std::move(entry.getMut()));
       };
 
-      ImportParser parser{memory, input.kind};
       std::string_view remaining = input.text;
 
       for (;;) {

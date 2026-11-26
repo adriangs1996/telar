@@ -164,16 +164,9 @@ if(TELAR_GUI_NATIVE)
     gui-platform
     gui-application gui-platform-native gui-keyboard gui-fonts-native gui-machine-profiles Qt6::Quick
     Qt6::QuickControls2 Qt6::Network Qt6::Concurrent)
-  # Most of a gui-quick compilation parses the same Qt headers again; the ones
-  # that at least two in five Qt adapters include are parsed once per build.
-  option(TELAR_GUI_PRECOMPILED_HEADERS "Precompile the Qt headers shared by gui-quick sources" ON)
-  if(TELAR_GUI_PRECOMPILED_HEADERS)
-    target_precompile_headers(gui-quick PRIVATE
-      <QByteArray> <QColor> <QDir> <QFont> <QFutureWatcher> <QHash> <QIODevice> <QImage>
-      <QKeyEvent> <QList> <QMetaObject> <QMouseEvent> <QObject> <QPointF> <QPointer>
-      <QQuickItem> <QQuickWindow> <QRectF> <QSizeF> <QString> <QStringList> <QThread>
-      <QTimer> <QVariant> <QVariantMap> <QWindow> <QtQml/qqmlregistration.h>)
-  endif()
+  # Qt adapters import C++23 modules that import `std`; Clang does not merge stdlib types
+  # such as std::string_view across a precompiled header (-include-pch) and the `std` BMI,
+  # so gui-quick compiles without a precompiled header.
   set(TELAR_GUI_LINK_HOST_HEADER "" CACHE FILEPATH "Header selecting a compile-time external link host")
   if(TELAR_GUI_LINK_HOST_HEADER)
     get_filename_component(gui_link_host_header "${TELAR_GUI_LINK_HOST_HEADER}" ABSOLUTE)

@@ -3,8 +3,6 @@
 static_assert(true);
 #endif
 
-#include "telar_base/memory/allocator.hpp"
-#include "telar_base/text/utf8.hpp"
 #include <array>
 #include <cstddef>
 #include <cstdint>
@@ -23,6 +21,8 @@ import telar.base.ds;
 import telar.gui.foundation.core;
 import telar.wire.vocabulary;
 import telar.wire.pane_io;
+import telar.base.memory.allocators;
+import telar.base.text.utf8;
 
 namespace {
 

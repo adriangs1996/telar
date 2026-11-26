@@ -25,6 +25,7 @@ static_assert(true);
 
 #include "tbc/view.hpp"
 
+import telar.base.memory.allocators;
 import telar.gui.foundation.core;
 import telar.gui.foundation.fonts;
 import telar.gui.foundation.terminal;

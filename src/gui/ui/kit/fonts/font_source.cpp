@@ -5,7 +5,6 @@ static_assert(true);
 
 #include "font_source.hpp"
 #include "platform/font.h"
-#include "telar_base/ds/values.hpp"
 #include <QByteArray>
 #include <QFile>
 #include <QFileDevice>
@@ -23,6 +22,7 @@ static_assert(true);
 #include <utility>
 
 import telar.wire.vocabulary;
+import telar.base.ds;
 
 namespace telar::gui::qt {
 

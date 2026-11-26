@@ -6,7 +6,6 @@ static_assert(true);
 #include "machine_roster.hpp"
 #include "dialogs.hpp"
 #include "machines_coordinator.hpp"
-#include "telar_base/memory/fixed_text.hpp"
 #include "ui/app/overlays/machine_prompt/machine_profiles_source.hpp"
 #include "ui/app/overlays/notifications/notifications_controller.hpp"
 #include "ui/kit/machines/machine_client.hpp"

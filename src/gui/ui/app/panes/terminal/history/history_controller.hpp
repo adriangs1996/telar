@@ -32,6 +32,7 @@ import telar.gui.application;
 import telar.gui.foundation.core;
 import telar.gui.foundation.text;
 import telar.base.ds;
+import telar.base.memory.allocators;
 
 namespace telar::gui::test {
   struct HistoryPresentation;

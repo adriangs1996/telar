@@ -5,7 +5,6 @@ static_assert(true);
 
 #include "pointer_dispatcher.hpp"
 #include "platform/scroll_event.hpp"
-#include "telar_base/memory/fixed_text.hpp"
 #include "ui/app/chrome/activity/activity_controller.hpp"
 #include "ui/app/chrome/tabs/tabs_controller.hpp"
 #include "ui/app/panes/attachments/attachment_shelf.hpp"

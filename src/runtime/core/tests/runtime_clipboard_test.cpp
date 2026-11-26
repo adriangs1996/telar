@@ -1,14 +1,11 @@
-#include <expected>
-#include <telar_clipboard/clipboard.hpp>
 #ifdef __clangd__
 // Keep textual ABI declarations and module imports in one clangd parse.
 static_assert(true);
 #endif
 
+#include <expected>
+
 #include "telar_base/diagnostics/config.hpp"
-#include "telar_base/memory/allocator.hpp"
-#include "telar_base/memory/fixed_text.hpp"
-#include "telar_base/text/utf8.hpp"
 #include <algorithm>
 #include <array>
 #include <atomic>
@@ -51,6 +48,7 @@ static_assert(true);
 import telar.runtime.core.tests.client_peer;
 import telar.runtime.core.client_control;
 import telar.runtime.terminal.control;
+import telar.clipboard;
 import telar.testing;
 import telar.testing.test_memory;
 import telar.wire.clipboard;
@@ -60,6 +58,8 @@ import telar.base.ds;
 import telar.platform.primitives;
 import telar.wire.vocabulary;
 import telar.wire.runtime;
+import telar.base.memory.allocators;
+import telar.base.text.utf8;
 
 #ifdef TELAR_TEST_NATIVE_CLIPBOARD
 // Defined in runtime_clipboard_native.cpp, which builds only with the native clipboard.

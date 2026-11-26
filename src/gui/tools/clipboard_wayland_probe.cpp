@@ -3,7 +3,6 @@
 static_assert(true);
 #endif
 
-#include "telar_base/ds/values.hpp"
 #include "ui/app/panes/attachments/clipboard_images.hpp"
 #include <QByteArray>
 #include <QByteArrayView>
@@ -34,7 +33,7 @@ static_assert(true);
 #include <utility>
 
 import telar.gui.foundation.core;
-
+import telar.base.ds;
 
 namespace {
 

@@ -5,7 +5,6 @@ static_assert(true);
 
 #include "platform/window.hpp"
 #include "tbc/view.hpp"
-#include "telar_base/ds/values.hpp"
 #include "ui/kit/fonts/bundled_fonts.hpp"
 #include "ui/kit/fonts/font_collection.hpp"
 #include "ui/kit/fonts/resident_fonts.hpp"
@@ -47,6 +46,8 @@ static_assert(true);
 #include <string_view>
 #include <utility>
 #include <vector>
+
+import telar.base.ds;
 
 namespace {
 

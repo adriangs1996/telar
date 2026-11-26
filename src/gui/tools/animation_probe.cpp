@@ -6,7 +6,6 @@ static_assert(true);
 #include "animation_presentation.hpp"
 #include "platform/window.hpp"
 #include "platform/window_activation.hpp"
-#include "telar_base/ds/values.hpp"
 #include "ui/app/application_controller.hpp"
 #include "ui/app/chrome/tabs/tab_strip_layout.hpp"
 #include "ui/design/controls/modal_reveal_layout.hpp"
@@ -33,7 +32,7 @@ static_assert(true);
 #include <utility>
 
 import telar.gui.foundation.core;
-
+import telar.base.ds;
 
 namespace {
 

@@ -19,8 +19,8 @@ dependencies, for headless installations.
 
 ## Build and test
 
-C++ importers reach the API through the `telar.clipboard` module, which owns
-`include/telar_clipboard/clipboard.hpp`; the header stays for Objective-C++. The Linux backends
+C++ importers reach the API through the `telar.clipboard` module; on macOS it bridges
+to Objective-C++ through the internal C ABI `src/macos/clipboard_bridge.h`. The Linux backends
 are C++ modules too (`telar.clipboard.wayland` and `telar.clipboard.x11`, each the
 only owner of its library's headers, on top of `telar.clipboard.transfer`), and the
 reader imports `std` and `telar.sys`. Every build therefore needs the toolchain

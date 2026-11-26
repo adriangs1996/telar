@@ -8,7 +8,6 @@ static_assert(true);
 #include "platform/text_input.hpp"
 #include "platform/window.hpp"
 #include "tbc/view.hpp"
-#include "telar_base/memory/fixed_text.hpp"
 #include "ui/app/panes/terminal/prompt/prompt_keys.hpp"
 #include "ui/kit/cell_scene/graphics_scene.hpp"
 #include "ui/kit/cell_scene/terminal_scene.hpp"

@@ -1,6 +1,8 @@
-#pragma once
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
 
-#include "telar_base/ds/values.hpp"
 #include <QColor>
 #include <QImage>
 #include <QJsonArray>
@@ -11,6 +13,10 @@
 #include <algorithm>
 #include <array>
 #include <cmath>
+
+#pragma once
+
+import telar.base.ds;
 
 namespace telar::gui::test {
 

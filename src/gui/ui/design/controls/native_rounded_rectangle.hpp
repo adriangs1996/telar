@@ -1,7 +1,9 @@
-#pragma once
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
 
 #include "tbc/view.hpp"
-#include "telar_base/ds/values.hpp"
 #include "ui/kit/scene/ancestor_geometry.hpp"
 #include <QColor>
 #include <QQuickItem>
@@ -10,6 +12,10 @@
 #include <QtCore/qtypes.h>
 #include <QtQml/qqmlregistration.h>
 #include <optional>
+
+#pragma once
+
+import telar.base.ds;
 
 namespace telar::gui::qt {
 

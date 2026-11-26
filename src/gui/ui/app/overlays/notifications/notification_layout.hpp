@@ -4,7 +4,6 @@ static_assert(true);
 #endif
 
 #include "tbc/view.hpp"
-#include "telar_base/memory/fixed_text.hpp"
 #include "ui/app/overlays/notifications/notifications_controller.hpp"
 #include "ui/kit/fonts/font_collection.hpp"
 #include "ui/kit/fonts/resident_fonts.hpp"
@@ -29,6 +28,7 @@ import telar.gui.foundation.core;
 import telar.gui.application;
 import telar.base.ds;
 import telar.wire.vocabulary;
+import telar.base.memory.containers;
 
 namespace telar::gui::qt {
 

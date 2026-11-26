@@ -11,7 +11,8 @@
     ],
     "native": [],
     "clipboard": [
-      "sys"
+      "sys",
+      "tbc"
     ],
     "shell": [
       "tbc"
@@ -237,7 +238,9 @@
   "upward_imports": [],
   "interfaces": {
     "lib/base/diagnostics/diagnostics.cppm": "telar.base.diagnostics",
+    "lib/base/diagnostics/timing/timing.cppm": "telar.base.diagnostics.timing",
     "lib/base/ds/ds.cppm": "telar.base.ds",
+    "lib/base/ds/values/values.cppm": "telar.base.ds.values",
     "lib/base/editors/editors.cppm": "telar.base.editors",
     "lib/base/history/history.cppm": "telar.base.history",
     "lib/base/memory/allocators/allocators.cppm": "telar.base.memory.allocators",
@@ -760,14 +763,8 @@
   },
   "textual_boundaries": {
     "lib/base/include/telar_base/diagnostics/config.hpp": "Project macro header: TELAR_DIAGNOSTIC, TELAR_DIAGNOSTICS and TELAR_ASSERT; includes nothing",
-    "lib/base/include/telar_base/diagnostics/timing.hpp": "Objective-C++ ABI",
-    "lib/base/include/telar_base/ds/containers.hpp": "Qt adapters and Objective-C++ include it; module units import its owner module",
-    "lib/base/include/telar_base/ds/values.hpp": "Qt adapters and Objective-C++ include it; module units import its owner module",
-    "lib/base/include/telar_base/memory/allocation_statistics.hpp": "Objective-C++ ABI",
-    "lib/base/include/telar_base/memory/allocator.hpp": "Objective-C++ ABI",
-    "lib/base/include/telar_base/memory/fixed_text.hpp": "Qt adapters include it; module units import its owner module",
-    "lib/base/include/telar_base/text/utf8.hpp": "Qt adapters include it; module units import its owner module",
-    "lib/clipboard/include/telar_clipboard/clipboard.hpp": "Native clipboard ABI shared with Objective-C++",
+    "lib/clipboard/src/macos/clipboard_bridge.h": "C ABI shared between telar.clipboard and Objective-C++",
+    "lib/clipboard/tests/macos_pasteboard_fixture.h": "C ABI test fixture shared with Objective-C++",
     "lib/ebnf/tests/parser_assertions.hpp": "Textual test fixture, including compiler diagnostic and macro expansion locations",
     "lib/ebnf/tests/spec_support.hpp": "Textual test fixture shared by the shipped specs' GoogleTest files",
     "lib/ghostty/include/telar_ghostty/modes.hpp": "Project macro header: TELAR_GHOSTTY_MODES, the modes telar.ghostty.vt captures and the ghostty-modes test checks; includes nothing",
@@ -1041,25 +1038,8 @@
     }
   ],
   "header_owners": {
-    "lib/base/diagnostics/diagnostics.cppm": [
-      "lib/base/include/telar_base/diagnostics/timing.hpp"
-    ],
-    "lib/base/ds/ds.cppm": [
-      "lib/base/include/telar_base/ds/containers.hpp",
-      "lib/base/include/telar_base/ds/values.hpp"
-    ],
-    "lib/base/memory/allocators/allocators.cppm": [
-      "lib/base/include/telar_base/memory/allocation_statistics.hpp",
-      "lib/base/include/telar_base/memory/allocator.hpp"
-    ],
-    "lib/base/memory/containers/containers.cppm": [
-      "lib/base/include/telar_base/memory/fixed_text.hpp"
-    ],
-    "lib/base/text/utf8/utf8.cppm": [
-      "lib/base/include/telar_base/text/utf8.hpp"
-    ],
-    "lib/clipboard/clipboard.cppm": [
-      "lib/clipboard/include/telar_clipboard/clipboard.hpp"
+    "lib/clipboard/clipboard.cpp": [
+      "lib/clipboard/src/macos/clipboard_bridge.h"
     ],
     "lib/platform/fs/fs.cppm": [
       "lib/platform/include/telar_platform/open_directory.h"

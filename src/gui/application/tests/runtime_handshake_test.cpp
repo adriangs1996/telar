@@ -3,8 +3,6 @@
 static_assert(true);
 #endif
 
-#include "telar_base/memory/fixed_text.hpp"
-#include "telar_base/text/utf8.hpp"
 #include <algorithm>
 #include <array>
 #include <charconv>
@@ -31,6 +29,7 @@ import telar.gui.application;
 import telar.base.ds;
 import telar.gui.foundation.core;
 import telar.wire.vocabulary;
+import telar.base.text.utf8;
 
 namespace {
 

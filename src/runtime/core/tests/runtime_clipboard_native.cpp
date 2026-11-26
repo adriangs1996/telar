@@ -5,9 +5,6 @@ static_assert(true);
 
 #include "platform/private_clipboard.hpp"
 #include "telar_base/diagnostics/config.hpp"
-#include "telar_base/memory/allocator.hpp"
-#include "telar_base/memory/fixed_text.hpp"
-#include "telar_base/text/utf8.hpp"
 #include <algorithm>
 #include <array>
 #include <atomic>
@@ -55,6 +52,7 @@ import telar.wire.clipboard;
 import telar.runtime.core.model.client_layouts;
 import telar.runtime.core.model.slot_store;
 import telar.wire.vocabulary;
+import telar.base.memory.allocators;
 
 using telar::testing::check;
 

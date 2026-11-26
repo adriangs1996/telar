@@ -3,8 +3,6 @@
 static_assert(true);
 #endif
 
-#include "telar_base/memory/fixed_text.hpp"
-#include "telar_base/text/utf8.hpp"
 #include "ui/kit/models/pane_attention_value.hpp"
 #include "ui/kit/models/progress_value.hpp"
 #include <QChar>

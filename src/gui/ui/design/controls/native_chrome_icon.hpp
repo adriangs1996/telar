@@ -18,6 +18,7 @@ static_assert(true);
 
 #pragma once
 
+import telar.base.memory.allocators;
 import telar.gui.foundation.core;
 import telar.gui.foundation.fonts;
 

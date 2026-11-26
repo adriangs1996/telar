@@ -3,7 +3,6 @@
 static_assert(true);
 #endif
 
-#include "telar_base/ds/values.hpp"
 #include "ui/kit/models/list_model.hpp"
 #include "ui/kit/store/store.hpp"
 #include <QAbstractItemModel>
@@ -14,6 +13,8 @@ static_assert(true);
 #include <optional>
 
 #pragma once
+
+import telar.base.ds;
 
 namespace telar::gui::qt {
 

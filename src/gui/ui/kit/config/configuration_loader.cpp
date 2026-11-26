@@ -4,7 +4,6 @@ static_assert(true);
 #endif
 
 #include "configuration_loader.hpp"
-#include "telar_base/memory/allocator.hpp"
 #include <array>
 #include <cstddef>
 #include <cstdio>

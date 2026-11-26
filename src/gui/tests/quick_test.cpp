@@ -15,9 +15,6 @@ static_assert(true);
 #include "platform/window_activation.hpp"
 #include "qml_fixture.hpp"
 #include "screen_fixture.hpp"
-#include "telar_base/memory/allocator.hpp"
-#include "telar_base/memory/fixed_text.hpp"
-#include "telar_base/text/utf8.hpp"
 #include "terminal_cursor_fixture.hpp"
 #include "ui/app/application_controller.hpp"
 #include "ui/app/chrome/mode_bar/native_mode_layout.hpp"
@@ -143,6 +140,7 @@ import telar.base.ds;
 import telar.wire.vocabulary;
 import telar.wire.clients;
 import telar.wire.runtime;
+import telar.base.memory.allocators;
 
 namespace telar::gui::test {
 

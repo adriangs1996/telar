@@ -1,5 +1,9 @@
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
+
 #include "bundled_fonts.hpp"
-#include "telar_base/ds/values.hpp"
 #include <QDebug>
 #include <QFontDatabase>
 #include <QString>
@@ -7,6 +11,8 @@
 #include <QtCore/qcontainerfwd.h>
 #include <QtCore/qlogging.h>
 #include <array>
+
+import telar.base.ds;
 
 namespace telar::gui::qt {
   namespace {

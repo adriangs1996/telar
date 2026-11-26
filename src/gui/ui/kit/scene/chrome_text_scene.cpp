@@ -12,8 +12,6 @@ static_assert(true);
 #include "qt_buffers.hpp"
 #include "scene_nodes.hpp"
 #include "tbc/view.hpp"
-#include "telar_base/ds/values.hpp"
-#include "telar_base/memory/fixed_text.hpp"
 #include "ui/kit/fonts/font_collection.hpp"
 #include "ui/kit/fonts/resident_fonts.hpp"
 #include <QColor>
@@ -59,6 +57,7 @@ static_assert(true);
 
 import telar.gui.foundation.core;
 import telar.wire.vocabulary;
+import telar.base.ds;
 
 namespace telar::gui::qt {
   namespace {

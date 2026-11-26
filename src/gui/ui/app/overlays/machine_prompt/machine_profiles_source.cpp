@@ -4,7 +4,6 @@ static_assert(true);
 #endif
 
 #include "machine_profiles_source.hpp"
-#include "telar_base/memory/allocator.hpp"
 #include <QDebug>
 #include <QFuture>
 #include <QString>
@@ -32,6 +31,7 @@ import telar.gui.foundation.system;
 import telar.gui.application;
 import telar.base.ds;
 import telar.gui.foundation.core;
+import telar.base.memory.allocators;
 
 namespace telar::gui::qt {
 

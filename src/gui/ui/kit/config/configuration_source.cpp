@@ -5,8 +5,6 @@ static_assert(true);
 
 #include "configuration_source.hpp"
 #include "appearance.hpp"
-#include "telar_base/memory/allocator.hpp"
-#include "telar_base/memory/fixed_text.hpp"
 #include <algorithm>
 #include <cstddef>
 #include <cstdint>
@@ -49,6 +47,7 @@ import telar.base.ds;
 import telar.gui.foundation.core;
 import telar.config.runtime;
 import telar.wire.vocabulary;
+import telar.base.memory.allocators;
 
 namespace telar::gui::qt {
 

@@ -6,9 +6,6 @@ static_assert(true);
 #include "configuration_loader.hpp"
 #include "lua_host.hpp"
 #include "tbc/view.hpp"
-#include "telar_base/memory/allocator.hpp"
-#include "telar_base/memory/fixed_text.hpp"
-#include "telar_base/text/utf8.hpp"
 #include "theme_choice_file.hpp"
 #include "ui/kit/fonts/font_cache.hpp"
 #include <algorithm>

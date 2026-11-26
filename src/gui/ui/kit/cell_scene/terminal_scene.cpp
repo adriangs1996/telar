@@ -4,7 +4,6 @@ static_assert(true);
 #endif
 
 #include "terminal_scene.hpp"
-#include "telar_base/memory/fixed_text.hpp"
 #include "terminal_decorations.hpp"
 #include "ui/kit/models/projection.hpp"
 #include "ui/kit/scene/cell_glyphs.hpp"

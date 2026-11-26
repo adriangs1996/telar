@@ -29,7 +29,7 @@ static_assert(true);
 #include <memory>
 
 import telar.gui.foundation.core;
-
+import telar.base.ds;
 
 namespace {
 
@@ -284,5 +284,4 @@ namespace {
 
 }
 
-#include "telar_base/ds/values.hpp"
 #include "window_test.moc"

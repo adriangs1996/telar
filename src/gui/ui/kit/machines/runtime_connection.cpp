@@ -4,7 +4,6 @@ static_assert(true);
 #endif
 
 #include "runtime_connection.hpp"
-#include "telar_base/memory/fixed_text.hpp"
 #include "ui/kit/machines/remote_bridge.hpp"
 #include <QElapsedTimer>
 #include <QScopedValueRollback>
@@ -38,6 +37,7 @@ import telar.gui.foundation.core;
 import telar.platform.primitives;
 import telar.wire.vocabulary;
 import telar.wire.runtime;
+import telar.wire.pane_io;
 
 namespace telar::gui::qt {
 

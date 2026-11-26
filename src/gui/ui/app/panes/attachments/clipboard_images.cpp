@@ -5,8 +5,6 @@ static_assert(true);
 
 #include "clipboard_images.hpp"
 #include "attachment_preview.hpp"
-#include "telar_base/ds/values.hpp"
-#include "telar_base/memory/allocator.hpp"
 #include <QDebug>
 #include <QFuture>
 #include <QObject>
@@ -21,7 +19,8 @@ static_assert(true);
 
 import telar.gui.foundation.core;
 import telar.gui.platform;
-
+import telar.base.ds;
+import telar.base.memory.allocators;
 
 namespace telar::gui::qt {
 

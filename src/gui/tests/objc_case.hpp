@@ -1,4 +1,7 @@
-#pragma once
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
 
 // A case of telar::testing for an Objective-C++ test, which cannot import a module: the .mm
 // defines one at namespace scope and fails it with check, as a C++ test does:
@@ -6,11 +9,14 @@
 //   const telar::gui::test::ObjcCase case_phases{"native_scroll_input.phases", phases};
 //
 // objc_case.cpp, a C++ unit of the same program, defines both with telar.testing.
-#include "telar_base/ds/values.hpp"
 #include <array>
 #include <cstddef>
 #include <source_location>
 #include <string_view>
+
+#pragma once
+
+import telar.base.ds;
 
 namespace telar::gui::test {
 

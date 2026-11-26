@@ -3,7 +3,6 @@
 static_assert(true);
 #endif
 
-#include "telar_base/memory/fixed_text.hpp"
 #include "ui/kit/models/projection.hpp"
 #include "ui/kit/process/command_process.hpp"
 #include <QIODevice>

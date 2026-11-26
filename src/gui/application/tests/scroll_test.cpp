@@ -2,7 +2,6 @@
 // Keep textual ABI declarations and module imports in one clangd parse.
 static_assert(true);
 #endif
-#include "telar_base/memory/allocator.hpp"
 #include <array>
 #include <cstdint>
 #include <string>
@@ -17,6 +16,7 @@ import telar.gui.foundation.terminal;
 import telar.wire.content;
 import telar.wire.vocabulary;
 import telar.base.ds;
+import telar.base.memory.allocators;
 
 namespace {
 

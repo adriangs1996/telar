@@ -4,7 +4,6 @@ static_assert(true);
 #endif
 
 #include "machine_chrome_layout.hpp"
-#include "telar_base/memory/fixed_text.hpp"
 #include "ui/kit/fonts/resident_fonts.hpp"
 #include "ui/kit/fonts/window_font_catalog.hpp"
 #include "ui/kit/machines/machine_client.hpp"
@@ -45,6 +44,7 @@ import telar.gui.foundation.drawing;
 import telar.gui.application;
 import telar.base.ds;
 import telar.wire.vocabulary;
+import telar.base.memory.allocators;
 
 namespace telar::gui::qt {
   namespace {

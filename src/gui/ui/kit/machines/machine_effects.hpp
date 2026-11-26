@@ -13,6 +13,7 @@ import telar.gui.foundation.system;
 import telar.gui.application;
 import telar.base.ds;
 import telar.gui.foundation.core;
+import telar.tbc;
 import telar.wire.vocabulary;
 
 namespace telar::gui::qt {

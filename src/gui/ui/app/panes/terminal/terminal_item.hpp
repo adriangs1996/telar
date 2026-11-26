@@ -3,7 +3,6 @@
 static_assert(true);
 #endif
 
-#include "telar_base/memory/fixed_text.hpp"
 #include "terminal_controller.hpp"
 #include "ui/app/panes/terminal/links/link_preview.hpp"
 #include "ui/kit/fonts/font_collection.hpp"

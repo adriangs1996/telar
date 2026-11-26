@@ -9,7 +9,6 @@ static_assert(true);
 #include "curve_mask.hpp"
 #include "qt_buffers.hpp"
 #include "scene_nodes.hpp"
-#include "telar_base/ds/values.hpp"
 #include <QPointF>
 #include <QRectF>
 #include <QSGGeometry>
@@ -19,6 +18,8 @@ static_assert(true);
 #include <cstddef>
 #include <span>
 #include <utility>
+
+import telar.base.ds;
 
 namespace telar::gui::qt {
   namespace {

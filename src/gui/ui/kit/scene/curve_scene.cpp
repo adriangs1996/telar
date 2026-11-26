@@ -8,7 +8,6 @@ static_assert(true);
 #include "curve_mask_node.hpp"
 #include "qt_buffers.hpp"
 #include "scene_nodes.hpp"
-#include "telar_base/ds/values.hpp"
 #include "ui/kit/models/projection.hpp"
 #include <QImage>
 #include <QPainter>
@@ -29,6 +28,8 @@ static_assert(true);
 #include <span>
 #include <stdexcept>
 #include <utility>
+
+import telar.base.ds;
 
 namespace telar::gui::qt {
 

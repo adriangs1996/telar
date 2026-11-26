@@ -5,9 +5,6 @@ static_assert(true);
 
 #include "machine_effects.hpp"
 #include "runtime_connection.hpp"
-#include "telar_base/memory/allocator.hpp"
-#include "telar_base/memory/fixed_text.hpp"
-#include "telar_base/text/utf8.hpp"
 #include <algorithm>
 #include <array>
 #include <atomic>
@@ -39,6 +36,7 @@ import telar.gui.foundation.system;
 import telar.base.ds;
 import telar.gui.foundation.core;
 import telar.wire.vocabulary;
+import telar.base.memory.containers;
 
 namespace telar::gui::qt {
 

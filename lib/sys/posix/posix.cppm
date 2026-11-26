@@ -52,6 +52,7 @@ export {
   using ::openat;
   using ::pipe;
   using ::poll;
+  using ::posix_memalign;
   using ::pread;
   using ::read;
   using ::write;

@@ -3,7 +3,6 @@
 static_assert(true);
 #endif
 
-#include "telar_base/memory/allocator.hpp"
 #include <algorithm>
 #include <array>
 #include <chrono>
@@ -45,6 +44,7 @@ import telar.gui.features.components;
 
 import telar.gui.application;
 import telar.gui.foundation.core;
+import telar.base.memory.allocators;
 
 namespace {
 

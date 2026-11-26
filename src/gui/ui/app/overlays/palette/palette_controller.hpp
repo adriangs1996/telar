@@ -24,6 +24,7 @@ import telar.gui.foundation.model;
 import telar.gui.application;
 import telar.gui.foundation.text;
 import telar.base.ds;
+import telar.base.memory.allocators;
 
 namespace telar::gui::qt {
 

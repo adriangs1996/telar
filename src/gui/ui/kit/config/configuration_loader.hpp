@@ -5,7 +5,6 @@ static_assert(true);
 
 #include "plugin_packages.hpp"
 #include "tbc/view.hpp"
-#include "telar_base/memory/allocator.hpp"
 #include <QByteArray>
 #include <QList>
 #include <QMap>

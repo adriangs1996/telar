@@ -6,7 +6,6 @@ static_assert(true);
 #include "font_resolver.hpp"
 #include "font_source.hpp"
 #include "tbc/view.hpp"
-#include "telar_base/memory/allocator.hpp"
 #include <QtCore/qtypes.h>
 #include <algorithm>
 #include <array>
@@ -23,6 +22,7 @@ import telar.gui.foundation.core;
 import telar.gui.foundation.fonts;
 import telar.gui.foundation.terminal;
 import telar.base.ds;
+import telar.base.memory.allocators;
 
 namespace telar::gui::qt {
 

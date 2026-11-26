@@ -10,11 +10,10 @@ option(TELAR_CLIPBOARD_NATIVE "Build native graphical-session clipboard access" 
 # their libraries' headers, and the reader imports both.
 add_library(telar-clipboard STATIC)
 target_compile_features(telar-clipboard PUBLIC cxx_std_23)
-target_include_directories(telar-clipboard PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/include")
 target_sources(telar-clipboard PUBLIC FILE_SET CXX_MODULES BASE_DIRS "${CMAKE_CURRENT_SOURCE_DIR}"
   FILES "${CMAKE_CURRENT_SOURCE_DIR}/clipboard.cppm")
 # The header-only tbc annotations state the API's lifetime contracts.
-target_link_libraries(telar-clipboard PUBLIC tbc::tbc telar::sys)
+target_link_libraries(telar-clipboard PUBLIC telar::tbc telar::sys)
 if(NOT TELAR_CLIPBOARD_NATIVE)
   target_sources(telar-clipboard PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/src/unavailable.cpp")
 elseif(APPLE)
@@ -24,7 +23,10 @@ elseif(APPLE)
   if(CLIPBOARD_HAS_OBJC_CLASS_STUB_CONTROL)
     target_compile_options(telar-clipboard PUBLIC "$<$<COMPILE_LANGUAGE:OBJCXX>:-fno-objc-msgsend-class-selector-stubs>")
   endif()
-  target_sources(telar-clipboard PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/src/clipboard.mm")
+  target_sources(telar-clipboard PRIVATE
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/clipboard.mm"
+    "${CMAKE_CURRENT_SOURCE_DIR}/clipboard.cpp")
+  target_include_directories(telar-clipboard PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/src")
   set_target_properties(telar-clipboard PROPERTIES OBJCXX_STANDARD 23 OBJCXX_STANDARD_REQUIRED YES OBJCXX_EXTENSIONS NO)
   target_compile_options(telar-clipboard PRIVATE "$<$<COMPILE_LANGUAGE:OBJCXX>:-fobjc-arc>")
   target_link_libraries(telar-clipboard PUBLIC "-framework AppKit")
@@ -68,7 +70,8 @@ if(BUILD_TESTING)
   if(APPLE AND TELAR_CLIPBOARD_NATIVE)
     set(clipboard_test_support "${CMAKE_CURRENT_SOURCE_DIR}/../../src/gui/tests")
     add_executable(clipboard-test
-      tests/clipboard_test.mm
+      tests/clipboard_test.cpp
+      tests/macos_pasteboard_fixture.mm
       cli.cpp
       "${clipboard_test_support}/platform/macos/private_clipboard.mm"
     )

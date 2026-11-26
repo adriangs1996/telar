@@ -1,6 +1,10 @@
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
+
 #include "element_layout.hpp"
 
-#include "telar_base/ds/values.hpp"
 #include "ui/kit/scene/window_animation_clock.hpp"
 
 #include <QQuickWindow>
@@ -13,6 +17,9 @@
 #include <functional>
 #include <limits>
 #include <utility>
+
+import telar.base.ds;
+import telar.tbc;
 
 namespace telar::gui::qt {
 

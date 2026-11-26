@@ -3,12 +3,10 @@
 static_assert(true);
 #endif
 
-#include "telar_base/ds/containers.hpp"
-
 #pragma once
 
 import telar.gui.foundation.core;
-
+import telar.base.ds;
 
 namespace telar::gui::qt {
 

@@ -4,7 +4,6 @@ static_assert(true);
 #endif
 
 #include "assertions.hpp"
-#include "telar_base/memory/allocator.hpp"
 #include <algorithm>
 #include <array>
 #include <cerrno>
@@ -36,6 +35,7 @@ import telar.platform.fs;
 import telar.base.ds;
 import telar.gui.foundation.core;
 import telar.wire.vocabulary;
+import telar.base.memory.allocators;
 
 namespace {
 

@@ -1,14 +1,10 @@
-module;
-#include "telar_base/diagnostics/timing.hpp"
-
 export module telar.base.diagnostics;
 
 import std;
+import telar.base.diagnostics.timing;
 import telar.base.memory.containers;
 import telar.base.ds;
 
-// Owned textual headers stay in this global module fragment only; importers
-// reach their names through these declarations instead of including them.
 export namespace telar {
   using telar::accumulate;
   using telar::Timing;

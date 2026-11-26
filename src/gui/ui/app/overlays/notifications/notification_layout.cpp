@@ -5,7 +5,6 @@ static_assert(true);
 
 #include "notification_layout.hpp"
 #include "tbc/view.hpp"
-#include "telar_base/memory/fixed_text.hpp"
 #include "ui/kit/fonts/resident_fonts.hpp"
 #include "ui/kit/fonts/window_font_catalog.hpp"
 #include "ui/kit/models/projection.hpp"

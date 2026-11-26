@@ -5,7 +5,6 @@ static_assert(true);
 
 #include "platform/font.h"
 #include "tbc/view.hpp"
-#include "telar_base/memory/fixed_text.hpp"
 #include "ui/kit/fonts/font_collection.hpp"
 #include "ui/kit/fonts/resident_fonts.hpp"
 #include <QtCore/qsystemdetection.h>
@@ -46,6 +45,7 @@ static_assert(true);
 #endif
 
 import telar.gui.foundation.core;
+import telar.base.memory.allocators;
 import telar.gui.foundation.fonts;
 import telar.gui.foundation.terminal;
 import telar.base.ds;

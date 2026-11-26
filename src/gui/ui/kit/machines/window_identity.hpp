@@ -3,7 +3,6 @@
 static_assert(true);
 #endif
 
-#include "telar_base/ds/values.hpp"
 #include <QByteArrayView>
 #include <QCryptographicHash>
 #include <array>
@@ -15,6 +14,7 @@ static_assert(true);
 #pragma once
 
 import telar.wire.vocabulary;
+import telar.base.ds;
 
 namespace telar::gui::qt {
 

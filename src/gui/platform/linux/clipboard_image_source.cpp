@@ -109,6 +109,7 @@ namespace telar::gui::platform {
 
     const auto& transfer = *static_cast<const Transfer*>(native_);
     SensitiveBytes png{memory};
+
     if (transfer.pipe) {
       try {
         png = ClipboardImagePipe::read(memory, transfer.pipe.get());

@@ -6,9 +6,6 @@ static_assert(true);
 #include "frame_fixture.hpp"
 #include "gui_wait.hpp"
 #include "qml_fixture.hpp"
-#include "telar_base/memory/allocator.hpp"
-#include "telar_base/memory/fixed_text.hpp"
-#include "telar_base/text/utf8.hpp"
 #include "ui/app/application_controller.hpp"
 #include "ui/kit/plugins/plugin_worker.hpp"
 #include <QByteArray>

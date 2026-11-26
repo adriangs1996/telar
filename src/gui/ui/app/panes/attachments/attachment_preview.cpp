@@ -4,8 +4,6 @@ static_assert(true);
 #endif
 
 #include "attachment_preview.hpp"
-#include "telar_base/ds/containers.hpp"
-#include "telar_base/memory/allocator.hpp"
 #include <QBuffer>
 #include <QByteArray>
 #include <QByteArrayView>
@@ -24,6 +22,7 @@ static_assert(true);
 
 import telar.gui.application;
 import telar.gui.foundation.core;
+import telar.base.ds;
 
 namespace telar::gui::qt {
 

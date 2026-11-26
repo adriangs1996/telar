@@ -3,7 +3,6 @@
 static_assert(true);
 #endif
 
-#include "telar_base/memory/fixed_text.hpp"
 #include <QByteArray>
 #include <QFutureWatcher>
 #include <QIODevice>

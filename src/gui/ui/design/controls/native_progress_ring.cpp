@@ -4,7 +4,6 @@ static_assert(true);
 #endif
 
 #include "native_progress_ring.hpp"
-#include "telar_base/ds/values.hpp"
 #include "ui/kit/scene/rounded_paints_scene.hpp"
 #include <QColor>
 #include <QQuickItem>
@@ -19,6 +18,8 @@ static_assert(true);
 #include <limits>
 #include <memory>
 #include <optional>
+
+import telar.base.ds;
 
 namespace telar::gui::qt {
 

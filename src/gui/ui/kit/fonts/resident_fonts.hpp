@@ -7,7 +7,6 @@ static_assert(true);
 #include "font_asset.hpp"
 #include "font_collection.hpp"
 #include "platform/font.h"
-#include "telar_base/memory/fixed_text.hpp"
 #include <QByteArray>
 #include <QString>
 #include <algorithm>

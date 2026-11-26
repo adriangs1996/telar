@@ -8,7 +8,6 @@ static_assert(true);
 #include "font_asset.hpp"
 #include "font_collection.hpp"
 #include "font_source.hpp"
-#include "telar_base/ds/values.hpp"
 #include <QHash>
 #include <QString>
 #include <QtCore/qstringliteral.h>
@@ -20,6 +19,8 @@ static_assert(true);
 #include <stdexcept>
 #include <string_view>
 #include <utility>
+
+import telar.base.ds;
 
 namespace telar::gui::qt {
   namespace {

@@ -3,8 +3,6 @@
 static_assert(true);
 #endif
 
-#include "telar_base/memory/allocator.hpp"
-#include "telar_base/memory/fixed_text.hpp"
 #include <algorithm>
 #include <arpa/inet.h>
 #include <array>
@@ -49,6 +47,7 @@ import telar.runtime.traffic.tap.exchange;
 import telar.runtime.traffic.tap.protocol;
 import telar.base.ds;
 import telar.wire.vocabulary;
+import telar.base.memory.allocators;
 
 namespace {
 

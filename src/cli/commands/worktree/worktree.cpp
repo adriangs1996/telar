@@ -1359,9 +1359,9 @@ namespace telar::runtime::cli::sessions {
       }
 
       PaneOpened launch(std::uint64_t id, std::string_view directory) {
-        ds::Vec<std::string_view, Memory> argv{memory_};
         const auto login = loginShell();
         const auto shell = login.view();
+        ds::Vec<std::string_view, Memory> argv{memory_};
 
         if (options_.command.empty()) {
           argv.push(shell);

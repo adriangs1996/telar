@@ -3,8 +3,6 @@
 static_assert(true);
 #endif
 
-#include "telar_base/memory/allocator.hpp"
-#include "telar_base/memory/fixed_text.hpp"
 #include "telar_platform/open_directory.h"
 #include "ui/kit/config/plugin_packages.hpp"
 #include "ui/kit/process/command_process.hpp"

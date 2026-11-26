@@ -5,12 +5,13 @@ static_assert(true);
 
 #include "prompt_controller.hpp"
 #include "prompt_editor_item.hpp"
-#include "telar_base/ds/values.hpp"
 #include "ui/kit/models/projection.hpp"
 #include <QClipboard>
 #include <QGuiApplication>
 #include <algorithm>
 #include <exception>
+
+import telar.base.ds;
 
 namespace telar::gui::qt {
 

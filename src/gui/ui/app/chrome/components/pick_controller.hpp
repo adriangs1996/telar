@@ -4,7 +4,6 @@ static_assert(true);
 #endif
 
 #include "tbc/view.hpp"
-#include "telar_base/memory/allocator.hpp"
 #include "ui/kit/process/surface_command.hpp"
 #include <QByteArray>
 #include <QString>
@@ -29,6 +28,7 @@ static_assert(true);
 import telar.gui.application;
 import telar.base.ds;
 import telar.gui.foundation.core;
+import telar.base.memory.allocators;
 
 namespace telar::gui::qt {
 
