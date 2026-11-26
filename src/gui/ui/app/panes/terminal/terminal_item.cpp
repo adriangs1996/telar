@@ -1013,7 +1013,11 @@ namespace telar::gui::qt {
   void TerminalItem::selectBlock(int index) {
     const auto* current = pane();
     if (current != nullptr && controller_ != nullptr && index >= 0 && std::cmp_less(index, current->blocks.size())) {
-      controller_->selectBlock(pane_id_, static_cast<std::size_t>(index));
+      // A click on a block of a pane in the background brings the pane forward first, where its
+      // keys go.
+      controller_->host().focusPane(*this);
+      forceActiveFocus(Qt::MouseFocusReason);
+      controller_->selectBlock(pane_id_, static_cast<std::size_t>(index), true);
     }
   }
 

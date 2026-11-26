@@ -117,6 +117,8 @@ export namespace telar::gui::features::prompt {
     // blocks, and the row the live prompt started on when the selection began.
     ds::Option<std::size_t> block;
     ds::Option<std::uint32_t> live_prompt;
+    // The pointer selected the block: the keys that type still go to the editor.
+    bool block_by_pointer = false;
     // The first half of `[[`, `]]`, `[f`, `]f`, `gg`, `z.` or `yc`.
     char chord = 0;
     // Where jumps left from, by stable row at the view's top, oldest first, and which of them
@@ -545,7 +547,14 @@ export namespace telar::gui::features::prompt {
 
   // Block `index` is selected, or none: the line is back at the live end. `live_prompt` is the row
   // the live prompt starts on, kept from the first selection on.
-  void selectBlock(PaneLine& line, ds::Option<std::size_t> index, ds::Option<std::uint32_t> live_prompt) noexcept;
+  void selectBlock(PaneLine& line, ds::Option<std::size_t> index, ds::Option<std::uint32_t> live_prompt, bool by_pointer = false) noexcept;
+
+  // The selected block is now at `index` among the pane's blocks, or gone: blocks before it were
+  // dropped, or came again.
+  void moveBlock(PaneLine& line, ds::Option<std::size_t> index) noexcept;
+
+  // Whether the pointer selected the block, rather than a key.
+  [[nodiscard]] bool blockByPointer(const PaneLine& line) noexcept;
 
   // The row the live prompt started on when the selection began.
   [[nodiscard]] ds::Option<std::uint32_t> livePrompt(const Lines& lines, std::uint64_t pane_id) noexcept;

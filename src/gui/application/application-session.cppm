@@ -271,8 +271,10 @@ export {
 
       [[nodiscard]] ds::Option<std::size_t> selectedBlock(std::uint64_t pane_id) const noexcept;
 
-      // Selects the block at `index`, shown from the top of the pane, or none: the pane's live end.
-      void selectBlock(std::uint64_t pane_id, ds::Option<std::size_t> index);
+      // Selects the block at `index`, or none: the pane's live end. The view moves only when the
+      // block's separator is out of it, to the pane's top. `by_pointer` for a click: the keys that
+      // type still go to the editor.
+      void selectBlock(std::uint64_t pane_id, ds::Option<std::size_t> index, bool by_pointer = false);
 
       // prefix+[ where telar's editor stands in for the prompt: the last command block, selected,
       // instead of copy mode from the live end.
@@ -758,8 +760,17 @@ export {
       // false when `pending` begins none of them.
       bool blockChord(char pending, BlockAt block, char32_t character);
 
-      // The z chord ended by `character` on block `index`.
-      void foldChord(BlockAt block, char32_t character);
+      // The z chord ended by `character` on block `index`; false when `character` ends none.
+      bool foldChord(BlockAt block, char32_t character);
+
+      // A key while the pointer holds a block selected outside vim's normal mode: Escape leaves it,
+      // the arrows step through the blocks, and any other key leaves it for the editor.
+      ds::Option<features::prompt::Outcome> pointerBlockKey(std::uint64_t pane_id, const features::prompt::KeyPress& key);
+
+      // The selected block of `pane`, by its stable key, before its blocks change; `restoreBlock`
+      // selects it again at its new index, or nothing when it is gone.
+      [[nodiscard]] ds::Option<std::uint64_t> selectedBlockKey(const Pane<Memory>& pane) const noexcept;
+      void restoreBlock(const Pane<Memory>& pane, ds::Option<std::uint64_t> key);
 
       // A key on block `index` outside a chord; false when it is none of block mode's.
       bool blockCommand(BlockAt block, char32_t character);

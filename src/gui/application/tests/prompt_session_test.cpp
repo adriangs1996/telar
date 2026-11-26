@@ -1104,29 +1104,39 @@ command = "switch" : "Switch branches" , { @branch } | "status" : "Show the work
     return client.findPane(1)->screen.scroll().offset;
   }
 
-  // Selecting, jumping between and scrolling around the blocks.
+  // Selecting, jumping between and scrolling around the blocks. A separator out of view comes
+  // to the top, where no pinned separator covers it.
   template <typename Client>
   void stepsThroughBlocks(Client& client) {
     prompt::key(client, 1, prompt::KeyPress{.key = prompt::Key::escape});
     control(client, 'u');
-    check(client.selectedBlock(1) == std::size_t{2} && top(client) == last_block_row - 1, "Ctrl-U selects the last block above its prompt");
+    check(client.selectedBlock(1) == std::size_t{2} && top(client) == last_block_row, "Ctrl-U selects the last block above its prompt");
     press(client, '[');
     press(client, 'f');
-    check(client.selectedBlock(1) == std::size_t{1} && top(client) == failed_block_row - 1, "[f steps to the failed block");
+    check(client.selectedBlock(1) == std::size_t{1} && top(client) == failed_block_row, "[f steps to the failed block");
     control(client, 'o');
-    check(top(client) == last_block_row - 1, "Ctrl-O goes back to where the jump left");
+    check(top(client) == last_block_row && client.selectedBlock(1) == std::size_t{2}, "Ctrl-O goes back to where the jump left, and selects the block there");
     control(client, 'i');
-    check(top(client) == failed_block_row - 1, "Ctrl-I comes forward again");
+    check(top(client) == failed_block_row, "Ctrl-I comes forward again");
     press(client, 'j');
-    check(top(client) == failed_block_row, "j moves the view down a row");
+    check(top(client) == failed_block_row + 1, "j moves the view down a row");
     press(client, 'k');
-    check(top(client) == failed_block_row - 1, "k moves it up a row");
+    check(top(client) == failed_block_row, "k moves it up a row");
     press(client, 'g');
     press(client, 'g');
-    check(top(client) == 0 && client.selectedBlock(1) == std::size_t{1}, "gg goes to the top, keeping the block");
+    check(top(client) == 0 && client.selectedBlock(1) == std::size_t{0}, "gg goes to the top and selects the first block");
+    prompt::key(client, 1, prompt::KeyPress{.key = prompt::Key::down});
+    check(client.selectedBlock(1) == std::size_t{1} && top(client) == failed_block_row, "Down steps to the next block");
+    press(client, 'z');
+    press(client, 'b');
     press(client, 'z');
     press(client, 't');
     check(top(client) == failed_block_row, "zt puts the block's separator at the top");
+    // A chord the next key does not end lets that key be read on its own.
+    press(client, 'y');
+    press(client, 'j');
+    check(top(client) == failed_block_row + 1 && !client.takeClipboardWrite(), "y then j moves the view and copies nothing");
+    press(client, 'k');
   }
 
   template <typename Client>
@@ -1198,6 +1208,39 @@ command = "switch" : "Switch branches" , { @branch } | "status" : "Show the work
 
     press(client, 'G');
     check(!client.selectedBlock(1) && top(client) == motions_live_top, "G goes back to the live end");
+  }
+
+  // A block the pointer selected leaves the keys that type to the editor, and a selected block
+  // stays selected as rows drop from the top of the scrollback.
+  void lineBlocksByPointer() {
+    SystemAllocator memory;
+    Transport transport;
+    TestSession client{memory, transport};
+
+    openBlocksAtLiveEnd(client, transport);
+    auto configuration = client.configuration;
+
+    configuration.prompt.keymap = PromptKeymap::emacs;
+    application::configuration::configure(client, configuration);
+    client.selectBlock(1, std::size_t{1}, true);
+    check(client.selectedBlock(1) == std::size_t{1}, "a click selects the block");
+    prompt::key(client, 1, prompt::KeyPress{.key = prompt::Key::up});
+    check(client.selectedBlock(1) == std::size_t{0}, "Up steps to the block above");
+    typeKeys(client, "git");
+    check(!client.selectedBlock(1) && prompt::line(client, 1)->text() == "git", "typing goes to the editor whole");
+
+    constexpr std::uint64_t dropped = 15;
+
+    client.selectBlock(1, std::size_t{1});
+    deliver(client, PaneScrollback{.pane_id = 1, .generation = 1, .trimmed = dropped});
+    check(client.selectedBlock(1) == std::size_t{0}, "the block stays selected after the rows above it are dropped");
+    const ds::Array blocks{
+        CommandBlock{.row = failed_block_row - dropped, .rows = 1, .state = CommandBlockState::failed, .status = 1, .command = "make"},
+        CommandBlock{.row = last_block_row - dropped, .rows = 1, .state = CommandBlockState::succeeded, .command = "git log"},
+    };
+
+    deliver(client, PaneBlocks{.pane_id = 1, .blocks = blocks});
+    check(client.selectedBlock(1) == std::size_t{0}, "and when its blocks come again");
   }
 
   // Ctrl-R and the path search start from the command the line holds, and the path chosen
@@ -1358,5 +1401,6 @@ command = "switch" : "Switch branches" , { @branch } | "status" : "Show the work
   const telar::testing::Case case_line_queues_across_the_hooks{"prompt_session.line_queues_across_the_hooks", lineQueuesAcrossTheHooks};
   const telar::testing::Case case_running_program_takes_its_keys{"prompt_session.running_program_takes_its_keys", runningProgramTakesItsKeys};
   const telar::testing::Case case_line_block_motions{"prompt_session.line_block_motions", lineBlockMotions};
+  const telar::testing::Case case_line_blocks_by_pointer{"prompt_session.line_blocks_by_pointer", lineBlocksByPointer};
 
 }

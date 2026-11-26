@@ -133,9 +133,9 @@ namespace telar::gui::qt {
     }
   }
 
-  void TerminalController::selectBlock(std::uint64_t pane_id, ds::Option<std::size_t> index) {
+  void TerminalController::selectBlock(std::uint64_t pane_id, ds::Option<std::size_t> index, bool by_pointer) {
     try {
-      store_.sessionMut().selectBlock(pane_id, index);
+      store_.sessionMut().selectBlock(pane_id, index, by_pointer);
     } catch (const std::exception& error) {
       emit failed(QString::fromUtf8(error.what()));
     }

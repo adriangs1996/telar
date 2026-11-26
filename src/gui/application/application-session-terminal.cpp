@@ -420,6 +420,8 @@ namespace telar::gui::application {
       return Change::none;
     }
 
+    const auto selected = selectedBlockKey(*pane);
+
     if (pane->scrollback_generation == message.generation && message.trimmed > pane->scrollback_trimmed) {
       // The blocks come again with their rows moved up; until then they are moved here, so
       // their folds keep hiding the same rows.
@@ -454,9 +456,13 @@ namespace telar::gui::application {
       pane->live_prompt_row.reset();
     }
 
+    const bool renumbered = pane->scrollback_generation != message.generation;
+
     pane->scrollback_generation = message.generation;
     pane->scrollback_trimmed = message.trimmed;
     pane->rows.number(message.generation);
+    // Rows dropped from the top keep each block's key; renumbered rows leave nothing to find.
+    restoreBlock(*pane, renumbered ? ds::none : selected);
     refreshFolds(*pane);
     changed_pane_ = pane->id;
     return Change::terminal;
