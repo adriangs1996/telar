@@ -1,28 +1,18 @@
+#include "attributes.hpp"
 #include "blank_lines.hpp"
 #include "checked_definitions.hpp"
-#include "const_overloads.hpp"
 #include "interface_bodies.hpp"
-#include "lifetime_analysis.hpp"
-#include "shared_access.hpp"
-#include "soundness_checks.hpp"
+#include "pipeline.hpp"
 #include "standard_containers.hpp"
-#include "view_type.hpp"
 
-#include <clang/AST/GlobalDecl.h>
-#include <clang/AST/Mangle.h>
-#include <clang/ASTMatchers/ASTMatchFinder.h>
-#include <clang/Basic/Diagnostic.h>
 #include <clang/Basic/DiagnosticOptions.h>
 #include <clang/Frontend/FrontendAction.h>
-#include <clang/Frontend/MultiplexConsumer.h>
 #include <clang/Frontend/TextDiagnosticPrinter.h>
 #include <clang/Tooling/ArgumentsAdjusters.h>
 #include <clang/Tooling/CommonOptionsParser.h>
 #include <clang/Tooling/Tooling.h>
 #include <llvm/ADT/ArrayRef.h>
-#include <llvm/ADT/SmallPtrSet.h>
 #include <llvm/ADT/StringSet.h>
-#include <llvm/ADT/StringSwitch.h>
 #include <llvm/Support/CommandLine.h>
 #include <llvm/Support/MemoryBuffer.h>
 #include <llvm/Support/Regex.h>
@@ -34,9 +24,7 @@
 #include <array>
 #include <atomic>
 #include <cstddef>
-#include <cstdint>
 #include <exception>
-#include <functional>
 #include <memory>
 #include <mutex>
 #include <numeric>
@@ -49,162 +37,7 @@
 #endif
 
 namespace {
-  class borrow_check final : public clang::ast_matchers::MatchFinder::MatchCallback {
-  public:
-    borrow_check(tbc_lint::lifetime_options options, tbc_lint::checked_definitions& checked)
-        : analysis_(options),
-          options_(options),
-          checked_(checked) {}
-
-    void run(const clang::ast_matchers::MatchFinder::MatchResult& result) override {
-      if (result.Nodes.getNodeAs<clang::TranslationUnitDecl>("unit") != nullptr) {
-        visited_.clear();
-        visited_redecls_.clear();
-        context_ = result.Context;
-        mangler_.reset(context_->createMangleContext());
-        // A unit that does not compile has an invalid AST. The question is asked before any check of
-        // this run reports, since a reported diagnostic counts as an error under --warnings-as-errors.
-        compiled_ = !context_->getDiagnostics().hasUncompilableErrorOccurred();
-        analysis_.beginTranslationUnit();
-        return;
-      }
-
-      if (const auto* record = result.Nodes.getNodeAs<clang::CXXRecordDecl>("record")) {
-        if (compiled_ && options_.check_lifetime) {
-          tbc_lint::checkRecordSoundness(*record, *result.Context, options_.errors);
-        }
-
-        return;
-      }
-
-      if (const auto* redecl = result.Nodes.getNodeAs<clang::FunctionDecl>("redecl")) {
-        if (compiled_ && options_.check_lifetime && redecl->getPreviousDecl() != nullptr && visited_redecls_.insert(redecl->getCanonicalDecl()).second) {
-          tbc_lint::checkRedeclarationSoundness(*redecl, *result.Context, options_.errors);
-        }
-
-        return;
-      }
-
-      const auto* function = result.Nodes.getNodeAs<clang::FunctionDecl>("function");
-      // An owner's implementation is trusted, as the standard library's is.
-      if (compiled_ && function != nullptr && !tbc_lint::ownerMember(*function) && visited_.insert(function->getCanonicalDecl()).second && claim(*function, *result.Context)) {
-        analysis_.analyze(*function, *result.Context);
-        if (options_.check_lifetime) {
-          if (const auto* definition = function->getDefinition()) {
-            tbc_lint::checkSharedAccess(*definition, *result.Context, options_.errors);
-          }
-
-          tbc_lint::checkFunctionSoundness(*function, *result.Context, options_.errors);
-        }
-      }
-    }
-
-    void onEndOfTranslationUnit() override {
-      if (context_ != nullptr && compiled_) {
-        analysis_.finishTranslationUnit(*context_);
-      }
-    }
-
-  private:
-    // A unit checks every definition its own file holds, and a definition from a header or an
-    // instantiation only when no other unit of the run has.
-    bool claim(const clang::FunctionDecl& function, clang::ASTContext& context) {
-      const auto& sources = context.getSourceManager();
-      if (sources.isInMainFile(sources.getExpansionLoc(function.getLocation())) || !mangler_->shouldMangleDeclName(&function)) {
-        return true;
-      }
-
-      // A constructor or destructor names one of its variants; GlobalDecl's plain form refuses them.
-      const auto global = [&] {
-        if (const auto* constructor = llvm::dyn_cast<clang::CXXConstructorDecl>(&function)) {
-          return clang::GlobalDecl(constructor, clang::Ctor_Complete);
-        }
-
-        if (const auto* destructor = llvm::dyn_cast<clang::CXXDestructorDecl>(&function)) {
-          return clang::GlobalDecl(destructor, clang::Dtor_Complete);
-        }
-
-        return clang::GlobalDecl(&function);
-      }();
-
-      std::string name;
-      llvm::raw_string_ostream stream(name);
-
-      mangler_->mangleName(global, stream);
-      return checked_.claim(std::move(name));
-    }
-
-    clang::ASTContext* context_ = nullptr;
-    bool compiled_ = false;
-    std::unique_ptr<clang::MangleContext> mangler_;
-    tbc_lint::lifetime_analysis analysis_;
-    tbc_lint::lifetime_options options_;
-    tbc_lint::checked_definitions& checked_;
-    llvm::SmallPtrSet<const clang::FunctionDecl*, 32> visited_;
-    llvm::SmallPtrSet<const clang::FunctionDecl*, 32> visited_redecls_;
-  };
-
-  // Limits the matchers to what a unit parses itself outside system headers: its own file, the project
-  // headers it includes and the template instantiations it performs. What a unit imports from a module
-  // is checked with the unit that defines it, so the matchers never deserialize it, and the parents
-  // the analysis asks for are those of this scope alone.
-  class parsed_scope final : public clang::ASTConsumer {
-  public:
-    explicit parsed_scope(std::unique_ptr<clang::ASTConsumer> matchers)
-        : matchers_(std::move(matchers)) {}
-
-    void Initialize(clang::ASTContext& context) override {
-      context_ = &context;
-      matchers_->Initialize(context);
-    }
-
-    bool HandleTopLevelDecl(clang::DeclGroupRef group) override {
-      const auto& sources = context_->getSourceManager();
-
-      for (auto* declaration : group) {
-        if (!sources.isInSystemHeader(sources.getExpansionLoc(declaration->getLocation()))) {
-          declarations_.push_back(declaration);
-        }
-      }
-
-      return matchers_->HandleTopLevelDecl(group);
-    }
-
-    // A declaration a module hands over as it is read, such as an inline function, belongs to the unit
-    // that defines it.
-    void HandleInterestingDecl(clang::DeclGroupRef group) override {
-      matchers_->HandleInterestingDecl(group);
-    }
-
-    void HandleTranslationUnit(clang::ASTContext& context) override {
-      context.setTraversalScope(declarations_);
-      matchers_->HandleTranslationUnit(context);
-    }
-
-  private:
-    clang::ASTContext* context_ = nullptr;
-    std::unique_ptr<clang::ASTConsumer> matchers_;
-    std::vector<clang::Decl*> declarations_;
-  };
-
-  enum class checker : std::uint8_t {
-    lifetime,
-    bounds,
-    blank_lines,
-    interface_bodies,
-    standard_containers,
-  };
-
-  // The checker a --scope names, as --checks spells it.
-  std::optional<checker> checkerNamed(llvm::StringRef name) {
-    return llvm::StringSwitch<std::optional<checker>>(name)
-        .Case("lifetime", checker::lifetime)
-        .Case("bounds", checker::bounds)
-        .Case("blank-lines", checker::blank_lines)
-        .Case("interface-bodies", checker::interface_bodies)
-        .Case("standard-containers", checker::standard_containers)
-        .Default(std::nullopt);
-  }
+  using checker = tbc_lint::checker_kind;
 
   struct settings {
     bool lifetime;
@@ -221,54 +54,73 @@ namespace {
     tbc_lint::container_allowlist& containers;
   };
 
-  // Runs the matchers of the lifetime and blank-lines checks, when there are any, after the
-  // interface-bodies check, which walks only what the unit parsed before the matchers load the rest.
   class unit_action final : public clang::ASTFrontendAction {
   public:
-    unit_action(clang::ast_matchers::MatchFinder* finder, const settings& settings)
-        : finder_(finder),
-          settings_(settings) {}
+    explicit unit_action(tbc_lint::unit_pipeline& pipeline)
+        : pipeline_(pipeline) {}
 
   protected:
     std::unique_ptr<clang::ASTConsumer> CreateASTConsumer(clang::CompilerInstance&, llvm::StringRef) override {
-      std::vector<std::unique_ptr<clang::ASTConsumer>> consumers;
-
-      if (settings_.interface_bodies) {
-        consumers.push_back(std::make_unique<tbc_lint::interface_body_check>(settings_.interfaces, settings_.errors));
-      }
-
-      if (finder_ != nullptr) {
-        consumers.push_back(std::make_unique<parsed_scope>(finder_->newASTConsumer()));
-      }
-
-      return std::make_unique<clang::MultiplexConsumer>(std::move(consumers));
+      return pipeline_.createConsumer();
     }
 
   private:
-    clang::ast_matchers::MatchFinder* finder_;
-    const settings& settings_;
+    tbc_lint::unit_pipeline& pipeline_;
   };
 
   class unit_actions final : public clang::tooling::FrontendActionFactory {
   public:
-    unit_actions(clang::ast_matchers::MatchFinder* finder, const settings& settings)
-        : finder_(finder),
-          settings_(settings) {}
+    explicit unit_actions(tbc_lint::unit_pipeline& pipeline)
+        : pipeline_(pipeline) {}
 
     std::unique_ptr<clang::FrontendAction> create() override {
-      return std::make_unique<unit_action>(finder_, settings_);
+      return std::make_unique<unit_action>(pipeline_);
     }
 
   private:
-    clang::ast_matchers::MatchFinder* finder_;
-    const settings& settings_;
+    tbc_lint::unit_pipeline& pipeline_;
   };
+
+  // Strips compiler plugin flags that load tbc-plugin itself, because tbc-lint already registers
+  // tbc's custom attributes and runs the selected checks directly.
+  clang::tooling::CommandLineArguments stripTbcPluginFlags(const clang::tooling::CommandLineArguments& arguments, llvm::StringRef /*filename*/) {
+    clang::tooling::CommandLineArguments filtered;
+
+    filtered.reserve(arguments.size());
+    for (std::size_t index = 0; index < arguments.size(); ++index) {
+      const llvm::StringRef arg(arguments[index]);
+
+      if (arg.starts_with("-fplugin=") && arg.contains("tbc-plugin")) {
+        continue;
+      }
+
+      if (arg.starts_with("-fplugin-arg-tbc-")) {
+        continue;
+      }
+
+      if (arg == "-Xclang" && index + 1 < arguments.size()) {
+        const llvm::StringRef next(arguments[index + 1]);
+        if ((next == "-load" || next == "-plugin" || next == "-add-plugin" || next == "-plugin-arg-tbc") && index + 2 < arguments.size()) {
+          const llvm::StringRef value(arguments[index + 2]);
+          if (value == "tbc" || value.contains("tbc-plugin") || next == "-plugin-arg-tbc") {
+            index += 2;
+            continue;
+          }
+        }
+      }
+
+      filtered.push_back(arguments[index]);
+    }
+
+    return filtered;
+  }
 
   // The process-wide file system changes the process's working directory for each compile command;
   // a physical one keeps its own, which concurrent units need.
   std::unique_ptr<clang::tooling::ClangTool> unitTool(const clang::tooling::CompilationDatabase& compilations, const std::string& source) {
     auto tool = std::make_unique<clang::tooling::ClangTool>(compilations, std::vector<std::string>{source}, std::make_shared<clang::PCHContainerOperations>(), llvm::IntrusiveRefCntPtr<llvm::vfs::FileSystem>(llvm::vfs::createPhysicalFileSystem().release()));
 
+    tool->appendArgumentsAdjuster(stripTbcPluginFlags);
     tool->appendArgumentsAdjuster(clang::tooling::getInsertArgumentAdjuster("-resource-dir=" TBC_CLANG_RESOURCE_DIR, clang::tooling::ArgumentInsertPosition::END));
     return tool;
   }
@@ -299,37 +151,21 @@ namespace {
   // Checks one translation unit with its own tool and analysis, so units can run on separate threads.
   // Its diagnostics are buffered, so that the output of parallel units never interleaves.
   int checkUnit(const clang::tooling::CompilationDatabase& compilations, const std::string& source, const settings& settings, std::string& output) {
-    clang::ast_matchers::MatchFinder finder;
-    std::optional<borrow_check> borrows;
-    std::optional<tbc_lint::const_overload_check> overloads;
+    const tbc_lint::pipeline_settings pipeline_config{
+        .lifetime = settings.lifetime,
+        .bounds = settings.bounds,
+        .blank_lines = settings.blank_lines,
+        .interface_bodies = settings.interface_bodies,
+        .standard_containers = settings.standard_containers,
+        .errors = settings.errors,
+        .header_filter = settings.header_filter,
+        .fixes = &settings.fixes,
+        .interfaces = &settings.interfaces,
+        .checked = &settings.checked,
+        .containers = &settings.containers,
+    };
 
-    if (settings.lifetime || settings.bounds) {
-      borrows.emplace(tbc_lint::lifetime_options{.errors = settings.errors, .check_lifetime = settings.lifetime, .check_bounds = settings.bounds}, settings.checked);
-      finder.addMatcher(clang::ast_matchers::translationUnitDecl().bind("unit"), &*borrows);
-      if (settings.lifetime) {
-        finder.addMatcher(clang::ast_matchers::cxxRecordDecl(clang::ast_matchers::isDefinition(), clang::ast_matchers::unless(clang::ast_matchers::isExpansionInSystemHeader())).bind("record"), &*borrows);
-        finder.addMatcher(clang::ast_matchers::functionDecl(clang::ast_matchers::unless(clang::ast_matchers::isExpansionInSystemHeader()), clang::ast_matchers::unless(clang::ast_matchers::isImplicit())).bind("redecl"), &*borrows);
-        overloads.emplace(settings.errors, settings.checked);
-        overloads->registerMatchers(finder);
-      }
-
-      finder.addMatcher(clang::ast_matchers::functionDecl(clang::ast_matchers::isDefinition(), clang::ast_matchers::unless(clang::ast_matchers::isExpansionInSystemHeader())).bind("function"), &*borrows);
-    }
-
-    std::optional<tbc_lint::blank_line_check> blank_lines;
-
-    if (settings.blank_lines) {
-      blank_lines.emplace(settings.fixes, settings.errors, settings.header_filter);
-      blank_lines->registerMatchers(finder);
-    }
-
-    std::optional<tbc_lint::standard_container_check> containers;
-
-    if (settings.standard_containers) {
-      containers.emplace(settings.errors, settings.checked, settings.containers);
-      containers->registerMatchers(finder);
-    }
-
+    tbc_lint::unit_pipeline pipeline(pipeline_config);
     llvm::raw_string_ostream stream(output);
     clang::DiagnosticOptions options;
 
@@ -338,13 +174,14 @@ namespace {
     const auto tool = unitTool(compilations, source);
 
     tool->setDiagnosticConsumer(&printer);
-    unit_actions actions(settings.lifetime || settings.bounds || settings.blank_lines || settings.standard_containers ? &finder : nullptr, settings);
+    unit_actions actions(pipeline);
 
     return tool->run(&actions);
   }
 }
 
 int main(int argc, const char** argv) try {
+  tbc_lint::registerAttributes();
 #if defined(__unix__) || defined(__APPLE__)
   // Parallel C++23 module checking opens many BMIs and headers simultaneously; macOS defaults to
   // 256 descriptors per process, which causes EMFILE / Clang preprocessor failures under `-j`.
@@ -445,7 +282,7 @@ int main(int argc, const char** argv) try {
 
   for (const auto& scope : scopes) {
     const auto [name, file] = llvm::StringRef(scope).split('=');
-    const auto check = checkerNamed(name);
+    const auto check = tbc_lint::checkerNamed(name);
     auto listed = llvm::MemoryBuffer::getFile(file, /*IsText=*/true);
     if (!check || !listed) {
       llvm::errs() << "tbc-lint: --scope needs <check>=<file> with a check of --checks and a file that can be read, not " << scope << '\n';

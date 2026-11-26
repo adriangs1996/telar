@@ -119,6 +119,7 @@ def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--compiler", required=True)
     parser.add_argument("--linter", required=True)
+    parser.add_argument("--plugin", default="")
     parser.add_argument("--sysroot", default="")
     parser.add_argument("--mode", choices=("validate", "implemented", "all"), default="validate")
     parser.add_argument("--case", default="*", help="Select case IDs with a shell-style pattern")
@@ -135,12 +136,15 @@ def main(argv=None):
     flags = ["-std=c++23", f"-I{PROJECT / 'include'}", "-Wno-return-stack-address"]
     if options.sysroot:
         flags += ["-isysroot", options.sysroot]
+    validate_flags = list(flags)
+    if options.plugin:
+        validate_flags += [f"-fplugin={options.plugin}", "-fplugin-arg-tbc-checks=none", "-Werror=unknown-attributes"]
     failures = []
     matched = 0
     checked = 0
     for source, file_cases in by_source.items():
         units = [source, *companion_units(source)]
-        invalid = [(unit, compiled) for unit in units if (compiled := run([options.compiler, *flags, "-fsyntax-only", str(unit)])).returncode]
+        invalid = [(unit, compiled) for unit in units if (compiled := run([options.compiler, *validate_flags, "-fsyntax-only", str(unit)])).returncode]
         for unit, compiled in invalid:
             failures.append(f"Invalid C++ fixture {unit.name}:\n{compiled.stderr}")
         if invalid or options.mode == "validate":

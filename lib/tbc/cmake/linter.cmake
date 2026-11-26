@@ -15,9 +15,26 @@ execute_process(COMMAND "${tbc_clang}" -print-resource-dir
   OUTPUT_VARIABLE tbc_clang_resources OUTPUT_STRIP_TRAILING_WHITESPACE
   COMMAND_ERROR_IS_FATAL ANY)
 
-add_executable(tbc-lint linter/main.cpp linter/lifetime_analysis.cpp linter/const_overloads.cpp linter/shared_access.cpp linter/soundness_checks.cpp linter/access_validity.cpp linter/exclusive_borrows.cpp linter/standard_containers.cpp linter/blank_lines.cpp linter/interface_bodies.cpp)
-target_include_directories(tbc-lint SYSTEM PRIVATE ${LLVM_INCLUDE_DIRS} ${CLANG_INCLUDE_DIRS})
+add_library(tbc-core OBJECT
+  linter/attributes.cpp
+  linter/pipeline.cpp
+  linter/lifetime_analysis.cpp
+  linter/const_overloads.cpp
+  linter/shared_access.cpp
+  linter/soundness_checks.cpp
+  linter/access_validity.cpp
+  linter/exclusive_borrows.cpp
+  linter/standard_containers.cpp
+  linter/blank_lines.cpp
+  linter/interface_bodies.cpp)
+set_target_properties(tbc-core PROPERTIES POSITION_INDEPENDENT_CODE ON)
+target_include_directories(tbc-core SYSTEM PRIVATE ${LLVM_INCLUDE_DIRS} ${CLANG_INCLUDE_DIRS})
 separate_arguments(tbc_llvm_definitions NATIVE_COMMAND "${LLVM_DEFINITIONS}")
+target_compile_options(tbc-core PRIVATE ${tbc_llvm_definitions})
+target_link_libraries(tbc-core PRIVATE tbc_options)
+
+add_executable(tbc-lint linter/main.cpp $<TARGET_OBJECTS:tbc-core>)
+target_include_directories(tbc-lint SYSTEM PRIVATE ${LLVM_INCLUDE_DIRS} ${CLANG_INCLUDE_DIRS})
 target_compile_options(tbc-lint PRIVATE ${tbc_llvm_definitions})
 target_compile_definitions(tbc-lint PRIVATE "TBC_CLANG_RESOURCE_DIR=\"${tbc_clang_resources}\"")
 target_link_libraries(tbc-lint PRIVATE tbc_options clang-cpp)
@@ -29,17 +46,31 @@ endif()
 
 if(NOT LLVM_ENABLE_RTTI)
   if(MSVC)
+    target_compile_options(tbc-core PRIVATE /GR-)
     target_compile_options(tbc-lint PRIVATE /GR-)
   else()
+    target_compile_options(tbc-core PRIVATE -fno-rtti)
     target_compile_options(tbc-lint PRIVATE -fno-rtti)
   endif()
 endif()
 
-# clang-tidy loads the plugin into its own process and resolves LLVM's and its own symbols there, so the
-# plugin links neither. An instrumented plugin does not load into a clang-tidy that is not.
+# clang and clang-tidy load plugins into their own processes and resolve LLVM's and Clang's symbols
+# there, so the plugins link neither. An instrumented plugin does not load into a host that is not.
 if(NOT TBC_SANITIZERS)
+  add_library(tbc-plugin MODULE linter/plugin.cpp $<TARGET_OBJECTS:tbc-core>)
+  set_target_properties(tbc-plugin PROPERTIES PREFIX "" SUFFIX ".so")
+  target_include_directories(tbc-plugin SYSTEM PRIVATE ${LLVM_INCLUDE_DIRS} ${CLANG_INCLUDE_DIRS})
+  target_compile_options(tbc-plugin PRIVATE ${tbc_llvm_definitions})
+  target_link_libraries(tbc-plugin PRIVATE tbc_options)
+  if(APPLE)
+    target_link_options(tbc-plugin PRIVATE -undefined dynamic_lookup)
+  endif()
+  if(NOT LLVM_ENABLE_RTTI)
+    target_compile_options(tbc-plugin PRIVATE -fno-rtti)
+  endif()
+
   find_program(tbc_clang_tidy NAMES clang-tidy HINTS "${LLVM_TOOLS_BINARY_DIR}" NO_DEFAULT_PATH)
-  add_library(tbc-tidy-scope MODULE linter/tidy_scope.cpp)
+  add_library(tbc-tidy-scope MODULE linter/tidy_scope.cpp linter/attributes.cpp)
   set_target_properties(tbc-tidy-scope PROPERTIES PREFIX "" SUFFIX ".so")
   target_include_directories(tbc-tidy-scope SYSTEM PRIVATE ${LLVM_INCLUDE_DIRS} ${CLANG_INCLUDE_DIRS})
   target_compile_options(tbc-tidy-scope PRIVATE ${tbc_llvm_definitions})

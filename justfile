@@ -109,6 +109,10 @@ analyze depth="shallow": lint-scope (configure "dev")
 lint-scope: tbc-configure
     "{{ cpp }}" build tbc -B lib/tbc/out/release -- --target tbc-tidy-scope
 
+# Build the Clang compiler plugin that parses [[tbc::...]] attributes and runs checks during compilation.
+tbc-plugin: tbc-configure
+    "{{ cpp }}" build tbc -B lib/tbc/out/release -- --target tbc-plugin
+
 # Build the optimized lifetime checker that the repository's .tbc.json names.
 lifetime-checker: tbc-configure
     "{{ cpp }}" build tbc -B lib/tbc/out/release -- --target tbc-lint
@@ -175,7 +179,7 @@ ebnf-test *args:
     GTEST_COLOR=yes "{{ cpp }}" test ci -- -L lib.ebnf -V "$@"
 
 # Configure the tree of PRESET; a tree with tests runs the GUI's integration tests against the development CLI.
-configure preset="dev":
+configure preset="dev": tbc-plugin
     "{{ cpp }}" configure {{ preset }} -- {{ if preset == "release" { "" } else if preset == "dist" { "" } else { test_options } }}
 
 playground:

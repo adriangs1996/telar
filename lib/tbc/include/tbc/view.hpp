@@ -1,10 +1,7 @@
 #ifndef TBC_VIEW_HPP
 #define TBC_VIEW_HPP
 
-// Module units import these declarations from telar.tbc and include tbc/annotations.hpp for
-// the macros; this header is for code that cannot import.
-#include "tbc/annotations.hpp"
-
+// Module units import these declarations from telar.tbc; this header is for code that cannot import.
 #include <type_traits>
 
 namespace tbc {
@@ -40,7 +37,7 @@ namespace tbc {
   }
 
   template <typename type>
-  TBC_RAW constexpr type* raw(type* pointer) noexcept {
+  constexpr type* raw(type* pointer) noexcept {
     return pointer;
   }
 

@@ -43,7 +43,7 @@ namespace spec {
     bytes readable() const;
     void reserve(std::size_t capacity);
     void compact();
-    TBC_UNINITIALIZED writable_bytes appendUninitialized(std::size_t count);
+    [[tbc::uninitialized]] writable_bytes appendUninitialized(std::size_t count);
   };
 
   struct retained_stream {
@@ -85,7 +85,7 @@ namespace spec {
   struct history_page {
     explicit history_page(tbc::view<std::span<const std::string_view>> rows);
     tbc::view<std::span<const std::string>> rows() const;
-    TBC_SWAPS void exchangeWith(history_page& other);
+    [[tbc::swaps]] void exchangeWith(history_page& other);
   };
 
   struct callback_context {};
@@ -93,7 +93,7 @@ namespace spec {
   void enqueueBound(tbc::ref_a<callback_context> context, tbc::val_a<std::function<void()>> callback);
   void invokeNow(std::function<void()> callback);
   void enqueue(tbc::val_static<std::function<void()>> callback);
-  TBC_INITIALIZES void initialize(writable_bytes output);
+  [[tbc::initializes]] void initialize(writable_bytes output);
   tbc::view<const int&, tbc::lt::a> checkedAt(tbc::view<std::span<const int>, tbc::lt::a> values, std::size_t index);
 }
 

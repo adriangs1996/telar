@@ -12,11 +12,7 @@
 namespace tbc_lint {
   namespace {
     bool isRawContext(const clang::FunctionDecl& function) {
-      if (annotated(function, "tbc::raw")) {
-        return true;
-      }
-
-      if (const auto* pattern = function.getTemplateInstantiationPattern(); pattern != nullptr && annotated(*pattern, "tbc::raw")) {
+      if (isRawFunction(function)) {
         return true;
       }
 
@@ -142,8 +138,7 @@ namespace tbc_lint {
         }
 
         const auto& sources = context_.getSourceManager();
-        const auto* pattern = callee->getTemplateInstantiationPattern();
-        const bool allowed_boundary = annotated(*callee, "tbc::raw") || (pattern != nullptr && annotated(*pattern, "tbc::raw")) || sources.isInSystemHeader(sources.getExpansionLoc(callee->getLocation()));
+        const bool allowed_boundary = isRawFunction(*callee) || sources.isInSystemHeader(sources.getExpansionLoc(callee->getLocation()));
 
         if (allowed_boundary) {
           for (const auto* argument : call->arguments()) {
@@ -239,7 +234,7 @@ namespace tbc_lint {
         }
 
         auto& diagnostics = context_.getDiagnostics();
-        const auto id = diagnostics.getCustomDiagID(errors_ ? clang::DiagnosticsEngine::Error : clang::DiagnosticsEngine::Warning, "accesses unsynchronized mutable global '%0'; use a TBC_SHARED or atomic type, or pass state explicitly [tbc-mutable-global]");
+        const auto id = diagnostics.getCustomDiagID(errors_ ? clang::DiagnosticsEngine::Error : clang::DiagnosticsEngine::Warning, "accesses unsynchronized mutable global '%0'; use a [[tbc::shared]] or atomic type, or pass state explicitly [tbc-mutable-global]");
 
         diagnostics.Report(use_loc, id) << variable->getName();
         return true;
@@ -317,7 +312,7 @@ namespace tbc_lint {
       }
 
       auto& diagnostics = context.getDiagnostics();
-      const auto id = diagnostics.getCustomDiagID(errors ? clang::DiagnosticsEngine::Error : clang::DiagnosticsEngine::Warning, "mutable field '%0' breaks shared immutability (Freeze); wrap it in telar::ds::Cell, a synchronization primitive, or mark the class TBC_SHARED [tbc-mutable-member]");
+      const auto id = diagnostics.getCustomDiagID(errors ? clang::DiagnosticsEngine::Error : clang::DiagnosticsEngine::Warning, "mutable field '%0' breaks shared immutability (Freeze); wrap it in telar::ds::Cell, a synchronization primitive, or mark the class [[tbc::shared]] [tbc-mutable-member]");
 
       diagnostics.Report(location, id) << field->getName();
     }

@@ -78,11 +78,14 @@ text_a longerText(text_a first, text_a second) {
 }
 ```
 
-A telar module unit imports the same declarations as `telar.tbc` instead of
-including `<tbc/view.hpp>`, and includes `<tbc/annotations.hpp>`, which includes
-nothing, when it needs `TBC_SHARED`, `TBC_CONSTRUCTS`, `TBC_SWAPS`,
-`TBC_UNINITIALIZED`, `TBC_INITIALIZES`, `TBC_OUTLIVES`, `TBC_RAW`,
-`TBC_HOT_PATH` or `TBC_GENERIC`.
+A telar module unit imports the type-level lifetime vocabulary (`tbc::view`,
+`tbc::holds`, `tbc::ref_a..d`, `tbc::mut_a..d`, `tbc::val_a..d`, `tbc::raw`,
+`tbc::outlives`) from `telar.tbc` instead of including `<tbc/view.hpp>`, and
+writes declaration attributes directly with the `tbc-plugin.so` Clang plugin:
+`[[tbc::shared]]`, `[[tbc::owner]]`, `[[tbc::constructs]]`, `[[tbc::swaps]]`,
+`[[tbc::uninitialized]]`, `[[tbc::initializes]]`, `[[tbc::raw]]`,
+`[[tbc::hot_path]]`, `[[tbc::generic]]`, and `[[tbc_outlives("b", "a")]]`. No
+macro header is required.
 
 [`docs/contracts.md`](docs/contracts.md) describes the signature design. Repeated
 `lt::a` denotes a common region, not one particular argument or allocation.
@@ -212,17 +215,17 @@ checked. Annotations are only requested where Rust would need an explicit lifeti
   `map.emplace(key, std::string)` into a view element is not tracked.
   A declaration's contract, elided or labeled, is checked against its
   definition in the translation unit that defines it, and redeclarations are
-  checked for matching contracts. A type marked `TBC_SHARED`, such as an
+  checked for matching contracts. A type marked `[[tbc::shared]]`, such as an
   allocator, is trusted to keep the borrows it hands out valid. Two-level
   regions (`tbc::view<type, outer, inner>`) express `&'outer Stream<'inner>`,
-  and directional outlives bounds can be stated with `TBC_OUTLIVES(longer, shorter)`
+  and directional outlives bounds can be stated with `[[tbc_outlives("longer", "shorter")]]`
   or `requires tbc::outlives<longer, shorter>`.
 - Local exclusive aliasing (with NLL liveness, derived reborrows, two-phase
   borrows, disjoint fields, and independent objects holding `&mut`),
   use-after-move and partial field moves, drop-check (`~T()` observing dead
   referents), exception unwinding, deferred callback captures, `Freeze`/immutability
   soundness (`mutable` fields, `const_cast`, mutable globals), definite
-  initialization (`TBC_UNINITIALIZED` / `TBC_INITIALIZES` and scalar locals),
+  initialization (`[[tbc::uninitialized]]` / `[[tbc::initializes]]` and scalar locals),
   bounds checking, and nullability guards are all enforced by default.
 - Concurrency (`Send`/`Sync` across threads), element-level container erasure,
   and indirect function-pointer dispatch remain outside the static guarantee.
@@ -282,7 +285,7 @@ These bodies stay:
 
 - `constexpr` and `consteval` functions, whose bodies importers evaluate, and a
   lambda that a `constexpr` variable holds when it can be evaluated too.
-- Hot paths marked `TBC_HOT_PATH`, from `<tbc/annotations.hpp>`, so that importers
+- Hot paths marked `[[tbc::hot_path]]` so that importers
   can inline them. A marked function that is not a template must also be
   `inline`: the body of a non-inline function never reaches an importer, and a
   member defined in its class is not implicitly inline in a module. On a class,
@@ -290,17 +293,17 @@ These bodies stay:
   stays one; on a variable, the lambdas that initialize it.
 
 ```cpp
-export TBC_HOT_PATH inline std::size_t next(std::size_t index) {
+export [[tbc::hot_path]] inline std::size_t next(std::size_t index) {
   return index + 1;
 }
 
 export template <typename type>
-class TBC_HOT_PATH Vector {
+class [[tbc::hot_path]] Vector {
   // ...
 };
 ```
 
-- Templates over a type their caller chooses, marked `TBC_GENERIC`: a protocol
+- Templates over a type their caller chooses, marked `[[tbc::generic]]`: a protocol
   message, a visitor, a callable or an output type that no `extern template`
   can instantiate in advance. The mark is reported on a function that is
   neither a template nor a member of one, including a full specialization,
@@ -309,7 +312,7 @@ class TBC_HOT_PATH Vector {
 
 ```cpp
 export template <typename message>
-TBC_GENERIC void send(Connection& connection, const message& value) {
+[[tbc::generic]] void send(Connection& connection, const message& value) {
   // ...
 }
 ```

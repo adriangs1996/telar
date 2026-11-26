@@ -162,7 +162,7 @@ class PublicSignatureTest(unittest.TestCase):
         result = self.compile_source(
             'struct stream { std::string_view text; };\n'
             'using outer_stream = tbc::view<const stream &, tbc::lt::b, tbc::lt::a>;\n'
-            'TBC_OUTLIVES(b, a) tbc::val_a<std::string_view> read(outer_stream s) { return s.text; }\n'
+            'tbc::val_a<std::string_view> read(outer_stream s) { return s.text; }\n'
             'template <typename tag = void>\n'
             'tbc::val_a<std::string_view> readConcept(tbc::val_b<std::string_view> s)\n'
             '  requires tbc::outlives<tbc::lt::b, tbc::lt::a>\n'

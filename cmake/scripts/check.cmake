@@ -240,7 +240,7 @@ foreach(check IN LISTS selected)
   elseif(check STREQUAL "interface_bodies")
     # Rule 3 of the module layout: an interface carries declarations, and function bodies
     # go to implementation units, except constexpr ones and the hot paths marked
-    # TBC_HOT_PATH. The allowlist names the modules that still keep bodies; the check
+    # [[tbc::hot_path]]. The allowlist names the modules that still keep bodies; the check
     # fails on any other module with one, and on an allowed module whose checked
     # interfaces keep none.
     list(APPEND arguments "--interface-allowlist=${root}/docs/build/interface-bodies-allowlist.txt")

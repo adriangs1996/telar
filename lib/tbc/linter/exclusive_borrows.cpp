@@ -562,7 +562,7 @@ namespace tbc_lint {
       bool errors,
       llvm::DenseSet<std::uint64_t>& reported
   ) {
-    if (definition.isImplicit() || definition.isDependentContext() || annotated(definition, "tbc::raw")) {
+    if (definition.isImplicit() || definition.isDependentContext() || isRawFunction(definition)) {
       return;
     }
 
@@ -897,8 +897,7 @@ namespace tbc_lint {
               // Skip if initialized from tbc::raw(...).
               if (const auto* call = llvm::dyn_cast_or_null<clang::CallExpr>(stripBorrowExpr(init))) {
                 const auto* callee = call->getDirectCallee();
-                const auto* pattern = callee == nullptr ? nullptr : callee->getTemplateInstantiationPattern();
-                if (callee != nullptr && (annotated(*callee, "tbc::raw") || (pattern != nullptr && annotated(*pattern, "tbc::raw")))) {
+                if (callee != nullptr && isRawFunction(*callee)) {
                   continue;
                 }
               }

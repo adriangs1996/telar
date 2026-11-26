@@ -186,28 +186,24 @@ class InterfaceBodiesTest(Fixture):
 
     def test_marked_inline_hot_paths_stay(self):
         self.check("""
-            module;
-
-            #include <tbc/annotations.hpp>
-
             export module demo;
 
-            export TBC_HOT_PATH inline int next(int value) {
+            export [[tbc::hot_path]] inline int next(int value) {
               return value + 1;
             }
 
-            export TBC_HOT_PATH int nextOutOfLine(int value) { // not inline
+            export [[tbc::hot_path]] int nextOutOfLine(int value) { // not inline
               return value + 1;
             }
 
             export class Cursor {
             public:
-              TBC_HOT_PATH inline int advance() {
+              [[tbc::hot_path]] inline int advance() {
                 return ++position_;
               }
 
               // A member defined in its class is not implicitly inline in a module.
-              TBC_HOT_PATH int retreat() { // not inline
+              [[tbc::hot_path]] int retreat() { // not inline
                 return --position_;
               }
 
@@ -216,7 +212,7 @@ class InterfaceBodiesTest(Fixture):
             };
 
             export template <typename type>
-            TBC_HOT_PATH type twice(type value) {
+            [[tbc::hot_path]] type twice(type value) {
               return value + value;
             }
 
@@ -228,14 +224,10 @@ class InterfaceBodiesTest(Fixture):
 
     def test_a_marked_class_covers_its_members(self):
         self.check("""
-            module;
-
-            #include <tbc/annotations.hpp>
-
             export module demo;
 
             export template <typename type>
-            class TBC_HOT_PATH Vector {
+            class [[tbc::hot_path]] Vector {
             public:
               type front() const {
                 return value_;
@@ -285,25 +277,21 @@ class InterfaceBodiesTest(Fixture):
 
     def test_marked_generic_templates_stay(self):
         self.check("""
-            module;
-
-            #include <tbc/annotations.hpp>
-
             export module demo;
 
             export template <typename message>
-            TBC_GENERIC void send(const message &value) {
+            [[tbc::generic]] void send(const message &value) {
             }
 
             export template <typename type>
             class Channel {
             public:
               template <typename visitor>
-              TBC_GENERIC void visit(visitor &&each) {
+              [[tbc::generic]] void visit(visitor &&each) {
                 each(value_);
               }
 
-              TBC_GENERIC type get() const {
+              [[tbc::generic]] type get() const {
                 return value_;
               }
 
@@ -314,12 +302,12 @@ class InterfaceBodiesTest(Fixture):
             };
 
             template <typename type>
-            TBC_GENERIC void Channel<type>::set(type value) {
+            [[tbc::generic]] void Channel<type>::set(type value) {
               value_ = value;
             }
 
             export template <typename type>
-            class TBC_GENERIC Queue {
+            class [[tbc::generic]] Queue {
             public:
               type front() const {
                 return value_;
@@ -336,7 +324,7 @@ class InterfaceBodiesTest(Fixture):
             };
 
             export template <typename type>
-            TBC_GENERIC inline auto convert = [](type value) {
+            [[tbc::generic]] inline auto convert = [](type value) {
               return value;
             };
 
@@ -345,19 +333,15 @@ class InterfaceBodiesTest(Fixture):
 
     def test_marked_generic_non_templates_are_reported(self):
         self.check("""
-            module;
-
-            #include <tbc/annotations.hpp>
-
             export module demo;
 
-            export TBC_GENERIC inline int next(int value) { // not template
+            export [[tbc::generic]] inline int next(int value) { // not template
               return value + 1;
             }
 
             export class Cursor {
             public:
-              TBC_GENERIC inline int advance() { // not template
+              [[tbc::generic]] inline int advance() { // not template
                 return ++position_;
               }
 
@@ -365,14 +349,14 @@ class InterfaceBodiesTest(Fixture):
               int position_ = 0;
             };
 
-            export class TBC_GENERIC Plain {
+            export class [[tbc::generic]] Plain {
             public:
               inline void run() { // not template
               }
             };
 
             export template <typename type>
-            TBC_GENERIC type twice(type value) {
+            [[tbc::generic]] type twice(type value) {
               return value + value;
             }
 
@@ -383,7 +367,7 @@ class InterfaceBodiesTest(Fixture):
             }
 
             export template <typename type>
-            class TBC_GENERIC Box {
+            class [[tbc::generic]] Box {
             public:
               type get() const {
                 return value_;
@@ -401,17 +385,13 @@ class InterfaceBodiesTest(Fixture):
               }
             };
 
-            export TBC_GENERIC inline auto hot = [](int value) { // not template
+            export [[tbc::generic]] inline auto hot = [](int value) { // not template
               return value;
             };
             """)
 
     def test_lambdas_that_initialize_variables_are_bodies(self):
         self.check("""
-            module;
-
-            #include <tbc/annotations.hpp>
-
             export module demo;
 
             export inline auto callback = [](int value) { // body
@@ -422,7 +402,7 @@ class InterfaceBodiesTest(Fixture):
               return value * 2;
             };
 
-            export TBC_HOT_PATH inline auto hot = [](int value) {
+            export [[tbc::hot_path]] inline auto hot = [](int value) {
               return value;
             };
 

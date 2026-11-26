@@ -187,9 +187,45 @@ namespace tbc_lint {
     });
   }
 
-  // A type marked TBC_SHARED keeps every borrow it hands out valid whatever is done through it, as a Rust
-  // type with interior mutability does through `&self`; a class template's mark covers its
-  // specializations.
+  inline bool hasFunctionAnnotation(const clang::FunctionDecl& function, llvm::StringRef attr_name) {
+    for (const auto* redecl : function.redecls()) {
+      if (annotated(*redecl, attr_name)) {
+        return true;
+      }
+    }
+
+    if (const auto* primary = function.getPrimaryTemplate()) {
+      if (annotated(*primary->getTemplatedDecl(), attr_name)) {
+        return true;
+      }
+    }
+
+    if (const auto* pattern = function.getTemplateInstantiationPattern(); pattern != nullptr && annotated(*pattern, attr_name)) {
+      return true;
+    }
+
+    return false;
+  }
+
+  inline bool isRawFunction(const clang::FunctionDecl& function) {
+    return hasFunctionAnnotation(function, "tbc::raw") || (function.getIdentifier() != nullptr && function.getName() == "raw" && inNamespace(function, "tbc"));
+  }
+
+  inline bool isSwapsFunction(const clang::FunctionDecl& function) {
+    return hasFunctionAnnotation(function, "tbc::swaps");
+  }
+
+  inline bool isUninitializedFunction(const clang::FunctionDecl& function) {
+    return hasFunctionAnnotation(function, "tbc::uninitialized");
+  }
+
+  inline bool isConstructsFunction(const clang::FunctionDecl& function) {
+    return hasFunctionAnnotation(function, "tbc::constructs");
+  }
+
+  // A type marked [[tbc::shared]] keeps every borrow it hands out valid whatever is done through
+  // it, as a Rust type with interior mutability does through `&self`; a class template's mark
+  // covers its specializations.
   inline bool sharedRecord(const clang::CXXRecordDecl& record) {
     if (const auto* specialization = llvm::dyn_cast<clang::ClassTemplateSpecializationDecl>(&record)) {
       if (const auto* pattern = specialization->getSpecializedTemplate()->getTemplatedDecl(); pattern != nullptr && annotated(*pattern, "tbc::shared")) {
@@ -200,9 +236,9 @@ namespace tbc_lint {
     return annotated(record, "tbc::shared");
   }
 
-  // A class marked TBC_OWNER owns one object in an allocation of its own, as Rust's Box does: it is
-  // read as the standard library's unique owner, whose object lies one level below it, and its
-  // implementation is trusted as the library's is.
+  // A class marked [[tbc::owner]] owns one object in an allocation of its own, as Rust's Box does:
+  // it is read as the standard library's unique owner, whose object lies one level below it, and
+  // its implementation is trusted as the library's is.
   inline bool ownerRecord(const clang::CXXRecordDecl& record) {
     if (const auto* specialization = llvm::dyn_cast<clang::ClassTemplateSpecializationDecl>(&record)) {
       if (const auto* pattern = specialization->getSpecializedTemplate()->getTemplatedDecl(); pattern != nullptr && annotated(*pattern, "tbc::owner")) {
@@ -213,7 +249,7 @@ namespace tbc_lint {
     return annotated(record, "tbc::owner");
   }
 
-  // A member of a TBC_OWNER class, whose implementation is trusted.
+  // A member of a [[tbc::owner]] class, whose implementation is trusted.
   inline bool ownerMember(const clang::Decl& declaration) {
     for (const auto* context = declaration.getDeclContext(); context != nullptr; context = context->getParent()) {
       if (const auto* record = llvm::dyn_cast<clang::CXXRecordDecl>(context); record != nullptr && ownerRecord(*record)) {
@@ -675,7 +711,7 @@ namespace tbc_lint {
     return !copy_assignable && !move_assignable;
   }
 
-  // Whether a type has no interior mutability (Rust's `Freeze` auto trait): no TBC_SHARED,
+  // Whether a type has no interior mutability (Rust's `Freeze` auto trait): no [[tbc::shared]],
   // no `mutable` fields, no standard sync primitives, and no incomplete opaque C records.
   inline bool isFreezeType(clang::QualType type, llvm::SmallPtrSetImpl<const clang::Type*>& seen) {
     type = type.getNonReferenceType().getCanonicalType();

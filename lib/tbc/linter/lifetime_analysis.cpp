@@ -1424,7 +1424,7 @@ namespace tbc_lint {
       llvm::DenseMap<const clang::CallExpr*, loans> call_results_;
       llvm::DenseMap<const clang::ValueDecl*, clang::FieldDecl*> captures_;
       llvm::SmallPtrSet<const clang::ValueDecl*, 4> by_reference_;
-      // Explicit directional outlives edges (longer, shorter) declared via TBC_OUTLIVES or tbc::outlives.
+      // Explicit directional outlives edges (longer, shorter) declared via [[tbc_outlives]] or tbc::outlives.
       llvm::SmallVector<std::pair<std::string, std::string>, 4> outlives_names_;
       llvm::SmallVector<std::pair<const clang::Type*, const clang::Type*>, 4> outlives_types_;
 
@@ -1632,16 +1632,14 @@ namespace tbc_lint {
         }
       }
 
-      // A factory marked TBC_CONSTRUCTS, whose callers rely on the constructor it forwards to, or one of
+      // A factory marked [[tbc::constructs]], whose callers rely on the constructor it forwards to, or one of
       // the standard library's, which forward their pack to their first template argument's constructor
       // as Rust's Arc::new(T::new(..)) keeps what T keeps.
       [[nodiscard]] static bool constructs(const clang::FunctionDecl& function) {
-        const auto* pattern = function.getPrimaryTemplate() != nullptr ? function.getPrimaryTemplate()->getTemplatedDecl() : nullptr;
-
-        return annotated(function, "tbc::constructs") || (pattern != nullptr && annotated(*pattern, "tbc::constructs")) || standardFunction(&function, "make_unique") || standardFunction(&function, "make_shared") || standardFunction(&function, "allocate_shared");
+        return isConstructsFunction(function) || standardFunction(&function, "make_unique") || standardFunction(&function, "make_shared") || standardFunction(&function, "allocate_shared");
       }
 
-      // What a TBC_CONSTRUCTS factory returns: what its first template argument's constructor keeps of the
+      // What a [[tbc::constructs]] factory returns: what its first template argument's constructor keeps of the
       // arguments the trailing pack forwards, and a borrow of each argument before the pack.
       std::optional<loans> forwardedConstruction(const clang::FunctionDecl& callee, const clang::CallExpr& call, const state& current) {
         const auto* arguments = callee.getTemplateSpecializationArgs();
@@ -1678,7 +1676,7 @@ namespace tbc_lint {
         return viewType(parameter.getType().getNonReferenceType()) && !parameter.getType()->isReferenceType() && !viewType(type) && !type->isPointerType();
       }
 
-      // A constructor marked TBC_CONSTRUCTS builds its class's first template argument in place from its
+      // A constructor marked [[tbc::constructs]] builds its class's first template argument in place from its
       // trailing pack, as std::optional's in_place one does, so it keeps what that type's constructors
       // keep of the pack.
       std::optional<loans> inPlaceConstruction(const clang::CXXConstructorDecl& constructor, llvm::ArrayRef<const clang::Expr*> arguments, const state& current) {
@@ -4071,9 +4069,7 @@ namespace tbc_lint {
       }
 
       [[nodiscard]] static bool rawFunction(const clang::FunctionDecl& callee) {
-        const auto* pattern = callee.getTemplateInstantiationPattern();
-
-        return annotated(callee, "tbc::raw") || (pattern != nullptr && annotated(*pattern, "tbc::raw"));
+        return isRawFunction(callee);
       }
 
       // A C library function: declared by the system, with no body to analyze.
@@ -5241,7 +5237,7 @@ namespace tbc_lint {
             return filename.contains("/vendor/") || filename.contains("/_deps/") || filename.contains("/.dependencies-cache/");
           };
 
-          if (callee->isExternC() && callee->getBuiltinID() == 0 && !callee->hasBody() && !is_third_party_header() && !annotated(*callee, "tbc::raw")) {
+          if (callee->isExternC() && callee->getBuiltinID() == 0 && !callee->hasBody() && !is_third_party_header() && !isRawFunction(*callee)) {
             if (index >= offset && index - offset < callee->getNumParams()) {
               const auto* param = callee->getParamDecl(index - offset);
               const auto mark = parameterAnnotation(*param, context_);
@@ -5274,8 +5270,7 @@ namespace tbc_lint {
         }
 
         const auto inputs = callInputs(call, current);
-        const auto* callee_pattern = callee->getTemplateInstantiationPattern();
-        const bool swaps_ownership = annotated(*callee, "tbc::swaps") || (callee_pattern != nullptr && annotated(*callee_pattern, "tbc::swaps"));
+        const bool swaps_ownership = isSwapsFunction(*callee);
 
         if (swaps_ownership) {
           if (object != nullptr && call.getNumArgs() > offset) {

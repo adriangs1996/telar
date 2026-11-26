@@ -208,19 +208,7 @@ namespace tbc_lint {
     }
 
     bool isUninitializedProducer(const clang::FunctionDecl* callee) {
-      if (callee == nullptr) {
-        return false;
-      }
-
-      if (annotated(*callee, "tbc::uninitialized")) {
-        return true;
-      }
-
-      if (const auto* pattern = callee->getTemplateInstantiationPattern(); pattern != nullptr && annotated(*pattern, "tbc::uninitialized")) {
-        return true;
-      }
-
-      return false;
+      return callee != nullptr && isUninitializedFunction(*callee);
     }
 
     bool isBufferInitializer(const clang::FunctionDecl* callee) {
@@ -228,11 +216,7 @@ namespace tbc_lint {
         return false;
       }
 
-      if (annotated(*callee, "tbc::initializes")) {
-        return true;
-      }
-
-      if (const auto* pattern = callee->getTemplateInstantiationPattern(); pattern != nullptr && annotated(*pattern, "tbc::initializes")) {
+      if (hasFunctionAnnotation(*callee, "tbc::initializes")) {
         return true;
       }
 
@@ -555,8 +539,7 @@ namespace tbc_lint {
         return false;
       }
 
-      const auto* pattern = callee->getTemplateInstantiationPattern();
-      if (annotated(*callee, "tbc::raw") || (pattern != nullptr && annotated(*pattern, "tbc::raw"))) {
+      if (isRawFunction(*callee)) {
         return false;
       }
 
@@ -1440,6 +1423,7 @@ namespace tbc_lint {
 
             for (unsigned index = 0; index < call->getNumArgs(); ++index) {
               const auto* arg = call->getArg(index);
+
               // Taking the address of a pointer (`&out_ptr`) passed as a `T**` out-parameter
               // initializes the pointer (e.g. `FT_Get_MM_Var`, `pcap_next_ex`).
               if (const auto* addr = llvm::dyn_cast_or_null<clang::UnaryOperator>(stripExpr(arg)); addr != nullptr && addr->getOpcode() == clang::UO_AddrOf) {

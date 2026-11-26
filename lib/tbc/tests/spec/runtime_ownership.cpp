@@ -96,7 +96,7 @@ void queueTakenOwner(tbc::view<spec::request_queue&> queue) {
 // SCENARIO: A boxed record's name is read after the vector holding the boxes grows; accept.
 namespace spec_box {
   template <typename Value>
-  class TBC_OWNER box {
+  class [[tbc::owner]] box {
   public:
     using element_type = Value;
 

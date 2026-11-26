@@ -241,11 +241,11 @@ void dropDeclarationOrderOk() {
 
 // CASE: region.outlives_macro_ok
 // PAIR: region.outlives_macro
-// SOURCE: lib/tbc/include/tbc/annotations.hpp :: TBC_OUTLIVES
+// SOURCE: lib/tbc/linter/attributes.cpp :: tbc_outlives_attr_info
 // STATUS: implemented
-// CONTRACT: TBC_OUTLIVES(longer, shorter) allows returning a borrow of region longer as shorter.
+// CONTRACT: [[tbc_outlives("longer", "shorter")]] allows returning a borrow of region longer as shorter.
 // SCENARIO: b outlives a, so returning the b view as an a result is accepted.
-TBC_OUTLIVES(b, a)
+[[tbc_outlives("b", "a")]]
 spec::text_a
 regionOutlivesMacroOk(spec::text_a first, spec::text_b second) {
   return first.empty() ? second : first;
@@ -255,11 +255,11 @@ regionOutlivesMacroOk(spec::text_a first, spec::text_b second) {
 
 // CASE: region.outlives_macro_reversed
 // PAIR: region.outlives_macro
-// SOURCE: lib/tbc/include/tbc/annotations.hpp :: TBC_OUTLIVES
+// SOURCE: lib/tbc/linter/attributes.cpp :: tbc_outlives_attr_info
 // STATUS: implemented
-// CONTRACT: Outlives bounds are directional: TBC_OUTLIVES(b, a) does not imply a outlives b.
+// CONTRACT: Outlives bounds are directional: [[tbc_outlives("b", "a")]] does not imply a outlives b.
 // SCENARIO: Returning an a view as a b result violates the declared directional bound.
-TBC_OUTLIVES(b, a)
+[[tbc_outlives("b", "a")]]
 spec::text_b
 regionOutlivesMacroReversed(spec::text_a first, spec::text_b second) {
   return second.empty() ? first : second; // expected-error [tbc-contract-violation]

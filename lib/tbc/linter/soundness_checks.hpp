@@ -13,8 +13,8 @@ namespace tbc_lint {
   // conflicting redeclaration contracts, unaudited const_cast, and unsynchronized mutable globals.
   void checkFunctionSoundness(const clang::FunctionDecl& function, clang::ASTContext& context, bool errors);
 
-  // Checks that non-TBC_SHARED project records declare no `mutable` fields except synchronization
-  // primitives or TBC_SHARED types (preserving Rust's `Freeze` boundary).
+  // Checks that non-[[tbc::shared]] project records declare no `mutable` fields except synchronization
+  // primitives or [[tbc::shared]] types (preserving Rust's `Freeze` boundary).
   void checkRecordSoundness(const clang::CXXRecordDecl& record, clang::ASTContext& context, bool errors);
 }
 

@@ -182,12 +182,12 @@ def main():
         if arguments.checks:
             command.append(f'--checks={arguments.checks}')
         command.extend(f'--extra-arg={argument}' for argument in arguments.extra_arg)
-        environment = None
+        environment = dict(os.environ, TBC_PLUGIN_DISABLE='1')
         if owned is not None:
             # clang-tidy reads the list from the directory of the unit's compile command.
             listed = stamp.with_suffix('.headers').absolute()
             listed.write_text(''.join(header + '\n' for header in owned[source]))
-            environment = dict(os.environ, TBC_PARSED_SCOPE_HEADERS=str(listed))
+            environment['TBC_PARSED_SCOPE_HEADERS'] = str(listed)
         result = subprocess.run([*command, source], stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, env=environment)
         # A source with several database entries announces each one it processes; only what it found stays.
         output = ''.join(line for line in result.stdout.splitlines(keepends=True) if not PROGRESS.match(line))

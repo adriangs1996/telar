@@ -150,8 +150,7 @@ namespace tbc_lint {
       void arguments(const clang::FunctionDecl* callee, llvm::ArrayRef<const clang::Expr*> arguments) {
         // `tbc::raw` takes a pointer out of the checker's reach, as unsafe Rust reads a `*mut T` out of
         // a `&T`: whoever writes through it answers for that.
-        const auto* pattern = callee == nullptr ? nullptr : callee->getTemplateInstantiationPattern();
-        if (callee == nullptr || annotated(*callee, "tbc::raw") || (pattern != nullptr && annotated(*pattern, "tbc::raw"))) {
+        if (callee == nullptr || isRawFunction(*callee)) {
           return;
         }
 

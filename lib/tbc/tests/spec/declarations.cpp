@@ -27,7 +27,7 @@ namespace declarations {
   };
 
   // An allocator: its blocks stay valid whatever is allocated after them.
-  class TBC_SHARED arena {
+  class [[tbc::shared]] arena {
   public:
     char* allocate(std::size_t size) {
       blocks_.push_back(std::make_unique<char[]>(size));
@@ -62,7 +62,7 @@ namespace declarations {
 
   // Builds its first template argument from the trailing arguments, as `Box::new(Value::new(..))`.
   template <typename Value, typename... Arguments>
-  TBC_CONSTRUCTS std::unique_ptr<Value> make(arena& memory, Arguments&&... arguments) {
+  [[tbc::constructs]] std::unique_ptr<Value> make(arena& memory, Arguments&&... arguments) {
     static_cast<void>(memory);
     return std::make_unique<Value>(std::forward<Arguments>(arguments)...);
   }
@@ -231,7 +231,7 @@ namespace declarations {
   class in_place_slot {
   public:
     template <typename... Arguments>
-    TBC_CONSTRUCTS explicit in_place_slot(std::in_place_t, Arguments&&... arguments)
+    [[tbc::constructs]] explicit in_place_slot(std::in_place_t, Arguments&&... arguments)
         : value_(std::forward<Arguments>(arguments)...) {}
 
     [[nodiscard]] const Value& get() const noexcept {
@@ -276,7 +276,7 @@ namespace declarations {
   class converted_slot {
   public:
     template <typename Other>
-    TBC_CONSTRUCTS converted_slot(Other&& value)
+    [[tbc::constructs]] converted_slot(Other&& value)
         : value_(std::forward<Other>(value)) {}
 
   private:
@@ -1301,7 +1301,7 @@ namespace declarations {
     int size_ = 0;
   };
 
-  class TBC_SHARED shared_fonts {
+  class [[tbc::shared]] shared_fonts {
   public:
     font_face& face() {
       return face_;
@@ -1369,7 +1369,7 @@ std::size_t declarationUnsharedReferenceResult(declarations::buffered_face& face
 // CONTRACT: A field of a TBC_SHARED type that can be neither assigned nor moved lives as long as its object, so a call that mutates the object keeps every borrow the field lent valid, as a pinned Rust value with interior mutability does.
 // SCENARIO: A value read from the owner's pinned machine is used after the owner records it; accept.
 namespace declarations {
-  class TBC_SHARED pinned_machine {
+  class [[tbc::shared]] pinned_machine {
   public:
     pinned_machine() = default;
     pinned_machine(const pinned_machine&) = delete;
@@ -1408,7 +1408,7 @@ int declarationPinnedSharedField() {
 // CONTRACT: A field of a TBC_SHARED type that can be neither assigned nor moved lives as long as its object, so a call that mutates the object keeps every borrow the field lent valid, as a pinned Rust value with interior mutability does.
 // SCENARIO: A machine that can be assigned may be replaced by the call, dropping the value it lent; reject at the call.
 namespace declarations {
-  class TBC_SHARED movable_machine {
+  class [[tbc::shared]] movable_machine {
   public:
     [[nodiscard]] int* slot() const;
   };
@@ -1444,7 +1444,7 @@ int declarationMovableSharedField() {
 // SCENARIO: Two holders keep one `Memory &`, and allocations through it and through each holder leave a block read later valid; accept.
 namespace declarations {
   // An allocator behind a virtual interface, used through `Memory &` instead of a concept.
-  class TBC_SHARED memory {
+  class [[tbc::shared]] memory {
   public:
     virtual ~memory() = default;
     virtual void* allocate(std::size_t size, std::size_t alignment) noexcept = 0;
@@ -1453,7 +1453,7 @@ namespace declarations {
 
   // Each implementation carries its own mark: a derived type is audited apart from its base.
   template <typename allocator>
-  class TBC_SHARED memory_adapter final : public memory {
+  class [[tbc::shared]] memory_adapter final : public memory {
   public:
     explicit memory_adapter(tbc::view<allocator&, tbc::lt::a> wrapped) noexcept
         : allocator_(wrapped) {}
@@ -1832,7 +1832,7 @@ void declarationAbstractSharedReleaseCollected(declarations::group_store& groups
 // CONTRACT: A shared object keeps valid the storage it hands out. A place found through a borrow of it that an object holds, past a field the shared type does not have, is such storage; growth there still ends the borrows of the object that owns it.
 // SCENARIO: A launch stores in the model a pane made with the shared memory, which a workspace's tab list also keeps through its allocator; growing a tab's list and then finding the pane again is accepted.
 namespace declarations {
-  class TBC_SHARED model_memory {
+  class [[tbc::shared]] model_memory {
   public:
     void* allocate(std::size_t size, std::size_t alignment) noexcept {
       static_cast<void>(alignment);
@@ -1847,7 +1847,7 @@ namespace declarations {
   };
 
   template <typename Value, typename... Arguments>
-  TBC_CONSTRUCTS std::unique_ptr<Value> makeFrom(model_memory& memory, Arguments&&... arguments) {
+  [[tbc::constructs]] std::unique_ptr<Value> makeFrom(model_memory& memory, Arguments&&... arguments) {
     static_cast<void>(memory);
     return std::make_unique<Value>(std::forward<Arguments>(arguments)...);
   }
@@ -2107,7 +2107,7 @@ void declarationNestedReferenceShared() {
 // CONTRACT: A result in a class region that refers to a shared object is what the one field of that region holding such a reference designates, as a `&'a Memory` copied out of a `State<'a>` is: a call that mutates an object keeping it leaves the input's other parts valid.
 // SCENARIO: The state's memory builds a list that keeps it, which grows while a history entry of the state is read; accept.
 namespace declarations {
-  class TBC_SHARED region_memory {
+  class [[tbc::shared]] region_memory {
   public:
     virtual ~region_memory() = default;
     virtual void* allocate(std::size_t size) = 0;
