@@ -12,14 +12,16 @@ namespace telar::gui::features::monitor {
 
     // The width of each column but the command's, in cells.
     constexpr std::uint16_t pid_cells = 7;
-    constexpr std::uint16_t program_cells = 16;
+    constexpr std::uint16_t program_cells = 22;
     constexpr std::uint16_t tree_program_cells = 30;
-    constexpr std::uint16_t threads_cells = 7;
-    constexpr std::uint16_t user_cells = 9;
+    // Room for the title and the sort's arrow: threads ▼.
+    constexpr std::uint16_t threads_cells = 9;
+    constexpr std::uint16_t user_cells = 12;
     constexpr std::uint16_t memory_cells = 6;
     constexpr std::uint16_t cpu_cells = 6;
     constexpr std::uint16_t owner_cells = 26;
     constexpr std::uint16_t least_command_cells = 12;
+    constexpr std::uint16_t mount_cells = 12;
     constexpr std::uint16_t gap_cells = 1;
 
     constexpr std::uint64_t kibibyte = 1024;
@@ -204,6 +206,14 @@ namespace telar::gui::features::monitor {
     return builder.text();
   }
 
+  ShortText wholePercent(std::uint32_t permille) {
+    Builder<short_text_bytes> builder;
+
+    appendNumber(builder, (std::uint64_t{permille} + (decimal / 2)) / decimal);
+    builder.append("%");
+    return builder.text();
+  }
+
   Tone cpuTone(std::uint32_t permille) noexcept {
     if (permille >= hot_permille) {
       return Tone::hot;
@@ -218,6 +228,21 @@ namespace telar::gui::features::monitor {
     }
 
     return fraction > warm_fraction ? Tone::warm : Tone::normal;
+  }
+
+  Tone headroomTone(double fraction) noexcept {
+    return meterTone(1.0 - fraction);
+  }
+
+  CellText mountLabel(std::string_view path) {
+    while (path.size() > 1 && path.ends_with('/')) {
+      path.remove_suffix(1);
+    }
+
+    const auto slash = path.rfind('/');
+    const auto last = slash == std::string_view::npos || path.size() == 1 ? path : path.substr(slash + 1);
+
+    return fit(last, mount_cells, false);
   }
 
   CellText treePrefix(const TreePlace& place) {
@@ -252,8 +277,10 @@ namespace telar::gui::features::monitor {
     while (position < command.size()) {
       const auto found = command.find(home, position);
       const auto end = found == std::string_view::npos ? std::string_view::npos : found + home.size();
-      // Only a whole directory: at the start of a word, and followed by a slash or the word's end.
-      const auto starts_word = found != std::string_view::npos && (found == 0 || command[found - 1] == ' ' || command[found - 1] == '=');
+      // Only a whole directory: at the start of a word, of a value after = or :, or after a word's
+      // one-letter flag such as -I, and followed by a slash or the word's end.
+      const auto flag = found >= 2 && command[found - 2] == '-' && std::isalpha(static_cast<unsigned char>(command[found - 1])) != 0 && (found == 2 || command[found - 3] == ' ');
+      const auto starts_word = found != std::string_view::npos && (found == 0 || command[found - 1] == ' ' || command[found - 1] == '=' || command[found - 1] == ':' || flag);
       const auto ends_directory = end != std::string_view::npos && (end == command.size() || command[end] == '/' || command[end] == ' ');
 
       if (found == std::string_view::npos) {
