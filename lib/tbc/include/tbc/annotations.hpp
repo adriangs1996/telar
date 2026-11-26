@@ -65,4 +65,38 @@
 #define TBC_GENERIC
 #endif
 
+// A method or function marked TBC_SWAPS exchanges storage ownership between its receiver and argument
+// (or between its two arguments), as `std::swap` does: views into either object follow their storage
+// to the new owner rather than being invalidated at the call.
+#if defined(__clang__)
+#define TBC_SWAPS [[clang::annotate("tbc::swaps")]]
+#else
+#define TBC_SWAPS
+#endif
+
+// A method or function marked TBC_UNINITIALIZED returns writable storage whose elements are not yet
+// initialized: reading those elements before an initializing write is reported as
+// `tbc-uninitialized-read`.
+#if defined(__clang__)
+#define TBC_UNINITIALIZED [[clang::annotate("tbc::uninitialized")]]
+#else
+#define TBC_UNINITIALIZED
+#endif
+
+// A function or method marked TBC_INITIALIZES writes every element of its writable buffer argument,
+// establishing initialization for storage returned by `TBC_UNINITIALIZED`.
+#if defined(__clang__)
+#define TBC_INITIALIZES [[clang::annotate("tbc::initializes")]]
+#else
+#define TBC_INITIALIZES
+#endif
+
+// Declares an explicit directional outlives bound (`longer: shorter`) on a function declaration,
+// allowing borrows in `longer` to supply results or targets in `shorter`.
+#if defined(__clang__)
+#define TBC_OUTLIVES(longer, shorter) [[clang::annotate("tbc::outlives:" #longer ":" #shorter)]]
+#else
+#define TBC_OUTLIVES(longer, shorter)
+#endif
+
 #endif

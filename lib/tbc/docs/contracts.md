@@ -294,8 +294,10 @@ it does not silently narrow that public promise at call sites.
 `lt::a` is a signature variable, not global storage or a request to extend an
 owner's life. Calls instantiate labels independently. `lt::a`, `lt::b`, `lt::c`,
 and `lt::d` are predefined. `tbc::lifetime<tag>` permits descriptive labels.
-Distinct labels do not imply an outlives relationship; explicit outlives bounds
-are not supported.
+Distinct labels do not imply an outlives relationship unless stated explicitly
+with `TBC_OUTLIVES(longer, shorter)` or `requires tbc::outlives<longer, shorter>`.
+Two-level regions can be expressed with `tbc::view<type, outer, inner>` (for
+example `&'b Stream<'a>`).
 
 `lt::static_storage` is the one fixed region: storage that outlives every caller,
 like Rust's `'static`. A result labeled with it depends on no argument or receiver,
@@ -325,9 +327,8 @@ std::string_view prefix(std::string_view renamed) {
 ```
 
 The checker still checks that declaration's explicit region against the plain
-C++ definition. Parameter spelling does not matter. Do not declare conflicting
-contracts on different redeclarations; validating every such conflict remains
-outside the current checks.
+C++ definition. Parameter spelling does not matter. Conflicting explicit
+contracts across redeclarations are rejected with `tbc-contract-violation`.
 
 ## Code the project does not control
 

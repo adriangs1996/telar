@@ -1,7 +1,10 @@
 #include "lifetime_analysis.hpp"
+#include "access_validity.hpp"
+#include "exclusive_borrows.hpp"
 #include "view_type.hpp"
 
 #include <clang/AST/ExprCXX.h>
+#include <clang/AST/ExprConcepts.h>
 #include <clang/AST/ExprObjC.h>
 #include <clang/AST/GlobalDecl.h>
 #include <clang/AST/Mangle.h>
@@ -51,6 +54,8 @@ namespace tbc_lint {
       self_borrow,
       retention,
       overlap,
+      destructor_dependency,
+      escaping_capture,
     };
 
     // How deep a borrow reaches into a variable: the variable itself, the storage it owns, such as a
@@ -289,6 +294,7 @@ namespace tbc_lint {
       const clang::Stmt* invalidated = nullptr;
       const clang::Stmt* full_expression = nullptr;
       clang::SourceLocation borrow_site{};
+      bool destroyed = false;
     };
 
     // Where a borrow of a local or a temporary was taken, which is where its escape is reported. Other
@@ -301,7 +307,7 @@ namespace tbc_lint {
 
     // Two borrows of the same storage, whatever position holds them. Every field but `held` counts.
     bool sameBorrow(const origin& left, const origin& right) {
-      return left.kind == right.kind && left.storage == right.storage && left.path == right.path && left.select == right.select && left.variable == right.variable && left.expression == right.expression && left.region == right.region && left.invalidated == right.invalidated && left.full_expression == right.full_expression && left.borrow_site == right.borrow_site;
+      return left.kind == right.kind && left.storage == right.storage && left.path == right.path && left.select == right.select && left.variable == right.variable && left.expression == right.expression && left.region == right.region && left.invalidated == right.invalidated && left.destroyed == right.destroyed && left.full_expression == right.full_expression && left.borrow_site == right.borrow_site;
     }
 
     llvm::hash_code borrowHash(const origin& value) {
@@ -909,6 +915,8 @@ namespace tbc_lint {
       // input holds, past a dereference.
       llvm::DenseMap<const clang::ValueDecl*, loans> designated;
       llvm::SmallPtrSet<const clang::ValueDecl*, 8> written;
+      // Live co-owners (holders) that retain a copy of a std::shared_ptr source's control block.
+      llvm::DenseMap<const clang::ValueDecl*, llvm::SmallPtrSet<const clang::ValueDecl*, 2>> co_owners;
 
       loans get(const clang::ValueDecl* key) const {
         return held(key);
@@ -945,6 +953,14 @@ namespace tbc_lint {
 
         for (const auto* key : other.written) {
           changed = written.insert(key).second || changed;
+        }
+
+        for (const auto& entry : other.co_owners) {
+          auto& dest = co_owners[entry.first];
+
+          for (const auto* holder : entry.second) {
+            changed = dest.insert(holder).second || changed;
+          }
         }
 
         return changed;
@@ -1235,6 +1251,8 @@ namespace tbc_lint {
             }
           }
         }
+
+        collectOutlivesBounds();
       }
 
       function_summary run(const clang::CFG& cfg, bool diagnostics = false) {
@@ -1293,11 +1311,22 @@ namespace tbc_lint {
         // Report only after the dataflow solution stabilizes, not during speculation.
         reporting_ = diagnostics;
         collecting_ = true;
+        drop_checks_.clear();
         for (const auto* block : *graph) {
           if (reached[block->getBlockID()]) {
             auto current = inputs[block->getBlockID()];
 
             transfer(*block, current);
+          }
+        }
+
+        // Emit deferred drop-check diagnostics only when an earlier explicit use did not already
+        // report tbc-invalidated-borrow at that same location.
+        for (const auto& check : drop_checks_) {
+          const auto inv_loc = context_.getSourceManager().getExpansionLoc(check.location);
+          const auto inv_key = (static_cast<std::uint64_t>(inv_loc.getRawEncoding()) << 8U) | static_cast<std::uint8_t>(issue::invalidated);
+          if (!reported_.contains(inv_key)) {
+            report(issue::destructor_dependency, check.location, &check.source, check.trigger);
           }
         }
 
@@ -1395,7 +1424,148 @@ namespace tbc_lint {
       llvm::DenseMap<const clang::CallExpr*, loans> call_results_;
       llvm::DenseMap<const clang::ValueDecl*, clang::FieldDecl*> captures_;
       llvm::SmallPtrSet<const clang::ValueDecl*, 4> by_reference_;
+      // Explicit directional outlives edges (longer, shorter) declared via TBC_OUTLIVES or tbc::outlives.
+      llvm::SmallVector<std::pair<std::string, std::string>, 4> outlives_names_;
+      llvm::SmallVector<std::pair<const clang::Type*, const clang::Type*>, 4> outlives_types_;
+
+      struct pending_drop_check {
+        clang::SourceLocation location;
+        origin source;
+        const clang::Stmt* trigger = nullptr;
+      };
+
+      llvm::SmallVector<pending_drop_check, 4> drop_checks_;
       bool reporting_ = false;
+
+      static std::string regionTagName(const clang::Type* region) {
+        const auto* record = region != nullptr ? region->getAsCXXRecordDecl() : nullptr;
+
+        return record != nullptr && record->getIdentifier() != nullptr ? record->getName().str() : std::string{};
+      }
+
+      void parseOutlivesExpr(const clang::Expr* expr) {
+        if (expr == nullptr) {
+          return;
+        }
+
+        expr = expr->IgnoreParenImpCasts();
+        if (const auto* binary = llvm::dyn_cast<clang::BinaryOperator>(expr); binary != nullptr && binary->getOpcode() == clang::BO_LAnd) {
+          parseOutlivesExpr(binary->getLHS());
+          parseOutlivesExpr(binary->getRHS());
+          return;
+        }
+
+        if (const auto* concept_spec = llvm::dyn_cast<clang::ConceptSpecializationExpr>(expr)) {
+          const auto* named = concept_spec->getNamedConcept();
+          if (named != nullptr && named->getIdentifier() != nullptr && named->getName() == "outlives" && inNamespace(*named, "tbc")) {
+            const auto args = concept_spec->getTemplateArguments();
+            if (args.size() == 2 && args[0].getKind() == clang::TemplateArgument::Type && args[1].getKind() == clang::TemplateArgument::Type) {
+              outlives_types_.emplace_back(args[0].getAsType().getCanonicalType().getTypePtr(), args[1].getAsType().getCanonicalType().getTypePtr());
+            }
+          }
+        }
+      }
+
+      void collectOutlivesBounds() {
+        for (const auto* redecl : function_.redecls()) {
+          for (const auto* attr : redecl->specific_attrs<clang::AnnotateAttr>()) {
+            auto text = attr->getAnnotation();
+            if (text.consume_front("tbc::outlives:")) {
+              const auto [longer, shorter] = text.split(':');
+              if (!longer.empty() && !shorter.empty()) {
+                outlives_names_.emplace_back(longer.str(), shorter.str());
+              }
+            }
+          }
+
+          if (const auto req = redecl->getTrailingRequiresClause(); req.ConstraintExpr != nullptr) {
+            parseOutlivesExpr(req.ConstraintExpr);
+          }
+
+          if (const auto* tmpl = redecl->getDescribedFunctionTemplate()) {
+            if (const auto* params = tmpl->getTemplateParameters(); params != nullptr && params->getRequiresClause() != nullptr) {
+              parseOutlivesExpr(params->getRequiresClause());
+            }
+          }
+        }
+      }
+
+      // Whether `longer` is proven to outlive `shorter` (reflexive, static outlives all, plus transitive
+      // closure over explicit outlives declarations).
+      [[nodiscard]] bool regionOutlives(const clang::Type* longer, const clang::Type* shorter) const {
+        if (longer == nullptr || shorter == nullptr) {
+          return false;
+        }
+
+        if (longer == shorter || staticRegion(longer)) {
+          return true;
+        }
+
+        if (outlives_types_.empty() && outlives_names_.empty()) {
+          return false;
+        }
+
+        llvm::SmallVector<const clang::Type*, 8> type_queue{longer};
+        llvm::SmallPtrSet<const clang::Type*, 8> visited_types{longer};
+
+        while (!type_queue.empty()) {
+          const auto* curr = type_queue.pop_back_val();
+
+          for (const auto& [from, to] : outlives_types_) {
+            if (from == curr) {
+              if (to == shorter) {
+                return true;
+              }
+
+              if (visited_types.insert(to).second) {
+                type_queue.push_back(to);
+              }
+            }
+          }
+        }
+
+        const auto start_name = regionTagName(longer);
+        const auto target_name = regionTagName(shorter);
+        if (!start_name.empty() && !target_name.empty()) {
+          llvm::SmallVector<std::string, 8> name_queue{start_name};
+          llvm::SmallVector<std::string, 8> seen_names{start_name};
+
+          while (!name_queue.empty()) {
+            const auto curr = name_queue.pop_back_val();
+
+            for (const auto& [from, to] : outlives_names_) {
+              if (from == curr) {
+                if (to == target_name) {
+                  return true;
+                }
+
+                if (!llvm::is_contained(seen_names, to)) {
+                  seen_names.push_back(to);
+                  name_queue.push_back(to);
+                }
+              }
+            }
+          }
+        }
+
+        return false;
+      }
+
+      // Effective region a field carries for its class: inner_region when two-level (`&'b Stream<'a>`),
+      // otherwise its single region.
+      [[nodiscard]] const clang::Type* fieldRegion(const clang::FieldDecl& field) const {
+        const auto mark = viewAnnotation(field.getType(), context_);
+
+        return mark.inner_region != nullptr ? mark.inner_region : mark.region;
+      }
+
+      // Whether a field's class region holds only what its referent holds (tbc::holds or two-level view).
+      [[nodiscard]] bool fieldHoldsOnly(const clang::FieldDecl& field) const {
+        const auto mark = viewAnnotation(field.getType(), context_);
+
+        return mark.held || mark.inner_region != nullptr;
+      }
+
       bool collecting_ = false;
       // Where the statement being transferred writes, for what a store reports.
       clang::SourceLocation write_site_{};
@@ -1716,6 +1886,12 @@ namespace tbc_lint {
         case issue::retention:
           id = diagnostics.getCustomDiagID(severity, "stores a borrow its declaration does not let it keep; label the input and the place that keeps it with one region [tbc-contract-violation]");
           break;
+        case issue::destructor_dependency:
+          id = diagnostics.getCustomDiagID(severity, "destructor depends on borrowed storage that does not outlive the owner [tbc-destructor-dependency]");
+          break;
+        case issue::escaping_capture:
+          id = diagnostics.getCustomDiagID(severity, "retained callback captures borrowed storage that does not outlive its execution [tbc-escaping-capture]");
+          break;
         }
 
         {
@@ -1900,9 +2076,9 @@ namespace tbc_lint {
         if (const auto* method = llvm::dyn_cast<clang::CXXMethodDecl>(&function_); method != nullptr && !llvm::isa<clang::CXXConstructorDecl>(method)) {
           for (const auto* field : namedFields(*method->getParent())) {
             if (containsViews(field->getType())) {
-              const auto annotation = viewAnnotation(field->getType(), context_);
+              const auto* region = fieldRegion(*field);
 
-              initial.values[field].add({.kind = origin_kind::receiver_region, .storage = field->getType()->isReferenceType() ? storage_kind::object : storage_kind::inherited, .variable = field, .region = annotation.region});
+              initial.values[field].add({.kind = origin_kind::receiver_region, .storage = field->getType()->isReferenceType() ? storage_kind::object : storage_kind::inherited, .variable = field, .region = region});
             }
           }
         }
@@ -2323,7 +2499,7 @@ namespace tbc_lint {
           return;
         }
 
-        const auto* region = field != nullptr ? viewAnnotation(field->getType(), context_).region : parameterAnnotation(*output, context_).region;
+        const auto* region = field != nullptr ? fieldRegion(*field) : parameterAnnotation(*output, context_).region;
         const auto* constructor = llvm::dyn_cast<clang::CXXConstructorDecl>(&function_);
         const bool elided = field != nullptr && constructor != nullptr && llvm::none_of(namedFields(*constructor->getParent()), [](const clang::FieldDecl* member) {
           return lifetimeField(*member);
@@ -2355,7 +2531,7 @@ namespace tbc_lint {
           }
 
           if (source.kind == origin_kind::receiver_region) {
-            if (field == nullptr && source.variable != &target && (region == nullptr || source.region != region)) {
+            if (field == nullptr && source.variable != &target && (region == nullptr || !regionOutlives(source.region, region))) {
               report(issue::retention, where, &source);
             }
 
@@ -2381,9 +2557,15 @@ namespace tbc_lint {
           }
 
           const auto source_annotation = parameterAnnotation(*parameter, context_);
-          const auto* source_region = source_annotation.region;
-          // A `&Pane<'a>` lets its holder keep what the pane holds, never the pane.
+          const auto* source_region = (contents && source_annotation.inner_region != nullptr) ? source_annotation.inner_region : source_annotation.region;
 
+          // A two-level reference field (`tbc::holds` or `tbc::view<Ref, outer, inner>`) may bind a
+          // reference whose outer lifetime is the parameter itself while its held borrows match `region`.
+          if (field != nullptr && fieldHoldsOnly(*field) && !contents && (source_region == region || source_annotation.inner_region == region || carriesRegion(parameter->getType(), region))) {
+            continue;
+          }
+
+          // A `&Pane<'a>` lets its holder keep what the pane holds, never the pane.
           if (source_annotation.held && !contents) {
             report(issue::retention, where, &source);
             continue;
@@ -2395,7 +2577,9 @@ namespace tbc_lint {
             continue;
           }
 
-          if (region == nullptr || source_region != region) {
+          // Invariance through &mut: writing into a mutable output parameter requires source_region to
+          // outlive target region (or match it).
+          if (region == nullptr || !regionOutlives(source_region, region)) {
             report(issue::retention, where, &source);
           }
         }
@@ -2938,7 +3122,7 @@ namespace tbc_lint {
         }
 
         for (const auto* field : namedFields(*method->getParent())) {
-          if (viewAnnotation(field->getType(), context_).region == region && containsViews(field->getType())) {
+          if (fieldRegion(*field) == region && containsViews(field->getType())) {
             return true;
           }
         }
@@ -3198,8 +3382,9 @@ namespace tbc_lint {
 
         for (unsigned index = 0; index < constructor->getNumParams() && index < construction.getNumArgs(); ++index) {
           const auto* parameter = constructor->getParamDecl(index);
-          const auto region = parameterAnnotation(*parameter, context_).region;
-          if (region != nullptr && !outputParameter(*parameter) && receiverHasRegion(*constructor, region)) {
+          const auto mark = parameterAnnotation(*parameter, context_);
+          const auto* region = mark.inner_region != nullptr ? mark.inner_region : mark.region;
+          if (region != nullptr && receiverHasRegion(*constructor, region)) {
             retained.merge(retainedArgument(*constructor, *constructor->getParent(), *parameter, *construction.getArg(index), region, current));
           }
         }
@@ -3639,9 +3824,17 @@ namespace tbc_lint {
         }
 
         // A pointer or a reference a shared type hands out, as an allocator's block or a cache's entry, is
-        // storage the shared object keeps valid, unchecked like a `new` expression's.
+        // storage the shared object keeps valid, unchecked like a `new` expression's — unless the shared
+        // object is a movable value field of an enclosing record, which mutating that record may replace.
         if (object != nullptr && (call.getType()->isPointerType() || callee->getReturnType()->isReferenceType()) && sharedType(objectType(*object))) {
-          return {};
+          const auto* member = llvm::dyn_cast<clang::MemberExpr>(clean(object));
+          const auto* field = member == nullptr ? nullptr : llvm::dyn_cast<clang::FieldDecl>(member->getMemberDecl());
+          const auto* shared_record = field != nullptr && !field->getType()->isReferenceType() && !field->getType()->isPointerType() ? recordOf(field->getType()) : nullptr;
+          if (shared_record == nullptr || !sharedRecord(*shared_record) || isPinnedRecord(*shared_record)) {
+            return {};
+          }
+
+          return objectStorage(*object, current);
         }
 
         const auto result_annotation = returnAnnotation(*callee, context_);
@@ -4074,7 +4267,7 @@ namespace tbc_lint {
 
         recordFields(*record->getDefinition(), fields);
         return llvm::any_of(fields, [&](const clang::FieldDecl* field) {
-          return viewAnnotation(field->getType(), context_).region == region;
+          return fieldRegion(*field) == region;
         });
       }
 
@@ -4162,7 +4355,7 @@ namespace tbc_lint {
         return llvm::any_of(fields, [&](const clang::FieldDecl* field) {
           const auto type = field->getType();
 
-          return viewAnnotation(type, context_).region == region && (type->isReferenceType() || type->isPointerType() || viewType(type.getNonReferenceType()));
+          return fieldRegion(*field) == region && !fieldHoldsOnly(*field) && (type->isReferenceType() || type->isPointerType() || viewType(type.getNonReferenceType()));
         });
       }
 
@@ -4563,9 +4756,9 @@ namespace tbc_lint {
           if (output.region != nullptr) {
             // What a field in the region owns lives in the region too, as a field of `&'a self` does.
             const auto* field = llvm::dyn_cast_or_null<clang::FieldDecl>(source.variable);
-            const bool owned = source.kind == origin_kind::receiver && field != nullptr && viewAnnotation(field->getType(), context_).region == output.region;
+            const bool owned = source.kind == origin_kind::receiver && field != nullptr && regionOutlives(fieldRegion(*field), output.region);
 
-            return owned || (source.kind == origin_kind::receiver_region && source.region == output.region);
+            return owned || (source.kind == origin_kind::receiver_region && regionOutlives(source.region, output.region));
           }
 
           return llvm::isa<clang::CXXMethodDecl>(function_);
@@ -4592,7 +4785,9 @@ namespace tbc_lint {
             return false;
           }
 
-          return (input.region == output.region && input.present) || (source.kind == origin_kind::parameter && !input.present && carriesRegion(parameter->getType(), output.region));
+          const auto* input_region = (source.kind == origin_kind::parameter && input.inner_region != nullptr) ? input.inner_region : input.region;
+
+          return (regionOutlives(input_region, output.region) && input.present) || (source.kind == origin_kind::parameter && !input.present && carriesRegion(parameter->getType(), output.region));
         }
 
         if (llvm::isa<clang::CXXMethodDecl>(function_)) {
@@ -4646,7 +4841,13 @@ namespace tbc_lint {
 
           // A declared contract, elided or labeled, is what callers without the body rely on.
           if (source.kind == origin_kind::local || source.kind == origin_kind::temporary) {
-            report(issue::dangling, statement.getReturnLoc(), &source);
+            if (hasCustomDeleterDependency(function_.getReturnType())) {
+              report(issue::destructor_dependency, statement.getReturnLoc(), &source);
+            } else if (standardType(function_.getReturnType(), "function") || (recordOf(function_.getReturnType()) != nullptr && recordOf(function_.getReturnType())->isLambda())) {
+              report(issue::escaping_capture, statement.getReturnLoc(), &source);
+            } else {
+              report(issue::dangling, statement.getReturnLoc(), &source);
+            }
           } else if (output.present && source.kind != origin_kind::unknown && !allowed(source, output)) {
             report(issue::contract, statement.getReturnLoc(), &source);
           } else if (!output.present && declarationOnly() && !elidedAllows(source)) {
@@ -4698,8 +4899,11 @@ namespace tbc_lint {
           }
 
           // An object of a shared type, such as an allocator, keeps what it handed out valid whatever is
-          // done to the inputs that reach it, also when an object that keeps it designates it.
-          if ((sharedType(owner->getType()) && !insideShared(*owner, place.target)) || throughShared(*owner, place.target)) {
+          // done to the inputs that reach it, also when an object that keeps it designates it — unless
+          // it is a movable/assignable value field of an enclosing object that is being mutated.
+          const auto* owner_record = recordOf(owner->getType());
+          const bool movable_shared_field = llvm::isa<clang::FieldDecl>(owner) && !owner->getType()->isReferenceType() && !owner->getType()->isPointerType() && owner_record != nullptr && sharedRecord(*owner_record) && !isPinnedRecord(*owner_record);
+          if ((!movable_shared_field && sharedType(owner->getType()) && !insideShared(*owner, place.target)) || throughShared(*owner, place.target)) {
             continue;
           }
 
@@ -4750,6 +4954,7 @@ namespace tbc_lint {
                     return reaches(source, *place);
                   }))) {
                 source.invalidated = trigger;
+                source.destroyed = destroyed;
               }
             }
           }
@@ -4963,10 +5168,90 @@ namespace tbc_lint {
           }
 
           // A parameter labeled static takes only what outlives every caller, as a Rust `&'static` does.
+          // A std::function / callable parameter labeled static or bound to another parameter's region
+          // checks that captured borrows do not escape their required lifetime (`tbc-escaping-capture`).
           if (index >= offset && index - offset < callee->getNumParams()) {
-            const auto input = parameterAnnotation(*callee->getParamDecl(index - offset), context_);
+            const auto* param = callee->getParamDecl(index - offset);
+            const auto input = parameterAnnotation(*param, context_);
+            const bool is_callable = standardType(param->getType(), "function") || (recordOf(argument->getType()) != nullptr && recordOf(argument->getType())->isLambda());
+
             if (input.present && staticRegion(input.region)) {
-              checkStatic(contents, argument->getExprLoc());
+              if (is_callable) {
+                for (const auto& source : contents.values) {
+                  if (source.kind != origin_kind::static_storage && source.kind != origin_kind::unknown && !staticInput(source)) {
+                    report(issue::escaping_capture, call.getEndLoc(), &source);
+                  }
+                }
+              } else {
+                checkStatic(contents, argument->getExprLoc());
+              }
+            } else if (is_callable && input.present && input.region != nullptr) {
+              // Context-bound callback (e.g. enqueueBound(ref_a<Context>, val_a<function>)):
+              // captured borrows must be static, or come from an argument sharing the same region,
+              // or outlive all arguments in that region (parameters outlive locals).
+              llvm::SmallPtrSet<const clang::ValueDecl*, 4> context_vars;
+              bool context_is_parameter = false;
+
+              for (unsigned other = 0; other < callee->getNumParams() && other + offset < call.getNumArgs(); ++other) {
+                if (other == index - offset) {
+                  continue;
+                }
+
+                const auto other_mark = parameterAnnotation(*callee->getParamDecl(other), context_);
+                if (other_mark.present && other_mark.region == input.region) {
+                  for (const auto& ctx_src : reference(call.getArg(other + offset), current).values) {
+                    if (ctx_src.variable != nullptr) {
+                      context_vars.insert(ctx_src.variable);
+                      if (parameterOrigin(ctx_src)) {
+                        context_is_parameter = true;
+                      }
+                    }
+                  }
+                }
+              }
+
+              if (context_is_parameter || !context_vars.empty()) {
+                for (const auto& source : contents.values) {
+                  if (source.kind == origin_kind::static_storage || source.kind == origin_kind::unknown || staticInput(source)) {
+                    continue;
+                  }
+
+                  if (source.kind == origin_kind::temporary) {
+                    report(issue::escaping_capture, call.getEndLoc(), &source);
+                  } else if (source.kind == origin_kind::local) {
+                    if (context_is_parameter || (source.variable != nullptr && !context_vars.contains(source.variable))) {
+                      report(issue::escaping_capture, call.getEndLoc(), &source);
+                    }
+                  }
+                }
+              }
+            }
+          }
+
+          // A foreign extern "C" function declared in project code with no body and no tbc annotation
+          // taking a borrowed view or complete-type pointer is an unverified boundary (`tbc-missing-contract`).
+          const auto callee_loc = callee->getLocation().isValid() ? context_.getSourceManager().getExpansionLoc(callee->getLocation()) : clang::SourceLocation{};
+          const auto is_third_party_header = [&]() {
+            if (callee_loc.isInvalid() || context_.getSourceManager().isInSystemHeader(callee_loc)) {
+              return true;
+            }
+
+            const auto filename = context_.getSourceManager().getFilename(callee_loc);
+
+            return filename.contains("/vendor/") || filename.contains("/_deps/") || filename.contains("/.dependencies-cache/");
+          };
+
+          if (callee->isExternC() && callee->getBuiltinID() == 0 && !callee->hasBody() && !is_third_party_header() && !annotated(*callee, "tbc::raw")) {
+            if (index >= offset && index - offset < callee->getNumParams()) {
+              const auto* param = callee->getParamDecl(index - offset);
+              const auto mark = parameterAnnotation(*param, context_);
+              const auto ptype = param->getType();
+              const bool opaque_c_ptr = ptype->isPointerType() && ptype->getPointeeType()->isIncompleteType();
+              if (!mark.present && !opaque_c_ptr && (viewType(ptype) || ptype->isPointerType())) {
+                origin unknown_call{.kind = origin_kind::unknown, .expression = &call};
+
+                report(issue::missing, call.getExprLoc(), &unknown_call);
+              }
             }
           }
 
@@ -4989,6 +5274,66 @@ namespace tbc_lint {
         }
 
         const auto inputs = callInputs(call, current);
+        const auto* callee_pattern = callee->getTemplateInstantiationPattern();
+        const bool swaps_ownership = annotated(*callee, "tbc::swaps") || (callee_pattern != nullptr && annotated(*callee_pattern, "tbc::swaps"));
+
+        if (swaps_ownership) {
+          if (object != nullptr && call.getNumArgs() > offset) {
+            const auto mine = objectTargets(*object, current);
+            const auto theirs = targets(call.getArg(offset), current);
+            if (mine.size() == 1 && theirs.size() == 1) {
+              exchangeOwnership(mine.front(), theirs.front(), current);
+            }
+          } else if (object == nullptr && call.getNumArgs() >= 2) {
+            const auto left = targets(call.getArg(0), current);
+            const auto right = targets(call.getArg(1), current);
+            if (left.size() == 1 && right.size() == 1) {
+              exchangeOwnership(left.front(), right.front(), current);
+            }
+          }
+
+          applied_.push_back(&call);
+          checkOverlap(call, inputs, current);
+          return;
+        }
+
+        // Record shared_ptr co-ownership when a mutating method of a receiver holding a shared_ptr
+        // field receives a shared_ptr argument (e.g. ReplyQueue::push(view, shared_owner)).
+        if (object != nullptr && method != nullptr && !method->isConst()) {
+          const bool receiver_holds_shared_ptr = llvm::any_of(namedFields(*method->getParent()), [](const clang::FieldDecl* field) {
+            return standardType(field->getType(), "shared_ptr");
+          });
+          if (receiver_holds_shared_ptr) {
+            const auto receivers = objectTargets(*object, current);
+
+            for (unsigned arg_idx = offset; arg_idx < call.getNumArgs(); ++arg_idx) {
+              const auto* arg = clean(call.getArg(arg_idx));
+
+              if (!standardType(call.getArg(arg_idx)->getType(), "shared_ptr")) {
+                continue;
+              }
+
+              // Unwrap implicit converting copy/move constructors (e.g. shared_ptr<T> -> shared_ptr<const void>).
+              while (arg != nullptr) {
+                if (const auto* temp = llvm::dyn_cast<clang::MaterializeTemporaryExpr>(arg)) {
+                  arg = clean(temp->getSubExpr());
+                } else if (const auto* ctor = llvm::dyn_cast<clang::CXXConstructExpr>(arg); ctor != nullptr && ctor->getNumArgs() >= 1) {
+                  arg = clean(ctor->getArg(0));
+                } else {
+                  break;
+                }
+              }
+
+              if (const auto* owner_var = place(arg)) {
+                for (const auto* holder : receivers) {
+                  if (holder != owner_var) {
+                    current.co_owners[owner_var].insert(holder);
+                  }
+                }
+              }
+            }
+          }
+        }
 
         applyInferredInvalidations(call, current);
         // The call's arguments were read before it ran, and checked then; resolving its effects, and the
@@ -6015,12 +6360,59 @@ namespace tbc_lint {
           if (const auto lifetime = element.getAs<clang::CFGLifetimeEnds>()) {
             const auto* variable = lifetime->getVarDecl();
             if (!llvm::isa<clang::ParmVarDecl>(variable)) {
-              invalidate({.variable = variable}, lifetime->getTriggerStmt(), current, true);
+              const auto* trigger = lifetime->getTriggerStmt();
+              if (trigger == nullptr) {
+                trigger = function_.getBody();
+              }
+
+              invalidate({.variable = variable}, trigger, current, true);
             }
           }
 
           if (const auto destructor = element.getAs<clang::CFGAutomaticObjDtor>()) {
-            invalidate({.variable = destructor->getVarDecl()}, destructor->getTriggerStmt(), current, true);
+            const auto* var = destructor->getVarDecl();
+            const auto* trigger = destructor->getTriggerStmt();
+            if (trigger == nullptr) {
+              trigger = function_.getBody();
+            }
+
+            // Drop check (BC-40..42): a non-trivial destructor observing borrowed data requires those
+            // borrows to remain valid until destruction runs (deferred until after explicit uses report).
+            if (reporting_ && hasDestructorDependency(var->getType())) {
+              const auto& sources = context_.getSourceManager();
+              const auto var_loc = sources.getExpansionLoc(var->getLocation());
+
+              for (const auto& source : current.held(var).values) {
+                const bool container_realloc = source.storage >= storage_kind::data && source.variable != nullptr && (transfersAllocation(source.variable->getType()) || standardType(source.variable->getType(), "basic_string"));
+                if (source.invalidated != nullptr && (source.destroyed || container_realloc)) {
+                  drop_checks_.push_back({.location = source.invalidated->getEndLoc(), .source = source, .trigger = trigger});
+                } else if (source.kind == origin_kind::local && source.variable != nullptr && source.variable != var) {
+                  if (const auto* target_var = llvm::dyn_cast<clang::VarDecl>(source.variable);
+                      target_var != nullptr && !llvm::isa<clang::ParmVarDecl>(target_var) && !target_var->hasGlobalStorage()) {
+                    const auto target_loc = sources.getExpansionLoc(target_var->getLocation());
+                    if (var_loc.isValid() && target_loc.isValid() && sources.isBeforeInTranslationUnit(var_loc, target_loc)) {
+                      drop_checks_.push_back({.location = trigger->getEndLoc(), .source = source, .trigger = trigger});
+                    }
+                  }
+                }
+              }
+            }
+
+            // If a std::shared_ptr has live co-owners (e.g. retained in a queue), transfer its heap
+            // allocation borrows to those co-owners before destroying this handle.
+            if (standardType(var->getType(), "shared_ptr")) {
+              if (const auto found = current.co_owners.find(var); found != current.co_owners.end() && !found->second.empty()) {
+                llvm::SmallVector<const clang::ValueDecl*, 4> destinations(found->second.begin(), found->second.end());
+
+                transferOwnership(var, destinations, storage_kind::data, current);
+              }
+            }
+
+            invalidate({.variable = var}, trigger, current, true);
+            // Remove this destroyed variable as a co-owner of any other shared_ptr.
+            for (auto& entry : current.co_owners) {
+              entry.second.erase(var);
+            }
           }
 
           const auto statement = element.getAs<clang::CFGStmt>();
@@ -6056,6 +6448,12 @@ namespace tbc_lint {
               if (transfersAllocation(variable->getType())) {
                 transferOwnership(movedFrom(variable->getInit()), {variable}, storage_kind::data, current);
               }
+
+              if (standardType(variable->getType(), "shared_ptr")) {
+                if (const auto* source_owner = place(variable->getInit()); source_owner != nullptr && source_owner != variable && standardType(source_owner->getType(), "shared_ptr")) {
+                  current.co_owners[source_owner].insert(variable);
+                }
+              }
             }
           } else if (const auto* returned = llvm::dyn_cast<clang::ReturnStmt>(node)) {
             checkReturn(*returned, current);
@@ -6065,6 +6463,38 @@ namespace tbc_lint {
             }
           } else if (const auto* call = llvm::dyn_cast<clang::CallExpr>(node)) {
             applyCall(*call, current);
+          } else if (const auto* thrown = llvm::dyn_cast<clang::CXXThrowExpr>(node)) {
+            // Unwinding destroys all locals declared inside enclosing scopes up to the innermost try block.
+            auto parent_node = clang::DynTypedNode::create(*thrown);
+            llvm::SmallVector<const clang::CompoundStmt*, 4> scopes;
+
+            while (true) {
+              const auto parents = context_.getParents(parent_node);
+              if (parents.empty()) {
+                break;
+              }
+
+              parent_node = parents[0];
+              if (const auto* compound = parent_node.get<clang::CompoundStmt>()) {
+                scopes.push_back(compound);
+              }
+
+              if (parent_node.get<clang::CXXTryStmt>() != nullptr) {
+                for (const auto* scope : scopes) {
+                  for (const auto* child : scope->body()) {
+                    if (const auto* decl_stmt = llvm::dyn_cast<clang::DeclStmt>(child)) {
+                      for (const auto* entry : decl_stmt->decls()) {
+                        if (const auto* local_var = llvm::dyn_cast<clang::VarDecl>(entry); local_var != nullptr && !local_var->hasGlobalStorage()) {
+                          invalidate({.variable = local_var}, thrown, current, true);
+                        }
+                      }
+                    }
+                  }
+                }
+
+                break;
+              }
+            }
           } else if (const auto* operation = llvm::dyn_cast<clang::BinaryOperator>(node)) {
             if (operation->isAssignmentOp()) {
               assign(*operation, current);
@@ -6079,20 +6509,52 @@ namespace tbc_lint {
     inference_cache cache;
   };
 
-  lifetime_analysis::lifetime_analysis(bool errors)
+  lifetime_analysis::lifetime_analysis(lifetime_options options)
       : implementation_(std::make_unique<implementation>()),
-        errors_(errors) {}
+        errors_(options.errors),
+        check_lifetime_(options.check_lifetime),
+        check_bounds_(options.check_bounds) {}
 
   lifetime_analysis::~lifetime_analysis() = default;
 
   void lifetime_analysis::beginTranslationUnit() {
     reported_.clear();
     implementation_->cache.clear();
+    clearTypeCaches();
   }
 
   void lifetime_analysis::analyze(const clang::FunctionDecl& function, clang::ASTContext& context) {
     if (const auto* definition = function.getDefinition()) {
       add(*definition, context);
+    }
+  }
+
+  namespace {
+    bool containsTryStmt(const clang::Stmt* root) {
+      if (root == nullptr) {
+        return false;
+      }
+
+      llvm::SmallVector<const clang::Stmt*, 32> stack{root};
+
+      while (!stack.empty()) {
+        const auto* current = stack.pop_back_val();
+        if (current == nullptr || llvm::isa<clang::LambdaExpr>(current)) {
+          continue;
+        }
+
+        if (llvm::isa<clang::CXXTryStmt>(current)) {
+          return true;
+        }
+
+        for (const auto* child : current->children()) {
+          if (child != nullptr) {
+            stack.push_back(child);
+          }
+        }
+      }
+
+      return false;
     }
   }
 
@@ -6107,6 +6569,7 @@ namespace tbc_lint {
     options.AddImplicitDtors = true;
     options.AddTemporaryDtors = true;
     options.AddLifetime = true;
+    options.AddEHEdges = containsTryStmt(definition.getBody());
     auto graph = clang::CFG::buildCFG(&definition, definition.getBody(), &context, options);
     if (!graph) {
       if (containsViews(definition.getReturnType())) {
@@ -6240,9 +6703,15 @@ namespace tbc_lint {
     });
 
     for (const auto* entry : ordered) {
-      function_analysis analysis(*entry->definition, context, errors_, reported_, cache);
+      if (check_lifetime_) {
+        function_analysis analysis(*entry->definition, context, errors_, reported_, cache);
 
-      analysis.run(*entry->graph, true);
+        analysis.run(*entry->graph, true);
+        checkAccessValidity(*entry->definition, *entry->graph, context, {.errors = errors_, .check_bounds = check_bounds_}, reported_);
+        checkExclusiveBorrowsAndMoves(*entry->definition, *entry->graph, context, errors_, reported_);
+      } else if (check_bounds_) {
+        checkAccessValidity(*entry->definition, *entry->graph, context, {.errors = errors_, .check_bounds = true}, reported_);
+      }
     }
   }
 }

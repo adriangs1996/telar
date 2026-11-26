@@ -45,9 +45,15 @@ namespace tbc {
   }
 
   // Region labels are scoped contract variables for the linter, not C++ type barriers.
-  template <typename type, detail::lifetime_region region = lt::elided>
+  // An optional second region names what a referent holds separately from the outer borrow, as Rust's
+  // `&'outer Stream<'inner>` does.
+  template <typename type, detail::lifetime_region region = lt::elided, detail::lifetime_region inner = lt::elided>
     requires(std::is_object_v<type> || std::is_reference_v<type>)
   using view = type;
+
+  // Directional outlives bound (`longer: shorter`) for template `requires` clauses.
+  template <typename longer, typename shorter>
+  concept outlives = detail::lifetime_region<longer> && detail::lifetime_region<shorter>;
 
   // A reference whose referent holds borrows of `region`, the reference itself lent for the call
   // alone, as Rust's `&Pane<'a>`: a result or a holder in `region` takes what the referent holds,

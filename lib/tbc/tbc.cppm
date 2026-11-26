@@ -14,6 +14,7 @@ export namespace tbc {
   using tbc::mut_d;
   using tbc::mut_self;
   using tbc::mut_static;
+  using tbc::outlives;
   using tbc::raw;
   using tbc::ref_a;
   using tbc::ref_b;

@@ -117,6 +117,10 @@ lifetime-checker: tbc-configure
 lifetime: lifetime-checker (configure "dev")
     "{{ cpp }}" exec -- cmake -DCHECK=lifetime "-DBUILD_DIRECTORY={{ build_dir }}/dev" -P cmake/scripts/check.cmake
 
+# Check static indexing bounds of the C++ sources of the dev tree.
+bounds: lifetime-checker (configure "dev")
+    "{{ cpp }}" exec -- cmake -DCHECK=bounds "-DBUILD_DIRECTORY={{ build_dir }}/dev" -P cmake/scripts/check.cmake
+
 # Run tbc-lint's four checks over the dev tree in one pass, which parses each source once.
 checks: lifetime-checker (configure "dev")
     "{{ cpp }}" exec -- cmake -DCHECK=lifetime+interface_bodies+blank_lines+standard_containers "-DBUILD_DIRECTORY={{ build_dir }}/dev" -P cmake/scripts/check.cmake

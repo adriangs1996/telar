@@ -1,13 +1,11 @@
-// Excluded from the corpus: exclusive aliasing is a Rust access policy, not a C++ memory error.
-// The linter's objective is invalid memory use; these cases are kept as reference only.
-#include "../support.hpp"
+#include "support.hpp"
 
 using int_view = tbc::view<const int&, tbc::lt::a>;
 
 // CASE: core.shared_write
 // PAIR: core.shared_liveness
 // SOURCE: lib/ebnf/lexer/lexer.cppm :: token
-// STATUS: pending
+// STATUS: implemented
 // CONTRACT: Shared references protect their referent from writes while required.
 // SCENARIO: The later read keeps the loan live; diagnose the intervening write.
 void sharedWrite() {
@@ -22,7 +20,7 @@ void sharedWrite() {
 // CASE: core.ended_shared
 // PAIR: core.shared_liveness
 // SOURCE: lib/ebnf/lexer/lexer.cppm :: token
-// STATUS: pending
+// STATUS: implemented
 // CONTRACT: A loan with no remaining use or observing destructor may end before scope exit.
 // SCENARIO: The view is consumed before the write; accept the later mutation.
 void endedShared() {
@@ -38,7 +36,7 @@ void endedShared() {
 // CASE: core.overlapping_mutable
 // PAIR: core.reborrow
 // SOURCE: lib/base/memory/containers/containers.cppm :: appendUninitialized
-// STATUS: pending
+// STATUS: implemented
 // CONTRACT: A live exclusive loan forbids an independent overlapping mutable loan.
 // SCENARIO: Both references remain used; report creation of the second loan.
 void overlappingMutable() {
@@ -55,7 +53,7 @@ void overlappingMutable() {
 // CASE: core.derived_reborrow
 // PAIR: core.reborrow
 // SOURCE: lib/base/memory/containers/containers.cppm :: appendUninitialized
-// STATUS: pending
+// STATUS: implemented
 // CONTRACT: A derived exclusive reborrow temporarily suspends conflicting parent access.
 // SCENARIO: Use the child, end its scope, then resume the parent; accept.
 void derivedReborrow() {

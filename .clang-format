@@ -47,3 +47,6 @@ SeparateDefinitionBlocks: Always
 MaxEmptyLinesToKeep: 1
 KeepEmptyLines:
   AtStartOfBlock: false
+
+AttributeMacros:
+  - TBC_OUTLIVES

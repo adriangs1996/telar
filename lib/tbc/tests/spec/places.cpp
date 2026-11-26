@@ -965,6 +965,9 @@ int places::entry_service::updateKept(int id) {
   }
 
   auto& entry = *existing;
+  if (entry.values.empty()) {
+    return 0;
+  }
   const int& first = entry.values[0];
   entry.change(1); // expected-error [tbc-invalidated-borrow]
   return first;
@@ -1029,6 +1032,9 @@ namespace places {
 }
 
 int placeWriteThroughHolderKept(places::logged_client& client) {
+  if (client.session.log.empty()) {
+    return 0;
+  }
   const int& first = client.session.log[0];
 
   client.session.disconnected(); // expected-error [tbc-invalidated-borrow]
@@ -1091,7 +1097,11 @@ namespace places {
 }
 
 int placeWriteThroughLentOther(places::lent_owner& owner) {
-  const int& first = owner.part().values[0];
+  auto& part = owner.part();
+  if (part.values.empty()) {
+    return 0;
+  }
+  const int& first = part.values[0];
 
   owner.part().grow(); // expected-error [tbc-invalidated-borrow]
   return first;
@@ -1136,6 +1146,9 @@ int placeWriteThroughCallback(const places::element_list& list) {
 // CONTRACT: A call through a reference to an object whose callee the checker reads, as a lambda's call operator, reborrows that reference, as Rust calls an `&mut impl FnMut` again and again: it ends other borrows, never the reference's own.
 // SCENARIO: The consumer grows a list while another variable keeps one of its values across the call; reject at the call.
 int placeWriteThroughCallbackGrows(std::vector<int>& values) {
+  if (values.empty()) {
+    return 0;
+  }
   const int& first = values[0];
   auto grow = [&](int value) {
     values.push_back(value);

@@ -4,6 +4,7 @@
 #include "interface_bodies.hpp"
 #include "lifetime_analysis.hpp"
 #include "shared_access.hpp"
+#include "soundness_checks.hpp"
 #include "standard_containers.hpp"
 #include "view_type.hpp"
 
@@ -43,17 +44,22 @@
 #include <string>
 #include <vector>
 
+#if defined(__unix__) || defined(__APPLE__)
+#include <sys/resource.h>
+#endif
+
 namespace {
   class borrow_check final : public clang::ast_matchers::MatchFinder::MatchCallback {
   public:
-    borrow_check(bool errors, tbc_lint::checked_definitions& checked)
-        : analysis_(errors),
-          errors_(errors),
+    borrow_check(tbc_lint::lifetime_options options, tbc_lint::checked_definitions& checked)
+        : analysis_(options),
+          options_(options),
           checked_(checked) {}
 
     void run(const clang::ast_matchers::MatchFinder::MatchResult& result) override {
       if (result.Nodes.getNodeAs<clang::TranslationUnitDecl>("unit") != nullptr) {
         visited_.clear();
+        visited_redecls_.clear();
         context_ = result.Context;
         mangler_.reset(context_->createMangleContext());
         // A unit that does not compile has an invalid AST. The question is asked before any check of
@@ -63,12 +69,32 @@ namespace {
         return;
       }
 
+      if (const auto* record = result.Nodes.getNodeAs<clang::CXXRecordDecl>("record")) {
+        if (compiled_ && options_.check_lifetime) {
+          tbc_lint::checkRecordSoundness(*record, *result.Context, options_.errors);
+        }
+
+        return;
+      }
+
+      if (const auto* redecl = result.Nodes.getNodeAs<clang::FunctionDecl>("redecl")) {
+        if (compiled_ && options_.check_lifetime && redecl->getPreviousDecl() != nullptr && visited_redecls_.insert(redecl->getCanonicalDecl()).second) {
+          tbc_lint::checkRedeclarationSoundness(*redecl, *result.Context, options_.errors);
+        }
+
+        return;
+      }
+
       const auto* function = result.Nodes.getNodeAs<clang::FunctionDecl>("function");
       // An owner's implementation is trusted, as the standard library's is.
       if (compiled_ && function != nullptr && !tbc_lint::ownerMember(*function) && visited_.insert(function->getCanonicalDecl()).second && claim(*function, *result.Context)) {
         analysis_.analyze(*function, *result.Context);
-        if (const auto* definition = function->getDefinition()) {
-          tbc_lint::checkSharedAccess(*definition, *result.Context, errors_);
+        if (options_.check_lifetime) {
+          if (const auto* definition = function->getDefinition()) {
+            tbc_lint::checkSharedAccess(*definition, *result.Context, options_.errors);
+          }
+
+          tbc_lint::checkFunctionSoundness(*function, *result.Context, options_.errors);
         }
       }
     }
@@ -112,9 +138,10 @@ namespace {
     bool compiled_ = false;
     std::unique_ptr<clang::MangleContext> mangler_;
     tbc_lint::lifetime_analysis analysis_;
-    bool errors_;
+    tbc_lint::lifetime_options options_;
     tbc_lint::checked_definitions& checked_;
     llvm::SmallPtrSet<const clang::FunctionDecl*, 32> visited_;
+    llvm::SmallPtrSet<const clang::FunctionDecl*, 32> visited_redecls_;
   };
 
   // Limits the matchers to what a unit parses itself outside system headers: its own file, the project
@@ -162,6 +189,7 @@ namespace {
 
   enum class checker : std::uint8_t {
     lifetime,
+    bounds,
     blank_lines,
     interface_bodies,
     standard_containers,
@@ -171,6 +199,7 @@ namespace {
   std::optional<checker> checkerNamed(llvm::StringRef name) {
     return llvm::StringSwitch<std::optional<checker>>(name)
         .Case("lifetime", checker::lifetime)
+        .Case("bounds", checker::bounds)
         .Case("blank-lines", checker::blank_lines)
         .Case("interface-bodies", checker::interface_bodies)
         .Case("standard-containers", checker::standard_containers)
@@ -179,6 +208,7 @@ namespace {
 
   struct settings {
     bool lifetime;
+    bool bounds;
     bool blank_lines;
     bool interface_bodies;
     bool standard_containers;
@@ -273,12 +303,17 @@ namespace {
     std::optional<borrow_check> borrows;
     std::optional<tbc_lint::const_overload_check> overloads;
 
-    if (settings.lifetime) {
-      borrows.emplace(settings.errors, settings.checked);
+    if (settings.lifetime || settings.bounds) {
+      borrows.emplace(tbc_lint::lifetime_options{.errors = settings.errors, .check_lifetime = settings.lifetime, .check_bounds = settings.bounds}, settings.checked);
       finder.addMatcher(clang::ast_matchers::translationUnitDecl().bind("unit"), &*borrows);
+      if (settings.lifetime) {
+        finder.addMatcher(clang::ast_matchers::cxxRecordDecl(clang::ast_matchers::isDefinition(), clang::ast_matchers::unless(clang::ast_matchers::isExpansionInSystemHeader())).bind("record"), &*borrows);
+        finder.addMatcher(clang::ast_matchers::functionDecl(clang::ast_matchers::unless(clang::ast_matchers::isExpansionInSystemHeader()), clang::ast_matchers::unless(clang::ast_matchers::isImplicit())).bind("redecl"), &*borrows);
+        overloads.emplace(settings.errors, settings.checked);
+        overloads->registerMatchers(finder);
+      }
+
       finder.addMatcher(clang::ast_matchers::functionDecl(clang::ast_matchers::isDefinition(), clang::ast_matchers::unless(clang::ast_matchers::isExpansionInSystemHeader())).bind("function"), &*borrows);
-      overloads.emplace(settings.errors, settings.checked);
-      overloads->registerMatchers(finder);
     }
 
     std::optional<tbc_lint::blank_line_check> blank_lines;
@@ -303,21 +338,37 @@ namespace {
     const auto tool = unitTool(compilations, source);
 
     tool->setDiagnosticConsumer(&printer);
-    unit_actions actions(settings.lifetime || settings.blank_lines || settings.standard_containers ? &finder : nullptr, settings);
+    unit_actions actions(settings.lifetime || settings.bounds || settings.blank_lines || settings.standard_containers ? &finder : nullptr, settings);
 
     return tool->run(&actions);
   }
 }
 
 int main(int argc, const char** argv) try {
+#if defined(__unix__) || defined(__APPLE__)
+  // Parallel C++23 module checking opens many BMIs and headers simultaneously; macOS defaults to
+  // 256 descriptors per process, which causes EMFILE / Clang preprocessor failures under `-j`.
+  rlimit fd_limit{};
+
+  if (getrlimit(RLIMIT_NOFILE, &fd_limit) == 0) {
+    constexpr rlim_t target = 10240;
+    const rlim_t desired = fd_limit.rlim_max == RLIM_INFINITY ? target : std::min(fd_limit.rlim_max, target);
+    if (fd_limit.rlim_cur < desired) {
+      fd_limit.rlim_cur = desired;
+      static_cast<void>(setrlimit(RLIMIT_NOFILE, &fd_limit));
+    }
+  }
+#endif
+
   llvm::cl::OptionCategory category("tbc-lint options");
   const llvm::cl::opt<bool> warnings_as_errors("warnings-as-errors", llvm::cl::desc("Report warnings as errors"), llvm::cl::cat(category));
   const llvm::cl::opt<unsigned> jobs("j", llvm::cl::desc("Translation units checked in parallel; 0 uses one per physical core"), llvm::cl::init(0), llvm::cl::cat(category));
   llvm::cl::bits<checker> checks(
       "checks",
-      llvm::cl::desc("Comma-separated checks to run; lifetime when none is given"),
+      llvm::cl::desc("Comma-separated checks to run; lifetime and bounds when none is given"),
       llvm::cl::values(
           clEnumValN(checker::lifetime, "lifetime", "Borrow checking"),
+          clEnumValN(checker::bounds, "bounds", "Static bounds checking"),
           clEnumValN(checker::blank_lines, "blank-lines", "Blank lines between the statements of a block"),
           clEnumValN(checker::interface_bodies, "interface-bodies", "Function bodies in module interface units"),
           clEnumValN(checker::standard_containers, "standard-containers", "Standard containers that telar::ds replaces")
@@ -390,7 +441,7 @@ int main(int argc, const char** argv) try {
   tbc_lint::container_allowlist containers(folders);
 
   // The sources each check applies to, for the checks given a scope.
-  std::array<std::optional<llvm::StringSet<>>, 4> scoped;
+  std::array<std::optional<llvm::StringSet<>>, 5> scoped;
 
   for (const auto& scope : scopes) {
     const auto [name, file] = llvm::StringRef(scope).split('=');
@@ -413,6 +464,7 @@ int main(int argc, const char** argv) try {
   const auto& compilations = options->getCompilations();
   const auto& sources = options->getSourcePathList();
   const bool lifetime = checks.getBits() == 0 || checks.isSet(checker::lifetime);
+  const bool bounds = checks.getBits() == 0 || checks.isSet(checker::bounds);
   std::vector<std::size_t> order(sources.size());
 
   std::ranges::iota(order, 0);
@@ -422,6 +474,7 @@ int main(int argc, const char** argv) try {
   tbc_lint::checked_definitions checked;
   const settings configuration{
       .lifetime = lifetime,
+      .bounds = bounds,
       .blank_lines = blank_lines,
       .interface_bodies = interface_bodies,
       .standard_containers = standard_containers,
@@ -517,6 +570,7 @@ int main(int argc, const char** argv) try {
     auto unit = configuration;
 
     unit.lifetime = configuration.lifetime && applies(checker::lifetime);
+    unit.bounds = configuration.bounds && applies(checker::bounds);
     unit.blank_lines = configuration.blank_lines && applies(checker::blank_lines);
     unit.interface_bodies = configuration.interface_bodies && applies(checker::interface_bodies);
     unit.standard_containers = configuration.standard_containers && applies(checker::standard_containers);

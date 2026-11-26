@@ -160,6 +160,9 @@ declarations::limit declarationStaticLocal() {
 // SCENARIO: A block is read after the allocator hands out another one; accept.
 char declarationSharedAllocator(declarations::arena& memory) {
   char* first = memory.allocate(8);
+  if (first == nullptr) {
+    return 0;
+  }
   memory.allocate(8);
   return *first;
 }
@@ -174,6 +177,9 @@ char declarationSharedAllocator(declarations::arena& memory) {
 // SCENARIO: Without the mark, a second allocation may move the first block; reject at the call.
 char declarationUnsharedPool(declarations::pool& memory) {
   char* first = memory.allocate(8);
+  if (first == nullptr) {
+    return 0;
+  }
   memory.allocate(8); // expected-error [tbc-invalidated-borrow]
   return *first;
 }
@@ -1263,7 +1269,7 @@ void declarationOwnedReceiverCall(declarations::screen& shown) {
 // CASE: declaration.owned_receiver_alias
 // PAIR: declaration.owned_receiver
 // SOURCE: src/runtime/traffic/proxy/runtime/runtime.cppm :: ApplicationRelay::Relays::transfer (http1_->advance)
-// STATUS: pending
+// STATUS: implemented
 // CONTRACT: The object a sole owner holds, as a unique_ptr's, is that owner's own: a call through it invalidates other borrows of what it designates, not the owner's own.
 // SCENARIO: A view of the screen's cells is read after the owned feeder grows them; reject at the feed.
 std::size_t declarationOwnedReceiverAlias() {
@@ -1398,7 +1404,7 @@ int declarationPinnedSharedField() {
 // CASE: declaration.movable_shared_field
 // PAIR: declaration.pinned_shared_field
 // SOURCE: src/gui/application/application-configuration.cppm :: ConfigurationGeneration::readConfiguration (lua::Vm)
-// STATUS: pending
+// STATUS: implemented
 // CONTRACT: A field of a TBC_SHARED type that can be neither assigned nor moved lives as long as its object, so a call that mutates the object keeps every borrow the field lent valid, as a pinned Rust value with interior mutability does.
 // SCENARIO: A machine that can be assigned may be replaced by the call, dropping the value it lent; reject at the call.
 namespace declarations {
@@ -1765,6 +1771,9 @@ void declarationAbstractSharedReleaseArgumentKept(declarations::group_store& gro
 // SCENARIO: A loop's second round passes the call an argument read from the group the first round released, without finding the group again; reject at the call.
 void declarationAbstractSharedReleaseNextRound(declarations::group_store& groups, std::size_t id) {
   auto* current = groups.find(id);
+  if (current == nullptr) {
+    return;
+  }
 
   for (int round = 0; round < 2; ++round) {
     declarations::releaseGroup(groups, id, current->id); // expected-error [tbc-invalidated-borrow]
@@ -1804,12 +1813,12 @@ void declarationAbstractSharedReleaseCollected(declarations::group_store& groups
   std::size_t count = 0;
 
   for (const auto* group : groups.items()) {
-    if (group != nullptr) {
+    if (group != nullptr && count < identities.size()) {
       identities[count++] = group->id;
     }
   }
 
-  for (std::size_t index = 0; index < count; ++index) {
+  for (std::size_t index = 0; index < count && index < identities.size(); ++index) {
     groups.erase(identities[index]);
   }
 }
@@ -1943,7 +1952,11 @@ namespace declarations {
       auto pane = makeFrom<model_pane>(memory_);
 
       model.panes.insert(identity, pane.release());
-      return *model.panes.find(identity);
+      auto* inserted = model.panes.find(identity);
+      if (inserted == nullptr) {
+        __builtin_trap();
+      }
+      return *inserted;
     }
 
   private:
@@ -1959,8 +1972,16 @@ int declarationSharedBorrowHeldLaunch(tbc::view<declarations::model_memory&, tbc
   declarations::pane_command command{memory};
 
   panes.launch(model, command, record);
-  model.workspaces.find(workspace)->tab(tab)->panes.push_back(record);
-  auto& pane = *model.panes.find(record);
+  if (auto* found_workspace = model.workspaces.find(workspace); found_workspace != nullptr) {
+    if (auto* found_tab = found_workspace->tab(tab); found_tab != nullptr) {
+      found_tab->panes.push_back(record);
+    }
+  }
+  auto* found_pane = model.panes.find(record);
+  if (found_pane == nullptr) {
+    return 0;
+  }
+  auto& pane = *found_pane;
 
   return pane.restored;
 }
@@ -1977,9 +1998,17 @@ std::size_t declarationSharedBorrowHeldField(tbc::view<declarations::model_memor
   declarations::pane_command command{memory};
 
   panes.launch(model, command, record);
-  auto& first = model.workspaces.find(workspace)->tab(tab)->panes.front();
+  auto* found_workspace = model.workspaces.find(workspace);
+  if (found_workspace == nullptr) {
+    return 0;
+  }
+  auto* found_tab = found_workspace->tab(tab);
+  if (found_tab == nullptr) {
+    return 0;
+  }
+  auto& first = found_tab->panes.front();
 
-  model.workspaces.find(workspace)->tab(tab)->panes.push_back(record); // expected-error [tbc-invalidated-borrow]
+  found_tab->panes.push_back(record); // expected-error [tbc-invalidated-borrow]
   return declarations::readIdentity(first);
 }
 
@@ -1995,9 +2024,16 @@ std::size_t declarationSharedBorrowHeldElement(tbc::view<declarations::model_mem
   declarations::pane_command command{memory};
 
   panes.launch(model, command, record);
-  auto* found = model.workspaces.find(workspace)->tab(tab);
+  auto* found_workspace = model.workspaces.find(workspace);
+  if (found_workspace == nullptr) {
+    return 0;
+  }
+  auto* found = found_workspace->tab(tab);
+  if (found == nullptr) {
+    return 0;
+  }
 
-  model.workspaces.find(workspace)->tabs.push_back(declarations::model_tab{record, {}}); // expected-error [tbc-invalidated-borrow]
+  found_workspace->tabs.push_back(declarations::model_tab{record, {}}); // expected-error [tbc-invalidated-borrow]
   return declarations::readIdentity(found->id);
 }
 
@@ -2136,7 +2172,11 @@ namespace declarations {
 
 void declarationRegionSharedKept(declarations::region_state& state) {
   auto& memory = declarations::region_access::memory(state);
-  const std::string_view entry = declarations::region_access::history(state).view()[0].view();
+  const auto history = declarations::region_access::history(state).view();
+  if (history.empty()) {
+    return;
+  }
+  const std::string_view entry = history[0].view();
   declarations::region_list words{memory};
 
   words.emplace(memory, entry);
@@ -2153,7 +2193,11 @@ void declarationRegionSharedKept(declarations::region_state& state) {
 // SCENARIO: The state the entry lies in is mutated while the list keeps its memory, before the entry is read; reject at the mutation.
 void declarationRegionSharedMutated(declarations::region_state& state) {
   auto& memory = declarations::region_access::memory(state);
-  const std::string_view entry = declarations::region_access::history(state).view()[0].view();
+  const auto history = declarations::region_access::history(state).view();
+  if (history.empty()) {
+    return;
+  }
+  const std::string_view entry = history[0].view();
   declarations::region_list words{memory};
 
   words.emplace(memory, "x");

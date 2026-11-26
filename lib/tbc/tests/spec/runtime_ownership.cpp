@@ -3,7 +3,7 @@
 // CASE: runtime.allocator_escape
 // PAIR: runtime.allocator_dependency
 // SOURCE: lib/base/include/telar_base/memory/allocator.hpp :: AllocationDeleter / makeOwned
-// STATUS: pending
+// STATUS: implemented
 // CONTRACT: An allocated owner's deleter borrows the allocator until owner destruction.
 // SCENARIO: Heap-allocated pointee lifetime does not rescue a dead stack allocator.
 tbc::view<spec::allocated_int, tbc::lt::a> allocatorEscape() {
@@ -16,7 +16,7 @@ tbc::view<spec::allocated_int, tbc::lt::a> allocatorEscape() {
 // CASE: runtime.allocator_caller_owned
 // PAIR: runtime.allocator_dependency
 // SOURCE: lib/base/include/telar_base/memory/allocator.hpp :: AllocationDeleter / makeOwned
-// STATUS: pending
+// STATUS: implemented
 // CONTRACT: A returned owner's allocator dependency is propagated to its caller.
 // SCENARIO: The allocator is borrowed from a reference parameter, not created locally.
 tbc::view<spec::allocated_int, tbc::lt::a> allocatorCallerOwned(tbc::view<spec::arena&, tbc::lt::a> memory) {
@@ -60,7 +60,7 @@ void movedOwnerPreservesView() {
 // CASE: runtime.queue_slot_removed
 // PAIR: runtime.queue_slot
 // SOURCE: src/runtime/workers/request_worker/request_worker.cppm :: operator[] / take
-// STATUS: pending
+// STATUS: implemented
 // CONTRACT: take destroys the old optional slot object after transferring its value.
 // SCENARIO: A reference to that slot is invalid even if its value was moved elsewhere.
 void queueSlotRemoved(tbc::view<spec::request_queue&> queue) {
@@ -75,7 +75,7 @@ void queueSlotRemoved(tbc::view<spec::request_queue&> queue) {
 // CASE: runtime.queue_taken_owner
 // PAIR: runtime.queue_slot
 // SOURCE: src/runtime/workers/request_worker/request_worker.cppm :: take
-// STATUS: pending
+// STATUS: implemented
 // CONTRACT: The returned string owns its transferred value independently of the old slot.
 // SCENARIO: A view acquired from the taken string remains valid after more queue removals.
 void queueTakenOwner(tbc::view<spec::request_queue&> queue) {

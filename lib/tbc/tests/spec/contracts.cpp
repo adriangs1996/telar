@@ -4,7 +4,7 @@
 using text_a = tbc::view<std::string_view, tbc::lt::a>;
 using text_b = tbc::view<std::string_view, tbc::lt::b>;
 
-void externalCall(std::span<const std::byte> input);
+extern "C" void externalCall(std::span<const std::byte> input);
 
 // CASE: contract.wrong_return_origin
 // PAIR: contract.return_origin
@@ -34,7 +34,7 @@ text_a correctReturnOrigin(text_a first, text_a second) {
 // CASE: contract.unknown_call
 // PAIR: contract.call_boundary
 // SOURCE: src/runtime/history/store/database.cpp :: Statement::bind
-// STATUS: pending
+// STATUS: implemented
 // CONTRACT: Borrow-sensitive external calls need an analyzable implementation or a future boundary model.
 // SCENARIO: This native declaration has neither; do not assume it cannot retain input.
 void unknownCall(spec::bytes input) {
@@ -46,7 +46,7 @@ void unknownCall(spec::bytes input) {
 // CASE: contract.explicit_noescape
 // PAIR: contract.call_boundary
 // SOURCE: src/runtime/history/store/database.cpp :: Statement::bind
-// STATUS: pending
+// STATUS: implemented
 // CONTRACT: The visible observer body does not retain its borrowed argument.
 // SCENARIO: Its view parameter is valid during this call and no state escapes it.
 void explicitNoescape(spec::bytes input) {

@@ -103,8 +103,28 @@ namespace tbc_lint {
         return true;
       }
 
+      // Constructing a read-only view (such as std::span<const T> or std::string_view) from a
+      // non-const reference only reads the referenced container; it never mutates it.
+      [[nodiscard]] bool readOnlyViewConstruction(const clang::CXXConstructExpr& construction) const {
+        const auto type = construction.getType();
+        if (standardType(type, "basic_string_view")) {
+          return true;
+        }
+
+        if (standardType(type, "span")) {
+          const auto element = memberType(type, "element_type");
+
+          return !element.isNull() && element.isConstQualified();
+        }
+
+        return false;
+      }
+
       bool VisitCXXConstructExpr(clang::CXXConstructExpr* construction) {
-        arguments(construction->getConstructor(), llvm::ArrayRef(construction->getArgs(), construction->getNumArgs()));
+        if (!readOnlyViewConstruction(*construction)) {
+          arguments(construction->getConstructor(), llvm::ArrayRef(construction->getArgs(), construction->getNumArgs()));
+        }
+
         return true;
       }
 

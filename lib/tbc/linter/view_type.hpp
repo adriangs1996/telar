@@ -3,10 +3,12 @@
 
 #include <clang/AST/ASTContext.h>
 #include <clang/AST/Attr.h>
+#include <clang/AST/DeclCXX.h>
 #include <clang/AST/DeclTemplate.h>
 #include <clang/AST/ExprCXX.h>
 #include <clang/AST/Type.h>
 #include <clang/Basic/SourceManager.h>
+#include <llvm/ADT/DenseMap.h>
 #include <llvm/ADT/STLExtras.h>
 #include <llvm/ADT/SmallPtrSet.h>
 
@@ -14,28 +16,81 @@ namespace tbc_lint {
   struct annotation {
     bool present = false;
     const clang::Type* region = nullptr;
+    // Optional inner region for two-level borrows, as `tbc::view<Stream&, lt::b, lt::a>` (`&'b Stream<'a>`).
+    const clang::Type* inner_region = nullptr;
     // Labeled with tbc::holds: the region is what the referent holds, the reference anonymous.
     bool held = false;
   };
 
+  inline bool inNamespace(const clang::Decl& declaration, llvm::StringRef space_name) {
+    const auto* space = llvm::dyn_cast<clang::NamespaceDecl>(declaration.getDeclContext());
+    if (space == nullptr || space->getIdentifier() == nullptr || space->getName() != space_name) {
+      return false;
+    }
+
+    const auto* parent = space->getParent();
+
+    return parent != nullptr && parent->isTranslationUnit();
+  }
+
+  inline bool inTbcLtNamespace(const clang::Decl& declaration) {
+    const auto* space = llvm::dyn_cast<clang::NamespaceDecl>(declaration.getDeclContext());
+    if (space == nullptr || space->getIdentifier() == nullptr || space->getName() != "lt") {
+      return false;
+    }
+
+    const auto* outer = llvm::dyn_cast_or_null<clang::NamespaceDecl>(space->getParent());
+
+    return outer != nullptr && outer->getIdentifier() != nullptr && outer->getName() == "tbc" && outer->getParent() != nullptr && outer->getParent()->isTranslationUnit();
+  }
+
+  inline bool inTelarDsNamespace(const clang::Decl& declaration) {
+    const auto* space = llvm::dyn_cast<clang::NamespaceDecl>(declaration.getDeclContext());
+    if (space == nullptr || space->getIdentifier() == nullptr || space->getName() != "ds") {
+      return false;
+    }
+
+    const auto* outer = llvm::dyn_cast_or_null<clang::NamespaceDecl>(space->getParent());
+
+    return outer != nullptr && outer->getIdentifier() != nullptr && outer->getName() == "telar" && outer->getParent() != nullptr && outer->getParent()->isTranslationUnit();
+  }
+
+  inline bool tbcLifetimeRegion(const clang::Type* region, llvm::StringRef name) {
+    const auto* record = region != nullptr ? region->getAsCXXRecordDecl() : nullptr;
+
+    return record != nullptr && record->getIdentifier() != nullptr && record->getName() == name && inTbcLtNamespace(*record);
+  }
+
+  inline const clang::Type* unwrapRegionArg(const clang::TemplateArgument& argument) {
+    if (argument.getKind() != clang::TemplateArgument::Type) {
+      return nullptr;
+    }
+
+    const auto* region = argument.getAsType().getCanonicalType().getTypePtr();
+    if (tbcLifetimeRegion(region, "elided")) {
+      return nullptr;
+    }
+
+    return region;
+  }
+
   inline annotation viewAnnotation(clang::QualType type, const clang::ASTContext& context) {
     while (!type.isNull()) {
+      if (type->isBuiltinType()) {
+        return {};
+      }
+
       if (const auto* specialization = llvm::dyn_cast<clang::TemplateSpecializationType>(type.getTypePtr())) {
         const auto* declaration = specialization->getTemplateName().getAsTemplateDecl();
-        const auto name = declaration == nullptr ? std::string{} : declaration->getQualifiedNameAsString();
-        if (name == "tbc::view" || name == "tbc::holds") {
-          const auto arguments = specialization->template_arguments();
-          const clang::Type* region = nullptr;
+        if (declaration != nullptr && declaration->getIdentifier() != nullptr && inNamespace(*declaration, "tbc")) {
+          const auto name = declaration->getName();
+          if (name == "view" || name == "holds") {
+            const auto arguments = specialization->template_arguments();
+            const clang::Type* region = arguments.size() > 1 ? unwrapRegionArg(arguments[1]) : nullptr;
+            const clang::Type* inner = name == "view" && arguments.size() > 2 ? unwrapRegionArg(arguments[2]) : nullptr;
 
-          if (arguments.size() > 1 && arguments[1].getKind() == clang::TemplateArgument::Type) {
-            region = arguments[1].getAsType().getCanonicalType().getTypePtr();
-            const auto* record = region->getAsCXXRecordDecl();
-            if (record != nullptr && record->getQualifiedNameAsString() == "tbc::lt::elided") {
-              region = nullptr;
-            }
+            return {.present = true, .region = region, .inner_region = inner, .held = name == "holds" && region != nullptr};
           }
-
-          return {.present = true, .region = region, .held = name == "tbc::holds" && region != nullptr};
         }
       }
 
@@ -55,7 +110,7 @@ namespace tbc_lint {
 
     for (const auto* declaration : function.redecls()) {
       const auto annotation = viewAnnotation(declaration->getDeclaredReturnType(), context);
-      if (annotation.region != nullptr) {
+      if (annotation.region != nullptr || annotation.inner_region != nullptr) {
         return *declaration;
       }
 
@@ -78,9 +133,7 @@ namespace tbc_lint {
   }
 
   inline bool selfRegion(const clang::Type* region) {
-    const auto* record = region != nullptr ? region->getAsCXXRecordDecl() : nullptr;
-
-    return record != nullptr && record->getQualifiedNameAsString() == "tbc::lt::self";
+    return tbcLifetimeRegion(region, "self");
   }
 
   // A field labeled lt::self borrows only its own object.
@@ -89,9 +142,7 @@ namespace tbc_lint {
   }
 
   inline bool staticRegion(const clang::Type* region) {
-    const auto* record = region != nullptr ? region->getAsCXXRecordDecl() : nullptr;
-
-    return record != nullptr && record->getQualifiedNameAsString() == "tbc::lt::static_storage";
+    return tbcLifetimeRegion(region, "static_storage");
   }
 
   // A field that only ever holds storage that outlives every caller, as a Rust `&'static str` does,
@@ -104,7 +155,8 @@ namespace tbc_lint {
   // can hold a borrow from outside the object. A field that borrows only its own object, or only
   // static storage, declares none.
   inline bool lifetimeField(const clang::FieldDecl& field) {
-    const auto* region = viewAnnotation(field.getType(), field.getASTContext()).region;
+    const auto mark = viewAnnotation(field.getType(), field.getASTContext());
+    const auto* region = mark.inner_region != nullptr ? mark.inner_region : mark.region;
 
     return region != nullptr && !selfRegion(region) && !staticRegion(region);
   }
@@ -208,7 +260,7 @@ namespace tbc_lint {
   inline bool standardType(clang::QualType type, llvm::StringRef name) {
     const auto* record = recordOf(type);
 
-    return record != nullptr && standardRecord(type) && record->getName() == name;
+    return record != nullptr && record->getIdentifier() != nullptr && record->getName() == name && standardRecord(type);
   }
 
   inline bool rangeView(clang::QualType type);
@@ -541,10 +593,238 @@ namespace tbc_lint {
     return false;
   }
 
+  inline llvm::DenseMap<const clang::Type*, bool>& containsViewsCache() {
+    thread_local llvm::DenseMap<const clang::Type*, bool> cache;
+
+    return cache;
+  }
+
+  inline llvm::DenseMap<const clang::Type*, bool>& destructorDepCache() {
+    thread_local llvm::DenseMap<const clang::Type*, bool> cache;
+
+    return cache;
+  }
+
+  inline void clearTypeCaches() {
+    containsViewsCache().clear();
+    destructorDepCache().clear();
+  }
+
   inline bool containsViews(clang::QualType type) {
+    if (type.isNull()) {
+      return false;
+    }
+
+    if (type->isReferenceType()) {
+      return true;
+    }
+
+    const auto canonical = type.getCanonicalType();
+    if (canonical->isBuiltinType() || canonical->isEnumeralType()) {
+      return false;
+    }
+
+    if (canonical->isPointerType()) {
+      return true;
+    }
+
+    auto& cache = containsViewsCache();
+    if (const auto found = cache.find(canonical.getTypePtr()); found != cache.end()) {
+      return found->second;
+    }
+
+    llvm::SmallPtrSet<const clang::Type*, 16> seen;
+    const bool result = containsViews(type, seen);
+
+    cache[canonical.getTypePtr()] = result;
+    return result;
+  }
+
+  // Standard synchronization primitives whose interior mutability is safe under shared access.
+  inline bool isSynchronizationType(clang::QualType type) {
+    type = type.getNonReferenceType();
+    const auto* record = recordOf(type);
+    if (record == nullptr || !standardRecord(type)) {
+      return false;
+    }
+
+    const auto name = record->getName();
+
+    return name == "mutex" || name == "recursive_mutex" || name == "shared_mutex" || name == "timed_mutex" || name == "condition_variable" || name == "condition_variable_any" || name == "atomic" || name == "atomic_flag" || name == "once_flag";
+  }
+
+  // Whether a record cannot be reassigned (copy-assigned or move-assigned), so a field of this type
+  // stays alive for its enclosing object's whole lifetime, as a pinned Rust value does.
+  inline bool isPinnedRecord(const clang::CXXRecordDecl& record) {
+    const auto* definition = record.getDefinition();
+    if (definition == nullptr) {
+      return false;
+    }
+
+    bool copy_assignable = !definition->hasUserDeclaredCopyAssignment() && !definition->hasUserDeclaredMoveConstructor() && !definition->hasUserDeclaredMoveAssignment();
+    bool move_assignable = !definition->hasUserDeclaredCopyConstructor() && !definition->hasUserDeclaredCopyAssignment() && !definition->hasUserDeclaredMoveConstructor() && !definition->hasUserDeclaredMoveAssignment() && !definition->hasUserDeclaredDestructor();
+
+    for (const auto* method : definition->methods()) {
+      if (method->isCopyAssignmentOperator()) {
+        copy_assignable = !method->isDeleted();
+      } else if (method->isMoveAssignmentOperator()) {
+        move_assignable = !method->isDeleted();
+      }
+    }
+
+    return !copy_assignable && !move_assignable;
+  }
+
+  // Whether a type has no interior mutability (Rust's `Freeze` auto trait): no TBC_SHARED,
+  // no `mutable` fields, no standard sync primitives, and no incomplete opaque C records.
+  inline bool isFreezeType(clang::QualType type, llvm::SmallPtrSetImpl<const clang::Type*>& seen) {
+    type = type.getNonReferenceType().getCanonicalType();
+    if (!seen.insert(type.getTypePtr()).second) {
+      return true;
+    }
+
+    if (type->isBuiltinType() || type->isPointerType() || type->isEnumeralType() || type->isFunctionPointerType()) {
+      return true;
+    }
+
+    if (const auto* array = llvm::dyn_cast<clang::ArrayType>(type.getTypePtr())) {
+      return isFreezeType(array->getElementType(), seen);
+    }
+
+    const auto* record = recordOf(type);
+    if (record == nullptr) {
+      return true;
+    }
+
+    if (sharedRecord(*record) || isSynchronizationType(type)) {
+      return false;
+    }
+
+    const auto* definition = record->getDefinition();
+    if (definition == nullptr) {
+      return false;
+    }
+
+    for (const auto* field : definition->fields()) {
+      if (field->isMutable() || !isFreezeType(field->getType(), seen)) {
+        return false;
+      }
+    }
+
+    for (const auto& base : definition->bases()) {
+      if (!isFreezeType(base.getType(), seen)) {
+        return false;
+      }
+    }
+
+    return true;
+  }
+
+  inline bool isFreezeType(clang::QualType type) {
     llvm::SmallPtrSet<const clang::Type*, 16> seen;
 
-    return containsViews(type, seen);
+    return isFreezeType(type, seen);
+  }
+
+  // Whether `type` is an owning smart pointer whose custom deleter borrows external storage
+  // (such as `std::unique_ptr<T, AllocationDeleter>` borrowing an allocator).
+  inline bool hasCustomDeleterDependency(clang::QualType type) {
+    type = type.getNonReferenceType().getCanonicalType();
+    if (!standardType(type, "unique_ptr")) {
+      return false;
+    }
+
+    const auto* specialization = llvm::dyn_cast_or_null<clang::ClassTemplateSpecializationDecl>(recordOf(type));
+    if (specialization == nullptr) {
+      return false;
+    }
+
+    const auto args = specialization->getTemplateArgs().asArray();
+
+    return args.size() >= 2 && args[1].getKind() == clang::TemplateArgument::Type && containsViews(args[1].getAsType());
+  }
+
+  // Whether destroying a value of `type` can observe a borrowed resource (Rust's drop check):
+  // a unique_ptr with a custom deleter holding borrows, or a non-library record with a user-declared
+  // destructor that holds borrows (directly or via a member).
+  inline bool hasDestructorDependency(clang::QualType type, llvm::SmallPtrSetImpl<const clang::Type*>& seen) {
+    type = type.getNonReferenceType().getCanonicalType();
+    if (!seen.insert(type.getTypePtr()).second) {
+      return false;
+    }
+
+    if (hasCustomDeleterDependency(type)) {
+      return true;
+    }
+
+    const auto* record = recordOf(type);
+    if (record == nullptr || record->getDefinition() == nullptr || libraryRecord(type)) {
+      return false;
+    }
+
+    // Telar's own standard containers (telar::ds::Vec, String, Map, Option, Array, Box) only drop
+    // their elements, like Rust's #[may_dangle] Vec<T>: a destructor dependency exists only if an
+    // element type itself has a destructor dependency.
+    if (inTelarDsNamespace(*record)) {
+      if (const auto* specialization = llvm::dyn_cast<clang::ClassTemplateSpecializationDecl>(record)) {
+        for (const auto& arg : specialization->getTemplateArgs().asArray()) {
+          if (arg.getKind() == clang::TemplateArgument::Type) {
+            const auto arg_type = arg.getAsType();
+            const auto* arg_record = recordOf(arg_type);
+            if (arg_record != nullptr && sharedRecord(*arg_record)) {
+              continue;
+            }
+
+            if (hasDestructorDependency(arg_type, seen)) {
+              return true;
+            }
+          }
+        }
+      }
+
+      return false;
+    }
+
+    const auto* definition = record->getDefinition();
+    if (definition->hasUserDeclaredDestructor() && containsViews(type)) {
+      return true;
+    }
+
+    for (const auto* field : definition->fields()) {
+      if (hasDestructorDependency(field->getType(), seen)) {
+        return true;
+      }
+    }
+
+    for (const auto& base : definition->bases()) {
+      if (hasDestructorDependency(base.getType(), seen)) {
+        return true;
+      }
+    }
+
+    return false;
+  }
+
+  inline bool hasDestructorDependency(clang::QualType type) {
+    if (type.isNull()) {
+      return false;
+    }
+
+    const auto canonical = type.getNonReferenceType().getCanonicalType();
+    if (canonical->isBuiltinType() || canonical->isEnumeralType() || canonical->isPointerType()) {
+      return false;
+    }
+
+    auto& cache = destructorDepCache();
+    if (const auto found = cache.find(canonical.getTypePtr()); found != cache.end()) {
+      return found->second;
+    }
+
+    llvm::SmallPtrSet<const clang::Type*, 16> seen;
+    const bool result = hasDestructorDependency(type, seen);
+
+    cache[canonical.getTypePtr()] = result;
+    return result;
   }
 
   // The type of what a value designates: a pointer's or a reference's pointee, a smart pointer's
