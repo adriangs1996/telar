@@ -66,6 +66,38 @@ namespace telar::runtime {
       return changed;
     }
 
+    struct ResolvedAgentLocation {
+      const Pane* pane;
+      const Workspace* workspace;
+      const Tab* tab;
+      std::uint16_t pane_index;
+    };
+
+    tbc::val_a<ds::Option<ResolvedAgentLocation>> resolveAgentLocation(tbc::ref_a<RuntimeModel> model, const Agent& agent) noexcept {
+      const auto* pane = model.panes.find(agent.pane);
+      if (pane == nullptr || pane->generation != agent.generation || agent.sequence == 0) {
+        return ds::none;
+      }
+
+      const auto* workspace = model.workspaces.find(pane->location.workspace.id);
+      const auto* tab = workspace != nullptr ? workspace->tab(pane->location.tab_id) : nullptr;
+      if (tab == nullptr) {
+        return ds::none;
+      }
+
+      const auto* const position = std::ranges::find(tab->panes, pane->id);
+      if (position == tab->panes.end()) {
+        return ds::none;
+      }
+
+      return ResolvedAgentLocation{
+          .pane = pane,
+          .workspace = workspace,
+          .tab = tab,
+          .pane_index = static_cast<std::uint16_t>(position - tab->panes.begin() + 1),
+      };
+    }
+
   }
 
   void AgentSnapshotBuilder::publish(ClientSession& client, const RuntimeModel& model, const AgentRegistry<ConcurrentMemory>& registry) {
@@ -80,26 +112,14 @@ namespace telar::runtime {
     const auto now = wallMilliseconds();
 
     for (const auto& agent : registry.records()) {
-      const auto* pane = model.panes.find(agent->pane);
-      if (pane == nullptr || pane->generation != agent->generation || agent->sequence == 0) {
+      const auto located = resolveAgentLocation(model, *agent);
+      if (!located) {
         continue;
       }
 
-      const auto* workspace = model.workspaces.find(pane->location.workspace.id);
-      if (workspace == nullptr) {
-        continue;
-      }
-
-      const auto* tab = workspace->tab(pane->location.tab_id);
-      if (tab == nullptr) {
-        continue;
-      }
-
-      const auto* const position = std::ranges::find(tab->panes, pane->id);
-      if (position == tab->panes.end()) {
-        continue;
-      }
-
+      const auto* pane = located->pane;
+      const auto* workspace = located->workspace;
+      const auto* tab = located->tab;
       auto provider = describeProvider(agent->provider);
       std::string_view icon;
       const auto* manifest = model.manifests.find(agent->provider);
@@ -128,7 +148,7 @@ namespace telar::runtime {
           .pane_id = pane->id,
           .pane_generation = pane->generation,
           .location = pane->location,
-          .pane_index = static_cast<std::uint16_t>(position - tab->panes.begin() + 1),
+          .pane_index = located->pane_index,
           .process_id = static_cast<std::uint32_t>(agent->process_identity ? agent->process_identity->pid : pane->process_id),
           .session_id = agent->session_id,
           .workspace_label = utf8Prefix(workspace->displayName(), label_bytes),

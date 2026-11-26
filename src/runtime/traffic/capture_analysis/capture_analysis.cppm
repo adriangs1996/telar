@@ -191,54 +191,17 @@ export {
           return;
         }
 
-        const auto now = Clock::now();
-        ds::Option<Entry>* slot = nullptr;
-
-        for (auto& entry : entries_.viewMut()) {
-          if (entry && entry->key == part.key) {
-            slot = &entry;
-            break;
-          }
-        }
-
-        if (slot && now - (*slot)->created >= lifetime) {
-          if ((*slot)->storage) {
-            failure(slot->getMut(), "ip_fragment_timeout", report);
-          }
-
-          slot->reset();
-        }
-
+        const auto slot_index = acquireSlot(part.key, Clock::now(), report);
+        auto& slot = entries_.atMut(slot_index);
         if (!slot) {
-          const auto entries = entries_.viewMut();
-          const auto free = std::ranges::find_if(entries, [](const auto& entry) {
-            return !entry;
-          });
-
-          slot = free == entries.end() ? &*std::min_element(entries.begin(), entries.end(), [](const auto& first, const auto& second) {
-            return first->created < second->created;
-          })
-                                       : &*free;
-          if (slot == nullptr) {
-            return;
-          }
-
-          if (*slot && (*slot)->storage) {
-            failure(slot->getMut(), "ip_fragment_capacity", report);
-          }
-
-          slot->reset();
-        }
-
-        if (!*slot) {
           Entry entry;
 
           initialize(entry, event, part.key);
           entry.storage.emplace(memory_, maximum_prefix + maximum_payload);
-          slot->emplace(std::move(entry));
+          slot.emplace(std::move(entry));
         }
 
-        auto& entry = slot->getMut();
+        auto& entry = slot.getMut();
         if (!entry.storage) {
           return;
         }
@@ -250,9 +213,9 @@ export {
         }
 
         if (entry.prefix != 0 && entry.length && entry.received == *entry.length) {
-          auto completed = std::move(*slot);
+          auto completed = std::move(slot);
 
-          slot->reset();
+          slot.reset();
           consume(assembled(completed.getMut()));
         }
       }
@@ -282,6 +245,46 @@ export {
       static void store(Entry& entry, const Fragment& part);
 
       static std::span<const Byte> assembled(Entry& entry);
+
+      template <typename Report>
+      [[tbc::generic]] std::size_t acquireSlot(const Key& key, Clock::time_point now, Report& report) {
+        auto entries = entries_.viewMut();
+
+        for (std::size_t index = 0; index < entries.size(); ++index) {
+          if (!entries[index] || entries[index]->key != key) {
+            continue;
+          }
+
+          if (now - entries[index]->created >= lifetime) {
+            if (entries[index]->storage) {
+              failure(entries[index].getMut(), "ip_fragment_timeout", report);
+            }
+
+            entries[index].reset();
+          }
+
+          return index;
+        }
+
+        std::size_t oldest = 0;
+
+        for (std::size_t index = 0; index < entries.size(); ++index) {
+          if (!entries[index]) {
+            return index;
+          }
+
+          if (entries[index]->created < entries[oldest]->created) {
+            oldest = index;
+          }
+        }
+
+        if (entries[oldest] && entries[oldest]->storage) {
+          failure(entries[oldest].getMut(), "ip_fragment_capacity", report);
+        }
+
+        entries[oldest].reset();
+        return oldest;
+      }
 
       template <typename Report>
       [[tbc::generic]] static void failure(Entry& entry, std::string_view reason, Report report) {

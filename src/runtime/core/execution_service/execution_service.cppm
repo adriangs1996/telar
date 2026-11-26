@@ -56,6 +56,7 @@ export {
     class [[tbc::shared]] LimitService {
     public:
       LimitService() = default;
+      ~LimitService() = default;
       LimitService(const LimitService&) = delete;
       LimitService& operator=(const LimitService&) = delete;
       LimitService(LimitService&&) = delete;

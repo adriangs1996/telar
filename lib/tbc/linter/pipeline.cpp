@@ -144,7 +144,8 @@ namespace tbc_lint {
       }
 
       void HandleTranslationUnit(clang::ASTContext& context) override {
-        const auto previous = context.getTraversalScope();
+        const auto prior = context.getTraversalScope();
+        const std::vector<clang::Decl*> previous(prior.begin(), prior.end());
 
         context.setTraversalScope(declarations_);
         matchers_->HandleTranslationUnit(context);

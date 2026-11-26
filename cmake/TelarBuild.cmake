@@ -90,9 +90,14 @@ if(TELAR_TBC_PLUGIN)
     set(telar_tbc_plugin "${CMAKE_SOURCE_DIR}/lib/tbc/out/release/tbc-plugin.so")
   endif()
   if(EXISTS "${telar_tbc_plugin}")
+    # Only the macOS units have had the blank lines of docs/code-style.md applied.
+    set(telar_tbc_plugin_checks "lifetime,interface-bodies,standard-containers")
+    if(APPLE)
+      string(APPEND telar_tbc_plugin_checks ",blank-lines")
+    endif()
     target_compile_options(telar-build-flags INTERFACE
       "$<$<COMPILE_LANGUAGE:CXX,OBJCXX>:-fplugin=${telar_tbc_plugin}>"
-      "$<$<COMPILE_LANGUAGE:CXX,OBJCXX>:-fplugin-arg-tbc-checks=lifetime,interface-bodies,blank-lines,standard-containers>"
+      "$<$<COMPILE_LANGUAGE:CXX,OBJCXX>:-fplugin-arg-tbc-checks=${telar_tbc_plugin_checks}>"
       "$<$<COMPILE_LANGUAGE:CXX,OBJCXX>:-fplugin-arg-tbc-warnings-as-errors>"
       "$<$<COMPILE_LANGUAGE:CXX,OBJCXX>:-fplugin-arg-tbc-interface-allowlist=${CMAKE_SOURCE_DIR}/docs/build/interface-bodies-allowlist.txt>"
       "$<$<COMPILE_LANGUAGE:CXX,OBJCXX>:-fplugin-arg-tbc-standard-containers-allowlist=${CMAKE_SOURCE_DIR}/docs/build/standard-containers-allowlist.txt>"

@@ -362,7 +362,7 @@ namespace telar::gui::application {
 
   namespace {
 
-    void confirmPaneAttachment(std::uint64_t& attachment_generation, std::uint64_t& chrome_revision, Pane<Memory>& pane) {
+    void confirmPaneAttachment(std::uint64_t& attachment_generation, Pane<Memory>& pane, std::uint64_t& chrome_revision) {
       if (pane.attached) {
         return;
       }
@@ -379,7 +379,7 @@ namespace telar::gui::application {
   }
 
   void Session::confirmAttachment(Pane<Memory>& pane) {
-    confirmPaneAttachment(attachment_generation_, chrome_revision_, pane);
+    confirmPaneAttachment(attachment_generation_, pane, chrome_revision_);
   }
 
   void Session::synchronizeAttachments() {
@@ -534,7 +534,7 @@ namespace telar::gui::application {
     }
 
     reserveAppend(panes, maximum_panes);
-    confirmPaneAttachment(attachment_generation_, chrome_revision_, pane.getMut());
+    confirmPaneAttachment(attachment_generation_, pane.getMut(), chrome_revision_);
 
     if (discovered) {
       tabs.atMut(cached_index) = std::move(tab);

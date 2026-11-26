@@ -245,7 +245,9 @@ namespace {
     telar::MemoryAdapter adapter{system};
 
     telar::ConcurrentMemory& memory = adapter;
-    GraphicsBudget budget{.used = GraphicsBudget::global_capacity - pixels.size() + 1};
+    GraphicsBudget budget;
+
+    budget.used = GraphicsBudget::global_capacity - pixels.size() + 1;
     GraphicsStore store{memory, budget};
     bool rejected = false;
 

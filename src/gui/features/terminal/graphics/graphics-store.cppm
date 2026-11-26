@@ -91,6 +91,7 @@ export {
       std::size_t used = 0;
 
       GraphicsBudget() = default;
+      ~GraphicsBudget() = default;
       GraphicsBudget(const GraphicsBudget&) = delete;
       GraphicsBudget& operator=(const GraphicsBudget&) = delete;
       GraphicsBudget(GraphicsBudget&&) = delete;
