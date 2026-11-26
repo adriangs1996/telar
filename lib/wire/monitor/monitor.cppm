@@ -103,6 +103,8 @@ export extern "C++" {
       static constexpr std::int32_t lowest_nice = 20;
       // A share of the processor in thousandths: of one core, or of all of them together.
       static constexpr std::uint16_t whole_permille = 1000;
+      // The shares of all cores a snapshot carries, one per reading: 2 minutes at a reading every 2 s.
+      static constexpr std::size_t history_samples = 60;
     };
 
     // The sections a query asks for, as bits.
@@ -327,6 +329,9 @@ export extern "C++" {
       std::uint64_t sample{};
       // Of all cores together: 1000 is every core busy.
       std::uint16_t cpu_permille{};
+      // The shares of all cores of the readings before, oldest first and this one last, back to the
+      // last pause in the readings.
+      std::span<const std::uint16_t> history;
       std::span<const std::uint16_t> cores;
       std::uint64_t memory_total_bytes{};
       std::uint64_t memory_used_bytes{};
@@ -335,10 +340,20 @@ export extern "C++" {
       std::uint64_t swap_total_bytes{};
       std::uint64_t swap_used_bytes{};
       std::uint32_t process_count{};
-      // Of those, the ones telar runs: in its panes or its own, and those an agent runs.
+      // Of those, the ones telar runs: in its panes or its own, those an agent runs or that are one,
+      // and the agents themselves.
       std::uint32_t telar_count{};
       std::uint32_t agent_count{};
+      std::uint32_t agents{};
+      // Of the processes whose threads the runtime could read.
       std::uint32_t thread_count{};
+      // The processes whose CPU, memory and threads the runtime may not read, and what the cores
+      // spent that no process it read accounts for, of one core as a process's share: the other
+      // users' processes and the kernel's.
+      std::uint32_t unmeasured_count{};
+      std::uint32_t unattributed_cpu_permille{};
+      // The user the runtime runs as.
+      std::uint32_t user_id{};
       std::uint64_t disk_read_per_second{};
       std::uint64_t disk_written_per_second{};
       std::span<const MonitorDisk> disks;
@@ -361,6 +376,7 @@ export extern "C++" {
               Field<&MonitorSnapshot::sections, BoundedInteger<u8, 0, MonitorSections::all>, "sections">,
               Field<&MonitorSnapshot::sample, u64, "sample">,
               Field<&MonitorSnapshot::cpu_permille, BoundedInteger<u16, 0, MonitorLimits::whole_permille>, "cpu_permille">,
+              Field<&MonitorSnapshot::history, CountedSpan<u8, BoundedInteger<u16, 0, MonitorLimits::whole_permille>, MonitorLimits::history_samples>, "history">,
               Field<&MonitorSnapshot::cores, CountedSpan<u16, BoundedInteger<u16, 0, MonitorLimits::whole_permille>, MonitorLimits::maximum_cores>, "cores">,
               Field<&MonitorSnapshot::memory_total_bytes, u64, "memory_total_bytes">,
               Field<&MonitorSnapshot::memory_used_bytes, u64, "memory_used_bytes">,
@@ -371,7 +387,11 @@ export extern "C++" {
               Field<&MonitorSnapshot::process_count, u32, "process_count">,
               Field<&MonitorSnapshot::telar_count, u32, "telar_count">,
               Field<&MonitorSnapshot::agent_count, u32, "agent_count">,
+              Field<&MonitorSnapshot::agents, u32, "agents">,
               Field<&MonitorSnapshot::thread_count, u32, "thread_count">,
+              Field<&MonitorSnapshot::unmeasured_count, u32, "unmeasured_count">,
+              Field<&MonitorSnapshot::unattributed_cpu_permille, u32, "unattributed_cpu_permille">,
+              Field<&MonitorSnapshot::user_id, u32, "user_id">,
               Field<&MonitorSnapshot::disk_read_per_second, u64, "disk_read_per_second">,
               Field<&MonitorSnapshot::disk_written_per_second, u64, "disk_written_per_second">,
               Field<&MonitorSnapshot::disks, CountedSpan<u8, ValueCodec<MonitorDisk>, MonitorLimits::maximum_disks>, "disks">,

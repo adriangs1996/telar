@@ -10,6 +10,7 @@ module;
 #include <sys/random.h>
 #include <sys/socket.h>
 #include <sys/syscall.h>
+#include <time.h>
 #include <unistd.h>
 #if !defined(__GLIBC__)
 #include <linux/fs.h>
@@ -56,6 +57,7 @@ export namespace telar::sys {
 // define it, undefined, and exported under its own name, so `EPOLL_CTL_ADD` reads the same to an
 // importer that includes the header and to one that only imports this module.
 #define TELAR_SYS_CONSTANTS(X) \
+  X(CLOCK_BOOTTIME)            \
   X(EPOLL_CTL_ADD)             \
   X(EPOLL_CTL_DEL)             \
   X(EPOLL_CTL_MOD)             \
@@ -93,6 +95,7 @@ namespace telar::sys::captured {
 
 }
 
+#undef CLOCK_BOOTTIME
 #undef EPOLL_CTL_ADD
 #undef EPOLL_CTL_DEL
 #undef EPOLL_CTL_MOD

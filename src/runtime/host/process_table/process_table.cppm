@@ -55,6 +55,10 @@ export {
       // One process, none once it is gone.
       static ds::Option<ProcessRecord> find(pid_t process) noexcept;
 
+      // The time now on the clock a record's start counts: since the epoch on macOS, since boot on
+      // Linux.
+      static std::chrono::microseconds clock() noexcept;
+
       // Sends the signal to the process if it is still that instance; a start of
       // zero accepts whichever process has the pid. Linux sends it through a pidfd, so a pid recycled
       // after the check never receives it; macOS has none, which leaves the instant between the

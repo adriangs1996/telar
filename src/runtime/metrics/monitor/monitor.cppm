@@ -55,6 +55,8 @@ export {
       // It is an agent or descends from one.
       bool under_agent = false;
       ProcessOwner owner = ProcessOwner::none;
+      // It runs one of telar's programs beside the runtime.
+      bool telar_program = false;
       bool described = false;
       FixedText<MonitorLimits::name_bytes> name;
       FixedText<MonitorLimits::user_bytes> user;
@@ -68,6 +70,21 @@ export {
     // The answers of one round, in the order of its queries; none for a query that names a process
     // that is gone or was replaced.
     using MonitorAnswers = ds::Array<ds::Option<MonitorSnapshot>, maximum_monitor_answers>;
+
+    // The exact paths of telar's programs beside the runtime, which the monitor names as telar's
+    // whoever started them. Never a prefix: telar in /usr/bin would name half the system.
+    struct TelarPrograms {
+      static constexpr std::size_t maximum_programs = 2;
+
+      ds::Array<FixedText<process_path_bytes>, maximum_programs> paths{};
+      std::uint8_t count = 0;
+
+      [[nodiscard]] bool contains(std::string_view path) const noexcept;
+    };
+
+    // `telar` and `telar-gateway` beside the runtime's own executable, those that are there: they are
+    // built and installed together.
+    [[nodiscard]] TelarPrograms siblingPrograms() noexcept;
 
     // A user's name as the sampler caches it.
     struct UserName {
@@ -83,7 +100,11 @@ export {
       using Clock = std::chrono::steady_clock;
       static constexpr std::size_t maximum_answers = maximum_monitor_answers;
 
-      MonitorSampler(tbc::mut_a<ConcurrentMemory> memory, tbc::ref_a<ProcessInspector> inspector);
+      // A reading further than this from the one before follows a pause in the readings: the history
+      // of the processor starts again after it.
+      static constexpr auto history_gap = std::chrono::seconds{5};
+
+      MonitorSampler(tbc::mut_a<ConcurrentMemory> memory, tbc::ref_a<ProcessInspector> inspector, const TelarPrograms& programs = {});
       ~MonitorSampler() = default;
       MonitorSampler(const MonitorSampler&) = delete;
       MonitorSampler& operator=(const MonitorSampler&) = delete;
@@ -91,8 +112,10 @@ export {
       MonitorSampler& operator=(MonitorSampler&&) = delete;
 
       // Takes the processes, leaving the previous reading's storage in `records` for the next one.
-      // `clients` are the processes connected to the runtime: its windows and its CLI.
-      void update(ds::Vec<ProcessRecord, ConcurrentMemory>& records, const HostDetail& host, Clock::time_point now, std::span<const PaneRoot> roots, std::span<const pid_t> clients = {});
+      // `started_clock` is the time now on the clock the records' starts count
+      // (ProcessTable::clock). `clients` are the processes connected to the runtime: its windows and
+      // its CLI.
+      void update(ds::Vec<ProcessRecord, ConcurrentMemory>& records, const HostDetail& host, Clock::time_point now, std::chrono::microseconds started_clock, std::span<const PaneRoot> roots, std::span<const pid_t> clients = {});
 
       // Two readings were taken, so CPU and rates are known.
       [[nodiscard]] bool ready() const noexcept;
@@ -140,6 +163,7 @@ export {
 
       void attribute(std::span<const PaneRoot> roots);
       void measureHost(const HostDetail& host, double seconds);
+      void remember(double seconds) noexcept;
       [[nodiscard]] static bool matches(const MonitorEntry& entry, const MonitorView& view) noexcept;
       [[nodiscard]] static bool before(const MonitorEntry& left, const MonitorEntry& right, const MonitorView& view) noexcept;
       // As `before`, but a tree orders siblings by their branches' processor and memory.
@@ -205,10 +229,17 @@ export {
       pid_t self_ = 0;
       ds::Array<pid_t, maximum_monitor_clients> clients_{};
       std::size_t client_count_ = 1;
+      TelarPrograms programs_{};
+      uid_t user_ = 0;
 
       HostDetail host_{};
       ds::Array<std::uint16_t, HostDetail::maximum_cores> cores_{};
       std::uint16_t cpu_permille_ = 0;
+      // Of one core, as a process's share: what every core was busy together.
+      std::uint64_t cores_busy_permille_ = 0;
+      // The shares of the readings in a row, oldest first, until a pause.
+      ds::Array<std::uint16_t, MonitorLimits::history_samples> history_{};
+      std::uint8_t history_count_ = 0;
       std::uint64_t disk_read_per_second_ = 0;
       std::uint64_t disk_written_per_second_ = 0;
       // They view host_.
@@ -217,6 +248,11 @@ export {
       std::uint32_t thread_count_ = 0;
       std::uint32_t telar_count_ = 0;
       std::uint32_t agent_count_ = 0;
+      std::uint32_t agents_ = 0;
+      // The processes whose CPU the runtime may not read, and what the cores spent that no process it
+      // read accounts for, of one core.
+      std::uint32_t unmeasured_count_ = 0;
+      std::uint32_t unattributed_permille_ = 0;
     };
 
   }
