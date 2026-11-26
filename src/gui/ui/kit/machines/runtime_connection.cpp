@@ -4,8 +4,6 @@ static_assert(true);
 #endif
 
 #include "runtime_connection.hpp"
-#include "foundation/core/application_memory.hpp"
-#include "foundation/core/memory.hpp"
 #include "telar_base/memory/fixed_text.hpp"
 #include "telar_platform/file_descriptor.hpp"
 #include "telar_wire/codecs/telar_codec.hpp"
@@ -43,6 +41,7 @@ static_assert(true);
 import telar.client;
 import telar.gui.application;
 import telar.base.ds;
+import telar.gui.foundation.core;
 
 namespace telar::gui::qt {
 

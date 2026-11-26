@@ -3,8 +3,6 @@
 static_assert(true);
 #endif
 
-#include "foundation/core/application_memory.hpp"
-#include "foundation/core/memory.hpp"
 #include "graphics_scene.hpp"
 #include "tbc/view.hpp"
 #include "telar_base/memory/fixed_text.hpp"

@@ -6,8 +6,6 @@ static_assert(true);
 #include "agent_report_fixture.hpp"
 #include "appearance_fixture.hpp"
 #include "clipboard_fixture.hpp"
-#include "foundation/core/application_memory.hpp"
-#include "foundation/core/memory.hpp"
 #include "frame_fixture.hpp"
 #include "frame_pacing_fixture.hpp"
 #include "gui_wait.hpp"

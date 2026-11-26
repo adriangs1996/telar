@@ -4,10 +4,6 @@ static_assert(true);
 #endif
 
 #include "assertions.hpp"
-#include "features/terminal/attachments/capture.hpp"
-#include "features/terminal/attachments/sensitive_bytes.hpp"
-#include "features/terminal/attachments/types.hpp"
-#include "foundation/core/application_memory.hpp"
 #include "ui/app/panes/attachments/attachment_preview.hpp"
 #include <QBuffer>
 #include <QByteArray>
@@ -25,6 +21,7 @@ static_assert(true);
 
 import telar.gui.features.terminal.attachments;
 import telar.base.ds;
+import telar.gui.foundation.core;
 
 namespace {
 

@@ -3,7 +3,6 @@
 static_assert(true);
 #endif
 
-#include "foundation/core/application_memory.hpp"
 #include "plugin_worker.hpp"
 #include "tbc/view.hpp"
 #include "ui/kit/config/configuration_source.hpp"
@@ -17,6 +16,7 @@ static_assert(true);
 
 import telar.gui.application;
 import telar.base.ds;
+import telar.gui.foundation.core;
 
 namespace telar::gui::test {
   struct MachineWindow;

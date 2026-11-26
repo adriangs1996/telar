@@ -1,9 +1,11 @@
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
+
 #include "ui/kit/scene/optical_text.hpp"
 #include "cf_reference.hpp"
 #include "font_smoothing.h"
-#include "foundation/core/memory.hpp"
-#include "tbc/view.hpp"
-#include "telar_base/ds/containers.hpp"
 #include <CoreText/CoreText.h>
 #include <QFontMetricsF>
 #include <QGlyphRun>
@@ -21,6 +23,11 @@
 #include <memory>
 #include <span>
 #include <stdexcept>
+
+import telar.base.ds;
+import telar.base.memory.allocators;
+import telar.gui.foundation.core;
+import telar.tbc;
 
 namespace telar::gui::qt {
   namespace {

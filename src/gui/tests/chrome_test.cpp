@@ -3,8 +3,6 @@
 static_assert(true);
 #endif
 
-#include "foundation/core/application_memory.hpp"
-#include "foundation/core/memory.hpp"
 #include "frame_fixture.hpp"
 #include "qml_fixture.hpp"
 #include "telar_wire/serializers/telar_cells.hpp"
@@ -69,6 +67,7 @@ import telar.gui.features.notifications;
 import telar.gui.features.window;
 import telar.gui.features.status_bar;
 import telar.base.ds;
+import telar.gui.foundation.core;
 
 namespace {
 

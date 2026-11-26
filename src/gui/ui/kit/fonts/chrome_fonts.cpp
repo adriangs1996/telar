@@ -5,7 +5,6 @@ static_assert(true);
 
 #include "chrome_fonts.hpp"
 #include "font_source.hpp"
-#include "foundation/core/memory.hpp"
 #include "telar_base/ds/containers.hpp"
 #include <QByteArray>
 #include <QtCore/qstringliteral.h>
@@ -13,6 +12,9 @@ static_assert(true);
 #include <memory>
 #include <stdexcept>
 #include <string_view>
+
+import telar.gui.foundation.core;
+
 
 namespace telar::gui::qt {
   namespace {

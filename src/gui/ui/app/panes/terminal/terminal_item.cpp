@@ -4,9 +4,6 @@ static_assert(true);
 #endif
 
 #include "terminal_item.hpp"
-#include "foundation/core/application_memory.hpp"
-#include "foundation/core/memory.hpp"
-#include "foundation/core/wheel_accumulator.hpp"
 #include "platform/font.h"
 #include "platform/text_input.hpp"
 #include "platform/window.hpp"

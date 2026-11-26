@@ -3,7 +3,6 @@
 static_assert(true);
 #endif
 
-#include "foundation/core/memory.hpp"
 #include "telar_wire/protocol/pane_io.hpp"
 #include "telar_wire/serializers/telar_messages.hpp"
 #include "ui/kit/models/agent_status_value.hpp"

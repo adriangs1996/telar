@@ -3,7 +3,6 @@
 static_assert(true);
 #endif
 
-#include "foundation/core/memory.hpp"
 #include <QLocalSocket>
 #include <QString>
 #include <QtCore/qtypes.h>
@@ -16,6 +15,7 @@ static_assert(true);
 
 import telar.gui.foundation.system;
 import telar.platform.paths;
+import telar.gui.foundation.core;
 
 namespace telar::gui::qt {
 

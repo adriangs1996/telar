@@ -5,7 +5,6 @@ static_assert(true);
 
 #include "font_resolver.hpp"
 #include "font_source.hpp"
-#include "foundation/core/memory.hpp"
 #include "tbc/view.hpp"
 #include "telar_base/memory/allocator.hpp"
 #include <QtCore/qtypes.h>

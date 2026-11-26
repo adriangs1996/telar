@@ -2,7 +2,6 @@
 // Keep textual ABI declarations and module imports in one clangd parse.
 static_assert(true);
 #endif
-#include "foundation/core/memory.hpp"
 #include "telar_config/graphics/limits.hpp"
 #include "telar_wire/codecs/telar_value_codec.hpp"
 #include "telar_wire/serializers/telar_messages.hpp"
@@ -33,6 +32,7 @@ import telar.gui.foundation.text;
 import telar.gui.foundation.model;
 import telar.gui.features.activity;
 import telar.base.ds;
+import telar.gui.foundation.core;
 
 namespace {
 

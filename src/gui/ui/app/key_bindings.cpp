@@ -4,7 +4,6 @@ static_assert(true);
 #endif
 
 #include "key_bindings.hpp"
-#include "foundation/core/memory.hpp"
 #include "telar_config/graphics/limits.hpp"
 #include "telar_wire/serializers/telar_messages.hpp"
 #include "ui/app/chrome/components/components_controller.hpp"
@@ -47,6 +46,7 @@ static_assert(true);
 
 import telar.gui.application;
 import telar.base.ds;
+import telar.gui.foundation.core;
 
 namespace telar::gui::qt {
 

@@ -3,7 +3,6 @@
 static_assert(true);
 #endif
 
-#include "foundation/core/memory.hpp"
 #include "nvim_controller.hpp"
 #include "predictive_echo.hpp"
 #include "telar_wire/codecs/telar_value_codec.hpp"

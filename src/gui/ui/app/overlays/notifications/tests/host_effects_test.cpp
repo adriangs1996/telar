@@ -3,7 +3,6 @@
 static_assert(true);
 #endif
 
-#include "foundation/core/memory.hpp"
 #include "qt_case.hpp"
 #include "telar_wire/serializers/telar_messages.hpp"
 #include "ui/app/overlays/notifications/sound_player.hpp"
@@ -35,6 +34,7 @@ import telar.gui.tests.allocation_gate;
 import telar.gui.application;
 import telar.gui.foundation.system;
 import telar.base.ds;
+import telar.gui.foundation.core;
 
 namespace {
 

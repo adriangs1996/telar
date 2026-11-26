@@ -3,7 +3,6 @@
 static_assert(true);
 #endif
 
-#include "foundation/core/memory.hpp"
 #include "nvim_host.hpp"
 #include "tbc/view.hpp"
 #include "ui/kit/store/store.hpp"

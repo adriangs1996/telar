@@ -4,14 +4,6 @@ static_assert(true);
 #endif
 
 #include "xcb_clipboard_image_monitor.hpp"
-#include "../clipboard_image_source.hpp"
-#include "features/terminal/attachments/secure_erase.hpp"
-#include "features/terminal/attachments/sensitive_bytes.hpp"
-#include "features/terminal/attachments/types.hpp"
-#include "foundation/core/application_memory.hpp"
-#include "foundation/core/memory.hpp"
-#include "telar_base/memory/allocator.hpp"
-#include "telar_platform/file_descriptor.hpp"
 #include <QAbstractNativeEventFilter>
 #include <QByteArray>
 #include <QCoreApplication>
@@ -44,7 +36,9 @@ static_assert(true);
 #include <xcb/xcbext.h>
 #include <xcb/xproto.h>
 
+import telar.gui.foundation.core;
 import telar.gui.platform;
+import telar.platform.primitives;
 import telar.base.ds;
 
 namespace telar::gui::platform {

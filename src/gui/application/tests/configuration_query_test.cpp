@@ -3,7 +3,6 @@
 static_assert(true);
 #endif
 
-#include "foundation/core/memory.hpp"
 #include "telar_base/memory/allocator.hpp"
 #include "telar_wire/serializers/telar_messages.hpp"
 #include <array>

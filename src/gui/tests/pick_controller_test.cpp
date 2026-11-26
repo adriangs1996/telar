@@ -3,7 +3,6 @@
 static_assert(true);
 #endif
 
-#include "foundation/core/memory.hpp"
 #include "telar_base/memory/allocator.hpp"
 #include <algorithm>
 #include <array>
@@ -45,6 +44,7 @@ import telar.gui.features.components;
 #include <iostream>
 
 import telar.gui.application;
+import telar.gui.foundation.core;
 
 namespace {
 

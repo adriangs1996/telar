@@ -1,1 +1,1 @@
-telar_add_domain(gui platform)
+telar_add_domain(gui platform DEPS foundation/core)

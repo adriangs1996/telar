@@ -7,6 +7,51 @@ import telar.sys.posix;
 
 namespace telar::gui::platform {
 
+  void ClipboardImageTransfer::fail(ClipboardImageError error) noexcept {
+    if (failed_.load(std::memory_order_relaxed)) {
+      return;
+    }
+
+    error_ = error;
+    failed_.store(true, std::memory_order_release);
+  }
+
+  ds::Option<ClipboardImageError> ClipboardImageTransfer::failure() const noexcept {
+    if (failed_.load(std::memory_order_acquire)) {
+      return error_;
+    }
+
+    return ds::none;
+  }
+
+  ClipboardImageFailure::ClipboardImageFailure(ClipboardImageError code) noexcept
+      : code_(code) {}
+
+  ClipboardImageError ClipboardImageFailure::code() const noexcept {
+    return code_;
+  }
+
+  const char* ClipboardImageFailure::what() const noexcept {
+    switch (code_) {
+    case ClipboardImageError::no_image:
+      return "NoImageOnClipboard";
+    case ClipboardImageError::changed:
+      return "ClipboardChanged";
+    case ClipboardImageError::source_bytes:
+      return "ClipboardSourceTooLarge";
+    case ClipboardImageError::png_bytes:
+      return "ClipboardPngTooLarge";
+    case ClipboardImageError::pixels:
+      return "ClipboardPixelsTooLarge";
+    case ClipboardImageError::invalid_image:
+      return "InvalidClipboardImage";
+    case ClipboardImageError::read_failed:
+      return "ClipboardReadFailed";
+    }
+
+    return "ClipboardReadFailed";
+  }
+
   template <Allocator Memory>
   tbc::val_a<SensitiveBytes<Memory>> ClipboardImagePipe::read(tbc::mut_a<Memory> memory, int descriptor, ClipboardImagePipeLimits limits) {
     if (descriptor < 0) {

@@ -3,7 +3,6 @@
 static_assert(true);
 #endif
 
-#include "foundation/core/wheel_accumulator.hpp"
 #include "history_controller.hpp"
 #include "ui/app/panes/terminal/history/layout/history_filters_layout.hpp"
 #include "ui/app/panes/terminal/history/layout/history_footer_layout.hpp"
@@ -34,6 +33,7 @@ static_assert(true);
 
 import telar.gui.application;
 import telar.base.ds;
+import telar.gui.foundation.core;
 
 namespace telar::gui::qt {
 

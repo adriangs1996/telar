@@ -3,7 +3,6 @@
 static_assert(true);
 #endif
 
-#include "foundation/core/application_memory.hpp"
 #include "telar_platform/file_descriptor.hpp"
 #include "telar_wire/codecs/telar_value_codec.hpp"
 #include "telar_wire/codecs/telar_wire.hpp"
@@ -49,6 +48,7 @@ import telar.gui.features.plugins;
 import telar.platform.fs;
 import telar.plugins;
 import telar.base.ds;
+import telar.gui.foundation.core;
 
 namespace {
 

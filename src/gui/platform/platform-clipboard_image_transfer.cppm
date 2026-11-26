@@ -5,27 +5,13 @@ import std;
 import :clipboard_image_pipe;
 import telar.base.ds;
 
-// This class completes the forward declaration in the Objective-C++ ABI.
+// The transfer status shared between the clipboard reader and pipe on Linux.
 export namespace telar::gui::platform {
 
-  extern "C++" class ClipboardImageTransfer {
+  class ClipboardImageTransfer {
   public:
-    inline void fail(ClipboardImageError error) noexcept {
-      if (failed_.load(std::memory_order_relaxed)) {
-        return;
-      }
-
-      error_ = error;
-      failed_.store(true, std::memory_order_release);
-    }
-
-    [[nodiscard]] inline ds::Option<ClipboardImageError> failure() const noexcept {
-      if (failed_.load(std::memory_order_acquire)) {
-        return error_;
-      }
-
-      return ds::none;
-    }
+    void fail(ClipboardImageError error) noexcept;
+    [[nodiscard]] ds::Option<ClipboardImageError> failure() const noexcept;
 
   private:
     ClipboardImageError error_ = ClipboardImageError::read_failed;

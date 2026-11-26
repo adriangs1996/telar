@@ -1,60 +1,52 @@
-#include "platform/file_drag.hpp"
-#include "platform/macos/file_drag_writers.h"
+#include "platform/macos/file_drag_bridge.h"
+#include "tbc/view.hpp"
 #include <AppKit/AppKit.h>
-#include <QGuiApplication>
-#include <QWindow>
 #include <UniformTypeIdentifiers/UniformTypeIdentifiers.h>
-#include <bit>
 #include <cstdint>
 #include <memory>
 #include <span>
 #include <string_view>
-#include <utility>
 
-namespace telar::gui::platform {
-  namespace {
+struct TelarGuiFileDrag {
+  NSArray<id<NSPasteboardWriting>>* writers = nil;
+  NSObject<NSFilePromiseProviderDelegate, NSDraggingSource>* source = nil;
+  NSMutableDictionary<NSNumber*, void (^)(NSError*)>* waiting = [NSMutableDictionary dictionary];
+  std::uint64_t ticket = 0;
+  TelarGuiPromiseAskedCallback callback = nullptr;
+  void* context = nullptr;
 
-    NSString* textOf(std::string_view text) {
-      NSString* const read = [[NSString alloc] initWithBytes:text.data() length:text.size() encoding:NSUTF8StringEncoding];
-
-      // Bytes that are no text read as no text.
-      return read == nil ? @"" : read;
+  void ask(std::uint32_t row, std::string_view path, void (^handler)(NSError*)) {
+    // A directory's path may end in a slash, which is no part of its name.
+    while (path.size() > 1 && path.ends_with('/')) {
+      path.remove_suffix(1);
     }
 
-    NSError* failureOf(NSString* why) {
-      return [NSError errorWithDomain:NSCocoaErrorDomain code:NSFileWriteUnknownError userInfo:@{NSLocalizedDescriptionKey : why}];
+    const auto split = path.rfind('/');
+    if (callback == nullptr || split == std::string_view::npos || split == 0 || split + 1 == path.size()) {
+      handler([NSError errorWithDomain:NSCocoaErrorDomain code:NSFileWriteUnknownError userInfo:@{NSLocalizedDescriptionKey : @"Nothing writes a file there"}]);
+      return;
     }
 
+    waiting[[NSNumber numberWithUnsignedLongLong:++ticket]] = [handler copy];
+    const auto directory = path.substr(0, split);
+    const auto name = path.substr(split + 1);
+
+    callback(context, row, ticket, directory.data(), directory.size(), name.data(), name.size());
+  }
+};
+
+namespace {
+
+  NSString* textOf(std::string_view text) {
+    NSString* const read = [[NSString alloc] initWithBytes:text.data() length:text.size() encoding:NSUTF8StringEncoding];
+
+    // Bytes that are no text read as no text.
+    return read == nil ? @"" : read;
   }
 
-  // What the rows are on the pasteboard, whoever is asked for the files they promise, and the
-  // files the system asked for and waits to hear of, by their ticket.
-  struct FileDrag::Native {
-    NSArray<id<NSPasteboardWriting>>* writers = nil;
-    NSObject<NSFilePromiseProviderDelegate, NSDraggingSource>* source = nil;
-    NSMutableDictionary<NSNumber*, void (^)(NSError*)>* waiting = [NSMutableDictionary dictionary];
-    std::uint64_t ticket = 0;
-    tbc::val_a<PromiseAsked> asked;
-
-    // The system asked for what `row` promised at `path`, and `handler` tells it how writing
-    // it ended.
-    void ask(std::uint32_t row, std::string_view path, void (^handler)(NSError*)) {
-      // A directory's path may end in a slash, which is no part of its name.
-      while (path.size() > 1 && path.ends_with('/')) {
-        path.remove_suffix(1);
-      }
-
-      const auto split = path.rfind('/');
-
-      if (!asked || split == std::string_view::npos || split == 0 || split + 1 == path.size()) {
-        handler(failureOf(@"Nothing writes a file there"));
-        return;
-      }
-
-      waiting[[NSNumber numberWithUnsignedLongLong:++ticket]] = [handler copy];
-      asked({.row = row, .ticket = ticket, .directory = path.substr(0, split), .name = path.substr(split + 1)});
-    }
-  };
+  NSError* failureOf(NSString* why) {
+    return [NSError errorWithDomain:NSCocoaErrorDomain code:NSFileWriteUnknownError userInfo:@{NSLocalizedDescriptionKey : why}];
+  }
 
 }
 
@@ -102,7 +94,7 @@ namespace telar::gui::platform {
 // view the drag ended.
 @interface TelarDragSource : NSObject <NSFilePromiseProviderDelegate, NSDraggingSource>
 // The rows it is the source of; none once other rows were given, or the window is gone.
-@property(nonatomic, assign) telar::gui::platform::FileDrag::Native* rows;
+@property(nonatomic, assign) TelarGuiFileDrag* rows;
 @property(nonatomic, weak) NSView* view;
 @end
 
@@ -148,153 +140,183 @@ namespace telar::gui::platform {
 
 @end
 
-namespace telar::gui::platform {
-  namespace {
+namespace {
 
-    constexpr CGFloat icon_side = 32;
+  constexpr CGFloat icon_side = 32;
 
-    // The type a promise says it is of. AppKit takes a promise of data or of a directory and
-    // throws for any other (NSFilePromiseProvider.h, on `fileType`): a directory is a folder
-    // whatever it is called, and a file is the kind of data its name says, or data.
-    UTType* typeNamed(NSString* name, bool directory) {
-      if (directory) {
-        return UTTypeFolder;
-      }
-
-      NSString* const extension = name.pathExtension;
-      UTType* const known = extension.length == 0 ? nil : [UTType typeWithFilenameExtension:extension];
-
-      return known == nil || ![known conformsToType:UTTypeData] ? UTTypeData : known;
+  // The type a promise says it is of. AppKit takes a promise of data or of a directory and
+  // throws for any other (NSFilePromiseProvider.h, on `fileType`): a directory is a folder
+  // whatever it is called, and a file is the kind of data its name says, or data.
+  UTType* typeNamed(NSString* name, bool directory) {
+    if (directory) {
+      return UTTypeFolder;
     }
 
-    // The event a drag begins with: the one being handled when the pointer holds the rows, or
-    // one made of where the pointer is.
-    NSEvent* pointerEvent(NSWindow* window) {
-      NSEvent* const current = NSApp.currentEvent;
-      if (current != nil && current.window == window && (current.type == NSEventTypeLeftMouseDown || current.type == NSEventTypeLeftMouseDragged)) {
-        return current;
-      }
+    NSString* const extension = name.pathExtension;
+    UTType* const known = extension.length == 0 ? nil : [UTType typeWithFilenameExtension:extension];
 
-      return [NSEvent mouseEventWithType:NSEventTypeLeftMouseDragged
-                                location:window.mouseLocationOutsideOfEventStream
-                           modifierFlags:NSEvent.modifierFlags
-                               timestamp:NSProcessInfo.processInfo.systemUptime
-                            windowNumber:window.windowNumber
-                                 context:nil
-                             eventNumber:0
-                              clickCount:1
-                                pressure:1];
-    }
-
-    // The source no longer answers for rows that are gone.
-    void forsake(NSObject<NSFilePromiseProviderDelegate, NSDraggingSource>* source) {
-      if (source != nil) {
-        static_cast<TelarDragSource*>(source).rows = nullptr;
-      }
-    }
-
-    // What a row is on the pasteboard, and the picture the pointer carries of it.
-    struct Written {
-      id<NSPasteboardWriting> writer;
-      NSImage* icon;
-    };
-
-    Written written(const DraggedOut& row, TelarDragSource* source) {
-      if (!row.promised.empty()) {
-        NSString* const name = textOf(row.promised);
-        UTType* const type = typeNamed(name, row.directory);
-        TelarFilePromise* const promise = [[TelarFilePromise alloc] initWithFileType:type.identifier delegate:source];
-
-        promise.name = name;
-        promise.line = textOf(row.text);
-        promise.row = row.row;
-        promise.source = source;
-        return {.writer = promise, .icon = [NSWorkspace.sharedWorkspace iconForContentType:type]};
-      }
-
-      if (!row.path.empty()) {
-        NSString* const path = textOf(row.path);
-
-        return {.writer = [NSURL fileURLWithPath:path], .icon = [NSWorkspace.sharedWorkspace iconForFile:path]};
-      }
-
-      NSPasteboardItem* const named = [[NSPasteboardItem alloc] init];
-
-      [named setString:textOf(row.text) forType:NSPasteboardTypeString];
-      return {.writer = named, .icon = [NSWorkspace.sharedWorkspace iconForContentType:UTTypePlainText]};
-    }
-
+    return known == nil || ![known conformsToType:UTTypeData] ? UTTypeData : known;
   }
 
-  FileDrag::FileDrag()
-      : native_(std::make_unique<Native>()) {}
+  // The event a drag begins with: the one being handled when the pointer holds the rows, or
+  // one made of where the pointer is.
+  NSEvent* pointerEvent(NSWindow* window) {
+    NSEvent* const current = NSApp.currentEvent;
+    if (current != nil && current.window == window && (current.type == NSEventTypeLeftMouseDown || current.type == NSEventTypeLeftMouseDragged)) {
+      return current;
+    }
 
-  FileDrag::~FileDrag() {
-    forsake(native_->source);
-    for (NSNumber* const ticket in native_->waiting.allKeys) {
-      end(ticket.unsignedLongLongValue, "the window closed before the file arrived");
+    return [NSEvent mouseEventWithType:NSEventTypeLeftMouseDragged
+                              location:window.mouseLocationOutsideOfEventStream
+                         modifierFlags:NSEvent.modifierFlags
+                             timestamp:NSProcessInfo.processInfo.systemUptime
+                          windowNumber:window.windowNumber
+                               context:nil
+                           eventNumber:0
+                            clickCount:1
+                              pressure:1];
+  }
+
+  // The source no longer answers for rows that are gone.
+  void forsake(NSObject<NSFilePromiseProviderDelegate, NSDraggingSource>* source) {
+    if (source != nil) {
+      static_cast<TelarDragSource*>(source).rows = nullptr;
     }
   }
 
-  const FileDrag::Native& nativeOf(const FileDrag& drag) noexcept {
-    return *drag.native_;
+  // What a row is on the pasteboard, and the picture the pointer carries of it.
+  struct Written {
+    id<NSPasteboardWriting> writer;
+    NSImage* icon;
+  };
+
+  std::string_view sliceOf(const char* data, std::size_t size) noexcept {
+    return data == nullptr || size == 0 ? std::string_view{} : std::string_view{data, size};
   }
 
-  NSArray<id<NSPasteboardWriting>>* writersOf(const FileDrag& drag) {
-    return nativeOf(drag).writers;
-  }
+  Written written(const TelarGuiDraggedOut& row, TelarDragSource* source) {
+    const auto promised = sliceOf(row.promised_data, row.promised_size);
+    const auto text = sliceOf(row.text_data, row.text_size);
+    const auto path_view = sliceOf(row.path_data, row.path_size);
 
-  void FileDrag::end(std::uint64_t ticket, std::string_view failure) {
-    NSNumber* const key = [NSNumber numberWithUnsignedLongLong:ticket];
-    void (^const handler)(NSError*) = native_->waiting[key];
-    if (handler == nil) {
-      return;
+    if (!promised.empty()) {
+      NSString* const name = textOf(promised);
+      UTType* const type = typeNamed(name, row.directory);
+      TelarFilePromise* const promise = [[TelarFilePromise alloc] initWithFileType:type.identifier delegate:source];
+
+      promise.name = name;
+      promise.line = textOf(text);
+      promise.row = row.row;
+      promise.source = source;
+      return {.writer = promise, .icon = [NSWorkspace.sharedWorkspace iconForContentType:type]};
     }
 
-    [native_->waiting removeObjectForKey:key];
-    handler(failure.empty() ? nil : failureOf(textOf(failure)));
-  }
+    if (!path_view.empty()) {
+      NSString* const path = textOf(path_view);
 
-  bool FileDrag::give(const QWindow& window, std::span<const DraggedOut> rows, tbc::val_a<PromiseAsked> asked) {
-    @autoreleasepool {
-      // Only AppKit's window has a view: under another platform of Qt the handle is something else.
-      const bool native = QGuiApplication::platformName() == QLatin1StringView{"cocoa"} && window.handle() != nullptr;
-      NSView* const view = native ? (__bridge NSView*)std::bit_cast<void*>(window.winId()) : nil;
-      TelarDragSource* const source = [[TelarDragSource alloc] init];
-      NSMutableArray<id<NSPasteboardWriting>>* const writers = [NSMutableArray arrayWithCapacity:rows.size()];
-      NSMutableArray<NSImage*>* const icons = [NSMutableArray arrayWithCapacity:rows.size()];
-
-      source.rows = native_.get();
-      source.view = view;
-      for (const auto& row : rows) {
-        const auto made = written(row, source);
-
-        [writers addObject:made.writer];
-        [icons addObject:made.icon];
-      }
-
-      forsake(native_->source);
-      native_->writers = writers;
-      native_->source = source;
-      native_->asked = std::move(asked);
-      if (view == nil || view.window == nil || writers.count == 0 || (NSEvent.pressedMouseButtons & NSUInteger{1}) == 0) {
-        return false;
-      }
-
-      NSEvent* const event = pointerEvent(view.window);
-      const NSPoint held = [view convertPoint:event.locationInWindow fromView:nil];
-      NSMutableArray<NSDraggingItem*>* const items = [NSMutableArray arrayWithCapacity:writers.count];
-
-      for (NSUInteger index = 0; index < writers.count; ++index) {
-        NSDraggingItem* const item = [[NSDraggingItem alloc] initWithPasteboardWriter:writers[index]];
-
-        [item setDraggingFrame:NSMakeRect(held.x - (icon_side / 2), held.y - (icon_side / 2), icon_side, icon_side) contents:icons[index]];
-        [items addObject:item];
-      }
-
-      [view beginDraggingSessionWithItems:items event:event source:source];
-      return true;
+      return {.writer = [NSURL fileURLWithPath:path], .icon = [NSWorkspace.sharedWorkspace iconForFile:path]};
     }
+
+    NSPasteboardItem* const named = [[NSPasteboardItem alloc] init];
+
+    [named setString:textOf(text) forType:NSPasteboardTypeString];
+    return {.writer = named, .icon = [NSWorkspace.sharedWorkspace iconForContentType:UTTypePlainText]};
   }
 
+}
+
+TelarGuiFileDrag* telarGuiFileDragCreate(void) {
+  return std::make_unique<TelarGuiFileDrag>().release();
+}
+
+void telarGuiFileDragDestroy(TelarGuiFileDrag* self) {
+  if (self == nullptr) {
+    return;
+  }
+
+  const std::unique_ptr<TelarGuiFileDrag> owned{self};
+
+  forsake(owned->source);
+  const std::string_view closed{"the window closed before the file arrived"};
+
+  for (NSNumber* const ticket in owned->waiting.allKeys) {
+    telarGuiFileDragEnd(owned.get(), ticket.unsignedLongLongValue, closed.data(), closed.size());
+  }
+}
+
+void telarGuiFileDragEnd(TelarGuiFileDrag* self, uint64_t ticket, const char* failure_data, size_t failure_size) {
+  if (self == nullptr) {
+    return;
+  }
+
+  NSNumber* const key = [NSNumber numberWithUnsignedLongLong:ticket];
+  void (^const handler)(NSError*) = self->waiting[key];
+  if (handler == nil) {
+    return;
+  }
+
+  [self->waiting removeObjectForKey:key];
+  const auto failure = sliceOf(failure_data, failure_size);
+
+  handler(failure.empty() ? nil : failureOf(textOf(failure)));
+}
+
+bool telarGuiFileDragGive(
+    TelarGuiFileDrag* self,
+    void* ns_view,
+    const TelarGuiDraggedOut* rows,
+    size_t row_count,
+    TelarGuiPromiseAskedCallback callback,
+    void* context
+) {
+  if (self == nullptr) {
+    return false;
+  }
+
+  @autoreleasepool {
+    NSView* const view = ns_view != nullptr ? (__bridge NSView*)ns_view : nil;
+    TelarDragSource* const source = [[TelarDragSource alloc] init];
+    NSMutableArray<id<NSPasteboardWriting>>* const writers = [NSMutableArray arrayWithCapacity:row_count];
+    NSMutableArray<NSImage*>* const icons = [NSMutableArray arrayWithCapacity:row_count];
+
+    source.rows = self;
+    source.view = view;
+#pragma clang unsafe_buffer_usage begin
+    const std::span<const TelarGuiDraggedOut> row_span{rows, rows == nullptr ? 0 : row_count};
+#pragma clang unsafe_buffer_usage end
+
+    for (const auto& row : row_span) {
+      const auto made = written(row, source);
+
+      [writers addObject:made.writer];
+      [icons addObject:made.icon];
+    }
+
+    forsake(self->source);
+    self->writers = writers;
+    self->source = source;
+    self->callback = tbc::raw(callback);
+    self->context = tbc::raw(context);
+    if (view == nil || view.window == nil || writers.count == 0 || (NSEvent.pressedMouseButtons & NSUInteger{1}) == 0) {
+      return false;
+    }
+
+    NSEvent* const event = pointerEvent(view.window);
+    const NSPoint held = [view convertPoint:event.locationInWindow fromView:nil];
+    NSMutableArray<NSDraggingItem*>* const items = [NSMutableArray arrayWithCapacity:writers.count];
+
+    for (NSUInteger index = 0; index < writers.count; ++index) {
+      NSDraggingItem* const item = [[NSDraggingItem alloc] initWithPasteboardWriter:writers[index]];
+
+      [item setDraggingFrame:NSMakeRect(held.x - (icon_side / 2), held.y - (icon_side / 2), icon_side, icon_side) contents:icons[index]];
+      [items addObject:item];
+    }
+
+    [view beginDraggingSessionWithItems:items event:event source:source];
+    return true;
+  }
+}
+
+const void* telarGuiFileDragWriters(const TelarGuiFileDrag* self) {
+  return self == nullptr ? nullptr : (__bridge const void*)self->writers;
 }

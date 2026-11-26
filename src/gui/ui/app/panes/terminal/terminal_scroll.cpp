@@ -3,8 +3,6 @@
 static_assert(true);
 #endif
 
-#include "foundation/core/memory.hpp"
-#include "foundation/core/wheel_accumulator.hpp"
 #include "platform/scroll_event.hpp"
 #include "telar_wire/serializers/telar_frame.hpp"
 #include "terminal_item.hpp"
@@ -23,6 +21,7 @@ static_assert(true);
 
 import telar.gui.application;
 import telar.base.ds;
+import telar.gui.foundation.core;
 
 namespace telar::gui::qt {
 

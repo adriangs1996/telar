@@ -3,9 +3,6 @@
 static_assert(true);
 #endif
 
-#include "foundation/core/application_memory.hpp"
-#include "foundation/core/memory.hpp"
-#include "foundation/core/wheel_accumulator.hpp"
 #include "machine_effects.hpp"
 #include "runtime_connection.hpp"
 #include "telar_base/memory/allocator.hpp"
@@ -47,6 +44,7 @@ static_assert(true);
 import telar.gui.application;
 import telar.gui.foundation.system;
 import telar.base.ds;
+import telar.gui.foundation.core;
 
 namespace telar::gui::qt {
 

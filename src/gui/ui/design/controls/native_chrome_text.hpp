@@ -3,7 +3,6 @@
 static_assert(true);
 #endif
 
-#include "foundation/core/memory.hpp"
 #include "ui/kit/fonts/font_collection.hpp"
 #include "ui/kit/fonts/resident_fonts.hpp"
 #include "ui/kit/scene/ancestor_geometry.hpp"

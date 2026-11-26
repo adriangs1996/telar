@@ -4,7 +4,6 @@ static_assert(true);
 #endif
 
 #include "font_source.hpp"
-#include "foundation/core/memory.hpp"
 #include "terminal_font.hpp"
 #include <QtCore/qtypes.h>
 

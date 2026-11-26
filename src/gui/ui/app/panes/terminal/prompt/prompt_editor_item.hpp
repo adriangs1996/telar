@@ -5,7 +5,6 @@ static_assert(true);
 
 #pragma once
 
-#include "foundation/core/memory.hpp"
 #include "prompt_controller.hpp"
 #include "ui/design/controls/cell_text_grid.hpp"
 #include "ui/kit/scene/ancestor_geometry.hpp"
@@ -26,6 +25,7 @@ static_assert(true);
 import telar.gui.application;
 import telar.base.ds;
 import telar.shell.syntax;
+import telar.gui.foundation.core;
 
 namespace telar::gui::qt {
 

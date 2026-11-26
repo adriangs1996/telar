@@ -3,7 +3,6 @@
 static_assert(true);
 #endif
 
-#include "foundation/core/application_memory.hpp"
 #include "frame_fixture.hpp"
 #include "gui_wait.hpp"
 #include "qml_fixture.hpp"
@@ -134,6 +133,7 @@ import telar.wire.history;
 import telar.wire.layout;
 import telar.gui.features.machines;
 import telar.base.ds;
+import telar.gui.foundation.core;
 
 namespace {
 

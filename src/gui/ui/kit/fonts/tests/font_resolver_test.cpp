@@ -3,7 +3,6 @@
 static_assert(true);
 #endif
 
-#include "foundation/core/memory.hpp"
 #include "platform/font.h"
 #include "qt_case.hpp"
 #include "telar_wire/codecs/telar_wire.hpp"
@@ -40,6 +39,9 @@ static_assert(true);
 #include <stdexcept>
 #include <string_view>
 #include <vector>
+
+import telar.gui.foundation.core;
+
 
 namespace {
 

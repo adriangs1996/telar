@@ -3,7 +3,6 @@
 static_assert(true);
 #endif
 
-#include "foundation/core/memory.hpp"
 #include "telar_base/memory/allocator.hpp"
 #include "telar_base/memory/fixed_text.hpp"
 #include "telar_platform/file_descriptor.hpp"
@@ -49,6 +48,7 @@ import telar.gui.tests.plugin_effect_cases;
 import telar.platform.fs;
 import telar.plugins;
 import telar.base.ds;
+import telar.gui.foundation.core;
 #ifdef __APPLE__
 #endif
 

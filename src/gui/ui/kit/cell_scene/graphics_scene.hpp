@@ -3,8 +3,6 @@
 static_assert(true);
 #endif
 
-#include "foundation/core/application_memory.hpp"
-#include "foundation/core/memory.hpp"
 #include "telar_config/graphics/limits.hpp"
 #include "telar_wire/serializers/telar_messages.hpp"
 #include "window_images.hpp"
@@ -32,6 +30,7 @@ static_assert(true);
 import telar.gui.foundation.terminal;
 import telar.gui.application;
 import telar.base.ds;
+import telar.gui.foundation.core;
 
 class QQuickWindow;
 

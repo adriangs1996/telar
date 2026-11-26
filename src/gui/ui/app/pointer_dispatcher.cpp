@@ -4,7 +4,6 @@ static_assert(true);
 #endif
 
 #include "pointer_dispatcher.hpp"
-#include "foundation/core/memory.hpp"
 #include "platform/scroll_event.hpp"
 #include "telar_base/memory/fixed_text.hpp"
 #include "telar_config/graphics/limits.hpp"
@@ -56,6 +55,7 @@ static_assert(true);
 
 import telar.gui.application;
 import telar.base.ds;
+import telar.gui.foundation.core;
 
 namespace telar::gui::qt {
 

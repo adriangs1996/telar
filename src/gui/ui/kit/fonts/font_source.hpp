@@ -3,7 +3,6 @@
 static_assert(true);
 #endif
 
-#include "foundation/core/memory.hpp"
 #include "tbc/view.hpp"
 #include "telar_wire/codecs/telar_wire.hpp"
 #include <QByteArray>

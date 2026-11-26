@@ -28,7 +28,6 @@ static_assert(true);
 #include <span>
 #include <utility>
 #ifdef Q_OS_MACOS
-#include "foundation/core/memory.hpp"
 #endif
 #ifdef Q_OS_MACOS
 #include "platform/font.h"
@@ -62,6 +61,7 @@ static_assert(true);
 
 import telar.gui.foundation.fonts;
 import telar.base.ds;
+import telar.gui.foundation.core;
 #ifdef Q_OS_MACOS
 #endif
 

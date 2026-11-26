@@ -3,7 +3,6 @@
 static_assert(true);
 #endif
 
-#include "foundation/core/application_memory.hpp"
 #include <QByteArrayView>
 #include <QCryptographicHash>
 #include <algorithm>
@@ -16,6 +15,7 @@ static_assert(true);
 #pragma once
 
 import telar.plugins;
+import telar.gui.foundation.core;
 
 namespace telar::gui::qt {
 

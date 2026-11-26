@@ -3,7 +3,6 @@
 static_assert(true);
 #endif
 
-#include "foundation/core/memory.hpp"
 #include <algorithm>
 #include <array>
 #include <cstddef>
@@ -27,6 +26,7 @@ import telar.gui.foundation.terminal;
 import telar.gui.foundation.fonts;
 import telar.gui.foundation.fonts.tests.font_fixture;
 import telar.base.ds;
+import telar.gui.foundation.core;
 
 namespace {
 

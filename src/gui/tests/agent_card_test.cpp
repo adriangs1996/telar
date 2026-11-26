@@ -3,7 +3,6 @@
 static_assert(true);
 #endif
 
-#include "foundation/core/memory.hpp"
 #include "qml_fixture.hpp"
 #include "telar_wire/serializers/telar_messages.hpp"
 #include "ui/app/chrome/activity/agent_projection.hpp"
@@ -46,6 +45,7 @@ import telar.gui.features.workbench;
 import telar.gui.foundation.drawing;
 import telar.gui.features.activity;
 import telar.base.ds;
+import telar.gui.foundation.core;
 
 namespace {
 

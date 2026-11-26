@@ -2,7 +2,6 @@
 #include "cf_reference.hpp"
 #include "font_smoothing.h"
 #include "tbc/view.hpp"
-#include "telar_base/ds/values.hpp"
 #import <CoreGraphics/CoreGraphics.h>
 #import <CoreText/CoreText.h>
 #include <cmath>
@@ -92,9 +91,9 @@ namespace {
       return nullptr;
     }
 
-    telar::ds::Array<const void*, 1> keys{kCTFontVariationAttribute};
-    telar::ds::Array<const void*, 1> entries{axes.get()};
-    const NativeReference<CFDictionaryRef> attributes{CFDictionaryCreate(kCFAllocatorDefault, keys.dataMut(), entries.dataMut(), static_cast<CFIndex>(keys.size()), &kCFTypeDictionaryKeyCallBacks, &kCFTypeDictionaryValueCallBacks)};
+    const void* key = kCTFontVariationAttribute;
+    const void* entry = axes.get();
+    const NativeReference<CFDictionaryRef> attributes{CFDictionaryCreate(kCFAllocatorDefault, &key, &entry, 1, &kCFTypeDictionaryKeyCallBacks, &kCFTypeDictionaryValueCallBacks)};
     const NativeReference<CTFontDescriptorRef> descriptor{attributes ? CTFontDescriptorCreateWithAttributes(attributes.get()) : nullptr};
 
     return descriptor ? tbc::raw(CTFontCreateCopyWithAttributes(font.get(), CTFontGetSize(font.get()), nullptr, descriptor.get())) : nullptr;

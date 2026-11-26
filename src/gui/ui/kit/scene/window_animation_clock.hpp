@@ -3,7 +3,6 @@
 static_assert(true);
 #endif
 
-#include "foundation/core/memory.hpp"
 #include "telar_base/ds/containers.hpp"
 #include "telar_base/ds/values.hpp"
 #include <QList>
@@ -20,6 +19,9 @@ static_assert(true);
 #include <typeinfo>
 
 #pragma once
+
+import telar.gui.foundation.core;
+
 
 namespace telar::gui::qt {
 

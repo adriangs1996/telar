@@ -6,7 +6,6 @@ static_assert(true);
 #include "text_scene.hpp"
 #include "chrome_glyph_images.hpp"
 #include "chrome_text_scene.hpp"
-#include "foundation/core/memory.hpp"
 #include "platform/font.h"
 #include "scene_nodes.hpp"
 #include "telar_base/memory/fixed_text.hpp"
@@ -56,6 +55,9 @@ static_assert(true);
 #ifdef Q_OS_MACOS
 #include "telar_base/ds/values.hpp"
 #endif
+
+import telar.gui.foundation.core;
+
 
 namespace telar::gui::qt {
 

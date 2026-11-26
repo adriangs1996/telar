@@ -4,7 +4,6 @@ static_assert(true);
 #endif
 
 #include "cell_text_grid.hpp"
-#include "foundation/core/memory.hpp"
 #include "tbc/view.hpp"
 #include "ui/kit/fonts/font_collection.hpp"
 #include "ui/kit/scene/ancestor_geometry.hpp"
@@ -24,7 +23,9 @@ static_assert(true);
 
 #pragma once
 
+import telar.base.memory.allocators;
 import telar.gui.foundation.fonts;
+import telar.gui.foundation.core;
 
 namespace telar::gui::qt {
 

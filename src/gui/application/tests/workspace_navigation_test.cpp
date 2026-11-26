@@ -3,7 +3,6 @@
 static_assert(true);
 #endif
 
-#include "foundation/core/memory.hpp"
 #include "telar_base/memory/allocator.hpp"
 #include "telar_wire/protocol/pane_io.hpp"
 #include "telar_wire/protocol/runtime.hpp"
@@ -27,6 +26,7 @@ import telar.wire.layout;
 import telar.wire.runtime;
 import telar.gui.foundation.model;
 import telar.base.ds;
+import telar.gui.foundation.core;
 
 namespace {
 

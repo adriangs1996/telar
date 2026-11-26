@@ -1,5 +1,4 @@
 #include "agent_report_fixture.hpp"
-#include "foundation/core/application_memory.hpp"
 #include "telar_wire/codecs/telar_codec.hpp"
 #include "telar_wire/codecs/telar_wire.hpp"
 #include "telar_wire/protocol/pane_io.hpp"
@@ -24,6 +23,7 @@
 
 import telar.wire.agents;
 import telar.base.ds;
+import telar.gui.foundation.core;
 
 namespace {
 

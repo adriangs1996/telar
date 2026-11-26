@@ -8,7 +8,6 @@ static_assert(true);
 #include "alpha_mask_material.hpp"
 #include "alpha_mask_vertex.hpp"
 #include "chrome_glyph_images.hpp"
-#include "foundation/core/memory.hpp"
 #include "platform/font.h"
 #include "qt_buffers.hpp"
 #include "scene_nodes.hpp"
@@ -59,6 +58,9 @@ static_assert(true);
 #include <string_view>
 #include <type_traits>
 #include <utility>
+
+import telar.gui.foundation.core;
+
 
 namespace telar::gui::qt {
   namespace {

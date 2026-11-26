@@ -1,9 +1,14 @@
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
+
+#include <string_view>
+
 #pragma once
 
-#include "foundation/core/wheel_accumulator.hpp"
-#include "telar_base/ds/values.hpp"
-#include <optional>
-#include <string_view>
+import telar.base.ds;
+import telar.gui.foundation.core;
 
 class QWindow;
 

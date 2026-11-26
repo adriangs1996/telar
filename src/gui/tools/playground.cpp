@@ -3,7 +3,6 @@
 static_assert(true);
 #endif
 
-#include "foundation/core/application_memory.hpp"
 #include "platform/window.hpp"
 #include "ui/app/application_controller.hpp"
 #include "ui/kit/fonts/bundled_fonts.hpp"
@@ -23,6 +22,9 @@ static_assert(true);
 #include <cstdlib>
 #include <exception>
 #include <iostream>
+
+import telar.gui.foundation.core;
+
 
 // Shows a QML file from disk and shows it again whenever a QML file beside it changes.
 //

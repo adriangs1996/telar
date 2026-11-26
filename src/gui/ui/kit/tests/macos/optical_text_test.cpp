@@ -3,7 +3,6 @@
 static_assert(true);
 #endif
 
-#include "foundation/core/memory.hpp"
 #include "glyph_rasterizer.h"
 #include "platform/font.h"
 #include "ui/kit/fonts/bundled_fonts.hpp"
@@ -43,6 +42,7 @@ static_assert(true);
 import telar.testing;
 import telar.gui.foundation.fonts;
 import telar.base.ds;
+import telar.gui.foundation.core;
 
 extern "C" {
 }

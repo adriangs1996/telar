@@ -3,7 +3,6 @@
 static_assert(true);
 #endif
 
-#include "foundation/core/memory.hpp"
 #include "telar_config/graphics/limits.hpp"
 #include "telar_wire/serializers/telar_cells.hpp"
 #include "telar_wire/serializers/telar_messages.hpp"

@@ -3,7 +3,6 @@
 static_assert(true);
 #endif
 
-#include "foundation/core/application_memory.hpp"
 #include "ui/app/application_controller.hpp"
 #include "ui/kit/fonts/bundled_fonts.hpp"
 #include <QFont>
@@ -22,6 +21,9 @@ static_assert(true);
 #include <exception>
 #include <iostream>
 #include <stdexcept>
+
+import telar.gui.foundation.core;
+
 
 // How long the GUI takes to start: from main to the root QML object, and to its first frame.
 //

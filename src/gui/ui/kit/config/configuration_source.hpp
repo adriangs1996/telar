@@ -4,8 +4,6 @@ static_assert(true);
 #endif
 
 #include "configuration_loader.hpp"
-#include "foundation/core/application_memory.hpp"
-#include "foundation/core/memory.hpp"
 #include "lua_host.hpp"
 #include "tbc/view.hpp"
 #include "telar_base/memory/allocator.hpp"

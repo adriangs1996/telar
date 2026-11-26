@@ -3,7 +3,6 @@
 static_assert(true);
 #endif
 
-#include "foundation/core/application_memory.hpp"
 #include "frame_fixture.hpp"
 #include "gui_wait.hpp"
 #include "qml_fixture.hpp"
@@ -142,6 +141,7 @@ import telar.wire.layout;
 import telar.wire.monitor;
 import telar.wire.nvim;
 import telar.base.ds;
+import telar.gui.foundation.core;
 
 namespace telar::gui::test {
 

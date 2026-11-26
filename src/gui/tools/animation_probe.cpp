@@ -4,7 +4,6 @@ static_assert(true);
 #endif
 
 #include "animation_presentation.hpp"
-#include "foundation/core/application_memory.hpp"
 #include "platform/window.hpp"
 #include "platform/window_activation.hpp"
 #include "telar_base/ds/values.hpp"
@@ -32,6 +31,9 @@ static_assert(true);
 #include <memory>
 #include <optional>
 #include <utility>
+
+import telar.gui.foundation.core;
+
 
 namespace {
 
