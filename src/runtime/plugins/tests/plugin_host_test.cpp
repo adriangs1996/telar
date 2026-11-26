@@ -35,6 +35,7 @@ static_assert(true);
 #include <string>
 #include <string_view>
 #include <sys/stat.h>
+#include <unistd.h>
 #include <utility>
 
 import telar.testing;

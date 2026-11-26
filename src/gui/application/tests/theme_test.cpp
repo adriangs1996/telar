@@ -12,6 +12,7 @@ static_assert(true);
 #include <string>
 #include <string_view>
 
+#include <algorithm>
 #include <climits>
 
 import telar.testing;

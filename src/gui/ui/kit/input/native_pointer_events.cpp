@@ -10,7 +10,6 @@ static_assert(true);
 
 import telar.gui.foundation.core;
 
-
 namespace telar::gui::qt {
 
   struct NativePointerEvents::Native final : QWindowSystemEventHandler {

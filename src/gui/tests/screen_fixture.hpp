@@ -15,6 +15,7 @@ static_assert(true);
 import telar.gui.foundation.terminal;
 import telar.gui.application;
 import telar.wire.vocabulary;
+import telar.base.memory.allocators;
 
 namespace telar::gui::test {
 

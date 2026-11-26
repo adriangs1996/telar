@@ -6,6 +6,7 @@
 #include <stdexcept>
 #include <string_view>
 #include <utility>
+#include <variant>
 
 import telar.testing;
 import telar.gui.features.terminal.attachments;

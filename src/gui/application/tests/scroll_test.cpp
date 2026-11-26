@@ -5,6 +5,7 @@ static_assert(true);
 #include <array>
 #include <cstdint>
 #include <string>
+#include <utility>
 #include <vector>
 
 import telar.testing;

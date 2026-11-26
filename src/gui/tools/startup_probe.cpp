@@ -24,7 +24,6 @@ static_assert(true);
 
 import telar.gui.foundation.core;
 
-
 // How long the GUI takes to start: from main to the root QML object, and to its first frame.
 //
 // It builds the window as the GUI tests do (tests/quick_test.cpp), without a runtime, on the

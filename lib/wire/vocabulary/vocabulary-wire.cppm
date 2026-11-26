@@ -28,9 +28,9 @@ export {
     // The same bytes as text and as wire bytes, for the field codecs below, which call them per
     // field and per byte.
     [[tbc::hot_path]] [[nodiscard]] inline std::span<const Byte> byteView(std::string_view text) noexcept {
-  #pragma clang unsafe_buffer_usage begin
+#pragma clang unsafe_buffer_usage begin
       return {reinterpret_cast<const Byte*>(text.data()), text.size()}; // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast): Byte may alias char, and no cast-free view reads text as bytes
-  #pragma clang unsafe_buffer_usage end
+#pragma clang unsafe_buffer_usage end
     }
 
     [[tbc::hot_path]] [[nodiscard]] inline std::string_view textView(std::span<const Byte> bytes) noexcept {
@@ -51,7 +51,7 @@ export {
       either,
     };
 
-  #ifdef TELAR_DEBUG
+#ifdef TELAR_DEBUG
     namespace debug {
 
       inline constexpr std::string_view hex_digits = "0123456789abcdef";
@@ -140,7 +140,7 @@ export {
       void printValue(std::size_t byte_count, const char* name, const char* value, std::FILE* output, bool more);
 
     } // namespace debug
-  #endif
+#endif
 
     // The frame owns decoded string bytes. This separate caller-owned buffer
     // owns decoded list elements and must not overlap the frame or be reused

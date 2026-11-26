@@ -25,7 +25,6 @@ static_assert(true);
 
 import telar.gui.foundation.core;
 
-
 // Shows a QML file from disk and shows it again whenever a QML file beside it changes.
 //
 //   gui-playground src/gui/playground/Tiles.qml

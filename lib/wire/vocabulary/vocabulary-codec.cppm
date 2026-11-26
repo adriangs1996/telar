@@ -15,7 +15,7 @@ import telar.base.memory.allocators;
 export {
   namespace telar {
 
-  #ifdef TELAR_DEBUG
+#ifdef TELAR_DEBUG
     namespace debug {
 
       template <Allocator Memory>
@@ -288,7 +288,7 @@ export {
       }
 
     } // namespace debug
-  #endif
+#endif
 
     struct Codec {
       template <typename Message>
@@ -328,7 +328,7 @@ export {
         return buffer.first(size);
       }
 
-  #ifdef TELAR_DEBUG
+#ifdef TELAR_DEBUG
       // Prints the frame's bytes, field names and values in three aligned rows; the text it builds lives
       // in `memory` until it returns.
       template <typename Message, Allocator Memory>
@@ -371,7 +371,7 @@ export {
           static_cast<void>(std::fputc('\n', output));
         }
       }
-  #endif
+#endif
 
       template <typename Message>
       [[tbc::generic]] static auto encode(const Message& message) TELAR_THROWS(EncodingError) {
@@ -418,13 +418,13 @@ export {
       }
     };
 
-  #ifdef TELAR_DEBUG
+#ifdef TELAR_DEBUG
     template <Direction Side, auto Tag, typename Body>
     template <typename Message, Allocator Memory>
     [[tbc::generic]] void MessageLayout<Side, Tag, Body>::prettyPrint(Memory& memory, const Message& message, std::FILE* output) {
       Codec::prettyPrint(memory, message, output);
     }
-  #endif
+#endif
 
   } // namespace telar
 }

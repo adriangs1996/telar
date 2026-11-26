@@ -24,6 +24,7 @@ import telar.base.ds;
 import telar.wire.vocabulary;
 import telar.base.memory.allocators;
 import telar.base.text.utf8;
+import telar.base.diagnostics;
 
 namespace {
 

@@ -348,8 +348,8 @@ export {
     // and every command print it: the one place that spells them. Empty for a value that names none.
     // Each switch lists every enumerator, and here a missing one is an error: an enumerator added
     // without its name does not compile.
-  #pragma clang diagnostic push
-  #pragma clang diagnostic error "-Wswitch"
+#pragma clang diagnostic push
+#pragma clang diagnostic error "-Wswitch"
 
     [[nodiscard]] constexpr std::string_view clientTagName(ClientTag tag) noexcept { // NOLINT(readability-function-size): one case per tag, in one switch, is what makes a tag without its name an error
       switch (tag) {
@@ -805,7 +805,7 @@ export {
       return {};
     }
 
-  #pragma clang diagnostic pop
+#pragma clang diagnostic pop
 
     // The status and the reason `name` spells, by the names above; nothing for any other text.
     [[nodiscard]] constexpr ds::Option<AgentStatus> agentStatusNamed(std::string_view name) noexcept {

@@ -3,8 +3,10 @@
 static_assert(true);
 #endif
 
+#include <algorithm>
 #include <cstddef>
 #include <cstdint>
+#include <string>
 #include <string_view>
 
 import telar.testing;

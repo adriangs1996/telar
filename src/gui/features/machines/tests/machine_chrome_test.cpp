@@ -11,6 +11,7 @@ static_assert(true);
 #include <optional>
 #include <span>
 #include <string_view>
+#include <variant>
 
 import telar.testing;
 import telar.gui.foundation.core;

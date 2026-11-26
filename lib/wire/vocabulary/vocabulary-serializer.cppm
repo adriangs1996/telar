@@ -55,7 +55,7 @@ export {
         input = input.subspan(size);
       }
 
-  #ifdef TELAR_DEBUG
+#ifdef TELAR_DEBUG
       static void prettyPrint(std::span<const Byte>& input, std::FILE* output) {
         constexpr auto width = WireCodec::width;
         const auto bytes = input.first(width);
@@ -77,7 +77,7 @@ export {
 
         debug::printValue(width, Name.value.data(), value.data(), output, !input.empty());
       }
-  #endif
+#endif
     };
 
     template <auto Member, auto ContextMember, typename WireCodec, FixedString Name>
@@ -252,7 +252,7 @@ export {
         (Fields::visit(message, input, visitor), ...);
       }
 
-  #ifdef TELAR_DEBUG
+#ifdef TELAR_DEBUG
       static void prettyPrintFields(std::span<const Byte> input, std::FILE* output) {
         (Fields::prettyPrint(input, output), ...);
       }
@@ -264,7 +264,7 @@ export {
       static void prettyPrintValues(std::span<const Byte> input, std::FILE* output) {
         (Fields::prettyPrintValue(input, output), ...);
       }
-  #endif
+#endif
     };
 
     template <typename Body, bool Fixed = Body::fixed_size>
@@ -280,10 +280,10 @@ export {
       static constexpr Direction direction = Side;
       static constexpr auto tag = Tag;
 
-  #ifdef TELAR_DEBUG
+#ifdef TELAR_DEBUG
       template <typename Message, Allocator Memory>
       static void prettyPrint(Memory& memory, const Message& message, std::FILE* output);
-  #endif
+#endif
     };
 
     template <Direction Side, auto Tag, typename... Fields>

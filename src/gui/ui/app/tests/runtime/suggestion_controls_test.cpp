@@ -47,7 +47,6 @@ static_assert(true);
 
 import telar.gui.foundation.core;
 
-
 namespace {
 
   using namespace telar::gui;

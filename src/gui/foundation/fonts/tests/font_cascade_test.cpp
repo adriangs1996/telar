@@ -22,6 +22,7 @@ import telar.gui.foundation.fonts;
 import telar.gui.foundation.fonts.tests.font_fixture;
 import telar.base.ds;
 import telar.gui.foundation.core;
+import telar.base.memory.allocators;
 
 namespace {
 

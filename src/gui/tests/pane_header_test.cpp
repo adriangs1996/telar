@@ -42,6 +42,7 @@ import telar.gui.features.activity;
 import telar.gui.features.workbench;
 import telar.base.ds;
 import telar.wire.vocabulary;
+import telar.base.memory.allocators;
 
 namespace {
 

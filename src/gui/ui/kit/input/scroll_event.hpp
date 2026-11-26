@@ -13,7 +13,6 @@ static_assert(true);
 
 import telar.gui.foundation.core;
 
-
 namespace telar::gui::qt {
 
   [[nodiscard]] inline ScrollPhase scrollPhase(Qt::ScrollPhase phase) noexcept {

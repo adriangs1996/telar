@@ -1,6 +1,6 @@
-#include "platform/macos/clipboard_image_bridge.h"
 #include "cf_reference.hpp"
 #include "platform/clipboard_image_file.h"
+#include "platform/macos/clipboard_image_bridge.h"
 #include "tbc/view.hpp"
 #include <AppKit/AppKit.h>
 #include <CoreFoundation/CoreFoundation.h>

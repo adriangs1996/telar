@@ -27,6 +27,7 @@ import telar.gui.features.notifications;
 import telar.base.ds;
 import telar.gui.foundation.core;
 import telar.wire.vocabulary;
+import telar.base.memory.allocators;
 
 namespace {
 

@@ -172,9 +172,9 @@ export {
     template <typename Value>
     [[tbc::hot_path]] inline std::span<Value> spanOver(Value* storage, std::size_t count) noexcept {
       // Every caller passes the count of values its storage holds.
-  #pragma clang unsafe_buffer_usage begin
+#pragma clang unsafe_buffer_usage begin
       return {storage, count};
-  #pragma clang unsafe_buffer_usage end
+#pragma clang unsafe_buffer_usage end
     }
 
     // The high and low halves of a 128-bit product folded together: every bit of either factor
