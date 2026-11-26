@@ -276,6 +276,10 @@ export {
       static bool cursorPath(std::string_view path, std::string_view session) noexcept;
       void cursor(const SessionFileWatch& watch, Result& result);
       void claude(const SessionFileWatch& watch, Result& result);
+      static bool antigravityPath(std::string_view path, std::string_view session) noexcept;
+      void antigravity(const SessionFileWatch& watch, Result& result);
+      // The title of an annotation Antigravity writes in protobuf's text format, `title:"…"`.
+      ds::Option<FixedText<agent_report_title_bytes>> annotationTitle(std::string_view input);
       ds::Option<FixedText<agent_report_title_bytes>> readTitle(std::string_view input, ds::Option<std::string_view> session);
       static ds::Option<std::uint64_t> regularFileSize(const FileDescriptor& file) noexcept;
       std::string_view read(int descriptor, std::uint64_t offset, std::size_t limit);

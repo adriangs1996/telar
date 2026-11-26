@@ -752,6 +752,9 @@ namespace telar::runtime {
       case AgentSessionFileKind::cursor_meta:
         cursor(request.watch, result);
         break;
+      case AgentSessionFileKind::antigravity_annotations:
+        antigravity(request.watch, result);
+        break;
       }
     } catch (const std::exception&) { // NOLINT(bugprone-empty-catch): the title is best effort, and a session file that cannot be read yields what was read before it failed
     }
@@ -807,6 +810,141 @@ namespace telar::runtime {
     }
 
     result.title = readTitle(input, ds::none);
+  }
+
+  template <Allocator Memory>
+  bool SessionFileReader<Memory>::antigravityPath(std::string_view path, std::string_view session) noexcept {
+    constexpr std::string_view directory = "/annotations/";
+    constexpr std::string_view extension = ".pbtxt";
+
+    if (session.empty() || session.size() > agent_report_session_bytes || !std::ranges::all_of(session, [](char byte) {
+          return (byte >= '0' && byte <= '9') || (byte >= 'a' && byte <= 'f') || (byte >= 'A' && byte <= 'F') || byte == '-';
+        })) {
+      return false;
+    }
+
+    if (!path.starts_with('/') || !path.ends_with(extension)) {
+      return false;
+    }
+
+    path.remove_suffix(extension.size());
+    return path.ends_with(session) && path.substr(0, path.size() - session.size()).ends_with(directory);
+  }
+
+  template <Allocator Memory>
+  void SessionFileReader<Memory>::antigravity(const SessionFileWatch& watch, Result& result) {
+    if (!antigravityPath(path_, watch.session.view())) {
+      return;
+    }
+
+    FileDescriptor file{::open(path_.data(), combineFlags(O_RDONLY, O_NONBLOCK, O_CLOEXEC))}; // NOLINT(cppcoreguidelines-pro-type-vararg): open's C signature is variadic
+    const auto size = regularFileSize(file);
+    if (!size || *size >= metadata_capacity) {
+      return;
+    }
+
+    const auto input = read(file.get(), 0, metadata_capacity);
+    if (input.size() == metadata_capacity) {
+      return;
+    }
+
+    result.title = annotationTitle(input);
+  }
+
+  template <Allocator Memory>
+  ds::Option<FixedText<agent_report_title_bytes>> SessionFileReader<Memory>::annotationTitle(std::string_view input) {
+    validateUtf8(input);
+
+    // A quoted string from its opening quote, into decoded_: the index after its closing quote.
+    // Antigravity escapes a quote and a backslash; a title with any other escape is a control
+    // byte the agent's title refuses, so it fails here.
+    const auto quoted = [&](std::size_t start) {
+      const char quote = input[start];
+
+      decoded_.truncate(0);
+      for (auto index = start + 1; index < input.size(); ++index) {
+        const char byte = input[index];
+        if (byte == quote) {
+          return index + 1;
+        }
+
+        if (byte == '\\') {
+          if (++index == input.size() || (input[index] != '"' && input[index] != '\'' && input[index] != '\\')) {
+            throw EncodingError{"Unsupported annotation escape"};
+          }
+        } else if (byte == '\n') {
+          break;
+        }
+
+        decoded_.push(input[index]);
+      }
+
+      throw EncodingError{"Unterminated annotation string"};
+    };
+
+    const auto identifier = [](char byte) {
+      return (byte >= 'a' && byte <= 'z') || (byte >= 'A' && byte <= 'Z') || (byte >= '0' && byte <= '9') || byte == '_';
+    };
+
+    ds::Option<FixedText<agent_report_title_bytes>> title;
+    std::size_t depth = 0;
+
+    for (std::size_t index = 0; index < input.size();) {
+      const char byte = input[index];
+
+      if (byte == '"' || byte == '\'') {
+        index = quoted(index);
+      } else if (byte == '#') {
+        const auto end = input.find('\n', index);
+
+        index = end == std::string_view::npos ? input.size() : end;
+      } else if (byte == '{' || byte == '<') {
+        ++depth;
+        ++index;
+      } else if (byte == '}' || byte == '>') {
+        if (depth-- == 0) {
+          throw EncodingError{"Unbalanced annotation"};
+        }
+
+        ++index;
+      } else if (identifier(byte)) {
+        const auto start = index;
+
+        while (index < input.size() && identifier(input[index])) {
+          ++index;
+        }
+
+        if (depth != 0 || input.substr(start, index - start) != "title") {
+          continue;
+        }
+
+        index = input.find_first_not_of(" \t\r\n", index);
+        if (index == std::string_view::npos || input[index] != ':') {
+          throw EncodingError{"Annotation title without a value"};
+        }
+
+        index = input.find_first_not_of(" \t\r\n", index + 1);
+        if (index == std::string_view::npos || (input[index] != '"' && input[index] != '\'')) {
+          throw EncodingError{"Annotation title is not a string"};
+        }
+
+        if (title) {
+          throw EncodingError{"Duplicate annotation title"};
+        }
+
+        index = quoted(index);
+        title.emplace().assign(utf8Prefix(decoded_, title_capacity));
+      } else {
+        ++index;
+      }
+    }
+
+    if (depth != 0) {
+      throw EncodingError{"Unbalanced annotation"};
+    }
+
+    // An annotation without a title clears the agent's, as Cursor's metadata does.
+    return title ? title : ds::Option{FixedText<agent_report_title_bytes>{}};
   }
 
   template <Allocator Memory>

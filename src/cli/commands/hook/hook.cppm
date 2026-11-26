@@ -88,7 +88,7 @@ namespace telar::runtime::cli::hooks {
 
   tbc::val_a<ds::Option<ReportAgent>> openCodeLifecycle(tbc::ref_a<Payload> input, tbc::mut_a<FixedText<display_line_bytes>> event);
 
-  tbc::val_a<ds::Option<ReportAgent>> antigravityLifecycle(tbc::ref_a<Payload> input, tbc::mut_a<FixedText<display_line_bytes>> event);
+  tbc::val_a<ds::Option<ReportAgent>> antigravityLifecycle(tbc::ref_a<Payload> input, tbc::mut_a<FixedText<display_line_bytes>> event, tbc::mut_a<FixedText<agent_report_session_file_bytes>> annotations);
 
   tbc::val_a<ds::Option<ReportAgent>> cursorLifecycle(tbc::ref_a<Payload> input, tbc::mut_a<FixedText<display_line_bytes>> event, tbc::val_a<std::string_view> metadata);
 

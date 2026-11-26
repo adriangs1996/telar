@@ -1713,6 +1713,7 @@ namespace telar {
     claude_transcript = 0,
     codex_state = 1,
     cursor_meta = 2,
+    antigravity_annotations = 3,
   };
 
   enum class AgentCommandPhase : Byte {

@@ -108,6 +108,39 @@ namespace {
     check(!reader.observe(request).title);
   }
 
+  // Antigravity's annotation of a conversation, which /rename rewrites: `title:"…"` in protobuf's text format.
+  void testAntigravityAnnotation(SessionFileReader<ConcurrentMemory>& reader, const std::string& root) {
+    constexpr std::string_view session = "eb7c1aee-80c3-47a9-a589-acaa80399047";
+    const auto directory = root + "/annotations";
+
+    std::filesystem::create_directory(directory);
+    const auto path = directory + "/" + std::string{session} + ".pbtxt";
+    SessionFileRequest request;
+
+    request.watch.configure(session, path, AgentSessionFileKind::antigravity_annotations);
+    writeSessionFile(path, "title:\"Improving Borrow Checker\"");
+    auto result = reader.observe(request);
+
+    check(result.title && result.title->view() == "Improving Borrow Checker");
+    writeSessionFile(path, "# comment title:\"x\"\nother { title: \"nested\" }\ntitle : 'Café \\'quoted\\' \\\\ path'\n");
+    result = reader.observe(request);
+    check(result.title && result.title->view() == "Café 'quoted' \\ path");
+    writeSessionFile(path, "");
+    result = reader.observe(request);
+    check(result.title && result.title->view().empty());
+    for (const auto input : {"title:\"a\" title:\"b\"", "title:\"open", "title:7", "title:\"line\\nbreak\"", "other { title:\"x\""}) {
+      writeSessionFile(path, input);
+      check(!reader.observe(request).title, input);
+    }
+
+    // Only the annotation of the agent's own conversation is read.
+    writeSessionFile(path, "title:\"Mine\"");
+    request.watch.session.assign("0e1a57cd-721b-46a7-af1d-24b73e09eeac");
+    check(!reader.observe(request).title);
+    request.watch.configure(session, root + "/" + std::string{session} + ".pbtxt", AgentSessionFileKind::antigravity_annotations);
+    check(!reader.observe(request).title);
+  }
+
   void testCodexDatabase(SessionFileReader<ConcurrentMemory>& reader, const std::string& root) {
     const auto path = root + "/codex.sqlite";
     SessionFileRequest request;
@@ -166,6 +199,7 @@ namespace {
 
     testTranscript(reader, root);
     testCursorMetadata(reader, root);
+    testAntigravityAnnotation(reader, root);
     testCodexDatabase(reader, root);
     std::filesystem::remove_all(root);
   }

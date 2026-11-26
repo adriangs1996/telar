@@ -410,7 +410,15 @@ namespace {
     Mapped start{AgentProvider::antigravity, R"({"conversationId":"dba6456e-2313-4a85-bf65-f11b9dd59f09","cwd":"/w","hookEventName":"SessionStart","lastUserInput":"hi","modelName":"m","transcriptPath":"/t/transcript_full.jsonl","workspacePaths":["/w"]})"};
 
     check(lifecycle(start.reports, AgentReportState::ready));
-    check(start.reports.lifecycle->session == "dba6456e-2313-4a85-bf65-f11b9dd59f09" && start.reports.lifecycle->session_file.empty());
+    check(start.reports.lifecycle->session == "dba6456e-2313-4a85-bf65-f11b9dd59f09");
+    check(start.reports.lifecycle->session_file.empty(), "a transcript outside brain/<id>/ names an annotation");
+
+    // The title /rename writes lives in annotations/<id>.pbtxt beside brain/<id>/.
+    Mapped named{AgentProvider::antigravity, R"({"conversationId":"dba6456e-2313-4a85-bf65-f11b9dd59f09","hookEventName":"PreInvocation","transcriptPath":"/home/u/.gemini/antigravity-cli/brain/dba6456e-2313-4a85-bf65-f11b9dd59f09/.system_generated/logs/transcript_full.jsonl"})"};
+
+    check(named.reports.lifecycle->session_file == "/home/u/.gemini/antigravity-cli/annotations/dba6456e-2313-4a85-bf65-f11b9dd59f09.pbtxt");
+    check(named.reports.lifecycle->session_file_kind == AgentSessionFileKind::antigravity_annotations);
+    check(encodes(named.reports));
     check(start.reports.progress && start.reports.progress->cwd == "/w");
     check(lifecycle(Mapped{AgentProvider::antigravity, R"({"hookEventName":"PreInvocation","invocationNum":0,"initialNumSteps":1})"}.reports, AgentReportState::working));
     check(!Mapped{AgentProvider::antigravity, R"({"hookEventName":"PostInvocation","invocationNum":0})"}.reports.lifecycle);
@@ -434,6 +442,12 @@ namespace {
 
     check(!read.reports.command && read.reports.lifecycle->event == "» read_file /w/a.md");
 
+    // Its questions to the user block it until they are answered.
+    Mapped question{AgentProvider::antigravity, R"({"hookEventName":"PreToolUse","toolCall":{"id":"call_4","name":"ask_question","args":{"questions":[{"is_multi_select":false,"options":["a","b"],"question":"Which scope do you want?"}]}}})"};
+
+    check(lifecycle(question.reports, AgentReportState::blocked, AgentBlockedReason::question) && question.reports.lifecycle->event == "Which scope do you want?");
+    check(lifecycle(Mapped{AgentProvider::antigravity, R"({"hookEventName":"PostToolUse","toolCall":{"id":"call_4","name":"ask_question","args":{}}})"}.reports, AgentReportState::working));
+
     check(lifecycle(Mapped{AgentProvider::antigravity, R"({"hookEventName":"Stop","terminationReason":"NO_TOOL_CALL","error":"","fullyIdle":true})"}.reports, AgentReportState::ready));
     check(lifecycle(Mapped{AgentProvider::antigravity, R"({"hookEventName":"Stop","terminationReason":"USER_CANCELED","error":""})"}.reports, AgentReportState::interrupted));
 
@@ -451,6 +465,42 @@ namespace {
     }
 
     check(refused);
+  }
+
+  // Antigravity's Stop carries no answer: the hook reads the last response of the turn from the
+  // conversation's own transcript.
+  void antigravityFinalMessage() {
+    const Directory root;
+    constexpr std::string_view session = "eb7c1aee-80c3-47a9-a589-acaa80399047";
+    const auto logs = root.path("brain/" + std::string{session} + "/.system_generated/logs");
+
+    std::filesystem::create_directories(logs);
+    const auto transcript = root.write("brain/" + std::string{session} + "/.system_generated/logs/transcript_full.jsonl",
+        R"({"step_index":0,"source":"USER_EXPLICIT","type":"USER_INPUT","content":"hi"}
+{"step_index":1,"source":"MODEL","type":"PLANNER_RESPONSE","content":"First answer"}
+{"step_index":2,"source":"USER_EXPLICIT","type":"USER_INPUT","content":"again"}
+{"step_index":3,"source":"MODEL","type":"PLANNER_RESPONSE","thinking":"x","tool_calls":[{"name":"run_command"}]}
+{"step_index":4,"source":"MODEL","type":"GENERIC","content":"Created At: now"}
+{"step_index":5,"source":"MODEL","type":"PLANNER_RESPONSE","content":"Listo: **tests** en verde.\nSegunda línea."}
+{"step_index":6,"source":"MODEL","type":"GENERIC","content":"Completed At: now"}
+)");
+    const auto stop = [&](std::string_view path, std::string_view conversation) {
+      const auto input = std::format(R"({{"hookEventName":"Stop","terminationReason":"NO_TOOL_CALL","error":"","conversationId":"{}","transcriptPath":"{}"}})", conversation, path);
+
+      const Mapped mapped{AgentProvider::antigravity, input};
+
+      return mapped.reports.progress ? std::string{mapped.reports.progress->final_message} : std::string{};
+    };
+
+    check(stop(transcript, session) == "Listo: **tests** en verde.\nSegunda línea.");
+
+    // Another conversation's transcript, or one outside brain/<id>/, is not read.
+    check(stop(transcript, "0e1a57cd-721b-46a7-af1d-24b73e09eeac").empty());
+    check(stop(root.write("transcript_full.jsonl", R"({"source":"MODEL","type":"PLANNER_RESPONSE","content":"x"})"), session).empty());
+
+    // A turn the user started and the model has not answered has no answer yet.
+    std::ofstream{transcript, std::ios::app} << R"({"step_index":7,"source":"USER_EXPLICIT","type":"USER_INPUT","content":"third"})" << "\n";
+    check(stop(transcript, session).empty());
   }
 
   void progressPlanOps() {
@@ -471,6 +521,12 @@ namespace {
 
     check(plan.reports.progress && plan.reports.progress->plan_op == AgentPlanOp::set);
     check(plan.reports.progress->plan_total == 3 && plan.reports.progress->plan_done == 1 && plan.reports.progress->plan_text == "b");
+
+    // Antigravity's update_steps rewrites the whole plan, as Antigravity CLI 1.5.17 sends it.
+    Mapped steps{AgentProvider::antigravity, R"({"hookEventName":"PostToolUse","toolCall":{"id":"call_9","name":"update_steps","args":{"steps":[{"status":"done","title":"Create worktree and baseline benchmark"},{"status":"in_progress","title":"Map architecture of lifetime_analysis.cpp"},{"status":"pending","title":"Implement core borrow checker features"}]}}})"};
+
+    check(steps.reports.progress && steps.reports.progress->plan_op == AgentPlanOp::set);
+    check(steps.reports.progress->plan_total == 3 && steps.reports.progress->plan_done == 1 && steps.reports.progress->plan_text == "Map architecture of lifetime_analysis.cpp");
 
     // A new session starts with an empty plan.
     Mapped start{AgentProvider::claude, R"({"hook_event_name":"SessionStart"})"};
@@ -567,6 +623,7 @@ namespace {
   const telar::testing::Case case_opencode_lifecycle_and_title{"hooks.opencode_lifecycle_and_title", openCodeLifecycleAndTitle};
   const telar::testing::Case case_cursor_lifecycle{"hooks.cursor_lifecycle", cursorLifecycle};
   const telar::testing::Case case_antigravity_lifecycle{"hooks.antigravity_lifecycle", antigravityLifecycle};
+  const telar::testing::Case case_antigravity_final_message{"hooks.antigravity_final_message", antigravityFinalMessage};
   const telar::testing::Case case_progress_plan_ops{"hooks.progress_plan_ops", progressPlanOps};
   const telar::testing::Case case_progress_cwd_and_worktree{"hooks.progress_cwd_and_worktree", progressCwdAndWorktree};
   const telar::testing::Case case_codex_session_file_newest{"hooks.codex_session_file_newest", codexSessionFileNewest};

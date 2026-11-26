@@ -59,6 +59,8 @@ export {
       FixedText<display_line_bytes> step;
       FixedText<display_line_bytes> title_text;
       FixedText<display_message_bytes> message;
+      // The session file a lifecycle report names when the hook builds its path.
+      FixedText<agent_report_session_file_bytes> session_file;
       LinkedWorktree worktree;
     };
 

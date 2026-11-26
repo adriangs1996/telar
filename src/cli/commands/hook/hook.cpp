@@ -293,9 +293,25 @@ namespace telar::runtime::cli::hooks {
     return report;
   }
 
-  tbc::val_a<ds::Option<ReportAgent>> antigravityLifecycle(tbc::ref_a<Payload> input, tbc::mut_a<FixedText<display_line_bytes>> event) {
+  tbc::val_a<ds::Option<ReportAgent>> antigravityLifecycle(tbc::ref_a<Payload> input, tbc::mut_a<FixedText<display_line_bytes>> event, tbc::mut_a<FixedText<agent_report_session_file_bytes>> annotations) {
     const auto name = input.event();
-    ReportAgent report{.session = sessionReference(input.session())};
+    const auto session = sessionReference(input.session());
+    // Antigravity keeps a conversation's title, which /rename changes without a hook, in
+    // annotations/<id>.pbtxt beside brain/<id>/, the directory of the transcript it names.
+    const auto transcript = input.fields().text("transcriptPath");
+    const auto brain = session.empty() ? std::string_view::npos : transcript.find("/brain/");
+
+    annotations.assign({});
+    if (brain != std::string_view::npos && transcript.substr(brain + 7).starts_with(session)) {
+      ds::Array<char, agent_report_session_file_bytes> buffer{};
+      const auto written = std::format_to_n(buffer.dataMut(), static_cast<std::ptrdiff_t>(buffer.size()), "{}/annotations/{}.pbtxt", transcript.substr(0, brain), session);
+
+      if (static_cast<std::size_t>(written.size) <= buffer.size()) {
+        annotations.assign({buffer.data(), static_cast<std::size_t>(written.size)});
+      }
+    }
+
+    ReportAgent report{.session = session, .session_file = annotations.view(), .session_file_kind = AgentSessionFileKind::antigravity_annotations};
 
     // Antigravity starts a conversation with its first prompt, and calls the model right after;
     // neither an interrupt nor a permission the user denies reaches a hook, so the screen ends those turns.
@@ -303,6 +319,13 @@ namespace telar::runtime::cli::hooks {
       report.state = AgentReportState::ready;
     } else if (name == "PreInvocation") {
       report.state = AgentReportState::working;
+    } else if (name == "PreToolUse" && input.toolName() == "ask_question") {
+      // Its questions wait for the user, as Claude's AskUserQuestion does, in the same shape.
+      report.state = AgentReportState::blocked;
+      report.blocked_reason = AgentBlockedReason::question;
+      if (!questionEvent(event, input)) {
+        toolEvent(event, input);
+      }
     } else if (name == "PreToolUse" || name == "PostToolUse") {
       // A tool call runs before the permission it may ask for, which the screen reads.
       report.state = AgentReportState::working;
@@ -370,12 +393,37 @@ namespace telar::runtime::cli::hooks {
       constexpr ds::Array names{"pending", "in_progress", "completed", "deleted"};
       const auto* const found = std::ranges::find(names, text);
 
+      // Antigravity's update_steps calls a completed step done.
+      if (text == "done") {
+        return AgentPlanStatus::completed;
+      }
+
       return found == names.end() ? ds::none : ds::Option{static_cast<AgentPlanStatus>(found - names.begin())};
     }
 
+    // Where a tool that rewrites the whole plan keeps its steps: the list, a step's text and the
+    // text of the one in progress. Claude's TodoWrite, Antigravity's update_steps and Codex's update_plan.
+    struct PlanShape {
+      std::string_view items;
+      std::string_view text;
+      std::string_view active;
+    };
+
+    PlanShape planShape(std::string_view tool) noexcept {
+      if (tool == "TodoWrite") {
+        return {.items = "todos", .text = "content", .active = "activeForm"};
+      }
+
+      if (tool == "update_steps") {
+        return {.items = "steps", .text = "title", .active = "title"};
+      }
+
+      return {.items = "plan", .text = "step", .active = "step"};
+    }
+
     void setPlan(tbc::ref_a<Payload> input, tbc::mut_a<FixedText<display_line_bytes>> step, tbc::mut_a<ReportAgentProgress> report) {
-      const bool todo = input.fields().text("tool_name") == "TodoWrite";
-      const auto items = input.tools().value(todo ? "todos" : "plan");
+      const auto shape = planShape(input.toolName());
+      const auto items = input.tools().value(shape.items);
       if (!items || !items->encoded().starts_with('[')) {
         return;
       }
@@ -398,9 +446,9 @@ namespace telar::runtime::cli::hooks {
         if (status == AgentPlanStatus::completed) {
           report.plan_done += report.plan_done < std::numeric_limits<std::uint16_t>::max();
         } else if (status == AgentPlanStatus::in_progress && current.empty()) {
-          current.assign(item.stringField(todo ? "activeForm" : "step").valueOr(item.stringField(todo ? "content" : "step").valueOr("")));
+          current.assign(item.stringField(shape.active).valueOr(item.stringField(shape.text).valueOr("")));
         } else if (status == AgentPlanStatus::pending && pending.empty()) {
-          pending.assign(item.stringField(todo ? "content" : "step").valueOr(""));
+          pending.assign(item.stringField(shape.text).valueOr(""));
         }
       });
 
@@ -419,7 +467,7 @@ namespace telar::runtime::cli::hooks {
         return;
       }
 
-      const auto tool = input.fields().text("tool_name");
+      const auto tool = input.toolName();
       if (tool == "TaskCreate") {
         if (const auto subject = input.tools().stringField("subject")) {
           report.plan_op = AgentPlanOp::add;
@@ -439,8 +487,93 @@ namespace telar::runtime::cli::hooks {
           report.plan_index = *identifier - 1;
           report.plan_status = *status;
         }
-      } else if (tool == "TodoWrite" || tool == "update_plan") {
+      } else if (tool == "TodoWrite" || tool == "update_plan" || tool == "update_steps") {
         setPlan(input, step, report);
+      }
+    }
+
+    // Antigravity's Stop carries no answer: the last one is the last response of the model in the
+    // transcript, after the user's last message. The transcript must be the conversation's own,
+    // brain/<id>/…/*.jsonl, a regular file of this user; only its tail is read.
+    void antigravityReply(const Payload& input, ds::String<Memory>& reply) {
+      constexpr std::size_t tail_bytes = std::size_t{512} * 1024;
+      const auto path = input.fields().text("transcriptPath");
+      const auto session = sessionReference(input.session());
+      const auto brain = path.find("/brain/");
+
+      if (session.empty() || brain == std::string_view::npos || !path.starts_with('/') || !path.ends_with(".jsonl") || path.contains("/../") || path.size() >= PATH_MAX || !path.substr(brain + 7).starts_with(session) || !path.substr(brain + 7 + session.size()).starts_with('/')) {
+        return;
+      }
+
+      ds::Array<char, PATH_MAX> terminated{};
+
+      std::ranges::copy(path, terminated.viewMut().begin());
+      FileDescriptor file{::open(terminated.data(), combineFlags(O_RDONLY, O_NOFOLLOW, O_NONBLOCK, O_CLOEXEC))}; // NOLINT(cppcoreguidelines-pro-type-vararg): open's C signature is variadic
+      struct stat status{};
+      if (!file || ::fstat(file.get(), &status) != 0 || !S_ISREG(status.st_mode) || status.st_uid != ::getuid()) {
+        return;
+      }
+
+      const auto size = static_cast<std::size_t>(status.st_size);
+      const auto start = size > tail_bytes ? size - tail_bytes : 0;
+      ds::String<Memory> tail{input.memory()};
+
+      tail.resize(size - start);
+      std::size_t held = 0;
+
+      while (held < tail.size()) {
+        const auto received = ::pread(file.get(), tail.dataMut() + held, tail.size() - held, static_cast<off_t>(start + held));
+        if (received < 0 && sys::lastError() == EINTR) {
+          continue;
+        }
+
+        if (received <= 0) {
+          break;
+        }
+
+        held += static_cast<std::size_t>(received);
+      }
+
+      std::string_view lines{tail.data(), held};
+
+      // A tail that starts inside a line leaves that line out.
+      if (start != 0) {
+        const auto first = lines.find('\n');
+
+        lines = first == std::string_view::npos ? std::string_view{} : lines.substr(first + 1);
+      }
+
+      while (!lines.empty()) {
+        const auto end = lines.find_last_not_of('\n');
+        if (end == std::string_view::npos) {
+          return;
+        }
+
+        const auto begin = lines.rfind('\n', end);
+        const auto line = lines.substr(begin == std::string_view::npos ? 0 : begin + 1, end - (begin == std::string_view::npos ? 0 : begin + 1) + 1);
+
+        lines = lines.substr(0, begin == std::string_view::npos ? 0 : begin);
+        if (!line.contains("\"PLANNER_RESPONSE\"") && !line.contains("\"USER_INPUT\"")) {
+          continue;
+        }
+
+        try {
+          const Object entry{input.memory(), JsonValue::parse(line)};
+
+          const auto type = entry.stringField("type").valueOr("");
+
+          if (type == "USER_INPUT") {
+            return;
+          }
+
+          if (type == "PLANNER_RESPONSE" && entry.stringField("source").valueOr("") == "MODEL") {
+            if (const auto content = entry.stringField("content"); content && !content->empty()) {
+              reply.assign(*content);
+              return;
+            }
+          }
+        } catch (const std::exception&) { // NOLINT(bugprone-empty-catch): a line that is not an entry is skipped, as a truncated one is.
+        }
       }
     }
 
@@ -460,7 +593,15 @@ namespace telar::runtime::cli::hooks {
 
     updatePlan(input, texts.step, report);
     if (input.event() == (from_pi ? "agent_settled" : "Stop")) {
-      displayText(texts.message, input.fields().optionalText("last_assistant_message").valueOr(""), true);
+      ds::String<Memory> reply{input.memory()};
+
+      if (input.provider() == AgentProvider::antigravity) {
+        antigravityReply(input, reply);
+      } else {
+        reply.assign(input.fields().optionalText("last_assistant_message").valueOr(""));
+      }
+
+      displayText(texts.message, reply, true);
       report.final_message = texts.message.view();
     }
 
@@ -544,7 +685,7 @@ namespace telar::runtime::cli::hooks {
       reports.lifecycle = cursorLifecycle(input, texts.event, files.cursor(input, environment));
       break;
     case AgentProvider::antigravity:
-      reports.lifecycle = antigravityLifecycle(input, texts.event);
+      reports.lifecycle = antigravityLifecycle(input, texts.event, texts.session_file);
       break;
     // Unknown and custom providers report no lifecycle. Custom providers take the values between
     // the named ones, which only the default reaches.
