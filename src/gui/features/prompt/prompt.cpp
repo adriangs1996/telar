@@ -1040,21 +1040,10 @@ namespace telar::gui::features::prompt {
     return line.block;
   }
 
-  void selectBlock(PaneLine& line, ds::Option<std::size_t> index, ds::Option<std::uint32_t> live_prompt, bool by_pointer) noexcept {
-    auto& block = line.block;
-
+  void selectBlock(PaneLine& line, ds::Option<std::size_t> index, bool by_pointer) noexcept {
     line.chord = 0;
     line.block_by_pointer = index && by_pointer;
-    if (!index) {
-      block.reset();
-      return;
-    }
-
-    if (!block) {
-      line.live_prompt = live_prompt;
-    }
-
-    block = index;
+    line.block = index;
   }
 
   void moveBlock(PaneLine& line, ds::Option<std::size_t> index) noexcept {
@@ -1067,12 +1056,6 @@ namespace telar::gui::features::prompt {
 
   bool blockByPointer(const PaneLine& line) noexcept {
     return line.block && line.block_by_pointer;
-  }
-
-  ds::Option<std::uint32_t> livePrompt(const Lines& lines, std::uint64_t pane_id) noexcept {
-    const auto* found = lines.find(pane_id);
-
-    return found == nullptr ? ds::none : std::as_const(**found).live_prompt;
   }
 
   void beginChord(PaneLine& line, char first) noexcept {

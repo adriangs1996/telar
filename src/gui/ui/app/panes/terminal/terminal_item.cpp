@@ -701,18 +701,13 @@ namespace telar::gui::qt {
         const auto& block = pane.blocks[index];
 
         lists.rail.push_back(QVariantMap{{QStringLiteral("state"), blockState(block.state)}, {QStringLiteral("index"), static_cast<int>(index)}, {QStringLiteral("selected"), context.selected == index}});
-        const auto begin = static_cast<std::uint64_t>(block.row);
-        const auto end = begin + block.rows;
+        // On the command's first row, which the separator stands in for; the rows of a command
+        // that runs on past it, wrapped or on lines of its own, show the rest of it.
+        const auto separator = GuiSession::separatorRow(pane, index);
 
         for (std::size_t drawn_index = 0; drawn_index < drawn.count; ++drawn_index) {
-          const auto row = drawn.absolute(drawn_index);
-          if (!row || *row < begin || *row >= end) {
-            continue;
-          }
-
-          hidden.atMut(drawn_index) = 1;
-          // On the command's last row: the prompt's other rows stay empty above it, as a margin.
-          if (*row == end - 1) {
+          if (drawn.absolute(drawn_index) == ds::Option<std::uint64_t>{separator}) {
+            hidden.atMut(drawn_index) = 1;
             lists.separators.push_back(separatorAt(pane, index, static_cast<int>(drawn_index), context));
           }
         }
@@ -739,8 +734,8 @@ namespace telar::gui::qt {
           continue;
         }
 
-        // From the separator's row, under the margin its prompt left.
-        const auto begin = static_cast<std::uint64_t>(blocks[index].row) + blocks[index].rows - 1;
+        // From the separator's row.
+        const auto begin = GuiSession::separatorRow(pane, index);
         auto last = index;
 
         while (last + 1 < blocks.size() && blocks[last + 1].nest == CommandBlockNest::inside) {

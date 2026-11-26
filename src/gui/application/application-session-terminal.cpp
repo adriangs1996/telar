@@ -273,7 +273,18 @@ namespace telar::gui::application {
   }
 
   Change Session::apply(const PaneClipboard& message) {
-    clipboard_.assign(textView(message.bytes));
+    auto text = textView(message.bytes);
+
+    // A command copied from its rows starts where its own text does.
+    if (!command_copy_.empty() && message.pane_id == command_copy_pane_) {
+      if (const auto start = text.find(command_copy_.view()); start != std::string_view::npos) {
+        text.remove_prefix(start);
+      }
+
+      command_copy_.clear();
+    }
+
+    clipboard_.assign(text);
 
     return Change::clipboard;
   }

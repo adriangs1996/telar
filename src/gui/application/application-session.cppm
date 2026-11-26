@@ -267,6 +267,10 @@ export {
       // the live prompt or the scrollback's end for the last; empty when it printed nothing.
       [[nodiscard]] static std::pair<std::uint32_t, std::uint32_t> blockRows(const Pane<Memory>& pane, std::size_t index) noexcept;
 
+      // The row block `index`'s separator is drawn on: the command's first, where telar's prompt
+      // leaves it, with the rows of a command that runs on past it shown under it.
+      [[nodiscard]] static std::uint64_t separatorRow(const Pane<Memory>& pane, std::size_t index) noexcept;
+
       // ---- command blocks, selected from the editor -------------------------------------------
 
       [[nodiscard]] ds::Option<std::size_t> selectedBlock(std::uint64_t pane_id) const noexcept;
@@ -797,13 +801,17 @@ export {
 
       // The rows of a block's output: from under its command to above the next block's prompt, or
       // the live prompt's for the last one.
-      [[nodiscard]] std::pair<std::uint32_t, std::uint32_t> blockOutput(const Pane<Memory>& pane, std::size_t index) const;
+      [[nodiscard]] static ds::Option<std::pair<std::uint32_t, std::uint32_t>> blockOutput(const Pane<Memory>& pane, std::size_t index) noexcept;
 
       // Copy mode on a block's output: from its first character, or every line of it selected.
       void selectBlockOutput(const Pane<Memory>& pane, std::size_t index, bool lines);
 
       // A block's whole output to the clipboard, as the runtime reads it.
       void copyBlockOutput(const Pane<Memory>& pane, std::size_t index);
+
+      // Copies block `index`'s command whole, as the rows it was typed on hold it: the block's
+      // own text is its first line, cut short.
+      void copyBlockCommand(const Pane<Memory>& pane, std::size_t index);
 
       // The row the shell's live prompt starts on, from the top of the scrollback, while the pane
       // shows its live end.
@@ -888,6 +896,10 @@ export {
     private:
       tbc::val_a<ds::Vec<Byte, Memory>> decode_;
       tbc::val_a<ds::String<Memory>> clipboard_;
+      // The start of a command whose rows a copy reads: what the rows hold before it is a
+      // prompt's, which the copy leaves out. Empty when no such copy is on its way.
+      tbc::val_a<ds::String<Memory>> command_copy_;
+      std::uint64_t command_copy_pane_ = 0;
       tbc::val_a<ds::String<Memory>> error_;
       tbc::val_a<ds::String<Memory>> command_response_;
 

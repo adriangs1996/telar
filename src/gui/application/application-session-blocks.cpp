@@ -88,6 +88,10 @@ namespace telar::gui::application {
     return {first, std::max(first, end)};
   }
 
+  std::uint64_t Session::separatorRow(const Pane<Memory>& pane, std::size_t index) noexcept {
+    return pane.blocks[index].row;
+  }
+
   ds::Option<std::size_t> Session::selectedBlock(std::uint64_t pane_id) const noexcept {
     const auto block = features::prompt::selectedBlock(prompt_lines, pane_id);
     const auto* pane = findPane(pane_id);
@@ -110,9 +114,8 @@ namespace telar::gui::application {
       // Stepping from a block the pointer selected keeps the keys for the editor.
       const auto selected = features::prompt::selectedBlock(line);
 
-      features::prompt::selectBlock(line, index, selected ? ds::none : livePromptRow(*pane), by_pointer || (selected && features::prompt::blockByPointer(line)));
-      const auto& block = pane->blocks[*index];
-      const auto separator = pane->folds.display(static_cast<std::uint64_t>(block.row) + std::max<std::uint32_t>(block.rows, 1) - 1);
+      features::prompt::selectBlock(line, index, by_pointer || (selected && features::prompt::blockByPointer(line)));
+      const auto separator = pane->folds.display(separatorRow(*pane, *index));
       const auto top = shownTop(*pane);
       // The separator and a row of its output in view, clear of the line docked at the bottom:
       // the view stays. Otherwise the separator comes to the top, where no pinned one covers it.
@@ -123,7 +126,7 @@ namespace telar::gui::application {
         scrollToShownRow(*pane, separator);
       }
     } else {
-      features::prompt::selectBlock(line, ds::none, ds::none);
+      features::prompt::selectBlock(line, ds::none);
       scrollToRow(pane_id, std::numeric_limits<std::uint32_t>::max());
     }
 
@@ -458,8 +461,7 @@ namespace telar::gui::application {
         return false;
       }
 
-      clipboard_.assign(pane->blocks[index].command);
-      clipboard_written_ = true;
+      copyBlockCommand(*pane, index);
       return true;
     case 'g':
       if (character != 'g') {
@@ -493,7 +495,7 @@ namespace telar::gui::application {
     }
 
     const auto rows = static_cast<std::uint64_t>(pane->screen.rows());
-    const auto separator = pane->folds.display(static_cast<std::uint64_t>(pane->blocks[index].row) + pane->blocks[index].rows - 1);
+    const auto separator = pane->folds.display(separatorRow(*pane, index));
 
     switch (character) {
     case 'a':
@@ -610,7 +612,12 @@ namespace telar::gui::application {
   }
 
   void Session::searchBlockOutput(Pane<Memory>& pane, std::size_t index) {
-    const auto [first, last] = blockOutput(pane, index);
+    const auto output = blockOutput(pane, index);
+    if (!output) {
+      return;
+    }
+
+    const auto [first, last] = *output;
     const auto grid = copyGrid(pane.screen);
 
     if (folded({.pane_id = pane.id, .index = index})) {
@@ -623,22 +630,22 @@ namespace telar::gui::application {
     }
   }
 
-  std::pair<std::uint32_t, std::uint32_t> Session::blockOutput(const Pane<Memory>& pane, std::size_t index) const {
-    const auto& block = pane.blocks[index];
-    const auto first = block.row + block.rows;
-    std::uint32_t end = pane.screen.scroll().total_rows;
-
-    if (index + 1 < pane.blocks.size()) {
-      end = pane.blocks[index + 1].row;
-    } else if (const auto live = features::prompt::livePrompt(prompt_lines, pane.id)) {
-      end = *live;
+  ds::Option<std::pair<std::uint32_t, std::uint32_t>> Session::blockOutput(const Pane<Memory>& pane, std::size_t index) noexcept {
+    const auto [first, end] = blockRows(pane, index);
+    if (end <= first) {
+      return ds::none;
     }
 
-    return {first, std::max(first, end == 0 ? 0 : end - 1)};
+    return std::pair{first, end - 1};
   }
 
   void Session::selectBlockOutput(const Pane<Memory>& pane, std::size_t index, bool lines) {
-    const auto [first, last] = blockOutput(pane, index);
+    const auto output = blockOutput(pane, index);
+    if (!output) {
+      return;
+    }
+
+    const auto [first, last] = *output;
     const auto grid = copyGrid(pane.screen);
     const auto columns = static_cast<std::uint16_t>(grid.columns == 0 ? 0 : grid.columns - 1);
     const CopyPoint start{.x = 0, .y = first};
@@ -649,10 +656,33 @@ namespace telar::gui::application {
   }
 
   void Session::copyBlockOutput(const Pane<Memory>& pane, std::size_t index) {
-    const auto [first, last] = blockOutput(pane, index);
+    const auto output = blockOutput(pane, index);
+    if (!output) {
+      return;
+    }
+
+    const auto [first, last] = *output;
     const auto columns = pane.screen.columns();
 
     link.send(CopySelection{.pane_id = pane.id, .start_x = 0, .start_y = first, .end_x = static_cast<std::uint16_t>(columns == 0 ? 0 : columns - 1), .end_y = last, .linewise = true});
+  }
+
+  void Session::copyBlockCommand(const Pane<Memory>& pane, std::size_t index) {
+    const auto& block = pane.blocks[index];
+
+    if (block.rows == 0 || block.command.empty()) {
+      clipboard_.assign(block.command);
+      clipboard_written_ = true;
+      return;
+    }
+
+    // Enough of the command's start to find it past whatever a prompt left on its first row.
+    constexpr std::size_t start_bytes = 16;
+    const auto columns = pane.screen.columns();
+
+    command_copy_.assign(block.command.substr(0, std::min(start_bytes, block.command.size())));
+    command_copy_pane_ = pane.id;
+    link.send(CopySelection{.pane_id = pane.id, .start_x = 0, .start_y = block.row, .end_x = static_cast<std::uint16_t>(columns == 0 ? 0 : columns - 1), .end_y = block.row + block.rows - 1U, .linewise = true});
   }
 
   bool Session::takeBlockChange() noexcept {

@@ -296,7 +296,7 @@ namespace telar::gui::qt {
         return block.row <= anchor;
       });
       if (found != blocks.rend()) {
-        target = static_cast<double>(folds.display(static_cast<std::uint64_t>(found->row) + found->rows - 1)) * cell;
+        target = static_cast<double>(folds.display(GuiSession::separatorRow(*current, static_cast<std::size_t>(blocks.rend() - found - 1)))) * cell;
       }
     }
 
@@ -865,7 +865,7 @@ namespace telar::gui::qt {
     ds::Option<std::size_t> found;
 
     for (std::size_t index = blocks.size(); index-- > 0;) {
-      const auto separator = static_cast<std::uint64_t>(blocks[index].row) + blocks[index].rows - 1;
+      const auto separator = GuiSession::separatorRow(*current, index);
       if (separator < row || (separator == row && shift_ > 0)) {
         found = index;
         break;
@@ -888,8 +888,7 @@ namespace telar::gui::qt {
     qreal push = 0;
 
     if (index + 1 < blocks.size()) {
-      const auto& next = blocks[index + 1];
-      const auto separator = viewFolds().display(static_cast<std::uint64_t>(next.row) + next.rows - 1);
+      const auto separator = viewFolds().display(GuiSession::separatorRow(*current, index + 1));
       const auto below = ((static_cast<double>(separator) - static_cast<double>(top_row_)) * cell) - shift_;
 
       push = static_cast<qreal>(std::min(0.0, below - cell));

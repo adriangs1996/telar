@@ -114,9 +114,8 @@ export namespace telar::gui::features::prompt {
     // clock: keys typed in between wait in the line, for a while. None outside that gap.
     ds::Option<std::int64_t> ended;
     // The command block selected from the editor's normal mode, by its index among the pane's
-    // blocks, and the row the live prompt started on when the selection began.
+    // blocks.
     ds::Option<std::size_t> block;
-    ds::Option<std::uint32_t> live_prompt;
     // The pointer selected the block: the keys that type still go to the editor.
     bool block_by_pointer = false;
     // The first half of `[[`, `]]`, `[f`, `]f`, `gg`, `z.` or `yc`.
@@ -545,9 +544,8 @@ export namespace telar::gui::features::prompt {
 
   [[nodiscard]] ds::Option<std::size_t> selectedBlock(const PaneLine& line) noexcept;
 
-  // Block `index` is selected, or none: the line is back at the live end. `live_prompt` is the row
-  // the live prompt starts on, kept from the first selection on.
-  void selectBlock(PaneLine& line, ds::Option<std::size_t> index, ds::Option<std::uint32_t> live_prompt, bool by_pointer = false) noexcept;
+  // Block `index` is selected, or none: the line is back at the live end.
+  void selectBlock(PaneLine& line, ds::Option<std::size_t> index, bool by_pointer = false) noexcept;
 
   // The selected block is now at `index` among the pane's blocks, or gone: blocks before it were
   // dropped, or came again.
@@ -555,9 +553,6 @@ export namespace telar::gui::features::prompt {
 
   // Whether the pointer selected the block, rather than a key.
   [[nodiscard]] bool blockByPointer(const PaneLine& line) noexcept;
-
-  // The row the live prompt started on when the selection began.
-  [[nodiscard]] ds::Option<std::uint32_t> livePrompt(const Lines& lines, std::uint64_t pane_id) noexcept;
 
   // The first key of a two-key command (`[[`, `gg`, `zt`, `yc`…), which the next key takes.
   void beginChord(PaneLine& line, char first) noexcept;

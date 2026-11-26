@@ -1036,9 +1036,14 @@ command = "switch" : "Switch branches" , { @branch } | "status" : "Show the work
     const auto copied = transport.last<CopySelection>();
 
     check(copied.start_y == output_first && copied.end_y == output_last && copied.linewise, "Y copies the block's output");
+    // yc reads the command whole from the rows it was typed on, from where its text starts.
     press(client, 'y');
     press(client, 'c');
-    check(client.takeClipboardWrite() && std::string_view{client.clipboard()} == "make test", "yc copies its command");
+    const auto command = transport.last<CopySelection>();
+
+    check(command.start_y <= command.end_y && command.end_y < output_first && command.linewise, "yc copies the rows of its command");
+    deliver(client, PaneClipboard{.pane_id = 1, .bytes = byteView("% make test --keep-going")});
+    check(std::string_view{client.clipboard()} == "make test --keep-going", "yc copies its command whole, without what came before it");
 
     // v selects its output in copy mode, and the editor stays in place of the prompt.
     press(client, 'v');
