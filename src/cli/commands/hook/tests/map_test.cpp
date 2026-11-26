@@ -267,6 +267,13 @@ namespace {
     check(shell.reports.lifecycle->event == "waiting for 1 background task", shell.reports.lifecycle->event);
     check(lifecycle(Mapped{AgentProvider::claude, R"({"hook_event_name":"Stop","background_tasks":[{"id":"b2","type":"subagent","status":"completed"}]})"}.reports, AgentReportState::ready));
 
+    // The sockets that watch a published artifact for comments run as long as the session: a turn
+    // that leaves only them is done, and a monitor of its own still keeps it waiting.
+    Mapped watched{AgentProvider::claude, R"({"hook_event_name":"Stop","session_id":"s1","background_tasks":[{"id":"s1","type":"monitor","status":"running","description":"live updates for artifact abc"},{"id":"s2","type":"monitor","status":"running","description":"presence on artifact https://claude.ai/artifact/abc"}]})"};
+
+    check(lifecycle(watched.reports, AgentReportState::ready), "a turn that leaves only artifact watches is done");
+    check(lifecycle(Mapped{AgentProvider::claude, R"({"hook_event_name":"Stop","background_tasks":[{"id":"b3","type":"monitor","status":"running","description":"tail the deploy log","command":"tail -f deploy.log"},{"id":"s1","type":"monitor","status":"running","description":"live updates for artifact abc"}]})"}.reports, AgentReportState::waiting));
+
     // A subagent's dialog shows in its session's pane and blocks the session; its other events do not reach it.
     check(lifecycle(Mapped{AgentProvider::claude, R"({"hook_event_name":"PermissionRequest","agent_id":"sub","tool_name":"Bash","tool_input":{"command":"rm x"}})"}.reports, AgentReportState::blocked, AgentBlockedReason::permission));
     check(lifecycle(Mapped{AgentProvider::claude, R"({"hook_event_name":"Notification","agent_id":"sub","notification_type":"permission_prompt","message":"Allow?"})"}.reports, AgentReportState::blocked, AgentBlockedReason::permission));

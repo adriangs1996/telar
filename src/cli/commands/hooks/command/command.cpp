@@ -32,6 +32,14 @@ namespace telar::runtime::cli::hooks {
       return name;
     }
 
+    // Claude lists the sockets that watch a published artifact for comments as running monitors.
+    // They live as long as the session and wake it only for a comment, so Claude does not count
+    // them as work in flight. The hook leaves out the flag Claude marks them with, and only their
+    // description tells them apart.
+    bool claudeArtifactWatch(std::string_view type, std::string_view description) noexcept {
+      return type == "monitor" && (description.starts_with("live updates for artifact ") || description.starts_with("presence on artifact "));
+    }
+
     // A string token holding a \u escape decodes as JSON would, so an invalid one fails here.
     void decodeEscapes(std::string_view token, ds::String<Memory>& decoded) {
       if (token.contains("\\u")) {
@@ -284,9 +292,10 @@ namespace telar::runtime::cli::hooks {
     if (const auto tasks = fields_.value("background_tasks")) {
       tasks->eachElement([&](JsonValue value) {
         const Object task{memory_, value, true};
+        const auto type = task.text("type");
         const auto status = task.text("status");
 
-        background_work_ += !task.text("type").empty() && status == "running";
+        background_work_ += !type.empty() && status == "running" && !claudeArtifactWatch(type, task.text("description"));
       });
     }
   }
