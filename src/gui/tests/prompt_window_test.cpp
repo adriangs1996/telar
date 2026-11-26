@@ -7,6 +7,7 @@ static_assert(true);
 #include "frame_fixture.hpp"
 #include "gui_wait.hpp"
 #include "qml_fixture.hpp"
+#include "screen_fixture.hpp"
 #include "telar_base/memory/allocator.hpp"
 #include "telar_base/memory/fixed_text.hpp"
 #include "telar_base/text/utf8.hpp"
@@ -16,7 +17,9 @@ static_assert(true);
 #include "ui/app/application_controller.hpp"
 #include "ui/kit/input/key_adapter.hpp"
 #include <QByteArray>
+#include <QClipboard>
 #include <QColor>
+#include <QWheelEvent>
 #include <algorithm>
 #include <array>
 #include <charconv>
@@ -863,6 +866,159 @@ command = "switch" : "Switch branches" | "status" : "Show the working tree statu
     }
   }
 
+  // The native prompt's view, blocks and clipboard, each against a real zsh.
+
+  constexpr auto telar_config = "return {api_version=2,client={prompt={mode='telar'}}}";
+  constexpr auto telar_vim_config = "return {api_version=2,client={prompt={mode='telar',keymap='vim'}}}";
+
+  // The highest `tick<N>` the pane's screen holds, 0 for none.
+  int lastTick(const ApplicationController& application, std::uint64_t pane) {
+    static const QRegularExpression tick{QStringLiteral("tick(\\d+)")};
+    int last = 0;
+
+    for (auto match = tick.globalMatch(screenText(application.pane(pane)->screen)); match.hasNext();) {
+      last = std::max(last, match.next().captured(1).toInt());
+    }
+
+    return last;
+  }
+
+  // A notch of a mouse wheel over the terminal, `notches` up when positive.
+  void wheel(QQuickWindow& window, TerminalItem& terminal, int notches) {
+    constexpr int notch = 120;
+    const QPointF position{terminal.width() / 2, terminal.height() / 2};
+    QWheelEvent event{position, window.mapToGlobal(position), QPoint{}, QPoint{0, notches * notch}, Qt::NoButton, Qt::NoModifier, Qt::NoScrollPhase, false};
+
+    QCoreApplication::sendEvent(&terminal, &event);
+  }
+
+  QString clipboardText() {
+    return QGuiApplication::clipboard()->text();
+  }
+
+  // Where the view stands and what it shows, for a failure's message.
+  QString viewState(const ApplicationController& application, const TerminalItem& terminal, std::uint64_t pane) {
+    return viewPosition(application, terminal, pane) + QStringLiteral(", rows below %1, arrived %2, at bottom %3, last tick %4").arg(terminal.rowsBelow()).arg(terminal.rowsArrived()).arg(atBottom(application, pane)).arg(lastTick(application, pane));
+  }
+
+  // Drags the pointer over row `row` of the view, from column `first` to `last`, and lets go.
+  void dragRow(QQuickWindow& window, const TerminalItem& terminal, int row, int first, int last) {
+    const auto cell = terminal.cellSize();
+    const auto at = [&](int column) {
+      return terminal.mapToScene(QPointF{(column + 0.5) * cell.width(), (row + 0.5) * cell.height()}).toPoint();
+    };
+
+    QTest::mousePress(&window, Qt::LeftButton, Qt::NoModifier, at(first));
+    QTest::mouseMove(&window, at((first + last) / 2));
+    QTest::mouseMove(&window, at(last));
+    QTest::mouseRelease(&window, Qt::LeftButton, Qt::NoModifier, at(last));
+  }
+
+  // The platform's copy key over the terminal: Cmd+C, or Ctrl+Shift+C.
+  void pressCopy(TerminalItem& terminal, Qt::Key key = Qt::Key_C) {
+#ifdef __APPLE__
+    constexpr Qt::KeyboardModifiers copy_modifiers = Qt::ControlModifier;
+#else
+    constexpr Qt::KeyboardModifiers copy_modifiers = Qt::ControlModifier | Qt::ShiftModifier;
+#endif
+    QKeyEvent copy{QEvent::KeyPress, key, copy_modifiers, key == Qt::Key_C ? QStringLiteral("c") : QString{}};
+
+    QCoreApplication::sendEvent(&terminal, &copy);
+  }
+
+  // The view row of block `index`'s separator, -1 while it is not in view.
+  int separatorRow(const TerminalItem& terminal, int index) {
+    for (const auto& separator : terminal.separators()) {
+      const auto map = separator.toMap();
+      if (map.value(QStringLiteral("index")).toInt() == index) {
+        return map.value(QStringLiteral("row")).toInt();
+      }
+    }
+
+    return -1;
+  }
+
+  // A runtime that integrates a real zsh in a fresh home, a window with a pane of it, the
+  // separators, the rail and the line over its terminal, and `config` as the client's file; `body`
+  // runs with them. Needs TELAR_GUI_TEST_RUNTIME and /bin/zsh.
+  template <typename Body>
+  void withRealShell(const QByteArray& config, Body body) {
+    const auto executable = qEnvironmentVariable("TELAR_GUI_TEST_RUNTIME");
+    if (executable.isEmpty() || !QFileInfo::exists(QStringLiteral("/bin/zsh"))) {
+      QSKIP("Set TELAR_GUI_TEST_RUNTIME to a runtime executable; needs /bin/zsh");
+    }
+
+    const QTemporaryDir directory;
+
+    QVERIFY(directory.isValid());
+    const auto home = directory.filePath(QStringLiteral("home"));
+
+    QVERIFY(QDir{}.mkpath(home));
+    const auto socket = directory.filePath(QStringLiteral("runtime.sock"));
+    QProcess runtime;
+
+    runtime.setProgram(executable);
+    runtime.setArguments({QStringLiteral("server"), QStringLiteral("--no-config"), QStringLiteral("--fresh"), QStringLiteral("--socket"), socket});
+    runtime.setProcessEnvironment(isolatedEnvironment(directory, home));
+    runtime.start();
+    QVERIFY(runtime.waitForStarted());
+    const auto stop = qScopeGuard([&] {
+      runtime.terminate();
+      runtime.waitForFinished(stop_wait_ms);
+    });
+
+    QTRY_VERIFY_WITH_TIMEOUT(QFileInfo::exists(socket), runtime_wait_ms);
+    qputenv("SHELL", "/bin/zsh");
+
+    ApplicationMemory application_memory;
+    ApplicationAllocator& memory = application_memory.memory();
+    ApplicationController application{memory};
+    const auto config_path = directory.filePath(QStringLiteral("config.lua"));
+    QFile file{config_path};
+
+    QVERIFY(file.open(QIODevice::WriteOnly));
+    file.write(config);
+    file.close();
+    application.loadConfiguration(config_path, {}, {});
+    QQuickWindow window;
+
+    window.resize(screen_size);
+    application.setWindow(window);
+    application.machines()->open(socket);
+    QTRY_COMPARE_WITH_TIMEOUT(application.panes()->rows()->rowCount(), 1, runtime_wait_ms);
+    const auto record = application.panes()->rows()->data(application.panes()->rows()->index(0, 0), ListModel::record_role).toMap();
+    const auto pane = record.value(QStringLiteral("key")).toString().toULongLong();
+
+    QTRY_COMPARE_WITH_TIMEOUT(application.prompt()->surface(pane), application::prompt::Surface::editor, runtime_wait_ms);
+
+    TerminalItem terminal{window.contentItem()};
+
+    terminal.setController(application.terminals());
+    terminal.setPaneId(QString::number(pane));
+    terminal.setSize(QSizeF{screen_size});
+    // The pieces a pane stacks over its terminal: the separators, the rail and the line.
+    constexpr QPointF rail_position{700, 12};
+    constexpr qreal rail_height = 180;
+    QQmlEngine engine;
+    const auto grid = application.display()->geometry().value(QStringLiteral("typography")).toMap().value(QStringLiteral("grid"));
+    const auto separators = createChrome(engine, QStringLiteral("CommandSeparators"), {{QStringLiteral("view"), QVariant::fromValue(static_cast<QObject*>(&terminal))}, {QStringLiteral("colors"), application.colors()}, {QStringLiteral("grid"), grid}});
+
+    separators->setParentItem(&terminal);
+    const auto rail = createChrome(engine, QStringLiteral("CommandRail"), {{QStringLiteral("view"), QVariant::fromValue(static_cast<QObject*>(&terminal))}, {QStringLiteral("colors"), application.colors()}});
+
+    rail->setParentItem(&terminal);
+    rail->setPosition(rail_position);
+    rail->setHeight(rail_height);
+    const auto line = createPromptLine(engine, application, terminal, pane);
+
+    line->setParentItem(&terminal);
+    window.show();
+    QVERIFY(QTest::qWaitForWindowExposed(&window, wait_ms));
+    terminal.forceActiveFocus();
+
+    body(application, window, terminal, *line, pane, directory);
+  }
+
   class PromptWindowTest : public QObject {
     Q_OBJECT
 
@@ -1147,95 +1303,350 @@ command = "switch" : "Switch branches" | "status" : "Show the working tree statu
       QTRY_VERIFY_WITH_TIMEOUT(!line->property("compact").toBool(), wait_ms);
     }
 
+    // A command prints for a while; a wheel notch up stops following it, and wheel notches back
+    // down to the live end follow it again.
+    Q_SLOT static void followsOutputAfterTheWheelComesBack() {
+      withRealShell(telar_config, [](ApplicationController& application, QQuickWindow& window, TerminalItem& terminal, QQuickItem&, std::uint64_t pane, const QTemporaryDir&) {
+        QKeyEvent enter{QEvent::KeyPress, Qt::Key_Return, Qt::NoModifier, QStringLiteral("\r")};
+
+        runCommand(application, terminal, pane, "seq 80");
+        type(terminal, "for i in {1..600}; do echo tick$i; sleep 0.02; done");
+        QCoreApplication::sendEvent(&terminal, &enter);
+        QTRY_VERIFY_WITH_TIMEOUT(lastTick(application, pane) >= 40, runtime_wait_ms);
+        wheel(window, terminal, 1);
+        QTest::qWait(view_settle_ms);
+        const auto scrolled = lastTick(application, pane);
+
+        QTest::qWait(view_settle_ms);
+        QVERIFY2(lastTick(application, pane) == scrolled && terminal.rowsBelow() > 0, qPrintable(QStringLiteral("scrolled up, the rows stay: ") + viewState(application, terminal, pane)));
+        wheel(window, terminal, -3);
+        QTest::qWait(view_settle_ms);
+        const auto back = lastTick(application, pane);
+
+        QTest::qWait(view_settle_ms);
+        QVERIFY2(lastTick(application, pane) > back && terminal.rowsBelow() == 0, qPrintable(QStringLiteral("back at the end the view follows the output again: ") + viewState(application, terminal, pane)));
+      });
+    }
+
+    // The same with JumpToEnd's click while the command still prints.
+    Q_SLOT static void followsOutputAfterJumpingToTheEnd() {
+      withRealShell(telar_config, [](ApplicationController& application, QQuickWindow& window, TerminalItem& terminal, QQuickItem&, std::uint64_t pane, const QTemporaryDir&) {
+        QKeyEvent enter{QEvent::KeyPress, Qt::Key_Return, Qt::NoModifier, QStringLiteral("\r")};
+
+        runCommand(application, terminal, pane, "seq 80");
+        type(terminal, "for i in {1..600}; do echo tick$i; sleep 0.02; done");
+        QCoreApplication::sendEvent(&terminal, &enter);
+        QTRY_VERIFY_WITH_TIMEOUT(lastTick(application, pane) >= 40, runtime_wait_ms);
+        wheel(window, terminal, 2);
+        QTest::qWait(view_settle_ms);
+        terminal.scrollToEnd();
+        QTest::qWait(view_settle_ms);
+        const auto back = lastTick(application, pane);
+
+        QTest::qWait(view_settle_ms);
+        QVERIFY2(lastTick(application, pane) > back && terminal.rowsBelow() == 0, qPrintable(viewState(application, terminal, pane)));
+      });
+    }
+
+    // With the vim keymap: Escape, [[ selects the last command, yc copies its command and Y its
+    // output.
+    Q_SLOT static void copiesABlockWithVimKeys() {
+      withRealShell(telar_vim_config, [](ApplicationController& application, QQuickWindow&, TerminalItem& terminal, QQuickItem&, std::uint64_t pane, const QTemporaryDir&) {
+        QKeyEvent escape{QEvent::KeyPress, Qt::Key_Escape, Qt::NoModifier, QStringLiteral("\x1b")};
+
+        runCommand(application, terminal, pane, "printf 'alpha\\nbeta\\ngamma\\n'");
+        QTRY_VERIFY_WITH_TIMEOUT(application.pane(pane)->blocks.size() == 1, runtime_wait_ms);
+        QGuiApplication::clipboard()->setText(QStringLiteral("untouched"));
+        QCoreApplication::sendEvent(&terminal, &escape);
+        type(terminal, "[[");
+        QTRY_VERIFY2_WITH_TIMEOUT(application.prompt()->selectedBlock(pane).hasValue(), "Escape then [[ selects the last command", runtime_wait_ms);
+        type(terminal, "yc");
+        QTRY_COMPARE_WITH_TIMEOUT(clipboardText(), QStringLiteral("printf 'alpha\\nbeta\\ngamma\\n'"), runtime_wait_ms);
+        QKeyEvent output{QEvent::KeyPress, Qt::Key_Y, Qt::ShiftModifier, QStringLiteral("Y")};
+
+        QCoreApplication::sendEvent(&terminal, &output);
+        QTRY_COMPARE_WITH_TIMEOUT(clipboardText(), QStringLiteral("alpha\nbeta\ngamma"), runtime_wait_ms);
+      });
+    }
+
+    // With the default keymap, prefix+[ selects the last command (selectBlock here), then yc and Y.
+    Q_SLOT static void copiesABlockFromPrefixBracket() {
+      withRealShell(telar_config, [](ApplicationController& application, QQuickWindow&, TerminalItem& terminal, QQuickItem&, std::uint64_t pane, const QTemporaryDir&) {
+        runCommand(application, terminal, pane, "printf 'alpha\\nbeta\\ngamma\\n'");
+        QTRY_VERIFY_WITH_TIMEOUT(application.pane(pane)->blocks.size() == 1, runtime_wait_ms);
+        QGuiApplication::clipboard()->setText(QStringLiteral("untouched"));
+        application.terminals()->selectBlock(pane, 0);
+        QTRY_VERIFY_WITH_TIMEOUT(application.prompt()->selectedBlock(pane).hasValue(), runtime_wait_ms);
+        type(terminal, "yc");
+        QTRY_COMPARE_WITH_TIMEOUT(clipboardText(), QStringLiteral("printf 'alpha\\nbeta\\ngamma\\n'"), runtime_wait_ms);
+        QKeyEvent output{QEvent::KeyPress, Qt::Key_Y, Qt::ShiftModifier, QStringLiteral("Y")};
+
+        QCoreApplication::sendEvent(&terminal, &output);
+        QTRY_COMPARE_WITH_TIMEOUT(clipboardText(), QStringLiteral("alpha\nbeta\ngamma"), runtime_wait_ms);
+      });
+    }
+
+    // Y on a command whose output ends right before the live prompt copies all of it, its last
+    // line too, and nothing of the prompt.
+    Q_SLOT static void copiesWholeOutputs() {
+      withRealShell(telar_config, [](ApplicationController& application, QQuickWindow&, TerminalItem& terminal, QQuickItem&, std::uint64_t pane, const QTemporaryDir&) {
+        runCommand(application, terminal, pane, "echo one");
+        runCommand(application, terminal, pane, "seq 3");
+        QTRY_VERIFY_WITH_TIMEOUT(application.pane(pane)->blocks.size() == 2, runtime_wait_ms);
+        QGuiApplication::clipboard()->setText(QStringLiteral("untouched"));
+        application.terminals()->selectBlock(pane, 1);
+        QTRY_VERIFY_WITH_TIMEOUT(application.prompt()->selectedBlock(pane).hasValue(), runtime_wait_ms);
+        QKeyEvent output{QEvent::KeyPress, Qt::Key_Y, Qt::ShiftModifier, QStringLiteral("Y")};
+
+        QCoreApplication::sendEvent(&terminal, &output);
+        QTRY_VERIFY_WITH_TIMEOUT(clipboardText() != QStringLiteral("untouched"), runtime_wait_ms);
+        QCOMPARE(clipboardText(), QStringLiteral("1\n2\n3"));
+        // The first command's output too, between two separators.
+        application.terminals()->selectBlock(pane, 0);
+        QGuiApplication::clipboard()->setText(QStringLiteral("untouched"));
+        QCoreApplication::sendEvent(&terminal, &output);
+        QTRY_VERIFY_WITH_TIMEOUT(clipboardText() != QStringLiteral("untouched"), runtime_wait_ms);
+        QCOMPARE(clipboardText(), QStringLiteral("one"));
+      });
+    }
+
+    // A drag over a row scrolled into view copies the row it is drawn on.
+    Q_SLOT static void selectsTheRowsDrawnWhenScrolled() {
+      withRealShell(telar_config, [](ApplicationController& application, QQuickWindow& window, TerminalItem& terminal, QQuickItem&, std::uint64_t pane, const QTemporaryDir&) {
+        runCommand(application, terminal, pane, "seq 1000 1120");
+        wheel(window, terminal, 5);
+        QTest::qWait(view_settle_ms);
+        const auto lines = screenText(application.pane(pane)->screen).split(QLatin1Char('\n'));
+        constexpr int row = 3;
+
+        QGuiApplication::clipboard()->setText(QStringLiteral("untouched"));
+        dragRow(window, terminal, row, 0, 3);
+        pressCopy(terminal);
+        QTRY_VERIFY2_WITH_TIMEOUT(clipboardText() != QStringLiteral("untouched"), "a drag copies on release", runtime_wait_ms);
+        QCOMPARE(clipboardText(), lines[row].trimmed());
+      });
+    }
+
+    // A drag while a command still prints, scrolled up, copies the row it is drawn on.
+    Q_SLOT static void selectsWhileOutputRuns() {
+      withRealShell(telar_config, [](ApplicationController& application, QQuickWindow& window, TerminalItem& terminal, QQuickItem&, std::uint64_t pane, const QTemporaryDir&) {
+        QKeyEvent enter{QEvent::KeyPress, Qt::Key_Return, Qt::NoModifier, QStringLiteral("\r")};
+
+        runCommand(application, terminal, pane, "seq 80");
+        type(terminal, "for i in {1..600}; do echo tick$i; sleep 0.02; done");
+        QCoreApplication::sendEvent(&terminal, &enter);
+        QTRY_VERIFY_WITH_TIMEOUT(lastTick(application, pane) >= 60, runtime_wait_ms);
+        wheel(window, terminal, 4);
+        QTest::qWait(view_settle_ms);
+        const auto lines = screenText(application.pane(pane)->screen).split(QLatin1Char('\n'));
+        constexpr int row = 4;
+
+        QGuiApplication::clipboard()->setText(QStringLiteral("untouched"));
+        dragRow(window, terminal, row, 0, 6);
+        pressCopy(terminal);
+        QTRY_VERIFY2_WITH_TIMEOUT(clipboardText() != QStringLiteral("untouched"), qPrintable(QStringLiteral("a drag copies on release: ") + viewState(application, terminal, pane)), runtime_wait_ms);
+        QCOMPARE(clipboardText(), lines[row].trimmed());
+        // The view still moves with the wheel after the selection.
+        const auto before = application.pane(pane)->screen.scroll().offset;
+
+        wheel(window, terminal, 2);
+        QTest::qWait(view_settle_ms);
+        QVERIFY2(application.pane(pane)->screen.scroll().offset < before, qPrintable(viewState(application, terminal, pane)));
+      });
+    }
+
+    // With an earlier command folded, a drag over the first output row of the next command copies
+    // that row, not the folded command's.
+    Q_SLOT static void selectsUnderAFold() {
+      withRealShell(telar_config, [](ApplicationController& application, QQuickWindow& window, TerminalItem& terminal, QQuickItem&, std::uint64_t pane, const QTemporaryDir&) {
+        runCommand(application, terminal, pane, "seq 1 60");
+        runCommand(application, terminal, pane, "seq 1000 1060");
+        QTRY_VERIFY_WITH_TIMEOUT(application.pane(pane)->blocks.size() == 2, runtime_wait_ms);
+        terminal.toggleFold(0);
+        QTRY_VERIFY_WITH_TIMEOUT(!application.pane(pane)->folds.empty(), runtime_wait_ms);
+        terminal.scrollToFraction(0, false);
+        QTest::qWait(view_settle_ms);
+        const auto separator = separatorRow(terminal, 1);
+
+        QVERIFY2(separator >= 0, "the second command's separator is in view");
+        QGuiApplication::clipboard()->setText(QStringLiteral("untouched"));
+        dragRow(window, terminal, separator + 1, 0, 4);
+        pressCopy(terminal);
+        QTRY_VERIFY_WITH_TIMEOUT(clipboardText() != QStringLiteral("untouched"), runtime_wait_ms);
+        QCOMPARE(clipboardText(), QStringLiteral("1000"));
+      });
+    }
+
+    // A notch up and at once a notch back, or far more notches down than up, while a command
+    // prints: the view should be following the output again either way.
+    Q_SLOT static void followsOutputAfterAShortWheel() {
+      withRealShell(telar_config, [](ApplicationController& application, QQuickWindow& window, TerminalItem& terminal, QQuickItem&, std::uint64_t pane, const QTemporaryDir&) {
+        QKeyEvent enter{QEvent::KeyPress, Qt::Key_Return, Qt::NoModifier, QStringLiteral("\r")};
+        constexpr int jiggle_ms = 150;
+
+        runCommand(application, terminal, pane, "seq 80");
+        type(terminal, "for i in {1..900}; do echo tick$i; sleep 0.02; done");
+        QCoreApplication::sendEvent(&terminal, &enter);
+        QTRY_VERIFY_WITH_TIMEOUT(lastTick(application, pane) >= 40, runtime_wait_ms);
+        wheel(window, terminal, 1);
+        QTest::qWait(jiggle_ms);
+        wheel(window, terminal, -1);
+        QTest::qWait(view_settle_ms);
+        const auto jiggled = terminal.rowsBelow();
+
+        terminal.scrollToEnd();
+        QTest::qWait(view_settle_ms);
+        wheel(window, terminal, 1);
+        QTest::qWait(jiggle_ms);
+        wheel(window, terminal, -40);
+        QTest::qWait(view_settle_ms);
+        QTest::qWait(view_settle_ms);
+        QVERIFY2(jiggled == 0 && terminal.rowsBelow() == 0, qPrintable(QStringLiteral("rows below after the jiggle %1; ").arg(jiggled) + viewState(application, terminal, pane)));
+      });
+    }
+
+    // A block selected as a click on its separator selects it, then a command typed in the
+    // default keymap reaches the editor whole.
+    Q_SLOT static void typesAfterAClickedBlock() {
+      withRealShell(telar_config, [](ApplicationController& application, QQuickWindow&, TerminalItem& terminal, QQuickItem&, std::uint64_t pane, const QTemporaryDir&) {
+        runCommand(application, terminal, pane, "echo one");
+        terminal.selectBlock(0);
+        QTRY_VERIFY_WITH_TIMEOUT(application.prompt()->selectedBlock(pane).hasValue(), runtime_wait_ms);
+        type(terminal, "git status");
+        const auto text = application.prompt()->line(pane)->text();
+
+        QCOMPARE(QString::fromUtf8(text.data(), static_cast<qsizetype>(text.size())), QStringLiteral("git status"));
+      });
+    }
+
+    // Y on a command with no output copies nothing of the next command.
+    Q_SLOT static void copiesNothingOfAnEmptyOutput() {
+      withRealShell(telar_config, [](ApplicationController& application, QQuickWindow&, TerminalItem& terminal, QQuickItem&, std::uint64_t pane, const QTemporaryDir&) {
+        runCommand(application, terminal, pane, "true");
+        runCommand(application, terminal, pane, "echo after");
+        QTRY_VERIFY_WITH_TIMEOUT(application.pane(pane)->blocks.size() == 2, runtime_wait_ms);
+        QGuiApplication::clipboard()->setText(QStringLiteral("untouched"));
+        application.terminals()->selectBlock(pane, 0);
+        QTRY_VERIFY_WITH_TIMEOUT(application.prompt()->selectedBlock(pane).hasValue(), runtime_wait_ms);
+        QKeyEvent output{QEvent::KeyPress, Qt::Key_Y, Qt::ShiftModifier, QStringLiteral("Y")};
+
+        QCoreApplication::sendEvent(&terminal, &output);
+        QTest::qWait(view_settle_ms);
+        QVERIFY2(!clipboardText().contains(QStringLiteral("echo after")), qPrintable(QStringLiteral("copied: ") + clipboardText()));
+      });
+    }
+
+    // yc copies the whole command that ran, past 160 bytes.
+    Q_SLOT static void copiesALongCommandWhole() {
+      withRealShell(telar_config, [](ApplicationController& application, QQuickWindow&, TerminalItem& terminal, QQuickItem&, std::uint64_t pane, const QTemporaryDir&) {
+        const std::string command = "echo " + std::string(200, 'a');
+
+        runCommand(application, terminal, pane, command);
+        QTRY_VERIFY_WITH_TIMEOUT(application.pane(pane)->blocks.size() == 1, runtime_wait_ms);
+        application.terminals()->selectBlock(pane, 0);
+        QTRY_VERIFY_WITH_TIMEOUT(application.prompt()->selectedBlock(pane).hasValue(), runtime_wait_ms);
+        type(terminal, "yc");
+        QTRY_VERIFY_WITH_TIMEOUT(clipboardText().startsWith(QStringLiteral("echo")), runtime_wait_ms);
+        QCOMPARE(clipboardText().size(), static_cast<qsizetype>(command.size()));
+      });
+    }
+
+    // Cmd+Up selects the last command from the default keymap, Cmd+C copies its output, the
+    // separator's button its command, and typing goes on to the editor.
+    Q_SLOT static void copiesWithTheWindowKeys() {
+      withRealShell(telar_config, [](ApplicationController& application, QQuickWindow&, TerminalItem& terminal, QQuickItem&, std::uint64_t pane, const QTemporaryDir&) {
+        runCommand(application, terminal, pane, "printf 'alpha\\nbeta\\n'");
+        QGuiApplication::clipboard()->setText(QStringLiteral("untouched"));
+        pressCopy(terminal, Qt::Key_Up);
+        QTRY_VERIFY_WITH_TIMEOUT(application.prompt()->selectedBlock(pane) == ds::Option<std::size_t>{0}, runtime_wait_ms);
+        pressCopy(terminal);
+        QTRY_COMPARE_WITH_TIMEOUT(clipboardText(), QStringLiteral("alpha\nbeta"), runtime_wait_ms);
+        QSignalSpy copied{&terminal, &TerminalItem::blockCopied};
+
+        terminal.copyBlock(0, true);
+        QTRY_COMPARE_WITH_TIMEOUT(clipboardText(), QStringLiteral("printf 'alpha\\nbeta\\n'"), runtime_wait_ms);
+        QTRY_VERIFY_WITH_TIMEOUT(!copied.isEmpty(), runtime_wait_ms);
+        type(terminal, "git");
+        const auto text = application.prompt()->line(pane)->text();
+
+        QCOMPARE(QString::fromUtf8(text.data(), static_cast<qsizetype>(text.size())), QStringLiteral("git"));
+        QVERIFY(!application.prompt()->selectedBlock(pane).hasValue());
+      });
+    }
+
+    // zsh's spelling correction asks before the command starts: the answer reaches zsh.
+    Q_SLOT static void answersZshCorrection() {
+      withRealShell(telar_config, [](ApplicationController& application, QQuickWindow&, TerminalItem& terminal, QQuickItem&, std::uint64_t pane, const QTemporaryDir&) {
+        QKeyEvent enter{QEvent::KeyPress, Qt::Key_Return, Qt::NoModifier, QStringLiteral("\r")};
+
+        runCommand(application, terminal, pane, "setopt correct");
+        const auto ran = application.pane(pane)->shell.commands;
+
+        type(terminal, "gti --version");
+        QCoreApplication::sendEvent(&terminal, &enter);
+        QTRY_VERIFY_WITH_TIMEOUT(screenText(application.pane(pane)->screen).contains(QStringLiteral("correct")), runtime_wait_ms);
+        QTest::qWait(view_settle_ms);
+        type(terminal, "y");
+        QTRY_VERIFY2_WITH_TIMEOUT(application.pane(pane)->shell.commands > ran && screenText(application.pane(pane)->screen).contains(QStringLiteral("git version")), qPrintable(screenText(application.pane(pane)->screen)), runtime_wait_ms);
+      });
+    }
+
+    // A click in the editor places the cursor; on macOS, Command+A selects the command,
+    // Command+X cuts it and Command+Z brings it back.
+    Q_SLOT static void editsWithThePointerAndCommandKeys() {
+      withRealShell(telar_config, [](ApplicationController& application, QQuickWindow& window, TerminalItem& terminal, QQuickItem& line, std::uint64_t pane, const QTemporaryDir&) {
+        auto* editor = line.findChild<PromptEditorItem*>();
+
+        QVERIFY(editor != nullptr);
+        type(terminal, "git status");
+        QTRY_COMPARE_WITH_TIMEOUT(application.prompt()->line(pane)->cursor(), std::size_t{10}, runtime_wait_ms);
+        const auto cell = editor->cellWidth();
+
+        QTRY_VERIFY_WITH_TIMEOUT(editor->isVisible(), runtime_wait_ms);
+        QTest::qWait(view_settle_ms);
+        // The editor lays its text out after a two-column indent: the fifth character is in its
+        // seventh column.
+        QTest::mouseClick(&window, Qt::LeftButton, Qt::NoModifier, editor->mapToScene(QPointF{cell * 6.5, editor->cellHeight() / 2}).toPoint());
+        QTRY_COMPARE_WITH_TIMEOUT(application.prompt()->line(pane)->cursor(), std::size_t{4}, runtime_wait_ms);
+#ifdef __APPLE__
+        const auto command = [&](Qt::Key key, Qt::KeyboardModifiers more = Qt::NoModifier) {
+          QKeyEvent press{QEvent::KeyPress, key, Qt::ControlModifier | more, QString {}};
+
+          QCoreApplication::sendEvent(&terminal, &press);
+        };
+
+        command(Qt::Key_A);
+        command(Qt::Key_X);
+        QCOMPARE(clipboardText(), QStringLiteral("git status"));
+        QVERIFY(application.prompt()->line(pane)->text().empty());
+        command(Qt::Key_Z);
+        QCOMPARE(QString::fromUtf8(application.prompt()->line(pane)->text().data(), static_cast<qsizetype>(application.prompt()->line(pane)->text().size())), QStringLiteral("git status"));
+        command(Qt::Key_Left);
+        QCOMPARE(application.prompt()->line(pane)->cursor(), std::size_t{0});
+#endif
+      });
+    }
+
     // The whole chain with nothing faked: the runtime integrates a real zsh, the line takes the
     // keys, and the shell runs the command it receives. Needs TELAR_GUI_TEST_RUNTIME.
     Q_SLOT static void lineRunsInARealShell() {
-      const auto executable = qEnvironmentVariable("TELAR_GUI_TEST_RUNTIME");
-      if (executable.isEmpty() || !QFileInfo::exists(QStringLiteral("/bin/zsh"))) {
-        QSKIP("Set TELAR_GUI_TEST_RUNTIME to a runtime executable; needs /bin/zsh");
-      }
+      withRealShell("return {api_version=2,client={prompt={mode='telar'}}}", [](ApplicationController& application, QQuickWindow& window, TerminalItem& terminal, QQuickItem& line_item, std::uint64_t pane, const QTemporaryDir& directory) {
+        auto* line = &line_item;
 
-      const QTemporaryDir directory;
-
-      QVERIFY(directory.isValid());
-      const auto home = directory.filePath(QStringLiteral("home"));
-
-      QVERIFY(QDir{}.mkpath(home));
-      const auto socket = directory.filePath(QStringLiteral("runtime.sock"));
-      QProcess runtime;
-
-      runtime.setProgram(executable);
-      runtime.setArguments({QStringLiteral("server"), QStringLiteral("--no-config"), QStringLiteral("--fresh"), QStringLiteral("--socket"), socket});
-      runtime.setProcessEnvironment(isolatedEnvironment(directory, home));
-      runtime.start();
-      QVERIFY(runtime.waitForStarted());
-      const auto stop = qScopeGuard([&] {
-        runtime.terminate();
-        runtime.waitForFinished(stop_wait_ms);
+        runsAndSuggests(application, terminal, *line, pane, directory.filePath(QStringLiteral("ran-by-line")));
+        QVERIFY(!QTest::currentTestFailed());
+        cardReadsTheLastCommand(application, directory.filePath(QStringLiteral("ran-by-line")));
+        QVERIFY(!QTest::currentTestFailed());
+        marksFailuresAndPresence(application, window, terminal, *line, pane);
+        QVERIFY(!QTest::currentTestFailed());
+        returnsFromFullScreen(application, terminal, pane);
+        QVERIFY(!QTest::currentTestFailed());
+        exercisesScrollback(application, window, terminal, *line, pane);
+        QVERIFY(!QTest::currentTestFailed());
+        completesFromSpecs(application, terminal, pane);
+        QVERIFY(!QTest::currentTestFailed());
+        recordsLaunchFrames(window, terminal);
       });
-
-      QTRY_VERIFY_WITH_TIMEOUT(QFileInfo::exists(socket), runtime_wait_ms);
-      qputenv("SHELL", "/bin/zsh");
-
-      ApplicationMemory application_memory;
-      ApplicationAllocator& memory = application_memory.memory();
-      ApplicationController application{memory};
-      const auto config = directory.filePath(QStringLiteral("config.lua"));
-      QFile file{config};
-
-      QVERIFY(file.open(QIODevice::WriteOnly));
-      file.write("return {api_version=2,client={prompt={mode='telar'}}}");
-      file.close();
-      application.loadConfiguration(config, {}, {});
-      QQuickWindow window;
-
-      window.resize(screen_size);
-      application.setWindow(window);
-      application.machines()->open(socket);
-      QTRY_COMPARE_WITH_TIMEOUT(application.panes()->rows()->rowCount(), 1, runtime_wait_ms);
-      const auto record = application.panes()->rows()->data(application.panes()->rows()->index(0, 0), ListModel::record_role).toMap();
-      const auto pane = record.value(QStringLiteral("key")).toString().toULongLong();
-
-      QTRY_COMPARE_WITH_TIMEOUT(application.prompt()->surface(pane), application::prompt::Surface::editor, runtime_wait_ms);
-
-      TerminalItem terminal{window.contentItem()};
-
-      terminal.setController(application.terminals());
-      terminal.setPaneId(QString::number(pane));
-      terminal.setSize(QSizeF{screen_size});
-      // The pieces a pane stacks over its terminal: the separators, the rail and the line.
-      constexpr QPointF rail_position{700, 12};
-      constexpr qreal rail_height = 180;
-      QQmlEngine engine;
-      const auto grid = application.display()->geometry().value(QStringLiteral("typography")).toMap().value(QStringLiteral("grid"));
-      const auto separators = createChrome(engine, QStringLiteral("CommandSeparators"), {{QStringLiteral("view"), QVariant::fromValue(static_cast<QObject*>(&terminal))}, {QStringLiteral("colors"), application.colors()}, {QStringLiteral("grid"), grid}});
-
-      separators->setParentItem(&terminal);
-      const auto rail = createChrome(engine, QStringLiteral("CommandRail"), {{QStringLiteral("view"), QVariant::fromValue(static_cast<QObject*>(&terminal))}, {QStringLiteral("colors"), application.colors()}});
-
-      rail->setParentItem(&terminal);
-      rail->setPosition(rail_position);
-      rail->setHeight(rail_height);
-      const auto line = createPromptLine(engine, application, terminal, pane);
-
-      line->setParentItem(&terminal);
-      window.show();
-      QVERIFY(QTest::qWaitForWindowExposed(&window, wait_ms));
-      terminal.forceActiveFocus();
-
-      runsAndSuggests(application, terminal, *line, pane, directory.filePath(QStringLiteral("ran-by-line")));
-      QVERIFY(!QTest::currentTestFailed());
-      cardReadsTheLastCommand(application, directory.filePath(QStringLiteral("ran-by-line")));
-      QVERIFY(!QTest::currentTestFailed());
-      marksFailuresAndPresence(application, window, terminal, *line, pane);
-      QVERIFY(!QTest::currentTestFailed());
-      returnsFromFullScreen(application, terminal, pane);
-      QVERIFY(!QTest::currentTestFailed());
-      exercisesScrollback(application, window, terminal, *line, pane);
-      QVERIFY(!QTest::currentTestFailed());
-      completesFromSpecs(application, terminal, pane);
-      QVERIFY(!QTest::currentTestFailed());
-      recordsLaunchFrames(window, terminal);
     }
   };
 

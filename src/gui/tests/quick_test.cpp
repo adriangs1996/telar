@@ -3736,12 +3736,19 @@ for i in 0 1 2 3 4 5 6 7; do printf '\033[10%sm    ' "$i"; done; printf '\033[0m
       client_->commands()->execute(window_actions::Action::toggle_sidebar);
     }
 
+    // A selection the pointer made reaches the clipboard by the platform's copy key, which
+    // copies it whether or not letting go did (gui.copy_on_select).
     Q_SLOT void pointerSelection() {
       auto* clipboard = QGuiApplication::clipboard();
       auto saved_clipboard = test::copyClipboard();
       const auto restore_clipboard = qScopeGuard([clipboard, saved = std::move(saved_clipboard)] mutable {
         clipboard->setMimeData(saved.release());
       });
+      const auto copy = [this] {
+        const auto modifiers = platform::usesCommandKey() ? Qt::KeyboardModifiers{Qt::ControlModifier} : Qt::KeyboardModifiers{Qt::ControlModifier | Qt::ShiftModifier};
+
+        QTest::keyClick(window_, Qt::Key_C, modifiers);
+      };
 
       QTRY_VERIFY_WITH_TIMEOUT(terminalReady(), runtime_wait_ms);
       auto* terminal = terminalIn(window_->contentItem());
@@ -3763,6 +3770,7 @@ for i in 0 1 2 3 4 5 6 7; do printf '\033[10%sm    ' "$i"; done; printf '\033[0m
       QTest::mouseClick(window_, Qt::LeftButton, Qt::NoModifier, clicked);
       QCOMPARE(clipboard->text(), QStringLiteral("unchanged clipboard"));
       QTest::mouseClick(window_, Qt::LeftButton, Qt::NoModifier, clicked);
+      copy();
       QTRY_COMPARE_WITH_TIMEOUT(clipboard->text(), path, runtime_wait_ms);
       QVERIFY(!client_->copy()->active());
       QTest::mouseClick(window_, Qt::LeftButton, Qt::NoModifier, clicked);
@@ -3780,6 +3788,7 @@ for i in 0 1 2 3 4 5 6 7; do printf '\033[10%sm    ' "$i"; done; printf '\033[0m
       QTest::mousePress(window_, Qt::LeftButton, Qt::NoModifier, beginning);
       QTest::mouseMove(window_, end);
       QTest::mouseRelease(window_, Qt::LeftButton, Qt::NoModifier, end);
+      copy();
       QTRY_COMPARE_WITH_TIMEOUT(clipboard->text(), QStringLiteral("/tmp"), runtime_wait_ms);
       QTest::qWait(click_wait_ms);
       QVERIFY(test::waitForSynchronizedFrame(*window_, runtime_wait_ms));
@@ -3788,6 +3797,7 @@ for i in 0 1 2 3 4 5 6 7; do printf '\033[10%sm    ' "$i"; done; printf '\033[0m
       QTest::mouseMove(window_, end);
       terminal->ungrabMouse();
       QTest::mouseRelease(window_, Qt::LeftButton, Qt::NoModifier, end);
+      copy();
       QTRY_COMPARE_WITH_TIMEOUT(clipboard->text(), QStringLiteral("/tmp"), runtime_wait_ms);
       QTest::keyClick(window_, Qt::Key_X);
       client_->terminals()->input(pane->id, "\x15");
