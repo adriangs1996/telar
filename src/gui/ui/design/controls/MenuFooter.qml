@@ -15,8 +15,10 @@ Item {
     property string text
     // The rows' columns, in this item's coordinates: the center of their marks, where their
     // names start.
-    property real markCenter: Math.round(20 * ratio)
-    property real textX: Math.round(38 * ratio)
+    readonly property real implicitMarkCenter: Math.round((ChromeStyle.menuRowPadding + ChromeStyle.menuMark / 2) * ratio)
+    readonly property real implicitTextX: Math.round((ChromeStyle.menuRowPadding + ChromeStyle.menuMark + ChromeStyle.menuGap) * ratio)
+    property real markCenter: implicitMarkCenter
+    property real textX: implicitTextX
     readonly property real gap: Math.round(6 * ratio)
     readonly property real actionHeight: Math.round(32 * ratio)
     readonly property real hairline: 1 / Screen.devicePixelRatio
@@ -52,7 +54,7 @@ Item {
                 width: root.plusSide
                 height: width
                 symbol: "plus"
-                color: root.colors.subtext0
+                color: ChromeStyle.legible(root.colors.subtext0, Qt.tint(root.colors.panel_bg, Qt.alpha(root.colors.chromeText, ChromeStyle.hoverAlpha)), 3)
             }
 
             ChromeText {

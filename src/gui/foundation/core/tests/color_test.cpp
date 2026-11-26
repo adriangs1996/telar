@@ -102,4 +102,41 @@ namespace {
 
   const telar::testing::Case case_bit_exact_normalization{"color.bit_exact_normalization", bitExactNormalization};
 
+  bool near(float actual, float expected) {
+    constexpr float tolerance = 0.01F;
+
+    return std::abs(actual - expected) < tolerance;
+  }
+
+  // The ratios a screenshot of the top bar measured, against the WCAG formula.
+  void contrastMatchesWcag() {
+    check(near(telar::gui::contrast(Color::rgb(0x000000), Color::rgb(0xffffff)), 21), "black on white is 21:1");
+    check(near(telar::gui::contrast(Color::rgb(0x808080), Color::rgb(0x808080)), 1), "a color on itself is 1:1");
+    check(near(telar::gui::contrast(Color::rgb(0x989890), Color::rgb(0x3e3d3b)), 3.74F), "the track's names read 3.74:1 on its well");
+    check(near(telar::gui::contrast(Color::rgb(0x3e3d3b), Color::rgb(0x989890)), 3.74F), "the ratio does not depend on the order");
+  }
+
+  const telar::testing::Case case_contrast_matches_wcag{"color.contrast_matches_wcag", contrastMatchesWcag};
+
+  void legibleReachesTheRatio() {
+    const auto well = Color::rgb(0x3e3d3b);
+    const auto subtext = Color::rgb(0x989890);
+    const auto lifted = telar::gui::legible(subtext, well, 4.5F);
+
+    check(telar::gui::contrast(lifted, well) >= 4.5F, "a dim ink on a dark ground is lifted to the ratio");
+    check(telar::gui::contrast(lifted, well) < 4.6F, "the lift stops near the ratio and keeps the ink's hue");
+    check(lifted.r > subtext.r, "on a dark ground the ink moves toward white");
+
+    const auto paper = Color::rgb(0xf5f4f0);
+    const auto pale = Color::rgb(0xb0b0a8);
+    const auto darkened = telar::gui::legible(pale, paper, 4.5F);
+
+    check(telar::gui::contrast(darkened, paper) >= 4.5F, "a pale ink on a light ground is darkened to the ratio");
+    check(darkened.r < pale.r, "on a light ground the ink moves toward black");
+    check(telar::gui::legible(Color::rgb(0xffffff), well, 4.5F) == Color::rgb(0xffffff), "an ink that already reads is unchanged");
+    check(telar::gui::legible(Color::rgb(0x989890, 0.5F), well, 4.5F).a == 0.5F, "the ink keeps its alpha");
+  }
+
+  const telar::testing::Case case_legible_reaches_the_ratio{"color.legible_reaches_the_ratio", legibleReachesTheRatio};
+
 }

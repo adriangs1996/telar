@@ -14,6 +14,12 @@ MachineChromeLayout {
     // A row of the list was chosen; the menu that holds the list closes on it.
     signal chosen()
 
+    // The list's status line reads on its surface, the menu's or the sidebar's, under the
+    // selection's fill too.
+    readonly property color listSurface: roster ? colors.panel_bg : colors.sidebarBackground
+    readonly property color listGround: Qt.tint(Qt.rgba(listSurface.r, listSurface.g, listSurface.b, 1), style.activeBackground ?? "transparent")
+    readonly property color secondary: ChromeStyle.legible(colors.subtext0, listGround, 4.5)
+
     function move(delta) {
         if (listRows.count > 0) selection = Math.max(0, Math.min(listRows.count - 1, selection + delta));
     }
@@ -85,34 +91,21 @@ MachineChromeLayout {
 
             HoverHandler { cursorShape: Qt.PointingHandCursor }
 
-            // The machine's color and initial in a disc, which no workspace's square mark takes
-            // for a machine, with the dot of its link at the corner.
-            NativeRoundedRectangle {
+            // The machine's initial in its neutral disc, as the bar's switch draws it; the dot of
+            // its link sits at the corner.
+            MachineAvatar {
                 id: avatar
                 objectName: "machineAvatar"
-                readonly property color ink: row.record.ink.a > 0 ? row.record.ink : root.colors.accent
                 x: row.record.avatarBounds.x - row.record.bounds.x
                 y: row.record.avatarBounds.y - row.record.bounds.y
                 width: row.record.avatarBounds.width
                 height: row.record.avatarBounds.height
-                radius: width / 2
-                color: Qt.alpha(ink, 0.16)
-                borderColor: ink
-                borderAlpha: 0.4
-                borderWidth: 1 / Screen.devicePixelRatio
+                colors: root.colors
+                ink: row.record.ink
+                initial: row.record.initial
+                initialName: "machineInitial"
+                pixelSize: root.style.smallSize
                 opacity: row.enabled ? 1 : 0.5
-
-                ChromeText {
-                    objectName: "machineInitial"
-                    anchors.fill: parent
-                    text: row.record.initial
-                    color: avatar.ink
-                    pixelSize: root.style.smallSize
-                    emphasized: true
-                    horizontalAlignment: Text.AlignHCenter
-                    elide: Text.ElideNone
-                    Accessible.ignored: true
-                }
             }
 
             NativeRoundedRectangle {
@@ -148,7 +141,7 @@ MachineChromeLayout {
                 width: row.record.statusBounds.width
                 height: row.record.statusBounds.height
                 text: row.record.status
-                color: row.record.attention ? root.style.attention : root.colors.subtext0
+                color: row.record.attention ? root.style.attention : root.secondary
                 pixelSize: root.style.smallSize
                 Accessible.ignored: true
             }

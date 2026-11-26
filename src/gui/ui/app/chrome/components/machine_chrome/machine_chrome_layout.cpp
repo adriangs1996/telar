@@ -332,6 +332,13 @@ namespace telar::gui::qt {
         {QStringLiteral("tileRadius"), length(application::workbench::TabStripGeometry::tile_radius)},
     };
 
+    if (mode_ == Mode::list) {
+      const auto columns = application::machines::MachineChromeGeometry::listColumns(chrome_);
+
+      style.insert(QStringLiteral("markCenter"), static_cast<qreal>(columns.mark_center) / density_);
+      style.insert(QStringLiteral("textX"), static_cast<qreal>(columns.text_x) / density_);
+    }
+
     QList<QVariantMap> records;
     const Rect area = isVisible() ? Rect{.width = static_cast<float>(width() * density_), .height = static_cast<float>(height() * density_)} : Rect{};
     qreal preferred = 0;
@@ -468,12 +475,13 @@ namespace telar::gui::qt {
 
       const bool stacked = source->card_count != 0;
       ds::Array<char, Geometry::list_status_capacity> storage{};
-      const auto advance = std::max(measure(source->label.view(), true), measure(Geometry::listStatus(source->live, source->agent_count, storage.viewMut()), false));
+      const auto status = Geometry::listStatus(source->live, source->agent_count, storage.viewMut());
+      const auto advance = std::max(measure(source->label.view(), true), measure(status, false));
 
       widest = std::max(widest, Geometry::listNaturalWidth(chrome_, advance, stacked, roster_));
       // The sidebar sizes the area to the rows that fit; the item clips the rest.
       if (!area.empty()) {
-        records.append(listRecord(*source, Geometry::listRow(area, chrome_, index, stacked, roster_)));
+        records.append(listRecord(*source, Geometry::listRow(area, chrome_, index, stacked, roster_, !status.empty())));
       }
 
       ++index;

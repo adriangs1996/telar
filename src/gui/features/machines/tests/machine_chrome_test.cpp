@@ -86,6 +86,13 @@ namespace {
 
     enlarged.text_ratio = 2;
     check(Geometry::listRow(area, enlarged, 0, false, false).avatar.width == avatar.width * enlarged.text_ratio && Geometry::listRow(area, chrome, 0, false, false).avatar.width == avatar.width, "rows follow the chrome text, whatever the display ratio is");
+    const auto quiet = Geometry::listRow(area, chrome, 0, false, false, false);
+    constexpr Rect centered_label{.x = 46, .y = 53, .width = 178, .height = 17};
+
+    check(quiet.label == centered_label && quiet.status.empty(), "a row with no status line centers its label in the row");
+    const auto columns = Geometry::listColumns(chrome);
+
+    check(columns.mark_center == avatar.x - area.x + (avatar.width / 2) && columns.text_x == label.x - area.x, "the columns a menu's last action lines up with are the rows' own");
   }
 
   void machineLabelsDropTheLinkLocalDomain() {
@@ -102,7 +109,8 @@ namespace {
     constexpr std::size_t several = 12;
 
     check(Geometry::listStatus(false, 3, storage.viewMut()) == "Offline", "a machine whose link is down reads offline, whatever it last reported");
-    check(Geometry::listStatus(true, 0, storage.viewMut()) == "No active agents" && Geometry::listStatus(true, 1, storage.viewMut()) == "1 active agent", "an idle machine and a single agent read in plain words");
+    check(Geometry::listStatus(true, 0, storage.viewMut()).empty(), "an idle machine reads nothing under its label, as an idle workspace shows no count");
+    check(Geometry::listStatus(true, 1, storage.viewMut()) == "1 active agent", "a single agent reads in plain words");
     check(Geometry::listStatus(true, several, storage.viewMut()) == "12 active agents", "several agents read as their count");
     check(Geometry::listStatus(true, std::numeric_limits<std::size_t>::max(), storage.viewMut()) == "active agents", "a count that does not fit drops out instead of overrunning the storage");
   }

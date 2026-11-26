@@ -69,6 +69,9 @@ Popup {
             colors: root.colors
             typography: root.typography
             ratio: root.ratio
+            // In the columns of the machine rows, which the list lays out.
+            markCenter: list.style.markCenter ?? implicitMarkCenter
+            textX: list.style.textX ?? implicitTextX
             text: "Add or manage machines"
             onTriggered: {
                 root.close();

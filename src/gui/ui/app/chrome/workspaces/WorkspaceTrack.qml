@@ -5,9 +5,9 @@ import QtQuick.Controls.Basic
 import Telar.Gui
 
 // The workspaces of the machine as one segmented control, in the runtime's order: each segment a
-// mark and a name, the active one filled. While the room holds every name they all show; when
-// it does not, only the active one keeps its name and the others their mark; past that the ones
-// that do not fit hide behind the control that opens the whole list.
+// swatch of its hue and a name, the active one filled. While the room holds every name they all
+// show; when it does not, only the active one keeps its name and the others a tile with their
+// initial; past that the ones that do not fit hide behind the control that opens the whole list.
 Item {
     id: root
 
@@ -15,20 +15,31 @@ Item {
     required property var colors
     required property var typography
     property real ratio: 1
+    // The bar's controls share one height; the track takes it from the bar.
+    property real controlHeight: Math.round(30 * ratio)
     property int selectedIndex: -1
     // The room the bar leaves the track; it draws the richest form that fits it.
     property real room: 0
     readonly property int count: segments.count
-    readonly property real trackHeight: Math.round(30 * ratio)
+    readonly property real trackHeight: controlHeight
     readonly property real inset: Math.round(3 * ratio)
     readonly property real spacing: Math.round(2 * ratio)
     readonly property real markSide: Math.round(20 * ratio)
+    // A named segment's hue: the name beside it already says what the tile's initial would.
+    readonly property real swatchSide: Math.round(8 * ratio)
     readonly property real segmentHeight: trackHeight - 2 * inset
-    readonly property real segmentPadding: Math.round(6 * ratio)
+    readonly property real segmentPadding: Math.round(8 * ratio)
     readonly property real labelGap: Math.round(6 * ratio)
     readonly property real dotSide: Math.round(6 * ratio)
     readonly property real compactWidth: markSide + 2 * Math.round(2 * ratio)
     readonly property real moreWidth: Math.round(26 * ratio)
+    // The grounds the track's ink sits on. The text of a segment at rest reads on the well, or
+    // on the hover over it, whichever is closer to the text.
+    readonly property color well: Qt.tint(Qt.rgba(colors.topbarBackground.r, colors.topbarBackground.g, colors.topbarBackground.b, 1), Qt.alpha(colors.chromeText, ChromeStyle.wellAlpha))
+    readonly property color hoverGround: Qt.tint(well, Qt.alpha(colors.chromeText, ChromeStyle.hoverAlpha))
+    readonly property color currentGround: Qt.tint(well, Qt.alpha(colors.chromeText, currentAlpha))
+    readonly property color secondary: ChromeStyle.legible(colors.subtext0, hoverGround, 4.5)
+    readonly property real currentAlpha: 0.18
     // What each segment measures with its name, as its delegate reports it; the list counts its
     // rows before or after it builds them, so the total follows both.
     property var namedWidths: []
@@ -121,9 +132,14 @@ Item {
             readonly property color hue: root.colors[record.markHue ?? "mauve"]
             readonly property bool alerting: (record.attention ?? "").length > 0
             readonly property real dotRoom: alerting ? root.labelGap + root.dotSide : 0
-            // The heavier weight's width, so choosing a workspace moves none of the others.
-            readonly property real namedWidth: root.segmentPadding + root.markSide + root.labelGap + Math.ceil(measure.implicitWidth) + dotRoom + root.segmentPadding + Math.round(2 * root.ratio)
+            // Every name in one weight, so the room a name keeps is the room it draws and
+            // choosing a workspace moves none of the others.
+            readonly property real namedWidth: root.segmentPadding + root.swatchSide + root.labelGap + Math.ceil(name.implicitWidth) + dotRoom + root.segmentPadding
             readonly property bool whole: root.named || current
+            readonly property color ground: current ? root.currentGround : root.well
+            // The hue in full on the workspace in front; the others' fade toward the well, so
+            // their names, not their colors, are what reads first.
+            readonly property color ink: current ? hue : Qt.tint(root.well, Qt.alpha(hue, 0.6))
 
             width: whole ? namedWidth : root.compactWidth
             height: root.segmentHeight
@@ -139,7 +155,7 @@ Item {
                 radius: height / 2
                 // The active segment is raised by its fill alone, so the well draws the only
                 // outline; a border marks keyboard focus.
-                color: segment.current ? Qt.alpha(root.colors.chromeText, 0.14) : segment.hovered || segment.visualFocus ? Qt.alpha(root.colors.chromeText, ChromeStyle.hoverAlpha) : "transparent"
+                color: segment.current ? Qt.alpha(root.colors.chromeText, root.currentAlpha) : segment.hovered || segment.visualFocus ? Qt.alpha(root.colors.chromeText, ChromeStyle.hoverAlpha) : "transparent"
                 borderColor: root.colors.accent
                 borderAlpha: ChromeStyle.focusAlpha
                 borderWidth: segment.visualFocus ? root.ratio : 0
@@ -147,36 +163,32 @@ Item {
 
             HoverHandler { cursorShape: Qt.PointingHandCursor }
 
-            NativeChromeText {
-                id: measure
-                text: segment.record.name ?? ""
-                pixelSize: root.typography.body
-                emphasized: true
-                visible: false
-            }
-
-            // The workspace's hue and initial, a tile like a machine's.
+            // The workspace's hue: a swatch beside its name, or a tile with its initial when the
+            // name has no room.
             NativeRoundedRectangle {
                 id: mark
                 objectName: "workspaceSegmentMark"
+                readonly property real fill: segment.current ? 0.24 : 0.14
                 x: segment.whole ? root.segmentPadding : (segment.width - width) / 2
                 y: (segment.height - height) / 2
-                width: root.markSide
-                height: root.markSide
-                radius: Math.round(6 * root.ratio)
-                color: Qt.alpha(segment.hue, 0.16)
+                width: segment.whole ? root.swatchSide : root.markSide
+                height: width
+                radius: segment.whole ? width / 2 : Math.round(6 * root.ratio)
+                color: segment.whole ? segment.ink : Qt.alpha(segment.hue, fill)
                 borderColor: segment.hue
-                borderAlpha: 0.4
-                borderWidth: 1 / Screen.devicePixelRatio
+                borderAlpha: segment.whole ? 0 : segment.current ? 0.5 : 0.25
+                borderWidth: segment.whole ? 0 : 1 / Screen.devicePixelRatio
 
                 ChromeText {
+                    objectName: "workspaceSegmentInitial"
                     anchors.fill: parent
                     text: segment.record.initial || "?"
-                    color: segment.hue
+                    color: ChromeStyle.legible(segment.ink, Qt.tint(segment.ground, Qt.alpha(segment.hue, mark.fill)), 3)
                     pixelSize: root.typography.small
                     emphasized: true
                     horizontalAlignment: Text.AlignHCenter
                     elide: Text.ElideNone
+                    visible: !segment.whole
                     Accessible.ignored: true
                 }
 
@@ -199,20 +211,18 @@ Item {
             ChromeText {
                 id: name
                 objectName: "workspaceSegmentName"
-                x: mark.x + mark.width + root.labelGap
+                x: root.segmentPadding + root.swatchSide + root.labelGap
                 width: Math.max(0, segment.width - x - segment.dotRoom - root.segmentPadding)
                 height: segment.height
                 text: segment.record.name ?? ""
-                color: segment.current ? root.colors.chromeText : root.colors.subtext0
+                color: segment.current || segment.hovered ? root.colors.chromeText : root.secondary
                 pixelSize: root.typography.body
-                emphasized: segment.current
                 visible: segment.whole
                 Accessible.ignored: true
             }
 
             NativeRoundedRectangle {
                 objectName: "workspaceSegmentAttention"
-                // Right after the name as it is drawn, which is narrower than the room its heavier weight keeps.
                 x: Math.min(name.x + Math.ceil(name.implicitWidth), name.x + name.width) + root.labelGap
                 y: (segment.height - height) / 2
                 width: root.dotSide
@@ -236,7 +246,9 @@ Item {
         }
     }
 
-    // Opens the list of every workspace; it counts the ones the track could not show.
+    // Opens the list of every workspace, which starts on its search field: a magnifier while
+    // every workspace shows, the count of the ones the track could not show otherwise. The
+    // machine's chevron is the only chevron in the bar.
     AbstractButton {
         id: more
         objectName: "workspaceTrackMore"
@@ -264,7 +276,7 @@ Item {
             objectName: "workspaceTrackMoreLabel"
             anchors.fill: parent
             text: "+" + more.hiddenCount
-            color: root.colors.subtext0
+            color: root.secondary
             pixelSize: root.typography.small
             horizontalAlignment: Text.AlignHCenter
             elide: Text.ElideNone
@@ -273,16 +285,16 @@ Item {
         }
 
         ProviderMark {
-            objectName: "workspaceTrackMoreChevron"
+            objectName: "workspaceTrackMoreSearch"
             anchors.centerIn: parent
             width: Math.round(12 * root.ratio)
             height: width
-            symbol: "chevron-down"
-            color: root.colors.subtext0
+            symbol: "search"
+            color: root.secondary
             visible: more.hiddenCount === 0
         }
 
         Accessible.role: Accessible.Button
-        Accessible.name: more.hiddenCount > 0 ? "Show all workspaces, " + more.hiddenCount + " hidden" : "Show all workspaces"
+        Accessible.name: more.hiddenCount > 0 ? "Show all workspaces, " + more.hiddenCount + " hidden" : "Find a workspace"
     }
 }

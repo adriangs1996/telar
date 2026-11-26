@@ -161,6 +161,14 @@ export {
       bool operator==(const Color&) const = default;
     };
 
+    // WCAG 2.x contrast ratio of two opaque colors, from 1 (equal) to 21 (black on white).
+    [[nodiscard]] float contrast(Color first, Color second) noexcept;
+
+    // `ink` as close to itself as it can stay while reading at `ratio` on the opaque `ground`:
+    // unchanged when it already does, else mixed toward black or white, whichever the ground
+    // lets go further.
+    [[nodiscard]] Color legible(Color ink, Color ground, float ratio) noexcept;
+
     // Zenburn's projected colors, so a window paints the default theme before its configuration loads.
     struct DefaultTheme {
       static constexpr Color background = Color::rgb(0x2b2b2b);

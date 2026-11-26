@@ -6,7 +6,8 @@ import Telar.Gui
 // The machine the window shows as one control: its avatar with the dot of its link, its label
 // and a chevron. It opens the menu of every machine. A dot before the chevron says another
 // machine needs the person. When the row is narrow the label elides, and the avatar still tells
-// which machine it is.
+// which machine it is. The machine is the context the workspaces sit in, so its label reads
+// quieter than the workspace in front.
 Item {
     id: root
 
@@ -19,16 +20,21 @@ Item {
     property bool open: false
     readonly property string label: machine.label ?? ""
     readonly property bool attention: machine.attention ?? false
-    readonly property color ink: (machine.ink?.a ?? 0) > 0 ? machine.ink : colors.accent
-    readonly property real inset: Math.round(5 * ratio)
+    readonly property color ink: (machine.ink?.a ?? 0) > 0 ? machine.ink : "transparent"
     readonly property real avatarSide: Math.round(20 * ratio)
+    // The avatar sits as far from the pill's round end as from its top, so the disc is
+    // concentric with the end at any height the bar gives the control.
+    readonly property real inset: Math.max(Math.round(2 * ratio), Math.round((height - avatarSide) / 2))
     readonly property real labelGap: Math.round(7 * ratio)
     readonly property real chevronSide: Math.round(12 * ratio)
     readonly property real dotSide: Math.round(6 * ratio)
     readonly property real dotRoom: attention ? dotSide + labelGap : 0
+    // The chevron is centered where the avatar is at the other end, concentric with its end.
+    readonly property real endInset: inset + Math.round((avatarSide - chevronSide) / 2)
+    // The label at rest and the chevron, readable on the well in every theme.
+    readonly property color well: Qt.tint(Qt.rgba(colors.topbarBackground.r, colors.topbarBackground.g, colors.topbarBackground.b, 1), Qt.alpha(colors.chromeText, ChromeStyle.wellAlpha))
+    readonly property color secondary: ChromeStyle.legible(colors.subtext0, well, 4.5)
     // The control with no label: what is left when the bar has no room for one.
-    // The pill's round end needs more room past the chevron than the avatar's disc does.
-    readonly property real endInset: Math.round(9 * ratio)
     readonly property real bareWidth: inset + avatarSide + dotRoom + labelGap + chevronSide + endInset
     readonly property real minimumWidth: bareWidth
     readonly property real preferredWidth: minimumWidth + (label.length > 0 ? labelGap + Math.ceil(labelText.implicitWidth) : 0)
@@ -60,32 +66,19 @@ Item {
             borderWidth: control.visualFocus ? 1 / Screen.devicePixelRatio : 0
         }
         contentItem: Item {
-            // The machine's color and initial in a disc, which no workspace's square mark takes
-            // for a machine, with the dot of its link at the corner.
-            NativeRoundedRectangle {
+            // The machine's initial in its neutral disc, with the dot of its link at the corner.
+            MachineAvatar {
                 id: avatar
                 objectName: "topBarMachineAvatar"
                 x: root.inset
                 y: (parent.height - height) / 2
                 width: root.avatarSide
                 height: root.avatarSide
-                radius: width / 2
-                color: Qt.alpha(root.ink, 0.16)
-                borderColor: root.ink
-                borderAlpha: 0.4
-                borderWidth: 1 / Screen.devicePixelRatio
-
-                ChromeText {
-                    objectName: "topBarMachineInitial"
-                    anchors.fill: parent
-                    text: root.machine.initial ?? ""
-                    color: root.ink
-                    pixelSize: root.typography.small
-                    emphasized: true
-                    horizontalAlignment: Text.AlignHCenter
-                    elide: Text.ElideNone
-                    Accessible.ignored: true
-                }
+                colors: root.colors
+                ink: root.ink
+                initial: root.machine.initial ?? ""
+                initialName: "topBarMachineInitial"
+                pixelSize: root.typography.small
 
                 NativeRoundedRectangle {
                     objectName: "topBarMachineLink"
@@ -108,9 +101,8 @@ Item {
                 width: Math.max(0, chevron.x - root.dotRoom - root.labelGap - x)
                 height: parent.height
                 text: root.label
-                color: root.colors.chromeText
+                color: control.hovered || control.checked ? root.colors.chromeText : root.secondary
                 pixelSize: root.typography.body
-                emphasized: true
                 visible: width > 0
             }
 
@@ -133,7 +125,7 @@ Item {
                 width: root.chevronSide
                 height: root.chevronSide
                 symbol: "chevron-down"
-                color: root.colors.subtext0
+                color: root.secondary
             }
         }
     }

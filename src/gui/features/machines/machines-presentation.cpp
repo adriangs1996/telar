@@ -98,7 +98,7 @@ namespace telar::gui::features::machines {
     }
 
     if (agents == 0) {
-      return "No active agents";
+      return {};
     }
 
     if (agents == 1) {
@@ -145,7 +145,15 @@ namespace telar::gui::features::machines {
     return chrome.textPx((2 * list_padding) + list_avatar + list_gap) + (stacked ? chrome.textPx(list_gap + stack_width) : 0) + (marked ? chrome.textPx(list_gap + list_mark) : 0) + text_advance;
   }
 
-  MachineChromeGeometry::ListRow MachineChromeGeometry::listRow(Rect area, const ChromeMetrics& chrome, std::size_t index, bool stacked, bool marked) noexcept {
+  MachineChromeGeometry::ListColumns MachineChromeGeometry::listColumns(const ChromeMetrics& chrome) noexcept {
+    const auto padding = std::round(chrome.textPx(list_padding));
+    const auto avatar = std::round(chrome.textPx(list_avatar));
+    const auto gap = std::round(chrome.textPx(list_gap));
+
+    return {.mark_center = padding + (avatar / 2), .text_x = padding + avatar + gap};
+  }
+
+  MachineChromeGeometry::ListRow MachineChromeGeometry::listRow(Rect area, const ChromeMetrics& chrome, std::size_t index, bool stacked, bool marked, bool described) noexcept {
     const auto height = listRowHeight(chrome);
     const auto padding = std::round(chrome.textPx(list_padding));
     const auto avatar = std::round(chrome.textPx(list_avatar));
@@ -178,9 +186,15 @@ namespace telar::gui::features::machines {
       end = row.stack.x - gap;
     }
 
-    const auto left = row.avatar.right() + gap;
-    const auto top = row.bounds.y + std::round(chrome.textPx(list_vertical_padding));
+    const auto left = area.x + listColumns(chrome).text_x;
     const auto width = std::max(0.0F, end - left);
+
+    if (!described) {
+      row.label = {.x = left, .y = row.bounds.y + std::round((height - label_height) / 2), .width = width, .height = label_height};
+      return row;
+    }
+
+    const auto top = row.bounds.y + std::round(chrome.textPx(list_vertical_padding));
 
     row.label = {.x = left, .y = top, .width = width, .height = label_height};
     row.status = {.x = left, .y = top + label_height, .width = width, .height = ChromeMetrics::lineHeight(chrome.small)};

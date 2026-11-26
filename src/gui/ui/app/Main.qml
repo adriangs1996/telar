@@ -51,6 +51,7 @@ Window {
             controlsInset: telar.display.windowControls
             ratio: root.ratio
             textScale: telar.display.chromeTextScale
+            textRatio: root.textRatio
             rail: root.geometry.rail
             onSidebarToggled: telar.commands.execute(WindowActions.Action.toggle_sidebar)
             onWorkspaceSelected: key => telar.commands.execute(WindowActions.Action.select_workspace, key)

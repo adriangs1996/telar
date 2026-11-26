@@ -18,13 +18,21 @@ Popup {
     // The tallest the menu grows; past it the rows scroll.
     property real maximumHeight: 480 * ratio
     readonly property real inset: Math.round(6 * ratio)
-    readonly property real rowHeight: Math.round(44 * ratio)
+    // A row is its two lines and the padding around them, measured as the machine rows are.
+    readonly property real rowPadding: Math.round(ChromeStyle.menuRowVerticalPadding * ratio)
+    readonly property real nameHeight: ChromeStyle.lineHeight(typography.body)
+    readonly property real pathHeight: ChromeStyle.lineHeight(typography.small)
+    readonly property real rowHeight: 2 * rowPadding + nameHeight + pathHeight
     readonly property real fieldHeight: Math.round(32 * ratio)
-    readonly property real markSide: Math.round(24 * ratio)
-    // The rows' columns, shared with the machine menu: the mark, then the name.
-    readonly property real markX: Math.round(8 * ratio)
-    readonly property real textX: markX + markSide + Math.round(6 * ratio)
+    readonly property real markSide: Math.round(ChromeStyle.menuMark * ratio)
+    // The rows' columns, the machine menu's too: the mark, then the name.
+    readonly property real markX: Math.round(ChromeStyle.menuRowPadding * ratio)
+    readonly property real textX: markX + markSide + Math.round(ChromeStyle.menuGap * ratio)
     readonly property real checkSide: Math.round(14 * ratio)
+    // The ground under a row's text: the menu's surface, with the selection's fill at most.
+    readonly property color surface: Qt.rgba(colors.panel_bg.r, colors.panel_bg.g, colors.panel_bg.b, 1)
+    readonly property color selectedGround: Qt.tint(surface, Qt.alpha(colors.text, ChromeStyle.selectionAlpha))
+    readonly property color secondary: ChromeStyle.legible(colors.subtext0, selectedGround, 4.5)
     readonly property real hairline: 1 / Screen.devicePixelRatio
     readonly property real fixedHeight: inset + fieldHeight + inset + hairline + inset + inset + footer.height + inset
     property string filter: ""
@@ -106,7 +114,7 @@ Popup {
             width: root.checkSide
             height: width
             symbol: "search"
-            color: root.colors.subtext0
+            color: root.secondary
         }
 
         FormTextField {
@@ -195,7 +203,7 @@ Popup {
                     ChromeText {
                         anchors.fill: parent
                         text: row.modelData.initial || "?"
-                        color: row.hue
+                        color: ChromeStyle.legible(row.hue, Qt.tint(root.selectedGround, Qt.alpha(row.hue, 0.16)), 3)
                         pixelSize: root.typography.body
                         emphasized: true
                         horizontalAlignment: Text.AlignHCenter
@@ -207,10 +215,10 @@ Popup {
                 ChromeText {
                     objectName: "workspaceMenuName"
                     x: root.textX
-                    y: Math.round(5 * root.ratio)
+                    y: root.rowPadding
                     // The counts keep their own width, up to half the line; the name takes the rest.
                     width: Math.max(0, row.nameRoom - (factsLabel.visible ? factsLabel.width + Math.round(12 * root.ratio) : 0))
-                    height: Math.round(18 * root.ratio)
+                    height: root.nameHeight
                     text: row.modelData.name ?? ""
                     color: root.colors.chromeText
                     pixelSize: root.typography.body
@@ -224,29 +232,54 @@ Popup {
                     id: factsLabel
                     objectName: "workspaceMenuFacts"
                     x: root.textX + row.nameRoom - width
-                    y: Math.round(5 * root.ratio)
+                    y: root.rowPadding
                     width: Math.min(Math.ceil(implicitWidth), Math.round(row.nameRoom / 2))
-                    height: Math.round(18 * root.ratio)
+                    height: root.nameHeight
                     text: row.modelData.facts ?? ""
-                    color: root.colors.subtext0
+                    color: root.secondary
                     pixelSize: root.typography.small
                     horizontalAlignment: Text.AlignRight
                     visible: text.length > 0 && width > 0
                     Accessible.ignored: true
                 }
 
-                // Its path as the prompt reads it, cut in the middle so the folder that names it
-                // stays; then its branch.
+                // The second line, from the name's column to the check's: the path, then the
+                // branch. The path comes first: the branch gives up its room down to a few
+                // letters before the path is cut.
+                readonly property real lineRoom: Math.max(0, width - root.textX - checkRoom - Math.round(8 * root.ratio))
+                readonly property real lineGap: Math.round(12 * root.ratio)
+                readonly property string path: modelData.shownPath ?? ""
+                readonly property int folderStart: path.lastIndexOf("/") + 1
+                readonly property real pathNatural: Math.ceil(pathHead.implicitWidth) + Math.ceil(pathFolder.implicitWidth)
+                readonly property real pathRoom: Math.max(0, lineRoom - (branchLabel.visible ? branchLabel.width + lineGap : 0))
+
+                // Its path as the prompt reads it. The folder that names it stays whole; what leads
+                // to it is cut in the middle when the line has no room for all of it.
                 ChromeText {
+                    id: pathHead
                     objectName: "workspaceMenuPath"
                     x: root.textX
-                    y: Math.round(23 * root.ratio)
-                    width: Math.max(0, row.width - x - row.checkRoom - Math.round(8 * root.ratio) - (branchLabel.visible ? branchLabel.width + Math.round(12 * root.ratio) : 0))
-                    height: Math.round(16 * root.ratio)
-                    text: row.modelData.shownPath ?? ""
-                    color: root.colors.subtext0
+                    y: root.rowPadding + root.nameHeight
+                    width: Math.min(Math.ceil(implicitWidth), Math.max(0, row.pathRoom - Math.ceil(pathFolder.implicitWidth)))
+                    height: root.pathHeight
+                    text: row.path.slice(0, row.folderStart)
+                    color: root.secondary
                     pixelSize: root.typography.small
                     elide: Text.ElideMiddle
+                    visible: text.length > 0 && width > 0
+                    Accessible.ignored: true
+                }
+
+                ChromeText {
+                    id: pathFolder
+                    objectName: "workspaceMenuFolder"
+                    x: root.textX + (pathHead.visible ? pathHead.width : 0)
+                    y: root.rowPadding + root.nameHeight
+                    width: Math.min(Math.ceil(implicitWidth), row.pathRoom)
+                    height: root.pathHeight
+                    text: row.path.slice(row.folderStart)
+                    color: root.secondary
+                    pixelSize: root.typography.small
                     Accessible.ignored: true
                 }
 
@@ -256,11 +289,13 @@ Popup {
                     objectName: "workspaceMenuBranch"
                     readonly property real iconSide: Math.round(12 * root.ratio)
                     readonly property real iconGap: Math.round(4 * root.ratio)
-                    readonly property real room: Math.round((row.width - root.textX) * 0.4)
+                    readonly property real natural: iconSide + iconGap + Math.ceil(branchName.implicitWidth)
+                    // The few letters a branch keeps when the path needs the line.
+                    readonly property real least: Math.min(natural, iconSide + iconGap + Math.round(48 * root.ratio))
                     x: row.width - width - row.checkRoom - Math.round(8 * root.ratio)
-                    y: Math.round(23 * root.ratio)
-                    width: Math.min(iconSide + iconGap + Math.ceil(branchName.implicitWidth), room)
-                    height: Math.round(16 * root.ratio)
+                    y: root.rowPadding + root.nameHeight
+                    width: Math.min(natural, Math.max(least, row.lineRoom - row.pathNatural - row.lineGap))
+                    height: root.pathHeight
                     visible: branchName.text.length > 0
 
                     ProviderMark {
@@ -268,7 +303,7 @@ Popup {
                         width: branchLabel.iconSide
                         height: width
                         symbol: "git-branch"
-                        color: root.colors.subtext0
+                        color: root.secondary
                     }
 
                     ChromeText {
@@ -277,7 +312,7 @@ Popup {
                         width: Math.max(0, parent.width - x)
                         height: parent.height
                         text: (row.modelData.branch ?? "") + ((row.modelData.branch ?? "").length > 0 && row.modelData.dirty ? " ●" : "")
-                        color: root.colors.subtext0
+                        color: root.secondary
                         pixelSize: root.typography.small
                         Accessible.ignored: true
                     }
@@ -287,9 +322,9 @@ Popup {
                     id: attentionLabel
                     objectName: "workspaceMenuAttention"
                     x: row.width - width - Math.round(8 * root.ratio) - row.checkRoom
-                    y: Math.round(5 * root.ratio)
+                    y: root.rowPadding
                     width: Math.ceil(implicitWidth)
-                    height: Math.round(18 * root.ratio)
+                    height: root.nameHeight
                     text: row.modelData.attention ?? ""
                     color: root.colors[row.modelData.attentionColor ?? "yellow"]
                     pixelSize: root.typography.small
@@ -319,7 +354,7 @@ Popup {
                 width: Math.max(0, parent.width - 2 * x)
                 height: root.rowHeight
                 text: "No workspace matches"
-                color: root.colors.subtext0
+                color: root.secondary
                 pixelSize: root.typography.body
                 visible: root.rows.length === 0
             }

@@ -3,11 +3,13 @@
 static_assert(true);
 #endif
 
+#include <QColor>
 #include <QObject>
 #include <QtQml/qqmlregistration.h>
 
 #pragma once
 
+import telar.gui.foundation.core;
 import telar.gui.foundation.drawing;
 
 namespace telar::gui::qt {
@@ -25,6 +27,10 @@ namespace telar::gui::qt {
     Q_PROPERTY(qreal outlineAlpha READ outlineAlpha CONSTANT)
     Q_PROPERTY(qreal focusAlpha READ focusAlpha CONSTANT)
     Q_PROPERTY(qreal wellAlpha READ wellAlpha CONSTANT)
+    Q_PROPERTY(qreal menuRowPadding READ menuRowPadding CONSTANT)
+    Q_PROPERTY(qreal menuRowVerticalPadding READ menuRowVerticalPadding CONSTANT)
+    Q_PROPERTY(qreal menuMark READ menuMark CONSTANT)
+    Q_PROPERTY(qreal menuGap READ menuGap CONSTANT)
 
   public:
     explicit ChromeStyle(QObject* parent = nullptr)
@@ -64,6 +70,39 @@ namespace telar::gui::qt {
 
     [[nodiscard]] qreal wellAlpha() const noexcept {
       return gui::ChromeStyle::well_alpha;
+    }
+
+    [[nodiscard]] qreal menuRowPadding() const noexcept {
+      return gui::ChromeStyle::menu_row_padding;
+    }
+
+    [[nodiscard]] qreal menuRowVerticalPadding() const noexcept {
+      return gui::ChromeStyle::menu_row_vertical_padding;
+    }
+
+    [[nodiscard]] qreal menuMark() const noexcept {
+      return gui::ChromeStyle::menu_mark;
+    }
+
+    [[nodiscard]] qreal menuGap() const noexcept {
+      return gui::ChromeStyle::menu_gap;
+    }
+
+    // `ink` moved the least it must to read at `ratio` on the opaque `ground`; the chrome's
+    // secondary text and the marks' letters ask it, so every theme keeps them readable.
+    Q_INVOKABLE [[nodiscard]] QColor legible(const QColor& ink, const QColor& ground, qreal ratio) const noexcept {
+      const auto color = [](const QColor& source) {
+        return gui::Color{.r = source.redF(), .g = source.greenF(), .b = source.blueF(), .a = source.alphaF()};
+      };
+      const auto result = gui::legible(color(ink), color(ground), static_cast<float>(ratio));
+
+      return QColor::fromRgbF(result.r, result.g, result.b, result.a);
+    }
+
+    // The height of a line of chrome text at `pixelSize`, the one the machine rows are laid out
+    // with, so a menu drawn in QML stacks its lines as they do.
+    Q_INVOKABLE [[nodiscard]] qreal lineHeight(qreal pixelSize) const noexcept {
+      return static_cast<qreal>(gui::ChromeMetrics::lineHeight(static_cast<std::uint16_t>(std::lround(pixelSize))));
     }
   };
 

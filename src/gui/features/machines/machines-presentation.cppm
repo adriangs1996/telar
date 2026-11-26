@@ -6,6 +6,7 @@ import std;
 
 import :roster;
 import telar.gui.foundation.core;
+import telar.gui.foundation.drawing;
 import telar.gui.foundation.text;
 import telar.base.ds;
 
@@ -65,11 +66,12 @@ export {
         fold,
       };
 
-      static constexpr float list_vertical_padding = 5;
-      static constexpr float list_padding = 8;
-      // As wide as an agent card's mark column, so labels share the cards' text column.
-      static constexpr float list_avatar = 24;
-      static constexpr float list_gap = 6;
+      static constexpr float list_vertical_padding = ChromeStyle::menu_row_vertical_padding;
+      // The menus' shared columns. The avatar is as wide as an agent card's mark column, so
+      // labels share the cards' text column.
+      static constexpr float list_padding = ChromeStyle::menu_row_padding;
+      static constexpr float list_avatar = ChromeStyle::menu_mark;
+      static constexpr float list_gap = ChromeStyle::menu_gap;
       static constexpr float list_dot = 7;
       static constexpr float list_dot_overhang = 2;
       // The column the roster keeps at the end of every row for the mark of the machine shown.
@@ -87,6 +89,13 @@ export {
         Rect mark;
       };
 
+      // Where a row's columns stand from its left edge: the center of its avatar and the start
+      // of its text. A menu's last action lines up with them.
+      struct ListColumns {
+        float mark_center = 0;
+        float text_x = 0;
+      };
+
       struct Control {
         Rect bounds;
         Rect label;
@@ -98,7 +107,8 @@ export {
       static constexpr std::size_t list_status_capacity = 32;
 
       // What a machine row reads under its label: that its link is down, or how many of its
-      // agents work or wait.
+      // agents work or wait. An idle machine reads nothing there, as an idle workspace shows no
+      // count.
       [[nodiscard]] static std::string_view listStatus(bool live, std::size_t agents, std::span<char, list_status_capacity> storage) noexcept;
 
       // The sidebar lists the machines other than the active one, one row each: the machine's
@@ -110,7 +120,9 @@ export {
       // The width that shows a row's whole label and status line, whichever advances further.
       // `marked` keeps the column of the roster's current mark.
       [[nodiscard]] static float listNaturalWidth(const ChromeMetrics& chrome, float text_advance, bool stacked, bool marked) noexcept;
-      [[nodiscard]] static ListRow listRow(Rect area, const ChromeMetrics& chrome, std::size_t index, bool stacked, bool marked) noexcept;
+      // A row without a status line centers its label in the row.
+      [[nodiscard]] static ListRow listRow(Rect area, const ChromeMetrics& chrome, std::size_t index, bool stacked, bool marked, bool described = true) noexcept;
+      [[nodiscard]] static ListColumns listColumns(const ChromeMetrics& chrome) noexcept;
 
       // A label as the chrome shows it: without the `.local` a macOS host name ends in, which
       // names the link-local domain and tells one machine from no other.
