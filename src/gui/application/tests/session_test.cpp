@@ -485,6 +485,8 @@ namespace {
     openFirstPane(client, transport);
     constexpr std::uint32_t history_rows = 3;
 
+    // Letting go copies, as X11 terminals do.
+    client.configuration.copy_on_select = true;
     deliverSingleCell(client, {.pane_id = 1, .frame_id = 1, .scroll = {.total_rows = history_rows}});
     check(application::terminal::copy_mode::press(client, {.pane_id = 1}), "an attached focused pane must admit selection");
     static_cast<void>(application::terminal::copy_mode::pointer(client, {.pane_id = 1, .kind = application::terminal::copy_mode::CopyPointerKind::release}));

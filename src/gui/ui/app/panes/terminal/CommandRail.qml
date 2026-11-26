@@ -19,6 +19,16 @@ Item {
     // Only while there is more than a view to map.
     readonly property bool useful: root.viewHeight < 1
 
+    // The command whose segment is at `fraction` of the rail's height, or -1.
+    function segmentAt(fraction) {
+        for (const segment of root.segments) {
+            if (fraction >= segment.top && fraction < segment.top + segment.height) {
+                return segment.index;
+            }
+        }
+        return -1;
+    }
+
     visible: root.useful || (root.view && root.view.railMatches.length > 0)
     width: (hover.hovered || dragArea.pressed ? 12 : 8) * root.ratio
     opacity: hover.hovered || dragArea.pressed ? 1 : 0.7
@@ -89,7 +99,8 @@ Item {
         }
     }
 
-    // The view, which drags the rows one to one.
+    // The view, which drags the rows one to one; a click on it without a drag selects the
+    // command under it, as one on its segment would.
     Rectangle {
         id: thumb
         x: -2 * root.ratio
@@ -104,15 +115,32 @@ Item {
         MouseArea {
             id: dragArea
             property real grab: 0
+            property bool dragged: false
             anchors.fill: parent
             cursorShape: pressed ? Qt.ClosedHandCursor : Qt.OpenHandCursor
-            onPressed: (mouse) => dragArea.grab = mouse.y
+            onPressed: (mouse) => {
+                dragArea.grab = mouse.y;
+                dragArea.dragged = false;
+            }
             onPositionChanged: (mouse) => {
                 if (!dragArea.pressed) {
                     return;
                 }
+                if (Math.abs(mouse.y - dragArea.grab) < 3 * root.ratio && !dragArea.dragged) {
+                    return;
+                }
+                dragArea.dragged = true;
                 const top = thumb.y + mouse.y - dragArea.grab;
                 root.view.scrollToFraction((top + thumb.height / 2) / root.height, false);
+            }
+            onClicked: (mouse) => {
+                if (dragArea.dragged) {
+                    return;
+                }
+                const index = root.segmentAt((thumb.y + mouse.y) / root.height);
+                if (index >= 0) {
+                    root.view.selectBlock(index);
+                }
             }
         }
     }

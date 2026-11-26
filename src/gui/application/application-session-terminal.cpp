@@ -432,6 +432,12 @@ namespace telar::gui::application {
     }
 
     const auto selected = selectedBlockKey(*pane);
+    const bool renumbered = pane->scrollback_generation != message.generation;
+
+    // Renumbered rows: the blocks kept past the runtime's no longer name theirs.
+    if (renumbered) {
+      pane->forgetKeptBlocks();
+    }
 
     if (pane->scrollback_generation == message.generation && message.trimmed > pane->scrollback_trimmed) {
       // The blocks come again with their rows moved up; until then they are moved here, so
@@ -439,9 +445,11 @@ namespace telar::gui::application {
       const auto dropped = message.trimmed - pane->scrollback_trimmed;
 
       pane->scrollback_dropped += dropped;
-      static_cast<void>(pane->blocks.retain([dropped](const CommandBlock& block) {
+      const auto removed = pane->blocks.retain([dropped](const CommandBlock& block) {
         return block.row >= dropped;
-      }));
+      });
+
+      pane->kept_blocks -= std::min(pane->kept_blocks, removed);
 
       for (auto& block : pane->blocks.viewMut()) {
         block.row -= static_cast<std::uint32_t>(dropped);
@@ -466,8 +474,6 @@ namespace telar::gui::application {
     if (pane->scrollback_generation != message.generation) {
       pane->live_prompt_row.reset();
     }
-
-    const bool renumbered = pane->scrollback_generation != message.generation;
 
     pane->scrollback_generation = message.generation;
     pane->scrollback_trimmed = message.trimmed;

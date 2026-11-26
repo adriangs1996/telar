@@ -82,8 +82,9 @@ Item {
     readonly property real cell: editor.cellWidth
     readonly property real line: root.terminal && root.terminal.cell.height > 0 ? root.terminal.cell.height : editor.cellHeight
     readonly property int screenRows: root.terminal ? root.terminal.rows : 0
-    // As a separator lays out its row: the pill, then the command.
-    readonly property real pillX: root.cell * 0.5
+    // As a separator lays out its row: past its chevron's two cells, the pill, then the command,
+    // so a command stays where it was typed when its separator takes its place.
+    readonly property real pillX: root.cell * 2
     readonly property real pillHeight: Math.round(root.line * 0.72)
     readonly property real pillWidth: Math.max(root.pillHeight, root.cell * 2)
     readonly property real textX: root.pillX + root.pillWidth + root.cell
@@ -425,12 +426,13 @@ Item {
                 }
             }
 
+            // Fainter than a separator's rule, so the context does not read as a command.
             Rectangle {
                 x: place.x + place.width + root.cell
                 anchors.verticalCenter: parent.verticalCenter
                 width: Math.max(0, statusRow.x - x - root.cell)
                 height: Math.max(1, root.ratio)
-                color: Qt.alpha(root.colors.overlay1, 0.35)
+                color: Qt.alpha(root.colors.overlay1, 0.14)
             }
 
             Row {

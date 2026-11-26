@@ -332,6 +332,16 @@ Item {
                 }
             }
 
+            // The selected command's output, marked down its edge: the rows Y copies.
+            Rectangle {
+                readonly property int below: Math.max(0, (root.view ? root.view.rows : 0) - separator.modelData.row - (separator.modelData.commandRows ?? 1))
+                visible: separator.modelData.selected && !separator.pinned && !separator.modelData.folded && (separator.modelData.rows ?? 0) > 0
+                y: (separator.modelData.commandRows ?? 1) * separator.line
+                width: Math.max(2, 2 * root.ratio)
+                height: Math.min(separator.modelData.rows ?? 0, below) * separator.line
+                color: Qt.alpha(root.colors.accent, 0.45)
+            }
+
             // The pointer over the row shows the command's actions, without taking the pointer
             // from the terminal under it.
             HoverHandler {
@@ -393,7 +403,8 @@ Item {
                     x: chevron.width
                     anchors.verticalCenter: parent.verticalCenter
                     height: Math.round(separator.line * 0.72)
-                    width: Math.max(height, mark.width + separator.cell)
+                    // As wide as the editor's pill at least, so the command stays where it was typed.
+                    width: Math.max(height, separator.cell * 2, mark.width + separator.cell)
                     radius: height / 2
                     color: Qt.alpha(separator.tone, separator.running && separator.revealed ? root.breath : 0.2)
 

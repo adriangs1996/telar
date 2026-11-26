@@ -68,6 +68,11 @@ export {
 
       // Keeps `commands` with their lines copied into the pane.
       void setBlocks(std::span<const CommandBlock> commands);
+      // The rows were numbered anew: the kept blocks no longer name theirs.
+      void forgetKeptBlocks();
+      // Where the lines of blocks `first` to `end` lie in `blocks_text`, which may begin with
+      // lines of blocks since dropped.
+      [[nodiscard]] std::pair<std::size_t, std::size_t> textOf(std::size_t first, std::size_t end) const noexcept;
 
       std::uint64_t id;
       std::uint64_t generation = 0;
@@ -136,9 +141,13 @@ export {
       // `shell.directory` view.
       ds::String<Memory> shell_host;
       ds::String<Memory> shell_directory;
-      // The commands the integrated shell ran, oldest first; `blocks_text` owns their lines.
+      // The commands the integrated shell ran, oldest first; `blocks_text` owns their lines. The
+      // runtime sends its newest; the first `kept_blocks` are older ones this pane keeps while
+      // their rows stay in the scrollback, up to `blocks_kept_limit` blocks in all.
+      static constexpr std::size_t blocks_kept_limit = 256;
       tbc::val_self<ds::Vec<CommandBlock, Memory>> blocks;
       ds::String<Memory> blocks_text;
+      std::size_t kept_blocks = 0;
       // The commands folded, by the stable number of their first row, and the rows their output
       // hides from the view.
       ds::Vec<std::uint64_t, Memory> folded;

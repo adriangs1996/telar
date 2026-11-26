@@ -1248,6 +1248,43 @@ command = "switch" : "Switch branches" , { @branch } | "status" : "Show the work
     check(client.selectedBlock(1) == std::size_t{0}, "and when its blocks come again");
   }
 
+  // The runtime sends its newest blocks: the older ones stay while their rows do, and go when
+  // the rows are numbered anew.
+  void lineKeepsOlderBlocks() {
+    SystemAllocator memory;
+    Transport transport;
+    TestSession client{memory, transport};
+
+    openBlocksAtLiveEnd(client, transport);
+    constexpr std::uint32_t newest_row = 90;
+    const ds::Array newest{
+        CommandBlock{.row = failed_block_row, .rows = 1, .state = CommandBlockState::failed, .status = 1, .command = "make"},
+        CommandBlock{.row = last_block_row, .rows = 1, .state = CommandBlockState::succeeded, .command = "git log"},
+        CommandBlock{.row = newest_row, .rows = 1, .state = CommandBlockState::succeeded, .command = "ls -la"},
+    };
+
+    deliver(client, PaneBlocks{.pane_id = 1, .blocks = newest});
+    const auto& blocks = client.findPane(1)->blocks;
+
+    check(blocks.size() == 4 && blocks[0].command == "ls" && blocks[3].command == "ls -la", "the block the runtime no longer sends stays, with its line");
+    deliver(client, PaneBlocks{.pane_id = 1, .blocks = newest});
+    check(blocks.size() == 4 && blocks[0].command == "ls" && blocks[1].command == "make", "and stays as the same blocks come again");
+    constexpr std::uint32_t trimmed = 15;
+
+    deliver(client, PaneScrollback{.pane_id = 1, .generation = 1, .trimmed = trimmed});
+    check(blocks.size() == 3 && blocks[0].command == "make", "it goes with its rows");
+    // The runtime numbers the rows from the scrollback's new top.
+    const ds::Array moved{
+        CommandBlock{.row = last_block_row - trimmed, .rows = 1, .state = CommandBlockState::succeeded, .command = "git log"},
+        CommandBlock{.row = newest_row - trimmed, .rows = 1, .state = CommandBlockState::succeeded, .command = "ls -la"},
+    };
+
+    deliver(client, PaneBlocks{.pane_id = 1, .blocks = moved});
+    check(blocks.size() == 3 && blocks[0].command == "make" && blocks[2].command == "ls -la", "a block the runtime drops after it stays in turn");
+    deliver(client, PaneScrollback{.pane_id = 1, .generation = 2, .trimmed = 0});
+    check(blocks.size() == 2 && blocks[0].command == "git log", "rows numbered anew forget the blocks kept");
+  }
+
   // Ctrl-R and the path search start from the command the line holds, and the path chosen
   // replaces the word it started from.
   void lineSearches() {
@@ -1406,6 +1443,7 @@ command = "switch" : "Switch branches" , { @branch } | "status" : "Show the work
   const telar::testing::Case case_line_queues_across_the_hooks{"prompt_session.line_queues_across_the_hooks", lineQueuesAcrossTheHooks};
   const telar::testing::Case case_running_program_takes_its_keys{"prompt_session.running_program_takes_its_keys", runningProgramTakesItsKeys};
   const telar::testing::Case case_line_block_motions{"prompt_session.line_block_motions", lineBlockMotions};
+  const telar::testing::Case case_line_keeps_older_blocks{"prompt_session.line_keeps_older_blocks", lineKeepsOlderBlocks};
   const telar::testing::Case case_line_blocks_typing_leaves{"prompt_session.line_blocks_typing_leaves", lineBlocksTypingLeaves};
 
 }

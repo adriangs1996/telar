@@ -689,6 +689,7 @@ namespace telar::gui::qt {
           {QStringLiteral("selected"), context.selected == index},
           {QStringLiteral("folded"), context.session.folded({.pane_id = context.pane_id, .index = index})},
           {QStringLiteral("rows"), static_cast<int>(output_end - output_first)},
+          {QStringLiteral("commandRows"), static_cast<int>(std::max<std::uint32_t>(block.rows, 1))},
           {QStringLiteral("foldable"), context.mapped && output_end > output_first},
           {QStringLiteral("remote"), block.nest == CommandBlockNest::inside},
           {QStringLiteral("host"), index >= context.live_session ? context.host : QString{}},
@@ -698,6 +699,18 @@ namespace telar::gui::qt {
     // The rail's marks and the separators for the commands the shell ran, their rows painted empty.
     template <typename ViewRows>
     void markCommands(const application::Pane<Memory>& pane, const DrawnRows<ViewRows>& drawn, const SeparatorContext& context, ds::Vec<std::uint8_t, Memory>& hidden, BlockLists& lists) {
+      // The rows drawn run down the scrollback: only the commands between the first and the last
+      // are looked for among them.
+      ds::Option<std::uint64_t> lowest;
+      ds::Option<std::uint64_t> highest;
+
+      for (std::size_t drawn_index = 0; drawn_index < drawn.count; ++drawn_index) {
+        if (const auto row = drawn.absolute(drawn_index)) {
+          lowest = lowest ? std::min(*lowest, *row) : *row;
+          highest = highest ? std::max(*highest, *row) : *row;
+        }
+      }
+
       for (std::size_t index = 0; index < pane.blocks.size(); ++index) {
         const auto& block = pane.blocks[index];
 
@@ -705,6 +718,9 @@ namespace telar::gui::qt {
         // On the command's first row, which the separator stands in for; the rows of a command
         // that runs on past it, wrapped or on lines of its own, show the rest of it.
         const auto separator = GuiSession::separatorRow(pane, index);
+        if (!lowest || separator < *lowest || separator > *highest) {
+          continue;
+        }
 
         for (std::size_t drawn_index = 0; drawn_index < drawn.count; ++drawn_index) {
           if (drawn.absolute(drawn_index) == ds::Option<std::uint64_t>{separator}) {
