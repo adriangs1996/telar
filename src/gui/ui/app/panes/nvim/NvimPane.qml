@@ -44,6 +44,7 @@ FocusScope {
         focus: true
         controller: root.controller
         paneId: root.paneId
+        pickerColumns: pick.columns
         onPressed: root.pressed()
 
         Repeater {
@@ -474,6 +475,15 @@ FocusScope {
                 view.chooseMenu((view.popupMenu.first ?? 0) + index);
                 view.forceActiveFocus();
             }
+        }
+
+        // Under the picker the editor recedes, so the panel stands in front of it: its surface
+        // is the editor's own color, and the preview inside it a float of the editor's.
+        Rectangle {
+            z: 985
+            anchors.fill: parent
+            visible: pick.reveal > 0
+            color: Qt.rgba(0, 0, 0, 0.32 * pick.reveal)
         }
 
         NvimPicker {

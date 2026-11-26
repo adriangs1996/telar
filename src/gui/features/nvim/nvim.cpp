@@ -963,7 +963,9 @@ namespace telar::gui::features::nvim {
     auto& picker = editor->picker;
 
     clearMatches(picker);
-    picker.truncated = message.truncated;
+    // The runtime says when it could not index every path; a list as long as a search takes
+    // has more past it too.
+    picker.truncated = message.truncated || message.matches.size() >= FindPaths::maximum_limit;
     for (const auto& match : message.matches) {
       const auto first = static_cast<std::uint32_t>(picker.positions.size());
 

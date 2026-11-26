@@ -8,13 +8,13 @@ import Telar.Gui
 // preview when its host has one. The terminal's path search and the editor's picker are both
 // this panel; each gives it its rows and decides what its keys do.
 //
-// A row is {runs, suffix, trail, detail, detailRuns, icon, iconTone, badge, badgeTone, marked}:
+// A row is {runs, suffix, detail, detailRuns, icon, badge, badgeTone, marked}:
 // `runs` are the parts of its name, each {text, colorRole, bold}, as a path's label gives them;
-// `suffix` follows the name and is never cut; `trail` are runs after it, quiet, that give way
-// first, as where a file is; `detail` is a second line under it, a line of a file, and
-// `detailRuns` the same line in parts, {text, bold}, with what the query matched bold; `icon` is
-// the glyph of what it is, a file's type or a folder, drawn in `iconTone`, a role of the
-// window's colors; `badge` is a letter at its end, what git says of it, drawn in `badgeTone`.
+// `suffix` follows the name, quiet, and is never cut; `detail` is a second line under it, a
+// line of a file, and `detailRuns` the same line in parts, {text, bold}, with what the query
+// matched bold; `icon` is the glyph of what it is, a file's type or a folder, quiet beside the
+// name; `badge` is a letter at its end, what git says of it, drawn in `badgeTone`, a role of
+// the window's colors.
 //
 // A focus scope: the keys given to the panel are its query's. A host that sets `focus` on the
 // panel names the panel in its own scope, never an item that would hold the keys in the
@@ -53,6 +53,12 @@ FocusScope {
     // A panel that opens under a terminal's cursor is measured in that terminal's cells: each
     // of its parts is then a row of them, and what the search says goes on the footer's row.
     property bool compact: false
+    // The family rows write their names in, as an editor's picker writes its paths in the
+    // editor's own; the window's without one.
+    property string rowFamily: ""
+    // The room a row's name has beside its icon and its letter of git, for a host that cuts
+    // its names to it.
+    readonly property real nameRoom: Math.max(0, listWidth - 2 * inset - 20 * ratio - iconSlot - iconGap - 24 * ratio)
     readonly property real cell: Math.max(typography.grid?.cellHeight ?? 0, 16 * ratio)
     readonly property real bodyRow: Math.max(typography.bodyRow ?? 0, typography.body ?? 0)
     readonly property real smallRow: Math.max(typography.smallRow ?? 0, typography.small ?? 0)
@@ -304,41 +310,58 @@ FocusScope {
                     height: line.firstHeight
                     visible: line.iconed
 
+                    // In one quiet tone, a little smaller than the name: the name is what is read.
                     ChromeIcon {
                         x: root.compact ? 0 : Math.round((parent.width - width) / 2)
                         anchors.verticalCenter: parent.verticalCenter
                         width: height
-                        height: Math.round(root.typography.body * 1.15)
+                        height: Math.round(root.typography.body * (root.compact ? 1.15 : 0.95))
                         glyph: line.row.icon ?? ""
                         pixelSize: height
-                        color: root.colors[line.row.iconTone ?? "subtext0"] ?? root.colors.subtext0
+                        color: Qt.alpha(root.colors.subtext0, 0.8)
                     }
                 }
 
                 // The name: its directory quiet, its own part plain, what the query matched
-                // marked. What follows it is never cut; the trail after it gives way first,
-                // and then the name, faded where it stops.
+                // marked. What follows it is never cut: the name gives way, faded where it
+                // stops.
                 Item {
                     id: label
                     x: 10 * root.ratio + icon.width + (line.iconed ? root.iconGap : 0)
                     y: line.firstTop
                     width: Math.max(0, parent.width - x - 10 * root.ratio - line.badged)
                     height: line.firstHeight
-                    readonly property bool trailed: (line.row.trail ?? []).length > 0
-                    readonly property real nameRoom: Math.max(0, width - suffix.implicitWidth)
+                    readonly property real nameRoom: Math.max(0, width - (suffix.visible ? suffix.implicitWidth : 0))
 
                     Item {
                         id: nameBox
-                        width: Math.min(nameRow.implicitWidth, label.nameRoom)
+                        readonly property real nameWidth: coded.visible ? coded.implicitWidth : nameRow.implicitWidth
+                        width: Math.min(nameWidth, label.nameRoom)
                         height: parent.height
                         clip: true
-                        layer.enabled: nameRow.implicitWidth > label.nameRoom && root.fades
+                        layer.enabled: nameWidth > label.nameRoom && root.fades
                         layer.effect: Fade {
                             fadeStart: Math.max(0, 1 - 24 * root.ratio / Math.max(1, nameBox.width))
                         }
 
+                        // In the host's family: the runs as one line of styled text.
+                        Text {
+                            id: coded
+                            visible: root.rowFamily.length > 0
+                            height: parent.height
+                            verticalAlignment: Text.AlignVCenter
+                            renderType: Text.NativeRendering
+                            font.family: root.rowFamily
+                            font.pixelSize: root.typography.body
+                            textFormat: Text.StyledText
+                            text: visible ? root.pathText(line.row.runs ?? []) + root.quiet(line.row.suffix ?? "") : ""
+                            color: root.colors.text
+                            Accessible.ignored: true
+                        }
+
                         Row {
                             id: nameRow
+                            visible: !coded.visible
                             height: parent.height
 
                             Repeater {
@@ -363,44 +386,11 @@ FocusScope {
                         x: nameBox.width
                         width: implicitWidth
                         height: parent.height
-                        visible: text.length > 0
+                        visible: text.length > 0 && !coded.visible
                         text: line.row.suffix ?? ""
                         pixelSize: root.typography.body
                         elide: Text.ElideNone
                         color: Qt.alpha(root.colors.text, 0.5)
-                    }
-
-                    Item {
-                        id: trailBox
-                        x: nameBox.width + suffix.implicitWidth + 10 * root.ratio
-                        width: Math.max(0, label.width - x)
-                        height: parent.height
-                        visible: label.trailed && width > 24 * root.ratio
-                        clip: true
-                        layer.enabled: visible && trailRow.implicitWidth > width && root.fades
-                        layer.effect: Fade {
-                            fadeStart: Math.max(0, 1 - 24 * root.ratio / Math.max(1, trailBox.width))
-                        }
-
-                        Row {
-                            id: trailRow
-                            height: parent.height
-
-                            Repeater {
-                                model: line.row.trail ?? []
-
-                                delegate: ChromeText {
-                                    required property var modelData
-                                    width: implicitWidth
-                                    height: trailRow.height
-                                    text: modelData.text
-                                    pixelSize: root.typography.small
-                                    elide: Text.ElideNone
-                                    emphasized: modelData.bold
-                                    color: modelData.bold ? root.colors.accent : Qt.alpha(root.colors.text, 0.4)
-                                }
-                            }
-                        }
                     }
                 }
 
@@ -521,11 +511,27 @@ FocusScope {
         trailing: root.trailing
     }
 
+    function escaped(text) {
+        return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    }
+
     // Parts of a line as styled text: the matched ones bold, in the accent.
     function styled(runs) {
-        const escaped = text => text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
         const accent = String(root.colors.accent);
 
         return runs.map(run => run.bold ? "<b><font color=\"" + accent + "\">" + escaped(run.text) + "</font></b>" : escaped(run.text)).join("");
+    }
+
+    // Text quiet beside a name, as styled text.
+    function quiet(text) {
+        return text.length > 0 ? "<font color=\"" + String(Qt.alpha(root.colors.text, 0.5)) + "\">" + escaped(text) + "</font>" : "";
+    }
+
+    // A name's runs as styled text, for the host's family: what the query matched bold in the
+    // accent, the name plain, the rest quiet.
+    function pathText(runs) {
+        const accent = String(root.colors.accent);
+
+        return runs.map(run => run.bold ? "<b><font color=\"" + accent + "\">" + escaped(run.text) + "</font></b>" : run.colorRole === "text" ? escaped(run.text) : quiet(run.text)).join("");
     }
 }
