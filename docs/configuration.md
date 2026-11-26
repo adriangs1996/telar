@@ -673,6 +673,12 @@ missing mapping, a non-string field or a subagent id are ignored. The shipped
 manifests map Claude Code `Bash.command`, Codex `Bash.command` plus the legacy
 `exec_command.cmd` and `shell.command` names, and Pi `bash.command`.
 
+An activity card shows an agent's plan from the plan tools its hooks report.
+Claude Code keeps those tools (`TaskCreate`, `TaskUpdate`) off for its newest
+models, so every pane starts with `CLAUDE_CODE_ENABLE_TODO_TOOLS=1` unless the
+environment already sets it. `runtime.agent_plans = false` leaves the variable
+alone; the change reaches panes opened after the runtime restarts.
+
 Overriding a built-in keeps its provider index, artwork and code-level
 capabilities; only the listed fields change. For example, relabel Claude Code
 and add a working phrase:

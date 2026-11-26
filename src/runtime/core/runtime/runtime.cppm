@@ -259,6 +259,8 @@ export {
       // Where telar keeps its own files, among them the Neovim and the configuration it provisions.
       std::string_view data_home;
       bool ssh_integration = false;
+      // Panes turn on the plan tools an agent keeps off by default.
+      bool agent_plans = true;
       // Where the user's completion specs live: the configuration's own directory.
       std::string_view configuration_directory;
       // The editor's configuration, $XDG_CONFIG_HOME/telar/editor: the directory its Neovim

@@ -382,6 +382,8 @@ export {
       bool resume_agents = true;
       bool shell_integration = true;
       bool ssh_integration = true;
+      // Turns on the plan tools an agent keeps off by default, so its card shows its plan.
+      bool agent_plans = true;
     };
 
     template <Allocator Memory>

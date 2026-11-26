@@ -261,9 +261,10 @@ namespace telar::runtime::config {
       return;
     }
 
-    runtime.onlyFields({"history", "session", "engine", "agent_descriptions", "graphics", "proxy", "agents", "control_queries", "shell_integration", "ssh_integration"});
+    runtime.onlyFields({"history", "session", "engine", "agent_descriptions", "graphics", "proxy", "agents", "control_queries", "shell_integration", "ssh_integration", "agent_plans"});
     values_.shell_integration = runtime.field("shell_integration").boolean(values_.shell_integration);
     values_.ssh_integration = runtime.field("ssh_integration").boolean(values_.ssh_integration);
+    values_.agent_plans = runtime.field("agent_plans").boolean(values_.agent_plans);
     history(runtime.field("history"));
     session(runtime.field("session"));
     helper(runtime.field("engine"), values_.engine, true);

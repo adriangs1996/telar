@@ -852,6 +852,7 @@ namespace telar::runtime::config {
     copy.resume_agents = resume_agents;
     copy.shell_integration = shell_integration;
     copy.ssh_integration = ssh_integration;
+    copy.agent_plans = agent_plans;
     return copy;
   }
 

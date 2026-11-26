@@ -402,6 +402,7 @@ namespace telar::runtime::cli {
         .shell_integration = shell_integration,
         .data_home = paths.data_home,
         .ssh_integration = configuration.ssh_integration,
+        .agent_plans = configuration.agent_plans,
         .configuration_directory = configuration_directory.empty() ? std::string_view{config_home} : configuration_directory,
         .editor_configuration = editor_configuration.view(),
     };

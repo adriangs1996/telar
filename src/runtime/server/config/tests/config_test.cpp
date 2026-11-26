@@ -80,7 +80,7 @@ return telar.config {
     },
   },
   profiles = {
-    selected = {runtime = {history = {path='sub/../history.db', command_filters={'private'}, secrets_filter=false}, session={persist=true, resume_agents=false}, ssh_integration=false}},
+    selected = {runtime = {history = {path='sub/../history.db', command_filters={'private'}, secrets_filter=false}, session={persist=true, resume_agents=false}, ssh_integration=false, agent_plans=false}},
     other = {runtime = {history = {command_filters={'other-only'}}}},
   },
 }
@@ -94,7 +94,7 @@ return telar.config {
 
       config::Loader{memory, values}.load(options, ProcessEnvironment{});
       check(values.capture_output && values.persist_session && !values.resume_agents);
-      check(values.shell_integration && !values.ssh_integration);
+      check(values.shell_integration && !values.ssh_integration && !values.agent_plans);
       check(std::string_view{values.history_path} == root + "/history.db" && !values.history_filters.secrets);
       // The session and the proxy's keys go beside the configuration that named them, not under the runtime's cwd.
       check(std::string_view{values.session_path} == root + "/state/s.bin");
