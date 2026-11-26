@@ -233,7 +233,7 @@ namespace telar::gui::qt {
     // The answer was to an older view: the view changed while it was asked, the rows shown moved
     // past it, or another process is selected.
     const auto& view = state.view;
-    const auto stale_detail = view.selected.pid != 0 && (!state.detail || state.detail->process.instance.pid != view.selected.pid);
+    const auto stale_detail = view.selected.pid != 0 && monitor::selectedDetail(state) == nullptr;
 
     if (state.owed || stale_detail || !monitor::covers(state)) {
       refresh();
@@ -486,12 +486,12 @@ namespace telar::gui::qt {
 
   QVariantMap MonitorController::detail() const {
     const auto& session = store_.session();
-    const auto& state = monitor::state(session);
-    if (!state.detail || state.view.selected.pid == 0) {
+    const auto* const held = monitor::selectedDetail(monitor::state(session));
+    if (held == nullptr) {
       return {};
     }
 
-    const auto& detail = *state.detail;
+    const auto& detail = *held;
     const auto& process = detail.process;
     const auto kept = detail.keptChildren();
     QStringList ports;
@@ -908,20 +908,19 @@ namespace telar::gui::qt {
   }
 
   void MonitorController::copyCommand() {
-    const auto& state = monitor::state(store_.session());
-    if (state.detail && state.view.selected.pid != 0) {
-      QGuiApplication::clipboard()->setText(text(state.detail->arguments));
+    if (const auto* const held = monitor::selectedDetail(monitor::state(store_.session()))) {
+      QGuiApplication::clipboard()->setText(text(held->arguments));
     }
   }
 
   void MonitorController::focusPane() {
-    const auto& state = monitor::state(store_.session());
-    if (!state.detail || state.detail->process.pane_id == 0) {
+    const auto* const held = monitor::selectedDetail(monitor::state(store_.session()));
+    if (held == nullptr || held->process.pane_id == 0) {
       emit failed(QStringLiteral("This process runs in no telar pane"));
       return;
     }
 
-    const auto pane = state.detail->process.pane_id;
+    const auto pane = held->process.pane_id;
 
     emit closeRequested();
     application::workbench::focusPane(store_.sessionMut(), pane);
@@ -993,9 +992,15 @@ namespace telar::gui::qt {
       return true;
     case Action::process_lower_priority: {
       constexpr int step = 5;
-      const auto& state = monitor::state(store_.session());
+      const auto* const held = monitor::selectedDetail(monitor::state(store_.session()));
 
-      renice((state.detail ? state.detail->process.nice : 0) + step);
+      // Until the selected process's detail arrives its nice value is not known.
+      if (held == nullptr) {
+        emit failed(QStringLiteral("The process's priority is still being read; try again"));
+        return true;
+      }
+
+      renice(held->process.nice + step);
       return true;
     }
     case Action::process_copy_command:

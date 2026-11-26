@@ -45,6 +45,7 @@ export namespace telar::gui::application::monitor {
   using features::monitor::relist;
   using features::monitor::rowCount;
   using features::monitor::rowOf;
+  using features::monitor::selectedDetail;
   using features::monitor::shownInterfaces;
   using features::monitor::slotAt;
   using features::monitor::toggle;

@@ -175,6 +175,15 @@ namespace telar::gui::features::monitor {
     return history.view().first(history_count);
   }
 
+  const ProcessDetail* selectedDetail(const State& state) noexcept {
+    const auto& selected = state.view.selected;
+    if (selected.pid == 0 || !state.detail || state.detail->process.instance != selected) {
+      return nullptr;
+    }
+
+    return &*state.detail;
+  }
+
   Window window(const State& state) noexcept {
     return windowAround(state.view.first, state.view.visible, state.groups.view(), state.view.layout);
   }

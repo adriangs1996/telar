@@ -198,6 +198,10 @@ export namespace telar::gui::features::monitor {
     [[nodiscard]] std::span<const std::uint16_t> cpuHistory() const noexcept;
   };
 
+  // The detail of the process selected; none while the detail held is another's, as it is until the
+  // answer about the one selected arrives.
+  [[nodiscard]] const ProcessDetail* selectedDetail(const State& state) noexcept;
+
   // The rows of the listing the window asks for: those it shows, and as many before and after.
   [[nodiscard]] Window window(const State& state) noexcept;
 

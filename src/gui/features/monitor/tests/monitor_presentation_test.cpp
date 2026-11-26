@@ -286,6 +286,30 @@ namespace {
     check(state.network_peaks.count == 1 && state.disk_peaks.scale(disk_rate_floor) == disk_rate_floor);
   }
 
+  // The detail held is the selected process's only when it names the same instance.
+  void detailIsTheSelected() {
+    telar::testing::TestMemory adapter;
+    Memory& memory = adapter;
+    State state{memory};
+    const ProcessInstance selected{.pid = 42, .started_seconds = 10};
+    MonitorDetail detail{};
+
+    detail.process.instance = selected;
+    detail.process.nice = 7;
+    state.view.selected = selected;
+    wait(state, 1);
+    check(receive(state, MonitorSnapshot{.request_id = 1, .detail = detail}));
+    check(selectedDetail(state) != nullptr && selectedDetail(state)->process.nice == 7);
+
+    // Another process, or the same pid started again: the detail held is the last one's.
+    state.view.selected = {.pid = 43, .started_seconds = 10};
+    check(selectedDetail(state) == nullptr);
+    state.view.selected = {.pid = 42, .started_seconds = 11};
+    check(selectedDetail(state) == nullptr);
+    state.view.selected = {};
+    check(selectedDetail(state) == nullptr);
+  }
+
   const telar::testing::Case case_columns{"monitor_presentation.columns_share_the_width", columnsShareTheWidth};
   const telar::testing::Case case_fit{"monitor_presentation.fit_counts_characters", fitCountsCharacters};
   const telar::testing::Case case_amounts{"monitor_presentation.amounts_read_short", amountsReadShort};
@@ -302,5 +326,6 @@ namespace {
   const telar::testing::Case case_mounts{"monitor_presentation.mounts_read_short", mountsReadShort};
   const telar::testing::Case case_interfaces{"monitor_presentation.interfaces_shown_by_traffic", interfacesShownByTraffic};
   const telar::testing::Case case_rates{"monitor_presentation.rates_fill_against_their_peak", ratesFillAgainstTheirPeak};
+  const telar::testing::Case case_detail{"monitor_presentation.detail_is_the_selected", detailIsTheSelected};
 
 }
