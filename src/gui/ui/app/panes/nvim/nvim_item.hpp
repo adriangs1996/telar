@@ -5,9 +5,6 @@ static_assert(true);
 
 #include "nvim_controller.hpp"
 #include "predictive_echo.hpp"
-#include "telar_wire/codecs/telar_value_codec.hpp"
-#include "telar_wire/serializers/telar_cells.hpp"
-#include "telar_wire/serializers/telar_frame.hpp"
 #include "ui/kit/fonts/font_collection.hpp"
 #include "ui/kit/fonts/resident_fonts.hpp"
 #include "ui/kit/fonts/terminal_font.hpp"
@@ -32,6 +29,7 @@ import telar.gui.foundation.core;
 import telar.gui.foundation.terminal;
 import telar.gui.application;
 import telar.base.ds;
+import telar.wire.vocabulary;
 
 namespace telar::gui::qt {
 

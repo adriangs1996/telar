@@ -9,10 +9,6 @@ static_assert(true);
 #include "platform/window.hpp"
 #include "tbc/view.hpp"
 #include "telar_base/memory/fixed_text.hpp"
-#include "telar_config/graphics/limits.hpp"
-#include "telar_wire/serializers/telar_cells.hpp"
-#include "telar_wire/serializers/telar_frame.hpp"
-#include "telar_wire/serializers/telar_messages.hpp"
 #include "ui/app/panes/terminal/prompt/prompt_keys.hpp"
 #include "ui/kit/cell_scene/graphics_scene.hpp"
 #include "ui/kit/cell_scene/terminal_scene.hpp"
@@ -76,6 +72,7 @@ import telar.gui.foundation.core;
 import telar.gui.foundation.terminal;
 import telar.gui.application;
 import telar.base.ds;
+import telar.wire.vocabulary;
 
 namespace telar::gui::qt {
 

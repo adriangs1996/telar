@@ -5,10 +5,6 @@ static_assert(true);
 
 #include "telar_base/memory/allocator.hpp"
 #include "telar_base/memory/fixed_text.hpp"
-#include "telar_platform/file_descriptor.hpp"
-#include "telar_wire/codecs/telar_value_codec.hpp"
-#include "telar_wire/codecs/telar_wire.hpp"
-#include "telar_wire/serializers/telar_messages.hpp"
 #include <algorithm>
 #include <arpa/inet.h>
 #include <array>
@@ -52,6 +48,7 @@ import telar.plugins;
 import telar.runtime.traffic.tap.exchange;
 import telar.runtime.traffic.tap.protocol;
 import telar.base.ds;
+import telar.wire.vocabulary;
 
 namespace {
 

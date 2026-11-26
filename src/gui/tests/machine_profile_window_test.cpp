@@ -5,8 +5,6 @@ static_assert(true);
 
 #include "assertions.hpp"
 #include "gui_wait.hpp"
-#include "telar_wire/protocol/pane_io.hpp"
-#include "telar_wire/serializers/telar_messages.hpp"
 #include "ui/app/application_controller.hpp"
 #include "ui/app/overlays/machine_prompt/machine_profiles_source.hpp"
 #include "ui/kit/fonts/bundled_fonts.hpp"
@@ -47,6 +45,8 @@ import telar.gui.foundation.system;
 import telar.wire.layout;
 import telar.base.ds;
 import telar.gui.foundation.core;
+import telar.wire.pane_io;
+import telar.wire.vocabulary;
 
 namespace telar::gui::test {
 

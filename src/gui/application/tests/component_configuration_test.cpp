@@ -4,7 +4,6 @@ static_assert(true);
 #endif
 
 #include "telar_base/memory/allocator.hpp"
-#include "telar_wire/serializers/telar_messages.hpp"
 #include <array>
 #include <chrono>
 #include <cstddef>
@@ -32,6 +31,7 @@ import telar.gui.application;
 import telar.gui.features.status_bar;
 import telar.gui.foundation.core;
 import telar.base.ds;
+import telar.wire.vocabulary;
 
 namespace {
 

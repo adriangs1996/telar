@@ -330,6 +330,13 @@
     "lib/wire/nvim/nvim.cppm": "telar.wire.nvim",
     "lib/wire/pane_io/pane_io.cppm": "telar.wire.pane_io",
     "lib/wire/runtime/runtime.cppm": "telar.wire.runtime",
+    "lib/wire/vocabulary/vocabulary-cells.cppm": "telar.wire.vocabulary:cells",
+    "lib/wire/vocabulary/vocabulary-codec.cppm": "telar.wire.vocabulary:codec",
+    "lib/wire/vocabulary/vocabulary-frame.cppm": "telar.wire.vocabulary:frame",
+    "lib/wire/vocabulary/vocabulary-messages.cppm": "telar.wire.vocabulary:messages",
+    "lib/wire/vocabulary/vocabulary-serializer.cppm": "telar.wire.vocabulary:serializer",
+    "lib/wire/vocabulary/vocabulary-value_codec.cppm": "telar.wire.vocabulary:value_codec",
+    "lib/wire/vocabulary/vocabulary-wire.cppm": "telar.wire.vocabulary:wire",
     "lib/wire/vocabulary/vocabulary.cppm": "telar.wire.vocabulary",
     "lib/wire/worktrees/worktrees.cppm": "telar.wire.worktrees",
     "src/cli/commands/history/history.cppm": "telar.cli.commands.history",
@@ -753,7 +760,6 @@
   },
   "textual_boundaries": {
     "lib/base/include/telar_base/diagnostics/config.hpp": "Project macro header: TELAR_DIAGNOSTIC, TELAR_DIAGNOSTICS and TELAR_ASSERT; includes nothing",
-    "lib/base/include/telar_base/diagnostics/limit_reach.hpp": "Included by other textual headers and tests; module units import its owner module",
     "lib/base/include/telar_base/diagnostics/timing.hpp": "Objective-C++ ABI",
     "lib/base/include/telar_base/ds/containers.hpp": "Qt adapters and Objective-C++ include it; module units import its owner module",
     "lib/base/include/telar_base/ds/values.hpp": "Qt adapters and Objective-C++ include it; module units import its owner module",
@@ -762,12 +768,9 @@
     "lib/base/include/telar_base/memory/fixed_text.hpp": "Qt adapters include it; module units import its owner module",
     "lib/base/include/telar_base/text/utf8.hpp": "Qt adapters include it; module units import its owner module",
     "lib/clipboard/include/telar_clipboard/clipboard.hpp": "Native clipboard ABI shared with Objective-C++",
-    "lib/config/include/telar_config/graphics/limits.hpp": "Qt adapters include it; module units import its owner module",
-    "lib/config/include/telar_config/terminal/control/policy.hpp": "Qt adapters include it; module units import its owner module",
     "lib/ebnf/tests/parser_assertions.hpp": "Textual test fixture, including compiler diagnostic and macro expansion locations",
     "lib/ebnf/tests/spec_support.hpp": "Textual test fixture shared by the shipped specs' GoogleTest files",
     "lib/ghostty/include/telar_ghostty/modes.hpp": "Project macro header: TELAR_GHOSTTY_MODES, the modes telar.ghostty.vt captures and the ghostty-modes test checks; includes nothing",
-    "lib/platform/include/telar_platform/file_descriptor.hpp": "Objective-C++ ABI",
     "lib/platform/include/telar_platform/open_directory.h": "C ABI",
     "lib/platform/include/telar_platform/trace_macro.hpp": "Project macro header: TELAR_TRACE; includes nothing",
     "lib/tbc/include/tbc/contracts.hpp": "Consumer-side preprocessor annotations inspected by Clang AST tooling",
@@ -793,19 +796,7 @@
     "lib/tbc/tests/spec/system_macro.hpp": "Textual test fixture, including compiler diagnostic and macro expansion locations",
     "lib/tbc/tests/spec/units/cross_unit/node.hpp": "Textual spec fixture shared by the cross-unit cases and the unit that defines their bodies",
     "lib/tbc/tests/spec/units/cross_unit/stream.hpp": "Textual spec fixture shared by the cross-unit cases and the unit that defines their bodies",
-    "lib/vocabulary/include/telar_vocabulary/vocabulary.hpp": "Included by the protocol's textual headers; module units import telar.vocabulary",
     "lib/wire/include/telar_wire/codecs/telar_annotations.hpp": "Project macro header: the codec annotations TELAR_THROWS and TELAR_CHANGES; includes nothing",
-    "lib/wire/include/telar_wire/codecs/telar_cells.hpp": "Included by other textual headers and tests; module units import its owner module",
-    "lib/wire/include/telar_wire/codecs/telar_codec.hpp": "Qt adapters include it; module units import its owner module",
-    "lib/wire/include/telar_wire/codecs/telar_value_codec.hpp": "Qt adapters include it; module units import its owner module",
-    "lib/wire/include/telar_wire/codecs/telar_wire.hpp": "Qt adapters include it; module units import its owner module",
-    "lib/wire/include/telar_wire/protocol/clients.hpp": "Qt adapters and tests include it; module units import its owner module",
-    "lib/wire/include/telar_wire/protocol/pane_io.hpp": "Qt adapters and tests include it; module units import its owner module",
-    "lib/wire/include/telar_wire/protocol/runtime.hpp": "Qt adapters and tests include it; module units import its owner module",
-    "lib/wire/include/telar_wire/serializers/telar_cells.hpp": "Qt adapters include it; module units import its owner module",
-    "lib/wire/include/telar_wire/serializers/telar_frame.hpp": "Qt adapters include it; module units import its owner module",
-    "lib/wire/include/telar_wire/serializers/telar_messages.hpp": "Qt adapters include it; module units import its owner module",
-    "lib/wire/include/telar_wire/serializers/telar_serializer.hpp": "Qt adapters include it; module units import its owner module",
     "src/gui/features/explorer/tests/explorer_fixture.hpp": "Test or tool support (local textual fixture)",
     "src/gui/platform/clipboard_image_file.h": "Objective-C++ ABI",
     "src/gui/platform/clipboard_image_monitor.hpp": "Objective-C++ ABI",
@@ -1051,7 +1042,6 @@
   ],
   "header_owners": {
     "lib/base/diagnostics/diagnostics.cppm": [
-      "lib/base/include/telar_base/diagnostics/limit_reach.hpp",
       "lib/base/include/telar_base/diagnostics/timing.hpp"
     ],
     "lib/base/ds/ds.cppm": [
@@ -1071,42 +1061,11 @@
     "lib/clipboard/clipboard.cppm": [
       "lib/clipboard/include/telar_clipboard/clipboard.hpp"
     ],
-    "lib/config/core/core.cppm": [
-      "lib/config/include/telar_config/graphics/limits.hpp"
-    ],
-    "lib/config/runtime/runtime.cppm": [
-      "lib/config/include/telar_config/terminal/control/policy.hpp"
-    ],
     "lib/platform/fs/fs.cppm": [
       "lib/platform/include/telar_platform/open_directory.h"
     ],
-    "lib/platform/primitives/primitives.cppm": [
-      "lib/platform/include/telar_platform/file_descriptor.hpp"
-    ],
     "lib/tbc/tbc.cppm": [
       "lib/tbc/include/tbc/view.hpp"
-    ],
-    "lib/vocabulary/vocabulary.cppm": [
-      "lib/vocabulary/include/telar_vocabulary/vocabulary.hpp"
-    ],
-    "lib/wire/clients/clients.cppm": [
-      "lib/wire/include/telar_wire/protocol/clients.hpp"
-    ],
-    "lib/wire/pane_io/pane_io.cppm": [
-      "lib/wire/include/telar_wire/protocol/pane_io.hpp"
-    ],
-    "lib/wire/runtime/runtime.cppm": [
-      "lib/wire/include/telar_wire/protocol/runtime.hpp"
-    ],
-    "lib/wire/vocabulary/vocabulary.cppm": [
-      "lib/wire/include/telar_wire/codecs/telar_cells.hpp",
-      "lib/wire/include/telar_wire/codecs/telar_codec.hpp",
-      "lib/wire/include/telar_wire/codecs/telar_value_codec.hpp",
-      "lib/wire/include/telar_wire/codecs/telar_wire.hpp",
-      "lib/wire/include/telar_wire/serializers/telar_cells.hpp",
-      "lib/wire/include/telar_wire/serializers/telar_frame.hpp",
-      "lib/wire/include/telar_wire/serializers/telar_messages.hpp",
-      "lib/wire/include/telar_wire/serializers/telar_serializer.hpp"
     ],
     "src/gui/foundation/fonts/fonts-face.cppm": [
       "src/gui/platform/font.h"

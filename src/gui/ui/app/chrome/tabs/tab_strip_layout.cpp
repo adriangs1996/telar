@@ -4,7 +4,6 @@ static_assert(true);
 #endif
 
 #include "tab_strip_layout.hpp"
-#include "telar_wire/serializers/telar_messages.hpp"
 #include "ui/kit/fonts/chrome_fonts.hpp"
 #include "ui/kit/models/list_model.hpp"
 #include "ui/kit/scene/window_animation_clock.hpp"
@@ -42,6 +41,7 @@ import telar.gui.foundation.drawing;
 import telar.gui.foundation.model;
 import telar.gui.application;
 import telar.base.ds;
+import telar.wire.vocabulary;
 
 namespace telar::gui::qt {
 

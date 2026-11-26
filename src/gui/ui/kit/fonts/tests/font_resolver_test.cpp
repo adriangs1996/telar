@@ -5,7 +5,6 @@ static_assert(true);
 
 #include "platform/font.h"
 #include "qt_case.hpp"
-#include "telar_wire/codecs/telar_wire.hpp"
 #include "ui/kit/fonts/bundled_fonts.hpp"
 #include "ui/kit/fonts/font_cache.hpp"
 #include "ui/kit/fonts/font_resolver.hpp"
@@ -41,7 +40,7 @@ static_assert(true);
 #include <vector>
 
 import telar.gui.foundation.core;
-
+import telar.wire.vocabulary;
 
 namespace {
 

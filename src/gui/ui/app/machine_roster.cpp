@@ -7,7 +7,6 @@ static_assert(true);
 #include "dialogs.hpp"
 #include "machines_coordinator.hpp"
 #include "telar_base/memory/fixed_text.hpp"
-#include "telar_wire/serializers/telar_messages.hpp"
 #include "ui/app/overlays/machine_prompt/machine_profiles_source.hpp"
 #include "ui/app/overlays/notifications/notifications_controller.hpp"
 #include "ui/kit/machines/machine_client.hpp"
@@ -37,6 +36,7 @@ static_assert(true);
 import telar.config.client;
 import telar.gui.application;
 import telar.base.ds;
+import telar.wire.vocabulary;
 
 namespace telar::gui::qt {
 

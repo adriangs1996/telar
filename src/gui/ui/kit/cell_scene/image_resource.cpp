@@ -8,8 +8,6 @@ static_assert(true);
 #include "image_resource.hpp"
 #include "graphics_scene.hpp"
 #include "tbc/view.hpp"
-#include "telar_config/graphics/limits.hpp"
-#include "telar_wire/serializers/telar_messages.hpp"
 #include "ui/kit/scene/qt_buffers.hpp"
 #include "ui/kit/scene/scene_nodes.hpp"
 #include <QImage>
@@ -52,6 +50,7 @@ static_assert(true);
 
 import telar.gui.application;
 import telar.base.ds;
+import telar.wire.vocabulary;
 
 namespace telar::gui::qt {
 

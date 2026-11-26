@@ -4,8 +4,6 @@ static_assert(true);
 #endif
 
 #include "key_bindings.hpp"
-#include "telar_config/graphics/limits.hpp"
-#include "telar_wire/serializers/telar_messages.hpp"
 #include "ui/app/chrome/components/components_controller.hpp"
 #include "ui/app/panes/attachments/attachments_controller.hpp"
 #include "ui/app/panes/terminal/copy_controller.hpp"
@@ -29,7 +27,6 @@ static_assert(true);
 #include <utility>
 #include <variant>
 
-#include "telar_wire/serializers/telar_frame.hpp"
 #include "ui/app/panes/terminal/terminal_item.hpp"
 #include "ui/kit/input/key_adapter.hpp"
 #include "ui/kit/input/key_encoding.hpp"
@@ -47,6 +44,7 @@ static_assert(true);
 import telar.gui.application;
 import telar.base.ds;
 import telar.gui.foundation.core;
+import telar.wire.vocabulary;
 
 namespace telar::gui::qt {
 

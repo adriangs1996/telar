@@ -1,7 +1,3 @@
-module;
-
-#include "telar_config/graphics/limits.hpp"
-
 export module telar.config.core;
 
 import std;
@@ -13,10 +9,27 @@ import telar.wire.vocabulary;
 import telar.base.memory.allocators;
 import telar.base.ds;
 
-// Owned textual headers stay in this global module fragment only; importers
-// reach their names through these declarations instead of including them.
-export namespace telar::runtime {
-  using telar::runtime::GraphicsLimits;
+export {
+  namespace telar::runtime {
+
+    struct GraphicsLimits {
+      static constexpr std::size_t kibibyte = 1024;
+      static constexpr std::size_t mebibyte = kibibyte * kibibyte;
+      static constexpr std::size_t maximum_pane_bytes = 256 * mebibyte;
+      static constexpr std::size_t maximum_global_bytes = 512 * mebibyte;
+      static constexpr std::size_t payload_bytes = 64 * kibibyte;
+      static constexpr std::size_t recommended_chunk_bytes = 3072;
+      static constexpr std::size_t maximum_chunks_per_image = maximum_pane_bytes / 2 / recommended_chunk_bytes;
+
+      std::size_t pane_bytes = maximum_pane_bytes;
+      std::size_t global_bytes = maximum_global_bytes;
+
+      [[nodiscard]] constexpr std::size_t screenBytes() const noexcept {
+        return pane_bytes / 2;
+      }
+    };
+
+  }
 }
 
 // Interface: telar_config/limit_notices.cppm

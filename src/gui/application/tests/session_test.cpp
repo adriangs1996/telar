@@ -4,14 +4,6 @@ static_assert(true);
 #endif
 #include "telar_base/memory/allocator.hpp"
 #include "telar_base/text/utf8.hpp"
-#include "telar_wire/codecs/telar_cells.hpp"
-#include "telar_wire/codecs/telar_wire.hpp"
-#include "telar_wire/protocol/clients.hpp"
-#include "telar_wire/protocol/pane_io.hpp"
-#include "telar_wire/protocol/runtime.hpp"
-#include "telar_wire/serializers/telar_cells.hpp"
-#include "telar_wire/serializers/telar_frame.hpp"
-#include "telar_wire/serializers/telar_messages.hpp"
 #include <algorithm>
 #include <array>
 #include <cstddef>
@@ -41,6 +33,9 @@ import telar.wire.runtime;
 import telar.gui.foundation.model;
 import telar.base.ds;
 import telar.client;
+import telar.wire.vocabulary;
+import telar.wire.clients;
+import telar.wire.pane_io;
 
 namespace {
 

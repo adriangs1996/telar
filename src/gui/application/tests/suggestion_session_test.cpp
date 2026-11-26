@@ -5,9 +5,6 @@ static_assert(true);
 
 #include "telar_base/memory/allocator.hpp"
 #include "telar_base/text/utf8.hpp"
-#include "telar_wire/protocol/pane_io.hpp"
-#include "telar_wire/serializers/telar_frame.hpp"
-#include "telar_wire/serializers/telar_messages.hpp"
 #include <cstddef>
 #include <cstring>
 #include <limits>
@@ -19,6 +16,8 @@ import telar.testing;
 import telar.gui.application.tests.session_fixture;
 import telar.gui.application;
 import telar.wire.editor;
+import telar.wire.pane_io;
+import telar.wire.vocabulary;
 
 namespace {
 

@@ -12,9 +12,27 @@ import telar.sys.apple;
 import telar.sys.linux_api;
 #endif
 
-// The owned header declares these in the global module, so their definitions belong to it too.
-extern "C++" {
 namespace telar::runtime {
+
+  FileDescriptor::~FileDescriptor() {
+    reset();
+  }
+
+  FileDescriptor& FileDescriptor::operator=(FileDescriptor&& other) noexcept {
+    if (this != &other) {
+      reset(other.release());
+    }
+
+    return *this;
+  }
+
+  void FileDescriptor::reset(int descriptor) noexcept {
+    if (descriptor_ >= 0) {
+      ::close(descriptor_);
+    }
+
+    descriptor_ = descriptor;
+  }
 
   FileDescriptor duplicateCloseOnExec(int descriptor, int minimum) {
     const int copied = ::fcntl(descriptor, F_DUPFD_CLOEXEC, minimum); // NOLINT(cppcoreguidelines-pro-type-vararg): fcntl's C signature is variadic
@@ -39,7 +57,6 @@ namespace telar::runtime {
     }
   }
 
-}
 }
 
 namespace telar::runtime {

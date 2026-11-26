@@ -4,7 +4,6 @@ static_assert(true);
 #endif
 
 #include "telar_base/memory/allocator.hpp"
-#include "telar_wire/serializers/telar_messages.hpp"
 #include <algorithm>
 #include <array>
 #include <cstddef>
@@ -19,6 +18,7 @@ import telar.gui.application.tests.session_fixture;
 import telar.gui.application;
 import telar.wire.agents;
 import telar.base.ds;
+import telar.wire.vocabulary;
 
 namespace {
 

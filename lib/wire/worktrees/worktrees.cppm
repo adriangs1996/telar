@@ -12,10 +12,7 @@ export namespace telar {
   using telar::MessageSchema;
 }
 
-// Declared in the global module, with the vocabulary these schemas build on, so the module's
-// implementation unit defines their members there too.
-// NOLINTBEGIN(misc-use-internal-linkage): exported, and declared in the global module for worktrees.cpp.
-export extern "C++" {
+export {
   namespace telar {
 
     struct RegisterWorktree {
@@ -80,4 +77,3 @@ export extern "C++" {
 
   }
 }
-// NOLINTEND(misc-use-internal-linkage)

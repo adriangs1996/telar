@@ -3,7 +3,6 @@
 static_assert(true);
 #endif
 
-#include "telar_wire/serializers/telar_messages.hpp"
 #include <array>
 #include <cstddef>
 #include <cstring>
@@ -25,6 +24,7 @@ import telar.base.text.json;
 import telar.plugins;
 import telar.base.ds;
 import telar.gui.foundation.core;
+import telar.wire.vocabulary;
 
 namespace {
 

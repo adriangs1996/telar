@@ -4,7 +4,6 @@ static_assert(true);
 #endif
 
 #include "platform/scroll_event.hpp"
-#include "telar_wire/serializers/telar_frame.hpp"
 #include "terminal_item.hpp"
 #include "ui/kit/cell_scene/terminal_scene.hpp"
 #include "ui/kit/motion/scroll_motion.hpp"
@@ -22,6 +21,7 @@ static_assert(true);
 import telar.gui.application;
 import telar.base.ds;
 import telar.gui.foundation.core;
+import telar.wire.vocabulary;
 
 namespace telar::gui::qt {
 

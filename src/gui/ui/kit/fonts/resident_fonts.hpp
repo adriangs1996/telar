@@ -8,8 +8,6 @@ static_assert(true);
 #include "font_collection.hpp"
 #include "platform/font.h"
 #include "telar_base/memory/fixed_text.hpp"
-#include "telar_wire/serializers/telar_cells.hpp"
-#include "telar_wire/serializers/telar_frame.hpp"
 #include <QByteArray>
 #include <QString>
 #include <algorithm>
@@ -37,6 +35,7 @@ static_assert(true);
 
 import telar.gui.foundation.fonts;
 import telar.base.ds;
+import telar.wire.vocabulary;
 
 namespace telar::gui::qt {
 

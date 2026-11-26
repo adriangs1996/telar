@@ -5,8 +5,6 @@ static_assert(true);
 
 #include "frame_fixture.hpp"
 #include "qml_fixture.hpp"
-#include "telar_wire/serializers/telar_cells.hpp"
-#include "telar_wire/serializers/telar_messages.hpp"
 #include "ui/app/application_controller.hpp"
 #include "ui/app/chrome/metrics_projection.hpp"
 #include "ui/app/chrome/sidebar_projection.hpp"
@@ -68,6 +66,7 @@ import telar.gui.features.window;
 import telar.gui.features.status_bar;
 import telar.base.ds;
 import telar.gui.foundation.core;
+import telar.wire.vocabulary;
 
 namespace {
 

@@ -4,7 +4,6 @@ static_assert(true);
 #endif
 
 #include "curve_mask.hpp"
-#include "telar_wire/serializers/telar_cells.hpp"
 #include <QQuickWindow>
 #include <QSGNode>
 #include <QtCore/qtypes.h>
@@ -29,6 +28,7 @@ static_assert(true);
 import telar.gui.foundation.core;
 import telar.gui.foundation.fonts;
 import telar.base.ds;
+import telar.wire.vocabulary;
 
 namespace telar::gui::qt {
 

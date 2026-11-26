@@ -4,7 +4,6 @@ static_assert(true);
 #endif
 
 #include "native_tab_activity.hpp"
-#include "telar_wire/serializers/telar_messages.hpp"
 #include "ui/kit/models/progress_value.hpp"
 #include "ui/kit/scene/rounded_paints_scene.hpp"
 #include "ui/kit/scene/window_animation_clock.hpp"
@@ -34,6 +33,7 @@ static_assert(true);
 import telar.gui.foundation.system;
 import telar.gui.application;
 import telar.base.ds;
+import telar.wire.vocabulary;
 
 namespace telar::gui::qt {
 

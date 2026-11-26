@@ -3,11 +3,6 @@
 static_assert(true);
 #endif
 
-#include "telar_wire/codecs/telar_cells.hpp"
-#include "telar_wire/codecs/telar_wire.hpp"
-#include "telar_wire/serializers/telar_cells.hpp"
-#include "telar_wire/serializers/telar_frame.hpp"
-#include "telar_wire/serializers/telar_messages.hpp"
 #include "ui/app/panes/terminal/links/link_preview.hpp"
 #include "ui/kit/cell_scene/terminal_scene.hpp"
 #include "ui/kit/cell_scene/window_images.hpp"
@@ -61,6 +56,7 @@ import telar.gui.foundation.terminal;
 import telar.gui.application;
 import telar.base.ds;
 import telar.gui.foundation.core;
+import telar.wire.vocabulary;
 
 namespace {
 

@@ -4,9 +4,6 @@ static_assert(true);
 #endif
 
 #include "telar_base/memory/allocator.hpp"
-#include "telar_wire/serializers/telar_cells.hpp"
-#include "telar_wire/serializers/telar_frame.hpp"
-#include "telar_wire/serializers/telar_messages.hpp"
 #include <cstddef>
 #include <cstdint>
 #include <cstdlib>

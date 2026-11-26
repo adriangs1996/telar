@@ -9,8 +9,6 @@ static_assert(true);
 #include "platform/font.h"
 #include "scene_nodes.hpp"
 #include "telar_base/memory/fixed_text.hpp"
-#include "telar_wire/serializers/telar_cells.hpp"
-#include "telar_wire/serializers/telar_frame.hpp"
 #include "ui/kit/fonts/font_collection.hpp"
 #include "ui/kit/fonts/resident_fonts.hpp"
 #include "ui/kit/models/projection.hpp"
@@ -57,7 +55,7 @@ static_assert(true);
 #endif
 
 import telar.gui.foundation.core;
-
+import telar.wire.vocabulary;
 
 namespace telar::gui::qt {
 

@@ -4,8 +4,6 @@ static_assert(true);
 #endif
 
 #include "telar_base/memory/allocator.hpp"
-#include "telar_wire/protocol/pane_io.hpp"
-#include "telar_wire/serializers/telar_messages.hpp"
 #include <array>
 #include <cstddef>
 #include <cstdint>
@@ -26,6 +24,8 @@ import telar.gui.features.workbench;
 import telar.gui.foundation.model;
 import telar.gui.features.activity;
 import telar.base.ds;
+import telar.wire.pane_io;
+import telar.wire.vocabulary;
 
 namespace {
 

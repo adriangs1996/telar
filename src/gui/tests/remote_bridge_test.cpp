@@ -3,8 +3,6 @@
 static_assert(true);
 #endif
 
-#include "telar_platform/file_descriptor.hpp"
-#include "telar_wire/codecs/telar_wire.hpp"
 #include "ui/kit/machines/remote_bridge.hpp"
 #include <QByteArray>
 #include <QCoreApplication>
@@ -35,6 +33,8 @@ import telar.gui.features.machines;
 import telar.client;
 import telar.gui.application;
 import telar.base.ds;
+import telar.platform.primitives;
+import telar.wire.vocabulary;
 
 namespace {
 

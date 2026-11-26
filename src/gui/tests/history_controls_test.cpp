@@ -5,7 +5,6 @@ static_assert(true);
 
 #include "frame_fixture.hpp"
 #include "qml_fixture.hpp"
-#include "telar_wire/serializers/telar_messages.hpp"
 #include "ui/app/panes/terminal/history/layout/history_empty_layout.hpp"
 #include "ui/app/panes/terminal/history/layout/history_filters_layout.hpp"
 #include "ui/app/panes/terminal/history/layout/history_footer_layout.hpp"
@@ -68,6 +67,7 @@ import telar.gui.features.machines;
 import telar.gui.features.window;
 import telar.base.ds;
 import telar.gui.foundation.core;
+import telar.wire.vocabulary;
 
 namespace {
 

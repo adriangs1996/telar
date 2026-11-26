@@ -3,7 +3,6 @@
 static_assert(true);
 #endif
 
-#include "telar_wire/serializers/telar_messages.hpp"
 #include "ui/kit/process/command_process.hpp"
 #include "ui/kit/process/host_command.hpp"
 #include <QProcess>
@@ -25,6 +24,7 @@ static_assert(true);
 
 import telar.gui.foundation.system;
 import telar.base.ds;
+import telar.wire.vocabulary;
 
 namespace telar::gui::qt {
 

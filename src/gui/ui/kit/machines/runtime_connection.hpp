@@ -5,12 +5,6 @@ static_assert(true);
 
 #include "telar_base/memory/fixed_text.hpp"
 #include "telar_base/text/utf8.hpp"
-#include "telar_platform/file_descriptor.hpp"
-#include "telar_wire/codecs/telar_codec.hpp"
-#include "telar_wire/codecs/telar_value_codec.hpp"
-#include "telar_wire/protocol/pane_io.hpp"
-#include "telar_wire/protocol/runtime.hpp"
-#include "telar_wire/serializers/telar_serializer.hpp"
 #include "ui/kit/machines/remote_bridge.hpp"
 #include <QByteArrayView>
 #include <QLocalSocket>
@@ -39,6 +33,8 @@ import telar.gui.foundation.system;
 import telar.client;
 import telar.base.ds;
 import telar.gui.foundation.core;
+import telar.platform.primitives;
+import telar.wire.vocabulary;
 
 namespace telar::gui::qt {
 

@@ -5,8 +5,6 @@ static_assert(true);
 
 #include "controlled_awake_clock.hpp"
 #include "qml_fixture.hpp"
-#include "telar_wire/protocol/pane_io.hpp"
-#include "telar_wire/serializers/telar_messages.hpp"
 #include "ui/app/application_controller.hpp"
 #include "ui/kit/fonts/bundled_fonts.hpp"
 #include "ui/kit/models/list_model.hpp"
@@ -44,6 +42,8 @@ import telar.wire.graphics;
 import telar.wire.layout;
 import telar.base.ds;
 import telar.gui.foundation.core;
+import telar.wire.pane_io;
+import telar.wire.vocabulary;
 
 namespace {
 

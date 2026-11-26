@@ -9,7 +9,6 @@ static_assert(true);
 #include <cstdint>
 #include <optional>
 
-#include "telar_wire/serializers/telar_frame.hpp"
 #include <QElapsedTimer>
 #include <QKeyEvent>
 #include <QList>
@@ -25,6 +24,7 @@ import telar.gui.application;
 import telar.gui.foundation.actions;
 import telar.gui.foundation.keys;
 import telar.base.ds;
+import telar.wire.vocabulary;
 
 namespace telar::gui::qt {
 

@@ -4,7 +4,6 @@ static_assert(true);
 #endif
 
 #include "telar_base/memory/fixed_text.hpp"
-#include "telar_wire/codecs/telar_value_codec.hpp"
 #include "ui/kit/models/projection.hpp"
 #include "ui/kit/process/command_process.hpp"
 #include <QIODevice>
@@ -36,6 +35,7 @@ static_assert(true);
 import telar.gui.application;
 import telar.gui.foundation.system;
 import telar.base.ds;
+import telar.wire.vocabulary;
 
 namespace telar::gui::qt {
 

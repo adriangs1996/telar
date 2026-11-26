@@ -6,7 +6,6 @@ static_assert(true);
 #include "tabs_controller.hpp"
 #include "tab_strip_layout.hpp"
 #include "telar_base/ds/values.hpp"
-#include "telar_wire/serializers/telar_messages.hpp"
 #include "ui/kit/models/projection.hpp"
 #include <QList>
 #include <QtCore/qnamespace.h>
@@ -17,6 +16,8 @@ static_assert(true);
 #include <functional>
 #include <span>
 #include <utility>
+
+import telar.wire.vocabulary;
 
 namespace telar::gui::qt {
 

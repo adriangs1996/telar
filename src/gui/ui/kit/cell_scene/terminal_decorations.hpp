@@ -3,7 +3,6 @@
 static_assert(true);
 #endif
 
-#include "telar_wire/serializers/telar_cells.hpp"
 #include "ui/kit/models/projection.hpp"
 #include "ui/kit/scene/rounded_rectangle_scene.hpp"
 #include "ui/kit/scene/scene_nodes.hpp"
@@ -26,6 +25,7 @@ static_assert(true);
 
 import telar.gui.foundation.core;
 import telar.gui.foundation.drawing;
+import telar.wire.vocabulary;
 
 namespace telar::gui::qt {
 

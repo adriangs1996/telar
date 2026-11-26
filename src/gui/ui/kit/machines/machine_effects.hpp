@@ -3,7 +3,6 @@
 static_assert(true);
 #endif
 
-#include "telar_wire/serializers/telar_messages.hpp"
 #include "ui/kit/timing/window_frame_pacer.hpp"
 #include <array>
 #include <optional>
@@ -14,6 +13,7 @@ import telar.gui.foundation.system;
 import telar.gui.application;
 import telar.base.ds;
 import telar.gui.foundation.core;
+import telar.wire.vocabulary;
 
 namespace telar::gui::qt {
 

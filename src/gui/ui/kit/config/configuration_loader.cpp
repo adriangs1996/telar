@@ -15,7 +15,6 @@ static_assert(true);
 #include <string_view>
 #include <utility>
 
-#include "telar_config/terminal/control/policy.hpp"
 #include "ui/kit/models/projection.hpp"
 #include <QDir>
 #include <QFile>
@@ -33,6 +32,7 @@ import telar.gui.foundation.actions;
 import telar.gui.application;
 import telar.base.ds;
 import telar.gui.foundation.core;
+import telar.config.runtime;
 
 namespace telar::gui::qt {
 

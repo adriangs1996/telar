@@ -5,11 +5,6 @@ static_assert(true);
 
 #include "telar_base/memory/allocator.hpp"
 #include "telar_base/text/utf8.hpp"
-#include "telar_wire/codecs/telar_codec.hpp"
-#include "telar_wire/codecs/telar_wire.hpp"
-#include "telar_wire/protocol/pane_io.hpp"
-#include "telar_wire/protocol/runtime.hpp"
-#include "telar_wire/serializers/telar_messages.hpp"
 #include <algorithm>
 #include <array>
 #include <cstddef>
@@ -38,6 +33,8 @@ import telar.wire.layout;
 import telar.wire.runtime;
 import telar.wire.worktrees;
 import telar.base.ds;
+import telar.wire.vocabulary;
+import telar.wire.pane_io;
 
 namespace {
 

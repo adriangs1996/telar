@@ -3,7 +3,6 @@
 static_assert(true);
 #endif
 
-#include "telar_wire/serializers/telar_messages.hpp"
 #include <QPointer>
 #include <QQuickItem>
 #include <QRectF>
@@ -18,6 +17,7 @@ static_assert(true);
 
 import telar.gui.foundation.model;
 import telar.base.ds;
+import telar.wire.vocabulary;
 
 namespace telar::gui::qt {
 

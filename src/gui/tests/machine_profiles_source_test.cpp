@@ -4,7 +4,6 @@ static_assert(true);
 #endif
 
 #include "assertions.hpp"
-#include "telar_wire/codecs/telar_wire.hpp"
 #include "ui/app/overlays/machine_prompt/machine_profiles_source.hpp"
 #include <QCoreApplication>
 #include <QElapsedTimer>
@@ -34,6 +33,7 @@ import telar.gui.features.machines;
 import telar.gui.foundation.system;
 import telar.base.ds;
 import telar.gui.foundation.core;
+import telar.wire.vocabulary;
 
 namespace {
 

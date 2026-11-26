@@ -7,8 +7,6 @@ static_assert(true);
 #include "dialogs.hpp"
 #include "frame_presenter.hpp"
 #include "telar_base/memory/fixed_text.hpp"
-#include "telar_wire/codecs/telar_wire.hpp"
-#include "telar_wire/serializers/telar_messages.hpp"
 #include "ui/kit/machines/machine_client.hpp"
 #include "ui/kit/machines/remote_bridge.hpp"
 #include "ui/kit/machines/runtime_connection.hpp"

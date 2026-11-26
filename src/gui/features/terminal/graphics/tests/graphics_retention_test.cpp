@@ -3,9 +3,6 @@
 static_assert(true);
 #endif
 
-#include "telar_config/graphics/limits.hpp"
-#include "telar_wire/codecs/telar_wire.hpp"
-#include "telar_wire/serializers/telar_messages.hpp"
 #include <algorithm>
 #include <array>
 #include <atomic>
@@ -24,6 +21,7 @@ import telar.gui.features.terminal.graphics;
 import telar.wire.graphics;
 import telar.base.ds;
 import telar.gui.foundation.core;
+import telar.wire.vocabulary;
 
 namespace {
 

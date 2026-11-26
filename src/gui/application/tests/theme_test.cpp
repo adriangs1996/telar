@@ -14,8 +14,6 @@ static_assert(true);
 #include <string>
 #include <string_view>
 
-#include "telar_wire/serializers/telar_cells.hpp"
-
 #include <climits>
 
 import telar.testing;

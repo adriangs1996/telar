@@ -4,9 +4,6 @@ static_assert(true);
 #endif
 
 #include "agent_projection.hpp"
-#include "telar_config/graphics/limits.hpp"
-#include "telar_wire/serializers/telar_cells.hpp"
-#include "telar_wire/serializers/telar_messages.hpp"
 #include "ui/kit/models/projection.hpp"
 #include <QString>
 #include <QVariantMap>
@@ -35,6 +32,7 @@ import telar.gui.foundation.core;
 import telar.gui.foundation.agents;
 import telar.gui.foundation.model;
 import telar.gui.application;
+import telar.wire.vocabulary;
 
 namespace telar::gui::qt {
 

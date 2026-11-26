@@ -3,7 +3,6 @@
 static_assert(true);
 #endif
 
-#include "telar_wire/serializers/telar_messages.hpp"
 #include "ui/kit/models/projection.hpp"
 #include <QString>
 #include <QVariantList>
@@ -17,6 +16,7 @@ static_assert(true);
 import telar.gui.application;
 import telar.gui.foundation.core;
 import telar.base.ds;
+import telar.wire.vocabulary;
 
 namespace telar::gui::qt {
 

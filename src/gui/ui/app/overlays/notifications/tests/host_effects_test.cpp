@@ -4,7 +4,6 @@ static_assert(true);
 #endif
 
 #include "qt_case.hpp"
-#include "telar_wire/serializers/telar_messages.hpp"
 #include "ui/app/overlays/notifications/sound_player.hpp"
 #include "ui/app/overlays/notifications/system_notifier.hpp"
 #include "ui/kit/process/command_process.hpp"
@@ -35,6 +34,7 @@ import telar.gui.application;
 import telar.gui.foundation.system;
 import telar.base.ds;
 import telar.gui.foundation.core;
+import telar.wire.vocabulary;
 
 namespace {
 

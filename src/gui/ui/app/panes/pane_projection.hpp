@@ -3,8 +3,6 @@
 static_assert(true);
 #endif
 
-#include "telar_wire/protocol/pane_io.hpp"
-#include "telar_wire/serializers/telar_messages.hpp"
 #include "ui/kit/models/agent_status_value.hpp"
 #include "ui/kit/models/progress_value.hpp"
 #include "ui/kit/models/projection.hpp"
@@ -23,6 +21,8 @@ static_assert(true);
 
 import telar.gui.application;
 import telar.gui.foundation.core;
+import telar.wire.pane_io;
+import telar.wire.vocabulary;
 
 namespace telar::gui::qt {
 

@@ -13,7 +13,7 @@ lib/base/include/telar_base/ds/values.hpp
 src/gui/platform/font.h
 
 # FixedString takes a string literal as a template argument, and a literal's type is a C array.
-lib/wire/include/telar_wire/codecs/telar_wire.hpp
+lib/wire/vocabulary/vocabulary-wire.cppm
 
 # Libraries that do not depend on telar's base library, and so cannot use telar::ds.
 lib/ebnf/

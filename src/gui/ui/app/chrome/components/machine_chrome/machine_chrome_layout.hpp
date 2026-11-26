@@ -5,7 +5,6 @@ static_assert(true);
 
 #include "machine_chrome_controller.hpp"
 #include "telar_base/memory/fixed_text.hpp"
-#include "telar_wire/serializers/telar_cells.hpp"
 #include "ui/kit/fonts/resident_fonts.hpp"
 #include "ui/kit/models/list_model.hpp"
 #include <QAbstractItemModel>
@@ -31,6 +30,7 @@ static_assert(true);
 import telar.gui.foundation.core;
 import telar.gui.application;
 import telar.base.ds;
+import telar.wire.vocabulary;
 
 namespace telar::gui::qt {
 

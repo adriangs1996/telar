@@ -5,15 +5,9 @@ import telar.base.diagnostics;
 import telar.tbc;
 import telar.base.ds;
 
-// The owned header declares these in the global module, so their definitions belong to it too.
-extern "C++" {
 namespace telar {
 
   namespace {
-
-    // The printable ASCII bytes lie between the control bytes and DEL.
-    constexpr Byte first_printable_byte = 0x20;
-    constexpr Byte delete_byte = 0x7f;
 
     constexpr std::size_t max_agent_session_bytes = 64;
     // The longest name macOS gives a POSIX shared memory object.
@@ -921,5 +915,4 @@ namespace telar {
     frame.validate();
   }
 
-}
 }

@@ -5,8 +5,6 @@ static_assert(true);
 
 #include "telar_base/memory/allocator.hpp"
 #include "telar_base/text/utf8.hpp"
-#include "telar_wire/protocol/runtime.hpp"
-#include "telar_wire/serializers/telar_messages.hpp"
 #include <array>
 #include <cstddef>
 #include <cstdint>
@@ -25,6 +23,7 @@ import telar.gui.features.notifications;
 import telar.wire.graphics;
 import telar.wire.runtime;
 import telar.base.ds;
+import telar.wire.vocabulary;
 
 namespace {
 

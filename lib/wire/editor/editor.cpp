@@ -3,8 +3,6 @@ module telar.wire.editor;
 import std;
 import telar.wire.vocabulary;
 
-// The interface declares these in the global module, so their definitions belong to it too.
-extern "C++" {
 namespace telar {
 
   void OpenEditor::validate() const {
@@ -44,5 +42,4 @@ namespace telar {
     }
   }
 
-}
 }

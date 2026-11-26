@@ -4,7 +4,6 @@ static_assert(true);
 #endif
 
 #include "telar_base/memory/fixed_text.hpp"
-#include "telar_wire/codecs/telar_value_codec.hpp"
 #include <QFont>
 #include <QRectF>
 #include <QStringList>
@@ -22,6 +21,7 @@ static_assert(true);
 import telar.gui.foundation.core;
 import telar.gui.application;
 import telar.base.ds;
+import telar.wire.vocabulary;
 
 namespace telar::gui::qt {
 

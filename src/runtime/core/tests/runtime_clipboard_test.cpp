@@ -6,18 +6,9 @@ static_assert(true);
 #endif
 
 #include "telar_base/diagnostics/config.hpp"
-#include "telar_base/diagnostics/limit_reach.hpp"
 #include "telar_base/memory/allocator.hpp"
 #include "telar_base/memory/fixed_text.hpp"
 #include "telar_base/text/utf8.hpp"
-#include "telar_config/graphics/limits.hpp"
-#include "telar_platform/file_descriptor.hpp"
-#include "telar_wire/codecs/telar_codec.hpp"
-#include "telar_wire/codecs/telar_value_codec.hpp"
-#include "telar_wire/protocol/runtime.hpp"
-#include "telar_wire/serializers/telar_frame.hpp"
-#include "telar_wire/serializers/telar_messages.hpp"
-#include "telar_wire/serializers/telar_serializer.hpp"
 #include <algorithm>
 #include <array>
 #include <atomic>
@@ -66,6 +57,9 @@ import telar.wire.clipboard;
 import telar.runtime.core.model.client_layouts;
 import telar.runtime.core.model.slot_store;
 import telar.base.ds;
+import telar.platform.primitives;
+import telar.wire.vocabulary;
+import telar.wire.runtime;
 
 #ifdef TELAR_TEST_NATIVE_CLIPBOARD
 // Defined in runtime_clipboard_native.cpp, which builds only with the native clipboard.
