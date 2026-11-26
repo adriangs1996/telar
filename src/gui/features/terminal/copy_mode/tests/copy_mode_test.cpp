@@ -319,6 +319,31 @@ namespace {
     check(!mode.pointerOwner(), "the delayed release must retire the quarantined owner");
   }
 
+  // A view that folds or scrolls by pixels draws rows the screen does not hold: the pointer
+  // selects them by their row in the scrollback, and a double click on one selects its cell.
+  void pointerBeyondTheScreen() {
+    const GridFixture fixture;
+    auto grid = fixture.grid();
+    constexpr std::uint32_t total_rows = 40;
+    constexpr std::uint32_t offset = 20;
+    constexpr std::uint32_t above = 3;
+    constexpr std::uint32_t below = 30;
+
+    grid.scroll = {.total_rows = total_rows, .offset = offset};
+    CopyMode mode;
+
+    check(mode.beginPointer({.pane_id = 1, .position = {.x = 1, .y = above}}, grid), "a press on a row above the screen must begin a selection");
+    const auto released = mode.pointer({.x = 4, .y = below}, grid, true);
+    const auto& selection = requiredValue(requiredValue(released).selection);
+
+    check(selection.start_y == above && selection.end_y == below, "the selection must keep the rows drawn, not rows of the screen");
+    mode.finishPointer();
+    static_cast<void>(mode.clearPointer());
+    check(mode.beginPointer({.pane_id = 1, .position = {.x = 1, .y = above}, .now_ns = 1}, grid), "a second press must begin again");
+    check(mode.state() && mode.state()->pointer && mode.state()->pointer->start == CopyPoint{.x = 1, .y = above} && mode.state()->pointer->end == CopyPoint{.x = 1, .y = above}, "a word on a row the screen does not hold must be its cell");
+    check(!mode.beginPointer({.pane_id = 1, .position = {.x = 1, .y = total_rows}}, grid), "a press past the last row must not begin a selection");
+  }
+
   void wheelFractionsAndBounds() {
     WheelAccumulator wheel;
     constexpr double first_fraction = 0.4;
@@ -342,6 +367,7 @@ namespace {
   const telar::testing::Case case_pointer_and_projection{"copy_mode.pointer_and_projection", pointerAndProjection};
   const telar::testing::Case case_click_timing{"copy_mode.click_timing", clickTiming};
   const telar::testing::Case case_pointer_ownership{"copy_mode.pointer_ownership", pointerOwnership};
+  const telar::testing::Case case_pointer_beyond_the_screen{"copy_mode.pointer_beyond_the_screen", pointerBeyondTheScreen};
   const telar::testing::Case case_wheel_fractions_and_bounds{"copy_mode.wheel_fractions_and_bounds", wheelFractionsAndBounds};
 
 }

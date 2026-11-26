@@ -91,7 +91,7 @@ namespace telar::gui::features::terminal::copy_mode {
 
     bool beginPointer(CopyPress press, const CopyGrid& grid) noexcept;
 
-    [[nodiscard]] tbc::val_static<ds::Option<CopyPlan>> pointer(CopyPoint local, const CopyGrid& grid, bool released) const noexcept;
+    [[nodiscard]] tbc::val_static<ds::Option<CopyPlan>> pointer(CopyPoint point, const CopyGrid& grid, bool released) const noexcept;
 
     bool clearPointer() noexcept;
 

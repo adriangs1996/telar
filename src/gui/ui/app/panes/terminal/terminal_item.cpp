@@ -1051,6 +1051,9 @@ namespace telar::gui::qt {
     if (mapped) {
       layoutRows();
       collectDrawnRows(drawn_rows_, view_rows_, *current);
+      if (const auto& state = controller_->copy().state(); state && state->pane_id == pane_id_) {
+        copy.selection = drawnSelection(*state);
+      }
     }
 
     revealed_rows_.clear();
@@ -1086,6 +1089,7 @@ namespace telar::gui::qt {
         .fonts = font_collection_,
         .grid = font_grid_,
         .selection = copy.selection,
+        .selection_drawn = mapped,
         .bounds = boundingRect(),
         .scale = window()->effectiveDevicePixelRatio(),
         .appearance = appearance_,

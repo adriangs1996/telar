@@ -302,8 +302,8 @@ namespace telar::gui::qt {
     const auto cursor_column = cursorColumn(frame, row_index, columns_);
 
     const auto cells = frame.row(row_index).first(std::min<std::size_t>(columns_, frame.row(row_index).size()));
-    const auto screen_row = frame.screenRow(row_index);
-    const auto grouped_text = text_.prepare(cells, {.pixel_height = frame.grid.pixel_height, .cell_width = frame.grid.width, .cursor = cursor_column, .selection = !screen_row ? CellSelection{} : frame.selection, .first_cell = screen_row.valueOr(0) * frame.screen.columns()});
+    const auto selection_row = frame.selectionRow(row_index);
+    const auto grouped_text = text_.prepare(cells, {.pixel_height = frame.grid.pixel_height, .cell_width = frame.grid.width, .cursor = cursor_column, .selection = !selection_row ? CellSelection{} : frame.selection, .first_cell = selection_row.valueOr(0) * frame.screen.columns()});
     auto decorations = std::make_unique<QSGNode>();
 
     for (std::size_t column = 0; column < cells.size(); ++column) {
@@ -345,7 +345,7 @@ namespace telar::gui::qt {
     row.revision = frame.rowRevision(row_index);
     row.source = frame.rowSource(row_index);
     row.appearance = frame.appearance;
-    row.selection = screen_row ? frame.selection.within(*screen_row * frame.screen.columns(), frame.screen.columns()) : CellSelection{};
+    row.selection = selection_row ? frame.selection.within(*selection_row * frame.screen.columns(), frame.screen.columns()) : CellSelection{};
     row.cursor = cursor_column;
   }
 
@@ -406,8 +406,8 @@ namespace telar::gui::qt {
       }
 
       const bool shown = std::exchange(row.hidden, false);
-      const auto screen_row = frame.screenRow(position);
-      const auto selection = screen_row ? frame.selection.within(*screen_row * frame.screen.columns(), frame.screen.columns()) : CellSelection{};
+      const auto selection_row = frame.selectionRow(position);
+      const auto selection = selection_row ? frame.selection.within(*selection_row * frame.screen.columns(), frame.screen.columns()) : CellSelection{};
       if (shown || glyphs_changed || bounds_ != frame.bounds || row.revision != frame.rowRevision(position) || row.source != frame.rowSource(position) || row.appearance != frame.appearance || row.selection != selection || row.cursor != cursorColumn(frame, position, columns_)) {
         paintRow(frame, static_cast<std::size_t>(index));
       }

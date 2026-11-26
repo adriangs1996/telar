@@ -116,8 +116,9 @@ export namespace telar::gui::features::terminal::copy_mode {
   // A press at `press.position` selects from there, a word or a line on a second or third click.
   [[tbc::hot_path]] inline bool press(State& state, CopyPress press, const CopyGrid& grid) noexcept;
 
-  // The plan a drag to `local` asks for, ending the gesture when `released`.
-  [[nodiscard]] [[tbc::hot_path]] inline tbc::val_static<ds::Option<CopyPlan>> drag(const State& state, CopyPoint local, const CopyGrid& grid, bool released) noexcept;
+  // The plan a drag to `point`, a cell counted from the top of the scrollback, asks for, ending
+  // the gesture when `released`.
+  [[nodiscard]] [[tbc::hot_path]] inline tbc::val_static<ds::Option<CopyPlan>> drag(const State& state, CopyPoint point, const CopyGrid& grid, bool released) noexcept;
 
   // The plan a wheel step of `rows` asks for.
   [[nodiscard]] [[tbc::hot_path]] inline tbc::val_static<ds::Option<CopyPlan>> scroll(const State& state, std::int32_t rows, const CopyGrid& grid) noexcept;
@@ -229,8 +230,8 @@ namespace telar::gui::features::terminal::copy_mode {
     return Access::mode(state).beginPointer(press, grid);
   }
 
-  inline tbc::val_static<ds::Option<CopyPlan>> drag(const State& state, CopyPoint local, const CopyGrid& grid, bool released) noexcept {
-    return Access::mode(state).pointer(local, grid, released);
+  inline tbc::val_static<ds::Option<CopyPlan>> drag(const State& state, CopyPoint point, const CopyGrid& grid, bool released) noexcept {
+    return Access::mode(state).pointer(point, grid, released);
   }
 
   inline tbc::val_static<ds::Option<CopyPlan>> scroll(const State& state, std::int32_t rows, const CopyGrid& grid) noexcept {
