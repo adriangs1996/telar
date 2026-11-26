@@ -700,6 +700,27 @@ command = "switch" : "Switch branches" , { @branch } | "status" : "Show the work
     deliver(client, CompletionWords{.request_id = transport.last<CompleteWords>().request_id, .words = found});
     typeKeys(client, "l ");
     check(!prompt::line(client, 1)->menu() && prompt::line(client, 1)->text() == "tel ", "a space leaves the word and closes the menu");
+
+    // What every choice starts with is written at once, as zsh and fish do; Space after Tab
+    // took one through the choices takes it.
+    prompt::key(client, 1, prompt::KeyPress{.key = prompt::Key::character, .character = 'u', .modifiers = {.control = true}});
+    typeKeys(client, "pro");
+    tab(client);
+    const ds::Array projects{CompletionWord{.text = "project-a"}, CompletionWord{.text = "project-b"}};
+
+    deliver(client, CompletionWords{.request_id = transport.last<CompleteWords>().request_id, .words = projects});
+    check(prompt::line(client, 1)->text() == "project-" && prompt::line(client, 1)->menu() && prompt::line(client, 1)->menu()->choices.size() == 2, "the start every choice shares is written, the menu open");
+    tab(client);
+    prompt::key(client, 1, prompt::KeyPress{.key = prompt::Key::character, .character = ' ', .text = " "});
+    check(!prompt::line(client, 1)->menu() && prompt::line(client, 1)->text() == "project-b ", "Space takes the choice Tab went to");
+
+    // A word that starts no choice as typed starts them ignoring case.
+    prompt::key(client, 1, prompt::KeyPress{.key = prompt::Key::character, .character = 'u', .modifiers = {.control = true}});
+    typeKeys(client, "pro");
+    tab(client);
+    deliver(client, CompletionWords{.request_id = transport.last<CompleteWords>().request_id, .words = projects});
+    typeKeys(client, "A");
+    check(prompt::line(client, 1)->menu() && prompt::line(client, 1)->menu()->choices.size() == 1 && prompt::line(client, 1)->menu()->choices[0].text == "project-a", "typing narrows ignoring case when nothing matches as typed");
   }
 
   // A spec's provider completes branches, and the history suggests whole commands.

@@ -354,6 +354,51 @@ namespace telar::gui::application::prompt {
     }
   }
 
+  void textCommand(Session& session, std::uint64_t pane_id, TextCommand command) {
+    auto* line = features::prompt::find(session.prompt_lines, pane_id);
+    if (line == nullptr) {
+      return;
+    }
+
+    auto& text = line->line.editorMut().textMut();
+
+    switch (command) {
+    case TextCommand::select_all:
+      text.select(0, text.size());
+      break;
+    case TextCommand::redo:
+      static_cast<void>(text.redo());
+      break;
+    case TextCommand::erase_selection:
+      if (text.selecting()) {
+        static_cast<void>(text.insert({}));
+      }
+
+      break;
+    }
+
+    Access::changedPane(session) = pane_id;
+  }
+
+  void placeCursor(Session& session, std::uint64_t pane_id, std::size_t offset) {
+    if (auto* line = features::prompt::find(session.prompt_lines, pane_id)) {
+      line->line.editorMut().textMut().moveTo(offset);
+      Access::changedPane(session) = pane_id;
+    }
+  }
+
+  std::string_view selectedText(const Session& session, std::uint64_t pane_id) noexcept {
+    const auto typed = line(session, pane_id);
+    if (!typed) {
+      return {};
+    }
+
+    const auto start = std::min(typed->cursor(), typed->anchor());
+    const auto end = std::max(typed->cursor(), typed->anchor());
+
+    return typed->text().substr(start, end - start);
+  }
+
   CommandPresence commandPresence(Session& session, std::uint64_t pane_id, std::string_view word) {
     const auto* pane = findPane(session.panes, pane_id);
     if (pane == nullptr || pane->shell.remote || !session.ready()) {

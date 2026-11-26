@@ -1034,10 +1034,17 @@ namespace telar::gui::qt {
     if (current != nullptr && controller_ != nullptr && index >= 0 && std::cmp_less(index, current->blocks.size())) {
       // A click on a block of a pane in the background brings the pane forward first, where its
       // keys go.
-      controller_->host().focusPane(*this);
-      forceActiveFocus(Qt::MouseFocusReason);
+      focusFromPointer();
       controller_->selectBlock(pane_id_, static_cast<std::size_t>(index), true);
     }
+  }
+
+  void TerminalItem::focusFromPointer() {
+    if (controller_ != nullptr) {
+      controller_->host().focusPane(*this);
+    }
+
+    forceActiveFocus(Qt::MouseFocusReason);
   }
 
   void TerminalItem::copyBlock(int index, bool command) {
@@ -1211,8 +1218,17 @@ namespace telar::gui::qt {
     const auto block = controller_->prompt().selectedBlock(pane_id_);
     const bool blocks = controller_->prompt().surface(pane_id_) == application::prompt::Surface::editor && controller_->configuration().prompt.mode == PromptMode::telar && !current->blocks.empty();
 
+    // macOS's Command keys for the editor's text, which the keymaps have none for.
+    const bool command_key = platform::usesCommandKey() && clipboard_shortcut && controller_->prompt().edits(pane_id_);
+
     if (clipboard_shortcut && event.key() == Qt::Key_C && selected) {
       controller_->copy().copySelection(pane_id_);
+    } else if (command_key && (event.key() == Qt::Key_C || event.key() == Qt::Key_X) && controller_->prompt().copyText(pane_id_, event.key() == Qt::Key_X)) {
+      // The editor's selection went to the clipboard.
+    } else if (command_key && event.key() == Qt::Key_A) {
+      controller_->prompt().textCommand(pane_id_, application::prompt::TextCommand::select_all);
+    } else if (platform::usesCommandKey() && controller_->prompt().edits(pane_id_) && event.key() == Qt::Key_Z && (event.modifiers() & (Qt::ControlModifier | Qt::ShiftModifier)) == (Qt::ControlModifier | Qt::ShiftModifier)) {
+      controller_->prompt().textCommand(pane_id_, application::prompt::TextCommand::redo);
     } else if (clipboard_shortcut && event.key() == Qt::Key_C && block) {
       controller_->copyBlock(pane_id_, *block, application::BlockCopy::output);
     } else if (clipboard_shortcut && blocks && (event.key() == Qt::Key_Up || event.key() == Qt::Key_Down)) {

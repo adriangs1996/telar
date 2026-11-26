@@ -65,4 +65,8 @@ export namespace telar::gui::features::prompt {
   // Writes `text` as one shell word: characters the shell would read specially are escaped.
   tbc::val_a<ds::String<Memory>> quoteWord(tbc::mut_a<Memory> memory, std::string_view text, shell::Dialect dialect);
 
+  // Whether `text` starts with `start`, ignoring the case of ASCII letters, as a file system that
+  // ignores case finds a file: the choices offered when none starts with what was typed as typed.
+  [[nodiscard]] bool startsFolded(std::string_view text, std::string_view start) noexcept;
+
 }

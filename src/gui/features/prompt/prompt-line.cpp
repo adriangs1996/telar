@@ -32,6 +32,29 @@ namespace telar::gui::features::prompt {
 
     // The quote a word leaves open at its end, wherever it opened (`--file="My Do`); 0 when none
     // is.
+    // `text` without a character its end cuts short.
+    std::string_view wholeCharacters(std::string_view text) noexcept {
+      constexpr unsigned char continuation_mask = 0xc0;
+      constexpr unsigned char continuation = 0x80;
+      auto start = text.size();
+
+      while (start != 0 && (static_cast<unsigned char>(text[start - 1]) & continuation_mask) == continuation) {
+        --start;
+      }
+
+      if (start == 0) {
+        return text;
+      }
+
+      // The lead byte says how long its character is: 110xxxxx two bytes, 1110xxxx three, 11110xxx four.
+      const auto lead = static_cast<unsigned char>(text[start - 1]);
+      const auto length = lead < 0xc0 ? 1U : lead < 0xe0 ? 2U
+                                         : lead < 0xf0   ? 3U
+                                                         : 4U;
+
+      return text.size() - (start - 1) < length ? text.substr(0, start - 1) : text;
+    }
+
     char openQuote(std::string_view word) noexcept {
       char quote = 0;
 
@@ -398,7 +421,7 @@ namespace telar::gui::features::prompt {
         return Outcome::terminal;
       }
 
-      editor_.clear();
+      editor_.cancel();
       armed_ = false;
       history_index_.reset();
       ++revision_;
@@ -417,6 +440,8 @@ namespace telar::gui::features::prompt {
       return Outcome::complete;
     case Request::history_search:
       return surface == Surface::editor ? Outcome::search_history : Outcome::edited;
+    case Request::last_argument:
+      return lastArgument(history);
     case Request::unhandled:
       return Outcome::ignored;
     }
@@ -440,13 +465,24 @@ namespace telar::gui::features::prompt {
       accept();
     } else if (menu_->choices.empty()) {
       menu_.reset();
+    } else if (!menu_->refined && menu_->whole) {
+      // Of a cut list, what the choices shown share may not be what every choice does.
+      writeCommonStart();
     }
   }
 
   void Line::accept() {
+    const auto& choice = menu_->choices[menu_->selected];
+    // Copied: the menu goes once the choice is written.
+    const ds::String<Memory> text{draft_.memory(), choice.text.view()};
+
+    writeChoice(text.view(), !choice.directory && !choice.joined);
+    menu_.reset();
+  }
+
+  void Line::writeChoice(std::string_view text, bool ends) {
     const auto typed = menuContext(draft_.memory(), editor_, *menu_);
     const auto& menu = *menu_;
-    const auto& choice = menu.choices[menu.selected];
     const auto begin = menu.begin;
     auto end = std::min(menu.end, editor_.text().size());
     auto& memory = draft_.memory();
@@ -455,34 +491,57 @@ namespace telar::gui::features::prompt {
 
     // A choice that goes on from what was typed keeps how it was typed: only what it adds is
     // escaped, inside the quote the word opened if it did, which closes once the word ends.
-    if (typed && typed->replace_end == cursor && choice.text.view().starts_with(typed->partial.view())) {
+    if (typed && typed->replace_end == cursor && text.starts_with(typed->partial.view())) {
       const auto raw = editor_.text().view().substr(begin, cursor - begin);
-      const auto added = choice.text.view().substr(typed->partial.size());
+      const auto added = text.substr(typed->partial.size());
       const char quote = openQuote(raw);
 
       word.assign(raw);
       if (quote == 0) {
         word.append(quoteWord(memory, added, menu.dialect));
       } else if (appendQuoted(word, added, quote, menu.dialect)) {
-        if (!choice.directory && !choice.joined) {
+        if (ends) {
           word.push(quote);
         }
       } else {
-        word = quoteWord(memory, choice.text, menu.dialect);
+        word = quoteWord(memory, text, menu.dialect);
       }
 
       end = cursor;
     } else {
-      word = quoteWord(memory, choice.text, menu.dialect);
+      word = quoteWord(memory, text, menu.dialect);
     }
 
-    if (!choice.directory && !choice.joined) {
+    if (ends) {
       word.push(' ');
     }
 
-    menu_.reset();
     editor_.textMut().replace(begin, end, word);
     ++revision_;
+  }
+
+  void Line::writeCommonStart() {
+    const auto& choices = menu_->choices;
+    auto common = choices[0].text.view();
+
+    for (const auto& choice : choices) {
+      const auto text = choice.text.view();
+      const auto [ends, _] = std::ranges::mismatch(common, text);
+
+      common = common.substr(0, static_cast<std::size_t>(ends - common.begin()));
+    }
+
+    // Whole characters only: a common start may end inside one.
+    common = wholeCharacters(common);
+    const auto typed = menuContext(draft_.memory(), editor_, *menu_);
+    if (!typed || typed->replace_end != editor_.text().cursor() || common.size() <= typed->partial.size() || !common.starts_with(typed->partial.view())) {
+      return;
+    }
+
+    const ds::String<Memory> text{draft_.memory(), common};
+
+    writeChoice(text.view(), false);
+    menu_.getMut().end = editor_.text().cursor();
   }
 
   ds::Option<Outcome> Line::menuKey(const KeyPress& key, bool& refining) {
@@ -492,7 +551,21 @@ namespace telar::gui::features::prompt {
     const bool backward = key.key == Key::backtab || (key.key == Key::tab && key.modifiers.shift) || key.key == Key::up || (key.key == Key::character && key.modifiers.control && key.character == 'p');
     if (count != 0 && (forward || backward)) {
       menu.selected = (menu.selected + (forward ? 1 : count - 1)) % count;
+      menu.cycled = true;
       ++revision_;
+      return Outcome::edited;
+    }
+
+    // Space after moving through the choices takes the selected one, and is typed after it when
+    // the choice does not end in one.
+    if (count != 0 && menu.cycled && key.key == Key::character && key.character == U' ' && !key.modifiers.control && !key.modifiers.alt) {
+      const bool spaced = !menu.choices[menu.selected].directory && !menu.choices[menu.selected].joined;
+
+      accept();
+      if (!spaced) {
+        editor_.textMut().insert(" ");
+      }
+
       return Outcome::edited;
     }
 
@@ -550,10 +623,19 @@ namespace telar::gui::features::prompt {
     // Owned, as the choices are rebuilt while it is compared.
     const auto word = std::move(typed.getMut().partial);
 
+    // As typed first; ignoring case when nothing matches so.
     menu.choices.clear();
     for (const auto& choice : menu.all) {
       if (choice.text.view().starts_with(word.view())) {
         menu.choices.push(choice.clone());
+      }
+    }
+
+    if (menu.choices.empty()) {
+      for (const auto& choice : menu.all) {
+        if (startsFolded(choice.text.view(), word.view())) {
+          menu.choices.push(choice.clone());
+        }
       }
     }
 
@@ -636,6 +718,31 @@ namespace telar::gui::features::prompt {
 
     editor_.placeAtEnd();
     recalled_ = editor_.text().revision();
+    ++revision_;
+    return Outcome::edited;
+  }
+
+  Outcome Line::lastArgument(History history) {
+    auto& text = editor_.textMut();
+    const bool again = argument_steps_ != 0 && text.revision() == argument_revision_ && text.cursor() == argument_end_;
+    const auto steps = again ? argument_steps_ + 1 : 1;
+    const auto command = back(steps, history);
+    if (!command) {
+      return Outcome::edited;
+    }
+
+    // Its last word, as the shell splits words on blanks.
+    auto words = command->substr(0, command->find_last_not_of(" \t\n") + 1);
+    const auto argument = words.substr(words.find_last_of(" \t\n") + 1);
+    // Copied: the history the argument views may change as the text does.
+    const ds::String<Memory> copy{draft_.memory(), argument};
+    const auto start = again ? argument_start_ : text.cursor();
+
+    text.replace(start, again ? argument_end_ : start, copy.view());
+    argument_steps_ = steps;
+    argument_start_ = start;
+    argument_end_ = start + copy.size();
+    argument_revision_ = text.revision();
     ++revision_;
     return Outcome::edited;
   }

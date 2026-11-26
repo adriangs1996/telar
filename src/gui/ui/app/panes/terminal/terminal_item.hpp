@@ -183,6 +183,8 @@ namespace telar::gui::qt {
     Q_INVOKABLE void toggleFold(int index);
     // Copies the command at `index`, or its output.
     Q_INVOKABLE void copyBlock(int index, bool command);
+    // A click on something drawn over the terminal: its pane comes forward and takes the keys.
+    Q_INVOKABLE void focusFromPointer();
     // Glides back to the live end and follows the output again.
     Q_INVOKABLE void scrollToEnd();
     // Glides to show the scrollback's `fraction`, its middle there; or moves there at once, as

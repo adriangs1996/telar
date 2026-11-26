@@ -898,15 +898,24 @@ namespace telar::gui::features::prompt {
     auto& memory = state.memory;
     Choices paths{memory};
 
-    for (const auto& match : message.matches) {
-      // Directories arrive with their trailing slash.
-      const bool directory = match.kind == PathKind::directory;
-      const auto name = directory ? match.path.substr(0, match.path.size() - 1) : match.path;
-      if (!name.contains('/') && name.starts_with(query.view())) {
-        Name text = base.clone();
+    // As typed first; ignoring case when nothing matches so, as `cd doc` finds Documents on a
+    // file system that ignores case.
+    for (const bool folded : {false, true}) {
+      for (const auto& match : message.matches) {
+        // Directories arrive with their trailing slash.
+        const bool directory = match.kind == PathKind::directory;
+        const auto name = directory ? match.path.substr(0, match.path.size() - 1) : match.path;
+        const bool starts = folded ? startsFolded(name, query.view()) : name.starts_with(query.view());
+        if (!name.contains('/') && starts) {
+          Name text = base.clone();
 
-        text.append(match.path);
-        paths.push(Choice{.text = std::move(text), .description = Name{memory}, .directory = directory});
+          text.append(match.path);
+          paths.push(Choice{.text = std::move(text), .description = Name{memory}, .directory = directory});
+        }
+      }
+
+      if (!paths.empty()) {
+        break;
       }
     }
 

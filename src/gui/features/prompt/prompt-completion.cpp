@@ -199,4 +199,12 @@ namespace telar::gui::features::prompt {
     return result;
   }
 
+  bool startsFolded(std::string_view text, std::string_view start) noexcept {
+    constexpr auto fold = [](char byte) {
+      return byte >= 'A' && byte <= 'Z' ? static_cast<char>(byte - 'A' + 'a') : byte;
+    };
+
+    return text.size() >= start.size() && std::ranges::equal(text.substr(0, start.size()), start, {}, fold, fold);
+  }
+
 }

@@ -24,15 +24,12 @@ import telar.base.ds;
 
 namespace telar::gui::qt {
 
-  // How long a typed character takes to rise into place, and a completed one to sweep in; a
-  // completion sweeps one character after another, this far apart.
-  static constexpr qint64 rise_ms = 70;
+  // How long a completed character takes to sweep in; a completion sweeps one character after
+  // another, this far apart.
   static constexpr qint64 sweep_ms = 200;
   static constexpr qint64 sweep_step_ms = 16;
   static constexpr qint64 ghost_ms = 300;
   static constexpr std::size_t maximum_fresh = 200;
-  // A rising character starts this share of a cell below its place.
-  static constexpr qreal rise_lift = 0.15;
   // The ticker only paces frames, so its period is arbitrary: it loops until nothing moves.
   static constexpr int ticker_period_ms = 1000;
 
@@ -50,6 +47,38 @@ namespace telar::gui::qt {
     }
 
     constexpr int menu_page = 8;
+
+    // The columns a suggestion leaves at its row's end for the keys that take it.
+    constexpr std::size_t hint_columns = 22;
+
+    // What of `ghost` fits on the row the typed text ends on, `columns` wide, a column kept for
+    // the caret and room for the keys that take it: past it, the suggestion would add rows and
+    // move the terminal as it comes and goes.
+    std::string_view onCaretRow(std::string_view typed, std::string_view ghost, std::size_t columns) noexcept {
+      if (columns == 0) {
+        return {};
+      }
+
+      const auto line_start = typed.rfind('\n');
+      const auto line = line_start == std::string_view::npos ? typed : typed.substr(line_start + 1);
+      const auto used = static_cast<std::size_t>(std::ranges::count_if(line, [](char byte) {
+        return !continuationByte(byte);
+      })) % columns;
+      const auto end_column = columns > hint_columns * 2 ? columns - hint_columns : columns;
+      const auto room = used + 1 < end_column ? end_column - used - 1 : 0;
+
+      ghost = ghost.substr(0, ghost.find('\n'));
+      std::size_t end = 0;
+
+      for (std::size_t characters = 0; end < ghost.size() && characters < room; ++characters) {
+        ++end;
+        while (end < ghost.size() && continuationByte(ghost[end])) {
+          ++end;
+        }
+      }
+
+      return ghost.substr(0, end);
+    }
 
     // The page of the menu that holds the selected choice.
     std::pair<std::size_t, std::size_t> menuPage(const application::prompt::Menu& menu) {
@@ -352,9 +381,17 @@ namespace telar::gui::qt {
       return {};
     }
 
-    const auto& label = line->menu()->label;
+    const auto& menu = *line->menu();
+    auto label = QString::fromUtf8(menu.label.data(), static_cast<qsizetype>(menu.label.size()));
 
-    return QString::fromUtf8(label.data(), static_cast<qsizetype>(label.size()));
+    // More choices than a page shows: which one is selected, and of how many.
+    if (std::cmp_greater(menu.choices.size(), menu_page)) {
+      const auto place = QStringLiteral("%1/%2").arg(menu.selected + 1).arg(menu.choices.size());
+
+      label = label.isEmpty() ? place : label + QStringLiteral(" · ") + place;
+    }
+
+    return label;
   }
 
   bool PromptEditorItem::remote() const noexcept {
@@ -476,6 +513,48 @@ namespace telar::gui::qt {
 
   int PromptEditorItem::visibleRows() const noexcept {
     return std::min(static_cast<int>(layout_.rows), maximum_rows_);
+  }
+
+  void PromptEditorItem::placeCaret(QPointF point) {
+    const auto line = controller_ == nullptr ? ds::none : controller_->line(pane_id_);
+    if (!line || cellWidth() <= 0 || cellHeight() <= 0) {
+      return;
+    }
+
+    const auto row = static_cast<std::uint32_t>(std::max(0, first_row_ + static_cast<int>(std::floor(point.y() / cellHeight()))));
+    const auto column = static_cast<std::uint32_t>(std::max(0.0, std::floor(point.x() / cellWidth())));
+    const auto typed = line->text().size();
+    ds::Option<std::size_t> offset;
+
+    // The run under the column, a character a cell; past the row's last, the row's end.
+    for (const auto& run : layout_.runs) {
+      if (run.row != row || run.start >= typed) {
+        continue;
+      }
+
+      if (column < run.column) {
+        offset = offset.valueOr(run.start);
+        break;
+      }
+
+      auto at = run.start;
+
+      for (auto cell = run.column; at < run.end && cell < column; ++cell) {
+        ++at;
+        while (at < run.end && continuationByte(display_.view()[at])) {
+          ++at;
+        }
+      }
+
+      offset = std::min(at, typed);
+      if (column < run.column + run.columns) {
+        break;
+      }
+    }
+
+    if (offset) {
+      controller_->placeCursor(pane_id_, *offset);
+    }
   }
 
   int PromptEditorItem::columns() const noexcept {
@@ -631,7 +710,7 @@ namespace telar::gui::qt {
       ghost_.assign(ghost);
     }
 
-    display_.append(ghost);
+    display_.append(onCaretRow(display_.view(), ghost, static_cast<std::size_t>(std::max(0, maximumColumns()))));
     return {.cursor = cursor, .composing = composing.size(), .typed = typed};
   }
 
@@ -768,15 +847,13 @@ namespace telar::gui::qt {
     }
 
     item->setColor(look.color);
-    item->setPosition({run.column * cell.width(), ((static_cast<int>(run.row) - first_row_) * cell.height()) + look.lift});
+    item->setPosition({run.column * cell.width(), (static_cast<int>(run.row) - first_row_) * cell.height()});
     item->setOpacity(look.opacity);
     item->setVisible(true);
   }
 
-  // Fresh text rises into place or sweeps in from the accent, adding where it glows; a new
-  // suggestion fades in.
+  // Fresh text sweeps in from the accent, adding where it glows; a new suggestion fades in.
   PromptEditorItem::RunLook PromptEditorItem::look(const application::prompt::Run& run, QSizeF cell, qint64 now, QVariantList& glows) const {
-    [[clang::no_destroy]] static const QEasingCurve rise_curve{QEasingCurve::OutCubic};
     [[clang::no_destroy]] static const QEasingCurve sweep_curve{QEasingCurve::OutQuad};
     RunLook result{.color = styleColor(run.style)};
 
@@ -792,15 +869,6 @@ namespace telar::gui::qt {
     const auto elapsed = static_cast<qreal>(now - fresh.started_ms);
     const auto width = cell.width();
     const auto height = cell.height();
-
-    if (fresh.motion == Motion::rise) {
-      const auto progress = rise_curve.valueForProgress(std::clamp(elapsed / rise_ms, 0.0, 1.0));
-
-      result.lift = (1 - progress) * height * rise_lift;
-      result.opacity = progress;
-      return result;
-    }
-
     const auto progress = sweep_curve.valueForProgress(std::clamp(elapsed / sweep_ms, 0.0, 1.0));
 
     result.color = blend(accent_, result.color, progress);
@@ -879,7 +947,7 @@ namespace telar::gui::qt {
     const auto now = clock_.elapsed();
 
     static_cast<void>(fresh_.retain([&](const Fresh& fresh) {
-      return now - fresh.started_ms < (fresh.motion == Motion::rise ? rise_ms : sweep_ms);
+      return now - fresh.started_ms < sweep_ms;
     }));
 
     if (text == previous) {
@@ -935,8 +1003,8 @@ namespace telar::gui::qt {
     animateInsertion(prefix, text.substr(prefix, inserted), now);
   }
 
-  // A single character rises into place; a completion or a suggestion taken sweeps in, each
-  // character after the one before.
+  // A character typed shows in its place at once, as a terminal echoes it: what is typed is
+  // never late. A completion or a suggestion taken sweeps in, each character after the one before.
   void PromptEditorItem::animateInsertion(std::size_t prefix, std::string_view added, qint64 now) {
     std::size_t characters = 0;
 
@@ -945,7 +1013,6 @@ namespace telar::gui::qt {
     }
 
     if (characters == 1) {
-      fresh_.push({.start = prefix, .end = prefix + added.size(), .motion = Motion::rise, .started_ms = now});
       return;
     }
 
@@ -957,7 +1024,7 @@ namespace telar::gui::qt {
         continue;
       }
 
-      fresh_.push({.start = start, .end = prefix + offset, .motion = Motion::sweep, .started_ms = now + delay});
+      fresh_.push({.start = start, .end = prefix + offset, .started_ms = now + delay});
       start = prefix + offset;
       delay += sweep_step_ms;
     }
@@ -969,7 +1036,7 @@ namespace telar::gui::qt {
     }
 
     return std::ranges::any_of(fresh_, [&](const Fresh& fresh) {
-      return now - fresh.started_ms < (fresh.motion == Motion::rise ? rise_ms : sweep_ms);
+      return now - fresh.started_ms < sweep_ms;
     });
   }
 

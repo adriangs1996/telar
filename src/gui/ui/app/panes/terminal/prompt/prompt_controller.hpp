@@ -54,6 +54,11 @@ namespace telar::gui::qt {
     // The command block selected in the pane, by index among its blocks.
     [[nodiscard]] ds::Option<std::size_t> selectedBlock(std::uint64_t pane_id) const noexcept;
     [[nodiscard]] bool typingLeavesBlock(std::uint64_t pane_id) const noexcept;
+    // macOS's Command keys for the editor's text: select all, redo, and copy or cut the selection
+    // to the clipboard; false for a copy or cut with nothing selected.
+    void textCommand(std::uint64_t pane_id, application::prompt::TextCommand command);
+    bool copyText(std::uint64_t pane_id, bool cut);
+    void placeCursor(std::uint64_t pane_id, std::size_t offset);
 
     // What an editor shows around the line: its pane, the configuration and copy mode.
     [[nodiscard]] const application::Pane<Memory>* pane(std::uint64_t pane_id) const noexcept;

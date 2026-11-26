@@ -51,6 +51,30 @@ namespace telar::gui::qt {
     return store_.session().selectedBlock(pane_id);
   }
 
+  void PromptController::textCommand(std::uint64_t pane_id, application::prompt::TextCommand command) {
+    application::prompt::textCommand(store_.sessionMut(), pane_id, command);
+    publish(pane_id);
+  }
+
+  void PromptController::placeCursor(std::uint64_t pane_id, std::size_t offset) {
+    application::prompt::placeCursor(store_.sessionMut(), pane_id, offset);
+    publish(pane_id);
+  }
+
+  bool PromptController::copyText(std::uint64_t pane_id, bool cut) {
+    const auto selected = application::prompt::selectedText(store_.session(), pane_id);
+    if (selected.empty()) {
+      return false;
+    }
+
+    QGuiApplication::clipboard()->setText(toQString(selected));
+    if (cut) {
+      textCommand(pane_id, application::prompt::TextCommand::erase_selection);
+    }
+
+    return true;
+  }
+
   bool PromptController::typingLeavesBlock(std::uint64_t pane_id) const noexcept {
     return store_.session().typingLeavesBlock(pane_id);
   }

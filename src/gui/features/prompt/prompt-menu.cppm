@@ -55,6 +55,8 @@ export namespace telar::gui::features::prompt {
     bool whole = true;
     // Refined by typing: a single choice left is not written for the user.
     bool refined = false;
+    // Tab or the arrows moved through the choices: Space takes the one selected.
+    bool cycled = false;
   };
 
 }

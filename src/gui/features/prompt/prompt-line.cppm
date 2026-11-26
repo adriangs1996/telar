@@ -172,6 +172,11 @@ namespace telar::gui::features::prompt {
     void settle();
 
     void accept();
+    // Writes `text` in place of the word the menu offers choices for, as it was typed so far;
+    // `ends` closes a quote the word opened and adds the space after it.
+    void writeChoice(std::string_view text, bool ends);
+    // Writes what every choice starts with past what was typed, as zsh and fish do.
+    void writeCommonStart();
 
     // While the menu is open, Tab and the arrows move through it, Enter takes the choice and
     // Escape closes it; any other key closes it and edits as usual.
@@ -189,6 +194,9 @@ namespace telar::gui::features::prompt {
     // Up and Down past the editor's first and last line walk the commands sent from it, then
     // `history`'s, keeping what was being written to come back to.
     Outcome travel(int direction, History history);
+    // Alt-.: the last argument of the command before, written at the cursor; again at once, the
+    // last argument of the one before that in its place.
+    Outcome lastArgument(History history);
 
     // The command `steps` back from the line: this one's own, newest first, then the ones of
     // `history` it did not send, newest first; each once.
@@ -203,6 +211,12 @@ namespace telar::gui::features::prompt {
     // back was edited: the text's revision then was `recalled_`.
     ds::Option<std::size_t> history_index_;
     std::uint64_t recalled_ = 0;
+    // What the last Alt-. wrote: how many commands back it read, where it wrote, and the text's
+    // revision after, which a repeat at once still shows.
+    std::size_t argument_steps_ = 0;
+    std::size_t argument_start_ = 0;
+    std::size_t argument_end_ = 0;
+    std::uint64_t argument_revision_ = 0;
     tbc::val_a<ds::Option<Menu>> menu_;
     std::uint64_t revision_ = 0;
     // The next offer refines the menu typing reopened: one choice left is not written.
