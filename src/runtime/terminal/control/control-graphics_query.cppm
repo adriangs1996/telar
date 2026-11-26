@@ -1,5 +1,4 @@
 module;
-#include "tbc/annotations.hpp"
 #include "telar_base/diagnostics/config.hpp"
 
 export module telar.runtime.terminal.control:graphics_query;
@@ -98,7 +97,7 @@ export namespace telar::runtime::control {
 
   // Generic over the caller's allocator, so it stays here.
   template <Allocator Memory>
-  class TBC_GENERIC GraphicsQueries {
+  class [[tbc::generic]] GraphicsQueries {
   public:
     explicit GraphicsQueries(Memory& memory, GraphicsQueryResources resources = {})
         : local_budget_(resources.limits.global_bytes),

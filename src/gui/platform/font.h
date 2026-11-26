@@ -2,13 +2,6 @@
 #include <stdint.h>
 
 #ifdef __cplusplus
-#include "tbc/annotations.hpp"
-#define TELAR_GUI_FONT_RAW TBC_RAW
-#else
-#define TELAR_GUI_FONT_RAW
-#endif
-
-#ifdef __cplusplus
 extern "C" {
 #endif
 
@@ -62,17 +55,21 @@ inline constexpr auto telar_font_family_not_found = static_cast<int>(TelarFontSt
 inline constexpr auto telar_font_style_not_found = static_cast<int>(TelarFontStatus::telar_font_style_not_found);
 #endif
 
-TELAR_GUI_FONT_RAW int telarGuiFindFont(const char* family, const char* style, telar_font_match* match);
+#ifdef __cplusplus
+[[tbc::raw]]
+#endif
+int telarGuiFindFont(const char* family, const char* style, telar_font_match* match);
 
 int telarGuiFindFallbackFont(const char* text, telar_font_match* match);
 
 typedef int (*telar_font_validator)(const telar_font_match* match, void* context);
 
-TELAR_GUI_FONT_RAW int telarGuiFindValidatedFallbackFont(const char* text, telar_font_match* match, telar_font_validator validator, void* context);
+#ifdef __cplusplus
+[[tbc::raw]]
+#endif
+int telarGuiFindValidatedFallbackFont(const char* text, telar_font_match* match, telar_font_validator validator, void* context);
 // NOLINTEND(readability-redundant-declaration)
 
 #ifdef __cplusplus
 }
 #endif
-
-#undef TELAR_GUI_FONT_RAW

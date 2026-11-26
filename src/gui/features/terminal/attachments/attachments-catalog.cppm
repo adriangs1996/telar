@@ -1,6 +1,5 @@
 module;
 #include "features/terminal/attachments/capture.hpp"
-#include "tbc/annotations.hpp"
 #include "telar_base/diagnostics/config.hpp"
 
 // The images attached to a pane's prompt: the shelf's catalog of them, and the markers the
@@ -217,7 +216,7 @@ export namespace telar::gui::features::terminal::attachments {
   // its last render lease is released; eviction may only reuse releasable slots.
   // Generic over the caller's delivery and its slot state, so it stays whole for each importer.
   template <Allocator Memory, typename Delivery>
-  class TBC_GENERIC AttachmentCatalog {
+  class [[tbc::generic]] AttachmentCatalog {
   public:
     struct Slot {
       AttachmentCapture<Memory> capture;

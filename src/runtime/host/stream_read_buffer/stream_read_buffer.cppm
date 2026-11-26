@@ -1,6 +1,3 @@
-module;
-#include "tbc/annotations.hpp"
-
 export module telar.runtime.host.stream_read_buffer;
 
 import std;
@@ -41,7 +38,7 @@ export {
       // Writes what `stream` accepts now and returns the stream's result.
       // Generic over the caller's stream, so it stays a template here.
       template <ByteStream Stream>
-      TBC_GENERIC inline StreamResult write(Stream& stream) noexcept {
+      [[tbc::generic]] inline StreamResult write(Stream& stream) noexcept {
         const auto rest = remaining();
         const auto result = stream.write({reinterpret_cast<const std::uint8_t*>(rest.data()), rest.size()}); // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast): the bytes may alias char, and no cast-free view reads text as bytes
         if (result.state == StreamResult::State::data) {
@@ -59,7 +56,7 @@ export {
     // Reads and discards what a refused peer still sends; true once its stream ended or failed.
     // Generic over the caller's stream, so it stays a template here.
     template <ByteStream Stream>
-    TBC_GENERIC inline bool drainEnded(Stream& stream) noexcept {
+    [[tbc::generic]] inline bool drainEnded(Stream& stream) noexcept {
       constexpr std::size_t discard_bytes = 4096;
       ds::Array<std::uint8_t, discard_bytes> discarded; // NOLINT(cppcoreguidelines-pro-type-member-init): the bytes are read only to be dropped, so zeroing 4 KiB per drain is work nothing needs
       const auto read = stream.read(discarded.viewMut());
@@ -85,7 +82,7 @@ export {
 
       // Generic over the caller's stream, so it stays a template here.
       template <PeekableByteStream Stream>
-      TBC_GENERIC inline Result receive(Stream& source, std::span<std::uint8_t> storage, std::string_view delimiter) noexcept {
+      [[tbc::generic]] inline Result receive(Stream& source, std::span<std::uint8_t> storage, std::string_view delimiter) noexcept {
         if (complete_) {
           return Result::complete;
         }
@@ -133,7 +130,7 @@ export {
     private:
       // Generic over the caller's stream, so it stays a template here.
       template <BufferedByteStream Stream>
-      TBC_GENERIC inline Result receiveBuffered(Stream& source, std::span<std::uint8_t> storage, std::string_view delimiter) noexcept {
+      [[tbc::generic]] inline Result receiveBuffered(Stream& source, std::span<std::uint8_t> storage, std::string_view delimiter) noexcept {
         const auto visible = source.peekView(storage.size() - length_);
         if (visible.state != StreamResult::State::data || visible.bytes.empty()) {
           return interrupted({visible.state, 0, visible.waiting});
@@ -221,7 +218,7 @@ export {
         requires requires(Read read, std::span<std::uint8_t> destination) {
           { read(destination) } noexcept -> std::same_as<StreamResult>;
         }
-      TBC_GENERIC inline StreamView peek(Read read, std::size_t maximum) noexcept {
+      [[tbc::generic]] inline StreamView peek(Read read, std::size_t maximum) noexcept {
         if (empty()) {
           const auto received = read(storage_.bytes());
           if (received.state != StreamResult::State::data || received.bytes == 0) {

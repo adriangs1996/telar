@@ -217,7 +217,7 @@ namespace telar::gui::qt {
       using Source = QPair<QQuickWindow*, const FontSet*>;
       using Key = std::conditional_t<optical, std::pair<Source, std::uint32_t>, Source>;
 
-      struct TBC_SHARED Cache {
+      struct [[tbc::shared]] Cache {
         QHash<Key, std::weak_ptr<ChromeGlyphImages>> entries;
       };
 

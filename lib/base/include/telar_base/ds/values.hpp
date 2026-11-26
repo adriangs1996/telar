@@ -1,6 +1,5 @@
 #pragma once
 
-#include "tbc/annotations.hpp"
 #include "tbc/view.hpp"
 #include "telar_base/diagnostics/config.hpp"
 #include <algorithm>
@@ -40,7 +39,7 @@ namespace telar::ds {
   // initialize it and it copies as its values do.
   template <typename Value, std::size_t Count>
     requires(Count > 0)
-  struct TBC_GENERIC Array {
+  struct [[tbc::generic]] Array {
     using value_type = Value;
 
     // Not static, as std::array's: a call reads as a call on the value it sizes.
@@ -165,7 +164,7 @@ namespace telar::ds {
   // NOLINTBEGIN(cppcoreguidelines-pro-type-union-access): the value lives in a union with nothing, as std::optional's does
   template <typename Value>
     requires(std::is_object_v<Value> && !std::is_array_v<Value>)
-  class TBC_GENERIC Option {
+  class [[tbc::generic]] Option {
   public:
     constexpr Option() noexcept
         : empty_() {}
@@ -177,7 +176,7 @@ namespace telar::ds {
     // std::optional does; braces build a Value. It keeps what Value's constructor keeps of it.
     template <typename Other = Value>
       requires(!std::same_as<std::remove_cvref_t<Other>, Option> && !std::same_as<std::remove_cvref_t<Other>, None> && !std::same_as<std::remove_cvref_t<Other>, std::in_place_t> && std::is_constructible_v<Value, Other>)
-    TBC_CONSTRUCTS constexpr explicit(!std::is_convertible_v<Other, Value>) Option(Other&& value)
+    [[tbc::constructs]] constexpr explicit(!std::is_convertible_v<Other, Value>) Option(Other&& value)
         : value_(std::forward<Other>(value)),
           full_(true) {}
 
@@ -185,7 +184,7 @@ namespace telar::ds {
     // constructor keeps of it.
     template <typename Other>
       requires(!std::same_as<Other, Value> && std::is_constructible_v<Value, const Other&>)
-    TBC_CONSTRUCTS constexpr explicit(!std::is_convertible_v<const Other&, Value>) Option(const Option<Other>& other)
+    [[tbc::constructs]] constexpr explicit(!std::is_convertible_v<const Other&, Value>) Option(const Option<Other>& other)
         : empty_() {
       if (other.hasValue()) {
         std::construct_at(&value_, other.get());
@@ -196,7 +195,7 @@ namespace telar::ds {
     // Builds the value in place, for one that cannot move, as std::optional's in_place constructor
     // does. It keeps what Value's constructor keeps of the arguments.
     template <typename... Arguments>
-    TBC_CONSTRUCTS constexpr explicit Option(std::in_place_t /*tag*/, Arguments&&... arguments)
+    [[tbc::constructs]] constexpr explicit Option(std::in_place_t /*tag*/, Arguments&&... arguments)
         : value_(std::forward<Arguments>(arguments)...),
           full_(true) {}
 
@@ -457,7 +456,7 @@ namespace telar::ds {
   // synchronized, as a Cell is not Sync: every holder of a reference runs on one thread.
   template <typename Value>
     requires std::is_trivially_copyable_v<Value>
-  class TBC_SHARED Cell {
+  class [[tbc::shared]] Cell {
   public:
     constexpr Cell() noexcept = default;
 

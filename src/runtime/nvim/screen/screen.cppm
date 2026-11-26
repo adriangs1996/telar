@@ -1,6 +1,3 @@
-module;
-#include "tbc/annotations.hpp"
-
 export module telar.runtime.nvim.screen;
 
 import std;

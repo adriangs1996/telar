@@ -1,6 +1,3 @@
-module;
-#include "tbc/annotations.hpp"
-
 export module telar.gui.application:session;
 
 import std;

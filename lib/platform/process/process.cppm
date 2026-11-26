@@ -1,6 +1,3 @@
-module;
-#include "tbc/annotations.hpp"
-
 export module telar.platform.process;
 
 import std;
@@ -212,7 +209,7 @@ export {
     public:
       template <typename Consumer>
         requires(!std::same_as<std::remove_cvref_t<Consumer>, BytesConsumer> && std::invocable<Consumer&, std::span<const Byte>>)
-      TBC_GENERIC BytesConsumer(Consumer&& consumer) noexcept // NOLINT(cppcoreguidelines-explicit-constructor,misc-explicit-constructor): a call passes its lambda where it takes a BytesConsumer, as Rust passes a closure as `&mut dyn FnMut`
+      [[tbc::generic]] BytesConsumer(Consumer&& consumer) noexcept // NOLINT(cppcoreguidelines-explicit-constructor,misc-explicit-constructor): a call passes its lambda where it takes a BytesConsumer, as Rust passes a closure as `&mut dyn FnMut`
           : consumer_(erasedAddress(std::forward<Consumer>(consumer))),
             consume_([](void* target, std::span<const Byte> bytes) {
               auto& consume = *static_cast<std::remove_reference_t<Consumer>*>(target);
@@ -231,7 +228,7 @@ export {
       // The consumer's address with its type erased; the trampoline casts it back to the type, and
       // so the constness, the consumer came with.
       template <typename Object>
-      TBC_GENERIC static void* erasedAddress(const Object& object) noexcept {
+      [[tbc::generic]] static void* erasedAddress(const Object& object) noexcept {
         return tbc::raw(const_cast<void*>(static_cast<const void*>(std::addressof(object)))); // NOLINT(cppcoreguidelines-pro-type-const-cast): the trampoline restores the consumer's own type and constness
       }
 

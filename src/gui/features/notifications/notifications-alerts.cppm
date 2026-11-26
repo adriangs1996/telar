@@ -1,5 +1,4 @@
 module;
-#include "tbc/annotations.hpp"
 
 // The notices agents raise when they need input, finish or fail, one each or folded into a
 // summary when more change at once than the center keeps.
@@ -43,7 +42,7 @@ export {
 
       // Generic over the caller's label and publisher, so it stays here.
       template <AgentAlertLabel Resolve, NotificationPublisher Publish>
-      TBC_GENERIC static std::size_t publish(std::span<const AgentStatusChange> changes, Resolve resolve, Publish publish_notification) {
+      [[tbc::generic]] static std::size_t publish(std::span<const AgentStatusChange> changes, Resolve resolve, Publish publish_notification) {
         const auto count = static_cast<std::size_t>(std::ranges::count_if(changes, alertable));
         const auto individual = count > NotificationCenter::capacity ? NotificationCenter::capacity - 1 : count;
         std::size_t published = 0;

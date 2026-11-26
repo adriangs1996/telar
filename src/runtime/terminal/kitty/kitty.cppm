@@ -1,6 +1,3 @@
-module;
-#include "tbc/annotations.hpp"
-
 export module telar.runtime.terminal.kitty;
 
 import std;
@@ -49,7 +46,7 @@ export namespace telar::runtime {
 
   // Generic over the caller's integer width, so it stays here.
   template <std::unsigned_integral Number>
-  TBC_GENERIC ds::Option<Number> kittyUnsigned(std::string_view text) noexcept {
+  [[tbc::generic]] ds::Option<Number> kittyUnsigned(std::string_view text) noexcept {
     return unsignedDecimal<Number>(text);
   }
 
@@ -270,7 +267,7 @@ export namespace telar::runtime {
 
   // Mappings that stand in for placeholder allocations, shared by the threads that decode and draw
   // images under its mutex. A mapping lives until its placeholder is deallocated.
-  class TBC_SHARED MappedImages {
+  class [[tbc::shared]] MappedImages {
   public:
     bool adopt(const void* placeholder, MappedRegion& pixels) noexcept;
 
@@ -297,7 +294,7 @@ export namespace telar::runtime {
   };
 
   // The bytes every pane's media may hold, which the panes reserve from at once under its mutex.
-  class TBC_SHARED MediaBudget {
+  class [[tbc::shared]] MediaBudget {
   public:
     constexpr explicit MediaBudget(std::size_t limit) noexcept
         : limit_(limit) {}
@@ -318,7 +315,7 @@ export namespace telar::runtime {
 
   // Generic over the caller's upstream allocator, so it stays here.
   template <Allocator Upstream>
-  class TBC_SHARED TBC_GENERIC MediaAllocator {
+  class [[tbc::shared]] [[tbc::generic]] MediaAllocator {
   public:
     static constexpr bool thread_safe = ConcurrentAllocator<Upstream>;
 

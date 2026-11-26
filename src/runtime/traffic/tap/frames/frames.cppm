@@ -1,6 +1,3 @@
-module;
-#include "tbc/annotations.hpp"
-
 export module telar.runtime.traffic.tap.frames;
 
 import std;
@@ -39,7 +36,7 @@ export {
 
       // Generic over the caller's integer and enumeration types, so these stay here.
       template <std::unsigned_integral Integer>
-      TBC_GENERIC inline Integer integer() {
+      [[tbc::generic]] inline Integer integer() {
         return LittleEndian<Integer>::decode(remaining_);
       }
 
@@ -49,7 +46,7 @@ export {
 
       template <typename Enum>
         requires std::is_enum_v<Enum>
-      TBC_GENERIC Enum tag(Enum maximum) {
+      [[tbc::generic]] Enum tag(Enum maximum) {
         const auto value = integer<Byte>();
         if (value > static_cast<Byte>(maximum)) {
           throw EncodingError{"Unknown tap enumeration value"};
@@ -60,7 +57,7 @@ export {
 
       template <typename Enum>
         requires std::is_enum_v<Enum>
-      TBC_GENERIC void require(Enum expected) {
+      [[tbc::generic]] void require(Enum expected) {
         if (integer<Byte>() != static_cast<Byte>(expected)) {
           throw EncodingError{"Unexpected tap frame tag"};
         }
@@ -87,7 +84,7 @@ export {
     public:
       // Generic over the caller's integer and enumeration types, so these stay here.
       template <std::unsigned_integral Integer>
-      TBC_GENERIC inline void integer([[maybe_unused]] Integer value) {
+      [[tbc::generic]] inline void integer([[maybe_unused]] Integer value) {
         add(sizeof(Integer));
       }
 
@@ -97,7 +94,7 @@ export {
 
       template <typename Enum>
         requires std::is_enum_v<Enum>
-      TBC_GENERIC void tag([[maybe_unused]] Enum value) {
+      [[tbc::generic]] void tag([[maybe_unused]] Enum value) {
         integer(Byte{});
       }
 
@@ -129,7 +126,7 @@ export {
 
       // Generic over the caller's integer and enumeration types, so these stay here.
       template <std::unsigned_integral Integer>
-      TBC_GENERIC inline void integer(Integer value) {
+      [[tbc::generic]] inline void integer(Integer value) {
         LittleEndian<Integer>::encode(value, remaining_);
       }
 
@@ -139,7 +136,7 @@ export {
 
       template <typename Enum>
         requires std::is_enum_v<Enum>
-      TBC_GENERIC void tag(Enum value) {
+      [[tbc::generic]] void tag(Enum value) {
         integer(static_cast<Byte>(value));
       }
 

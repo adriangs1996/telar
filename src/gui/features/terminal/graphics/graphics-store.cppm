@@ -1,5 +1,4 @@
 module;
-#include "tbc/annotations.hpp"
 
 // The images a pane holds as the runtime sends them, the bytes every pane's images count
 // against, and the limits that stop them.
@@ -87,7 +86,7 @@ export {
 
     // The bytes every pane's graphics hold, which each store counts against. It hands out nothing, so a
     // reference to it stays valid whatever any store records.
-    struct TBC_SHARED GraphicsBudget {
+    struct [[tbc::shared]] GraphicsBudget {
       static constexpr std::size_t global_capacity = runtime::GraphicsLimits::maximum_global_bytes;
       std::size_t used = 0;
 
@@ -120,7 +119,7 @@ export {
 
         // Generic over the caller's shared image source.
         template <typename Source>
-        TBC_GENERIC bool readShared(Source& source) {
+        [[tbc::generic]] bool readShared(Source& source) {
           if (received_ != 0 || chunks_ != 0) {
             throw EncodingError{"Shared image already received pixels"};
           }
@@ -162,7 +161,7 @@ export {
 
       // Generic over the caller's shared image source.
       template <typename Source>
-      TBC_GENERIC bool sharedImage(const GraphicsSharedImage& message, Source& source) {
+      [[tbc::generic]] bool sharedImage(const GraphicsSharedImage& message, Source& source) {
         if (!accept(message.header.revision)) {
           return false;
         }

@@ -1,6 +1,3 @@
-module;
-#include "tbc/annotations.hpp"
-
 export module telar.gui.foundation.fonts:text_runs;
 
 import std;
@@ -40,7 +37,7 @@ export {
 
       // Generic over the caller's ligature coverage; called once per cell of a shaped row.
       template <LigatureRoles Coverage>
-      TBC_GENERIC void append(const Coverage& coverage, const CellValue& cell, bool alone) {
+      [[tbc::generic]] void append(const Coverage& coverage, const CellValue& cell, bool alone) {
         const auto role = alone || !shapeable(cell) ? fonts::LigatureRole::none : coverage.role(cell.utf8());
         const auto joins = role != fonts::LigatureRole::none && !columns_.empty() && columns_.back().role != fonts::LigatureRole::none && inkStyle(previous_.style) == inkStyle(cell.style) && !typographic(previous_, cell);
 

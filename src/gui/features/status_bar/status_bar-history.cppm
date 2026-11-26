@@ -1,5 +1,4 @@
 module;
-#include "tbc/annotations.hpp"
 
 // The CPU's recent samples, which the bar draws as a sparkline.
 export module telar.gui.features.status_bar:history;

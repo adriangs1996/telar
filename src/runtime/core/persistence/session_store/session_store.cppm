@@ -1,5 +1,4 @@
 module;
-#include "tbc/annotations.hpp"
 #include "telar_platform/trace_macro.hpp"
 
 export module telar.runtime.core.persistence.session_store;
@@ -191,7 +190,7 @@ export {
 
       // Generic over the caller's consumer, which each record is handed to.
       template <typename Consumer>
-      TBC_GENERIC inline void read(Consumer consume) {
+      [[tbc::generic]] inline void read(Consumer consume) {
         for (;;) {
           const auto kind = u8::decode(input_);
           if (kind > static_cast<Byte>(Kind::places)) {
@@ -283,7 +282,7 @@ export {
 
     // Kept whole: generic over the pane launcher, PaneService in telar.runtime.core, which imports this module.
     template <PaneLauncher Panes>
-    class TBC_GENERIC Restore {
+    class [[tbc::generic]] Restore {
     public:
       // The panes it launches keep the allocator, so everything the restore reaches lives in region `a`.
       inline explicit Restore(tbc::mut_a<ConcurrentMemory> memory, tbc::mut_a<RuntimeModel> model, tbc::mut_a<Panes> panes, tbc::mut_a<ClientLayouts> layouts, bool resume_agents)
@@ -643,7 +642,7 @@ export {
     // only the stamps that tell whether the session changed.
     // Kept whole: generic over the agents, AgentService in telar.runtime.core and persistence_test's SnapshotAgents.
     template <AgentSource Agents>
-    class TBC_GENERIC Snapshot {
+    class [[tbc::generic]] Snapshot {
     public:
       // The bytes view the buffer.
       inline static tbc::val_a<std::span<const Byte>> encode(const RuntimeModel& model, const ClientLayouts& layouts, const Agents& agents, tbc::val_a<std::span<Byte>> buffer, std::size_t& dropped) {
@@ -766,7 +765,7 @@ export {
 
     // Kept whole: generic over the agents, AgentService in telar.runtime.core, which imports this module.
     template <AgentSource Agents>
-    class TBC_GENERIC SessionStore {
+    class [[tbc::generic]] SessionStore {
       using Clock = std::chrono::steady_clock;
 
     public:

@@ -6,7 +6,6 @@ static_assert(true);
 #include "rounded_rectangle_scene.hpp"
 #include "physical_pixel_matrix.hpp"
 #include "qt_buffers.hpp"
-#include "tbc/annotations.hpp"
 #include <QByteArray>
 #include <QSGGeometry>
 #include <QSGGeometryNode>
@@ -113,7 +112,7 @@ namespace telar::gui::qt {
       }
 
       [[nodiscard]] QSGMaterialType* type() const override {
-        struct TBC_SHARED Types {
+        struct [[tbc::shared]] Types {
           ds::Array<QSGMaterialType, 4> entries;
         };
 

@@ -1,5 +1,4 @@
 module;
-#include "tbc/annotations.hpp"
 
 // What the configuration's interpreter gives the GUI, read into the features' values: the
 // actions a binding names and what an extended action describes, the content a component's render
@@ -64,7 +63,7 @@ namespace telar::gui::application {
     static_assert(BindingLimits::keys == runtime::config::BindingSetting::maximum_keys);
 
     template <BindingActionSource Actions>
-    TBC_GENERIC static void apply(const runtime::lua::Value& client, InputConfiguration& input, Actions& actions) {
+    [[tbc::generic]] static void apply(const runtime::lua::Value& client, InputConfiguration& input, Actions& actions) {
       const auto settings = Reader::input(client);
       if (settings.prefix) {
         input.setPrefix(*settings.prefix);
@@ -142,7 +141,7 @@ namespace telar::gui::application {
 
   // A caller's action reader as ComponentActions. Generic over the caller's reader.
   template <typename Reader>
-  class TBC_GENERIC ComponentActionsOf final : public ComponentActions {
+  class [[tbc::generic]] ComponentActionsOf final : public ComponentActions {
   public:
     explicit ComponentActionsOf(Reader& reader) noexcept
         : reader_(reader) {}
@@ -283,21 +282,21 @@ export namespace telar::gui::application {
     void readDefinitions(const runtime::lua::Value& client);
 
     template <typename Actions>
-    TBC_GENERIC void readFixed(Actions& actions, runtime::config::LimitNotices& limits) {
+    [[tbc::generic]] void readFixed(Actions& actions, runtime::config::LimitNotices& limits) {
       ComponentActionsOf<Actions> reader{actions};
 
       readFixedSources(reader, limits);
     }
 
     template <typename Actions>
-    TBC_GENERIC void readBar(features::components::Position position, const runtime::lua::Value& value, Actions& actions, runtime::config::LimitNotices& limits) {
+    [[tbc::generic]] void readBar(features::components::Position position, const runtime::lua::Value& value, Actions& actions, runtime::config::LimitNotices& limits) {
       ComponentActionsOf<Actions> reader{actions};
 
       readBarContent(position, value, reader, limits);
     }
 
     template <typename Actions>
-    TBC_GENERIC void readPanel(const runtime::lua::Value& value, Actions& actions, runtime::config::LimitNotices& limits) {
+    [[tbc::generic]] void readPanel(const runtime::lua::Value& value, Actions& actions, runtime::config::LimitNotices& limits) {
       ComponentActionsOf<Actions> reader{actions};
 
       readPanelContent(value, reader, limits);
@@ -312,7 +311,7 @@ export namespace telar::gui::application {
     [[nodiscard]] bool contains(BindingAction action) const noexcept;
 
     template <typename Visitor>
-    TBC_GENERIC void visitActions(const Visitor& visitor) const {
+    [[tbc::generic]] void visitActions(const Visitor& visitor) const {
       const auto visit = [&](const auto& content) {
         for (const auto& node : content.nodes()) {
           if (const auto action = content.action(node)) {

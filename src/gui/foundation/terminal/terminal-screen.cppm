@@ -1,5 +1,4 @@
 module;
-#include "tbc/annotations.hpp"
 #include "telar_base/diagnostics/config.hpp"
 
 export module telar.gui.foundation.terminal:screen;
@@ -13,7 +12,7 @@ import telar.base.ds;
 export namespace telar::gui::inline foundation::inline terminal {
 
   // Compared for every cell a selection covers.
-  struct TBC_HOT_PATH CellPosition {
+  struct [[tbc::hot_path]] CellPosition {
     std::uint16_t x = 0;
     std::uint32_t y = 0;
 
@@ -25,7 +24,7 @@ export namespace telar::gui::inline foundation::inline terminal {
   };
 
   // Built and read for every cell of a frame.
-  struct TBC_HOT_PATH CellValue {
+  struct [[tbc::hot_path]] CellValue {
     static constexpr std::size_t text_capacity = 16;
 
     CellStyle style;
@@ -73,7 +72,7 @@ export namespace telar::gui::inline foundation::inline terminal {
   };
 
   template <Allocator Memory>
-  class TBC_GENERIC Screen {
+  class [[tbc::generic]] Screen {
   public:
     static constexpr std::size_t maximum_cells = TerminalGrid::maximum_cells;
 

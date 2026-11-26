@@ -1,6 +1,3 @@
-module;
-#include "tbc/annotations.hpp"
-
 export module telar.runtime.terminal.control:classification;
 
 import std;
@@ -20,7 +17,7 @@ export namespace telar::runtime::control {
   // Generic over the caller's writer, so it stays here. The final byte is a char and nothing that
   // converts to one, so a mode number cannot take its place.
   template <typename Writer>
-  TBC_GENERIC void forwardPrivateMode(std::uint16_t mode, std::same_as<char> auto final, Writer&& write) {
+  [[tbc::generic]] void forwardPrivateMode(std::uint16_t mode, std::same_as<char> auto final, Writer&& write) {
     // ESC [ ? and a final byte around five decimal digits.
     constexpr std::size_t command_capacity = 16;
     constexpr std::string_view prefix = "\x1b[?";

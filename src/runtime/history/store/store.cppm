@@ -1,6 +1,3 @@
-module;
-#include "tbc/annotations.hpp"
-
 export module telar.runtime.history.store;
 
 import std;
@@ -267,7 +264,7 @@ export {
       static constexpr std::size_t result_header_bytes = sizeof(Byte) + (sizeof(std::uint64_t) * 2) + sizeof(std::uint16_t) + sizeof(Byte);
 
       // Reserved whole and bounded before each copy, so the texts the entries view never move.
-      class TBC_SHARED TextArena {
+      class [[tbc::shared]] TextArena {
       public:
         explicit TextArena(ConcurrentMemory& memory, std::size_t limit);
 

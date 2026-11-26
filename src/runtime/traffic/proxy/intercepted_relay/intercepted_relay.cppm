@@ -1,6 +1,3 @@
-module;
-#include "tbc/annotations.hpp"
-
 export module telar.runtime.traffic.proxy.intercepted_relay;
 
 import std;
@@ -64,7 +61,7 @@ export {
 
       // Generic over the caller's streams and observer, and called for every read the relay makes.
       template <PeekableByteStream Source, ByteStream Destination, Http1Observer Observer>
-      TBC_GENERIC bool advance(Source& source, Destination& destination, Observer& observer) noexcept {
+      [[tbc::generic]] bool advance(Source& source, Destination& destination, Observer& observer) noexcept {
         active_ = false;
         for (std::size_t round = 0; round < maximum_rounds; ++round) {
           if (!step(source, destination, observer)) {
@@ -97,7 +94,7 @@ export {
 
       // One read or write of the message; false once the relay can go no further for now.
       template <PeekableByteStream Source, ByteStream Destination, Http1Observer Observer>
-      TBC_GENERIC bool step(Source& source, Destination& destination, Observer& observer) noexcept {
+      [[tbc::generic]] bool step(Source& source, Destination& destination, Observer& observer) noexcept {
         switch (state_) {
         case State::reading_head:
           return readHead(source, observer);
@@ -120,7 +117,7 @@ export {
       }
 
       template <PeekableByteStream Source, ByteStream Destination, Http1Observer Observer>
-      TBC_GENERIC bool writeStep(Source& source, Destination& destination, Observer& observer) noexcept {
+      [[tbc::generic]] bool writeStep(Source& source, Destination& destination, Observer& observer) noexcept {
         // A borrowed body fragment stays in the source, stable through every write retry, until it is
         // consumed; everything else waits in the relay's own storage.
         const bool body_pending = state_ == State::writing_body;
@@ -151,7 +148,7 @@ export {
       }
 
       template <PeekableByteStream Source, Http1Observer Observer>
-      TBC_GENERIC bool readHead(Source& source, Observer& observer) noexcept {
+      [[tbc::generic]] bool readHead(Source& source, Observer& observer) noexcept {
         const auto previous = reader_.length();
         const auto result = reader_.receive(source, storage_.bytes(), "\r\n\r\n");
         const bool progress = reader_.length() != previous;
@@ -181,7 +178,7 @@ export {
       }
 
       template <ByteStream Source>
-      TBC_GENERIC bool readBody(Source& source) noexcept {
+      [[tbc::generic]] bool readBody(Source& source) noexcept {
         const auto capacity = body_stage_ == BodyStage::until_close ? body_capacity : std::min(remaining_, body_capacity);
         const auto received = bodyInput(source, capacity);
         if (received.state == StreamResult::State::blocked) {
@@ -206,7 +203,7 @@ export {
 
       // How much body arrived: in the source until it is consumed, or read into the relay's storage.
       template <ByteStream Source>
-      TBC_GENERIC StreamResult bodyInput(Source& source, std::size_t maximum) noexcept {
+      [[tbc::generic]] StreamResult bodyInput(Source& source, std::size_t maximum) noexcept {
         if constexpr (BufferedByteStream<Source>) {
           const auto peeked = source.peekView(maximum);
 
@@ -217,7 +214,7 @@ export {
       }
 
       template <PeekableByteStream Source>
-      TBC_GENERIC bool readLine(Source& source) noexcept {
+      [[tbc::generic]] bool readLine(Source& source) noexcept {
         const auto previous = reader_.length();
         const auto capacity = body_stage_ == BodyStage::trailer ? trailer_line_capacity : chunk_line_capacity;
 
@@ -241,7 +238,7 @@ export {
       template <ByteStream Destination, Http1Observer Observer>
       // Writes the source's borrowed bytes, or, without them, the relay's own storage: the storage is
       // named here rather than lent in, as Rust names a field of self instead of passing it with &mut self.
-      TBC_GENERIC bool writePending(Destination& destination, Observer& observer, ds::Option<std::span<const std::uint8_t>> borrowed) noexcept {
+      [[tbc::generic]] bool writePending(Destination& destination, Observer& observer, ds::Option<std::span<const std::uint8_t>> borrowed) noexcept {
         const auto pending = borrowed ? *borrowed : storage_.bytes().first(write_length_);
         const auto sent = destination.write(pending.subspan(write_offset_));
         if (sent.state == StreamResult::State::blocked) {
@@ -271,7 +268,7 @@ export {
 
       // Hands the observer what the write just finished and moves on to what follows it.
       template <Http1Observer Observer>
-      TBC_GENERIC void finishWrite(Observer& observer, ds::Option<std::span<const std::uint8_t>> borrowed) noexcept {
+      [[tbc::generic]] void finishWrite(Observer& observer, ds::Option<std::span<const std::uint8_t>> borrowed) noexcept {
         const auto pending = borrowed ? *borrowed : storage_.bytes().first(write_length_);
 
         switch (state_) {
@@ -303,7 +300,7 @@ export {
       }
 
       template <Http1Observer Observer>
-      TBC_GENERIC void observeLine(Observer& observer) noexcept {
+      [[tbc::generic]] void observeLine(Observer& observer) noexcept {
         recordLineLimit(observer);
         if constexpr (requires { { observer.chunkLine(std::string_view{}) } noexcept -> std::same_as<void>; }) {
           if (body_stage_ == BodyStage::chunk_size && line_result_ == DelimitedRead::Result::complete) {
@@ -325,7 +322,7 @@ export {
       void finishLine() noexcept;
 
       template <Http1Observer Observer>
-      TBC_GENERIC void recordLineLimit(Observer& observer) noexcept {
+      [[tbc::generic]] void recordLineLimit(Observer& observer) noexcept {
         if (line_result_ == DelimitedRead::Result::too_large) {
           observer.lineTooLong(body_stage_ == BodyStage::trailer ? Http1Line::trailer : Http1Line::chunk_size);
         }
@@ -391,7 +388,7 @@ export {
       // goes on as it is.
       // The slot keeps an allocation of `memory`, region `a`, until the decision is released.
       template <typename Message>
-      TBC_GENERIC bool begin(tbc::mut_a<Memory> memory, traffic::HttpControl& control, traffic::FlowEvent event, const Message& message) {
+      [[tbc::generic]] bool begin(tbc::mut_a<Memory> memory, traffic::HttpControl& control, traffic::FlowEvent event, const Message& message) {
         decision_.emplace(memory, HttpMessageLimits::message_bytes);
         event.bytes = HttpMessageCodec::encodeMessage(decision_.getMut().bytesMut(), message);
         ticket_ = control.interceptHttp(event);
@@ -401,7 +398,7 @@ export {
       // The hook's verdict, once it has one; a replacement is read into `message`, which throws when
       // the hook's bytes are no message.
       template <typename Message>
-      TBC_GENERIC Outcome poll(traffic::HttpControl& control, Message& message) {
+      [[tbc::generic]] Outcome poll(traffic::HttpControl& control, Message& message) {
         const auto decision = control.pollHttp(ticket_, decision_.getMut().bytesMut());
         if (decision.verdict == traffic::Verdict::pending) {
           return Outcome::pending;
@@ -469,7 +466,7 @@ export {
 
       // Generic over the caller's observer.
       template <Http1Observer Observer>
-      struct TBC_GENERIC Observation {
+      struct [[tbc::generic]] Observation {
         Http1InterceptedRelay& relay;
         Observer& next;
 
@@ -574,7 +571,7 @@ export {
 
       // Generic over the caller's destination.
       template <ByteStream Destination>
-      struct TBC_GENERIC Sink {
+      struct [[tbc::generic]] Sink {
         Http1InterceptedRelay& relay;
         Destination& destination;
 
@@ -630,7 +627,7 @@ export {
 
       // Generic over the caller's streams and observer, and called for every read the relay makes.
       template <PeekableByteStream Source, ByteStream Destination, Http1Observer Observer>
-      TBC_GENERIC bool advance(Source& source, Destination& destination, Observer& observer) noexcept {
+      [[tbc::generic]] bool advance(Source& source, Destination& destination, Observer& observer) noexcept {
         if (mode_ == Mode::failed) {
           return false;
         }
@@ -716,7 +713,7 @@ export {
       void readExpectation(bool body);
 
       template <ByteStream Destination>
-      TBC_GENERIC bool flush(Destination& destination) noexcept {
+      [[tbc::generic]] bool flush(Destination& destination) noexcept {
         if (!continue_.remaining().empty()) {
           return false;
         }

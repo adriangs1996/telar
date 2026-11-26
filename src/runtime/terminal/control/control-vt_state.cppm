@@ -1,6 +1,3 @@
-module;
-#include "tbc/annotations.hpp"
-
 export module telar.runtime.terminal.control:vt_state;
 
 import std;
@@ -109,7 +106,7 @@ export namespace telar::runtime::control {
     // A value read once per epoch. Like a Rust `Cell`, reading it through a shared reference may refresh
     // it; it hands out copies only. Generic over the value and the caller's read, so it stays here.
     template <typename Value>
-    class TBC_SHARED TBC_GENERIC Cached {
+    class [[tbc::shared]] [[tbc::generic]] Cached {
     public:
       template <typename Read>
       Value get(std::uint64_t epoch, Read&& read) const {

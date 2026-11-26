@@ -1,6 +1,3 @@
-module;
-#include "tbc/annotations.hpp"
-
 export module telar.gui.foundation.fonts:curve_cache;
 
 import std;
@@ -397,7 +394,7 @@ export {
 
     // Generic over the payload the renderer caches; looked up once per drawn curve glyph.
     template <std::movable Payload>
-    class TBC_GENERIC CurveCache {
+    class [[tbc::generic]] CurveCache {
     public:
       static constexpr std::size_t capacity = 56;
       static constexpr std::uint16_t raster_limit = 256;

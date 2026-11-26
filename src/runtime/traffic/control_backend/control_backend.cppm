@@ -1,6 +1,3 @@
-module;
-#include "tbc/annotations.hpp"
-
 export module telar.runtime.traffic.control_backend;
 
 import std;
@@ -128,7 +125,7 @@ export {
     // Decides intercepted exchanges with the hooks registered for them. Proxy threads offer exchanges and
     // the control thread decides them, at once, under its mutex.
     template <std::size_t maximum_bytes = FlowControl::chunk_bytes>
-    class TBC_SHARED Interception {
+    class [[tbc::shared]] Interception {
       using Secure = ErasingAllocator<ConcurrentMemory>;
       using Owner = std::uint64_t;
 
@@ -213,7 +210,7 @@ export {
 
       // The service queues requests on its own thread, without a lossy cross-thread channel.
       template <typename Consumer>
-      TBC_GENERIC void deliver(Owner owner, Consumer consumer) noexcept {
+      [[tbc::generic]] void deliver(Owner owner, Consumer consumer) noexcept {
         std::scoped_lock lock{mutex_};
 
         for (auto& slot : pending_.viewMut()) {
@@ -310,7 +307,7 @@ export {
     // Only native runtime code can attach a package. Lua never supplies this grant
     // or opens the authenticated endpoint; each registration gets its own channel.
     // Package workers call it from their own threads, so an implementation is synchronized.
-    class TBC_SHARED PackagePort {
+    class [[tbc::shared]] PackagePort {
     public:
       virtual ~PackagePort() = default;
       virtual PackageChannel openPackage(const plugins::ServiceSpec& specification, std::uint32_t registration = 0) = 0;
@@ -362,7 +359,7 @@ export {
     // Recording sessions proxy threads append to and clients page through, under its mutex.
     // Generic over the caller's clock.
     template <typename Clock = std::chrono::steady_clock>
-    class TBC_SHARED TBC_GENERIC Recordings {
+    class [[tbc::shared]] [[tbc::generic]] Recordings {
       using Request = recording::Request;
 
       struct Entry {
@@ -780,7 +777,7 @@ export {
   namespace telar::runtime::traffic {
 
     // The traffic control service: its own thread serves clients while proxy threads report flows to it.
-    class TBC_SHARED Service : public FlowControl, public HttpControl, public PackagePort { // NOLINT(misc-multiple-inheritance): one service is what proxy threads report flows, HTTP and packages to, and the ports' default hooks are what other implementations keep
+    class [[tbc::shared]] Service : public FlowControl, public HttpControl, public PackagePort { // NOLINT(misc-multiple-inheritance): one service is what proxy threads report flows, HTTP and packages to, and the ports' default hooks are what other implementations keep
       using SensitiveMemory = ErasingAllocator<ConcurrentMemory>;
       using Bytes = ds::Vec<Byte, SensitiveMemory>;
       static constexpr std::size_t maximum_peers = (Limits::subscribers * 2) + 1;
@@ -1022,7 +1019,7 @@ export {
 
     // Generic over the caller's proxy.
     template <typename Proxy>
-    class TBC_GENERIC Backend {
+    class [[tbc::generic]] Backend {
       using Clock = std::chrono::steady_clock;
 
       // How long a helper gets to stop or start, and how often it is checked meanwhile.
@@ -1391,7 +1388,7 @@ export {
 
       // Generic over the caller's callback.
       template <typename Predicate>
-      TBC_GENERIC bool wait(Predicate predicate, const std::atomic<bool>& cancelled) {
+      [[tbc::generic]] bool wait(Predicate predicate, const std::atomic<bool>& cancelled) {
         const auto deadline = Clock::now() + helper_timeout;
 
         while (!predicate()) {
@@ -1448,7 +1445,7 @@ export {
     // one bounded request. Closing a client only cancels delivery of its reply.
     // Generic over the caller's handler.
     template <ConcurrentAllocator Memory, typename Handler>
-    class TBC_GENERIC Service : public PackagePort {
+    class [[tbc::generic]] Service : public PackagePort {
       using Clock = std::chrono::steady_clock;
 
       // How long a peer gets to send its request, and to read its reply.

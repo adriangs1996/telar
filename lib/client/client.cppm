@@ -1,5 +1,4 @@
 module;
-#include "tbc/annotations.hpp"
 #include "telar_wire/codecs/telar_annotations.hpp"
 
 export module telar.client;
@@ -357,7 +356,7 @@ export {
       void deinit();
 
       template <typename Message>
-      TBC_GENERIC inline void send(const Message& message) {
+      [[tbc::generic]] inline void send(const Message& message) {
         using Schema = MessageSchema<Message>;
         static_assert(Schema::direction == Direction::client, "Can only send Client Messages");
 
@@ -365,7 +364,7 @@ export {
       }
 
       template <typename Message>
-      TBC_GENERIC inline void send(const Message& message, std::span<Byte> frame_buffer) {
+      [[tbc::generic]] inline void send(const Message& message, std::span<Byte> frame_buffer) {
         static_assert(MessageSchema<Message>::direction == Direction::client, "Can only send Client Messages");
 
         if (frame_buffer.size() < frame_prefix_size) {
@@ -392,7 +391,7 @@ export {
       };
 
       template <std::size_t N>
-      TBC_GENERIC inline void sendFrame(const ds::Array<Byte, N>& payload) TELAR_THROWS(SocketError) {
+      [[tbc::generic]] inline void sendFrame(const ds::Array<Byte, N>& payload) TELAR_THROWS(SocketError) {
         static_assert(N > 0 && N <= max_payload_size, "Invalid runtime frame length");
         ds::Array<Byte, frame_prefix_size + N> frame{};
         std::span<Byte> output = frame.viewMut();

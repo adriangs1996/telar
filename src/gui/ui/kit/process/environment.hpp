@@ -1,6 +1,5 @@
 #pragma once
 
-#include "tbc/annotations.hpp"
 #include "telar_base/ds/values.hpp"
 #include <QByteArray>
 #include <QHash>
@@ -32,7 +31,7 @@ namespace telar::gui::qt {
       return {value.constData(), static_cast<std::size_t>(value.size())};
     }
 
-    struct TBC_SHARED Values {
+    struct [[tbc::shared]] Values {
       QHash<QByteArray, QByteArray> entries;
     };
 

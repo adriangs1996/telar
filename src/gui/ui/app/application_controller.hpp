@@ -372,7 +372,7 @@ namespace telar::gui::qt {
     tbc::val_self<WindowDisplay> display_;
 
     // The theme and font QML reads, built on first read after each configurationChanged.
-    struct TBC_SHARED ThemeCache {
+    struct [[tbc::shared]] ThemeCache {
       ds::Option<QVariantMap> colors;
       ds::Option<QVariantMap> font;
     };

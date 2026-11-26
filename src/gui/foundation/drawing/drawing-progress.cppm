@@ -1,6 +1,3 @@
-module;
-#include "tbc/annotations.hpp"
-
 export module telar.gui.foundation.drawing:progress;
 
 import std;
@@ -29,7 +26,7 @@ export {
       ds::Option<Color> track = ds::none;
 
       template <typename Visitor>
-      TBC_GENERIC void visit(Visitor visitor) const {
+      [[tbc::generic]] void visit(Visitor visitor) const {
         visit(PaintSink::of(visitor));
       }
 
@@ -59,7 +56,7 @@ export {
       bool compact = true;
 
       template <typename Visitor>
-      TBC_GENERIC void visit(Visitor append) const {
+      [[tbc::generic]] void visit(Visitor append) const {
         visit(PaintSink::of(append));
       }
 

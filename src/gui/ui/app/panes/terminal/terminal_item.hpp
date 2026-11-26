@@ -5,7 +5,6 @@ static_assert(true);
 
 #include "foundation/core/memory.hpp"
 #include "foundation/core/wheel_accumulator.hpp"
-#include "tbc/annotations.hpp"
 #include "telar_base/memory/fixed_text.hpp"
 #include "telar_wire/codecs/telar_value_codec.hpp"
 #include "telar_wire/serializers/telar_cells.hpp"
@@ -382,7 +381,7 @@ namespace telar::gui::qt {
     [[nodiscard]] int indexAt(QPointF position) const noexcept;
     [[nodiscard]] application::terminal::copy_mode::CopyPointerInput pointerInput(QPointF position, application::terminal::copy_mode::CopyPointerKind kind, bool left_button = true, std::int32_t rows = 0) const noexcept;
     // The pane, reached through the controller QML owns, which this item knows by address only.
-    [[nodiscard]] TBC_RAW const application::Pane<Memory>* pane() const noexcept;
+    [[nodiscard]] [[tbc::raw]] const application::Pane<Memory>* pane() const noexcept;
     // The first command of the remote session the pane is in, counting the ssh that opened it;
     // past the last command when the pane's shell is its own. Its separators name the host.
     [[nodiscard]] static std::size_t liveSession(const application::Pane<Memory>& pane) noexcept;
@@ -488,7 +487,7 @@ namespace telar::gui::qt {
     int fold_from_ = -1;
     qreal fold_offset_ = 0;
 
-    struct TBC_SHARED DrawnCache {
+    struct [[tbc::shared]] DrawnCache {
       explicit DrawnCache(Memory& memory)
           : spans(memory),
             flags(memory),

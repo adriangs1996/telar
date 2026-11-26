@@ -1,5 +1,4 @@
 module;
-#include "tbc/annotations.hpp"
 
 // One pane's command editor: the line being written or queued, the commands sent from it, and
 // what the owner must do next. It knows nothing of Qt or the transport. Nothing here is exported:
@@ -38,7 +37,7 @@ namespace telar::gui::features::prompt {
 
   // A caller's callable behind Continuation, for the time of one key.
   template <typename Incomplete>
-  class TBC_GENERIC ContinuationOf final : public Continuation {
+  class [[tbc::generic]] ContinuationOf final : public Continuation {
   public:
     explicit ContinuationOf(Incomplete& incomplete) noexcept
         : incomplete_(incomplete) {}
@@ -93,7 +92,7 @@ namespace telar::gui::features::prompt {
     // A key in the editor or the queue. `incomplete` tells whether the shell would wait for more
     // of the command, so Enter continues it on a new line.
     template <typename Incomplete>
-    TBC_GENERIC Outcome press(Surface surface, const KeyPress& key, const Incomplete& incomplete, History history = {}) {
+    [[tbc::generic]] Outcome press(Surface surface, const KeyPress& key, const Incomplete& incomplete, History history = {}) {
       const ContinuationOf<const Incomplete> continuation{incomplete};
 
       return pressKey(surface, key, continuation, history);
@@ -101,7 +100,7 @@ namespace telar::gui::features::prompt {
 
     // A key the user bound to an action; the rest of the line answers it as for any key.
     template <typename Incomplete>
-    TBC_GENERIC Outcome perform(Surface surface, Action action, const Incomplete& incomplete, History history = {}) {
+    [[tbc::generic]] Outcome perform(Surface surface, Action action, const Incomplete& incomplete, History history = {}) {
       const ContinuationOf<const Incomplete> continuation{incomplete};
 
       return performAction(surface, action, continuation, history);

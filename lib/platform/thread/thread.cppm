@@ -1,6 +1,3 @@
-module;
-#include "tbc/annotations.hpp"
-
 export module telar.platform.thread;
 
 import std;
@@ -15,7 +12,7 @@ export {
     // reports. Its owner joins it before anything the body touches goes away. It stays in the
     // interface because it is a template over the caller's body.
     template <typename Body>
-    TBC_GENERIC inline std::jthread startThread(const char* operation, Body&& body) {
+    [[tbc::generic]] inline std::jthread startThread(const char* operation, Body&& body) {
       try {
         return std::jthread{std::forward<Body>(body)};
       } catch (const std::system_error& error) {

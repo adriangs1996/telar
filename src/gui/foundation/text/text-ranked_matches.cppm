@@ -1,6 +1,3 @@
-module;
-#include "tbc/annotations.hpp"
-
 export module telar.gui.foundation.text:ranked_matches;
 
 import std;
@@ -14,7 +11,7 @@ export {
 
     // Generic over the caller's target and capacity, so it stays whole for each importer.
     template <std::semiregular Target, std::size_t Capacity>
-    class TBC_GENERIC RankedMatches {
+    class [[tbc::generic]] RankedMatches {
       static_assert(Capacity > 0);
 
     public:

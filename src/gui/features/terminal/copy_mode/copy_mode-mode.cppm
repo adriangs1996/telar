@@ -1,5 +1,4 @@
 module;
-#include "tbc/annotations.hpp"
 
 // Copy mode's state machine: the keys that move its cursor and the plans it commits. Nothing
 // here is exported: only the feature's own units name it, through State.

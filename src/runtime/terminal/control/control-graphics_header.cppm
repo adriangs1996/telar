@@ -1,6 +1,3 @@
-module;
-#include "tbc/annotations.hpp"
-
 export module telar.runtime.terminal.control:graphics_header;
 
 import std;
@@ -17,7 +14,7 @@ export namespace telar::runtime::control {
     // Generic over the caller's field callback, so it stays here.
     template <typename ProcessField>
       requires requires(ProcessField& process) { { process(std::uint8_t{}, std::string_view{}) } noexcept -> std::same_as<bool>; }
-    TBC_GENERIC static bool scan(std::string_view header, bool has_payload, ProcessField&& process) noexcept {
+    [[tbc::generic]] static bool scan(std::string_view header, bool has_payload, ProcessField&& process) noexcept {
       ScanState state;
       const auto finish = [&] {
         const bool accepted = std::forward<ProcessField>(process)(state.key, state.field());

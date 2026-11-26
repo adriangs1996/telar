@@ -1,5 +1,4 @@
 module;
-#include "tbc/annotations.hpp"
 
 // telar's command editor in each pane: the line being written or queued and the keys that edit
 // it, Tab's completion, whether the shell runs the command being typed, the commands the
@@ -130,84 +129,84 @@ export namespace telar::gui::features::prompt {
   // until a use case changes them. Inline, as a line's view reads it whenever it draws.
   class LineView {
   public:
-    TBC_HOT_PATH inline LineView(tbc::ref_a<Line> line, tbc::val_a<History> history) noexcept
+    [[tbc::hot_path]] inline LineView(tbc::ref_a<Line> line, tbc::val_a<History> history) noexcept
         : line_(&line),
           history_(history) {}
 
-    [[nodiscard]] TBC_HOT_PATH inline tbc::val_a<std::string_view> text() const noexcept {
+    [[nodiscard]] [[tbc::hot_path]] inline tbc::val_a<std::string_view> text() const noexcept {
       return line_->editor().text().view();
     }
 
-    [[nodiscard]] TBC_HOT_PATH inline std::size_t cursor() const noexcept {
+    [[nodiscard]] [[tbc::hot_path]] inline std::size_t cursor() const noexcept {
       return line_->editor().text().cursor();
     }
 
     // The other end of the selection; the cursor without one.
-    [[nodiscard]] TBC_HOT_PATH inline std::size_t anchor() const noexcept {
+    [[nodiscard]] [[tbc::hot_path]] inline std::size_t anchor() const noexcept {
       return line_->editor().text().anchor();
     }
 
     // What vim's visual modes highlight, which is more than the selection; none outside them.
-    [[nodiscard]] TBC_HOT_PATH inline ds::Option<std::pair<std::size_t, std::size_t>> highlight() const noexcept {
+    [[nodiscard]] [[tbc::hot_path]] inline ds::Option<std::pair<std::size_t, std::size_t>> highlight() const noexcept {
       return line_->editor().visualRange();
     }
 
-    [[nodiscard]] TBC_HOT_PATH inline Keymap keymap() const noexcept {
+    [[nodiscard]] [[tbc::hot_path]] inline Keymap keymap() const noexcept {
       return line_->editor().keymap();
     }
 
-    [[nodiscard]] TBC_HOT_PATH inline Mode mode() const noexcept {
+    [[nodiscard]] [[tbc::hot_path]] inline Mode mode() const noexcept {
       return line_->editor().mode();
     }
 
     // An operator or count of vim's waits for the rest of its command.
-    [[nodiscard]] TBC_HOT_PATH inline bool commandPending() const noexcept {
+    [[nodiscard]] [[tbc::hot_path]] inline bool commandPending() const noexcept {
       return line_->editor().pending();
     }
 
     // The command typed while another runs waits for it; Enter arms it to run when that one
     // succeeds.
-    [[nodiscard]] TBC_HOT_PATH inline bool queued() const noexcept {
+    [[nodiscard]] [[tbc::hot_path]] inline bool queued() const noexcept {
       return line_->queued();
     }
 
     // While a program runs, typed lines go to it instead of the queue.
-    [[nodiscard]] TBC_HOT_PATH inline bool answering() const noexcept {
+    [[nodiscard]] [[tbc::hot_path]] inline bool answering() const noexcept {
       return line_->answering();
     }
 
-    [[nodiscard]] TBC_HOT_PATH inline std::uint32_t secretKeys() const noexcept {
+    [[nodiscard]] [[tbc::hot_path]] inline std::uint32_t secretKeys() const noexcept {
       return line_->secretKeys();
     }
 
-    [[nodiscard]] TBC_HOT_PATH inline tbc::ref_a<ds::Option<Menu>> menu() const noexcept {
+    [[nodiscard]] [[tbc::hot_path]] inline tbc::ref_a<ds::Option<Menu>> menu() const noexcept {
       return line_->menu();
     }
 
     // Moves with every change to what the line shows.
-    [[nodiscard]] TBC_HOT_PATH inline std::uint64_t revision() const noexcept {
+    [[nodiscard]] [[tbc::hot_path]] inline std::uint64_t revision() const noexcept {
       return line_->revision();
     }
 
     // The commands sent from this line, oldest first.
-    [[nodiscard]] TBC_HOT_PATH inline tbc::val_a<History> recent() const noexcept {
+    [[nodiscard]] [[tbc::hot_path]] inline tbc::val_a<History> recent() const noexcept {
       return line_->recent();
     }
 
     // Whether the menu still waits for the answer to request `request`.
-    [[nodiscard]] TBC_HOT_PATH inline bool pending(std::uint64_t request) const noexcept {
+    [[nodiscard]] [[tbc::hot_path]] inline bool pending(std::uint64_t request) const noexcept {
       return line_->pending(request);
     }
 
     // The rest of a command this one starts: from what this line sent, then from the history.
     // Only while typing at the end of a line of two characters or more.
-    [[nodiscard]] TBC_HOT_PATH inline tbc::val_a<std::string_view> suggestion() const noexcept {
+    [[nodiscard]] [[tbc::hot_path]] inline tbc::val_a<std::string_view> suggestion() const noexcept {
       return line_->suggestion(history_);
     }
 
     // The same for every view of one line, for a view to tell when the line it shows changed: an
     // address compared, never followed, as Rust's `*const ()`.
-    [[nodiscard]] TBC_HOT_PATH TBC_RAW inline const void* identity() const noexcept {
+    [[nodiscard]] [[tbc::hot_path]] [[tbc::raw]] inline const void* identity() const noexcept {
       return line_;
     }
 
@@ -301,19 +300,19 @@ export namespace telar::gui::features::prompt {
   // Pane `pane_id`'s line, made on first use, in `keymap`.
   [[nodiscard]] tbc::val_a<Opened> open(State& state, tbc::mut_a<Lines> lines, std::uint64_t pane_id, Keymap keymap);
 
-  [[nodiscard]] TBC_HOT_PATH inline PaneLine* find(Lines& lines, std::uint64_t pane_id) noexcept;
+  [[nodiscard]] [[tbc::hot_path]] inline PaneLine* find(Lines& lines, std::uint64_t pane_id) noexcept;
 
-  [[nodiscard]] TBC_HOT_PATH inline tbc::val_a<ds::Option<LineView>> line(tbc::ref_a<State> state, tbc::ref_a<Lines> lines, std::uint64_t pane_id) noexcept;
+  [[nodiscard]] [[tbc::hot_path]] inline tbc::val_a<ds::Option<LineView>> line(tbc::ref_a<State> state, tbc::ref_a<Lines> lines, std::uint64_t pane_id) noexcept;
 
-  [[nodiscard]] TBC_HOT_PATH inline tbc::val_a<LineView> view(tbc::ref_a<State> state, tbc::ref_a<PaneLine> line) noexcept;
+  [[nodiscard]] [[tbc::hot_path]] inline tbc::val_a<LineView> view(tbc::ref_a<State> state, tbc::ref_a<PaneLine> line) noexcept;
 
   // The commands people typed, most recent first and each once, which the suggestions read.
-  [[nodiscard]] TBC_HOT_PATH inline History history(const State& state) noexcept;
+  [[nodiscard]] [[tbc::hot_path]] inline History history(const State& state) noexcept;
 
   // Pane `pane_id` printed now, as `now` reads the clock, only for a pane with a line: a program
   // quiet since may be asking a question.
   template <typename Now>
-  TBC_GENERIC void output(Lines& lines, std::uint64_t pane_id, Now&& now) noexcept;
+  [[tbc::generic]] void output(Lines& lines, std::uint64_t pane_id, Now&& now) noexcept;
 
   // Pane `pane_id` is gone: its line and what it asked for go with it.
   void forget(State& state, Lines& lines, std::uint64_t pane_id) noexcept;
@@ -327,13 +326,13 @@ export namespace telar::gui::features::prompt {
   // would send the next one to the queue. `now` reads the clock, only when the line is empty and
   // no answer is under way.
   template <typename Now>
-  [[nodiscard]] TBC_GENERIC bool toProgram(PaneLine& line, const KeyPress& key, const PaneShell& shell, std::uint32_t cursor_column, Now&& now);
+  [[nodiscard]] [[tbc::generic]] bool toProgram(PaneLine& line, const KeyPress& key, const PaneShell& shell, std::uint32_t cursor_column, Now&& now);
 
   // Whether text an input method committed or a paste reaches the program instead of the queue,
   // as a key would: during an answer, or as its start. Only one line does (oneLine), and a line
   // end after it ends the answer.
   template <typename Now>
-  [[nodiscard]] TBC_GENERIC bool toProgram(PaneLine& line, std::string_view text, std::uint32_t cursor_column, Now&& now);
+  [[nodiscard]] [[tbc::generic]] bool toProgram(PaneLine& line, std::string_view text, std::uint32_t cursor_column, Now&& now);
 
   // How the line reads a key: the bindings of `configuration`, and the `dialect` of the shell that
   // runs the command.
@@ -344,11 +343,11 @@ export namespace telar::gui::features::prompt {
 
   // A key in the line: the action the configuration binds to it in the editor's mode, or the
   // editor's own. Enter continues a command the dialect's shell would read more of.
-  [[nodiscard]] TBC_HOT_PATH inline Outcome press(const State& state, PaneLine& line, Surface surface, const KeyPress& key, KeyReading reading);
+  [[nodiscard]] [[tbc::hot_path]] inline Outcome press(const State& state, PaneLine& line, Surface surface, const KeyPress& key, KeyReading reading);
 
   // What the line hands its owner with `run`, `answer` or `bytes`: the command, the answer or the
   // keys. Valid until the line's next key.
-  [[nodiscard]] TBC_HOT_PATH inline std::string_view delivery(const PaneLine& line) noexcept;
+  [[nodiscard]] [[tbc::hot_path]] inline std::string_view delivery(const PaneLine& line) noexcept;
 
   // `command` ran from a line: every pane's suggestions know it at once, without asking the
   // history again.
@@ -381,7 +380,7 @@ export namespace telar::gui::features::prompt {
   [[nodiscard]] ds::Option<std::uint64_t> takeWrite(State& state) noexcept;
 
   // A key at a secret prompt, `byte` the first it sends: one more dot, or none after an erase.
-  TBC_HOT_PATH inline void typeSecret(PaneLine& line, char byte) noexcept;
+  [[tbc::hot_path]] inline void typeSecret(PaneLine& line, char byte) noexcept;
 
   // The pane's shell went from `previous` to `current` at `now`: a secret prompt ends once it
   // echoes again, and back at its prompt, from a command or from the gap after its end, the
@@ -617,7 +616,7 @@ namespace telar::gui::features::prompt {
   // An answer under way, or a program that seems to ask a question. The echo of each key it
   // takes is output too, so its quiet is only read before the first one.
   template <typename Now>
-  TBC_GENERIC bool answers(const PaneLine& line, std::uint32_t cursor_column, Now&& now) {
+  [[tbc::generic]] bool answers(const PaneLine& line, std::uint32_t cursor_column, Now&& now) {
     if (line.forwarding) {
       return true;
     }

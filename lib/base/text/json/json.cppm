@@ -1,6 +1,3 @@
-module;
-#include "tbc/annotations.hpp"
-
 export module telar.base.text.json;
 
 import std;
@@ -36,7 +33,7 @@ export {
 
       // Each takes the consumer itself, as the lambdas callers pass build it in place.
       template <typename Consumer>
-      TBC_GENERIC void eachElement(Consumer consume) const { // NOLINT(misc-no-recursion): callers recurse through it as deep as maximum_depth_ allows
+      [[tbc::generic]] void eachElement(Consumer consume) const { // NOLINT(misc-no-recursion): callers recurse through it as deep as maximum_depth_ allows
         auto input = bytes_;
 
         for (bool more = enter(input, {.open = '[', .close = ']'}); more; more = advance(input, ']')) {
@@ -48,7 +45,7 @@ export {
       }
 
       template <typename Consumer>
-      TBC_GENERIC void eachMember(Consumer consume) const { // NOLINT(misc-no-recursion): callers recurse through it as deep as maximum_depth_ allows
+      [[tbc::generic]] void eachMember(Consumer consume) const { // NOLINT(misc-no-recursion): callers recurse through it as deep as maximum_depth_ allows
         auto input = bytes_;
 
         for (bool more = enter(input, {.open = '{', .close = '}'}); more; more = advance(input, '}')) {
@@ -115,7 +112,7 @@ export {
     // Passes `text` to `emit` as the inside of a JSON string literal, in pieces: runs of bytes that
     // need no escape, and each escape.
     template <typename Emit>
-    TBC_GENERIC void escapeJson(std::string_view text, JsonEscapes escapes, Emit&& emit) {
+    [[tbc::generic]] void escapeJson(std::string_view text, JsonEscapes escapes, Emit&& emit) {
       constexpr std::string_view hex = "0123456789abcdef";
       constexpr unsigned char first_printable = 0x20;
       constexpr unsigned char delete_byte = 0x7f;
@@ -175,7 +172,7 @@ export {
 
     // Appends `text` to `output` as one JSON string literal, quotes included.
     template <typename Text>
-    TBC_GENERIC void appendJsonText(Text& output, std::string_view text, JsonEscapes escapes = JsonEscapes::standard) {
+    [[tbc::generic]] void appendJsonText(Text& output, std::string_view text, JsonEscapes escapes = JsonEscapes::standard) {
       output.append(std::string_view{"\""});
       escapeJson(text, escapes, [&](std::string_view piece) {
         output.append(piece);
@@ -201,7 +198,7 @@ struct std::formatter<telar::runtime::JsonQuoted, char> {
   }
 
   template <typename Context>
-  TBC_GENERIC tbc::val_a<typename Context::iterator> format(const telar::runtime::JsonQuoted& quoted, tbc::mut_a<Context> context) const {
+  [[tbc::generic]] tbc::val_a<typename Context::iterator> format(const telar::runtime::JsonQuoted& quoted, tbc::mut_a<Context> context) const {
     auto output = context.out();
 
     *output++ = '"';
@@ -228,7 +225,7 @@ export {
   namespace telar::runtime {
 
     template <Allocator Memory, std::size_t Count>
-    class TBC_GENERIC JsonFields {
+    class [[tbc::generic]] JsonFields {
     public:
       // The fields view the object's text and the names, and allocate scratch text, all in region `a`.
       inline explicit JsonFields(tbc::mut_a<Memory> memory, tbc::ref_a<JsonValue> object, tbc::ref_a<ds::Array<std::string_view, Count>> names)

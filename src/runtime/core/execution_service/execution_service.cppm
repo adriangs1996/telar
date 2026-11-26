@@ -1,5 +1,4 @@
 module;
-#include "tbc/annotations.hpp"
 #include "telar_base/diagnostics/config.hpp"
 
 export module telar.runtime.core.execution_service;
@@ -54,7 +53,7 @@ export {
     // Limits the runtime and its clients reach. Any service may report one: a report is copied into a
     // fixed queue, and the runtime delivers the queue once no client is borrowed, recording each limit and
     // showing it to interactive clients. Nothing the service holds moves, so many services keep it.
-    class TBC_SHARED LimitService {
+    class [[tbc::shared]] LimitService {
     public:
       LimitService() = default;
       LimitService(const LimitService&) = delete;
@@ -128,7 +127,7 @@ export {
 
       // Generic over the caller's admission, a callable; the handshake advances in the implementation unit.
       template <typename Admit>
-      TBC_GENERIC inline void event(const Event& event, const Admit& admit) {
+      [[tbc::generic]] inline void event(const Event& event, const Admit& admit) {
         auto descriptor = advance(event);
         if (!descriptor) {
           return;
@@ -223,7 +222,7 @@ export {
     // Generic over the pane type of its caller; an empty observer importers inline away.
     struct IgnorePaneInput {
       template <typename PaneType>
-      TBC_GENERIC inline void operator()(const PaneType& /*pane*/, std::span<const Byte> /*bytes*/) const noexcept {}
+      [[tbc::generic]] inline void operator()(const PaneType& /*pane*/, std::span<const Byte> /*bytes*/) const noexcept {}
     };
 
     // Where a pane launches, and how its terminal and shell start. `bare_prompt`: the client it is
@@ -244,7 +243,7 @@ export {
     // Kept whole: tests instantiate it with their own fake Poller and History (launch_failure_test's
     // FailingPoller and QueuedHistory).
     template <EventLoop Poller, HistoryEventSink History = DiscardedHistory>
-    class TBC_GENERIC PaneService {
+    class [[tbc::generic]] PaneService {
     public:
       // The panes it launches keep the allocator, and the service keeps what it is given, all in region `a`.
       inline explicit PaneService(tbc::mut_a<ConcurrentMemory> memory, tbc::mut_a<Poller> poller, tbc::mut_a<LimitService> limits, tbc::val_a<PaneLaunchOptions> options, tbc::mut_a<History> history = discarded_history) // NOLINT(performance-unnecessary-value-param): taken by value, the label says the views the options hold live in region `a`; a reference would demand it of the options themselves

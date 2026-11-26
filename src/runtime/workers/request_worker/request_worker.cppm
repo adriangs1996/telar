@@ -1,5 +1,4 @@
 module;
-#include "tbc/annotations.hpp"
 #include "telar_base/diagnostics/config.hpp"
 
 export module telar.runtime.workers.request_worker;
@@ -41,13 +40,13 @@ export {
     // The request, the service and the result cross threads only under the mutex: a request is taken
     // when the worker is idle, and its result, which may view the service, is consumed before the next
     // request is accepted. That protocol is audited here, as the unsafe code behind a Rust channel is, so
-    // the worker is TBC_SHARED; callers still see that it keeps what they submit.
+    // the worker is [[tbc::shared]]; callers still see that it keeps what they submit.
     //
     // Kept whole: tests instantiate it with their own fake Service (descent_test's DescentProbe over a
     // GatedLineageInspector).
     template <typename Service>
       requires ObservationService<std::remove_reference_t<Service>>
-    class TBC_SHARED TBC_GENERIC ObservationWorker {
+    class [[tbc::shared]] [[tbc::generic]] ObservationWorker {
       using Request = std::remove_reference_t<Service>::Request;
       using Result = std::remove_reference_t<Service>::Result;
 
@@ -221,7 +220,7 @@ export {
     //
     // Generic over the caller's request, worker and consumer, so it stays whole here.
     template <typename Request>
-    class TBC_GENERIC SerialQueue {
+    class [[tbc::generic]] SerialQueue {
     public:
       inline explicit SerialQueue(ConcurrentMemory& memory)
           : waiting_(memory) {}
@@ -276,7 +275,7 @@ export {
 
     // Generic over the caller's value (RequestWorker's jobs and completions), so it stays whole here.
     template <typename Value, std::size_t Capacity, ConcurrentAllocator Memory>
-    class TBC_GENERIC RequestQueue {
+    class [[tbc::generic]] RequestQueue {
       static_assert(Capacity != 0 && std::is_nothrow_move_constructible_v<Value>);
 
     public:
@@ -396,7 +395,7 @@ export {
     // ControlledHistoryService).
     template <ConcurrentAllocator Memory, typename Service>
       requires RequestService<Service, Memory>
-    class TBC_GENERIC RequestWorker {
+    class [[tbc::generic]] RequestWorker {
     public:
       inline explicit RequestWorker(Memory& memory, Service& service)
           : memory_(memory),

@@ -1,6 +1,3 @@
-module;
-#include "tbc/annotations.hpp"
-
 export module telar.runtime.plugins.tap_configuration;
 
 import std;
@@ -113,7 +110,7 @@ export {
 
     // Generic over the caller's wait, and called for every frame a tap worker exchanges.
     template <PipeWait Wait = BlockingPipeWait>
-    class TBC_GENERIC PipeStream {
+    class [[tbc::generic]] PipeStream {
     public:
       inline explicit PipeStream(PipeEnds ends, Wait wait = {}) noexcept
           : input_(ends.input),
@@ -288,7 +285,7 @@ export {
     public:
       // Generic over the caller's environment.
       template <EnvironmentLookup Environment>
-      TBC_GENERIC explicit TapConfiguration(Memory& memory, std::string_view directory, std::span<const ConfiguredPlugin> configured, const Environment& environment)
+      [[tbc::generic]] explicit TapConfiguration(Memory& memory, std::string_view directory, std::span<const ConfiguredPlugin> configured, const Environment& environment)
           : snapshots_(memory) {
         if (directory.empty()) {
           return;
@@ -333,7 +330,7 @@ export {
 
     private:
       template <EnvironmentLookup Environment>
-      TBC_GENERIC static TrustStore loadTrust(Memory& memory, const Environment& environment) {
+      [[tbc::generic]] static TrustStore loadTrust(Memory& memory, const Environment& environment) {
         return TrustStore::load(memory, Paths::trust(memory, environment));
       }
 

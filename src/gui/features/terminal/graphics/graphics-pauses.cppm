@@ -1,5 +1,4 @@
 module;
-#include "tbc/annotations.hpp"
 
 // The panes whose images are paused after a limit, and when each asks the runtime again.
 // Nothing here is exported: only the feature's own units name it, through State.
@@ -46,19 +45,19 @@ namespace telar::gui::features::terminal::graphics {
     // The callers' callables are erased here so that the work stays in pauses.cpp.
     template <typename Request, typename Notice>
       requires std::invocable<const Request&, std::uint64_t> && std::invocable<const Notice&, std::uint64_t>
-    TBC_GENERIC void pause(std::uint64_t pane_id, std::uint64_t now_ns, const Request& request, const Notice& notice) {
+    [[tbc::generic]] void pause(std::uint64_t pane_id, std::uint64_t now_ns, const Request& request, const Notice& notice) {
       pause(Moment{.pane_id = pane_id, .now_ns = now_ns}, {.request = PaneCall<void>::of(request), .notice = PaneCall<void>::of(notice)});
     }
 
     template <typename Request>
       requires std::invocable<const Request&, std::uint64_t>
-    TBC_GENERIC void resumeDue(std::uint64_t now_ns, const Request& request) {
+    [[tbc::generic]] void resumeDue(std::uint64_t now_ns, const Request& request) {
       resumeDue(now_ns, PaneCall<void>::of(request));
     }
 
     template <typename Request>
       requires std::invocable<const Request&, std::uint64_t>
-    TBC_GENERIC void focus(Moment event, const Request& request) {
+    [[tbc::generic]] void focus(Moment event, const Request& request) {
       focus(event, PaneCall<void>::of(request));
     }
 
@@ -66,7 +65,7 @@ namespace telar::gui::features::terminal::graphics {
 
     template <typename Mirrored>
       requires std::predicate<const Mirrored&, std::uint64_t>
-    TBC_GENERIC void forgetClosed(const Mirrored& mirrored) {
+    [[tbc::generic]] void forgetClosed(const Mirrored& mirrored) {
       forgetClosed(PaneCall<bool>::of(mirrored));
     }
 
@@ -81,7 +80,7 @@ namespace telar::gui::features::terminal::graphics {
 
       // Generic over the caller's callable, so it stays here.
       template <typename Callable>
-      TBC_GENERIC static PaneCall of(const Callable& callable) noexcept {
+      [[tbc::generic]] static PaneCall of(const Callable& callable) noexcept {
         return {
             .context = &callable,
             .call = [](const void* context, std::uint64_t pane_id) -> Result {

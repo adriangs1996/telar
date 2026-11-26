@@ -1,6 +1,3 @@
-module;
-#include "tbc/annotations.hpp"
-
 export module telar.runtime.traffic.tap.exchange;
 
 import std;
@@ -18,7 +15,7 @@ export {
 
     // Threads reserve and release bytes atomically, so a reference to the quota stays valid whatever is
     // done through it.
-    class TBC_SHARED CaptureQuota {
+    class [[tbc::shared]] CaptureQuota {
     public:
       explicit CaptureQuota(std::size_t limit) noexcept;
 
@@ -138,7 +135,7 @@ export {
       template <typename Text>
         requires std::convertible_to<const Text&, std::string_view>
       // Implicit, so that a capture start's designated initializer takes the host's text.
-      TBC_GENERIC inline CaptureHost(const Text& value) noexcept { // NOLINT(cppcoreguidelines-explicit-constructor,misc-explicit-constructor,bugprone-exception-escape): append throws only past the capacity the text is cut to
+      [[tbc::generic]] inline CaptureHost(const Text& value) noexcept { // NOLINT(cppcoreguidelines-explicit-constructor,misc-explicit-constructor,bugprone-exception-escape): append throws only past the capacity the text is cut to
         auto text = std::string_view{value};
 
         oversized_ = text.size() > capacity;

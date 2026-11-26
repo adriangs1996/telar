@@ -1,5 +1,4 @@
 module;
-#include "tbc/annotations.hpp"
 #include "telar_platform/trace_macro.hpp"
 
 export module telar.cli.commands.hooks.session;
@@ -91,10 +90,10 @@ export {
       Session(Memory& memory, const char* socket, PaneTarget target);
 
       // The members generic over the protocol's messages keep their bodies here,
-      // marked TBC_GENERIC: the messages are an open set that no implementation
+      // marked [[tbc::generic]]: the messages are an open set that no implementation
       // unit can instantiate ahead.
       template <typename Report>
-      TBC_GENERIC inline void report(Report value) noexcept {
+      [[tbc::generic]] inline void report(Report value) noexcept {
         try {
           TELAR_TRACE("hooks.sendReport");
           exchange(value);
@@ -105,7 +104,7 @@ export {
       void reportLimit(std::uint64_t received, std::size_t capacity) noexcept;
 
       template <typename Reply = RequestCompleted, typename Report>
-      TBC_GENERIC inline Reply exchange(Report value) {
+      [[tbc::generic]] inline Reply exchange(Report value) {
         if constexpr (requires { value.pane_id; value.pane_generation; }) {
           value.pane_id = target_.pane_id;
           value.pane_generation = target_.generation;

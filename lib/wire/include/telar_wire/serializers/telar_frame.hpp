@@ -139,7 +139,7 @@ namespace telar {
     static void decodeBody(DecodeInput input, tbc::mut_a<TextMetadata> value, DecodeStorage& storage);
 
     template <typename Visitor>
-    TBC_GENERIC static void
+    [[tbc::generic]] static void
     visitFields(const TextMetadata& value, std::span<const Byte>& input, Visitor visitor) {
       const auto take = [&](std::size_t size) {
         const auto bytes = input.first(size);
@@ -308,7 +308,7 @@ namespace telar {
 
     // Generic over the frame message the caller encodes.
     template <typename Frame>
-    TBC_GENERIC static void encodeBody(const Frame& frame, std::span<Byte>& output) {
+    [[tbc::generic]] static void encodeBody(const Frame& frame, std::span<Byte>& output) {
       for (const auto& span : frame.spans) {
         auto reader = span.reader();
 

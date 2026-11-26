@@ -1,5 +1,4 @@
 module;
-#include "tbc/annotations.hpp"
 #include "telar_base/diagnostics/config.hpp"
 
 export module telar.base.text;
@@ -472,7 +471,7 @@ struct std::formatter<telar::runtime::AsciiLower, char> {
   }
 
   template <typename Context>
-  TBC_GENERIC tbc::val_a<typename Context::iterator> format(const telar::runtime::AsciiLower& lower, tbc::mut_a<Context> context) const {
+  [[tbc::generic]] tbc::val_a<typename Context::iterator> format(const telar::runtime::AsciiLower& lower, tbc::mut_a<Context> context) const {
     auto output = context.out();
 
     for (const char character : lower.text) {
@@ -490,7 +489,7 @@ struct std::formatter<telar::runtime::LowerHex, char> {
   }
 
   template <typename Context>
-  TBC_GENERIC tbc::val_a<typename Context::iterator> format(const telar::runtime::LowerHex& hex, tbc::mut_a<Context> context) const {
+  [[tbc::generic]] tbc::val_a<typename Context::iterator> format(const telar::runtime::LowerHex& hex, tbc::mut_a<Context> context) const {
     constexpr std::string_view digits = "0123456789abcdef";
     constexpr unsigned nibble_bits = 4;
     constexpr unsigned nibble_mask = 0x0f;

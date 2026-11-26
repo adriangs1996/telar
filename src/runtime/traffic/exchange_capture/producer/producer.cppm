@@ -1,8 +1,6 @@
 module;
 #include "telar_platform/trace_macro.hpp"
 
-#include "tbc/annotations.hpp"
-
 export module telar.runtime.traffic.exchange_capture.producer;
 
 import std;
@@ -266,7 +264,7 @@ export {
     // Proxy threads start and publish halves while the receiver drains them: the limits are fixed once
     // built, and what changes after is atomic or the synchronized channel, so the halves that borrow its
     // quota stay valid whatever is done through it.
-    class TBC_SHARED CaptureProducer {
+    class [[tbc::shared]] CaptureProducer {
     public:
       using Half = CapturedExchange::Half;
 

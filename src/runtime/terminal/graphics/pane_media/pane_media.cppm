@@ -1,5 +1,4 @@
 module;
-#include "tbc/annotations.hpp"
 
 #include "telar_base/diagnostics/config.hpp"
 
@@ -257,11 +256,11 @@ export {
 
       GraphicsUploadLimits::Reached takeUploadLimits() noexcept;
 
-      [[nodiscard]] TBC_HOT_PATH inline const GraphicsStorage<telar::runtime::MediaAllocator<ConcurrentMemory>>& graphics() const noexcept {
+      [[nodiscard]] [[tbc::hot_path]] inline const GraphicsStorage<telar::runtime::MediaAllocator<ConcurrentMemory>>& graphics() const noexcept {
         return graphics_;
       }
 
-      TBC_HOT_PATH inline GraphicsStorage<telar::runtime::MediaAllocator<ConcurrentMemory>>& graphicsMut() noexcept {
+      [[tbc::hot_path]] inline GraphicsStorage<telar::runtime::MediaAllocator<ConcurrentMemory>>& graphicsMut() noexcept {
         return graphics_;
       }
 
@@ -357,7 +356,7 @@ export {
     // images and the transfer requests, and the runtime reaches them only while the media is not
     // busy. The request queue's mutex orders each handover; only the runtime seals, completes and
     // cancels.
-    class TBC_SHARED PaneMedia final : public TerminalMedia {
+    class [[tbc::shared]] PaneMedia final : public TerminalMedia {
     public:
       using AllocatedMemory = MediaAllocator<ConcurrentMemory>;
 
@@ -408,7 +407,7 @@ export {
 
       // Generic over the caller's predicate, so it stays here.
       template <typename Consumer>
-      TBC_GENERIC inline void discardUnwantedTransfers(const Consumer& wanted) noexcept {
+      [[tbc::generic]] inline void discardUnwantedTransfers(const Consumer& wanted) noexcept {
         prepared_.discardUnwanted(wanted);
         requests_.discardUnwanted(wanted);
       }
@@ -420,7 +419,7 @@ export {
       std::uint64_t takeDroppedBytes() noexcept;
 
       // The next media of the retired list this one is on.
-      TBC_HOT_PATH inline std::shared_ptr<PaneMedia>& retiredNextMut() noexcept {
+      [[tbc::hot_path]] inline std::shared_ptr<PaneMedia>& retiredNextMut() noexcept {
         return retired_next_;
       }
 

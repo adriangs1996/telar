@@ -1,6 +1,3 @@
-module;
-#include "tbc/annotations.hpp"
-
 export module telar.runtime.host.name_resolutions;
 
 import std;
@@ -45,7 +42,7 @@ export {
 
     // Kept whole: tests instantiate it with their own fake Resolver (proxy_resolution_test's BlockingNameResolver).
     template <HostnameResolver Resolver>
-    class TBC_GENERIC NameResolutions {
+    class [[tbc::generic]] NameResolutions {
     public:
       static constexpr std::size_t capacity = 64;
       static constexpr std::size_t maximum_addresses = 32;
@@ -72,7 +69,7 @@ export {
 
       static constexpr std::size_t maximum_subscribers = 128;
 
-      struct TBC_SHARED State {
+      struct [[tbc::shared]] State {
         pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
         ds::Array<Row, capacity> rows;
         ds::Array<CompletionSignal*, maximum_subscribers> subscribers{};

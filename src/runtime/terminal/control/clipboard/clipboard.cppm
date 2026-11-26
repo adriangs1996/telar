@@ -1,6 +1,3 @@
-module;
-#include "tbc/annotations.hpp"
-
 export module telar.runtime.terminal.control.clipboard;
 
 import std;
@@ -224,7 +221,7 @@ export namespace telar::runtime::control {
 
     // Generic over the caller's response sink, so it stays here.
     template <typename Sink>
-    TBC_GENERIC bool publish(Sink& sink) {
+    [[tbc::generic]] bool publish(Sink& sink) {
       while (replies_.count != 0) {
         auto& reply = replies_.replies.atMut(replies_.head);
         if (!reply.publish(sink)) {

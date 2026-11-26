@@ -1,5 +1,4 @@
 module;
-#include "tbc/annotations.hpp"
 
 // The tabs and panes the user works in: which tab comes next, where focus goes, how the panes of a
 // tab share its area, the layout each workspace and tab was left with and restores, and what a
@@ -67,7 +66,7 @@ export namespace telar::gui::features::workbench {
   // ---- the area the panes share -------------------------------------------------------------
 
   // Where the panes go on the window and how many cells they have; read every frame.
-  [[nodiscard]] TBC_HOT_PATH inline const WorkbenchGeometry& geometry(const State& state) noexcept;
+  [[nodiscard]] [[tbc::hot_path]] inline const WorkbenchGeometry& geometry(const State& state) noexcept;
 
   // The window gave the panes `geometry`; true when it changed.
   [[nodiscard]] bool place(State& state, WorkbenchGeometry geometry) noexcept;
@@ -105,10 +104,10 @@ export namespace telar::gui::features::workbench {
 
   // The tab at `location`, if the session holds it. The session's own lookup, which ui makes
   // every frame for the active tab.
-  [[nodiscard]] TBC_HOT_PATH inline const Tab<Memory>* find(Tabs tabs, TabLocation location) noexcept;
+  [[nodiscard]] [[tbc::hot_path]] inline const Tab<Memory>* find(Tabs tabs, TabLocation location) noexcept;
 
   // The same tab, to change it.
-  [[nodiscard]] TBC_HOT_PATH inline Tab<Memory>* findMut(std::span<ds::Box<Tab<Memory>, Memory>> tabs, TabLocation location) noexcept;
+  [[nodiscard]] [[tbc::hot_path]] inline Tab<Memory>* findMut(std::span<ds::Box<Tab<Memory>, Memory>> tabs, TabLocation location) noexcept;
 
   // The tab at `index` in the order the workspace of `active` shows its tabs.
   [[nodiscard]] ds::Option<TabLocation> tabAt(Tabs tabs, ds::Option<TabLocation> active, std::size_t index) noexcept;
@@ -220,7 +219,7 @@ namespace telar::gui::features::workbench {
   }
 
   template <typename Visit>
-  TBC_GENERIC void arrange(const State& state, Tab<Memory>& tab, Visit visit) {
+  [[tbc::generic]] void arrange(const State& state, Tab<Memory>& tab, Visit visit) {
     const auto& geometry = Access::geometry(state);
     const auto fullscreen = tab.fullscreen ? ds::Option{tab.focused_pane} : ds::none;
     const auto placements = tab.layout.arrange(geometry.cellArea(), geometry.layout_metrics, fullscreen);
@@ -233,7 +232,7 @@ namespace telar::gui::features::workbench {
   }
 
   template <typename Focus>
-  TBC_GENERIC void restore(State& state, Tab<Memory>& tab, Focus&& focus) {
+  [[tbc::generic]] void restore(State& state, Tab<Memory>& tab, Focus&& focus) {
     auto& restoring = Access::restoring(state);
     auto& saved_layouts = Access::saved(state);
 

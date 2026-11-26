@@ -1,6 +1,5 @@
 #pragma once
 
-#include "tbc/annotations.hpp"
 #include "tbc/view.hpp"
 #include "telar_base/diagnostics/config.hpp"
 #include "telar_base/ds/values.hpp"
@@ -28,7 +27,7 @@ namespace telar::ds {
   // Allocates bytes for a container, which throws where the allocator fails, as Rust's allocation
   // failure aborts rather than returning null.
   template <Allocator Memory>
-  TBC_GENERIC void* allocateBytes(Memory& memory, std::size_t size, std::size_t alignment) {
+  [[tbc::generic]] void* allocateBytes(Memory& memory, std::size_t size, std::size_t alignment) {
     auto* storage = memory.allocate(size, alignment);
     if (storage == nullptr) {
       throw std::bad_alloc{};
@@ -43,7 +42,7 @@ namespace telar::ds {
   // `getMut` the mutable one. Moving it moves the pointer, so what borrows the value outlives the
   // Box's moves, as a Vec of them growing.
   template <typename Value, Allocator Memory>
-  class TBC_OWNER TBC_GENERIC Box {
+  class [[tbc::owner]] [[tbc::generic]] Box {
   public:
     using element_type = Value;
 
@@ -153,7 +152,7 @@ namespace telar::ds {
   // A Box holding the Value its arguments construct, in `memory`; it keeps what Value's constructor
   // keeps of them, and the allocator.
   template <typename Value, Allocator Memory, typename... Arguments>
-  TBC_CONSTRUCTS TBC_GENERIC Box<Value, Memory> makeBox(Memory& memory, Arguments&&... arguments) {
+  [[tbc::constructs]] [[tbc::generic]] Box<Value, Memory> makeBox(Memory& memory, Arguments&&... arguments) {
     auto* value = static_cast<Value*>(allocateBytes(memory, sizeof(Value), alignof(Value)));
 
     try {
@@ -169,7 +168,7 @@ namespace telar::ds {
   // The `count` values at `storage` as a span. The containers below keep their storage as a pointer
   // and count how many values it holds, so this is where their bounds meet the pointer.
   template <typename Value>
-  TBC_HOT_PATH inline std::span<Value> spanOver(Value* storage, std::size_t count) noexcept {
+  [[tbc::hot_path]] inline std::span<Value> spanOver(Value* storage, std::size_t count) noexcept {
     // Every caller passes the count of values its storage holds.
 #pragma clang unsafe_buffer_usage begin
     return {storage, count};
@@ -178,7 +177,7 @@ namespace telar::ds {
 
   // The high and low halves of a 128-bit product folded together: every bit of either factor
   // reaches every bit of the result, as wyhash and rapidhash mix.
-  TBC_HOT_PATH inline std::uint64_t mix(std::uint64_t left, std::uint64_t right) noexcept {
+  [[tbc::hot_path]] inline std::uint64_t mix(std::uint64_t left, std::uint64_t right) noexcept {
     constexpr std::size_t half_bits = 64;
     const auto product = static_cast<unsigned __int128>(left) * right;
 
@@ -188,7 +187,7 @@ namespace telar::ds {
   // The word the first bytes of `bytes` hold, in the machine's order; a constant-size copy, which
   // compiles to one load.
   template <std::unsigned_integral Word, typename Byte>
-  TBC_HOT_PATH inline Word readWord(std::span<const Byte> bytes) noexcept {
+  [[tbc::hot_path]] inline Word readWord(std::span<const Byte> bytes) noexcept {
     Word word = 0;
 
     std::ranges::copy(std::as_bytes(bytes.first(sizeof(Word))), std::as_writable_bytes(std::span{&word, 1}).begin());
@@ -196,21 +195,21 @@ namespace telar::ds {
   }
 
   template <std::unsigned_integral Word>
-  TBC_HOT_PATH inline void writeWord(std::span<char> target, Word word) noexcept {
+  [[tbc::hot_path]] inline void writeWord(std::span<char> target, Word word) noexcept {
     std::ranges::copy(std::as_bytes(std::span{&word, 1}), std::as_writable_bytes(target.first(sizeof(Word))).begin());
   }
 
-  TBC_HOT_PATH inline std::uint64_t read64(std::span<const char> bytes) noexcept {
+  [[tbc::hot_path]] inline std::uint64_t read64(std::span<const char> bytes) noexcept {
     return readWord<std::uint64_t>(bytes);
   }
 
-  TBC_HOT_PATH inline std::uint64_t read32(std::span<const char> bytes) noexcept {
+  [[tbc::hot_path]] inline std::uint64_t read32(std::span<const char> bytes) noexcept {
     return readWord<std::uint32_t>(bytes);
   }
 
   // Copies up to 23 bytes, as an inline String holds, with overlapping word moves rather than a call
   // to memcpy, which costs more than the copy at these sizes. `target` has room for all of `source`.
-  TBC_HOT_PATH inline void copyShort(std::span<char> target, std::span<const char> source) noexcept {
+  [[tbc::hot_path]] inline void copyShort(std::span<char> target, std::span<const char> source) noexcept {
     constexpr std::size_t long_word = sizeof(std::uint64_t);
     constexpr std::size_t short_word = sizeof(std::uint32_t);
     const auto count = source.size();
@@ -249,14 +248,14 @@ namespace telar::ds {
   // hashes per process and keys cannot be chosen ahead of time to collide.
   inline constexpr char hash_anchor = 0;
 
-  TBC_HOT_PATH inline std::uint64_t hashSeed() noexcept {
+  [[tbc::hot_path]] inline std::uint64_t hashSeed() noexcept {
     return hash_secrets[0] ^ std::bit_cast<std::uintptr_t>(&hash_anchor);
   }
 
   // Eight control bytes of a Map read as one word, as abseil's portable group. A full slot's byte is
   // seven bits of its key's hash; an empty or removed slot's has the top bit set, and so does the
   // sentinel that ends iteration.
-  struct TBC_HOT_PATH Group {
+  struct [[tbc::hot_path]] Group {
     static_assert(std::endian::native == std::endian::little, "a slot's byte is the word's byte of the same rank");
 
     static constexpr std::size_t width = 8;
@@ -336,7 +335,7 @@ namespace telar::ds {
   // where they can. The value type may be incomplete where a Vec of it is declared, as a tree's node
   // holds a Vec of nodes; it is checked where a Vec is destroyed.
   template <typename Value, Allocator Memory>
-  class TBC_GENERIC Vec {
+  class [[tbc::generic]] Vec {
   public:
     explicit Vec(tbc::mut_a<Memory> memory) noexcept
         : memory_(&memory) {}
@@ -795,7 +794,7 @@ namespace telar::ds {
   // keeps no pointer into itself, so containers relocate it as its bytes. Copying allocates, so it is
   // explicit (`clone`).
   template <Allocator Memory>
-  class TBC_GENERIC String {
+  class [[tbc::generic]] String {
   public:
     using trivially_relocatable = String;
 
@@ -1297,7 +1296,7 @@ namespace telar::ds {
   // A hash for Map keys: integers, enumerations, pointers and text, mixed so that the low bits a
   // table indexes by depend on every bit of the key, and seeded per process. Text hashes as wyhash
   // does: overlapping words for short text, three lanes of 16 bytes for long.
-  struct TBC_HOT_PATH Hash {
+  struct [[tbc::hot_path]] Hash {
     template <typename Key>
       requires(std::is_integral_v<Key> || std::is_enum_v<Key> || std::is_pointer_v<Key>)
     [[nodiscard]] std::uint64_t operator()(Key key) const noexcept {
@@ -1384,7 +1383,7 @@ namespace telar::ds {
   // them, and as bytes where they can. Copying allocates, so it is explicit (`clone`).
   template <typename Key, typename Value, Allocator Memory, typename Hasher = Hash>
     requires(std::is_nothrow_move_constructible_v<Key> && std::is_nothrow_move_constructible_v<Value> && std::is_nothrow_invocable_r_v<std::uint64_t, Hasher, KeyLookup<Key>>)
-  class TBC_GENERIC Map {
+  class [[tbc::generic]] Map {
     using Lookup = KeyLookup<Key>;
 
   public:
@@ -1933,7 +1932,7 @@ namespace telar::ds {
   // bytes, aligned past a pointer, or whose move can throw does not convert. A call may mutate the
   // callable, as an `FnMut`'s does, so it is not const. Calling an empty Function traps.
   template <typename Result, typename... Arguments, std::size_t Capacity>
-  class TBC_GENERIC Function<Result(Arguments...), Capacity> {
+  class [[tbc::generic]] Function<Result(Arguments...), Capacity> {
     // Scalars pass to the callable by value, in registers, and the rest by reference, as libc++'s
     // std::function passes them.
     template <typename Argument>

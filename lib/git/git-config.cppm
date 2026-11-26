@@ -1,6 +1,3 @@
-module;
-#include "tbc/annotations.hpp"
-
 export module telar.git:config;
 
 import std;
@@ -26,7 +23,7 @@ namespace telar::git {
   // malformed line, as git refuses such a file. `scratch` holds the unescaped
   // subsection and value; it grows once to twice the file size.
   template <Allocator Memory, typename Visitor>
-  TBC_GENERIC bool parseConfig(std::string_view text, ds::String<Memory>& scratch, Visitor&& visit) {
+  [[tbc::generic]] bool parseConfig(std::string_view text, ds::String<Memory>& scratch, Visitor&& visit) {
     // Stays generic over the caller's visitor, which the parser calls through a function pointer.
     using Target = std::remove_reference_t<Visitor>;
 

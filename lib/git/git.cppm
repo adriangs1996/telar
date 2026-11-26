@@ -1,6 +1,3 @@
-module;
-#include "tbc/annotations.hpp"
-
 export module telar.git;
 
 import std;
@@ -178,7 +175,7 @@ export namespace telar::git {
 
     // The remotes the repository's config names, from the last read().
     template <typename Visit>
-    TBC_GENERIC void remotes(Visit&& visit) noexcept {
+    [[tbc::generic]] void remotes(Visit&& visit) noexcept {
       // Stays generic over the caller's visitor, which the reader calls through a function pointer.
       using Target = std::remove_reference_t<Visit>;
 
@@ -196,19 +193,19 @@ export namespace telar::git {
     // then packed ones, each a valid ref name, at most `limit` of them, a name possibly twice.
     // Reads only what it lists; nothing is followed out of the git directory.
     template <typename Visit>
-    TBC_GENERIC void branches(std::size_t limit, Visit&& visit) const noexcept {
+    [[tbc::generic]] void branches(std::size_t limit, Visit&& visit) const noexcept {
       references("refs/heads", limit, std::forward<Visit>(visit));
     }
 
     // The remote-tracking branches, as remote/branch, the same way; a remote's HEAD is not one.
     template <typename Visit>
-    TBC_GENERIC void remoteBranches(std::size_t limit, Visit&& visit) const noexcept {
+    [[tbc::generic]] void remoteBranches(std::size_t limit, Visit&& visit) const noexcept {
       references("refs/remotes", limit, std::forward<Visit>(visit));
     }
 
     // The tags, the same way.
     template <typename Visit>
-    TBC_GENERIC void tags(std::size_t limit, Visit&& visit) const noexcept {
+    [[tbc::generic]] void tags(std::size_t limit, Visit&& visit) const noexcept {
       references("refs/tags", limit, std::forward<Visit>(visit));
     }
 
@@ -224,7 +221,7 @@ export namespace telar::git {
 
     // The refs under `space` (refs/heads, refs/remotes or refs/tags), named without it.
     template <typename Visit>
-    TBC_GENERIC void references(std::string_view space, std::size_t limit, Visit&& visit) const noexcept {
+    [[tbc::generic]] void references(std::string_view space, std::size_t limit, Visit&& visit) const noexcept {
       // Stays generic over the caller's visitor, which the reader calls through a function pointer.
       using Target = std::remove_reference_t<Visit>;
 

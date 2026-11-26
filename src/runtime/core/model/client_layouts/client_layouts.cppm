@@ -1,5 +1,4 @@
 module;
-#include "tbc/annotations.hpp"
 #include "telar_base/diagnostics/config.hpp"
 
 export module telar.runtime.core.model.client_layouts;
@@ -292,7 +291,7 @@ export {
       // syscall result consumes the admitted prefix; EINTR/EAGAIN retain it.
       // Generic over the caller's writer: control_desktop_test passes its own.
       template <typename WriteResponses = ResponseWriter>
-      TBC_GENERIC inline void write(WriteResponses write_responses = {}) {
+      [[tbc::generic]] inline void write(WriteResponses write_responses = {}) {
         const auto batch = pty_responses->peekBatch();
         const bool response = batch.count != 0;
         const auto bytes = input.readable();
@@ -547,12 +546,12 @@ export {
 
       // The body of the kind `Body` names; null when the pane is of another kind.
       template <typename Body>
-      TBC_GENERIC [[nodiscard]] inline const Body* as() const noexcept {
+      [[tbc::generic]] [[nodiscard]] inline const Body* as() const noexcept {
         return std::get_if<Body>(&body);
       }
 
       template <typename Body>
-      TBC_GENERIC [[nodiscard]] inline Body* asMut() noexcept {
+      [[tbc::generic]] [[nodiscard]] inline Body* asMut() noexcept {
         return std::get_if<Body>(&body);
       }
 
@@ -623,7 +622,7 @@ export {
       Body& body;
 
       // As a reference to a value is also one to the value unchanged.
-      TBC_HOT_PATH [[nodiscard]] inline operator PaneRef<const Body>() const noexcept // NOLINT(cppcoreguidelines-explicit-constructor,misc-explicit-constructor): as T& is a const T&
+      [[tbc::hot_path]] [[nodiscard]] inline operator PaneRef<const Body>() const noexcept // NOLINT(cppcoreguidelines-explicit-constructor,misc-explicit-constructor): as T& is a const T&
         requires(!std::is_const_v<Body>)
       {
         return {.core = core, .body = body};
@@ -634,7 +633,7 @@ export {
     // for does not compile, so a new kind is decided at every visit; the assertion says where to
     // add one.
     template <typename Visitor>
-    TBC_GENERIC inline void visitPane(Pane& pane, Visitor&& visitor) {
+    [[tbc::generic]] inline void visitPane(Pane& pane, Visitor&& visitor) {
       static_assert(std::variant_size_v<decltype(pane.body)> == 3, "a new kind of pane is visited here");
 
       if (auto* terminal = std::get_if<TerminalBody>(&pane.body)) {
@@ -653,7 +652,7 @@ export {
     }
 
     template <typename Visitor>
-    TBC_GENERIC inline void visitPane(const Pane& pane, Visitor&& visitor) {
+    [[tbc::generic]] inline void visitPane(const Pane& pane, Visitor&& visitor) {
       static_assert(std::variant_size_v<decltype(pane.body)> == 3, "a new kind of pane is visited here");
 
       if (const auto* terminal = std::get_if<TerminalBody>(&pane.body)) {
@@ -674,7 +673,7 @@ export {
     // Calls `visitor` with the pane as the kind it is, for what works on a kind's state and on
     // the pane's.
     template <typename Visitor>
-    TBC_GENERIC inline void visitPaneAs(Pane& pane, Visitor&& visitor) {
+    [[tbc::generic]] inline void visitPaneAs(Pane& pane, Visitor&& visitor) {
       visitPane(pane, [&]<typename Body>(Body& body) {
         std::forward<Visitor>(visitor)(PaneRef<Body>{.core = pane, .body = body});
       });
@@ -682,7 +681,7 @@ export {
 
     // The pane as the kind `Body` names; none for no pane and for a pane of another kind.
     template <typename Body>
-    TBC_HOT_PATH [[nodiscard]] inline tbc::val_a<ds::Option<PaneRef<Body>>> paneAs(tbc::val_a<Pane*> pane) noexcept {
+    [[tbc::hot_path]] [[nodiscard]] inline tbc::val_a<ds::Option<PaneRef<Body>>> paneAs(tbc::val_a<Pane*> pane) noexcept {
       if (pane == nullptr) {
         return {};
       }
@@ -696,7 +695,7 @@ export {
     }
 
     template <typename Body>
-    TBC_HOT_PATH [[nodiscard]] inline tbc::val_a<ds::Option<PaneRef<const Body>>> paneAs(tbc::val_a<const Pane*> pane) noexcept {
+    [[tbc::hot_path]] [[nodiscard]] inline tbc::val_a<ds::Option<PaneRef<const Body>>> paneAs(tbc::val_a<const Pane*> pane) noexcept {
       if (pane == nullptr) {
         return {};
       }
@@ -710,29 +709,29 @@ export {
     }
 
     // The terminal a pane is; none for no pane and for a pane of another kind.
-    TBC_HOT_PATH [[nodiscard]] inline tbc::val_a<ds::Option<PaneRef<TerminalBody>>> asTerminal(tbc::val_a<Pane*> pane) noexcept {
+    [[tbc::hot_path]] [[nodiscard]] inline tbc::val_a<ds::Option<PaneRef<TerminalBody>>> asTerminal(tbc::val_a<Pane*> pane) noexcept {
       return paneAs<TerminalBody>(pane);
     }
 
-    TBC_HOT_PATH [[nodiscard]] inline tbc::val_a<ds::Option<PaneRef<const TerminalBody>>> asTerminal(tbc::val_a<const Pane*> pane) noexcept {
+    [[tbc::hot_path]] [[nodiscard]] inline tbc::val_a<ds::Option<PaneRef<const TerminalBody>>> asTerminal(tbc::val_a<const Pane*> pane) noexcept {
       return paneAs<TerminalBody>(pane);
     }
 
     // The editor a pane is; none for no pane and for a pane of another kind.
-    TBC_HOT_PATH [[nodiscard]] inline tbc::val_a<ds::Option<PaneRef<NvimBody>>> asNvim(tbc::val_a<Pane*> pane) noexcept {
+    [[tbc::hot_path]] [[nodiscard]] inline tbc::val_a<ds::Option<PaneRef<NvimBody>>> asNvim(tbc::val_a<Pane*> pane) noexcept {
       return paneAs<NvimBody>(pane);
     }
 
-    TBC_HOT_PATH [[nodiscard]] inline tbc::val_a<ds::Option<PaneRef<const NvimBody>>> asNvim(tbc::val_a<const Pane*> pane) noexcept {
+    [[tbc::hot_path]] [[nodiscard]] inline tbc::val_a<ds::Option<PaneRef<const NvimBody>>> asNvim(tbc::val_a<const Pane*> pane) noexcept {
       return paneAs<NvimBody>(pane);
     }
 
     // The explorer a pane is; none for no pane and for a pane of another kind.
-    TBC_HOT_PATH [[nodiscard]] inline tbc::val_a<ds::Option<PaneRef<ExplorerBody>>> asExplorer(tbc::val_a<Pane*> pane) noexcept {
+    [[tbc::hot_path]] [[nodiscard]] inline tbc::val_a<ds::Option<PaneRef<ExplorerBody>>> asExplorer(tbc::val_a<Pane*> pane) noexcept {
       return paneAs<ExplorerBody>(pane);
     }
 
-    TBC_HOT_PATH [[nodiscard]] inline tbc::val_a<ds::Option<PaneRef<const ExplorerBody>>> asExplorer(tbc::val_a<const Pane*> pane) noexcept {
+    [[tbc::hot_path]] [[nodiscard]] inline tbc::val_a<ds::Option<PaneRef<const ExplorerBody>>> asExplorer(tbc::val_a<const Pane*> pane) noexcept {
       return paneAs<ExplorerBody>(pane);
     }
 
@@ -923,7 +922,7 @@ export {
     // Generic over the caller's predicate and sender, and run for every message sent to all clients. Takes
     // both themselves, as the lambdas callers pass build them in place.
     template <typename Admits, typename Send>
-    TBC_GENERIC inline void deliver(ClientStore& clients, Admits admits, Send send) noexcept {
+    [[tbc::generic]] inline void deliver(ClientStore& clients, Admits admits, Send send) noexcept {
       for (auto* client : clients.items()) {
         if (client == nullptr || client->connection.flags().closing || !admits(*client)) {
           continue;
@@ -940,7 +939,7 @@ export {
     // Sends `message` to each open client `admits` accepts, as deliver does; how many queued it.
     // Generic over the caller's predicate and message, as deliver.
     template <typename Admits, typename Message>
-    TBC_GENERIC inline std::size_t broadcast(ClientStore& clients, Admits admits, const Message& message) noexcept {
+    [[tbc::generic]] inline std::size_t broadcast(ClientStore& clients, Admits admits, const Message& message) noexcept {
       std::size_t delivered = 0;
 
       deliver(clients, admits, [&](ClientSession& client) {
@@ -1049,7 +1048,7 @@ export {
       // Generic over the caller's consumer, which each record is handed to. Takes the consumer itself, as
       // the lambda callers pass builds it in place.
       template <typename Consumer>
-      TBC_GENERIC inline void exportRecords(const RuntimeModel& model, Consumer consume) const {
+      [[tbc::generic]] inline void exportRecords(const RuntimeModel& model, Consumer consume) const {
         ds::Array<ClientTabLayout, maximum_tabs> tabs;
 
         for (const auto& record : records_) {

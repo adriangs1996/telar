@@ -2,13 +2,11 @@
 #define TELAR_RUNTIME_OPEN_DIRECTORY_H
 
 #ifdef __cplusplus
-#include "tbc/annotations.hpp"
-
 extern "C" {
 #endif
 
 #ifdef __cplusplus
-TBC_RAW
+[[tbc::raw]]
 #endif
 int telarOpenDirectoryNoFollow(const char* path);
 

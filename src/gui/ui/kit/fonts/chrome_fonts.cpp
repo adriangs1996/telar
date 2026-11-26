@@ -6,7 +6,6 @@ static_assert(true);
 #include "chrome_fonts.hpp"
 #include "font_source.hpp"
 #include "foundation/core/memory.hpp"
-#include "tbc/annotations.hpp"
 #include "telar_base/ds/containers.hpp"
 #include <QByteArray>
 #include <QtCore/qstringliteral.h>
@@ -58,7 +57,7 @@ namespace telar::gui::qt {
   }
 
   std::shared_ptr<ChromeFonts> ChromeFonts::shared() {
-    struct TBC_SHARED Cache {
+    struct [[tbc::shared]] Cache {
       std::weak_ptr<ChromeFonts> fonts;
     };
 

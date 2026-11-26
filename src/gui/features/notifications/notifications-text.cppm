@@ -1,5 +1,4 @@
 module;
-#include "tbc/annotations.hpp"
 
 // A notice's message wrapped to the lines a card shows, the last one shortened to fit.
 export module telar.gui.features.notifications:text;
@@ -27,7 +26,7 @@ export {
       // The lines view the wrapped text, region `a`, but for a shortened last line, which the text owns.
       // Stays here: generic over the caller's measure, which the wrapping calls through a function pointer.
       template <LabelMeasure Measure>
-      TBC_GENERIC void wrap(tbc::val_a<std::string_view> text, float width, Measure& measure) {
+      [[tbc::generic]] void wrap(tbc::val_a<std::string_view> text, float width, Measure& measure) {
         auto call = [&measure](std::string_view part) -> float {
           return measure(part);
         };

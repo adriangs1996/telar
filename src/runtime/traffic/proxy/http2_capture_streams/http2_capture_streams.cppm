@@ -1,5 +1,4 @@
 module;
-#include "tbc/annotations.hpp"
 #include "telar_platform/trace_macro.hpp"
 
 export module telar.runtime.traffic.proxy.http2_capture_streams;
@@ -175,7 +174,7 @@ export {
     };
 
     // Every counter is atomic, so a reference to them stays valid whatever any thread records.
-    class TBC_SHARED ProxyCounters {
+    class [[tbc::shared]] ProxyCounters {
     public:
       static constexpr auto capacity = static_cast<std::size_t>(ProxyCounter::count);
       static constexpr ds::Array<std::string_view, capacity> names = {
@@ -225,7 +224,7 @@ export {
 
     // Generic over the caller's resolver.
     template <Allocator Memory, HostnameResolver Resolver>
-    class TBC_GENERIC ConnectHandshake {
+    class [[tbc::generic]] ConnectHandshake {
     public:
       using Time = ProxyConnectionPolicy::Time;
 
@@ -598,7 +597,7 @@ export {
 
     // Generic over the caller's clock.
     template <CaptureClock Clock = CaptureWallClock>
-    class TBC_GENERIC Http2CaptureStreams {
+    class [[tbc::generic]] Http2CaptureStreams {
     public:
       inline explicit Http2CaptureStreams(CaptureProducer* producer, ProxyCounters& counters, CaptureStart context, CaptureSide side) noexcept
           : producer_(producer),

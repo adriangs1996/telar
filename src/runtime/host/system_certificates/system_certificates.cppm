@@ -1,6 +1,3 @@
-module;
-#include "tbc/annotations.hpp"
-
 export module telar.runtime.host.system_certificates;
 
 import std;
@@ -35,7 +32,7 @@ export {
     public:
       // Stays generic over the caller's consumer, which the reader calls through a function pointer.
       template <typename Consumer>
-      TBC_GENERIC inline static void read(Consumer&& consume) {
+      [[tbc::generic]] inline static void read(Consumer&& consume) {
         using Target = std::remove_reference_t<Consumer>;
 
         readBundle(const_cast<std::remove_const_t<Target>*>(std::addressof(consume)), [](void* target, std::span<const std::uint8_t> bytes) {
@@ -59,7 +56,7 @@ export {
       // Stays generic over the caller's consumer, which the reader calls through a function pointer.
       // Takes the consumer itself, as the lambdas callers pass build it in place.
       template <typename Consumer>
-      TBC_GENERIC inline static void read(Consumer consume) {
+      [[tbc::generic]] inline static void read(Consumer consume) {
         const auto sink = [](void* target, std::span<const std::uint8_t> bytes) {
           (*static_cast<Consumer*>(target))(bytes);
         };

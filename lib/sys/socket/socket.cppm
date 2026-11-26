@@ -1,5 +1,4 @@
 module;
-#include "tbc/annotations.hpp"
 #include <arpa/inet.h>
 #include <ifaddrs.h>
 #include <net/if.h>
@@ -262,8 +261,8 @@ export {
   unsigned char* CMSG_DATA(cmsghdr* header) noexcept; // NOLINT(readability-identifier-naming): exported under the system's own names
   // The control headers are handed out by address, as Rust's libc::CMSG_FIRSTHDR and CMSG_NXTHDR
   // return raw pointers: the caller answers for the control buffer outliving the walk.
-  TBC_RAW cmsghdr* CMSG_FIRSTHDR(msghdr* message) noexcept;                // NOLINT(readability-identifier-naming): exported under the system's own names
-  TBC_RAW cmsghdr* CMSG_NXTHDR(msghdr* message, cmsghdr* header) noexcept; // NOLINT(readability-identifier-naming): exported under the system's own names
+  [[tbc::raw]] cmsghdr* CMSG_FIRSTHDR(msghdr* message) noexcept;                // NOLINT(readability-identifier-naming): exported under the system's own names
+  [[tbc::raw]] cmsghdr* CMSG_NXTHDR(msghdr* message, cmsghdr* header) noexcept; // NOLINT(readability-identifier-naming): exported under the system's own names
 
   // NOLINTNEXTLINE(readability-identifier-naming): exported under the system's own name
   inline constexpr bool IN_MULTICAST(in_addr_t address) noexcept {

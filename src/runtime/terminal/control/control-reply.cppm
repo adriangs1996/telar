@@ -1,6 +1,3 @@
-module;
-#include "tbc/annotations.hpp"
-
 export module telar.runtime.terminal.control:reply;
 
 import std;
@@ -18,7 +15,7 @@ export namespace telar::runtime::control {
 
   // Generic over the caller's allocator, so it stays here.
   template <Allocator Memory>
-  class TBC_GENERIC Reply {
+  class [[tbc::generic]] Reply {
     // The bytes a sealed reply moved out of its overflow, in their memory's region `a`.
     struct Storage {
       explicit Storage(tbc::view<ds::Vec<std::uint8_t, Memory>&&, tbc::lt::a> moved)

@@ -6,7 +6,6 @@ static_assert(true);
 #include "alpha_mask_material.hpp"
 #include "physical_pixel_matrix.hpp"
 #include "qt_buffers.hpp"
-#include "tbc/annotations.hpp"
 #include "telar_base/ds/values.hpp"
 #include <QByteArray>
 #include <QSGMaterial>
@@ -141,7 +140,7 @@ namespace telar::gui::qt {
     constexpr std::size_t sampling_modes = 3;
     constexpr std::size_t blend_modes = 2;
 
-    struct TBC_SHARED MaterialTypes {
+    struct [[tbc::shared]] MaterialTypes {
       ds::Array<QSGMaterialType, sampling_modes * blend_modes> entries;
     };
 

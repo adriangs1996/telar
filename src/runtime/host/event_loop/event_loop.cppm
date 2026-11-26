@@ -1,6 +1,3 @@
-module;
-#include "tbc/annotations.hpp"
-
 export module telar.runtime.host.event_loop;
 
 import std;
@@ -37,7 +34,7 @@ export {
 #ifdef __APPLE__
     // Registering and removing descriptors invalidates nothing the queue hands out: events land in the
     // caller's buffer, so many objects may keep the queue.
-    class TBC_SHARED Kqueue {
+    class [[tbc::shared]] Kqueue {
     public:
       Kqueue();
 
@@ -108,7 +105,7 @@ export {
     // Registering and removing descriptors invalidates nothing the queue hands out: events land in the
     // caller's buffer, so many objects may keep the queue.
     template <Allocator Memory>
-    class TBC_SHARED Epoll {
+    class [[tbc::shared]] Epoll {
       struct Interest {
         std::uint64_t token = 0;
         std::uint32_t mask = 0;

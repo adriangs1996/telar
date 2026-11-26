@@ -1,5 +1,4 @@
 module;
-#include "tbc/annotations.hpp"
 #include "telar_platform/trace_macro.hpp"
 
 #include "telar_base/diagnostics/config.hpp"
@@ -99,7 +98,7 @@ export {
     // tracker and the inference; the request queue's mutex orders each handover, and the runtime
     // completes the batch only once its result came back. Only the runtime reads what the worker
     // owns, after collecting, and copies it then.
-    class TBC_SHARED PaneObserver {
+    class [[tbc::shared]] PaneObserver {
     public:
       // What the observer keeps lives in `memory`, region `a`; the directory is copied.
       explicit PaneObserver(tbc::mut_a<ConcurrentMemory> memory, TerminalSize size, std::string_view directory = {}, bool capture_output = false, ds::Option<ShellToken> shell_token = ds::none);
@@ -140,7 +139,7 @@ export {
 
       // Generic over the caller's history sink, so it stays here.
       template <HistoryEventSink History>
-      TBC_GENERIC inline ScreenObservationResult observe(const AgentManifests& manifests, AgentProvider provider, History& history, bool inspect_screen = true) noexcept {
+      [[tbc::generic]] inline ScreenObservationResult observe(const AgentManifests& manifests, AgentProvider provider, History& history, bool inspect_screen = true) noexcept {
         TELAR_TRACE("observation.replay");
         TELAR_DIAGNOSTIC(AllocationScope allocation_scope{AllocationPath::observation});
         ScreenObservationResult result;
@@ -185,13 +184,13 @@ export {
       ScreenObservationResult observe(const AgentManifests& manifests, AgentProvider provider, bool inspect_screen = true) noexcept;
 
       // The next observer of the retired list this one is on.
-      TBC_HOT_PATH inline std::shared_ptr<PaneObserver>& retiredNextMut() noexcept {
+      [[tbc::hot_path]] inline std::shared_ptr<PaneObserver>& retiredNextMut() noexcept {
         return retired_next_;
       }
 
     private:
       template <HistoryEventSink History>
-      struct TBC_GENERIC CommandRelay {
+      struct [[tbc::generic]] CommandRelay {
         const HistorySession& session;
         History& history;
         std::atomic<std::uint64_t>& injected_submissions;
@@ -218,7 +217,7 @@ export {
       // Replays the sealed batch's events into the tracker and the terminal; whether any was output.
       // Generic over the caller's history sink, as observe.
       template <HistoryEventSink History>
-      TBC_GENERIC inline bool replay(const ObservationBatch& batch, CommandRelay<History>& commands, ScreenObservationResult& result) {
+      [[tbc::generic]] inline bool replay(const ObservationBatch& batch, CommandRelay<History>& commands, ScreenObservationResult& result) {
         bool output = false;
 
         for (const auto& event : std::span{batch.events}.first(batch.event_count)) {
@@ -300,7 +299,7 @@ export {
 
     // Generic over the caller's process probe and history sink, so it stays here whole.
     template <PaneProcessProbe Probe, HistoryEventSink History>
-    class TBC_GENERIC ObservationProcessor {
+    class [[tbc::generic]] ObservationProcessor {
     public:
       // The panes one observation round reads.
       static constexpr std::size_t batch_capacity = 8;

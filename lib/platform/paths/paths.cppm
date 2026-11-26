@@ -1,6 +1,3 @@
-module;
-#include "tbc/annotations.hpp"
-
 export module telar.platform.paths;
 
 import std;
@@ -46,7 +43,7 @@ export {
     // Any lookup behind the virtual one, as Rust's `&dyn Environment`, for a function that reads it
     // without being a template over it.
     template <EnvironmentLookup Environment>
-    class TBC_GENERIC EnvironmentOf final : public EnvironmentSource {
+    class [[tbc::generic]] EnvironmentOf final : public EnvironmentSource {
     public:
       explicit EnvironmentOf(tbc::ref_a<Environment> environment) noexcept
           : environment_(environment) {}

@@ -1,5 +1,4 @@
 module;
-#include "tbc/annotations.hpp"
 
 // The cards the window paints for the notices: their geometry, the label of their action and
 // the stack that moves them as notices come and go. Each window holds its own stack.
@@ -39,7 +38,7 @@ export {
 
       // Generic over the caller's measure, so it stays here.
       template <LabelMeasure Measure>
-      [[nodiscard]] TBC_GENERIC static tbc::val_a<std::string_view> fitHost(tbc::val_a<std::string_view> host, float width, Measure& measure, tbc::mut_a<Buffer> buffer) {
+      [[nodiscard]] [[tbc::generic]] static tbc::val_a<std::string_view> fitHost(tbc::val_a<std::string_view> host, float width, Measure& measure, tbc::mut_a<Buffer> buffer) {
         if (!std::isfinite(width) || width < 0) {
           throw std::invalid_argument{"InvalidNotificationActionWidth"};
         }
@@ -187,7 +186,7 @@ export {
 
       // Generic over the caller's filter and measure, so it stays here; it runs once per frame.
       template <NotificationHidden Hidden, NotificationHeight Measure>
-      [[nodiscard]] TBC_GENERIC Cards prepare(NotificationStackRequest request, Hidden hidden, Measure measure) {
+      [[nodiscard]] [[tbc::generic]] Cards prepare(NotificationStackRequest request, Hidden hidden, Measure measure) {
         Cards result;
         const auto margin = NotificationMetrics::margin * request.ratio;
         const auto width = std::min(NotificationMetrics::preferred_width * request.ratio, request.host.width - (2 * margin));

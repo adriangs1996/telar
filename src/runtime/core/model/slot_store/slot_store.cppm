@@ -1,6 +1,3 @@
-module;
-#include "tbc/annotations.hpp"
-
 export module telar.runtime.core.model.slot_store;
 
 import std;
@@ -63,7 +60,7 @@ export {
     // lanes all derive from this one list.
     // Kept whole: generic over the requests and the caller's consumer, and read on every decoded request.
     template <typename... Requests>
-    struct TBC_GENERIC ClientRequestList {
+    struct [[tbc::generic]] ClientRequestList {
       // Calls `consume.template operator()<Message>()` for the request `tag` names, when its lane is at
       // least `Lane`; false when no such request has that tag. Takes the consumer itself, as the lambdas
       // callers pass build it in place.
@@ -355,7 +352,7 @@ export {
 
     // Kept whole: a container over the caller's value, from modules that import this one (Pane, Execution...).
     template <typename Value, std::size_t Capacity, Allocator Memory>
-    class TBC_GENERIC SlotStore {
+    class [[tbc::generic]] SlotStore {
       static_assert(Capacity > 0 && Capacity <= std::numeric_limits<std::uint16_t>::max());
 
     public:

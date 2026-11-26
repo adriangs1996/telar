@@ -1,6 +1,3 @@
-module;
-#include "tbc/annotations.hpp"
-
 export module telar.runtime.nvim.rpc;
 
 import std;
@@ -33,7 +30,7 @@ export {
       // bytes are not MessagePack, a message passes the limit or `consume` stopped.
       template <typename Consume>
         requires std::predicate<Consume&, std::span<const std::uint8_t>>
-      TBC_GENERIC bool feed(std::span<const std::uint8_t> bytes, Consume consume) {
+      [[tbc::generic]] bool feed(std::span<const std::uint8_t> bytes, Consume consume) {
         while (!bytes.empty()) {
           const auto progress = scanner_.feed(bytes);
 
