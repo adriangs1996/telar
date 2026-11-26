@@ -1,6 +1,3 @@
-module;
-#include "tbc/annotations.hpp"
-
 export module telar.gui.foundation.text:text_fit;
 
 import std;
@@ -41,7 +38,7 @@ export {
 
       template <LabelMeasure Measure>
       // The fitted text is the text itself or the prefix written into the buffer, region `a`.
-      [[nodiscard]] TBC_GENERIC inline static tbc::val_a<std::string_view> fit(tbc::val_a<std::string_view> text, float width, Measure& measure, tbc::mut_a<Buffer> buffer) {
+      [[nodiscard]] [[tbc::generic]] inline static tbc::val_a<std::string_view> fit(tbc::val_a<std::string_view> text, float width, Measure& measure, tbc::mut_a<Buffer> buffer) {
         if (!std::isfinite(width)) {
           throw std::invalid_argument{"InvalidTextFitWidth"};
         }
@@ -75,7 +72,7 @@ export {
 
     private:
       template <LabelMeasure Measure>
-      [[nodiscard]] TBC_GENERIC inline static float measureText(Measure& measure, std::string_view text) {
+      [[nodiscard]] [[tbc::generic]] inline static float measureText(Measure& measure, std::string_view text) {
         const auto width = static_cast<float>(measure(text));
         if (!std::isfinite(width) || width < 0) {
           throw std::invalid_argument{"InvalidTextFitMeasurement"};

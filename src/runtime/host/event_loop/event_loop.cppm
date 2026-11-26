@@ -1,6 +1,3 @@
-module;
-#include "tbc/annotations.hpp"
-
 export module telar.runtime.host.event_loop;
 
 import std;
@@ -37,7 +34,7 @@ export {
 #ifdef __APPLE__
     // Registering and removing descriptors invalidates nothing the queue hands out: events land in the
     // caller's buffer, so many objects may keep the queue.
-    class TBC_SHARED Kqueue {
+    class [[tbc::shared]] Kqueue {
     public:
       Kqueue();
 
@@ -92,14 +89,18 @@ export {
   namespace telar::runtime {
     namespace linux_signals {
 
-      struct Registration {
+      struct [[tbc::shared]] Registration {
         std::atomic<int> destination{0};
         std::atomic<unsigned> writers{0};
         std::atomic<bool> pending{false};
       };
 
+      struct [[tbc::shared]] Registrations {
+        ds::Array<Registration, NSIG> slots;
+      };
+
       static_assert(std::atomic<int>::is_always_lock_free && std::atomic<unsigned>::is_always_lock_free && std::atomic<bool>::is_always_lock_free);
-      inline ds::Array<Registration, NSIG> registrations;
+      inline Registrations registrations;
 
       void notify(int number) noexcept;
 
@@ -108,7 +109,7 @@ export {
     // Registering and removing descriptors invalidates nothing the queue hands out: events land in the
     // caller's buffer, so many objects may keep the queue.
     template <Allocator Memory>
-    class TBC_SHARED Epoll {
+    class [[tbc::shared]] Epoll {
       struct Interest {
         std::uint64_t token = 0;
         std::uint32_t mask = 0;

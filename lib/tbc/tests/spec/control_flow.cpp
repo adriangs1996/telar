@@ -62,7 +62,7 @@ namespace flow {
 // CASE: flow.branch_invalidates
 // PAIR: flow.branch_paths
 // SOURCE: lib/base/memory/containers/containers.cppm :: reserve
-// STATUS: pending
+// STATUS: implemented
 // CONTRACT: A borrow needed after a join must survive every incoming reachable path.
 // SCENARIO: Only one branch reallocates, but that path still reaches the old view's read.
 void branchInvalidates(tbc::view<spec::byte_queue&> queue, bool grow) {
@@ -78,7 +78,7 @@ void branchInvalidates(tbc::view<spec::byte_queue&> queue, bool grow) {
 // CASE: flow.invalidating_branch_returns
 // PAIR: flow.branch_paths
 // SOURCE: lib/base/memory/containers/containers.cppm :: reserve
-// STATUS: pending
+// STATUS: implemented
 // CONTRACT: A view need not stay live on a path which cannot reach a later use.
 // SCENARIO: The invalidating branch returns; the read is reachable only without growth.
 void invalidatingBranchReturns(tbc::view<spec::byte_queue&> queue, bool grow) {
@@ -95,7 +95,7 @@ void invalidatingBranchReturns(tbc::view<spec::byte_queue&> queue, bool grow) {
 // CASE: flow.unwind_destroys_source
 // PAIR: flow.exception_cleanup
 // SOURCE: lib/base/include/telar_base/memory/allocator.hpp :: makeOwned exception cleanup
-// STATUS: pending
+// STATUS: implemented
 // CONTRACT: Unwinding destroys local owners before entering the surrounding handler.
 // SCENARIO: A descriptor assigned outside try still points into an unwound local string.
 void unwindDestroysSource() {
@@ -114,7 +114,7 @@ void unwindDestroysSource() {
 // CASE: flow.unwind_preserves_owned_copy
 // PAIR: flow.exception_cleanup
 // SOURCE: lib/base/include/telar_base/memory/allocator.hpp :: makeOwned exception cleanup
-// STATUS: pending
+// STATUS: implemented
 // CONTRACT: An owned copy declared outside try is not destroyed by unwinding its inner scope.
 // SCENARIO: Copy the text before throwing; catch may safely read the independent owner.
 void unwindPreservesOwnedCopy() {
@@ -184,7 +184,7 @@ void unrelatedOwner() {
 // CASE: flow.shared_owner_alive
 // PAIR: flow.reply_owner
 // SOURCE: src/runtime/terminal/control/control-reply.cppm :: Reply::publish
-// STATUS: pending
+// STATUS: implemented
 // CONTRACT: An owner retained beside a view keeps alive only the object it owns.
 // SCENARIO: The queue keeps a copy of the shared owner of the reply's bytes, so the local owner's destruction does not destroy them; accept.
 void sharedOwnerAlive() {

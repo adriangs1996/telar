@@ -1,6 +1,3 @@
-module;
-#include "tbc/annotations.hpp"
-
 export module telar.cli.session.control_session;
 
 import std;
@@ -47,7 +44,7 @@ export {
       // Generic over the protocol's messages, an open set, so it stays a template
       // here.
       template <typename Message>
-      TBC_GENERIC inline void send(const Message& message, std::span<Byte> buffer) {
+      [[tbc::generic]] inline void send(const Message& message, std::span<Byte> buffer) {
         client_.send(message, buffer);
       }
 
@@ -96,10 +93,10 @@ export {
       void receiveTimeout(unsigned seconds);
 
       // The members generic over the protocol's messages keep their bodies here,
-      // marked TBC_GENERIC: the messages are an open set that no implementation
+      // marked [[tbc::generic]]: the messages are an open set that no implementation
       // unit can instantiate ahead.
       template <typename Request>
-      TBC_GENERIC inline void send(Request request) {
+      [[tbc::generic]] inline void send(Request request) {
         if constexpr (requires { request.request_id; }) {
           request.request_id = next_request_++;
         }
@@ -108,7 +105,7 @@ export {
       }
 
       template <typename Reply, typename Request>
-      TBC_GENERIC inline Reply exchange(Request request) {
+      [[tbc::generic]] inline Reply exchange(Request request) {
         request.request_id = next_request_++;
         connection_.send(request, outgoing_.viewMut());
         return receive<Reply>(request.request_id);
@@ -116,7 +113,7 @@ export {
 
       // Subscription events may interleave with a reply; snapshots have no request id.
       template <typename Reply>
-      TBC_GENERIC inline Reply receive(ds::Option<std::uint64_t> request_id = ds::none) {
+      [[tbc::generic]] inline Reply receive(ds::Option<std::uint64_t> request_id = ds::none) {
         for (;;) {
           const auto frame = connection_.receive(incoming_.viewMut());
           DecodeStorage storage{decoded_.viewMut()};

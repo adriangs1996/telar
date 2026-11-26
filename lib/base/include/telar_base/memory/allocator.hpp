@@ -23,7 +23,7 @@ namespace telar {
     { memory.deallocate(pointer, size, alignment) } noexcept -> std::same_as<void>;
   };
 
-  class TBC_SHARED SystemAllocator {
+  class [[tbc::shared]] SystemAllocator {
   public:
     static constexpr bool thread_safe = true;
 
@@ -43,7 +43,7 @@ namespace telar {
   };
 
   template <Allocator Upstream>
-  class TBC_SHARED BudgetAllocator {
+  class [[tbc::shared]] BudgetAllocator {
   public:
     static constexpr bool thread_safe = false;
 
@@ -108,10 +108,12 @@ namespace telar {
   private:
 #if TELAR_DIAGNOSTICS
     void recordAllocation(std::size_t size) noexcept {
+      const auto path = current_allocation_path.get();
+
       ++statistics_.live_allocations;
       statistics_.total.record(size);
-      statistics_.paths.atMut(static_cast<std::size_t>(current_allocation_path)).record(size);
-      if (current_allocation_path == AllocationPath::interactive && terminal_allocation) {
+      statistics_.paths.atMut(static_cast<std::size_t>(path)).record(size);
+      if (path == AllocationPath::interactive && terminal_allocation.get()) {
         statistics_.interactive_terminal.record(size);
       }
     }
@@ -130,7 +132,7 @@ namespace telar {
   BudgetAllocator(Upstream& upstream, std::size_t limit) -> BudgetAllocator<Upstream>;
 
   template <Allocator Upstream>
-  class TBC_SHARED SynchronizedAllocator {
+  class [[tbc::shared]] SynchronizedAllocator {
   public:
     static constexpr bool thread_safe = true;
 
@@ -175,7 +177,7 @@ namespace telar {
 
   // An allocator behind a virtual call, so a service compiles once rather than once per allocator.
   // allocate returns nullptr, instead of throwing, when it cannot satisfy the request.
-  class TBC_SHARED Memory {
+  class [[tbc::shared]] Memory {
   public:
     static constexpr bool thread_safe = false;
 
@@ -200,7 +202,7 @@ namespace telar {
   };
 
   // A Memory that any number of threads may call at once.
-  class TBC_SHARED ConcurrentMemory : public Memory {
+  class [[tbc::shared]] ConcurrentMemory : public Memory {
   public:
     static constexpr bool thread_safe = true;
 
@@ -217,7 +219,7 @@ namespace telar {
 #pragma clang diagnostic pop
 
   // A Memory that erases every block before releasing it, for secrets.
-  class TBC_SHARED ErasingMemory : public Memory {
+  class [[tbc::shared]] ErasingMemory : public Memory {
   public:
     static constexpr bool erasing = true;
 
@@ -245,7 +247,7 @@ namespace telar {
 
   // Puts any allocator, test fakes included, behind Memory. It keeps the allocator by reference.
   template <Allocator Upstream>
-  class TBC_SHARED MemoryAdapter final : public MemoryInterface<Upstream> {
+  class [[tbc::shared]] MemoryAdapter final : public MemoryInterface<Upstream> {
   public:
     // constexpr, so that a unit declaring an adapter instantiates the constructor, and with it the
     // overrides, rather than only the unit that emits the vtable.
@@ -278,7 +280,7 @@ namespace telar {
   MemoryAdapter(Upstream& upstream) -> MemoryAdapter<Upstream>;
 
   template <typename Value, Allocator Memory>
-  class TBC_SHARED AllocatorRef {
+  class [[tbc::shared]] AllocatorRef {
   public:
     using value_type = Value;
     using propagate_on_container_move_assignment = std::false_type;

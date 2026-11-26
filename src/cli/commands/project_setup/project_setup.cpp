@@ -1765,7 +1765,7 @@ namespace telar::runtime::cli::project_setup {
     // The shared JSON parser intentionally has one generic syntax error. A recipe
     // keeps a distinct EOF diagnostic when its valid prefix can be completed.
     template <Allocator Memory>
-    const char* recipeJsonFailure(Memory& memory, std::string_view text) {
+    tbc::val_static<const char*> recipeJsonFailure(Memory& memory, std::string_view text) {
       // The brackets still open, innermost last; a recipe within its byte limit nests no deeper.
       ds::Array<char, max_recipe_bytes> closing{};
       const auto open = openBrackets(text, closing.viewMut());

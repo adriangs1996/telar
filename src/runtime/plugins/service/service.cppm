@@ -1,5 +1,4 @@
 module;
-#include "tbc/annotations.hpp"
 #include "telar_platform/trace_macro.hpp"
 
 export module telar.runtime.plugins.service;
@@ -48,7 +47,7 @@ export {
 
       // Generic over the caller's consumer.
       template <typename Consumer>
-      TBC_GENERIC constexpr void collect(Consumer /*consumer*/) const noexcept {}
+      [[tbc::generic]] constexpr void collect(Consumer /*consumer*/) const noexcept {}
     };
 
   }
@@ -61,7 +60,7 @@ export {
     // Proxy threads submit exchanges and the runtime collects results while the trust monitor revokes
     // workers: the workers are fixed once built, and what changes after is atomic or a synchronized
     // channel, so every borrow the service lends stays valid whatever is done through it.
-    class TBC_SHARED Service {
+    class [[tbc::shared]] Service {
     public:
       explicit Service(ConcurrentMemory& memory, std::span<const ServiceSpec> specifications, const char* executable, std::string_view trace_prefix = {}, traffic::PackagePort* traffic = nullptr);
 
@@ -84,7 +83,7 @@ export {
 
       // Generic over the caller's consumer; takes it itself, as the lambdas callers pass build it in place.
       template <typename Consumer>
-      TBC_GENERIC void collect(Consumer consumer) {
+      [[tbc::generic]] void collect(Consumer consumer) {
         results_.collect([&](const auto& result) {
           if (result.package_index < workers_.size() && !workers_[result.package_index]->revoked() && result.authorized(workers_[result.package_index]->specification())) {
             consumer(result.batch());

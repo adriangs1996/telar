@@ -275,6 +275,9 @@ pointers::options lambdaReferenceCaptureContents(std::span<const char* const> ar
   pointers::options result;
   std::size_t index = 0;
   const auto next = [&]() -> std::string_view {
+    if (index >= arguments.size()) {
+      return {};
+    }
     return arguments[index++];
   };
   result.value = next();
@@ -350,7 +353,7 @@ void pointerReferenceParameterEscape(pointers::frame& frame) {
 namespace pointers {
   class view_reader {
   public:
-    explicit view_reader(tbc::view<std::string_view&, tbc::lt::a> view)
+    explicit view_reader(tbc::holds<std::string_view&, tbc::lt::a> view)
         : view_(view) {}
 
     [[nodiscard]] text_a read() const {
@@ -358,7 +361,7 @@ namespace pointers {
     }
 
   private:
-    tbc::view<std::string_view&, tbc::lt::a> view_;
+    tbc::holds<std::string_view&, tbc::lt::a> view_;
   };
 
   struct buffer {
@@ -371,36 +374,36 @@ namespace pointers {
 
   class buffer_stream {
   public:
-    explicit buffer_stream(buffer& source)
+    explicit buffer_stream(tbc::mut_a<buffer> source)
         : source_(source) {}
 
-    std::span<const char> peek() const {
+    tbc::val_a<std::span<const char>> peek() const {
       return source_.peek();
     }
 
   private:
-    buffer& source_;
+    tbc::mut_a<buffer> source_;
   };
 
   template <typename Stream>
   class gated_stream {
   public:
-    explicit gated_stream(Stream& stream)
+    explicit gated_stream(tbc::view<Stream&, tbc::lt::b, tbc::lt::a> stream)
         : stream_(stream) {}
 
-    std::span<const char> peek() const {
+    tbc::val_a<std::span<const char>> peek() const {
       return stream_.peek();
     }
 
   private:
-    Stream& stream_;
+    tbc::view<Stream&, tbc::lt::b, tbc::lt::a> stream_;
   };
 
   struct relay {
     tbc::view<const char*, tbc::lt::a> pending = nullptr;
 
     template <typename Source>
-    void advance(tbc::view<const Source&, tbc::lt::a> source) {
+    void advance(tbc::holds<const Source&, tbc::lt::a> source) {
       pending = source.peek().data();
     }
   };
@@ -410,6 +413,10 @@ namespace pointers {
   };
 
   void attach(tbc::view<record*, tbc::lt::a> target, text_a text) {
+    if (target == nullptr) {
+      return;
+    }
+
     target->text = text;
   }
 
@@ -421,7 +428,7 @@ namespace pointers {
 // CASE: pointer.reference_field_read
 // PAIR: pointer.reference_field
 // SOURCE: src/runtime/traffic/tls/interception/interception.cppm :: TlsStream::peekView
-// STATUS: pending
+// STATUS: implemented
 // CONTRACT: Reading a reference field yields what its referent holds, not the referent itself; a result that names the referent's region rather than the reference's, as `&'s &'b str` does, needs one region per level.
 // SCENARIO: The local view refers to the caller's string, so the view read back may be returned; accept.
 std::string_view pointerReferenceFieldRead(const std::string& text) {
@@ -450,10 +457,10 @@ std::string_view pointerReferenceFieldDead() {
 // CASE: pointer.nested_reference_wrapper
 // PAIR: pointer.nested_reference
 // SOURCE: src/runtime/traffic/proxy/runtime/runtime.cppm :: ApplicationRelay::advance
-// STATUS: pending
+// STATUS: implemented
 // CONTRACT: A wrapper's view of the stream it wraps can name the stream's own region rather than the wrapper's, as `&'s Stream<'b>` does; one label per field cannot yet tell the two apart.
 // SCENARIO: The relay keeps a pointer into the caller's buffer through two local wrappers; accept.
-void pointerNestedReferenceWrapper(pointers::buffer& source, pointers::relay& out) {
+void pointerNestedReferenceWrapper(tbc::mut_a<pointers::buffer> source, tbc::mut_a<pointers::relay> out) {
   pointers::buffer_stream stream{source};
   pointers::gated_stream gated{stream};
   out.advance(gated);
@@ -789,6 +796,10 @@ namespace pointers {
 }
 
 int pointerOpaqueHandleComplete(pointers::complete_state& state) {
+  if (state.values.empty()) {
+    return 0;
+  }
+
   const int& first = state.values[0];
 
   pointers::complete_reader{state}.read(1); // expected-error [tbc-invalidated-borrow]

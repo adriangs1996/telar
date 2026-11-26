@@ -1,6 +1,3 @@
-module;
-#include "tbc/annotations.hpp"
-
 export module telar.gui.foundation.actions:binding;
 
 import std;
@@ -24,7 +21,7 @@ export {
     int compareChords(KeyChord left, KeyChord right) noexcept;
 
     template <typename Action>
-    struct TBC_GENERIC KeyBinding {
+    struct [[tbc::generic]] KeyBinding {
       ds::Array<KeyChord, BindingLimits::keys> keys{};
       std::size_t length = 0;
       Action action{};
@@ -42,7 +39,7 @@ export {
     };
 
     template <typename Action>
-    class TBC_GENERIC BindingMap {
+    class [[tbc::generic]] BindingMap {
     public:
       struct Range {
         std::size_t begin = 0;

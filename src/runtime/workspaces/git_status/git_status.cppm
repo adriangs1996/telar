@@ -1,6 +1,3 @@
-module;
-#include "tbc/annotations.hpp"
-
 export module telar.runtime.workspaces.git_status;
 
 import std;
@@ -27,7 +24,7 @@ export {
 
       // Generic over the caller's consumer, so it stays a template here.
       template <typename Consumer>
-      TBC_GENERIC inline int stream(std::initializer_list<std::string_view> arguments, Consumer&& consume, Clock::time_point deadline = Clock::time_point::max()) {
+      [[tbc::generic]] inline int stream(std::initializer_list<std::string_view> arguments, Consumer&& consume, Clock::time_point deadline = Clock::time_point::max()) {
         return withCommand(arguments, [&](auto& command) {
           return output_.stream(command, deadline, std::forward<Consumer>(consume));
         });
@@ -36,7 +33,7 @@ export {
     private:
       // Generic over the caller's operation, so it stays a template here.
       template <typename Operation>
-      TBC_GENERIC inline int withCommand(std::initializer_list<std::string_view> arguments, Operation&& operation) {
+      [[tbc::generic]] inline int withCommand(std::initializer_list<std::string_view> arguments, Operation&& operation) {
         return git_.with(arguments, std::forward<Operation>(operation));
       }
 

@@ -1,5 +1,4 @@
 module;
-#include "tbc/annotations.hpp"
 #include "telar_base/diagnostics/config.hpp"
 
 export module telar.runtime.terminal.ghostty;
@@ -14,7 +13,7 @@ export namespace telar::runtime {
 
   // Generic over the libghostty struct its caller sizes, so it stays here.
   template <typename Value>
-  TBC_GENERIC Value ghosttySized() noexcept {
+  [[tbc::generic]] Value ghosttySized() noexcept {
     Value value{};
 
     value.size = sizeof(Value);
@@ -46,7 +45,7 @@ export namespace telar::runtime {
   // keep it are destroyed before the owner releases it. Generic over the handle and the release its
   // caller names, so it stays here.
   template <typename Handle, auto Release>
-  class TBC_SHARED TBC_GENERIC GhosttyHandle {
+  class [[tbc::shared]] [[tbc::generic]] GhosttyHandle {
   public:
     GhosttyHandle() = default;
 
@@ -82,7 +81,7 @@ export namespace telar::runtime {
   // Lends Ghostty the allocator, region `a`, which outlives the bridge. Generic over the caller's
   // allocator, so it stays here.
   template <Allocator Memory>
-  class TBC_GENERIC GhosttyAllocatorBridge {
+  class [[tbc::generic]] GhosttyAllocatorBridge {
   public:
     explicit GhosttyAllocatorBridge(tbc::mut_a<Memory> memory) noexcept
         : allocator_{.ctx = &memory, .vtable = &callbacks} {}

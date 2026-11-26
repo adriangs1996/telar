@@ -1,6 +1,3 @@
-module;
-#include "tbc/annotations.hpp"
-
 export module telar.cli.commands.hooks.command;
 
 import std;
@@ -45,7 +42,7 @@ export {
 
       // Generic over the caller's integer type, so it stays here and reads the field through text.
       template <typename Integer>
-      TBC_GENERIC inline ds::Option<Integer> integer(std::string_view name) const {
+      [[tbc::generic]] inline ds::Option<Integer> integer(std::string_view name) const {
         const auto field = value(name);
         if (!field || field->encoded() == "null") {
           return ds::none;

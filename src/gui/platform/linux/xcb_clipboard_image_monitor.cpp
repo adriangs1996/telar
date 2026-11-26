@@ -105,14 +105,18 @@ namespace telar::gui::platform {
       QObject::connect(&poller_, &QTimer::timeout, &poller_, [this] {
         advance();
       });
-      QCoreApplication::instance()->installNativeEventFilter(this);
+      if (auto* application = QCoreApplication::instance()) {
+        application->installNativeEventFilter(this);
+      }
       poller_.start(std::chrono::milliseconds{1});
       xcb_flush(connection_);
     }
 
     ~Native() override {
       poller_.stop();
-      QCoreApplication::instance()->removeNativeEventFilter(this);
+      if (auto* application = QCoreApplication::instance()) {
+        application->removeNativeEventFilter(this);
+      }
       finish(ClipboardImageError::read_failed);
       for (std::size_t index = 0; index < cookies_.size(); ++index) {
         discard(cookies_[index]);
@@ -140,6 +144,11 @@ namespace telar::gui::platform {
       status_ = std::allocate_shared<ClipboardImageTransfer>(AllocatorRef<ClipboardImageTransfer, ApplicationAllocator>{memory_});
       window_ = xcb_generate_id(connection_);
       const auto* const screen = xcb_setup_roots_iterator(xcb_get_setup(connection_)).data;
+      if (screen == nullptr) {
+        finish(ClipboardImageError::read_failed);
+        throw ClipboardImageFailure{ClipboardImageError::read_failed};
+      }
+
       constexpr std::uint32_t events = XCB_EVENT_MASK_PROPERTY_CHANGE;
       xcb_create_window(connection_, XCB_COPY_FROM_PARENT, window_, screen->root, 0, 0, 1, 1, 0, XCB_WINDOW_CLASS_INPUT_ONLY, XCB_COPY_FROM_PARENT, XCB_CW_EVENT_MASK, &events);
       deadline_ = std::chrono::steady_clock::now() + ClipboardImagePipe::timeout;
@@ -161,6 +170,9 @@ namespace telar::gui::platform {
       }
 
       const auto* const event = static_cast<const xcb_generic_event_t*>(message);
+      if (event == nullptr) {
+        return false;
+      }
       const auto kind = event->response_type & event_type_mask;
       if (kind == XCB_SELECTION_NOTIFY) {
         xcb_selection_notify_event_t selection{};
@@ -394,6 +406,12 @@ namespace telar::gui::platform {
     }
 
     void drain() {
+      if (!property_) {
+        finish(ClipboardImageError::read_failed);
+
+        return;
+      }
+
       const auto length = static_cast<std::size_t>(xcb_get_property_value_length(property_.get()));
       const auto* const bytes = static_cast<const std::byte*>(xcb_get_property_value(property_.get()));
       if (sent_ < length) {

@@ -15,6 +15,8 @@
 // headers this unit checks besides its own file, one real path per line. The unit then leaves the
 // other headers to the units that have them. Without the variable it checks every header it parses.
 
+#include "attributes.hpp"
+
 #include <clang-tidy/ClangTidyCheck.h>
 #include <clang-tidy/ClangTidyModule.h>
 #include <clang/AST/ASTContext.h>
@@ -113,6 +115,10 @@ namespace {
 
   class tbc_module final : public clang::tidy::ClangTidyModule {
   public:
+    tbc_module() {
+      tbc_lint::registerAttributes();
+    }
+
     void addCheckFactories(clang::tidy::ClangTidyCheckFactories& factories) override {
       factories.registerCheck<parsed_scope_check>("tbc-parsed-scope");
     }

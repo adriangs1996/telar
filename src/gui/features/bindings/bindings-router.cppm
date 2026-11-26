@@ -1,5 +1,4 @@
 module;
-#include "tbc/annotations.hpp"
 
 // What a key does before it reaches the terminal: the bindings a press starts or completes, the
 // physical keys each window holds and who owns them until they are released, and the repeat of a
@@ -59,7 +58,7 @@ export {
     };
 
     template <typename Action, BindingInput Event = BindingEvent>
-    class TBC_GENERIC KeyRouter {
+    class [[tbc::generic]] KeyRouter {
     public:
       enum class Outcome : std::uint8_t {
         forward,

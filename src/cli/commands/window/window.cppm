@@ -1,6 +1,3 @@
-module;
-#include "tbc/annotations.hpp"
-
 export module telar.cli.commands.window;
 
 import std;
@@ -86,17 +83,17 @@ export {
       static Line bounded(std::string_view text);
 
       template <typename... Arguments>
-      TBC_GENERIC void end(Step step, Status status, std::format_string<Arguments...> format, Arguments&&... arguments) {
+      [[tbc::generic]] void end(Step step, Status status, std::format_string<Arguments...> format, Arguments&&... arguments) {
         endLine(step, status, formatted(format, std::forward<Arguments>(arguments)...));
       }
 
       template <typename... Arguments>
-      TBC_GENERIC void note(Step step, std::format_string<Arguments...> format, Arguments&&... arguments) {
+      [[tbc::generic]] void note(Step step, std::format_string<Arguments...> format, Arguments&&... arguments) {
         noteLine(step, formatted(format, std::forward<Arguments>(arguments)...));
       }
 
       template <typename... Arguments>
-      TBC_GENERIC void progress(std::format_string<Arguments...> format, Arguments&&... arguments) const {
+      [[tbc::generic]] void progress(std::format_string<Arguments...> format, Arguments&&... arguments) const {
         progressLine(formatted(format, std::forward<Arguments>(arguments)...));
       }
 
@@ -116,7 +113,7 @@ export {
 
     private:
       template <typename... Arguments>
-      TBC_GENERIC static Line formatted(std::format_string<Arguments...> format, Arguments&&... arguments) {
+      [[tbc::generic]] static Line formatted(std::format_string<Arguments...> format, Arguments&&... arguments) {
         ds::Array<char, max_text_bytes> buffer{};
         const auto written = std::format_to_n(buffer.dataMut(), buffer.size(), format, std::forward<Arguments>(arguments)...);
 

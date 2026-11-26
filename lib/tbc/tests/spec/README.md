@@ -32,13 +32,11 @@ comparison. Notes are permitted but their wording and locations are not yet part
 of the assertion. There is no message-substring match that can accidentally
 accept a different rule's warning.
 
-The corpus contains **438 cases in 200 groups**: 223 accepted and 215 rejected
-examples. There are 387 implemented regressions and 51 explicitly pending
-requirements. The original 58 cases are supplemented by 74 inference cases,
+The corpus contains **476 cases in 219 groups**: 242 accepted and 234 rejected
+examples. All 476 cases are implemented regressions (`0` pending). The original 58 cases are supplemented by 74 inference cases,
 42 pointer and lambda cases, 47 standard-library cases, 22 third-party library
 cases, 56 storage-place cases, 2 system-macro cases, 2 elided-contract cases,
-4 retention-path cases, 3 static-result cases, 2 opaque-constructor cases, 18 elision, self-field and labeled-field cases, 2 deduced-result cases, 73 declaration cases, 10 cross-unit cases, 12 constness cases, and 8 shorthand cases.
-A passing pending positive case does not establish support for its contract.
+4 retention-path cases, 3 static-result cases, 2 opaque-constructor cases, 18 elision, self-field and labeled-field cases, 2 deduced-result cases, 73 declaration cases, 10 cross-unit cases, 12 constness cases, 8 shorthand cases, 4 exclusive-aliasing cases (`aliasing.cpp`), and 34 borrow-rule, move, drop-check, outlives, and soundness cases (`borrow_rules.cpp`).
 
 ## Source inventory
 
@@ -65,6 +63,8 @@ A passing pending positive case does not establish support for its contract.
 | `cross_unit.cpp` | 10 | `JsonNode<Memory>` in `lib/base/text/json`, whose accessors and explicit instantiations live in the implementation unit, the CLI's `HistoryPathVisitor`, and the proxy relay's `FlowStream`s over `SocketStream`: a call into a function another unit defines is known by its declaration, as every call is. A const lookup or count ends no borrow of its receiver, while a lookup for mutable access, an append and a truncation do, recursive or not; a virtual call and a final override are bound by the same declaration; wrappers lent to a call keep their own references to their streams whether or not a checked unit defines the streams' reads and writes, and two wrappers over one stream overlap. |
 | `constness.cpp` | 12 | `JsonNode::find`, `DropChannel::take` and `SlotIndexes::forEach` in `lib/base`, and the GUI's library item overrides: a project type never overloads a method on constness, member templates included, while an rvalue-receiver overload and an override, whose signature its base chose, are not such overloads. Shared access lends shared everything its object reaches, except a shared type, a synchronization primitive, an opaque C object, or a pointer taken out through `tbc::raw`. |
 | `access_validity.cpp` | 4 | Glyph bitmap row slicing and allocator null checks motivate bounds/nullability requirements in addition to borrow lifetimes. Unproven bounds are not a claim that every runtime index is actually invalid. |
+| `aliasing.cpp` | 4 | Local NLL shared-vs-mutable aliasing, overlapping exclusive borrows, and derived reborrows. |
+| `borrow_rules.cpp` | 34 | Derived reborrow parent suspension, two-phase borrows, disjoint struct fields, two independent objects keeping the same mutable reference, use-after-move and partial field moves, drop-check declaration order, explicit outlives (`TBC_OUTLIVES`, `tbc::outlives`), Freeze/immutability soundness (`mutable` fields, `const_cast`, mutable globals, conflicting redeclarations), definite local initialization, post-increment/modulo/bitmask bounds, and nullable field guards. |
 
 ### Deliberate reductions and preconditions
 
@@ -90,10 +90,8 @@ A fixture whose cases call into other translation units keeps them in
 run, which shows that the bodies those units define change nothing for their
 callers. A diagnostic in a companion unit belongs to no case and fails the run.
 
-The linter detects invalid memory uses, not aliasing. Two overlapping mutable
-references are legal C++, so Rust's exclusive-access rules are not a target.
-The former shared/exclusive loan cases are kept outside the corpus in
-`excluded/aliasing.cpp` for reference.
+Exclusive-aliasing, move-semantics, drop-check, outlives, soundness, bounds, and
+nullability rules are all active parts of the specification corpus.
 
 ## Lifetime syntax in the examples
 
@@ -171,11 +169,15 @@ not functionality smuggled in through a private annotation language.
 | `tbc-missing-contract` | A borrow-sensitive call has neither an analyzable body nor an explicit trusted effect contract. |
 | `tbc-unproven-bounds` | The safe profile cannot establish an indexed access's bounds. |
 | `tbc-nullable-dereference` | Dereference without a required non-null proof. |
+| `tbc-conflicting-borrow` | Creation of a borrow that conflicts with a live overlapping exclusive or shared loan. |
+| `tbc-conflicting-access` | Direct access (or parent access during an active reborrow) that conflicts with a live loan. |
+| `tbc-use-after-move` | Reads or uses a non-Copy value or moved field after ownership was moved out. |
+| `tbc-mutable-member` | Plain `mutable` field on a non-`TBC_SHARED` class outside synchronization primitives. |
+| `tbc-const-cast` | Unaudited `const_cast` outside `tbc::raw(...)` or system C FFI boundaries. |
+| `tbc-mutable-global` | Access to an unsynchronized non-`const` global variable. |
 
-`tbc-dangling-borrow`, `tbc-invalidated-borrow`, `tbc-contract-violation`, and
-`tbc-missing-contract` have implemented regressions. `tbc-ambiguous-lifetime`
-is also emitted for ambiguous declaration-only elision. The remaining names
-are pending acceptance criteria, not claims of implemented checks.
+All diagnostic codes above have implemented paired regressions in the corpus.
+`tbc-ambiguous-lifetime` is also emitted for ambiguous declaration-only elision.
 
 ## Running the corpus
 

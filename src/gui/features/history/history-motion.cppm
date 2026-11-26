@@ -1,5 +1,4 @@
 module;
-#include "tbc/annotations.hpp"
 
 // How the panel moves: the selection gliding between rows, a command line unfolding and the
 // loading cue.

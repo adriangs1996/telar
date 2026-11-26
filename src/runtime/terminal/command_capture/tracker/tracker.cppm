@@ -1,5 +1,4 @@
 module;
-#include "tbc/annotations.hpp"
 #include "telar_base/diagnostics/config.hpp"
 
 export module telar.runtime.terminal.command_capture.tracker;
@@ -47,7 +46,7 @@ export namespace telar::runtime {
   };
 
   template <CapturedCommandSink Sink>
-  class TBC_GENERIC CapturedCommandRelay final : public CapturedCommandEmitter {
+  class [[tbc::generic]] CapturedCommandRelay final : public CapturedCommandEmitter {
   public:
     inline explicit CapturedCommandRelay(tbc::mut_a<Sink> sink) noexcept
         : sink_(sink) {}
@@ -139,7 +138,7 @@ export namespace telar::runtime {
   };
 
   template <CommandCompletionSink Sink>
-  class TBC_GENERIC CommandZoneRelay final : public CommandZoneSink {
+  class [[tbc::generic]] CommandZoneRelay final : public CommandZoneSink {
   public:
     inline explicit CommandZoneRelay(tbc::mut_a<Sink> sink) noexcept
         : sink_(sink) {}
@@ -177,7 +176,7 @@ export namespace telar::runtime {
     // A shell over scan, for any sink: the sink only hears of a finished sequence, so the
     // bytes are read without a virtual call.
     template <CommandCompletionSink Sink>
-    TBC_GENERIC inline void feed(std::span<const Byte> bytes, ObservationTime time, Sink& sink) {
+    [[tbc::generic]] inline void feed(std::span<const Byte> bytes, ObservationTime time, Sink& sink) {
       CommandZoneRelay<Sink> relay{sink};
 
       scan(bytes, time, relay);
@@ -360,7 +359,7 @@ export namespace telar::runtime {
     // What to read from the anchor to the cursor, or nothing when there is no text to read.
     // Ghostty's own references into its grid, which it keeps valid until the screen changes: a raw
     // value, as Rust keeps an FFI library's handles.
-    [[nodiscard]] TBC_RAW tbc::val_a<ds::Option<GhosttySelection>> select(tbc::val_a<CommandScreen> screen) const;
+    [[nodiscard]] [[tbc::raw]] tbc::val_a<ds::Option<GhosttySelection>> select(tbc::val_a<CommandScreen> screen) const;
 
   private:
     using TrackedReference = GhosttyHandle<GhosttyTrackedGridRef, ghostty_tracked_grid_ref_free>;
@@ -474,7 +473,7 @@ export namespace telar::runtime {
     Entry& entryMut(std::size_t index) noexcept;
     [[nodiscard]] tbc::ref_b<Entry> entry(std::size_t index) const noexcept;
     // A tracked reference ghostty keeps into its grid, which the block owns: a raw handle.
-    TBC_RAW ds::Option<TrackedReference> track();
+    [[tbc::raw]] ds::Option<TrackedReference> track();
     [[nodiscard]] ds::Option<std::uint32_t> row(const TrackedReference& tracked) const;
     void start(std::chrono::steady_clock::time_point now);
     void finish(CommandBlockState state, std::int32_t status, std::chrono::steady_clock::time_point now);
@@ -601,21 +600,21 @@ export namespace telar::runtime {
 
     // Generic over the caller's sink, as the relay that hands it each command.
     template <CapturedCommandSink Sink>
-    TBC_GENERIC inline std::size_t input(const CommandByteObservation& observation, Sink& sink) {
+    [[tbc::generic]] inline std::size_t input(const CommandByteObservation& observation, Sink& sink) {
       CapturedCommandRelay<Sink> relay{sink};
 
       return CommandTrackerCore::input(observation, relay);
     }
 
     template <CapturedCommandSink Sink>
-    TBC_GENERIC inline void output(CommandByteObservation observation, Sink& sink) {
+    [[tbc::generic]] inline void output(CommandByteObservation observation, Sink& sink) {
       CapturedCommandRelay<Sink> relay{sink};
 
       CommandTrackerCore::output(observation, relay);
     }
 
     template <CapturedCommandSink Sink>
-    TBC_GENERIC inline void complete(CommandCompletion completion, Sink& sink) {
+    [[tbc::generic]] inline void complete(CommandCompletion completion, Sink& sink) {
       CapturedCommandRelay<Sink> relay{sink};
 
       CommandTrackerCore::complete(completion, relay);

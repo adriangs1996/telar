@@ -33,10 +33,14 @@ namespace telar::gui::qt {
 
   namespace {
 
-    std::span<const WindowAnimationLane::Make>& composition() noexcept {
-      static std::span<const WindowAnimationLane::Make> lanes;
+    struct [[tbc::shared]] Composition {
+      std::span<const WindowAnimationLane::Make> lanes;
+    };
 
-      return lanes;
+    std::span<const WindowAnimationLane::Make>& composition() noexcept {
+      static Composition state;
+
+      return state.lanes;
     }
 
   }

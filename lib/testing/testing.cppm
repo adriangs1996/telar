@@ -1,6 +1,3 @@
-module;
-#include "tbc/annotations.hpp"
-
 export module telar.testing;
 
 import std;
@@ -71,19 +68,19 @@ export namespace telar::testing {
   // returns.
   void miss(std::string_view what, std::source_location location) noexcept;
 
-  TBC_HOT_PATH inline void check(bool condition, std::source_location location = std::source_location::current()) noexcept {
+  [[tbc::hot_path]] inline void check(bool condition, std::source_location location = std::source_location::current()) noexcept {
     if (!condition) [[unlikely]] {
       fail({}, location);
     }
   }
 
-  TBC_HOT_PATH inline void check(bool condition, std::string_view what, std::source_location location = std::source_location::current()) noexcept {
+  [[tbc::hot_path]] inline void check(bool condition, std::string_view what, std::source_location location = std::source_location::current()) noexcept {
     if (!condition) [[unlikely]] {
       fail(what, location);
     }
   }
 
-  TBC_HOT_PATH inline bool expect(bool condition, std::string_view what = {}, std::source_location location = std::source_location::current()) noexcept {
+  [[tbc::hot_path]] inline bool expect(bool condition, std::string_view what = {}, std::source_location location = std::source_location::current()) noexcept {
     if (!condition) [[unlikely]] {
       miss(what, location);
     }

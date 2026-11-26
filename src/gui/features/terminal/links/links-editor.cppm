@@ -1,5 +1,4 @@
 module;
-#include "tbc/annotations.hpp"
 
 // The editor a file link opens: its arguments for the editor's conventions, the request the
 // runtime answers, and the path expanded and anchored at a pane's directory.
@@ -121,7 +120,7 @@ export {
       using PathText = runtime::FixedText<maximum_bytes>;
 
       template <PathEnvironment Environment>
-      [[nodiscard]] TBC_GENERIC static PathText expand(PathExpansionInput input, const Environment& environment) {
+      [[nodiscard]] [[tbc::generic]] static PathText expand(PathExpansionInput input, const Environment& environment) {
         const Lookup<Environment> lookup{environment};
 
         return expandWith(input, lookup);
@@ -143,7 +142,7 @@ export {
       };
 
       template <PathEnvironment Environment>
-      class TBC_GENERIC Lookup final : public Variables {
+      class [[tbc::generic]] Lookup final : public Variables {
       public:
         explicit Lookup(const Environment& source) noexcept
             : source_(source) {}

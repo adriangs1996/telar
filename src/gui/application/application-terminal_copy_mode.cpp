@@ -113,8 +113,10 @@ namespace telar::gui::application::terminal::copy_mode {
   void leave(Session& session) {
     auto& state = session.copy_mode;
 
-    if (auto* copy_pane = pane(session.copy_mode, session.panes)) {
-      apply(session.copy_mode, session.link, session.view_version, feature::leave(state, copyGrid(copy_pane->screen)), *copy_pane);
+    if (auto* copy_pane = pane(state, session.panes)) {
+      const auto plan = feature::leave(state, copyGrid(copy_pane->screen));
+
+      apply(state, session.link, session.view_version, plan, *copy_pane);
     } else {
       feature::close(state);
     }
@@ -148,7 +150,6 @@ namespace telar::gui::application::terminal::copy_mode {
   }
 
   CopyPointerDecision::Outcome pointer(Session& session, const CopyPointerInput& input) {
-    auto& state = session.copy_mode;
     const auto decision = feature::routeCopyPointer(input, authority(session, input));
     const auto finish = decision.cancel || (decision.motion && input.kind == CopyPointerKind::release);
 
@@ -156,22 +157,22 @@ namespace telar::gui::application::terminal::copy_mode {
       if (decision.leave) {
         leave(session);
       } else if (decision.cancel) {
-        static_cast<void>(feature::clearPointer(state));
+        static_cast<void>(feature::clearPointer(session.copy_mode));
       } else if (auto* copy_pane = pane(session.copy_mode, session.panes); copy_pane != nullptr) {
-        if (const auto plan = move(state, decision, input.kind == CopyPointerKind::release, *copy_pane)) {
-          apply(state, session.link, session.view_version, *plan, *copy_pane);
+        if (const auto plan = move(session.copy_mode, decision, input.kind == CopyPointerKind::release, *copy_pane)) {
+          apply(session.copy_mode, session.link, session.view_version, *plan, *copy_pane);
         }
       }
     } catch (...) {
       if (finish) {
-        feature::release(state);
+        feature::release(session.copy_mode);
       }
 
       throw;
     }
 
     if (finish) {
-      feature::release(state);
+      feature::release(session.copy_mode);
     }
 
     return decision.outcome;
@@ -180,14 +181,14 @@ namespace telar::gui::application::terminal::copy_mode {
   void search(Session& session, std::string_view needle) {
     const bool reads_rows = session.readsRows();
     auto& state = session.copy_mode;
-    auto* copy_pane = pane(session.copy_mode, session.panes);
+    auto* copy_pane = pane(state, session.panes);
     if (copy_pane == nullptr || !feature::view(state).active()) {
       throw EncodingError{"No copy mode owns this search"};
     }
 
     if (const auto plan = feature::type(state, needle, copyGrid(copy_pane->screen)); needle.empty()) {
       if (plan) {
-        apply(session.copy_mode, session.link, session.view_version, *plan, *copy_pane);
+        apply(state, session.link, session.view_version, *plan, *copy_pane);
       }
 
       const auto pane_id = copy_pane->id;
@@ -262,13 +263,13 @@ namespace telar::gui::application::terminal::copy_mode {
       return Change::none;
     }
 
-    auto* copy_pane = pane(session.copy_mode, session.panes);
+    auto* copy_pane = pane(state, session.panes);
     if (copy_pane == nullptr) {
       return Change::none;
     }
 
     if (const auto plan = feature::receive(state, message, copyGrid(copy_pane->screen))) {
-      apply(session.copy_mode, session.link, session.view_version, *plan, *copy_pane);
+      apply(state, session.link, session.view_version, *plan, *copy_pane);
     }
 
     const auto pane_id = copy_pane->id;

@@ -2,6 +2,7 @@ module telar.cli.session.server;
 
 import telar.sys.posix;
 import telar.sys.process;
+import telar.tbc;
 
 import telar.cli.console.command_limit;
 import telar.cli.session.control_session;
@@ -195,7 +196,7 @@ namespace telar::runtime::cli {
     ds::Vec<char*, Memory> command{memory};
 
     command.reserve(arguments.size() + 2);
-    command.push(const_cast<char*>(runtime.cStr())); // NOLINT(cppcoreguidelines-pro-type-const-cast): execv's C signature takes the arguments as char*, and does not write them
+    command.push(tbc::raw(const_cast<char*>(runtime.cStr()))); // NOLINT(cppcoreguidelines-pro-type-const-cast): execv's C signature takes the arguments as char*, and does not write them
     command.extend({arguments.begin(), arguments.end()});
     command.push(nullptr);
     ::execv(runtime.cStr(), command.data());

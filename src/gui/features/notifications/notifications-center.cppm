@@ -1,5 +1,4 @@
 module;
-#include "tbc/annotations.hpp"
 
 // The notices the window shows: each one's text, target and fade, and the few the center keeps.
 export module telar.gui.features.notifications:center;

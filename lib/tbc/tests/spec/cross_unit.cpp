@@ -218,7 +218,7 @@ bool crossUnitOpaqueStreams(cross_unit::relays& relays, cross_unit::opaque_strea
 // SCENARIO: Both wrappers view the same socket, so mutating it through either one invalidates the other's borrow of it; reject each wrapper at the call.
 bool crossUnitSharedStream(cross_unit::relays& relays, cross_unit::socket_stream& socket, cross_unit::flow* owner) {
   cross_unit::flow_stream<cross_unit::socket_stream> to_child{socket, owner};
-  cross_unit::flow_stream<cross_unit::socket_stream> to_origin{socket, owner};
+  cross_unit::flow_stream<cross_unit::socket_stream> to_origin{socket, owner}; // expected-error [tbc-conflicting-borrow]
 
   return relays.transfer(
       to_child,  // expected-error [tbc-invalidated-borrow]

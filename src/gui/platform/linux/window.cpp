@@ -77,8 +77,13 @@ namespace telar::gui::platform {
         return false;
       }
 
+      auto* functions = probe.functions();
+      if (functions == nullptr) {
+        return false;
+      }
+
       std::uint32_t devices = 0;
-      probe.functions()->vkEnumeratePhysicalDevices(probe.vkInstance(), &devices, nullptr);
+      functions->vkEnumeratePhysicalDevices(probe.vkInstance(), &devices, nullptr);
 
       return devices > 0;
     }

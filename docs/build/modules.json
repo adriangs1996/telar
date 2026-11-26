@@ -769,17 +769,21 @@
     "lib/platform/include/telar_platform/file_descriptor.hpp": "Objective-C++ ABI",
     "lib/platform/include/telar_platform/open_directory.h": "C ABI",
     "lib/platform/include/telar_platform/trace_macro.hpp": "Project macro header: TELAR_TRACE; includes nothing",
-    "lib/tbc/include/tbc/annotations.hpp": "Project macro header: the TBC annotations tbc-lint reads on declarations; includes nothing",
     "lib/tbc/include/tbc/contracts.hpp": "Consumer-side preprocessor annotations inspected by Clang AST tooling",
     "lib/tbc/include/tbc/detail/attributes.hpp": "Consumer-side preprocessor annotations inspected by Clang AST tooling",
     "lib/tbc/include/tbc/lifetime.hpp": "Consumer-side preprocessor annotations inspected by Clang AST tooling",
     "lib/tbc/include/tbc/view.hpp": "Lifetime vocabulary for sources that cannot import telar.tbc, which owns it",
+    "lib/tbc/linter/access_validity.hpp": "Private Clang AST adapter; must use the SDK declarations of the selected linter toolchain",
+    "lib/tbc/linter/attributes.hpp": "Private Clang AST adapter; must use the SDK declarations of the selected linter toolchain",
     "lib/tbc/linter/blank_lines.hpp": "Private Clang AST adapter; must use the SDK declarations of the selected linter toolchain",
     "lib/tbc/linter/checked_definitions.hpp": "Private Clang AST adapter; must use the SDK declarations of the selected linter toolchain",
     "lib/tbc/linter/const_overloads.hpp": "Private Clang AST adapter; must use the SDK declarations of the selected linter toolchain",
+    "lib/tbc/linter/exclusive_borrows.hpp": "Private Clang AST adapter; must use the SDK declarations of the selected linter toolchain",
     "lib/tbc/linter/interface_bodies.hpp": "Private Clang AST adapter; must use the SDK declarations of the selected linter toolchain",
     "lib/tbc/linter/lifetime_analysis.hpp": "Private Clang AST adapter; must use the SDK declarations of the selected linter toolchain",
+    "lib/tbc/linter/pipeline.hpp": "Private Clang AST adapter; must use the SDK declarations of the selected linter toolchain",
     "lib/tbc/linter/shared_access.hpp": "Private Clang AST adapter; must use the SDK declarations of the selected linter toolchain",
+    "lib/tbc/linter/soundness_checks.hpp": "Private Clang AST adapter; must use the SDK declarations of the selected linter toolchain",
     "lib/tbc/linter/standard_containers.hpp": "Private Clang AST adapter; must use the SDK declarations of the selected linter toolchain",
     "lib/tbc/linter/view_type.hpp": "Private Clang AST adapter; must use the SDK declarations of the selected linter toolchain",
     "lib/tbc/tests/spec/elision.hpp": "Textual test fixture, including compiler diagnostic and macro expansion locations",
@@ -1021,8 +1025,7 @@
     "lib/base/include/telar_base/diagnostics/config.hpp",
     "lib/wire/include/telar_wire/codecs/telar_annotations.hpp",
     "lib/ghostty/include/telar_ghostty/modes.hpp",
-    "lib/platform/include/telar_platform/trace_macro.hpp",
-    "lib/tbc/include/tbc/annotations.hpp"
+    "lib/platform/include/telar_platform/trace_macro.hpp"
   ],
   "implicit_uses": [
     {

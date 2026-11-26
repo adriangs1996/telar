@@ -1,6 +1,3 @@
-module;
-#include "tbc/annotations.hpp"
-
 module telar.msgpack;
 
 import std;

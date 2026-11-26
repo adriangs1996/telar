@@ -370,9 +370,14 @@ namespace telar::gui::qt {
 
     ConfigurationSource configuration_source_;
     tbc::val_self<WindowDisplay> display_;
+
     // The theme and font QML reads, built on first read after each configurationChanged.
-    mutable ds::Option<QVariantMap> colors_;
-    mutable ds::Option<QVariantMap> font_;
+    struct [[tbc::shared]] ThemeCache {
+      ds::Option<QVariantMap> colors;
+      ds::Option<QVariantMap> font;
+    };
+
+    mutable ThemeCache cache_;
     tbc::val_self<ElementSlots> element_slots_{configuration_source_, [this] {
                                                  return components_.context();
                                                },

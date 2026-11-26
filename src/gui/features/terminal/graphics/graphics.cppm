@@ -1,5 +1,4 @@
 module;
-#include "tbc/annotations.hpp"
 
 // The images in a terminal: what each pane holds as the runtime sends them, the textures a
 // frame draws them with and where, and the panes whose images pause after a limit until they ask
@@ -35,30 +34,30 @@ export namespace telar::gui::features::terminal::graphics {
     GraphicsPauses pauses_;
   };
 
-  [[nodiscard]] TBC_HOT_PATH inline bool paused(const State& state, std::uint64_t pane_id) noexcept;
+  [[nodiscard]] [[tbc::hot_path]] inline bool paused(const State& state, std::uint64_t pane_id) noexcept;
 
   // Changes whenever a pause begins, waits or ends.
-  [[nodiscard]] TBC_HOT_PATH inline std::uint64_t revision(const State& state) noexcept;
+  [[nodiscard]] [[tbc::hot_path]] inline std::uint64_t revision(const State& state) noexcept;
 
   // When the next paused pane asks the runtime again; none while none waits.
-  [[nodiscard]] TBC_HOT_PATH inline ds::Option<std::uint64_t> deadline(const State& state) noexcept;
+  [[nodiscard]] [[tbc::hot_path]] inline ds::Option<std::uint64_t> deadline(const State& state) noexcept;
 
   // Pane `pane_id` reached a limit at `now_ns`: its images pause. `request` asks the runtime for
   // a pane's images again, `notice` tells the user once a pause begins.
   template <typename Request, typename Notice>
     requires std::invocable<const Request&, std::uint64_t> && std::invocable<const Notice&, std::uint64_t>
-  TBC_GENERIC void pause(State& state, std::uint64_t pane_id, std::uint64_t now_ns, const Request& request, const Notice& notice);
+  [[tbc::generic]] void pause(State& state, std::uint64_t pane_id, std::uint64_t now_ns, const Request& request, const Notice& notice);
 
   // The paused panes whose wait ended by `now_ns` ask the runtime again, through `request`.
   template <typename Request>
     requires std::invocable<const Request&, std::uint64_t>
-  TBC_GENERIC void resume(State& state, std::uint64_t now_ns, const Request& request);
+  [[tbc::generic]] void resume(State& state, std::uint64_t now_ns, const Request& request);
 
   // Pane `pane_id` took the focus at `now_ns`: a paused pane asks again at once, through
   // `request`.
   template <typename Request>
     requires std::invocable<const Request&, std::uint64_t>
-  TBC_GENERIC void focus(State& state, std::uint64_t pane_id, std::uint64_t now_ns, const Request& request);
+  [[tbc::generic]] void focus(State& state, std::uint64_t pane_id, std::uint64_t now_ns, const Request& request);
 
   // A snapshot of pane `pane_id`'s images applied at `now_ns`: a complete one ends its pause.
   void receive(State& state, std::uint64_t pane_id, SnapshotPhase phase, std::uint64_t now_ns) noexcept;
@@ -66,7 +65,7 @@ export namespace telar::gui::features::terminal::graphics {
   // The panes `mirrored` no longer finds stop pausing.
   template <typename Mirrored>
     requires std::predicate<const Mirrored&, std::uint64_t>
-  TBC_GENERIC void forgetClosed(State& state, const Mirrored& mirrored);
+  [[tbc::generic]] void forgetClosed(State& state, const Mirrored& mirrored);
 
   // The connection ended: no pane waits.
   void suspend(State& state) noexcept;
@@ -100,25 +99,25 @@ namespace telar::gui::features::terminal::graphics {
 
   template <typename Request, typename Notice>
     requires std::invocable<const Request&, std::uint64_t> && std::invocable<const Notice&, std::uint64_t>
-  TBC_GENERIC void pause(State& state, std::uint64_t pane_id, std::uint64_t now_ns, const Request& request, const Notice& notice) {
+  [[tbc::generic]] void pause(State& state, std::uint64_t pane_id, std::uint64_t now_ns, const Request& request, const Notice& notice) {
     Access::pauses(state).pause(pane_id, now_ns, request, notice);
   }
 
   template <typename Request>
     requires std::invocable<const Request&, std::uint64_t>
-  TBC_GENERIC void resume(State& state, std::uint64_t now_ns, const Request& request) {
+  [[tbc::generic]] void resume(State& state, std::uint64_t now_ns, const Request& request) {
     Access::pauses(state).resumeDue(now_ns, request);
   }
 
   template <typename Request>
     requires std::invocable<const Request&, std::uint64_t>
-  TBC_GENERIC void focus(State& state, std::uint64_t pane_id, std::uint64_t now_ns, const Request& request) {
+  [[tbc::generic]] void focus(State& state, std::uint64_t pane_id, std::uint64_t now_ns, const Request& request) {
     Access::pauses(state).focus({.pane_id = pane_id, .now_ns = now_ns}, request);
   }
 
   template <typename Mirrored>
     requires std::predicate<const Mirrored&, std::uint64_t>
-  TBC_GENERIC void forgetClosed(State& state, const Mirrored& mirrored) {
+  [[tbc::generic]] void forgetClosed(State& state, const Mirrored& mirrored) {
     Access::pauses(state).forgetClosed(mirrored);
   }
 

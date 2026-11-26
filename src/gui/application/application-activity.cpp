@@ -52,13 +52,14 @@ namespace telar::gui::application::activity {
 
   Change receive(Session& session, const AgentSnapshot& message) {
     const auto now_ns = Access::now(session);
-    auto& agents = session.agent_list;
-    if (!agents.apply(message, now_ns)) {
+    if (!session.agent_list.apply(message, now_ns)) {
       return Change::none;
     }
 
     peek::follow(session);
     acknowledge(session);
+    auto& agents = session.agent_list;
+
     features::notifications::AgentAlerts::publish(agents.statusChanges(), [&](const AgentStatusChange& change) {
       const auto* agent = features::activity::find(agents.entries(), change.pane_id, change.pane_generation);
 

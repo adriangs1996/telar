@@ -1,5 +1,4 @@
 module;
-#include "tbc/annotations.hpp"
 #include "telar_platform/trace_macro.hpp"
 
 export module telar.runtime.core.delivery.client_delivery;
@@ -143,7 +142,7 @@ export {
 
       // Kept here: `send` is the connection's callable, an open set no unit can instantiate ahead.
       // Reading a pane's text moves its terminal, so projecting is a Rust `FnMut`, not an `Fn`.
-      TBC_GENERIC inline void operator()(const DeferredResponse& response, auto&& send) {
+      [[tbc::generic]] inline void operator()(const DeferredResponse& response, auto&& send) {
         TELAR_TRACE("runtime.projectResponse");
         std::visit([&](const auto& request) {
           project(request, send);
@@ -159,7 +158,7 @@ export {
       [[nodiscard]] static std::string_view snapshotDirectory(std::string_view cwd) noexcept;
 
       // Kept here: `send` is the connection's callable, an open set no unit can instantiate ahead.
-      TBC_GENERIC inline void project(const ReadPane& request, auto& send) {
+      [[tbc::generic]] inline void project(const ReadPane& request, auto& send) {
         // Generation 0 reads whatever generation the pane has, as clients that predate generations ask.
         auto* pane = request.pane_generation == 0 ? model_.panes.find(request.pane_id) : findPane(model_.panes, {.id = request.pane_id, .generation = request.pane_generation});
         if (pane == nullptr) {
@@ -199,7 +198,7 @@ export {
       }
 
       // Kept here: `send` is the connection's callable, an open set no unit can instantiate ahead.
-      TBC_GENERIC inline void project(const RequestTabSnapshot& request, auto& send) {
+      [[tbc::generic]] inline void project(const RequestTabSnapshot& request, auto& send) {
         ds::Array<PaneDescriptor, max_snapshot_tab_panes> descriptors;
         std::size_t count = 0;
 
@@ -226,7 +225,7 @@ export {
       }
 
       // Kept here: `send` is the connection's callable, an open set no unit can instantiate ahead.
-      TBC_GENERIC inline void project(const RequestWorkspaceSnapshot& request, auto& send) {
+      [[tbc::generic]] inline void project(const RequestWorkspaceSnapshot& request, auto& send) {
         const auto* workspace = model_.workspaces.find(request.workspace.id);
         if (request.workspace.kind != WorkspaceLocation::Kind::workspace || workspace == nullptr) {
           send(RequestFailed{.request_id = request.request_id, .code = FailureCode::workspace_not_found, .message = "workspace closed before its snapshot was sent"});
@@ -265,7 +264,7 @@ export {
       }
 
       // Kept here: `send` is the connection's callable, an open set no unit can instantiate ahead.
-      TBC_GENERIC inline void project(const QueryLimits& request, auto& send) {
+      [[tbc::generic]] inline void project(const QueryLimits& request, auto& send) {
         ds::Array<LimitListEntry, 2 * LimitLedger::capacity> entries;
         std::size_t count = 0;
 
@@ -313,7 +312,7 @@ export {
 
       // Kept here: the source is the runtime's StateProjection over its own services, or a test's fake.
       template <RuntimeStateSource Source>
-      TBC_GENERIC inline Result write(ClientSession& client, Source& source, Clock::time_point now) {
+      [[tbc::generic]] inline Result write(ClientSession& client, Source& source, Clock::time_point now) {
         TELAR_TRACE("runtime.deliverClient");
         Result result;
 
@@ -337,7 +336,7 @@ export {
     private:
       // Kept here: the source is the runtime's StateProjection over its own services, or a test's fake.
       template <RuntimeStateSource Source>
-      TBC_GENERIC inline void prepare(ClientSession& client, Source& source, Clock::time_point now, std::chrono::nanoseconds& timeout) {
+      [[tbc::generic]] inline void prepare(ClientSession& client, Source& source, Clock::time_point now, std::chrono::nanoseconds& timeout) {
         const auto queued_lane = client.connection.nextLane();
         if (queued_lane <= DeliveryLane::management) {
           return;
@@ -407,7 +406,7 @@ export {
 
     // Kept whole: tests instantiate it with their own fake services (client_delivery_test's Agents and Metrics).
     template <typename Workspaces, typename Agents, typename Metrics, typename Layouts, typename Proxy>
-    class TBC_GENERIC StateProjection {
+    class [[tbc::generic]] StateProjection {
     public:
       inline explicit StateProjection(Workspaces& workspaces, Agents& agents, Metrics& metrics, Layouts& layouts, const Proxy& proxy)
           : workspaces_(workspaces),
@@ -528,7 +527,7 @@ export {
 
     // Kept here: the consumer is the caller's callable, an open set no unit can instantiate ahead.
     template <typename Consumer>
-    TBC_GENERIC bool dispatchRequest(ClientTag tag, Consumer&& consume) {
+    [[tbc::generic]] bool dispatchRequest(ClientTag tag, Consumer&& consume) {
       return ClientRequests::dispatch(tag, std::forward<Consumer>(consume));
     }
 

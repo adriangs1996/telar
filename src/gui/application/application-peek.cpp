@@ -57,17 +57,15 @@ namespace telar::gui::application::peek {
   }
 
   bool open(Session& session, PeekTarget target) {
-    auto& state = session.peek;
-
     if (!session.ready() || !session.presented() || features::peek::find(session.agents(), target) == nullptr) {
       return false;
     }
 
-    features::peek::open(state, target);
+    features::peek::open(session.peek, target);
     try {
       read(session);
     } catch (...) {
-      features::peek::close(state);
+      features::peek::close(session.peek);
       throw;
     }
 

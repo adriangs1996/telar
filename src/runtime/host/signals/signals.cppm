@@ -1,6 +1,3 @@
-module;
-#include "tbc/annotations.hpp"
-
 export module telar.runtime.host.signals;
 
 import std;
@@ -12,7 +9,7 @@ export {
   namespace telar::runtime {
 
     // A pipe one thread notifies and another drains: both ends share it.
-    class TBC_SHARED CompletionSignal {
+    class [[tbc::shared]] CompletionSignal {
     public:
       CompletionSignal();
 
@@ -38,7 +35,7 @@ export {
 
     // Any thread may request cancellation and any may observe it: the flag is atomic and the wake signal
     // is shared, so a reference to it stays valid whatever is done through it.
-    class TBC_SHARED CancellationSignal {
+    class [[tbc::shared]] CancellationSignal {
     public:
       void request() noexcept;
 

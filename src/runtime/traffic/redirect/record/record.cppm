@@ -1,6 +1,3 @@
-module;
-#include "tbc/annotations.hpp"
-
 export module telar.runtime.traffic.redirect.record;
 
 import std;
@@ -69,7 +66,7 @@ export {
 
     // Generic over the caller's command and flags.
     template <typename Command, typename Flags = LoopbackFlags>
-    class TBC_GENERIC PfLoopback {
+    class [[tbc::generic]] PfLoopback {
     public:
       inline explicit PfLoopback(Command& command) noexcept
           : command_(command) {}
@@ -170,7 +167,7 @@ export {
 
       // Generic over the caller's store and interface.
       template <typename Store, typename Interface>
-      TBC_GENERIC void acquire(Store& store, Interface& interface, std::string_view owner) {
+      [[tbc::generic]] void acquire(Store& store, Interface& interface, std::string_view owner) {
         validateOwner(owner);
         load(store);
         const auto marker = ownerMarker(owner);
@@ -194,7 +191,7 @@ export {
       }
 
       template <typename Store, typename Interface>
-      TBC_GENERIC void release(Store& store, Interface& interface, std::string_view owner) {
+      [[tbc::generic]] void release(Store& store, Interface& interface, std::string_view owner) {
         validateOwner(owner);
         load(store);
         const auto marker = ownerMarker(owner);
@@ -227,7 +224,7 @@ export {
       ds::String<Memory> ownerMarker(std::string_view owner);
 
       template <typename Store>
-      TBC_GENERIC void load(Store& store) {
+      [[tbc::generic]] void load(Store& store) {
         owners_.clear();
         restore_skip_ = false;
         const auto saved = store.load();
@@ -261,7 +258,7 @@ export {
       }
 
       template <typename Store>
-      TBC_GENERIC void save(Store& store) {
+      [[tbc::generic]] void save(Store& store) {
         ds::String<Memory> content{memory_, restore_skip_ ? skip_header : filter_header};
 
         content.append(owners_);
@@ -278,7 +275,7 @@ export {
 
     // Generic over the caller's interface.
     template <Allocator Memory, typename Interface>
-    class TBC_GENERIC SharedLoopback {
+    class [[tbc::generic]] SharedLoopback {
     public:
       inline explicit SharedLoopback(Memory& memory, Interface& interface, std::string_view owner) noexcept
           : memory_(memory),
@@ -360,7 +357,7 @@ export {
 
       // Generic over the caller's store and interface.
       template <typename State>
-      TBC_GENERIC explicit PacketLog(State& state, uid_t uid, Direction direction = Direction::outbound)
+      [[tbc::generic]] explicit PacketLog(State& state, uid_t uid, Direction direction = Direction::outbound)
           : uid_(uid),
             direction_(direction),
             index_(LogInterface::create()),

@@ -1,6 +1,3 @@
-module;
-#include "tbc/annotations.hpp"
-
 export module telar.runtime.agents.snapshot;
 
 import std;
@@ -227,7 +224,7 @@ export {
 
       // The predicate is the caller's type, so this member keeps its body here.
       template <typename Predicate>
-      TBC_GENERIC inline void removeIf(const Predicate& predicate) {
+      [[tbc::generic]] inline void removeIf(const Predicate& predicate) {
         if (records_.retain([&](const auto& agent) {
               return !predicate(*agent);
             }) != 0) {

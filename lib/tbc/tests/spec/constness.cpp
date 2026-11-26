@@ -1,6 +1,5 @@
 #include "system_library.hpp"
 
-#include <tbc/annotations.hpp>
 #include <tbc/view.hpp>
 
 #include <cstddef>
@@ -149,7 +148,7 @@ namespace constness {
     }
   };
 
-  class TBC_SHARED counter {
+  class [[tbc::shared]] counter {
   public:
     void add() noexcept {
       ++count_;

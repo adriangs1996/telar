@@ -386,7 +386,9 @@ void initializerListRange() {
   std::array<const char*, 2> complete{};
   std::size_t count = 0;
   for (const auto prefix : {"git", "-c"}) {
-    complete[count++] = prefix;
+    if (count < complete.size()) {
+      complete[count++] = prefix;
+    }
   }
   standard::observeChars(complete[0]);
 }
@@ -624,6 +626,9 @@ namespace standard {
     std::array<std::optional<std::unique_ptr<scene_node>>, 4> slots_;
 
     scene_node& install(std::size_t slot) {
+      if (slot >= slots_.size()) {
+        slot = 0;
+      }
       auto owned = std::make_unique<scene_node>();
       auto* raw = owned.get();
       slots_[slot] = std::move(owned);

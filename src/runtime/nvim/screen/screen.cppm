@@ -1,6 +1,3 @@
-module;
-#include "tbc/annotations.hpp"
-
 export module telar.runtime.nvim.screen;
 
 import std;
@@ -503,7 +500,7 @@ export {
       ConcurrentMemory& memory_;
       ds::Vec<ds::Box<NvimScreenGrid, ConcurrentMemory>, ConcurrentMemory> grids_;
       // Where the last lookup found its grid: a redraw names the same one many times in a row.
-      mutable std::size_t recent_ = 0;
+      ds::Cell<std::size_t> recent_{0};
       std::size_t cell_count_ = 0;
       // Where `put` writes next: the grid `line` found, by its place in grids_, and the cell.
       std::size_t put_grid_ = 0;

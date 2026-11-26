@@ -5,6 +5,9 @@
 extern "C" {
 #endif
 
+#ifdef __cplusplus
+[[tbc::raw]]
+#endif
 int telarOpenDirectoryNoFollow(const char* path);
 
 #ifdef __cplusplus

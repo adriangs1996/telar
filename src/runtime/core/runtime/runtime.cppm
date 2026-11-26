@@ -1,5 +1,4 @@
 module;
-#include "tbc/annotations.hpp"
 #include "telar_base/diagnostics/config.hpp"
 #include "telar_platform/trace_macro.hpp"
 
@@ -281,7 +280,7 @@ export {
       // Generic over the caller's plugin event source; the metrics it reads are reported in the
       // implementation unit.
       template <plugins::EventSource Source>
-      TBC_GENERIC inline void collect(ClientStore& clients, Source& source) {
+      [[tbc::generic]] inline void collect(ClientStore& clients, Source& source) {
         source.collect([&](const plugins::EffectBatch& batch) {
           for (const auto& notification : std::span{batch.notifications}.first(batch.count)) {
             publish(clients, notification);
@@ -578,7 +577,7 @@ export {
 
       // Generic over the caller's capture source, the proxy in production.
       template <CaptureEventSource Captures>
-      TBC_GENERIC inline void run(Captures& captures) {
+      [[tbc::generic]] inline void run(Captures& captures) {
         plugins::IgnoreEvents plugins;
 
         run(captures, plugins);
@@ -587,7 +586,7 @@ export {
       // Generic over the caller's capture and plugin event sources, the proxy and the plugin service in
       // production; each ready event is routed in the implementation unit.
       template <CaptureEventSource Captures, plugins::EventSource Plugins>
-      TBC_GENERIC inline void run(Captures& captures, Plugins& plugins) {
+      [[tbc::generic]] inline void run(Captures& captures, Plugins& plugins) {
         TELAR_TRACE("runtime.run");
         TELAR_DIAGNOSTIC(AllocationScope allocation_scope{AllocationPath::interactive});
         ds::Array<Event, Poller::event_capacity> ready{};

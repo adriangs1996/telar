@@ -216,15 +216,20 @@ namespace telar::gui::qt {
     [[nodiscard]] static tbc::val_a<std::shared_ptr<ChromeGlyphImages>> shared(tbc::mut_a<QQuickWindow> window, tbc::val_a<std::shared_ptr<FontSet>> fonts, fonts::GlyphRasterization rasterization = {}) {
       using Source = QPair<QQuickWindow*, const FontSet*>;
       using Key = std::conditional_t<optical, std::pair<Source, std::uint32_t>, Source>;
+
+      struct [[tbc::shared]] Cache {
+        QHash<Key, std::weak_ptr<ChromeGlyphImages>> entries;
+      };
+
 // A thread that exits must drop its weak references, or the images' shared allocations leak with it.
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wexit-time-destructors"
-      thread_local QHash<Key, std::weak_ptr<ChromeGlyphImages>> caches;
+      thread_local Cache caches;
 #pragma clang diagnostic pop
 
-      for (auto entry = caches.begin(); entry != caches.end();) {
+      for (auto entry = caches.entries.begin(); entry != caches.entries.end();) {
         if (entry.value().expired()) {
-          entry = caches.erase(entry);
+          entry = caches.entries.erase(entry);
         } else {
           ++entry;
         }
@@ -238,10 +243,10 @@ namespace telar::gui::qt {
         }
       }();
 
-      auto cached = caches.value(key).lock();
+      auto cached = caches.entries.value(key).lock();
       if (!cached) {
         cached = std::make_shared<ChromeGlyphImages>(window, fonts, rasterization);
-        caches.insert(key, cached);
+        caches.entries.insert(key, cached);
       }
 
       return cached;

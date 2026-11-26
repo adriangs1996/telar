@@ -1,5 +1,4 @@
 module;
-#include "tbc/annotations.hpp"
 #include "telar_platform/trace_macro.hpp"
 
 export module telar.runtime.traffic.exchange_capture.pipeline;
@@ -133,7 +132,7 @@ export {
     // Generic over the caller's tap and clock.
     template <typename Tap, CaptureClock Clock = CaptureWallClock>
       requires CaptureTap<Tap>
-    class TBC_GENERIC CapturePipeline {
+    class [[tbc::generic]] CapturePipeline {
     public:
       inline explicit CapturePipeline(ConcurrentMemory& memory, CaptureProducer& producer, ProxyCaptureLimits limits, Tap& tap)
           : tap_(tap),

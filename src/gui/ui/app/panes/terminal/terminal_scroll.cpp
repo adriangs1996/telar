@@ -65,7 +65,7 @@ namespace telar::gui::qt {
   }
 
   bool TerminalItem::smoothScroll() const noexcept {
-    return mapsRows() && controller_->configuration().scroll.smooth;
+    return mapsRows() && controller_ != nullptr && controller_->configuration().scroll.smooth;
   }
 
   double TerminalItem::rowHeight() const noexcept {
@@ -212,6 +212,10 @@ namespace telar::gui::qt {
 
   // Rows the scrollback dropped above the view: it moves up as far to keep showing its rows.
   void TerminalItem::followDroppedRows(bool following) {
+    if (controller_ == nullptr) {
+      return;
+    }
+
     const auto dropped = controller_->sessionMut().takeDroppedRows(pane_id_);
     if (dropped == 0) {
       return;
@@ -467,7 +471,7 @@ namespace telar::gui::qt {
   void TerminalItem::applyScroll(bool driven) {
     const auto* current = pane();
     const auto cell = rowHeight();
-    if (current == nullptr || cell <= 0 || !mapsRows()) {
+    if (current == nullptr || controller_ == nullptr || cell <= 0 || !mapsRows()) {
       return;
     }
 
@@ -559,7 +563,7 @@ namespace telar::gui::qt {
   // for `overscan` views of rows around them.
   void TerminalItem::requestViewRows(bool moving) {
     const auto* current = pane();
-    if (current == nullptr || !mapsRows()) {
+    if (current == nullptr || controller_ == nullptr || !mapsRows()) {
       return;
     }
 
@@ -614,7 +618,7 @@ namespace telar::gui::qt {
 
   bool TerminalItem::scrollWheel(const QWheelEvent& event) {
     const auto* current = pane();
-    if (current == nullptr || !smoothScroll()) {
+    if (current == nullptr || controller_ == nullptr || !smoothScroll()) {
       return false;
     }
 
@@ -786,6 +790,10 @@ namespace telar::gui::qt {
   // A segment per command, its share of the `shown` rows.
   QVariantList TerminalItem::railSegmentsFor(std::uint64_t shown) const {
     const auto* current = pane();
+    if (current == nullptr || controller_ == nullptr) {
+      return {};
+    }
+
     const auto& folds = current->folds;
     const auto& blocks = current->blocks;
     const auto selected = controller_->prompt().selectedBlock(pane_id_);
@@ -812,8 +820,7 @@ namespace telar::gui::qt {
   // The command whose output the top row shows while its separator is above the view.
   QVariantMap TerminalItem::pinnedBlock() const {
     const auto* current = pane();
-
-    if (view_rows_.empty() || !view_rows_.front().exists) {
+    if (current == nullptr || controller_ == nullptr || view_rows_.empty() || !view_rows_.front().exists) {
       return {};
     }
 
@@ -917,7 +924,7 @@ namespace telar::gui::qt {
     QVariantList rail;
     const auto* current = pane();
     const auto& copy = controller_ == nullptr ? ds::Option<application::terminal::copy_mode::CopyState>{} : controller_->copy().state();
-    if (current != nullptr && copy && copy->pane_id == pane_id_) {
+    if (controller_ != nullptr && current != nullptr && copy && copy->pane_id == pane_id_) {
       const auto matches = application::terminal::copy_mode::view(controller_->session()).matches();
       const auto& screen = current->screen;
       const auto total = static_cast<std::uint64_t>(screen.scroll().total_rows);

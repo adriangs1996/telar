@@ -1,5 +1,4 @@
 module;
-#include "tbc/annotations.hpp"
 
 // The pointer over the panel: scrolling its list, pressing its actions and what it hovers.
 export module telar.gui.features.history:pointer;

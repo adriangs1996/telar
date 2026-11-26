@@ -42,7 +42,7 @@ namespace telar::gui::qt {
 
   // The faces a window shares. A face it hands out is a member that never moves, fallbacks included, so
   // a reference to it stays valid whatever is done through the fonts.
-  class TBC_SHARED ResidentFonts {
+  class [[tbc::shared]] ResidentFonts {
   public:
     explicit ResidentFonts(std::shared_ptr<const FontAsset> source);
     explicit ResidentFonts(std::shared_ptr<const FontCollection> collection);

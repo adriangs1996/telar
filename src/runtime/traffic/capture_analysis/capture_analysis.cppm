@@ -1,6 +1,3 @@
-module;
-#include "tbc/annotations.hpp"
-
 export module telar.runtime.traffic.capture_analysis;
 
 import std;
@@ -160,7 +157,7 @@ export {
 
       // Generic over the caller's callbacks, and called for every captured packet.
       template <typename Consume, typename Report>
-      TBC_GENERIC void packet(const Event& event, Consume consume, Report report) {
+      [[tbc::generic]] void packet(const Event& event, Consume consume, Report report) {
         const auto network = NetworkPacket::decode(event);
         auto fragment = parse(network);
         if (!fragment) {
@@ -194,50 +191,17 @@ export {
           return;
         }
 
-        const auto now = Clock::now();
-        ds::Option<Entry>* slot = nullptr;
-
-        for (auto& entry : entries_.viewMut()) {
-          if (entry && entry->key == part.key) {
-            slot = &entry;
-            break;
-          }
-        }
-
-        if (slot && now - (*slot)->created >= lifetime) {
-          if ((*slot)->storage) {
-            failure(slot->getMut(), "ip_fragment_timeout", report);
-          }
-
-          slot->reset();
-        }
-
+        const auto slot_index = acquireSlot(part.key, Clock::now(), report);
+        auto& slot = entries_.atMut(slot_index);
         if (!slot) {
-          const auto entries = entries_.viewMut();
-          const auto free = std::ranges::find_if(entries, [](const auto& entry) {
-            return !entry;
-          });
-
-          slot = free == entries.end() ? &*std::min_element(entries.begin(), entries.end(), [](const auto& first, const auto& second) {
-            return first->created < second->created;
-          })
-                                       : &*free;
-          if (*slot && (*slot)->storage) {
-            failure(slot->getMut(), "ip_fragment_capacity", report);
-          }
-
-          slot->reset();
-        }
-
-        if (!*slot) {
           Entry entry;
 
           initialize(entry, event, part.key);
           entry.storage.emplace(memory_, maximum_prefix + maximum_payload);
-          slot->emplace(std::move(entry));
+          slot.emplace(std::move(entry));
         }
 
-        auto& entry = slot->getMut();
+        auto& entry = slot.getMut();
         if (!entry.storage) {
           return;
         }
@@ -249,15 +213,15 @@ export {
         }
 
         if (entry.prefix != 0 && entry.length && entry.received == *entry.length) {
-          auto completed = std::move(*slot);
+          auto completed = std::move(slot);
 
-          slot->reset();
+          slot.reset();
           consume(assembled(completed.getMut()));
         }
       }
 
       template <typename Report>
-      TBC_GENERIC void expire(Report report, bool stop = false, Clock::time_point now = Clock::now()) {
+      [[tbc::generic]] void expire(Report report, bool stop = false, Clock::time_point now = Clock::now()) {
         for (auto& entry : entries_.viewMut()) {
           if (entry && (stop || now - entry->created >= lifetime)) {
             if (entry->storage) {
@@ -283,7 +247,47 @@ export {
       static std::span<const Byte> assembled(Entry& entry);
 
       template <typename Report>
-      TBC_GENERIC static void failure(Entry& entry, std::string_view reason, Report report) {
+      [[tbc::generic]] std::size_t acquireSlot(const Key& key, Clock::time_point now, Report& report) {
+        auto entries = entries_.viewMut();
+
+        for (std::size_t index = 0; index < entries.size(); ++index) {
+          if (!entries[index] || entries[index]->key != key) {
+            continue;
+          }
+
+          if (now - entries[index]->created >= lifetime) {
+            if (entries[index]->storage) {
+              failure(entries[index].getMut(), "ip_fragment_timeout", report);
+            }
+
+            entries[index].reset();
+          }
+
+          return index;
+        }
+
+        std::size_t oldest = 0;
+
+        for (std::size_t index = 0; index < entries.size(); ++index) {
+          if (!entries[index]) {
+            return index;
+          }
+
+          if (entries[index]->created < entries[oldest]->created) {
+            oldest = index;
+          }
+        }
+
+        if (entries[oldest] && entries[oldest]->storage) {
+          failure(entries[oldest].getMut(), "ip_fragment_capacity", report);
+        }
+
+        entries[oldest].reset();
+        return oldest;
+      }
+
+      template <typename Report>
+      [[tbc::generic]] static void failure(Entry& entry, std::string_view reason, Report report) {
         entry.storage.reset();
         auto event = entry.event;
 
@@ -402,7 +406,7 @@ export {
 
       // Generic over the caller's callbacks, and called for every captured packet.
       template <typename Emit>
-      TBC_GENERIC void packet(const Event& event, Emit emit) {
+      [[tbc::generic]] void packet(const Event& event, Emit emit) {
         const auto parsed = TcpPacketDecoder::decode(event);
         if (parsed) {
           consumePacket(event, *parsed, emit);
@@ -410,7 +414,7 @@ export {
       }
 
       template <typename Emit>
-      TBC_GENERIC void payload(const Event& event, const IpPayload& ip_payload, Emit emit) {
+      [[tbc::generic]] void payload(const Event& event, const IpPayload& ip_payload, Emit emit) {
         const auto parsed = TcpPacketDecoder::decodePayload(ip_payload);
         if (parsed) {
           consumePacket(event, *parsed, emit);
@@ -418,7 +422,7 @@ export {
       }
 
       template <typename Emit>
-      TBC_GENERIC void expire(Emit emit, bool stop = false) {
+      [[tbc::generic]] void expire(Emit emit, bool stop = false) {
         const auto now = Clock::now();
         Event event;
 
@@ -471,7 +475,7 @@ export {
       };
 
       template <typename Emit>
-      TBC_GENERIC void consumePacket(const Event& event, const TcpPacket& packet, Emit emit) {
+      [[tbc::generic]] void consumePacket(const Event& event, const TcpPacket& packet, Emit emit) {
         const bool reverse = packet.destination < packet.source;
         Key key{.session = event.session, .interface = event.interface_index, .first = reverse ? packet.destination : packet.source, .second = reverse ? packet.source : packet.destination};
 
@@ -491,6 +495,10 @@ export {
 
           static_cast<void>(flows_.insert(key, Flow{memory_, capture_flow_bit | ++next_, initial_reverse, event.offline}));
           found = flows_.findMut(key);
+          if (found == nullptr) {
+            return;
+          }
+
           publish(key, *found, event, {.kind = Kind::flow_open}, emit);
           if ((packet.flags & syn) == 0) {
             publish(key, *found, event, {.kind = Kind::flow_gap, .item = {.reason = "capture_started_midstream"}}, emit);
@@ -533,7 +541,7 @@ export {
 
       // Starts a side at the first sequence it sees, and marks where a FIN ends it: a FIN past the
       // bytes the side has seen leaves a gap until they come.
-      TBC_HOT_PATH inline static void track(Side& side, const TcpPacket& packet, std::uint32_t sequence) noexcept {
+      [[tbc::hot_path]] inline static void track(Side& side, const TcpPacket& packet, std::uint32_t sequence) noexcept {
         if (!side.started) {
           side.started = true;
           side.initial = side.next = sequence;
@@ -549,7 +557,7 @@ export {
 
       // Whether a SYN without ACK opens the flow's tuple anew, at a sequence other than the one it
       // started at.
-      TBC_HOT_PATH inline static bool reused(const Flow& flow, const TcpPacket& packet, bool reverse) noexcept {
+      [[tbc::hot_path]] inline static bool reused(const Flow& flow, const TcpPacket& packet, bool reverse) noexcept {
         if ((packet.flags & syn) == 0 || (packet.flags & ack) != 0) {
           return false;
         }
@@ -561,7 +569,7 @@ export {
 
       // Ends the flow touched longest ago, for a new one to take its place.
       template <typename Emit>
-      TBC_GENERIC void evictOldest(const Event& event, Emit emit) {
+      [[tbc::generic]] void evictOldest(const Event& event, Emit emit) {
         const Key* oldest = nullptr;
         const Flow* oldest_flow = nullptr;
 
@@ -583,7 +591,7 @@ export {
       }
 
       // Closes the direction once its bytes reach its FIN; true when both directions are closed.
-      TBC_HOT_PATH inline static bool settle(Flow& flow, Direction direction) noexcept {
+      [[tbc::hot_path]] inline static bool settle(Flow& flow, Direction direction) noexcept {
         auto& side = direction == Direction::outbound ? flow.outbound : flow.inbound;
         if (side.fin && side.next == *side.fin && !side.closed) {
           ++side.next;
@@ -598,7 +606,7 @@ export {
       // Reassembles one direction of a flow; the bytes buffered over every flow and the allocator are lent
       // apart from it.
       template <typename Emit>
-      TBC_GENERIC inline static bool consume(const Arrival& arrival, tbc::mut_a<Flow> flow, std::size_t& total_buffered, tbc::mut_a<Secure> memory, Emit emit) {
+      [[tbc::generic]] inline static bool consume(const Arrival& arrival, tbc::mut_a<Flow> flow, std::size_t& total_buffered, tbc::mut_a<Secure> memory, Emit emit) {
         const auto& packet = arrival.packet;
         auto& side = arrival.direction == Direction::outbound ? flow.outbound : flow.inbound;
         auto sequence = packet.sequence + ((packet.flags & syn) != 0 ? 1U : 0U);
@@ -661,7 +669,7 @@ export {
         return true;
       }
 
-      TBC_HOT_PATH inline static Overlap compare(const Side& side, std::uint32_t sequence, std::span<const Byte> bytes) noexcept {
+      [[tbc::hot_path]] inline static Overlap compare(const Side& side, std::uint32_t sequence, std::span<const Byte> bytes) noexcept {
         if (bytes.empty()) {
           return Overlap::none;
         }
@@ -686,7 +694,7 @@ export {
       }
 
       template <typename Emit>
-      TBC_GENERIC static void publish(const Key& key, const Flow& flow, Event event, Notice notice, Emit emit) {
+      [[tbc::generic]] static void publish(const Key& key, const Flow& flow, Event event, Notice notice, Emit emit) {
         const auto client = (flow.reverse ? key.second : key.first).text();
         const auto server = (flow.reverse ? key.first : key.second).text();
         auto& item = notice.item;
@@ -708,7 +716,7 @@ export {
 
       // Publishes the end of a flow; the caller drops the flow and the bytes it buffered.
       template <typename Emit>
-      TBC_GENERIC static void announceClose(const Key& key, const Flow& flow, const Event& event, Ending ending, Emit emit) {
+      [[tbc::generic]] static void announceClose(const Key& key, const Flow& flow, const Event& event, Ending ending, Emit emit) {
         if (flow.outbound.gap) {
           publish(key, flow, event, {.kind = Kind::flow_gap, .item = {.offset = flow.outbound.offset, .reason = ending.reason}}, emit);
         }
@@ -726,7 +734,7 @@ export {
 
       // Ends the flow of a key this Map holds.
       template <typename Emit>
-      TBC_GENERIC void close(const Key& key, const Event& event, std::string_view reason, Emit emit, bool gap) {
+      [[tbc::generic]] void close(const Key& key, const Event& event, std::string_view reason, Emit emit, bool gap) {
         const auto& flow = *flows_.find(key);
 
         announceClose(key, flow, event, {.reason = reason, .gap = gap}, emit);
@@ -761,7 +769,7 @@ export {
 
       // Generic over the caller's callbacks, and called for every captured packet.
       template <typename Emit>
-      TBC_GENERIC void packet(const Event& event, Selection selection, Emit emit) {
+      [[tbc::generic]] void packet(const Event& event, Selection selection, Emit emit) {
         fragments_.packet(event, [&](std::span<const Byte> bytes) {
           const auto ip_payload = IpPayload::decode(bytes);
           if (!ip_payload) {
@@ -794,7 +802,7 @@ export {
       }
 
       template <typename Emit>
-      TBC_GENERIC void expire(Emit emit, bool stop = false) {
+      [[tbc::generic]] void expire(Emit emit, bool stop = false) {
         fragments_.expire([&](const Event& source, std::string_view reason) {
           fragmentError(source, reason, emit);
         },
@@ -804,7 +812,7 @@ export {
 
     private:
       template <typename Emit>
-      TBC_GENERIC static void fragmentError(Event event, std::string_view reason, Emit emit) {
+      [[tbc::generic]] static void fragmentError(Event event, std::string_view reason, Emit emit) {
         event.kind = Kind::error;
         event.bytes = byteView(reason);
         emit(event);

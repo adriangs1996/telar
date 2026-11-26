@@ -1,5 +1,4 @@
 module;
-#include "tbc/annotations.hpp"
 #include "telar_base/diagnostics/config.hpp"
 
 export module telar.runtime.terminal.control:cursor_report;
@@ -14,7 +13,7 @@ export namespace telar::runtime::control {
 
   // Generic over the caller's allocator, so it stays here.
   template <Allocator Memory>
-  TBC_GENERIC void cursorReport(Reply<Memory>& reply, Position position, bool extended) {
+  [[tbc::generic]] void cursorReport(Reply<Memory>& reply, Position position, bool extended) {
     constexpr std::size_t maximum_cursor_reply = 32;
     ds::Array<char, maximum_cursor_reply> encoded{};
     // One mutable borrow of the buffer, which `next` walks.

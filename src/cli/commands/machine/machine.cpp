@@ -2458,8 +2458,13 @@ fetch() {
       // Logs `name` in there where it is not yet: its outcome, or none where setup leaves the login
       // to the person.
       ds::Option<MachineLogin> loginAgent(std::string_view name, bool& started) {
+        const auto* path = platform_.agents.find(name);
+        if (path == nullptr) {
+          return ds::none;
+        }
+
         const auto selected = provider(name);
-        const Agent agent{.name = name, .path = platform_.agents.find(name)->view(), .provider = selected ? ds::Option{selected->view()} : ds::none};
+        const Agent agent{.name = name, .path = path->view(), .provider = selected ? ds::Option{selected->view()} : ds::none};
         bool logged_in = false;
 
         try {
@@ -3333,7 +3338,7 @@ mkdir -p "$HOME/.local/bin" && "$telar" cli install --dir "$HOME/.local/bin" >/d
       const auto& target = *resolved;
       SetupRun run{.memory = memory, .report = report, .options = options, .target = target, .path = path};
 
-      if (!report.json) {
+      if (!run.report.json) {
         std::println(stdout, "Setting up {} ({}) with telar {}", target.label.data(), target.destination.data(), version);
         static_cast<void>(std::fflush(stdout));
       }
@@ -3347,19 +3352,19 @@ mkdir -p "$HOME/.local/bin" && "$telar" cli install --dir "$HOME/.local/bin" >/d
         }
       }
 
-      const auto platform = reach(memory, report, target, build.directory);
-      if (!platform || !install(memory, report, target, *platform, build)) {
-        return report.finish(memory, {.label = target.label, .destination = target.destination});
+      const auto platform = reach(memory, run.report, target, build.directory);
+      if (!platform || !install(memory, run.report, target, *platform, build)) {
+        return run.report.finish(memory, {.label = target.label, .destination = target.destination});
       }
 
       Random random;
       const auto remote = MachineProfile::create(MachineId::generate(random), {.label = target.label, .destination = target.destination, .program = platform->target.view()});
 
-      if (!startRuntime(memory, report, target, remote, interactive)) {
+      if (!startRuntime(memory, run.report, target, remote, interactive)) {
         // The build is in place there though no runtime of it runs: the profile names it, so the
         // next setup or check reaches that telar.
         saveProfile(run, *platform);
-        return report.finish(memory, {.label = target.label, .destination = target.destination});
+        return run.report.finish(memory, {.label = target.label, .destination = target.destination});
       }
 
       linkProgram(run, *platform);
@@ -3368,27 +3373,27 @@ mkdir -p "$HOME/.local/bin" && "$telar" cli install --dir "$HOME/.local/bin" >/d
       ds::Option<Platform> reprobed;
 
       if (options.skip[0]) {
-        report.end(Step::agents, Status::skipped, "--skip agents");
-      } else if (installAgents(memory, report, target.destination, *platform, wanted)) {
+        run.report.end(Step::agents, Status::skipped, "--skip agents");
+      } else if (installAgents(memory, run.report, target.destination, *platform, wanted)) {
         reprobed = reprobe(memory, target, build);
       }
 
       const auto& current = reprobed ? *reprobed : *platform;
 
-      integrateAgents(memory, report, target.destination, current);
+      integrateAgents(memory, run.report, target.destination, current);
       if (!options.skip[3]) {
-        provisionEditor(memory, report, target.destination, current);
+        provisionEditor(memory, run.report, target.destination, current);
       }
 
       if (options.skip[1]) {
-        report.end(Step::configuration, Status::skipped, "--skip config");
+        run.report.end(Step::configuration, Status::skipped, "--skip config");
       } else {
-        syncConfig(memory, report, target.destination, current, wanted);
+        syncConfig(memory, run.report, target.destination, current, wanted);
       }
 
       logIn(run, current, wanted, interactive);
       checkAttach(run, remote);
-      return report.finish(memory, {.label = target.label, .destination = target.destination});
+      return run.report.finish(memory, {.label = target.label, .destination = target.destination});
     }
 
   }

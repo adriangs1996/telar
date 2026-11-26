@@ -91,29 +91,29 @@ namespace telar::gui::qt {
     }
 
     const auto key = drawnScreenKey();
-    if (drawn_screen_ && drawn_screen_key_ == key) {
-      return &*drawn_screen_;
+    if (drawn_.screen && drawn_.screen_key == key) {
+      return &*drawn_.screen;
     }
 
-    if (!drawn_screen_) {
-      drawn_screen_.emplace(controller_->memory());
+    if (!drawn_.screen) {
+      drawn_.screen.emplace(controller_->memory());
     }
 
     const auto& screen = current->screen;
 
-    drawn_spans_.clear();
-    drawn_flags_.clear();
-    drawn_links_.clear();
-    drawn_runs_.clear();
-    drawn_uris_.clear();
+    drawn_.spans.clear();
+    drawn_.flags.clear();
+    drawn_.links.clear();
+    drawn_.runs.clear();
+    drawn_.uris.clear();
     for (std::size_t index = 0; index < view_rows_.size(); ++index) {
       appendDrawnRow(index);
     }
 
-    std::ranges::sort(drawn_runs_.viewMut(), {}, &MetadataRun::start);
-    drawn_screen_.getMut().compose(screen.columns(), drawn_spans_.view(), drawn_flags_.view(), TextMetadata{.status = screen.metadataStatus(), .row_flags = drawn_flags_.view(), .links = drawn_links_.view(), .runs = drawn_runs_.view(), .uris = drawn_uris_.view()});
-    drawn_screen_key_ = key;
-    return &*drawn_screen_;
+    std::ranges::sort(drawn_.runs.viewMut(), {}, &MetadataRun::start);
+    drawn_.screen.getMut().compose(screen.columns(), drawn_.spans.view(), drawn_.flags.view(), TextMetadata{.status = screen.metadataStatus(), .row_flags = drawn_.flags.view(), .links = drawn_.links.view(), .runs = drawn_.runs.view(), .uris = drawn_.uris.view()});
+    drawn_.screen_key = key;
+    return &*drawn_.screen;
   }
 
   // Drawn row `index`, with its links, onto the drawn screen being put together.
@@ -123,19 +123,19 @@ namespace telar::gui::qt {
     const auto columns = static_cast<std::uint32_t>(screen.columns());
     // A link on this row, from `column` on, with its target.
     const auto link = [&](std::uint32_t column, std::uint32_t length, std::string_view uri) {
-      const auto offset = drawn_uris_.size();
+      const auto offset = drawn_.uris.size();
 
-      drawn_uris_.extend(byteView(uri));
-      drawn_links_.push({.offset = static_cast<std::uint32_t>(offset), .len = static_cast<std::uint16_t>(uri.size())});
-      drawn_runs_.push({.start = static_cast<std::uint32_t>(index * columns) + column, .len = length, .link_index = static_cast<std::uint16_t>(drawn_links_.size() - 1)});
+      drawn_.uris.extend(byteView(uri));
+      drawn_.links.push({.offset = static_cast<std::uint32_t>(offset), .len = static_cast<std::uint16_t>(uri.size())});
+      drawn_.runs.push({.start = static_cast<std::uint32_t>(index * columns) + column, .len = length, .link_index = static_cast<std::uint16_t>(drawn_.links.size() - 1)});
     };
 
     const auto& view = view_rows_[index];
     if (view.exists && view.screen_row >= 0) {
       const auto row = static_cast<std::uint32_t>(view.screen_row);
 
-      drawn_spans_.push(screen.row(row));
-      drawn_flags_.push(screen.rowFlags(row));
+      drawn_.spans.push(screen.row(row));
+      drawn_.flags.push(screen.rowFlags(row));
       for (const auto& run : screen.linkRuns()) {
         if (run.start >= row * columns && run.start < (row + 1) * columns) {
           link(run.start - (row * columns), run.len, screen.linkAt(run.start));
@@ -147,8 +147,8 @@ namespace telar::gui::qt {
 
     const auto stable = current->scrollback_trimmed + view.row;
     if (const auto kept = view.exists ? current->rows.find(stable) : ds::none) {
-      drawn_spans_.push(kept->cells);
-      drawn_flags_.push(kept->flags);
+      drawn_.spans.push(kept->cells);
+      drawn_.flags.push(kept->flags);
       current->rows.links(stable, [&](const auto& kept_link) {
         link(kept_link.column, kept_link.length, kept_link.uri);
       });
@@ -156,8 +156,8 @@ namespace telar::gui::qt {
       return;
     }
 
-    drawn_spans_.push({});
-    drawn_flags_.push(0);
+    drawn_.spans.push({});
+    drawn_.flags.push(0);
   }
 
   ds::Option<CellPosition> TerminalItem::visibleCellAt(QPointF position) const noexcept {
@@ -247,7 +247,7 @@ namespace telar::gui::qt {
 
   void TerminalItem::refreshLinkHover() {
     const auto* current = pane();
-    if (!link_pointer_ || !linkEligible() || current == nullptr) {
+    if (!link_pointer_ || !linkEligible() || current == nullptr || controller_ == nullptr) {
       clearLinkHover();
 
       return;

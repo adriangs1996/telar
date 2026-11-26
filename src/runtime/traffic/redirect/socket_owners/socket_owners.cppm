@@ -1,6 +1,3 @@
-module;
-#include "tbc/annotations.hpp"
-
 export module telar.runtime.traffic.redirect.socket_owners;
 
 import std;
@@ -98,7 +95,7 @@ export {
 
     // Generic over the caller's command, state and loopback.
     template <typename Command, typename State, typename Loopback, Allocator Memory>
-    class TBC_GENERIC PfSession {
+    class [[tbc::generic]] PfSession {
     public:
       inline explicit PfSession(Command& command, State& state, const PfIdentity<Memory>& identity, Loopback& loopback) noexcept
           : command_(command),
@@ -318,7 +315,7 @@ export {
 
     // Generic over the caller's visitor.
     template <typename Visitor>
-    TBC_GENERIC void visitLinuxTcpSockets(Visitor&& visit) {
+    [[tbc::generic]] void visitLinuxTcpSockets(Visitor&& visit) {
       constexpr ds::Array families{AF_INET, AF_INET6};
       constexpr std::size_t read_capacity = 4096;
       constexpr std::size_t maximum_line_bytes = 1024;
@@ -497,7 +494,7 @@ export {
     private:
       // Generic over the caller's session.
       template <typename Session>
-      TBC_GENERIC void discover(Session& session, uid_t uid, const PfIdentity<Memory>& identity) {
+      [[tbc::generic]] void discover(Session& session, uid_t uid, const PfIdentity<Memory>& identity) {
         ds::Array<Byte, PacketLog::frame_bytes> bytes; // NOLINT(cppcoreguidelines-pro-type-member-init): the read fills what it returns; zeroing 64 KiB for every discovery packet is wasted work
         auto packet = discovery_.getMut().receive(bytes.viewMut());
         if (packet.empty()) {
@@ -512,7 +509,7 @@ export {
       }
 
       template <typename Session>
-      TBC_GENERIC void discovered(Session& session, uid_t uid, const PfIdentity<Memory>& identity, std::span<Byte> packet, const PacketLog::Metadata* metadata = nullptr) {
+      [[tbc::generic]] void discovered(Session& session, uid_t uid, const PfIdentity<Memory>& identity, std::span<Byte> packet, const PacketLog::Metadata* metadata = nullptr) {
         const auto key = FlowKey::syn(packet);
         const bool incoming = metadata != nullptr && metadata->incoming;
         if (!key || !selects(*key, incoming)) {

@@ -1,5 +1,4 @@
 module;
-#include "tbc/annotations.hpp"
 
 // Copy mode in a terminal: entering it at the cursor or on a command's output, moving its cursor
 // and selection with keys and the pointer, searching the scrollback, and leaving it.
@@ -49,26 +48,26 @@ export namespace telar::gui::features::terminal::copy_mode {
   public:
     static constexpr std::size_t maximum_matches = CopyMode::maximum_matches;
 
-    TBC_HOT_PATH inline explicit CopyModeView(tbc::ref_a<CopyMode> mode) noexcept
+    [[tbc::hot_path]] inline explicit CopyModeView(tbc::ref_a<CopyMode> mode) noexcept
         : mode_(&mode) {}
 
-    [[nodiscard]] TBC_HOT_PATH inline tbc::ref_a<ds::Option<CopyState>> state() const noexcept {
+    [[nodiscard]] [[tbc::hot_path]] inline tbc::ref_a<ds::Option<CopyState>> state() const noexcept {
       return mode_->state();
     }
 
-    [[nodiscard]] TBC_HOT_PATH inline bool active() const noexcept {
+    [[nodiscard]] [[tbc::hot_path]] inline bool active() const noexcept {
       return mode_->active();
     }
 
-    [[nodiscard]] TBC_HOT_PATH inline std::uint64_t revision() const noexcept {
+    [[nodiscard]] [[tbc::hot_path]] inline std::uint64_t revision() const noexcept {
       return mode_->revision();
     }
 
-    [[nodiscard]] TBC_HOT_PATH inline ds::Option<CopyPointerOwner> pointerOwner() const noexcept {
+    [[nodiscard]] [[tbc::hot_path]] inline ds::Option<CopyPointerOwner> pointerOwner() const noexcept {
       return mode_->pointerOwner();
     }
 
-    [[nodiscard]] TBC_HOT_PATH inline tbc::val_a<std::span<const PaneMatch>> matches() const noexcept {
+    [[nodiscard]] [[tbc::hot_path]] inline tbc::val_a<std::span<const PaneMatch>> matches() const noexcept {
       return mode_->matches();
     }
 
@@ -76,7 +75,7 @@ export namespace telar::gui::features::terminal::copy_mode {
     tbc::val_a<const CopyMode*> mode_;
   };
 
-  [[nodiscard]] TBC_HOT_PATH inline tbc::val_a<CopyModeView> view(tbc::ref_a<State> state) noexcept;
+  [[nodiscard]] [[tbc::hot_path]] inline tbc::val_a<CopyModeView> view(tbc::ref_a<State> state) noexcept;
 
   // ---- entering and leaving ---------------------------------------------------------------------
 
@@ -112,34 +111,34 @@ export namespace telar::gui::features::terminal::copy_mode {
 
   // The plan a key asks for; none when copy mode does not take keys. A key that begins a search
   // begins it from where the cursor is now.
-  [[nodiscard]] TBC_HOT_PATH inline tbc::val_static<ds::Option<CopyPlan>> key(State& state, const TerminalKey& key, const CopyGrid& grid);
+  [[nodiscard]] [[tbc::hot_path]] inline tbc::val_static<ds::Option<CopyPlan>> key(State& state, const TerminalKey& key, const CopyGrid& grid);
 
   // A press at `press.position` selects from there, a word or a line on a second or third click.
-  TBC_HOT_PATH inline bool press(State& state, CopyPress press, const CopyGrid& grid) noexcept;
+  [[tbc::hot_path]] inline bool press(State& state, CopyPress press, const CopyGrid& grid) noexcept;
 
   // The plan a drag to `local` asks for, ending the gesture when `released`.
-  [[nodiscard]] TBC_HOT_PATH inline tbc::val_static<ds::Option<CopyPlan>> drag(const State& state, CopyPoint local, const CopyGrid& grid, bool released) noexcept;
+  [[nodiscard]] [[tbc::hot_path]] inline tbc::val_static<ds::Option<CopyPlan>> drag(const State& state, CopyPoint local, const CopyGrid& grid, bool released) noexcept;
 
   // The plan a wheel step of `rows` asks for.
-  [[nodiscard]] TBC_HOT_PATH inline tbc::val_static<ds::Option<CopyPlan>> scroll(const State& state, std::int32_t rows, const CopyGrid& grid) noexcept;
+  [[nodiscard]] [[tbc::hot_path]] inline tbc::val_static<ds::Option<CopyPlan>> scroll(const State& state, std::int32_t rows, const CopyGrid& grid) noexcept;
 
   // Typing drops a selection the pointer made; false when there was none.
-  TBC_HOT_PATH inline bool clearPointer(State& state) noexcept;
+  [[tbc::hot_path]] inline bool clearPointer(State& state) noexcept;
 
   // The pointer let go: its gesture ends.
-  TBC_HOT_PATH inline void release(State& state) noexcept;
+  [[tbc::hot_path]] inline void release(State& state) noexcept;
 
   // ---- plans --------------------------------------------------------------------------------------
 
   // Whether `plan` was made from copy mode as it stands.
-  [[nodiscard]] TBC_HOT_PATH inline bool current(const State& state, const CopyPlan& plan) noexcept;
+  [[nodiscard]] [[tbc::hot_path]] inline bool current(const State& state, const CopyPlan& plan) noexcept;
 
   // Copy mode becomes what `plan` leads to; false when it is no longer current.
-  TBC_HOT_PATH inline bool commit(State& state, const CopyPlan& plan) noexcept;
+  [[tbc::hot_path]] inline bool commit(State& state, const CopyPlan& plan) noexcept;
 
   // A frame of copy mode's pane arrived, its view at `previous_offset` before it: the cursor and
   // selection follow the rows the scrollback dropped.
-  TBC_HOT_PATH inline void follow(State& state, std::uint32_t previous_offset, const CopyGrid& grid) noexcept;
+  [[tbc::hot_path]] inline void follow(State& state, std::uint32_t previous_offset, const CopyGrid& grid) noexcept;
 
   // ---- the search ---------------------------------------------------------------------------------
 

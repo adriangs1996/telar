@@ -1,15 +1,15 @@
 #include "tbc/view.hpp"
 
-using int_view = tbc::view<int&, tbc::lt::a>;
+using int_view = tbc::view<const int&, tbc::lt::a>;
 
-int global_value = 1;
+const int global_value = 1;
 
 int_view fromReference(int_view value) {
   return value;
 }
 
 int_view fromStatic() {
-  static int value = 1;
+  static const int value = 1;
   return value;
 }
 

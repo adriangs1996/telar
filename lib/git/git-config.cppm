@@ -1,11 +1,9 @@
-module;
-#include "tbc/annotations.hpp"
-
 export module telar.git:config;
 
 import std;
 import telar.base.memory.allocators;
 import telar.base.ds;
+import telar.tbc;
 
 // A strict reader of git's config syntax. It only reports variables: nothing
 // it reads is executed, and include/includeIf are ordinary, ignored entries.
@@ -25,13 +23,13 @@ namespace telar::git {
   // malformed line, as git refuses such a file. `scratch` holds the unescaped
   // subsection and value; it grows once to twice the file size.
   template <Allocator Memory, typename Visitor>
-  TBC_GENERIC bool parseConfig(std::string_view text, ds::String<Memory>& scratch, Visitor&& visit) {
+  [[tbc::generic]] bool parseConfig(std::string_view text, ds::String<Memory>& scratch, Visitor&& visit) {
     // Stays generic over the caller's visitor, which the parser calls through a function pointer.
     using Target = std::remove_reference_t<Visitor>;
 
     auto&& visitor = std::forward<Visitor>(visit);
 
-    return parseConfigEntries(text, scratch, const_cast<std::remove_const_t<Target>*>(std::addressof(visitor)), [](void* target, const ConfigEntry& entry) -> bool {
+    return parseConfigEntries(text, scratch, tbc::raw(const_cast<std::remove_const_t<Target>*>(std::addressof(visitor))), [](void* target, const ConfigEntry& entry) -> bool {
       return (*static_cast<Target*>(target))(entry);
     });
   }

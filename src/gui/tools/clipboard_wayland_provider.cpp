@@ -139,10 +139,17 @@ int main(int argc, char** argv) {
     }
 
     readiness.stop();
+    auto* const board = QGuiApplication::clipboard();
+    if (board == nullptr) {
+      QCoreApplication::exit(1);
+
+      return;
+    }
+
     auto data = std::make_unique<ProviderData>(std::move(bytes), std::chrono::milliseconds{delay});
-    QGuiApplication::clipboard()->setMimeData(data.release());
+    board->setMimeData(data.release());
     QFile ready{arguments.at(static_cast<int>(Argument::ready))};
-    if (!QGuiApplication::clipboard()->ownsClipboard() || !ready.open(QIODevice::WriteOnly) || ready.write(QByteArrayLiteral("ready")) <= 0) {
+    if (!board->ownsClipboard() || !ready.open(QIODevice::WriteOnly) || ready.write(QByteArrayLiteral("ready")) <= 0) {
       QCoreApplication::exit(1);
     }
   });

@@ -217,13 +217,14 @@ namespace telar::runtime {
   }
 
   ds::Option<std::size_t> NvimScreen::indexOf(std::uint32_t id) const noexcept {
-    if (recent_ < grids_.size() && grids_[recent_]->id == id) {
-      return recent_;
+    const auto recent = recent_.get();
+    if (recent < grids_.size() && grids_[recent]->id == id) {
+      return recent;
     }
 
     for (std::size_t index = 0; index < grids_.size(); ++index) {
       if (grids_[index]->id == id) {
-        recent_ = index;
+        recent_.set(index);
         return index;
       }
     }
@@ -238,7 +239,7 @@ namespace telar::runtime {
   }
 
   NvimScreenGrid& NvimScreen::add(std::uint32_t id) {
-    recent_ = grids_.size();
+    recent_.set(grids_.size());
     return grids_.push(ds::makeBox<NvimScreenGrid>(memory_, memory_, id)).getMut();
   }
 

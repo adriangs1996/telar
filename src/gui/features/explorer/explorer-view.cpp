@@ -286,17 +286,16 @@ namespace telar::gui::features::explorer {
     // what is below it.
     void pushEntry(Build& build, const Level& level, std::uint32_t index) { // NOLINT(misc-no-recursion): a tree unfolds ViewLimits::depth directories deep at most
       constexpr std::uint64_t whole = 1000;
-      auto& window = build.window;
       const auto& directory = *build.state.directories[level.holder];
       const auto& entry = directory.entries[index];
       Text child{build.order.memory()};
 
       join(child, {.directory = level.path, .name = directory.name(entry)});
 
-      const bool expanded = entry.directory && holds(window.expanded, child.view());
+      const bool expanded = entry.directory && holds(build.window.expanded, child.view());
 
       place(
-          window,
+          build.window,
           {
               .kind = RowKind::entry,
               .depth = level.depth,
@@ -309,23 +308,22 @@ namespace telar::gui::features::explorer {
       );
 
       if (!entry.directory) {
-        pushUnfolded(window, build.state, child.view(), static_cast<std::uint8_t>(level.depth + 1));
+        pushUnfolded(build.window, build.state, child.view(), static_cast<std::uint8_t>(level.depth + 1));
       }
 
-      const auto own = window.rows.size();
+      const auto own = build.window.rows.size();
 
       if (expanded && std::cmp_less(level.depth + 1, ViewLimits::depth)) {
         walk(build, child.view(), static_cast<std::uint8_t>(level.depth + 1));
       }
 
       // An unfolded directory the filter kept only to look below it, where nothing matched.
-      if (expanded && window.rows.size() == own && !holdsFolded(directory.name(entry), window.filter.view())) {
-        window.rows.truncate(own - 1);
+      if (expanded && build.window.rows.size() == own && !holdsFolded(directory.name(entry), build.window.filter.view())) {
+        build.window.rows.truncate(own - 1);
       }
     }
 
     void walk(Build& build, std::string_view path, std::uint8_t depth) { // NOLINT(misc-no-recursion): a tree unfolds ViewLimits::depth directories deep at most
-      auto& window = build.window;
       const auto holder = holderOf(build.state, path);
       if (!holder) {
         return;
@@ -333,12 +331,12 @@ namespace telar::gui::features::explorer {
 
       const auto& directory = *build.state.directories[*holder];
       if (!directory.listed) {
-        pushText(window, {.kind = RowKind::note, .depth = depth}, "reading…");
+        pushText(build.window, {.kind = RowKind::note, .depth = depth}, "reading…");
         return;
       }
 
       if (directory.failed) {
-        pushText(window, {.kind = RowKind::note, .depth = depth}, "this account may not read it, or it is gone");
+        pushText(build.window, {.kind = RowKind::note, .depth = depth}, "this account may not read it, or it is gone");
         return;
       }
 
@@ -347,7 +345,7 @@ namespace telar::gui::features::explorer {
       Level level{.holder = *holder, .path = path, .depth = depth};
 
       level.largest = keepListed(build, directory, level);
-      sortListed(build.order.viewMut().subspan(first), directory, window.sort);
+      sortListed(build.order.viewMut().subspan(first), directory, build.window.sort);
       for (std::size_t place = first; place < build.order.size(); ++place) {
         pushEntry(build, level, build.order[place]);
       }
@@ -355,12 +353,12 @@ namespace telar::gui::features::explorer {
       build.order.truncate(first);
       pushAdded(build, path, depth);
       if (!directory.whole()) {
-        pushText(window, {.kind = RowKind::note, .depth = depth}, "reading more…");
+        pushText(build.window, {.kind = RowKind::note, .depth = depth}, "reading more…");
       } else if (directory.total > directory.entries.size()) {
         Text more{build.order.memory()};
 
         ds::formatTo(more, "… {} more entries are not listed", directory.total - directory.entries.size());
-        pushText(window, {.kind = RowKind::note, .depth = depth}, more.view());
+        pushText(build.window, {.kind = RowKind::note, .depth = depth}, more.view());
       }
     }
 
@@ -477,12 +475,16 @@ namespace telar::gui::features::explorer {
     }
 
     void buildTree(Window& window, const Pending& pending, const State& state) {
-      Build build{.window = window, .edits = pending.edits, .transfers = pending.transfers, .state = state, .order = ds::Vec<std::uint32_t, Memory>{window.rows.memory()}};
       const auto* root = find(state, window.root.view());
 
       window.loading = root == nullptr || !root->listed;
-      if (!window.loading) {
-        walk(build, window.root.view(), 0);
+      if (root != nullptr && root->listed) {
+        {
+          Build build{.window = window, .edits = pending.edits, .transfers = pending.transfers, .state = state, .order = ds::Vec<std::uint32_t, Memory>{window.rows.memory()}};
+
+          walk(build, root->path.view(), 0);
+        }
+
         pushLeftOut(window, pending.keymap);
       }
     }
@@ -5282,7 +5284,7 @@ namespace telar::gui::features::explorer {
       const bool known = listed != nullptr && (listed->failed || listed->whole());
       Candidates found{.files = path.files};
 
-      if (known) {
+      if (listed != nullptr && known) {
         gatherCandidates(found, *listed, stem);
       }
 

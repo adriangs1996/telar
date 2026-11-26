@@ -1,5 +1,4 @@
 module;
-#include "tbc/annotations.hpp"
 #include "telar_base/diagnostics/config.hpp"
 
 export module telar.runtime.core.execution_service;
@@ -54,8 +53,15 @@ export {
     // Limits the runtime and its clients reach. Any service may report one: a report is copied into a
     // fixed queue, and the runtime delivers the queue once no client is borrowed, recording each limit and
     // showing it to interactive clients. Nothing the service holds moves, so many services keep it.
-    class TBC_SHARED LimitService {
+    class [[tbc::shared]] LimitService {
     public:
+      LimitService() = default;
+      ~LimitService() = default;
+      LimitService(const LimitService&) = delete;
+      LimitService& operator=(const LimitService&) = delete;
+      LimitService(LimitService&&) = delete;
+      LimitService& operator=(LimitService&&) = delete;
+
       // Records a client's report at once, so a query in the same batch sees it; a control client's report
       // that is due is shown at the next delivery.
       void receive(RuntimeLimits& limits, ClientSession& client, const ReportLimit& message);
@@ -122,7 +128,7 @@ export {
 
       // Generic over the caller's admission, a callable; the handshake advances in the implementation unit.
       template <typename Admit>
-      TBC_GENERIC inline void event(const Event& event, const Admit& admit) {
+      [[tbc::generic]] inline void event(const Event& event, const Admit& admit) {
         auto descriptor = advance(event);
         if (!descriptor) {
           return;
@@ -217,7 +223,7 @@ export {
     // Generic over the pane type of its caller; an empty observer importers inline away.
     struct IgnorePaneInput {
       template <typename PaneType>
-      TBC_GENERIC inline void operator()(const PaneType& /*pane*/, std::span<const Byte> /*bytes*/) const noexcept {}
+      [[tbc::generic]] inline void operator()(const PaneType& /*pane*/, std::span<const Byte> /*bytes*/) const noexcept {}
     };
 
     // Where a pane launches, and how its terminal and shell start. `bare_prompt`: the client it is
@@ -238,7 +244,7 @@ export {
     // Kept whole: tests instantiate it with their own fake Poller and History (launch_failure_test's
     // FailingPoller and QueuedHistory).
     template <EventLoop Poller, HistoryEventSink History = DiscardedHistory>
-    class TBC_GENERIC PaneService {
+    class [[tbc::generic]] PaneService {
     public:
       // The panes it launches keep the allocator, and the service keeps what it is given, all in region `a`.
       inline explicit PaneService(tbc::mut_a<ConcurrentMemory> memory, tbc::mut_a<Poller> poller, tbc::mut_a<LimitService> limits, tbc::val_a<PaneLaunchOptions> options, tbc::mut_a<History> history = discarded_history) // NOLINT(performance-unnecessary-value-param): taken by value, the label says the views the options hold live in region `a`; a reference would demand it of the options themselves
@@ -778,7 +784,7 @@ export {
         const auto pane = requireTerminalGeneration(model.panes, request.pane_id, request.pane_generation).core.id;
         auto* client = clients.find(client_id);
         auto* attachment = client == nullptr ? nullptr : client->attachmentMut(pane);
-        if (attachment == nullptr || client->connection.flags().closing) {
+        if (client == nullptr || attachment == nullptr || client->connection.flags().closing) {
           throw RequestError{FailureCode::invalid_request, "Desktop state requires a live pane attachment"};
         }
 

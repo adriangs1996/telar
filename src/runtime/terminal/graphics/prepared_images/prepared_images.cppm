@@ -1,5 +1,4 @@
 module;
-#include "tbc/annotations.hpp"
 
 #include "telar_base/diagnostics/config.hpp"
 
@@ -82,7 +81,7 @@ export {
 
       // Generic over the caller's predicate, so it stays here.
       template <typename Consumer>
-      TBC_GENERIC inline void discardUnwanted(const Consumer& wanted) noexcept {
+      [[tbc::generic]] inline void discardUnwanted(const Consumer& wanted) noexcept {
         for (auto& slot : entries_.viewMut()) {
           if (slot && !wanted(slot->key, true)) {
             slot.reset();
@@ -141,7 +140,7 @@ export {
 
       // Generic over the caller's predicate, so it stays here.
       template <typename Consumer>
-      TBC_GENERIC inline void discardUnwanted(const Consumer& wanted) noexcept {
+      [[tbc::generic]] inline void discardUnwanted(const Consumer& wanted) noexcept {
         for (auto& entry : entries_.viewMut()) {
           if (entry && !wanted(entry->key, entry->shared)) {
             entry.reset();

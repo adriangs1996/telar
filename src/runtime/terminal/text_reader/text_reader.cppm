@@ -1,5 +1,4 @@
 module;
-#include "tbc/annotations.hpp"
 #include "telar_base/diagnostics/config.hpp"
 
 export module telar.runtime.terminal.text_reader;
@@ -305,9 +304,15 @@ export {
       static constexpr std::size_t maximum_spans = 4096;
       static constexpr std::size_t maximum_metadata_bytes = 153098 + (maximum_spans * 12) + 62;
 #if TELAR_DIAGNOSTICS
+      struct [[tbc::shared]] Counters {
+        diagnostics::FrameCounters take() const noexcept;
+
+        mutable diagnostics::FrameCounters value;
+      };
+
       void recordFrame(std::size_t bytes, bool snapshot) noexcept;
 
-      mutable diagnostics::FrameCounters counters_;
+      Counters counters_;
 #endif
       std::uint64_t pane_id_;
       tbc::val_a<ds::Vec<ScreenCell, ConcurrentMemory>> baseline_;
@@ -456,7 +461,7 @@ export {
 
       // ghostty's terminal, which lives apart from this object, by address only: raw, as a Rust FFI
       // `*mut` is.
-      TBC_RAW GhosttyTerminal handle() const noexcept;
+      [[tbc::raw]] GhosttyTerminal handle() const noexcept;
 
       const GhosttyAllocator* allocator() const noexcept;
 
@@ -464,19 +469,19 @@ export {
       diagnostics::TerminalStorageSnapshot storageMetrics() const;
 #endif
 
-      [[nodiscard]] TBC_HOT_PATH inline const Screen& screen() const noexcept {
+      [[nodiscard]] [[tbc::hot_path]] inline const Screen& screen() const noexcept {
         return screen_;
       }
 
-      [[nodiscard]] TBC_HOT_PATH inline const TerminalEffects& effects() const noexcept {
+      [[nodiscard]] [[tbc::hot_path]] inline const TerminalEffects& effects() const noexcept {
         return effects_;
       }
 
-      TBC_HOT_PATH inline TerminalEffects& effectsMut() noexcept {
+      [[tbc::hot_path]] inline TerminalEffects& effectsMut() noexcept {
         return effects_;
       }
 
-      [[nodiscard]] TBC_HOT_PATH inline const GraphicsStorage<ConcurrentMemory>& graphics() const noexcept {
+      [[nodiscard]] [[tbc::hot_path]] inline const GraphicsStorage<ConcurrentMemory>& graphics() const noexcept {
         return graphics_;
       }
 
@@ -533,7 +538,7 @@ export {
       // when a page holds no more hyperlinks; only a refused allocation means the pane's memory
       // ran out.
       struct GhosttyMemory {
-        TBC_HOT_PATH inline void* allocate(std::size_t size, std::size_t alignment) noexcept {
+        [[tbc::hot_path]] inline void* allocate(std::size_t size, std::size_t alignment) noexcept {
           auto* const pointer = memory.allocate(size, alignment);
           if (pointer == nullptr) {
             refusals.fetch_add(1, std::memory_order_relaxed);
@@ -542,7 +547,7 @@ export {
           return pointer;
         }
 
-        TBC_HOT_PATH inline void deallocate(void* pointer, std::size_t size, std::size_t alignment) noexcept {
+        [[tbc::hot_path]] inline void deallocate(void* pointer, std::size_t size, std::size_t alignment) noexcept {
           memory.deallocate(pointer, size, alignment);
         }
 
@@ -565,7 +570,7 @@ export {
       const TerminalMedia* media_ = nullptr;
       static constexpr std::size_t control_input_limit = std::size_t{128} * 1024;
       // The engine keeps the queue responses_ owns, a shared type, so the terminal stays where it was built.
-      tbc::val_a<control::Engine> control_;
+      tbc::val_self<control::Engine> control_;
       tbc::val_a<ByteQueue<ConcurrentMemory>> pending_control_input_;
       TerminalPurpose purpose_;
       CellProjection projection_;

@@ -1,5 +1,4 @@
 module;
-#include "tbc/annotations.hpp"
 #include "telar_base/memory/allocator.hpp"
 
 export module telar.base.memory.allocators;
@@ -40,7 +39,7 @@ export {
 
     // An allocator combinator on every allocation path, over any composed upstream.
     template <Allocator Upstream>
-    class TBC_SHARED TBC_GENERIC BufferAllocator {
+    class [[tbc::shared]] [[tbc::generic]] BufferAllocator {
     public:
       static constexpr bool thread_safe = false;
 

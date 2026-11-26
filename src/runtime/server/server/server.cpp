@@ -88,6 +88,7 @@ namespace telar::runtime::cli {
     const config::LocalModules modules{machine.state(), directory};
     const auto wrapped = pluginCallbackSource(memory, source, options.action);
     config::LimitNotices limits;
+    config::LimitNotices binding_limits;
     config::RetainedCommandTabRegistry commands;
 
     lua_pushnil(machine.state());
@@ -96,7 +97,7 @@ namespace telar::runtime::cli {
     config::RetainedActionValidator validator{definitions, limits, commands};
 
     machine.execute(wrapped, "@plugin-worker.lua");
-    const int reference = retainPluginCallback(machine.state(), validator, limits);
+    const int reference = retainPluginCallback(machine.state(), validator, binding_limits);
 
     lua_settop(machine.state(), 1);
 

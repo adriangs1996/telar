@@ -104,6 +104,9 @@ namespace telar::gui::inline foundation::inline system {
       }
 
       void awaitCapabilities() {
+        if (display_ == nullptr) {
+          return;
+        }
         if (synchronization_ != nullptr) {
           wl_callback_destroy(synchronization_);
         }
@@ -128,8 +131,9 @@ namespace telar::gui::inline foundation::inline system {
         // Qt owns the display and outlives this effect, which it calls back by address.
         display_ = tbc::raw(&display);
         native_.registry = display.wl_registry();
-        const auto* application = qGuiApp->nativeInterface<QNativeInterface::QWaylandApplication>();
-        native_.compositor = application->compositor();
+        if (const auto* application = qGuiApp->nativeInterface<QNativeInterface::QWaylandApplication>()) {
+          native_.compositor = application->compositor();
+        }
         for (const auto& global : display.globals()) {
           bind(global);
         }
@@ -167,7 +171,9 @@ namespace telar::gui::inline foundation::inline system {
           return;
         }
         if (display_ == nullptr) {
-          attachDisplay(*window->display());
+          if (auto* display = window->display()) {
+            attachDisplay(*display);
+          }
         }
         if (native_.surface != window->wlSurface()) {
           releaseSurface();

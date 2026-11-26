@@ -1,5 +1,4 @@
 module;
-#include "tbc/annotations.hpp"
 
 export module telar.runtime.terminal.shell_integration;
 
@@ -198,7 +197,7 @@ export namespace telar::runtime {
   // keeps the startup the user asked for. A template over the caller's argument range, so only
   // the walk stays here.
   template <std::ranges::input_range Arguments>
-  TBC_GENERIC inline ds::Option<IntegratedShell> integrableShell(const Arguments& arguments) noexcept {
+  [[tbc::generic]] inline ds::Option<IntegratedShell> integrableShell(const Arguments& arguments) noexcept {
     auto argument = std::ranges::begin(arguments);
     if (argument == std::ranges::end(arguments)) {
       return ds::none;

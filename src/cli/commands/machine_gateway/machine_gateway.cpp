@@ -2577,7 +2577,7 @@ namespace telar::runtime::cli::gateway_commands {
       ds::Vec<char*, Memory> arguments{memory};
 
       for (const auto& word : command) {
-        arguments.push(const_cast<char*>(word.data())); // NOLINT(cppcoreguidelines-pro-type-const-cast): posix_spawn's C signature takes the arguments as char*, and does not write them
+        arguments.push(tbc::raw(const_cast<char*>(word.data()))); // NOLINT(cppcoreguidelines-pro-type-const-cast): posix_spawn's C signature takes the arguments as char*, and does not write them
       }
 
       arguments.push(nullptr);

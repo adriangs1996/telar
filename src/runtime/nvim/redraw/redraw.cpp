@@ -1293,13 +1293,13 @@ namespace telar::runtime {
     Arguments arguments{notification};
     std::uint32_t batches = 0;
 
-    outcome.accepted = arguments.batches(batches);
+    context.outcome.accepted = arguments.batches(batches);
 
-    for (std::uint32_t batch = 0; outcome.accepted && batch < batches; ++batch) {
-      outcome.accepted = applyBatch(context, arguments);
+    for (std::uint32_t batch = 0; context.outcome.accepted && batch < batches; ++batch) {
+      context.outcome.accepted = applyBatch(context, arguments);
     }
 
-    outcome.accepted = outcome.accepted && !arguments.failed();
+    context.outcome.accepted = context.outcome.accepted && !arguments.failed();
     return outcome;
   }
 

@@ -94,11 +94,13 @@ namespace telar::remote {
     // connections still open: the process ends with them.
     template <typename Service>
     [[noreturn]] void runUntilStopped(Service& service) {
-      static Service* running = nullptr;
+      static std::atomic<Service*> running{nullptr};
 
-      running = &service;
+      running.store(&service, std::memory_order_release);
       stop_running.store([] noexcept {
-        running->stop();
+        if (auto* const current = running.load(std::memory_order_acquire)) {
+          current->stop();
+        }
       });
 
       if (::signal(SIGTERM, &onSignal) == SIG_ERR || ::signal(SIGINT, &onSignal) == SIG_ERR) {
@@ -285,7 +287,7 @@ namespace telar::remote {
       const runtime::ExecutablePath self;
       ds::Array<char, PATH_MAX + log_name_bytes> log{};
       auto command = ds::toArray("link");
-      const ds::Array<char*, 3> arguments{const_cast<char*>(self.cStr()), command.dataMut(), nullptr}; // NOLINT(cppcoreguidelines-pro-type-const-cast): posix_spawn's C signature takes the arguments as char*, and does not write them
+      const ds::Array<char*, 3> arguments{tbc::raw(const_cast<char*>(self.cStr())), command.dataMut(), nullptr}; // NOLINT(cppcoreguidelines-pro-type-const-cast): posix_spawn's C signature takes the arguments as char*, and does not write them
 
       std::format_to_n(log.dataMut(), log.size() - 1, "{}/gateway.start.log", paths.directory.view());
       static_cast<void>(runtime::cli::spawnDaemon(self.cStr(), arguments.data(), log.data()));

@@ -1,6 +1,3 @@
-module;
-#include "tbc/annotations.hpp"
-
 export module telar.gui.foundation.drawing:rounded_rectangle;
 
 import std;
@@ -51,7 +48,7 @@ namespace telar::gui::inline foundation::inline drawing {
 
     // Generic over the caller's visitor, so it stays here.
     template <typename Visitor>
-    TBC_GENERIC static PaintSink of(Visitor& visitor) noexcept {
+    [[tbc::generic]] static PaintSink of(Visitor& visitor) noexcept {
       return {
           .context = &visitor,
           .call = [](void* context, const RoundedRectanglePaint& paint) {

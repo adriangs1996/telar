@@ -1,6 +1,3 @@
-module;
-#include "tbc/annotations.hpp"
-
 export module telar.base.history;
 
 import std;
@@ -37,7 +34,7 @@ export {
     public:
       // Hands `keep` each run of `bytes`, and of what earlier pieces held, that is not a mark.
       template <typename Keep>
-      TBC_GENERIC inline void feed(std::span<const std::uint8_t> bytes, Keep keep) {
+      [[tbc::generic]] inline void feed(std::span<const std::uint8_t> bytes, Keep keep) {
         std::size_t index = 0;
 
         while (index < bytes.size()) {

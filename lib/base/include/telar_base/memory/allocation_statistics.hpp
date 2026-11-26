@@ -35,16 +35,18 @@ namespace telar {
 
 #if TELAR_DIAGNOSTICS
   // The allocation context of each thread, which the scopes below set.
-  inline thread_local AllocationPath current_allocation_path = AllocationPath::other; // NOLINT(cppcoreguidelines-avoid-non-const-global-variables): a thread's own state, which the scopes below set
-  inline thread_local bool terminal_allocation = false;                               // NOLINT(cppcoreguidelines-avoid-non-const-global-variables): a thread's own state, which the scopes below set
+  inline thread_local ds::Cell<AllocationPath> current_allocation_path{AllocationPath::other}; // NOLINT(cppcoreguidelines-avoid-non-const-global-variables): a thread's own state, which the scopes below set
+  inline thread_local ds::Cell<bool> terminal_allocation{false};                               // NOLINT(cppcoreguidelines-avoid-non-const-global-variables): a thread's own state, which the scopes below set
 
   class AllocationScope {
   public:
     explicit AllocationScope(AllocationPath path) noexcept
-        : previous_(std::exchange(current_allocation_path, path)) {}
+        : previous_(current_allocation_path.get()) {
+      current_allocation_path.set(path);
+    }
 
     ~AllocationScope() {
-      current_allocation_path = previous_;
+      current_allocation_path.set(previous_);
     }
 
     AllocationScope(const AllocationScope&) = delete;
@@ -59,10 +61,12 @@ namespace telar {
   class TerminalAllocationScope {
   public:
     TerminalAllocationScope() noexcept
-        : previous_(std::exchange(terminal_allocation, true)) {}
+        : previous_(terminal_allocation.get()) {
+      terminal_allocation.set(true);
+    }
 
     ~TerminalAllocationScope() {
-      terminal_allocation = previous_;
+      terminal_allocation.set(previous_);
     }
 
     TerminalAllocationScope(const TerminalAllocationScope&) = delete;

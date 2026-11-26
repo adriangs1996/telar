@@ -2,6 +2,7 @@ export module telar.runtime.host.proc_file;
 
 import std;
 import telar.sys.posix;
+import telar.tbc;
 
 import telar.platform.primitives;
 import telar.base.ds;
@@ -19,9 +20,9 @@ export {
 
       ds::Option<uid_t> owner() const noexcept;
 
-      ds::Option<std::string_view> read(const char* name, std::span<char> buffer) const noexcept;
+      tbc::val_a<ds::Option<std::string_view>> read(const char* name, tbc::val_a<std::span<char>> buffer) const noexcept;
 
-      ds::Option<std::string_view> link(const char* name, std::span<char> buffer) const noexcept;
+      tbc::val_a<ds::Option<std::string_view>> link(const char* name, tbc::val_a<std::span<char>> buffer) const noexcept;
 
     private:
       FileDescriptor directory_;

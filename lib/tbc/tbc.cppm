@@ -4,8 +4,7 @@ module;
 export module telar.tbc;
 
 // The declarations of tbc/view.hpp for module units, so that they import them instead of
-// including the header and its standard library in each global module fragment. A module
-// exports no macros: the annotations stay in tbc/annotations.hpp.
+// including headers in each global module fragment.
 export namespace tbc {
   using tbc::holds;
   using tbc::mut_a;
@@ -14,6 +13,7 @@ export namespace tbc {
   using tbc::mut_d;
   using tbc::mut_self;
   using tbc::mut_static;
+  using tbc::outlives;
   using tbc::raw;
   using tbc::ref_a;
   using tbc::ref_b;

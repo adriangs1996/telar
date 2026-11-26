@@ -42,7 +42,12 @@ namespace telar::gui::features::prompt {
       }
 
       static_cast<void>(all.insert(pane_id, CommandChecks{memory}));
-      return *all.findMut(pane_id);
+      auto* inserted = all.findMut(pane_id);
+      if (inserted == nullptr) {
+        throw std::logic_error{"Inserted command checks missing"};
+      }
+
+      return *inserted;
     }
 
     // What the pane learned of its shell's commands, forgotten after each command and change of
@@ -151,6 +156,10 @@ namespace telar::gui::features::prompt {
 
       static_cast<void>(lines.insert(pane_id, ds::makeBox<PaneLine>(memory, memory, pane_id, keymap)));
       found = lines.findMut(pane_id);
+    }
+
+    if (found == nullptr) {
+      throw std::logic_error{"Inserted prompt line missing"};
     }
 
     auto& line = found->getMut();
@@ -776,34 +785,35 @@ namespace telar::gui::features::prompt {
     }
 
     CompletionPlan result{memory};
-    auto& completion = result.completion;
 
-    completion = complete(memory, context, found, state.scratch.lend(), line.line.recent(), shell::Syntax{.dialect = dialect});
+    result.completion = complete(memory, context, found, state.scratch.lend(), line.line.recent(), shell::Syntax{.dialect = dialect});
 
     auto partial = context.partial.view();
-    if (partial.starts_with(completion.provider_prefix.view())) {
-      partial.remove_prefix(completion.provider_prefix.size());
+    if (partial.starts_with(result.completion.provider_prefix.view())) {
+      partial.remove_prefix(result.completion.provider_prefix.size());
     }
 
     // A remote shell's files, branches and commands are on its host: only the spec's own choices
     // apply there.
-    const bool files = wants(completion, "file");
+    const bool files = wants(result.completion, "file");
 
     if (asks && reads_directories && context.command_position && partial.contains('/')) {
       // A command named by its path: the executables and directories there.
       askDirectory(result, memory, partial, CompletionProvider::executable);
-    } else if (asks && reads_directories && (files || wants(completion, "directory"))) {
+    } else if (asks && reads_directories && (files || wants(result.completion, "directory"))) {
       askDirectory(result, memory, partial, files ? CompletionProvider::path : CompletionProvider::directory);
       askProviders(result, memory, context.command_position, partial, reads_references);
     } else if (asks) {
-      if (files || wants(completion, "directory")) {
+      if (files || wants(result.completion, "directory")) {
         askPaths(result, directory, memory, partial);
       }
 
       askProviders(result, memory, context.command_position, partial, reads_references);
     }
 
-    result.label.assign(sourceLabel(context, completion));
+    const auto label = sourceLabel(context, result.completion);
+
+    result.label.assign(label);
     result.dialect = dialect;
     result.context = std::move(context);
     return result;
@@ -952,29 +962,31 @@ namespace telar::gui::features::prompt {
   }
 
   void failAll(State& state, Lines& lines) noexcept {
-    auto& commands = state.command_requests;
-    auto& specs = state.spec_requests;
-    auto& completions = state.completions;
-
     state.history_request = 0;
     try {
-      while (!commands.empty()) {
-        static_cast<void>(fail(state, lines, (*commands.begin()).key));
+      while (!state.command_requests.empty()) {
+        const auto request_id = (*state.command_requests.begin()).key;
+
+        static_cast<void>(fail(state, lines, request_id));
       }
 
-      while (!specs.empty()) {
-        static_cast<void>(fail(state, lines, (*specs.begin()).key));
+      while (!state.spec_requests.empty()) {
+        const auto request_id = (*state.spec_requests.begin()).key;
+
+        static_cast<void>(fail(state, lines, request_id));
       }
 
-      while (!completions.empty()) {
-        static_cast<void>(fail(state, lines, (*completions.begin()).key));
+      while (!state.completions.empty()) {
+        const auto request_id = (*state.completions.begin()).key;
+
+        static_cast<void>(fail(state, lines, request_id));
       }
     } catch (const std::exception&) {
       // A menu that could not settle keeps its choices; no answer is waited for any more.
-      commands.clear();
-      specs.clear();
+      state.command_requests.clear();
+      state.spec_requests.clear();
       state.spec_completions.clear();
-      completions.clear();
+      state.completions.clear();
     }
   }
 

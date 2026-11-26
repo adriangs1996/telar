@@ -3,7 +3,7 @@
 // CASE: runtime.queue_reallocation
 // PAIR: runtime.queue_growth
 // SOURCE: lib/base/memory/containers/containers.cppm :: readable / reserve
-// STATUS: pending
+// STATUS: implemented
 // CONTRACT: reserve may free the storage used by readable views.
 // SCENARIO: Diagnose the invalidating call because an old view is read afterward.
 void queueReallocation(tbc::view<spec::byte_queue&> queue) {
@@ -17,7 +17,7 @@ void queueReallocation(tbc::view<spec::byte_queue&> queue) {
 // CASE: runtime.queue_growth_after_read
 // PAIR: runtime.queue_growth
 // SOURCE: lib/base/memory/containers/containers.cppm :: readable / reserve
-// STATUS: pending
+// STATUS: implemented
 // CONTRACT: Invalidating storage is legal after its borrowed view is no longer required.
 // SCENARIO: Read the old view before reserve and obtain a fresh view afterward.
 void queueGrowthAfterRead(tbc::view<spec::byte_queue&> queue) {
@@ -31,7 +31,7 @@ void queueGrowthAfterRead(tbc::view<spec::byte_queue&> queue) {
 // CASE: runtime.queue_compaction
 // PAIR: runtime.queue_compaction
 // SOURCE: lib/base/memory/containers/containers.cppm :: compact / appendUninitialized
-// STATUS: pending
+// STATUS: implemented
 // CONTRACT: Compaction changes the logical elements denoted by old views even without allocation.
 // SCENARIO: Address stability alone cannot preserve an old logical view.
 void queueCompaction(tbc::view<spec::byte_queue&> queue) {
@@ -45,7 +45,7 @@ void queueCompaction(tbc::view<spec::byte_queue&> queue) {
 // CASE: runtime.queue_copied_before_compaction
 // PAIR: runtime.queue_compaction
 // SOURCE: lib/base/memory/containers/containers.cppm :: compact
-// STATUS: pending
+// STATUS: implemented
 // CONTRACT: A vector copied from the readable range owns independent elements.
 // SCENARIO: Compaction cannot invalidate the copied bytes; accept.
 void queueCopiedBeforeCompaction(tbc::view<spec::byte_queue&> queue) {
@@ -60,7 +60,7 @@ void queueCopiedBeforeCompaction(tbc::view<spec::byte_queue&> queue) {
 // CASE: runtime.read_local_destination
 // PAIR: runtime.destination_origin
 // SOURCE: lib/base/memory/containers/containers.cppm :: read
-// STATUS: pending
+// STATUS: implemented
 // CONTRACT: read returns a view of destination, not of the stream receiver.
 // SCENARIO: A long-lived stream cannot make a local destination escape safely.
 spec::bytes_a readLocalDestination(tbc::view<const spec::retained_stream&, tbc::lt::b> stream) {
@@ -73,7 +73,7 @@ spec::bytes_a readLocalDestination(tbc::view<const spec::retained_stream&, tbc::
 // CASE: runtime.read_caller_destination
 // PAIR: runtime.destination_origin
 // SOURCE: lib/base/memory/containers/containers.cppm :: read
-// STATUS: pending
+// STATUS: implemented
 // CONTRACT: The result is bounded by destination storage, independently of receiver lifetime.
 // SCENARIO: A local stream may die while its caller-backed output view is returned.
 spec::bytes_a readCallerDestination(spec::writable_bytes_a destination) {
@@ -86,7 +86,7 @@ spec::bytes_a readCallerDestination(spec::writable_bytes_a destination) {
 // CASE: runtime.read_uninitialized_append
 // PAIR: runtime.append_initialization
 // SOURCE: lib/base/memory/containers/containers.cppm :: appendUninitialized
-// STATUS: pending
+// STATUS: implemented
 // CONTRACT: appendUninitialized grants writable storage, not initialized values.
 // SCENARIO: Reject a read of the appended range before any initializing write.
 void readUninitializedAppend(tbc::view<spec::byte_queue&> queue) {
@@ -99,7 +99,7 @@ void readUninitializedAppend(tbc::view<spec::byte_queue&> queue) {
 // CASE: runtime.initialize_append
 // PAIR: runtime.append_initialization
 // SOURCE: lib/base/memory/containers/containers.cppm :: appendUninitialized / append
-// STATUS: pending
+// STATUS: implemented
 // CONTRACT: The initializer must establish initialization for every output element; this effect remains a pending model.
 // SCENARIO: The read follows initialize, so the writable span now contains values.
 void initializeAppend(tbc::view<spec::byte_queue&> queue) {

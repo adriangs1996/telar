@@ -79,6 +79,37 @@ if(TELAR_SANITIZERS)
   target_link_options(telar-build-flags INTERFACE -fsanitize=address,undefined)
 endif()
 
+# Run the tbc Clang compiler plugin during C++ / Objective-C++ compilation so custom [[tbc::...]]
+# attributes parse natively (no macro header) and borrow-checking, interface-bodies, blank-lines,
+# and standard-containers run in the same parse without double-parsing every unit.
+option(TELAR_TBC_PLUGIN "Load tbc-plugin.so during C++ compilation" ON)
+set(TBC_PLUGIN "" CACHE FILEPATH "Path to tbc-plugin.so; defaults to lib/tbc/out/release/tbc-plugin.so")
+if(TELAR_TBC_PLUGIN)
+  set(telar_tbc_plugin "${TBC_PLUGIN}")
+  if(NOT telar_tbc_plugin)
+    set(telar_tbc_plugin "${CMAKE_SOURCE_DIR}/lib/tbc/out/release/tbc-plugin.so")
+  endif()
+  if(EXISTS "${telar_tbc_plugin}")
+    # Only the macOS units have had the blank lines of docs/code-style.md applied.
+    set(telar_tbc_plugin_checks "lifetime,interface-bodies,standard-containers")
+    if(APPLE)
+      string(APPEND telar_tbc_plugin_checks ",blank-lines")
+    endif()
+    target_compile_options(telar-build-flags INTERFACE
+      "$<$<COMPILE_LANGUAGE:CXX,OBJCXX>:-fplugin=${telar_tbc_plugin}>"
+      "$<$<COMPILE_LANGUAGE:CXX,OBJCXX>:-fplugin-arg-tbc-checks=${telar_tbc_plugin_checks}>"
+      "$<$<COMPILE_LANGUAGE:CXX,OBJCXX>:-fplugin-arg-tbc-warnings-as-errors>"
+      "$<$<COMPILE_LANGUAGE:CXX,OBJCXX>:-fplugin-arg-tbc-interface-allowlist=${CMAKE_SOURCE_DIR}/docs/build/interface-bodies-allowlist.txt>"
+      "$<$<COMPILE_LANGUAGE:CXX,OBJCXX>:-fplugin-arg-tbc-standard-containers-allowlist=${CMAKE_SOURCE_DIR}/docs/build/standard-containers-allowlist.txt>"
+      "$<$<COMPILE_LANGUAGE:CXX,OBJCXX>:-fplugin-arg-tbc-scope=lifetime=${CMAKE_BINARY_DIR}/checks/lifetime.txt>"
+      "$<$<COMPILE_LANGUAGE:CXX,OBJCXX>:-fplugin-arg-tbc-scope=interface-bodies=${CMAKE_BINARY_DIR}/checks/interface_bodies.txt>"
+      "$<$<COMPILE_LANGUAGE:CXX,OBJCXX>:-fplugin-arg-tbc-scope=blank-lines=${CMAKE_BINARY_DIR}/checks/blank_lines.txt>"
+      "$<$<COMPILE_LANGUAGE:CXX,OBJCXX>:-fplugin-arg-tbc-scope=standard-containers=${CMAKE_BINARY_DIR}/checks/standard_containers.txt>")
+  else()
+    message(FATAL_ERROR "tbc-plugin.so was not found at '${telar_tbc_plugin}'. Build it with `just tbc-plugin` or pass -DTELAR_TBC_PLUGIN=OFF.")
+  endif()
+endif()
+
 # Optimized builds link with ThinLTO, so a function body can inline into
 # callers in other translation units and modules. CMake's IPO compiles with
 # -flto=thin and archives with the toolchain's llvm-ar, which indexes the

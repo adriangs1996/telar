@@ -258,42 +258,44 @@ namespace telar::runtime {
   }
 
   TlsLibrary::TlsLibrary(ConcurrentMemory& memory) {
-    if (configured || CRYPTO_set_mem_functions(&allocate, &reallocate, &deallocate) != 1) {
+    if (configured.load(std::memory_order_acquire) || CRYPTO_set_mem_functions(&allocate, &reallocate, &deallocate) != 1) {
       throw std::logic_error{"TLS allocation must be configured once before using OpenSSL"};
     }
 
-    configured = true;
-    configured_memory = &memory;
+    configured.store(true, std::memory_order_release);
+    configured_memory.store(&memory, std::memory_order_release);
     if (OPENSSL_init_ssl(OPENSSL_INIT_NO_ATEXIT | OPENSSL_INIT_NO_LOAD_CONFIG, nullptr) != 1) {
       OPENSSL_cleanup();
-      configured_memory = nullptr;
+      configured_memory.store(nullptr, std::memory_order_release);
       throw std::bad_alloc{};
     }
   }
 
   TlsLibrary::~TlsLibrary() {
     OPENSSL_cleanup();
-    configured_memory = nullptr;
+    configured_memory.store(nullptr, std::memory_order_release);
   }
 
   bool TlsLibrary::uses(const ConcurrentMemory& memory) const noexcept { // NOLINT(readability-convert-member-functions-to-static): the instance a caller holds proves OpenSSL is configured
-    return configured_memory == &memory;
+    return configured_memory.load(std::memory_order_acquire) == &memory;
   }
 
   void* TlsLibrary::allocate(std::size_t size, const char* /*file*/, int /*line*/) noexcept {
-    if (configured_memory == nullptr || size == 0) {
+    auto* const memory = configured_memory.load(std::memory_order_acquire);
+    if (memory == nullptr || size == 0) {
       return nullptr;
     }
 
-    return CAllocationBlocks{*configured_memory}.allocate(size);
+    return CAllocationBlocks{*memory}.allocate(size);
   }
 
   void TlsLibrary::deallocate(void* pointer, const char* /*file*/, int /*line*/) noexcept {
-    if (pointer == nullptr) {
+    auto* const memory = configured_memory.load(std::memory_order_acquire);
+    if (pointer == nullptr || memory == nullptr) {
       return;
     }
 
-    CAllocationBlocks{*configured_memory}.release(pointer);
+    CAllocationBlocks{*memory}.release(pointer);
   }
 
   void* TlsLibrary::reallocate(void* pointer, std::size_t size, const char* file, int line) noexcept {
@@ -302,7 +304,12 @@ namespace telar::runtime {
       return nullptr;
     }
 
-    return configured_memory == nullptr ? nullptr : CAllocationBlocks{*configured_memory}.resize(pointer, size);
+    auto* const memory = configured_memory.load(std::memory_order_acquire);
+    if (memory == nullptr) {
+      return nullptr;
+    }
+
+    return CAllocationBlocks{*memory}.resize(pointer, size);
   }
 
   tbc::val_a<CertificateAuthority> CertificateAuthority::loadOrCreate(tbc::mut_a<ConcurrentMemory> memory, const TlsLibrary& library, int directory, AuthorityKind kind) {

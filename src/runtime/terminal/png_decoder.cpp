@@ -68,6 +68,10 @@ namespace telar::runtime {
     };
 
     bool decodePng(void* context, tbc::val_a<const GhosttyAllocator*> allocator, const Byte* bytes, std::size_t length, tbc::val_a<GhosttySysImage*> image) noexcept { // NOLINT(misc-const-correctness): GhosttySysDecodePngFn's C signature takes a mutable userdata
+      if (image == nullptr) {
+        return false;
+      }
+
       const auto limit = context == nullptr ? graphics_screen_bytes : *static_cast<const std::size_t*>(context);
       // GhosttySysDecodePngFn hands the PNG as a C pointer and length.
 #pragma clang unsafe_buffer_usage begin
@@ -95,7 +99,7 @@ namespace telar::runtime {
     }
 
     wuffs_base__io_buffer source{
-        .data = {.ptr = const_cast<Byte*>(bytes.data()), .len = bytes.size()}, // NOLINT(cppcoreguidelines-pro-type-const-cast): wuffs's io_buffer has no read-only form; the decoder only reads its source
+        .data = {.ptr = tbc::raw(const_cast<Byte*>(bytes.data())), .len = bytes.size()}, // NOLINT(cppcoreguidelines-pro-type-const-cast): wuffs's io_buffer has no read-only form; the decoder only reads its source
         .meta = {.wi = bytes.size(), .ri = 0, .pos = 0, .closed = true},
     };
 

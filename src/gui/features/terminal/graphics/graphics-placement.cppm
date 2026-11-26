@@ -1,5 +1,4 @@
 module;
-#include "tbc/annotations.hpp"
 
 // Where an image is drawn: the part of it a placement shows, the box it fills in the cells, and
 // the Unicode placeholders that place it in the text.

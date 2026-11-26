@@ -1,5 +1,4 @@
 module;
-#include "tbc/annotations.hpp"
 
 // The textures a window's frames draw images with: which stay resident, how many a frame may
 // draw, and the placements a frame keeps when there are more.
@@ -186,7 +185,7 @@ export {
 
     // Generic over the caller's texture resources: it only erases them for ImageResidencyTable.
     template <ImageTextureReleases Resources>
-    class TBC_GENERIC ImageResidency : public ImageResidencyTable {
+    class [[tbc::generic]] ImageResidency : public ImageResidencyTable {
     public:
       explicit ImageResidency(Resources& resources) noexcept
           : ImageResidencyTable(&resources, [](void* context, ImageTextureHandle handle) noexcept {

@@ -5,6 +5,7 @@ import telar.sys.socket;
 import telar.sys.process;
 import telar.sys.linux_api;
 import telar.sys.posix;
+import telar.tbc;
 
 import telar.runtime.host.proc_file;
 import telar.wire.vocabulary;
@@ -48,7 +49,7 @@ namespace telar::runtime {
     return identity(credentials.pid);
   }
 
-  ProcessArguments ProcessInspector::readArguments(pid_t process, std::span<char> buffer) noexcept {
+  tbc::val_a<ProcessArguments> ProcessInspector::readArguments(pid_t process, tbc::val_a<std::span<char>> buffer) noexcept {
     const auto bytes = ProcDirectory{process}.read("cmdline", buffer);
     return ProcessArguments{bytes.valueOr(std::string_view{})};
   }
@@ -66,8 +67,9 @@ namespace telar::runtime {
     constexpr std::size_t maximum_group_ports = 256;
     ListeningPorts ports;
     ds::Array<std::uint16_t, maximum_group_ports> found{};
+    const auto count = groupListeningPorts(uid_, group, found.viewMut());
 
-    for (const auto port : std::span{found}.first(groupListeningPorts(uid_, group, found.viewMut()))) {
+    for (const auto port : std::span{found}.first(count)) {
       ports.add(port);
     }
 

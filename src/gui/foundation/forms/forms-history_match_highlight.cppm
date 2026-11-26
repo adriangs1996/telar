@@ -1,6 +1,3 @@
-module;
-#include "tbc/annotations.hpp"
-
 export module telar.gui.foundation.forms:history_match_highlight;
 
 import std;
@@ -26,7 +23,7 @@ export {
 
       // Generic over the caller's sink, so it stays here; it runs per history row painted.
       template <HistoryMatchSink Sink>
-      TBC_GENERIC void paint(std::string_view text, Rect bounds, float cell_width, Sink& sink) {
+      [[tbc::generic]] void paint(std::string_view text, Rect bounds, float cell_width, Sink& sink) {
         GraphemeCursor cursor{text};
         std::uint32_t column = 0;
 

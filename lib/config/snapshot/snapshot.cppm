@@ -1,6 +1,3 @@
-module;
-#include "tbc/annotations.hpp"
-
 export module telar.config.snapshot;
 
 import std;
@@ -58,7 +55,7 @@ export {
     public:
       // Hands `consume` the root and then the selected profile's configuration.
       template <typename Consume>
-      TBC_GENERIC inline static void each(const lua::Value& root, std::string_view profile, Consume&& consume) {
+      [[tbc::generic]] inline static void each(const lua::Value& root, std::string_view profile, Consume&& consume) {
         consume(root);
         if (!profile.empty()) {
           const auto profiles = root.field("profiles");
@@ -71,7 +68,7 @@ export {
       // Hands `consume` the root's client table and then the selected profile's, with the root's
       // as the one it inherits from.
       template <typename Consume>
-      TBC_GENERIC inline static void clients(const lua::Value& root, std::string_view profile, Consume&& consume) {
+      [[tbc::generic]] inline static void clients(const lua::Value& root, std::string_view profile, Consume&& consume) {
         const auto client = root.field("client");
 
         consume(client, static_cast<const lua::Value*>(nullptr));
@@ -83,7 +80,7 @@ export {
       // Hands `consume` the client table in effect and the one it inherits from, if any, and
       // returns what `consume` returns.
       template <typename Consume>
-      TBC_GENERIC inline static decltype(auto) client(const lua::Value& root, std::string_view profile, Consume&& consume) {
+      [[tbc::generic]] inline static decltype(auto) client(const lua::Value& root, std::string_view profile, Consume&& consume) {
         const auto client = root.field("client");
 
         if (profile.empty()) {
@@ -96,7 +93,7 @@ export {
       // Hands each `client.prompt` binding to `binding` in order.
       template <typename Binding>
       // The settings view the strings the Lua state holds, region `a`.
-      [[nodiscard]] TBC_GENERIC inline static tbc::val_a<ClientLayerSettings> read(const lua::Value& configuration, Binding&& binding) {
+      [[nodiscard]] [[tbc::generic]] inline static tbc::val_a<ClientLayerSettings> read(const lua::Value& configuration, Binding&& binding) {
         return {
             .themes = ThemeReader::selection(configuration),
             .client = ClientReader::read(configuration.field("client"), std::forward<Binding>(binding)),
@@ -106,7 +103,7 @@ export {
 
     private:
       template <typename Consume>
-      TBC_GENERIC inline static decltype(auto) overlay(const lua::Value& root, std::string_view profile, const lua::Value& client, Consume&& consume) {
+      [[tbc::generic]] inline static decltype(auto) overlay(const lua::Value& root, std::string_view profile, const lua::Value& client, Consume&& consume) {
         const auto profiles = root.field("profiles");
         const auto selected = profiles.entry(profile);
         const auto configuration = selected.as("config");

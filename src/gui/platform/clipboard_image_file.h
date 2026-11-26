@@ -9,7 +9,14 @@ typedef struct TelarGuiClipboardImagePipe {
   int write_descriptor;
 } TelarGuiClipboardImagePipe;
 
+#ifdef __cplusplus
+[[tbc::raw]]
+#endif
 int telarGuiOpenClipboardImagePipe(TelarGuiClipboardImagePipe* pipe);
+
+#ifdef __cplusplus
+[[tbc::raw]]
+#endif
 int telarGuiOpenClipboardImageFile(const char* path);
 
 #ifdef __cplusplus
