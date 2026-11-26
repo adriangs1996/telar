@@ -33,6 +33,11 @@ export {
       // The arguments joined by spaces into `output`, cut where it ends.
       [[nodiscard]] tbc::val_a<std::string_view> joined(tbc::val_a<std::span<char>> output) const noexcept;
 
+      // As `joined`, but a shell reads back the same arguments: one that holds anything but letters,
+      // digits and `@%+=:,./_-` is written in single quotes, a quote in it as '\''. Only whole
+      // arguments fit `output`, so what is cut still pastes.
+      [[nodiscard]] tbc::val_a<std::string_view> quoted(tbc::val_a<std::span<char>> output) const noexcept;
+
     private:
       static ds::Option<std::string_view> next(std::string_view& remaining) noexcept;
 
@@ -87,9 +92,11 @@ export {
       FixedText<process_name_bytes> name;
     };
 
-    // A process's command line, its arguments joined by spaces, and the agent it runs.
+    // A process's command line, its arguments joined by spaces, its executable's path and the agent
+    // it runs. The path is empty when the system does not let the runtime read it.
     struct CommandLine {
       std::string_view text;
+      FixedText<process_path_bytes> path;
       AgentProvider provider = AgentProvider::unknown;
     };
 
@@ -129,6 +136,8 @@ export {
       [[nodiscard]] ListeningPorts listeningPorts(pid_t group) const noexcept;
       // Of any user's process the system lets the runtime read; the text views `output`.
       [[nodiscard]] tbc::val_a<CommandLine> commandLine(pid_t process, tbc::val_a<std::span<char>> output) const noexcept;
+      // The arguments as a shell reads them back (ProcessArguments::quoted); they view `output`.
+      [[nodiscard]] tbc::val_a<std::string_view> quotedArguments(pid_t process, tbc::val_a<std::span<char>> output) const noexcept;
 
     private:
       // The arguments view the caller's buffer.

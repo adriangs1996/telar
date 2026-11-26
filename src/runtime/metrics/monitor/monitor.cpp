@@ -889,7 +889,7 @@ namespace telar::runtime {
       text.fresh.owner = ownerOf(text.fresh, clients_.view().first(client_count_));
     }
 
-    displayCopy(text.arguments, inspector_.commandLine(pid, arguments.viewMut()).text);
+    displayCopy(text.arguments, inspector_.quotedArguments(pid, arguments.viewMut()));
     displayCopy(text.directory, inspector_.directory(pid).view());
     if (const auto identity = inspector_.identity(pid)) {
       text.ports = inspector_.listeningPorts(identity->process_group);

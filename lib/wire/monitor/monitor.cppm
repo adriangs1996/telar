@@ -299,7 +299,8 @@ export extern "C++" {
 
     struct MonitorDetail {
       MonitorProcess process{};
-      // Every argument, joined by spaces and cut to arguments_bytes.
+      // Every argument, as a shell reads them back: quoted where one needs it, and cut after the last
+      // whole argument that fits arguments_bytes.
       std::string_view arguments;
       std::string_view directory;
       std::span<const std::uint16_t> ports;

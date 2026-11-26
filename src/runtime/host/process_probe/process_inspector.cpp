@@ -139,6 +139,55 @@ namespace telar::runtime {
     return {output.data(), length};
   }
 
+  std::string_view ProcessArguments::quoted(std::span<char> output) const noexcept {
+    // A quote ends the quoted text, writes itself escaped and opens it again: '\''.
+    constexpr std::string_view escaped_quote = "'\\''";
+    const auto plain = [](char byte) {
+      return (byte >= 'a' && byte <= 'z') || (byte >= 'A' && byte <= 'Z') || (byte >= '0' && byte <= '9') || std::string_view{"@%+=:,./_-"}.contains(byte);
+    };
+
+    auto remaining = arguments_;
+    std::size_t length = 0;
+
+    while (const auto argument = next(remaining)) {
+      const auto bare = std::ranges::all_of(*argument, plain);
+      const auto quotes = static_cast<std::size_t>(std::ranges::count(*argument, '\''));
+      const auto separator = length == 0 ? std::size_t{0} : std::size_t{1};
+      const auto needed = bare ? argument->size() : argument->size() + 2 + (quotes * (escaped_quote.size() - 1));
+      if (length + separator + needed > output.size()) {
+        break;
+      }
+
+      auto written = output.subspan(length);
+
+      if (separator != 0) {
+        written[0] = ' ';
+        written = written.subspan(1);
+      }
+
+      if (bare) {
+        std::ranges::copy(*argument, written.begin());
+      } else {
+        auto cursor = written.begin();
+
+        *cursor++ = '\'';
+        for (const auto byte : *argument) {
+          if (byte == '\'') {
+            cursor = std::ranges::copy(escaped_quote, cursor).out;
+          } else {
+            *cursor++ = byte;
+          }
+        }
+
+        *cursor = '\'';
+      }
+
+      length += separator + needed;
+    }
+
+    return {output.data(), length};
+  }
+
   ds::Option<std::string_view> ProcessArguments::next(std::string_view& remaining) noexcept {
     const auto first = remaining.find_first_not_of('\0');
     if (first == std::string_view::npos) {
@@ -267,7 +316,13 @@ namespace telar::runtime {
     const auto arguments = readArguments(process, storage.viewMut());
     const auto provider = path.view().empty() ? AgentProvider::unknown : arguments.provider(manifests_, path.view());
 
-    return {.text = arguments.joined(output), .provider = provider};
+    return {.text = arguments.joined(output), .path = path, .provider = provider};
+  }
+
+  std::string_view ProcessInspector::quotedArguments(pid_t process, std::span<char> output) const noexcept {
+    ds::Array<char, maximum_process_argument_bytes> storage; // NOLINT(cppcoreguidelines-pro-type-member-init): sysctl writes the arguments it reports, and only those are read, so zeroing 16 KiB per process is work no read needs
+
+    return readArguments(process, storage.viewMut()).quoted(output);
   }
 
   // A manifest's display name always fits a process name.
