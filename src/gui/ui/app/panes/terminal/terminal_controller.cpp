@@ -7,7 +7,10 @@ static_assert(true);
 #include "telar_base/memory/allocator.hpp"
 #include "terminal_item.hpp"
 #include "ui/kit/cell_scene/window_images.hpp"
+#include "ui/kit/models/projection.hpp"
+#include <QClipboard>
 #include <QCoreApplication>
+#include <QGuiApplication>
 #include <QtCore/qtypes.h>
 #include <algorithm>
 #include <exception>
@@ -133,9 +136,37 @@ namespace telar::gui::qt {
     }
   }
 
-  void TerminalController::selectBlock(std::uint64_t pane_id, ds::Option<std::size_t> index) {
+  void TerminalController::copyBlock(std::uint64_t pane_id, std::size_t index, application::BlockCopy what) {
+    auto& session = store_.sessionMut();
+
     try {
-      store_.sessionMut().selectBlock(pane_id, index);
+      static_cast<void>(session.copyBlock({.pane_id = pane_id, .index = index}, what));
+    } catch (const std::exception& error) {
+      emit failed(QString::fromUtf8(error.what()));
+    }
+
+    // A command copied from the block's own text, not its rows, is written here.
+    if (session.takeClipboardWrite()) {
+      QGuiApplication::clipboard()->setText(toQString(session.clipboard()));
+    }
+
+    emit terminalChanged(pane_id);
+  }
+
+  void TerminalController::stepBlock(std::uint64_t pane_id, application::BlockStep direction) {
+    try {
+      store_.sessionMut().stepBlockFromWindow(pane_id, direction);
+    } catch (const std::exception& error) {
+      emit failed(QString::fromUtf8(error.what()));
+    }
+
+    prompt_.publish(pane_id);
+    emit terminalChanged(pane_id);
+  }
+
+  void TerminalController::selectBlock(std::uint64_t pane_id, ds::Option<std::size_t> index, bool typing_leaves) {
+    try {
+      store_.sessionMut().selectBlock(pane_id, index, typing_leaves);
     } catch (const std::exception& error) {
       emit failed(QString::fromUtf8(error.what()));
     }

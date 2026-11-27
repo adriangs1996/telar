@@ -156,6 +156,20 @@ namespace {
     deliver(client, atPrompt(3, 1));
     check(transport.inputSince(before).empty() && prompt::line(client, 1)->text() == "deploy", "a failure keeps the queued command as a draft");
 
+    // A key that reaches the program after the line was queued, as the end-of-file that ends
+    // `cat`, keeps the line from running: it may have been meant for the program.
+    prompt::key(client, 1, prompt::KeyPress{.key = prompt::Key::character, .character = 'u', .modifiers = {.control = true}});
+    deliver(client, running(2));
+    before = transport.sent.size();
+    typeKeys(client, "rm -rf build");
+    enter(client);
+    check(prompt::line(client, 1)->queued(), "Enter arms the line");
+    prompt::key(client, 1, prompt::KeyPress{.key = prompt::Key::character, .character = 'd', .modifiers = {.control = true}});
+    check(!prompt::line(client, 1)->queued(), "end-of-file to the program disarms it");
+    deliver(client, atPrompt(3, 0));
+    check(transport.commandsSince(before).empty() && prompt::line(client, 1)->text() == "rm -rf build", "the line waits instead of running");
+    prompt::key(client, 1, prompt::KeyPress{.key = prompt::Key::character, .character = 'u', .modifiers = {.control = true}});
+
     // A password prompt gets the keys; the line only counts them.
     deliver(client, running(3, false));
     check(prompt::surface(client, 1) == prompt::Surface::secret, "echo off is a secret");
@@ -163,6 +177,12 @@ namespace {
     client.input(1, "a");
     client.input(1, "b");
     check(prompt::line(client, 1)->secretKeys() == 2, "the line counts the hidden keys");
+    client.input(1, "\x7f");
+    check(prompt::line(client, 1)->secretKeys() == 1, "Backspace erases one of them");
+    client.input(1, "\xc3\xb1");
+    check(prompt::line(client, 1)->secretKeys() == 2, "a character of several bytes is one key");
+    client.input(1, "\x15");
+    check(prompt::line(client, 1)->secretKeys() == 0, "Ctrl-U erases them all");
     deliver(client, atPrompt(4, 0));
     check(prompt::line(client, 1)->secretKeys() == 0, "the count clears with the prompt");
 
@@ -202,18 +222,27 @@ namespace {
       return false;
     };
 
-    // Without bracketed paste the shell would run each line of it on its own.
-    const auto before = transport.sent.size();
+    // Without bracketed paste a line break is Enter: the shell reads the command a line at a
+    // time, asking for the rest as it does for one typed, so it runs whole.
+    auto before = transport.sent.size();
 
     typeKeys(client, "echo 'a");
     check(enter(client) == prompt::Outcome::edited, "an open quote continues on a new line");
     typeKeys(client, "b'");
-    check(refused(), "a multi-line command the shell cannot take whole is refused");
-    check(transport.commandsSince(before).empty() && transport.inputSince(before).empty(), "nothing reaches the shell");
-    check(prompt::line(client, 1)->text() == "echo 'a\nb'", "the command stays in the editor");
-    check(prompt::line(client, 1)->recent().empty() && prompt::history(client).empty(), "a command never sent is not remembered");
+    check(enter(client) == prompt::Outcome::run && transport.commandsSince(before) == std::vector<std::string>{"echo 'a\nb'"}, "a multi-line command reaches the shell");
 
-    // An answer to a running program is checked the same way.
+    // A tab would complete: a command with one is refused, and stays in the editor.
+    before = transport.sent.size();
+    client.paste(1, "printf 'a\tb'");
+    check(refused(), "a command with a tab the shell cannot take whole is refused");
+    check(transport.commandsSince(before).empty() && transport.inputSince(before).empty(), "nothing reaches the shell");
+    check(prompt::line(client, 1)->text() == "printf 'a\tb'", "the command stays in the editor");
+    prompt::key(client, 1, prompt::KeyPress{.key = prompt::Key::character, .character = 'u', .modifiers = {.control = true}});
+    typeKeys(client, "echo 'a");
+    enter(client);
+    typeKeys(client, "b'");
+
+    // An answer to a running program is checked as before: a line break would end it early.
     deliver(client, running(1));
     prompt::key(client, 1, prompt::KeyPress{.key = prompt::Key::enter, .modifiers = {.alt = true}});
     check(prompt::line(client, 1)->answering(), "Alt-Enter answers the program");
@@ -671,6 +700,27 @@ command = "switch" : "Switch branches" , { @branch } | "status" : "Show the work
     deliver(client, CompletionWords{.request_id = transport.last<CompleteWords>().request_id, .words = found});
     typeKeys(client, "l ");
     check(!prompt::line(client, 1)->menu() && prompt::line(client, 1)->text() == "tel ", "a space leaves the word and closes the menu");
+
+    // What every choice starts with is written at once, as zsh and fish do; Space after Tab
+    // took one through the choices takes it.
+    prompt::key(client, 1, prompt::KeyPress{.key = prompt::Key::character, .character = 'u', .modifiers = {.control = true}});
+    typeKeys(client, "pro");
+    tab(client);
+    const ds::Array projects{CompletionWord{.text = "project-a"}, CompletionWord{.text = "project-b"}};
+
+    deliver(client, CompletionWords{.request_id = transport.last<CompleteWords>().request_id, .words = projects});
+    check(prompt::line(client, 1)->text() == "project-" && prompt::line(client, 1)->menu() && prompt::line(client, 1)->menu()->choices.size() == 2, "the start every choice shares is written, the menu open");
+    tab(client);
+    prompt::key(client, 1, prompt::KeyPress{.key = prompt::Key::character, .character = ' ', .text = " "});
+    check(!prompt::line(client, 1)->menu() && prompt::line(client, 1)->text() == "project-b ", "Space takes the choice Tab went to");
+
+    // A word that starts no choice as typed starts them ignoring case.
+    prompt::key(client, 1, prompt::KeyPress{.key = prompt::Key::character, .character = 'u', .modifiers = {.control = true}});
+    typeKeys(client, "pro");
+    tab(client);
+    deliver(client, CompletionWords{.request_id = transport.last<CompleteWords>().request_id, .words = projects});
+    typeKeys(client, "A");
+    check(prompt::line(client, 1)->menu() && prompt::line(client, 1)->menu()->choices.size() == 1 && prompt::line(client, 1)->menu()->choices[0].text == "project-a", "typing narrows ignoring case when nothing matches as typed");
   }
 
   // A spec's provider completes branches, and the history suggests whole commands.
@@ -1036,9 +1086,14 @@ command = "switch" : "Switch branches" , { @branch } | "status" : "Show the work
     const auto copied = transport.last<CopySelection>();
 
     check(copied.start_y == output_first && copied.end_y == output_last && copied.linewise, "Y copies the block's output");
+    // yc reads the command whole from the rows it was typed on, from where its text starts.
     press(client, 'y');
     press(client, 'c');
-    check(client.takeClipboardWrite() && std::string_view{client.clipboard()} == "make test", "yc copies its command");
+    const auto command = transport.last<CopySelection>();
+
+    check(command.start_y <= command.end_y && command.end_y < output_first && command.linewise, "yc copies the rows of its command");
+    deliver(client, PaneClipboard{.pane_id = 1, .bytes = byteView("% make test --keep-going")});
+    check(std::string_view{client.clipboard()} == "make test --keep-going", "yc copies its command whole, without what came before it");
 
     // v selects its output in copy mode, and the editor stays in place of the prompt.
     press(client, 'v');
@@ -1104,29 +1159,39 @@ command = "switch" : "Switch branches" , { @branch } | "status" : "Show the work
     return client.findPane(1)->screen.scroll().offset;
   }
 
-  // Selecting, jumping between and scrolling around the blocks.
+  // Selecting, jumping between and scrolling around the blocks. A separator out of view comes
+  // to the top, where no pinned separator covers it.
   template <typename Client>
   void stepsThroughBlocks(Client& client) {
     prompt::key(client, 1, prompt::KeyPress{.key = prompt::Key::escape});
     control(client, 'u');
-    check(client.selectedBlock(1) == std::size_t{2} && top(client) == last_block_row - 1, "Ctrl-U selects the last block above its prompt");
+    check(client.selectedBlock(1) == std::size_t{2} && top(client) == last_block_row, "Ctrl-U selects the last block above its prompt");
     press(client, '[');
     press(client, 'f');
-    check(client.selectedBlock(1) == std::size_t{1} && top(client) == failed_block_row - 1, "[f steps to the failed block");
+    check(client.selectedBlock(1) == std::size_t{1} && top(client) == failed_block_row, "[f steps to the failed block");
     control(client, 'o');
-    check(top(client) == last_block_row - 1, "Ctrl-O goes back to where the jump left");
+    check(top(client) == last_block_row && client.selectedBlock(1) == std::size_t{2}, "Ctrl-O goes back to where the jump left, and selects the block there");
     control(client, 'i');
-    check(top(client) == failed_block_row - 1, "Ctrl-I comes forward again");
+    check(top(client) == failed_block_row, "Ctrl-I comes forward again");
     press(client, 'j');
-    check(top(client) == failed_block_row, "j moves the view down a row");
+    check(top(client) == failed_block_row + 1, "j moves the view down a row");
     press(client, 'k');
-    check(top(client) == failed_block_row - 1, "k moves it up a row");
+    check(top(client) == failed_block_row, "k moves it up a row");
     press(client, 'g');
     press(client, 'g');
-    check(top(client) == 0 && client.selectedBlock(1) == std::size_t{1}, "gg goes to the top, keeping the block");
+    check(top(client) == 0 && client.selectedBlock(1) == std::size_t{0}, "gg goes to the top and selects the first block");
+    prompt::key(client, 1, prompt::KeyPress{.key = prompt::Key::down});
+    check(client.selectedBlock(1) == std::size_t{1} && top(client) == failed_block_row, "Down steps to the next block");
+    press(client, 'z');
+    press(client, 'b');
     press(client, 'z');
     press(client, 't');
     check(top(client) == failed_block_row, "zt puts the block's separator at the top");
+    // A chord the next key does not end lets that key be read on its own.
+    press(client, 'y');
+    press(client, 'j');
+    check(top(client) == failed_block_row + 1 && !client.takeClipboardWrite(), "y then j moves the view and copies nothing");
+    press(client, 'k');
   }
 
   template <typename Client>
@@ -1198,6 +1263,76 @@ command = "switch" : "Switch branches" , { @branch } | "status" : "Show the work
 
     press(client, 'G');
     check(!client.selectedBlock(1) && top(client) == motions_live_top, "G goes back to the live end");
+  }
+
+  // A block the pointer selected leaves the keys that type to the editor, and a selected block
+  // stays selected as rows drop from the top of the scrollback.
+  void lineBlocksTypingLeaves() {
+    SystemAllocator memory;
+    Transport transport;
+    TestSession client{memory, transport};
+
+    openBlocksAtLiveEnd(client, transport);
+    auto configuration = client.configuration;
+
+    configuration.prompt.keymap = PromptKeymap::emacs;
+    application::configuration::configure(client, configuration);
+    client.selectBlock(1, std::size_t{1}, true);
+    check(client.selectedBlock(1) == std::size_t{1}, "a click selects the block");
+    prompt::key(client, 1, prompt::KeyPress{.key = prompt::Key::up});
+    check(client.selectedBlock(1) == std::size_t{0}, "Up steps to the block above");
+    typeKeys(client, "git");
+    check(!client.selectedBlock(1) && prompt::line(client, 1)->text() == "git", "typing goes to the editor whole");
+
+    constexpr std::uint64_t dropped = 15;
+
+    client.selectBlock(1, std::size_t{1});
+    deliver(client, PaneScrollback{.pane_id = 1, .generation = 1, .trimmed = dropped});
+    check(client.selectedBlock(1) == std::size_t{0}, "the block stays selected after the rows above it are dropped");
+    const ds::Array blocks{
+        CommandBlock{.row = failed_block_row - dropped, .rows = 1, .state = CommandBlockState::failed, .status = 1, .command = "make"},
+        CommandBlock{.row = last_block_row - dropped, .rows = 1, .state = CommandBlockState::succeeded, .command = "git log"},
+    };
+
+    deliver(client, PaneBlocks{.pane_id = 1, .blocks = blocks});
+    check(client.selectedBlock(1) == std::size_t{0}, "and when its blocks come again");
+  }
+
+  // The runtime sends its newest blocks: the older ones stay while their rows do, and go when
+  // the rows are numbered anew.
+  void lineKeepsOlderBlocks() {
+    SystemAllocator memory;
+    Transport transport;
+    TestSession client{memory, transport};
+
+    openBlocksAtLiveEnd(client, transport);
+    constexpr std::uint32_t newest_row = 90;
+    const ds::Array newest{
+        CommandBlock{.row = failed_block_row, .rows = 1, .state = CommandBlockState::failed, .status = 1, .command = "make"},
+        CommandBlock{.row = last_block_row, .rows = 1, .state = CommandBlockState::succeeded, .command = "git log"},
+        CommandBlock{.row = newest_row, .rows = 1, .state = CommandBlockState::succeeded, .command = "ls -la"},
+    };
+
+    deliver(client, PaneBlocks{.pane_id = 1, .blocks = newest});
+    const auto& blocks = client.findPane(1)->blocks;
+
+    check(blocks.size() == 4 && blocks[0].command == "ls" && blocks[3].command == "ls -la", "the block the runtime no longer sends stays, with its line");
+    deliver(client, PaneBlocks{.pane_id = 1, .blocks = newest});
+    check(blocks.size() == 4 && blocks[0].command == "ls" && blocks[1].command == "make", "and stays as the same blocks come again");
+    constexpr std::uint32_t trimmed = 15;
+
+    deliver(client, PaneScrollback{.pane_id = 1, .generation = 1, .trimmed = trimmed});
+    check(blocks.size() == 3 && blocks[0].command == "make", "it goes with its rows");
+    // The runtime numbers the rows from the scrollback's new top.
+    const ds::Array moved{
+        CommandBlock{.row = last_block_row - trimmed, .rows = 1, .state = CommandBlockState::succeeded, .command = "git log"},
+        CommandBlock{.row = newest_row - trimmed, .rows = 1, .state = CommandBlockState::succeeded, .command = "ls -la"},
+    };
+
+    deliver(client, PaneBlocks{.pane_id = 1, .blocks = moved});
+    check(blocks.size() == 3 && blocks[0].command == "make" && blocks[2].command == "ls -la", "a block the runtime drops after it stays in turn");
+    deliver(client, PaneScrollback{.pane_id = 1, .generation = 2, .trimmed = 0});
+    check(blocks.size() == 2 && blocks[0].command == "git log", "rows numbered anew forget the blocks kept");
   }
 
   // Ctrl-R and the path search start from the command the line holds, and the path chosen
@@ -1358,5 +1493,7 @@ command = "switch" : "Switch branches" , { @branch } | "status" : "Show the work
   const telar::testing::Case case_line_queues_across_the_hooks{"prompt_session.line_queues_across_the_hooks", lineQueuesAcrossTheHooks};
   const telar::testing::Case case_running_program_takes_its_keys{"prompt_session.running_program_takes_its_keys", runningProgramTakesItsKeys};
   const telar::testing::Case case_line_block_motions{"prompt_session.line_block_motions", lineBlockMotions};
+  const telar::testing::Case case_line_keeps_older_blocks{"prompt_session.line_keeps_older_blocks", lineKeepsOlderBlocks};
+  const telar::testing::Case case_line_blocks_typing_leaves{"prompt_session.line_blocks_typing_leaves", lineBlocksTypingLeaves};
 
 }

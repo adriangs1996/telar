@@ -64,6 +64,9 @@ namespace telar::gui::qt {
     std::shared_ptr<const FontCollection> fonts;
     FontGrid grid;
     CellSelection selection;
+    // Whether `selection` counts the drawn rows rather than the screen's: a view that draws its
+    // own rows selects the rows it shows, wherever they come from.
+    bool selection_drawn = false;
     QRectF bounds;
     qreal scale = 1;
     std::uint64_t appearance = 0;
@@ -159,11 +162,20 @@ namespace telar::gui::qt {
       return ds::none;
     }
 
+    // The row `selection` counts drawn row `index` as, if it counts it.
+    [[nodiscard]] ds::Option<std::size_t> selectionRow(std::size_t index) const noexcept {
+      if (!selection_drawn) {
+        return screenRow(index);
+      }
+
+      return index < rowCount() ? ds::Option<std::size_t>{index} : ds::none;
+    }
+
     // Whether the cell at `cell.x` of drawn row `cell.y` is selected.
     [[nodiscard]] bool selected(CellPosition cell) const noexcept {
-      const auto screen_row = screenRow(cell.y);
+      const auto row = selectionRow(cell.y);
 
-      return screen_row && selection.contains((*screen_row * screen.columns()) + cell.x);
+      return row && selection.contains((*row * screen.columns()) + cell.x);
     }
 
     [[nodiscard]] bool hidden(std::size_t row) const noexcept {

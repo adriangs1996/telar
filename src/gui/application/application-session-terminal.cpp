@@ -273,7 +273,18 @@ namespace telar::gui::application {
   }
 
   Change Session::apply(const PaneClipboard& message) {
-    clipboard_.assign(textView(message.bytes));
+    auto text = textView(message.bytes);
+
+    // A command copied from its rows starts where its own text does.
+    if (!command_copy_.empty() && message.pane_id == command_copy_pane_) {
+      if (const auto start = text.find(command_copy_.view()); start != std::string_view::npos) {
+        text.remove_prefix(start);
+      }
+
+      command_copy_.clear();
+    }
+
+    clipboard_.assign(text);
 
     return Change::clipboard;
   }
@@ -420,15 +431,25 @@ namespace telar::gui::application {
       return Change::none;
     }
 
+    const auto selected = selectedBlockKey(*pane);
+    const bool renumbered = pane->scrollback_generation != message.generation;
+
+    // Renumbered rows: the blocks kept past the runtime's no longer name theirs.
+    if (renumbered) {
+      pane->forgetKeptBlocks();
+    }
+
     if (pane->scrollback_generation == message.generation && message.trimmed > pane->scrollback_trimmed) {
       // The blocks come again with their rows moved up; until then they are moved here, so
       // their folds keep hiding the same rows.
       const auto dropped = message.trimmed - pane->scrollback_trimmed;
 
       pane->scrollback_dropped += dropped;
-      static_cast<void>(pane->blocks.retain([dropped](const CommandBlock& block) {
+      const auto removed = pane->blocks.retain([dropped](const CommandBlock& block) {
         return block.row >= dropped;
-      }));
+      });
+
+      pane->kept_blocks -= std::min(pane->kept_blocks, removed);
 
       for (auto& block : pane->blocks.viewMut()) {
         block.row -= static_cast<std::uint32_t>(dropped);
@@ -457,6 +478,8 @@ namespace telar::gui::application {
     pane->scrollback_generation = message.generation;
     pane->scrollback_trimmed = message.trimmed;
     pane->rows.number(message.generation);
+    // Rows dropped from the top keep each block's key; renumbered rows leave nothing to find.
+    restoreBlock(*pane, renumbered ? ds::none : selected);
     refreshFolds(*pane);
     changed_pane_ = pane->id;
     return Change::terminal;

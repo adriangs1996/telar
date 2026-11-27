@@ -56,8 +56,8 @@ export {
         }
 
         return {
-            HistoryActionLabel{.key = "Ctrl+C", .word = "copy", .action = HistoryCardAction::copy},
-            HistoryActionLabel{.key = "Ctrl+D", .word = "delete", .action = HistoryCardAction::erase},
+            HistoryActionLabel{.key = "Ctrl+Shift+C", .word = "copy", .action = HistoryCardAction::copy},
+            HistoryActionLabel{.key = "Ctrl+Shift+D", .word = "delete", .action = HistoryCardAction::erase},
             HistoryActionLabel{.key = "Alt+Enter", .word = "go to pane", .action = HistoryCardAction::visit},
         };
       }

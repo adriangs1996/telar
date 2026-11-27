@@ -53,6 +53,8 @@ namespace telar::gui::qt {
     // are; and copy mode on this pane: "" when off, else "copy", "visual" or "visual-line".
     Q_PROPERTY(int block READ block NOTIFY stateChanged)
     Q_PROPERTY(int blocks READ blocks NOTIFY stateChanged)
+    // Whether the keys that type let the selected block go, as after a click on it.
+    Q_PROPERTY(bool blockTyping READ blockTyping NOTIFY stateChanged)
     Q_PROPERTY(QString copying READ copying NOTIFY stateChanged)
     Q_PROPERTY(bool queued READ queued NOTIFY stateChanged)
     Q_PROPERTY(bool answering READ answering NOTIFY stateChanged)
@@ -119,6 +121,7 @@ namespace telar::gui::qt {
     [[nodiscard]] bool suggesting() const noexcept;
     [[nodiscard]] int block() const noexcept;
     [[nodiscard]] int blocks() const noexcept;
+    [[nodiscard]] bool blockTyping() const noexcept;
     [[nodiscard]] QString copying() const;
     [[nodiscard]] bool queued() const noexcept;
     [[nodiscard]] bool answering() const noexcept;
@@ -148,6 +151,10 @@ namespace telar::gui::qt {
     [[nodiscard]] qreal cellWidth() const noexcept;
     [[nodiscard]] qreal cellHeight() const noexcept;
 
+    // A click at `point`, in this item's coordinates: the cursor goes to the character there, or
+    // to the end of the row past its last.
+    Q_INVOKABLE void placeCaret(QPointF point);
+
     // Rebuilds the layout from the session's editor.
     void refresh();
     // The pane's line or screen moved: refreshes when this editor shows that pane, keeping the
@@ -172,24 +179,17 @@ namespace telar::gui::qt {
     QSGNode* updatePaintNode(QSGNode* previous, UpdatePaintNodeData* data) override;
 
   private:
-    // Text that just arrived: a typed character rises into place, a completion sweeps in from
-    // the accent colour, one character after another.
-    enum class Motion : std::uint8_t {
-      rise,
-      sweep,
-    };
-
+    // Text a completion or a suggestion taken just wrote: it sweeps in from the accent colour,
+    // one character after another.
     struct Fresh {
       std::size_t start = 0;
       std::size_t end = 0;
-      Motion motion = Motion::rise;
       qint64 started_ms = 0;
     };
 
-    // How a run shows: its colour, how far below its place it sits and how opaque it is.
+    // How a run shows: its colour and how opaque it is.
     struct RunLook {
       QColor color;
-      qreal lift = 0;
       qreal opacity = 1;
     };
 

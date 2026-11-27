@@ -96,6 +96,7 @@ namespace telar::gui::application {
         nvim(allocator),
         decode_(allocator),
         clipboard_(allocator),
+        command_copy_(allocator),
         error_(allocator),
         command_response_(allocator),
         launch_defaults(allocator) {

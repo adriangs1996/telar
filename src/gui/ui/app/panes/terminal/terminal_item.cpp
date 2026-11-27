@@ -685,9 +685,11 @@ namespace telar::gui::qt {
           {QStringLiteral("status"), block.status},
           {QStringLiteral("duration"), static_cast<qulonglong>(block.duration_ms)},
           {QStringLiteral("index"), static_cast<int>(index)},
+          {QStringLiteral("key"), static_cast<qulonglong>(GuiSession::blockKey(pane, index))},
           {QStringLiteral("selected"), context.selected == index},
           {QStringLiteral("folded"), context.session.folded({.pane_id = context.pane_id, .index = index})},
           {QStringLiteral("rows"), static_cast<int>(output_end - output_first)},
+          {QStringLiteral("commandRows"), static_cast<int>(std::max<std::uint32_t>(block.rows, 1))},
           {QStringLiteral("foldable"), context.mapped && output_end > output_first},
           {QStringLiteral("remote"), block.nest == CommandBlockNest::inside},
           {QStringLiteral("host"), index >= context.live_session ? context.host : QString{}},
@@ -697,22 +699,32 @@ namespace telar::gui::qt {
     // The rail's marks and the separators for the commands the shell ran, their rows painted empty.
     template <typename ViewRows>
     void markCommands(const application::Pane<Memory>& pane, const DrawnRows<ViewRows>& drawn, const SeparatorContext& context, ds::Vec<std::uint8_t, Memory>& hidden, BlockLists& lists) {
+      // The rows drawn run down the scrollback: only the commands between the first and the last
+      // are looked for among them.
+      ds::Option<std::uint64_t> lowest;
+      ds::Option<std::uint64_t> highest;
+
+      for (std::size_t drawn_index = 0; drawn_index < drawn.count; ++drawn_index) {
+        if (const auto row = drawn.absolute(drawn_index)) {
+          lowest = lowest ? std::min(*lowest, *row) : *row;
+          highest = highest ? std::max(*highest, *row) : *row;
+        }
+      }
+
       for (std::size_t index = 0; index < pane.blocks.size(); ++index) {
         const auto& block = pane.blocks[index];
 
-        lists.rail.push_back(QVariantMap{{QStringLiteral("state"), blockState(block.state)}, {QStringLiteral("index"), static_cast<int>(index)}, {QStringLiteral("selected"), context.selected == index}});
-        const auto begin = static_cast<std::uint64_t>(block.row);
-        const auto end = begin + block.rows;
+        lists.rail.push_back(QVariantMap{{QStringLiteral("state"), blockState(block.state)}, {QStringLiteral("index"), static_cast<int>(index)}, {QStringLiteral("key"), static_cast<qulonglong>(GuiSession::blockKey(pane, index))}, {QStringLiteral("selected"), context.selected == index}});
+        // On the command's first row, which the separator stands in for; the rows of a command
+        // that runs on past it, wrapped or on lines of its own, show the rest of it.
+        const auto separator = GuiSession::separatorRow(pane, index);
+        if (!lowest || separator < *lowest || separator > *highest) {
+          continue;
+        }
 
         for (std::size_t drawn_index = 0; drawn_index < drawn.count; ++drawn_index) {
-          const auto row = drawn.absolute(drawn_index);
-          if (!row || *row < begin || *row >= end) {
-            continue;
-          }
-
-          hidden.atMut(drawn_index) = 1;
-          // On the command's last row: the prompt's other rows stay empty above it, as a margin.
-          if (*row == end - 1) {
+          if (drawn.absolute(drawn_index) == ds::Option<std::uint64_t>{separator}) {
+            hidden.atMut(drawn_index) = 1;
             lists.separators.push_back(separatorAt(pane, index, static_cast<int>(drawn_index), context));
           }
         }
@@ -739,8 +751,8 @@ namespace telar::gui::qt {
           continue;
         }
 
-        // From the separator's row, under the margin its prompt left.
-        const auto begin = static_cast<std::uint64_t>(blocks[index].row) + blocks[index].rows - 1;
+        // From the separator's row.
+        const auto begin = GuiSession::separatorRow(pane, index);
         auto last = index;
 
         while (last + 1 < blocks.size() && blocks[last + 1].nest == CommandBlockNest::inside) {
@@ -899,6 +911,17 @@ namespace telar::gui::qt {
     return first;
   }
 
+  void TerminalItem::announceBlockCopy() {
+    if (controller_ == nullptr) {
+      return;
+    }
+
+    if (const auto& note = controller_->session().lastBlockCopy(); note.serial != block_copy_serial_ && note.pane_id == pane_id_) {
+      block_copy_serial_ = note.serial;
+      emit blockCopied(static_cast<int>(note.index), note.what == application::BlockCopy::command ? QStringLiteral("command") : QStringLiteral("output"), note.copied);
+    }
+  }
+
   // The rows painted empty, and the separators and rail drawn for the commands the shell ran.
   // Read on the GUI thread whenever the pane or its editor changes, for the next paint.
   void TerminalItem::refreshBlocks() {
@@ -906,6 +929,7 @@ namespace telar::gui::qt {
     BlockLists lists;
     RowPlaces places;
 
+    announceBlockCopy();
     hidden_rows_.clear();
     if (current != nullptr && controller_ != nullptr) {
       const auto& screen = current->screen;
@@ -1013,7 +1037,25 @@ namespace telar::gui::qt {
   void TerminalItem::selectBlock(int index) {
     const auto* current = pane();
     if (current != nullptr && controller_ != nullptr && index >= 0 && std::cmp_less(index, current->blocks.size())) {
-      controller_->selectBlock(pane_id_, static_cast<std::size_t>(index));
+      // A click on a block of a pane in the background brings the pane forward first, where its
+      // keys go.
+      focusFromPointer();
+      controller_->selectBlock(pane_id_, static_cast<std::size_t>(index), true);
+    }
+  }
+
+  void TerminalItem::focusFromPointer() {
+    if (controller_ != nullptr) {
+      controller_->host().focusPane(*this);
+    }
+
+    forceActiveFocus(Qt::MouseFocusReason);
+  }
+
+  void TerminalItem::copyBlock(int index, bool command) {
+    const auto* current = pane();
+    if (current != nullptr && controller_ != nullptr && index >= 0 && std::cmp_less(index, current->blocks.size())) {
+      controller_->copyBlock(pane_id_, static_cast<std::size_t>(index), command ? application::BlockCopy::command : application::BlockCopy::output);
     }
   }
 
@@ -1051,6 +1093,9 @@ namespace telar::gui::qt {
     if (mapped) {
       layoutRows();
       collectDrawnRows(drawn_rows_, view_rows_, *current);
+      if (const auto& state = controller_->copy().state(); state && state->pane_id == pane_id_) {
+        copy.selection = drawnSelection(*state);
+      }
     }
 
     revealed_rows_.clear();
@@ -1086,6 +1131,7 @@ namespace telar::gui::qt {
         .fonts = font_collection_,
         .grid = font_grid_,
         .selection = copy.selection,
+        .selection_drawn = mapped,
         .bounds = boundingRect(),
         .scale = window()->effectiveDevicePixelRatio(),
         .appearance = appearance_,
@@ -1167,15 +1213,8 @@ namespace telar::gui::qt {
       return typed;
     }
 
-    const Qt::KeyboardModifiers clipboard_modifiers = platform::usesCommandKey() ? Qt::ControlModifier : Qt::ControlModifier | Qt::ShiftModifier;
-    const auto clipboard_shortcut = (event.modifiers() & (Qt::ControlModifier | Qt::ShiftModifier | Qt::AltModifier | Qt::MetaModifier)) == clipboard_modifiers;
-    const auto& copy = controller_->copy().state();
-    const auto selected = copy && copy->pane_id == pane_id_ && copy->pointer && copy->anchor;
-
-    if (clipboard_shortcut && event.key() == Qt::Key_C && selected) {
-      controller_->copy().copySelection(pane_id_);
-    } else if (clipboard_shortcut && event.key() == Qt::Key_V) {
-      controller_->paste(pane_id_, QGuiApplication::clipboard()->text());
+    if (clipboardKey(event)) {
+      // The clipboard or the editor's text took the key.
     } else if (preedit_.isEmpty() && controller_->prompt().edits(pane_id_)) {
       // telar's command editor takes the key; the terminal gets what it hands back, and at the
       // prompt nothing the editor cannot use reaches the shell's own line editor.
@@ -1192,6 +1231,46 @@ namespace telar::gui::qt {
     wakeCursor();
 
     return typed;
+  }
+
+  bool TerminalItem::clipboardKey(const QKeyEvent& event) {
+    const auto* current = pane();
+    if (current == nullptr || controller_ == nullptr) {
+      return false;
+    }
+
+    const Qt::KeyboardModifiers clipboard_modifiers = platform::usesCommandKey() ? Qt::ControlModifier : Qt::ControlModifier | Qt::ShiftModifier;
+    const auto clipboard_shortcut = (event.modifiers() & (Qt::ControlModifier | Qt::ShiftModifier | Qt::AltModifier | Qt::MetaModifier)) == clipboard_modifiers;
+    const auto& copy = controller_->copy().state();
+    const auto selected = copy && copy->pane_id == pane_id_ && copy->pointer && copy->anchor;
+
+    // The platform's copy key copies the selected command's output when nothing else is
+    // selected; its arrows step through the commands from any keymap.
+    const auto block = controller_->prompt().selectedBlock(pane_id_);
+    const bool blocks = controller_->prompt().surface(pane_id_) == application::prompt::Surface::editor && controller_->configuration().prompt.mode == PromptMode::telar && !current->blocks.empty();
+
+    // macOS's Command keys for the editor's text, which the keymaps have none for.
+    const bool command_key = platform::usesCommandKey() && clipboard_shortcut && controller_->prompt().edits(pane_id_);
+
+    if (clipboard_shortcut && event.key() == Qt::Key_C && selected) {
+      controller_->copy().copySelection(pane_id_);
+    } else if (command_key && (event.key() == Qt::Key_C || event.key() == Qt::Key_X) && controller_->prompt().copyText(pane_id_, event.key() == Qt::Key_X)) {
+      // The editor's selection went to the clipboard.
+    } else if (command_key && event.key() == Qt::Key_A) {
+      controller_->prompt().textCommand(pane_id_, application::prompt::TextCommand::select_all);
+    } else if (platform::usesCommandKey() && controller_->prompt().edits(pane_id_) && event.key() == Qt::Key_Z && (event.modifiers() & (Qt::ControlModifier | Qt::ShiftModifier)) == (Qt::ControlModifier | Qt::ShiftModifier)) {
+      controller_->prompt().textCommand(pane_id_, application::prompt::TextCommand::redo);
+    } else if (clipboard_shortcut && event.key() == Qt::Key_C && block) {
+      controller_->copyBlock(pane_id_, *block, application::BlockCopy::output);
+    } else if (clipboard_shortcut && blocks && (event.key() == Qt::Key_Up || event.key() == Qt::Key_Down)) {
+      controller_->stepBlock(pane_id_, event.key() == Qt::Key_Up ? application::BlockStep::up : application::BlockStep::down);
+    } else if (clipboard_shortcut && event.key() == Qt::Key_V) {
+      controller_->paste(pane_id_, QGuiApplication::clipboard()->text());
+    } else {
+      return false;
+    }
+
+    return true;
   }
 
   void TerminalItem::wakeCursor() {

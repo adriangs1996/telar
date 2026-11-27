@@ -383,7 +383,9 @@ namespace telar::gui::features::terminal::copy_mode {
   }
 
   bool CopyMode::beginPointer(CopyPress press, const CopyGrid& grid) noexcept {
-    if (active() || press.position.x >= grid.columns || press.position.y >= grid.rows) {
+    // The press names the row it is drawn on, from the top of the scrollback: a view that
+    // folds or scrolls by pixels draws rows the screen does not hold.
+    if (active() || grid.rows == 0 || press.position.x >= grid.columns || press.position.y > grid.lastRow()) {
       return false;
     }
 
@@ -394,7 +396,7 @@ namespace telar::gui::features::terminal::copy_mode {
     click_pane_ = press.pane_id;
     const auto granularity = clicks_.press(press.position, press.now_ns);
 
-    state_ = CopyState{.pane_id = press.pane_id, .cursor = {.x = press.position.x, .y = grid.scroll.offset + press.position.y}, .entry_offset = grid.scroll.offset, .viewport_offset = grid.scroll.offset};
+    state_ = CopyState{.pane_id = press.pane_id, .cursor = press.position, .entry_offset = grid.scroll.offset, .viewport_offset = grid.scroll.offset};
     state_.getMut().beginPointer(granularity, grid);
     gesture_ = press.pane_id;
     match_count_ = 0;
@@ -403,14 +405,14 @@ namespace telar::gui::features::terminal::copy_mode {
     return true;
   }
 
-  tbc::val_static<ds::Option<CopyPlan>> CopyMode::pointer(CopyPoint local, const CopyGrid& grid, bool released) const noexcept {
+  tbc::val_static<ds::Option<CopyPlan>> CopyMode::pointer(CopyPoint point, const CopyGrid& grid, bool released) const noexcept {
     if (!state_ || !state_->pointer || gesture_ != state_->pane_id) {
       return {};
     }
 
     auto next = *state_;
 
-    next.movePointer({.x = local.x, .y = grid.scroll.offset + std::min<std::uint32_t>(local.y, grid.rows == 0 ? 0 : grid.rows - 1)}, grid);
+    next.movePointer({.x = point.x, .y = std::min(point.y, grid.lastRow())}, grid);
     if (released && !next.anchor) {
       return leave(grid);
     }

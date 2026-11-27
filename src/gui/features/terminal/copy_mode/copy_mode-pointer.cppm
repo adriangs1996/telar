@@ -41,6 +41,8 @@ export {
       move,
     };
 
+    // Pointer positions are cells counted from the top of the scrollback: the row a view draws
+    // there, which a view that folds or scrolls by pixels may take from beyond its screen.
     struct CopyPress {
       std::uint64_t pane_id = 0;
       CopyPoint position{};

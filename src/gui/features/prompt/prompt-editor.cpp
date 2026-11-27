@@ -80,6 +80,18 @@ namespace telar::gui::features::prompt {
     reset();
   }
 
+  void Editor::cancel() {
+    if (!text_.empty()) {
+      text_.seal();
+      kill_ring_.assign(text_.view());
+      static_cast<void>(text_.replace(0, text_.size(), {}));
+      text_.seal();
+    }
+
+    mode_ = Mode::insert;
+    reset();
+  }
+
   void Editor::newline() {
     // Outside vim's insert mode the caret sits on a character, or a selection covers some: the
     // command goes on after the text, typed in insert mode, without taking either.
@@ -99,11 +111,27 @@ namespace telar::gui::features::prompt {
   }
 
   void Editor::insertText(std::string_view text) {
-    if (keymap_ == Keymap::vim && mode_ != Mode::insert) {
+    if (keymap_ != Keymap::vim || mode_ == Mode::insert) {
+      text_.insert(text, true);
       return;
     }
 
+    // Outside insert mode, a paste or a character an input method composed goes in after the
+    // cursor, as `p` puts a register: the editor stays in normal mode, on the last one put.
+    if (text.empty()) {
+      return;
+    }
+
+    reset();
+    text_.release();
+    mode_ = Mode::normal;
+    const auto cursor = text_.cursor();
+    const auto position = text_.empty() || cursor == text_.lineEnd(cursor) ? cursor : text_.next(cursor);
+
+    text_.moveTo(position);
     text_.insert(text, true);
+    text_.moveTo(text_.previous(text_.cursor()));
+    clampNormal();
   }
 
   Request Editor::perform(Action action) {
@@ -239,9 +267,45 @@ namespace telar::gui::features::prompt {
     return keymap_ == Keymap::vim && mode_ != Mode::insert ? normal(key) : insert(key);
   }
 
+  ds::Option<Request> Editor::prefixed(const KeyPress& key) {
+    const auto& mods = key.modifiers;
+
+    // After Ctrl-V the key goes in as typed: a tab, which would complete, or a character.
+    if (std::exchange(quoted_pending_, false)) {
+      if (key.key == Key::tab) {
+        text_.insert("\t", true);
+        return Request::none;
+      }
+
+      if (key.key == Key::character && !key.text.empty() && !mods.control) {
+        text_.insert(key.text, true);
+        return Request::none;
+      }
+    }
+
+    if (!std::exchange(meta_pending_, false) || mods.control || mods.alt) {
+      return ds::none;
+    }
+
+    if (key.key == Key::character) {
+      return meta(key.character);
+    }
+
+    if (key.key == Key::backspace) {
+      eraseBackward(true);
+      return Request::none;
+    }
+
+    return ds::none;
+  }
+
   Request Editor::insert(const KeyPress& key) {
     const auto& mods = key.modifiers;
     const auto cursor = text_.cursor();
+
+    if (const auto request = prefixed(key)) {
+      return *request;
+    }
 
     if (key.key == Key::character && mods.control && !mods.alt) {
       return control(key.character);
@@ -332,7 +396,8 @@ namespace telar::gui::features::prompt {
       return Request::none;
     }
 
-    return Request::unhandled;
+    meta_pending_ = true;
+    return Request::none;
   }
 
   Request Editor::control(char32_t character) {
@@ -396,6 +461,12 @@ namespace telar::gui::features::prompt {
     case 'g':
       text_.moveTo(text_.cursor());
       return Request::none;
+    // Ctrl-[ is Escape, as the terminal sends it.
+    case '[':
+      return escapeInsert();
+    case 'v':
+      quoted_pending_ = true;
+      return Request::none;
     default:
       return Request::unhandled;
     }
@@ -414,9 +485,38 @@ namespace telar::gui::features::prompt {
     case 'd':
       kill(cursor, wordEnd(cursor));
       return Request::none;
+    case 'u':
+    case 'l':
+    case 'c':
+      changeCase(character);
+      return Request::none;
+    case '.':
+    case '_':
+      return Request::last_argument;
     default:
       return Request::unhandled;
     }
+  }
+
+  void Editor::changeCase(char32_t how) {
+    const auto cursor = text_.cursor();
+    const auto end = wordEnd(cursor);
+    ds::String<Memory> word{memory(), text_.view().substr(cursor, end - cursor)};
+    bool first = true;
+
+    // ASCII letters change; any other character stays as it is.
+    for (auto& byte : word.viewMut()) {
+      if (std::isalnum(static_cast<unsigned char>(byte)) == 0) {
+        continue;
+      }
+
+      const bool upper = how == 'u' || (how == 'c' && first);
+
+      byte = static_cast<char>(upper ? std::toupper(static_cast<unsigned char>(byte)) : std::tolower(static_cast<unsigned char>(byte)));
+      first = false;
+    }
+
+    text_.replace(cursor, end, word.view());
   }
 
   void Editor::move(std::size_t offset, bool extend) noexcept {

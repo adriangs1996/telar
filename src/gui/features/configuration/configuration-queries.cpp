@@ -71,6 +71,8 @@ namespace telar::gui::features::configuration {
         writeScroll(value, configuration);
       });
 
+      object.member("copy_on_select", configuration.copy_on_select);
+
       object.member("window", [&](JsonWriter& value) {
         writeWindow(value, configuration, default_titlebar);
       });

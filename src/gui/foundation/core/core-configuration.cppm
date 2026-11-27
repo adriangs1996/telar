@@ -185,6 +185,13 @@ export {
       ThemeSelection themes;
       CursorShape cursor = CursorShape::block;
       ScrollConfiguration scroll;
+      // Whether letting go of a pointer selection copies it, as X11 terminals do; otherwise the
+      // platform's copy key does.
+#ifdef __APPLE__
+      bool copy_on_select = false;
+#else
+      bool copy_on_select = true;
+#endif
       bool cursor_blink = true;
       std::chrono::milliseconds blink_interval = default_blink_interval;
       float background_opacity = 1;

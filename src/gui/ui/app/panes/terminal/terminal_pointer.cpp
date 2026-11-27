@@ -21,6 +21,7 @@ static_assert(true);
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
+#include <limits>
 #include <optional>
 #include <string_view>
 #include <utility>
@@ -29,20 +30,76 @@ import telar.gui.application;
 
 namespace telar::gui::qt {
 
-  int TerminalItem::indexAt(QPointF position) const noexcept {
+  ds::Option<CopyPoint> TerminalItem::cellAt(QPointF position) const noexcept {
     const auto* current = pane();
     if (current == nullptr || current->screen.columns() == 0 || current->screen.rows() == 0 || font_.cell.width() <= 0 || font_.cell.height() <= 0 || !std::isfinite(position.x()) || !std::isfinite(position.y())) {
-      return -1;
+      return ds::none;
     }
 
-    const auto column = static_cast<int>(std::clamp(std::floor(position.x() / font_.cell.width()), 0.0, static_cast<double>(current->screen.columns() - 1)));
-    // Rows drawn shifted up, or from beyond the screen, are the screen's own where it holds them;
-    // elsewhere the nearest of its rows.
-    const auto drawn = (position.y() + shift_) / font_.cell.height();
-    const auto screen_row = screenRowAt(drawn);
-    const auto row = screen_row ? static_cast<int>(*screen_row) : static_cast<int>(std::clamp(std::floor(drawn), 0.0, static_cast<double>(current->screen.rows() - 1)));
+    const auto column = static_cast<std::uint16_t>(std::clamp(std::floor(position.x() / font_.cell.width()), 0.0, static_cast<double>(current->screen.columns() - 1)));
+    const auto drawn = std::floor((position.y() + shift_) / font_.cell.height());
 
-    return (row * current->screen.columns()) + column;
+    // A view that draws its own rows knows which row each one is: folds and rows from beyond
+    // the screen included.
+    if (!view_rows_.empty()) {
+      auto index = static_cast<std::size_t>(std::clamp(drawn, 0.0, static_cast<double>(view_rows_.size() - 1)));
+
+      while (index > 0 && !view_rows_[index].exists) {
+        --index;
+      }
+
+      if (!view_rows_[index].exists) {
+        return ds::none;
+      }
+
+      return CopyPoint{.x = column, .y = static_cast<std::uint32_t>(std::min<std::uint64_t>(view_rows_[index].row, std::numeric_limits<std::uint32_t>::max()))};
+    }
+
+    // The screen's rows, from the row its cells start on: the view the runtime last sent, not
+    // one asked for since.
+    const auto row = static_cast<std::uint32_t>(std::clamp(drawn, 0.0, static_cast<double>(current->screen.rows() - 1)));
+
+    return CopyPoint{.x = column, .y = current->screen.cellsOffset() + row};
+  }
+
+  CellSelection TerminalItem::drawnSelection(const application::terminal::copy_mode::CopyState& copy) const noexcept {
+    const auto* current = pane();
+    if (!copy.anchor || current == nullptr || current->screen.columns() == 0) {
+      return {};
+    }
+
+    const auto columns = static_cast<std::size_t>(current->screen.columns());
+    auto first = std::min(*copy.anchor, copy.cursor);
+    auto last = std::max(*copy.anchor, copy.cursor);
+
+    if (copy.linewise) {
+      first.x = 0;
+      last.x = static_cast<std::uint16_t>(columns - 1);
+    }
+
+    // The first drawn row at or past the selection's start, and the last at or before its end:
+    // folds between them hide rows the copy still takes.
+    ds::Option<std::size_t> head;
+    ds::Option<std::size_t> tail;
+
+    for (std::size_t index = 0; index < view_rows_.size(); ++index) {
+      const auto& view = view_rows_[index];
+      if (!view.exists || view.row < first.y || view.row > last.y) {
+        continue;
+      }
+
+      if (!head) {
+        head = (index * columns) + (view.row == first.y ? first.x : 0);
+      }
+
+      tail = (index * columns) + (view.row == last.y ? last.x : columns - 1);
+    }
+
+    if (!head || !tail) {
+      return {};
+    }
+
+    return {.anchor = static_cast<int>(*head), .head = static_cast<int>(*tail)};
   }
 
   void TerminalItem::mousePacket(unsigned button, QPointF position, bool released) {
@@ -90,17 +147,14 @@ namespace telar::gui::qt {
 
   application::terminal::copy_mode::CopyPointerInput TerminalItem::pointerInput(QPointF position, application::terminal::copy_mode::CopyPointerKind kind, bool left_button, std::int32_t rows) const noexcept {
     application::terminal::copy_mode::CopyPointerInput input{.pane_id = pane_id_, .kind = kind, .left_button = left_button, .inside = boundingRect().contains(position), .rows = rows};
-    const auto index = indexAt(position);
-    const auto* current = pane();
-    if (index < 0 || current == nullptr) {
+    const auto cell = cellAt(position);
+    if (!cell) {
       input.pane_id = 0;
 
       return input;
     }
 
-    const auto columns = current->screen.columns();
-
-    input.position = {.x = static_cast<std::uint16_t>(index % columns), .y = static_cast<std::uint32_t>(index / columns)};
+    input.position = *cell;
 
     return input;
   }
@@ -294,9 +348,19 @@ namespace telar::gui::qt {
 
       return;
     }
-    case WheelRoute::scroll:
-      controller_->scroll({.pane_id = pane_id_, .rows = -rows});
+    case WheelRoute::scroll: {
+      // Rows down that reach where the live end was follow the output again.
+      const auto& scroll = current->screen.scroll();
+      const auto bottom = static_cast<std::uint64_t>(scroll.total_rows - std::min<std::uint32_t>(scroll.total_rows, current->screen.rows()));
+      const auto left_end = bottom - std::min(bottom, rowsSinceLeftEnd());
+      if (rows > 0 && static_cast<std::uint64_t>(scroll.offset) + static_cast<std::uint64_t>(rows) >= left_end) {
+        scrollToEnd();
+      } else {
+        controller_->scroll({.pane_id = pane_id_, .rows = -rows});
+      }
+
       return;
+    }
     }
   }
 

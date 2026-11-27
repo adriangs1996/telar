@@ -86,8 +86,10 @@ namespace telar::gui::qt {
         result.modifiers &= ~static_cast<unsigned>(Modifier::shift);
       }
 
+      // Any key of a character, ñ or ç on a Spanish layout as much as an ASCII one: Option+ñ
+      // types `~` there.
       if constexpr (Convention == system::KeyboardConvention::apple) {
-        if (!modified && ascii_key) {
+        if (!modified && event.key() >= Qt::Key_Space && event.key() < first_special_key) {
           optionCharacter(result, event, text, option_as_alt);
         }
       }
@@ -161,6 +163,8 @@ namespace telar::gui::qt {
 
     static constexpr std::uint32_t first_printable = 0x20;
     static constexpr std::uint32_t delete_character = 0x7f;
+    // Qt numbers a key of a character by its code point, and the keys of no character from here.
+    static constexpr int first_special_key = 0x01000000;
 
     // An ASCII key typed with Option whose text is printable and not the key's own: that text
     // without Alt, or, when `option_as_alt` makes Option Meta, Alt with the key under it.
@@ -180,14 +184,15 @@ namespace telar::gui::qt {
       }
     }
 
-    // The character of an ASCII key as typed without Option: lowercase unless Shift is held.
+    // The character of a key as typed without Option: lowercase unless Shift is held.
     static std::uint32_t baseCharacter(const QKeyEvent& event) noexcept {
-      auto character = static_cast<std::uint32_t>(event.key());
-      if (character >= 'A' && character <= 'Z' && !event.modifiers().testFlag(Qt::ShiftModifier)) {
-        character += 'a' - 'A';
+      const auto character = static_cast<char32_t>(event.key());
+
+      if (event.modifiers().testFlag(Qt::ShiftModifier)) {
+        return character;
       }
 
-      return character;
+      return QChar::toLower(character);
     }
 
     static void normalizeTab(TerminalKey& key, bool backwards) noexcept {

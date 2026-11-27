@@ -132,7 +132,11 @@ namespace telar::gui::qt {
     void scrollToRow(std::uint64_t pane_id, std::uint32_t row);
     // Selects a command block of the pane, by index among its blocks, or none to go back to the
     // live end.
-    void selectBlock(std::uint64_t pane_id, ds::Option<std::size_t> index);
+    void selectBlock(std::uint64_t pane_id, ds::Option<std::size_t> index, bool typing_leaves = false);
+    // Copies the command or the output of a command block of the pane.
+    void copyBlock(std::uint64_t pane_id, std::size_t index, application::BlockCopy what);
+    // The window's own step through the pane's blocks, Cmd+Up and Cmd+Down.
+    void stepBlock(std::uint64_t pane_id, application::BlockStep direction);
     // The modifiers held over the terminals, from the pointer or the keyboard.
     void observePointerModifiers(Qt::KeyboardModifiers modifiers);
     [[nodiscard]] std::shared_ptr<const application::terminal::links::LinkHit> shareLinkHit(const application::terminal::links::LinkHit& hit);

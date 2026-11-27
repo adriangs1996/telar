@@ -187,6 +187,9 @@ namespace telar::gui::qt {
     // At the end, the view follows the output; a fold that moves the end does not drag it along,
     // while a document that comes or grows at the end is output like any other.
     bool following = !motion_.moving() && motion_.position() >= motion_.limit() - (cell / 2);
+    if (following) {
+      left_end_rows_.reset();
+    }
 
     followDroppedRows(following);
     following = !anchorFolds() && following;
@@ -293,7 +296,7 @@ namespace telar::gui::qt {
         return block.row <= anchor;
       });
       if (found != blocks.rend()) {
-        target = static_cast<double>(folds.display(static_cast<std::uint64_t>(found->row) + found->rows - 1)) * cell;
+        target = static_cast<double>(folds.display(GuiSession::separatorRow(*current, static_cast<std::size_t>(blocks.rend() - found - 1)))) * cell;
       }
     }
 
@@ -639,26 +642,24 @@ namespace telar::gui::qt {
 
     const auto now = scrollTime();
     const auto precise = !event.pixelDelta().isNull() && event.source() == Qt::MouseEventSynthesizedBySystem;
+
+    // Where the live end is as the view leaves it, before output moves it on.
+    if (!left_end_rows_ && motion_.destination() >= motion_.limit() - (cell / 2)) {
+      left_end_rows_ = current->scrollback_trimmed + current->screen.scroll().total_rows;
+    }
+
     if (precise) {
-      const auto phase = event.phase();
-      if (phase == Qt::ScrollBegin) {
-        // A finger on the trackpad stops a fling.
-        motion_.stop();
-      } else if (phase == Qt::ScrollEnd) {
-        // macOS continues the gesture with its own momentum; elsewhere the view flings on.
-        if constexpr (platform::native_scroll_events) {
-          motion_.settle();
-        } else {
-          motion_.release(now);
-        }
-      } else {
-        motion_.follow(-event.pixelDelta().y(), now);
-      }
+      scrollGesture(event, cell, now);
     } else {
       constexpr double wheel_unit = 120;
       const auto notches = -static_cast<double>(event.angleDelta().y()) / wheel_unit;
 
       motion_.wheel(notches * WheelAccumulator::rows_per_line * cell, now);
+      // Notches down that reach where the live end was glide to the end as it moves: output
+      // that arrives while they ease would leave them short of it.
+      if (notches > 0 && motion_.destination() >= leftEnd() - (cell / 2)) {
+        motion_.glideToEnd(now, static_cast<double>(current->screen.rows()) * cell);
+      }
     }
 
     driven_ = true;
@@ -668,6 +669,44 @@ namespace telar::gui::qt {
     }
 
     return true;
+  }
+
+  void TerminalItem::scrollGesture(const QWheelEvent& event, double cell, ScrollTime now) {
+    const auto phase = event.phase();
+    if (phase == Qt::ScrollBegin) {
+      // A finger on the trackpad stops a fling.
+      motion_.stop();
+    } else if (phase == Qt::ScrollEnd) {
+      // macOS continues the gesture with its own momentum; elsewhere the view flings on.
+      if constexpr (platform::native_scroll_events) {
+        motion_.settle();
+      } else {
+        motion_.release(now);
+      }
+    } else {
+      motion_.follow(-event.pixelDelta().y(), now);
+    }
+
+    // A gesture that ends where the live end was takes the view back to it.
+    if (!motion_.moving() && motion_.position() >= leftEnd() - (cell / 2)) {
+      motion_.place(motion_.limit());
+    }
+  }
+
+  std::uint64_t TerminalItem::rowsSinceLeftEnd() const {
+    const auto* current = pane();
+    const auto left = left_end_rows_ ? left_end_rows_ : away_rows_;
+    if (current == nullptr || !left) {
+      return 0;
+    }
+
+    const auto stable_total = current->scrollback_trimmed + current->screen.scroll().total_rows;
+
+    return stable_total > *left ? stable_total - *left : 0;
+  }
+
+  double TerminalItem::leftEnd() const {
+    return std::max(0.0, motion_.limit() - (static_cast<double>(rowsSinceLeftEnd()) * rowHeight()));
   }
 
   void TerminalItem::scrollToEnd() {
@@ -830,7 +869,7 @@ namespace telar::gui::qt {
     ds::Option<std::size_t> found;
 
     for (std::size_t index = blocks.size(); index-- > 0;) {
-      const auto separator = static_cast<std::uint64_t>(blocks[index].row) + blocks[index].rows - 1;
+      const auto separator = GuiSession::separatorRow(*current, index);
       if (separator < row || (separator == row && shift_ > 0)) {
         found = index;
         break;
@@ -853,8 +892,7 @@ namespace telar::gui::qt {
     qreal push = 0;
 
     if (index + 1 < blocks.size()) {
-      const auto& next = blocks[index + 1];
-      const auto separator = viewFolds().display(static_cast<std::uint64_t>(next.row) + next.rows - 1);
+      const auto separator = viewFolds().display(GuiSession::separatorRow(*current, index + 1));
       const auto below = ((static_cast<double>(separator) - static_cast<double>(top_row_)) * cell) - shift_;
 
       push = static_cast<qreal>(std::min(0.0, below - cell));
@@ -864,6 +902,7 @@ namespace telar::gui::qt {
 
     return QVariantMap{
         {QStringLiteral("index"), static_cast<int>(index)},
+        {QStringLiteral("key"), static_cast<qulonglong>(GuiSession::blockKey(*current, index))},
         {QStringLiteral("command"), QString::fromUtf8(block.command.data(), static_cast<qsizetype>(block.command.size()))},
         {QStringLiteral("lines"), static_cast<int>(block.lines)},
         {QStringLiteral("state"), stateName(block.state)},

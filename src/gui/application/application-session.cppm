@@ -120,6 +120,22 @@ export {
       down = 1,
     };
 
+    // What a copy of a command block takes.
+    enum class BlockCopy : std::uint8_t {
+      command,
+      output,
+    };
+
+    // The last copy of a block, for its view to say so: `copied` false when there was nothing to
+    // copy, and `serial` counting the copies from 1.
+    struct BlockCopyNote {
+      std::uint64_t pane_id = 0;
+      std::size_t index = 0;
+      BlockCopy what = BlockCopy::output;
+      bool copied = false;
+      std::uint64_t serial = 0;
+    };
+
     class Session {
       // The use cases of application::<feature> reach the members below through it.
       friend struct Access;
@@ -267,12 +283,31 @@ export {
       // the live prompt or the scrollback's end for the last; empty when it printed nothing.
       [[nodiscard]] static std::pair<std::uint32_t, std::uint32_t> blockRows(const Pane<Memory>& pane, std::size_t index) noexcept;
 
+      // The row block `index`'s separator is drawn on: the command's first, where telar's prompt
+      // leaves it, with the rows of a command that runs on past it shown under it.
+      [[nodiscard]] static std::uint64_t separatorRow(const Pane<Memory>& pane, std::size_t index) noexcept;
+
       // ---- command blocks, selected from the editor -------------------------------------------
 
       [[nodiscard]] ds::Option<std::size_t> selectedBlock(std::uint64_t pane_id) const noexcept;
 
-      // Selects the block at `index`, shown from the top of the pane, or none: the pane's live end.
-      void selectBlock(std::uint64_t pane_id, ds::Option<std::size_t> index);
+      // Whether the keys that type let the pane's selected block go, as after a click on it.
+      [[nodiscard]] bool typingLeavesBlock(std::uint64_t pane_id) const noexcept;
+
+      // Selects the block at `index`, or none: the pane's live end. The view moves only when the
+      // block's separator is out of it, to the pane's top. `typing_leaves` for a click or the window's step: the keys that
+      // type still go to the editor.
+      void selectBlock(std::uint64_t pane_id, ds::Option<std::size_t> index, bool typing_leaves = false);
+
+      // Copies block `index`'s command or output; false when it has none to copy.
+      bool copyBlock(BlockAt block, BlockCopy what);
+
+      [[nodiscard]] const BlockCopyNote& lastBlockCopy() const noexcept;
+
+      // The window's own step through the blocks, Cmd+Up and Cmd+Down, from any keymap or mode:
+      // the block above or below the selected one, or the last from the live end. The keys that
+      // type still go to the editor.
+      void stepBlockFromWindow(std::uint64_t pane_id, BlockStep direction);
 
       // prefix+[ where telar's editor stands in for the prompt: the last command block, selected,
       // instead of copy mode from the live end.
@@ -758,8 +793,21 @@ export {
       // false when `pending` begins none of them.
       bool blockChord(char pending, BlockAt block, char32_t character);
 
-      // The z chord ended by `character` on block `index`.
-      void foldChord(BlockAt block, char32_t character);
+      // The chord pending on the line ended by `character`, or `[` or `]` beginning one; false
+      // when `character` does neither. A chord it does not end is dropped.
+      bool chordKey(std::uint64_t pane_id, ds::Option<std::size_t> selection, char32_t character);
+
+      // The z chord ended by `character` on block `index`; false when `character` ends none.
+      bool foldChord(BlockAt block, char32_t character);
+
+      // A key on a block that typing leaves, outside vim's normal mode: Escape leaves it,
+      // the arrows step through the blocks, and any other key leaves it for the editor.
+      ds::Option<features::prompt::Outcome> typingBlockKey(std::uint64_t pane_id, const features::prompt::KeyPress& key);
+
+      // The selected block of `pane`, by its stable key, before its blocks change; `restoreBlock`
+      // selects it again at its new index, or nothing when it is gone.
+      [[nodiscard]] ds::Option<std::uint64_t> selectedBlockKey(const Pane<Memory>& pane) const noexcept;
+      void restoreBlock(const Pane<Memory>& pane, ds::Option<std::uint64_t> key);
 
       // A key on block `index` outside a chord; false when it is none of block mode's.
       bool blockCommand(BlockAt block, char32_t character);
@@ -786,13 +834,17 @@ export {
 
       // The rows of a block's output: from under its command to above the next block's prompt, or
       // the live prompt's for the last one.
-      [[nodiscard]] std::pair<std::uint32_t, std::uint32_t> blockOutput(const Pane<Memory>& pane, std::size_t index) const;
+      [[nodiscard]] static ds::Option<std::pair<std::uint32_t, std::uint32_t>> blockOutput(const Pane<Memory>& pane, std::size_t index) noexcept;
 
       // Copy mode on a block's output: from its first character, or every line of it selected.
       void selectBlockOutput(const Pane<Memory>& pane, std::size_t index, bool lines);
 
       // A block's whole output to the clipboard, as the runtime reads it.
       void copyBlockOutput(const Pane<Memory>& pane, std::size_t index);
+
+      // Copies block `index`'s command whole, as the rows it was typed on hold it: the block's
+      // own text is its first line, cut short.
+      void copyBlockCommand(const Pane<Memory>& pane, std::size_t index);
 
       // The row the shell's live prompt starts on, from the top of the scrollback, while the pane
       // shows its live end.
@@ -877,6 +929,11 @@ export {
     private:
       tbc::val_a<ds::Vec<Byte, Memory>> decode_;
       tbc::val_a<ds::String<Memory>> clipboard_;
+      // The start of a command whose rows a copy reads: what the rows hold before it is a
+      // prompt's, which the copy leaves out. Empty when no such copy is on its way.
+      tbc::val_a<ds::String<Memory>> command_copy_;
+      std::uint64_t command_copy_pane_ = 0;
+      BlockCopyNote block_copy_;
       tbc::val_a<ds::String<Memory>> error_;
       tbc::val_a<ds::String<Memory>> command_response_;
 

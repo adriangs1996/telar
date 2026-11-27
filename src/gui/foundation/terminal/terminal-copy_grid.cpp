@@ -117,6 +117,11 @@ namespace telar::gui::inline foundation::inline terminal {
   }
 
   ds::Array<CopyPoint, 2> CopyGrid::pointerSpan(CopyPoint point, CopyGranularity granularity) const noexcept {
+    // Words are read from the screen's cells: on a row it does not hold, a word is its cell.
+    if (granularity == CopyGranularity::word && cell(point) == nullptr) {
+      granularity = CopyGranularity::character;
+    }
+
     auto first = point;
     auto last = point;
 

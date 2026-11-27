@@ -97,6 +97,7 @@ export {
       ds::Option<double> chrome_scale;
       ds::Option<std::uint16_t> max_fps;
       ds::Array<ds::Option<double>, surface_names.size()> opacity{};
+      ds::Option<bool> copy_on_select;
     };
 
     class GuiReader {

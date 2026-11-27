@@ -898,15 +898,24 @@ namespace telar::gui::features::prompt {
     auto& memory = state.memory;
     Choices paths{memory};
 
-    for (const auto& match : message.matches) {
-      // Directories arrive with their trailing slash.
-      const bool directory = match.kind == PathKind::directory;
-      const auto name = directory ? match.path.substr(0, match.path.size() - 1) : match.path;
-      if (!name.contains('/') && name.starts_with(query.view())) {
-        Name text = base.clone();
+    // As typed first; ignoring case when nothing matches so, as `cd doc` finds Documents on a
+    // file system that ignores case.
+    for (const bool folded : {false, true}) {
+      for (const auto& match : message.matches) {
+        // Directories arrive with their trailing slash.
+        const bool directory = match.kind == PathKind::directory;
+        const auto name = directory ? match.path.substr(0, match.path.size() - 1) : match.path;
+        const bool starts = folded ? startsFolded(name, query.view()) : name.starts_with(query.view());
+        if (!name.contains('/') && starts) {
+          Name text = base.clone();
 
-        text.append(match.path);
-        paths.push(Choice{.text = std::move(text), .description = Name{memory}, .directory = directory});
+          text.append(match.path);
+          paths.push(Choice{.text = std::move(text), .description = Name{memory}, .directory = directory});
+        }
+      }
+
+      if (!paths.empty()) {
+        break;
       }
     }
 
@@ -1040,26 +1049,28 @@ namespace telar::gui::features::prompt {
     return line.block;
   }
 
-  void selectBlock(PaneLine& line, ds::Option<std::size_t> index, ds::Option<std::uint32_t> live_prompt) noexcept {
-    auto& block = line.block;
-
+  void selectBlock(PaneLine& line, ds::Option<std::size_t> index, bool typing_leaves) noexcept {
     line.chord = 0;
-    if (!index) {
-      block.reset();
-      return;
-    }
-
-    if (!block) {
-      line.live_prompt = live_prompt;
-    }
-
-    block = index;
+    line.typing_leaves_block = index && typing_leaves;
+    line.block = index;
   }
 
-  ds::Option<std::uint32_t> livePrompt(const Lines& lines, std::uint64_t pane_id) noexcept {
+  void moveBlock(PaneLine& line, ds::Option<std::size_t> index) noexcept {
+    line.block = index;
+    if (!index) {
+      line.typing_leaves_block = false;
+      line.chord = 0;
+    }
+  }
+
+  bool typingLeavesBlock(const PaneLine& line) noexcept {
+    return line.block && line.typing_leaves_block;
+  }
+
+  bool typingLeavesBlock(const Lines& lines, std::uint64_t pane_id) noexcept {
     const auto* found = lines.find(pane_id);
 
-    return found == nullptr ? ds::none : std::as_const(**found).live_prompt;
+    return found != nullptr && typingLeavesBlock(std::as_const(**found));
   }
 
   void beginChord(PaneLine& line, char first) noexcept {

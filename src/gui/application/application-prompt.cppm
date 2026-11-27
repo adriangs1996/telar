@@ -66,6 +66,24 @@ export namespace telar::gui::application::prompt {
   // tab are dropped: they would act on the shell instead of being written.
   void text(Session& session, std::uint64_t pane_id, std::string_view text);
 
+  // Edits macOS's Command keys make that no keymap has a key for.
+  enum class TextCommand : std::uint8_t {
+    // Command+A: the whole command selected.
+    select_all,
+    // Command+Shift+Z: a change undone, done again.
+    redo,
+    // Command+X, once the selection is copied: the selection erased.
+    erase_selection,
+  };
+
+  void textCommand(Session& session, std::uint64_t pane_id, TextCommand command);
+
+  // A click in the editor: the cursor at byte `offset` of the command.
+  void placeCursor(Session& session, std::uint64_t pane_id, std::size_t offset);
+
+  // The text selected in the pane's editor, for Command+C and Command+X; empty without one.
+  [[nodiscard]] std::string_view selectedText(const Session& session, std::uint64_t pane_id) noexcept;
+
   // Whether the pane's shell runs `word`, for the editor to mark a command that does not exist.
   // Asks the runtime the first time and answers pending until it replies; a remote shell's
   // commands are unknown. Forgotten after each command and change of directory.
