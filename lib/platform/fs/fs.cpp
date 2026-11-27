@@ -96,7 +96,7 @@ namespace telar::runtime {
       name.atMut(index) = separator;
     }
 
-    FileDescriptor directory{::open(name.data(), combineFlags(O_RDONLY, O_DIRECTORY, O_CLOEXEC, O_NOFOLLOW))}; // NOLINT(cppcoreguidelines-pro-type-vararg): open's C signature is variadic
+    const FileDescriptor directory{::open(name.data(), combineFlags(O_RDONLY, O_DIRECTORY, O_CLOEXEC, O_NOFOLLOW))}; // NOLINT(cppcoreguidelines-pro-type-vararg): open's C signature is variadic
     struct stat state{};
     if (!directory || ::fstat(directory.get(), &state) != 0) {
       throw SystemError{"Open private directory"};
@@ -184,7 +184,7 @@ namespace telar::runtime {
     }
 
     copyTerminated(path, terminated);
-    FileDescriptor file{::open(terminated.data(), combineFlags(O_RDONLY, O_NONBLOCK, O_CLOEXEC, O_NOCTTY))}; // NOLINT(cppcoreguidelines-pro-type-vararg): open's C signature is variadic
+    const FileDescriptor file{::open(terminated.data(), combineFlags(O_RDONLY, O_NONBLOCK, O_CLOEXEC, O_NOCTTY))}; // NOLINT(cppcoreguidelines-pro-type-vararg): open's C signature is variadic
     struct stat status{};
     if (!file || ::fstat(file.get(), &status) != 0 || !S_ISREG(status.st_mode)) {
       return ds::none;
@@ -485,7 +485,7 @@ namespace telar::runtime {
 
       while (const auto* entry = iterator.next()) {
         const char* const name = std::data(entry->d_name);
-        FileDescriptor child{::openat(directory, name, combineFlags(O_RDONLY, O_DIRECTORY, O_NOFOLLOW, O_CLOEXEC))}; // NOLINT(cppcoreguidelines-pro-type-vararg): openat's C signature is variadic
+        const FileDescriptor child{::openat(directory, name, combineFlags(O_RDONLY, O_DIRECTORY, O_NOFOLLOW, O_CLOEXEC))}; // NOLINT(cppcoreguidelines-pro-type-vararg): openat's C signature is variadic
         if (child) {
           removeContents(child.get());
           ::unlinkat(directory, name, AT_REMOVEDIR);

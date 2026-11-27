@@ -16,8 +16,8 @@ namespace {
 
   std::uint8_t capture(NSPasteboard* board, std::size_t maximum_bytes, TelarClipboardStoreCallback store, void* context) {
     struct ImageFormat {
-      NSPasteboardType type;
-      const char* mime_type;
+      NSPasteboardType type = nil;
+      const char* mime_type = nullptr;
     };
 
     const std::array formats{

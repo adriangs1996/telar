@@ -141,7 +141,7 @@ export {
       template <HistoryEventSink History>
       [[tbc::generic]] inline ScreenObservationResult observe(const AgentManifests& manifests, AgentProvider provider, History& history, bool inspect_screen = true) noexcept {
         TELAR_TRACE("observation.replay");
-        TELAR_DIAGNOSTIC(AllocationScope allocation_scope{AllocationPath::observation});
+        TELAR_DIAGNOSTIC(const AllocationScope allocation_scope{AllocationPath::observation});
         ScreenObservationResult result;
         const auto& batch = batches_[*sealed_];
 

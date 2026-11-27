@@ -26,7 +26,7 @@ namespace telar::runtime::redirect {
   }
 
   unsigned LogInterface::create() {
-    FileDescriptor control{::socket(AF_INET, SOCK_DGRAM, 0)};
+    const FileDescriptor control{::socket(AF_INET, SOCK_DGRAM, 0)};
     if (!control) {
       throw SystemError{"Open PF log interface control"};
     }
@@ -52,7 +52,7 @@ namespace telar::runtime::redirect {
       throw std::invalid_argument{"Invalid private PF log interface"};
     }
 
-    FileDescriptor control{::socket(AF_INET, SOCK_DGRAM, 0)};
+    const FileDescriptor control{::socket(AF_INET, SOCK_DGRAM, 0)};
     if (!control) {
       throw SystemError{"Open PF log interface control"};
     }
@@ -66,7 +66,7 @@ namespace telar::runtime::redirect {
   }
 
   void LoopbackFlags::setSkipped(bool skipped) {
-    FileDescriptor device{::open("/dev/pf", combineFlags(O_RDWR, O_CLOEXEC, O_NOFOLLOW))}; // NOLINT(cppcoreguidelines-pro-type-vararg): open's C signature is variadic
+    const FileDescriptor device{::open("/dev/pf", combineFlags(O_RDWR, O_CLOEXEC, O_NOFOLLOW))}; // NOLINT(cppcoreguidelines-pro-type-vararg): open's C signature is variadic
     if (!device) {
       throw SystemError{"Open PF loopback control"};
     }

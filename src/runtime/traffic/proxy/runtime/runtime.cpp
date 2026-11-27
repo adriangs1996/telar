@@ -758,7 +758,7 @@ namespace telar::runtime {
 
   bool ProxyListener::answers(std::uint16_t port) noexcept {
     try {
-      auto socket = openSocket();
+      const auto socket = openSocket();
       const auto loopback = address(port);
       if (::connect(socket.get(), loopback.address(), loopback.length) == 0) {
         return true;

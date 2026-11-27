@@ -165,7 +165,7 @@ namespace telar::runtime::cli::repository {
         return ds::none;
       }
 
-      auto directory = file_transfer::openDirectory(root);
+      const auto directory = file_transfer::openDirectory(root);
 
       try {
         Git git{memory, root};
@@ -335,7 +335,7 @@ namespace telar::runtime::cli::repository {
       }
 
       constexpr std::size_t max_owner_bytes = 2048;
-      auto directory = file_transfer::openDirectory(stage);
+      const auto directory = file_transfer::openDirectory(stage);
       ds::Vec<unsigned char, Memory> marker{memory};
       if (!readPrivateFile(directory.get(), "owner", marker, max_owner_bytes) || textBytes(marker.view()) != identity) {
         throw std::runtime_error{"UnownedRepositoryStage"};
@@ -571,7 +571,7 @@ namespace telar::runtime::cli::repository {
     // The bundle file in the temporary directory. TMPDIR may sit behind a symlink (macOS's /var);
     // only the directory just created, private to this process, must not be one.
     FileDescriptor createBundle(const Text& temporary) {
-      FileDescriptor directory{::open(temporary.data(), combineFlags(O_RDONLY, O_DIRECTORY, O_NOFOLLOW, O_CLOEXEC))}; // NOLINT(cppcoreguidelines-pro-type-vararg): open's C signature is variadic
+      const FileDescriptor directory{::open(temporary.data(), combineFlags(O_RDONLY, O_DIRECTORY, O_NOFOLLOW, O_CLOEXEC))}; // NOLINT(cppcoreguidelines-pro-type-vararg): open's C signature is variadic
       if (!directory) {
         throw std::runtime_error{sys::errorName(sys::lastError())};
       }
@@ -625,7 +625,7 @@ namespace telar::runtime::cli::repository {
     const auto excluded = exclusions(memory, git, {.commit = commit, .listing = listing});
     const auto temporary = makeTemporary(memory);
     const StagingDirectory cleanup{temporary.clone()};
-    auto bundle = createBundle(temporary);
+    const auto bundle = createBundle(temporary);
 
     const auto ref = ds::format(memory, "refs/telar/transfer/{}", temporary.view().substr(temporary.view().rfind('/') + 1));
 

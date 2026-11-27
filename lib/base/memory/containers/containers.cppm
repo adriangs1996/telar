@@ -56,7 +56,7 @@ export {
       }
 
       // Equal texts are equal, whatever the bytes past them hold.
-      friend bool operator==(const FixedText& left, const FixedText& right) noexcept {
+      friend inline bool operator==(const FixedText& left, const FixedText& right) noexcept {
         return left.view() == right.view();
       }
 

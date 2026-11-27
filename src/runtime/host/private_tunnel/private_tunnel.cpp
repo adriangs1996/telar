@@ -124,7 +124,7 @@ namespace telar::runtime {
       throw SystemError{"Read redirect discovery interface index"};
     }
 
-    FileDescriptor configuration{::socket(AF_INET, SOCK_DGRAM, 0)};
+    const FileDescriptor configuration{::socket(AF_INET, SOCK_DGRAM, 0)};
     ifreq flags{};
 
     std::ranges::copy(name_.view(), std::span{sys::interfaceName(flags)}.begin());
@@ -146,7 +146,7 @@ namespace telar::runtime {
       throw SystemError{"Attach discovery IPv4 protocol"};
     }
 
-    FileDescriptor ipv6{::socket(AF_INET6, SOCK_DGRAM, 0)};
+    const FileDescriptor ipv6{::socket(AF_INET6, SOCK_DGRAM, 0)};
     in6_aliasreq request{};
 
     std::ranges::copy(name_.view(), std::span{request.ifra_name}.begin());

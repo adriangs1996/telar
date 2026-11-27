@@ -588,7 +588,7 @@ export {
       template <CaptureEventSource Captures, plugins::EventSource Plugins>
       [[tbc::generic]] inline void run(Captures& captures, Plugins& plugins) {
         TELAR_TRACE("runtime.run");
-        TELAR_DIAGNOSTIC(AllocationScope allocation_scope{AllocationPath::interactive});
+        TELAR_DIAGNOSTIC(const AllocationScope allocation_scope{AllocationPath::interactive});
         ds::Array<Event, Poller::event_capacity> ready{};
         PluginDelivery delivery{limits_};
         const int capture_descriptor = captures.descriptor();

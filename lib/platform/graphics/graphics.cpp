@@ -24,7 +24,7 @@ namespace telar::runtime {
     randomBytes(nonce.dataMut(), nonce.size());
     std::ranges::copy(prefix, name.begin());
     encodeLowerHex(nonce.view(), name.subspan(prefix.size()));
-    FileDescriptor descriptor{::shm_open(storage.name_.data(), combineFlags(O_CREAT, O_EXCL, O_RDWR), private_file_mode)}; // NOLINT(cppcoreguidelines-pro-type-vararg): shm_open's C signature is variadic
+    const FileDescriptor descriptor{::shm_open(storage.name_.data(), combineFlags(O_CREAT, O_EXCL, O_RDWR), private_file_mode)}; // NOLINT(cppcoreguidelines-pro-type-vararg): shm_open's C signature is variadic
     if (!descriptor) {
       storage.name_.atMut(0) = '\0';
       return ds::none;

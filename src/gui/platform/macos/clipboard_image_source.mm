@@ -166,7 +166,7 @@ namespace {
     return NativeSource{nullptr};
   }
 
-  std::uint8_t readDimensions(CGImageSourceRef source, std::uint64_t max_pixels, std::uint32_t& out_width, std::uint32_t& out_height) {
+  std::uint8_t readDimensions(CGImageSourceRef source, std::uint64_t max_pixels, TelarGuiClipboardDimensions& out) {
     const NativeReference<CFDictionaryRef> properties{CGImageSourceCopyPropertiesAtIndex(source, 0, nullptr)};
     if (properties.get() == nullptr) {
       return telar_gui_clipboard_read_failed;
@@ -184,8 +184,8 @@ namespace {
       return telar_gui_clipboard_pixels;
     }
 
-    out_width = static_cast<std::uint32_t>(width);
-    out_height = static_cast<std::uint32_t>(height);
+    out.width = static_cast<std::uint32_t>(width);
+    out.height = static_cast<std::uint32_t>(height);
     return telar_gui_clipboard_ok;
   }
 
@@ -208,10 +208,10 @@ namespace {
 }
 
 void* telarGuiClipboardGeneralPasteboard(int64_t* revision) {
-  return telarGuiClipboardRetainPasteboard((__bridge void*)NSPasteboard.generalPasteboard, revision);
+  return telarGuiClipboardRetainPasteboard((__bridge const void*)NSPasteboard.generalPasteboard, revision);
 }
 
-void* telarGuiClipboardRetainPasteboard(void* pasteboard, int64_t* revision) {
+void* telarGuiClipboardRetainPasteboard(const void* pasteboard, int64_t* revision) {
   auto* const board = (__bridge NSPasteboard*)pasteboard;
   if (board == nil) {
     return nullptr;
@@ -224,63 +224,57 @@ void* telarGuiClipboardRetainPasteboard(void* pasteboard, int64_t* revision) {
   return (__bridge_retained void*)board;
 }
 
-void telarGuiClipboardReleasePasteboard(void* native) {
+void telarGuiClipboardReleasePasteboard(const void* native) {
   if (native != nullptr) {
     CFRelease(native);
   }
 }
 
 uint8_t telarGuiClipboardReadPng(
-    void* native,
-    int64_t revision,
-    uint64_t max_source_bytes,
-    uint64_t max_pixels,
-    TelarGuiClipboardWriteCallback write_callback,
-    void* write_context,
-    uint32_t* width,
-    uint32_t* height
+    const void* native,
+    const TelarGuiClipboardReadRequest* request,
+    TelarGuiClipboardDimensions* dimensions
 ) {
+  if (request == nullptr) {
+    return telar_gui_clipboard_read_failed;
+  }
+
   @autoreleasepool {
     auto* const board = (__bridge NSPasteboard*)native;
-    if (board == nil || board.changeCount != revision) {
+    if (board == nil || board.changeCount != request->revision) {
       return telar_gui_clipboard_changed;
     }
 
     std::uint8_t failure = telar_gui_clipboard_no_image;
-    const auto file_source = fileSource(board, max_source_bytes, failure);
+    const auto file_source = fileSource(board, request->max_source_bytes, failure);
 
     if (failure == telar_gui_clipboard_bad_alloc) {
       return failure;
     }
 
-    const auto data_source = file_source.get() == nullptr ? dataSource(board, max_source_bytes, failure) : NativeSource{nullptr};
-    CGImageSourceRef const active = file_source.get() != nullptr ? file_source.get() : data_source.get();
+    const auto data_source = file_source.get() == nullptr ? dataSource(board, request->max_source_bytes, failure) : NativeSource{nullptr};
+    auto* const active = file_source.get() != nullptr ? file_source.get() : data_source.get();
     if (active == nullptr) {
       return failure;
     }
 
-    if (board.changeCount != revision) {
+    if (board.changeCount != request->revision) {
       return telar_gui_clipboard_changed;
     }
 
-    std::uint32_t pixel_width = 0;
-    std::uint32_t pixel_height = 0;
-    const auto dim_status = readDimensions(active, max_pixels, pixel_width, pixel_height);
+    TelarGuiClipboardDimensions measured{.width = 0, .height = 0};
+    const auto dim_status = readDimensions(active, request->max_pixels, measured);
     if (dim_status != telar_gui_clipboard_ok) {
       return dim_status;
     }
 
-    const auto encode_status = encodeSource(active, write_callback, write_context);
+    const auto encode_status = encodeSource(active, request->write_callback, request->write_context);
     if (encode_status != telar_gui_clipboard_ok) {
       return encode_status;
     }
 
-    if (width != nullptr) {
-      *width = pixel_width;
-    }
-
-    if (height != nullptr) {
-      *height = pixel_height;
+    if (dimensions != nullptr) {
+      *dimensions = measured;
     }
 
     return telar_gui_clipboard_ok;

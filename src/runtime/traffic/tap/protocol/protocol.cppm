@@ -46,8 +46,8 @@ export {
     };
 
     struct HalfView {
-      std::span<const std::uint8_t> head{};
-      std::span<const std::uint8_t> body{};
+      std::span<const std::uint8_t> head;
+      std::span<const std::uint8_t> body;
       std::string_view encoding;
       bool decoded = false;
       bool body_truncated = false;

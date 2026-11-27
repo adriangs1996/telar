@@ -27,7 +27,7 @@ namespace telar::runtime {
         std::ranges::copy(file.directory, path.viewMut().subspan(root.size() + 1).begin());
         createPrivateDirectory({path.data(), length});
 
-        FileDescriptor directory{::open(path.data(), combineFlags(O_RDONLY, O_DIRECTORY, O_NOFOLLOW, O_CLOEXEC))}; // NOLINT(cppcoreguidelines-pro-type-vararg): open's C signature is variadic
+        const FileDescriptor directory{::open(path.data(), combineFlags(O_RDONLY, O_DIRECTORY, O_NOFOLLOW, O_CLOEXEC))}; // NOLINT(cppcoreguidelines-pro-type-vararg): open's C signature is variadic
         if (!directory) {
           throw SystemError{"Open shell integration directory"};
         }

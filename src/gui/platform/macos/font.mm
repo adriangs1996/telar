@@ -158,10 +158,11 @@ namespace {
 
     NSMutableData* const units_data = [NSMutableData dataWithLength:text.length * sizeof(unichar)];
     NSMutableData* const glyphs_data = [NSMutableData dataWithLength:text.length * sizeof(CGGlyph)];
-    auto* const units = static_cast<unichar*>(units_data.mutableBytes);
     auto* const glyphs = static_cast<CGGlyph*>(glyphs_data.mutableBytes);
 
-    [text getCharacters:units range:NSMakeRange(0, text.length)];
+    [text getCharacters:static_cast<unichar*>(units_data.mutableBytes) range:NSMakeRange(0, text.length)];
+    const auto* const units = static_cast<const unichar*>(units_data.bytes);
+
     return CTFontGetGlyphsForCharacters(font, units, glyphs, static_cast<CFIndex>(text.length));
   }
 

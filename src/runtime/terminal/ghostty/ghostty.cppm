@@ -96,7 +96,7 @@ export namespace telar::runtime {
 
   private:
     static void* allocate(void* context, std::size_t size, std::uint8_t alignment, std::uintptr_t /*return_address*/) noexcept {
-      TELAR_DIAGNOSTIC(TerminalAllocationScope allocation_scope);
+      TELAR_DIAGNOSTIC(const TerminalAllocationScope allocation_scope);
       // The pinned ABI passes log2(alignment), despite allocator.h describing bytes.
       if (alignment >= std::numeric_limits<std::size_t>::digits) {
         return nullptr;

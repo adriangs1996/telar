@@ -701,7 +701,7 @@ export {
         size_ = count;
       }
 
-      friend bool operator==(const Vec& left, const Vec& right)
+      friend inline bool operator==(const Vec& left, const Vec& right)
         requires std::equality_comparable<Value>
       {
         return std::ranges::equal(left.view(), right.view());
@@ -1090,19 +1090,19 @@ export {
         setSize(result);
       }
 
-      friend bool operator==(const String& left, const String& right) noexcept {
+      friend inline bool operator==(const String& left, const String& right) noexcept {
         return left.view() == right.view();
       }
 
-      friend bool operator==(const String& left, std::string_view right) noexcept {
+      friend inline bool operator==(const String& left, std::string_view right) noexcept {
         return left.view() == right;
       }
 
-      friend std::strong_ordering operator<=>(const String& left, const String& right) noexcept {
+      friend inline std::strong_ordering operator<=>(const String& left, const String& right) noexcept {
         return left.view() <=> right.view();
       }
 
-      friend std::strong_ordering operator<=>(const String& left, std::string_view right) noexcept {
+      friend inline std::strong_ordering operator<=>(const String& left, std::string_view right) noexcept {
         return left.view() <=> right;
       }
 
@@ -1417,7 +1417,7 @@ export {
           return *this;
         }
 
-        friend bool operator==(const Iterator& left, const Iterator& right) noexcept {
+        friend inline bool operator==(const Iterator& left, const Iterator& right) noexcept {
           return left.control_ == right.control_;
         }
 

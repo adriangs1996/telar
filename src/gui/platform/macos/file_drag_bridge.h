@@ -21,15 +21,24 @@ typedef struct TelarGuiDraggedOut {
   bool directory;
 } TelarGuiDraggedOut;
 
-typedef void (*TelarGuiPromiseAskedCallback)(
-    void* context,
-    uint32_t row,
-    uint64_t ticket,
-    const char* directory_data,
-    size_t directory_size,
-    const char* name_data,
-    size_t name_size
-);
+typedef struct TelarGuiPromiseRequest {
+  uint32_t row;
+  uint64_t ticket;
+  const char* directory_data;
+  size_t directory_size;
+  const char* name_data;
+  size_t name_size;
+} TelarGuiPromiseRequest;
+
+typedef void (*TelarGuiPromiseAskedCallback)(void* context, const TelarGuiPromiseRequest* request);
+
+typedef struct TelarGuiFileDragRequest {
+  const void* ns_view;
+  const TelarGuiDraggedOut* rows;
+  size_t row_count;
+  TelarGuiPromiseAskedCallback callback;
+  void* context;
+} TelarGuiFileDragRequest;
 
 #ifdef __cplusplus
 [[tbc::raw]]
@@ -44,19 +53,12 @@ void telarGuiFileDragDestroy(TelarGuiFileDrag* self);
 #ifdef __cplusplus
 [[tbc::raw]]
 #endif
-bool telarGuiFileDragGive(
-    TelarGuiFileDrag* self,
-    void* ns_view,
-    const TelarGuiDraggedOut* rows,
-    size_t row_count,
-    TelarGuiPromiseAskedCallback callback,
-    void* context
-);
+bool telarGuiFileDragGive(TelarGuiFileDrag* self, const TelarGuiFileDragRequest* request);
 
 #ifdef __cplusplus
 [[tbc::raw]]
 #endif
-void telarGuiFileDragEnd(TelarGuiFileDrag* self, uint64_t ticket, const char* failure_data, size_t failure_size);
+void telarGuiFileDragEnd(const TelarGuiFileDrag* self, uint64_t ticket, const char* failure_data, size_t failure_size);
 
 #ifdef __cplusplus
 [[tbc::raw]]

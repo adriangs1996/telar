@@ -116,18 +116,16 @@ namespace telar::gui::platform {
 
   tbc::val_a<AttachmentCapture<ApplicationAllocator>> ClipboardImageSource::read(tbc::mut_a<ApplicationAllocator> memory, ClipboardCaptureRequest request) const {
     PngWriter writer{.bytes = SensitiveBytes<ApplicationAllocator>{memory}, .failure = nullptr};
-    std::uint32_t width = 0;
-    std::uint32_t height = 0;
-    const auto status = telarGuiClipboardReadPng(
-        native_,
-        revision_,
-        AttachmentLimits::maximum_source_bytes,
-        AttachmentLimits::maximum_pixels,
-        &PngWriter::write,
-        tbc::raw(&writer),
-        &width,
-        &height
-    );
+    const TelarGuiClipboardReadRequest read_request{
+        .revision = revision_,
+        .max_source_bytes = AttachmentLimits::maximum_source_bytes,
+        .max_pixels = AttachmentLimits::maximum_pixels,
+        .write_callback = &PngWriter::write,
+        .write_context = tbc::raw(&writer),
+    };
+
+    TelarGuiClipboardDimensions dimensions{.width = 0, .height = 0};
+    const auto status = telarGuiClipboardReadPng(native_, &read_request, &dimensions);
 
     if (writer.failure != nullptr) {
       try {
@@ -146,7 +144,7 @@ namespace telar::gui::platform {
     }
 
     request.capture.target.validate();
-    return {.request = request, .png = std::move(writer.bytes), .width = width, .height = height};
+    return {.request = request, .png = std::move(writer.bytes), .width = dimensions.width, .height = dimensions.height};
   }
 
 }

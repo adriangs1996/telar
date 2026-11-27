@@ -164,7 +164,7 @@ namespace telar::runtime::trace {
     const std::string_view full_path{path};
     // The tail of the terminated path, so terminated too.
     const auto name = full_path.substr(full_path.rfind('/') + 1);
-    auto parent = openPrivateParent(path);
+    const auto parent = openPrivateParent(path);
     FileDescriptor file{::openat(parent.get(), name.data(), combineFlags(O_WRONLY, O_CREAT, O_EXCL, O_NOFOLLOW, O_CLOEXEC), private_file_mode)}; // NOLINT(cppcoreguidelines-pro-type-vararg): openat's C signature is variadic
     if (!file) {
       throw SystemError{"Create trace file", sys::lastError()};

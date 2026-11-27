@@ -31,7 +31,16 @@ struct TelarGuiFileDrag {
     const auto directory = path.substr(0, split);
     const auto name = path.substr(split + 1);
 
-    callback(context, row, ticket, directory.data(), directory.size(), name.data(), name.size());
+    const TelarGuiPromiseRequest request{
+        .row = row,
+        .ticket = ticket,
+        .directory_data = directory.data(),
+        .directory_size = directory.size(),
+        .name_data = name.data(),
+        .name_size = name.size(),
+    };
+
+    callback(context, &request);
   }
 };
 
@@ -244,7 +253,7 @@ void telarGuiFileDragDestroy(TelarGuiFileDrag* self) {
   }
 }
 
-void telarGuiFileDragEnd(TelarGuiFileDrag* self, uint64_t ticket, const char* failure_data, size_t failure_size) {
+void telarGuiFileDragEnd(const TelarGuiFileDrag* self, uint64_t ticket, const char* failure_data, size_t failure_size) {
   if (self == nullptr) {
     return;
   }
@@ -261,28 +270,21 @@ void telarGuiFileDragEnd(TelarGuiFileDrag* self, uint64_t ticket, const char* fa
   handler(failure.empty() ? nil : failureOf(textOf(failure)));
 }
 
-bool telarGuiFileDragGive(
-    TelarGuiFileDrag* self,
-    void* ns_view,
-    const TelarGuiDraggedOut* rows,
-    size_t row_count,
-    TelarGuiPromiseAskedCallback callback,
-    void* context
-) {
-  if (self == nullptr) {
+bool telarGuiFileDragGive(TelarGuiFileDrag* self, const TelarGuiFileDragRequest* request) {
+  if (self == nullptr || request == nullptr) {
     return false;
   }
 
   @autoreleasepool {
-    NSView* const view = ns_view != nullptr ? (__bridge NSView*)ns_view : nil;
+    NSView* const view = request->ns_view != nullptr ? (__bridge NSView*)request->ns_view : nil;
     TelarDragSource* const source = [[TelarDragSource alloc] init];
-    NSMutableArray<id<NSPasteboardWriting>>* const writers = [NSMutableArray arrayWithCapacity:row_count];
-    NSMutableArray<NSImage*>* const icons = [NSMutableArray arrayWithCapacity:row_count];
+    NSMutableArray<id<NSPasteboardWriting>>* const writers = [NSMutableArray arrayWithCapacity:request->row_count];
+    NSMutableArray<NSImage*>* const icons = [NSMutableArray arrayWithCapacity:request->row_count];
 
     source.rows = self;
     source.view = view;
 #pragma clang unsafe_buffer_usage begin
-    const std::span<const TelarGuiDraggedOut> row_span{rows, rows == nullptr ? 0 : row_count};
+    const std::span<const TelarGuiDraggedOut> row_span{request->rows, request->rows == nullptr ? 0 : request->row_count};
 #pragma clang unsafe_buffer_usage end
 
     for (const auto& row : row_span) {
@@ -295,8 +297,8 @@ bool telarGuiFileDragGive(
     forsake(self->source);
     self->writers = writers;
     self->source = source;
-    self->callback = tbc::raw(callback);
-    self->context = tbc::raw(context);
+    self->callback = tbc::raw(request->callback);
+    self->context = tbc::raw(request->context);
     if (view == nil || view.window == nil || writers.count == 0 || (NSEvent.pressedMouseButtons & NSUInteger{1}) == 0) {
       return false;
     }

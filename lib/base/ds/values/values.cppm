@@ -21,7 +21,7 @@ export {
     // does not inherit.
     template <typename Value>
     constexpr bool relocatable = std::is_trivially_copyable_v<Value>
-#if !defined(__POINTER_FIELD_PROTECTION_TAGGED__)
+#ifndef __POINTER_FIELD_PROTECTION_TAGGED__
                                  || requires { requires std::same_as<typename Value::__trivially_relocatable, Value>; }
 #endif
                                  || requires { requires std::same_as<typename Value::trivially_relocatable, Value>; };

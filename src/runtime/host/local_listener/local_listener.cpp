@@ -67,7 +67,7 @@ namespace telar::runtime {
     }
 
     std::ranges::copy(path, path_.viewMut().begin());
-    auto parent = openPrivateParent(path);
+    const auto parent = openPrivateParent(path);
 
     constexpr std::string_view lock_suffix = ".lock";
     // Zeroed, so the path ends terminated.
@@ -140,7 +140,7 @@ namespace telar::runtime {
       throw SystemError{"runtime endpoint is not an owned socket", EACCES};
     }
 
-    FileDescriptor probe{::socket(AF_UNIX, SOCK_STREAM, 0)};
+    const FileDescriptor probe{::socket(AF_UNIX, SOCK_STREAM, 0)};
     if (!probe) {
       throw SystemError{"probe runtime socket"};
     }

@@ -37,25 +37,17 @@ namespace telar::gui::platform {
     Native(Native&&) = delete;
     Native& operator=(Native&&) = delete;
 
-    static void dispatch(
-        void* context,
-        std::uint32_t row,
-        std::uint64_t ticket,
-        const char* directory_data,
-        std::size_t directory_size,
-        const char* name_data,
-        std::size_t name_size
-    ) {
+    static void dispatch(void* context, const TelarGuiPromiseRequest* request) {
       auto& self = *static_cast<Native*>(context);
-      if (!self.asked) {
+      if (!self.asked || request == nullptr) {
         return;
       }
 
       self.asked({
-          .row = row,
-          .ticket = ticket,
-          .directory = directory_data == nullptr ? std::string_view{} : std::string_view{directory_data, directory_size},
-          .name = name_data == nullptr ? std::string_view{} : std::string_view{name_data, name_size},
+          .row = request->row,
+          .ticket = request->ticket,
+          .directory = request->directory_data == nullptr ? std::string_view{} : std::string_view{request->directory_data, request->directory_size},
+          .name = request->name_data == nullptr ? std::string_view{} : std::string_view{request->name_data, request->name_size},
       });
     }
   };
@@ -76,7 +68,7 @@ namespace telar::gui::platform {
   bool FileDrag::give(const QWindow& window, std::span<const DraggedOut> rows, tbc::val_a<PromiseAsked> asked) {
     // Only AppKit's window has a view: under another platform of Qt the handle is something else.
     const bool native = QGuiApplication::platformName() == QLatin1StringView{"cocoa"} && window.handle() != nullptr;
-    void* const view = native ? std::bit_cast<void*>(window.winId()) : nullptr;
+    const void* const view = native ? std::bit_cast<const void*>(window.winId()) : nullptr;
     SystemAllocator memory;
     ds::Vec<TelarGuiDraggedOut, SystemAllocator> converted{memory};
 
@@ -95,14 +87,15 @@ namespace telar::gui::platform {
     }
 
     native_->asked = std::move(asked);
-    return telarGuiFileDragGive(
-        native_->handle,
-        view,
-        converted.empty() ? nullptr : converted.data(),
-        converted.size(),
-        native_->asked ? &Native::dispatch : nullptr,
-        tbc::raw(native_.get())
-    );
+    const TelarGuiFileDragRequest request{
+        .ns_view = view,
+        .rows = converted.empty() ? nullptr : converted.data(),
+        .row_count = converted.size(),
+        .callback = native_->asked ? &Native::dispatch : nullptr,
+        .context = tbc::raw(native_.get()),
+    };
+
+    return telarGuiFileDragGive(native_->handle, &request);
   }
 
 }

@@ -393,7 +393,7 @@ namespace telar::runtime {
   void PathIndexBuilder::build(const char* root) noexcept {
     TELAR_TRACE("paths.build");
     try {
-      FileDescriptor directory{::open(root, combineFlags(O_RDONLY, O_DIRECTORY, O_CLOEXEC))}; // NOLINT(cppcoreguidelines-pro-type-vararg): open's C signature is variadic
+      const FileDescriptor directory{::open(root, combineFlags(O_RDONLY, O_DIRECTORY, O_CLOEXEC))}; // NOLINT(cppcoreguidelines-pro-type-vararg): open's C signature is variadic
       if (!directory) {
         storage_.failure = PathBuildFailure::unreadable;
       } else {
@@ -566,7 +566,7 @@ namespace telar::runtime {
       }
 
       const auto relative = storage_.path(entry);
-      auto child = openRelative(root, relative);
+      const auto child = openRelative(root, relative);
       if (child) {
         list(child.get(), relative);
       }

@@ -787,7 +787,7 @@ namespace telar::runtime::redirect {
     }
 
     const ShutdownSignals signals;
-    auto monitor = traffic::connect(endpoint_);
+    const auto monitor = traffic::connect(endpoint_);
 
     greet(monitor.get());
     discovery_.emplace();

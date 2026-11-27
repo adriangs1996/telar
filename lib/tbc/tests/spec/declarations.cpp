@@ -129,7 +129,7 @@ namespace declarations {
 
 // CASE: declaration.static_literal
 // PAIR: declaration.static_field
-// SOURCE: lib/base/include/telar_base/diagnostics/limit_reach.hpp :: LimitReach
+// SOURCE: lib/base/diagnostics/diagnostics.cppm :: LimitReach
 // STATUS: implemented
 // CONTRACT: A field labeled `lt::static_storage` holds only storage that outlives every caller, so its object borrows nothing through it.
 // SCENARIO: A limit named by a literal is kept after the function that built it returns; accept.
@@ -141,7 +141,7 @@ declarations::limit declarationStaticLiteral() {
 
 // CASE: declaration.static_local
 // PAIR: declaration.static_field
-// SOURCE: lib/base/include/telar_base/diagnostics/limit_reach.hpp :: LimitReach
+// SOURCE: lib/base/diagnostics/diagnostics.cppm :: LimitReach
 // STATUS: implemented
 // CONTRACT: A field labeled `lt::static_storage` holds only storage that outlives every caller, so its object borrows nothing through it.
 // SCENARIO: A local string's view is written to the static field; reject where it is written.
@@ -154,7 +154,7 @@ declarations::limit declarationStaticLocal() {
 
 // CASE: declaration.shared_allocator
 // PAIR: declaration.shared_type
-// SOURCE: lib/base/include/telar_base/memory/allocator.hpp :: SynchronizedAllocator
+// SOURCE: lib/base/memory/allocators/allocators.cppm :: SynchronizedAllocator
 // STATUS: implemented
 // CONTRACT: A call through a TBC_SHARED type invalidates nothing, as a Rust type with interior mutability through `&self`.
 // SCENARIO: A block is read after the allocator hands out another one; accept.
@@ -171,7 +171,7 @@ char declarationSharedAllocator(declarations::arena& memory) {
 
 // CASE: declaration.unshared_pool
 // PAIR: declaration.shared_type
-// SOURCE: lib/base/include/telar_base/memory/allocator.hpp :: SynchronizedAllocator
+// SOURCE: lib/base/memory/allocators/allocators.cppm :: SynchronizedAllocator
 // STATUS: implemented
 // CONTRACT: A call through a TBC_SHARED type invalidates nothing, as a Rust type with interior mutability through `&self`.
 // SCENARIO: Without the mark, a second allocation may move the first block; reject at the call.
@@ -188,7 +188,7 @@ char declarationUnsharedPool(declarations::pool& memory) {
 
 // CASE: declaration.constructed_copy
 // PAIR: declaration.constructs
-// SOURCE: lib/base/include/telar_base/memory/allocator.hpp :: makeOwned
+// SOURCE: lib/base/memory/allocators/allocators.cppm :: makeOwned
 // STATUS: implemented
 // CONTRACT: A TBC_CONSTRUCTS factory keeps what the constructor it forwards to keeps.
 // SCENARIO: The entry copies a local number and keeps a view of a live string; accept.
@@ -205,7 +205,7 @@ std::size_t declarationConstructedCopy(declarations::arena& memory, const std::s
 
 // CASE: declaration.constructed_view
 // PAIR: declaration.constructs
-// SOURCE: lib/base/include/telar_base/memory/allocator.hpp :: makeOwned
+// SOURCE: lib/base/memory/allocators/allocators.cppm :: makeOwned
 // STATUS: implemented
 // CONTRACT: A TBC_CONSTRUCTS factory keeps what the constructor it forwards to keeps.
 // SCENARIO: The entry keeps a view of a local string that dies before it is read.
@@ -1438,7 +1438,7 @@ int declarationMovableSharedField() {
 
 // CASE: declaration.abstract_shared_memory
 // PAIR: declaration.abstract_shared
-// SOURCE: lib/base/include/telar_base/memory/allocator.hpp :: ConcurrentAllocator (the type-erased Memory planned to replace it)
+// SOURCE: lib/base/memory/allocators/allocators.cppm :: ConcurrentAllocator (the type-erased Memory planned to replace it)
 // STATUS: implemented
 // CONTRACT: An abstract TBC_SHARED type is shared through a reference to it, as a Rust `&dyn Trait` of a type with interior mutability: its virtual calls invalidate nothing.
 // SCENARIO: Two holders keep one `Memory &`, and allocations through it and through each holder leave a block read later valid; accept.
@@ -1545,7 +1545,7 @@ char declarationAbstractSharedMemory(tbc::view<declarations::memory&, tbc::lt::a
 
 // CASE: declaration.abstract_shared_escapes
 // PAIR: declaration.abstract_shared
-// SOURCE: lib/base/include/telar_base/memory/allocator.hpp :: ConcurrentAllocator (the type-erased Memory planned to replace it)
+// SOURCE: lib/base/memory/allocators/allocators.cppm :: ConcurrentAllocator (the type-erased Memory planned to replace it)
 // STATUS: implemented
 // CONTRACT: An abstract TBC_SHARED type is shared through a reference to it, as a Rust `&dyn Trait` of a type with interior mutability: its virtual calls invalidate nothing.
 // SCENARIO: Sharing does not extend the referent: a buffer keeps a local adapter through `Memory &` and outlives it; reject at the return.

@@ -64,7 +64,7 @@ void optionalArrowRead(std::string_view text) {
 
 // CASE: std.unique_get_escape
 // PAIR: std.unique_get
-// SOURCE: lib/base/include/telar_base/memory/allocator.hpp :: Owned
+// SOURCE: lib/base/memory/allocators/allocators.cppm :: Owned
 // STATUS: implemented
 // CONTRACT: unique_ptr::get points into storage that the owner releases when it dies.
 // SCENARIO: The pointer from a local owner is returned.
@@ -77,7 +77,7 @@ const standard::record* uniqueGetEscape(std::string_view text) {
 
 // CASE: std.unique_get_read
 // PAIR: std.unique_get
-// SOURCE: lib/base/include/telar_base/memory/allocator.hpp :: Owned
+// SOURCE: lib/base/memory/allocators/allocators.cppm :: Owned
 // STATUS: implemented
 // CONTRACT: Contents read through a smart pointer borrow what the owned object borrows.
 // SCENARIO: The owned record's text outlives the owner; accept.

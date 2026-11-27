@@ -165,7 +165,7 @@ namespace telar::runtime::cli::file_transfer {
       checkSize(options.bytes);
     }
 
-    auto parent = openParent(options.path);
+    const auto parent = openParent(options.path);
     const auto slash = options.path.rfind('/');
     const auto name = options.path.substr(slash + 1);
     if (name.empty() || name == "." || name == "..") {
@@ -173,7 +173,7 @@ namespace telar::runtime::cli::file_transfer {
     }
 
     if (options.action == Options::Action::get) {
-      auto file = openRegular(parent.get(), name.data());
+      const auto file = openRegular(parent.get(), name.data());
       struct stat inode{};
       if (::fstat(file.get(), &inode) != 0) {
         throw std::runtime_error{sys::errorName(sys::lastError())};
@@ -191,7 +191,7 @@ namespace telar::runtime::cli::file_transfer {
     ds::Array<char, temporary_bytes> temporary{};
 
     std::format_to_n(temporary.dataMut(), temporary.size() - 1, ".telar-file-{:016x}{:016x}", randomIdentity(), randomIdentity());
-    FileDescriptor file{::openat(parent.get(), temporary.data(), combineFlags(O_CREAT, O_EXCL, O_WRONLY, O_CLOEXEC), private_file_mode)}; // NOLINT(cppcoreguidelines-pro-type-vararg): openat's C signature is variadic
+    const FileDescriptor file{::openat(parent.get(), temporary.data(), combineFlags(O_CREAT, O_EXCL, O_WRONLY, O_CLOEXEC), private_file_mode)}; // NOLINT(cppcoreguidelines-pro-type-vararg): openat's C signature is variadic
     if (!file) {
       throw std::runtime_error{sys::errorName(sys::lastError())};
     }
@@ -363,7 +363,7 @@ namespace telar::runtime::cli::diagnostics {
     };
 
     tbc::val_a<LogTail> readTail(int directory, const Log& log, tbc::val_a<std::span<char>> bytes) {
-      FileDescriptor file{::openat(directory, log.name.data(), combineFlags(O_RDONLY, O_NOFOLLOW, O_NONBLOCK, O_CLOEXEC))}; // NOLINT(cppcoreguidelines-pro-type-vararg): openat's C signature is variadic
+      const FileDescriptor file{::openat(directory, log.name.data(), combineFlags(O_RDONLY, O_NOFOLLOW, O_NONBLOCK, O_CLOEXEC))}; // NOLINT(cppcoreguidelines-pro-type-vararg): openat's C signature is variadic
       if (!file) {
         throw std::runtime_error{"CannotOpenDiagnosticLog"};
       }
@@ -807,7 +807,7 @@ namespace telar::runtime::cli::history {
     }
 
     tbc::val_a<std::pair<Text, bool>> newestLines(tbc::mut_a<Memory> memory, const Text& path) {
-      FileDescriptor file{::open(path.data(), combineFlags(O_RDONLY, O_CLOEXEC))}; // NOLINT(cppcoreguidelines-pro-type-vararg): open's C signature is variadic
+      const FileDescriptor file{::open(path.data(), combineFlags(O_RDONLY, O_CLOEXEC))}; // NOLINT(cppcoreguidelines-pro-type-vararg): open's C signature is variadic
       struct stat inode{};
       if (!file || ::fstat(file.get(), &inode) != 0) {
         throw std::runtime_error{sys::errorName(sys::lastError())};

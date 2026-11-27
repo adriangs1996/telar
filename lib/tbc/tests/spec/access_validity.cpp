@@ -29,7 +29,7 @@ void guardedIndex(tbc::view<std::span<const int>> values, std::size_t index) {
 
 // CASE: access.nullable_dereference
 // PAIR: access.pointer_nullability
-// SOURCE: lib/base/include/telar_base/memory/allocator.hpp :: AllocatorRef::allocate
+// SOURCE: lib/base/memory/allocators/allocators.cppm :: AllocatorRef::allocate
 // STATUS: implemented
 // CONTRACT: A nullable borrowed parameter must be proven non-null before dereference.
 // SCENARIO: A borrowed pointer may be null; view does not promise that allocation succeeded.
@@ -41,7 +41,7 @@ void nullableDereference(tbc::view<const int*> input) {
 
 // CASE: access.guarded_pointer
 // PAIR: access.pointer_nullability
-// SOURCE: lib/base/include/telar_base/memory/allocator.hpp :: AllocatorRef::allocate
+// SOURCE: lib/base/memory/allocators/allocators.cppm :: AllocatorRef::allocate
 // STATUS: implemented
 // CONTRACT: The null guard establishes dereferenceability only with respect to nullness.
 // SCENARIO: Caller-provided storage validity is a precondition; the guarded access is accepted.
