@@ -606,7 +606,6 @@
     "src/gui/foundation/text/text-text_fit.cppm": "telar.gui.foundation.text:text_fit",
     "src/gui/foundation/text/text.cppm": "telar.gui.foundation.text",
     "src/gui/platform/platform-clipboard_image_pipe.cppm": "telar.gui.platform:clipboard_image_pipe",
-    "src/gui/platform/platform-clipboard_image_transfer.cppm": "telar.gui.platform:clipboard_image_transfer",
     "src/gui/platform/platform.cppm": "telar.gui.platform",
     "src/gui/tests/activity_fixture/activity_fixture.cppm": "telar.gui.tests.activity_fixture",
     "src/gui/tests/agent_fixture/agent_fixture.cppm": "telar.gui.tests.agent_fixture",

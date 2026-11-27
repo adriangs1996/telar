@@ -12,8 +12,6 @@ import telar.platform.primitives;
 export {
   namespace telar::gui::platform {
 
-    class ClipboardImageTransfer;
-
     enum class ClipboardImageError : std::uint8_t {
       no_image,
       changed,
@@ -22,6 +20,17 @@ export {
       pixels,
       invalid_image,
       read_failed,
+    };
+
+    // The transfer status shared between the clipboard reader and pipe on Linux.
+    class ClipboardImageTransfer {
+    public:
+      void fail(ClipboardImageError error) noexcept;
+      [[nodiscard]] ds::Option<ClipboardImageError> failure() const noexcept;
+
+    private:
+      ClipboardImageError error_ = ClipboardImageError::read_failed;
+      std::atomic<bool> failed_ = false;
     };
 
     class ClipboardImageFailure final : public std::exception {

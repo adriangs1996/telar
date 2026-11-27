@@ -72,12 +72,12 @@ if(TELAR_GUI_NATIVE)
     PATHS "${TELAR_GUI_QT_PREFIX}/lib/cmake/Qt6GuiPrivate" NO_DEFAULT_PATH)
   qt_standard_project_setup(REQUIRES 6.7)
   add_library(gui-surface-command STATIC ui/kit/process/surface_command.cpp)
-  target_link_libraries(gui-surface-command PUBLIC gui-foundation-core gui-foundation-system gui-posix gui-platform Qt6::Core)
+  target_link_libraries(gui-surface-command PUBLIC gui-foundation-core gui-foundation-system gui-posix gui-platform telar::base Qt6::Core)
   set_target_properties(gui-surface-command PROPERTIES POSITION_INDEPENDENT_CODE ON)
   add_dependencies(gui-surface-command telar-gui-command)
 
   add_library(gui-machine-profiles STATIC ui/app/overlays/machine_prompt/machine_profiles_source.cpp ui/app/overlays/machine_prompt/machine_profiles_source.hpp)
-  target_link_libraries(gui-machine-profiles PUBLIC gui-posix gui-platform gui-application Qt6::Concurrent)
+  target_link_libraries(gui-machine-profiles PUBLIC gui-foundation-core gui-foundation-system gui-posix gui-platform gui-application telar::base Qt6::Concurrent)
   set_target_properties(gui-machine-profiles PROPERTIES POSITION_INDEPENDENT_CODE ON)
   if(Qt6_VERSION VERSION_GREATER_EQUAL 6.8)
     qt_policy(SET QTP0004 NEW)
@@ -85,7 +85,7 @@ if(TELAR_GUI_NATIVE)
 
   # The platform domain's native window, fonts and clipboard images, on Qt.
   add_library(gui-platform-native STATIC foundation/system/system-host_name.cpp)
-  target_link_libraries(gui-platform-native PUBLIC gui-foundation-core gui-foundation-system gui-foundation-fonts gui-platform gui-posix Qt6::Gui PRIVATE Qt6::Quick)
+  target_link_libraries(gui-platform-native PUBLIC gui-foundation-core gui-foundation-system gui-foundation-fonts gui-platform gui-posix telar::base telar::platform telar::tbc Qt6::Gui PRIVATE Qt6::Quick)
   set_target_properties(gui-platform-native PROPERTIES POSITION_INDEPENDENT_CODE ON)
   if(APPLE)
     if(NOT DEFINED CMAKE_OBJCXX_COMPILER AND "$ENV{OBJCXX}" STREQUAL "" AND CMAKE_CXX_COMPILER_ID MATCHES "Clang")
@@ -153,11 +153,11 @@ if(TELAR_GUI_NATIVE)
 
   add_library(gui-keyboard STATIC ui/kit/input/terminal_input.cpp)
   # It imports no domain; the lowest, gui-foundation-core, gives it the GUI's settings.
-  target_link_libraries(gui-keyboard PUBLIC gui-foundation-core Qt6::Gui)
+  target_link_libraries(gui-keyboard PUBLIC gui-foundation-core telar::base telar::wire Qt6::Gui)
   set_target_properties(gui-keyboard PROPERTIES POSITION_INDEPENDENT_CODE ON)
 
   add_library(gui-clipboard-images STATIC ui/app/panes/attachments/attachment_preview.cpp ui/app/panes/attachments/attachment_preview.hpp ui/app/panes/attachments/clipboard_images.cpp ui/app/panes/attachments/clipboard_images.hpp)
-  target_link_libraries(gui-clipboard-images PUBLIC gui-platform-native gui-application Qt6::Concurrent)
+  target_link_libraries(gui-clipboard-images PUBLIC gui-foundation-core gui-platform gui-platform-native gui-application telar::base telar::platform telar::tbc Qt6::Concurrent)
   set_target_properties(gui-clipboard-images PROPERTIES POSITION_INDEPENDENT_CODE ON)
 
   qt_add_library(gui-quick STATIC)
@@ -169,8 +169,9 @@ if(TELAR_GUI_NATIVE)
     gui-foundation-terminal gui-foundation-fonts gui-foundation-actions gui-foundation-keys gui-foundation-model
     gui-foundation-agents gui-foundation-drawing gui-foundation-forms gui-foundation-icons
     gui-platform
-    gui-application gui-platform-native gui-keyboard gui-fonts-native gui-machine-profiles Qt6::Quick
-    Qt6::QuickControls2 Qt6::Network Qt6::Concurrent)
+    gui-application gui-platform-native gui-keyboard gui-fonts-native gui-machine-profiles
+    telar::base telar::wire telar::platform telar::tbc
+    Qt6::Quick Qt6::QuickControls2 Qt6::Network Qt6::Concurrent)
   # Qt adapters import C++23 modules that import `std`; Clang does not merge stdlib types
   # such as std::string_view across a precompiled header (-include-pch) and the `std` BMI,
   # so gui-quick compiles without a precompiled header.
