@@ -1356,11 +1356,25 @@ return {api_version = 2, client = {
           view->send(QStringLiteral("<Cmd>call system('export GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1 && git init -q && git add screen.cpp redraw.cpp && git -c user.name=t -c user.email=t@t -c commit.gpgsign=false commit -qm first') | call writefile(['// screen', '// changed'], 'screen.cpp')<CR>"));
         }
 
+        // Two of the files open in the editor, the one edited last of them screen.cpp.
+        view->send(QStringLiteral("<Cmd>edit redraw.cpp | edit screen.cpp<CR>"));
         view->send(QStringLiteral("<Cmd>Telar files<CR>"));
         QTRY_VERIFY_WITH_TIMEOUT(view->picker().value(QStringLiteral("open")).toBool(), runtime_wait_ms);
         QCOMPARE(view->picker().value(QStringLiteral("source")).toString(), QStringLiteral("files"));
-        // Without a query, what the directory holds.
-        QTRY_VERIFY2_WITH_TIMEOUT(names().size() == 3 && names().contains(QStringLiteral("screen.cpp")), qPrintable(names().join(QLatin1Char(' '))), runtime_wait_ms);
+        // Without a query, what the directory holds: the files open first, the one being
+        // edited last of them, each group titled.
+        const auto sections = [&] {
+          QStringList found;
+
+          for (const auto& row : rows()) {
+            found.append(row.toMap().value(QStringLiteral("section")).toString());
+          }
+
+          return found;
+        };
+
+        QTRY_VERIFY2_WITH_TIMEOUT(names() == (QStringList{QStringLiteral("redraw.cpp"), QStringLiteral("screen.cpp"), QStringLiteral("frames.cpp")}), qPrintable(names().join(QLatin1Char(' '))), runtime_wait_ms);
+        QCOMPARE(sections(), (QStringList{QStringLiteral("Open"), QStringLiteral("Open"), QStringLiteral("Files")}));
         if (versioned) {
           const auto mark = [&](const QString& name) {
             for (const auto& row : rows()) {
@@ -1372,10 +1386,13 @@ return {api_version = 2, client = {
             return QStringLiteral("absent");
           };
 
-          QTRY_COMPARE_WITH_TIMEOUT(mark(QStringLiteral("screen.cpp")), QStringLiteral("M"), runtime_wait_ms);
-          QCOMPARE(mark(QStringLiteral("frames.cpp")), QStringLiteral("U"));
+          // An open file is marked as the one being edited, not by git.
+          QTRY_COMPARE_WITH_TIMEOUT(mark(QStringLiteral("frames.cpp")), QStringLiteral("U"), runtime_wait_ms);
+          QCOMPARE(mark(QStringLiteral("screen.cpp")), QStringLiteral("current"));
           QCOMPARE(mark(QStringLiteral("redraw.cpp")), QString{});
         }
+
+        shoot(QStringLiteral("editor-picker-browse"));
 
         view->searchPicker(QStringLiteral("fram"));
         QTRY_COMPARE_WITH_TIMEOUT(names(), QStringList{QStringLiteral("frames.cpp")}, runtime_wait_ms);
@@ -1399,10 +1416,10 @@ return {api_version = 2, client = {
             }
 
             QVERIFY2(room.contains(cells), qPrintable(QStringLiteral("preview %1,%2 %3x%4 past %5,%6 %7x%8").arg(cells.x()).arg(cells.y()).arg(cells.width()).arg(cells.height()).arg(room.x()).arg(room.y()).arg(room.width()).arg(room.height())));
-            // The panel stands on the editor's cells: the preview starts where its room does,
-            // right under the header, and fills it but for less than a cell.
-            QVERIFY2(cells.x() - room.x() < 1 && cells.y() - room.y() < 1, qPrintable(QStringLiteral("preview at %1,%2, room at %3,%4").arg(cells.x()).arg(cells.y()).arg(room.x()).arg(room.y())));
-            QVERIFY2(room.right() - cells.right() < view->cellWidth() && room.bottom() - cells.bottom() < view->cellHeight(), qPrintable(QStringLiteral("preview %1x%2 in room %3x%4").arg(cells.width()).arg(cells.height()).arg(room.width()).arg(room.height())));
+            // The float holds the whole cells of the room, which the pane draws it at the corner
+            // of: it fills the room but for less than a cell on each side.
+            QVERIFY2(cells.x() - room.x() < view->cellWidth() && cells.y() - room.y() < view->cellHeight(), qPrintable(QStringLiteral("preview at %1,%2, room at %3,%4").arg(cells.x()).arg(cells.y()).arg(room.x()).arg(room.y())));
+            QVERIFY2(room.right() - cells.right() < 2 * view->cellWidth() && room.bottom() - cells.bottom() < 2 * view->cellHeight(), qPrintable(QStringLiteral("preview %1x%2 in room %3x%4").arg(cells.width()).arg(cells.height()).arg(room.width()).arg(room.height())));
             ++inside;
           }
         }
@@ -1436,7 +1453,28 @@ return {api_version = 2, client = {
         QTRY_VERIFY_WITH_TIMEOUT(!view->picker().value(QStringLiteral("open")).toBool(), runtime_wait_ms);
         QTRY_VERIFY2_WITH_TIMEOUT(shown().contains(QStringLiteral("the needle is here")), qPrintable(shown()), runtime_wait_ms);
         QTRY_COMPARE_WITH_TIMEOUT(floats(), before, runtime_wait_ms);
-        view->send(QStringLiteral("<Cmd>bwipeout! | cd ..<CR>"));
+        view->send(QStringLiteral("<Cmd>bwipeout! | silent! bwipeout! redraw.cpp screen.cpp | cd ..<CR>"));
+      }
+
+      // A run that takes pictures of a repository of the person's, TELAR_EDITOR_SHOT_ROOT, shows
+      // the picker on it: with nothing typed, then searching TELAR_EDITOR_SHOT_QUERY.
+      if (const auto shot_root = qEnvironmentVariable("TELAR_EDITOR_SHOT_ROOT"); !shots.isEmpty() && !shot_root.isEmpty()) {
+        const auto rows = [&] {
+          return view->picker().value(QStringLiteral("rows")).toList();
+        };
+
+        view->send(QStringLiteral("<Cmd>silent cd %1 | silent! edit %2<CR>").arg(shot_root, qEnvironmentVariable("TELAR_EDITOR_SHOT_OPEN")));
+        view->send(QStringLiteral("<Cmd>Telar files<CR>"));
+        QTRY_VERIFY_WITH_TIMEOUT(view->picker().value(QStringLiteral("open")).toBool() && rows().size() > 3, runtime_wait_ms);
+        QTest::qWait(400);
+        shoot(QStringLiteral("editor-picker-repo-browse"));
+        view->searchPicker(qEnvironmentVariable("TELAR_EDITOR_SHOT_QUERY", QStringLiteral("runtime")));
+        QTRY_VERIFY_WITH_TIMEOUT(!view->picker().value(QStringLiteral("loading")).toBool() && rows().size() > 3, runtime_wait_ms);
+        QTest::qWait(400);
+        shoot(QStringLiteral("editor-picker-repo-search"));
+        view->closePicker();
+        QTRY_VERIFY_WITH_TIMEOUT(!view->picker().value(QStringLiteral("open")).toBool(), runtime_wait_ms);
+        view->send(QStringLiteral("<Cmd>silent! %bwipeout! | silent cd -<CR>"));
       }
 
       // A scroll slides the rows to their places: the grid clips itself while they travel, and

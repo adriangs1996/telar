@@ -44,7 +44,6 @@ FocusScope {
         focus: true
         controller: root.controller
         paneId: root.paneId
-        pickerColumns: pick.columns
         onPressed: root.pressed()
 
         Repeater {
@@ -64,8 +63,10 @@ FocusScope {
                 // preview comes with its picker instead.
                 property real reveal: floating && !preview ? 0 : 1
 
-                x: record.x
-                y: record.y + (1 - reveal) * 6 * root.ratio
+                // The preview stands where the picker's column leaves it room, to the pixel; the
+                // rest on their cells.
+                x: preview ? room.x : record.x
+                y: (preview ? room.y : record.y) + (1 - reveal) * 6 * root.ratio
                 // The picker's preview is a float of Neovim's, drawn over the picker's surface.
                 z: preview ? 995 : record.layer
                 width: record.width

@@ -259,6 +259,10 @@ export namespace telar::gui::features::nvim {
     std::uint16_t position_count = 0;
     // What git says of the file; none for a line of text or a buffer.
     PathChange change = PathChange::none;
+    // A file the editor has open, listed before the others while nothing is typed, and whether
+    // it is the one being edited.
+    bool open = false;
+    bool current = false;
   };
 
   // The picker of an editor pane: the files, the lines or the buffers a query finds under a
