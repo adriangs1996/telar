@@ -53,7 +53,7 @@ namespace {
     using Geometry = MachineChromeGeometry;
     const ChromeMetrics chrome;
     constexpr Rect area{.x = 8, .y = 40, .width = 224, .height = 86};
-    const auto first = Geometry::listRow(area, chrome, 0, true, false);
+    const auto first = Geometry::listRow(area, chrome, 0, {.stacked = true, .marked = false});
     constexpr Rect bounds{.x = 8, .y = 40, .width = 224, .height = 43};
     constexpr Rect avatar{.x = 16, .y = 50, .width = 24, .height = 24};
     constexpr Rect dot{.x = 35, .y = 69, .width = 7, .height = 7};
@@ -63,7 +63,7 @@ namespace {
 
     check(first.bounds == bounds && first.avatar == avatar && first.dot == dot && first.stack == stack, "a machine row keeps its avatar, link dot and agent stack apart");
     check(first.label == label && first.status == status, "the status line sits under the label in the cards' text column");
-    const auto second = Geometry::listRow(area, chrome, 1, false, false);
+    const auto second = Geometry::listRow(area, chrome, 1, {.stacked = false, .marked = false});
     constexpr Rect wide_label{.x = 46, .y = 88, .width = 178, .height = 17};
 
     check(second.bounds.y == bounds.y + bounds.height && second.stack.empty() && second.label == wide_label, "a row without agents gives the stack's room to its text");
@@ -76,7 +76,7 @@ namespace {
     constexpr float natural_width_with_mark = 166;
 
     check(Geometry::listNaturalWidth(chrome, text_advance, false, true) == natural_width_with_mark, "the roster's natural width keeps the mark's column past the text");
-    const auto marked = Geometry::listRow(area, chrome, 0, true, true);
+    const auto marked = Geometry::listRow(area, chrome, 0, {.stacked = true, .marked = true});
     constexpr Rect mark{.x = 210, .y = 55, .width = 14, .height = 14};
     constexpr Rect marked_stack{.x = 162, .y = 40, .width = 42, .height = 43};
 
@@ -85,8 +85,8 @@ namespace {
     ChromeMetrics enlarged;
 
     enlarged.text_ratio = 2;
-    check(Geometry::listRow(area, enlarged, 0, false, false).avatar.width == avatar.width * enlarged.text_ratio && Geometry::listRow(area, chrome, 0, false, false).avatar.width == avatar.width, "rows follow the chrome text, whatever the display ratio is");
-    const auto quiet = Geometry::listRow(area, chrome, 0, false, false, false);
+    check(Geometry::listRow(area, enlarged, 0, {.stacked = false, .marked = false}).avatar.width == avatar.width * enlarged.text_ratio && Geometry::listRow(area, chrome, 0, {.stacked = false, .marked = false}).avatar.width == avatar.width, "rows follow the chrome text, whatever the display ratio is");
+    const auto quiet = Geometry::listRow(area, chrome, 0, {.described = false});
     constexpr Rect centered_label{.x = 46, .y = 53, .width = 178, .height = 17};
 
     check(quiet.label == centered_label && quiet.status.empty(), "a row with no status line centers its label in the row");

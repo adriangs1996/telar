@@ -260,17 +260,20 @@ namespace telar::gui::qt {
     // empty, so the pane's own background shows there as under a terminal's cells. A row
     // covered in part is drawn from a copy in `copies`, one covered whole from `blank`; `flags`
     // holds the covered cells of one row.
-    void coverRows(tbc::holds<QList<TerminalRow>&, tbc::lt::a> rows, const application::nvim::Editor& editor, tbc::ref_a<application::nvim::Grid> base, tbc::mut_a<QList<CellValue>> copies, tbc::mut_a<QList<CellValue>> blank, QList<Byte>& flags) {
+    void coverRows(tbc::holds<QList<TerminalRow>&, tbc::lt::a> rows, const application::nvim::Editor& editor, tbc::ref_a<application::nvim::Grid> base, tbc::mut_a<QList<CellValue>> copies, tbc::mut_a<QList<CellValue>> blank, QList<Byte>& flags) { // NOLINT(readability-function-size): the rows lend from the copies and the blank row, each a borrow of its own
       const auto& screen = base.screen;
       const auto count = static_cast<std::size_t>(screen.rows());
       const auto columns = static_cast<std::size_t>(screen.columns());
       // A row covered in part is drawn again whenever what covers it changes: its revision is
       // the screen's, mixed with the cells covered.
       const auto mixed = [](std::uint64_t revision, std::span<const Byte> covered) {
-        std::uint64_t hash = 0xcbf29ce484222325ULL;
+        // FNV-1a's offset and prime.
+        constexpr std::uint64_t offset = 0xcbf2'9ce4'8422'2325ULL;
+        constexpr std::uint64_t prime = 0x0000'0100'0000'01b3ULL;
+        std::uint64_t hash = offset;
 
         for (const auto flag : covered) {
-          hash = (hash ^ flag) * 0x100000001b3ULL;
+          hash = (hash ^ flag) * prime;
         }
 
         return revision ^ (hash | 1U);
@@ -283,8 +286,8 @@ namespace telar::gui::qt {
       blank.resize(static_cast<qsizetype>(columns));
       rows.reserve(static_cast<qsizetype>(count));
 
-      const std::span<Byte> covered{flags.data(), columns};
-      const auto coveredCells = [&] {
+      const std::span<Byte> covered{flags};
+      const auto covered_count = [&] {
         return static_cast<std::size_t>(std::ranges::count(covered, Byte{1}));
       };
 
@@ -293,14 +296,14 @@ namespace telar::gui::qt {
       for (std::size_t row = 0; row < count; ++row) {
         application::nvim::coverDefaultRow(editor, row, covered);
 
-        const auto cells = coveredCells();
+        const auto cells = covered_count();
 
         partial += cells != 0 && cells != columns ? 1 : 0;
       }
 
       // Each copy keeps its place while the rows are drawn: the copies are made once there is
       // room for all of them.
-      copies.resize(static_cast<qsizetype>(partial * columns));
+      copies.resize(static_cast<qsizetype>(partial) * static_cast<qsizetype>(columns));
 
       std::size_t copied = 0;
 
@@ -308,14 +311,14 @@ namespace telar::gui::qt {
         application::nvim::coverDefaultRow(editor, row, covered);
 
         const auto cells = screen.row(row);
-        const auto hidden = coveredCells();
+        const auto hidden = covered_count();
         TerminalRow drawn{.cells = cells, .revision = screen.rowRevision(row), .source = row, .screen_row = static_cast<std::int32_t>(row)};
 
         if (hidden == columns) {
-          drawn.cells = std::span<const CellValue>{blank.constData(), columns};
+          drawn.cells = std::span<const CellValue>{std::as_const(blank)};
           drawn.revision = blank_revision;
         } else if (hidden != 0) {
-          const std::span<CellValue> copy{copies.data() + (copied++ * columns), columns};
+          const auto copy = std::span<CellValue>{copies}.subspan(copied++ * columns, columns);
 
           for (std::size_t column = 0; column < columns; ++column) {
             copy[column] = covered[column] != 0 || column >= cells.size() ? CellValue{} : cells[column];

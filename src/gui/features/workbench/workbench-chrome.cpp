@@ -185,7 +185,8 @@ namespace telar::gui::features::workbench {
   }
 
   void WorkspaceMark::distinguish(std::span<WorkspaceMark> marks) noexcept {
-    static_assert(hues.size() < 32);
+    // One bit of a word for each hue.
+    static_assert(hues.size() < std::numeric_limits<std::uint32_t>::digits);
     constexpr std::uint32_t every = (1U << hues.size()) - 1;
     std::uint32_t taken = 0;
 

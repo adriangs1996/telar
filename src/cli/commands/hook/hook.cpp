@@ -33,6 +33,9 @@ namespace telar::runtime::cli::hooks {
 
   namespace {
 
+    // Where Antigravity keeps a conversation: the directory of its transcript, by its id.
+    constexpr std::string_view brain_directory = "/brain/";
+
     // A tool call keeps Claude working; a question or a plan it presents blocks it on the user.
     void claudeToolUse(tbc::ref_a<Payload> input, tbc::mut_a<FixedText<display_line_bytes>> event, ReportAgent& report) {
       toolEvent(event, input);
@@ -299,10 +302,10 @@ namespace telar::runtime::cli::hooks {
     // Antigravity keeps a conversation's title, which /rename changes without a hook, in
     // annotations/<id>.pbtxt beside brain/<id>/, the directory of the transcript it names.
     const auto transcript = input.fields().text("transcriptPath");
-    const auto brain = session.empty() ? std::string_view::npos : transcript.find("/brain/");
+    const auto brain = session.empty() ? std::string_view::npos : transcript.find(brain_directory);
 
     annotations.assign({});
-    if (brain != std::string_view::npos && transcript.substr(brain + 7).starts_with(session)) {
+    if (brain != std::string_view::npos && transcript.substr(brain + brain_directory.size()).starts_with(session)) {
       ds::Array<char, agent_report_session_file_bytes> buffer{};
       const auto written = std::format_to_n(buffer.dataMut(), static_cast<std::ptrdiff_t>(buffer.size()), "{}/annotations/{}.pbtxt", transcript.substr(0, brain), session);
 
@@ -492,37 +495,46 @@ namespace telar::runtime::cli::hooks {
       }
     }
 
-    // Antigravity's Stop carries no answer: the last one is the last response of the model in the
-    // transcript, after the user's last message. The transcript must be the conversation's own,
-    // brain/<id>/…/*.jsonl, a regular file of this user; only its tail is read.
-    void antigravityReply(const Payload& input, ds::String<Memory>& reply) {
-      constexpr std::size_t tail_bytes = std::size_t{512} * 1024;
-      const auto path = input.fields().text("transcriptPath");
-      const auto session = sessionReference(input.session());
-      const auto brain = path.find("/brain/");
+    // Whether `path` is a transcript of the conversation `session`, brain/<id>/…/*.jsonl, as an
+    // absolute path without a way up.
+    bool conversationTranscript(std::string_view path, std::string_view session) noexcept {
+      const auto brain = path.find(brain_directory);
 
-      if (session.empty() || brain == std::string_view::npos || !path.starts_with('/') || !path.ends_with(".jsonl") || path.contains("/../") || path.size() >= PATH_MAX || !path.substr(brain + 7).starts_with(session) || !path.substr(brain + 7 + session.size()).starts_with('/')) {
-        return;
+      if (session.empty() || brain == std::string_view::npos || !path.starts_with('/') || !path.ends_with(".jsonl") || path.contains("/../") || path.size() >= PATH_MAX) {
+        return false;
       }
 
+      path.remove_prefix(brain + brain_directory.size());
+      if (!path.starts_with(session)) {
+        return false;
+      }
+
+      path.remove_prefix(session.size());
+      return path.starts_with('/');
+    }
+
+    // The end of the regular file of this user at `path` into `tail`, and where its first whole
+    // line starts there; nothing when the file is not one.
+    ds::Option<std::size_t> readTail(std::string_view path, ds::String<Memory>& tail) {
+      constexpr std::size_t tail_bytes = std::size_t{512} * 1024;
       ds::Array<char, PATH_MAX> terminated{};
 
       std::ranges::copy(path, terminated.viewMut().begin());
       FileDescriptor file{::open(terminated.data(), combineFlags(O_RDONLY, O_NOFOLLOW, O_NONBLOCK, O_CLOEXEC))}; // NOLINT(cppcoreguidelines-pro-type-vararg): open's C signature is variadic
       struct stat status{};
       if (!file || ::fstat(file.get(), &status) != 0 || !S_ISREG(status.st_mode) || status.st_uid != ::getuid()) {
-        return;
+        return ds::none;
       }
 
       const auto size = static_cast<std::size_t>(status.st_size);
       const auto start = size > tail_bytes ? size - tail_bytes : 0;
-      ds::String<Memory> tail{input.memory()};
 
       tail.resize(size - start);
       std::size_t held = 0;
 
       while (held < tail.size()) {
-        const auto received = ::pread(file.get(), tail.dataMut() + held, tail.size() - held, static_cast<off_t>(start + held));
+        const auto rest = tail.viewMut().subspan(held);
+        const auto received = ::pread(file.get(), rest.data(), rest.size(), static_cast<off_t>(start) + static_cast<off_t>(held));
         if (received < 0 && sys::lastError() == EINTR) {
           continue;
         }
@@ -534,15 +546,52 @@ namespace telar::runtime::cli::hooks {
         held += static_cast<std::size_t>(received);
       }
 
-      std::string_view lines{tail.data(), held};
-
+      tail.truncate(held);
       // A tail that starts inside a line leaves that line out.
-      if (start != 0) {
-        const auto first = lines.find('\n');
-
-        lines = first == std::string_view::npos ? std::string_view{} : lines.substr(first + 1);
+      if (start == 0) {
+        return std::size_t{0};
       }
 
+      const auto first = tail.view().find('\n');
+
+      return first == std::string_view::npos ? tail.size() : first + 1;
+    }
+
+    // Who a line of a transcript says spoke: the user, the model with its response in `reply`, or
+    // neither.
+    enum class Speaker : std::uint8_t {
+      neither,
+      user,
+      model,
+    };
+
+    Speaker spoke(std::string_view line, const Payload& input, ds::String<Memory>& reply) {
+      if (!line.contains("\"PLANNER_RESPONSE\"") && !line.contains("\"USER_INPUT\"")) {
+        return Speaker::neither;
+      }
+
+      try {
+        const Object entry{input.memory(), JsonValue::parse(line)};
+        const auto type = entry.stringField("type").valueOr("");
+        const auto content = type == "PLANNER_RESPONSE" && entry.stringField("source").valueOr("") == "MODEL" ? entry.stringField("content") : ds::none;
+
+        if (type == "USER_INPUT") {
+          return Speaker::user;
+        }
+
+        if (content && !content->empty()) {
+          reply.assign(*content);
+          return Speaker::model;
+        }
+      } catch (const std::exception&) { // NOLINT(bugprone-empty-catch): a line that is not an entry is skipped, as a truncated one is.
+      }
+
+      return Speaker::neither;
+    }
+
+    // The last response of the model in a transcript's lines, unless the user's last message is
+    // after it.
+    void lastReply(std::string_view lines, const Payload& input, ds::String<Memory>& reply) {
       while (!lines.empty()) {
         const auto end = lines.find_last_not_of('\n');
         if (end == std::string_view::npos) {
@@ -553,27 +602,30 @@ namespace telar::runtime::cli::hooks {
         const auto line = lines.substr(begin == std::string_view::npos ? 0 : begin + 1, end - (begin == std::string_view::npos ? 0 : begin + 1) + 1);
 
         lines = lines.substr(0, begin == std::string_view::npos ? 0 : begin);
-        if (!line.contains("\"PLANNER_RESPONSE\"") && !line.contains("\"USER_INPUT\"")) {
-          continue;
+        if (spoke(line, input, reply) != Speaker::neither) {
+          return;
         }
+      }
+    }
 
-        try {
-          const Object entry{input.memory(), JsonValue::parse(line)};
+    // Antigravity's Stop carries no answer: the last one is the last response of the model in the
+    // transcript, after the user's last message. The transcript must be the conversation's own,
+    // brain/<id>/…/*.jsonl, a regular file of this user; only its tail is read.
+    void antigravityReply(const Payload& input, ds::String<Memory>& reply) {
+      const auto path = input.fields().text("transcriptPath");
 
-          const auto type = entry.stringField("type").valueOr("");
+      if (!conversationTranscript(path, sessionReference(input.session()))) {
+        return;
+      }
 
-          if (type == "USER_INPUT") {
-            return;
-          }
+      ds::String<Memory> tail{input.memory()};
+      const auto first = readTail(path, tail);
 
-          if (type == "PLANNER_RESPONSE" && entry.stringField("source").valueOr("") == "MODEL") {
-            if (const auto content = entry.stringField("content"); content && !content->empty()) {
-              reply.assign(*content);
-              return;
-            }
-          }
-        } catch (const std::exception&) { // NOLINT(bugprone-empty-catch): a line that is not an entry is skipped, as a truncated one is.
-        }
+      if (first) {
+        auto lines = tail.view();
+
+        lines.remove_prefix(*first);
+        lastReply(lines, input, reply);
       }
     }
 
