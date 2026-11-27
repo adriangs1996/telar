@@ -11,6 +11,8 @@ static_assert(true);
 #include <QSGNode>
 #include <algorithm>
 #include <cmath>
+#include <cstdint>
+#include <limits>
 #include <memory>
 #include <span>
 #include <utility>
@@ -205,7 +207,19 @@ namespace telar::gui::qt {
       }
     }
 
-    const ds::Option<Drawn> next = current == nullptr || editor_ == nullptr ? ds::Option<Drawn>{} : Drawn{.revision = current->screen.revision(), .appearance = editor_->appearance()};
+    ds::Option<Drawn> next;
+
+    if (current != nullptr && editor_ != nullptr) {
+      const auto* shown = editor_->editorState();
+      const bool base = grid_id_ == 1;
+
+      next = Drawn{
+          .revision = current->screen.revision(),
+          .appearance = editor_->appearance(),
+          .layout = base ? shown->layout_revision : 0,
+          .status_row = base && shown->status_row ? static_cast<std::int32_t>(*shown->status_row) : -1,
+      };
+    }
 
     // Most frames change one grid: the others keep what they drew.
     if (next == drawn_ && next) {
@@ -241,6 +255,83 @@ namespace telar::gui::qt {
     }
   }
 
+  namespace {
+
+    // The default grid's rows into `rows`, with the cells the window does not draw from it left
+    // empty, so the pane's own background shows there as under a terminal's cells. A row
+    // covered in part is drawn from a copy in `copies`, one covered whole from `blank`; `flags`
+    // holds the covered cells of one row.
+    void coverRows(tbc::holds<QList<TerminalRow>&, tbc::lt::a> rows, const application::nvim::Editor& editor, tbc::ref_a<application::nvim::Grid> base, tbc::mut_a<QList<CellValue>> copies, tbc::mut_a<QList<CellValue>> blank, QList<Byte>& flags) {
+      const auto& screen = base.screen;
+      const auto count = static_cast<std::size_t>(screen.rows());
+      const auto columns = static_cast<std::size_t>(screen.columns());
+      // A row covered in part is drawn again whenever what covers it changes: its revision is
+      // the screen's, mixed with the cells covered.
+      const auto mixed = [](std::uint64_t revision, std::span<const Byte> covered) {
+        std::uint64_t hash = 0xcbf29ce484222325ULL;
+
+        for (const auto flag : covered) {
+          hash = (hash ^ flag) * 0x100000001b3ULL;
+        }
+
+        return revision ^ (hash | 1U);
+      };
+
+      // A row covered whole draws as the one empty row, whatever Neovim left on it.
+      constexpr std::uint64_t blank_revision = std::numeric_limits<std::uint64_t>::max();
+
+      flags.resize(static_cast<qsizetype>(columns));
+      blank.resize(static_cast<qsizetype>(columns));
+      rows.reserve(static_cast<qsizetype>(count));
+
+      const std::span<Byte> covered{flags.data(), columns};
+      const auto coveredCells = [&] {
+        return static_cast<std::size_t>(std::ranges::count(covered, Byte{1}));
+      };
+
+      std::size_t partial = 0;
+
+      for (std::size_t row = 0; row < count; ++row) {
+        application::nvim::coverDefaultRow(editor, row, covered);
+
+        const auto cells = coveredCells();
+
+        partial += cells != 0 && cells != columns ? 1 : 0;
+      }
+
+      // Each copy keeps its place while the rows are drawn: the copies are made once there is
+      // room for all of them.
+      copies.resize(static_cast<qsizetype>(partial * columns));
+
+      std::size_t copied = 0;
+
+      for (std::size_t row = 0; row < count; ++row) {
+        application::nvim::coverDefaultRow(editor, row, covered);
+
+        const auto cells = screen.row(row);
+        const auto hidden = coveredCells();
+        TerminalRow drawn{.cells = cells, .revision = screen.rowRevision(row), .source = row, .screen_row = static_cast<std::int32_t>(row)};
+
+        if (hidden == columns) {
+          drawn.cells = std::span<const CellValue>{blank.constData(), columns};
+          drawn.revision = blank_revision;
+        } else if (hidden != 0) {
+          const std::span<CellValue> copy{copies.data() + (copied++ * columns), columns};
+
+          for (std::size_t column = 0; column < columns; ++column) {
+            copy[column] = covered[column] != 0 || column >= cells.size() ? CellValue{} : cells[column];
+          }
+
+          drawn.cells = copy;
+          drawn.revision = mixed(drawn.revision, covered);
+        }
+
+        rows.append(drawn);
+      }
+    }
+
+  }
+
   QSGNode* NvimGridItem::updatePaintNode(QSGNode* previous, [[maybe_unused]] UpdatePaintNodeData* data) {
     const auto* current = grid();
     const auto* pane = editor_ == nullptr ? nullptr : editor_->pane();
@@ -248,6 +339,15 @@ namespace telar::gui::qt {
       const std::unique_ptr<QSGNode> discarded{previous};
 
       return nullptr;
+    }
+
+    // The default grid keeps what Neovim drew under its windows; the window draws the
+    // separators and the status line itself. None of that is drawn from its cells. A slide
+    // draws its own rows.
+    QList<TerminalRow> covered;
+
+    if (grid_id_ == 1 && drawn_rows_.isEmpty()) {
+      coverRows(covered, *editor_->editorState(), *current, covered_cells_, blank_row_, covered_);
     }
 
     [[clang::no_destroy]] static const QString no_preedit;
@@ -273,7 +373,7 @@ namespace telar::gui::qt {
         .owner = this,
         // The pane, or the float's own surface, is behind the cells that have no color.
         .background_provided = true,
-        .rows = std::span<const TerminalRow>{std::as_const(drawn_rows_)},
+        .rows = std::span<const TerminalRow>{std::as_const(covered.isEmpty() ? drawn_rows_ : covered)},
         .shift = shift_,
     };
 

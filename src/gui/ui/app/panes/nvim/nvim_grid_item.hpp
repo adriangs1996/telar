@@ -75,6 +75,9 @@ namespace telar::gui::qt {
     struct Drawn {
       std::uint64_t revision = 0;
       std::uint64_t appearance = 0;
+      // The default grid's cells left empty follow the windows and the status line.
+      std::uint64_t layout = 0;
+      std::int32_t status_row = -1;
 
       bool operator==(const Drawn&) const = default;
     };
@@ -91,6 +94,12 @@ namespace telar::gui::qt {
     bool counting_ = false;
     QList<TerminalRow> drawn_rows_;
     qreal shift_ = 0;
+    // What the default grid's rows are drawn from where cells are covered: copies of the rows
+    // covered in part, with the covered cells empty, the one empty row of the ones covered
+    // whole, and the flags of the row being covered.
+    QList<CellValue> covered_cells_;
+    QList<CellValue> blank_row_;
+    QList<Byte> covered_;
     // The revision of each row when its fonts were last asked for.
     QList<std::uint64_t> font_row_revisions_;
     std::uint64_t font_appearance_ = 0;

@@ -14,6 +14,7 @@ import telar.wire.vocabulary;
 
 export namespace telar::gui::application::nvim {
 
+  using features::nvim::CellArea;
   using features::nvim::Cmdline;
   using features::nvim::Editor;
   using features::nvim::EditorCursor;
@@ -33,6 +34,7 @@ export namespace telar::gui::application::nvim {
   using features::nvim::StatusToken;
   using features::nvim::Tab;
   using features::nvim::TabLine;
+  using features::nvim::WindowSeparators;
 
   using telar::NvimMessageKind;
   using telar::NvimMouse;
@@ -43,9 +45,11 @@ export namespace telar::gui::application::nvim {
   using telar::NvimPlacement;
   using telar::NvimPromptKind;
 
+  using features::nvim::coverDefaultRow;
   using features::nvim::findInLine;
   using features::nvim::notation;
   using features::nvim::readStatusLine;
+  using features::nvim::separators;
 
   // The modifier keys held with a mouse event, as the bits of NvimMouse::modifiers.
   inline constexpr Byte mouse_shift = telar::nvim_mouse_shift;

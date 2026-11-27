@@ -79,16 +79,6 @@ FocusScope {
                     easing.type: Easing.OutCubic
                 }
 
-                // Neovim draws a window over whatever the grid under it holds: the window hides
-                // it, as the pane's own background would.
-                Rectangle {
-                    readonly property color base: root.colors.terminalBackground
-
-                    anchors.fill: parent
-                    visible: !cell.floating && cell.record.kind !== "base"
-                    color: Qt.rgba(base.r, base.g, base.b, 1)
-                }
-
                 // The sides of a float Neovim borders with characters: the window frames it
                 // itself, and writes its title and its footer where those rows were.
                 readonly property int border: floating ? (record.border ?? 0) : 0
@@ -213,8 +203,9 @@ FocusScope {
             }
         }
 
-        // Between two windows Neovim fills cells with a separator's character: a line of the
-        // window's own stands over each. The cells stay Neovim's to drag.
+        // Between two windows Neovim fills cells with a separator's character, which the default
+        // grid leaves undrawn: a line of the window's own stands over each. The cells stay
+        // Neovim's to drag.
         Repeater {
             model: view.separators
 
@@ -228,13 +219,6 @@ FocusScope {
                 z: 0.5
                 width: modelData.width
                 height: modelData.height
-
-                Rectangle {
-                    readonly property color base: root.colors.terminalBackground
-
-                    anchors.fill: parent
-                    color: Qt.rgba(base.r, base.g, base.b, 1)
-                }
 
                 Rectangle {
                     x: separator.modelData.vertical ? Math.round((parent.width - width) / 2) : 0

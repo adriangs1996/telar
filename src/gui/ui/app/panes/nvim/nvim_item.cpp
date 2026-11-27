@@ -744,19 +744,8 @@ namespace telar::gui::qt {
     grids_.reconcile(std::move(records));
   }
 
-  namespace {
-
-    // The character Neovim rules a row with between two windows one over the other, when no
-    // status line stands there.
-    bool rules(std::string_view text) noexcept {
-      return text == "─" || text == "━" || text == "═";
-    }
-
-  }
-
   void NvimItem::synchronizeSeparators(const nvim::Editor& editor) {
     QVariantList separators;
-    const auto* base = editor.grid(1);
     const auto width = font_.cell.width();
     const auto height = font_.cell.height();
     const auto add = [&](bool vertical, QRectF bounds) {
@@ -769,20 +758,19 @@ namespace telar::gui::qt {
       });
     };
 
+    const auto cells = [&](const nvim::CellArea& area) {
+      return QRectF{area.column * width, area.row * height, area.columns * width, area.rows * height};
+    };
+
     for (const auto& grid : editor.grids) {
-      if (base == nullptr || grid->id == 1 || grid->placement != nvim::NvimPlacement::window) {
-        continue;
+      const auto [left, above] = nvim::separators(editor, *grid);
+
+      if (left) {
+        add(true, cells(*left));
       }
 
-      // A window that does not start at the editor's left edge has a separator's column there.
-      if (grid->column > 0) {
-        add(true, {(grid->column - 1) * width, grid->row * height, width, grid->height * height});
-      }
-
-      const auto above = grid->row - 1;
-      if (above >= 0 && std::cmp_less(above, base->screen.rows()) && std::cmp_less(grid->column, base->screen.columns()) &&
-          rules(base->screen.row(static_cast<std::size_t>(above))[static_cast<std::size_t>(grid->column)].utf8())) {
-        add(false, {grid->column * width, above * height, grid->width * width, height});
+      if (above) {
+        add(false, cells(*above));
       }
     }
 

@@ -392,6 +392,128 @@ namespace {
     check(receive(fixture.state, NvimFrame{.pane_id = pane_id, .frame_id = 2, .base_frame_id = 1}) == Received::presented && !find(fixture.state, pane_id)->status_row, "and when there is none");
   }
 
+  // Cells of the default grid, one text for each, as the runtime sends them from its first row.
+  struct Cells {
+    explicit Cells(std::initializer_list<std::string_view> texts) {
+      std::vector<Cell> cells;
+
+      for (const auto text : texts) {
+        cells.push_back({.text = {reinterpret_cast<const Byte*>(text.data()), text.size()}});
+      }
+
+      bytes.resize(CellRunCodec::encodedSize(cells));
+      span = {.start = 0, .count = static_cast<std::uint32_t>(cells.size()), .cells = CellRunCodec::encode(cells, bytes)};
+    }
+
+    std::vector<Byte> bytes;
+    FrameSpan span;
+  };
+
+  // Places window `grid` on the default grid, `height` rows from `row` and `width` columns from
+  // `column`, in frame 1.
+  void placeWindow(State& state, std::uint32_t grid, std::int32_t row, std::int32_t column, std::uint16_t width, std::uint16_t height) {
+    const Rows rows{width, 0, {"w"}};
+
+    check(receive(state, NvimGrid{.pane_id = pane_id, .frame_id = 1, .grid = grid, .columns = width, .rows = height, .placement = NvimPlacement::window, .row = row, .column = column, .width = width, .height = height, .full = true, .spans = {&rows.span, 1}}) == Received::staged);
+  }
+
+  std::string coveredOf(const Editor& editor, std::size_t row, std::size_t columns) {
+    std::vector<Byte> covered(columns, Byte{7});
+    std::string marks;
+
+    coverDefaultRow(editor, row, covered);
+    for (const auto flag : covered) {
+      marks += flag != 0 ? '#' : '.';
+    }
+
+    return marks;
+  }
+
+  // The default grid keeps what Neovim drew under a window before the window came: none of it is
+  // drawn, nor the separators and the status line the window draws itself. What is left is what
+  // Neovim draws there for the window to show, a window's own status line.
+  void defaultGridIsCoveredWhereTheWindowDrawsItself() {
+    Fixture fixture;
+    // A window over another on the left with a status line between them, a tall one on the
+    // right past a separator, and the status line of the whole editor on the last row.
+    const Cells base{
+        "a",
+        "b",
+        "c",
+        "│",
+        "x",
+        "y",
+        "z",
+        "s",
+        "t",
+        " ",
+        "│",
+        "x",
+        "y",
+        "z",
+        "o",
+        "l",
+        "d",
+        "│",
+        "o",
+        "l",
+        "d",
+        "N",
+        "O",
+        "R",
+        "M",
+        "A",
+        "L",
+        " ",
+    };
+
+    check(receive(fixture.state, NvimGrid{.pane_id = pane_id, .frame_id = 1, .grid = 1, .columns = 7, .rows = 4, .placement = NvimPlacement::window, .full = true, .spans = {&base.span, 1}}) == Received::staged);
+    placeWindow(fixture.state, 2, 0, 0, 3, 1);
+    placeWindow(fixture.state, 3, 0, 4, 3, 2);
+    placeWindow(fixture.state, 4, 2, 0, 7, 1);
+    check(receive(fixture.state, NvimFrame{.pane_id = pane_id, .frame_id = 1, .status_line = true, .status_row = 3}) == Received::presented);
+
+    const auto& editor = *find(fixture.state, pane_id);
+
+    check(coveredOf(editor, 0, 7) == "#######", "a row of windows and the separator between them is covered whole");
+    check(coveredOf(editor, 1, 7) == "...####", "a window's own status line is drawn from the default grid");
+    check(coveredOf(editor, 2, 7) == "#######", "what a window that came later stands over is not drawn");
+    check(coveredOf(editor, 3, 7) == "#######", "nor the status line of the whole editor");
+  }
+
+  // A window that does not start at the editor's left edge has a separator's column there, and
+  // one under a row Neovim rules has that row as its separator.
+  void windowSeparatorsAreWhereNeovimDrawsThem() {
+    Fixture fixture;
+    const Cells base{
+        "a",
+        "│",
+        "b",
+        "b",
+        "─",
+        "─",
+        "─",
+        "─",
+        "c",
+        "c",
+        "c",
+        "c",
+    };
+
+    check(receive(fixture.state, NvimGrid{.pane_id = pane_id, .frame_id = 1, .grid = 1, .columns = 4, .rows = 3, .placement = NvimPlacement::window, .full = true, .spans = {&base.span, 1}}) == Received::staged);
+    placeWindow(fixture.state, 2, 0, 2, 2, 1);
+    placeWindow(fixture.state, 3, 2, 0, 4, 1);
+    check(receive(fixture.state, NvimFrame{.pane_id = pane_id, .frame_id = 1}) == Received::presented);
+
+    const auto& editor = *find(fixture.state, pane_id);
+    const auto right = separators(editor, *editor.grid(2));
+    const auto below = separators(editor, *editor.grid(3));
+
+    check(right.left && right.left->row == 0 && right.left->column == 1 && right.left->rows == 1 && right.left->columns == 1 && !right.above, "the column left of a window is its separator");
+    check(below.above && below.above->row == 1 && below.above->column == 0 && below.above->columns == 4 && !below.left, "a ruled row above a window is its separator");
+    check(!separators(editor, *editor.grid(1)).left && !separators(editor, *editor.grid(1)).above, "the default grid has none");
+  }
+
   // A query is found in a line as the search of text matches it: regardless of case only while
   // it has no capital letter.
   void queryIsFoundAsTheSearchMatchesIt() {
@@ -414,5 +536,7 @@ namespace {
   const telar::testing::Case case_detached{"nvim.detached_editor_takes_the_screen_again", detachedEditorTakesTheScreenAgain};
   const telar::testing::Case case_dismissed{"nvim.dismissed_message_stays_gone", dismissedMessageStaysGone};
   const telar::testing::Case case_found{"nvim.query_is_found_as_the_search_matches_it", queryIsFoundAsTheSearchMatchesIt};
+  const telar::testing::Case case_covered{"nvim.default_grid_is_covered_where_the_window_draws_itself", defaultGridIsCoveredWhereTheWindowDrawsItself};
+  const telar::testing::Case case_separators{"nvim.window_separators_are_where_neovim_draws_them", windowSeparatorsAreWhereNeovimDrawsThem};
 
 }
