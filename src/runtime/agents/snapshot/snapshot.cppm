@@ -277,6 +277,15 @@ export {
       void antigravity(const SessionFileWatch& watch, Result& result);
       // The title of an annotation Antigravity writes in protobuf's text format, `title:"…"`.
       ds::Option<FixedText<agent_report_title_bytes>> annotationTitle(std::string_view input);
+      // A quoted string of an annotation, from its opening quote, into decoded_: the index after
+      // its closing quote.
+      std::size_t annotationString(std::string_view input, std::size_t start);
+      // The value of the `title` field whose name ends at `index`, into `title`: the index after
+      // it.
+      std::size_t annotationTitleValue(std::string_view input, std::size_t index, ds::Option<FixedText<agent_report_title_bytes>>& title);
+      // A field's name from `index`, and its value when it is the title at the top level, into
+      // `title`: the index after what it read.
+      std::size_t annotationField(std::string_view input, std::size_t index, bool top, ds::Option<FixedText<agent_report_title_bytes>>& title);
       ds::Option<FixedText<agent_report_title_bytes>> readTitle(std::string_view input, ds::Option<std::string_view> session);
       static ds::Option<std::uint64_t> regularFileSize(const FileDescriptor& file) noexcept;
       std::string_view read(int descriptor, std::uint64_t offset, std::size_t limit);

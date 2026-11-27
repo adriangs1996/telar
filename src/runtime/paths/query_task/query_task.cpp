@@ -74,15 +74,24 @@ namespace telar::runtime {
       constexpr std::size_t mode_digits = 6;
       constexpr std::string_view submodule_mode = "160000";
       const auto tab = record.find('\t');
-      const bool staged = tab != std::string_view::npos && tab > mode_digits + 2 && record[mode_digits] == ' ' && record[tab - 2] == ' ' && std::ranges::all_of(record.substr(0, mode_digits), [](char digit) {
-        return digit >= '0' && digit <= '7';
-      });
 
-      if (!staged) {
+      if (tab == std::string_view::npos || tab <= mode_digits + 2 || record[mode_digits] != ' ' || record[tab - 2] != ' ') {
         return {.path = record, .repository = record.ends_with('/')};
       }
 
-      return {.path = record.substr(tab + 1), .repository = record.starts_with(submodule_mode)};
+      // The mode, before the tab found inside the record, and the path after it.
+      auto mode = record;
+      auto path = record;
+
+      mode.remove_suffix(record.size() - mode_digits);
+      if (!std::ranges::all_of(mode, [](char digit) {
+            return digit >= '0' && digit <= '7';
+          })) {
+        return {.path = record, .repository = record.ends_with('/')};
+      }
+
+      path.remove_prefix(tab + 1);
+      return {.path = path, .repository = record.starts_with(submodule_mode)};
     }
 
     // Storage the allocator handed out for `count` values; empty when it had none.
@@ -549,7 +558,7 @@ namespace telar::runtime {
     }
   }
 
-  void PathIndexBuilder::listTracked(std::string_view directory, std::string_view prefix, tbc::mut_a<Directories> directories, tbc::mut_a<Repositories> repositories) {
+  void PathIndexBuilder::listTracked(std::string_view directory, std::string_view prefix, tbc::mut_a<Directories> directories, tbc::mut_a<Repositories> repositories) { // NOLINT(bugprone-easily-swappable-parameters): where the repository is, then what its paths are below the root, as the caller walks them
     try {
       const auto configuration_deadline = std::chrono::steady_clock::now() + std::chrono::seconds{2};
       GitRepository git{memory_, directory, configuration_deadline, storage_.cancelled};

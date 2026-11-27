@@ -306,7 +306,9 @@ namespace telar::gui::qt {
     std::uint64_t picker_revision_ = 0;
     static constexpr int minimum_picker_columns = 8;
     static constexpr int maximum_picker_columns = 512;
-    std::uint16_t picker_columns_ = 96;
+    // Until the picker says how many it has, the cells of a list of the usual width.
+    static constexpr std::uint16_t usual_picker_columns = 96;
+    std::uint16_t picker_columns_ = usual_picker_columns;
     // The cells the picker's preview was last asked to cover: the float found there is it.
     application::nvim::PreviewArea preview_area_;
     // What it was asked for, in pixels: a font of another size covers it with other cells.

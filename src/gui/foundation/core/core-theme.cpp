@@ -27,11 +27,11 @@ namespace telar::gui::inline foundation::inline core {
       return (red * linear(color.r)) + (green * linear(color.g)) + (blue * linear(color.b));
     }
 
-    Color mix(Color from, Color to, float amount) noexcept {
+    Color mix(Color from, Color toward, float amount) noexcept {
       return {
-          .r = from.r + ((to.r - from.r) * amount),
-          .g = from.g + ((to.g - from.g) * amount),
-          .b = from.b + ((to.b - from.b) * amount),
+          .r = from.r + ((toward.r - from.r) * amount),
+          .g = from.g + ((toward.g - from.g) * amount),
+          .b = from.b + ((toward.b - from.b) * amount),
           .a = from.a,
       };
     }

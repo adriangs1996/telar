@@ -125,12 +125,17 @@ namespace telar::gui::features::machines {
       return label;
     }
 
-    const auto suffix = label.substr(label.size() - link_local.size());
+    // The label's last characters, and the label without them: both inside it, which is longer.
+    auto suffix = label;
+    auto shown = label;
+
+    suffix.remove_prefix(label.size() - link_local.size());
+    shown.remove_suffix(link_local.size());
     const bool matches = std::ranges::equal(suffix, link_local, [](char left, char right) {
       return (left >= 'A' && left <= 'Z' ? static_cast<char>(left - 'A' + 'a') : left) == right;
     });
 
-    return matches ? label.substr(0, label.size() - link_local.size()) : label;
+    return matches ? shown : label;
   }
 
   float MachineChromeGeometry::listRowHeight(const ChromeMetrics& chrome) noexcept {
@@ -153,7 +158,7 @@ namespace telar::gui::features::machines {
     return {.mark_center = padding + (avatar / 2), .text_x = padding + avatar + gap};
   }
 
-  MachineChromeGeometry::ListRow MachineChromeGeometry::listRow(Rect area, const ChromeMetrics& chrome, std::size_t index, bool stacked, bool marked, bool described) noexcept {
+  MachineChromeGeometry::ListRow MachineChromeGeometry::listRow(Rect area, const ChromeMetrics& chrome, std::size_t index, ListRowParts parts) noexcept {
     const auto height = listRowHeight(chrome);
     const auto padding = std::round(chrome.textPx(list_padding));
     const auto avatar = std::round(chrome.textPx(list_avatar));
@@ -172,14 +177,14 @@ namespace telar::gui::features::machines {
     // The columns at the end, from the edge in: the current mark, then the stack.
     auto end = area.right() - padding;
 
-    if (marked) {
+    if (parts.marked) {
       const auto side = std::round(chrome.textPx(list_mark));
 
       row.mark = {.x = end - side, .y = row.bounds.y + std::round((height - side) / 2), .width = side, .height = side};
       end = row.mark.x - gap;
     }
 
-    if (stacked) {
+    if (parts.stacked) {
       const auto width = std::round(chrome.textPx(stack_width));
 
       row.stack = {.x = end - width, .y = row.bounds.y, .width = width, .height = height};
@@ -189,7 +194,7 @@ namespace telar::gui::features::machines {
     const auto left = area.x + listColumns(chrome).text_x;
     const auto width = std::max(0.0F, end - left);
 
-    if (!described) {
+    if (!parts.described) {
       row.label = {.x = left, .y = row.bounds.y + std::round((height - label_height) / 2), .width = width, .height = label_height};
       return row;
     }

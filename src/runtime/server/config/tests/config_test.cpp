@@ -105,7 +105,8 @@ return telar.config {
       check(values.engine.timeout == std::chrono::milliseconds{1000} && values.engine.idle_timeout == std::chrono::milliseconds{10000});
       const auto provider = values.manifests.fromExecutable("Custom.js");
 
-      check(static_cast<unsigned>(provider) == 6);
+      // The first custom agent takes the first index after the built-in providers.
+      check(static_cast<unsigned>(provider) == AgentManifests::first_custom_provider);
       const auto* manifest = values.manifests.find(provider);
 
       check(manifest != nullptr && manifest->displayName() == "Custom Agent" && manifest->icon.view() == "é");

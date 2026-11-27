@@ -120,8 +120,16 @@ export {
       // The width that shows a row's whole label and status line, whichever advances further.
       // `marked` keeps the column of the roster's current mark.
       [[nodiscard]] static float listNaturalWidth(const ChromeMetrics& chrome, float text_advance, bool stacked, bool marked) noexcept;
-      // A row without a status line centers its label in the row.
-      [[nodiscard]] static ListRow listRow(Rect area, const ChromeMetrics& chrome, std::size_t index, bool stacked, bool marked, bool described = true) noexcept;
+
+      // What a row shows besides its avatar and its label: the stack of its agents, the
+      // roster's current mark, and a status line, without which its label centers in the row.
+      struct ListRowParts {
+        bool stacked = false;
+        bool marked = false;
+        bool described = true;
+      };
+
+      [[nodiscard]] static ListRow listRow(Rect area, const ChromeMetrics& chrome, std::size_t index, ListRowParts parts) noexcept;
       [[nodiscard]] static ListColumns listColumns(const ChromeMetrics& chrome) noexcept;
 
       // A label as the chrome shows it: without the `.local` a macOS host name ends in, which

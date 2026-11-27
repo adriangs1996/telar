@@ -481,7 +481,7 @@ namespace telar::gui::qt {
       widest = std::max(widest, Geometry::listNaturalWidth(chrome_, advance, stacked, roster_));
       // The sidebar sizes the area to the rows that fit; the item clips the rest.
       if (!area.empty()) {
-        records.append(listRecord(*source, Geometry::listRow(area, chrome_, index, stacked, roster_, !status.empty())));
+        records.append(listRecord(*source, Geometry::listRow(area, chrome_, index, {.stacked = stacked, .marked = roster_, .described = !status.empty()})));
       }
 
       ++index;

@@ -828,7 +828,12 @@ namespace telar::runtime {
     }
 
     path.remove_suffix(extension.size());
-    return path.ends_with(session) && path.substr(0, path.size() - session.size()).ends_with(directory);
+    if (!path.ends_with(session)) {
+      return false;
+    }
+
+    path.remove_suffix(session.size());
+    return path.ends_with(directory);
   }
 
   template <Allocator Memory>
@@ -852,39 +857,76 @@ namespace telar::runtime {
   }
 
   template <Allocator Memory>
-  ds::Option<FixedText<agent_report_title_bytes>> SessionFileReader<Memory>::annotationTitle(std::string_view input) {
-    validateUtf8(input);
-
-    // A quoted string from its opening quote, into decoded_: the index after its closing quote.
+  std::size_t SessionFileReader<Memory>::annotationString(std::string_view input, std::size_t start) {
     // Antigravity escapes a quote and a backslash; a title with any other escape is a control
     // byte the agent's title refuses, so it fails here.
-    const auto quoted = [&](std::size_t start) {
-      const char quote = input[start];
+    const char quote = input[start];
 
-      decoded_.truncate(0);
-      for (auto index = start + 1; index < input.size(); ++index) {
-        const char byte = input[index];
-        if (byte == quote) {
-          return index + 1;
-        }
-
-        if (byte == '\\') {
-          if (++index == input.size() || (input[index] != '"' && input[index] != '\'' && input[index] != '\\')) {
-            throw EncodingError{"Unsupported annotation escape"};
-          }
-        } else if (byte == '\n') {
-          break;
-        }
-
-        decoded_.push(input[index]);
+    decoded_.truncate(0);
+    for (auto index = start + 1; index < input.size(); ++index) {
+      const char byte = input[index];
+      if (byte == quote) {
+        return index + 1;
       }
 
-      throw EncodingError{"Unterminated annotation string"};
-    };
+      if (byte == '\\') {
+        ++index;
+        if (index == input.size() || (input[index] != '"' && input[index] != '\'' && input[index] != '\\')) {
+          throw EncodingError{"Unsupported annotation escape"};
+        }
+      } else if (byte == '\n') {
+        break;
+      }
 
-    const auto identifier = [](char byte) {
+      decoded_.push(input[index]);
+    }
+
+    throw EncodingError{"Unterminated annotation string"};
+  }
+
+  template <Allocator Memory>
+  std::size_t SessionFileReader<Memory>::annotationTitleValue(std::string_view input, std::size_t index, ds::Option<FixedText<agent_report_title_bytes>>& title) {
+    index = input.find_first_not_of(" \t\r\n", index);
+    if (index == std::string_view::npos || input[index] != ':') {
+      throw EncodingError{"Annotation title without a value"};
+    }
+
+    index = input.find_first_not_of(" \t\r\n", index + 1);
+    if (index == std::string_view::npos || (input[index] != '"' && input[index] != '\'')) {
+      throw EncodingError{"Annotation title is not a string"};
+    }
+
+    if (title) {
+      throw EncodingError{"Duplicate annotation title"};
+    }
+
+    index = annotationString(input, index);
+    title.emplace().assign(utf8Prefix(decoded_, title_capacity));
+    return index;
+  }
+
+  namespace {
+
+    constexpr bool annotationIdentifier(char byte) noexcept {
       return (byte >= 'a' && byte <= 'z') || (byte >= 'A' && byte <= 'Z') || (byte >= '0' && byte <= '9') || byte == '_';
-    };
+    }
+
+  }
+
+  template <Allocator Memory>
+  std::size_t SessionFileReader<Memory>::annotationField(std::string_view input, std::size_t index, bool top, ds::Option<FixedText<agent_report_title_bytes>>& title) {
+    const auto start = index;
+
+    while (index < input.size() && annotationIdentifier(input[index])) {
+      ++index;
+    }
+
+    return top && input.substr(start, index - start) == "title" ? annotationTitleValue(input, index, title) : index;
+  }
+
+  template <Allocator Memory>
+  ds::Option<FixedText<agent_report_title_bytes>> SessionFileReader<Memory>::annotationTitle(std::string_view input) {
+    validateUtf8(input);
 
     ds::Option<FixedText<agent_report_title_bytes>> title;
     std::size_t depth = 0;
@@ -893,7 +935,7 @@ namespace telar::runtime {
       const char byte = input[index];
 
       if (byte == '"' || byte == '\'') {
-        index = quoted(index);
+        index = annotationString(input, index);
       } else if (byte == '#') {
         const auto end = input.find('\n', index);
 
@@ -902,38 +944,14 @@ namespace telar::runtime {
         ++depth;
         ++index;
       } else if (byte == '}' || byte == '>') {
-        if (depth-- == 0) {
+        if (depth == 0) {
           throw EncodingError{"Unbalanced annotation"};
         }
 
+        --depth;
         ++index;
-      } else if (identifier(byte)) {
-        const auto start = index;
-
-        while (index < input.size() && identifier(input[index])) {
-          ++index;
-        }
-
-        if (depth != 0 || input.substr(start, index - start) != "title") {
-          continue;
-        }
-
-        index = input.find_first_not_of(" \t\r\n", index);
-        if (index == std::string_view::npos || input[index] != ':') {
-          throw EncodingError{"Annotation title without a value"};
-        }
-
-        index = input.find_first_not_of(" \t\r\n", index + 1);
-        if (index == std::string_view::npos || (input[index] != '"' && input[index] != '\'')) {
-          throw EncodingError{"Annotation title is not a string"};
-        }
-
-        if (title) {
-          throw EncodingError{"Duplicate annotation title"};
-        }
-
-        index = quoted(index);
-        title.emplace().assign(utf8Prefix(decoded_, title_capacity));
+      } else if (annotationIdentifier(byte)) {
+        index = annotationField(input, index, depth == 0, title);
       } else {
         ++index;
       }

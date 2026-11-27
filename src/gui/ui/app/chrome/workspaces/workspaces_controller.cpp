@@ -93,7 +93,7 @@ namespace telar::gui::qt {
     QVarLengthArray<std::size_t, inline_projects> made(static_cast<qsizetype>(projects.size()));
     QVarLengthArray<application::workbench::WorkspaceMark, inline_projects> marks(static_cast<qsizetype>(projects.size()));
 
-    std::iota(made.begin(), made.end(), std::size_t{0});
+    std::ranges::iota(made, std::size_t{0});
     std::ranges::sort(made, {}, [&](std::size_t index) {
       return projects[index].location.id;
     });
@@ -102,7 +102,7 @@ namespace telar::gui::qt {
       marks[rank] = application::workbench::WorkspaceMark::resolve(projects[made[rank]].name);
     }
 
-    application::workbench::WorkspaceMark::distinguish({marks.data(), static_cast<std::size_t>(marks.size())});
+    application::workbench::WorkspaceMark::distinguish(std::span{marks});
 
     QVarLengthArray<application::workbench::WorkspaceMark, inline_projects> shown(marks.size());
 
