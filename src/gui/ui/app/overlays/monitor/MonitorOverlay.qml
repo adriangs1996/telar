@@ -35,6 +35,11 @@ FocusScope {
     // was asked on; another selection cancels it.
     readonly property var confirmation: controller.confirmation
     readonly property string confirming: confirmation.action ?? ""
+    // Between the yellow and the red: a theme's yellow can be as pale as its text.
+    readonly property color warmColor: Qt.tint(colors.yellow, Qt.alpha(colors.red, 0.5))
+    // The CPU no listed process accounts for, in a row above the table; empty when there is none.
+    readonly property var unattributed: controller.unattributed
+    readonly property bool hasUnattributed: (unattributed.cells ?? []).length > 0
 
     objectName: "monitorOverlay"
     visible: telar.dialogs.kind === Store.Dialog.monitor
@@ -47,7 +52,12 @@ FocusScope {
     }
 
     function toneColor(tone) {
-        return tone === "hot" ? colors.red : tone === "warm" ? colors.yellow : colors.text;
+        return tone === "hot" ? colors.red : tone === "warm" ? warmColor : colors.text;
+    }
+
+    // The color of a share of all cores in the history, as the meters read a share taken.
+    function shareColor(percent) {
+        return percent > 85 ? colors.red : percent > 60 ? warmColor : colors.green;
     }
 
     function key(event) {
@@ -89,13 +99,15 @@ FocusScope {
                 controller.close();
         } else if (event.text === "e") {
             controller.toggleTree();
+        } else if (event.text === "o") {
+            controller.setLayout(view.layout === "owner" ? "flat" : "owner");
         } else if (event.text === "s") {
             controller.cycleSort();
         } else if (event.text === "r") {
             controller.toggleReverse();
-        } else if (event.text === "t") {
+        } else if (event.text === "t" && hasDetail) {
             controller.ask("TERM");
-        } else if (event.text === "k") {
+        } else if (event.text === "k" && hasDetail) {
             controller.ask("KILL");
         } else if (event.text === "g" && (detail.pane ?? false)) {
             controller.focusPane();
@@ -249,7 +261,7 @@ FocusScope {
                     {
                         key: "agents",
                         label: "Agents",
-                        count: root.view.agents ?? 0
+                        count: root.view.agentsNote ?? "0"
                     }
                 ]
                 current: root.view.scope ?? "all"
@@ -300,21 +312,23 @@ FocusScope {
                 title: "cpu"
                 value: root.panels.cpu ?? ""
 
-                // The newest share at the right edge, as the history fills from the right.
+                // The newest share at the right edge, each in the color of its own share; the readings
+                // not taken yet are empty columns before them.
                 Item {
                     width: cpuPanel.contentWidth
                     height: 2 * root.line
 
                     BarSparkline {
-                        x: parent.width - width
-                        width: implicitWidth
+                        width: parent.width
                         height: parent.height
                         samples: root.panels.history ?? []
                         maximumColumns: 60
+                        showEmpty: true
                         columnGap: 1 * root.ratio
                         columnWidth: Math.max(1, (parent.width - (maximumColumns - 1) * columnGap) / maximumColumns)
                         chartHeight: height
-                    color: Number(root.panels.cpu ? parseFloat(root.panels.cpu) : 0) > 85 ? root.colors.red : root.colors.green
+                        color: root.colors.green
+                        columnColor: share => root.shareColor(share)
                         trackColor: Qt.alpha(root.colors.text, 0.06)
                         ratio: root.ratio
                     }
@@ -435,6 +449,35 @@ FocusScope {
             }
         }
 
+        // The CPU of the processes the runtime may not read and the kernel's, above the listing and
+        // apart from it.
+        Item {
+            id: unattributedRow
+
+            objectName: "monitorUnattributed"
+            y: columnTitles.y + columnTitles.height + 2 * root.ratio
+            width: table.width - table.scrollbarWidth - root.gap
+            height: root.line
+            visible: root.hasUnattributed
+
+            Repeater {
+                model: root.hasUnattributed ? root.controller.columns : []
+
+                delegate: CellText {
+                    required property var modelData
+                    required property int index
+
+                    x: modelData.x
+                    width: modelData.width
+                    height: unattributedRow.height
+                    clip: true
+                    grid: root.grid
+                    text: (root.unattributed.cells ?? [])[index] ?? ""
+                    color: root.colors.overlay1
+                }
+            }
+        }
+
         // The processes the table shows; the controller holds what is above and below them.
         Item {
             id: table
@@ -443,7 +486,7 @@ FocusScope {
             property real wheelRest: 0
 
             objectName: "monitorTable"
-            y: columnTitles.y + columnTitles.height + 2 * root.ratio
+            y: unattributedRow.visible ? unattributedRow.y + unattributedRow.height : columnTitles.y + columnTitles.height + 2 * root.ratio
             width: body.width
             height: Math.max(root.line, (details.visible ? details.y : (confirmBar.visible ? confirmBar.y : footerBar.y)) - root.gap - y)
             clip: true
@@ -721,6 +764,10 @@ FocusScope {
                         word: "tree"
                     },
                     {
+                        keys: ["o"],
+                        word: "owner"
+                    },
+                    {
                         keys: ["s"],
                         word: "sort"
                     },
@@ -739,13 +786,19 @@ FocusScope {
                         keys: ["g"],
                         word: "pane"
                     });
+                // What acts on the selected process, once there is one.
+                if (root.hasDetail)
+                    hints.push({
+                        keys: ["c"],
+                        word: "copy"
+                    }, {
+                        keys: ["t"],
+                        word: "TERM"
+                    }, {
+                        keys: ["k"],
+                        word: "KILL"
+                    });
                 hints.push({
-                    keys: ["t"],
-                    word: "TERM"
-                }, {
-                    keys: ["k"],
-                    word: "KILL"
-                }, {
                     keys: ["Esc"],
                     word: root.hasDetail ? "deselect" : "close"
                 });
@@ -1039,9 +1092,12 @@ FocusScope {
                 clip: true
                 grid: root.grid
                 text: (row.record.cells ?? [])[index] ?? ""
+                bold: index === 6 && row.record.cpuTone === "hot"
                 color: {
-                    if (index === 2 || index === 4)
+                    if (index === 2)
                         return root.colors.subtext0;
+                    if (index === 4)
+                        return row.record.ownUser ? root.colors.overlay1 : root.colors.text;
                     if (index === 6)
                         return root.toneColor(row.record.cpuTone);
                     if (index === 7)

@@ -27,6 +27,9 @@ export namespace telar::gui::application::monitor {
   using features::monitor::View;
 
   using features::monitor::column_count;
+  using features::monitor::disk_rate_floor;
+  using features::monitor::network_rate_floor;
+  using features::monitor::shown_interfaces;
 
   using features::monitor::abbreviateHome;
   using features::monitor::bytes;
@@ -34,15 +37,20 @@ export namespace telar::gui::application::monitor {
   using features::monitor::covers;
   using features::monitor::cpuTone;
   using features::monitor::fit;
+  using features::monitor::headroomTone;
   using features::monitor::meterTone;
+  using features::monitor::mountLabel;
   using features::monitor::ownerText;
   using features::monitor::percent;
   using features::monitor::relist;
   using features::monitor::rowCount;
   using features::monitor::rowOf;
+  using features::monitor::selectedDetail;
+  using features::monitor::shownInterfaces;
   using features::monitor::slotAt;
   using features::monitor::toggle;
   using features::monitor::treePrefix;
+  using features::monitor::wholePercent;
 
   using telar::MonitorLayout;
   using telar::MonitorLimits;

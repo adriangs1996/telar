@@ -632,7 +632,7 @@ export {
           : inspector_(inspector),
             processes_(std::move(processes)),
             host_(std::move(host)),
-            sampler_(memory, inspector),
+            sampler_(memory, inspector, siblingPrograms()),
             records_(memory) {}
 
       inline Result observe(const Request& work) noexcept {
@@ -644,7 +644,7 @@ export {
 
         try {
           if (work.sample && processes_.read(records_) && host_.read(detail_)) {
-            sampler_.update(records_, detail_, std::chrono::steady_clock::now(), {work.roots.data(), work.root_count}, {work.clients.data(), work.client_count});
+            sampler_.update(records_, detail_, {.now = std::chrono::steady_clock::now(), .started_clock = ProcessTable::clock()}, {work.roots.data(), work.root_count}, {work.clients.data(), work.client_count});
             outcome.sampled = true;
           }
 

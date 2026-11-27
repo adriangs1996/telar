@@ -42,6 +42,11 @@ namespace {
   }
 
   struct Fixture {
+    Fixture() = default;
+
+    explicit Fixture(const TelarPrograms& programs)
+        : sampler{memory, inspector, programs} {}
+
     telar::testing::TestMemory adapter;
     ConcurrentMemory& memory = adapter;
     ProcessInspector inspector;
@@ -49,14 +54,25 @@ namespace {
     ds::Vec<ProcessRecord, ConcurrentMemory> records{memory};
     HostDetail host{};
     Clock::time_point now{};
+    // The clock the records' starts count: a while after the processes of `process` started.
+    std::chrono::microseconds started_clock{std::chrono::seconds{1200}};
 
     void read(std::initializer_list<ProcessRecord> processes, std::span<const PaneRoot> roots = {}, std::span<const pid_t> clients = {}) {
       for (const auto& record : processes) {
         records.push(record);
       }
 
-      sampler.update(records, host, now, roots, clients);
+      sampler.update(records, host, {.now = now, .started_clock = started_clock}, roots, clients);
       now += std::chrono::seconds{2};
+      started_clock += std::chrono::seconds{2};
+    }
+
+    MonitorSnapshot hostAnswer() {
+      MonitorView view{.sections = MonitorSections::host};
+      const auto answers = sampler.answer({&view, 1});
+
+      check(answers[0].hasValue());
+      return *answers[0];
     }
 
     std::vector<MonitorProcess> list(MonitorView view, std::uint32_t* matched = nullptr) {
@@ -116,7 +132,8 @@ namespace {
     check(sample() == first + 1, std::to_string(first));
   }
 
-  // A recycled pid is a new process: its time is not compared with the old one's.
+  // A recycled pid is a new process: its time is not compared with the old one's, and was spent
+  // over its own life.
   void testRecycledPid() {
     Fixture fixture;
 
@@ -126,7 +143,155 @@ namespace {
 
     replaced.started_seconds += 50;
     fixture.read({replaced});
-    check(fixture.list(limited(1))[0].cpu_permille == 0);
+
+    // 6 s over the 151 s since it started at 1051 s, read at 1202 s.
+    const auto share = fixture.list(limited(1))[0].cpu_permille;
+
+    check(share == 39, std::to_string(share));
+  }
+
+  // A process that started since the last reading spent its CPU since it started, never more than
+  // every core.
+  void testNewProcessShare() {
+    Fixture fixture;
+
+    fixture.read({process(1, 0, "old", 0)});
+
+    // The second reading is at 1202 s: one started half a second before, one a microsecond before.
+    auto fresh = process(2, 0, "fresh", 250'000'000);
+    auto instant = process(3, 0, "instant", 1'000'000'000);
+
+    fresh.started_seconds = 1201;
+    fresh.started_microseconds = 500'000;
+    instant.started_seconds = 1201;
+    instant.started_microseconds = 999'999;
+    fixture.read({process(1, 0, "old", 0), fresh, instant});
+
+    auto view = limited(10);
+
+    view.sort = MonitorSort::pid;
+
+    const auto rows = fixture.list(view);
+
+    check(rows.size() == 3 && rows[1].cpu_permille == 500, std::to_string(rows[1].cpu_permille));
+    check(rows[2].cpu_permille == MonitorLimits::whole_permille, std::to_string(rows[2].cpu_permille));
+  }
+
+  // What the cores spent that no process the runtime read accounts for is the other users' and the
+  // kernel's; the processes it may not read are counted, and their threads are not.
+  void testUnattributedCpu() {
+    Fixture fixture;
+    auto hidden = process(2, 0, "WindowServer", 0);
+
+    hidden.measured = false;
+    hidden.threads = 0;
+    fixture.host.core_count = 2;
+    fixture.read({process(1, 0, "busy", 0), hidden});
+    // Two cores over 100 ticks each, one busy for all of them and the other for half: one core and a
+    // half, of which the process read spent half a core.
+    fixture.host.cores.atMut(0) = {.busy = 100, .total = 100};
+    fixture.host.cores.atMut(1) = {.busy = 50, .total = 100};
+    fixture.read({process(1, 0, "busy", 1'000'000'000), hidden});
+
+    const auto snapshot = fixture.hostAnswer();
+
+    check(snapshot.unattributed_cpu_permille == 1000, std::to_string(snapshot.unattributed_cpu_permille));
+    check(snapshot.unmeasured_count == 1 && snapshot.thread_count == 2 && snapshot.process_count == 2);
+  }
+
+  // The history holds the shares of the readings in a row; a pause starts it again.
+  void testHistory() {
+    Fixture fixture;
+    std::uint64_t ticks = 0;
+    const auto read = [&](std::uint64_t busy) {
+      ticks += 100;
+      fixture.host.cores.atMut(0).busy += busy;
+      fixture.host.cores.atMut(0).total = ticks;
+      fixture.read({process(1, 0, "busy", 0)});
+    };
+
+    fixture.host.core_count = 1;
+    read(0);
+    check(fixture.hostAnswer().history.empty());
+    read(25);
+    read(50);
+
+    auto history = fixture.hostAnswer().history;
+
+    check(history.size() == 2 && history[0] == 250 && history[1] == 500, std::to_string(history.size()));
+    fixture.now += MonitorSampler::history_gap;
+    read(100);
+    check(fixture.hostAnswer().history.empty() && fixture.hostAnswer().cpu_permille == 1000);
+    read(10);
+    history = fixture.hostAnswer().history;
+    check(history.size() == 1 && history[0] == 100, std::to_string(history.size()));
+
+    for (std::size_t reading = 0; reading < MonitorLimits::history_samples + 5; ++reading) {
+      read(1);
+    }
+
+    check(fixture.hostAnswer().history.size() == MonitorLimits::history_samples);
+  }
+
+  // A process whose executable is exactly one of telar's programs is telar's, whoever started it;
+  // a path that only starts with one is not. Its name is its executable's file name when the kernel's
+  // is a cut of it.
+  void testTelarPrograms() {
+    ds::Array<char, MonitorLimits::command_bytes> text{};
+    const ProcessInspector inspector;
+    const auto parent = ::getppid();
+    const auto line = inspector.commandLine(parent, text.viewMut());
+    const auto path = line.path.view();
+    if (path.empty()) {
+      telar::testing::skip("this user may not read the executable of the test's parent");
+    }
+
+    const auto file = path.substr(path.rfind('/') + 1);
+    TelarPrograms exact;
+    TelarPrograms prefix;
+
+    exact.paths.atMut(exact.count++).assign(path);
+    prefix.paths.atMut(prefix.count++).assign(path.substr(0, path.rfind('/') + 1));
+
+    auto record = process(1, 0, "", 0);
+
+    record.pid = parent;
+    record.name.assign(file.substr(0, 1));
+
+    // The owner and name of the parent's row and of the other process's, whichever pid is lower;
+    // copied, since a row views the sampler.
+    struct Described {
+      ProcessOwner owner = ProcessOwner::none;
+      std::string name;
+    };
+
+    const auto described = [&](const TelarPrograms& programs) {
+      Fixture fixture{programs};
+
+      fixture.read({record, process(2, 0, "other", 0)});
+
+      const auto rows = fixture.list(limited(10));
+      const auto row = [&](pid_t pid) {
+        const auto found = std::ranges::find(rows, pid, [](const MonitorProcess& listed) {
+          return listed.instance.pid;
+        });
+
+        check(found != rows.end());
+        return Described{.owner = found->owner, .name = std::string{found->name}};
+      };
+
+      return std::pair{row(parent), row(base + 2)};
+    };
+
+    const auto [own, other] = described(exact);
+
+    check(own.owner == ProcessOwner::telar && other.owner == ProcessOwner::none);
+    check(own.name == file, own.name);
+    check(described(prefix).first.owner == ProcessOwner::none);
+
+    // A kernel name the file's does not start with is kept: a link's or a script's.
+    record.name.assign("zz-script");
+    check(described(exact).first.name == "zz-script", described(exact).first.name);
   }
 
   // A process belongs to the pane whose shell it descends from; the telar scope keeps only those.
@@ -390,7 +555,7 @@ namespace {
 
     for (int reading = 0; reading < 2; ++reading) {
       check(table.read(records) && probe.read(host));
-      sampler.update(records, host, now, {});
+      sampler.update(records, host, {.now = now, .started_clock = ProcessTable::clock()}, {});
       now += std::chrono::seconds{2};
     }
 
@@ -422,6 +587,10 @@ namespace {
   const telar::testing::Case case_cpu_share{"monitor.cpu_share", testCpuShare};
   const telar::testing::Case case_sample_count{"monitor.sample_count", testSampleCount};
   const telar::testing::Case case_recycled_pid{"monitor.recycled_pid", testRecycledPid};
+  const telar::testing::Case case_new_process_share{"monitor.new_process_share", testNewProcessShare};
+  const telar::testing::Case case_unattributed_cpu{"monitor.unattributed_cpu", testUnattributedCpu};
+  const telar::testing::Case case_history{"monitor.history", testHistory};
+  const telar::testing::Case case_telar_programs{"monitor.telar_programs", testTelarPrograms};
   const telar::testing::Case case_pane_attribution{"monitor.pane_attribution", testPaneAttribution};
   const telar::testing::Case case_order_and_filter{"monitor.order_and_filter", testOrderAndFilter};
   const telar::testing::Case case_tree{"monitor.tree", testTree};

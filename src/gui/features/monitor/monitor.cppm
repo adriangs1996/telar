@@ -49,7 +49,13 @@ export namespace telar::gui::features::monitor {
   inline constexpr std::size_t kept_relatives = 16;
   // The processor shares the window keeps, one per reading of the runtime: 2 minutes at a reading
   // every 2 s.
-  inline constexpr std::size_t history_samples = 60;
+  inline constexpr std::size_t history_samples = MonitorLimits::history_samples;
+  // The interfaces the network panel shows.
+  inline constexpr std::size_t shown_interfaces = 4;
+  // The least a rate's meter fills against, so a trickle never fills it: 1 MiB/s of a network
+  // interface, 10 MiB/s of the disks.
+  inline constexpr std::uint64_t network_rate_floor = std::uint64_t{1} << 20U;
+  inline constexpr std::uint64_t disk_rate_floor = std::uint64_t{10} << 20U;
 
   struct DiskRow {
     FixedText<path_bytes> path;
@@ -67,6 +73,23 @@ export namespace telar::gui::features::monitor {
     std::uint64_t received_bytes = 0;
     std::uint64_t sent_bytes = 0;
   };
+
+  // The highest rate of each of the last readings in a row, which a rate's meter fills against.
+  struct RatePeaks {
+    ds::Array<std::uint64_t, history_samples> values{};
+    std::uint8_t count = 0;
+
+    // Keeps the newest history_samples.
+    void push(std::uint64_t rate) noexcept;
+
+    // The highest of them, never below `floor`.
+    [[nodiscard]] std::uint64_t scale(std::uint64_t floor) const noexcept;
+  };
+
+  // The interfaces the network panel shows, at most `shown.size()` of them by their index: those that
+  // carry bytes now, then the quiet ones, each by the bytes they carried since the machine started.
+  // One that never carried a byte is not shown. Returns how many.
+  std::size_t shownInterfaces(std::span<const InterfaceRow> interfaces, std::span<std::uint8_t> shown) noexcept;
 
   struct Relative {
     std::int32_t pid = 0;
@@ -138,11 +161,14 @@ export namespace telar::gui::features::monitor {
     FixedText<error_bytes> error;
 
     std::uint16_t cpu_permille = 0;
-    // The last history_samples shares of all cores, oldest first, and the runtime's reading the last
-    // one came from: an answer that repeats it adds none.
+    // The shares of all cores of the runtime's last readings in a row, oldest first, as it keeps them.
     ds::Array<std::uint16_t, history_samples> history{};
     std::uint8_t history_count = 0;
+    // The runtime's reading the last answer came from: an answer that repeats it adds no peak.
     std::uint64_t sample = 0;
+    // The highest rate of an interface the panel shows, and of the disks, per reading.
+    RatePeaks network_peaks{};
+    RatePeaks disk_peaks{};
     tbc::val_a<ds::Vec<std::uint16_t, Memory>> cores;
     std::uint64_t memory_total_bytes = 0;
     std::uint64_t memory_used_bytes = 0;
@@ -153,7 +179,11 @@ export namespace telar::gui::features::monitor {
     std::uint32_t process_count = 0;
     std::uint32_t telar_count = 0;
     std::uint32_t agent_count = 0;
+    std::uint32_t agents = 0;
     std::uint32_t thread_count = 0;
+    std::uint32_t unmeasured_count = 0;
+    std::uint32_t unattributed_cpu_permille = 0;
+    std::uint32_t user_id = 0;
     std::uint64_t disk_read_per_second = 0;
     std::uint64_t disk_written_per_second = 0;
     tbc::val_a<ds::Vec<DiskRow, Memory>> disks;
@@ -167,6 +197,10 @@ export namespace telar::gui::features::monitor {
 
     [[nodiscard]] std::span<const std::uint16_t> cpuHistory() const noexcept;
   };
+
+  // The detail of the process selected; none while the detail held is another's, as it is until the
+  // answer about the one selected arrives.
+  [[nodiscard]] const ProcessDetail* selectedDetail(const State& state) noexcept;
 
   // The rows of the listing the window asks for: those it shows, and as many before and after.
   [[nodiscard]] Window window(const State& state) noexcept;

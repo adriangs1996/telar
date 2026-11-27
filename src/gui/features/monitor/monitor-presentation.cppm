@@ -75,8 +75,12 @@ export namespace telar::gui::features::monitor {
   // An amount of bytes in at most six cells: 672K, 1.5M, 218M, 13.0G.
   [[nodiscard]] ShortText bytes(std::uint64_t value);
 
-  // A share in thousandths, as a percent with one decimal: 13.6.
+  // A share in thousandths, as a percent with one decimal: 13.6. The process table's, whose title
+  // says it is a percent.
   [[nodiscard]] ShortText percent(std::uint32_t permille);
+
+  // A share in thousandths, as a whole percent: 100%. Every other share the monitor shows.
+  [[nodiscard]] ShortText wholePercent(std::uint32_t permille);
 
   enum class Tone : std::uint8_t {
     normal,
@@ -87,13 +91,20 @@ export namespace telar::gui::features::monitor {
   // How a process's share of one core reads: warm from a quarter of it, hot from 80 %.
   [[nodiscard]] Tone cpuTone(std::uint32_t permille) noexcept;
 
-  // How a meter reads: warm past 60 %, hot past 85 %.
+  // How a meter of what is taken reads: warm past 60 %, hot past 85 %.
   [[nodiscard]] Tone meterTone(double fraction) noexcept;
+
+  // How a meter of what is left reads, such as the memory available: warm below 40 %, hot below 15 %.
+  [[nodiscard]] Tone headroomTone(double fraction) noexcept;
+
+  // A mount as the disks panel names it: its last directory, or / for the root, in at most 12 cells.
+  [[nodiscard]] CellText mountLabel(std::string_view path);
 
   // The tree's guides before a process's name, then its branch's mark: ▸ folded, ▾ open.
   [[nodiscard]] CellText treePrefix(const TreePlace& place);
 
-  // The command with the home directory written as ~.
+  // The command with the home directory written as ~ where a word, a value after = or :, or a
+  // one-letter flag such as -I starts with it.
   [[nodiscard]] CellText abbreviateHome(std::string_view command, std::string_view home);
 
   // What the owner column says of a process: its owner, and the agent's or the tab's name.

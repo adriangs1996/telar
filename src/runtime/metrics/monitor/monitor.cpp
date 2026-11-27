@@ -7,6 +7,7 @@ import telar.runtime.host.host_metrics;
 import telar.runtime.host.process_probe;
 import telar.runtime.host.process_table;
 import telar.config.runtime;
+import telar.platform.process;
 import telar.wire.monitor;
 import telar.wire.vocabulary;
 import telar.base.memory.allocators;
@@ -71,6 +72,18 @@ namespace telar::runtime {
       return static_cast<std::uint16_t>(std::min<std::uint64_t>(busy * permille / total, permille));
     }
 
+    // A share of one core: the CPU time spent over the seconds it was spent in.
+    std::uint32_t cpuPermille(std::uint64_t nanoseconds, double seconds) noexcept {
+      const auto share = static_cast<double>(nanoseconds) / (seconds * nanoseconds_per_second);
+
+      return static_cast<std::uint32_t>(std::min(share * permille, static_cast<double>(std::numeric_limits<std::uint32_t>::max())));
+    }
+
+    // When the process started, on the clock of ProcessTable::clock.
+    std::chrono::microseconds startedAt(const ProcessRecord& record) noexcept {
+      return std::chrono::seconds{static_cast<std::int64_t>(record.started_seconds)} + std::chrono::microseconds{static_cast<std::int64_t>(record.started_microseconds)};
+    }
+
     bool sameInstance(const ProcessRecord& left, const ProcessRecord& right) noexcept {
       return left.pid == right.pid && left.started_seconds == right.started_seconds && left.started_microseconds == right.started_microseconds;
     }
@@ -102,17 +115,20 @@ namespace telar::runtime {
       return found.name;
     }
 
-    void describe(MonitorEntry& entry, const ProcessInspector& inspector, ds::Vec<UserName, ConcurrentMemory>& users) {
+    void describe(MonitorEntry& entry, const ProcessInspector& inspector, ds::Vec<UserName, ConcurrentMemory>& users, const TelarPrograms& programs) {
       ds::Array<char, MonitorLimits::command_bytes> text{};
       const auto line = inspector.commandLine(entry.record.pid, text.viewMut());
-      const auto first = line.text.substr(0, line.text.find(' '));
-      const auto program = processBasename(first);
+      const auto program = processBasename(line.path.view());
       const auto short_name = entry.record.name.view();
+      // The kernel keeps 16 bytes of a process's name on macOS and 15 on Linux; its executable's file
+      // name is the whole of it. A name the file's does not start with stays: a link's, such as sh
+      // for dash, or a script's.
+      const auto cut = short_name.empty() || (program.size() > short_name.size() && program.starts_with(short_name));
 
       entry.agent = line.provider;
+      entry.telar_program = programs.contains(line.path.view());
       displayCopy(entry.command, line.text);
-      // macOS keeps 16 bytes of a process's name; its program's file name is the whole of it.
-      displayCopy(entry.name, !short_name.empty() && program.size() > short_name.size() && program.starts_with(short_name) ? program : short_name);
+      displayCopy(entry.name, cut ? program : short_name);
       entry.user = userName(users, entry.record.user);
       entry.described = true;
     }
@@ -120,7 +136,7 @@ namespace telar::runtime {
     // What a process is to telar, from where it runs and what runs it: `telar` names the runtime's
     // own processes.
     ProcessOwner ownerOf(const MonitorEntry& entry, std::span<const pid_t> telar) noexcept {
-      if (std::ranges::contains(telar, entry.record.pid)) {
+      if (entry.telar_program || std::ranges::contains(telar, entry.record.pid)) {
         return ProcessOwner::telar;
       }
 
@@ -143,6 +159,27 @@ namespace telar::runtime {
       return static_cast<std::uint32_t>(std::min<std::uint64_t>(value, std::numeric_limits<std::uint32_t>::max()));
     }
 
+  }
+
+  bool TelarPrograms::contains(std::string_view path) const noexcept {
+    return !path.empty() && std::ranges::any_of(paths.view().first(count), [&](const FixedText<process_path_bytes>& program) {
+      return program.view() == path;
+    });
+  }
+
+  TelarPrograms siblingPrograms() noexcept {
+    TelarPrograms programs;
+
+    for (const std::string_view name : {"telar", "telar-gateway"}) {
+      try {
+        if (const auto found = ExecutablePath::sibling({name})) {
+          programs.paths.atMut(programs.count++).assign(found->view());
+        }
+      } catch (const std::exception&) { // NOLINT(bugprone-empty-catch): an executable whose own path can not be read has no programs beside it
+      }
+    }
+
+    return programs;
   }
 
   bool MonitorView::toggles(std::int32_t pid) const noexcept {
@@ -182,7 +219,7 @@ namespace telar::runtime {
     return result;
   }
 
-  MonitorSampler::MonitorSampler(ConcurrentMemory& memory, const ProcessInspector& inspector)
+  MonitorSampler::MonitorSampler(ConcurrentMemory& memory, const ProcessInspector& inspector, TelarPrograms programs)
       : memory_(memory),
         inspector_(inspector),
         entries_(memory),
@@ -198,12 +235,18 @@ namespace telar::runtime {
         rows_(memory),
         groups_(memory),
         details_(memory),
-        self_(::getpid()) {
+        self_(::getpid()),
+        programs_(std::move(programs)),
+        user_(::geteuid()) {
     clients_.atMut(0) = self_;
   }
 
-  void MonitorSampler::update(ds::Vec<ProcessRecord, ConcurrentMemory>& records, const HostDetail& host, Clock::time_point now, std::span<const PaneRoot> roots, std::span<const pid_t> clients) {
+  void MonitorSampler::update(ds::Vec<ProcessRecord, ConcurrentMemory>& records, const HostDetail& host, ReadingTime time, std::span<const PaneRoot> roots, std::span<const pid_t> clients) {
+    const auto [now, started_clock] = time;
     const auto seconds = sampled_ ? std::chrono::duration<double>(now - *sampled_).count() : 0.0;
+    // No process spends more than every core.
+    const auto ceiling = std::uint32_t{std::max<std::uint16_t>(host.core_count, 1)} * permille;
+    std::uint64_t measured_permille = 0;
 
     // The runtime first, then as many clients as fit.
     clients_.atMut(0) = self_;
@@ -215,6 +258,7 @@ namespace telar::runtime {
     entries_.clear();
     entries_.reserve(records.size());
     thread_count_ = 0;
+    unmeasured_count_ = 0;
 
     std::size_t earlier = 0;
 
@@ -233,23 +277,34 @@ namespace telar::runtime {
         entry.name = before.name;
         entry.user = before.user;
         entry.command = before.command;
+        entry.telar_program = before.telar_program;
         if (record.measured && before.record.measured && seconds > 0 && record.cpu_nanoseconds >= before.record.cpu_nanoseconds) {
-          const auto share = static_cast<double>(record.cpu_nanoseconds - before.record.cpu_nanoseconds) / (seconds * nanoseconds_per_second);
+          entry.cpu_permille = cpuPermille(record.cpu_nanoseconds - before.record.cpu_nanoseconds, seconds);
+        }
+      } else if (record.measured && seconds > 0) {
+        // New since the last reading: it spent its time since it started. One the last reading
+        // missed spent it over its whole life, not over the time between the readings.
+        const auto alive = std::chrono::duration<double>(started_clock - startedAt(record)).count();
 
-          entry.cpu_permille = static_cast<std::uint32_t>(std::min(share * permille, static_cast<double>(std::numeric_limits<std::uint32_t>::max())));
+        if (alive > 0) {
+          entry.cpu_permille = std::min(cpuPermille(record.cpu_nanoseconds, alive), ceiling);
         }
       }
 
       if (!entry.described) {
-        describe(entry, inspector_, users_);
+        describe(entry, inspector_, users_, programs_);
       }
 
       thread_count_ += record.threads;
+      unmeasured_count_ += record.measured ? 0U : 1U;
+      measured_permille += record.measured ? entry.cpu_permille : 0U;
     }
 
     records.clear();
     attribute(roots);
     measureHost(host, seconds);
+    unattributed_permille_ = saturated(cores_busy_permille_ > measured_permille ? cores_busy_permille_ - measured_permille : 0);
+    remember(seconds);
     sampled_ = now;
     readings_ = std::min<std::uint32_t>(readings_ + 1, 2);
     ++sample_;
@@ -343,10 +398,12 @@ namespace telar::runtime {
 
     telar_count_ = 0;
     agent_count_ = 0;
+    agents_ = 0;
     for (auto& entry : entries_.viewMut()) {
       entry.owner = ownerOf(entry, clients_.view().first(client_count_));
       telar_count_ += entry.owner != ProcessOwner::none ? 1U : 0U;
       agent_count_ += underAgent(entry.owner) ? 1U : 0U;
+      agents_ += entry.owner == ProcessOwner::agent ? 1U : 0U;
     }
   }
 
@@ -368,6 +425,7 @@ namespace telar::runtime {
     }
 
     cpu_permille_ = busyPermille(busy, total);
+    cores_busy_permille_ = total == 0 ? 0 : busy * permille * host.core_count / total;
     disk_read_per_second_ = ratePerSecond(host.disk_read_bytes, host_.disk_read_bytes, seconds);
     disk_written_per_second_ = ratePerSecond(host.disk_written_bytes, host_.disk_written_bytes, seconds);
     for (std::size_t index = 0; index < host.interface_count; ++index) {
@@ -406,6 +464,26 @@ namespace telar::runtime {
           .available_bytes = mount.available_bytes,
       };
     }
+  }
+
+  // A reading in a row with the last one adds its share to the history; one after a pause starts it
+  // again, since the shares between them were never read.
+  void MonitorSampler::remember(double seconds) noexcept {
+    if (seconds <= 0) {
+      return;
+    }
+
+    if (seconds > std::chrono::duration<double>(history_gap).count()) {
+      history_count_ = 0;
+      return;
+    }
+
+    if (history_count_ == history_.size()) {
+      std::ranges::copy(history_.view().subspan(1), history_.dataMut());
+      --history_count_;
+    }
+
+    history_.atMut(history_count_++) = cpu_permille_;
   }
 
   bool MonitorSampler::matches(const MonitorEntry& entry, const MonitorView& view) noexcept {
@@ -765,6 +843,7 @@ namespace telar::runtime {
       snapshot.sample = sample_;
       if ((view.sections & MonitorSections::host) != 0) {
         snapshot.cpu_permille = cpu_permille_;
+        snapshot.history = history_.view().first(history_count_);
         snapshot.cores = cores_.view().first(host_.core_count);
         snapshot.memory_total_bytes = host_.memory_total_bytes;
         snapshot.memory_used_bytes = host_.memory_used_bytes;
@@ -775,7 +854,11 @@ namespace telar::runtime {
         snapshot.process_count = static_cast<std::uint32_t>(entries_.size());
         snapshot.telar_count = telar_count_;
         snapshot.agent_count = agent_count_;
+        snapshot.agents = agents_;
         snapshot.thread_count = thread_count_;
+        snapshot.unmeasured_count = unmeasured_count_;
+        snapshot.unattributed_cpu_permille = unattributed_permille_;
+        snapshot.user_id = user_;
       }
 
       if ((view.sections & MonitorSections::disks) != 0) {
@@ -880,7 +963,7 @@ namespace telar::runtime {
     } else {
       // Started after the last reading: described now, with the pane and agent of its parent.
       text.fresh.record = *record;
-      describe(text.fresh, inspector_, users_);
+      describe(text.fresh, inspector_, users_, programs_);
       if (const auto parent = indexOf(record->parent)) {
         text.fresh.pane_id = entries_[*parent].pane_id;
         text.fresh.under_agent = entries_[*parent].under_agent || text.fresh.agent != AgentProvider::unknown;
@@ -889,7 +972,7 @@ namespace telar::runtime {
       text.fresh.owner = ownerOf(text.fresh, clients_.view().first(client_count_));
     }
 
-    displayCopy(text.arguments, inspector_.commandLine(pid, arguments.viewMut()).text);
+    displayCopy(text.arguments, ProcessInspector::quotedArguments(pid, arguments.viewMut()));
     displayCopy(text.directory, inspector_.directory(pid).view());
     if (const auto identity = inspector_.identity(pid)) {
       text.ports = inspector_.listeningPorts(identity->process_group);
