@@ -62,7 +62,7 @@ namespace {
         records.push(record);
       }
 
-      sampler.update(records, host, now, started_clock, roots, clients);
+      sampler.update(records, host, {.now = now, .started_clock = started_clock}, roots, clients);
       now += std::chrono::seconds{2};
       started_clock += std::chrono::seconds{2};
     }
@@ -555,7 +555,7 @@ namespace {
 
     for (int reading = 0; reading < 2; ++reading) {
       check(table.read(records) && probe.read(host));
-      sampler.update(records, host, now, ProcessTable::clock(), {});
+      sampler.update(records, host, {.now = now, .started_clock = ProcessTable::clock()}, {});
       now += std::chrono::seconds{2};
     }
 

@@ -137,7 +137,7 @@ export {
       // Of any user's process the system lets the runtime read; the text views `output`.
       [[nodiscard]] tbc::val_a<CommandLine> commandLine(pid_t process, tbc::val_a<std::span<char>> output) const noexcept;
       // The arguments as a shell reads them back (ProcessArguments::quoted); they view `output`.
-      [[nodiscard]] tbc::val_a<std::string_view> quotedArguments(pid_t process, tbc::val_a<std::span<char>> output) const noexcept;
+      [[nodiscard]] static tbc::val_a<std::string_view> quotedArguments(pid_t process, tbc::val_a<std::span<char>> output) noexcept;
 
     private:
       // The arguments view the caller's buffer.

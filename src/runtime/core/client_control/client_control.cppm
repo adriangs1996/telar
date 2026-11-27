@@ -644,7 +644,7 @@ export {
 
         try {
           if (work.sample && processes_.read(records_) && host_.read(detail_)) {
-            sampler_.update(records_, detail_, std::chrono::steady_clock::now(), ProcessTable::clock(), {work.roots.data(), work.root_count}, {work.clients.data(), work.client_count});
+            sampler_.update(records_, detail_, {.now = std::chrono::steady_clock::now(), .started_clock = ProcessTable::clock()}, {work.roots.data(), work.root_count}, {work.clients.data(), work.client_count});
             outcome.sampled = true;
           }
 

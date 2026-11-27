@@ -175,8 +175,7 @@ namespace telar::runtime {
         if (const auto found = ExecutablePath::sibling({name})) {
           programs.paths.atMut(programs.count++).assign(found->view());
         }
-      } catch (...) {
-        // An executable without a path of its own has no programs beside it.
+      } catch (const std::exception&) { // NOLINT(bugprone-empty-catch): an executable whose own path can not be read has no programs beside it
       }
     }
 
@@ -220,7 +219,7 @@ namespace telar::runtime {
     return result;
   }
 
-  MonitorSampler::MonitorSampler(ConcurrentMemory& memory, const ProcessInspector& inspector, const TelarPrograms& programs)
+  MonitorSampler::MonitorSampler(ConcurrentMemory& memory, const ProcessInspector& inspector, TelarPrograms programs)
       : memory_(memory),
         inspector_(inspector),
         entries_(memory),
@@ -237,12 +236,13 @@ namespace telar::runtime {
         groups_(memory),
         details_(memory),
         self_(::getpid()),
-        programs_(programs),
+        programs_(std::move(programs)),
         user_(::geteuid()) {
     clients_.atMut(0) = self_;
   }
 
-  void MonitorSampler::update(ds::Vec<ProcessRecord, ConcurrentMemory>& records, const HostDetail& host, Clock::time_point now, std::chrono::microseconds started_clock, std::span<const PaneRoot> roots, std::span<const pid_t> clients) {
+  void MonitorSampler::update(ds::Vec<ProcessRecord, ConcurrentMemory>& records, const HostDetail& host, ReadingTime time, std::span<const PaneRoot> roots, std::span<const pid_t> clients) {
+    const auto [now, started_clock] = time;
     const auto seconds = sampled_ ? std::chrono::duration<double>(now - *sampled_).count() : 0.0;
     // No process spends more than every core.
     const auto ceiling = std::uint32_t{std::max<std::uint16_t>(host.core_count, 1)} * permille;
@@ -972,7 +972,7 @@ namespace telar::runtime {
       text.fresh.owner = ownerOf(text.fresh, clients_.view().first(client_count_));
     }
 
-    displayCopy(text.arguments, inspector_.quotedArguments(pid, arguments.viewMut()));
+    displayCopy(text.arguments, ProcessInspector::quotedArguments(pid, arguments.viewMut()));
     displayCopy(text.directory, inspector_.directory(pid).view());
     if (const auto identity = inspector_.identity(pid)) {
       text.ports = inspector_.listeningPorts(identity->process_group);

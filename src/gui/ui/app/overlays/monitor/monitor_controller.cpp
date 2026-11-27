@@ -939,6 +939,19 @@ namespace telar::gui::qt {
     };
   }
 
+  void MonitorController::lowerPriority() {
+    constexpr int step = 5;
+    const auto* const held = monitor::selectedDetail(monitor::state(store_.session()));
+
+    // Until the selected process's detail arrives its nice value is not known.
+    if (held == nullptr) {
+      emit failed(QStringLiteral("The process's priority is still being read; try again"));
+      return;
+    }
+
+    renice(held->process.nice + step);
+  }
+
   void MonitorController::renice(int nice) {
     const auto chosen = monitor::state(store_.session()).view.selected;
     if (chosen.pid == 0) {
@@ -1033,19 +1046,9 @@ namespace telar::gui::qt {
     case Action::process_continue:
       signal(QStringLiteral("CONT"));
       return true;
-    case Action::process_lower_priority: {
-      constexpr int step = 5;
-      const auto* const held = monitor::selectedDetail(monitor::state(store_.session()));
-
-      // Until the selected process's detail arrives its nice value is not known.
-      if (held == nullptr) {
-        emit failed(QStringLiteral("The process's priority is still being read; try again"));
-        return true;
-      }
-
-      renice(held->process.nice + step);
+    case Action::process_lower_priority:
+      lowerPriority();
       return true;
-    }
     case Action::process_copy_command:
       copyCommand();
       return true;

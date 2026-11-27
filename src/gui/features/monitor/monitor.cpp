@@ -75,6 +75,47 @@ namespace telar::gui::features::monitor {
       state.disk_peaks.push(std::max(state.disk_read_per_second, state.disk_written_per_second));
     }
 
+    // The machine's readings: its cores, memory, processes counted, disks and interfaces.
+    void keepMachine(State& state, const MonitorSnapshot& snapshot) {
+      state.cores.clear();
+      state.cores.extend(snapshot.cores);
+      state.memory_total_bytes = snapshot.memory_total_bytes;
+      state.memory_used_bytes = snapshot.memory_used_bytes;
+      state.memory_available_bytes = snapshot.memory_available_bytes;
+      state.memory_cached_bytes = snapshot.memory_cached_bytes;
+      state.swap_total_bytes = snapshot.swap_total_bytes;
+      state.swap_used_bytes = snapshot.swap_used_bytes;
+      state.process_count = snapshot.process_count;
+      state.telar_count = snapshot.telar_count;
+      state.agent_count = snapshot.agent_count;
+      state.agents = snapshot.agents;
+      state.thread_count = snapshot.thread_count;
+      state.unmeasured_count = snapshot.unmeasured_count;
+      state.unattributed_cpu_permille = snapshot.unattributed_cpu_permille;
+      state.user_id = snapshot.user_id;
+      state.disk_read_per_second = snapshot.disk_read_per_second;
+      state.disk_written_per_second = snapshot.disk_written_per_second;
+      state.disks.clear();
+      for (const auto& disk : snapshot.disks) {
+        auto& kept = state.disks.push(DiskRow{.total_bytes = disk.total_bytes, .used_bytes = disk.used_bytes, .available_bytes = disk.available_bytes});
+
+        copy(kept.path, disk.path);
+        copy(kept.type, disk.type);
+      }
+
+      state.interfaces.clear();
+      for (const auto& interface : snapshot.interfaces) {
+        auto& kept = state.interfaces.push(InterfaceRow{
+            .received_per_second = interface.received_per_second,
+            .sent_per_second = interface.sent_per_second,
+            .received_bytes = interface.received_bytes,
+            .sent_bytes = interface.sent_bytes,
+        });
+
+        copy(kept.name, interface.name);
+      }
+    }
+
   }
 
   void RatePeaks::push(std::uint64_t rate) noexcept {
@@ -248,44 +289,7 @@ namespace telar::gui::features::monitor {
       std::ranges::copy(snapshot.history.last(state.history_count), state.history.dataMut());
     }
 
-    state.cores.clear();
-    state.cores.extend(snapshot.cores);
-    state.memory_total_bytes = snapshot.memory_total_bytes;
-    state.memory_used_bytes = snapshot.memory_used_bytes;
-    state.memory_available_bytes = snapshot.memory_available_bytes;
-    state.memory_cached_bytes = snapshot.memory_cached_bytes;
-    state.swap_total_bytes = snapshot.swap_total_bytes;
-    state.swap_used_bytes = snapshot.swap_used_bytes;
-    state.process_count = snapshot.process_count;
-    state.telar_count = snapshot.telar_count;
-    state.agent_count = snapshot.agent_count;
-    state.agents = snapshot.agents;
-    state.thread_count = snapshot.thread_count;
-    state.unmeasured_count = snapshot.unmeasured_count;
-    state.unattributed_cpu_permille = snapshot.unattributed_cpu_permille;
-    state.user_id = snapshot.user_id;
-    state.disk_read_per_second = snapshot.disk_read_per_second;
-    state.disk_written_per_second = snapshot.disk_written_per_second;
-    state.disks.clear();
-    for (const auto& disk : snapshot.disks) {
-      auto& kept = state.disks.push(DiskRow{.total_bytes = disk.total_bytes, .used_bytes = disk.used_bytes, .available_bytes = disk.available_bytes});
-
-      copy(kept.path, disk.path);
-      copy(kept.type, disk.type);
-    }
-
-    state.interfaces.clear();
-    for (const auto& interface : snapshot.interfaces) {
-      auto& kept = state.interfaces.push(InterfaceRow{
-          .received_per_second = interface.received_per_second,
-          .sent_per_second = interface.sent_per_second,
-          .received_bytes = interface.received_bytes,
-          .sent_bytes = interface.sent_bytes,
-      });
-
-      copy(kept.name, interface.name);
-    }
-
+    keepMachine(state, snapshot);
     if (reading) {
       rememberPeaks(state, in_a_row);
     }

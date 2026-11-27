@@ -54,8 +54,8 @@ export namespace telar::gui::features::monitor {
   inline constexpr std::size_t shown_interfaces = 4;
   // The least a rate's meter fills against, so a trickle never fills it: 1 MiB/s of a network
   // interface, 10 MiB/s of the disks.
-  inline constexpr std::uint64_t network_rate_floor = std::uint64_t{1} << 20;
-  inline constexpr std::uint64_t disk_rate_floor = std::uint64_t{10} << 20;
+  inline constexpr std::uint64_t network_rate_floor = std::uint64_t{1} << 20U;
+  inline constexpr std::uint64_t disk_rate_floor = std::uint64_t{10} << 20U;
 
   struct DiskRow {
     FixedText<path_bytes> path;

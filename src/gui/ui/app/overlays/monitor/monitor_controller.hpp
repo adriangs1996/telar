@@ -169,6 +169,8 @@ namespace telar::gui::qt {
     [[nodiscard]] QString target(const application::monitor::ProcessInstance& process) const;
     void send(const application::monitor::ProcessInstance& process, application::monitor::ProcessSignal signal);
     void launch(const application::monitor::ProcessInstance& process, const QString& tool);
+    // Lowers the selected process's priority one step from the nice value its detail read.
+    void lowerPriority();
 
     Store& store_;
     ListModel rows_;

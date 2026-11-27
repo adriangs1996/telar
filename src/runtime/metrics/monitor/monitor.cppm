@@ -104,18 +104,23 @@ export {
       // of the processor starts again after it.
       static constexpr auto history_gap = std::chrono::seconds{5};
 
-      MonitorSampler(tbc::mut_a<ConcurrentMemory> memory, tbc::ref_a<ProcessInspector> inspector, const TelarPrograms& programs = {});
+      MonitorSampler(tbc::mut_a<ConcurrentMemory> memory, tbc::ref_a<ProcessInspector> inspector, TelarPrograms programs = {});
       ~MonitorSampler() = default;
       MonitorSampler(const MonitorSampler&) = delete;
       MonitorSampler& operator=(const MonitorSampler&) = delete;
       MonitorSampler(MonitorSampler&&) = delete;
       MonitorSampler& operator=(MonitorSampler&&) = delete;
 
+      // When a reading is taken: on the runtime's clock, and on the clock the records' starts count
+      // (ProcessTable::clock).
+      struct ReadingTime {
+        Clock::time_point now;
+        std::chrono::microseconds started_clock{};
+      };
+
       // Takes the processes, leaving the previous reading's storage in `records` for the next one.
-      // `started_clock` is the time now on the clock the records' starts count
-      // (ProcessTable::clock). `clients` are the processes connected to the runtime: its windows and
-      // its CLI.
-      void update(ds::Vec<ProcessRecord, ConcurrentMemory>& records, const HostDetail& host, Clock::time_point now, std::chrono::microseconds started_clock, std::span<const PaneRoot> roots, std::span<const pid_t> clients = {});
+      // `clients` are the processes connected to the runtime: its windows and its CLI.
+      void update(ds::Vec<ProcessRecord, ConcurrentMemory>& records, const HostDetail& host, ReadingTime time, std::span<const PaneRoot> roots, std::span<const pid_t> clients = {});
 
       // Two readings were taken, so CPU and rates are known.
       [[nodiscard]] bool ready() const noexcept;

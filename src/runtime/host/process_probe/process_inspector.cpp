@@ -12,6 +12,25 @@ namespace telar::runtime {
 
     // The runtimes that run an agent's script, which its arguments then name.
     constexpr ds::Array<std::string_view, 3> generic_runtimes{"node", "bun", "deno"};
+
+    // An argument in POSIX single quotes: a quote ends the quoted text, writes itself escaped and
+    // opens it again, '\''. `output` holds the argument's size, 2 and 3 more per quote in it.
+    constexpr std::string_view escaped_quote = "'\\''";
+
+    void writeQuoted(std::string_view argument, std::span<char> output) noexcept {
+      auto cursor = output.begin();
+
+      *cursor++ = '\'';
+      for (const auto byte : argument) {
+        if (byte == '\'') {
+          cursor = std::ranges::copy(escaped_quote, cursor).out;
+        } else {
+          *cursor++ = byte;
+        }
+      }
+
+      *cursor = '\'';
+    }
   }
 
   std::string_view processBasename(std::string_view path) noexcept {
@@ -140,8 +159,6 @@ namespace telar::runtime {
   }
 
   std::string_view ProcessArguments::quoted(std::span<char> output) const noexcept {
-    // A quote ends the quoted text, writes itself escaped and opens it again: '\''.
-    constexpr std::string_view escaped_quote = "'\\''";
     const auto plain = [](char byte) {
       return (byte >= 'a' && byte <= 'z') || (byte >= 'A' && byte <= 'Z') || (byte >= '0' && byte <= '9') || std::string_view{"@%+=:,./_-"}.contains(byte);
     };
@@ -168,18 +185,7 @@ namespace telar::runtime {
       if (bare) {
         std::ranges::copy(*argument, written.begin());
       } else {
-        auto cursor = written.begin();
-
-        *cursor++ = '\'';
-        for (const auto byte : *argument) {
-          if (byte == '\'') {
-            cursor = std::ranges::copy(escaped_quote, cursor).out;
-          } else {
-            *cursor++ = byte;
-          }
-        }
-
-        *cursor = '\'';
+        writeQuoted(*argument, written);
       }
 
       length += separator + needed;
@@ -319,7 +325,7 @@ namespace telar::runtime {
     return {.text = arguments.joined(output), .path = path, .provider = provider};
   }
 
-  std::string_view ProcessInspector::quotedArguments(pid_t process, std::span<char> output) const noexcept {
+  std::string_view ProcessInspector::quotedArguments(pid_t process, std::span<char> output) noexcept {
     ds::Array<char, maximum_process_argument_bytes> storage; // NOLINT(cppcoreguidelines-pro-type-member-init): sysctl writes the arguments it reports, and only those are read, so zeroing 16 KiB per process is work no read needs
 
     return readArguments(process, storage.viewMut()).quoted(output);
