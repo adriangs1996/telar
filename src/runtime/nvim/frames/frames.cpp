@@ -65,7 +65,7 @@ namespace telar::runtime {
     // A highlight as the style of a cell on the wire.
     // What a word the command line completes is, which Neovim does not say, by what the line
     // completes: the kinds a client has an icon for, and none for the rest.
-    constexpr tbc::val_static<std::string_view> completedKind(std::string_view completes, std::string_view word) noexcept {
+    constexpr tbc::val_static<std::string_view> completedKind(std::string_view completes, std::string_view word) noexcept { // NOLINT(bugprone-easily-swappable-parameters): what the line completes, then the word, as Neovim names them
       if (completes == "dir" || completes == "dir_in_path") {
         return "folder";
       }
