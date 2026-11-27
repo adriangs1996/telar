@@ -65,8 +65,9 @@ namespace telar::gui::application::terminal::copy_mode {
       return {.kind = feature::CopyPointerAuthority::Kind::keyboard, .inside = input.pane_id == state->pane_id && input.inside};
     }
 
-    // What a drag or a wheel turn over `pane` makes copy mode do.
-    tbc::val_static<ds::Option<feature::CopyPlan>> move(const feature::State& state, const CopyPointerDecision& decision, bool released, const Pane<Memory>& pane) {
+    // What a drag or a wheel turn over `pane` makes copy mode do; the selection it copies only
+    // when `copies`, as letting go copies only where the configuration says so.
+    tbc::val_static<ds::Option<feature::CopyPlan>> move(const feature::State& state, const CopyPointerDecision& decision, bool released, bool copies, const Pane<Memory>& pane) {
       const auto grid = copyGrid(pane.screen);
       ds::Option<feature::CopyPlan> plan;
 
@@ -74,6 +75,10 @@ namespace telar::gui::application::terminal::copy_mode {
         plan = feature::drag(state, *decision.motion, grid, released);
       } else if (decision.vertical) {
         plan = feature::scroll(state, *decision.vertical, grid);
+      }
+
+      if (plan && !copies) {
+        plan.getMut().selection.reset();
       }
 
       return plan;
@@ -159,15 +164,9 @@ namespace telar::gui::application::terminal::copy_mode {
       } else if (decision.cancel) {
         static_cast<void>(feature::clearPointer(session.copy_mode));
       } else if (auto* copy_pane = pane(session.copy_mode, session.panes); copy_pane != nullptr) {
-        if (const auto plan = move(session.copy_mode, decision, input.kind == CopyPointerKind::release, *copy_pane)) {
-          // Letting go copies only where the configuration says so; the copy key copies always.
-          auto staged = *plan;
-
-          if (!session.configuration.copy_on_select) {
-            staged.selection.reset();
-          }
-
-          apply(session.copy_mode, session.link, session.view_version, staged, *copy_pane);
+        // The copy key copies always.
+        if (const auto plan = move(session.copy_mode, decision, input.kind == CopyPointerKind::release, session.configuration.copy_on_select, *copy_pane)) {
+          apply(session.copy_mode, session.link, session.view_version, *plan, *copy_pane);
         }
       }
     } catch (...) {

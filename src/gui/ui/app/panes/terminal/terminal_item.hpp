@@ -242,6 +242,10 @@ namespace telar::gui::qt {
     // Types a key press the window left to the terminal: a clipboard shortcut, telar's command
     // editor, or the bytes the pane's program reads. The key, when the program received it.
     ds::Option<TerminalKey> type(const QKeyEvent& event);
+
+    // The platform's clipboard and Command keys: copy, paste, the editor's text commands and
+    // stepping through the commands; false when `event` is none of them.
+    bool clipboardKey(const QKeyEvent& event);
     // The cursor shows at once after a key, and blinks again from there.
     void wakeCursor();
 
@@ -310,6 +314,9 @@ namespace telar::gui::qt {
     static void requestRowFonts(ResidentFonts& fonts, WindowFontCatalog& catalog, std::span<const CellValue> cells);
     void refresh();
     void refreshBlocks();
+
+    // Emits blockCopied for a copy of one of this pane's blocks since the last one it told of.
+    void announceBlockCopy();
     void resizeTerminal();
     void synchronizeFocus();
     void releaseKeys();
@@ -337,6 +344,8 @@ namespace telar::gui::qt {
     void synchronizeScroll();
     // A wheel or trackpad over a scrollback the view scrolls itself; whether it took it.
     bool scrollWheel(const QWheelEvent& event);
+    // A trackpad's gesture of `event`, rows `cell` tall, at `now`.
+    void scrollGesture(const QWheelEvent& event, double cell, ScrollTime now);
     // Where the live end was when the view left it: a move down that reaches it comes back to
     // the live end and follows the output again, however much arrived meanwhile.
     [[nodiscard]] double leftEnd() const;

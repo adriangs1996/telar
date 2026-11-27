@@ -171,7 +171,7 @@ namespace telar::gui::application::prompt {
         // At the shell's prompt a line break typed without bracketed paste is Enter, which runs
         // each line in turn as the shell asks for the next, as bash 3.2 does with its PS2; only a
         // tab, which would complete, needs the paste.
-        features::history::HistoryText::validate(text.view(), bracketed || text.view().find('\t') == std::string_view::npos);
+        features::history::HistoryText::validate(text.view(), bracketed || !text.view().contains('\t'));
         // What the history does not keep, the suggestions do not offer.
         const bool kept = session.configuration.history_filters.allowsPane(text.view(), std::string_view{pane->cwd});
 
@@ -380,14 +380,14 @@ namespace telar::gui::application::prompt {
     Access::changedPane(session) = pane_id;
   }
 
-  void placeCursor(Session& session, std::uint64_t pane_id, std::size_t offset) {
+  void placeCursor(Session& session, std::uint64_t pane_id, std::size_t offset) { // NOLINT(bugprone-easily-swappable-parameters): the pane, then where in its line, as every use case of the prompt takes them
     if (auto* line = features::prompt::find(session.prompt_lines, pane_id)) {
       line->line.editorMut().textMut().moveTo(offset);
       Access::changedPane(session) = pane_id;
     }
   }
 
-  std::string_view selectedText(const Session& session, std::uint64_t pane_id) noexcept {
+  std::string_view selectedText(const Session& session, std::uint64_t pane_id) noexcept { // NOLINT(bugprone-exception-escape): substr is given offsets within the text, which cannot throw
     const auto typed = line(session, pane_id);
     if (!typed) {
       return {};

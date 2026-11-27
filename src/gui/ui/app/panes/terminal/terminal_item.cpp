@@ -911,6 +911,17 @@ namespace telar::gui::qt {
     return first;
   }
 
+  void TerminalItem::announceBlockCopy() {
+    if (controller_ == nullptr) {
+      return;
+    }
+
+    if (const auto& note = controller_->session().lastBlockCopy(); note.serial != block_copy_serial_ && note.pane_id == pane_id_) {
+      block_copy_serial_ = note.serial;
+      emit blockCopied(static_cast<int>(note.index), note.what == application::BlockCopy::command ? QStringLiteral("command") : QStringLiteral("output"), note.copied);
+    }
+  }
+
   // The rows painted empty, and the separators and rail drawn for the commands the shell ran.
   // Read on the GUI thread whenever the pane or its editor changes, for the next paint.
   void TerminalItem::refreshBlocks() {
@@ -918,13 +929,7 @@ namespace telar::gui::qt {
     BlockLists lists;
     RowPlaces places;
 
-    if (controller_ != nullptr) {
-      if (const auto& note = controller_->session().lastBlockCopy(); note.serial != block_copy_serial_ && note.pane_id == pane_id_) {
-        block_copy_serial_ = note.serial;
-        emit blockCopied(static_cast<int>(note.index), note.what == application::BlockCopy::command ? QStringLiteral("command") : QStringLiteral("output"), note.copied);
-      }
-    }
-
+    announceBlockCopy();
     hidden_rows_.clear();
     if (current != nullptr && controller_ != nullptr) {
       const auto& screen = current->screen;
@@ -1208,6 +1213,32 @@ namespace telar::gui::qt {
       return typed;
     }
 
+    if (clipboardKey(event)) {
+      // The clipboard or the editor's text took the key.
+    } else if (preedit_.isEmpty() && controller_->prompt().edits(pane_id_)) {
+      // telar's command editor takes the key; the terminal gets what it hands back, and at the
+      // prompt nothing the editor cannot use reaches the shell's own line editor.
+      QByteArray text;
+      const auto key = promptKey(event, text, optionAsAlt(controller_->configuration().prompt.macos_option_as_alt, event));
+      const bool taken = key && controller_->prompt().key(pane_id_, *key);
+      if (!taken && (key || controller_->prompt().surface(pane_id_) != application::prompt::Surface::editor)) {
+        typed = sendKeyPress(event, current->screen.modes());
+      }
+    } else if (preedit_.isEmpty()) {
+      typed = sendKeyPress(event, current->screen.modes());
+    }
+
+    wakeCursor();
+
+    return typed;
+  }
+
+  bool TerminalItem::clipboardKey(const QKeyEvent& event) {
+    const auto* current = pane();
+    if (current == nullptr || controller_ == nullptr) {
+      return false;
+    }
+
     const Qt::KeyboardModifiers clipboard_modifiers = platform::usesCommandKey() ? Qt::ControlModifier : Qt::ControlModifier | Qt::ShiftModifier;
     const auto clipboard_shortcut = (event.modifiers() & (Qt::ControlModifier | Qt::ShiftModifier | Qt::AltModifier | Qt::MetaModifier)) == clipboard_modifiers;
     const auto& copy = controller_->copy().state();
@@ -1235,22 +1266,11 @@ namespace telar::gui::qt {
       controller_->stepBlock(pane_id_, event.key() == Qt::Key_Up ? application::BlockStep::up : application::BlockStep::down);
     } else if (clipboard_shortcut && event.key() == Qt::Key_V) {
       controller_->paste(pane_id_, QGuiApplication::clipboard()->text());
-    } else if (preedit_.isEmpty() && controller_->prompt().edits(pane_id_)) {
-      // telar's command editor takes the key; the terminal gets what it hands back, and at the
-      // prompt nothing the editor cannot use reaches the shell's own line editor.
-      QByteArray text;
-      const auto key = promptKey(event, text, optionAsAlt(controller_->configuration().prompt.macos_option_as_alt, event));
-      const bool taken = key && controller_->prompt().key(pane_id_, *key);
-      if (!taken && (key || controller_->prompt().surface(pane_id_) != application::prompt::Surface::editor)) {
-        typed = sendKeyPress(event, current->screen.modes());
-      }
-    } else if (preedit_.isEmpty()) {
-      typed = sendKeyPress(event, current->screen.modes());
+    } else {
+      return false;
     }
 
-    wakeCursor();
-
-    return typed;
+    return true;
   }
 
   void TerminalItem::wakeCursor() {

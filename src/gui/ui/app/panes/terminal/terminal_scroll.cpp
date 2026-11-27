@@ -649,25 +649,7 @@ namespace telar::gui::qt {
     }
 
     if (precise) {
-      const auto phase = event.phase();
-      if (phase == Qt::ScrollBegin) {
-        // A finger on the trackpad stops a fling.
-        motion_.stop();
-      } else if (phase == Qt::ScrollEnd) {
-        // macOS continues the gesture with its own momentum; elsewhere the view flings on.
-        if constexpr (platform::native_scroll_events) {
-          motion_.settle();
-        } else {
-          motion_.release(now);
-        }
-      } else {
-        motion_.follow(-event.pixelDelta().y(), now);
-      }
-
-      // A gesture that ends where the live end was takes the view back to it.
-      if (!motion_.moving() && motion_.position() >= leftEnd() - (cell / 2)) {
-        motion_.place(motion_.limit());
-      }
+      scrollGesture(event, cell, now);
     } else {
       constexpr double wheel_unit = 120;
       const auto notches = -static_cast<double>(event.angleDelta().y()) / wheel_unit;
@@ -687,6 +669,28 @@ namespace telar::gui::qt {
     }
 
     return true;
+  }
+
+  void TerminalItem::scrollGesture(const QWheelEvent& event, double cell, ScrollTime now) {
+    const auto phase = event.phase();
+    if (phase == Qt::ScrollBegin) {
+      // A finger on the trackpad stops a fling.
+      motion_.stop();
+    } else if (phase == Qt::ScrollEnd) {
+      // macOS continues the gesture with its own momentum; elsewhere the view flings on.
+      if constexpr (platform::native_scroll_events) {
+        motion_.settle();
+      } else {
+        motion_.release(now);
+      }
+    } else {
+      motion_.follow(-event.pixelDelta().y(), now);
+    }
+
+    // A gesture that ends where the live end was takes the view back to it.
+    if (!motion_.moving() && motion_.position() >= leftEnd() - (cell / 2)) {
+      motion_.place(motion_.limit());
+    }
   }
 
   std::uint64_t TerminalItem::rowsSinceLeftEnd() const {

@@ -793,6 +793,10 @@ export {
       // false when `pending` begins none of them.
       bool blockChord(char pending, BlockAt block, char32_t character);
 
+      // The chord pending on the line ended by `character`, or `[` or `]` beginning one; false
+      // when `character` does neither. A chord it does not end is dropped.
+      bool chordKey(std::uint64_t pane_id, ds::Option<std::size_t> selection, char32_t character);
+
       // The z chord ended by `character` on block `index`; false when `character` ends none.
       bool foldChord(BlockAt block, char32_t character);
 

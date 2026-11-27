@@ -257,32 +257,7 @@ namespace telar::gui::application {
       return Outcome::edited;
     }
 
-    // The helpers below reach the pane and its line through the session, so each looks them up again.
-    auto* line = features::prompt::find(prompt_lines, pane_id);
-    if (line == nullptr) {
-      return ds::none;
-    }
-
-    // A chord the key does not end is dropped, and the key is read on its own.
-    const auto pending = features::prompt::takeChord(*line);
-    if (pending == '[' || pending == ']') {
-      const auto direction = pending == '[' ? BlockStep::up : BlockStep::down;
-
-      if (character == static_cast<unsigned>(pending)) {
-        stepBlock(pane_id, direction);
-        return Outcome::edited;
-      }
-
-      if (character == 'f') {
-        stepFailedBlock(pane_id, direction);
-        return Outcome::edited;
-      }
-    } else if (pending != 0 && selection && blockChord(pending, {.pane_id = pane_id, .index = *selection}, character)) {
-      return Outcome::edited;
-    }
-
-    if (character == '[' || character == ']') {
-      features::prompt::beginChord(*line, static_cast<char>(character));
+    if (chordKey(pane_id, selection, character)) {
       return Outcome::edited;
     }
 
@@ -309,6 +284,41 @@ namespace telar::gui::application {
     }
 
     return ds::none;
+  }
+
+  bool Session::chordKey(std::uint64_t pane_id, ds::Option<std::size_t> selection, char32_t character) {
+    auto* line = features::prompt::find(prompt_lines, pane_id);
+    if (line == nullptr) {
+      return false;
+    }
+
+    const auto pending = features::prompt::takeChord(*line);
+    if (pending == '[' || pending == ']') {
+      const auto direction = pending == '[' ? BlockStep::up : BlockStep::down;
+
+      if (character == static_cast<unsigned char>(pending)) {
+        stepBlock(pane_id, direction);
+        return true;
+      }
+
+      if (character == 'f') {
+        stepFailedBlock(pane_id, direction);
+        return true;
+      }
+    } else if (pending != 0 && selection && blockChord(pending, {.pane_id = pane_id, .index = *selection}, character)) {
+      return true;
+    }
+
+    if (character != '[' && character != ']') {
+      return false;
+    }
+
+    // blockChord reaches the lines through the session, so the line is looked up again.
+    if (auto* chord_line = features::prompt::find(prompt_lines, pane_id); chord_line != nullptr) {
+      features::prompt::beginChord(*chord_line, static_cast<char>(character));
+    }
+
+    return true;
   }
 
   ds::Option<features::prompt::Outcome> Session::typingBlockKey(std::uint64_t pane_id, const features::prompt::KeyPress& key) {
@@ -432,8 +442,8 @@ namespace telar::gui::application {
       if (const auto row = jumpTarget(*pane, *line, character == 'o')) {
         // The block the jump lands in is the one selected, so the keys after it act there.
         const auto blocks = pane->blocks.view();
-        const auto landed = std::ranges::find_if(blocks.rbegin(), blocks.rend(), [row = *row](const CommandBlock& block) {
-          return block.row <= row;
+        const auto landed = std::ranges::find_if(blocks.rbegin(), blocks.rend(), [target = *row](const CommandBlock& block) {
+          return block.row <= target;
         });
         if (landed != blocks.rend() && blockSelection(*pane, *line)) {
           features::prompt::moveBlock(*line, static_cast<std::size_t>(blocks.rend() - landed - 1));

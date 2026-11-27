@@ -30,10 +30,29 @@ namespace telar::gui::features::prompt {
       return (key.key == Key::character && key.modifiers.alt && key.character == 'f') || (key.key == Key::right && key.modifiers.alt);
     }
 
-    // The quote a word leaves open at its end, wherever it opened (`--file="My Do`); 0 when none
-    // is.
+    enum class MenuStep : std::uint8_t {
+      none,
+      forward,
+      backward,
+    };
+
+    // Where a key moves the menu's selection: Tab, Down and Ctrl-N forward, Shift-Tab, Up and
+    // Ctrl-P back.
+    MenuStep menuStep(const KeyPress& key) noexcept {
+      const bool control = key.key == Key::character && key.modifiers.control;
+      if ((key.key == Key::tab && !key.modifiers.shift) || key.key == Key::down || (control && key.character == 'n')) {
+        return MenuStep::forward;
+      }
+
+      if (key.key == Key::backtab || key.key == Key::tab || key.key == Key::up || (control && key.character == 'p')) {
+        return MenuStep::backward;
+      }
+
+      return MenuStep::none;
+    }
+
     // `text` without a character its end cuts short.
-    std::string_view wholeCharacters(std::string_view text) noexcept {
+    std::string_view wholeCharacters(std::string_view text) noexcept { // NOLINT(bugprone-exception-escape): substr is given an offset within the text, which cannot throw
       constexpr unsigned char continuation_mask = 0xc0;
       constexpr unsigned char continuation = 0x80;
       auto start = text.size();
@@ -48,13 +67,24 @@ namespace telar::gui::features::prompt {
 
       // The lead byte says how long its character is: 110xxxxx two bytes, 1110xxxx three, 11110xxx four.
       const auto lead = static_cast<unsigned char>(text[start - 1]);
-      const auto length = lead < 0xc0 ? 1U : lead < 0xe0 ? 2U
-                                         : lead < 0xf0   ? 3U
-                                                         : 4U;
+      constexpr unsigned char two_bytes = 0xc0;
+      constexpr unsigned char three_bytes = 0xe0;
+      constexpr unsigned char four_bytes = 0xf0;
+      auto length = 4U;
+
+      if (lead < two_bytes) {
+        length = 1;
+      } else if (lead < three_bytes) {
+        length = 2;
+      } else if (lead < four_bytes) {
+        length = 3;
+      }
 
       return text.size() - (start - 1) < length ? text.substr(0, start - 1) : text;
     }
 
+    // The quote a word leaves open at its end, wherever it opened (`--file="My Do`); 0 when none
+    // is.
     char openQuote(std::string_view word) noexcept {
       char quote = 0;
 
@@ -547,10 +577,9 @@ namespace telar::gui::features::prompt {
   ds::Option<Outcome> Line::menuKey(const KeyPress& key, bool& refining) {
     auto& menu = menu_.getMut();
     const auto count = menu.choices.size();
-    const bool forward = (key.key == Key::tab && !key.modifiers.shift) || key.key == Key::down || (key.key == Key::character && key.modifiers.control && key.character == 'n');
-    const bool backward = key.key == Key::backtab || (key.key == Key::tab && key.modifiers.shift) || key.key == Key::up || (key.key == Key::character && key.modifiers.control && key.character == 'p');
-    if (count != 0 && (forward || backward)) {
-      menu.selected = (menu.selected + (forward ? 1 : count - 1)) % count;
+    const auto step = menuStep(key);
+    if (count != 0 && step != MenuStep::none) {
+      menu.selected = (menu.selected + (step == MenuStep::forward ? 1 : count - 1)) % count;
       menu.cycled = true;
       ++revision_;
       return Outcome::edited;
@@ -732,7 +761,7 @@ namespace telar::gui::features::prompt {
     }
 
     // Its last word, as the shell splits words on blanks.
-    auto words = command->substr(0, command->find_last_not_of(" \t\n") + 1);
+    const auto words = command->substr(0, command->find_last_not_of(" \t\n") + 1);
     const auto argument = words.substr(words.find_last_of(" \t\n") + 1);
     // Copied: the history the argument views may change as the text does.
     const ds::String<Memory> copy{draft_.memory(), argument};

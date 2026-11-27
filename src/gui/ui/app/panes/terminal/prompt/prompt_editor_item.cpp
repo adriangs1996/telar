@@ -51,19 +51,20 @@ namespace telar::gui::qt {
     // The columns a suggestion leaves at its row's end for the keys that take it.
     constexpr std::size_t hint_columns = 22;
 
-    // What of `ghost` fits on the row the typed text ends on, `columns` wide, a column kept for
-    // the caret and room for the keys that take it: past it, the suggestion would add rows and
-    // move the terminal as it comes and goes.
-    std::string_view onCaretRow(std::string_view typed, std::string_view ghost, std::size_t columns) noexcept {
-      if (columns == 0) {
-        return {};
-      }
-
+    // The column the typed text ends on, in a row `columns` wide.
+    std::size_t endColumn(std::string_view typed, std::size_t columns) noexcept { // NOLINT(bugprone-exception-escape): substr is given an offset within the text, which cannot throw
       const auto line_start = typed.rfind('\n');
       const auto line = line_start == std::string_view::npos ? typed : typed.substr(line_start + 1);
-      const auto used = static_cast<std::size_t>(std::ranges::count_if(line, [](char byte) {
+
+      return static_cast<std::size_t>(std::ranges::count_if(line, [](char byte) {
         return !continuationByte(byte);
       })) % columns;
+    }
+
+    // What of `ghost` fits on the row the typed text ends on, at column `used` of `columns`, a
+    // column kept for the caret and room for the keys that take it: past it, the suggestion would
+    // add rows and move the terminal as it comes and goes.
+    std::string_view onCaretRow(std::string_view ghost, std::size_t used, std::size_t columns) noexcept { // NOLINT(bugprone-exception-escape,bugprone-easily-swappable-parameters): substr starts at 0, which cannot throw; the column, then the row's width
       const auto end_column = columns > hint_columns * 2 ? columns - hint_columns : columns;
       const auto room = used + 1 < end_column ? end_column - used - 1 : 0;
 
@@ -537,16 +538,16 @@ namespace telar::gui::qt {
         break;
       }
 
-      auto at = run.start;
+      auto byte = run.start;
 
-      for (auto cell = run.column; at < run.end && cell < column; ++cell) {
-        ++at;
-        while (at < run.end && continuationByte(display_.view()[at])) {
-          ++at;
+      for (auto cell = run.column; byte < run.end && cell < column; ++cell) {
+        ++byte;
+        while (byte < run.end && continuationByte(display_.view()[byte])) {
+          ++byte;
         }
       }
 
-      offset = std::min(at, typed);
+      offset = std::min(byte, typed);
       if (column < run.column + run.columns) {
         break;
       }
@@ -710,7 +711,10 @@ namespace telar::gui::qt {
       ghost_.assign(ghost);
     }
 
-    display_.append(onCaretRow(display_.view(), ghost, static_cast<std::size_t>(std::max(0, maximumColumns()))));
+    if (const auto columns = static_cast<std::size_t>(std::max(0, maximumColumns())); columns != 0) {
+      display_.append(onCaretRow(ghost, endColumn(display_.view(), columns), columns));
+    }
+
     return {.cursor = cursor, .composing = composing.size(), .typed = typed};
   }
 

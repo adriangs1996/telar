@@ -187,6 +187,7 @@ namespace telar::gui::qt {
     // The character of a key as typed without Option: lowercase unless Shift is held.
     static std::uint32_t baseCharacter(const QKeyEvent& event) noexcept {
       const auto character = static_cast<char32_t>(event.key());
+
       if (event.modifiers().testFlag(Qt::ShiftModifier)) {
         return character;
       }

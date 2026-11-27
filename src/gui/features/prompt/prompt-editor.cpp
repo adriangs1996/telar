@@ -267,9 +267,8 @@ namespace telar::gui::features::prompt {
     return keymap_ == Keymap::vim && mode_ != Mode::insert ? normal(key) : insert(key);
   }
 
-  Request Editor::insert(const KeyPress& key) {
+  ds::Option<Request> Editor::prefixed(const KeyPress& key) {
     const auto& mods = key.modifiers;
-    const auto cursor = text_.cursor();
 
     // After Ctrl-V the key goes in as typed: a tab, which would complete, or a character.
     if (std::exchange(quoted_pending_, false)) {
@@ -284,16 +283,28 @@ namespace telar::gui::features::prompt {
       }
     }
 
-    // After Escape in emacs the key is read as with Alt.
-    if (std::exchange(meta_pending_, false) && !mods.control && !mods.alt) {
-      if (key.key == Key::character) {
-        return meta(key.character);
-      }
+    if (!std::exchange(meta_pending_, false) || mods.control || mods.alt) {
+      return ds::none;
+    }
 
-      if (key.key == Key::backspace) {
-        eraseBackward(true);
-        return Request::none;
-      }
+    if (key.key == Key::character) {
+      return meta(key.character);
+    }
+
+    if (key.key == Key::backspace) {
+      eraseBackward(true);
+      return Request::none;
+    }
+
+    return ds::none;
+  }
+
+  Request Editor::insert(const KeyPress& key) {
+    const auto& mods = key.modifiers;
+    const auto cursor = text_.cursor();
+
+    if (const auto request = prefixed(key)) {
+      return *request;
     }
 
     if (key.key == Key::character && mods.control && !mods.alt) {
@@ -495,7 +506,7 @@ namespace telar::gui::features::prompt {
 
     // ASCII letters change; any other character stays as it is.
     for (auto& byte : word.viewMut()) {
-      if (!std::isalnum(static_cast<unsigned char>(byte))) {
+      if (std::isalnum(static_cast<unsigned char>(byte)) == 0) {
         continue;
       }
 

@@ -204,7 +204,7 @@ namespace telar::gui::features::prompt {
       return byte >= 'A' && byte <= 'Z' ? static_cast<char>(byte - 'A' + 'a') : byte;
     };
 
-    return text.size() >= start.size() && std::ranges::equal(text.substr(0, start.size()), start, {}, fold, fold);
+    return text.size() >= start.size() && std::ranges::equal(std::string_view{text.data(), start.size()}, start, {}, fold, fold);
   }
 
 }

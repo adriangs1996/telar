@@ -137,6 +137,7 @@ namespace telar::gui::application {
     static_cast<void>(blocks.retain([&position, kept = kept_blocks](const CommandBlock&) {
       return position++ >= kept;
     }));
+
     blocks_text.remove(0, text_end);
     kept_blocks = 0;
 

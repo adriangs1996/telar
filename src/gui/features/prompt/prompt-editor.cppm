@@ -120,6 +120,10 @@ namespace telar::gui::features::prompt {
 
     Request insert(const KeyPress& key);
 
+    // The key after Ctrl-V, which goes in as typed, or after Escape in emacs, read as with Alt;
+    // none when no such prefix came before it, or it does not take this key.
+    ds::Option<Request> prefixed(const KeyPress& key);
+
     // Backspace: the selection, the word before the cursor when `word`, or the character.
     void eraseBackward(bool word);
 

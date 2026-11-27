@@ -29,26 +29,24 @@ namespace telar::gui::qt {
     // line's ends, Shift selecting, Backspace erases to its start and Z undoes.
     if (key->has(KeyChord::Modifier::super)) {
       const bool shift = key->has(KeyChord::Modifier::shift);
+
       if (key->has(KeyChord::Modifier::control) || key->has(KeyChord::Modifier::alt)) {
         return ds::none;
       }
 
-      switch (key->code) {
-      case KeyChord::Key::left:
-        return application::prompt::KeyPress{.key = application::prompt::Key::home, .modifiers = {.shift = shift}};
-      case KeyChord::Key::right:
-        return application::prompt::KeyPress{.key = application::prompt::Key::end, .modifiers = {.shift = shift}};
-      case KeyChord::Key::backspace:
-        return application::prompt::KeyPress{.key = application::prompt::Key::character, .character = U'u', .modifiers = {.control = true}};
-      case KeyChord::Key::character:
-        if (key->codepoint == 'z' && !shift) {
-          return application::prompt::KeyPress{.key = application::prompt::Key::character, .character = U'_', .modifiers = {.control = true}};
-        }
-
-        return ds::none;
-      default:
-        return ds::none;
+      if (key->code == KeyChord::Key::left || key->code == KeyChord::Key::right) {
+        return application::prompt::KeyPress{.key = key->code == KeyChord::Key::left ? application::prompt::Key::home : application::prompt::Key::end, .modifiers = {.shift = shift}};
       }
+
+      if (key->code == KeyChord::Key::backspace) {
+        return application::prompt::KeyPress{.key = application::prompt::Key::character, .character = U'u', .modifiers = {.control = true}};
+      }
+
+      if (key->code == KeyChord::Key::character && key->codepoint == 'z' && !shift) {
+        return application::prompt::KeyPress{.key = application::prompt::Key::character, .character = U'_', .modifiers = {.control = true}};
+      }
+
+      return ds::none;
     }
 
     application::prompt::KeyPress result{.modifiers = {.control = key->has(KeyChord::Modifier::control), .alt = key->has(KeyChord::Modifier::alt), .shift = key->has(KeyChord::Modifier::shift)}};
