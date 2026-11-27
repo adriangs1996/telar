@@ -141,9 +141,12 @@ namespace telar::runtime {
 
     ds::Array<std::int32_t, maximum_path> bonuses; // NOLINT(cppcoreguidelines-pro-type-member-init): scored for every indexed path, and only the path's bonuses are written and read
     char previous = '/';
+    // A letter matched in the file's own name counts more than one in a folder above it: a
+    // search that starts with a folder's name still finds first the files named so.
+    const auto name_start = path.find_last_of('/') + 1;
 
     for (std::size_t index = 0; index < path.size(); ++index) {
-      bonuses.atMut(index) = bonus(previous, path[index]);
+      bonuses.atMut(index) = bonus(previous, path[index]) + (index >= name_start ? name_bonus : 0);
       previous = path[index];
     }
 

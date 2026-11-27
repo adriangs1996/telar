@@ -50,6 +50,7 @@ export {
       std::span<std::int32_t> row(std::size_t index, bool best) noexcept;
 
       static constexpr int consecutive_score = 1000;
+      static constexpr int name_bonus = 200;
       static constexpr int leading_gap = -5;
       static constexpr int inner_gap = -10;
       static constexpr int trailing_gap = -5;
