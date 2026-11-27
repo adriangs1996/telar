@@ -75,6 +75,7 @@ namespace telar::gui::qt {
           ThemedMark{.theme = ThemeName::zenburn, .source = u":/telar/fonts/telar-mark-zenburn.svg"},
           ThemedMark{.theme = ThemeName::gruvbox, .source = u":/telar/fonts/telar-mark-gruvbox.svg"},
           ThemedMark{.theme = ThemeName::gruvbox_hard, .source = u":/telar/fonts/telar-mark-gruvbox-hard.svg"},
+          ThemedMark{.theme = ThemeName::dracula, .source = u":/telar/fonts/telar-mark-dracula.svg"},
       };
 
       const auto* const found = std::ranges::find_if(marks, [theme](const ThemedMark& mark) {

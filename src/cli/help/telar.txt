@@ -65,8 +65,8 @@ Options before COMMAND:
   --profile NAME    Overlay a named Lua profile before CLI options
   --theme NAME      UI theme: zenburn (default), shade, cybervenom, vesper,
                     catppuccin, tokyo-night, kanagawa, kanagawa-dragon,
-                    gruvbox, gruvbox-hard, pierre-dark, pierre-dark-soft,
-                    terminal
+                    gruvbox, gruvbox-hard, dracula, pierre-dark,
+                    pierre-dark-soft, terminal
   --remote ADDRESS  Attach to the runtime behind a gateway this machine is paired with
   --machine LABEL   Show a saved machine first; the window still holds every enabled one
   --fresh           Start a runtime that sets the previous session aside instead of

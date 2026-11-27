@@ -777,6 +777,7 @@ namespace {
       QVERIFY(ProviderArtwork::telar(mark_side, false, static_cast<int>(ThemeName::zenburn)) != default_mark);
       QVERIFY(ProviderArtwork::telar(mark_side, false, static_cast<int>(ThemeName::gruvbox)) != default_mark);
       QVERIFY(ProviderArtwork::telar(mark_side, false, static_cast<int>(ThemeName::gruvbox_hard)) != ProviderArtwork::telar(mark_side, false, static_cast<int>(ThemeName::gruvbox)));
+      QVERIFY(ProviderArtwork::telar(mark_side, false, static_cast<int>(ThemeName::dracula)) != default_mark);
       QCOMPARE(ProviderArtwork::telar(mark_side, false, std::numeric_limits<int>::max()), default_mark);
       const auto catppuccin_mark = ProviderArtwork::telar(mark_side, false, static_cast<int>(ThemeName::catppuccin));
 

@@ -2205,7 +2205,7 @@ namespace telar::runtime::cli {
       }
     }
 
-    static constexpr auto names = ds::Array<std::string_view, 13>{"shade", "vesper", "catppuccin", "tokyo-night", "pierre-dark", "pierre-dark-soft", "kanagawa", "kanagawa-dragon", "terminal", "cybervenom", "zenburn", "gruvbox", "gruvbox-hard"};
+    static constexpr auto names = ds::Array<std::string_view, 14>{"shade", "vesper", "catppuccin", "tokyo-night", "pierre-dark", "pierre-dark-soft", "kanagawa", "kanagawa-dragon", "terminal", "cybervenom", "zenburn", "gruvbox", "gruvbox-hard", "dracula"};
     const auto* const found = std::ranges::find_if(names, [&](auto candidate) {
       return asciiEqualIgnoreCase(name, candidate);
     });

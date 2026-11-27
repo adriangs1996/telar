@@ -206,7 +206,7 @@ export {
 
     private:
       // Each name a theme may give, with the preset it selects.
-      static constexpr ds::Array<std::pair<std::string_view, std::string_view>, 22> presets{
+      static constexpr ds::Array<std::pair<std::string_view, std::string_view>, 23> presets{
           {
               {"cybervenom", "cybervenom"},
               {"shade", "shade"},
@@ -230,6 +230,7 @@ export {
               {"gruvbox", "gruvbox"},
               {"gruvbox-hard", "gruvbox-hard"},
               {"gruvbox_hard", "gruvbox-hard"},
+              {"dracula", "dracula"},
           },
       };
 

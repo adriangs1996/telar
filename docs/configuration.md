@@ -264,7 +264,7 @@ theme = "cybervenom"
 Each preset defines Telar's chrome roles and the native terminal's foreground,
 background, ANSI palette and cursor colors. Built-ins are `zenburn` (the default),
 `shade`, `cybervenom`, `vesper`, `catppuccin` (Mocha), `tokyo-night`, `kanagawa` (Wave),
-`kanagawa-dragon`, `gruvbox`, `gruvbox-hard`, `pierre-dark`,
+`kanagawa-dragon`, `gruvbox`, `gruvbox-hard`, `dracula`, `pierre-dark`,
 `pierre-dark-soft`, and `terminal`. The Pierre presets use the dark and dark-soft
 palettes from Adrian's Neovim theme, including syntax and ANSI colors.
 Shade is Nord on a `#191c22` polar night with `#d8dee9` text: control
@@ -284,6 +284,14 @@ with `#ebdbb2` text and `#fe8019` accents. `gruvbox` paints panes `#282828`;
 `gruvbox-hard` paints them `#1d2021`, where red clears 4.5:1 and comments reach
 4.47:1. Functions and strings share Gruvbox's green and are told apart by
 weight: functions bold, strings and comments italic.
+Dracula takes the Dracula Classic palette and ANSI colors from the
+[Dracula specification](https://draculatheme.com/spec), on `#282a36` with
+`#f8f8f2` text and `#bd93f9` accents. Its syntax follows the spec's reference
+implementation, [dracula/cursor](https://github.com/dracula/cursor): keywords
+and operators pink, functions green, types, namespaces and builtins cyan
+italic, parameters orange italic, numbers and constants purple, strings
+yellow, comments `#6272a4`. Muted chrome text uses the comment color too, as
+the reference does, so it reads at 3:1 against the background.
 The window uses the preset's terminal
 colors; child truecolor and OSC overrides still apply. The `terminal` preset
 uses host-relative chrome roles and a neutral explicit palette, since the

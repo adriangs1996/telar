@@ -196,6 +196,16 @@ namespace {
     hardened.terminal.background = dark0_hard;
     hardened.terminal.cursor_text_color = dark0_hard;
     check(hardened == gruvbox_hard, "the Gruvbox presets must differ only in the pane background");
+    const auto dracula = themeValuesByName("Dracula");
+    constexpr ThemeRgb dracula_background{40, 42, 54};
+    constexpr ThemeRgb dracula_bright_black{98, 114, 164};
+
+    check(dracula.base == ThemeName::dracula && dracula.terminal.background == dracula_background, "Dracula must paint the terminal its background");
+    check(dracula.terminal.palette[8] == dracula_bright_black, "Dracula must keep the spec's ANSI palette");
+    const auto dracula_type = dracula.syntaxStyle(SyntaxRole::type);
+    const auto dracula_parameter = dracula.syntaxStyle(SyntaxRole::parameter);
+
+    check(dracula_type.italic && dracula_parameter.italic && !dracula.syntaxStyle(SyntaxRole::comment).italic, "Dracula must italicize types and parameters, not comments");
   }
 
   // Zenburn's numbers and properties have no ANSI color: a pane's programs get them from the
