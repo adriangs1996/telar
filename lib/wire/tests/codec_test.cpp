@@ -659,6 +659,43 @@ namespace {
     check(refused<ConfigureTerminalColors>(patched(valid, marked, beyond)));
   }
 
+  // The inspector's question about a command and the runtime's answer cross whole: the command,
+  // every count and each day's runs; a request for more days than a reply carries is refused,
+  // sent or received.
+  void testCommandStatsRoundTrip() {
+    Storage storage{4096};
+    const QueryHistoryCommandStats asked{.request_id = 7, .entry_id = 42, .command = "make test", .days = 30, .until_ms = 1'700'000'000'000};
+
+    check(decodes<QueryHistoryCommandStats>(encoded(asked), storage, [&](const QueryHistoryCommandStats& decoded) {
+      check(decoded.request_id == 7 && decoded.entry_id == 42 && decoded.command == "make test" && decoded.days == 30 && decoded.until_ms == asked.until_ms);
+    }));
+
+    const ds::Array<std::uint32_t, 3> per_day{0, 4, 1};
+    const HistoryCommandStats answer{.request_id = 7, .found = true, .runs = 5, .measured = 4, .mean_duration_ms = 1500, .ended = 4, .succeeded = 3, .last_started_ms = 1'699'999'000'000, .last_exit = 2, .per_day = per_day};
+
+    check(decodes<HistoryCommandStats>(encoded(answer), storage, [&](const HistoryCommandStats& decoded) {
+      check(decoded.found && decoded.runs == 5 && decoded.measured == 4 && decoded.mean_duration_ms == 1500 && decoded.ended == 4 && decoded.succeeded == 3);
+      check(decoded.last_started_ms == answer.last_started_ms && decoded.last_exit && *decoded.last_exit == 2);
+      check(std::ranges::equal(decoded.per_day, per_day.view()));
+    }));
+
+    auto too_many = asked;
+
+    too_many.days = QueryHistoryCommandStats::maximum_days + 1;
+    check(encodeRefused(too_many), "more days than a reply carries are not sent");
+
+    auto most = asked;
+
+    most.days = QueryHistoryCommandStats::maximum_days;
+    const auto valid = encoded(most);
+    const auto day_byte = differingByte(valid, encoded(asked));
+    auto beyond = valid;
+
+    beyond[day_byte] = static_cast<Byte>(QueryHistoryCommandStats::maximum_days + 1);
+    check(!refused<QueryHistoryCommandStats>(valid));
+    check(refused<QueryHistoryCommandStats>(beyond), "nor received");
+  }
+
 #ifdef TELAR_DEBUG
   // The debug printer names each field and shows its value, escaping text, with its scratch text in
   // the allocator it is given and none of it left behind.
@@ -699,6 +736,7 @@ namespace {
   const telar::testing::Case case_launch_nul{"wire.launch_text_rejects_embedded_nul", testLaunchTextRejectsEmbeddedNul};
   const telar::testing::Case case_oversized_encode{"wire.oversized_encode_is_refused", testOversizedEncodeIsRefused};
   const telar::testing::Case case_message_invariants{"wire.decode_enforces_message_invariants", testDecodeEnforcesMessageInvariants};
+  const telar::testing::Case case_command_stats{"wire.command_stats_round_trip", testCommandStatsRoundTrip};
   const telar::testing::Case case_terminal_theme{"wire.terminal_theme_round_trips", testTerminalThemeRoundTrips};
 
 }

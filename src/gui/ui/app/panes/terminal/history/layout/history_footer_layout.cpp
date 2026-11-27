@@ -98,8 +98,7 @@ namespace telar::gui::qt {
         .inspecting = state.value(QStringLiteral("inspecting")).toBool(),
         .enter_runs = state.value(QStringLiteral("enterRuns")).toBool(),
         .has_more = state.value(QStringLiteral("hasMore")).toBool(),
-        .fuzzy = state.value(QStringLiteral("matchFuzzy")).toBool(),
-        .has_query = !state.value(QStringLiteral("query")).toString().isEmpty(),
+        .match = application::history::HistoryModes::named(state.value(QStringLiteral("match")).toString().toStdString()).valueOr(application::history::HistoryFooterOptions{}.match),
     };
 
     footer_ = application::history::HistoryFooter::resolve(options);

@@ -49,6 +49,8 @@ namespace telar::gui::qt {
     [[nodiscard]] bool hidesTerminalCursor(std::uint64_t pane_id) const noexcept;
     [[nodiscard]] ds::Option<application::prompt::LineView> line(std::uint64_t pane_id) const noexcept;
     [[nodiscard]] std::string_view suggestion(std::uint64_t pane_id) const noexcept;
+    // The bytes of the first option the line's command does not accept; none to mark.
+    [[nodiscard]] ds::Option<std::pair<std::size_t, std::size_t>> rejectedOption(std::uint64_t pane_id);
     // Whether the pane's shell runs `word`; asks the runtime once and answers pending until then.
     [[nodiscard]] application::prompt::CommandPresence commandPresence(std::uint64_t pane_id, std::string_view word);
     // The command block selected in the pane, by index among its blocks.
@@ -69,6 +71,8 @@ namespace telar::gui::qt {
     // terminal.
     bool key(std::uint64_t pane_id, const application::prompt::KeyPress& key);
     bool text(std::uint64_t pane_id, const QString& text);
+    // An input method reconverted bytes [begin, end) of the line into `text`.
+    void reconvert(std::uint64_t pane_id, application::prompt::Surrounding replaced, const QString& text);
     // The pane's line moved: its editors refresh, then lineChanged tells the terminal.
     void publish(qulonglong pane_id);
     // Text the line's editor took from outside the keyboard reaches its view.

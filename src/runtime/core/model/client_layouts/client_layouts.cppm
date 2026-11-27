@@ -135,6 +135,9 @@ export {
       std::uint64_t shell_revision = 0;
       std::uint64_t git_revision = 0;
       std::uint64_t blocks_revision = 0;
+      // The shell's last report of its line this client heard of; a client hears only of the
+      // ones made after it attached.
+      std::uint64_t typeahead_serial = 0;
       SentDocuments inline_documents;
       // The pane document revision this client has, whole once document_offset reaches its size.
       std::uint64_t document_revision = 0;
@@ -220,6 +223,8 @@ export {
       bool proxy_status_sent = false;
       bool agent_snapshot_requested = false;
       bool subscribed = false;
+      // Whether the client asked to be told each time the history changes.
+      bool watches_history = false;
       bool shared_graphics = false;
       std::uint64_t editor_source = 0;
       std::uint64_t editor_generation = 0;
@@ -279,8 +284,9 @@ export {
       // Starts the pane's program, once the body is in its pane; the process it started.
       pid_t start(ConcurrentMemory& memory, Command<ConcurrentMemory>& command, const PaneLaunch& settings);
 
-      // Reads what the program wrote; false once its output closed.
-      bool read(ReadMode mode = ReadMode::once);
+      // Reads what the program wrote; false once its output closed. `branch` is the branch of the
+      // repository the shell works in, for the commands the read starts.
+      bool read(ReadMode mode = ReadMode::once, std::string_view branch = {});
 
       // Reads where the integrated shell is and how the line discipline is set, and counts a
       // change. Two ioctls; the runtime calls it after output and, while a program runs, on its
@@ -400,33 +406,28 @@ export {
       IntegratedShell local_shell = IntegratedShell::none;
 
     private:
-      // Counts the commands the integrated shell finished, for its clients, and keeps the marks
-      // the bytes held, for the command blocks. A mark past the last kept one is not placed.
+      // Feeds the terminal what the shell printed up to each signed mark, so a command's block
+      // anchors where its mark was printed.
+      struct TerminalFeed {
+        Terminal& terminal;
+        PaneMedia& media;
+
+        void operator()(std::span<const Byte> bytes);
+      };
+
+      // Counts the commands the integrated shell finished, for its clients, and places each of
+      // its marks on the command blocks as the zones read it.
       struct ShellCompletions {
-        struct Mark {
-          char action = 0;
-          std::size_t end = 0;
-          ds::Option<int> status;
-        };
-
-        static constexpr std::size_t kept_capacity = 16;
-
         PaneShell& state;
-        ds::Array<Mark, kept_capacity> kept{};
-        std::size_t count = 0;
+        CommandBlockFeed<TerminalFeed>& blocks;
 
         void complete(CommandCompletion completion) noexcept;
 
-        void mark(CommandMark mark) noexcept;
-
-        [[nodiscard]] std::span<const Mark> marks() const noexcept;
+        void mark(CommandMark mark);
       };
 
       // Hands a read's bytes to the shell's marks, the observer and the terminal.
-      void ingest(std::span<const Byte> bytes, bool folded);
-
-      // Feeds the terminal up to each signed mark, so a command's block anchors where its mark was printed.
-      void feedMarks(std::span<const Byte> bytes, const ShellCompletions& completions);
+      void ingest(std::span<const Byte> bytes, bool folded, std::string_view branch);
 
       // Folds one round trip into the link's; clients hear of it when it moves by a tenth.
       void timeLink(std::chrono::steady_clock::duration elapsed) noexcept;

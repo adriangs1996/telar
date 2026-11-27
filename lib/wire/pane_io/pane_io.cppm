@@ -53,6 +53,37 @@ export {
     struct MessageSchema<PaneCommand> : Schema<Direction::client, ClientTag::pane_command, Field<&PaneCommand::pane_id, NonzeroU64, "pane_id">, Field<&PaneCommand::text, TailBytes<max_pane_input_bytes, 1>, "text">> {
     };
 
+    // PaneCommand with an answer: RequestCompleted once the runtime typed the command, or
+    // RequestFailed when it could not, as a pane whose input queue is full or whose program
+    // exited. The editor keeps a command it was refused, instead of losing it.
+    struct RunPaneCommand {
+      std::uint64_t request_id{};
+      std::uint64_t pane_id{};
+      std::span<const Byte> text;
+    };
+
+    template <>
+    struct MessageSchema<RunPaneCommand> : Schema<Direction::client, ClientTag::run_pane_command, Field<&RunPaneCommand::request_id, NonzeroU64, "request_id">, Field<&RunPaneCommand::pane_id, NonzeroU64, "pane_id">, Field<&RunPaneCommand::text, TailBytes<max_pane_input_bytes, 1>, "text">> {
+    };
+
+    // The most of a shell's line PaneTypeahead carries: the runtime keeps no more.
+    inline constexpr std::size_t max_pane_typeahead_bytes = 4096;
+
+    // The line an integrated shell's line editor held when the runtime had it cleared, before a
+    // command a client ran at its prompt (PaneCommand): keys that reached the shell while the
+    // client's editor was not up, before the first prompt or during a slow one. A client that draws
+    // its editor in place of the shell's prompt shows them there instead of losing them. Sent once
+    // per report, to the clients attached to the pane then. The text is printable but for the
+    // newlines and tabs of a line of several lines.
+    struct PaneTypeahead {
+      std::uint64_t pane_id{};
+      std::string_view text;
+    };
+
+    template <>
+    struct MessageSchema<PaneTypeahead> : Schema<Direction::server, ServerTag::pane_typeahead, Field<&PaneTypeahead::pane_id, NonzeroU64, "pane_id">, Field<&PaneTypeahead::text, MessageText16<max_pane_typeahead_bytes>, "text">> {
+    };
+
     // Whether this client draws telar's editor in place of the shell's prompt. The shells of the
     // panes it opens from now on print no prompt of their own, only the marks telar reads.
     struct ConfigureShellPrompt {

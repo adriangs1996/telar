@@ -80,6 +80,7 @@ namespace telar::gui::application {
       : prompt(allocator),
         prompt_lines(allocator),
         copy_mode(allocator),
+        block_filter(allocator),
         memory(allocator),
         link(transport),
         effects_(effects),
@@ -292,6 +293,8 @@ namespace telar::gui::application {
     // not compile.
     constexpr ds::Array ignored_messages{
         ServerTag::notification_shown,
+        // The answer to the CLI's rewrite of the history, which a window never asks for.
+        ServerTag::history_rewritten,
         ServerTag::history_stats_result,
         ServerTag::pane_focus_result,
         ServerTag::client_list,
@@ -386,9 +389,12 @@ namespace telar::gui::application {
         std::type_identity<AgentSnapshot>{},
         std::type_identity<PaneList>{},
         std::type_identity<PaneFacts>{},
+        std::type_identity<PaneTypeahead>{},
+        std::type_identity<HistoryChanged>{},
         std::type_identity<AgentSoundNotification>{},
         std::type_identity<HistoryResults>{},
         std::type_identity<HistoryOutput>{},
+        std::type_identity<HistoryCommandStats>{},
         std::type_identity<HistoryPruned>{},
         std::type_identity<PathResults>{},
         std::type_identity<CommandSuggestion>{},
@@ -829,6 +835,10 @@ namespace telar::gui::application {
       }
     }
 
+    if (terminal::filter::fail(block_filter, message.request_id)) {
+      return Change::none;
+    }
+
     if (const auto change = paths::fail(*this, message)) {
       return *change;
     }
@@ -837,7 +847,7 @@ namespace telar::gui::application {
       return *change;
     }
 
-    if (const auto change = prompt::fail(*this, message.request_id)) {
+    if (const auto change = prompt::fail(*this, message)) {
       return *change;
     }
 
@@ -895,6 +905,10 @@ namespace telar::gui::application {
       return Change::monitor;
     }
 
+    if (prompt::completed(*this, message.request_id)) {
+      return Change::none;
+    }
+
     const auto request = link.complete(message.request_id);
     if (request && request->kind == RequestKind::forget_worktree) {
       return Change::none;
@@ -940,6 +954,9 @@ namespace telar::gui::application {
   template bool Session::Link::offer<QueryHistory>(const QueryHistory& request);
   template ds::Option<std::uint64_t> Session::Link::ask<NvimConfiguration>(NvimConfiguration request);
   template ds::Option<std::uint64_t> Session::Link::ask<QueryMonitor>(QueryMonitor request);
+  template ds::Option<std::uint64_t> Session::Link::ask<RunPaneCommand>(RunPaneCommand request);
+  template ds::Option<std::uint64_t> Session::Link::ask<WatchHistory>(WatchHistory request);
+  template ds::Option<std::uint64_t> Session::Link::ask<ChooseHistoryEntry>(ChooseHistoryEntry request);
   template ds::Option<std::uint64_t> Session::Link::ask<FindPaths>(FindPaths request);
   template ds::Option<std::uint64_t> Session::Link::ask<ListDirectory>(ListDirectory request);
   template ds::Option<std::uint64_t> Session::Link::ask<MeasureDirectory>(MeasureDirectory request);
@@ -992,6 +1009,9 @@ namespace telar::gui::application {
   template void Session::Link::send<PaneInput>(const PaneInput& message);
   template void Session::Link::send<PaneResize>(const PaneResize& message);
   template void Session::Link::send<QueryHistory>(const QueryHistory& message);
+  template void Session::Link::send<QueryHistoryCommandStats>(const QueryHistoryCommandStats& message);
+  template void Session::Link::send<WatchHistory>(const WatchHistory& message);
+  template void Session::Link::send<ChooseHistoryEntry>(const ChooseHistoryEntry& message);
   template void Session::Link::send<ReadHistoryOutput>(const ReadHistoryOutput& message);
   template void Session::Link::send<ReadPane>(const ReadPane& message);
   template void Session::Link::send<ReadPaneRows>(const ReadPaneRows& message);

@@ -1,10 +1,13 @@
 telar history stats: Count commands and show the most frequent ones over a period
 
-Usage: telar history stats [--period today|week|month|year|all] [--cwd | --workspace PATH | --pane ID] [--socket PATH]
+Usage: telar history stats [--period today|week|month|year|all] [--ngram-size N] [--cwd | --workspace PATH | --pane ID] [--socket PATH]
 
 Arguments:
-  --period P       `today`, `week`, `month`, `year` or `all` (default).
+  --period P       `today` (since local midnight), `week`, `month` or `year`
+                   (the last 7, 30 or 365 days) or `all` (default).
+  --ngram-size N   Count sequences of N commands run one after another, 1 to 10
+                   (default 1), shown joined by ` ; `.
 
-Results: `commands: N`, `unique: N` and the top 10 commands with their counts.
-Only the scope and the period filter; --failed, --author and --limit are
-ignored here. Exit 0.
+Results: `commands: N`, `unique: N` and the top 10 commands or sequences with
+their counts. Only the scope and the period filter; --failed, --author and
+--limit are ignored here. Exit 0.

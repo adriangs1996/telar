@@ -46,6 +46,8 @@ export {
       session_end,
       // A picture of the terminal's screen, which draws the observer's after it lost bytes.
       resync,
+      // The git branch the pane's shell is on, which the commands it runs from here carry.
+      branch,
     };
 
     struct ObservationEvent {
@@ -150,7 +152,7 @@ export {
             session_started_ = history.recordHistory({HistoryEventKind::session_started, session_});
           }
 
-          CommandRelay<History> commands{session_, history, injected_submissions_};
+          CommandRelay<History> commands{session_, history, injected_submissions_, branch_.view()};
 
           TELAR_DIAGNOSTIC(commands.metrics = &result.metrics);
           if (batch.reset_before || reset_needed_) {
@@ -194,14 +196,29 @@ export {
         const HistorySession& session;
         History& history;
         std::atomic<std::uint64_t>& injected_submissions;
+        std::string_view branch;
 #if TELAR_DIAGNOSTICS
         diagnostics::ObservationCounters* metrics = nullptr;
 #endif
+
+        inline void start(const CapturedCommand& command) {
+          if (session.pane != 0) {
+            auto captured = command;
+
+            captured.branch = branch;
+            if (injected_submissions.load(std::memory_order_relaxed) != 0) {
+              captured.author = HistoryAuthor::agent;
+            }
+
+            [[maybe_unused]] const bool accepted = history.recordHistory({HistoryEventKind::command_started, session, captured});
+          }
+        }
 
         inline void emit(const CapturedCommand& command) {
           if (session.pane != 0) {
             auto captured = command;
 
+            captured.branch = branch;
             if (injected_submissions.load(std::memory_order_relaxed) != 0) {
               injected_submissions.fetch_sub(1, std::memory_order_relaxed);
               captured.author = HistoryAuthor::agent;
@@ -244,6 +261,13 @@ export {
             // Drawn on the screen alone: none of it is a command's output.
             terminal_.feed(batch.bytesOf(event));
             break;
+          case ObservationKind::branch: {
+            const auto branch = textView(batch.bytesOf(event));
+
+            branch_.assign(branch.substr(0, std::min(branch.size(), max_branch_bytes)));
+            commands.branch = branch_.view();
+            break;
+          }
           case ObservationKind::shell_exit:
             tracker_.complete({event.time, event.exit_code}, commands);
             break;
@@ -274,6 +298,7 @@ export {
       tbc::val_self<HistorySession> session_;
       tbc::val_a<ds::String<ConcurrentMemory>> workspace_path_;
       tbc::val_a<ds::String<ConcurrentMemory>> shell_;
+      FixedText<max_branch_bytes> branch_;
       TerminalSize initial_size_;
       AgentScreenInference inference_;
       bool reset_needed_ = false;

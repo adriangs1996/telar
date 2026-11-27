@@ -26,7 +26,6 @@ Item {
     signal cancelled()
     property alias searchHost: historySearch.fieldHost
     property alias rowsView: results
-    property bool retiringRows: false
 
     ModalRevealLayout {
         id: inspectorMotion
@@ -43,10 +42,6 @@ Item {
             id: root.browserState.selectedId ?? "",
             index: root.browserState.selection
         })
-    }
-
-    function restoreRows() {
-        root.retiringRows = false;
     }
 
     function revealSelection() {
@@ -114,18 +109,87 @@ Item {
         width: root.width - x
         height: root.regions.results.height
 
+        // The pins the search matches, first, newest pinned first: Alt, Shift and a digit run one.
+        Row {
+            id: pinStrip
+            objectName: "historyPins"
+            readonly property var pins: root.browserState.pins ?? []
+            x: 16 * root.ratio
+            y: 6 * root.ratio
+            width: Math.max(0, root.regions.results.width - 2 * x)
+            height: pins.length > 0 ? 24 * root.ratio : 0
+            visible: pins.length > 0 && root.regions.results.width > 0
+            spacing: 6 * root.ratio
+            clip: true
+
+            Repeater {
+                model: pinStrip.pins
+                delegate: Item {
+                    id: pin
+                    objectName: "historyPin"
+                    required property int index
+                    required property var modelData
+                    width: Math.min(pinText.implicitWidth + pinKey.implicitWidth + 20 * root.ratio, 260 * root.ratio)
+                    height: pinStrip.height
+
+                    NativeRoundedRectangle {
+                        anchors.fill: parent
+                        radius: 4 * root.ratio
+                        color: pinArea.containsMouse ? root.colors.surface1 : root.colors.surface0
+                    }
+
+                    ChromeText {
+                        id: pinKey
+                        x: 6 * root.ratio
+                        height: parent.height
+                        text: (root.browserState.macStyle ? "⌥⇧" : "Alt+Shift+") + (pin.index + 1)
+                        color: root.colors.overlay1
+                        pixelSize: root.typography.small
+                        elide: Text.ElideNone
+                    }
+
+                    CellText {
+                        id: pinText
+                        x: pinKey.x + pinKey.width + 6 * root.ratio
+                        width: Math.max(0, parent.width - x - 6 * root.ratio)
+                        height: parent.height
+                        text: pin.modelData.text
+                        color: root.colors.text
+                        grid: root.typography.grid
+                        clip: true
+                    }
+
+                    MouseArea {
+                        id: pinArea
+                        anchors.fill: parent
+                        hoverEnabled: true
+                        cursorShape: Qt.PointingHandCursor
+                        onClicked: root.controller.usePin(pin.index)
+                    }
+
+                    Accessible.role: Accessible.Button
+                    Accessible.name: "Run pinned " + pin.modelData.text
+                }
+            }
+        }
+
         ListView {
             id: results
             objectName: "historyResults"
 
             x: 0
-            y: 0
+            y: pinStrip.height > 0 ? pinStrip.y + pinStrip.height + 4 * root.ratio : 0
             width: root.regions.results.width
-            height: Math.max(0, parent.height - root.resultBottomInset)
+            height: Math.max(0, parent.height - root.resultBottomInset - y)
             visible: width > 0
             clip: true
             spacing: 0
-            model: root.retiringRows ? null : root.controller.rows
+            model: root.controller.rows
+            // Rows are made as they show, never ahead of time: Qt's view keeps the index of a row
+            // it makes ahead, unmoved by the rows removed meanwhile, and cancels it by that index
+            // once the rows went, past their end. Rows may then go at any time and the others
+            // keep their delegates.
+            cacheBuffer: 0
             opacity: historySearch.rowsOpacity
             verticalLayoutDirection: ListView.BottomToTop
             currentIndex: root.browserState.selection
@@ -165,7 +229,7 @@ Item {
                     height: result.height - y
                     record: result.record
                     commandText: result.selected ? root.controller.command : result.record.command
-                    query: root.browserState.query
+                    ranges: result.record.ranges ?? []
                     commandLoaded: !result.selected || root.browserState.commandLoaded
                     inspectionKey: root.browserState.inspectionKey
                     macStyle: root.browserState.macStyle
@@ -179,7 +243,13 @@ Item {
                     open: result.open
                     highlight: result.highlight
                     grouped: root.browserState.grouped
-                    showCwd: root.browserState.effectiveScope === "global" || root.browserState.effectiveScope === "workspace"
+                    showCwd: root.browserState.showDirectory !== false && (root.browserState.effectiveScope === "global" || root.browserState.effectiveScope === "workspace")
+                    showDuration: root.browserState.showDuration !== false
+                    showExit: root.browserState.showExit !== false
+                    showHost: root.browserState.showHost === true
+                    relativeTime: root.browserState.relativeTime === true
+                    marked: (root.browserState.marks ?? []).indexOf(result.record.key) >= 0
+                    quickKey: result.index < 9 ? result.index + 1 : 0
                     interactive: root.actionable
                     controller: root.controller
                     historyIndex: result.index
@@ -255,6 +325,7 @@ Item {
                     workspace: root.workspaceName
                     ratio: root.ratio
                     onSearchEverywhere: root.controller.setFilters({scope: "global"})
+                    onFilterChosen: word => root.controller.applyFilter(word)
                 }
             }
         }
@@ -291,6 +362,8 @@ Item {
 
     HistorySearchBar {
         id: historySearch
+        chips: root.browserState.chips ?? []
+        onChipRemoved: index => root.controller.removeChip(index)
         colors: root.colors
         typography: root.typography
         ratio: root.ratio
@@ -304,13 +377,43 @@ Item {
         height: root.regions.search.height
     }
 
-    Connections {
-        target: root.controller.rows
-        function onRowsAboutToBeRemoved() {
-            root.retiringRows = true;
+    // The delete that waits for its undo, in place of the footer's hints while it can be taken back.
+    Rectangle {
+        id: undoNotice
+        objectName: "historyUndo"
+        readonly property real inset: 16 * root.ratio
+        visible: root.browserState.hidden === true && height > 0
+        x: root.regions.footer.x
+        y: root.regions.footer.y
+        width: root.regions.footer.width
+        height: root.regions.footer.height
+        color: root.colors.surface0
+        z: 2
+
+        ChromeText {
+            x: undoNotice.inset
+            width: Math.max(0, undoButton.x - x - undoNotice.inset)
+            height: parent.height
+            text: "Deleted " + (root.browserState.hiddenCommand ?? "")
+            color: root.colors.text
+            pixelSize: root.typography.small
         }
-        function onRowsRemoved() {
-            Qt.callLater(root.restoreRows);
+
+        ChromeText {
+            id: undoButton
+            objectName: "historyUndoAction"
+            x: parent.width - width - undoNotice.inset
+            height: parent.height
+            text: "Undo " + (root.browserState.undoKey ?? "")
+            color: root.colors.accent
+            pixelSize: root.typography.small
+            emphasized: true
+
+            MouseArea {
+                anchors.fill: parent
+                cursorShape: Qt.PointingHandCursor
+                onClicked: root.controller.execute(HistoryController.Action.undo)
+            }
         }
     }
 

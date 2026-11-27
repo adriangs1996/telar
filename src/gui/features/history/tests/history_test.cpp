@@ -55,7 +55,12 @@ namespace {
     }
 
     QueryHistory refresh(std::uint64_t request_id) {
-      return features::history::refresh(history_, request_id);
+      const auto request = features::history::refresh(history_, request_id);
+      if (!request) {
+        throw std::runtime_error{"the page could not be refreshed"};
+      }
+
+      return *request;
     }
 
     template <typename Message>
@@ -84,11 +89,39 @@ namespace {
     }
 
     bool fail(std::uint64_t request_id, std::string_view message) {
-      return features::history::fail(history_, request_id, message);
+      return features::history::fail(history_, request_id, message) != HistoryFailure::none;
     }
 
     void suspend() noexcept {
       features::history::suspend(history_);
+    }
+
+    ds::Option<DeleteHistory> hide(std::uint64_t id, std::uint64_t request_id) {
+      return features::history::hide(history_, id, request_id);
+    }
+
+    ds::Option<DeleteHistory> commitHidden(std::uint64_t request_id) {
+      return features::history::commitHidden(history_, request_id);
+    }
+
+    bool unhide() noexcept {
+      return features::history::unhide(history_);
+    }
+
+    bool toggleMark(std::uint64_t id) {
+      return features::history::toggleMark(history_, id);
+    }
+
+    ds::Option<QueryHistoryCommandStats> readRuns(std::uint64_t request_id, CalendarSample sampled = {}) {
+      return features::history::readRuns(history_, request_id, sampled);
+    }
+
+    ds::Option<QueryHistory> readContext(std::uint64_t request_id) {
+      return features::history::readContext(history_, request_id);
+    }
+
+    bool watch(bool watching) noexcept {
+      return features::history::watch(history_, watching);
     }
 
   private:
@@ -279,7 +312,7 @@ namespace {
     }
 
     check(browser.reads().rows()[replaced->index].id == replacement.front().id, "the replacement must select its own command");
-    static_cast<void>(browser.refresh(3));
+    static_cast<void>(browser.begin({.request_id = 3}));
     browser.fail(3, "search failed");
     check(!browser.reads().choice() && !browser.reads().accepts(*replaced), "a failed search must not restore the previous choice");
     static_cast<void>(browser.begin({.request_id = 4}));
@@ -341,8 +374,8 @@ namespace {
       }
 
       check(rejected && browser.reads().state().phase == HistoryPhase::failed, "allocation failure must close input authority");
-      check(browser.reads().rows().size() == 1 && browser.reads().rows().front().command == "retained", "allocation failure must preserve the previous complete page");
-      check(budget.liveBytes() == live_bytes, "failed page staging must release every temporary allocation");
+      check(browser.reads().rows().empty(), "a search whose page could not be stored shows no rows of the search before it");
+      check(budget.liveBytes() <= live_bytes, "failed page staging must release every temporary allocation");
       static_cast<void>(browser.begin({.request_id = 3}));
       browser.apply(HistoryResults{.request_id = 3, .snapshot_id = 3, .entries = initial});
       check(browser.reads().command(1) == "retained", "a later successful query must restore submission authority");
@@ -617,6 +650,150 @@ namespace {
     check(std::string_view{output.data(), written} == "abc" && PlainText::strip(byteView("text"), {}) == 0, "plain text output must respect empty and bounded destinations");
   }
 
+  // A refresh reads the page anew under the person's hands: the rows stay usable while it loads,
+  // and the selection stays on the same command wherever the new page puts it.
+  void refreshKeepsTheSelectedCommand() {
+    SystemAllocator memory;
+    telar::MemoryAdapter adapted{memory};
+    Browser browser{adapted};
+    const ds::Array first{HistoryEntry{.id = 1, .command = "a"}, HistoryEntry{.id = 2, .command = "b"}, HistoryEntry{.id = 3, .command = "c"}};
+    const ds::Array newer{HistoryEntry{.id = 4, .command = "d"}, HistoryEntry{.id = 1, .command = "a"}, HistoryEntry{.id = 2, .command = "b"}, HistoryEntry{.id = 3, .command = "c"}};
+
+    static_cast<void>(browser.begin({.request_id = 1}));
+    browser.apply(HistoryResults{.request_id = 1, .snapshot_id = 1, .entries = first});
+    browser.select(2);
+    static_cast<void>(browser.refresh(2));
+    check(browser.reads().state().phase == HistoryPhase::ready && browser.reads().choice() && browser.reads().canSubmit(), "the rows stay usable while a refresh loads");
+    check(browser.reads().command(3) == "c", "a command shown can be read while a refresh loads");
+    browser.apply(HistoryResults{.request_id = 2, .snapshot_id = 2, .entries = newer});
+    check(browser.reads().rows()[browser.reads().state().selection].id == 3, "the selection follows its command to its new place");
+
+    // A row chosen while the refresh loads is the one it keeps.
+    static_cast<void>(browser.refresh(3));
+    check(browser.select(1), "a row can be selected while a refresh loads");
+    browser.apply(HistoryResults{.request_id = 3, .snapshot_id = 3, .entries = first});
+    check(browser.reads().state().selection == 0 && browser.reads().rows().front().id == 1, "the row chosen while the refresh loaded stays selected");
+  }
+
+  // The inspector keeps showing the output of the command a refresh keeps selected.
+  void refreshKeepsTheInspectedOutput() {
+    SystemAllocator memory;
+    telar::MemoryAdapter adapted{memory};
+    Browser browser{adapted};
+    const ds::Array first{HistoryEntry{.id = 1, .command = "a"}, HistoryEntry{.id = 2, .command = "b"}};
+    const ds::Array newer{HistoryEntry{.id = 3, .command = "c"}, HistoryEntry{.id = 1, .command = "a"}, HistoryEntry{.id = 2, .command = "b"}};
+
+    static_cast<void>(browser.begin({.request_id = 1}));
+    browser.apply(HistoryResults{.request_id = 1, .snapshot_id = 1, .entries = first});
+    browser.setInspecting(true);
+    const auto read = browser.readOutput(2);
+
+    check(read.hasValue(), "inspecting reads the output");
+    browser.apply(HistoryOutput{.request_id = 2, .id = 1, .content = byteView("built")});
+    static_cast<void>(browser.refresh(3));
+    check(browser.reads().output() == "built", "the output stays while a refresh loads");
+    browser.apply(HistoryResults{.request_id = 3, .snapshot_id = 2, .entries = newer});
+    check(browser.reads().output() == "built" && browser.reads().state().output_phase == HistoryPhase::ready, "the output stays once the refreshed page arrives");
+    check(!browser.readOutput(4), "the output kept is not read again");
+  }
+
+  // A search that fails takes away the rows of the query before it, which would show under the
+  // new query with its matches highlighted in them; a page that fails leaves the page shown.
+  void failedSearchLeavesNoRowsOfTheQueryBefore() {
+    SystemAllocator memory;
+    telar::MemoryAdapter adapted{memory};
+    Browser browser{adapted};
+    const ds::Array first{HistoryEntry{.id = 1, .command = "make"}, HistoryEntry{.id = 2, .command = "ls"}};
+
+    static_cast<void>(browser.begin({.request_id = 1, .query = "m"}));
+    browser.apply(HistoryResults{.request_id = 1, .snapshot_id = 1, .has_more = true, .entries = first});
+    static_cast<void>(browser.page(HistoryPage::older, 2));
+    browser.fail(2, "page failed");
+    check(browser.reads().rows().size() == first.size() && browser.reads().state().phase == HistoryPhase::ready, "a failed page leaves the page shown usable");
+
+    static_cast<void>(browser.begin({.request_id = 3, .query = "x"}));
+    browser.fail(3, "search failed");
+    check(browser.reads().rows().empty() && browser.reads().state().phase == HistoryPhase::failed && browser.reads().error() == "search failed", "a failed search shows no rows of the query before it");
+  }
+
+  // A new search typed while a later page shows selects its best match, never its last row.
+  void searchFromALaterPageSelectsTheBestMatch() {
+    SystemAllocator memory;
+    telar::MemoryAdapter adapted{memory};
+    Browser browser{adapted};
+    const ds::Array first{HistoryEntry{.id = 1, .command = "a"}, HistoryEntry{.id = 2, .command = "b"}};
+
+    static_cast<void>(browser.begin({.request_id = 1}));
+    browser.apply(HistoryResults{.request_id = 1, .snapshot_id = 1, .has_more = true, .entries = first});
+    static_cast<void>(browser.page(HistoryPage::older, 2));
+    browser.apply(HistoryResults{.request_id = 2, .snapshot_id = 1, .entries = first});
+    static_cast<void>(browser.begin({.request_id = 3, .query = "b"}));
+    browser.apply(HistoryResults{.request_id = 3, .snapshot_id = 2, .entries = first});
+    check(browser.reads().state().selection == 0, "the new search selects its first row");
+  }
+
+  // A delete waits for its undo: its row leaves at once and no page brings it back, undo takes it
+  // back, and a second delete sends the first.
+  void deletesWaitForTheirUndo() {
+    SystemAllocator memory;
+    telar::MemoryAdapter adapted{memory};
+    Browser browser{adapted};
+    const ds::Array entries{HistoryEntry{.id = 1, .command = "rm -rf build"}, HistoryEntry{.id = 2, .command = "make"}, HistoryEntry{.id = 3, .command = "ls"}};
+
+    static_cast<void>(browser.begin({.request_id = 1}));
+    browser.apply(HistoryResults{.request_id = 1, .snapshot_id = 1, .entries = entries});
+    check(!browser.hide(1, 2).hasValue(), "nothing waited before the first delete");
+    check(browser.reads().rows().size() == 2 && browser.reads().hidden() == 1 && browser.reads().hiddenCommand() == "rm -rf build", "the row leaves and the notice names it");
+    static_cast<void>(browser.refresh(3));
+    browser.apply(HistoryResults{.request_id = 3, .snapshot_id = 2, .entries = entries});
+    check(browser.reads().rows().size() == 2, "a page read meanwhile does not bring it back");
+
+    check(browser.unhide() && browser.reads().hidden() == 0, "undo takes the delete back");
+    static_cast<void>(browser.refresh(4));
+    browser.apply(HistoryResults{.request_id = 4, .snapshot_id = 3, .entries = entries});
+    check(browser.reads().rows().size() == entries.size(), "and the page read anew shows the row again");
+
+    static_cast<void>(browser.hide(1, 5));
+    const auto first = browser.hide(2, 6);
+
+    check(first && first->id == 1 && first->request_id == 6, "a second delete sends the first");
+    check(browser.reads().hidden() == 2 && browser.reads().deleting(), "the second waits for its own undo");
+    const auto second = browser.commitHidden(7);
+
+    check(second && second->id == 2 && browser.reads().hidden() == 0 && !browser.commitHidden(8), "the delete that waited goes once");
+  }
+
+  // Marked commands keep the order they were marked in, whatever the query shows after.
+  void marksKeepTheirOrderAcrossSearches() {
+    SystemAllocator memory;
+    telar::MemoryAdapter adapted{memory};
+    Browser browser{adapted};
+    const ds::Array first{HistoryEntry{.id = 1, .command = "make"}, HistoryEntry{.id = 2, .command = "make test"}};
+    const ds::Array second{HistoryEntry{.id = 3, .command = "git push"}};
+
+    static_cast<void>(browser.begin({.request_id = 1, .query = "make"}));
+    browser.apply(HistoryResults{.request_id = 1, .snapshot_id = 1, .entries = first});
+    check(browser.toggleMark(2) && browser.toggleMark(1), "rows are marked");
+    static_cast<void>(browser.begin({.request_id = 2, .query = "git"}));
+    browser.apply(HistoryResults{.request_id = 2, .snapshot_id = 1, .entries = second});
+    check(browser.toggleMark(3), "a row of another search is marked too");
+    check(browser.reads().markCount() == 3 && browser.reads().markedCommand(0) == "make test" && browser.reads().markedCommand(1) == "make" && browser.reads().markedCommand(2) == "git push", "the marks keep the order they were made in and their text");
+    check(!browser.toggleMark(3) && browser.reads().markCount() == 2 && !browser.reads().marked(3), "marking again unmarks");
+
+    const ds::Array truncated{HistoryEntry{.id = 4, .command = "partial", .command_truncated = true}};
+    bool refused = false;
+
+    static_cast<void>(browser.begin({.request_id = 3}));
+    browser.apply(HistoryResults{.request_id = 3, .snapshot_id = 1, .entries = truncated});
+    try {
+      static_cast<void>(browser.toggleMark(4));
+    } catch (const EncodingError&) {
+      refused = true;
+    }
+
+    check(refused && browser.reads().markCount() == 2, "a command whose capture was cut cannot be marked");
+  }
+
   void historyPanelPreservesTheSearchPosition() {
     const HistoryModalMetrics metrics{.viewport = {.width = 1200, .height = 800}, .cell_height = 20};
     const auto browsing = HistoryModalGeometry::measure(metrics, false);
@@ -669,19 +846,16 @@ namespace {
     check(shifted.search.y == before.search.y + entrance_offset && shifted.footer.y == before.footer.y + entrance_offset, "search and action hit areas must follow the panel entrance");
   }
 
-  void historySearchBorrowsOnlyTheEffectiveQuery() {
-    constexpr std::string_view source = "!   compiler";
-    const auto parsed = HistorySearch::parse(source, false);
+  // A leading ! is the matcher's, which reads it as fzf does: the search sends it as typed, and
+  // asks for failed commands only when the filter says so.
+  void aLeadingBangIsSearchedAsTyped() {
+    SystemAllocator memory;
+    telar::MemoryAdapter adapted{memory};
+    Browser browser{adapted};
+    const auto request = browser.begin({.request_id = 1, .query = "!make"});
 
-    check(parsed.failed_only && parsed.query == "compiler", "the failure prefix must expose the command query");
-    check(parsed.query.data() == source.data() + source.find("compiler"), "parsing a query must borrow its original storage");
-    check(HistorySearch::parse("!   ", false).query.empty(), "a failure-only search must still group results by day");
-    check(HistorySearch::parse(" !compiler", false).query == " !compiler", "only a leading failure marker changes the filter");
-    check(HistorySearch::parse("!\tcompiler", false).query == "\tcompiler", "the failure prefix must preserve non-space query bytes");
-    check(HistorySearch::parse("compiler", true).failed_only, "an explicit failure filter must survive an ordinary query");
-    const auto literal = HistorySearch::parse("\\!important", false);
-
-    check(!literal.failed_only && literal.query == "!important", "an escaped ! searches for itself");
+    check(request.query == "!make" && !request.failed_only, "the ! reaches the matcher");
+    check(browser.begin({.request_id = 2, .query = "make", .failed_only = true}).failed_only, "the failed filter asks for failures");
   }
 
   void historyRowsProtectTheCommandBeforeFacts() {
@@ -713,6 +887,198 @@ namespace {
     check(card.cwd.empty() && !card.time.empty(), "an expanded card must reserve its directory for the facts line");
   }
 
+  // A row keeps what the runtime matched and told of the run, as the panel draws them.
+  void rowsKeepWhatTheRuntimeMatched() {
+    SystemAllocator memory;
+    telar::MemoryAdapter adapted{memory};
+    Browser browser{adapted};
+    const ds::Array ranges{HistoryRange{.start = 0, .end = 3}, HistoryRange{.start = 4, .end = 8}};
+    const ds::Array excerpt_ranges{HistoryRange{.start = 6, .end = 11}};
+    const ds::Array entries{
+        HistoryEntry{.id = 1, .command = "git push", .host = "build", .run_count = 7, .ranges = ranges, .excerpt = "error: denied", .excerpt_ranges = excerpt_ranges},
+        HistoryEntry{.id = 2, .command = "ls", .neighbour = true},
+    };
+
+    static_cast<void>(browser.begin({.request_id = 1, .query = "gitpush"}));
+    browser.apply(HistoryResults{.request_id = 1, .snapshot_id = 1, .entries = entries});
+    const auto& matched = browser.reads().rows()[0];
+    const auto& around = browser.reads().rows()[1];
+
+    check(matched.ranges.view().size() == 2 && matched.ranges.view()[1].start == 4 && matched.ranges.view()[1].end == 8, "the row keeps the bytes the runtime matched");
+    check(std::string_view{matched.excerpt} == "error: denied" && matched.excerpt_ranges.view().size() == 1 && matched.excerpt_ranges.view()[0].start == 6, "the row keeps the output's excerpt and its match");
+    check(std::string_view{matched.host} == "build" && matched.run_count == 7, "the row keeps its machine and its runs");
+    check(!matched.neighbour && around.neighbour && around.ranges.view().empty(), "a run shown around a match is told apart");
+  }
+
+  // Every page of a search asks for what its first did.
+  void pagesKeepTheSearchCriteria() {
+    SystemAllocator memory;
+    telar::MemoryAdapter adapted{memory};
+    Browser browser{adapted};
+    const ds::Array first{HistoryEntry{.id = 1, .command = "a"}, HistoryEntry{.id = 2, .command = "b"}};
+    std::string host{"build"};
+    std::string branch{"main"};
+    std::string origin{"/src"};
+    std::string shell{"fish"};
+
+    static_cast<void>(browser.begin({.request_id = 1, .scope = HistoryScope::pane, .scope_value = std::uint64_t{9}, .sort = HistorySort::time, .since_ms = 5, .until_ms = 50, .exit_code = 2, .min_duration_ms = 10, .host = host, .branch = branch, .shell = shell, .preload = true, .output = true, .origin_pane = 9, .origin_cwd = origin}));
+    // The caller's text is gone once the search began.
+    host.assign("xxxxx");
+    branch.assign("xxxx");
+    origin.assign("xxxx");
+    shell.assign("xxxx");
+    browser.apply(HistoryResults{.request_id = 1, .snapshot_id = 1, .has_more = true, .entries = first});
+    const auto page = browser.page(HistoryPage::older, 2);
+
+    check(page && page->sort == HistorySort::time && page->since_ms == 5 && page->until_ms == 50 && page->exit_code == std::int32_t{2} && page->min_duration_ms == 10, "a page keeps the order and the filters");
+    check(page && page->host == "build" && page->branch == "main" && page->shell == "fish" && page->origin_cwd == "/src" && page->origin_pane == 9, "a page keeps the text it asks with");
+    check(page && page->preload && page->output && page->scope == HistoryScope::pane, "a page keeps the scope and what it searches");
+    check(browser.reads().preloads() && browser.reads().searchesOutput(), "the panel reads what the search asks");
+  }
+
+  // A listing by time reads each next page past the last run the page before showed, so a delete
+  // on an earlier page skips nothing; a refresh and going back read where each page began. A
+  // ranked listing has no such run to read past, and pages by offset.
+  void timePagesReadPastTheLastRunShown() {
+    SystemAllocator memory;
+    telar::MemoryAdapter adapted{memory};
+    Browser browser{adapted};
+    const ds::Array first{HistoryEntry{.id = 9, .started_at_ms = 900, .command = "c"}, HistoryEntry{.id = 7, .started_at_ms = 700, .command = "b"}};
+    const ds::Array second{HistoryEntry{.id = 4, .started_at_ms = 400, .command = "a"}, HistoryEntry{.id = 3, .started_at_ms = 300, .command = "z"}};
+
+    static_cast<void>(browser.begin({.request_id = 1, .match = HistoryMatch::fuzzy, .distinct = true}));
+    browser.apply(HistoryResults{.request_id = 1, .snapshot_id = 10, .has_more = true, .entries = first});
+    const auto older = browser.page(HistoryPage::older, 2);
+
+    check(older && older->after_started_ms == 700 && older->after_id == 7 && older->snapshot_id == 10, "the next page reads past the last run shown");
+    browser.apply(HistoryResults{.request_id = 2, .snapshot_id = 10, .has_more = true, .entries = second});
+    const auto refreshed = browser.refresh(3);
+
+    check(refreshed.after_started_ms == 700 && refreshed.after_id == 7, "a refresh reads the page from where it began");
+    browser.apply(HistoryResults{.request_id = 3, .snapshot_id = 11, .has_more = true, .entries = second});
+    const auto third = browser.page(HistoryPage::older, 4);
+
+    check(third && third->after_started_ms == 300 && third->after_id == 3, "and the page after it past its own last run");
+    browser.apply(HistoryResults{.request_id = 4, .snapshot_id = 11, .entries = std::span{first}.first(1)});
+    const auto back = browser.page(HistoryPage::newer, 5);
+
+    check(back && back->after_started_ms == 700 && back->after_id == 7, "going back reads the page before from where it began");
+    browser.apply(HistoryResults{.request_id = 5, .snapshot_id = 11, .has_more = true, .entries = second});
+    const auto top = browser.page(HistoryPage::newer, 6);
+
+    check(top && top->after_id == 0 && top->offset == 0, "and the first page from the newest run");
+
+    static_cast<void>(browser.begin({.request_id = 7, .query = "mk", .match = HistoryMatch::fuzzy, .distinct = true}));
+    browser.apply(HistoryResults{.request_id = 7, .snapshot_id = 12, .has_more = true, .entries = first});
+    const auto ranked = browser.page(HistoryPage::older, 8);
+
+    check(ranked && ranked->after_id == 0 && ranked->offset == first.size(), "a ranked listing pages by offset");
+  }
+
+  // A raw listing's page holds matches and the runs around them: the next page starts after the
+  // matches, and going back returns to the page it came from.
+  void rawPagesCountOnlyTheMatches() {
+    SystemAllocator memory;
+    telar::MemoryAdapter adapted{memory};
+    Browser browser{adapted};
+    const ds::Array first{HistoryEntry{.id = 1, .command = "x", .neighbour = true}, HistoryEntry{.id = 2, .command = "make"}, HistoryEntry{.id = 3, .command = "y", .neighbour = true}, HistoryEntry{.id = 4, .command = "make"}};
+    const ds::Array second{HistoryEntry{.id = 5, .command = "make"}, HistoryEntry{.id = 6, .command = "z", .neighbour = true}};
+
+    static_cast<void>(browser.begin({.request_id = 1, .query = "make", .neighbours = 1}));
+    browser.apply(HistoryResults{.request_id = 1, .snapshot_id = 1, .has_more = true, .entries = first});
+    const auto older = browser.page(HistoryPage::older, 2);
+
+    check(older && older->offset == 2 && older->neighbours == 1, "the next page starts after the two matches shown");
+    browser.apply(HistoryResults{.request_id = 2, .snapshot_id = 1, .has_more = true, .entries = second});
+    const auto third = browser.page(HistoryPage::older, 3);
+
+    check(third && third->offset == 3, "and the one after it after its one match");
+    browser.apply(HistoryResults{.request_id = 3, .snapshot_id = 1, .entries = second});
+    const auto back = browser.page(HistoryPage::newer, 4);
+
+    check(back && back->offset == 2, "going back returns to the page it came from");
+    browser.apply(HistoryResults{.request_id = 4, .snapshot_id = 1, .has_more = true, .entries = second});
+    const auto start = browser.page(HistoryPage::newer, 5);
+
+    check(start && start->offset == 0, "and then to the first");
+  }
+
+  // The inspector asks the runtime how every run of the command went, its days ending at the
+  // person's next midnight, and reads the commands run around the one inspected in its pane.
+  void inspectorReadsTheRunsAndTheContext() {
+    constexpr std::int64_t day = 86'400'000;
+    // 2026-11-27 15:00 in UTC+1: the day ends at 23:00 UTC.
+    constexpr CalendarSample sampled{.now_ms = (20'784 * day) + (14 * day / 24), .utc_offset_min = 60};
+    SystemAllocator memory;
+    telar::MemoryAdapter adapted{memory};
+    Browser browser{adapted};
+    const ds::Array page{HistoryEntry{.id = 10, .pane_id = 3, .command = "make test"}};
+    const ds::Array<std::uint32_t, 20> days{0, 0, 0, 0, 0, 0, 9, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2, 3};
+    const ds::Array around{
+        HistoryEntry{.id = 12, .command = "git push", .neighbour = true},
+        HistoryEntry{.id = 11, .command = "git commit", .neighbour = true},
+        HistoryEntry{.id = 10, .command = "make test"},
+        HistoryEntry{.id = 9, .command = "vim", .neighbour = true},
+        HistoryEntry{.id = 4, .command = "make test"},
+    };
+
+    static_cast<void>(browser.begin({.request_id = 1}));
+    browser.apply(HistoryResults{.request_id = 1, .snapshot_id = 1, .entries = page});
+    check(!browser.readRuns(2, sampled) && !browser.readContext(2), "nothing is read before the inspector opens");
+    browser.setInspecting(true);
+    const auto runs_read = browser.readRuns(3, sampled);
+    const auto context_read = browser.readContext(4);
+
+    check(runs_read && runs_read->entry_id == 10 && runs_read->days == HistoryRunStats::days && runs_read->until_ms == (20'785 * day) - (day / 24), "the runtime counts the entry's command, its days ending at the next local midnight");
+    check(context_read && context_read->scope == HistoryScope::pane && std::get<std::uint64_t>(context_read->scope_value) == 3 && context_read->neighbours == HistoryLimits::context_entries, "the context reads the runs around it in its pane");
+    check(!browser.readRuns(5, sampled) && !browser.readContext(5), "each is read once");
+    check(!browser.apply(HistoryCommandStats{.request_id = 9, .found = true, .runs = 1}), "an answer to another request is not the command's");
+    browser.apply(HistoryCommandStats{.request_id = 3, .found = true, .runs = 41, .measured = 30, .mean_duration_ms = 3000, .ended = 40, .succeeded = 30, .last_started_ms = 7, .last_exit = 1, .per_day = days.view()});
+    const auto& stats = browser.reads().runStats();
+
+    check(browser.reads().state().runs_phase == HistoryPhase::ready && stats.runs == 41 && stats.mean_duration_ms == 3000 && stats.ended == 40 && stats.succeeded == 30 && stats.last_exit == std::int32_t{1}, "the runtime's counts are kept");
+    check(std::ranges::equal(stats.per_day, days.view().last(HistoryRunStats::days)), "the days kept end today");
+    browser.apply(HistoryResults{.request_id = 4, .snapshot_id = 2, .entries = around});
+    check(browser.reads().state().context_phase == HistoryPhase::ready && browser.reads().contextCount() == 4, "the runs around it are kept, it aside");
+    check(browser.reads().contextAt(0).command == "git push" && browser.reads().contextAt(0).newer && browser.reads().contextAt(2).command == "vim" && !browser.reads().contextAt(2).newer, "newer runs come before it, older after");
+    browser.setInspecting(false);
+    check(browser.reads().contextCount() == 0 && browser.reads().state().runs_phase == HistoryPhase::idle, "closing the inspector forgets them");
+  }
+
+  // The inspector tells how many runs, how long they take, how often they succeed, when the last
+  // ran and how it ended, and a bar for each day's runs.
+  void runFactsTellTheRuns() {
+    constexpr std::int64_t hour = 3'600'000;
+    constexpr CalendarSample sampled{.now_ms = 1000 * hour};
+    HistoryRunStats stats{.runs = 41, .measured = 30, .mean_duration_ms = 3000, .ended = 40, .succeeded = 30, .last_started_ms = 998 * hour, .last_exit = 1};
+
+    stats.per_day.atMut(HistoryRunStats::days - 3) = 8;
+    stats.per_day.atMut(HistoryRunStats::days - 2) = 1;
+    stats.per_day.atMut(HistoryRunStats::days - 1) = 4;
+    const auto counted = HistoryRunFacts::derive(stats, sampled);
+    const auto one = HistoryRunFacts::derive(HistoryRunStats{.runs = 1, .last_started_ms = 998 * hour, .last_exit = 0}, sampled);
+
+    check(counted.runs.view() == "41 runs" && one.runs.view() == "1 run", "every run is counted");
+    check(counted.mean.view() == "3.0s", "the mean is of the runs whose end was told");
+    check(counted.success.view() == "75% of 40", "the success rate is of the runs that ended");
+    check(counted.last.view() == "2h ago  exit 1" && counted.last_color == PaletteRole::red, "the last run's age and its failure");
+    check(one.last.view() == "2h ago  ✓" && one.last_color == PaletteRole::green && one.mean.view().empty() && one.success.view().empty(), "a success, and nothing the runtime could not tell");
+    check(counted.per_day.view() == "···········█▁▄  4 today", "each day a bar against the busiest, a day without runs a dot");
+    check(HistoryRunFacts::derive({}, sampled).runs.view().empty(), "no run tells nothing");
+  }
+
+  // The panel asks to watch once; a connection that ended knows no watch.
+  void watchIsForgottenWithTheConnection() {
+    SystemAllocator memory;
+    telar::MemoryAdapter adapted{memory};
+    Browser browser{adapted};
+
+    check(browser.watch(true) && !browser.watch(true) && browser.reads().watching(), "a watch is asked for once");
+    browser.suspend();
+    check(!browser.reads().watching() && browser.watch(true), "a runtime connected again is asked again");
+    check(browser.watch(false) && !browser.watch(false), "and told once to stop");
+  }
+
   const telar::testing::Case case_owned_search_and_pages{"history.owned_search_and_pages", ownedSearchAndPages};
   const telar::testing::Case case_delete_keeps_the_position{"history.delete_keeps_the_position", deleteKeepsThePosition};
   const telar::testing::Case case_deletes_queue{"history.deletes_queue", deletesQueue};
@@ -731,7 +1097,20 @@ namespace {
   const telar::testing::Case case_history_inspection_replaces_only_the_narrow_list{"history.history_inspection_replaces_only_the_narrow_list", historyInspectionReplacesOnlyTheNarrowList};
   const telar::testing::Case case_history_compact_windows_keep_nonnegative_bands{"history.history_compact_windows_keep_nonnegative_bands", historyCompactWindowsKeepNonnegativeBands};
   const telar::testing::Case case_history_entrance_moves_paint_and_input_together{"history.history_entrance_moves_paint_and_input_together", historyEntranceMovesPaintAndInputTogether};
-  const telar::testing::Case case_history_search_borrows_only_the_effective_query{"history.history_search_borrows_only_the_effective_query", historySearchBorrowsOnlyTheEffectiveQuery};
+  const telar::testing::Case case_a_leading_bang_is_searched_as_typed{"history.a_leading_bang_is_searched_as_typed", aLeadingBangIsSearchedAsTyped};
+  const telar::testing::Case case_refresh_keeps_the_selected_command{"history.refresh_keeps_the_selected_command", refreshKeepsTheSelectedCommand};
+  const telar::testing::Case case_refresh_keeps_the_inspected_output{"history.refresh_keeps_the_inspected_output", refreshKeepsTheInspectedOutput};
+  const telar::testing::Case case_failed_search_leaves_no_rows_of_the_query_before{"history.failed_search_leaves_no_rows_of_the_query_before", failedSearchLeavesNoRowsOfTheQueryBefore};
+  const telar::testing::Case case_search_from_a_later_page_selects_the_best_match{"history.search_from_a_later_page_selects_the_best_match", searchFromALaterPageSelectsTheBestMatch};
+  const telar::testing::Case case_deletes_wait_for_their_undo{"history.deletes_wait_for_their_undo", deletesWaitForTheirUndo};
+  const telar::testing::Case case_marks_keep_their_order_across_searches{"history.marks_keep_their_order_across_searches", marksKeepTheirOrderAcrossSearches};
   const telar::testing::Case case_history_rows_protect_the_command_before_facts{"history.history_rows_protect_the_command_before_facts", historyRowsProtectTheCommandBeforeFacts};
+  const telar::testing::Case case_rows_keep_what_the_runtime_matched{"history.rows_keep_what_the_runtime_matched", rowsKeepWhatTheRuntimeMatched};
+  const telar::testing::Case case_pages_keep_the_search_criteria{"history.pages_keep_the_search_criteria", pagesKeepTheSearchCriteria};
+  const telar::testing::Case case_time_pages_read_past_the_last_run_shown{"history.time_pages_read_past_the_last_run_shown", timePagesReadPastTheLastRunShown};
+  const telar::testing::Case case_raw_pages_count_only_the_matches{"history.raw_pages_count_only_the_matches", rawPagesCountOnlyTheMatches};
+  const telar::testing::Case case_inspector_reads_the_runs_and_the_context{"history.inspector_reads_the_runs_and_the_context", inspectorReadsTheRunsAndTheContext};
+  const telar::testing::Case case_run_facts_tell_the_runs{"history.run_facts_tell_the_runs", runFactsTellTheRuns};
+  const telar::testing::Case case_watch_is_forgotten_with_the_connection{"history.watch_is_forgotten_with_the_connection", watchIsForgottenWithTheConnection};
 
 }

@@ -21,6 +21,7 @@ import telar.base.memory.containers;
 import telar.base.history;
 import telar.runtime.terminal.ghostty;
 import telar.base.ds;
+import telar.sys.socket;
 
 // The work is in tracker.cpp. What stays here are the relays over the caller's sinks, which hand
 // each sink to that work behind a virtual call.
@@ -31,10 +32,12 @@ export namespace telar::runtime {
     { sink.emit(command) } -> std::same_as<void>;
   };
 
-  // A CapturedCommandSink behind a virtual call, for the work in tracker.cpp.
+  // A CapturedCommandSink behind a virtual call, for the work in tracker.cpp. It hears of a
+  // command as it starts, too, which a sink without `start` ignores.
   class CapturedCommandEmitter {
   public:
     virtual void emit(const CapturedCommand& command) = 0;
+    virtual void start(const CapturedCommand& command) = 0;
 
   protected:
     CapturedCommandEmitter() = default;
@@ -53,6 +56,12 @@ export namespace telar::runtime {
 
     inline void emit(const CapturedCommand& command) override {
       sink_.emit(command);
+    }
+
+    inline void start(const CapturedCommand& command) override {
+      if constexpr (requires { sink_.start(command); }) {
+        sink_.start(command);
+      }
     }
 
   private:
@@ -113,12 +122,28 @@ export namespace telar::runtime {
     { sink.complete(completion) } -> std::same_as<void>;
   };
 
+  // Where a command starts, as the shell is when its C mark arrives: the directory it reported,
+  // the host and user it runs as, and the branch of the repository that directory is in. Views
+  // that live for the call they are passed to.
+  struct CommandPlace {
+    std::string_view directory;
+    std::string_view host;
+    std::string_view user;
+    std::string_view branch;
+    // The shell runs on a host `ssh` reached: this host's user and repository are not its.
+    bool remote = false;
+  };
+
   // A signed mark (A, B, C or D) and the offset just past it in the bytes fed, for a sink that
   // places it on the terminal those bytes reach. Two more say where the marks come from: N when
   // the shell `ssh` reached takes over, U when the pane's own shell is back.
   struct CommandMark {
     char action = 0;
     std::size_t end = 0;
+    // The status a D mark reported, when it reported one.
+    ds::Option<int> status;
+    // Where a C mark's command starts: what the zones know of it.
+    CommandPlace place;
   };
 
   // A CommandCompletionSink behind a virtual call, for the scan in tracker.cpp. It receives the
@@ -209,6 +234,22 @@ export namespace telar::runtime {
     // host's.
     [[nodiscard]] std::string_view remoteDirectory() const noexcept;
 
+    // The socket of the connection `ssh` shares with that shell's session, as the pane's own
+    // shell named it in the nonce it signed: an absolute path of plain characters a socket
+    // address holds. Empty when the session shares none, or until the remote shell answers.
+    [[nodiscard]] std::string_view remoteControl() const noexcept;
+
+    // The line the shell's line editor held when telar last had it cleared, before a command
+    // its editor ran: keys typed while that editor was not up. Printable text and the newlines
+    // and tabs of a multi-line line, at most `typeahead_capacity` bytes, cut on a character.
+    [[nodiscard]] std::string_view typeahead() const noexcept;
+    // Counts the shell's reports of its line, so a reader tells a new one from the last.
+    [[nodiscard]] std::uint64_t typeaheadSerial() const noexcept;
+
+    static constexpr std::size_t typeahead_capacity = 4096;
+    static constexpr std::size_t user_capacity = 64;
+    static constexpr std::size_t control_capacity = sizeof(sockaddr_un::sun_path) - 1;
+
 #if TELAR_DIAGNOSTICS
     diagnostics::CommandCaptureCounters takeMetrics() noexcept;
 #endif
@@ -241,11 +282,23 @@ export namespace telar::runtime {
       // 6973 and OSC 7; their buffers in its frame would put every prompt mark (OSC 133) on deeper
       // stack pages.
       [[gnu::noinline]] bool privateReport(std::string_view body);
+      // Whether `body` is a signed report that the running command's output ended
+      // (telar=<token>;ended), as the shell's own output, such as zsh's PROMPT_SP, starts.
+      [[nodiscard]] bool endReport(std::string_view body) const noexcept;
+      // The lines a signed report that the shell's report of its background jobs ended
+      // (telar=<token>;jobs=<lines>) says bash may have printed above where the command's output
+      // ended; nothing for another report.
+      [[nodiscard]] ds::Option<int> jobsReport(std::string_view body) const noexcept;
       void semantic(std::string_view body, ObservationTime time, CommandZoneSink& sink, std::size_t end);
       // Whether a mark's signature is the pane's shell's or the remote one's; the pane's own ends a
       // session `ssh` nested, and an A or D mark of it, `clears_nest`, drops the nonce it handed.
       bool signedMark(std::string_view options, bool clears_nest, CommandZoneSink& sink, std::size_t end);
       [[gnu::noinline]] void directoryReport(std::string_view body);
+      [[gnu::noinline]] void typeaheadReport(std::string_view encoded);
+      // The nonce the pane's shell hands `ssh`, and the socket of the connection it shares.
+      void nestReport(std::string_view body);
+      // Where a command starting now starts.
+      [[nodiscard]] CommandPlace place() const noexcept;
 
 #if TELAR_DIAGNOSTICS
       diagnostics::CommandCaptureCounters metrics_;
@@ -264,6 +317,15 @@ export namespace telar::runtime {
       FixedText<path_capacity> path_;
       FixedText<host_capacity> host_;
       FixedText<directory_capacity> remote_directory_;
+      // The host the pane's own shell names in its working directory reports.
+      FixedText<host_capacity> local_host_;
+      // The user the remote shell runs as, as it answered ssh's nonce.
+      FixedText<user_capacity> remote_user_;
+      // The shared connection's socket: named with the nonce, and the session's once answered.
+      FixedText<control_capacity> nest_control_;
+      FixedText<control_capacity> control_;
+      FixedText<typeahead_capacity> typeahead_;
+      std::uint64_t typeahead_serial_ = 0;
       std::shared_ptr<const ds::String<ConcurrentMemory>> names_;
     };
 
@@ -278,18 +340,24 @@ export namespace telar::runtime {
     bool overflow_ = false;
   };
 
-  // The last bytes of a command's output, kept in storage its owner allocates: empty storage
-  // keeps nothing.
+  // The last bytes of a command's output, kept in storage its owner allocates, storage_bytes of
+  // it: empty storage keeps nothing. A ring holds the last `capacity` bytes and the `lookback`
+  // before them, which tell where an escape sequence the tail would start inside of ends.
   class CommandOutputWindow {
   public:
     static constexpr std::size_t capacity = std::size_t{64} * 1024;
+    static constexpr std::size_t lookback = 4096;
+    static constexpr std::size_t storage_bytes = capacity + lookback;
 
     void append(std::span<std::uint8_t> storage, std::span<const std::uint8_t> bytes) noexcept;
-    [[nodiscard]] tbc::val_a<std::span<const std::uint8_t>> bytes(tbc::val_a<std::span<const std::uint8_t>> storage) const noexcept;
+    // The last `capacity` bytes of the output, or all of it, from the first byte that starts a
+    // character outside an escape sequence; it lays the ring out in order in `storage` first.
+    [[nodiscard]] tbc::val_a<std::span<const std::uint8_t>> bytes(tbc::val_a<std::span<std::uint8_t>> storage) noexcept;
     [[nodiscard]] std::uint64_t observed() const noexcept;
     void clear() noexcept;
 
   private:
+    std::size_t head_ = 0;
     std::size_t length_ = 0;
     std::uint64_t observed_ = 0;
   };
@@ -303,7 +371,7 @@ export namespace telar::runtime {
 
     void enable();
     void append(std::span<const std::uint8_t> bytes) noexcept;
-    [[nodiscard]] std::span<const std::uint8_t> bytes() const noexcept;
+    [[nodiscard]] std::span<const std::uint8_t> bytes() noexcept;
     [[nodiscard]] std::uint64_t observed() const noexcept;
     void clear() noexcept;
 
@@ -374,6 +442,22 @@ export namespace telar::runtime {
     bool erased_ = false;
   };
 
+  // A block as a checkpoint keeps it: what its command was, how it ended, where and when it
+  // started. Its rows stay with the scrollback of the runtime that drew them.
+  struct CommandBlockRecord {
+    CommandBlockState state = CommandBlockState::succeeded;
+    std::int32_t status = 0;
+    std::uint32_t duration_ms = 0;
+    std::int64_t started_ms = 0;
+    std::uint16_t lines = 0;
+    CommandBlockNest nest = CommandBlockNest::none;
+    std::string_view command;
+    std::string_view directory;
+    std::string_view host;
+    std::string_view user;
+    std::string_view branch;
+  };
+
   // Reads `selection` into `destination`. Whether it was cut short, or nothing when it is empty.
   ds::Option<bool> captureCommandText(const Terminal& terminal, const GhosttySelection& selection, ds::Vec<Byte, ConcurrentMemory>& destination);
 
@@ -381,6 +465,11 @@ export namespace telar::runtime {
   // in the pane's own terminal, so a client can mark them in the scrollback and jump to them.
   // The anchors follow the rows as output scrolls and the scrollback drops its oldest lines.
   // CommandBlocks gives it the terminal and the buffer it reads a command into.
+  //
+  // A block lives as long as the rows it was drawn on: rows the scrollback drops, or that
+  // `clear` or a reset erases, take their blocks with them, and so does a prompt drawn over
+  // them, as Ctrl-L draws one where the screen it cleared was. What clients hear is always in
+  // order: each block's output starts at or before the row the next block's prompt starts on.
   class CommandBlockRing {
   public:
     static constexpr std::size_t capacity = PaneBlocks::capacity;
@@ -391,8 +480,12 @@ export namespace telar::runtime {
     CommandBlockRing(CommandBlockRing&&) = delete;
     CommandBlockRing& operator=(CommandBlockRing&&) = delete;
 
-    // A signed mark, reached by the terminal as the shell printed it.
-    void mark(char action, std::chrono::steady_clock::time_point now);
+    // A signed mark, reached by the terminal as the shell printed it. A C mark's command starts
+    // at `place`.
+    void mark(char action, std::chrono::steady_clock::time_point now, const CommandPlace& place = {});
+
+    // A signed mark as the zones read it: a D mark ends its block with the status it reported.
+    void place(CommandMark mark, std::chrono::steady_clock::time_point now);
 
     // The status a D mark reported, for the block it ends: ssh's own, after its session.
     void finished(ds::Option<int> status, std::chrono::steady_clock::time_point now);
@@ -406,6 +499,15 @@ export namespace telar::runtime {
     [[nodiscard]] std::uint64_t revision() const noexcept;
     // The blocks view their commands in the ring, region `b`, through `storage`.
     tbc::val_b<PaneBlocks> message(std::uint64_t pane_id, tbc::mut_b<ds::Array<CommandBlock, capacity>> storage) const;
+
+    // The blocks of commands, oldest first, as a checkpoint keeps them: they view the ring, region
+    // `b`, through `storage`. Output no command printed has nothing to keep.
+    tbc::val_b<std::span<const CommandBlockRecord>> records(tbc::mut_b<ds::Array<CommandBlockRecord, capacity>> storage) const;
+
+    // A block of a command an earlier runtime ran, after the others restored and before every
+    // block of this one's; nothing once the ring is full. A command that still ran when that
+    // runtime ended was interrupted.
+    void restore(const CommandBlockRecord& block);
 
     // The command the shell runs or last ran. It outlives its block, which the ring drops with
     // the rows the scrollback loses: a pane's card still says what ran after `clear`.
@@ -426,7 +528,8 @@ export namespace telar::runtime {
     [[nodiscard]] std::uint64_t commandRevision() const noexcept;
 
   protected:
-    explicit CommandBlockRing(tbc::val_a<GhosttyTerminal> terminal);
+    // A block's places are kept in `memory`, region `c`, which must outlive the ring.
+    CommandBlockRing(tbc::mut_c<ConcurrentMemory> memory, tbc::val_a<GhosttyTerminal> terminal);
     ~CommandBlockRing() = default;
 
   private:
@@ -449,8 +552,22 @@ export namespace telar::runtime {
       GhosttyTrackedGridRef handle_ = nullptr;
     };
 
+    // Where a block's command started, as long as the block lives: only what the shell reported,
+    // so a block costs the bytes of its own place.
+    struct Place {
+      explicit Place(ConcurrentMemory& memory);
+
+      ds::String<ConcurrentMemory> directory;
+      ds::String<ConcurrentMemory> host;
+      ds::String<ConcurrentMemory> user;
+      ds::String<ConcurrentMemory> branch;
+    };
+
     struct Entry {
       TrackedReference anchor;
+      // The row the command's output starts on, mark C's, which ends the rows the prompt and
+      // the command line take however a resize reflows them.
+      TrackedReference output;
       std::uint32_t row = 0;
       std::uint16_t rows = 1;
       std::uint16_t lines = 0;
@@ -461,6 +578,10 @@ export namespace telar::runtime {
       std::int32_t status = 0;
       std::uint32_t duration_ms = 0;
       std::chrono::steady_clock::time_point started;
+      std::int64_t started_ms = 0;
+      ds::Option<Place> place;
+      // An earlier runtime's, restored without rows: its anchors track nothing.
+      bool restored = false;
       FixedText<command_bytes> command;
     };
 
@@ -474,27 +595,112 @@ export namespace telar::runtime {
     [[nodiscard]] tbc::ref_b<Entry> entry(std::size_t index) const noexcept;
     // A tracked reference ghostty keeps into its grid, which the block owns: a raw handle.
     [[tbc::raw]] ds::Option<TrackedReference> track();
+    // A reference to the start of row `row` of the active screen.
+    [[tbc::raw]] ds::Option<TrackedReference> track(std::uint16_t row);
+    // The prompt a line editor drew again without the shell's precmd, which printed no A mark:
+    // the next block starts where it now is.
+    // `idle`: no command was taken back, so output above the prompt came while none ran.
+    void redrawn(std::chrono::steady_clock::time_point now, bool idle);
+    // Drops the newest blocks a prompt starting on `row` was drawn over.
+    void cover(std::uint32_t row);
+    // Output printed from the prompt's row while no command ran: a block of its own, which takes
+    // the prompt's anchor, or, `reported`, the shell's report of its jobs, which takes the
+    // report's.
+    void background(std::chrono::steady_clock::time_point now, bool reported = false);
+    // The command's output ended (zsh's E, or the D of a shell without it): what the shell
+    // prints from here until it says its report ended is its report of its background jobs.
+    void reportStarts();
+    // The shell's report of its jobs ends at the cursor: its rows, and the `above` lines just
+    // above where the command's output ended that bash printed as job reports, become a
+    // background block at the next prompt.
+    void reportEnds(std::uint32_t above);
+    // The first of the job reports bash printed in the `above` lines just above `row`, no higher
+    // than `floor`; `row` when there is none.
+    [[nodiscard]] std::uint32_t reportsAbove(std::uint32_t row, std::uint32_t above, std::uint32_t floor) const;
+    // A reference to the start of row `row` of the screen, from the top of the scrollback.
+    [[tbc::raw]] ds::Option<TrackedReference> trackScreen(std::uint32_t row);
+    // The rows a block's output starts on and its prompt starts on, or nothing once its rows are
+    // gone. A background block's output starts on its first row.
+    [[nodiscard]] ds::Option<std::uint32_t> outputRow(const Entry& block, ds::Option<std::uint32_t> first) const;
+    // The line editor took the running command back before it ran.
+    void takeBack();
     [[nodiscard]] ds::Option<std::uint32_t> row(const TrackedReference& tracked) const;
-    void start(std::chrono::steady_clock::time_point now);
+    void start(std::chrono::steady_clock::time_point now, const CommandPlace& place);
+
     void finish(CommandBlockState state, std::int32_t status, std::chrono::steady_clock::time_point now);
     void closeSession(CommandBlockState state, std::int32_t status, std::chrono::steady_clock::time_point now);
     void end(Entry& block, CommandBlockState state, std::int32_t status, std::chrono::steady_clock::time_point now);
     // Ends `latest_`, the command that ran until now.
     void settle(CommandBlockState state, std::int32_t status, std::chrono::steady_clock::time_point now);
 
+    tbc::mut_c<ConcurrentMemory> memory_;
     // The terminal the selection reads, region `a`.
     tbc::val_a<CommandSelection> selection_;
     ds::Option<TrackedReference> prompt_;
+    // The rows from the prompt's A mark to its B mark, once its B was printed: a prompt drawn
+    // again is as tall, also after a command the line editor took back.
+    ds::Option<std::uint32_t> prompt_height_;
     tbc::val_b<ds::Array<Entry, capacity>> entries_{};
     std::size_t first_ = 0;
     std::size_t count_ = 0;
     std::uint64_t revision_ = 0;
     ds::Option<Latest> latest_;
+    // What `latest_` was before the running command started, for a command taken back.
+    ds::Option<Latest> previous_;
     std::uint64_t command_revision_ = 0;
     bool running_ = false;
     // Commands run in the shell ssh reached; that shell just left, and ssh's D ends its block.
     bool nested_ = false;
     bool closing_ = false;
+    // Where the shell's report of its jobs starts once the command's output ended: the row the
+    // output ended on, or the one after it when the output's last line has no newline.
+    ds::Option<TrackedReference> report_;
+    bool report_next_row_ = false;
+    // The first row of a report that printed something, which the next prompt makes a block.
+    ds::Option<TrackedReference> reported_;
+  };
+
+  // Feeds a read's bytes to the terminal the blocks anchor in, cut at each signed mark the zones
+  // find in them, and places each mark once the terminal holds what the shell printed before it,
+  // so a block starts on the row its mark was printed on. Every mark is placed, however many one
+  // read holds: the work is bounded by the bytes, not by a count of marks. `feed` is the
+  // caller's way to reach its terminal, a template so the call is direct; `fed` counts the bytes
+  // it reached, which the caller feeds the rest from once the zones read them all.
+  template <typename Feed>
+  class [[tbc::generic]] CommandBlockFeed {
+  public:
+    // `local` is the user this host's shell runs as and the branch its directory is in, for the
+    // commands it starts; a remote shell's come with its marks.
+    // NOLINTNEXTLINE(readability-function-size): the ring, the read, the terminal it feeds and how far, and when and where commands start, each its own borrow
+    inline CommandBlockFeed(tbc::mut_a<CommandBlockRing> blocks, tbc::val_a<std::span<const Byte>> bytes, tbc::mut_a<Feed> feed, tbc::mut_a<std::size_t> fed, std::chrono::steady_clock::time_point now, tbc::val_a<CommandPlace> local = {}) noexcept
+        : blocks_(blocks),
+          bytes_(bytes),
+          feed_(feed),
+          fed_(fed),
+          now_(now),
+          local_(local) {}
+
+    inline void mark(CommandMark mark) {
+      if (mark.end > fed_) {
+        feed_(bytes_.subspan(fed_, mark.end - fed_));
+        fed_ = mark.end;
+      }
+
+      if (!mark.place.remote) {
+        mark.place.user = local_.user;
+        mark.place.branch = local_.branch;
+      }
+
+      blocks_.place(mark, now_);
+    }
+
+  private:
+    tbc::mut_a<CommandBlockRing> blocks_;
+    tbc::val_a<std::span<const Byte>> bytes_;
+    tbc::mut_a<Feed> feed_;
+    tbc::mut_a<std::size_t> fed_;
+    std::chrono::steady_clock::time_point now_;
+    tbc::val_a<CommandPlace> local_;
   };
 
   class CommandBlocks final : public CommandBlockRing {
@@ -567,10 +773,18 @@ export namespace telar::runtime {
     // Empty while output capture is off.
     virtual std::span<std::uint8_t> outputStorage() noexcept = 0;
 
-    void afterOutput(const CommandByteObservation& observation, CapturedCommandEmitter& emitter);
+    // `committed`: these bytes end with the newline that started the command, so the marks in
+    // them came before it.
+    void afterOutput(const CommandByteObservation& observation, CapturedCommandEmitter& emitter, bool committed);
 
     // Keeps `bytes` of the running command's output, without the shell integration's marks.
     void appendOutput(std::span<const Byte> bytes) noexcept;
+
+    // The command as it stands, for its start and its end.
+    [[nodiscard]] CapturedCommand captured() const noexcept;
+
+    // The line the shell committed: the command it holds starts running, or none was captured.
+    void commit(CapturedCommandEmitter& emitter);
 
 #if TELAR_DIAGNOSTICS
     diagnostics::CommandCaptureCounters metrics_;
@@ -585,6 +799,9 @@ export namespace telar::runtime {
     std::int64_t last_output_ns_ = 0;
     Phase phase_ = Phase::idle;
     bool truncated_ = false;
+    // The shell said the command's output ended: what it prints until the command's end mark is
+    // its own.
+    bool output_ended_ = false;
     bool saw_foreground_child_ = false;
   };
 

@@ -57,8 +57,10 @@ namespace {
       winsize window{};
 
       ::ioctl(STDIN_FILENO, TIOCGWINSZ, &window);
-      std::ofstream{record, std::ios::app | std::ios::binary}.write(input.data(), count);
+      // The size first: a test that sees the bytes in RECORD reads the size of their read whole,
+      // never the file this rewrite has just emptied.
       std::ofstream{record + ".size"} << window.ws_col << 'x' << window.ws_row;
+      std::ofstream{record, std::ios::app | std::ios::binary}.write(input.data(), count);
     }
   }
 

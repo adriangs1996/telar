@@ -176,6 +176,17 @@ namespace {
     }
   }
 
+  // A client asks a runtime for a command's statistics only when its dialect knows the request:
+  // one of cqp00015 or later.
+  void testCommandStatsNeedCqp00015() {
+    using handshake::Dialect;
+
+    check(!handshake::speaks(Dialect::cqp00014, ClientTag::query_history_command_stats), "an older runtime is not asked");
+    check(handshake::speaks(Dialect::cqp00015, ClientTag::query_history_command_stats));
+    check(handshake::speaks(handshake::current_dialect, ClientTag::query_history_command_stats));
+  }
+
+  const telar::testing::Case case_command_stats{"client.command_stats_need_cqp00015", testCommandStatsNeedCqp00015};
   const telar::testing::Case case_handshake_rejections{"client.handshake_rejections", testHandshakeRejections};
   const telar::testing::Case case_frame_length_limits{"client.frame_length_limits", testFrameLengthLimits};
 

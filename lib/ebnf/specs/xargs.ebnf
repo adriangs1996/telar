@@ -1,6 +1,7 @@
 (* xargs: the union of GNU xargs (findutils 4.11.0, `xargs --help` on Arch Linux)
    and BSD xargs (`man xargs` on macOS 26). Options come first; the first operand
    is the command, and everything after it belongs to the command. *)
+(* telar: complete *)
 
 xargs = { option } , [ @command , { @any } ] ;
 

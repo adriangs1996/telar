@@ -236,7 +236,7 @@ namespace telar::gui::qt {
     QVariantMap colors_;
     // What colors_ gives each style, the accent and the path underline, read once per change of
     // colors_ instead of once per run and frame.
-    ds::Array<QColor, static_cast<std::size_t>(application::prompt::Style::missing) + 1> style_colors_;
+    ds::Array<QColor, static_cast<std::size_t>(application::prompt::Style::rejected) + 1> style_colors_;
     QColor accent_;
     QColor underline_;
     QString preedit_;

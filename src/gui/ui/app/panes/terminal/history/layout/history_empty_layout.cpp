@@ -113,12 +113,14 @@ namespace telar::gui::qt {
       options.scope = HistoryScope::workspace;
     } else if (scope == QStringLiteral("cwd")) {
       options.scope = HistoryScope::cwd;
-    } else if (scope == QStringLiteral("pane")) {
+    } else if (scope == QStringLiteral("pane") || scope == QStringLiteral("session")) {
       options.scope = HistoryScope::pane;
     }
 
-    if (state.value(QStringLiteral("author")).toString() == QStringLiteral("all")) {
+    if (const auto author = state.value(QStringLiteral("author")).toString(); author == QStringLiteral("all")) {
       options.author = HistoryAuthorFilter::all;
+    } else if (author == QStringLiteral("agent")) {
+      options.author = HistoryAuthorFilter::agent;
     }
 
     content_ = application::history::HistoryEmpty::derive(options);

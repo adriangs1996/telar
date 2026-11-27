@@ -31,6 +31,33 @@ HistoryRowLayout {
     property string inspectionKey: "Ctrl+O"
     property bool macStyle: false
     property bool paneOpen: false
+    // What the configuration shows beside the command, and how the time reads.
+    property bool showDuration: true
+    property bool showExit: true
+    // The machine it ran on, when the page holds runs of more than one.
+    property bool showHost: false
+    property bool relativeTime: false
+    // Marked to be used with the other commands marked.
+    property bool marked: false
+    // The digit Alt runs this row with, 0 for none.
+    property int quickKey: 0
+    // How long the command ran and how it failed: a command that succeeded, or still runs, shows
+    // no exit.
+    readonly property string detailText: {
+        const parts = [];
+        if (root.showHost && (root.record.host ?? "").length > 0) {
+            parts.push(root.record.host);
+        }
+        if (root.showDuration && !root.record.running && root.record.measured === true) {
+            parts.push(root.record.duration);
+        }
+        if (root.showExit && root.record.exitCode !== undefined && root.record.exitCode !== 0) {
+            parts.push("exit " + root.record.exitCode);
+        }
+        return parts.join(" · ");
+    }
+    // What the search read in the output, shown where the directory is.
+    readonly property bool excerpted: (record.excerpt ?? "").length > 0
     implicitHeight: cardVisible ? geometryRegions.cardHeight : rowHeight
     signal activated(string revision)
     signal actionTriggered(string action)
@@ -43,11 +70,13 @@ HistoryRowLayout {
         cellHeight: root.typography.grid.cellHeight,
         smallPixels: root.typography.small,
         viewportHeight: root.viewportHeight,
-        cwd: cwd.implicitWidth,
+        cwd: root.excerpted ? excerptRuns.implicitWidth : cwd.implicitWidth,
         time: timestamp.implicitWidth,
+        detail: detail.implicitWidth,
+        hasDetail: root.detailText.length > 0,
         agent: root.record.author === "agent",
-        showCwd: root.showCwd,
-        hasCwd: root.record.cwd.length > 0,
+        showCwd: root.showCwd || root.excerpted,
+        hasCwd: root.excerpted || root.record.cwd.length > 0,
         hasTime: timestamp.text.length > 0,
         expanded: root.cardVisible,
         open: root.open
@@ -99,6 +128,33 @@ HistoryRowLayout {
             y: -frameClip.y
             width: root.width
             height: root.height
+            // A run a raw listing shows around a match, which does not match itself.
+            opacity: root.record.neighbour === true && !root.selected ? 0.5 : 1
+
+            // The mark of a command marked to be used with the others, over its status.
+            NativeRoundedRectangle {
+                objectName: "historyMarked"
+                x: root.geometryRegions.status.x - 4 * root.ratio
+                y: root.geometryRegions.frame.y + 4 * root.ratio
+                width: 3 * root.ratio
+                height: Math.max(0, root.geometryRegions.frame.height - 8 * root.ratio)
+                radius: width / 2
+                color: root.colors.accent
+                visible: root.marked
+            }
+
+            CellText {
+                objectName: "historyQuickKey"
+                x: root.geometryRegions.status.x - root.typography.grid.cellWidth
+                y: root.geometryRegions.status.y
+                width: root.typography.grid.cellWidth
+                height: root.geometryRegions.status.height
+                text: root.quickKey > 0 ? String(root.quickKey) : ""
+                color: root.colors.overlay1
+                grid: root.typography.grid
+                visible: root.quickKey > 0 && !root.marked
+                Accessible.ignored: true
+            }
 
             CellText {
                 objectName: "historyStatus"
@@ -130,6 +186,32 @@ HistoryRowLayout {
                         color: root.colors.text
                         grid: root.typography.grid
                         clip: true
+                        // The card draws its lines in the shell's colours instead.
+                        opacity: (line.value.runs ?? []).length > 0 ? 0 : 1
+                    }
+
+                    Item {
+                        x: line.value.bounds.x
+                        y: line.value.bounds.y
+                        width: line.value.bounds.width
+                        height: line.value.bounds.height
+                        clip: true
+                        visible: (line.value.runs ?? []).length > 0
+
+                        Repeater {
+                            model: line.value.runs ?? []
+                            delegate: CellText {
+                                objectName: "historySyntax"
+                                required property var modelData
+                                x: modelData.bounds.x - line.value.bounds.x
+                                width: modelData.bounds.width
+                                height: modelData.bounds.height
+                                text: modelData.text
+                                color: root.colors[modelData.role] ?? root.colors[modelData.fallback] ?? root.colors.text
+                                grid: root.typography.grid
+                                Accessible.ignored: true
+                            }
+                        }
                     }
 
                     CellText {
@@ -218,6 +300,44 @@ HistoryRowLayout {
                 opacity: root.geometryRegions.cwdAlpha
                 pixelSize: root.typography.small
                 elide: Text.ElideNone
+                visible: width > 0 && !root.excerpted
+            }
+
+            Row {
+                id: excerptRuns
+                objectName: "historyExcerpt"
+                x: root.geometryRegions.cwd.x
+                y: root.geometryRegions.cwd.y
+                width: root.geometryRegions.cwd.width
+                height: root.geometryRegions.cwd.height
+                clip: true
+                visible: width > 0 && root.excerpted
+
+                Repeater {
+                    model: root.excerpted && root.controller ? root.controller.excerpt(root.record.excerpt, root.record.excerptRanges ?? []) : []
+                    delegate: ChromeText {
+                        required property var modelData
+                        height: excerptRuns.height
+                        text: modelData.text
+                        color: modelData.marked ? root.colors.accent : root.colors.subtext0
+                        emphasized: modelData.marked
+                        pixelSize: root.typography.small
+                        elide: Text.ElideNone
+                    }
+                }
+            }
+
+            ChromeText {
+                id: detail
+                objectName: "historyDetail"
+                x: root.geometryRegions.detail.x
+                y: root.geometryRegions.detail.y
+                width: root.geometryRegions.detail.width
+                height: root.geometryRegions.detail.height
+                text: root.detailText
+                color: root.record.failed ? root.colors.red : root.colors.subtext0
+                pixelSize: root.typography.small
+                elide: Text.ElideNone
                 visible: width > 0
             }
 
@@ -228,7 +348,7 @@ HistoryRowLayout {
                 y: root.geometryRegions.time.y
                 width: root.geometryRegions.time.width
                 height: root.geometryRegions.time.height
-                text: root.grouped ? root.record.clock : root.record.date
+                text: root.relativeTime ? root.record.age : (root.grouped ? root.record.clock : root.record.date)
                 color: root.colors.subtext0
                 pixelSize: root.typography.small
                 elide: Text.ElideNone

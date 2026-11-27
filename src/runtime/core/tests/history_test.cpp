@@ -124,7 +124,8 @@ namespace {
         store.importEntries(ImportHistory{.request_id = 1, .source = "fuzzy-ordering-shapes", .entries = entries}, reply);
       }
 
-      // Every match starts with gb, so recency alone determines the reference pages.
+      // Listed by time, recency alone determines the reference pages, the fuzzy match only
+      // choosing what is listed: a ranked listing also weighs how often each command ran.
       std::vector<std::size_t> order(count);
 
       std::iota(order.begin(), order.end(), 0);
@@ -151,7 +152,7 @@ namespace {
           }
 
           for (std::size_t offset = 0; offset <= expected.size() + page_size; offset += page_size) {
-            store.query(QueryHistory{.request_id = 2, .query = query, .match = HistoryMatch::fuzzy, .distinct = distinct, .limit = page_size, .offset = static_cast<std::uint32_t>(offset)}, reply);
+            store.query(QueryHistory{.request_id = 2, .query = query, .match = HistoryMatch::fuzzy, .distinct = distinct, .limit = page_size, .offset = static_cast<std::uint32_t>(offset), .sort = HistorySort::time}, reply);
             const auto result = decodeReply<HistoryResults>(reply, storage.viewMut());
             const auto start = std::min(offset, expected.size());
             const auto size = std::min(page_size, expected.size() - start);
@@ -211,7 +212,7 @@ namespace {
     check(results.entries[0].command == "cargo build" && results.entries[0].started_at_ms == 400);
     check(results.snapshot_id == query.snapshot_id);
 
-    query = QueryHistory{.request_id = 4, .query = "GST", .match = HistoryMatch::fuzzy, .distinct = true, .limit = 10};
+    query = QueryHistory{.request_id = 4, .query = "gst", .match = HistoryMatch::fuzzy, .distinct = true, .limit = 10};
     store.query(query, reply);
     results = decodeReply<HistoryResults>(reply, storage.viewMut());
     check(results.entries.size() == 1 && results.entries[0].command == "git status");
@@ -273,8 +274,10 @@ namespace {
       store.query(query, reply);
       auto result = decodeReply<HistoryResults>(reply, storage.viewMut());
 
-      check(result.snapshot_id == entry_count && !result.has_more && result.entries.size() == 3);
-      check(result.entries[0].id == entry_count && result.entries[1].id == 2 && result.entries[2].id == 3);
+      // Every run is searched, however many came after it: the oldest "gb", past 10,000 runs,
+      // matches best and scores first.
+      check(result.snapshot_id == entry_count && !result.has_more && result.entries.size() == 4);
+      check(result.entries[0].id == 1 && result.entries[1].id == entry_count && result.entries[2].id == 2 && result.entries[3].id == 3);
 
       // A list of each command once counts commands toward the cap, not runs: the oldest "gb",
       // past 10,000 runs, is found, and scores first.
@@ -507,8 +510,10 @@ namespace {
     {
       RequestWorker worker{memory, service};
 
+      // Each batch holds its own run, as an import's batches do: one entry is known by what it ran
+      // and when, and the same one sent again is not a second.
       for (std::uint64_t sequence = 1; sequence <= 3; ++sequence) {
-        const ds::Array<ImportHistoryEntry, 1> entries{{{100, "retained import"}}};
+        const ds::Array<ImportHistoryEntry, 1> entries{{{100 + static_cast<std::int64_t>(sequence), "retained import"}}};
 
         worker.submit(1, ImportHistory{.request_id = sequence, .source = "disconnected-client", .base_sequence = sequence, .entries = entries});
       }
@@ -532,15 +537,21 @@ namespace {
 
     check(!filters.allowsPane(" command", "/tmp"));
     check(filters.allowsAgent(" command", "/tmp"));
+    // An assignment to a secret's name is recorded with its value redacted, so not as written; a
+    // key alone is not recorded.
     check(!filters.allowsPane("export TOKEN=synthetic-test-value", "/tmp"));
+    check(filters.recordsPane("export TOKEN=synthetic-test-value", "/tmp"));
     check(filters.allowsPane("echo token=", "/tmp"));
-    check(filters.allowsPane("echo token='literal'", "/tmp"));
+    // A quoted value is a value too: recorded redacted, so not as written.
+    check(filters.recordsPane("echo token='literal'", "/tmp") && !filters.allowsPane("echo token='literal'", "/tmp"));
     check(filters.allowsPane("echo token= literal", "/tmp"));
     check(filters.allowsAgent("token=synthetic-test-value", "/tmp", false));
     check(!filters.allowsPane("echo ghp_" + std::string(20, 'x'), "/tmp"));
     check(filters.allowsPane("echo ghp_" + std::string(19, 'x'), "/tmp"));
     check(filters.allowsPane("echo GHP_" + std::string(20, 'x'), "/tmp"));
-    check(!filters.allowsPane("echo -----BEGIN PUBLIC KEY-----", "/tmp"));
+    check(!filters.recordsPane("ghp_" + std::string(36, 'x'), "/tmp"));
+    // A public key is no secret; a private key's body is redacted where it is printed.
+    check(filters.allowsPane("echo -----BEGIN PUBLIC KEY-----", "/tmp"));
     filters.commands.append("excluded-command");
     filters.directories.append("/excluded-directory");
     check(!filters.allowsAgent("excluded-command", "/tmp"));
@@ -557,7 +568,11 @@ namespace {
     ds::Array<Byte, 4096> storage;
     const auto result = decodeReply<HistoryResults>(reply, storage.viewMut());
 
-    check(result.entries.size() == 1 && result.entries[0].command == "echo visible");
+    // The secrets are kept by none of the entries, which keep the rest of what ran.
+    check(std::ranges::none_of(result.entries, [](const HistoryEntry& entry) {
+      return entry.command.contains("synthetic-test-value");
+    }));
+    check(result.entries.size() >= 2 && result.entries.front().command == "echo visible" && result.entries.back().command == "export API_KEY=[redacted]");
   }
 
   template <ConcurrentAllocator Memory>
@@ -605,6 +620,36 @@ namespace {
     check(captured_output.truncated && captured_output.observed_bytes == 20 && std::ranges::equal(captured_output.content, output));
   }
 
+  // A client's question about a command reaches the history's reader through the runtime's
+  // service, by its tag, and the answer is the command's runs.
+  template <ConcurrentAllocator Memory>
+  void testCommandStatsThroughTheService(Memory& memory) {
+    BackgroundService service{memory, ":memory:"};
+    const HistorySession session{.id = {4}, .pane = 5, .workspace_path = "/tmp", .shell = "/bin/sh"};
+
+    {
+      RequestWorker worker{memory, service};
+
+      worker.submitInternal(HistoryEventView{HistoryEventKind::session_started, session});
+      for (const int exit_code : {0, 0, 1}) {
+        worker.submitInternal(HistoryEventView{.kind = HistoryEventKind::command_finished, .session = session, .command = {.command = "cargo test", .directory = "/tmp", .started = {1000, 1'000'000'000}, .duration_ns = 3'000'000, .exit_code = exit_code}});
+      }
+
+      worker.cancel(0);
+    }
+
+    ds::Array<Byte, 256> bytes;
+    EncodedReply reply{memory};
+
+    service.process(Codec::encode(QueryHistoryCommandStats{.request_id = 3, .command = "cargo test", .days = 2, .until_ms = 86'400'000}, bytes.viewMut()), reply);
+    ds::Array<Byte, 1024> scratch;
+    const auto stats = decodeReply<HistoryCommandStats>(reply, scratch.viewMut());
+
+    check(stats.request_id == 3 && stats.found && stats.runs == 3 && stats.ended == 3 && stats.succeeded == 2);
+    check(stats.measured == 3 && stats.mean_duration_ms == 3 && stats.last_exit && *stats.last_exit == 1);
+    check(stats.per_day.size() == 2 && stats.per_day[0] == 0 && stats.per_day[1] == 3);
+  }
+
   template <ConcurrentAllocator Memory, typename Budget>
   void testHistoryFilterAdmission(Memory& memory, const Budget& budget) {
     HistoryFilters filters;
@@ -614,13 +659,18 @@ namespace {
     BackgroundService service{memory, ":memory:", filters};
     const HistorySession session{.id = {8}, .pane = 3, .workspace_path = "/tmp", .shell = "/bin/sh"};
 
+    // A token in the shape GitHub issues, made here so no line of the source looks like one.
+    const auto key = "ghp_" + std::string(36, 'x');
+
     {
       RequestWorker worker{memory, service};
       const auto allocations = budget.allocations();
       const ds::Array<Byte, 4096> output{};
+      const ds::Array<std::string_view, 3> commands{" filtered command", "filtered command", key};
 
       for (unsigned index = 0; index < 1024; ++index) {
-        for (const auto command : {" filtered command", "filtered command", "export TOKEN=synthetic-test-value"}) {
+        // A key alone is refused; a command that uses one would be kept with it redacted.
+        for (const auto command : commands) {
           worker.submitInternal(HistoryEventView{.kind = HistoryEventKind::command_finished, .session = session, .command = {.command = command, .directory = "/tmp", .started = {}, .output = output}});
         }
 
@@ -664,7 +714,7 @@ namespace {
 
       std::size_t completed = 0;
 
-      while (completed < 6) {
+      while (completed < 7) {
         pollfd ready{.fd = worker.descriptor(), .events = POLLIN, .revents = 0};
 
         check(::poll(&ready, 1, 2000) == 1);
@@ -684,6 +734,11 @@ namespace {
             const auto reply = Codec::decode<HistoryPruned>(payload, storage);
 
             check(reply.request_id == completed && reply.removed == 0);
+          } else if (completed == 6) {
+            // An import the history could not write fails, so its importer does not count it.
+            const auto reply = Codec::decode<RequestFailed>(payload, storage);
+
+            check(reply.request_id == 6 && reply.message == "history database is unavailable");
           } else {
             check(Codec::decode<RequestCompleted>(payload, storage).request_id == 7);
           }
@@ -812,6 +867,7 @@ namespace {
       testQueuedCommandsSurviveDisconnect(memory);
       testQueuedImportsSurviveDisconnect(memory);
       testQueuedPaneEvents(memory);
+      testCommandStatsThroughTheService(memory);
       testHistoryFilters(memory);
       testHistoryFilterAdmission(memory, budget);
       testUnavailableHistory(memory);

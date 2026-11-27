@@ -340,6 +340,17 @@ namespace {
 
       check(failed.command_state == PaneCommandState::finished && failed.command.ends_with("make test") && failed.exit_code == 3 && failed.duration_ms == 2500);
 
+      // The next one is stopped with Ctrl-C: interrupted, it still tells the status its shell gave.
+      mark('A', "\x1b]133;A\x07");
+      mark('B', "$ \x1b]133;B\x07");
+      mark(0, "sleep 9\r\n");
+      mark('C', "\x1b]133;C\x07");
+      static_cast<void>(facts());
+      blocks.finished(130, now + std::chrono::milliseconds{3000});
+      const auto stopped = facts();
+
+      check(stopped.command.ends_with("sleep 9") && stopped.exit_code == 130, "an interrupted command keeps the status its shell reported");
+
       // The worker read the repository its shell works in.
       pane.core.git.repository = true;
       pane.core.git.branch.assign("trunk");

@@ -57,6 +57,10 @@ namespace telar::gui::qt {
     publish(pane_id);
   }
 
+  ds::Option<std::pair<std::size_t, std::size_t>> PromptController::rejectedOption(std::uint64_t pane_id) {
+    return application::prompt::rejectedOption(store_.sessionMut(), pane_id);
+  }
+
   void PromptController::placeCursor(std::uint64_t pane_id, std::size_t offset) {
     application::prompt::placeCursor(store_.sessionMut(), pane_id, offset);
     publish(pane_id);
@@ -142,6 +146,13 @@ namespace telar::gui::qt {
     application::prompt::text(session, pane_id, typed);
     publishWrite();
     return true;
+  }
+
+  void PromptController::reconvert(std::uint64_t pane_id, application::prompt::Surrounding replaced, const QString& text) {
+    const auto bytes = text.toUtf8();
+
+    application::prompt::reconvert(store_.sessionMut(), pane_id, replaced, {bytes.constData(), static_cast<std::size_t>(bytes.size())});
+    publishWrite();
   }
 
   void PromptController::publish(qulonglong pane_id) {

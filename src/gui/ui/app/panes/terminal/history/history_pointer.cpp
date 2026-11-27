@@ -395,37 +395,59 @@ namespace telar::gui::qt {
       if (view.inspecting) {
         emit inspectionScrolled(steps);
       } else {
-        interact([&] {
-          moveRows(steps);
-        });
+        // A wheel turned down moves to older rows, which the panel draws higher.
+        move(-steps);
       }
     }
   }
 
-  void HistoryController::moveRows(std::int32_t steps) {
+  void HistoryController::move(int delta) {
+    if (!isOpen() || delta == 0) {
+      return;
+    }
+
+    // Moving takes back an Enter that waited for the rows.
+    pending_submit_.reset();
+    if (busy()) {
+      constexpr auto bound = static_cast<std::int32_t>(application::history::HistoryLimits::page_entries);
+
+      pending_moves_ = std::clamp(pending_moves_ + std::clamp(delta, -bound, bound), -bound, bound);
+      return;
+    }
+
+    interact([&] {
+      step(delta);
+    });
+  }
+
+  void HistoryController::step(std::int32_t delta) {
     auto& session = store_.sessionMut();
 
-    pending_submit_.reset();
-    for (std::int32_t remaining = std::abs(steps); remaining > 0; --remaining) {
+    for (std::int32_t remaining = std::abs(delta); remaining > 0; --remaining) {
+      if (busy()) {
+        pending_moves_ = delta < 0 ? -remaining : remaining;
+        break;
+      }
+
       // Viewed anew each step: selecting a row or a page changes the session the view reads.
       const auto browser = application::history::view(session);
-      if (busy() || browser.rows().empty()) {
+      if (browser.rows().empty()) {
         break;
       }
 
       const auto selected = browser.state().selection;
       const auto rows = browser.rows().size();
 
-      if (steps < 0) {
+      if (delta > 0) {
         if (selected + 1 < rows) {
           application::history::select(session, selected + 1);
-        } else {
-          application::history::page(session, application::history::HistoryPage::older);
+        } else if (!application::history::page(session, application::history::HistoryPage::older)) {
+          break;
         }
       } else if (selected > 0) {
         application::history::select(session, selected - 1);
-      } else {
-        application::history::page(session, application::history::HistoryPage::newer);
+      } else if (!application::history::page(session, application::history::HistoryPage::newer)) {
+        break;
       }
     }
   }

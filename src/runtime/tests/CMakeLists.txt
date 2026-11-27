@@ -3,6 +3,7 @@
 telar_add_tests(runtime-tests LABEL runtime.integration DIRECTORY .
   LINK runtime-workspaces-editors runtime-terminal-graphics runtime-paths runtime-host runtime-suggestions runtime-transport runtime-workers runtime-traffic
     runtime-traffic-exchange_capture runtime-traffic-tap runtime-workspaces runtime-workspaces-worktrees
+    runtime-terminal-command_capture runtime-terminal-shell_completion runtime-terminal-shell_integration runtime-terminal-shell_completion-tests-support
     telar::base telar::config telar::platform telar::vocabulary telar::wire)
 
 # End-to-end checks of the built programs, labelled runtime.e2e.

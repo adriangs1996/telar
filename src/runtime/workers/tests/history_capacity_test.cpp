@@ -207,8 +207,10 @@ namespace {
 
     std::vector<std::uint64_t> identities;
 
-    drainHistoryResponses(worker, identities, 4);
-    check(identities == std::vector<std::uint64_t>({1, 2, 4, 6}));
+    // The import outlives its client's cancellation, and answers like any other request: its
+    // importer waits for that answer before it sends the next batch.
+    drainHistoryResponses(worker, identities, 5);
+    check(identities == std::vector<std::uint64_t>({1, 2, 4, 6, 7}));
     check(service.waitStarted(6));
     check(service.cancelled(2));
   }
@@ -246,7 +248,9 @@ namespace {
 
   // Internal events share the queue's bound with client requests: with the queue full one is
   // refused, so its caller can count the loss, and it never runs.
-  void checkInternalAdmissionLimit(SystemAllocator& memory) {
+  // A history event is a write the history never drops: when the queue is full of requests, it
+  // waits past it, and is written in order once they are answered.
+  void checkInternalEventsWaitPastAFullQueue(SystemAllocator& memory) {
     ControlledHistoryService service;
     RequestWorker worker{memory, service};
 
@@ -256,24 +260,21 @@ namespace {
       worker.submit(1, QueryClients{.request_id = identity});
     }
 
-    bool refused = false;
-
-    try {
-      worker.submitInternal(std::uint64_t{1000});
-    } catch (const RequestError& error) {
-      refused = error.code() == FailureCode::resource_limit;
-    }
-
-    check(refused);
+    worker.submitInternal(std::uint64_t{1000});
+    worker.submitInternal(std::uint64_t{1001});
     service.stop();
     std::vector<std::uint64_t> identities;
 
     drainHistoryResponses(worker, identities, 65);
+    for (int attempt = 0; attempt < 1000 && worker.pending(); ++attempt) {
+      std::this_thread::sleep_for(std::chrono::milliseconds{2});
+    }
+
     check(!worker.pending());
 
     const auto finished = service.finished();
 
-    check(finished.size() == 65 && std::ranges::find(finished, 1000) == finished.end());
+    check(finished.size() == 67 && finished[65] == 1000 && finished[66] == 1001, "the events are written after the requests before them, in order");
   }
 
   void testHistoryCapacity() {
@@ -285,12 +286,12 @@ namespace {
   }
 
   const telar::testing::Case case_history_capacity{"history_capacity.history_capacity", testHistoryCapacity};
-  const telar::testing::Case case_internal_admission_limit{
-      "history_capacity.internal_admission_limit",
+  const telar::testing::Case case_internal_events_wait_past_a_full_queue{
+      "history_capacity.internal_events_wait_past_a_full_queue",
       [] {
         SystemAllocator memory;
 
-        checkInternalAdmissionLimit(memory);
+        checkInternalEventsWaitPastAFullQueue(memory);
       },
   };
 

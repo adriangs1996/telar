@@ -1,8 +1,9 @@
 telar history search: Search commands by text
 
-Usage: telar history search QUERY [filters] [--socket PATH]
+Usage: telar history search QUERY [filters] [--after ID | --offset N] [--fuzzy] [--distinct] [--json | --format TEMPLATE] [--socket PATH]
 
 Arguments:
-  QUERY            The text to find; at most 1024 bytes.
+  QUERY            The text to find; at most 1024 bytes. With --fuzzy, its
+                   characters in order.
 
-Results: as `history list`. Exit 0.
+Results: as `history list`, which explains the options. Exit 0.

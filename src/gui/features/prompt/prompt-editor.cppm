@@ -75,8 +75,9 @@ namespace telar::gui::features::prompt {
     // normal mode, where it sits on one.
     void placeAtEnd() noexcept;
 
-    // Text an input method committed or the user pasted.
-    void insertText(std::string_view text);
+    // Text an input method committed or the user pasted; false when the line cannot hold it,
+    // which leaves the line as it was.
+    bool insertText(std::string_view text);
 
     // A bound action, whatever the keymap: the same edits the default keys make.
     Request perform(Action action);

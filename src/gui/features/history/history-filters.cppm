@@ -181,6 +181,8 @@ export {
           Choice{.value = "workspace", .text = "Workspace"},
           Choice{.value = "cwd", .text = "Directory"},
           Choice{.value = "pane", .text = "Pane"},
+          // The pane's commands and those from before it started, as its shell's own history.
+          Choice{.value = "session", .text = "Session"},
       };
       static constexpr ds::Array authors{
           Choice{.value = "human", .text = "You"},
@@ -191,7 +193,7 @@ export {
       static constexpr std::string_view failed = "Failed";
 
       [[nodiscard]] static constexpr ds::Array<std::string_view, key_count> keys(HistoryKeyStyle style) noexcept {
-        return style == HistoryKeyStyle::mac ? ds::Array<std::string_view, key_count>{"⇥", "⇧⇥", "!"} : ds::Array<std::string_view, key_count>{"Tab", "Shift+Tab", "!"};
+        return style == HistoryKeyStyle::mac ? ds::Array<std::string_view, key_count>{"⇥", "⇧⇥", "exit:fail"} : ds::Array<std::string_view, key_count>{"Tab", "Shift+Tab", "exit:fail"};
       }
     };
 

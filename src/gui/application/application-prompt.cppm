@@ -18,6 +18,7 @@ export namespace telar::gui::application::prompt {
   using features::prompt::classify;
   using features::prompt::CommandPresence;
   using features::prompt::hiddenMarks;
+  using features::prompt::HistoryMatchRanges;
   using features::prompt::Key;
   using features::prompt::Keymap;
   using features::prompt::KeyPress;
@@ -25,12 +26,17 @@ export namespace telar::gui::application::prompt {
   using features::prompt::layout;
   using features::prompt::LineView;
   using features::prompt::Menu;
+  using features::prompt::menuMatch;
   using features::prompt::Mode;
   using features::prompt::Modifiers;
+  using features::prompt::offsetAt;
   using features::prompt::Outcome;
+  using features::prompt::Recalled;
   using features::prompt::Run;
   using features::prompt::Style;
   using features::prompt::Surface;
+  using features::prompt::Surrounding;
+  using features::prompt::surrounding;
 
   // Who has pane `pane_id`'s keyboard: the terminal, or telar's editor at the shell's prompt, the
   // queue while a command runs, or the program behind a secret prompt.
@@ -57,13 +63,14 @@ export namespace telar::gui::application::prompt {
   [[nodiscard]] std::string_view suggestion(const Session& session, std::uint64_t pane_id) noexcept;
 
   // The commands people typed, most recent first and each once, which the suggestions read.
-  [[nodiscard]] features::prompt::History history(const Session& session) noexcept;
+  [[nodiscard]] features::prompt::Recalled history(const Session& session) noexcept;
 
   // A key for the pane's editor or queue. `terminal` hands it back to the terminal.
   Outcome key(Session& session, std::uint64_t pane_id, const KeyPress& key);
 
   // Text an input method committed or a paste, into the editor. Controls other than newline and
-  // tab are dropped: they would act on the shell instead of being written.
+  // tab are dropped: they would act on the shell instead of being written. Text the line cannot
+  // hold is refused whole, with a notice of the limit.
   void text(Session& session, std::uint64_t pane_id, std::string_view text);
 
   // Edits macOS's Command keys make that no keymap has a key for.
@@ -81,6 +88,10 @@ export namespace telar::gui::application::prompt {
   // A click in the editor: the cursor at byte `offset` of the command.
   void placeCursor(Session& session, std::uint64_t pane_id, std::size_t offset);
 
+  // An input method reconverted bytes [begin, end) of the command into `text`, as a paste
+  // writes it there; the caret after it.
+  void reconvert(Session& session, std::uint64_t pane_id, Surrounding replaced, std::string_view text);
+
   // The text selected in the pane's editor, for Command+C and Command+X; empty without one.
   [[nodiscard]] std::string_view selectedText(const Session& session, std::uint64_t pane_id) noexcept;
 
@@ -88,6 +99,10 @@ export namespace telar::gui::application::prompt {
   // Asks the runtime the first time and answers pending until it replies; a remote shell's
   // commands are unknown. Forgotten after each command and change of directory.
   CommandPresence commandPresence(Session& session, std::uint64_t pane_id, std::string_view word);
+
+  // The bytes [first, second) of the first option the pane's command does not accept, as a spec
+  // that lists them all says (features::prompt::rejectedOption); none to mark.
+  [[nodiscard]] ds::Option<std::pair<std::size_t, std::size_t>> rejectedOption(Session& session, std::uint64_t pane_id);
 
   // The pane whose editor took text from outside the keyboard (a paste, a history entry, a
   // suggestion, a path) since the last call, for its view to show it.
@@ -115,6 +130,18 @@ namespace telar::gui::application::prompt {
   // The session connected again: a history its lines never got is asked for.
   void connected(Session& session);
 
+  // The runtime reports what the shell's own line editor held when a command cleared it: the
+  // pane's line takes it at the shell's next prompt, before what was typed there since.
+  Change receive(Session& session, const PaneTypeahead& message);
+
+  // The runtime's history changed: the commands Up walks are asked for again, and each line's
+  // ranked suggestion too.
+  Change receive(Session& session, const HistoryChanged& message);
+
+  // A line's ranked suggestion, or the commands the suggestions and Up read; none when the
+  // answer is neither, for the history browser.
+  ds::Option<Change> receive(Session& session, const HistoryResults& message);
+
   // Tells the runtime whether telar's editor stands in for the shell's prompt: the shells of the
   // panes it opens from now on print no prompt of their own. A cqp00002 runtime cannot hear it.
   void configureShell(Session& session);
@@ -126,6 +153,11 @@ namespace telar::gui::application::prompt {
   // None when the paths are not the line's.
   ds::Option<Change> receive(Session& session, const PathResults& message);
 
-  ds::Option<Change> fail(Session& session, std::uint64_t request_id);
+  // The runtime typed a command a line sent: true when it was one.
+  bool completed(Session& session, std::uint64_t request_id);
+
+  // A request of the prompt failed: a command the pane refused comes back into its line, with a
+  // notice of why.
+  ds::Option<Change> fail(Session& session, const RequestFailed& message);
 
 }

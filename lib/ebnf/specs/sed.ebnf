@@ -3,6 +3,7 @@
    description names both meanings. The first operand is the script unless -e or
    -f gives one; the rest are input files. GNU joins the -i suffix (-i.bak), BSD
    takes it as the next word (-i '' or -i .bak); both readings are accepted. *)
+(* telar: complete *)
 
 sed = { option | @file } , [ "--" , { @file } ] ;
 

@@ -35,6 +35,25 @@ operating system (`osascript` on macOS, `notify-send` on Linux) from a bounded
 worker with a three-second timeout; titles and messages are sanitized before
 they reach it. Each client applies its own policy, like sounds.
 
+## Long commands
+
+A command that ran at least 30 seconds and ends while the window is behind
+another, or while its pane is out of view, tells of its end: "Command finished"
+or "Command failed", with its first line, how long it ran and, for a failure,
+its exit status. A click on the notice shows its pane. Each client decides from
+the command blocks it receives, so nothing reaches the runtime; the notice goes
+through the delivery the configuration chose, and a card about a pane already in
+view is suppressed like any other.
+
+```lua
+client.notifications = {
+  long_commands = { enabled = true, after_ms = 30000 },
+}
+```
+
+`after_ms` accepts 1000 through 86400000 milliseconds; `enabled = false` turns
+the notices off for that client or profile.
+
 `terminal`, which sent OSC 9 to the terminal client's outer terminal, left
 with that client. The window and the headless client have no outer terminal,
 so a configuration that still names it loads with the default `telar`

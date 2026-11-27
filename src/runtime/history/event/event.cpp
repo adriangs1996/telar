@@ -14,6 +14,8 @@ namespace telar::runtime {
         shell_(memory, event.session.shell),
         command_(memory, event.command.command),
         directory_(memory, event.command.directory),
+        host_(memory, event.command.host),
+        branch_(memory, event.command.branch),
         output_(memory),
         cause_(memory, event.failure.cause) {
     output_.extend(event.command.output);
@@ -26,6 +28,8 @@ namespace telar::runtime {
     result.session.shell = shell_;
     result.command.command = command_;
     result.command.directory = directory_;
+    result.command.host = host_;
+    result.command.branch = branch_;
     result.command.output = output_;
     result.failure.cause = cause_;
     return result;

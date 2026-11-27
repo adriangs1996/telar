@@ -77,6 +77,7 @@ export {
   using ::ghostty_grid_ref_grapheme_batch;
   using ::ghostty_grid_ref_graphemes;
   using ::ghostty_grid_ref_hyperlink;
+  using ::ghostty_grid_ref_row;
   using ::ghostty_grid_ref_style;
   using ::ghostty_key_encoder_encode;
   using ::ghostty_key_encoder_free;

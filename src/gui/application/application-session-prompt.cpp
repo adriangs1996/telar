@@ -2,6 +2,7 @@ module telar.gui.application;
 
 import std;
 import telar.wire.editor;
+import telar.wire.pane_io;
 
 namespace telar::gui::application {
 
@@ -29,6 +30,10 @@ namespace telar::gui::application {
     }
 
     return paths::receive(*this, message);
+  }
+
+  Change Session::apply(const PaneTypeahead& message) {
+    return prompt::receive(*this, message);
   }
 
   Change Session::apply(const CommandSuggestion& message) {

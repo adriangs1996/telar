@@ -18,6 +18,8 @@ static_assert(true);
 #include "ui/kit/input/key_adapter.hpp"
 #include "ui/kit/input/key_encoding.hpp"
 #include <QClipboard>
+#include <QDate>
+#include <QDateTime>
 #include <QDebug>
 #include <QGuiApplication>
 #include <QHoverEvent>
@@ -508,10 +510,6 @@ namespace telar::gui::qt {
     }
 
     // Where the last command's rows end, counted from the top of the scrollback: the live prompt is past it.
-    std::uint64_t liveFrom(const auto& blocks) noexcept {
-      return blocks.empty() ? 0 : static_cast<std::uint64_t>(blocks.back().row) + blocks.back().rows;
-    }
-
     QString blockState(CommandBlockState state) {
       switch (state) {
       case CommandBlockState::running:
@@ -522,6 +520,8 @@ namespace telar::gui::qt {
         return QStringLiteral("failed");
       case CommandBlockState::session:
         return QStringLiteral("session");
+      case CommandBlockState::background:
+        return QStringLiteral("background");
       case CommandBlockState::interrupted:
         break;
       }
@@ -577,6 +577,8 @@ namespace telar::gui::qt {
       QVariantMap document_rows;
       QVariantList rail;
       QVariantList remote_rows;
+      QVariantList background_rows;
+      QVariantList restored;
     };
 
     // Where the prompt and the cursor are drawn, and how much of the scrollback lies below the view.
@@ -602,7 +604,7 @@ namespace telar::gui::qt {
     // there: hidden from where it was last seen to start, past the last command's rows.
     template <typename ViewRows>
     void hideLivePrompt(ds::Vec<std::uint8_t, Memory>& hidden, const ViewRows& view_rows, const application::Pane<Memory>& pane) {
-      if (!pane.live_prompt_row || *pane.live_prompt_row < liveFrom(pane.blocks)) {
+      if (!pane.live_prompt_row || *pane.live_prompt_row < GuiSession::liveFrom(pane)) {
         return;
       }
 
@@ -670,7 +672,7 @@ namespace telar::gui::qt {
       const auto& block = pane.blocks[index];
       const auto [output_first, output_end] = GuiSession::blockRows(pane, index);
 
-      return QVariantMap{
+      QVariantMap separator{
           {QStringLiteral("row"), row},
           {QStringLiteral("command"), QString::fromUtf8(block.command.data(), static_cast<qsizetype>(block.command.size()))},
           {QStringLiteral("lines"), static_cast<int>(block.lines)},
@@ -686,7 +688,29 @@ namespace telar::gui::qt {
           {QStringLiteral("foldable"), context.mapped && output_end > output_first},
           {QStringLiteral("remote"), block.nest == CommandBlockNest::inside},
           {QStringLiteral("host"), index >= context.live_session ? context.host : QString{}},
+          {QStringLiteral("marks"), TerminalItem::markLetters(pane, index)},
       };
+
+      separator.insert(TerminalItem::blockPlace(block));
+      return separator;
+    }
+
+    // The drawn rows of output no command printed, as {row, rows, index, selected} runs.
+    template <typename ViewRows>
+    void markBackground(const application::Pane<Memory>& pane, std::size_t index, const DrawnRows<ViewRows>& drawn, const SeparatorContext& context, BlockLists& lists) {
+      const auto [first, end] = GuiSession::blockRows(pane, index);
+      int run_first = -1;
+
+      for (std::size_t drawn_index = 0; drawn_index <= drawn.count; ++drawn_index) {
+        const auto row = drawn_index < drawn.count ? drawn.absolute(drawn_index) : ds::none;
+        const bool inside = row && *row >= first && *row < end;
+        if (inside && run_first < 0) {
+          run_first = static_cast<int>(drawn_index);
+        } else if (!inside && run_first >= 0) {
+          lists.background_rows.push_back(QVariantMap{{QStringLiteral("row"), run_first}, {QStringLiteral("rows"), static_cast<int>(drawn_index) - run_first}, {QStringLiteral("index"), static_cast<int>(index)}, {QStringLiteral("selected"), context.selected == index}});
+          run_first = -1;
+        }
+      }
     }
 
     // The rail's marks and the separators for the commands the shell ran, their rows painted empty.
@@ -707,7 +731,14 @@ namespace telar::gui::qt {
       for (std::size_t index = 0; index < pane.blocks.size(); ++index) {
         const auto& block = pane.blocks[index];
 
-        lists.rail.push_back(QVariantMap{{QStringLiteral("state"), blockState(block.state)}, {QStringLiteral("index"), static_cast<int>(index)}, {QStringLiteral("key"), static_cast<qulonglong>(GuiSession::blockKey(pane, index))}, {QStringLiteral("selected"), context.selected == index}});
+        lists.rail.push_back(QVariantMap{{QStringLiteral("state"), blockState(block.state)}, {QStringLiteral("index"), static_cast<int>(index)}, {QStringLiteral("key"), static_cast<qulonglong>(GuiSession::blockKey(pane, index))}, {QStringLiteral("selected"), context.selected == index}, {QStringLiteral("marks"), TerminalItem::markLetters(pane, index)}});
+        // Output no command printed has no prompt row to stand a separator on: its rows are
+        // marked down their edge instead.
+        if (block.state == CommandBlockState::background) {
+          markBackground(pane, index, drawn, context, lists);
+          continue;
+        }
+
         // On the command's first row, which the separator stands in for; the rows of a command
         // that runs on past it, wrapped or on lines of its own, show the rest of it.
         const auto separator = GuiSession::separatorRow(pane, index);
@@ -885,6 +916,132 @@ namespace telar::gui::qt {
 
   }
 
+  namespace {
+
+    // A directory as a separator has room for it: the home it is under as ~, and past
+    // `room` characters only its last components.
+    QString shortDirectory(std::string_view directory, std::string_view user) {
+      constexpr qsizetype room = 28;
+      auto path = QString::fromUtf8(directory.data(), static_cast<qsizetype>(directory.size()));
+      const auto name = QString::fromUtf8(user.data(), static_cast<qsizetype>(user.size()));
+      const QStringList homes{QStringLiteral("/home/") + name, QStringLiteral("/Users/") + name, name == QStringLiteral("root") ? QStringLiteral("/root") : QString{}};
+
+      for (const auto& home : homes) {
+        if (!name.isEmpty() && !home.isEmpty() && (path == home || path.startsWith(home + QLatin1Char('/')))) {
+          path = QLatin1Char('~') + path.mid(home.size());
+          break;
+        }
+      }
+
+      // The last two components, then the last alone, the start of the path left out.
+      for (int kept = 2; path.size() > room && kept > 0; --kept) {
+        const auto parts = path.split(QLatin1Char('/'), Qt::SkipEmptyParts);
+        if (parts.size() > kept) {
+          path = QStringLiteral("…/") + parts.mid(parts.size() - kept).join(QLatin1Char('/'));
+        }
+      }
+
+      return path;
+    }
+
+    // When a command started, in this machine's time: the time of day today, the date too
+    // before.
+    QString startedAt(std::int64_t milliseconds) {
+      if (milliseconds <= 0) {
+        return {};
+      }
+
+      const auto started = QDateTime::fromMSecsSinceEpoch(milliseconds);
+
+      return started.date() == QDate::currentDate() ? started.toString(QStringLiteral("HH:mm:ss")) : started.toString(QStringLiteral("d MMM HH:mm"));
+    }
+
+    QString textOf(std::string_view text) {
+      return QString::fromUtf8(text.data(), static_cast<qsizetype>(text.size()));
+    }
+
+  }
+
+  QVariantMap TerminalItem::blockPlace(const CommandBlock& block) {
+    const auto directory = shortDirectory(block.directory, block.user);
+    const auto branch = textOf(block.branch);
+    // Who ran it and where, for a command a remote shell ran or an earlier runtime kept.
+    const bool elsewhere = block.nest == CommandBlockNest::inside || block.restored;
+    const auto where = elsewhere && !block.host.empty() ? (block.user.empty() ? QString{} : textOf(block.user) + QLatin1Char('@')) + textOf(block.host) : QString{};
+    const auto started = startedAt(block.started_ms);
+    QStringList place;
+
+    for (const auto& part : {directory, branch.isEmpty() ? QString{} : QStringLiteral("⎇ ") + branch}) {
+      if (!part.isEmpty()) {
+        place.append(part);
+      }
+    }
+
+    // What a pointer resting on the block reads: the command, how it ended, where and when.
+    QStringList tip{block.state == CommandBlockState::background ? QStringLiteral("Output no command printed, while the shell waited") : textOf(block.command)};
+    QStringList detail;
+
+    tip.append(textOf(block.directory));
+    if (!branch.isEmpty()) {
+      detail.append(QStringLiteral("⎇ ") + branch);
+    }
+
+    if (!where.isEmpty()) {
+      detail.append(where);
+    }
+
+    if (!started.isEmpty()) {
+      detail.append(QStringLiteral("started ") + started);
+    }
+
+    detail.removeAll(QString{});
+    tip.append(detail.join(QStringLiteral(" · ")));
+    tip.removeAll(QString{});
+
+    return QVariantMap{
+        {QStringLiteral("place"), place.join(QStringLiteral("  "))},
+        {QStringLiteral("where"), where},
+        {QStringLiteral("started"), started},
+        {QStringLiteral("restored"), block.restored},
+        {QStringLiteral("tip"), tip.join(QLatin1Char('\n'))},
+    };
+  }
+
+  QVariantList TerminalItem::restoredList(const application::Pane<Memory>& pane) {
+    QVariantList list;
+
+    for (std::size_t index = 0; index < pane.restored.size(); ++index) {
+      const auto& block = pane.restored[index];
+      auto restored = blockPlace(block);
+
+      restored.insert(QVariantMap{
+          {QStringLiteral("index"), static_cast<int>(index)},
+          {QStringLiteral("command"), textOf(block.command)},
+          {QStringLiteral("state"), blockState(block.state)},
+          {QStringLiteral("status"), block.status},
+          {QStringLiteral("duration"), static_cast<qulonglong>(block.duration_ms)},
+          {QStringLiteral("whole"), GuiSession::wholeCommand(block)},
+      });
+
+      list.push_back(std::move(restored));
+    }
+
+    return list;
+  }
+
+  QString TerminalItem::markLetters(const application::Pane<Memory>& pane, std::size_t index) {
+    QString letters;
+    const auto marks = GuiSession::blockMarks(pane, index);
+
+    for (std::size_t letter = 0; letter < application::Pane<Memory>::mark_count; ++letter) {
+      if ((marks >> letter & 1U) != 0) {
+        letters.append(QChar{static_cast<char16_t>(u'a' + letter)});
+      }
+    }
+
+    return letters;
+  }
+
   std::size_t TerminalItem::liveSession(const application::Pane<Memory>& pane) noexcept {
     const auto& blocks = pane.blocks;
     auto first = blocks.size();
@@ -944,7 +1101,7 @@ namespace telar::gui::qt {
 
       hidden_rows_.resize(drawn.count, 0);
       const bool editing = controller_->prompt().surface(pane_id_) == application::prompt::Surface::editor;
-      const auto prompt = promptRows(screen, editing, liveFrom(current->blocks));
+      const auto prompt = promptRows(screen, editing, GuiSession::liveFrom(*current));
 
       hidePrompt(hidden_rows_, drawn, prompt);
       if (mapped && editing) {
@@ -966,6 +1123,7 @@ namespace telar::gui::qt {
 
         markCommands(*current, drawn, context, hidden_rows_, lists);
         lists.remote_rows = remoteRuns(sessionStretches(*current), drawn);
+        lists.restored = restoredList(*current);
       }
 
       placeDocuments(*current, {.folds = mapped ? viewFolds() : current->folds, .top_row = top_row_, .drawn = drawn.count, .mapped = mapped}, hidden_rows_, lists);
@@ -984,6 +1142,8 @@ namespace telar::gui::qt {
       emit documentsChanged();
     }
 
+    refreshBlockFilter();
+
     if (lists.separators != separators_) {
       QList<QVariantMap> rows;
 
@@ -998,7 +1158,9 @@ namespace telar::gui::qt {
       separator_rows_.reconcile(std::move(rows));
     }
 
-    if (lists.separators != separators_ || lists.document_rows != document_rows_ || lists.rail != rail_ || lists.remote_rows != remote_rows_ || places.prompt_row != prompt_row_ || font_.cell != shown_cell_) {
+    if (lists.separators != separators_ || lists.document_rows != document_rows_ || lists.rail != rail_ || lists.remote_rows != remote_rows_ || lists.background_rows != background_rows_ || lists.restored != restored_blocks_ || places.prompt_row != prompt_row_ || font_.cell != shown_cell_) {
+      background_rows_ = std::move(lists.background_rows);
+      restored_blocks_ = std::move(lists.restored);
       separators_ = std::move(lists.separators);
       document_rows_ = std::move(lists.document_rows);
       rail_ = std::move(lists.rail);
@@ -1011,12 +1173,52 @@ namespace telar::gui::qt {
     refreshScrollViews();
   }
 
+  // The filter of one of this pane's blocks, for the bar that shows it.
+  void TerminalItem::refreshBlockFilter() {
+    QVariantMap filter{{QStringLiteral("open"), false}};
+    const auto index = controller_ == nullptr ? ds::none : application::terminal::filter::block(controller_->session(), pane_id_);
+
+    if (index && controller_ != nullptr) {
+      const auto status = application::terminal::filter::status(controller_->session());
+
+      filter = QVariantMap{
+          {QStringLiteral("open"), true},
+          {QStringLiteral("index"), static_cast<int>(*index)},
+          {QStringLiteral("text"), QString::fromUtf8(status.text.data(), static_cast<qsizetype>(status.text.size()))},
+          {QStringLiteral("regex"), status.regex},
+          {QStringLiteral("ignoreCase"), status.ignore_case},
+          {QStringLiteral("invert"), status.invert},
+          {QStringLiteral("context"), static_cast<int>(status.context)},
+          {QStringLiteral("matches"), static_cast<qulonglong>(status.matches)},
+          {QStringLiteral("complete"), status.complete},
+          {QStringLiteral("truncated"), status.truncated},
+          {QStringLiteral("error"), QString::fromUtf8(status.error.data(), static_cast<qsizetype>(status.error.size()))},
+          {QStringLiteral("opened"), static_cast<qulonglong>(status.opened)},
+      };
+    }
+
+    if (filter != block_filter_) {
+      block_filter_ = std::move(filter);
+      emit blockFilterChanged();
+    }
+  }
+
   QVariantList TerminalItem::separators() const {
     return separators_;
   }
 
   QVariantList TerminalItem::rail() const {
     return rail_;
+  }
+
+  void TerminalItem::reuseRestored(int index, const QString& how) {
+    const auto* current = pane();
+    if (current == nullptr || controller_ == nullptr || index < 0 || !std::cmp_less(index, current->restored.size())) {
+      return;
+    }
+
+    focusFromPointer();
+    controller_->reuseRestored(pane_id_, static_cast<std::size_t>(index), how == QStringLiteral("run") ? application::BlockReuse::run : application::BlockReuse::edit);
   }
 
   QVariantList TerminalItem::remoteRows() const {
@@ -1050,6 +1252,53 @@ namespace telar::gui::qt {
     if (current != nullptr && controller_ != nullptr && index >= 0 && std::cmp_less(index, current->blocks.size())) {
       controller_->copyBlock(pane_id_, static_cast<std::size_t>(index), command ? application::BlockCopy::command : application::BlockCopy::output);
     }
+  }
+
+  void TerminalItem::filterBlock(int index) {
+    const auto* current = pane();
+    if (current == nullptr || controller_ == nullptr || index < 0 || !std::cmp_less(index, current->blocks.size())) {
+      return;
+    }
+
+    focusFromPointer();
+    controller_->openFilter(pane_id_, static_cast<std::size_t>(index));
+  }
+
+  void TerminalItem::queryBlockFilter(const QString& text, bool regex, bool ignore_case, bool invert, int context) {
+    if (controller_ == nullptr) {
+      return;
+    }
+
+    const auto bytes = text.toUtf8();
+    const auto lines = static_cast<std::uint8_t>(std::clamp<int>(context, 0, static_cast<int>(application::terminal::filter::maximum_context)));
+
+    controller_->queryFilter(pane_id_, {.text = {bytes.constData(), static_cast<std::size_t>(bytes.size())}, .regex = regex, .ignore_case = ignore_case, .invert = invert, .context = lines});
+  }
+
+  void TerminalItem::closeBlockFilter() {
+    if (controller_ != nullptr) {
+      controller_->closeFilter(pane_id_);
+      forceActiveFocus(Qt::OtherFocusReason);
+    }
+  }
+
+  void TerminalItem::reuseBlock(int index, const QString& how) {
+    const auto* current = pane();
+    if (current == nullptr || controller_ == nullptr || index < 0 || !std::cmp_less(index, current->blocks.size())) {
+      return;
+    }
+
+    auto reuse = application::BlockReuse::edit;
+
+    if (how == QStringLiteral("run")) {
+      reuse = application::BlockReuse::run;
+    } else if (how == QStringLiteral("root")) {
+      reuse = application::BlockReuse::edit_as_root;
+    }
+
+    // The editor the command lands in takes the keys, as a click on its block would give them.
+    focusFromPointer();
+    controller_->reuseBlock(pane_id_, static_cast<std::size_t>(index), reuse);
   }
 
   bool TerminalItem::backgroundProvided() const noexcept {
@@ -1339,6 +1588,27 @@ namespace telar::gui::qt {
   }
 
   void TerminalItem::inputMethodEvent(QInputMethodEvent* event) {
+    // A reconversion replaces text around the caret that the editor answered with (promptText).
+    if (event->replacementLength() != 0 && controller_ != nullptr && controller_->prompt().edits(pane_id_)) {
+      if (const auto around = promptText(); around.text.hasValue()) {
+        const auto start = std::clamp<qsizetype>(around.cursor + event->replacementStart(), 0, around.text->size());
+        const auto end = std::clamp<qsizetype>(start + event->replacementLength(), start, around.text->size());
+        const auto offset = [&](qsizetype units) {
+          return around.begin + static_cast<std::size_t>(around.text->first(units).toUtf8().size());
+        };
+
+        controller_->prompt().reconvert(pane_id_, {.begin = offset(start), .end = offset(end)}, event->commitString());
+        if (std::exchange(preedit_, event->preeditString()) != preedit_) {
+          emit preeditChanged();
+        }
+
+        polish();
+        update();
+        event->accept();
+        return;
+      }
+    }
+
     if (!event->commitString().isEmpty()) {
       if (controller_ != nullptr) {
         controller_->host().interruptKeys();
@@ -1398,14 +1668,19 @@ namespace telar::gui::qt {
     case Qt::ImHints:
       return static_cast<int>(Qt::ImhNoPredictiveText | Qt::ImhNoAutoUppercase);
     case Qt::ImCursorPosition:
+    case Qt::ImAnchorPosition:
     case Qt::ImSurroundingText:
     case Qt::ImCurrentSelection:
-    case Qt::ImMaximumTextLength:
-    case Qt::ImAnchorPosition:
-    case Qt::ImPreferredLanguage:
-    case Qt::ImAbsolutePosition:
     case Qt::ImTextBeforeCursor:
     case Qt::ImTextAfterCursor:
+      if (const auto around = promptText(); around.text.hasValue()) {
+        return answer(query, around);
+      }
+
+      return QQuickItem::inputMethodQuery(query);
+    case Qt::ImMaximumTextLength:
+    case Qt::ImPreferredLanguage:
+    case Qt::ImAbsolutePosition:
     case Qt::ImEnterKeyType:
     case Qt::ImAnchorRectangle:
     case Qt::ImInputItemClipRectangle:
@@ -1418,6 +1693,58 @@ namespace telar::gui::qt {
 
     // Qt answers a query outside the enum, such as a combination of queries.
     return QQuickItem::inputMethodQuery(query);
+  }
+
+  TerminalItem::PromptText TerminalItem::promptText() const {
+    // As much of the line as reconverting a word needs, not all a long paste holds.
+    constexpr std::size_t surrounding_bytes = 1024;
+    const auto line = controller_ == nullptr || !controller_->prompt().edits(pane_id_) ? ds::none : controller_->prompt().line(pane_id_);
+    if (!line) {
+      return {};
+    }
+
+    const auto text = line->text();
+    const auto around = application::prompt::surrounding(text, line->cursor(), surrounding_bytes);
+    const auto read = text.substr(around.begin, around.end - around.begin);
+    const auto units = [&](std::size_t offset) {
+      const auto before = read.substr(0, std::clamp(offset, around.begin, around.end) - around.begin);
+
+      return QString::fromUtf8(before.data(), static_cast<qsizetype>(before.size())).size();
+    };
+
+    return {.text = QString::fromUtf8(read.data(), static_cast<qsizetype>(read.size())), .begin = around.begin, .cursor = units(line->cursor()), .anchor = units(line->anchor())};
+  }
+
+  QVariant TerminalItem::answer(Qt::InputMethodQuery query, const PromptText& around) {
+    const auto& text = *around.text;
+    const auto first = std::min(around.cursor, around.anchor);
+    const auto last = std::max(around.cursor, around.anchor);
+
+    if (query == Qt::ImCursorPosition) {
+      return around.cursor;
+    }
+
+    if (query == Qt::ImAnchorPosition) {
+      return around.anchor;
+    }
+
+    if (query == Qt::ImSurroundingText) {
+      return text;
+    }
+
+    if (query == Qt::ImCurrentSelection) {
+      return text.sliced(first, last - first);
+    }
+
+    if (query == Qt::ImTextBeforeCursor) {
+      return text.first(around.cursor);
+    }
+
+    if (query == Qt::ImTextAfterCursor) {
+      return text.sliced(around.cursor);
+    }
+
+    return {};
   }
 
   void TerminalItem::focusInEvent(QFocusEvent* event) {

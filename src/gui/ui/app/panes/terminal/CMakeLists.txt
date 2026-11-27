@@ -11,10 +11,12 @@ telar_add_qml_sources(gui-quick
     terminal_pointer.cpp
     terminal_scroll.cpp
   QML_FILES
+    BlockFilter.qml
     CommandRail.qml
     CommandSeparators.qml
     JumpToEnd.qml
     PromptLine.qml
+    RestoredBlocks.qml
   REGISTERS)
 
 add_subdirectory(prompt)

@@ -4,6 +4,7 @@ static_assert(true);
 #endif
 
 #include "history_row_layout.hpp"
+#include "ui/kit/models/projection.hpp"
 #include <QByteArray>
 #include <QQuickItem>
 #include <QQuickWindow>
@@ -44,15 +45,15 @@ namespace telar::gui::qt {
     }
   }
 
-  void HistoryRowLayout::setQuery(const QString& query) {
-    if (query_ == query) {
+  void HistoryRowLayout::setRanges(const QVariantList& ranges) {
+    if (ranges_ == ranges) {
       return;
     }
 
-    query_ = query;
-    query_bytes_ = query.toUtf8();
+    ranges_ = ranges;
+    prepareMatches();
     query_dirty_ = true;
-    emit queryChanged();
+    emit rangesChanged();
     polish();
   }
 
@@ -87,6 +88,7 @@ namespace telar::gui::qt {
         {QStringLiteral("provider"), logical(geometry_.provider)},
         {QStringLiteral("cwd"), logical(geometry_.cwd)},
         {QStringLiteral("time"), logical(geometry_.time)},
+        {QStringLiteral("detail"), logical(geometry_.detail)},
         {QStringLiteral("radius"), static_cast<qreal>(application::history::HistoryRowGeometry::corner_radius) * ratio_},
         {QStringLiteral("stroke"), ratio_},
         {QStringLiteral("providerRadius"), static_cast<qreal>(application::history::HistoryRowGeometry::provider_radius) * ratio_},
@@ -112,7 +114,7 @@ namespace telar::gui::qt {
     return geometry_.frame;
   }
 
-  QVariantMap HistoryRowLayout::commandLine(std::string_view text, Rect bounds, bool continues, HistoryMatchHighlight& highlight) const {
+  QVariantMap HistoryRowLayout::commandLine(std::string_view text, std::size_t offset, Rect bounds, bool continues, HistoryMatchHighlight& highlight) const {
     const auto needed = static_cast<float>(cellTextColumns(text)) * cell_width_;
     const auto line = application::history::HistoryCommandLine::derive(bounds, {.needed = needed, .cell_width = cell_width_, .continues = continues});
     QVariantList matches;
@@ -123,9 +125,10 @@ namespace telar::gui::qt {
       });
     };
 
-    highlight.paint(text, line.text, cell_width_, record);
+    highlight.paint(text, offset, line.text, cell_width_, record);
 
     return {
+        {QStringLiteral("runs"), styledRuns(text, offset, line.text)},
         {QStringLiteral("text"), QString::fromUtf8(text.data(), static_cast<qsizetype>(text.size()))},
         {QStringLiteral("bounds"), logical(line.text)},
         {QStringLiteral("markerBounds"), logical(line.marker)},
@@ -135,14 +138,14 @@ namespace telar::gui::qt {
   }
 
   QVariantList HistoryRowLayout::commandLines() const {
-    HistoryMatchHighlight highlight{{query_bytes_.constData(), static_cast<std::size_t>(query_bytes_.size())}};
+    HistoryMatchHighlight highlight{matches_};
     QVariantList result;
 
     if (!expanded_) {
       const std::string_view text{command_bytes_.constData(), static_cast<std::size_t>(command_bytes_.size())};
       const auto end = text.find_first_of("\r\n");
 
-      result.append(commandLine(text.substr(0, end), geometry_.command, end != std::string_view::npos, highlight));
+      result.append(commandLine(text.substr(0, end), 0, geometry_.command, end != std::string_view::npos, highlight));
 
       return result;
     }
@@ -152,7 +155,7 @@ namespace telar::gui::qt {
     for (std::uint16_t index = 0; index < card_.shown; ++index) {
       const Rect area{.x = geometry_.command.x, .y = card_.text_y + (static_cast<float>(index) * cell_height_), .width = geometry_.command.width, .height = cell_height_};
 
-      result.append(commandLine(application::history::HistoryCard::line(command, card_.lines[index]), area, false, highlight));
+      result.append(commandLine(application::history::HistoryCard::line(command, card_.lines[index]), card_.lines[index].offset, area, false, highlight));
     }
 
     return result;
@@ -166,7 +169,102 @@ namespace telar::gui::qt {
       const std::string_view bytes{command_bytes_.constData(), static_cast<std::size_t>(command_bytes_.size())};
 
       first_line_columns_ = cellTextColumns(bytes.substr(0, bytes.find_first_of("\r\n")));
+      prepareMatches();
+      styled_ = false;
     }
+  }
+
+  namespace {
+
+    // The theme role a style of shell syntax takes, and the chrome colour a theme without it
+    // gives, as the prompt line's editor colours them.
+    std::pair<QString, QString> styleRole(application::prompt::Style style) {
+      switch (style) {
+      case application::prompt::Style::command:
+        return {QStringLiteral("syntax_func"), QStringLiteral("text")};
+      case application::prompt::Style::option:
+      case application::prompt::Style::variable:
+        return {QStringLiteral("syntax_parameter"), QStringLiteral("text")};
+      case application::prompt::Style::string:
+        return {QStringLiteral("syntax_string"), QStringLiteral("text")};
+      case application::prompt::Style::shell_operator:
+        return {QStringLiteral("syntax_operator"), QStringLiteral("subtext0")};
+      case application::prompt::Style::keyword:
+        return {QStringLiteral("syntax_keyword"), QStringLiteral("accent")};
+      case application::prompt::Style::comment:
+        return {QStringLiteral("syntax_comment"), QStringLiteral("subtext0")};
+      case application::prompt::Style::error:
+      case application::prompt::Style::missing:
+      case application::prompt::Style::hidden:
+      // An option its command refuses reads as the editor marks it, an error.
+      case application::prompt::Style::rejected:
+        return {QStringLiteral("red"), QStringLiteral("red")};
+      case application::prompt::Style::plain:
+      case application::prompt::Style::pending:
+      case application::prompt::Style::ghost:
+      case application::prompt::Style::path:
+        break;
+      }
+
+      return {QStringLiteral("text"), QStringLiteral("text")};
+    }
+
+  }
+
+  void HistoryRowLayout::prepareStyles() {
+    // Only the card shows the command whole, in the shell's colours.
+    if (!expanded_ || styled_) {
+      return;
+    }
+
+    const std::string_view command{command_bytes_.constData(), static_cast<std::size_t>(command_bytes_.size())};
+
+    styles_.clear();
+    styles_.resize(command.size(), application::prompt::Style::plain);
+    application::prompt::classify(command, styles_.viewMut(), tokens_);
+    styled_ = true;
+  }
+
+  QVariantList HistoryRowLayout::styledRuns(std::string_view text, std::size_t offset, Rect bounds) const {
+    if (!styled_ || offset + text.size() > styles_.size()) {
+      return {};
+    }
+
+    QVariantList runs;
+
+    std::size_t start = 0;
+    std::uint32_t column = 0;
+
+    // One run per style, at the cells the text before it takes.
+    while (start < text.size()) {
+      const auto style = styles_[offset + start];
+      auto end = start + 1;
+
+      while (end < text.size() && styles_[offset + end] == style) {
+        ++end;
+      }
+
+      const auto piece = text.substr(start, end - start);
+      const auto columns = cellTextColumns(piece);
+      const auto [role, fallback] = styleRole(style);
+      const Rect area{.x = bounds.x + (static_cast<float>(column) * cell_width_), .y = bounds.y, .width = static_cast<float>(columns) * cell_width_, .height = bounds.height};
+
+      runs.append(QVariantMap{
+          {QStringLiteral("text"), QString::fromUtf8(piece.data(), static_cast<qsizetype>(piece.size()))},
+          {QStringLiteral("role"), role},
+          {QStringLiteral("fallback"), fallback},
+          {QStringLiteral("bounds"), logical(area)},
+      });
+
+      column += columns;
+      start = end;
+    }
+
+    return runs;
+  }
+
+  void HistoryRowLayout::prepareMatches() {
+    matches_ = historyMatches(ranges_, static_cast<std::size_t>(command_bytes_.size()));
   }
 
   void HistoryRowLayout::updatePolish() {
@@ -202,10 +300,12 @@ namespace telar::gui::qt {
         .command = command_width,
         .cwd = advance(QStringLiteral("cwd")),
         .time = advance(QStringLiteral("time")),
+        .detail = advance(QStringLiteral("detail")),
         .agent = measurements_.value(QStringLiteral("agent")).toBool(),
         .show_cwd = measurements_.value(QStringLiteral("showCwd")).toBool(),
         .has_cwd = measurements_.value(QStringLiteral("hasCwd")).toBool(),
         .has_time = measurements_.value(QStringLiteral("hasTime")).toBool(),
+        .has_detail = measurements_.value(QStringLiteral("hasDetail")).toBool(),
         .expanded = measurements_.value(QStringLiteral("expanded")).toBool(),
     };
 
@@ -221,6 +321,8 @@ namespace telar::gui::qt {
       cell_width_ = cell_width;
       cell_height_ = cell_height;
       expanded_ = measured.expanded;
+      prepareStyles();
+
       card_ = expanded_ ? application::history::HistoryCard::measure(geometry_, chrome, {.cell_width = cell_width, .cell_height = cell_height, .row_height = row_height, .viewport_height = advance(QStringLiteral("viewportHeight"))}, {command_bytes_.constData(), static_cast<std::size_t>(command_bytes_.size())}) : application::history::HistoryCard{};
       if (expanded_) {
         const auto raw_open = measurements_.value(QStringLiteral("open"), 1).toFloat();

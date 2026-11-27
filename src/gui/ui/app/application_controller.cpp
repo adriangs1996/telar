@@ -689,6 +689,14 @@ namespace telar::gui::qt {
     connect(&window, &QWindow::heightChanged, this, &ApplicationController::synchronizeWindowSize);
     connect(&window, &QWindow::screenChanged, this, &ApplicationController::synchronizeScreen);
     connect(&window, &QWindow::windowStateChanged, &display_, &WindowDisplay::publish);
+    // A command that ran long tells of its end while the window is behind another.
+    sessionMut().windowActivated(window.isActive());
+    connect(&window, &QWindow::activeChanged, this, [this] {
+      if (window_ != nullptr) {
+        sessionMut().windowActivated(window_->isActive());
+      }
+    });
+
     terminals_.setWindow(window);
     frames_.observeFrames(window);
     synchronizeScreen();
@@ -849,6 +857,8 @@ namespace telar::gui::qt {
       break;
     case application::Change::terminal:
       attachments_.reconcileFrame(session().changedPane());
+      // A block's command read from its rows lands in its editor.
+      prompt_.publishWrite();
       emit terminals_.terminalChanged(session().changedPane());
       if (sessionMut().takeChromeChange() && !refresh_timer_.isActive()) {
         refresh_timer_.start();

@@ -210,6 +210,7 @@ export {
       case ServerTag::pane_progress:
         return DeliveryLane::progress;
       case ServerTag::pane_shell:
+      case ServerTag::pane_typeahead:
         return DeliveryLane::shell;
       case ServerTag::pane_scrollback:
         return DeliveryLane::scrollback;
@@ -249,9 +250,12 @@ export {
       case ServerTag::pane_matches:
       case ServerTag::pane_rows:
       case ServerTag::history_pruned:
+      case ServerTag::history_rewritten:
       case ServerTag::history_output:
       case ServerTag::history_stats_result:
+      case ServerTag::history_command_stats:
       case ServerTag::history_workspaces:
+      case ServerTag::history_changed:
       case ServerTag::pane_focus_command:
       case ServerTag::pane_focus_result:
       case ServerTag::command_suggestion:

@@ -133,6 +133,14 @@ namespace telar::gui::qt {
     void selectBlock(std::uint64_t pane_id, ds::Option<std::size_t> index, bool typing_leaves = false);
     // Copies the command or the output of a command block of the pane.
     void copyBlock(std::uint64_t pane_id, std::size_t index, application::BlockCopy what);
+    // Puts a command block's command in the pane's editor, or runs it again.
+    void reuseBlock(std::uint64_t pane_id, std::size_t index, application::BlockReuse how);
+    // The same with a command an earlier runtime kept.
+    void reuseRestored(std::uint64_t pane_id, std::size_t index, application::BlockReuse how);
+    // The filter of a command block's output: opened on it, its query typed, and closed.
+    void openFilter(std::uint64_t pane_id, std::size_t index);
+    void queryFilter(std::uint64_t pane_id, const application::terminal::filter::Query& query);
+    void closeFilter(std::uint64_t pane_id);
     // The window's own step through the pane's blocks, Cmd+Up and Cmd+Down.
     void stepBlock(std::uint64_t pane_id, application::BlockStep direction);
     // The modifiers held over the terminals, from the pointer or the keyboard.

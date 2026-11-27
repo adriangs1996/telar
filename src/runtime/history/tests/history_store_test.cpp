@@ -15,6 +15,7 @@ import telar.wire.agents;
 import telar.wire.history;
 import telar.wire.vocabulary;
 import telar.base.ds;
+import telar.config.runtime;
 
 namespace {
 
@@ -211,7 +212,9 @@ INSERT INTO command VALUES (1, x'01', 1, 0, 1, 1, 'legacy command', 0, '/legacy'
 
     check(commands(store, reply, QueryHistory{.request_id = 1, .query = "éc", .limit = 10}) == both, "a short query folds as a long one does");
     check(commands(store, reply, QueryHistory{.request_id = 2, .query = "écol", .limit = 10}) == both, "a long query folds");
-    check(commands(store, reply, QueryHistory{.request_id = 3, .query = "ÉC", .match = HistoryMatch::fuzzy, .limit = 10}) == both, "the fuzzy search folds the same way");
+    check(commands(store, reply, QueryHistory{.request_id = 3, .query = "éc", .match = HistoryMatch::fuzzy, .limit = 10}) == both, "the fuzzy search folds the same way");
+    // A capital in the query asks for that case, as fzf's smart case does.
+    check(commands(store, reply, QueryHistory{.request_id = 5, .query = "ÉC", .match = HistoryMatch::fuzzy, .limit = 10}) == std::vector<std::string>{"echo ÉCOLE"}, "a capital matches case for case");
     check(commands(store, reply, QueryHistory{.request_id = 4, .query = "é", .match = HistoryMatch::fuzzy, .limit = 10}) == both, "and never matches the bytes of other characters");
   }
 
@@ -536,8 +539,10 @@ INSERT INTO command VALUES (1, x'01', 1, 0, 1, 1, 'legacy command', 0, '/legacy'
     finished(store, owner, "echo café", "/tmp");
     finished(store, owner, "ls", "/tmp");
 
-    // The first keystrokes find what contains them, in any case: two characters, then one of two bytes.
-    check(commands(store, reply, QueryHistory{.request_id = 1, .query = "Gi", .limit = 10}) == std::vector<std::string>{"LOGIN shell", "git status"});
+    // The first keystrokes find what contains them, in any case: two characters, then one of two
+    // bytes. A query with a capital asks for that case.
+    check(commands(store, reply, QueryHistory{.request_id = 1, .query = "gi", .limit = 10}) == std::vector<std::string>{"LOGIN shell", "git status"});
+    check(commands(store, reply, QueryHistory{.request_id = 3, .query = "GI", .limit = 10}) == std::vector<std::string>{"LOGIN shell"});
     check(commands(store, reply, QueryHistory{.request_id = 2, .query = "é", .limit = 10}) == std::vector<std::string>{"echo café"});
   }
 
@@ -671,18 +676,206 @@ INSERT INTO command VALUES (1, x'01', 1, 0, 1, 1, 'legacy command', 0, '/legacy'
     check(requestFailure(remove) == FailureCode::invalid_request);
     check(requestFailure(read) == FailureCode::invalid_request);
 
-    // An import whose last sequence would pass the largest database integer.
+    // An import numbers its entries by what they ran, so no base it is sent with passes the
+    // database's integers: the entries are imported once, whatever it says.
     const ds::Array<ImportHistoryEntry, 2> entries{ImportHistoryEntry{1, "first imported"}, ImportHistoryEntry{2, "second imported"}};
 
     for (const auto base : {static_cast<std::uint64_t>(std::numeric_limits<std::int64_t>::max()), beyond}) {
-      const auto importing = [&] {
-        store.importEntries(ImportHistory{.request_id = 3, .source = "zsh", .base_sequence = base, .entries = entries}, reply);
-      };
-
-      check(requestFailure(importing) == FailureCode::invalid_request);
+      store.importEntries(ImportHistory{.request_id = 3, .source = "zsh", .base_sequence = base, .entries = entries}, reply);
     }
 
-    check(commands(store, reply, QueryHistory{.request_id = 4, .limit = 10}).empty(), "a refused import wrote entries");
+    check(commands(store, reply, QueryHistory{.request_id = 4, .limit = 10}) == std::vector<std::string>{"first imported", "second imported"});
+  }
+
+  void importLines(HistoryStore& store, EncodedReply<ConcurrentMemory>& reply, std::string_view source, std::span<const ImportHistoryEntry> entries) {
+    store.importEntries(ImportHistory{.request_id = 1, .source = source, .entries = entries}, reply);
+  }
+
+  // A histfile its shell trimmed from the front and then grew, imported again, adds exactly the
+  // runs that are new: an entry is known by what it ran and when, not by its line in the file.
+  void testReimportOfTrimmedFileAddsOnlyNewRuns() {
+    telar::testing::TestMemory adapter;
+    ConcurrentMemory& memory = adapter;
+    HistoryStore store{memory, ":memory:"};
+    EncodedReply reply{memory};
+    const ds::Array<ImportHistoryEntry, 3> first{ImportHistoryEntry{1000, "make"}, ImportHistoryEntry{2000, "make test"}, ImportHistoryEntry{3000, "git push"}};
+    const ds::Array<ImportHistoryEntry, 3> trimmed{ImportHistoryEntry{2000, "make test"}, ImportHistoryEntry{3000, "git push"}, ImportHistoryEntry{4000, "git pull"}};
+
+    importLines(store, reply, "zsh:/home/me/.zsh_history", first);
+    importLines(store, reply, "zsh:/home/me/.zsh_history", trimmed);
+    importLines(store, reply, "zsh:/home/me/.zsh_history", trimmed);
+    check(commands(store, reply, QueryHistory{.request_id = 2, .limit = 10}) == std::vector<std::string>{"git pull", "git push", "make", "make test"});
+  }
+
+  // Runs of one command at one time, as a file without times holds, are told apart by the
+  // milliseconds the importer adds to the later ones, so all of them are kept, and once.
+  void testIdenticalRunsAreKeptApart() {
+    telar::testing::TestMemory adapter;
+    ConcurrentMemory& memory = adapter;
+    HistoryStore store{memory, ":memory:"};
+    EncodedReply reply{memory};
+    const ds::Array<ImportHistoryEntry, 3> runs{ImportHistoryEntry{0, "ls"}, ImportHistoryEntry{1, "ls"}, ImportHistoryEntry{2, "ls"}};
+
+    importLines(store, reply, "bash:/home/me/.bash_history", runs);
+    importLines(store, reply, "bash:/home/me/.bash_history", runs);
+    check(commands(store, reply, QueryHistory{.request_id = 2, .limit = 10}) == std::vector<std::string>{"ls", "ls", "ls"});
+  }
+
+  // An imported line passes the filters a recorded command passes: a configured pattern or a
+  // leading space keeps it out, and a secret in it is redacted.
+  void testImportedLinesPassTheFilters() {
+    telar::testing::TestMemory adapter;
+    ConcurrentMemory& memory = adapter;
+    HistoryFilters filters;
+
+    filters.commands.append("vault login");
+    HistoryStore store{memory, ":memory:", filters};
+    EncodedReply reply{memory};
+    const ds::Array<ImportHistoryEntry, 4> lines{ImportHistoryEntry{1000, "vault login -method=oidc"}, ImportHistoryEntry{2000, " echo private"}, ImportHistoryEntry{3000, "export API_TOKEN=abc123"}, ImportHistoryEntry{4000, "echo kept"}};
+
+    importLines(store, reply, "zsh:/home/me/.zsh_history", lines);
+    check(commands(store, reply, QueryHistory{.request_id = 2, .limit = 10}) == std::vector<std::string>{"echo kept", "export API_TOKEN=[redacted]"});
+  }
+
+  // A secret a command printed is redacted in the output the history keeps; the rest of the
+  // output stays, and the output is not marked cut for it.
+  void testCapturedOutputKeepsNoSecret() {
+    telar::testing::TestMemory adapter;
+    ConcurrentMemory& memory = adapter;
+    HistoryStore store{memory, ":memory:"};
+    EncodedReply reply{memory};
+    // The name and its value are put together here, so no line of the source pairs a credential's
+    // name with a quoted value.
+    const auto name = "AWS_" + std::string{"SE"} + "CRET_ACCESS_KEY=";
+    const auto printed = "HOME=/home/me\n" + name + std::string(13, 'x') + "\nSHELL=/bin/zsh\n";
+    const auto bytes = std::span{reinterpret_cast<const Byte*>(printed.data()), printed.size()};
+
+    store.record({.kind = HistoryEventKind::command_finished, .session = session(1, "/tmp"), .command = {.command = "env", .directory = "/tmp", .started = {}, .output = bytes, .output_observed = printed.size()}});
+    store.readOutput(ReadHistoryOutput{.request_id = 2, .id = 1}, reply);
+    ds::Array<Byte, 4096> storage;
+    const auto output = decodeReply<HistoryOutput>(reply, storage.viewMut());
+    const std::string_view kept{reinterpret_cast<const char*>(output.content.data()), output.content.size()};
+
+    check(kept == "HOME=/home/me\n" + name + "[redacted]\nSHELL=/bin/zsh\n");
+    check(!output.truncated);
+  }
+
+  // Entries an older import numbered by their line take the identity an import gives them now
+  // when the history opens, so importing the same file again adds only what it never had.
+  void testOlderImportsTakeContentIdentity() {
+    telar::testing::TestMemory adapter;
+    ConcurrentMemory& memory = adapter;
+    const Directory directory;
+    const auto path = directory.file("history.db");
+    constexpr std::string_view source = "zsh:/home/me/.zsh_history";
+    const ImportIdentity identity{source};
+
+    {
+      HistoryStore created{memory, path.c_str()};
+    }
+
+    {
+      Database database{path.c_str()};
+      Statement owner{database, "INSERT INTO session(id, pane_id, location_kind, location_id, tab_id, workspace_path, shell, started_at_ms) VALUES(?1, ?2, 0, ?2, ?2, '', ?3, 0)"};
+
+      owner.bind(1, std::span{identity.session});
+      owner.bind(2, static_cast<std::int64_t>(identity.pane));
+      owner.bind(3, source);
+      owner.finish();
+      HistoryTexts texts{database};
+
+      // Two runs of `ls` without a time, then `make`, at the lines an older import gave them.
+      for (const auto& [sequence, command] : {std::pair{0, "ls"}, std::pair{1, "ls"}, std::pair{2, "make"}}) {
+        Statement row{database, "INSERT INTO command(session_id, pane_id, location_kind, location_id, tab_id, sequence, text_id, cwd, workspace_path, started_at_ms, duration_ns, exit_code, status, author, origin) VALUES(?1, ?2, 0, ?2, ?2, ?3, ?4, '', '', 0, 0, NULL, 0, 0, 0)"};
+
+        row.bind(1, std::span{identity.session});
+        row.bind(2, static_cast<std::int64_t>(identity.pane));
+        row.bind(3, static_cast<std::int64_t>(sequence));
+        row.bind(4, texts.idOf(command));
+        row.finish();
+      }
+    }
+
+    HistoryStore store{memory, path.c_str()};
+    EncodedReply reply{memory};
+    const ds::Array<ImportHistoryEntry, 4> grown{ImportHistoryEntry{0, "ls"}, ImportHistoryEntry{1, "ls"}, ImportHistoryEntry{0, "make"}, ImportHistoryEntry{5000, "new"}};
+
+    importLines(store, reply, source, grown);
+    check(commands(store, reply, QueryHistory{.request_id = 2, .limit = 10}) == std::vector<std::string>{"ls", "ls", "make", "new"});
+  }
+
+  // An imported entry keeps the directory, exit status and duration its source knew, and its
+  // directory passes the directory filters as a recorded command's does.
+  void testImportedEntriesKeepHowTheyRan() {
+    telar::testing::TestMemory adapter;
+    ConcurrentMemory& memory = adapter;
+    HistoryFilters filters;
+
+    filters.directories.append("/private");
+    HistoryStore store{memory, ":memory:", filters};
+    EncodedReply reply{memory};
+    const ds::Array<ImportHistoryEntry, 3> entries{
+        ImportHistoryEntry{.started_at_ms = 1000, .command = "make", .cwd = "/src", .exit_code = 2, .duration_ns = 5'000'000'000},
+        ImportHistoryEntry{.started_at_ms = 2000, .command = "ls", .cwd = "/private/keys"},
+        ImportHistoryEntry{.started_at_ms = 3000, .command = "pwd"},
+    };
+
+    importLines(store, reply, "atuin:/home/me/.local/share/atuin/history.db", entries);
+    store.query(QueryHistory{.request_id = 2, .limit = 10}, reply);
+    ds::Array<Byte, 4096> storage;
+    const auto result = decodeReply<HistoryResults>(reply, storage.viewMut());
+
+    check(result.entries.size() == 2);
+    check(result.entries[1].command == "make" && result.entries[1].cwd == "/src" && result.entries[1].exit_code == 2 && result.entries[1].duration_ns == 5'000'000'000);
+    check(result.entries[0].command == "pwd" && result.entries[0].cwd.empty() && !result.entries[0].exit_code && result.entries[0].duration_ns == 0);
+    check(commands(store, reply, QueryHistory{.request_id = 3, .scope = HistoryScope::cwd, .scope_value = std::string_view{"/src"}, .limit = 10}) == std::vector<std::string>{"make"});
+  }
+
+  // Entries recorded before a filter existed pass through it on request: what it refuses goes,
+  // a secret it finds in a command or an output is redacted, and a dry run only counts them.
+  void testRewriteAppliesTodaysFilters() {
+    telar::testing::TestMemory adapter;
+    ConcurrentMemory& memory = adapter;
+    const Directory directory;
+    const auto path = directory.file("history.db");
+    const std::string_view printed = "GITHUB_TOKEN=abc123\nok\n";
+    const auto bytes = std::span{reinterpret_cast<const Byte*>(printed.data()), printed.size()};
+
+    {
+      HistoryFilters lenient;
+
+      lenient.secrets = false;
+      HistoryStore before{memory, path.c_str(), lenient};
+
+      finished(before, session(1, "/tmp"), "vault login", "/tmp");
+      finished(before, session(1, "/tmp"), "export API_TOKEN=abc123", "/tmp");
+      before.record({.kind = HistoryEventKind::command_finished, .session = session(1, "/tmp"), .command = {.command = "env", .directory = "/tmp", .started = {}, .output = bytes, .output_observed = printed.size()}});
+      finished(before, session(1, "/tmp"), "make", "/tmp");
+    }
+
+    HistoryFilters filters;
+
+    filters.commands.append("vault");
+    HistoryStore store{memory, path.c_str(), filters};
+    EncodedReply reply{memory};
+    ds::Array<Byte, 4096> storage;
+
+    store.rewrite(RewriteHistory{.request_id = 1, .dry_run = true}, reply);
+    const auto counted = decodeReply<HistoryRewritten>(reply, storage.viewMut());
+
+    check(counted.removed == 1 && counted.redacted == 2);
+    check(commands(store, reply, QueryHistory{.request_id = 2, .limit = 10}) == std::vector<std::string>{"env", "export API_TOKEN=abc123", "make", "vault login"});
+
+    store.rewrite(RewriteHistory{.request_id = 3}, reply);
+    const auto done = decodeReply<HistoryRewritten>(reply, storage.viewMut());
+
+    check(done.removed == 1 && done.redacted == 2);
+    check(commands(store, reply, QueryHistory{.request_id = 4, .limit = 10}) == std::vector<std::string>{"env", "export API_TOKEN=[redacted]", "make"});
+    store.readOutput(ReadHistoryOutput{.request_id = 5, .id = 3}, reply);
+    const auto output = decodeReply<HistoryOutput>(reply, storage.viewMut());
+
+    check(std::string_view{reinterpret_cast<const char*>(output.content.data()), output.content.size()} == "GITHUB_TOKEN=[redacted]\nok\n" && !output.truncated);
+    check(commands(store, reply, QueryHistory{.request_id = 6, .query = "abc123", .limit = 10}).empty(), "the index forgets the redacted text");
   }
 
   const telar::testing::Case case_migrates_legacy_schema{"history_store.migrates_legacy_schema", testMigratesLegacySchema};
@@ -709,5 +902,12 @@ INSERT INTO command VALUES (1, x'01', 1, 0, 1, 1, 'legacy command', 0, '/legacy'
   const telar::testing::Case case_rejects_corrupt_rows{"history_store.rejects_corrupt_rows", testRejectsCorruptRows};
   const telar::testing::Case case_agent_command_without_tool_call{"history_store.agent_command_without_tool_call", testAgentCommandWithoutToolCall};
   const telar::testing::Case case_rejects_identities_beyond_int64{"history_store.rejects_identities_beyond_int64", testRejectsIdentitiesBeyondInt64};
+  const telar::testing::Case case_reimport_of_trimmed_file{"history_store.reimport_of_trimmed_file_adds_only_new_runs", testReimportOfTrimmedFileAddsOnlyNewRuns};
+  const telar::testing::Case case_identical_runs{"history_store.identical_runs_are_kept_apart", testIdenticalRunsAreKeptApart};
+  const telar::testing::Case case_imported_lines_filtered{"history_store.imported_lines_pass_the_filters", testImportedLinesPassTheFilters};
+  const telar::testing::Case case_output_keeps_no_secret{"history_store.captured_output_keeps_no_secret", testCapturedOutputKeepsNoSecret};
+  const telar::testing::Case case_imported_entries_keep_how_they_ran{"history_store.imported_entries_keep_how_they_ran", testImportedEntriesKeepHowTheyRan};
+  const telar::testing::Case case_rewrite_applies_todays_filters{"history_store.rewrite_applies_todays_filters", testRewriteAppliesTodaysFilters};
+  const telar::testing::Case case_older_imports_rekeyed{"history_store.older_imports_take_content_identity", testOlderImportsTakeContentIdentity};
 
 }

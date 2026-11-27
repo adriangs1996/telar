@@ -10,12 +10,13 @@ end
 
 set -g __telar_token "$TELAR_SHELL_TOKEN"
 set -g __telar_ssh "$TELAR_SHELL_SSH"
+set -g __telar_ssh_control "$TELAR_SHELL_SSH_CONTROL"
 # telar's editor stands in for the prompt: the shell prints only its marks.
 set -g __telar_mode
 if test "$TELAR_PROMPT_MODE" = telar
     set __telar_mode telar
 end
-set -e TELAR_SHELL_TOKEN TELAR_SHELL_SSH TELAR_PROMPT_MODE
+set -e TELAR_SHELL_TOKEN TELAR_SHELL_SSH TELAR_SHELL_SSH_CONTROL TELAR_PROMPT_MODE
 if not status is-interactive; or not string match -qr '^[0-9a-f]{32}$' -- $__telar_token
     set -e __telar_token
     return
@@ -24,7 +25,7 @@ end
 # `ssh` starts remote login shells with the integration too, unless the user defined one.
 if test -n "$__telar_ssh" -a -r "$__telar_ssh"; and not functions -q ssh
     function ssh --wraps ssh
-        TELAR_SHELL_TOKEN=$__telar_token TELAR_PROMPT_MODE="$__telar_mode" /bin/sh $__telar_ssh $argv
+        TELAR_SHELL_TOKEN=$__telar_token TELAR_PROMPT_MODE="$__telar_mode" TELAR_SHELL_SSH_CONTROL="$__telar_ssh_control" /bin/sh $__telar_ssh $argv
     end
 end
 
@@ -63,7 +64,32 @@ function __telar_name --argument-names name words
     end
 end
 
+# Keys typed while telar's editor was not up (before the first prompt, or while a slow prompt
+# ran) reach fish's line editor, where telar's editor hides them. telar types CSI 6973 ~, a
+# sequence no terminal sends for a key (6973 is telar's own number, as in its OSC 6973 reports),
+# before each command its editor runs: this reports the line to telar, %-encoded, so its editor
+# shows it, and clears it, so the command runs alone.
+function __telar_flush
+    set -l text (commandline | string collect)
+    if test -n "$text"
+        printf '\e]6973;telar=%s;typeahead=%s\a' $__telar_token (string escape --style=url -- $text)
+    end
+    commandline -r ''
+end
+
+# Bound at every prompt, so a configuration that changes its key bindings keeps it. vi's other
+# modes enter insert, where the command telar pastes is typed.
+function __telar_bind
+    bind \e\[6973~ __telar_flush
+    if string match -q '*vi*' -- $fish_key_bindings
+        bind -M insert \e\[6973~ __telar_flush
+        bind -M default -m insert \e\[6973~ __telar_flush
+        bind -M visual -m insert \e\[6973~ __telar_flush
+    end
+end
+
 function __telar_prompt --on-event fish_prompt
+    __telar_bind
     printf '\e]133;A;telar=%s\a' $__telar_token
     # The working directory (OSC 7), so telar knows where the next command runs.
     printf '\e]7;file://%s%s\a' $hostname (string replace -a '%' '%25' -- $PWD)

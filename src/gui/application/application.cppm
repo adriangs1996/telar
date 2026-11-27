@@ -23,6 +23,7 @@ export import :prompt;
 export import :terminal_input;
 export import :terminal_links;
 export import :terminal_copy_mode;
+export import :terminal_filter;
 export import :terminal_graphics;
 export import :terminal_attachments;
 export import :machines;

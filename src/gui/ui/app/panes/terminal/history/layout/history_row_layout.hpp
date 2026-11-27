@@ -10,6 +10,7 @@ static_assert(true);
 #include <QVariantMap>
 #include <QtCore/qcontainerfwd.h>
 #include <QtQml/qqmlregistration.h>
+#include <cstddef>
 #include <cstdint>
 #include <functional>
 #include <string_view>
@@ -19,6 +20,9 @@ static_assert(true);
 import telar.gui.foundation.core;
 import telar.gui.foundation.forms;
 import telar.gui.application;
+import telar.base.ds;
+import telar.shell.syntax;
+import telar.base.memory.allocators;
 
 namespace telar::gui::qt {
 
@@ -29,7 +33,8 @@ namespace telar::gui::qt {
     Q_PROPERTY(QVariantMap layout READ layout NOTIFY layoutChanged)
     Q_PROPERTY(QVariantMap geometryLayout READ geometryLayout NOTIFY geometryLayoutChanged)
     Q_PROPERTY(QVariantList lineLayout READ commandLines NOTIFY lineLayoutChanged)
-    Q_PROPERTY(QString query READ query WRITE setQuery NOTIFY queryChanged)
+    // The bytes the runtime matched in the command: start, end, start…, as the row's record holds.
+    Q_PROPERTY(QVariantList ranges READ ranges WRITE setRanges NOTIFY rangesChanged)
     Q_PROPERTY(int historyIndex READ historyIndex WRITE setHistoryIndex NOTIFY historyIndexChanged)
 
   public:
@@ -43,11 +48,11 @@ namespace telar::gui::qt {
     [[nodiscard]] QVariantMap layout() const;
     [[nodiscard]] QVariantMap geometryLayout() const;
 
-    [[nodiscard]] QString query() const {
-      return query_;
+    [[nodiscard]] QVariantList ranges() const {
+      return ranges_;
     }
 
-    void setQuery(const QString& query);
+    void setRanges(const QVariantList& ranges);
     [[nodiscard]] Rect physicalFrame() const noexcept;
 
     [[nodiscard]] int historyIndex() const noexcept {
@@ -62,7 +67,7 @@ namespace telar::gui::qt {
     void layoutChanged();
     void geometryLayoutChanged();
     void lineLayoutChanged();
-    void queryChanged();
+    void rangesChanged();
 
   protected:
     void updatePolish() override;
@@ -87,15 +92,27 @@ namespace telar::gui::qt {
     [[nodiscard]] GeometryState geometryState() const noexcept;
     [[nodiscard]] QRectF logical(Rect area) const noexcept;
     [[nodiscard]] QVariantList commandLines() const;
-    [[nodiscard]] QVariantMap commandLine(std::string_view text, Rect bounds, bool continues, HistoryMatchHighlight& highlight) const;
+    [[nodiscard]] QVariantMap commandLine(std::string_view text, std::size_t offset, Rect bounds, bool continues, HistoryMatchHighlight& highlight) const;
     void prepareCommand();
+    // What the runtime matched in the command, read once per command and ranges.
+    void prepareMatches();
+    // How the shell reads the command, once the card shows it whole.
+    void prepareStyles();
+    // The runs of line `text`, at byte `offset` of the command, in the shell's colours.
+    [[nodiscard]] QVariantList styledRuns(std::string_view text, std::size_t offset, Rect bounds) const;
     void publishLines();
 
     QVariantMap measurements_;
     QString command_text_;
-    QString query_;
-    QByteArray query_bytes_;
+    QVariantList ranges_;
     QByteArray command_bytes_;
+    HistoryMatchRanges matches_;
+    // QML makes the item, so it owns the memory its buffers live in.
+    SystemAllocator memory_;
+    MemoryAdapter<SystemAllocator> adapter_{memory_};
+    ds::Vec<application::prompt::Style, Memory> styles_{adapter_};
+    ds::Vec<shell::Token, Memory> tokens_{adapter_};
+    bool styled_ = false;
     application::history::HistoryRowGeometry geometry_;
     application::history::HistoryCard card_;
     qreal density_ = 1;

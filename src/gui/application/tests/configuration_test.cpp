@@ -71,10 +71,10 @@ namespace {
   }
 
   void promptPreferences() {
-    const auto configuration = read({.source = R"(return {api_version = 2, client = {prompt = {mode = "telar", keymap = "vim", motion = "none", ghost = false, macos_option_as_alt = true, max_lines = 4}}})", .profile = {}});
+    const auto configuration = read({.source = R"(return {api_version = 2, client = {prompt = {mode = "telar", keymap = "vim", motion = "none", ghost = false, macos_option_as_alt = true, max_lines = 4, up_scope = "workspace", expand_aliases = true}}})", .profile = {}});
     const auto& prompt = configuration.prompt;
 
-    check(prompt.mode == PromptMode::telar && prompt.keymap == PromptKeymap::vim && prompt.motion == PromptMotion::none && !prompt.ghost && prompt.macos_option_as_alt == telar::ds::Option{true} && prompt.max_lines == 4, "every prompt field must be read");
+    check(prompt.mode == PromptMode::telar && prompt.keymap == PromptKeymap::vim && prompt.motion == PromptMotion::none && !prompt.ghost && prompt.macos_option_as_alt == telar::ds::Option{true} && prompt.max_lines == 4 && prompt.up_scope == PromptUpScope::workspace && prompt.expand_aliases, "every prompt field must be read");
     check(read({.source = R"(return {api_version = 2, client = {prompt = {mode = "telar", skin = "glass"}}})", .profile = {}}).prompt.mode == PromptMode::telar, "client.prompt.skin is accepted as the documentation describes it");
     check(read({.source = "return {api_version = 2}", .profile = {}}).prompt == PromptConfiguration(), "the prompt stays classic by default");
     const auto filtered = read({.source = R"(return {api_version = 2, runtime = {history = {secrets_filter = false, command_filters = {"deploy"}}}})", .profile = {}});
@@ -147,6 +147,31 @@ namespace {
       }
 
       check(rejected, "invalid history configuration must not be silently accepted");
+    }
+  }
+
+  // The facts a history row shows, and how its time reads, are the configuration's.
+  void historyColumns() {
+    const auto defaults = read({.source = "return {api_version = 2}", .profile = {}});
+
+    check(defaults.history.show_duration && defaults.history.show_exit && defaults.history.show_directory && defaults.history.show_host && !defaults.history.relative_time, "a row shows how long a command ran, how it failed, where and on which machine, at its clock time");
+
+    const auto configured = read({.source = R"(return {api_version = 2, client = {history = {columns = {duration = false, directory = false, host = false}, time = "relative"}}})", .profile = {}});
+
+    check(!configured.history.show_duration && configured.history.show_exit && !configured.history.show_directory && !configured.history.show_host && configured.history.relative_time, "each column and the time read as configured, the rest kept");
+
+    constexpr auto invalid_sources = telar::ds::Array<std::string_view, 3>{R"(return {api_version = 2, client = {history = {time = "ago"}}})", R"(return {api_version = 2, client = {history = {columns = {branch = true}}}})", R"(return {api_version = 2, client = {history = {columns = {exit = "no"}}}})"};
+
+    for (const auto source : invalid_sources) {
+      bool rejected = false;
+
+      try {
+        read({.source = source, .profile = {}});
+      } catch (const std::exception&) {
+        rejected = true;
+      }
+
+      check(rejected, "an unknown column, time or value is refused");
     }
   }
 
@@ -449,8 +474,29 @@ namespace {
     }
   }
 
+  // The notice of a long command's end: on after 30 seconds unless the configuration or its
+  // profile says otherwise, and never sooner than a second.
+  void longCommandNoticeIsConfigured() {
+    const auto defaults = read({.source = R"(return {api_version = 2})", .profile = {}});
+
+    check(defaults.long_commands.enabled && defaults.long_commands.after_ms == 30'000, "a long command tells of its end after 30 seconds by default");
+    const auto profiled = read({.source = R"(return {api_version = 2, client = {notifications = {long_commands = {after_ms = 90000}}}, profiles = {quiet = {client = {notifications = {long_commands = {enabled = false}}}}}})", .profile = "quiet"});
+
+    check(!profiled.long_commands.enabled && profiled.long_commands.after_ms == 90'000, "a profile turns the notice off and keeps the threshold it inherits");
+    bool rejected = false;
+
+    try {
+      read({.source = R"(return {api_version = 2, client = {notifications = {long_commands = {after_ms = 10}}}})", .profile = {}});
+    } catch (const std::exception&) {
+      rejected = true;
+    }
+
+    check(rejected, "a threshold under a second is refused");
+  }
+
   const telar::testing::Case case_explorer_keys{"configuration.explorer_keys", explorerKeys};
   const telar::testing::Case case_history_preferences{"configuration.history_preferences", historyPreferences};
+  const telar::testing::Case case_history_columns{"configuration.history_columns", historyColumns};
   const telar::testing::Case case_prompt_preferences{"configuration.prompt_preferences", promptPreferences};
   const telar::testing::Case case_prompt_bindings_value{"configuration.prompt_bindings_value", promptBindingsValue};
   const telar::testing::Case case_independent_background_opacity{"configuration.independent_background_opacity", independentBackgroundOpacity};
@@ -458,6 +504,7 @@ namespace {
   const telar::testing::Case case_window_title_preferences{"configuration.window_title_preferences", windowTitlePreferences};
   const telar::testing::Case case_sidebar_width_preferences{"configuration.sidebar_width_preferences", sidebarWidthPreferences};
   const telar::testing::Case case_keymap_profiles_and_callbacks{"configuration.keymap_profiles_and_callbacks", keymapProfilesAndCallbacks};
+  const telar::testing::Case case_long_command_notice_is_configured{"configuration.long_command_notice_is_configured", longCommandNoticeIsConfigured};
   const telar::testing::Case case_input_expressions{"configuration.input_expressions", inputExpressions};
   const telar::testing::Case case_invalid_callbacks_and_recovery{"configuration.invalid_callbacks_and_recovery", invalidCallbacksAndRecovery};
   const telar::testing::Case case_profiles_themes_and_rejected_preferences{"configuration.profiles_themes_and_rejected_preferences", profilesThemesAndRejectedPreferences};

@@ -25,7 +25,9 @@ namespace telar::gui::features::history {
     }
 
     result.emphasized = true;
-    const auto nothing_recorded = !options.has_query && options.scope == HistoryScope::global && options.author == HistoryAuthorFilter::all && !options.failed_only && options.page_offset == 0;
+    // Nothing of the person's own: the panel shows their commands alone by default, and what an
+    // import brings is theirs.
+    const auto nothing_recorded = !options.has_query && options.scope == HistoryScope::global && options.author != HistoryAuthorFilter::agent && !options.failed_only && options.page_offset == 0;
     if (nothing_recorded) {
       result.title.append("No commands yet");
       result.subtitle = "Commands you run in telar appear here as you work. Bring your shell history:";

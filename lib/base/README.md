@@ -1,11 +1,12 @@
 # telar-base
 
 The foundations the runtime, the GUI and the `telar` CLI share: UTF-8 (`text/utf8/`),
-JSON (`text/json/`), ASCII and other text codecs (`text/`), each imported on its
-own (`telar.base.text.utf8`, `telar.base.text.json`, `telar.base.text`),
+JSON (`text/json/`), patterns that look for literal text or a regular expression in
+linear time (`text/pattern/`), ASCII and other text codecs (`text/`), each imported on its
+own (`telar.base.text.utf8`, `telar.base.text.json`, `telar.base.text.pattern`, `telar.base.text`),
 allocators (`memory/allocators/`), sensitive buffers (`memory/sensitive/`) and
 fixed-capacity containers (`memory/containers/`), each its own module, the diagnostics switches and timing (`diagnostics/`), the editor kinds (`editors/`), the history search policy
-(`history/`), and the program name and version children see (`telar.base.text`).
+(`history/`: its case fold, fzf's matcher and extended syntax, the ranking and command templates), and the program name and version children see (`telar.base.text`).
 It is C++23 with compiled standard module interfaces, with no dependency on the client protocol or runtime;
 the only telar library below it is `telar-sys`, through which `telar.base.text` parses socket addresses.
 Allocators and their adapters live in the neutral `telar` namespace. The caller

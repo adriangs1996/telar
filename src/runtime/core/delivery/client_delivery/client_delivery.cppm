@@ -109,6 +109,9 @@ export {
 
       static bool blocks(Connection<ConcurrentMemory>& connection, Attachment& attachment, PaneRef<const TerminalBody> pane);
 
+      // The line the shell's editor held when a command cleared it, once per report.
+      static bool typeahead(Connection<ConcurrentMemory>& connection, Attachment& attachment, PaneRef<const TerminalBody> pane);
+
       // How the scrollback numbers its rows, before a frame numbered so. A viewport held above the
       // bottom keeps showing the same rows when the scrollback drops rows above them.
       static bool scrollback(Connection<ConcurrentMemory>& connection, Attachment& attachment, PaneRef<TerminalBody> pane);

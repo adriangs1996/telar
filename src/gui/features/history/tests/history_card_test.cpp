@@ -9,7 +9,6 @@ static_assert(true);
 import std;
 import telar.testing;
 import telar.gui.foundation.core;
-import telar.gui.foundation.forms;
 import telar.gui.foundation.text;
 import telar.gui.features.history;
 import telar.base.ds;
@@ -107,34 +106,9 @@ namespace {
     check(card.height <= metrics.viewport_height, "the selected card must remain inside the list viewport");
   }
 
-  void highlightsContinueAcrossVisibleLines() {
-    HistoryMatchHighlight highlight{"中bS"};
-    constexpr float cell_width = 8;
-    constexpr Rect first{.x = 10, .y = 20, .width = 100, .height = 20};
-    constexpr Rect second{.x = 10, .y = 40, .width = 100, .height = 20};
-    telar::ds::Array<Rect, 3> matches{};
-    std::size_t count = 0;
-    auto record = [&](Rect area, std::string_view) {
-      matches.atCheckedMut(count++) = area;
-    };
-
-    highlight.paint("á中B", first, cell_width, record);
-    highlight.paint("second", second, cell_width, record);
-    constexpr std::size_t matched_bytes = std::string_view{"中bS"}.size();
-
-    check(count == matches.size() && highlight.matched() == matched_bytes, "matching must preserve UTF-8 byte positions and ASCII case folding across lines");
-    check(matches.front().width == 2 * cell_width && matches.back().y == second.y, "wide clusters and the next line must retain their complete cell rectangles");
-    HistoryMatchHighlight clipped{"中"};
-    constexpr Rect narrow{.width = cell_width, .height = 20};
-
-    clipped.paint("中", narrow, cell_width, record);
-    check(clipped.matched() == 0 && count == matches.size(), "an invisible partial cluster must not consume a query match");
-  }
-
   const telar::testing::Case case_word_wrapping_borrows_complete_lines{"history_card.word_wrapping_borrows_complete_lines", wordWrappingBorrowsCompleteLines};
   const telar::testing::Case case_graphemes_and_invalid_bytes_keep_their_boundaries{"history_card.graphemes_and_invalid_bytes_keep_their_boundaries", graphemesAndInvalidBytesKeepTheirBoundaries};
   const telar::testing::Case case_strict_and_nonthrowing_scalar_reads_agree{"history_card.strict_and_nonthrowing_scalar_reads_agree", strictAndNonthrowingScalarReadsAgree};
   const telar::testing::Case case_cards_bound_the_remaining_line_count{"history_card.cards_bound_the_remaining_line_count", cardsBoundTheRemainingLineCount};
-  const telar::testing::Case case_highlights_continue_across_visible_lines{"history_card.highlights_continue_across_visible_lines", highlightsContinueAcrossVisibleLines};
 
 }

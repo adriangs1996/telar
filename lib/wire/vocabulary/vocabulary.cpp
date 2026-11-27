@@ -179,6 +179,12 @@ namespace telar {
     }
   }
 
+  void BodySchema<HistoryRange>::validate(const HistoryRange& value) {
+    if (value.end <= value.start || value.end > max_history_command_bytes) {
+      throw EncodingError{"Invalid history match range"};
+    }
+  }
+
   void BodySchema<CoordinatorReference>::validate(const CoordinatorReference& value) {
     for (const auto byte : value.session_id) {
       if (byte != 0) {
@@ -388,8 +394,8 @@ namespace telar {
   }
 
   void BodySchema<CommandBlock>::validate(const CommandBlock& value) {
-    if (value.rows == 0) {
-      throw EncodingError{"Command block without rows"};
+    if ((value.rows == 0) != (value.state == CommandBlockState::background || value.restored)) {
+      throw EncodingError{value.rows == 0 ? "Command block without rows" : "Background or restored block with rows"};
     }
   }
 

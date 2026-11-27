@@ -66,12 +66,13 @@ export {
       // replaces without them, since the pane's strings now hold the new ones.
       tbc::val_static<PaneShell> setShell(const PaneShell& message);
 
-      // Keeps `commands` with their lines copied into the pane.
+      // Keeps `commands` with their text copied into the pane: the blocks an earlier runtime kept
+      // apart in `restored`, the others in `blocks`.
       void setBlocks(std::span<const CommandBlock> commands);
       // The rows were numbered anew: the kept blocks no longer name theirs.
       void forgetKeptBlocks();
-      // Where the lines of blocks `first` to `end` lie in `blocks_text`, which may begin with
-      // lines of blocks since dropped.
+      // Where the text of blocks `first` to `end` lies in `blocks_text`, which may begin with
+      // text of blocks since dropped.
       [[nodiscard]] std::pair<std::size_t, std::size_t> textOf(std::size_t first, std::size_t end) const noexcept;
 
       std::uint64_t id;
@@ -141,13 +142,18 @@ export {
       // `shell.directory` view.
       ds::String<Memory> shell_host;
       ds::String<Memory> shell_directory;
-      // The commands the integrated shell ran, oldest first; `blocks_text` owns their lines. The
-      // runtime sends its newest; the first `kept_blocks` are older ones this pane keeps while
-      // their rows stay in the scrollback, up to `blocks_kept_limit` blocks in all.
+      // The commands the integrated shell ran, oldest first; `blocks_text` owns their text: each
+      // block's command, directory, host, user and branch, one after another. The runtime sends
+      // its newest; the first `kept_blocks` are older ones this pane keeps while their rows stay
+      // in the scrollback, up to `blocks_kept_limit` blocks in all.
       static constexpr std::size_t blocks_kept_limit = 256;
       tbc::val_self<ds::Vec<CommandBlock, Memory>> blocks;
       ds::String<Memory> blocks_text;
       std::size_t kept_blocks = 0;
+      // The commands an earlier runtime kept, as the runtime last sent them: their rows went with
+      // that runtime's scrollback. `restored_text` owns their text as `blocks_text` does.
+      tbc::val_self<ds::Vec<CommandBlock, Memory>> restored;
+      ds::String<Memory> restored_text;
       // The commands folded, by the stable number of their first row, and the rows their output
       // hides from the view.
       ds::Vec<std::uint64_t, Memory> folded;
@@ -161,6 +167,19 @@ export {
       ds::Option<std::uint32_t> live_prompt_row;
       // The folded blocks by index while renumbered rows wait for the blocks numbered anew.
       ds::Vec<std::size_t, Memory> refold;
+
+      // A block vim's mark names: the stable number of the block's first row, as `folded` keeps
+      // it, and how far below it the view's top was when the mark was set.
+      struct BlockMark {
+        std::uint64_t block = 0;
+        std::uint64_t offset = 0;
+      };
+
+      // The marks `a` to `z`; `remark` holds them by block index while renumbered rows wait for
+      // the blocks numbered anew.
+      static constexpr std::size_t mark_count = 26;
+      ds::Array<ds::Option<BlockMark>, mark_count> marks{};
+      ds::Array<ds::Option<std::pair<std::size_t, std::uint64_t>>, mark_count> remark{};
     };
 
     // The application a tab shows: the pane's foreground, else the one the tab remembers for its

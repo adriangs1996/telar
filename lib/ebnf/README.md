@@ -156,6 +156,14 @@ The extensions to ISO 14977:
 - `--` and positional structure are ordinary grammar, as in
   `{ option | @file } , [ "--" , { @file } ]`.
 
+A spec that lists every option its command accepts says so with the comment
+`(* telar: complete *)`, which the matcher ignores like any other. telar's
+command editor then marks an option the spec does not name as one the command
+refuses, on a line it can read whole (no variables, quotes, pipes or
+substitutions); a long option's unique prefix, which getopt_long takes, is not
+marked. A spec without it is only used to complete. `ls`, `grep`, `sed`,
+`chown` and `xargs`, the union of their GNU and BSD options, carry it.
+
 A word that no terminal matches whole and that looks like a short-option cluster
 (`-abc`) is read as getopt reads it: the flags `-a -b -c`, where any of them may
 take the rest of the word as its value (`-mmessage`, `-p2222`). Every reading is

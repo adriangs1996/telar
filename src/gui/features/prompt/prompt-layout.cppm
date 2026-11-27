@@ -30,6 +30,8 @@ export namespace telar::gui::features::prompt {
     // A bidi control or a zero-width character, drawn as the mark that names it: hidden, it
     // would make the command shown differ from the one that runs.
     hidden,
+    // An option the command does not accept, as a spec that lists them all says.
+    rejected,
   };
 
   // The cells of a hidden character's mark, ⟨U+202E⟩.
@@ -105,5 +107,22 @@ export namespace telar::gui::features::prompt {
   // Lays out `styled` in rows of `columns` cells into `result`, replacing what it held. A run
   // never spans two styles or two groups.
   void layout(Layout& result, const StyledText& styled, Selection selection, std::uint32_t columns);
+
+  // The bytes [begin, end) of a line an input method reads around the caret, to reconvert what was
+  // typed: the caret's line of the text, at most `limit` bytes either side of the caret, cut at
+  // code point boundaries.
+  struct Surrounding {
+    std::size_t begin = 0;
+    std::size_t end = 0;
+  };
+
+  [[nodiscard]] Surrounding surrounding(std::string_view text, std::size_t cursor, std::size_t limit) noexcept;
+
+  // The byte a click at `cell`'s row and column of `laid`, the layout of `text`, puts the caret on:
+  // the start of the grapheme under the cell, however many cells and code points it takes (a CJK
+  // character two cells, an emoji joined of several one); before a row's first run, its start;
+  // past its last, its end. None on a row without runs, or one the layout did not keep. Never
+  // past `typed`, the bytes the caret can reach.
+  [[nodiscard]] ds::Option<std::size_t> offsetAt(const Layout& laid, std::string_view text, CellRange cell, std::size_t typed) noexcept;
 
 }

@@ -28,12 +28,21 @@ namespace telar::gui::features::history {
       facts.append(Kind::cwd, measurements.cwd, gap);
     }
 
+    if (measurements.has_detail) {
+      facts.append(Kind::detail, measurements.detail, gap);
+    }
+
     if (measurements.has_time) {
       facts.append(Kind::time, measurements.time, gap);
     }
 
+    // A long command takes the directory's room first, then the detail's.
     if (!measurements.expanded && measurements.command + facts.width > line.width) {
-      facts.removeCwd(gap);
+      facts.removeKind(Kind::cwd, gap);
+    }
+
+    if (facts.width - gap > line.width - chrome.px(minimum_command)) {
+      facts.removeKind(Kind::detail, gap);
     }
 
     while (facts.count > 0 && facts.width - gap > line.width - chrome.px(minimum_command)) {
@@ -61,6 +70,9 @@ namespace telar::gui::features::history {
       case Kind::time:
         result.time = area;
         break;
+      case Kind::detail:
+        result.detail = area;
+        break;
       }
 
       x += token.width + gap;
@@ -83,9 +95,9 @@ namespace telar::gui::features::history {
     --count;
   }
 
-  void HistoryRowGeometry::Facts::removeCwd(float gap) noexcept {
+  void HistoryRowGeometry::Facts::removeKind(Kind kind, float gap) noexcept {
     for (std::size_t index = 0; index < count; ++index) {
-      if (tokens[index].kind == Kind::cwd) {
+      if (tokens[index].kind == kind) {
         remove(index, gap);
 
         return;
@@ -221,9 +233,8 @@ namespace telar::gui::features::history {
       result.append(options.key_style == HistoryKeyStyle::mac ? "  ·  ⇞ older" : "  ·  PgUp older");
     }
 
-    if (options.fuzzy && options.has_query) {
-      result.append("  ·  fuzzy");
-    }
+    result.append(options.key_style == HistoryKeyStyle::mac ? "  ·  ⌥M " : "  ·  Alt+M ");
+    result.append(HistoryModes::name(options.match));
 
     return result;
   }

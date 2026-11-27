@@ -232,6 +232,69 @@ namespace telar::runtime::checkpoint {
     return true;
   }
 
+  EncodedBlocksRecord Reader::blocks() {
+    EncodedBlocksRecord record{.pane = u64::decode(input_), .count = u16::decode(input_)};
+    if (record.count > PaneBlocks::capacity) {
+      throw EncodingError{"Checkpoint has too many blocks"};
+    }
+
+    // Read once here, so a malformed block fails the checkpoint as any record does.
+    BlockReader blocks{input_};
+
+    for (std::size_t index = 0; index < record.count; ++index) {
+      static_cast<void>(blocks.next());
+    }
+
+    const auto length = blocks.consumed(input_);
+
+    record.encoded = input_.first(length);
+    input_ = input_.subspan(length);
+    return record;
+  }
+
+  BlockReader::BlockReader(tbc::val_a<std::span<const Byte>> bytes) noexcept
+      : input_(bytes) {}
+
+  tbc::val_a<CommandBlockRecord> BlockReader::next() {
+    CommandBlockRecord block;
+    const auto state = u8::decode(input_);
+
+    block.status = static_cast<std::int32_t>(u32::decode(input_));
+    block.duration_ms = u32::decode(input_);
+    block.started_ms = static_cast<std::int64_t>(u64::decode(input_));
+    block.lines = u16::decode(input_);
+    const auto nest = u8::decode(input_);
+
+    block.command = text16();
+    block.directory = text16();
+    block.host = text16();
+    block.user = text16();
+    block.branch = text16();
+    if (state > std::to_underlying(CommandBlockState::background) || nest > std::to_underlying(CommandBlockNest::inside) || block.command.size() > CommandBlockRing::command_bytes || block.directory.size() > max_block_directory_bytes || block.host.size() > max_block_host_bytes || block.user.size() > max_block_user_bytes || block.branch.size() > max_branch_bytes) {
+      throw EncodingError{"Invalid checkpoint block"};
+    }
+
+    block.state = static_cast<CommandBlockState>(state);
+    block.nest = static_cast<CommandBlockNest>(nest);
+    return block;
+  }
+
+  std::size_t BlockReader::consumed(std::span<const Byte> bytes) const noexcept {
+    return bytes.size() - input_.size();
+  }
+
+  tbc::val_a<std::string_view> BlockReader::text16() {
+    const auto length = u16::decode(input_);
+    if (length > input_.size()) {
+      throw EncodingError{"Truncated checkpoint block"};
+    }
+
+    const auto text = textView(input_.first(length));
+
+    input_ = input_.subspan(length);
+    return text;
+  }
+
   ds::Option<PaneRecord> Reader::pane() {
     PaneRecord record{.id = u64::decode(input_), .workspace = u64::decode(input_), .tab = u64::decode(input_), .cwd = text16(), .columns = u16::decode(input_), .rows = u16::decode(input_), .argument_count = u16::decode(input_), .arguments = {}};
 
@@ -498,6 +561,29 @@ namespace telar::runtime::checkpoint {
     }
   }
 
+  void Writer::write(const BlocksRecord& record) {
+    if (record.blocks.size() > PaneBlocks::capacity) {
+      throw EncodingError{"Invalid checkpoint block count"};
+    }
+
+    kind(Kind::blocks);
+    integer(record.pane);
+    integer(static_cast<std::uint16_t>(record.blocks.size()));
+    for (const auto& block : record.blocks) {
+      integer(static_cast<Byte>(block.state));
+      integer(static_cast<std::uint32_t>(block.status));
+      integer(block.duration_ms);
+      integer(static_cast<std::uint64_t>(block.started_ms));
+      integer(block.lines);
+      integer(static_cast<Byte>(block.nest));
+      text16(block.command);
+      text16(block.directory);
+      text16(block.host);
+      text16(block.user);
+      text16(block.branch);
+    }
+  }
+
   void Writer::write(const PlacesRecord& record) {
     if (record.payload.empty() || record.payload.size() > maximum_places_bytes) {
       throw EncodingError{"Invalid checkpoint places size"};
@@ -524,5 +610,6 @@ namespace telar::runtime::checkpoint {
   template void Writer::append<WorktreeRecord>(const WorktreeRecord& record);
   template void Writer::append<LayoutRecord>(const LayoutRecord& record);
   template void Writer::append<PlacesRecord>(const PlacesRecord& record);
+  template void Writer::append<BlocksRecord>(const BlocksRecord& record);
 
 }

@@ -164,6 +164,60 @@ namespace telar::gui::qt {
     emit terminalChanged(pane_id);
   }
 
+  void TerminalController::reuseBlock(std::uint64_t pane_id, std::size_t index, application::BlockReuse how) {
+    try {
+      static_cast<void>(store_.sessionMut().reuseBlock({.pane_id = pane_id, .index = index}, how));
+    } catch (const std::exception& error) {
+      emit failed(QString::fromUtf8(error.what()));
+    }
+
+    prompt_.publishWrite();
+    prompt_.publish(pane_id);
+    emit terminalChanged(pane_id);
+  }
+
+  void TerminalController::reuseRestored(std::uint64_t pane_id, std::size_t index, application::BlockReuse how) {
+    try {
+      static_cast<void>(store_.sessionMut().reuseRestored(pane_id, index, how));
+    } catch (const std::exception& error) {
+      emit failed(QString::fromUtf8(error.what()));
+    }
+
+    prompt_.publishWrite();
+    prompt_.publish(pane_id);
+    emit terminalChanged(pane_id);
+  }
+
+  void TerminalController::openFilter(std::uint64_t pane_id, std::size_t index) {
+    try {
+      static_cast<void>(application::terminal::filter::open(store_.sessionMut(), {.pane_id = pane_id, .index = index}));
+    } catch (const std::exception& error) {
+      emit failed(QString::fromUtf8(error.what()));
+    }
+
+    emit terminalChanged(pane_id);
+  }
+
+  void TerminalController::queryFilter(std::uint64_t pane_id, const application::terminal::filter::Query& query) {
+    try {
+      static_cast<void>(application::terminal::filter::query(store_.sessionMut(), query));
+    } catch (const std::exception& error) {
+      emit failed(QString::fromUtf8(error.what()));
+    }
+
+    emit terminalChanged(pane_id);
+  }
+
+  void TerminalController::closeFilter(std::uint64_t pane_id) {
+    try {
+      application::terminal::filter::close(store_.sessionMut());
+    } catch (const std::exception& error) {
+      emit failed(QString::fromUtf8(error.what()));
+    }
+
+    emit terminalChanged(pane_id);
+  }
+
   void TerminalController::selectBlock(std::uint64_t pane_id, ds::Option<std::size_t> index, bool typing_leaves) {
     try {
       store_.sessionMut().selectBlock(pane_id, index, typing_leaves);
