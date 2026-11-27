@@ -973,8 +973,13 @@ namespace telar::gui::qt {
           {QStringLiteral("menu"), shown(item.menu.of(text))},
       };
 
-      // What the item is, by the icon of its kind; an item that says no kind has none.
-      if (!kind.empty()) {
+      // What the item is, by the icon of its kind; an item that says no kind has none. A file
+      // the command line completes has its own icon, as in the picker.
+      if (kind == "file") {
+        putIcon(entry, fileIcon(item.word.of(text)));
+      } else if (kind == "folder") {
+        putIcon(entry, directoryIcon());
+      } else if (!kind.empty()) {
         putIcon(entry, kindIcon(kind));
       }
 

@@ -410,6 +410,126 @@ function _G.__telar_float(window)
   end
 end
 
+-- The command line as the window draws it. Neovim sends `:` uncolored, so its text is parsed
+-- here as Vim script, with the Lua of `:lua` and the shell command of `:!` in their own
+-- languages, and sent with what it completes: `[text, [[bytes, rgb or -1, attributes]...],
+-- completion type]`. A run's attributes are bold 1 and italic 2.
+local capture_styles = {}
+local function capture_style(capture, language)
+  local key = capture .. "." .. language
+  local found = capture_styles[key]
+  if found == nil then
+    found = false
+    -- `@function.call.lua` falls back as the highlighter does: `@function.call`, `@function`.
+    local name = "@" .. key
+    while name do
+      local highlight = vim.api.nvim_get_hl(0, { name = name, link = false, create = false })
+      if highlight.fg then
+        found = { highlight.fg, (highlight.bold and 1 or 0) + (highlight.italic and 2 or 0) }
+        break
+      end
+
+      name = name:match("^(.+)%.[^.]+$")
+    end
+
+    capture_styles[key] = found
+  end
+
+  return found or nil
+end
+
+vim.api.nvim_create_autocmd("ColorScheme", {
+  group = group,
+  callback = function()
+    capture_styles = {}
+  end,
+})
+
+-- The styles of a text's bytes, from one parse of it in `language`, offset by `from` bytes.
+local function color_bytes(styles, text, language, from)
+  local parsed, parser = pcall(vim.treesitter.get_string_parser, text, language)
+  if not parsed then
+    return
+  end
+
+  parser:parse(true)
+  parser:for_each_tree(function(tree, tree_language)
+    local name = tree_language:lang()
+    local query = vim.treesitter.query.get(name, "highlights")
+    if query == nil then
+      return
+    end
+
+    -- A capture later in a tree, or in an injected one, is the narrower: it wins.
+    for id, node in query:iter_captures(tree:root(), text) do
+      local capture = query.captures[id]
+      local style = capture:sub(1, 1) ~= "_" and capture ~= "spell" and capture ~= "nospell" and capture_style(capture, name)
+      if style then
+        local _, _, first, _, _, last = node:range(true)
+        for byte = first + 1, math.min(last, #text) do
+          styles[from + byte] = style
+        end
+      end
+    end
+  end)
+end
+
+local maximum_colored_bytes = 1024
+local function cmdline_runs(text)
+  if #text > maximum_colored_bytes then
+    return {}
+  end
+
+  local styles = {}
+  color_bytes(styles, text, "vim", 0)
+  -- Vim script has no grammar for a shell command: a shell's, when one is installed.
+  local bang = text:match("^%s*!()")
+  if bang and pcall(vim.treesitter.language.add, "bash") then
+    color_bytes(styles, text:sub(bang), "bash", bang - 1)
+  end
+
+  local runs, style, bytes = {}, nil, 0
+  for byte = 1, #text do
+    if styles[byte] ~= style and bytes > 0 then
+      runs[#runs + 1] = { bytes, style and style[1] or -1, style and style[2] or 0 }
+      bytes = 0
+    end
+
+    style = styles[byte]
+    bytes = bytes + 1
+  end
+
+  if bytes > 0 and (style or #runs > 0) then
+    runs[#runs + 1] = { bytes, style and style[1] or -1, style and style[2] or 0 }
+  end
+
+  return runs
+end
+
+local function tell_cmdline()
+  if vim.fn.getcmdtype() ~= ":" then
+    return
+  end
+
+  local text = vim.fn.getcmdline()
+  local colored, runs = pcall(cmdline_runs, text)
+  vim.rpcnotify(channel, "telar_cmdline", text, colored and runs or {}, vim.fn.getcmdcompltype())
+end
+
+vim.api.nvim_create_autocmd({ "CmdlineEnter", "CmdlineChanged" }, { group = group, callback = tell_cmdline })
+
+-- The first parse loads the grammars and their queries, which takes a moment: it is taken
+-- once Neovim is idle after starting, not on the first key typed after `:`.
+vim.api.nvim_create_autocmd("UIEnter", {
+  group = group,
+  once = true,
+  callback = function()
+    vim.defer_fn(function()
+      pcall(cmdline_runs, "lua vim.fn.has('nvim')")
+    end, 1500)
+  end,
+})
+
 -- `:Telar files`, `:Telar grep` and `:Telar buffers` ask the window for its picker, and
 -- `:Telar explore` for its explorer, on the directory of the file being edited with that file
 -- selected.

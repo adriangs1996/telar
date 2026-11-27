@@ -419,6 +419,8 @@ end
       explore(reader);
     } else if (method == "telar_status") {
       placedStatus(reader);
+    } else if (method == "telar_cmdline") {
+      colored(reader);
     } else if (method == "telar_buffers") {
       listed(reader);
     } else if (method == "telar_navigate") {
@@ -556,6 +558,50 @@ end
     const bool settled = screen_.settled();
 
     if (screen_.showFiles(files.view().first(kept))) {
+      publish(settled);
+    }
+  }
+
+  // `[text, [[bytes, rgb or -1, attributes]...], completion type]`: the configuration's colors
+  // for a text of the command line, and what it completes.
+  void NvimEditor::colored(msgpack::Reader& reader) {
+    constexpr std::uint32_t fields = 3;
+    constexpr std::int64_t largest_color = 0xFF'FFFF;
+    constexpr std::uint64_t bold = 1;
+    constexpr std::uint64_t italic = 2;
+    constexpr std::size_t completion_bytes = 64;
+    ds::Array<NvimColoredRun, max_nvim_text_runs> runs{};
+    std::uint32_t count = 0;
+
+    const auto text = reader.tuple(fields) ? reader.string() : ds::none;
+    if (!text || text->size() > max_nvim_line_bytes || !reader.array(count) || count > max_nvim_text_runs) {
+      return;
+    }
+
+    for (std::uint32_t index = 0; index < count; ++index) {
+      std::uint64_t bytes = 0;
+      std::int64_t color = -1;
+      std::uint64_t attributes = 0;
+
+      if (!reader.tuple(fields) || !reader.unsignedInteger(bytes) || !reader.integer(color) || !reader.unsignedInteger(attributes) || bytes > text->size() || color < -1 || color > largest_color) {
+        return;
+      }
+
+      auto& run = runs.atMut(index);
+
+      run.bytes = static_cast<std::uint32_t>(bytes);
+      run.highlight.foreground = color < 0 ? NvimHighlight::unset : static_cast<std::uint32_t>(color);
+      run.highlight.attributes = static_cast<std::uint16_t>(((attributes & bold) != 0 ? NvimHighlight::bold : 0U) | ((attributes & italic) != 0 ? NvimHighlight::italic : 0U));
+    }
+
+    const auto completes = reader.string();
+    if (!completes || completes->size() > completion_bytes) {
+      return;
+    }
+
+    const bool settled = screen_.settled();
+
+    if (screen_.colorCommandLine(*text, runs.view().first(count), *completes)) {
       publish(settled);
     }
   }

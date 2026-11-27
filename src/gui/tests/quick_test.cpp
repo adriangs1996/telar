@@ -1021,6 +1021,66 @@ return {api_version = 2, client = {
       press(Qt::Key_Escape, QString{});
       QTRY_VERIFY_WITH_TIMEOUT(!view->cmdline().value(QStringLiteral("visible")).toBool() && !view->popupMenu().value(QStringLiteral("visible")).toBool(), runtime_wait_ms);
 
+      // The line names what is written in it as a mode, hides the prefix that opened the mode,
+      // and colors the text in its language, which Neovim sends uncolored.
+      const auto mode = [&] {
+        for (const auto* chip : test::visualItems(*window_->contentItem(), QStringLiteral("cmdlineMode"))) {
+          if (chip->isVisible() && chip->opacity() > 0) {
+            return chip->property("label").toString();
+          }
+        }
+
+        return QString{};
+      };
+      const auto leave = [&] {
+        press(Qt::Key_Escape, QString{});
+        QTRY_VERIFY_WITH_TIMEOUT(!view->cmdline().value(QStringLiteral("visible")).toBool() && !view->popupMenu().value(QStringLiteral("visible")).toBool(), runtime_wait_ms);
+      };
+
+      view->send(QStringLiteral(":lua vim.fn.has('nvim')"));
+      QTRY_VERIFY2_WITH_TIMEOUT(mode() == QStringLiteral("Lua"), qPrintable(mode() + QLatin1Char('|') + view->cmdline().value(QStringLiteral("text")).toString() + QLatin1Char('|') + view->cmdline().value(QStringLiteral("first")).toString()), runtime_wait_ms);
+      QTRY_VERIFY_WITH_TIMEOUT(view->cmdline().value(QStringLiteral("runs")).toList().size() > 2, runtime_wait_ms);
+      shoot(QStringLiteral("editor-cmdline-lua"));
+      leave();
+
+      view->send(QStringLiteral(":!git log --oneline -5"));
+      QTRY_COMPARE_WITH_TIMEOUT(mode(), QStringLiteral("Shell"), runtime_wait_ms);
+      shoot(QStringLiteral("editor-cmdline-shell"));
+      leave();
+
+      view->send(QStringLiteral("/TELAR"));
+      QTRY_COMPARE_WITH_TIMEOUT(mode(), QStringLiteral("Search \u2193"), runtime_wait_ms);
+      shoot(QStringLiteral("editor-cmdline-search"));
+      leave();
+
+      // A path being completed lists files and folders with their icons, inside the line.
+      {
+        const QTemporaryDir completed;
+        QVERIFY(QDir{completed.path()}.mkpath(QStringLiteral("src/gui")));
+        QVERIFY(QDir{completed.path()}.mkpath(QStringLiteral("scripts")));
+        writeTestFile(QDir{completed.path()}.filePath(QStringLiteral("setup.lua")), "return {}\n");
+        writeTestFile(QDir{completed.path()}.filePath(QStringLiteral("SECURITY.md")), "# Security\n");
+        view->send(QStringLiteral("<Cmd>silent cd %1<CR>:edit s").arg(completed.path()));
+        QTRY_COMPARE_WITH_TIMEOUT(view->cmdline().value(QStringLiteral("text")).toString(), QStringLiteral("edit s"), runtime_wait_ms);
+        press(Qt::Key_Tab, QStringLiteral("\t"));
+        press(Qt::Key_Tab, QStringLiteral("\t"));
+
+        const auto icons = [&] {
+          QStringList found;
+
+          for (const auto& item : view->popupMenu().value(QStringLiteral("items")).toList()) {
+            found.append(item.toMap().value(QStringLiteral("kind")).toString());
+          }
+
+          return found;
+        };
+
+        QTRY_VERIFY2_WITH_TIMEOUT(icons().contains(QStringLiteral("folder")) && icons().contains(QStringLiteral("file")) && !icons().contains(QString{}), qPrintable(icons().join(QLatin1Char(','))), runtime_wait_ms);
+        shoot(QStringLiteral("editor-cmdline-files"));
+        leave();
+        view->send(QStringLiteral("<Cmd>silent cd -<CR>"));
+      }
+
       // The command line's text comes with Neovim's highlights, as a prompt that colors what is
       // typed in it asks for.
       view->send(QStringLiteral(":call input({'prompt': 'Color ', 'highlight': {typed -> [[0, len(typed), 'ErrorMsg']]}})<CR>red"));

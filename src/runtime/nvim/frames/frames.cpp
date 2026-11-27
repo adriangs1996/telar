@@ -63,6 +63,32 @@ namespace telar::runtime {
     };
 
     // A highlight as the style of a cell on the wire.
+    // What a word the command line completes is, which Neovim does not say, by what the line
+    // completes: the kinds a client has an icon for, and none for the rest.
+    constexpr tbc::val_static<std::string_view> completedKind(std::string_view completes, std::string_view word) noexcept {
+      if (completes == "dir" || completes == "dir_in_path") {
+        return "folder";
+      }
+
+      if (completes == "file" || completes == "file_in_path" || completes == "buffer" || completes == "runtime") {
+        return word.ends_with('/') ? "folder" : "file";
+      }
+
+      if (completes == "function" || completes == "user_func") {
+        return "function";
+      }
+
+      if (completes == "option") {
+        return "property";
+      }
+
+      if (completes == "color" || completes == "highlight") {
+        return "color";
+      }
+
+      return completes == "event" ? "event" : std::string_view{};
+    }
+
     constexpr CellStyle styleOf(const NvimHighlight& highlight) noexcept {
       CellStyle style{
           .foreground = colorOf(highlight.foreground),
@@ -401,6 +427,16 @@ namespace telar::runtime {
       styled = styled || chunk.highlight != 0;
     }
 
+    // Neovim leaves `:` uncolored: the configuration's colors, while they are of this text.
+    if (!styled && line.first == ':' && line.colored.view() == line.content.view()) {
+      run_count = 0;
+      for (const auto& run : line.coloring.view().first(std::min(line.coloring.size(), runs.size()))) {
+        runs.atMut(run_count++) = {.bytes = run.bytes, .style = styleOf(run.highlight)};
+      }
+
+      styled = run_count != 0;
+    }
+
     write(
         payload_,
         NvimCmdline{
@@ -443,11 +479,15 @@ namespace telar::runtime {
 
     if (menu.visible && !keeps) {
       const std::string_view text{menu.text.data(), menu.text.size()};
+      const auto completes = menu.grid < 0 ? screen.commandLine().completes.view() : std::string_view{};
 
       for (const auto& item : menu.items.view().subspan(first, std::min(total - first, max_nvim_menu_items))) {
+        const auto word = clipped(item.word.of(text), max_nvim_label_bytes);
+        const auto kind = item.kind.of(text);
+
         items.atMut(count++) = {
-            .word = clipped(item.word.of(text), max_nvim_label_bytes),
-            .kind = clipped(item.kind.of(text), max_nvim_label_bytes),
+            .word = word,
+            .kind = clipped(kind.empty() ? completedKind(completes, word) : kind, max_nvim_label_bytes),
             .menu = clipped(item.menu.of(text), max_nvim_label_bytes),
         };
       }

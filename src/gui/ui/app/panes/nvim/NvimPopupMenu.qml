@@ -5,7 +5,9 @@ import Telar.Gui
 
 // Neovim's completion menu as a list of telar's own: the word, what kind of thing it is as a
 // chip, and its note, hung from the cell Neovim names. Neovim owns the selection; this shows
-// the rows around it.
+// the rows around it. The menu of the command line is part of the line's surface instead: it
+// stands in the room the line docks it in, as tall rows that give a file or a folder its icon
+// and keep the folder of a path quieter than its name.
 Item {
     id: root
 
@@ -21,6 +23,10 @@ Item {
 
     required property point anchor
     required property real cellHeight
+    // Inside the command line's surface, in the room `dock` gives it, the chosen row in `tone`.
+    property bool embedded: false
+    property rect dock
+    property color tone: colors.accent
     readonly property var items: menu.items ?? []
     readonly property int selected: (menu.selected ?? -1) - (menu.first ?? 0)
     readonly property bool shown: (menu.visible ?? false) && items.length > 0
@@ -28,22 +34,49 @@ Item {
     readonly property string info: (menu.info ?? "").trim()
     readonly property real infoWidth: Math.min(300 * ratio, parent.width * 0.4)
     readonly property bool infoRight: x + width + 6 * ratio + infoWidth <= parent.width - 8 * ratio
-    readonly property int visibleRows: Math.min(items.length, 10)
-    readonly property real rowHeight: 26 * ratio
+    readonly property int visibleRows: Math.min(items.length, embedded ? 8 : 10)
+    readonly property real rowHeight: (embedded ? 32 : 26) * ratio
     // The column of the kinds' chips, kept for every row once one item says its kind.
     readonly property bool kinded: items.some(item => (item.kind ?? "").length > 0)
+    // The height the menu takes, shown or not, which a command line makes room for.
+    readonly property real fullHeight: visibleRows * rowHeight + 2 * padding
     readonly property real iconSide: Math.round(typography.body * 1.05)
     readonly property real chipWidth: 26 * ratio
-    readonly property real padding: 4 * ratio
+    readonly property real padding: (embedded ? 6 : 4) * ratio
     // The first row shown: the selection is kept in view.
     readonly property int firstRow: Math.max(0, Math.min(items.length - visibleRows, selected - Math.floor(visibleRows / 2)))
-    readonly property bool above: anchor.y + cellHeight + height + 8 * ratio > parent.height && anchor.y - height > 0
+    readonly property bool above: !embedded && anchor.y + cellHeight + height + 8 * ratio > parent.height && anchor.y - height > 0
     property real reveal: shown ? 1 : 0
 
-    width: Math.min(parent.width - 16 * ratio, 420 * ratio)
-    height: visibleRows * rowHeight + 2 * padding
-    x: Math.round(Math.max(8 * ratio, Math.min(anchor.x - 10 * ratio, parent.width - width - 8 * ratio)))
-    y: Math.round(above ? anchor.y - height - 4 * ratio : anchor.y + cellHeight + 4 * ratio)
+    // A word's pieces as drawn: the letters typed in the tone, and the folder of a path before
+    // its name quieter, when the menu is the command line's.
+    function pieces(item, chosen) {
+        const runs = item.runs ?? [{text: item.word ?? "", matched: false}];
+        const word = item.word ?? "";
+        const slash = embedded ? word.replace(/\/$/, "").lastIndexOf("/") + 1 : 0;
+        const kept = [];
+        let at = 0;
+
+        for (const run of runs) {
+            const cut = Math.max(0, Math.min(run.text.length, slash - at));
+            const parts = cut > 0 && cut < run.text.length ? [run.text.slice(0, cut), run.text.slice(cut)] : [run.text];
+
+            for (const part of parts) {
+                const folder = at < slash;
+                const color = run.matched ? (embedded ? tone : colors.text) : folder ? Qt.alpha(colors.text, 0.42) : chosen ? colors.text : colors.subtext0;
+
+                kept.push({text: part, matched: run.matched, color: color});
+                at += part.length;
+            }
+        }
+
+        return kept;
+    }
+
+    width: embedded ? dock.width : Math.min(parent.width - 16 * ratio, 420 * ratio)
+    height: fullHeight
+    x: embedded ? dock.x : Math.round(Math.max(8 * ratio, Math.min(anchor.x - 10 * ratio, parent.width - width - 8 * ratio)))
+    y: embedded ? dock.y : Math.round(above ? anchor.y - height - 4 * ratio : anchor.y + cellHeight + 4 * ratio)
     opacity: reveal
     visible: reveal > 0
 
@@ -55,6 +88,7 @@ Item {
         anchors.fill: parent
         colors: root.colors
         ratio: root.ratio
+        visible: !root.embedded
     }
 
     Item {
@@ -83,8 +117,19 @@ Item {
                 NativeRoundedRectangle {
                     anchors.fill: parent
                     radius: ChromeStyle.controlRadius * root.ratio
-                    color: Qt.alpha(root.colors.text, row.chosen ? ChromeStyle.selectionAlpha : ChromeStyle.selectionAlpha / 2)
+                    color: root.embedded && row.chosen ? Qt.alpha(root.tone, 0.16) : Qt.alpha(root.colors.text, row.chosen ? ChromeStyle.selectionAlpha : ChromeStyle.selectionAlpha / 2)
                     visible: row.chosen || pointer.containsMouse
+                }
+
+                // On the command line a kind is its icon alone, in the row's color.
+                ChromeIcon {
+                    x: 10 * root.ratio
+                    width: Math.round(root.typography.body * 1.05)
+                    height: parent.height
+                    glyph: row.item.icon ?? ""
+                    pixelSize: width
+                    color: row.chosen ? root.tone : Qt.alpha(root.colors.subtext0, 0.85)
+                    visible: root.embedded && glyph.length > 0
                 }
 
                 ActionPointer {
@@ -104,7 +149,7 @@ Item {
                     y: Math.round((parent.height - height) / 2)
                     width: root.chipWidth
                     height: 18 * root.ratio
-                    visible: label.length > 0
+                    visible: label.length > 0 && !root.embedded
 
                     NativeRoundedRectangle {
                         anchors.fill: parent
@@ -138,13 +183,13 @@ Item {
                 // The word, the letters of it that were typed marked.
                 Row {
                     id: word
-                    x: root.kinded ? 14 * root.ratio + root.chipWidth : 8 * root.ratio
+                    x: root.embedded ? (root.kinded ? 20 * root.ratio + Math.round(root.typography.body * 1.05) : 12 * root.ratio) : root.kinded ? 14 * root.ratio + root.chipWidth : 8 * root.ratio
                     height: parent.height
                     width: Math.min(implicitWidth, Math.max(0, parent.width - x - detail.implicitWidth - 20 * root.ratio))
                     clip: true
 
                     Repeater {
-                        model: row.item.runs ?? [{text: row.item.word ?? "", matched: false}]
+                        model: root.pieces(row.item, row.chosen)
 
                         delegate: CellText {
                             required property var modelData
@@ -152,7 +197,7 @@ Item {
                             text: modelData.text
                             grid: root.typography.grid
                             bold: modelData.matched
-                            color: modelData.matched || row.chosen ? root.colors.text : root.colors.subtext0
+                            color: modelData.color
                         }
                     }
                 }

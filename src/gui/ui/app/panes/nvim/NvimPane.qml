@@ -441,16 +441,23 @@ FocusScope {
             z: 960
             line: view.cmdline
             cellHeight: view.cellHeight
+            // The completions of the line are part of its surface.
+            menuHeight: completion.embedded && completion.shown ? completion.fullHeight : 0
+            menuChosen: completion.embedded && completion.shown && completion.selected >= 0
             colors: root.colors
             typography: root.typography
             ratio: root.ratio
         }
 
         NvimPopupMenu {
+            id: completion
             z: 970
             menu: view.popupMenu
-            // Under the cell Neovim names, or under the command line it completes.
-            anchor: (view.popupMenu.onCmdline ?? false) ? Qt.point(line.x + line.caretX, line.y + line.height - view.cellHeight) : Qt.point(view.popupMenu.x ?? 0, view.popupMenu.y ?? 0)
+            // Under the cell Neovim names, or inside the command line it completes.
+            embedded: (view.popupMenu.onCmdline ?? false) && line.shown
+            dock: Qt.rect(line.x, line.y + line.menuTop, line.width, 0)
+            tone: line.tone
+            anchor: Qt.point(view.popupMenu.x ?? 0, view.popupMenu.y ?? 0)
             cellHeight: view.cellHeight
             colors: root.colors
             typography: root.typography
