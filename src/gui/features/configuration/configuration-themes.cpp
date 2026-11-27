@@ -32,6 +32,14 @@ namespace telar::gui::features::configuration {
       return "gruvbox-hard";
     }
 
+    if (name == "transylvania_vela") {
+      return "transylvania-vela";
+    }
+
+    if (name == "transylvania_sangre") {
+      return "transylvania-sangre";
+    }
+
     if (name == "default") {
       return "terminal";
     }

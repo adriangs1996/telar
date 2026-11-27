@@ -144,7 +144,8 @@ theme's background, the spider its text tones and the thread, feet and cursor
 its accent. Any theme without its own file uses `telar-mark.svg`, in Zenburn's
 colors. One per theme: `shade`, `cybervenom`, `vesper`, `catppuccin`,
 `tokyo-night`, `pierre-dark`, `pierre-dark-soft`, `kanagawa`,
-`kanagawa-dragon`, `gruvbox`, `gruvbox-hard`, `dracula`, `zenburn` and `terminal`.
+`kanagawa-dragon`, `gruvbox`, `gruvbox-hard`, `dracula`, `transylvania`,
+`transylvania-vela`, `transylvania-sangre`, `zenburn` and `terminal`.
 
 `telar-mark-64.png` is the mark's 64 x 64 RGBA rasterization, SHA-256
 `868bb574daa2dc12544877e8cbc7504d94e84607148f7ce374fa987361a48a88`, and

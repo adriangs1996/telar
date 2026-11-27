@@ -177,7 +177,6 @@ namespace {
     constexpr ThemeRgb zenburn_bg_1{43, 43, 43};
 
     check(zenburn.terminal.background == zenburn_bg_1, "Zenburn must paint the terminal zenburn-bg-1");
-    check(default_theme_values == zenburn, "Zenburn must be the default theme");
     const auto gruvbox = themeValuesByName("Gruvbox");
     const auto gruvbox_hard = themeValuesByName("gruvbox_hard");
     constexpr ThemeRgb dark0{40, 40, 40};
@@ -206,6 +205,41 @@ namespace {
     const auto dracula_parameter = dracula.syntaxStyle(SyntaxRole::parameter);
 
     check(dracula_type.italic && dracula_parameter.italic && !dracula.syntaxStyle(SyntaxRole::comment).italic, "Dracula must italicize types and parameters, not comments");
+    // Each Transylvania preset keeps its keyword color for keywords alone and draws operators
+    // and punctuation in one muted tone.
+    const auto checkTransylvania = [](std::string_view name, ThemeName base, ThemeRgb background) {
+      const auto theme = themeValuesByName(name);
+      const auto keyword = theme.syntaxStyle(SyntaxRole::keyword).color;
+      bool keyword_alone = true;
+
+      for (std::size_t index = 0; index < syntax_names.size(); ++index) {
+        const auto role = static_cast<SyntaxRole>(index);
+
+        keyword_alone = keyword_alone && (role == SyntaxRole::keyword || theme.syntaxStyle(role).color != keyword);
+      }
+
+      const auto operator_color = theme.syntaxStyle(SyntaxRole::operator_name).color;
+      const auto italic = theme.syntaxStyle(SyntaxRole::comment).italic && theme.syntaxStyle(SyntaxRole::type).italic && theme.syntaxStyle(SyntaxRole::parameter).italic;
+
+      check(theme.base == base && theme.terminal.background == background, "a Transylvania preset must paint the terminal its background");
+      check(keyword_alone, "a Transylvania preset must keep its keyword color for keywords");
+      check(operator_color == theme.syntaxStyle(SyntaxRole::punctuation).color && operator_color != theme.syntaxStyle(SyntaxRole::plain).color, "a Transylvania preset must draw operators and punctuation in one muted tone");
+      check(italic, "a Transylvania preset must italicize comments, types and parameters");
+    };
+
+    checkTransylvania("transylvania", ThemeName::transylvania, ThemeRgb{22, 24, 27});
+    checkTransylvania("transylvania_vela", ThemeName::transylvania_vela, ThemeRgb{26, 23, 21});
+    checkTransylvania("Transylvania-Sangre", ThemeName::transylvania_sangre, ThemeRgb{23, 21, 26});
+    check(default_theme_values == themeValuesByName("transylvania"), "Transylvania must be the default theme");
+    // A window paints the default theme before its configuration loads: its colors are the
+    // default theme's, projected.
+    auto unconfigured = projectTheme(default_theme_values);
+
+    unconfigured.chrome = decltype(unconfigured.chrome){};
+    unconfigured.syntax = decltype(unconfigured.syntax){};
+    unconfigured.syntax_italic = 0;
+    unconfigured.syntax_bold = 0;
+    check(unconfigured == Theme{}, "the colors a window paints before its configuration loads must be the default theme's");
   }
 
   // Zenburn's numbers and properties have no ANSI color: a pane's programs get them from the

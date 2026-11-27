@@ -50,7 +50,7 @@ namespace telar::gui::qt {
       return pixels;
     }
 
-    // The default mark wears Zenburn, Telar's default theme and brand colors; every other preset has its own.
+    // The default mark wears Zenburn, Telar's brand colors; every preset has its own.
     QString telarSource(bool monochrome, int theme) {
       if (monochrome) {
         return QStringLiteral(":/telar/fonts/telar-mark-mono.svg");
@@ -76,6 +76,9 @@ namespace telar::gui::qt {
           ThemedMark{.theme = ThemeName::gruvbox, .source = u":/telar/fonts/telar-mark-gruvbox.svg"},
           ThemedMark{.theme = ThemeName::gruvbox_hard, .source = u":/telar/fonts/telar-mark-gruvbox-hard.svg"},
           ThemedMark{.theme = ThemeName::dracula, .source = u":/telar/fonts/telar-mark-dracula.svg"},
+          ThemedMark{.theme = ThemeName::transylvania, .source = u":/telar/fonts/telar-mark-transylvania.svg"},
+          ThemedMark{.theme = ThemeName::transylvania_vela, .source = u":/telar/fonts/telar-mark-transylvania-vela.svg"},
+          ThemedMark{.theme = ThemeName::transylvania_sangre, .source = u":/telar/fonts/telar-mark-transylvania-sangre.svg"},
       };
 
       const auto* const found = std::ranges::find_if(marks, [theme](const ThemedMark& mark) {

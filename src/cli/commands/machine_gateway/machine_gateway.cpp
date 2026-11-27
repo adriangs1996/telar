@@ -2197,7 +2197,7 @@ namespace telar::runtime::cli {
   }
 
   std::string_view WindowOptions::canonicalTheme(std::string_view name) {
-    static constexpr auto aliases = ds::Array<std::pair<std::string_view, std::string_view>, 9>{{{"catppuccin-mocha", "catppuccin"}, {"mocha", "catppuccin"}, {"tokyonight", "tokyo-night"}, {"tokyo_night", "tokyo-night"}, {"kanagawa-wave", "kanagawa"}, {"kanagawa_wave", "kanagawa"}, {"kanagawa_dragon", "kanagawa-dragon"}, {"gruvbox_hard", "gruvbox-hard"}, {"default", "terminal"}}};
+    static constexpr auto aliases = ds::Array<std::pair<std::string_view, std::string_view>, 11>{{{"catppuccin-mocha", "catppuccin"}, {"mocha", "catppuccin"}, {"tokyonight", "tokyo-night"}, {"tokyo_night", "tokyo-night"}, {"kanagawa-wave", "kanagawa"}, {"kanagawa_wave", "kanagawa"}, {"kanagawa_dragon", "kanagawa-dragon"}, {"gruvbox_hard", "gruvbox-hard"}, {"transylvania_vela", "transylvania-vela"}, {"transylvania_sangre", "transylvania-sangre"}, {"default", "terminal"}}};
 
     for (const auto& [alias, canonical] : aliases) {
       if (asciiEqualIgnoreCase(name, alias)) {
@@ -2205,7 +2205,7 @@ namespace telar::runtime::cli {
       }
     }
 
-    static constexpr auto names = ds::Array<std::string_view, 14>{"shade", "vesper", "catppuccin", "tokyo-night", "pierre-dark", "pierre-dark-soft", "kanagawa", "kanagawa-dragon", "terminal", "cybervenom", "zenburn", "gruvbox", "gruvbox-hard", "dracula"};
+    static constexpr auto names = ds::Array<std::string_view, 17>{"shade", "vesper", "catppuccin", "tokyo-night", "pierre-dark", "pierre-dark-soft", "kanagawa", "kanagawa-dragon", "terminal", "cybervenom", "zenburn", "gruvbox", "gruvbox-hard", "dracula", "transylvania", "transylvania-vela", "transylvania-sangre"};
     const auto* const found = std::ranges::find_if(names, [&](auto candidate) {
       return asciiEqualIgnoreCase(name, candidate);
     });

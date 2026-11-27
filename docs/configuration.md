@@ -262,8 +262,9 @@ theme = "cybervenom"
 ```
 
 Each preset defines Telar's chrome roles and the native terminal's foreground,
-background, ANSI palette and cursor colors. Built-ins are `zenburn` (the default),
-`shade`, `cybervenom`, `vesper`, `catppuccin` (Mocha), `tokyo-night`, `kanagawa` (Wave),
+background, ANSI palette and cursor colors. Built-ins are `transylvania` (the
+default), `transylvania-vela`, `transylvania-sangre`, `zenburn`, `shade`,
+`cybervenom`, `vesper`, `catppuccin` (Mocha), `tokyo-night`, `kanagawa` (Wave),
 `kanagawa-dragon`, `gruvbox`, `gruvbox-hard`, `dracula`, `pierre-dark`,
 `pierre-dark-soft`, and `terminal`. The Pierre presets use the dark and dark-soft
 palettes from Adrian's Neovim theme, including syntax and ANSI colors.
@@ -292,6 +293,14 @@ and operators pink, functions green, types, namespaces and builtins cyan
 italic, parameters orange italic, numbers and constants purple, strings
 yellow, comments `#6272a4`. Muted chrome text uses the comment color too, as
 the reference does, so it reads at 3:1 against the background.
+The Transylvania presets share one syntax: the keyword color belongs to keywords
+alone, operators and punctuation recede to one muted tone, and comments, types,
+builtins and parameters are italic. Every syntax role clears 4.5:1 against its
+background and comments clear 4:1. `transylvania` is moonlight: `#16181b` with
+`#d6d5d1` text, `#a3b6d1` accents and orange keywords. `transylvania-vela` is
+candlelight: `#1a1715` with `#ddd4c6` text, `#e3a857` accents and orange keywords.
+`transylvania-sangre` is blood: `#17151a` with `#d8d2cf` text and crimson `#d9596c`
+accents and keywords. Their ANSI colors come from their syntax colors.
 The window uses the preset's terminal
 colors; child truecolor and OSC overrides still apply. The `terminal` preset
 uses host-relative chrome roles and a neutral explicit palette, since the

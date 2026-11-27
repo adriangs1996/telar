@@ -778,6 +778,9 @@ namespace {
       QVERIFY(ProviderArtwork::telar(mark_side, false, static_cast<int>(ThemeName::gruvbox)) != default_mark);
       QVERIFY(ProviderArtwork::telar(mark_side, false, static_cast<int>(ThemeName::gruvbox_hard)) != ProviderArtwork::telar(mark_side, false, static_cast<int>(ThemeName::gruvbox)));
       QVERIFY(ProviderArtwork::telar(mark_side, false, static_cast<int>(ThemeName::dracula)) != default_mark);
+      QVERIFY(ProviderArtwork::telar(mark_side, false, static_cast<int>(ThemeName::transylvania)) != default_mark);
+      QVERIFY(ProviderArtwork::telar(mark_side, false, static_cast<int>(ThemeName::transylvania_vela)) != ProviderArtwork::telar(mark_side, false, static_cast<int>(ThemeName::transylvania)));
+      QVERIFY(ProviderArtwork::telar(mark_side, false, static_cast<int>(ThemeName::transylvania_sangre)) != ProviderArtwork::telar(mark_side, false, static_cast<int>(ThemeName::transylvania)));
       QCOMPARE(ProviderArtwork::telar(mark_side, false, std::numeric_limits<int>::max()), default_mark);
       const auto catppuccin_mark = ProviderArtwork::telar(mark_side, false, static_cast<int>(ThemeName::catppuccin));
 
