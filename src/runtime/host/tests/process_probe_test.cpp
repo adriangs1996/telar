@@ -65,6 +65,24 @@ namespace {
     ::close(input[1]);
   }
 
+  // Quoted arguments paste back as the same arguments: only those that need it are in single quotes,
+  // a quote in one as '\'', and what does not fit leaves out whole arguments.
+  void testQuotedArguments() {
+    using namespace std::string_view_literals;
+
+    const auto arguments = "claude\0--name=Fix Monitor UI\0it's\0-I/usr/include\0a$b\0"sv;
+    const ProcessArguments parsed{arguments};
+    ds::Array<char, 128> output{};
+
+    check(parsed.joined(output.viewMut()) == "claude --name=Fix Monitor UI it's -I/usr/include a$b");
+    check(parsed.quoted(output.viewMut()) == R"(claude '--name=Fix Monitor UI' 'it'\''s' -I/usr/include 'a$b')", std::string{parsed.quoted(output.viewMut())});
+    check(ProcessArguments{"ls\0-la\0"sv}.quoted(output.viewMut()) == "ls -la");
+    check(parsed.quoted(output.viewMut().first(30)) == "claude '--name=Fix Monitor UI'", std::string{parsed.quoted(output.viewMut().first(30))});
+    check(parsed.quoted(output.viewMut().first(29)) == "claude");
+    check(parsed.quoted(output.viewMut().first(3)).empty());
+  }
+
   const telar::testing::Case case_controlling_terminal{"process_probe.controlling_terminal", testControllingTerminal};
+  const telar::testing::Case case_quoted_arguments{"process_probe.quoted_arguments", testQuotedArguments};
 
 }

@@ -510,6 +510,76 @@ namespace telar::gui::features::nvim {
     return nullptr;
   }
 
+  namespace {
+
+    // The character Neovim rules a row with between two windows one over the other, when no
+    // status line stands there.
+    bool rules(std::string_view text) noexcept {
+      return text == "─" || text == "━" || text == "═";
+    }
+
+  }
+
+  WindowSeparators separators(const Editor& editor, const Grid& window) noexcept {
+    WindowSeparators found;
+    const auto* base = editor.grid(1);
+
+    if (base == nullptr || window.id == 1 || window.placement != NvimPlacement::window || window.column < 0) {
+      return found;
+    }
+
+    if (window.column > 0) {
+      found.left = CellArea{.row = window.row, .column = window.column - 1, .rows = window.height, .columns = 1};
+    }
+
+    const auto above = window.row - 1;
+    if (above >= 0 && std::cmp_less(above, base->screen.rows()) && std::cmp_less(window.column, base->screen.columns()) &&
+        rules(base->screen.row(static_cast<std::size_t>(above))[static_cast<std::size_t>(window.column)].utf8())) {
+      found.above = CellArea{.row = above, .column = window.column, .rows = 1, .columns = window.width};
+    }
+
+    return found;
+  }
+
+  void coverDefaultRow(const Editor& editor, std::size_t row, std::span<Byte> covered) noexcept {
+    const auto line = static_cast<std::int64_t>(row);
+    const auto whole = static_cast<std::int64_t>(covered.size());
+    const bool status = editor.status_row && *editor.status_row == row;
+
+    std::ranges::fill(covered, static_cast<Byte>(status ? 1 : 0));
+    if (status) {
+      return;
+    }
+
+    const auto mark = [&](const CellArea& area) {
+      if (line < area.row || line >= std::int64_t{area.row} + area.rows) {
+        return;
+      }
+
+      const auto first = std::clamp<std::int64_t>(area.column, 0, whole);
+      const auto last = std::clamp<std::int64_t>(std::int64_t{area.column} + area.columns, first, whole);
+
+      std::ranges::fill(covered.subspan(static_cast<std::size_t>(first), static_cast<std::size_t>(last - first)), Byte{1});
+    };
+
+    for (const auto& grid : editor.grids) {
+      if (grid->id == 1 || grid->placement != NvimPlacement::window) {
+        continue;
+      }
+
+      const auto [left, above] = separators(editor, *grid);
+
+      mark({.row = grid->row, .column = grid->column, .rows = grid->height, .columns = grid->width});
+      if (left) {
+        mark(*left);
+      }
+
+      if (above) {
+        mark(*above);
+      }
+    }
+  }
+
   State::State(Memory& memory)
       : memory_(memory),
         editors_(memory) {}
@@ -963,7 +1033,9 @@ namespace telar::gui::features::nvim {
     auto& picker = editor->picker;
 
     clearMatches(picker);
-    picker.truncated = message.truncated;
+    // The runtime says when it could not index every path; a list as long as a search takes
+    // has more past it too.
+    picker.truncated = message.truncated || message.matches.size() >= FindPaths::maximum_limit;
     for (const auto& match : message.matches) {
       const auto first = static_cast<std::uint32_t>(picker.positions.size());
 

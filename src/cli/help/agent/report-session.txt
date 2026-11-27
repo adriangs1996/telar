@@ -12,9 +12,9 @@ Arguments:
 
 Effects: the runtime stores the typed reference. After a restart it relaunches the
 pane's shell and types the agent's own resume command (`claude --resume`, `codex
-resume`, `pi --session`, `cursor-agent --resume`, `opencode --session`). The
-installed hooks report the session they receive the same way, so an agent with
-`telar integration install` needs no call. The target must already be observed as
-an agent. Starts the local runtime when none runs.
+resume`, `pi --session`, `cursor-agent --resume`, `opencode --session`, `agy
+--resume`). The installed hooks report the session they receive the same way, so
+an agent with `telar integration install` needs no call. The target must already
+be observed as an agent. Starts the local runtime when none runs.
 
 Results: nothing; exit 0, 2 when the agent is unknown.

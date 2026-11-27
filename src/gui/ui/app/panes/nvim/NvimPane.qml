@@ -44,6 +44,7 @@ FocusScope {
         focus: true
         controller: root.controller
         paneId: root.paneId
+        pickerColumns: pick.columns
         onPressed: root.pressed()
 
         Repeater {
@@ -76,16 +77,6 @@ FocusScope {
                     to: 1
                     duration: 140
                     easing.type: Easing.OutCubic
-                }
-
-                // Neovim draws a window over whatever the grid under it holds: the window hides
-                // it, as the pane's own background would.
-                Rectangle {
-                    readonly property color base: root.colors.terminalBackground
-
-                    anchors.fill: parent
-                    visible: !cell.floating && cell.record.kind !== "base"
-                    color: Qt.rgba(base.r, base.g, base.b, 1)
                 }
 
                 // The sides of a float Neovim borders with characters: the window frames it
@@ -212,8 +203,9 @@ FocusScope {
             }
         }
 
-        // Between two windows Neovim fills cells with a separator's character: a line of the
-        // window's own stands over each. The cells stay Neovim's to drag.
+        // Between two windows Neovim fills cells with a separator's character, which the default
+        // grid leaves undrawn: a line of the window's own stands over each. The cells stay
+        // Neovim's to drag.
         Repeater {
             model: view.separators
 
@@ -227,13 +219,6 @@ FocusScope {
                 z: 0.5
                 width: modelData.width
                 height: modelData.height
-
-                Rectangle {
-                    readonly property color base: root.colors.terminalBackground
-
-                    anchors.fill: parent
-                    color: Qt.rgba(base.r, base.g, base.b, 1)
-                }
 
                 Rectangle {
                     x: separator.modelData.vertical ? Math.round((parent.width - width) / 2) : 0
@@ -474,6 +459,15 @@ FocusScope {
                 view.chooseMenu((view.popupMenu.first ?? 0) + index);
                 view.forceActiveFocus();
             }
+        }
+
+        // Under the picker the editor recedes, so the panel stands in front of it: its surface
+        // is the editor's own color, and the preview inside it a float of the editor's.
+        Rectangle {
+            z: 985
+            anchors.fill: parent
+            visible: pick.reveal > 0
+            color: Qt.rgba(0, 0, 0, 0.32 * pick.reveal)
         }
 
         NvimPicker {

@@ -16,6 +16,7 @@ static_assert(true);
 #include <QtQml/qqmlregistration.h>
 #include <cstddef>
 #include <cstdint>
+#include <string_view>
 
 #pragma once
 
@@ -40,6 +41,7 @@ namespace telar::gui::qt {
     Q_PROPERTY(QVariantList columns READ columns NOTIFY changed)
     Q_PROPERTY(QVariantMap detail READ detail NOTIFY changed)
     Q_PROPERTY(QVariantMap footer READ footer NOTIFY changed)
+    Q_PROPERTY(QVariantMap unattributed READ unattributed NOTIFY changed)
     Q_PROPERTY(QVariantMap confirmation READ confirmation NOTIFY changed)
     Q_PROPERTY(QString error READ error NOTIFY changed)
     Q_PROPERTY(QAbstractItemModel* rows READ rows CONSTANT)
@@ -62,6 +64,9 @@ namespace telar::gui::qt {
     [[nodiscard]] QVariantList columns() const;
     [[nodiscard]] QVariantMap detail() const;
     [[nodiscard]] QVariantMap footer() const;
+    // The row above the table for the CPU no listed process accounts for: the other users' and the
+    // kernel's. Empty when the listing is narrowed, or the runtime misses nothing.
+    [[nodiscard]] QVariantMap unattributed() const;
     // The action waiting for a yes, and the process it acts on; empty when none waits.
     [[nodiscard]] QVariantMap confirmation() const;
     [[nodiscard]] QString error() const;
@@ -154,6 +159,8 @@ namespace telar::gui::qt {
     bool selectAt(std::size_t row);
     // The row of the listing the selected process stands in, if the window holds it.
     [[nodiscard]] ds::Option<std::size_t> selectedRow() const;
+    // A cell of the table: the text in the column's cells, cut with `mark`.
+    [[nodiscard]] QString cell(application::monitor::Column column, std::string_view value, std::string_view mark = "…") const;
     [[nodiscard]] QVariantMap processRecord(const application::monitor::ProcessRow& row) const;
     [[nodiscard]] QVariantMap groupRecord(const application::monitor::GroupRow& group) const;
     // Whether the process and the machine it was asked on are still the ones selected.
@@ -162,6 +169,8 @@ namespace telar::gui::qt {
     [[nodiscard]] QString target(const application::monitor::ProcessInstance& process) const;
     void send(const application::monitor::ProcessInstance& process, application::monitor::ProcessSignal signal);
     void launch(const application::monitor::ProcessInstance& process, const QString& tool);
+    // Lowers the selected process's priority one step from the nice value its detail read.
+    void lowerPriority();
 
     Store& store_;
     ListModel rows_;

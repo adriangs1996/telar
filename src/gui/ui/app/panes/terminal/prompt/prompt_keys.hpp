@@ -21,7 +21,31 @@ namespace telar::gui::qt {
   // `option_as_alt` makes macOS's Option Meta, as for the terminal.
   inline tbc::val_a<ds::Option<application::prompt::KeyPress>> promptKey(const QKeyEvent& event, tbc::mut_a<QByteArray> text, bool option_as_alt) {
     const auto key = NativeKeyAdapter::terminalKey(event, option_as_alt);
-    if (!key || key->has(KeyChord::Modifier::super)) {
+    if (!key) {
+      return ds::none;
+    }
+
+    // macOS's Command keys for text, as the keys the editor knows: Left and Right go to the
+    // line's ends, Shift selecting, Backspace erases to its start and Z undoes.
+    if (key->has(KeyChord::Modifier::super)) {
+      const bool shift = key->has(KeyChord::Modifier::shift);
+
+      if (key->has(KeyChord::Modifier::control) || key->has(KeyChord::Modifier::alt)) {
+        return ds::none;
+      }
+
+      if (key->code == KeyChord::Key::left || key->code == KeyChord::Key::right) {
+        return application::prompt::KeyPress{.key = key->code == KeyChord::Key::left ? application::prompt::Key::home : application::prompt::Key::end, .modifiers = {.shift = shift}};
+      }
+
+      if (key->code == KeyChord::Key::backspace) {
+        return application::prompt::KeyPress{.key = application::prompt::Key::character, .character = U'u', .modifiers = {.control = true}};
+      }
+
+      if (key->code == KeyChord::Key::character && key->codepoint == 'z' && !shift) {
+        return application::prompt::KeyPress{.key = application::prompt::Key::character, .character = U'_', .modifiers = {.control = true}};
+      }
+
       return ds::none;
     }
 

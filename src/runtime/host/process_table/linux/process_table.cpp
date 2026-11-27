@@ -109,6 +109,16 @@ namespace telar::runtime {
     return record(process);
   }
 
+  // /proc/PID/stat counts a start in ticks since boot, suspended time included.
+  std::chrono::microseconds ProcessTable::clock() noexcept {
+    timespec now{};
+    if (::clock_gettime(CLOCK_BOOTTIME, &now) != 0) {
+      return {};
+    }
+
+    return std::chrono::seconds{now.tv_sec} + std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::nanoseconds{now.tv_nsec});
+  }
+
   ProcessActionResult ProcessTable::signal(ProcessInstance process, int signal) noexcept {
     if (process.pid <= 0) {
       return ProcessActionResult::gone;

@@ -59,14 +59,6 @@ Item {
     y: (status.row ?? 0) * cellHeight
     height: cellHeight
 
-    // The editor's own surface, so the line is part of it and not a band of other cells.
-    Rectangle {
-        readonly property color base: root.colors.terminalBackground
-
-        anchors.fill: parent
-        color: Qt.rgba(base.r, base.g, base.b, 1)
-    }
-
     Rectangle {
         width: parent.width
         height: 1

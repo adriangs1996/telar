@@ -54,16 +54,121 @@ namespace telar::gui::features::monitor {
       return static_cast<std::uint8_t>(count);
     }
 
-    // The history keeps the newest history_samples shares.
-    void remember(State& state, std::uint16_t share) noexcept {
-      if (state.history_count == history_samples) {
-        std::ranges::copy(state.history.view().subspan(1), state.history.dataMut());
-        --state.history_count;
+    // The highest rate of a reading: of the interfaces the panel shows, and of the disks.
+    void rememberPeaks(State& state, bool in_a_row) noexcept {
+      ds::Array<std::uint8_t, shown_interfaces> shown{};
+      std::uint64_t loudest = 0;
+
+      // Readings the window missed leave rates it never saw: the peaks start again.
+      if (!in_a_row) {
+        state.network_peaks = {};
+        state.disk_peaks = {};
       }
 
-      state.history.atMut(state.history_count++) = share;
+      for (const auto index : shown.view().first(shownInterfaces(state.interfaces.view(), shown.viewMut()))) {
+        const auto& interface = state.interfaces[index];
+
+        loudest = std::max(loudest, interface.received_per_second + interface.sent_per_second);
+      }
+
+      state.network_peaks.push(loudest);
+      state.disk_peaks.push(std::max(state.disk_read_per_second, state.disk_written_per_second));
     }
 
+    // The machine's readings: its cores, memory, processes counted, disks and interfaces.
+    void keepMachine(State& state, const MonitorSnapshot& snapshot) {
+      state.cores.clear();
+      state.cores.extend(snapshot.cores);
+      state.memory_total_bytes = snapshot.memory_total_bytes;
+      state.memory_used_bytes = snapshot.memory_used_bytes;
+      state.memory_available_bytes = snapshot.memory_available_bytes;
+      state.memory_cached_bytes = snapshot.memory_cached_bytes;
+      state.swap_total_bytes = snapshot.swap_total_bytes;
+      state.swap_used_bytes = snapshot.swap_used_bytes;
+      state.process_count = snapshot.process_count;
+      state.telar_count = snapshot.telar_count;
+      state.agent_count = snapshot.agent_count;
+      state.agents = snapshot.agents;
+      state.thread_count = snapshot.thread_count;
+      state.unmeasured_count = snapshot.unmeasured_count;
+      state.unattributed_cpu_permille = snapshot.unattributed_cpu_permille;
+      state.user_id = snapshot.user_id;
+      state.disk_read_per_second = snapshot.disk_read_per_second;
+      state.disk_written_per_second = snapshot.disk_written_per_second;
+      state.disks.clear();
+      for (const auto& disk : snapshot.disks) {
+        auto& kept = state.disks.push(DiskRow{.total_bytes = disk.total_bytes, .used_bytes = disk.used_bytes, .available_bytes = disk.available_bytes});
+
+        copy(kept.path, disk.path);
+        copy(kept.type, disk.type);
+      }
+
+      state.interfaces.clear();
+      for (const auto& interface : snapshot.interfaces) {
+        auto& kept = state.interfaces.push(InterfaceRow{
+            .received_per_second = interface.received_per_second,
+            .sent_per_second = interface.sent_per_second,
+            .received_bytes = interface.received_bytes,
+            .sent_bytes = interface.sent_bytes,
+        });
+
+        copy(kept.name, interface.name);
+      }
+    }
+
+  }
+
+  void RatePeaks::push(std::uint64_t rate) noexcept {
+    if (count == values.size()) {
+      std::ranges::copy(values.view().subspan(1), values.dataMut());
+      --count;
+    }
+
+    values.atMut(count++) = rate;
+  }
+
+  std::uint64_t RatePeaks::scale(std::uint64_t floor) const noexcept {
+    return std::ranges::fold_left(values.view().first(count), floor, [](std::uint64_t highest, std::uint64_t value) {
+      return std::max(highest, value);
+    });
+  }
+
+  std::size_t shownInterfaces(std::span<const InterfaceRow> interfaces, std::span<std::uint8_t> shown) noexcept {
+    const auto carried = [](const InterfaceRow& interface) {
+      return interface.received_bytes + interface.sent_bytes;
+    };
+
+    const auto busy = [](const InterfaceRow& interface) {
+      return interface.received_per_second + interface.sent_per_second > 0;
+    };
+
+    std::size_t count = 0;
+
+    for (std::size_t index = 0; index < interfaces.size() && index <= std::numeric_limits<std::uint8_t>::max(); ++index) {
+      const auto& interface = interfaces[index];
+      if (carried(interface) == 0) {
+        continue;
+      }
+
+      // Insertion into the few kept: the busy first, then by bytes carried.
+      const auto before = [&](std::uint8_t kept) {
+        const auto& other = interfaces[kept];
+
+        return busy(interface) != busy(other) ? busy(interface) : carried(interface) > carried(other);
+      };
+
+      const auto kept = shown.first(count);
+      const auto position = static_cast<std::size_t>(std::ranges::find_if(kept, before) - kept.begin());
+      if (position == shown.size()) {
+        continue;
+      }
+
+      count = std::min(count + 1, shown.size());
+      std::ranges::shift_right(shown.first(count).subspan(position), 1);
+      shown[position] = static_cast<std::uint8_t>(index);
+    }
+
+    return count;
   }
 
   std::span<const Relative> ProcessDetail::keptChildren() const noexcept {
@@ -109,6 +214,15 @@ namespace telar::gui::features::monitor {
 
   std::span<const std::uint16_t> State::cpuHistory() const noexcept {
     return history.view().first(history_count);
+  }
+
+  const ProcessDetail* selectedDetail(const State& state) noexcept {
+    const auto& selected = state.view.selected;
+    if (selected.pid == 0 || !state.detail || state.detail->process.instance != selected) {
+      return nullptr;
+    }
+
+    return &*state.detail;
   }
 
   Window window(const State& state) noexcept {
@@ -164,43 +278,20 @@ namespace telar::gui::features::monitor {
     state.waiting = 0;
     state.error.assign({});
     state.cpu_permille = snapshot.cpu_permille;
-    if (snapshot.sample != state.sample) {
-      state.sample = snapshot.sample;
-      remember(state, snapshot.cpu_permille);
+
+    const auto reading = snapshot.sample != state.sample;
+    const auto in_a_row = state.sample != 0 && snapshot.sample == state.sample + 1;
+
+    state.sample = snapshot.sample;
+    // The runtime keeps the history, so the window shows the same one however often it opens.
+    if ((snapshot.sections & MonitorSections::host) != 0) {
+      state.history_count = static_cast<std::uint8_t>(std::min(snapshot.history.size(), history_samples));
+      std::ranges::copy(snapshot.history.last(state.history_count), state.history.dataMut());
     }
 
-    state.cores.clear();
-    state.cores.extend(snapshot.cores);
-    state.memory_total_bytes = snapshot.memory_total_bytes;
-    state.memory_used_bytes = snapshot.memory_used_bytes;
-    state.memory_available_bytes = snapshot.memory_available_bytes;
-    state.memory_cached_bytes = snapshot.memory_cached_bytes;
-    state.swap_total_bytes = snapshot.swap_total_bytes;
-    state.swap_used_bytes = snapshot.swap_used_bytes;
-    state.process_count = snapshot.process_count;
-    state.telar_count = snapshot.telar_count;
-    state.agent_count = snapshot.agent_count;
-    state.thread_count = snapshot.thread_count;
-    state.disk_read_per_second = snapshot.disk_read_per_second;
-    state.disk_written_per_second = snapshot.disk_written_per_second;
-    state.disks.clear();
-    for (const auto& disk : snapshot.disks) {
-      auto& kept = state.disks.push(DiskRow{.total_bytes = disk.total_bytes, .used_bytes = disk.used_bytes, .available_bytes = disk.available_bytes});
-
-      copy(kept.path, disk.path);
-      copy(kept.type, disk.type);
-    }
-
-    state.interfaces.clear();
-    for (const auto& interface : snapshot.interfaces) {
-      auto& kept = state.interfaces.push(InterfaceRow{
-          .received_per_second = interface.received_per_second,
-          .sent_per_second = interface.sent_per_second,
-          .received_bytes = interface.received_bytes,
-          .sent_bytes = interface.sent_bytes,
-      });
-
-      copy(kept.name, interface.name);
+    keepMachine(state, snapshot);
+    if (reading) {
+      rememberPeaks(state, in_a_row);
     }
 
     // Rows of a listing the view left are not shown: the query for the current one goes next.

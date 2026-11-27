@@ -14,6 +14,7 @@ NativeFormField {
     readonly property var regions: layout
     readonly property real placeholderAlpha: 0.7
     readonly property real prefixPlaceholderAlpha: 0.55
+    readonly property color surface: Qt.rgba(colors.panel_bg.r, colors.panel_bg.g, colors.panel_bg.b, 1)
 
     clip: true
     Accessible.role: Accessible.EditableText
@@ -45,7 +46,8 @@ NativeFormField {
         height: root.regions.content.height
         text: root.placeholderText
         pixelSize: root.typography.body ?? 1
-        color: Qt.alpha(root.colors.subtext0, root.placeholderAlpha)
+        // Faded below the text it stands for, but still readable at 4.5:1 on the field's surface.
+        color: ChromeStyle.legible(Qt.tint(root.surface, Qt.alpha(root.colors.subtext0, root.placeholderAlpha)), root.surface, 4.5)
         elide: Text.ElideNone
         visible: root.regions.available && root.regions.text === "" && !root.regions.composing
     }

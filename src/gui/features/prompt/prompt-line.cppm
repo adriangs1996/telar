@@ -73,6 +73,9 @@ namespace telar::gui::features::prompt {
 
     // The command typed while another runs waits for it; Enter arms it to run when that one
     // succeeds.
+    // Keys reached the running program: what the queue holds may have been meant for it, so it
+    // waits in the line instead of running when the shell is back.
+    void disarm() noexcept;
     [[nodiscard]] bool queued() const noexcept;
 
     // While a program runs, typed lines go to it instead of the queue.
@@ -88,6 +91,10 @@ namespace telar::gui::features::prompt {
     // `history`, newest first. Only while typing at the end of a non-empty line.
     // From the commands sent from this line or from the history, both in region `a`.
     [[nodiscard]] tbc::val_a<std::string_view> suggestion(tbc::val_a<History> history) const noexcept;
+
+    // Whether the line has a use for `key` ahead of any binding: the menu of choices that shows
+    // takes every key, and the suggestion the keys that take it.
+    [[nodiscard]] bool claims(const KeyPress& key, History history) const noexcept;
 
     // A key in the editor or the queue. `incomplete` tells whether the shell would wait for more
     // of the command, so Enter continues it on a new line.
@@ -147,6 +154,9 @@ namespace telar::gui::features::prompt {
 
     void clearSecret() noexcept;
 
+    // The last key of the secret erased, as the line discipline's erase character erases it.
+    void eraseSecretKey() noexcept;
+
     void remember(std::string_view command);
 
   private:
@@ -162,6 +172,11 @@ namespace telar::gui::features::prompt {
     void settle();
 
     void accept();
+    // Writes `text` in place of the word the menu offers choices for, as it was typed so far;
+    // `ends` closes a quote the word opened and adds the space after it.
+    void writeChoice(std::string_view text, bool ends);
+    // Writes what every choice starts with past what was typed, as zsh and fish do.
+    void writeCommonStart();
 
     // While the menu is open, Tab and the arrows move through it, Enter takes the choice and
     // Escape closes it; any other key closes it and edits as usual.
@@ -179,6 +194,9 @@ namespace telar::gui::features::prompt {
     // Up and Down past the editor's first and last line walk the commands sent from it, then
     // `history`'s, keeping what was being written to come back to.
     Outcome travel(int direction, History history);
+    // Alt-.: the last argument of the command before, written at the cursor; again at once, the
+    // last argument of the one before that in its place.
+    Outcome lastArgument(History history);
 
     // The command `steps` back from the line: this one's own, newest first, then the ones of
     // `history` it did not send, newest first; each once.
@@ -193,6 +211,12 @@ namespace telar::gui::features::prompt {
     // back was edited: the text's revision then was `recalled_`.
     ds::Option<std::size_t> history_index_;
     std::uint64_t recalled_ = 0;
+    // What the last Alt-. wrote: how many commands back it read, where it wrote, and the text's
+    // revision after, which a repeat at once still shows.
+    std::size_t argument_steps_ = 0;
+    std::size_t argument_start_ = 0;
+    std::size_t argument_end_ = 0;
+    std::uint64_t argument_revision_ = 0;
     tbc::val_a<ds::Option<Menu>> menu_;
     std::uint64_t revision_ = 0;
     // The next offer refines the menu typing reopened: one choice left is not written.

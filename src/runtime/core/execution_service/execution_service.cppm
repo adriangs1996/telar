@@ -211,6 +211,8 @@ export {
       std::string_view shell_integration;
       // Whether an integrated shell's `ssh` brings the integration to the hosts it reaches.
       bool ssh_integration = false;
+      // Whether a pane turns on the plan tools an agent keeps off by default.
+      bool agent_plans = true;
     };
 
   }
@@ -255,7 +257,8 @@ export {
             socket_path_(options.socket),
             proxy_(options.proxy),
             control_policy_(options.control_policy),
-            shell_integration_(memory, options.shell_integration, options.ssh_integration) {}
+            shell_integration_(memory, options.shell_integration, options.ssh_integration),
+            agent_plans_(options.agent_plans) {}
 
       inline static Pane& require(PaneStore& panes, std::uint64_t identity) {
         auto* pane = panes.find(identity);
@@ -1128,6 +1131,12 @@ export {
 
       inline tbc::val_a<PaneRef<TerminalBody>> launchPrepared(tbc::mut_a<RuntimeModel> model, const PanePlacement& placement, Command<ConcurrentMemory>& command, PaneKey identity) {
         identify(command, model, placement, identity);
+        // Claude Code keeps its task list tools off for its newest models, and its card's plan comes
+        // only from them. A value the user set stays.
+        if (agent_plans_ && !command.environment("CLAUDE_CODE_ENABLE_TODO_TOOLS")) {
+          command.setEnvironment({.name = "CLAUDE_CODE_ENABLE_TODO_TOOLS", .value = "1"});
+        }
+
         proxy_.apply(command);
         const auto shell = shell_integration_.apply(command, placement.bare_prompt);
         const PaneLaunch settings{.size = placement.size, .media_budget = model.media_budget, .graphics = model.graphics_limits, .shell = shell};
@@ -1203,6 +1212,7 @@ export {
       ProxyClientConfiguration proxy_;
       control::Policy control_policy_;
       tbc::val_a<ShellIntegration<ConcurrentMemory>> shell_integration_;
+      bool agent_plans_;
     };
 
   }

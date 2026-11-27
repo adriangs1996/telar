@@ -32,6 +32,8 @@ export {
       // The activity names the project's path in the replica, region `a`.
       [[nodiscard]] static tbc::val_a<ProjectActivity> derive(tbc::ref_a<WorkspaceReplica<Memory>> workspaces, std::span<const Agent<Memory>> agents, std::uint64_t project) noexcept;
 
+      // The counts that are not zero, in words: "3 worktrees · 1 working · 2 done". None when
+      // every count is zero or the project is gone.
       [[nodiscard]] tbc::val_a<ds::Option<std::string_view>> summary(tbc::mut_a<Text> storage) const;
 
       [[nodiscard]] Attention attentionLabel() const;

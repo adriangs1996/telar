@@ -168,7 +168,10 @@ namespace telar::gui::application::prompt {
 
       switch (outcome) {
       case Outcome::run: {
-        features::history::HistoryText::validate(text.view(), bracketed);
+        // At the shell's prompt a line break typed without bracketed paste is Enter, which runs
+        // each line in turn as the shell asks for the next, as bash 3.2 does with its PS2; only a
+        // tab, which would complete, needs the paste.
+        features::history::HistoryText::validate(text.view(), bracketed || !text.view().contains('\t'));
         // What the history does not keep, the suggestions do not offer.
         const bool kept = session.configuration.history_filters.allowsPane(text.view(), std::string_view{pane->cwd});
 
@@ -349,6 +352,51 @@ namespace telar::gui::application::prompt {
     if (auto* line = features::prompt::find(session.prompt_lines, pane_id)) {
       features::prompt::insert(session.prompt, *line, text);
     }
+  }
+
+  void textCommand(Session& session, std::uint64_t pane_id, TextCommand command) {
+    auto* line = features::prompt::find(session.prompt_lines, pane_id);
+    if (line == nullptr) {
+      return;
+    }
+
+    auto& text = line->line.editorMut().textMut();
+
+    switch (command) {
+    case TextCommand::select_all:
+      text.select(0, text.size());
+      break;
+    case TextCommand::redo:
+      static_cast<void>(text.redo());
+      break;
+    case TextCommand::erase_selection:
+      if (text.selecting()) {
+        static_cast<void>(text.insert({}));
+      }
+
+      break;
+    }
+
+    Access::changedPane(session) = pane_id;
+  }
+
+  void placeCursor(Session& session, std::uint64_t pane_id, std::size_t offset) { // NOLINT(bugprone-easily-swappable-parameters): the pane, then where in its line, as every use case of the prompt takes them
+    if (auto* line = features::prompt::find(session.prompt_lines, pane_id)) {
+      line->line.editorMut().textMut().moveTo(offset);
+      Access::changedPane(session) = pane_id;
+    }
+  }
+
+  std::string_view selectedText(const Session& session, std::uint64_t pane_id) noexcept { // NOLINT(bugprone-exception-escape): substr is given offsets within the text, which cannot throw
+    const auto typed = line(session, pane_id);
+    if (!typed) {
+      return {};
+    }
+
+    const auto start = std::min(typed->cursor(), typed->anchor());
+    const auto end = std::max(typed->cursor(), typed->anchor());
+
+    return typed->text().substr(start, end - start);
   }
 
   CommandPresence commandPresence(Session& session, std::uint64_t pane_id, std::string_view word) {

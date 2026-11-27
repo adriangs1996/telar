@@ -114,9 +114,11 @@ export namespace telar::gui::features::prompt {
     // clock: keys typed in between wait in the line, for a while. None outside that gap.
     ds::Option<std::int64_t> ended;
     // The command block selected from the editor's normal mode, by its index among the pane's
-    // blocks, and the row the live prompt started on when the selection began.
+    // blocks.
     ds::Option<std::size_t> block;
-    ds::Option<std::uint32_t> live_prompt;
+    // The block was selected from outside the editor's keys, by a click or the window's own
+    // step: the keys that type still go to the editor, and let the block go.
+    bool typing_leaves_block = false;
     // The first half of `[[`, `]]`, `[f`, `]f`, `gg`, `z.` or `yc`.
     char chord = 0;
     // Where jumps left from, by stable row at the view's top, oldest first, and which of them
@@ -543,12 +545,17 @@ export namespace telar::gui::features::prompt {
 
   [[nodiscard]] ds::Option<std::size_t> selectedBlock(const PaneLine& line) noexcept;
 
-  // Block `index` is selected, or none: the line is back at the live end. `live_prompt` is the row
-  // the live prompt starts on, kept from the first selection on.
-  void selectBlock(PaneLine& line, ds::Option<std::size_t> index, ds::Option<std::uint32_t> live_prompt) noexcept;
+  // Block `index` is selected, or none: the line is back at the live end.
+  void selectBlock(PaneLine& line, ds::Option<std::size_t> index, bool typing_leaves = false) noexcept;
 
-  // The row the live prompt started on when the selection began.
-  [[nodiscard]] ds::Option<std::uint32_t> livePrompt(const Lines& lines, std::uint64_t pane_id) noexcept;
+  // The selected block is now at `index` among the pane's blocks, or gone: blocks before it were
+  // dropped, or came again.
+  void moveBlock(PaneLine& line, ds::Option<std::size_t> index) noexcept;
+
+  // Whether the keys that type let the selected block go, as after a click on it.
+  [[nodiscard]] bool typingLeavesBlock(const PaneLine& line) noexcept;
+
+  [[nodiscard]] bool typingLeavesBlock(const Lines& lines, std::uint64_t pane_id) noexcept;
 
   // The first key of a two-key command (`[[`, `gg`, `zt`, `yc`…), which the next key takes.
   void beginChord(PaneLine& line, char first) noexcept;
@@ -608,7 +615,8 @@ namespace telar::gui::features::prompt {
       return prompt::incomplete(memory, text, syntax);
     };
 
-    const auto action = bound(key, edited.editor(), reading.configuration);
+    // The menu that shows and the suggestion keep their keys from the bindings.
+    const auto action = edited.claims(key, history(state)) ? ds::none : bound(key, edited.editor(), reading.configuration);
 
     return action ? edited.perform(surface, *action, incomplete, history(state)) : edited.press(surface, key, incomplete, history(state));
   }
@@ -640,6 +648,7 @@ namespace telar::gui::features::prompt {
           line.line.committed({});
         }
 
+        line.line.disarm();
         line.forwarding = false;
         return true;
       }
@@ -660,6 +669,7 @@ namespace telar::gui::features::prompt {
       return false;
     }
 
+    line.line.disarm();
     line.forwarding = !enter;
     return true;
   }
@@ -670,6 +680,7 @@ namespace telar::gui::features::prompt {
       return false;
     }
 
+    line.line.disarm();
     line.forwarding = !text.ends_with('\n') && !text.ends_with('\r');
     return true;
   }
@@ -679,18 +690,26 @@ namespace telar::gui::features::prompt {
   }
 
   inline void typeSecret(PaneLine& line, char byte) noexcept {
-    // DEL, Backspace and Ctrl-U erase what was typed; any other control types nothing.
+    // DEL and Backspace erase the last key typed, as the line discipline does; Ctrl-U erases them
+    // all, and Ctrl-W too, as the dots cannot tell where a word began. Any other control types
+    // nothing.
     constexpr unsigned char delete_control = 0x7f;
     constexpr unsigned char backspace = 0x08;
     constexpr unsigned char kill_line = 0x15;
+    constexpr unsigned char kill_word = 0x17;
     constexpr unsigned char first_printable = 0x20;
+    // A character is a dot, whatever its length: its continuation bytes add none.
+    constexpr unsigned char continuation_mask = 0xc0;
+    constexpr unsigned char continuation = 0x80;
 
     const auto value = static_cast<unsigned char>(byte);
     auto& typed = line.line;
 
-    if (value == delete_control || value == backspace || value == kill_line) {
+    if (value == delete_control || value == backspace) {
+      typed.eraseSecretKey();
+    } else if (value == kill_line || value == kill_word) {
       typed.clearSecret();
-    } else if (value >= first_printable) {
+    } else if (value >= first_printable && (value & continuation_mask) != continuation) {
       typed.countSecretKey();
     }
   }

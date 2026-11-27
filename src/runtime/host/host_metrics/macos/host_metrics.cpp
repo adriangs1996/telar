@@ -77,8 +77,17 @@ namespace telar::runtime {
       return ds::none;
     }
 
+    // Activity Monitor's memory used: the anonymous pages but those an app marked purgeable, wired
+    // pages and the compressor's. File-backed pages, active or not, are the cache.
     std::uint64_t usedPages(const vm_statistics64_data_t& memory) noexcept {
-      return static_cast<std::uint64_t>(memory.active_count) + memory.wire_count + memory.compressor_page_count;
+      const auto internal = static_cast<std::uint64_t>(memory.internal_page_count);
+      const auto purgeable = static_cast<std::uint64_t>(memory.purgeable_count);
+
+      return (internal > purgeable ? internal - purgeable : 0) + memory.wire_count + memory.compressor_page_count;
+    }
+
+    std::uint64_t cachedPages(const vm_statistics64_data_t& memory) noexcept {
+      return static_cast<std::uint64_t>(memory.external_page_count) + memory.purgeable_count;
     }
 
     template <typename Integer>
@@ -192,8 +201,8 @@ namespace telar::runtime {
       detail.memory_total_bytes = total;
       detail.memory_used_bytes = used;
       detail.memory_available_bytes = total - used;
-      // File-backed pages: what the kernel drops first when memory runs short.
-      detail.memory_cached_bytes = static_cast<std::uint64_t>(memory.external_page_count) * page;
+      // File-backed and purgeable pages: what the kernel drops first when memory runs short.
+      detail.memory_cached_bytes = cachedPages(memory) * page;
       if (::sysctlbyname("vm.swapusage", &swap, &swap_size, nullptr, 0) == 0 && swap_size == sizeof(swap)) {
         detail.swap_total_bytes = swap.xsu_total;
         detail.swap_used_bytes = swap.xsu_used;

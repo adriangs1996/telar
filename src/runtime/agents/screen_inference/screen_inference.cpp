@@ -94,7 +94,7 @@ namespace telar::runtime {
       constexpr std::size_t claude_rows = 4;
       constexpr std::size_t cursor_rows = 12;
 
-      if (provider == AgentProvider::claude || provider == AgentProvider::codex) {
+      if (provider == AgentProvider::claude || provider == AgentProvider::codex || provider == AgentProvider::antigravity) {
         return claude_rows;
       }
 
@@ -210,7 +210,8 @@ namespace telar::runtime {
       return {};
     }
 
-    arguments.atMut(0) = resume.provider == AgentProvider::cursor ? "cursor-agent" : describeProvider(resume.provider).name;
+    // The executable that names the provider, which the user types to launch it.
+    arguments.atMut(0) = describeProvider(resume.provider).process_names[0];
     arguments.atMut(1) = resumeOption(resume.provider);
     std::size_t count = 2;
 
@@ -283,6 +284,8 @@ namespace telar::runtime {
       return codex();
     case AgentProvider::cursor:
       return cursor();
+    case AgentProvider::antigravity:
+      return antigravity();
     case AgentProvider::unknown:
     case AgentProvider::pi:
     case AgentProvider::opencode:
@@ -546,8 +549,42 @@ namespace telar::runtime {
     return {};
   }
 
+  AgentScreenObservation AgentScreenReader::antigravity() const noexcept {
+    // How many rows a draft may wrap over in the composer.
+    constexpr unsigned draft_rows = 8;
+
+    // Antigravity draws its composer between two rules above a footer, the last row with text,
+    // which starts with "esc to cancel" while a turn runs. A dialog takes the composer's place.
+    std::size_t footer = screen_.rows;
+
+    while (footer != 0 && row(footer - 1).first == 0) {
+      --footer;
+    }
+
+    if (footer < 4 || row(footer - 2).first != box_horizontal) {
+      return {};
+    }
+
+    for (std::size_t composer = footer - 2, rows = 0; composer-- > 1 && rows < draft_rows; ++rows) {
+      const auto line = row(composer);
+      if (line.first == box_horizontal) {
+        return {};
+      }
+
+      if (line.first == '>' && line.column == 0) {
+        if (row(composer - 1).first != box_horizontal) {
+          return {};
+        }
+
+        return {.status = row(footer - 1).text().starts_with("esc to cancel") ? AgentStatus::working : AgentStatus::ready};
+      }
+    }
+
+    return {};
+  }
+
   bool hasIdleScreen(AgentProvider provider) noexcept {
-    return provider == AgentProvider::claude || provider == AgentProvider::codex || provider == AgentProvider::cursor;
+    return provider == AgentProvider::claude || provider == AgentProvider::codex || provider == AgentProvider::cursor || provider == AgentProvider::antigravity;
   }
 
   std::string_view AgentScreenSample::capture(AgentScreenView screen, std::size_t row_limit) noexcept {
@@ -649,8 +686,8 @@ namespace telar::runtime {
       return ds::Option{*phrases};
     }
 
-    if (provider == AgentProvider::cursor) {
-      return reader.signal(AgentProvider::cursor);
+    if (provider == AgentProvider::cursor || provider == AgentProvider::antigravity) {
+      return reader.signal(provider);
     }
 
     const auto* manifest = phrases ? manifests.find(phrases->provider) : nullptr;

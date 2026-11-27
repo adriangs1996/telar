@@ -1,6 +1,6 @@
 telar integration install: Add telar's hooks (or extension/plugin) and skills for an agent, its Neovim plugin, or the Neovim of its editor panes
 
-Usage: telar integration install claude|codex|pi|cursor|opencode|neovim [--settings PATH]
+Usage: telar integration install claude|codex|pi|cursor|opencode|antigravity|neovim [--settings PATH]
        telar integration install editor
 
 Arguments:

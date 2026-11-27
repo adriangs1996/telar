@@ -16,6 +16,16 @@ export {
       static constexpr float selection_alpha = 0.09F;
       static constexpr float outline_alpha = 0.12F;
       static constexpr float focus_alpha = 0.65F;
+      // The well the top bar's selectors sit on at rest: the machine switch and the workspace
+      // track.
+      static constexpr float well_alpha = 0.07F;
+      // The columns every chrome menu's rows share, the machines' and the workspaces': the
+      // inset of their mark, the mark, and the gap before their text.
+      static constexpr float menu_row_padding = 8;
+      // Above a menu row's first line and below its second.
+      static constexpr float menu_row_vertical_padding = 5;
+      static constexpr float menu_mark = 24;
+      static constexpr float menu_gap = 6;
     };
 
   }

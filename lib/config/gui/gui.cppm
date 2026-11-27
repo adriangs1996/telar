@@ -97,6 +97,7 @@ export {
       ds::Option<double> chrome_scale;
       ds::Option<std::uint16_t> max_fps;
       ds::Array<ds::Option<double>, surface_names.size()> opacity{};
+      ds::Option<bool> copy_on_select;
     };
 
     class GuiReader {
@@ -203,7 +204,7 @@ export {
 
     private:
       // Each name a theme may give, with the preset it selects.
-      static constexpr ds::Array<std::pair<std::string_view, std::string_view>, 19> presets{
+      static constexpr ds::Array<std::pair<std::string_view, std::string_view>, 28> presets{
           {
               {"cybervenom", "cybervenom"},
               {"shade", "shade"},
@@ -224,6 +225,15 @@ export {
               {"terminal", "terminal"},
               {"default", "terminal"},
               {"zenburn", "zenburn"},
+              {"gruvbox", "gruvbox"},
+              {"gruvbox-hard", "gruvbox-hard"},
+              {"gruvbox_hard", "gruvbox-hard"},
+              {"dracula", "dracula"},
+              {"transylvania", "transylvania"},
+              {"transylvania-vela", "transylvania-vela"},
+              {"transylvania_vela", "transylvania-vela"},
+              {"transylvania-sangre", "transylvania-sangre"},
+              {"transylvania_sangre", "transylvania-sangre"},
           },
       };
 

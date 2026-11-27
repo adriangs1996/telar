@@ -55,7 +55,7 @@ namespace telar::gui::qt {
   QVariantMap MachineChromeController::active() const {
     const auto& machines = store_.machines();
     const auto& row = machines.row(machines.active());
-    const auto label = toQString(row.label.view());
+    const auto label = toQString(application::machines::MachineChromeGeometry::shownLabel(row.label.view()));
 
     return {
         {QStringLiteral("label"), label},

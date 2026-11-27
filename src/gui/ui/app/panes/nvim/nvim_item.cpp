@@ -91,27 +91,6 @@ namespace telar::gui::qt {
 
     // The bytes of a path the query matched that fall in its part from `start` to `end`, counted
     // from `start`. A match names at most max_match_positions of them, which the wire bounds.
-    class PartMarks {
-    public:
-      PartMarks(std::span<const std::uint16_t> marks, std::size_t start, std::size_t end) noexcept {
-        for (const auto mark : marks) {
-          if (mark >= start && mark < end && count_ < positions_.size()) {
-            positions_.atMut(count_++) = static_cast<std::uint16_t>(mark - start);
-          }
-        }
-      }
-
-      [[nodiscard]] std::span<const std::uint16_t> view() const noexcept {
-        return std::span{positions_}.first(count_);
-      }
-
-    private:
-      static constexpr std::size_t max_match_positions = 64;
-
-      ds::Array<std::uint16_t, max_match_positions> positions_{};
-      std::size_t count_ = 0;
-    };
-
     QVariantMap textRun(std::string_view text, bool matched) {
       return {{QStringLiteral("text"), shown(text)}, {QStringLiteral("bold"), matched}};
     }
@@ -520,6 +499,28 @@ namespace telar::gui::qt {
     }
   }
 
+  void NvimItem::setPickerColumns(int columns) {
+    const auto kept = static_cast<std::uint16_t>(std::clamp(columns, minimum_picker_columns, maximum_picker_columns));
+    if (kept == picker_columns_) {
+      return;
+    }
+
+    picker_columns_ = kept;
+    emit pickerColumnsChanged();
+    // The rows are cut again to the new width, once the binding that asked for it is done:
+    // the width follows the picker, which the rows change.
+    QMetaObject::invokeMethod(
+        this,
+        [this] {
+          if (const auto* editor = editorState()) {
+            picker_revision_ = 0;
+            projectPicker(*editor);
+          }
+        },
+        Qt::QueuedConnection
+    );
+  }
+
   void NvimItem::projectPicker(const nvim::Editor& editor) {
     if (picker_revision_ == editor.picker_revision) {
       return;
@@ -536,21 +537,15 @@ namespace telar::gui::qt {
       const auto path = match.path.of(text);
       const auto slash = path.rfind('/');
       const auto name_start = slash == std::string_view::npos ? 0 : slash + 1;
-      const auto directory = slash == std::string_view::npos ? std::string_view{} : path.substr(0, slash);
       const auto line = match.text.of(text);
-
-      // The name first and where it is after it, each as the terminal's path picker shows a
-      // path: the same runs, from the same code, with what the query matched in each.
-      constexpr std::uint16_t label_columns = 96;
       const auto marks = std::span<const std::uint16_t>{std::as_const(picker.positions).view()}.subspan(match.first_position, match.position_count);
-      const PartMarks name_marks{marks, name_start, path.size()};
-      const PartMarks directory_marks{marks, 0, directory.size()};
 
+      // The path as it is read, its directory quiet before its name, cut to the cells the
+      // list has: the terminal's path picker shows its paths with the same runs.
       QVariantMap row{
-          {QStringLiteral("runs"), pathLabelRuns(path.substr(name_start), name_marks.view(), label_columns)},
-          {QStringLiteral("trail"), directory.empty() ? QVariantList{} : pathLabelRuns(directory, directory_marks.view(), label_columns)},
+          {QStringLiteral("runs"), pathLabelRuns(path, marks, picker_columns_)},
           {QStringLiteral("name"), shown(path.substr(name_start))},
-          {QStringLiteral("directory"), shown(directory)},
+          {QStringLiteral("directory"), shown(slash == std::string_view::npos ? std::string_view{} : path.substr(0, slash))},
           {QStringLiteral("line"), static_cast<int>(match.line)},
           {QStringLiteral("text"), shown(line)},
           {QStringLiteral("textRuns"), match.line > 0 ? textRuns(line, query) : QVariantList{}},
@@ -749,19 +744,8 @@ namespace telar::gui::qt {
     grids_.reconcile(std::move(records));
   }
 
-  namespace {
-
-    // The character Neovim rules a row with between two windows one over the other, when no
-    // status line stands there.
-    bool rules(std::string_view text) noexcept {
-      return text == "─" || text == "━" || text == "═";
-    }
-
-  }
-
   void NvimItem::synchronizeSeparators(const nvim::Editor& editor) {
     QVariantList separators;
-    const auto* base = editor.grid(1);
     const auto width = font_.cell.width();
     const auto height = font_.cell.height();
     const auto add = [&](bool vertical, QRectF bounds) {
@@ -774,20 +758,19 @@ namespace telar::gui::qt {
       });
     };
 
+    const auto cells = [&](const nvim::CellArea& area) {
+      return QRectF{area.column * width, area.row * height, area.columns * width, area.rows * height};
+    };
+
     for (const auto& grid : editor.grids) {
-      if (base == nullptr || grid->id == 1 || grid->placement != nvim::NvimPlacement::window) {
-        continue;
+      const auto [left, above] = nvim::separators(editor, *grid);
+
+      if (left) {
+        add(true, cells(*left));
       }
 
-      // A window that does not start at the editor's left edge has a separator's column there.
-      if (grid->column > 0) {
-        add(true, {(grid->column - 1) * width, grid->row * height, width, grid->height * height});
-      }
-
-      const auto above = grid->row - 1;
-      if (above >= 0 && std::cmp_less(above, base->screen.rows()) && std::cmp_less(grid->column, base->screen.columns()) &&
-          rules(base->screen.row(static_cast<std::size_t>(above))[static_cast<std::size_t>(grid->column)].utf8())) {
-        add(false, {grid->column * width, above * height, grid->width * width, height});
+      if (above) {
+        add(false, cells(*above));
       }
     }
 

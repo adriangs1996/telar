@@ -174,7 +174,69 @@ namespace {
     constexpr ThemeRgb zenburn_bg_1{43, 43, 43};
 
     check(zenburn.terminal.background == zenburn_bg_1, "Zenburn must paint the terminal zenburn-bg-1");
-    check(default_theme_values == zenburn, "Zenburn must be the default theme");
+    const auto gruvbox = themeValuesByName("Gruvbox");
+    const auto gruvbox_hard = themeValuesByName("gruvbox_hard");
+    constexpr ThemeRgb dark0{40, 40, 40};
+    constexpr ThemeRgb dark0_hard{29, 32, 33};
+
+    check(gruvbox.base == ThemeName::gruvbox && gruvbox.terminal.background == dark0, "Gruvbox must paint the terminal dark0");
+    check(gruvbox_hard.base == ThemeName::gruvbox_hard && gruvbox_hard.terminal.background == dark0_hard, "Gruvbox hard must paint the terminal dark0_hard");
+    const auto gruvbox_func = gruvbox.syntaxStyle(SyntaxRole::func);
+    const auto gruvbox_string = gruvbox.syntaxStyle(SyntaxRole::string);
+
+    check(gruvbox_func.color == gruvbox_string.color && gruvbox_func.bold && !gruvbox_func.italic && gruvbox_string.italic && !gruvbox_string.bold, "Gruvbox must tell functions from strings by weight, as their green is shared");
+    auto hardened = gruvbox;
+
+    hardened.base = ThemeName::gruvbox_hard;
+    hardened.palette.atMut(static_cast<std::size_t>(PaletteRole::panel_bg)) = gruvbox_hard.color(PaletteRole::panel_bg);
+    hardened.terminal.background = dark0_hard;
+    hardened.terminal.cursor_text_color = dark0_hard;
+    check(hardened == gruvbox_hard, "the Gruvbox presets must differ only in the pane background");
+    const auto dracula = themeValuesByName("Dracula");
+    constexpr ThemeRgb dracula_background{40, 42, 54};
+    constexpr ThemeRgb dracula_bright_black{98, 114, 164};
+
+    check(dracula.base == ThemeName::dracula && dracula.terminal.background == dracula_background, "Dracula must paint the terminal its background");
+    check(dracula.terminal.palette[8] == dracula_bright_black, "Dracula must keep the spec's ANSI palette");
+    const auto dracula_type = dracula.syntaxStyle(SyntaxRole::type);
+    const auto dracula_parameter = dracula.syntaxStyle(SyntaxRole::parameter);
+
+    check(dracula_type.italic && dracula_parameter.italic && !dracula.syntaxStyle(SyntaxRole::comment).italic, "Dracula must italicize types and parameters, not comments");
+    // Each Transylvania preset keeps its keyword color for keywords alone and draws operators
+    // and punctuation in one muted tone.
+    const auto checkTransylvania = [](std::string_view name, ThemeName base, ThemeRgb background) {
+      const auto theme = themeValuesByName(name);
+      const auto keyword = theme.syntaxStyle(SyntaxRole::keyword).color;
+      bool keyword_alone = true;
+
+      for (std::size_t index = 0; index < syntax_names.size(); ++index) {
+        const auto role = static_cast<SyntaxRole>(index);
+
+        keyword_alone = keyword_alone && (role == SyntaxRole::keyword || theme.syntaxStyle(role).color != keyword);
+      }
+
+      const auto operator_color = theme.syntaxStyle(SyntaxRole::operator_name).color;
+      const auto italic = theme.syntaxStyle(SyntaxRole::comment).italic && theme.syntaxStyle(SyntaxRole::type).italic && theme.syntaxStyle(SyntaxRole::parameter).italic;
+
+      check(theme.base == base && theme.terminal.background == background, "a Transylvania preset must paint the terminal its background");
+      check(keyword_alone, "a Transylvania preset must keep its keyword color for keywords");
+      check(operator_color == theme.syntaxStyle(SyntaxRole::punctuation).color && operator_color != theme.syntaxStyle(SyntaxRole::plain).color, "a Transylvania preset must draw operators and punctuation in one muted tone");
+      check(italic, "a Transylvania preset must italicize comments, types and parameters");
+    };
+
+    checkTransylvania("transylvania", ThemeName::transylvania, ThemeRgb{22, 24, 27});
+    checkTransylvania("transylvania_vela", ThemeName::transylvania_vela, ThemeRgb{26, 23, 21});
+    checkTransylvania("Transylvania-Sangre", ThemeName::transylvania_sangre, ThemeRgb{23, 21, 26});
+    check(default_theme_values == themeValuesByName("transylvania"), "Transylvania must be the default theme");
+    // A window paints the default theme before its configuration loads: its colors are the
+    // default theme's, projected.
+    auto unconfigured = projectTheme(default_theme_values);
+
+    unconfigured.chrome = decltype(unconfigured.chrome){};
+    unconfigured.syntax = decltype(unconfigured.syntax){};
+    unconfigured.syntax_italic = 0;
+    unconfigured.syntax_bold = 0;
+    check(unconfigured == Theme{}, "the colors a window paints before its configuration loads must be the default theme's");
   }
 
   // Zenburn's numbers and properties have no ANSI color: a pane's programs get them from the

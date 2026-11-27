@@ -8,6 +8,71 @@ import telar.base.ds;
 
 namespace telar::gui::inline foundation::inline core {
 
+  namespace {
+
+    float linear(float channel) noexcept {
+      constexpr float knee = 0.04045F;
+      constexpr float slope = 12.92F;
+      constexpr float offset = 0.055F;
+      constexpr float gamma = 2.4F;
+
+      return channel <= knee ? channel / slope : std::pow((channel + offset) / (1 + offset), gamma);
+    }
+
+    float luminance(Color color) noexcept {
+      constexpr float red = 0.2126F;
+      constexpr float green = 0.7152F;
+      constexpr float blue = 0.0722F;
+
+      return (red * linear(color.r)) + (green * linear(color.g)) + (blue * linear(color.b));
+    }
+
+    Color mix(Color from, Color toward, float amount) noexcept {
+      return {
+          .r = from.r + ((toward.r - from.r) * amount),
+          .g = from.g + ((toward.g - from.g) * amount),
+          .b = from.b + ((toward.b - from.b) * amount),
+          .a = from.a,
+      };
+    }
+
+  }
+
+  float contrast(Color first, Color second) noexcept {
+    constexpr float flare = 0.05F;
+    const auto lighter = std::max(luminance(first), luminance(second));
+    const auto darker = std::min(luminance(first), luminance(second));
+
+    return (lighter + flare) / (darker + flare);
+  }
+
+  Color legible(Color ink, Color ground, float ratio) noexcept {
+    if (contrast(ink, ground) >= ratio) {
+      return ink;
+    }
+
+    constexpr Color black{.r = 0, .g = 0, .b = 0, .a = 1};
+    constexpr Color white{.r = 1, .g = 1, .b = 1, .a = 1};
+    const auto target = contrast(white, ground) >= contrast(black, ground) ? white : black;
+
+    if (contrast(target, ground) < ratio) {
+      return mix(ink, target, 1);
+    }
+
+    // The least mix that reaches the ratio; twelve halvings land within a 4096th of it.
+    constexpr int steps = 12;
+    float low = 0;
+    float high = 1;
+
+    for (int step = 0; step < steps; ++step) {
+      const auto middle = (low + high) / 2;
+
+      (contrast(mix(ink, target, middle), ground) >= ratio ? high : low) = middle;
+    }
+
+    return mix(ink, target, high);
+  }
+
   float BackgroundOpacity::resolve(Surface surface, float fallback) const noexcept {
     return overrides[static_cast<std::size_t>(surface)].valueOr(fallback);
   }

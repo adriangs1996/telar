@@ -16,22 +16,31 @@ Item {
     property real columnWidth: 2 * ratio
     property real columnGap: 1 * ratio
     property real chartHeight: 12 * ratio
+    // A function from a sample to its column's color; every column takes `color` without one.
+    property var columnColor: null
+    // The columns before the first sample show as empty tracks, so a history that is still short
+    // reads as one.
+    property bool showEmpty: false
     readonly property real minimumColumnHeight: 2 * ratio
     readonly property real fullPercent: 100
     readonly property real density: Screen.devicePixelRatio
     readonly property int shownColumns: Math.min(samples.length, maximumColumns)
     readonly property int firstSample: samples.length - shownColumns
+    readonly property int columns: showEmpty ? maximumColumns : shownColumns
+    readonly property int emptyColumns: columns - shownColumns
 
-    implicitWidth: shownColumns > 0 ? shownColumns * columnWidth + (shownColumns - 1) * columnGap : 0
+    implicitWidth: columns > 0 ? columns * columnWidth + (columns - 1) * columnGap : 0
 
     Repeater {
-        model: root.shownColumns
+        model: root.columns
 
         delegate: Item {
             id: column
 
             required property int index
-            readonly property real fillHeight: Math.max(root.minimumColumnHeight, Math.round(root.chartHeight * root.density * root.samples[root.firstSample + index] / root.fullPercent) / root.density)
+            readonly property bool empty: index < root.emptyColumns
+            readonly property real sample: empty ? 0 : root.samples[root.firstSample + index - root.emptyColumns]
+            readonly property real fillHeight: Math.max(root.minimumColumnHeight, Math.round(root.chartHeight * root.density * sample / root.fullPercent) / root.density)
 
             x: index * (root.columnWidth + root.columnGap)
             y: (root.height - root.chartHeight) / 2
@@ -42,6 +51,7 @@ Item {
                 anchors.fill: parent
                 radius: root.columnWidth / 4
                 color: root.trackColor
+                opacity: column.empty ? 0.5 : 1
             }
 
             NativeRoundedRectangle {
@@ -49,7 +59,8 @@ Item {
                 width: parent.width
                 height: column.fillHeight
                 radius: root.columnWidth / 4
-                color: root.color
+                color: root.columnColor ? root.columnColor(column.sample) : root.color
+                visible: !column.empty
             }
         }
     }

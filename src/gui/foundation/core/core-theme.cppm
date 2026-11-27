@@ -44,6 +44,12 @@ export {
       terminal,
       cybervenom,
       zenburn,
+      gruvbox,
+      gruvbox_hard,
+      dracula,
+      transylvania,
+      transylvania_vela,
+      transylvania_sangre,
     };
 
     enum class Appearance : std::uint8_t {
@@ -89,7 +95,7 @@ export {
       punctuation,
     };
 
-    inline constexpr ds::Array theme_names{"shade", "vesper", "catppuccin", "tokyo_night", "pierre_dark", "pierre_dark_soft", "kanagawa", "kanagawa_dragon", "terminal", "cybervenom", "zenburn"};
+    inline constexpr ds::Array theme_names{"shade", "vesper", "catppuccin", "tokyo_night", "pierre_dark", "pierre_dark_soft", "kanagawa", "kanagawa_dragon", "terminal", "cybervenom", "zenburn", "gruvbox", "gruvbox_hard", "dracula", "transylvania", "transylvania_vela", "transylvania_sangre"};
     inline constexpr ds::Array palette_names{"accent", "panel_bg", "surface0", "surface1", "surface_dim", "overlay0", "overlay1", "text", "subtext0", "mauve", "green", "yellow", "red", "blue", "teal", "peach"};
     inline constexpr ds::Array syntax_names{"plain", "keyword", "string", "number", "comment", "constant", "builtin_constant", "builtin", "func", "type", "parameter", "property", "namespace", "operator", "punctuation"};
 
@@ -159,43 +165,51 @@ export {
       bool operator==(const Color&) const = default;
     };
 
-    // Zenburn's projected colors, so a window paints the default theme before its configuration loads.
+    // WCAG 2.x contrast ratio of two opaque colors, from 1 (equal) to 21 (black on white).
+    [[nodiscard]] float contrast(Color first, Color second) noexcept;
+
+    // `ink` as close to itself as it can stay while reading at `ratio` on the opaque `ground`:
+    // unchanged when it already does, else mixed toward black or white, whichever the ground
+    // lets go further.
+    [[nodiscard]] Color legible(Color ink, Color ground, float ratio) noexcept;
+
+    // Transylvania's projected colors, so a window paints the default theme before its configuration loads.
     struct DefaultTheme {
-      static constexpr Color background = Color::rgb(0x2b2b2b);
-      static constexpr Color foreground = Color::rgb(0xdcdccc);
-      static constexpr Color surface = Color::rgb(0x383838);
-      static constexpr Color elevated = Color::rgb(0x4f4f4f);
-      static constexpr Color border = Color::rgb(0x5f5f5f);
-      static constexpr Color muted = Color::rgb(0x989890);
-      static constexpr Color accent = Color::rgb(0xf0dfaf);
+      static constexpr Color background = Color::rgb(0x16181b);
+      static constexpr Color foreground = Color::rgb(0xd6d5d1);
+      static constexpr Color surface = Color::rgb(0x1f2125);
+      static constexpr Color elevated = Color::rgb(0x2d3036);
+      static constexpr Color border = Color::rgb(0x24272c);
+      static constexpr Color muted = Color::rgb(0x9ba2ab);
+      static constexpr Color accent = Color::rgb(0xa3b6d1);
       static constexpr Color selection = elevated;
-      static constexpr Color cursor = Color::rgb(0xffffef);
-      static constexpr Color success = Color::rgb(0x8fb28f);
-      static constexpr Color warning = Color::rgb(0xf0dfaf);
-      static constexpr Color failure = Color::rgb(0xe37170);
+      static constexpr Color cursor = Color::rgb(0xa3b6d1);
+      static constexpr Color success = Color::rgb(0xb0c79e);
+      static constexpr Color warning = Color::rgb(0xe5c984);
+      static constexpr Color failure = Color::rgb(0xf08879);
       static constexpr std::size_t palette_size = 16;
       static constexpr ds::Array<Color, palette_size> palette{
-          Color::rgb(0x4f4f4f),
-          Color::rgb(0xcc9393),
-          Color::rgb(0x8fb28f),
-          Color::rgb(0xe0cf9f),
-          Color::rgb(0x94bff3),
-          Color::rgb(0xdc8cc3),
-          Color::rgb(0x8cd0d3),
-          Color::rgb(0xdcdccc),
-          Color::rgb(0x709080),
-          Color::rgb(0xdca3a3),
-          Color::rgb(0xafd8af),
-          Color::rgb(0xf0dfaf),
-          Color::rgb(0xbde0f3),
-          Color::rgb(0xec93d3),
-          Color::rgb(0x93e0e3),
-          Color::rgb(0xffffef),
+          Color::rgb(0x1f2125),
+          Color::rgb(0xf08879),
+          Color::rgb(0xb0c79e),
+          Color::rgb(0xe5c984),
+          Color::rgb(0xa3b6d1),
+          Color::rgb(0xd8a7b9),
+          Color::rgb(0x8eb3c4),
+          Color::rgb(0xd6d5d1),
+          Color::rgb(0x757c86),
+          Color::rgb(0xf3a196),
+          Color::rgb(0xc2d3b3),
+          Color::rgb(0xead59e),
+          Color::rgb(0xb7c6db),
+          Color::rgb(0xe0bac8),
+          Color::rgb(0xa7c3d1),
+          Color::rgb(0xefeeec),
       };
     };
 
     struct Theme {
-      ThemeName name = ThemeName::zenburn;
+      ThemeName name = ThemeName::transylvania;
       Color background = DefaultTheme::background;
       Color foreground = DefaultTheme::foreground;
       Color surface = DefaultTheme::surface;

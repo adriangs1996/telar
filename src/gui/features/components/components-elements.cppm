@@ -129,10 +129,10 @@ export {
       [[nodiscard]] static tbc::val_static<Icon> find(std::string_view name) noexcept;
 
     private:
-      static const ds::Array<Icon, 32> values;
+      static const ds::Array<Icon, 33> values;
     };
 
-    inline constexpr ds::Array<Icon, 32> Icon::values = ds::Array<Icon, 32>{
+    inline constexpr ds::Array<Icon, 33> Icon::values = ds::Array<Icon, 33>{
         Icon{.name = "sidebar_collapse", .glyph = ""},
         Icon{.name = "sidebar_expand", .glyph = ""},
         Icon{.name = "workspace_menu", .glyph = ""},
@@ -150,6 +150,7 @@ export {
         Icon{.name = "provider_pi", .glyph = "󰏿", .provider = AgentProvider::pi},
         Icon{.name = "provider_cursor", .glyph = "󰋘", .provider = AgentProvider::cursor},
         Icon{.name = "provider_opencode", .glyph = "󰝣", .provider = AgentProvider::opencode},
+        Icon{.name = "provider_antigravity", .glyph = "\U000f14de", .provider = AgentProvider::antigravity},
         Icon{.name = "app_terminal", .glyph = ""},
         Icon{.name = "app_editor", .glyph = ""},
         Icon{.name = "app_git", .glyph = ""},

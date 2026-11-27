@@ -6,7 +6,10 @@ static_assert(true);
 #include "workspaces_controller.hpp"
 #include "project_projection.hpp"
 #include "ui/kit/models/projection.hpp"
+#include <QVarLengthArray>
 #include <algorithm>
+#include <cstddef>
+#include <numeric>
 #include <span>
 #include <utility>
 
@@ -14,6 +17,13 @@ import telar.base.ds;
 import telar.base.memory.allocators;
 
 namespace telar::gui::qt {
+
+  namespace {
+
+    // Workspaces of a machine whose marks are sorted without touching the heap.
+    constexpr qsizetype inline_projects = 32;
+
+  }
 
   WorkspacesController::WorkspacesController(Store& store, QObject* parent)
       : QObject(parent),
@@ -75,13 +85,37 @@ namespace telar::gui::qt {
         return sameWorkspace(workspace.location, active->location.workspace);
       });
       if (current != session.workspaces().end()) {
-        context = workspaceRecord(*current, true);
+        context = workspaceRecord(*current, true, application::workbench::WorkspaceMark::resolve(current->name));
       }
     }
 
-    for (const auto& workspace : session.workspace_list.projects()) {
+    const auto projects = session.workspace_list.projects();
+    // The marks in the order the runtime made the workspaces, so a new one never takes an older
+    // one's hue; then back in the order the track shows them.
+    QVarLengthArray<std::size_t, inline_projects> made(static_cast<qsizetype>(projects.size()));
+    QVarLengthArray<application::workbench::WorkspaceMark, inline_projects> marks(static_cast<qsizetype>(projects.size()));
+
+    std::ranges::iota(made, std::size_t{0});
+    std::ranges::sort(made, {}, [&](std::size_t index) {
+      return projects[index].location.id;
+    });
+
+    for (qsizetype rank = 0; rank < made.size(); ++rank) {
+      marks[rank] = application::workbench::WorkspaceMark::resolve(projects[made[rank]].name);
+    }
+
+    application::workbench::WorkspaceMark::distinguish(std::span{marks});
+
+    QVarLengthArray<application::workbench::WorkspaceMark, inline_projects> shown(marks.size());
+
+    for (qsizetype rank = 0; rank < made.size(); ++rank) {
+      shown[static_cast<qsizetype>(made[rank])] = marks[rank];
+    }
+
+    for (std::size_t index = 0; index < projects.size(); ++index) {
+      const auto& workspace = projects[index];
       const bool selected = selected_project == workspace.location.id;
-      auto record = projectRecord(workspace, session.workspace_list, std::span<const Agent<Memory>>{session.agents()}, selected);
+      auto record = projectRecord(workspace, session.workspace_list, std::span<const Agent<Memory>>{session.agents()}, selected, shown[static_cast<qsizetype>(index)]);
 
       record.insert(QStringLiteral("index"), workspaces.size());
       if (selected) {

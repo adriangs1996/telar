@@ -42,8 +42,8 @@ for *loom*.
 
 ## Features
 
-- **Agent status.** Integrations for Claude Code, Codex, Pi, Cursor Agent and
-  OpenCode report lifecycle events. Other programs get a status estimated from
+- **Agent status.** Integrations for Claude Code, Codex, Pi, Cursor Agent,
+  OpenCode and Antigravity report lifecycle events. Other programs get a status estimated from
   process and terminal activity.
 - **A worktree per task.** Create a Git worktree, launch an agent in it, and
   follow its status and diff from the CLI, next to your shell and editor.
@@ -101,7 +101,7 @@ key.
 Connect your agent, then start a new session of it inside Telar:
 
 ```sh
-telar integration install claude   # or codex, pi, cursor, opencode
+telar integration install claude   # or codex, pi, cursor, opencode, antigravity
 ```
 
 Open a window on another machine that has Telar installed:

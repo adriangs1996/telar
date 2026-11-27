@@ -1928,7 +1928,7 @@ namespace telar::runtime {
         clients_(memory),
         admissions_(poller_, limits_),
         client_layouts_(memory),
-        panes_(memory, poller_, limits_, PaneLaunchOptions{.socket = options.socket, .proxy = proxy, .control_policy = options.control_policy, .shell_integration = options.shell_integration, .ssh_integration = options.ssh_integration}, background),
+        panes_(memory, poller_, limits_, PaneLaunchOptions{.socket = options.socket, .proxy = proxy, .control_policy = options.control_policy, .shell_integration = options.shell_integration, .ssh_integration = options.ssh_integration, .agent_plans = options.agent_plans}, background),
         workspaces_(memory),
         worktrees_(memory, limits_),
         executions_(memory, poller_, limits_),

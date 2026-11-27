@@ -346,6 +346,30 @@ export namespace telar::gui::features::nvim {
     std::uint64_t picker_revision = 0;
   };
 
+  // Cells of a grid: `rows` rows from `row`, of `columns` columns from `column`.
+  struct CellArea {
+    std::int32_t row = 0;
+    std::int32_t column = 0;
+    std::int32_t rows = 0;
+    std::int32_t columns = 0;
+  };
+
+  // The lines that part a window from the ones beside it, on the cells of the default grid
+  // Neovim draws them with: the column on its left when it does not start at the editor's left
+  // edge, and the row above it when Neovim rules a line there, where no status line stands.
+  struct WindowSeparators {
+    ds::Option<CellArea> left;
+    ds::Option<CellArea> above;
+  };
+
+  [[nodiscard]] WindowSeparators separators(const Editor& editor, const Grid& window) noexcept;
+
+  // Marks the cells of row `row` of the default grid that are not drawn from it, one flag for
+  // each of the row's cells: the ones under a window, which keep whatever Neovim drew there
+  // before the window came, and the separators and the status line of the whole editor, which
+  // the window draws itself.
+  void coverDefaultRow(const Editor& editor, std::size_t row, std::span<Byte> covered) noexcept;
+
   // A key as Neovim names keys: one of its named keys or a character, and what is held with it.
   struct Key {
     // "Esc", "CR", "F5" and the like; empty for a character.

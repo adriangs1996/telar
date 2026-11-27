@@ -73,7 +73,7 @@ Item {
         emptyText: root.state.count === 0 ? root.state.emptyText : ""
         status: root.state.status
         failed: root.state.failed
-        rows: listed.map(row => ({runs: row.runs, icon: row.icon, iconTone: row.iconTone, badge: row.badge ?? "", badgeTone: row.badgeTone ?? "", identity: root.state.revision + ":" + row.path}))
+        rows: listed.map(row => ({runs: row.runs, icon: row.icon, badge: row.badge ?? "", badgeTone: row.badgeTone ?? "", identity: root.state.revision + ":" + row.path}))
         current: Math.max(0, listed.findIndex(row => row.selected))
         hints: (root.regions.hints ?? []).map(hint => ({keys: [hint.key], word: hint.word}))
         onSearched: text => root.controller.search(text)

@@ -86,7 +86,7 @@ export {
               Field<&ReportAgent::state, EnumByte<AgentReportState, std::to_underlying(AgentReportState::interrupted)>, "state">,
               Field<&ReportAgent::session, Text16<agent_report_session_bytes>, "session">,
               Field<&ReportAgent::session_file, Text16<agent_report_session_file_bytes>, "session_file">,
-              Field<&ReportAgent::session_file_kind, EnumByte<AgentSessionFileKind, 2>, "session_file_kind">,
+              Field<&ReportAgent::session_file_kind, EnumByte<AgentSessionFileKind, 3>, "session_file_kind">,
               Field<&ReportAgent::blocked_reason, EnumByte<AgentBlockedReason, 4>, "blocked_reason">,
               Field<&ReportAgent::event, DisplayText16<agent_report_event_bytes>, "event">> {};
 

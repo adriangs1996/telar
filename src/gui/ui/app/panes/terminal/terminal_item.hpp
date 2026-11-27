@@ -175,6 +175,10 @@ namespace telar::gui::qt {
     Q_INVOKABLE void selectBlock(int index);
     // Folds or unfolds the output of the command at `index`.
     Q_INVOKABLE void toggleFold(int index);
+    // Copies the command at `index`, or its output.
+    Q_INVOKABLE void copyBlock(int index, bool command);
+    // A click on something drawn over the terminal: its pane comes forward and takes the keys.
+    Q_INVOKABLE void focusFromPointer();
     // Glides back to the live end and follows the output again.
     Q_INVOKABLE void scrollToEnd();
     // Glides to show the scrollback's `fraction`, its middle there; or moves there at once, as
@@ -232,6 +236,10 @@ namespace telar::gui::qt {
     // Types a key press the window left to the terminal: a clipboard shortcut, telar's command
     // editor, or the bytes the pane's program reads. The key, when the program received it.
     ds::Option<TerminalKey> type(const QKeyEvent& event);
+
+    // The platform's clipboard and Command keys: copy, paste, the editor's text commands and
+    // stepping through the commands; false when `event` is none of them.
+    bool clipboardKey(const QKeyEvent& event);
     // The cursor shows at once after a key, and blinks again from there.
     void wakeCursor();
 
@@ -261,6 +269,9 @@ namespace telar::gui::qt {
     void scrollChanged();
     void stickyChanged();
     void matchesChanged();
+    // A command's command or output was copied, or had nothing to copy: `what` is "command" or
+    // "output".
+    void blockCopied(int index, const QString& what, bool copied);
 
   protected:
     void updatePolish() override;
@@ -297,6 +308,9 @@ namespace telar::gui::qt {
     static void requestRowFonts(ResidentFonts& fonts, WindowFontCatalog& catalog, std::span<const CellValue> cells);
     void refresh();
     void refreshBlocks();
+
+    // Emits blockCopied for a copy of one of this pane's blocks since the last one it told of.
+    void announceBlockCopy();
     void resizeTerminal();
     void synchronizeFocus();
     void releaseKeys();
@@ -324,6 +338,12 @@ namespace telar::gui::qt {
     void synchronizeScroll();
     // A wheel or trackpad over a scrollback the view scrolls itself; whether it took it.
     bool scrollWheel(const QWheelEvent& event);
+    // A trackpad's gesture of `event`, rows `cell` tall, at `now`.
+    void scrollGesture(const QWheelEvent& event, double cell, ScrollTime now);
+    // Where the live end was when the view left it: a move down that reaches it comes back to
+    // the live end and follows the output again, however much arrived meanwhile.
+    [[nodiscard]] double leftEnd() const;
+    [[nodiscard]] std::uint64_t rowsSinceLeftEnd() const;
     // Moves the motion to this frame and the view with it.
     void advanceScroll();
     void applyScroll(bool driven);
@@ -372,7 +392,11 @@ namespace telar::gui::qt {
     [[nodiscard]] const Screen<Memory>* drawnScreen() const;
     [[nodiscard]] std::uint64_t drawnScreenKey() const noexcept;
     void appendDrawnRow(std::size_t index) const;
-    [[nodiscard]] int indexAt(QPointF position) const noexcept;
+    // The cell drawn at `position`, counted from the top of the scrollback; on a row past the
+    // last that exists, that last row.
+    [[nodiscard]] ds::Option<CopyPoint> cellAt(QPointF position) const noexcept;
+    // Copy mode's selection over the rows the view draws, counted as the scene counts them.
+    [[nodiscard]] CellSelection drawnSelection(const application::terminal::copy_mode::CopyState& copy) const noexcept;
     [[nodiscard]] application::terminal::copy_mode::CopyPointerInput pointerInput(QPointF position, application::terminal::copy_mode::CopyPointerKind kind, bool left_button = true, std::int32_t rows = 0) const noexcept;
     // The pane, reached through the controller QML owns, which this item knows by address only.
     [[nodiscard]] [[tbc::raw]] const application::Pane<Memory>* pane() const noexcept;
@@ -444,8 +468,13 @@ namespace telar::gui::qt {
     // Since the view left the live end: the scrollback's stable rows then, and the commands
     // running then.
     ds::Option<std::uint64_t> away_rows_;
+    // The rows the scrollback held, counted from its first row ever, when a wheel or gesture
+    // took the view away from the live end; none while the view follows the output.
+    ds::Option<std::uint64_t> left_end_rows_;
     ds::Vec<std::uint64_t, Memory> away_running_{adapter_};
     int rows_arrived_ = 0;
+    // The serial of the last block copy this view announced.
+    std::uint64_t block_copy_serial_ = 0;
     QVariantList finished_below_;
     QVariantMap sticky_block_;
     QVariantList rail_segments_;

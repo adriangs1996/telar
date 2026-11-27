@@ -147,6 +147,11 @@ namespace telar::runtime {
     return record(information);
   }
 
+  // The kernel keeps a process's start as the time of day.
+  std::chrono::microseconds ProcessTable::clock() noexcept {
+    return std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::system_clock::now().time_since_epoch());
+  }
+
   ProcessActionResult ProcessTable::signal(ProcessInstance process, int signal) noexcept {
     if (process.pid <= 0 || !sameProcessInstance(process)) {
       return ProcessActionResult::gone;

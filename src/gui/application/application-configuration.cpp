@@ -111,6 +111,7 @@ namespace telar::gui::application {
     scroll.wheel_ms = gui.scroll.wheel_ms.valueOr(scroll.wheel_ms);
     scroll.overscan = static_cast<float>(gui.scroll.overscan.valueOr(static_cast<double>(scroll.overscan)));
     scroll.sticky_headers = gui.scroll.sticky_headers.valueOr(scroll.sticky_headers);
+    configuration.copy_on_select = gui.copy_on_select.valueOr(configuration.copy_on_select);
 
     window(gui.window, configuration);
     for (std::size_t index = 0; index < gui.opacity.size(); ++index) {

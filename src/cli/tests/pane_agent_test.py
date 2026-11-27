@@ -186,7 +186,7 @@ def check(binary, root):
         assert value['revision'] == 11 and value['agents'][0]['final_message'] == 'Finished\nmessage'
         assert value['agents'][0]['session_id'] == '000102030405060708090a0b0c0d0e0f'
         row = run('agent', 'get', 'fIxTuRe').stdout
-        assert row == b'PANE  GEN  STATUS   PROV    WORKSPACE         TAB           TITLE\n17    29   ready    claude  Workspace         Tab           Fixture\n', row
+        assert row == b'PANE  GEN  STATUS   PROV         WORKSPACE         TAB           TITLE\n17    29   ready    claude       Workspace         Tab           Fixture\n', row
         fixture.duplicate = True
         assert b'more than one agent' in run('agent', 'get', 'fixture', status=1).stderr
         fixture.duplicate = False

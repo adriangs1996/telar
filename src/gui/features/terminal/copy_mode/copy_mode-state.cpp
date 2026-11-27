@@ -75,7 +75,7 @@ namespace telar::gui::features::terminal::copy_mode {
     }
 
     point.x = std::min<std::uint16_t>(point.x, grid.columns - 1);
-    point.y = std::clamp(point.y, grid.scroll.offset, grid.scroll.offset + grid.rows - 1);
+    point.y = std::min(point.y, grid.lastRow());
     const auto span = grid.pointerSpan(point, pointer->granularity);
     const auto backwards = point < pointer->start;
 

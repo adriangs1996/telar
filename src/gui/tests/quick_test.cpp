@@ -3162,6 +3162,80 @@ for i in 0 1 2 3 4 5 6 7; do printf '\033[10%sm    ' "$i"; done; printf '\033[0m
     // With a single tab page the strip over the editor lists Neovim's buffers: the one shown is
     // lit, one with changes is marked, and a click goes to another. Tab pages take the strip
     // once there is more than one.
+    // An editor's windows show the pane's own background, at the pane's opacity, as a
+    // terminal's cells do: nothing Neovim left on the default grid under a window is drawn, not
+    // even the separator of a split that closed.
+    Q_SLOT void editorPaneKeepsThePaneOpacity() {
+      if (QStandardPaths::findExecutable(QStringLiteral("nvim")).isEmpty()) {
+        QSKIP("Neovim is not installed on this host");
+      }
+
+      QTRY_VERIFY_WITH_TIMEOUT(terminalReady(), runtime_wait_ms);
+      const auto original_id = firstPane()->id;
+      const auto tab_count = client_->tabs()->rows()->rowCount();
+      const QTemporaryDir directory;
+      const auto path = directory.filePath(QStringLiteral("config.lua"));
+      bool opened = false;
+      const auto restore = qScopeGuard([&] {
+        if (opened) {
+          closeTemporaryTab({.count = tab_count, .pane_id = original_id});
+        }
+
+        client_->loadConfiguration({}, {}, {});
+      });
+      const auto editorView = [&] {
+        const auto views = test::visualItems(*window_->contentItem(), QStringLiteral("paneEditor"));
+
+        return views.empty() ? nullptr : qobject_cast<NvimItem*>(views.front());
+      };
+      const auto separators = [&] {
+        return editorView()->property("separators").toList();
+      };
+      constexpr qreal pane_opacity = 0.3;
+
+      writeTestFile(path, "return {api_version=2,gui={window={background_opacity=1},opacity={pane=0.3}}}");
+      client_->loadConfiguration(path, {}, {});
+      QCOMPARE(client_->status()->error(), QString{});
+      client_->commands()->execute(window_actions::Action::new_editor_tab);
+      QTRY_VERIFY_WITH_TIMEOUT(client_->tabs()->rows()->rowCount() == tab_count + 1, runtime_wait_ms);
+      opened = true;
+      QTRY_VERIFY_WITH_TIMEOUT(editorView() != nullptr && editorView()->ready(), runtime_wait_ms);
+
+      // A split leaves its separator on the default grid, where the window stands once it closes.
+      editorView()->send(QStringLiteral("<Cmd>vsplit<CR>"));
+      QTRY_COMPARE_WITH_TIMEOUT(separators().size(), 1, runtime_wait_ms);
+      const auto separator = separators().front().toMap();
+      const auto cell = editorView()->mapRectToScene({separator.value(QStringLiteral("x")).toReal(), 0, separator.value(QStringLiteral("width")).toReal(), 1});
+
+      editorView()->send(QStringLiteral("<Cmd>only<CR>"));
+      QTRY_VERIFY_WITH_TIMEOUT(separators().isEmpty(), runtime_wait_ms);
+      QTest::qWait(120);
+      QVERIFY(test::waitForSynchronizedFrame(*window_, runtime_wait_ms));
+      const auto frame = window_->grabWindow();
+      const auto bounds = editorView()->mapRectToScene(editorView()->boundingRect());
+      // The most opaque pixel of a row from `left` to `right`, in logical pixels.
+      const auto opacity = [&](qreal left, qreal right, qreal y) {
+        const auto ratio = window_->devicePixelRatio();
+        const auto row = static_cast<int>(y * ratio);
+        qreal most = 0;
+
+        for (auto x = static_cast<int>(std::floor(left * ratio)); x < static_cast<int>(std::ceil(right * ratio)); ++x) {
+          most = std::max<qreal>(most, frame.pixelColor(x, row).alphaF());
+        }
+
+        return most;
+      };
+      const auto verify = [&](qreal left, qreal right, std::string_view where) {
+        const auto actual = opacity(left, right, bounds.center().y());
+
+        QVERIFY2(std::abs(actual - pane_opacity) <= 1.0 / 255, qPrintable(QStringLiteral("%1: alpha %2, expected %3").arg(QString::fromUtf8(where.data(), static_cast<qsizetype>(where.size()))).arg(actual).arg(pane_opacity)));
+      };
+
+      QVERIFY(!frame.isNull());
+      verify(bounds.right() - 8, bounds.right() - 4, "the window");
+      verify(cell.left(), cell.right(), "the separator the closed split left");
+    }
+
     Q_SLOT void editorTabStripListsBuffers() {
       if (QStandardPaths::findExecutable(QStringLiteral("nvim")).isEmpty()) {
         QSKIP("Neovim is not installed on this host");
@@ -3726,12 +3800,19 @@ for i in 0 1 2 3 4 5 6 7; do printf '\033[10%sm    ' "$i"; done; printf '\033[0m
       client_->commands()->execute(window_actions::Action::toggle_sidebar);
     }
 
+    // A selection the pointer made reaches the clipboard by the platform's copy key, which
+    // copies it whether or not letting go did (gui.copy_on_select).
     Q_SLOT void pointerSelection() {
       auto* clipboard = QGuiApplication::clipboard();
       auto saved_clipboard = test::copyClipboard();
       const auto restore_clipboard = qScopeGuard([clipboard, saved = std::move(saved_clipboard)] mutable {
         clipboard->setMimeData(saved.release());
       });
+      const auto copy = [this] {
+        const auto modifiers = platform::usesCommandKey() ? Qt::KeyboardModifiers{Qt::ControlModifier} : Qt::KeyboardModifiers{Qt::ControlModifier | Qt::ShiftModifier};
+
+        QTest::keyClick(window_, Qt::Key_C, modifiers);
+      };
 
       QTRY_VERIFY_WITH_TIMEOUT(terminalReady(), runtime_wait_ms);
       auto* terminal = terminalIn(window_->contentItem());
@@ -3753,6 +3834,7 @@ for i in 0 1 2 3 4 5 6 7; do printf '\033[10%sm    ' "$i"; done; printf '\033[0m
       QTest::mouseClick(window_, Qt::LeftButton, Qt::NoModifier, clicked);
       QCOMPARE(clipboard->text(), QStringLiteral("unchanged clipboard"));
       QTest::mouseClick(window_, Qt::LeftButton, Qt::NoModifier, clicked);
+      copy();
       QTRY_COMPARE_WITH_TIMEOUT(clipboard->text(), path, runtime_wait_ms);
       QVERIFY(!client_->copy()->active());
       QTest::mouseClick(window_, Qt::LeftButton, Qt::NoModifier, clicked);
@@ -3770,6 +3852,7 @@ for i in 0 1 2 3 4 5 6 7; do printf '\033[10%sm    ' "$i"; done; printf '\033[0m
       QTest::mousePress(window_, Qt::LeftButton, Qt::NoModifier, beginning);
       QTest::mouseMove(window_, end);
       QTest::mouseRelease(window_, Qt::LeftButton, Qt::NoModifier, end);
+      copy();
       QTRY_COMPARE_WITH_TIMEOUT(clipboard->text(), QStringLiteral("/tmp"), runtime_wait_ms);
       QTest::qWait(click_wait_ms);
       QVERIFY(test::waitForSynchronizedFrame(*window_, runtime_wait_ms));
@@ -3778,6 +3861,7 @@ for i in 0 1 2 3 4 5 6 7; do printf '\033[10%sm    ' "$i"; done; printf '\033[0m
       QTest::mouseMove(window_, end);
       terminal->ungrabMouse();
       QTest::mouseRelease(window_, Qt::LeftButton, Qt::NoModifier, end);
+      copy();
       QTRY_COMPARE_WITH_TIMEOUT(clipboard->text(), QStringLiteral("/tmp"), runtime_wait_ms);
       QTest::keyClick(window_, Qt::Key_X);
       client_->terminals()->input(pane->id, "\x15");

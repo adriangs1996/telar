@@ -97,6 +97,52 @@ namespace {
     check(directories == 1 && !lists(found, "src"), "a parent directory is not listed once, as a directory");
   }
 
+  // A repository inside the one searched lists its own files: a submodule, which the outer index
+  // holds as one entry, and a repository the outer one does not hold. Each is a directory, never
+  // a file. A path in conflict, which the index holds once for each side, is listed once.
+  void testNestedRepositories() {
+    if (std::system("command -v git >/dev/null 2>&1") != 0) {
+      telar::testing::skip("git is not installed");
+    }
+
+    telar::testing::TestMemory adapter;
+    ConcurrentMemory& memory = adapter;
+    TemporaryDirectory repository{"/tmp/telar-paths-XXXXXX"};
+    const std::string root{repository.path()};
+
+    write(root + "/top.txt");
+    write(root + "/conflicted.txt");
+    write(root + "/module/src/main.rs");
+    write(root + "/module/untracked.txt");
+    write(root + "/loose/tool.txt");
+    const auto line = "cd " + root + " && export GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1"
+                                     " && git -C module init -q && git -C module add src && git -C module -c user.name=t -c user.email=t@t commit -qm module"
+                                     " && git -C loose init -q && git init -q && git add top.txt module >/dev/null 2>&1"
+                                     " && blob=$(git hash-object -w conflicted.txt)"
+                                     " && printf '100644 %s 1\\tconflicted.txt\\n100644 %s 2\\tconflicted.txt\\n100644 %s 3\\tconflicted.txt\\n' $blob $blob $blob"
+                                     " | git update-index --index-info";
+
+    check(std::system(line.c_str()) == 0);
+    PathIndex index{memory};
+    const auto found = listing(memory, index, root);
+    const auto named = [&](std::string_view path) {
+      return std::ranges::count(found.paths, path, &Found::path);
+    };
+    const auto directory = [&](std::string_view path) {
+      return named(path) == 1 && std::ranges::any_of(found.paths, [&](const Found& entry) {
+        return entry.path == path && entry.kind == PathKind::directory;
+      });
+    };
+
+    check(found.complete && lists(found, "top.txt"));
+    check(lists(found, "module/src/main.rs"), "a submodule's file is missing");
+    check(lists(found, "module/untracked.txt"), "a submodule's untracked file is missing");
+    check(lists(found, "loose/tool.txt"), "an untracked repository's file is missing");
+    check(named("module") == 0 && directory("module/"), "a submodule is not one directory");
+    check(directory("loose/"), "an untracked repository is not one directory");
+    check(named("conflicted.txt") == 1, "a path in conflict is listed for each side");
+  }
+
   // Each path says what git holds of it, against the repository's head and its index, from a
   // root below the repository's top as well; a committed one says nothing.
   void testGitChangesOfPaths() {
@@ -252,6 +298,7 @@ namespace {
   }
 
   const telar::testing::Case case_git_index_respects_ignore{"path_index.git_index_respects_ignore", testGitIndexRespectsIgnore};
+  const telar::testing::Case case_nested_repositories{"path_index.nested_repositories", testNestedRepositories};
   const telar::testing::Case case_git_changes_of_paths{"path_index.git_changes_of_paths", testGitChangesOfPaths};
   const telar::testing::Case case_path_change_letters{"path_index.path_change_letters", testPathChangeLetters};
   const telar::testing::Case case_unreadable_root{"path_index.unreadable_root", testUnreadableRoot};

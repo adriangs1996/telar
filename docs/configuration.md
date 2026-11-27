@@ -262,9 +262,10 @@ theme = "cybervenom"
 ```
 
 Each preset defines Telar's chrome roles and the native terminal's foreground,
-background, ANSI palette and cursor colors. Built-ins are `zenburn` (the default),
-`shade`, `cybervenom`, `vesper`, `catppuccin` (Mocha), `tokyo-night`, `kanagawa` (Wave),
-`kanagawa-dragon`, `pierre-dark`,
+background, ANSI palette and cursor colors. Built-ins are `transylvania` (the
+default), `transylvania-vela`, `transylvania-sangre`, `zenburn`, `shade`,
+`cybervenom`, `vesper`, `catppuccin` (Mocha), `tokyo-night`, `kanagawa` (Wave),
+`kanagawa-dragon`, `gruvbox`, `gruvbox-hard`, `dracula`, `pierre-dark`,
 `pierre-dark-soft`, and `terminal`. The Pierre presets use the dark and dark-soft
 palettes from Adrian's Neovim theme, including syntax and ANSI colors.
 Shade is Nord on a `#191c22` polar night with `#d8dee9` text: control
@@ -279,6 +280,27 @@ surface on Zenburn's own grey scale. Roles are told apart by hue, not weight:
 keywords `#f0dfaf`, functions `#bde0f3`, types `#a7d1ce`, properties `#dfaf8f`,
 constants and numbers `#bfebbf`, strings `#cc9393`. It uses `#f0dfaf` accents
 and no italics or bold.
+The Gruvbox presets take gruvbox.nvim's dark palette, syntax and ANSI colors,
+with `#ebdbb2` text and `#fe8019` accents. `gruvbox` paints panes `#282828`;
+`gruvbox-hard` paints them `#1d2021`, where red clears 4.5:1 and comments reach
+4.47:1. Functions and strings share Gruvbox's green and are told apart by
+weight: functions bold, strings and comments italic.
+Dracula takes the Dracula Classic palette and ANSI colors from the
+[Dracula specification](https://draculatheme.com/spec), on `#282a36` with
+`#f8f8f2` text and `#bd93f9` accents. Its syntax follows the spec's reference
+implementation, [dracula/cursor](https://github.com/dracula/cursor): keywords
+and operators pink, functions green, types, namespaces and builtins cyan
+italic, parameters orange italic, numbers and constants purple, strings
+yellow, comments `#6272a4`. Muted chrome text uses the comment color too, as
+the reference does, so it reads at 3:1 against the background.
+The Transylvania presets share one syntax: the keyword color belongs to keywords
+alone, operators and punctuation recede to one muted tone, and comments, types,
+builtins and parameters are italic. Every syntax role clears 4.5:1 against its
+background and comments clear 4:1. `transylvania` is moonlight: `#16181b` with
+`#d6d5d1` text, `#a3b6d1` accents and orange keywords. `transylvania-vela` is
+candlelight: `#1a1715` with `#ddd4c6` text, `#e3a857` accents and orange keywords.
+`transylvania-sangre` is blood: `#17151a` with `#d8d2cf` text and crimson `#d9596c`
+accents and keywords. Their ANSI colors come from their syntax colors.
 The window uses the preset's terminal
 colors; child truecolor and OSC overrides still apply. The `terminal` preset
 uses host-relative chrome roles and a neutral explicit palette, since the
@@ -490,6 +512,7 @@ gui = {
 | `scroll.sticky_headers` | `true` | Keep the separator of the command being read on the pane's top row while its own separator is above the view. Needs `client.prompt.mode = "telar"`. |
 | `sidebar.width` | `"auto"` | `"auto"` fits the band to its content: the longest card and machine row, at most a third of the window and never below 220. It fits when the window first has its agents, on a reload and when the sidebar's edge is double-clicked, never while agents change, since every width change resizes each pane's terminal. A number is the width in logical pixels; `220..800`, decimals allowed. Scaled by the display and rounded to device pixels, then clamped so the workbench keeps at least 20 columns after the band and its 8 px gap; a window too narrow for the full sidebar shows a workspace rail if space permits. Keyboard `resize_sidebar` moves the width by 16 logical pixels and dragging the edge sets it exactly; both change only this window and are not written back to the file, so the value here is what a new window starts from. A reload that changes the value replaces the window's width; one that leaves it unchanged keeps an interactive choice. |
 | `max_fps` | the display's rate | Caps how many frames a second the window presents; an integer `30..240`. By default the window presents at the refresh rate of the display it is on (120 on ProMotion, 144 or 165 on many external monitors, 60 elsewhere) and follows it to another display; past that rate vsync would discard the frames. A lower cap saves power during floods and animations. The runtime sends pane output to this window at the same interval. A reload applies it at once. |
+| `copy_on_select` | `false` on macOS, `true` elsewhere | Letting go of a selection made with the pointer copies it to the clipboard, as X11 terminals do. Either way the platform's copy key (Command+C, or Control+Shift+C) copies it. |
 | `chrome.scale` | `1` | Multiplies the native chrome text sizes; `0.5..2`, decimals allowed. The chrome derives three sizes from `font.size` times the display scale: title and body ×0.87, small ×0.73, rounded to device pixels and never below 6. The bands (top navigation 42, status bar 26, pane header 22 logical pixels) do not scale with it, so the body size is capped at the largest whose line box fits the pane header: at `font.size = 15` the body stops growing at 16 px (scale ≈ 1.3) while title and small keep growing, reaching 26 and 22 px at scale 2. The terminal grid and the PTY size never change with it; a reload applies it without rebuilding the atlas. |
 
 `gui.opacity` sets the background alpha of each surface, `0..1`. An override
@@ -593,10 +616,10 @@ Ghostty configuration files.
 `runtime.agents` is an array of agent manifests. A manifest is everything
 Telar knows about one coding agent without code: how to recognize it, how to
 show it, and which client capability it supports. Telar ships manifests for
-`claude`, `codex`, `pi`, `cursor` and `opencode`. Naming one of them extends or overrides the
+`claude`, `codex`, `pi`, `cursor`, `opencode` and `antigravity`. Naming one of them extends or overrides the
 shipped manifest; any other name creates a new agent that the sidebar, the
 `telar agent` command, notifications and the image shelf treat exactly like a
-built-in one. Up to 27 agents can be configured besides the built-in ones,
+built-in one. Up to 26 agents can be configured besides the built-in ones,
 32 in all.
 
 A manifest past a limit keeps what fits and the rest of the configuration
@@ -668,6 +691,12 @@ missing mapping, a non-string field or a subagent id are ignored. The shipped
 manifests map Claude Code `Bash.command`, Codex `Bash.command` plus the legacy
 `exec_command.cmd` and `shell.command` names, and Pi `bash.command`.
 
+An activity card shows an agent's plan from the plan tools its hooks report.
+Claude Code keeps those tools (`TaskCreate`, `TaskUpdate`) off for its newest
+models, so every pane starts with `CLAUDE_CODE_ENABLE_TODO_TOOLS=1` unless the
+environment already sets it. `runtime.agent_plans = false` leaves the variable
+alone; the change reaches panes opened after the runtime restarts.
+
 Overriding a built-in keeps its provider index, artwork and code-level
 capabilities; only the listed fields change. For example, relabel Claude Code
 and add a working phrase:
@@ -681,11 +710,11 @@ agents = {
 Three things stay in code and are not configurable, because each needs an
 agent-specific program rather than data:
 
-- **Session resume.** Only `claude`, `codex`, `pi`, `cursor` and `opencode` are resumed from a
+- **Session resume.** Only `claude`, `codex`, `pi`, `cursor`, `opencode` and `antigravity` are resumed from a
   checkpoint. A configured agent restores as
   a plain shell.
 - **Lifecycle hooks.** `telar integration <agent>` and `telar hook <agent>`
-  know the hook formats of the five built-ins (`src/cli/commands/hooks/`).
+  know the hook formats of the six built-ins (`src/cli/commands/hooks/`).
 
 Diagnostics name the entry and the field, for example
 `config.runtime.agents[2].icon must be exactly one cell wide`.
@@ -1363,10 +1392,14 @@ pane is scrolled up does not move it, and the rows it shows stay in place when
 the scrollback drops its oldest rows. With `client.prompt.mode = "telar"`, the
 right edge maps the whole scrollback: a segment per command, as tall as its
 output and in the colour of how it ended, with the view drawn over them. A
-click on a segment selects its command, a click elsewhere glides there, and
-the view drags. The commands' outputs fold: the chevron on a separator, or the
-keys below, hide them behind their separator, which then says how many rows it
-hides; folding keeps the row at the top where it was.
+click on a segment, or on the view over it, selects its command, a click
+elsewhere glides there, and the view drags. The commands' outputs fold: the
+chevron on a separator, or the [keys of a selected command](#command-blocks),
+hide them behind their separator, which then says how many rows it hides;
+folding keeps the row at the top where it was.
+
+A wheel or a trackpad that moves back down to where the live end was when the
+view left it follows the output again, however much arrived meanwhile.
 
 `telar.action.copy_mode()` enters the focused pane's scrollback. Its default
 binding is `prefix`, then `[`. In copy mode, the mouse wheel scrolls three rows
@@ -1506,7 +1539,98 @@ the query: the history search starts from the whole command, and the path picker
 from the plain relative word before the caret, which the chosen path replaces.
 Ctrl+R opens the history search, with the newest matches first under the query.
 Its inspector (Ctrl+O) still opens as a dialog. The history search lists each
-command once, at its newest run that passes the filters.
+command once, at its newest run that passes the filters. In it, Ctrl+R and
+Ctrl+S step to older and newer matches, Ctrl+C and Ctrl+G cancel, Command+C
+(Ctrl+Shift+C) copies the selected command and Command+Backspace
+(Ctrl+Shift+D) deletes every run of it.
+
+### The command editor
+
+`client.prompt` sets telar's command editor:
+
+```lua
+client = {
+  prompt = {
+    mode = "telar",
+    keymap = "vim",
+    ghost = true,
+    motion = "ease",
+    max_lines = 12,
+    bindings = {
+      { keys = "ctrl+j", action = "submit" },
+      { keys = "H", action = "line_start", mode = "normal" },
+    },
+  },
+}
+```
+
+| Setting | Default | Meaning |
+| --- | --- | --- |
+| `mode` | `"classic"` | `"telar"` for telar's editor in place of the shell's prompt. |
+| `keymap` | `"emacs"` | `"emacs"`, readline's keys, or `"vim"`, which starts each command in insert mode. |
+| `ghost` | `true` | Suggest the rest of a command from the history, dimmed after the caret. |
+| `motion` | `"spring"` | How completions and the editor's state changes move: `"spring"`, `"ease"` or `"none"`. What is typed always shows at once. |
+| `max_lines` | `12` | Rows the editor grows to before it scrolls; `1..64`. |
+| `macos_option_as_alt` | the layout's | See above. |
+| `bindings` | none | Up to 256 keys, each to an action: `submit`, `newline`, `cancel`, `complete`, `accept_suggestion`, `history_previous`, `history_next`, `history_search`, `line_start`, `line_end`, `char_left`, `char_right`, `word_left`, `word_right`, `delete_char`, `backspace`, `kill_line`, `kill_to_start`, `kill_word`, `kill_word_back`, `yank`, `undo`, `redo`, `transpose`, `clear_screen`, `normal_mode`, `insert_mode`. `mode = "normal"` binds the key in vim's normal mode instead of insert. A menu of choices, and a suggestion, keep the keys that act on them. |
+
+The emacs keymap reads readline's keys: Ctrl+A and Ctrl+E, Ctrl+B and Ctrl+F,
+Alt+B and Alt+F (or Escape then B or F), Ctrl+W, Ctrl+U, Ctrl+K and Alt+D kill
+into the ring Ctrl+Y yanks from, Ctrl+T transposes, Ctrl+_ undoes, Alt+U,
+Alt+L and Alt+C change a word's case, Alt+. writes the last argument of the
+command before (again at once, of the one before that), Ctrl+V types the next
+key as it is, a tab included, Ctrl+R searches the history and Ctrl+L clears the
+screen. Ctrl+C drops the command as a kill, so Ctrl+Y or undo brings it back;
+Ctrl+D on an empty line ends the shell. Alt+Enter or Shift+Enter inserts a line
+break, and Enter on a command the shell would read more of, as an open quote,
+continues it on a new line. The vim keymap adds normal and visual modes, and
+Ctrl+[ is Escape in both. On macOS, Command with Left and Right goes to the
+line's ends, Backspace erases to its start, Z undoes, Shift+Z redoes, A
+selects the command, and C and X copy and cut the selection. A click places the
+cursor.
+
+Tab completes commands, paths, and what a command's spec offers. What every
+choice starts with is written at once; Tab and Shift+Tab, or the arrows, move
+through the rest, Enter takes the one selected, and so does Space once Tab moved
+to it; Escape closes them.
+Typing narrows them, ignoring case when nothing matches as typed.
+
+While a command runs, the editor takes the next one: Enter queues it to run if
+the running one succeeds, and Alt+Enter sends the line to the program instead.
+A key that reaches the program after the line was queued, as the Ctrl+D that
+ends `cat`, keeps the line from running: it waits in the editor.
+
+#### Command blocks
+
+Each command the shell ran is a block: its separator, then its output. A block
+is selected by a click on its separator or on its segment of the rail, by
+Command+Up and Command+Down (Ctrl+Shift with the arrows elsewhere) from any
+keymap, by `prefix` then `[`, which selects the last, or from vim's normal mode
+by Ctrl+U, Ctrl+D, `[[` and `]]`, and `[f` and `]f` for the failed ones. Up and
+Down step through the blocks while one is selected; the view moves only when
+the block's separator is out of it.
+
+A separator under the pointer, or selected, offers "copy command" and "copy
+output", and the copy says what it took. Command+C (Ctrl+Shift+C) copies the
+selected block's output. A block selected with the pointer or the window's
+arrows lets the keys that type go to the editor, which takes them. From vim's
+keys, the selected block also takes:
+
+| Keys | |
+| --- | --- |
+| `Y` | Copy the output. |
+| `yc`, `yy` | Copy the command, whole. |
+| `v`, `V` | Select the output in copy mode, by characters or lines. |
+| `/` | Search the output; Tab widens the search to the scrollback. |
+| `za`, `zc`, `zo` | Toggle, fold or unfold the output; `zM` and `zR` every block's. |
+| `zt`, `zz`, `zb` | Put the block at the view's top, middle or bottom. |
+| `j`, `k` | Move the view a row. |
+| `gg`, `G` | The first block; the live end. |
+| Ctrl+O, Ctrl+I | Back and forth through the jumps, selecting the block each lands in. |
+| Escape, `q` | Back to the editor. |
+
+A pane keeps the blocks of the commands whose rows the scrollback still holds,
+up to 256.
 
 Copy mode accepts `h`, `j`, `k`, `l` and the arrow keys, `w`, `b`, `e`, `{`,
 `}`, `0`, `^`, `$`, `g`, `G`, Page Up, Page Down, Ctrl-B, Ctrl-F, Ctrl-U, and Ctrl-D.

@@ -82,8 +82,9 @@ Item {
     readonly property real cell: editor.cellWidth
     readonly property real line: root.terminal && root.terminal.cell.height > 0 ? root.terminal.cell.height : editor.cellHeight
     readonly property int screenRows: root.terminal ? root.terminal.rows : 0
-    // As a separator lays out its row: the pill, then the command.
-    readonly property real pillX: root.cell * 0.5
+    // As a separator lays out its row: past its chevron's two cells, the pill, then the command,
+    // so a command stays where it was typed when its separator takes its place.
+    readonly property real pillX: root.cell * 2
     readonly property real pillHeight: Math.round(root.line * 0.72)
     readonly property real pillWidth: Math.max(root.pillHeight, root.cell * 2)
     readonly property real textX: root.pillX + root.pillWidth + root.cell
@@ -425,12 +426,13 @@ Item {
                 }
             }
 
+            // Fainter than a separator's rule, so the context does not read as a command.
             Rectangle {
                 x: place.x + place.width + root.cell
                 anchors.verticalCenter: parent.verticalCenter
                 width: Math.max(0, statusRow.x - x - root.cell)
                 height: Math.max(1, root.ratio)
-                color: Qt.alpha(root.colors.overlay1, 0.35)
+                color: Qt.alpha(root.colors.overlay1, 0.14)
             }
 
             Row {
@@ -495,7 +497,7 @@ Item {
                 // vim's normal and visual modes turn the mark around.
                 CellText {
                     anchors.centerIn: parent
-                    text: editor.mode === "normal" || editor.mode.startsWith("visual") ? "❮" : "❯"
+                    text: editor.mode === "normal" || editor.mode.startsWith("visual") ? "‹" : "›"
                     grid: root.grid
                     color: pill.tone
                     bold: true
@@ -508,7 +510,10 @@ Item {
                 readonly property bool copying: editor.copying.length > 0
                 readonly property bool selecting: editor.block > 0 && !trailing.copying
                 readonly property bool editing: root.editing && !trailing.copying && !trailing.selecting
-                visible: root.focused && (root.queueing || trailing.copying || trailing.selecting || editor.suggesting || trailing.menuOpen)
+                // Only where they fit beside the text: the editor keeps its width as they come
+                // and go, so the command never reflows under them.
+                readonly property bool fits: editor.x + (editor.columns + 2) * root.cell <= parent.width - implicitWidth - root.cell * 2
+                visible: root.focused && trailing.fits && (root.queueing || trailing.copying || trailing.selecting || editor.suggesting || trailing.menuOpen)
                 x: parent.width - implicitWidth - root.cell * 2
                 y: parent.height - root.line
                 height: root.line
@@ -544,22 +549,30 @@ Item {
                     action: "close"
                 }
 
+                // A block selected by a click or the window's arrows takes only these keys; one
+                // selected from vim's keys takes them all.
                 Hint {
                     visible: trailing.selecting
-                    key: "⌃U ⌃D"
+                    key: "↑↓"
                     action: "move"
                 }
 
                 Hint {
                     visible: trailing.selecting
-                    key: "v"
-                    action: "select"
+                    key: editor.blockTyping ? (Qt.platform.os === "osx" ? "⌘C" : "⇧⌃C") : "Y"
+                    action: "copy output"
                 }
 
                 Hint {
-                    visible: trailing.selecting
-                    key: "Y"
-                    action: "copy"
+                    visible: trailing.selecting && !editor.blockTyping
+                    key: "yc"
+                    action: "copy command"
+                }
+
+                Hint {
+                    visible: trailing.selecting && !editor.blockTyping
+                    key: "v"
+                    action: "select"
                 }
 
                 Hint {
@@ -574,11 +587,12 @@ Item {
                     action: "back"
                 }
 
-                // A line written while a program runs waits for it, or goes to it.
+                // A line written while a program runs waits for it, to run if it ends well, or goes
+                // to it.
                 Hint {
                     visible: root.queueing && !editor.queued && !editor.answering
                     key: "⏎"
-                    action: "queue"
+                    action: "run after it"
                 }
 
                 Hint {
@@ -591,7 +605,7 @@ Item {
                     id: queuedKey
                     anchors.verticalCenter: parent.verticalCenter
                     visible: root.queueing && (editor.queued || editor.answering)
-                    text: editor.answering ? "to program" : "queued"
+                    text: editor.answering ? "to program" : "runs if it succeeds"
                     onVisibleChanged: {
                         if (queuedKey.visible && root.moving) {
                             armed.restart();
@@ -1419,6 +1433,20 @@ Item {
 
     NativePromptEditor {
         id: editor
+
+        // A click places the cursor, as in any text field, and brings the pane forward.
+        MouseArea {
+            anchors.fill: parent
+            enabled: root.editing && !root.searching
+            cursorShape: Qt.IBeamCursor
+            onPressed: (mouse) => {
+                if (root.terminal) {
+                    root.terminal.focusFromPointer();
+                }
+                editor.placeCaret(Qt.point(mouse.x, mouse.y));
+            }
+        }
+
         controller: root.prompt
         paneId: root.paneId
         grid: root.grid
@@ -1437,7 +1465,7 @@ Item {
         y: body.y + root.editorY
         width: editor.columns * root.cell + root.cell
         height: editor.visibleRows * root.line
-        maximumColumns: Math.max(8, Math.floor((root.width - editor.x - (trailing.visible && trailing.implicitWidth > 0 ? trailing.implicitWidth + root.cell * 3 : root.cell * 2)) / Math.max(1, root.cell)) - 1)
+        maximumColumns: Math.max(8, Math.floor((root.width - editor.x - root.cell * 2) / Math.max(1, root.cell)) - 1)
 
         // A completion sweeping in glows in the accent colour as it settles.
         Repeater {
@@ -1457,8 +1485,8 @@ Item {
             }
         }
 
-        // The caret slides to where it goes and blinks while the keyboard rests; a block in
-        // vim's normal mode.
+        // The caret is where the next character goes at once, and blinks while the keyboard rests;
+        // a block in vim's normal mode.
         Rectangle {
             id: caret
             readonly property bool block: editor.mode === "normal" || editor.mode.startsWith("visual")
@@ -1471,14 +1499,6 @@ Item {
             color: root.colors.accent
             opacity: block ? 0.5 : caret.on ? 1 : 0.15
             visible: root.focused && root.inputShown
-            Behavior on x {
-                enabled: root.moving
-                NumberAnimation { duration: 40; easing.type: Easing.OutCubic }
-            }
-            Behavior on y {
-                enabled: root.moving
-                NumberAnimation { duration: 40; easing.type: Easing.OutCubic }
-            }
             Behavior on width {
                 enabled: root.moving
                 NumberAnimation { duration: 120 }

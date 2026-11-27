@@ -9,7 +9,7 @@ import telar.base.ds;
 namespace telar::gui::features::activity {
 
   bool ApplicationMark::followsTheme() const noexcept {
-    return provider == AgentProvider::codex || provider == AgentProvider::pi || provider == AgentProvider::cursor || provider == AgentProvider::opencode;
+    return provider == AgentProvider::codex || provider == AgentProvider::pi || provider == AgentProvider::cursor || provider == AgentProvider::opencode || provider == AgentProvider::antigravity;
   }
 
   ApplicationMark ApplicationMark::forApplication(std::string_view name) noexcept {
@@ -34,6 +34,8 @@ namespace telar::gui::features::activity {
       return {.provider = provider, .glyph = "\U000f02d8", .tile = "#e5e3ee", .ink = "#1a1627"};
     case AgentProvider::opencode:
       return {.provider = provider, .glyph = "\U000f0763", .tile = "#99baf8", .ink = "#1a1627"};
+    case AgentProvider::antigravity:
+      return {.provider = provider, .glyph = "\U000f14de", .tile = "#8ab4f8", .ink = "#1a1627"};
     case AgentProvider::unknown:
     case AgentProvider::last_custom:
       break;

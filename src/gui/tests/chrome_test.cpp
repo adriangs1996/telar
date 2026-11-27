@@ -510,14 +510,14 @@ namespace {
         QVERIFY(well->width() < strip->width());
         QVERIFY2(qAbs(well->x() + well->width() / 2 - strip->width() / 2) <= 1, qPrintable(QStringLiteral("well %1+%2 in %3").arg(well->x()).arg(well->width()).arg(strip->width())));
         QVERIFY(strip->mapToItem(navigation.get(), QPointF{}).x() > track_bounds.right());
-        // Three workspaces: the one in front keeps its name, the others their mark.
+        // Three workspaces in a wide bar: every name fits, so every one shows.
         qsizetype named = 0;
 
         for (const auto* name : visualItems(*track, QStringLiteral("workspaceSegmentName"))) {
           named += static_cast<qsizetype>(name->isVisible());
         }
 
-        QCOMPARE(named, qsizetype{1});
+        QCOMPARE(named, static_cast<qsizetype>(workspace_count));
         QVERIFY(visualItems(*navigation, QStringLiteral("topBarTelarMark")).isEmpty());
 
         const auto segments = visualItems(*track, QStringLiteral("workspaceSegment"));
@@ -719,7 +719,7 @@ namespace {
       QVERIFY(glyph != nullptr);
       QVERIFY(!engine.rootContext()->contextProperty(QStringLiteral("telar")).isValid());
 
-      for (const auto* const name : {"Claude Code", "CODEX.EXE", "pi", "Cursor Agent", "OpenCode"}) {
+      for (const auto* const name : {"Claude Code", "CODEX.EXE", "pi", "Cursor Agent", "OpenCode", "agy"}) {
         const auto resolved = ApplicationMark::forApplication(name);
         const QVariantMap record{{QStringLiteral("providerMark"), static_cast<int>(resolved.provider)}, {QStringLiteral("glyph"), toQString(resolved.glyph)}};
 
@@ -748,7 +748,7 @@ namespace {
       QVERIFY(ProviderArtwork::image(telar::AgentProvider::claude, ApplicationMark::maximum_cell + 1).isNull());
       QVERIFY(ProviderArtwork::telar(ApplicationMark::minimum_cell - 1).isNull());
       QVERIFY(ProviderArtwork::telar(ApplicationMark::maximum_cell + 1).isNull());
-      for (const auto* const name : {u"bot", u"chevron-down", u"chevron-right", u"git-branch", u"server", u"square-terminal"}) {
+      for (const auto* const name : {u"bot", u"check", u"chevron-down", u"chevron-right", u"git-branch", u"plus", u"search", u"server", u"square-terminal"}) {
         const auto icon = ProviderArtwork::symbol(name, mark_side);
 
         QVERIFY2(!icon.isNull() && icon.hasAlphaChannel(), "every bundled line icon must rasterize");
@@ -773,6 +773,12 @@ namespace {
       // The default mark wears Zenburn's brand colors; Cybervenom keeps its own violet mark.
       QVERIFY(ProviderArtwork::telar(mark_side, false, static_cast<int>(ThemeName::cybervenom)) != default_mark);
       QVERIFY(ProviderArtwork::telar(mark_side, false, static_cast<int>(ThemeName::zenburn)) != default_mark);
+      QVERIFY(ProviderArtwork::telar(mark_side, false, static_cast<int>(ThemeName::gruvbox)) != default_mark);
+      QVERIFY(ProviderArtwork::telar(mark_side, false, static_cast<int>(ThemeName::gruvbox_hard)) != ProviderArtwork::telar(mark_side, false, static_cast<int>(ThemeName::gruvbox)));
+      QVERIFY(ProviderArtwork::telar(mark_side, false, static_cast<int>(ThemeName::dracula)) != default_mark);
+      QVERIFY(ProviderArtwork::telar(mark_side, false, static_cast<int>(ThemeName::transylvania)) != default_mark);
+      QVERIFY(ProviderArtwork::telar(mark_side, false, static_cast<int>(ThemeName::transylvania_vela)) != ProviderArtwork::telar(mark_side, false, static_cast<int>(ThemeName::transylvania)));
+      QVERIFY(ProviderArtwork::telar(mark_side, false, static_cast<int>(ThemeName::transylvania_sangre)) != ProviderArtwork::telar(mark_side, false, static_cast<int>(ThemeName::transylvania)));
       QCOMPARE(ProviderArtwork::telar(mark_side, false, std::numeric_limits<int>::max()), default_mark);
       const auto catppuccin_mark = ProviderArtwork::telar(mark_side, false, static_cast<int>(ThemeName::catppuccin));
 
@@ -1289,8 +1295,8 @@ namespace {
       QVERIFY(track->setProperty("selectedIndex", 0));
       QTRY_VERIFY_WITH_TIMEOUT(inView(), fixture_wait_ms);
 
-      // Three workspaces or more: every mark shows and only the one in front keeps its name,
-      // whatever the room, so the track leaves the tabs theirs.
+      // A few workspaces in a short room: every mark shows and only the one in front keeps its
+      // name. Given the room for every name, every one shows, however many there are.
       constexpr int few = 4;
       constexpr int pair = 2;
 
@@ -1302,8 +1308,9 @@ namespace {
 
       QVERIFY(track->setProperty("room", wide_window));
       QVERIFY(test::waitForSynchronizedFrame(window, fixture_wait_ms));
-      QCOMPARE(shownNames(), qsizetype{1});
+      QCOMPARE(shownNames(), qsizetype{few});
       QCOMPARE(track->property("shownCount").toInt(), few);
+      QVERIFY(track->width() <= wide_window);
 
       // Two workspaces with room for both names: each shows its own, and choosing the other
       // moves neither.

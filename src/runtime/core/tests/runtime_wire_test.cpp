@@ -136,7 +136,7 @@ namespace {
   void testPaneIdentityEnvironment() {
     RuntimeHost host;
     ProtocolPeer peer{host.socket()};
-    const ds::Array<std::string_view, 3> arguments{"/bin/sh", "-c", "env | grep '^TELAR_' | sort; echo identity-done; exec cat"};
+    const ds::Array<std::string_view, 3> arguments{"/bin/sh", "-c", "env | grep -E '^(TELAR_|CLAUDE_CODE_ENABLE_TODO_TOOLS=)' | sort; echo identity-done; exec cat"};
     const auto opened = peer.exchange<PaneOpened>(OpenPane{.request_id = 1, .size = size, .launch = Launch{.cwd = "/tmp", .arguments = arguments}});
     const auto screen = screenShowing(peer, opened.pane_id, "identity-done");
     const auto expect = [&](std::string_view name, const std::string& value) {
@@ -148,6 +148,8 @@ namespace {
     expect("TELAR_WORKSPACE_ID", std::to_string(opened.location.workspace.id));
     expect("TELAR_TAB_ID", std::to_string(opened.location.tab_id));
     expect("TELAR_SOCKET_PATH", host.socket());
+    // Claude Code shows its plan only with its task list tools, which panes turn on.
+    expect("CLAUDE_CODE_ENABLE_TODO_TOOLS", "1");
   }
 
   void testSendTextRefusals() {

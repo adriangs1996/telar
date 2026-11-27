@@ -20,6 +20,10 @@ NativeRoundedRectangle {
     property var drawn: null
     property real ratio: 1
     property real textScale: 1
+    // How far the chrome's text is from its design size. The machine and workspace controls and
+    // their menus measure by it, as the bar's height and the machine rows do, so they keep their
+    // proportions at any font size.
+    property real textRatio: 1
     property bool rail: false
     property bool prefixPending: false
     signal sidebarToggled()
@@ -37,20 +41,22 @@ NativeRoundedRectangle {
     // Controls follow the bar's height, which follows the font size:
     // 28-point controls on the default 44-point bar.
     readonly property real toggleSide: Math.round(height * 0.635)
-    readonly property real identityGap: Math.round(height * 0.26)
     readonly property real glyphSide: Math.round(toggleSide * 0.6)
-    readonly property real controlGap: 8 * ratio
+    // One gap between controls, 8 points on the default bar, growing with it as they do.
+    readonly property real controlGap: Math.round(height * 0.18)
     // The bar reads in the order of what holds what: the machine, its workspaces, then the tabs
     // of the workspace in front. The tabs keep tabsFloor before the other two get any room, so
     // a narrow window shortens those first: the machine's label down to labelFloor, then the
     // workspaces' names, then the workspaces that do not fit.
     readonly property real tabsFloor: 220 * ratio
-    readonly property real machineMaximum: 240 * ratio
     readonly property real labelFloor: 72 * ratio
     readonly property real sideRoom: Math.max(0, paletteButton.x - identity.x - 3 * controlGap - tabsFloor)
-    readonly property real machineWanted: Math.min(identity.preferredWidth, machineMaximum)
+    readonly property real machineWanted: identity.preferredWidth
     readonly property real machineFloor: Math.min(machineWanted, identity.minimumWidth + labelFloor)
-    readonly property real machineRoom: Math.min(sideRoom, Math.max(machineFloor, Math.min(machineWanted, sideRoom - controlGap - track.preferredWidth)))
+    // Every workspace's name while they fit beside the machine's shortest label, else only the
+    // active one's.
+    readonly property real trackWanted: sideRoom - controlGap - machineFloor >= track.namedWidth ? track.namedWidth : track.shortWidth
+    readonly property real machineRoom: Math.min(sideRoom, Math.max(machineFloor, Math.min(machineWanted, sideRoom - controlGap - trackWanted)))
     readonly property real trackRoom: Math.max(0, sideRoom - identity.width - controlGap)
     readonly property real tabsLeft: (track.width > 0 ? track.x + track.width : identity.x + identity.width) + 2 * controlGap
     readonly property real tabsWidth: Math.max(0, paletteButton.x - controlGap - tabsLeft)
@@ -84,13 +90,13 @@ NativeRoundedRectangle {
         id: identity
         objectName: "topBarIdentity"
         visible: root.drawn === null
-        x: toggle.x + toggle.width + root.identityGap
+        x: toggle.x + toggle.width + root.controlGap
         y: (parent.height - height) / 2
         width: root.machineRoom
         height: Math.min(parent.height, root.toggleSide)
         colors: root.colors
         typography: root.typography
-        ratio: root.ratio
+        ratio: root.textRatio
         machine: root.machine
         open: machineMenu.visible
         onRequested: machineMenu.open()
@@ -109,7 +115,8 @@ NativeRoundedRectangle {
         selectedIndex: root.workspace.index ?? -1
         colors: root.colors
         typography: root.typography
-        ratio: root.ratio
+        ratio: root.textRatio
+        controlHeight: root.toggleSide
         onSelected: key => root.workspaceSelected(key)
         onListRequested: workspaceMenu.open()
     }
@@ -122,7 +129,7 @@ NativeRoundedRectangle {
         controller: root.machineChrome
         colors: root.colors
         typography: root.typography
-        ratio: root.ratio
+        ratio: root.textRatio
     }
 
     WorkspaceMenu {
@@ -134,7 +141,7 @@ NativeRoundedRectangle {
         model: root.workspaceModel
         colors: root.colors
         typography: root.typography
-        ratio: root.ratio
+        ratio: root.textRatio
         onSelected: key => root.workspaceSelected(key)
         onCreateRequested: root.workspaceCreated()
     }
@@ -238,7 +245,7 @@ NativeRoundedRectangle {
             implicitHeight: root.toggleSide
             colors: root.colors
             typography: root.typography
-            ratio: root.ratio
+            ratio: root.textRatio
             machine: root.machine
             open: machineMenu.visible
             onRequested: machineMenu.open()
@@ -255,7 +262,8 @@ NativeRoundedRectangle {
             selectedIndex: root.workspace.index ?? -1
             colors: root.colors
             typography: root.typography
-            ratio: root.ratio
+            ratio: root.textRatio
+            controlHeight: root.toggleSide
             onSelected: key => root.workspaceSelected(key)
             onListRequested: workspaceMenu.open()
         }

@@ -61,6 +61,39 @@ namespace telar::runtime {
       bool oversized_ = false;
     };
 
+    // A path `git ls-files --stage` lists, and whether it is a repository inside the one listed.
+    struct ListedPath {
+      std::string_view path;
+      bool repository = false;
+    };
+
+    // A record of `git ls-files --stage`: "<mode> <object> <stage>\t<path>" for a path the index
+    // holds, the path alone for one it does not. A repository inside is a submodule, of mode
+    // 160000, or a directory the index does not hold, which git ends with its '/'.
+    ListedPath listedPath(std::string_view record) noexcept {
+      constexpr std::size_t mode_digits = 6;
+      constexpr std::string_view submodule_mode = "160000";
+      const auto tab = record.find('\t');
+
+      if (tab == std::string_view::npos || tab <= mode_digits + 2 || record[mode_digits] != ' ' || record[tab - 2] != ' ') {
+        return {.path = record, .repository = record.ends_with('/')};
+      }
+
+      // The mode, before the tab found inside the record, and the path after it.
+      auto mode = record;
+      auto path = record;
+
+      mode.remove_suffix(record.size() - mode_digits);
+      if (!std::ranges::all_of(mode, [](char digit) {
+            return digit >= '0' && digit <= '7';
+          })) {
+        return {.path = record, .repository = record.ends_with('/')};
+      }
+
+      path.remove_prefix(tab + 1);
+      return {.path = path, .repository = record.starts_with(submodule_mode)};
+    }
+
     // Storage the allocator handed out for `count` values; empty when it had none.
     template <typename Value, Allocator Memory>
     std::span<Value> allocateValues(Memory& memory, std::size_t count) {
@@ -477,20 +510,101 @@ namespace telar::runtime {
       static_cast<void>(directories.insert(storage_.path(storage_.entry(storage_.count - 1)), true));
     }
 
-    return storage_.append(relative, PathKind::file);
+    // A path that ends with '/' is a directory, appended above as the last of them.
+    return relative.ends_with('/') || storage_.append(relative, PathKind::file);
   }
 
   void PathIndexBuilder::tracked(const char* root) {
+    Directories directories{memory_};
+    Repositories repositories{memory_};
+    std::string_view top{root};
+
+    while (top.ends_with('/')) {
+      top.remove_suffix(1);
+    }
+
+    listTracked(root, {}, directories, repositories);
+    for (std::size_t index = 0; index < repositories.size(); ++index) {
+      if (storage_.cancelled.load(std::memory_order_relaxed) || storage_.truncated) {
+        return;
+      }
+
+      // More than a search should wait for: the rest are not listed, and the list says so.
+      if (index == most_nested_repositories) {
+        storage_.truncated = true;
+        return;
+      }
+
+      // The repository's directory, and its marker after it, terminated.
+      const auto prefix = repositories[index];
+      ds::Array<char, OwnedPathQuery::root_bytes + relative_path_bytes + git_marker.size() + 1> path{};
+      const auto directory_size = top.size() + prefix.size();
+
+      if (directory_size + git_marker.size() >= path.size()) {
+        continue;
+      }
+
+      const auto written = path.viewMut();
+      auto end = std::ranges::copy(top, written.begin()).out;
+
+      *end++ = '/';
+      end = std::ranges::copy(prefix.substr(0, prefix.size() - 1), end).out;
+      *std::ranges::copy(git_marker, end).out = '\0';
+
+      // A submodule that is not checked out is an empty directory of the outer repository.
+      if (::access(path.data(), F_OK) == 0) {
+        listTracked(std::string_view{path.data(), directory_size}, prefix, directories, repositories);
+      }
+    }
+  }
+
+  void PathIndexBuilder::listTracked(std::string_view directory, std::string_view prefix, tbc::mut_a<Directories> directories, tbc::mut_a<Repositories> repositories) { // NOLINT(bugprone-easily-swappable-parameters): where the repository is, then what its paths are below the root, as the caller walks them
     try {
       const auto configuration_deadline = std::chrono::steady_clock::now() + std::chrono::seconds{2};
-      GitRepository git{memory_, root, configuration_deadline, storage_.cancelled};
-      Directories directories{memory_};
+      GitRepository git{memory_, directory, configuration_deadline, storage_.cancelled};
       TrackedPath current;
-      const auto append = [&](std::string_view relative) {
-        return appendTracked(relative, directories);
+      ds::Array<char, relative_path_bytes> joined{};
+
+      const auto append = [&](std::string_view record) {
+        const auto listed = listedPath(record);
+        // A submodule's path comes without the '/' that makes it a directory here.
+        const bool closed = listed.repository && !listed.path.ends_with('/');
+        const auto size = prefix.size() + listed.path.size() + static_cast<std::size_t>(closed);
+
+        // Passed over, as the reader passes over a path longer than the index keeps.
+        if (size > joined.size()) {
+          return true;
+        }
+
+        const auto written = joined.viewMut();
+        const auto end = std::ranges::copy(listed.path, std::ranges::copy(prefix, written.begin()).out).out;
+
+        if (closed) {
+          *end = '/';
+        }
+
+        const std::string_view relative{joined.data(), size};
+
+        // A path in conflict comes once for each side, one after another.
+        if (storage_.count > 0 && storage_.path(storage_.entry(storage_.count - 1)) == relative) {
+          return true;
+        }
+
+        const auto before = storage_.count;
+
+        if (!appendTracked(relative, directories)) {
+          return false;
+        }
+
+        // A repository's directory is the last entry its path appended.
+        if (listed.repository && storage_.count != before) {
+          repositories.push(storage_.path(storage_.entry(storage_.count - 1)));
+        }
+
+        return true;
       };
 
-      git.stream({"ls-files", "-z", "--cached", "--others", "--exclude-standard"}, [&](std::span<const Byte> bytes) {
+      git.stream({"ls-files", "-z", "--stage", "--cached", "--others", "--exclude-standard"}, [&](std::span<const Byte> bytes) {
         return current.feed(bytes, storage_.cancelled, append);
       });
     } catch (const SystemError&) {  // NOLINT(bugprone-empty-catch): without git the walk lists the directory instead

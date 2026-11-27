@@ -88,6 +88,10 @@ namespace telar::gui::application {
     return {first, std::max(first, end)};
   }
 
+  std::uint64_t Session::separatorRow(const Pane<Memory>& pane, std::size_t index) noexcept {
+    return pane.blocks[index].row;
+  }
+
   ds::Option<std::size_t> Session::selectedBlock(std::uint64_t pane_id) const noexcept {
     const auto block = features::prompt::selectedBlock(prompt_lines, pane_id);
     const auto* pane = findPane(pane_id);
@@ -98,7 +102,11 @@ namespace telar::gui::application {
     return *block;
   }
 
-  void Session::selectBlock(std::uint64_t pane_id, ds::Option<std::size_t> index) {
+  bool Session::typingLeavesBlock(std::uint64_t pane_id) const noexcept {
+    return selectedBlock(pane_id) && features::prompt::typingLeavesBlock(prompt_lines, pane_id);
+  }
+
+  void Session::selectBlock(std::uint64_t pane_id, ds::Option<std::size_t> index, bool typing_leaves) {
     const auto* pane = findPane(pane_id);
     if (pane == nullptr) {
       return;
@@ -107,12 +115,22 @@ namespace telar::gui::application {
     auto& line = prompt::open(*this, pane_id);
 
     if (index && *index < pane->blocks.size()) {
-      features::prompt::selectBlock(line, index, features::prompt::selectedBlock(line) ? ds::none : livePromptRow(*pane));
-      const auto row = pane->blocks[*index].row;
+      // Stepping from a block the pointer selected keeps the keys for the editor.
+      const auto selected = features::prompt::selectedBlock(line);
 
-      scrollToRow(pane_id, row == 0 ? 0 : row - 1);
+      features::prompt::selectBlock(line, index, typing_leaves || (selected && features::prompt::typingLeavesBlock(line)));
+      const auto separator = pane->folds.display(separatorRow(*pane, *index));
+      const auto top = shownTop(*pane);
+      // The separator and a row of its output in view, clear of the line docked at the bottom:
+      // the view stays. Otherwise the separator comes to the top, where no pinned one covers it.
+      constexpr std::uint64_t docked_rows = 2;
+      const auto rows = static_cast<std::uint64_t>(pane->screen.rows());
+
+      if (separator < top || separator + docked_rows >= top + rows) {
+        scrollToShownRow(*pane, separator);
+      }
     } else {
-      features::prompt::selectBlock(line, ds::none, ds::none);
+      features::prompt::selectBlock(line, ds::none);
       scrollToRow(pane_id, std::numeric_limits<std::uint32_t>::max());
     }
 
@@ -180,7 +198,11 @@ namespace telar::gui::application {
       return Change::none;
     }
 
+    // The selected block stays selected wherever it now is among the blocks.
+    const auto selected = selectedBlockKey(*pane);
+
     pane->setBlocks(message.blocks);
+    restoreBlock(*pane, selected);
 
     // A command that ran without the shell finding it missing exists, though the shell never
     // reported it: a function defined since its last report, say.
@@ -224,6 +246,10 @@ namespace telar::gui::application {
       return ds::none;
     }
 
+    if (selection && !normal && features::prompt::typingLeavesBlock(*found)) {
+      return typingBlockKey(pane_id, key);
+    }
+
     const bool plain = key.key == features::prompt::Key::character && !key.modifiers.control && !key.modifiers.alt;
     const auto character = plain ? key.character : 0U;
     const bool control = key.key == features::prompt::Key::character && key.modifiers.control && !key.modifiers.alt;
@@ -231,27 +257,7 @@ namespace telar::gui::application {
       return Outcome::edited;
     }
 
-    // The helpers below reach the pane and its line through the session, so each looks them up again.
-    auto* line = features::prompt::find(prompt_lines, pane_id);
-    if (line == nullptr) {
-      return ds::none;
-    }
-
-    const auto pending = features::prompt::takeChord(*line);
-    if (pending == '[' || pending == ']') {
-      const auto direction = pending == '[' ? BlockStep::up : BlockStep::down;
-
-      if (character == static_cast<unsigned>(pending)) {
-        stepBlock(pane_id, direction);
-      } else if (character == 'f') {
-        stepFailedBlock(pane_id, direction);
-      }
-
-      return Outcome::edited;
-    }
-
-    if (character == '[' || character == ']') {
-      features::prompt::beginChord(*line, static_cast<char>(character));
+    if (chordKey(pane_id, selection, character)) {
       return Outcome::edited;
     }
 
@@ -259,7 +265,14 @@ namespace telar::gui::application {
       return ds::none;
     }
 
-    if (blockChord(pending, {.pane_id = pane_id, .index = *selection}, character) || blockCommand({.pane_id = pane_id, .index = *selection}, character)) {
+    // The arrows step through the blocks while one is selected.
+    const bool bare = !key.modifiers.control && !key.modifiers.alt && !key.modifiers.shift;
+    if (bare && (key.key == features::prompt::Key::up || key.key == features::prompt::Key::down)) {
+      stepBlock(pane_id, key.key == features::prompt::Key::up ? BlockStep::up : BlockStep::down);
+      return Outcome::edited;
+    }
+
+    if (blockCommand({.pane_id = pane_id, .index = *selection}, character)) {
       return Outcome::edited;
     }
 
@@ -271,6 +284,83 @@ namespace telar::gui::application {
     }
 
     return ds::none;
+  }
+
+  bool Session::chordKey(std::uint64_t pane_id, ds::Option<std::size_t> selection, char32_t character) {
+    auto* line = features::prompt::find(prompt_lines, pane_id);
+    if (line == nullptr) {
+      return false;
+    }
+
+    const auto pending = features::prompt::takeChord(*line);
+    if (pending == '[' || pending == ']') {
+      const auto direction = pending == '[' ? BlockStep::up : BlockStep::down;
+
+      if (character == static_cast<unsigned char>(pending)) {
+        stepBlock(pane_id, direction);
+        return true;
+      }
+
+      if (character == 'f') {
+        stepFailedBlock(pane_id, direction);
+        return true;
+      }
+    } else if (pending != 0 && selection && blockChord(pending, {.pane_id = pane_id, .index = *selection}, character)) {
+      return true;
+    }
+
+    if (character != '[' && character != ']') {
+      return false;
+    }
+
+    // blockChord reaches the lines through the session, so the line is looked up again.
+    if (auto* chord_line = features::prompt::find(prompt_lines, pane_id); chord_line != nullptr) {
+      features::prompt::beginChord(*chord_line, static_cast<char>(character));
+    }
+
+    return true;
+  }
+
+  ds::Option<features::prompt::Outcome> Session::typingBlockKey(std::uint64_t pane_id, const features::prompt::KeyPress& key) {
+    using features::prompt::Outcome;
+    const bool bare = !key.modifiers.control && !key.modifiers.alt && !key.modifiers.shift;
+
+    if (bare && (key.key == features::prompt::Key::up || key.key == features::prompt::Key::down)) {
+      stepBlock(pane_id, key.key == features::prompt::Key::up ? BlockStep::up : BlockStep::down);
+      return Outcome::edited;
+    }
+
+    selectBlock(pane_id, ds::none);
+
+    return key.key == features::prompt::Key::escape ? ds::Option<Outcome>{Outcome::edited} : ds::none;
+  }
+
+  ds::Option<std::uint64_t> Session::selectedBlockKey(const Pane<Memory>& pane) const noexcept {
+    const auto selected = selectedBlock(pane.id);
+
+    return selected ? ds::Option<std::uint64_t>{blockKey(pane, *selected)} : ds::none;
+  }
+
+  void Session::restoreBlock(const Pane<Memory>& pane, ds::Option<std::uint64_t> key) {
+    auto* line = features::prompt::find(prompt_lines, pane.id);
+    if (!key || line == nullptr) {
+      return;
+    }
+
+    ds::Option<std::size_t> index;
+
+    for (std::size_t at = 0; at < pane.blocks.size(); ++at) {
+      if (blockKey(pane, at) == *key) {
+        index = at;
+        break;
+      }
+    }
+
+    if (index != features::prompt::selectedBlock(*line)) {
+      features::prompt::moveBlock(*line, index);
+      block_changed_ = true;
+      changed_pane_ = pane.id;
+    }
   }
 
   ds::Option<std::size_t> Session::blockSelection(const Pane<Memory>& pane, const features::prompt::PaneLine& line) noexcept {
@@ -350,6 +440,15 @@ namespace telar::gui::application {
     case 'i':
       static_cast<void>(features::prompt::takeChord(*line));
       if (const auto row = jumpTarget(*pane, *line, character == 'o')) {
+        // The block the jump lands in is the one selected, so the keys after it act there.
+        const auto blocks = pane->blocks.view();
+        const auto landed = std::ranges::find_if(blocks.rbegin(), blocks.rend(), [target = *row](const CommandBlock& block) {
+          return block.row <= target;
+        });
+        if (landed != blocks.rend() && blockSelection(*pane, *line)) {
+          features::prompt::moveBlock(*line, static_cast<std::size_t>(blocks.rend() - landed - 1));
+        }
+
         scrollToRow(pane_id, *row);
         changed_pane_ = pane_id;
         block_changed_ = true;
@@ -371,21 +470,28 @@ namespace telar::gui::application {
 
     switch (pending) {
     case 'y':
-      if (character == 'c') {
-        clipboard_.assign(pane->blocks[index].command);
-        clipboard_written_ = true;
+      // yc, and yy as vim's reflex, copy the command.
+      if (character != 'c' && character != 'y') {
+        return false;
       }
 
+      static_cast<void>(copyBlock(block, BlockCopy::command));
       return true;
     case 'g':
-      if (character == 'g') {
-        recordJump(*pane, *line);
-        scrollToShownRow(*pane, 0);
+      if (character != 'g') {
+        return false;
       }
 
+      // The first command, from the top of the scrollback.
+      recordJump(*pane, *line);
+      selectBlock(pane_id, std::size_t{0});
+      scrollToShownRow(*pane, 0);
       return true;
     case 'z':
-      foldChord(block, character);
+      if (!foldChord(block, character)) {
+        return false;
+      }
+
       changed_pane_ = pane_id;
       block_changed_ = true;
       return true;
@@ -394,16 +500,16 @@ namespace telar::gui::application {
     }
   }
 
-  void Session::foldChord(BlockAt block, char32_t character) {
+  bool Session::foldChord(BlockAt block, char32_t character) {
     const auto [pane_id, index] = block;
     const auto* pane = findPaneMut(pane_id);
     auto* line = features::prompt::find(prompt_lines, pane_id);
     if (pane == nullptr || line == nullptr) {
-      return;
+      return false;
     }
 
     const auto rows = static_cast<std::uint64_t>(pane->screen.rows());
-    const auto separator = pane->folds.display(static_cast<std::uint64_t>(pane->blocks[index].row) + pane->blocks[index].rows - 1);
+    const auto separator = pane->folds.display(separatorRow(*pane, index));
 
     switch (character) {
     case 'a':
@@ -437,8 +543,10 @@ namespace telar::gui::application {
       break;
     }
     default:
-      break;
+      return false;
     }
+
+    return true;
   }
 
   bool Session::blockCommand(BlockAt block, char32_t character) {
@@ -475,7 +583,7 @@ namespace telar::gui::application {
       selectBlockOutput(*pane, index, character == 'V');
       return true;
     case 'Y':
-      copyBlockOutput(*pane, index);
+      static_cast<void>(copyBlock(block, BlockCopy::output));
       return true;
     case 'q':
       selectBlock(pane_id, ds::none);
@@ -518,7 +626,12 @@ namespace telar::gui::application {
   }
 
   void Session::searchBlockOutput(Pane<Memory>& pane, std::size_t index) {
-    const auto [first, last] = blockOutput(pane, index);
+    const auto output = blockOutput(pane, index);
+    if (!output) {
+      return;
+    }
+
+    const auto [first, last] = *output;
     const auto grid = copyGrid(pane.screen);
 
     if (folded({.pane_id = pane.id, .index = index})) {
@@ -531,22 +644,22 @@ namespace telar::gui::application {
     }
   }
 
-  std::pair<std::uint32_t, std::uint32_t> Session::blockOutput(const Pane<Memory>& pane, std::size_t index) const {
-    const auto& block = pane.blocks[index];
-    const auto first = block.row + block.rows;
-    std::uint32_t end = pane.screen.scroll().total_rows;
-
-    if (index + 1 < pane.blocks.size()) {
-      end = pane.blocks[index + 1].row;
-    } else if (const auto live = features::prompt::livePrompt(prompt_lines, pane.id)) {
-      end = *live;
+  ds::Option<std::pair<std::uint32_t, std::uint32_t>> Session::blockOutput(const Pane<Memory>& pane, std::size_t index) noexcept {
+    const auto [first, end] = blockRows(pane, index);
+    if (end <= first) {
+      return ds::none;
     }
 
-    return {first, std::max(first, end == 0 ? 0 : end - 1)};
+    return std::pair{first, end - 1};
   }
 
   void Session::selectBlockOutput(const Pane<Memory>& pane, std::size_t index, bool lines) {
-    const auto [first, last] = blockOutput(pane, index);
+    const auto output = blockOutput(pane, index);
+    if (!output) {
+      return;
+    }
+
+    const auto [first, last] = *output;
     const auto grid = copyGrid(pane.screen);
     const auto columns = static_cast<std::uint16_t>(grid.columns == 0 ? 0 : grid.columns - 1);
     const CopyPoint start{.x = 0, .y = first};
@@ -557,10 +670,65 @@ namespace telar::gui::application {
   }
 
   void Session::copyBlockOutput(const Pane<Memory>& pane, std::size_t index) {
-    const auto [first, last] = blockOutput(pane, index);
+    const auto output = blockOutput(pane, index);
+    if (!output) {
+      return;
+    }
+
+    const auto [first, last] = *output;
     const auto columns = pane.screen.columns();
 
     link.send(CopySelection{.pane_id = pane.id, .start_x = 0, .start_y = first, .end_x = static_cast<std::uint16_t>(columns == 0 ? 0 : columns - 1), .end_y = last, .linewise = true});
+  }
+
+  void Session::copyBlockCommand(const Pane<Memory>& pane, std::size_t index) {
+    const auto& block = pane.blocks[index];
+
+    if (block.rows == 0 || block.command.empty()) {
+      clipboard_.assign(block.command);
+      clipboard_written_ = true;
+      return;
+    }
+
+    // Enough of the command's start to find it past whatever a prompt left on its first row.
+    constexpr std::size_t start_bytes = 16;
+    const auto columns = pane.screen.columns();
+
+    command_copy_.assign(block.command.substr(0, std::min(start_bytes, block.command.size())));
+    command_copy_pane_ = pane.id;
+    link.send(CopySelection{.pane_id = pane.id, .start_x = 0, .start_y = block.row, .end_x = static_cast<std::uint16_t>(columns == 0 ? 0 : columns - 1), .end_y = block.row + block.rows - 1U, .linewise = true});
+  }
+
+  bool Session::copyBlock(BlockAt block, BlockCopy what) {
+    const auto [pane_id, index] = block;
+    const auto* pane = findPane(pane_id);
+    if (pane == nullptr || index >= pane->blocks.size()) {
+      return false;
+    }
+
+    const bool copied = what == BlockCopy::command || blockOutput(*pane, index).hasValue();
+
+    if (copied && what == BlockCopy::command) {
+      copyBlockCommand(*pane, index);
+    } else if (copied) {
+      copyBlockOutput(*pane, index);
+    }
+
+    block_copy_ = {.pane_id = pane_id, .index = index, .what = what, .copied = copied, .serial = block_copy_.serial + 1};
+    changed_pane_ = pane_id;
+    block_changed_ = true;
+    return copied;
+  }
+
+  const BlockCopyNote& Session::lastBlockCopy() const noexcept {
+    return block_copy_;
+  }
+
+  void Session::stepBlockFromWindow(std::uint64_t pane_id, BlockStep direction) {
+    stepBlock(pane_id, direction);
+    if (auto* line = features::prompt::find(prompt_lines, pane_id); line != nullptr && features::prompt::selectedBlock(*line)) {
+      features::prompt::selectBlock(*line, features::prompt::selectedBlock(*line), true);
+    }
   }
 
   bool Session::takeBlockChange() noexcept {

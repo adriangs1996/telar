@@ -52,6 +52,7 @@ namespace {
     check(root(AgentProvider::claude, overrides, true) == "/home/user/.claude");
     check(root(AgentProvider::opencode, overrides) == "/x/opencode");
     check(root(AgentProvider::cursor, overrides) == "/home/user/.cursor");
+    check(root(AgentProvider::antigravity, overrides) == "/home/user/.gemini/config");
 
     const TestEnvironment home{{{{"HOME", "/home/user"}}}};
 

@@ -537,7 +537,74 @@ namespace {
   }
 
   // Behaviours that differed from vim's, each as vim has it.
+  // readline's keys: Escape then a key is Alt with it, Alt-U, L and C change a word's case,
+  // Ctrl-V types a tab, and Alt-. writes the last argument of the commands before.
+  void readlineKeys() {
+    const auto alt = [](Editor& editor, char key) {
+      return editor.press({.key = Key::character, .character = static_cast<char32_t>(key), .modifiers = {.alt = true}});
+    };
+
+    {
+      Editor editor;
+
+      type(editor, "git status");
+      type(editor, "\x1b"
+                   "b");
+      require(editor.view().cursor() == 4, "Escape then b moves back a word");
+      alt(editor, 'u');
+      require(text(editor) == "git STATUS", "Alt-U writes the word in capitals");
+      control(editor, 'a');
+      alt(editor, 'c');
+      require(text(editor) == "Git STATUS", "Alt-C gives the word a capital");
+      alt(editor, 'l');
+      require(text(editor) == "Git status" && editor.view().cursor() == text(editor).size(), "Alt-L writes it in small letters, the cursor after it");
+      control(editor, 'v');
+      editor.press({.key = Key::tab});
+      require(text(editor) == "Git status\t", "Ctrl-V then Tab types a tab");
+      control(editor, 'c');
+      require(text(editor).empty(), "Ctrl-C drops the line");
+      control(editor, '_');
+      require(text(editor) == "Git status\t", "undo brings it back");
+      control(editor, 'c');
+      control(editor, 'y');
+      require(text(editor) == "Git status\t", "and so does Ctrl-Y");
+    }
+
+    {
+      Editor editor{Keymap::vim};
+
+      type(editor, "ls");
+      control(editor, '[');
+      require(editor.view().mode() == Mode::normal, "Ctrl-[ leaves insert mode");
+    }
+
+    {
+      Editor editor;
+
+      editor.write("touch notes.txt");
+      editor.press({.key = Key::enter});
+      editor.write("mkdir build");
+      editor.press({.key = Key::enter});
+      type(editor, "cat ");
+      alt(editor, '.');
+      require(text(editor) == "cat build", "Alt-. writes the last argument of the command before");
+      alt(editor, '.');
+      require(text(editor) == "cat notes.txt", "again at once, of the one before that");
+    }
+  }
+
   void vimFixes() {
+    // A paste in normal mode goes in after the cursor, as p puts, and the mode stays.
+    {
+      Editor editor{Keymap::vim};
+
+      type(editor, "ls");
+      type(editor, "\x1b"
+                   "0");
+      editor.insert(" -la");
+      require(text(editor) == "l -las" && editor.view().mode() == Mode::normal, "a paste in normal mode goes after the cursor");
+    }
+
     // Vjd deletes both lines the selection spans.
     {
       Editor editor{Keymap::vim};
@@ -1136,6 +1203,7 @@ namespace {
   const telar::testing::Case case_write_starts_history_over{"prompt_editor.write_starts_history_over", writeStartsHistoryOver};
   const telar::testing::Case case_grapheme_motions{"prompt_editor.grapheme_motions", graphemeMotions};
   const telar::testing::Case case_vim_fixes{"prompt_editor.vim_fixes", vimFixes};
+  const telar::testing::Case case_readline_keys{"prompt_editor.readline_keys", readlineKeys};
   const telar::testing::Case case_emacs_goal_column{"prompt_editor.emacs_goal_column", emacsGoalColumn};
   const telar::testing::Case case_emacs_kills_accumulate{"prompt_editor.emacs_kills_accumulate", emacsKillsAccumulate};
   const telar::testing::Case case_undo_keeps_changes{"prompt_editor.undo_keeps_changes", undoKeepsChanges};

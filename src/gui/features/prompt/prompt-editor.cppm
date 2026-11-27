@@ -27,6 +27,9 @@ namespace telar::gui::features::prompt {
     // Ctrl-D on an empty line.
     end_of_file,
     clear_screen,
+    // Alt-. and Alt-_: the owner writes the last argument of a command before, an older one
+    // each time the key comes again.
+    last_argument,
     // Not a key this keymap uses; the owner may run telar's own binding for it.
     unhandled,
   };
@@ -60,6 +63,10 @@ namespace telar::gui::features::prompt {
 
     // Starts a new line, back in insert mode.
     void clear() noexcept;
+
+    // Ctrl-C: the line goes, as the shell drops it, but as a kill and an undo step: Ctrl-Y puts
+    // it back, and so does undo.
+    void cancel();
 
     // The command goes on on a new line, after the text outside vim's insert mode.
     void newline();
@@ -113,6 +120,10 @@ namespace telar::gui::features::prompt {
 
     Request insert(const KeyPress& key);
 
+    // The key after Ctrl-V, which goes in as typed, or after Escape in emacs, read as with Alt;
+    // none when no such prefix came before it, or it does not take this key.
+    ds::Option<Request> prefixed(const KeyPress& key);
+
     // Backspace: the selection, the word before the cursor when `word`, or the character.
     void eraseBackward(bool word);
 
@@ -123,6 +134,9 @@ namespace telar::gui::features::prompt {
     Request control(char32_t character);
 
     Request meta(char32_t character);
+    // Alt-U, Alt-L and Alt-C: the word from the cursor in capitals, small letters, or with its
+    // first letter a capital, the cursor after it.
+    void changeCase(char32_t how);
 
     void move(std::size_t offset, bool extend = false) noexcept;
 
@@ -341,6 +355,10 @@ namespace telar::gui::features::prompt {
     // Whether the key being handled killed text, and whether the one before did.
     bool killing_ = false;
     bool killed_ = false;
+    // Escape began a Meta key in emacs, as readline reads `Esc b` as Alt-B; Ctrl-V the next key
+    // goes in as typed, a tab included.
+    bool meta_pending_ = false;
+    bool quoted_pending_ = false;
     Find last_find_;
     std::size_t count_ = 0;
     std::size_t operator_count_ = 0;

@@ -66,8 +66,10 @@ namespace telar::gui::qt {
         return {.letter = "D", .tone = "red"};
       case PathChange::renamed:
         return {.letter = "R", .tone = "blue"};
+      // A file git does not hold yet is common, and asks for nothing: quiet, as the name's
+      // directory.
       case PathChange::untracked:
-        return {.letter = "U", .tone = "green"};
+        return {.letter = "U", .tone = "overlay1"};
       case PathChange::conflicted:
         return {.letter = "!", .tone = "red"};
       case PathChange::none:

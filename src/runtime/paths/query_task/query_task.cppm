@@ -169,9 +169,20 @@ export {
 
       static bool insideGit(std::string_view path) noexcept;
 
+      // The repositories found inside the one listed, by their directory's path in the storage.
+      using Repositories = ds::Vec<std::string_view, ConcurrentMemory>;
+
+      // The repositories inside the one listed that are listed too, at most: each costs git twice.
+      static constexpr std::size_t most_nested_repositories = 256;
+
       bool appendTracked(std::string_view relative, tbc::mut_a<Directories> directories);
 
+      // Lists the repository at `root`, then each repository inside it.
       void tracked(const char* root);
+
+      // Lists what git holds or would add of the repository at `directory`, `prefix` from the
+      // root, and notes each repository inside it in `repositories`.
+      void listTracked(std::string_view directory, std::string_view prefix, tbc::mut_a<Directories> directories, tbc::mut_a<Repositories> repositories);
 
       // Reads what git says of the paths under `root` that are not as committed.
       void changes(const char* root);

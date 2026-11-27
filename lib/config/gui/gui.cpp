@@ -14,7 +14,7 @@ namespace telar::runtime::config {
       return settings;
     }
 
-    gui.onlyFields({"font", "cursor", "window", "chrome", "sidebar", "max_fps", "opacity", "scroll"});
+    gui.onlyFields({"font", "cursor", "window", "chrome", "sidebar", "max_fps", "opacity", "scroll", "copy_on_select"});
     font(gui.field("font"), settings.font);
     cursor(gui.field("cursor"), settings.cursor);
     scroll(gui.field("scroll"), settings.scroll);
@@ -23,6 +23,7 @@ namespace telar::runtime::config {
     sidebar(gui.field("sidebar"), settings.sidebar);
     opacity(gui.field("opacity"), settings.opacity);
     settings.max_fps = optionalWhole<std::uint16_t>(gui.field("max_fps"), GuiBounds::max_fps);
+    settings.copy_on_select = optionalBoolean(gui.field("copy_on_select"));
     return settings;
   }
 

@@ -8,7 +8,7 @@ import telar.runtime.terminal.text_reader;
 import telar.wire.vocabulary;
 import telar.base.ds;
 
-// Screens Claude Code 2.1.332 and Codex 0.169.0 drew in a 100x32 terminal, their last rows with
+// Screens Claude Code 2.1.332, Codex 0.169.0 and Antigravity CLI 1.5.17 drew in a 100x32 terminal, their last rows with
 // their title and cursor, recorded from real sessions; paths and account details are replaced.
 namespace {
 
@@ -249,6 +249,119 @@ namespace {
       "\x1b[28;3H"
       "\x1b[?25h";
 
+  // Antigravity CLI 1.5.17 idle: its composer between two rules, the footer below them.
+  constexpr std::string_view antigravity_idle =
+      "\x1b[2J"
+      "\x1b[1;1H      ▄▀▀▄        Antigravity CLI 1.5.17"
+      "\x1b[2;1H     ▀▀▀▀▀▀       Gemini 4 Neon (High)"
+      "\x1b[3;1H    ▀▀▀▀▀▀▀▀      /tmp/demo"
+      "\x1b[28;1H────────────────────────────────────────────────────────────────────────────────────────────────────"
+      "\x1b[29;1H> Auto mode: edits & safe commands auto-approved (shift+tab to cycle)"
+      "\x1b[30;1H────────────────────────────────────────────────────────────────────────────────────────────────────"
+      "\x1b[31;1H? for shortcuts                                                          auto · Gemini 4 Neon · high"
+      "\x1b[29;3H"
+      "\x1b[?25h";
+
+  // Antigravity running a turn: the footer offers to cancel it.
+  constexpr std::string_view antigravity_working =
+      "\x1b[2J"
+      "\x1b[22;1H> Run exactly: rm -rf ./scratch-dir && mkdir scratch-dir"
+      "\x1b[24;1H● Ran (rm -rf ./scratch-dir && mkdir scratch-dir) (ctrl+o to expand)"
+      "\x1b[25;1H⡿  Running command... 1s"
+      "\x1b[26;1H└ Tip: Press ctrl+b to send a long task to the background."
+      "\x1b[28;1H────────────────────────────────────────────────────────────────────────────────────────────────────"
+      "\x1b[29;1H>"
+      "\x1b[30;1H────────────────────────────────────────────────────────────────────────────────────────────────────"
+      "\x1b[31;1Hesc to cancel                                                            auto · Gemini 4 Neon · high"
+      "\x1b[29;3H"
+      "\x1b[?25h";
+
+  // Antigravity asks permission for a shell command.
+  constexpr std::string_view antigravity_permission =
+      "\x1b[2J"
+      "\x1b[16;1H● Ran (rm -rf ./scratch-dir && mkdir scratch-dir && touch scratch-dir/a) (ctrl+o to expand)"
+      "\x1b[18;1HCommand"
+      "\x1b[19;1H────────────────────────────────────────────────────────────────────────────────────────────────────"
+      "\x1b[21;1HRequesting permission for:"
+      "\x1b[22;1H   rm -rf ./scratch-dir && mkdir scratch-dir && touch scratch-dir/a"
+      "\x1b[24;1HRun this command?"
+      "\x1b[25;1H> 1. Yes, run command"
+      "\x1b[26;1H  2. Yes, and always allow in this conversation for commands that start with 'rm -rf'"
+      "\x1b[27;1H  3. Yes, and always allow for commands that start with 'rm -rf' (Persist to settings.json)"
+      "\x1b[28;1H  4. No, cancel"
+      "\x1b[30;1H  ↑/↓ Navigate · tab Amend · ctrl+g edit/expand command"
+      "\x1b[31;1Hesc to cancel                                                                   Gemini 4 Neon · high"
+      "\x1b[?25l";
+
+  // Antigravity asks whether to trust a new workspace.
+  constexpr std::string_view antigravity_trust =
+      "\x1b[2J"
+      "\x1b[1;1HAccessing workspace:"
+      "\x1b[3;1H/tmp/demo"
+      "\x1b[5;1HDo you trust the contents of this project?"
+      "\x1b[7;1HAntigravity CLI requires permission to read, edit, and execute files here."
+      "\x1b[9;1H> Yes, I trust this folder"
+      "\x1b[10;1H  No, exit"
+      "\x1b[12;1H  ↑/↓ Navigate · enter Confirm"
+      "\x1b[13;1H                                                                         auto · Gemini 4 Neon · high"
+      "\x1b[?25l";
+
+  // Antigravity asks to create a file.
+  constexpr std::string_view antigravity_create_file =
+      "\x1b[2J"
+      "\x1b[18;1HCreate file"
+      "\x1b[19;1H────────────────────────────────────────────────────────────────────────────────────────────────────"
+      "\x1b[21;1H/tmp/demo/notes.txt  +1"
+      "\x1b[22;1H  1  +  hola"
+      "\x1b[24;1HAllow creation of this file?"
+      "\x1b[25;1H> 1. Yes, allow creation"
+      "\x1b[26;1H  2. No, deny creation"
+      "\x1b[28;1H  ↑/↓ Navigate · f full diff"
+      "\x1b[29;1Hesc to cancel                                                                   Gemini 4 Neon · high"
+      "\x1b[?25l";
+
+  // Antigravity asks to read a file outside the workspace: its footer names no other key.
+  constexpr std::string_view antigravity_file_access =
+      "\x1b[2J"
+      "\x1b[18;1HFile access"
+      "\x1b[19;1H────────────────────────────────────────────────────────────────────────────────────────────────────"
+      "\x1b[21;1HRead: /home/user/notes/SKILL.md"
+      "\x1b[22;1HReason: outside workspace"
+      "\x1b[24;1HAllow access to this file?"
+      "\x1b[25;1H> 1. Yes, allow access"
+      "\x1b[26;1H  2. Yes, and always allow non-workspace access"
+      "\x1b[27;1H  3. No, deny access"
+      "\x1b[29;1H  ↑/↓ Navigate"
+      "\x1b[30;1Hesc to cancel                                                                   Gemini 4 Neon · high"
+      "\x1b[?25l";
+
+  // Antigravity's command menu, open as the user types a slash: not a question.
+  constexpr std::string_view antigravity_menu =
+      "\x1b[2J"
+      "\x1b[20;1H────────────────────────────────────────────────────────────────────────────────────────────────────"
+      "\x1b[21;1H> /"
+      "\x1b[22;1H────────────────────────────────────────────────────────────────────────────────────────────────────"
+      "\x1b[23;1H> /add-dir                        Add a directory to the workspace"
+      "\x1b[24;1H  /agents                         List available custom agents"
+      "\x1b[25;1H   ↓ 85 more"
+      "\x1b[27;1H  ↑/↓ Navigate · enter Select · tab Complete"
+      "\x1b[28;1Hesc to cancel                                                                   Gemini 4 Neon · high"
+      "\x1b[21;4H"
+      "\x1b[?25h";
+
+  // Antigravity after Esc, with a draft in its composer: the footer drops its hint.
+  constexpr std::string_view antigravity_interrupted_draft =
+      "\x1b[2J"
+      "\x1b[24;1H> Write a 2000 word essay about terminals in your reply (no tools)."
+      "\x1b[26;1H  ⎿  Interrupted · What should Antigravity CLI do instead?"
+      "\x1b[27;1H────────────────────────────────────────────────────────────────────────────────────────────────────"
+      "\x1b[28;1H> un borrador que"
+      "\x1b[29;1H  sigue en otra fila"
+      "\x1b[30;1H────────────────────────────────────────────────────────────────────────────────────────────────────"
+      "\x1b[31;1H                                                                         auto · Gemini 4 Neon · high"
+      "\x1b[29;20H"
+      "\x1b[?25h";
+
   struct Screen {
     Screen()
         : terminal(memory, TerminalSize{100, 32, 8, 16}) {}
@@ -362,6 +475,23 @@ namespace {
     check(reads(AgentProvider::cursor, output, AgentStatus::ready), "Claude's phrases in Cursor's output block Cursor");
   }
 
+  // Antigravity's footer tells a running turn from an idle composer; its dialogs' footers block it,
+  // and the conversation above the composer, which may quote them, does not.
+  void antigravityScreens() {
+    check(reads(AgentProvider::antigravity, antigravity_idle, AgentStatus::ready), "an idle Antigravity reads as busy");
+    check(reads(AgentProvider::antigravity, antigravity_working, AgentStatus::working), "a running Antigravity reads as idle");
+    check(reads(AgentProvider::antigravity, antigravity_permission, AgentStatus::blocked), "a permission does not block Antigravity");
+    check(reads(AgentProvider::antigravity, antigravity_trust, AgentStatus::blocked), "the trust dialog does not block Antigravity");
+    check(reads(AgentProvider::antigravity, antigravity_create_file, AgentStatus::blocked), "a file creation does not block Antigravity");
+    check(reads(AgentProvider::antigravity, antigravity_file_access, AgentStatus::blocked), "access outside the workspace does not block Antigravity");
+    check(statusOf(AgentProvider::antigravity, antigravity_menu) != ds::Option{AgentStatus::blocked}, "the command menu blocks Antigravity");
+    check(reads(AgentProvider::antigravity, antigravity_interrupted_draft, AgentStatus::ready), "a draft after an interrupt hides the idle composer");
+
+    const auto quoted = std::string{antigravity_working} + "\x1b[20;1H  the footer says ↑/↓ Navigate · tab Amend" + "\x1b[29;3H";
+
+    check(reads(AgentProvider::antigravity, quoted, AgentStatus::working), "a dialog quoted in the conversation blocks Antigravity");
+  }
+
   const telar::testing::Case case_claude_work{"agent_screens.claude_work", claudeWork};
   const telar::testing::Case case_claude_dialogs{"agent_screens.claude_dialogs", claudeDialogs};
   const telar::testing::Case case_claude_stops{"agent_screens.claude_stops", claudeStops};
@@ -369,6 +499,7 @@ namespace {
   const telar::testing::Case case_codex_screens{"agent_screens.codex_screens", codexScreens};
   const telar::testing::Case case_screen_changes{"agent_screens.screen_changes", screenChanges};
   const telar::testing::Case case_codex_question_after_reset{"agent_screens.codex_question_after_reset", codexQuestionAfterReset};
+  const telar::testing::Case case_antigravity_screens{"agent_screens.antigravity_screens", antigravityScreens};
   const telar::testing::Case case_cursor_reads_its_own_phrases{"agent_screens.cursor_reads_its_own_phrases", cursorReadsItsOwnPhrases};
 
 }

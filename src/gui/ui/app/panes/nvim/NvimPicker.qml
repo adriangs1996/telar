@@ -13,7 +13,7 @@ FocusScope {
     objectName: "editorPicker"
 
     // The editor's picker: open, source, query, root, loading, truncated and rows of
-    // {runs, trail, name, directory, line, text, textRuns}.
+    // {runs, name, directory, line, text, textRuns}.
     required property var picker
     required property var colors
     required property var typography
@@ -29,6 +29,9 @@ FocusScope {
     // The room left for the preview, in the parent's own coordinates.
     readonly property rect previewArea: Qt.rect(x + panel.previewArea.x, y + panel.previewArea.y, panel.previewArea.width, panel.previewArea.height)
     readonly property var currentRow: rows[current] ?? null
+    // The cells a row has for its path in the editor's family: the runtime's rows are cut to
+    // them. A row of the text search keeps room for the line it names.
+    readonly property int columns: Math.floor(panel.nameRoom / Math.max(1, glyphs.advanceWidth("M"))) - (source === "text" ? 6 : 0)
     property int current: 0
     // The entries marked for the quickfix list, by their place in the list.
     property var marked: []
@@ -115,6 +118,12 @@ FocusScope {
         NumberAnimation { duration: 140; easing.type: Easing.OutCubic }
     }
 
+    FontMetrics {
+        id: glyphs
+        font.family: root.typography.primaryFamily || "Telar Forma"
+        font.pixelSize: root.typography.body ?? 13
+    }
+
     NvimSurface {
         anchors.fill: parent
         colors: root.colors
@@ -128,6 +137,7 @@ FocusScope {
         colors: root.colors
         typography: root.typography
         ratio: root.ratio
+        rowFamily: root.typography.primaryFamily || "Telar Forma"
         fieldName: "editorPickerSearch"
         searchName: "Search the editor's files"
         placeholder: root.currentSource.placeholder
@@ -136,9 +146,7 @@ FocusScope {
         scope: root.source
         rows: root.rows.map((row, index) => ({
             runs: row.runs ?? [],
-            trail: row.trail ?? [],
             icon: row.icon ?? "",
-            iconTone: row.iconTone ?? "",
             badge: row.badge ?? "",
             badgeTone: row.badgeTone ?? "",
             suffix: (row.line ?? 0) > 0 ? ":" + row.line : "",

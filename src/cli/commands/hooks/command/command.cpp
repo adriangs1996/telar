@@ -32,6 +32,14 @@ namespace telar::runtime::cli::hooks {
       return name;
     }
 
+    // Claude lists the sockets that watch a published artifact for comments as running monitors.
+    // They live as long as the session and wake it only for a comment, so Claude does not count
+    // them as work in flight. The hook leaves out the flag Claude marks them with, and only their
+    // description tells them apart.
+    bool claudeArtifactWatch(std::string_view type, std::string_view description) noexcept {
+      return type == "monitor" && (description.starts_with("live updates for artifact ") || description.starts_with("presence on artifact "));
+    }
+
     // A string token holding a \u escape decodes as JSON would, so an invalid one fails here.
     void decodeEscapes(std::string_view token, ds::String<Memory>& decoded) {
       if (token.contains("\\u")) {
@@ -200,18 +208,21 @@ namespace telar::runtime::cli::hooks {
       : memory_(memory),
         provider_(provider),
         fields_(std::move(input)),
-        tools_(memory, toolObject(fields_)) {
+        call_(memory, objectOrEmpty(provider == AgentProvider::antigravity ? fields_.value("toolCall") : ds::none), true),
+        tools_(memory, objectOrEmpty(toolInput())) {
     validateTools();
     readTexts(fields_, {"tool_name", "cwd"});
     if (provider == AgentProvider::pi || provider == AgentProvider::opencode) {
       readEventFields();
+    } else if (provider == AgentProvider::antigravity) {
+      readAntigravityFields();
     } else {
       readHookFields();
     }
   }
 
   void Payload::validateTools() {
-    if (const auto tool_input = fields_.value("tool_input")) {
+    if (const auto tool_input = toolInput()) {
       if (tool_input->encoded().starts_with('{')) {
         tools_.requireUnique();
         tools_.eachValue([&](JsonValue child) {
@@ -270,15 +281,21 @@ namespace telar::runtime::cli::hooks {
     }
   }
 
+  void Payload::readAntigravityFields() {
+    readTexts(fields_, {"hookEventName", "conversationId", "terminationReason", "error"});
+    readTexts(call_, {"name", "id"});
+  }
+
   void Payload::readClaudeFields() {
     readTexts(fields_, {"session_title", "notification_type", "message", "last_assistant_message", "new_cwd", "error"});
     // Every running background task, a shell as a subagent, wakes Claude again when it ends.
     if (const auto tasks = fields_.value("background_tasks")) {
       tasks->eachElement([&](JsonValue value) {
         const Object task{memory_, value, true};
+        const auto type = task.text("type");
         const auto status = task.text("status");
 
-        background_work_ += !task.text("type").empty() && status == "running";
+        background_work_ += !type.empty() && status == "running" && !claudeArtifactWatch(type, task.text("description"));
       });
     }
   }
@@ -308,10 +325,18 @@ namespace telar::runtime::cli::hooks {
   }
 
   std::string_view Payload::event() const {
+    if (provider_ == AgentProvider::antigravity) {
+      return fields_.text("hookEventName");
+    }
+
     return fields_.text(provider_ == AgentProvider::pi || provider_ == AgentProvider::opencode ? "event" : "hook_event_name");
   }
 
   std::string_view Payload::session() const {
+    if (provider_ == AgentProvider::antigravity) {
+      return fields_.text("conversationId");
+    }
+
     return fields_.text(provider_ == AgentProvider::cursor ? "conversation_id" : "session_id");
   }
 
@@ -325,6 +350,18 @@ namespace telar::runtime::cli::hooks {
 
   std::string_view Payload::toolEvent() const {
     return provider_ == AgentProvider::cursor ? cursorToolEvent(event()) : event();
+  }
+
+  std::string_view Payload::toolName() const {
+    return provider_ == AgentProvider::antigravity ? call_.text("name") : fields_.text("tool_name");
+  }
+
+  std::string_view Payload::toolCallId() const {
+    if (provider_ == AgentProvider::antigravity) {
+      return call_.text("id");
+    }
+
+    return fields_.text(provider_ == AgentProvider::pi || provider_ == AgentProvider::opencode ? "tool_call_id" : "tool_use_id");
   }
 
   AgentBlockedReason Payload::blockedReason() const {
@@ -343,9 +380,11 @@ namespace telar::runtime::cli::hooks {
     }
   }
 
-  JsonValue Payload::toolObject(const Object& fields) {
-    const auto value = fields.value("tool_input");
+  ds::Option<JsonValue> Payload::toolInput() const {
+    return provider_ == AgentProvider::antigravity ? call_.value("args") : fields_.value("tool_input");
+  }
 
+  JsonValue Payload::objectOrEmpty(ds::Option<JsonValue> value) {
     return value && value->encoded().starts_with('{') ? *value : JsonValue{"{}"};
   }
 
@@ -485,7 +524,7 @@ namespace telar::runtime::cli::hooks {
   }
 
   void toolEvent(FixedText<display_line_bytes>& output, const Payload& input) {
-    const auto name = input.fields().text("tool_name");
+    const auto name = input.toolName();
     if (name.empty()) {
       output.assign({});
       return;
@@ -502,7 +541,8 @@ namespace telar::runtime::cli::hooks {
 
     append("» ");
     append(name);
-    for (const auto* const key : {"command", "cmd", "file_path", "filePath", "filepath", "path", "pattern", "url", "query", "prompt", "description"}) {
+    // Antigravity names its arguments in PascalCase: CommandLine, Path, Query.
+    for (const auto* const key : {"command", "cmd", "CommandLine", "file_path", "filePath", "filepath", "path", "Path", "AbsolutePath", "pattern", "url", "query", "Query", "prompt", "description"}) {
       if (const auto argument = input.tools().stringField(key); argument && !argument->empty()) {
         append(" ");
         append(*argument);
@@ -548,6 +588,22 @@ namespace telar::runtime::cli::hooks {
         return ds::none;
       }
 
+      // Antigravity reports a command that exited non-zero as the error "exit status N".
+      if (input.provider() == AgentProvider::antigravity) {
+        constexpr std::string_view exit_status = "exit status ";
+
+        if (input.event() != "PostToolUse") {
+          return ds::none;
+        }
+
+        const auto error = input.fields().text("error");
+        if (error.empty()) {
+          return ds::Option<std::int32_t>{0};
+        }
+
+        return error.starts_with(exit_status) ? parseExact<std::int32_t>(error.substr(exit_status.size())) : ds::none;
+      }
+
       if (input.provider() != AgentProvider::cursor) {
         return input.fields().template integer<std::int32_t>("exit_code");
       }
@@ -581,7 +637,7 @@ namespace telar::runtime::cli::hooks {
 
     const auto provider = describeProvider(input.provider()).name;
     const auto* manifest = builtinManifests().find(input.provider());
-    const auto field = manifest == nullptr ? std::string_view{} : manifest->commandField(input.fields().text("tool_name"));
+    const auto field = manifest == nullptr ? std::string_view{} : manifest->commandField(input.toolName());
     const auto command = input.tools().stringField(field);
     if (!command || command->empty()) {
       return ds::none;
@@ -592,7 +648,7 @@ namespace telar::runtime::cli::hooks {
     return ReportAgentCommand{
         .phase = started ? AgentCommandPhase::started : AgentCommandPhase::finished,
         .provider = provider,
-        .tool_call_id = input.fields().text(input.provider() == AgentProvider::pi || input.provider() == AgentProvider::opencode ? "tool_call_id" : "tool_use_id"),
+        .tool_call_id = input.toolCallId(),
         .command = *command,
         .cwd = input.provider() == AgentProvider::cursor && cwd.empty() ? input.workspace() : cwd,
         .session = sessionReference(input.session()),

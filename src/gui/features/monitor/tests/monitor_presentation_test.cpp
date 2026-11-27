@@ -60,6 +60,27 @@ namespace {
     check(meterTone(0.6) == Tone::normal && meterTone(0.61) == Tone::warm && meterTone(0.9) == Tone::hot);
   }
 
+  // Every share but the process table's is a whole percent with its sign.
+  void sharesReadWhole() {
+    check(wholePercent(1000).view() == "100%" && wholePercent(0).view() == "0%");
+    check(wholePercent(424).view() == "42%" && wholePercent(425).view() == "43%" && wholePercent(1500).view() == "150%");
+  }
+
+  // What is left warns as it empties: much memory available is no warning.
+  void headroomWarnsAsItEmpties() {
+    check(headroomTone(0.9) == Tone::normal && headroomTone(0.5) == Tone::normal);
+    check(headroomTone(0.3) == Tone::warm && headroomTone(0.1) == Tone::hot);
+  }
+
+  // A mount is named by its last directory in at most 12 cells.
+  void mountsReadShort() {
+    check(mountLabel("/").view() == "/");
+    check(mountLabel("/Volumes/Try Omarchy").view() == "Try Omarchy");
+    check(mountLabel("/System/Volumes/Data").view() == "Data");
+    check(mountLabel("/mnt/backups/").view() == "backups");
+    check(mountLabel("/Volumes/Untitled External Disk").view() == "Untitled Ex…", std::string{mountLabel("/Volumes/Untitled External Disk").view()});
+  }
+
   // A row's guides say which of its ancestors' branches go on below it, and its mark whether its
   // own branch is folded.
   void treeGuides() {
@@ -75,6 +96,10 @@ namespace {
     check(abbreviateHome("ssh -i /Users/ada/keys/x --config=/Users/ada", "/Users/ada").view() == "ssh -i ~/keys/x --config=~");
     check(abbreviateHome("/Users/adam/bin", "/Users/ada").view() == "/Users/adam/bin");
     check(abbreviateHome("/bin/zsh", "").view() == "/bin/zsh");
+    // After a path list's colon, and after a one-letter flag that starts a word.
+    check(abbreviateHome("cc -I/Users/ada/include -L/Users/ada/lib", "/Users/ada").view() == "cc -I~/include -L~/lib");
+    check(abbreviateHome("PATH=/bin:/Users/ada/bin -F/Users/ada", "/Users/ada").view() == "PATH=/bin:~/bin -F~");
+    check(abbreviateHome("x--I/Users/ada --I/Users/ada", "/Users/ada").view() == "x--I/Users/ada --I/Users/ada");
   }
 
   void ownersAreNamed() {
@@ -146,7 +171,6 @@ namespace {
 
     check(receive(state, MonitorSnapshot{.request_id = 5, .sample = 1, .cpu_permille = 420, .matched = 100, .processes = processes.view()}));
     check(state.offset == 30 && state.processes.size() == 30 && covers(state));
-    check(state.cpuHistory().size() == 1 && state.cpuHistory()[0] == 420);
     state.view.first = 55;
     check(!covers(state));
 
@@ -182,26 +206,108 @@ namespace {
     check(state.matched == 0 && state.processes.empty());
   }
 
-  // The history takes one share per reading of the runtime, however many answers repeat it.
-  void historyCountsReadings() {
+  // The history is the runtime's: each answer replaces it, so a monitor that opens again shows what
+  // the runtime read, never the window's last one spliced to it.
+  void historyIsTheRuntimes() {
     telar::testing::TestMemory adapter;
     Memory& memory = adapter;
     State state{memory};
-    const auto answer = [&](std::uint64_t id, std::uint64_t sample, std::uint16_t share) {
+    const auto answer = [&](std::uint64_t id, std::uint64_t sample, std::span<const std::uint16_t> history) {
       wait(state, id);
-      check(receive(state, MonitorSnapshot{.request_id = id, .sample = sample, .cpu_permille = share}));
+      check(receive(state, MonitorSnapshot{.request_id = id, .sections = MonitorSections::host, .sample = sample, .history = history}));
     };
 
-    answer(1, 7, 100);
-    answer(2, 7, 100);
-    answer(3, 7, 100);
-    answer(4, 8, 250);
-    check(state.cpuHistory().size() == 2 && state.cpuHistory()[1] == 250, std::to_string(state.cpuHistory().size()));
+    const ds::Array<std::uint16_t, 3> first{100, 200, 300};
+    const ds::Array<std::uint16_t, 1> after_pause{900};
 
-    // A new runtime counts again from the start.
-    reset(state);
-    answer(5, 2, 300);
-    check(state.cpuHistory().size() == 3);
+    answer(1, 7, first.view());
+    answer(2, 7, first.view());
+    check(state.cpuHistory().size() == 3 && state.cpuHistory()[2] == 300, std::to_string(state.cpuHistory().size()));
+    answer(3, 20, after_pause.view());
+    check(state.cpuHistory().size() == 1 && state.cpuHistory()[0] == 900, std::to_string(state.cpuHistory().size()));
+
+    // An answer without the host's readings leaves the history as it was.
+    wait(state, 4);
+    check(receive(state, MonitorSnapshot{.request_id = 4, .sections = MonitorSections::processes, .sample = 21}));
+    check(state.cpuHistory().size() == 1);
+  }
+
+  // The network panel shows the interfaces that carry bytes now first, then the quiet ones, each by
+  // the bytes carried since the machine started, and none that never carried one.
+  void interfacesShownByTraffic() {
+    const ds::Array<InterfaceRow, 7> interfaces{
+        InterfaceRow{.received_bytes = 900},
+        InterfaceRow{.received_per_second = 10, .received_bytes = 5},
+        InterfaceRow{},
+        InterfaceRow{.sent_per_second = 1, .sent_bytes = 50},
+        InterfaceRow{.received_bytes = 100},
+        InterfaceRow{.received_bytes = 400},
+        InterfaceRow{.received_bytes = 1},
+    };
+    ds::Array<std::uint8_t, shown_interfaces> shown{};
+    const auto count = shownInterfaces(interfaces.view(), shown.viewMut());
+
+    check(count == 4, std::to_string(count));
+    check(shown[0] == 3 && shown[1] == 1 && shown[2] == 0 && shown[3] == 5, std::to_string(shown[0]) + std::to_string(shown[1]) + std::to_string(shown[2]) + std::to_string(shown[3]));
+    check(shownInterfaces(interfaces.view().first(3), shown.viewMut()) == 2);
+  }
+
+  // A rate's meter fills against the highest rate of the readings in a row, of the interfaces shown,
+  // and never against less than its floor.
+  void ratesFillAgainstTheirPeak() {
+    telar::testing::TestMemory adapter;
+    Memory& memory = adapter;
+    State state{memory};
+    const auto answer = [&](std::uint64_t id, std::uint64_t sample, std::span<const MonitorInterface> interfaces, std::uint64_t read) {
+      wait(state, id);
+      check(receive(state, MonitorSnapshot{.request_id = id, .sample = sample, .disk_read_per_second = read, .interfaces = interfaces}));
+    };
+
+    constexpr std::uint64_t mebibyte = std::uint64_t{1} << 20;
+    const ds::Array<MonitorInterface, 1> trickle{MonitorInterface{.name = "en0", .received_per_second = 19'400, .sent_per_second = 14'900, .received_bytes = 1}};
+    ds::Array<MonitorInterface, 6> busy{};
+
+    // The sixth interface is the loudest, but four others carried more bytes and it is not shown.
+    for (std::size_t index = 0; index < busy.size(); ++index) {
+      busy.atMut(index) = {.name = "if", .received_per_second = 3 * mebibyte, .received_bytes = 100 - index};
+    }
+
+    busy.atMut(5).received_per_second = 50 * mebibyte;
+    answer(1, 1, trickle.view(), 0);
+    check(state.network_peaks.scale(network_rate_floor) == network_rate_floor && state.disk_peaks.scale(disk_rate_floor) == disk_rate_floor);
+    answer(2, 2, busy.view(), 40 * mebibyte);
+    check(state.network_peaks.scale(network_rate_floor) == 3 * mebibyte, std::to_string(state.network_peaks.scale(network_rate_floor)));
+    check(state.disk_peaks.scale(disk_rate_floor) == 40 * mebibyte);
+
+    // A repeat of the reading adds no peak; a reading after some the window missed starts them again.
+    answer(3, 2, trickle.view(), 0);
+    check(state.network_peaks.count == 2);
+    answer(4, 9, trickle.view(), 0);
+    check(state.network_peaks.count == 1 && state.disk_peaks.scale(disk_rate_floor) == disk_rate_floor);
+  }
+
+  // The detail held is the selected process's only when it names the same instance.
+  void detailIsTheSelected() {
+    telar::testing::TestMemory adapter;
+    Memory& memory = adapter;
+    State state{memory};
+    const ProcessInstance selected{.pid = 42, .started_seconds = 10};
+    MonitorDetail detail{};
+
+    detail.process.instance = selected;
+    detail.process.nice = 7;
+    state.view.selected = selected;
+    wait(state, 1);
+    check(receive(state, MonitorSnapshot{.request_id = 1, .detail = detail}));
+    check(selectedDetail(state) != nullptr && selectedDetail(state)->process.nice == 7);
+
+    // Another process, or the same pid started again: the detail held is the last one's.
+    state.view.selected = {.pid = 43, .started_seconds = 10};
+    check(selectedDetail(state) == nullptr);
+    state.view.selected = {.pid = 42, .started_seconds = 11};
+    check(selectedDetail(state) == nullptr);
+    state.view.selected = {};
+    check(selectedDetail(state) == nullptr);
   }
 
   const telar::testing::Case case_columns{"monitor_presentation.columns_share_the_width", columnsShareTheWidth};
@@ -214,6 +320,12 @@ namespace {
   const telar::testing::Case case_toggled{"monitor_presentation.toggled_branches", toggledBranches};
   const telar::testing::Case case_answers{"monitor_presentation.answers_fill_the_window", answersFillTheWindow};
   const telar::testing::Case case_stale{"monitor_presentation.stale_listings_are_dropped", staleListingsAreDropped};
-  const telar::testing::Case case_history{"monitor_presentation.history_counts_readings", historyCountsReadings};
+  const telar::testing::Case case_history{"monitor_presentation.history_is_the_runtimes", historyIsTheRuntimes};
+  const telar::testing::Case case_shares{"monitor_presentation.shares_read_whole", sharesReadWhole};
+  const telar::testing::Case case_headroom{"monitor_presentation.headroom_warns_as_it_empties", headroomWarnsAsItEmpties};
+  const telar::testing::Case case_mounts{"monitor_presentation.mounts_read_short", mountsReadShort};
+  const telar::testing::Case case_interfaces{"monitor_presentation.interfaces_shown_by_traffic", interfacesShownByTraffic};
+  const telar::testing::Case case_rates{"monitor_presentation.rates_fill_against_their_peak", ratesFillAgainstTheirPeak};
+  const telar::testing::Case case_detail{"monitor_presentation.detail_is_the_selected", detailIsTheSelected};
 
 }
