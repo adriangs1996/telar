@@ -160,17 +160,21 @@ if(TELAR_GUI_NATIVE)
   target_link_libraries(gui-clipboard-images PUBLIC gui-foundation-core gui-platform gui-platform-native gui-application telar::base telar::platform telar::tbc Qt6::Concurrent)
   set_target_properties(gui-clipboard-images PROPERTIES POSITION_INDEPENDENT_CODE ON)
 
+  set(gui_quick_module_targets
+    gui-foundation-core gui-foundation-system gui-foundation-text
+    gui-foundation-terminal gui-foundation-fonts gui-foundation-actions gui-foundation-keys gui-foundation-model
+    gui-foundation-agents gui-foundation-drawing gui-foundation-forms gui-foundation-icons
+    gui-platform gui-application
+    telar::base telar::wire telar::platform telar::tbc)
+
   qt_add_library(gui-quick STATIC)
+  set_target_properties(gui-quick PROPERTIES POSITION_INDEPENDENT_CODE ON)
   target_link_libraries(gui-quick PRIVATE Qt6::GuiPrivate)
   target_link_libraries(gui-quick PUBLIC gui-clipboard-images)
   set_source_files_properties(ui/app/panes/attachments/attachment_preview.cpp PROPERTIES COMPILE_OPTIONS "-ffp-contract=off")
 
-  target_link_libraries(gui-quick PUBLIC gui-foundation-core gui-foundation-system gui-foundation-text
-    gui-foundation-terminal gui-foundation-fonts gui-foundation-actions gui-foundation-keys gui-foundation-model
-    gui-foundation-agents gui-foundation-drawing gui-foundation-forms gui-foundation-icons
-    gui-platform
-    gui-application gui-platform-native gui-keyboard gui-fonts-native gui-machine-profiles
-    telar::base telar::wire telar::platform telar::tbc
+  target_link_libraries(gui-quick PUBLIC ${gui_quick_module_targets}
+    gui-platform-native gui-keyboard gui-fonts-native gui-machine-profiles
     Qt6::Quick Qt6::QuickControls2 Qt6::Network Qt6::Concurrent)
   # Qt adapters import C++23 modules that import `std`; Clang does not merge stdlib types
   # such as std::string_view across a precompiled header (-include-pch) and the `std` BMI,
@@ -231,6 +235,7 @@ if(TELAR_GUI_NATIVE)
     QML_FILES ${gui_quick_qml_files})
 
   qt_add_executable(telar-gui main.cpp)
+  set_target_properties(telar-gui PROPERTIES POSITION_INDEPENDENT_CODE ON)
   if(APPLE)
     target_link_options(telar-gui PRIVATE -Wl,-headerpad_max_install_names)
     add_executable(telar-gui-launcher tools/macos_launcher.cpp foundation/system/system-login_shell.cpp)
@@ -240,13 +245,13 @@ if(TELAR_GUI_NATIVE)
     set_target_properties(telar-gui-launcher PROPERTIES AUTOMOC OFF AUTOUIC OFF AUTORCC OFF)
     add_dependencies(telar-gui telar-gui-launcher)
   endif()
-  target_link_libraries(telar-gui PRIVATE gui-platform gui-quick gui-quickplugin)
+  target_link_libraries(telar-gui PRIVATE ${gui_quick_module_targets} gui-quick gui-quickplugin)
   add_dependencies(telar-gui telar-gui-command)
   # Run by hand by tools/measure_startup.py, in Release too, so a tree configured
   # without tests builds it.
-  telar_add_test(gui-startup-probe QT PROBE SOURCES tools/startup_probe.cpp LIBRARIES gui-quick gui-quickplugin)
+  telar_add_test(gui-startup-probe QT PROBE SOURCES tools/startup_probe.cpp LIBRARIES ${gui_quick_module_targets} gui-quick gui-quickplugin)
   # Shows a QML file of the ignored playground/ and shows it again when it changes.
-  telar_add_test(gui-playground QT PROBE SOURCES tools/playground.cpp LIBRARIES gui-quick gui-quickplugin)
+  telar_add_test(gui-playground QT PROBE SOURCES tools/playground.cpp LIBRARIES ${gui_quick_module_targets} gui-quick gui-quickplugin)
 
   set(gui_font_directory "${TELAR_ROOT}/assets")
   qt_add_resources(gui-quick gui-fonts
