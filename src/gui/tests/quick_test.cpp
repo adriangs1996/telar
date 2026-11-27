@@ -1144,6 +1144,65 @@ return {api_version = 2, client = {
       QTRY_COMPARE_WITH_TIMEOUT(view->mode(), QStringLiteral("normal"), runtime_wait_ms);
       shoot(QStringLiteral("editor-message"));
 
+      // Each thing said goes where it is read: what is said is gone when the person says so.
+      const auto forget = [&] {
+        for (const auto& item : view->messages().value(QStringLiteral("items")).toList()) {
+          view->dismissMessage(item.toMap().value(QStringLiteral("key")).toString());
+        }
+
+        QTRY_VERIFY_WITH_TIMEOUT(view->messages().value(QStringLiteral("items")).toList().isEmpty(), runtime_wait_ms);
+      };
+      const auto visibleItem = [&](const QString& name) -> QQuickItem* {
+        for (auto* item : test::visualItems(*window_->contentItem(), name)) {
+          if (item->isVisible()) {
+            return item;
+          }
+        }
+
+        return nullptr;
+      };
+
+      forget();
+      // An error, its code apart from what it says.
+      view->send(QStringLiteral(":Wq<CR>"));
+      QTRY_VERIFY_WITH_TIMEOUT(std::ranges::any_of(view->messages().value(QStringLiteral("items")).toList(), [](const QVariant& item) {
+        return item.toMap().value(QStringLiteral("kind")).toString() == QStringLiteral("error");
+      }),
+          runtime_wait_ms);
+      shoot(QStringLiteral("editor-message-error"));
+      forget();
+
+      // A task's progress, a bar that fills in place.
+      view->send(QStringLiteral("<Cmd>lua vim.api.nvim_echo({{'Indexing 412 of 958 files'}}, false, {kind = 'progress', percent = 43, title = 'clangd', status = 'running', source = 'telar'})<CR>"));
+      QTRY_VERIFY_WITH_TIMEOUT(std::ranges::any_of(view->messages().value(QStringLiteral("items")).toList(), [](const QVariant& item) {
+        return item.toMap().value(QStringLiteral("kind")).toString() == QStringLiteral("progress");
+      }),
+          runtime_wait_ms);
+      shoot(QStringLiteral("editor-message-progress"));
+      forget();
+
+      // The count of a search is on the status line, never a notice.
+      view->send(QStringLiteral("<Cmd>call setline(1, ['obs one', 'obs two', 'obs three'])<CR>/obs<CR>n"));
+      QTRY_VERIFY2_WITH_TIMEOUT(visibleItem(QStringLiteral("editorSearchCount")) != nullptr && visibleItem(QStringLiteral("editorSearchCount"))->property("label").toString().contains(QStringLiteral(" of ")), qPrintable(said() ? QStringLiteral("said") : QStringLiteral("nothing")), runtime_wait_ms);
+      for (const auto& item : view->messages().value(QStringLiteral("items")).toList()) {
+        QCOMPARE(item.toMap().value(QStringLiteral("kind")).toString(), QStringLiteral("search"));
+      }
+
+      shoot(QStringLiteral("editor-search-count"));
+      forget();
+      QTRY_VERIFY_WITH_TIMEOUT(visibleItem(QStringLiteral("editorSearchCount")) == nullptr, runtime_wait_ms);
+
+      // What a command lists is a panel under it, to read and copy.
+      view->send(QStringLiteral(":ls"));
+      QTRY_COMPARE_WITH_TIMEOUT(view->cmdline().value(QStringLiteral("text")).toString(), QStringLiteral("ls"), runtime_wait_ms);
+      view->send(QStringLiteral("<CR>"));
+      QTRY_VERIFY_WITH_TIMEOUT(visibleItem(QStringLiteral("editorOutput")) != nullptr && !visibleItem(QStringLiteral("editorOutput"))->property("text").toString().isEmpty(), runtime_wait_ms);
+      QCOMPARE(visibleItem(QStringLiteral("editorOutputPanel"))->property("title").toString(), QStringLiteral(":ls"));
+      shoot(QStringLiteral("editor-output"));
+      forget();
+      QTRY_VERIFY_WITH_TIMEOUT(visibleItem(QStringLiteral("editorOutput")) == nullptr, runtime_wait_ms);
+      view->send(QStringLiteral("<Cmd>silent undo<CR>"));
+
       // vim.ui.select is the window's dialog, whatever asked, and its answer reaches the caller.
       view->send(QStringLiteral(":lua vim.ui.select({'Rename symbol', 'Extract function', 'Inline variable'}, {prompt = 'Code actions', kind = 'refactor'}, function(choice) vim.g.telar_choice = choice end)<CR>"));
       QTRY_COMPARE_WITH_TIMEOUT(view->prompt().value(QStringLiteral("kind")).toString(), QStringLiteral("select"), runtime_wait_ms);
