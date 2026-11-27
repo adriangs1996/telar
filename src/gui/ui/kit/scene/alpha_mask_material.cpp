@@ -139,9 +139,14 @@ namespace telar::gui::qt {
   QSGMaterialType* AlphaMaskMaterial::type() const {
     constexpr std::size_t sampling_modes = 3;
     constexpr std::size_t blend_modes = 2;
-    static ds::Array<QSGMaterialType, sampling_modes * blend_modes> material_types;
 
-    return &material_types.atMut((static_cast<std::size_t>(blend_) * sampling_modes) + static_cast<std::size_t>(sampling_));
+    struct [[tbc::shared]] MaterialTypes {
+      ds::Array<QSGMaterialType, sampling_modes * blend_modes> entries;
+    };
+
+    static MaterialTypes material_types;
+
+    return &material_types.entries.atMut((static_cast<std::size_t>(blend_) * sampling_modes) + static_cast<std::size_t>(sampling_));
   }
 
   QSGMaterialShader* AlphaMaskMaterial::createShader([[maybe_unused]] QSGRendererInterface::RenderMode render_mode) const {

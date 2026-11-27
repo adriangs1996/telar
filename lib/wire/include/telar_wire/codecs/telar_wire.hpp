@@ -1,6 +1,5 @@
 #pragma once
 
-#include "tbc/annotations.hpp"
 #include "tbc/view.hpp"
 
 #include <type_traits>
@@ -45,13 +44,13 @@ namespace telar {
 
   // The same bytes as text and as wire bytes, for the field codecs below, which call them per
   // field and per byte.
-  TBC_HOT_PATH [[nodiscard]] inline std::span<const Byte> byteView(std::string_view text) noexcept {
+  [[tbc::hot_path]] [[nodiscard]] inline std::span<const Byte> byteView(std::string_view text) noexcept {
 #pragma clang unsafe_buffer_usage begin
     return {reinterpret_cast<const Byte*>(text.data()), text.size()}; // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast): Byte may alias char, and no cast-free view reads text as bytes
 #pragma clang unsafe_buffer_usage end
   }
 
-  TBC_HOT_PATH [[nodiscard]] inline std::string_view textView(std::span<const Byte> bytes) noexcept {
+  [[tbc::hot_path]] [[nodiscard]] inline std::string_view textView(std::span<const Byte> bytes) noexcept {
     return {reinterpret_cast<const char*>(bytes.data()), bytes.size()}; // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast): char may alias Byte, and no cast-free view reads bytes as text
   }
 

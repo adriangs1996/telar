@@ -47,6 +47,7 @@ namespace telar::runtime {
   void randomBytes(void* data, std::size_t size) noexcept {
 #ifdef __linux__
     auto* cursor = static_cast<unsigned char*>(data);
+
     while (size != 0) {
       const auto count = ::getrandom(cursor, size, 0);
       if (count < 0) {
@@ -185,6 +186,7 @@ namespace telar::runtime {
     return result == KERN_SUCCESS && copied == output.size();
 #else
     std::size_t filled = 0;
+
     while (filled < output.size()) {
       if (offset > static_cast<std::uint64_t>(std::numeric_limits<off_t>::max()) - filled) {
         return false;

@@ -1,5 +1,4 @@
 module;
-#include "tbc/annotations.hpp"
 
 // The notices the user sees: the notification center and its cards, the alerts agents raise,
 // the sounds they play and the limits the session reached.
@@ -57,10 +56,10 @@ export namespace telar::gui::features::notifications {
   [[nodiscard]] ds::Option<NotificationTarget> activate(State& state, NotificationId id, std::uint64_t now_ns) noexcept;
 
   // What the window paints: the notices, valid until a use case changes them.
-  [[nodiscard]] TBC_HOT_PATH inline const NotificationCenter& center(const State& state) noexcept;
+  [[nodiscard]] [[tbc::hot_path]] inline const NotificationCenter& center(const State& state) noexcept;
 
   // Changes whenever the notices do.
-  [[nodiscard]] TBC_HOT_PATH inline std::uint64_t revision(const State& state) noexcept;
+  [[nodiscard]] [[tbc::hot_path]] inline std::uint64_t revision(const State& state) noexcept;
 
   // ---- agent sounds -------------------------------------------------------------------------
 

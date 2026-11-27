@@ -1,5 +1,4 @@
 module;
-#include "tbc/annotations.hpp"
 #include "telar_base/diagnostics/config.hpp"
 
 export module telar.runtime.core.client_control;
@@ -61,7 +60,7 @@ export {
     // Reads agents' session files on a worker; the agents are lent to each call.
     // Kept whole: Agents is the runtime's AgentService, from a module that imports this one.
     template <ConcurrentAllocator Memory, SessionFileObserver Agents>
-    class TBC_GENERIC AgentFileService {
+    class [[tbc::generic]] AgentFileService {
     public:
       inline explicit AgentFileService(Memory& memory)
           : worker_(std::in_place, memory) {}
@@ -158,7 +157,7 @@ export {
 
     // Kept here: the message is any of the protocol's, an open set no unit can instantiate ahead.
     template <typename Message>
-    TBC_GENERIC ds::Option<ReporterIdentity> reporterOf(const AgentManifests& manifests, const Message& message) noexcept {
+    [[tbc::generic]] ds::Option<ReporterIdentity> reporterOf(const AgentManifests& manifests, const Message& message) noexcept {
       if constexpr (std::same_as<Message, ReportAgent> || std::same_as<Message, ReportAgentTitle> || std::same_as<Message, ReportAgentProgress>) {
         return ReporterIdentity{message.pane_id, message.pane_generation, message.provider};
       } else if constexpr (std::same_as<Message, ReportAgentCommand>) {
@@ -177,7 +176,7 @@ export {
     // its client; the runtime takes it out to replay it.
     // Kept whole: tests instantiate it with their own fake Agents (deferred_reports_test's RecordedAgents).
     template <ReporterAgents Agents>
-    class TBC_GENERIC DeferredReports {
+    class [[tbc::generic]] DeferredReports {
     public:
       // The clients whose held reports are due, in the order they were held.
       struct Due {
@@ -200,8 +199,8 @@ export {
           return ReportDecision::accepted;
         }
 
-        auto& report = client.deferred_report;
         const auto rejection = reportingRejection(agents, client, *pane);
+        auto& report = client.deferred_report;
 
         if (report.answering) {
           if (report.answer_rechecked && rejection) {
@@ -341,7 +340,7 @@ export {
     // until the caller schedules the held checks.
     // Kept whole: tests instantiate it with their own fake Inspector (agents_test's TestProcessInspector).
     template <LineageInspector Inspector>
-    class TBC_GENERIC DescentService {
+    class [[tbc::generic]] DescentService {
     public:
       inline explicit DescentService(const Inspector& inspector)
           : worker_(std::in_place, inspector) {}
@@ -406,7 +405,9 @@ export {
 
         pending_ = true;
         for (const auto& check : std::span{request.checks}.first(request.count)) {
-          clients.find(check.client)->descent_running = true;
+          if (auto* client = clients.find(check.client)) {
+            client->descent_running = true;
+          }
         }
       }
 
@@ -458,7 +459,7 @@ export {
     // Kept whole: tests instantiate it with their own fake Probe (metrics_test's FakeHostMetrics).
     template <typename Probe>
       requires HostMetricsProbe<std::remove_reference_t<Probe>>
-    class TBC_GENERIC HostMetricsReader {
+    class [[tbc::generic]] HostMetricsReader {
     public:
       using Request = HostSampler;
       using Result = HostSampler;
@@ -489,7 +490,7 @@ export {
     // Kept whole: tests instantiate it with their own fake Probe (metrics_test's FakeHostMetrics).
     template <typename Probe>
       requires HostMetricsProbe<std::remove_reference_t<Probe>>
-    class TBC_GENERIC HostMetricsService {
+    class [[tbc::generic]] HostMetricsService {
     public:
       using Clock = std::chrono::steady_clock;
       static constexpr auto sample_interval = std::chrono::seconds{2};
@@ -622,7 +623,7 @@ export {
     // Kept whole: tests instantiate it with their own fake probes.
     template <typename Processes, typename Host>
       requires ProcessTableProbe<Processes> && HostDetailProbe<Host>
-    class TBC_GENERIC MonitorReader {
+    class [[tbc::generic]] MonitorReader {
     public:
       using Request = MonitorWork;
       using Result = MonitorOutcome;
@@ -748,7 +749,7 @@ export {
     // Kept whole: tests instantiate it with their own fake probes.
     template <typename Processes, typename Host>
       requires ProcessTableProbe<Processes> && HostDetailProbe<Host>
-    class TBC_GENERIC MonitorService {
+    class [[tbc::generic]] MonitorService {
     public:
       using Clock = std::chrono::steady_clock;
       static constexpr auto sample_interval = std::chrono::seconds{2};
@@ -947,7 +948,7 @@ export {
     // Kept whole: tests instantiate it with their own fakes (observation_test's UnusedAgents and DirectoryOnlyProbe).
     template <typename Agents, ObservationLimitSink Limits, PaneProcessProbe Probe, HistoryEventSink History>
       requires AgentObservationSink<Agents>
-    class TBC_GENERIC PaneObservationService {
+    class [[tbc::generic]] PaneObservationService {
       using Processor = ObservationProcessor<Probe, History>;
 
     public:
@@ -992,7 +993,7 @@ export {
       inline void observe(RuntimeModel& model, Agents& agents, std::uint64_t pane_id) {
         collect(model, agents);
         auto* found = model.panes.find(pane_id);
-        if (pending_ || !asTerminal(found)) {
+        if (pending_ || found == nullptr || !asTerminal(found)) {
           return;
         }
 
@@ -1249,7 +1250,7 @@ export {
     // consumer from filling the response queue or stalling terminal delivery.
     // Kept whole: tests instantiate it with their own fake Reader (runtime_clipboard_test's Reader).
     template <typename Reader = RuntimeClipboardReader>
-    class TBC_GENERIC RuntimeClipboardService {
+    class [[tbc::generic]] RuntimeClipboardService {
     public:
       using Clock = std::chrono::steady_clock;
       static constexpr auto transfer_timeout = std::chrono::seconds{30};
@@ -1375,7 +1376,7 @@ export {
 
     // Kept whole: tests instantiate it with their own fake Probe (worktree_detection_test's GatedWorktreeDetector).
     template <WorktreeDetector Probe>
-    class TBC_GENERIC WorktreeDetectionService {
+    class [[tbc::generic]] WorktreeDetectionService {
     public:
       // The probe is built in place on its worker from the arguments.
       template <typename... Arguments>

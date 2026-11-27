@@ -1,6 +1,3 @@
-module;
-#include "tbc/annotations.hpp"
-
 export module telar.gui.application:configuration;
 
 import std;
@@ -160,7 +157,7 @@ export {
       void renderPick(std::size_t index, const features::components::Context& context, features::components::PickItems& items);
 
       template <typename Visitor>
-      TBC_GENERIC void visitArguments(int reference, const char* field, const Visitor& visit) const {
+      [[tbc::generic]] void visitArguments(int reference, const char* field, const Visitor& visit) const {
         const runtime::lua::Value registry{machine_.state(), LUA_REGISTRYINDEX, "source registry"};
 
         runtime::config::CommandArgumentsReader::read(registry.element(reference), field, visit);
@@ -185,7 +182,7 @@ export {
       [[nodiscard]] ds::Option<NamedActionDescription> namedAction(BindingAction action) const;
 
       template <typename Visitor>
-      TBC_GENERIC void visitPluginActions(const Visitor& visitor) const {
+      [[tbc::generic]] void visitPluginActions(const Visitor& visitor) const {
         const auto visit = [&](BindingAction action) {
           if (const auto plugin = pluginAction(action)) {
             visitor(*plugin);
@@ -202,7 +199,7 @@ export {
       [[nodiscard]] const BindingMap<BindingAction>& keymap() const noexcept;
 
       template <typename Visitor>
-      TBC_GENERIC void visitLocalModules(Visitor&& visit) const {
+      [[tbc::generic]] void visitLocalModules(Visitor&& visit) const {
         if (modules_) {
           modules_->visitLoadedNames(machine_.state(), std::forward<Visitor>(visit));
         }

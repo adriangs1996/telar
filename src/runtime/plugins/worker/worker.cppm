@@ -1,5 +1,4 @@
 module;
-#include "tbc/annotations.hpp"
 #include "telar_platform/trace_macro.hpp"
 
 export module telar.runtime.plugins.worker;
@@ -43,7 +42,7 @@ export {
 
     // Generic over the caller's stream, and called for every frame a worker exchanges.
     template <FrameStream Stream>
-    class TBC_GENERIC FrameChannel {
+    class [[tbc::generic]] FrameChannel {
     public:
       inline explicit FrameChannel(Stream& stream) noexcept
           : stream_(stream) {}
@@ -189,7 +188,7 @@ export {
 
       // Generic over the caller's consumer; takes it itself, as the lambdas callers pass build it in place.
       template <typename Consumer>
-      TBC_GENERIC void collect(Consumer consumer) {
+      [[tbc::generic]] void collect(Consumer consumer) {
         if (!ready_ || !ready_.getMut().consume()) {
           return;
         }
@@ -496,7 +495,7 @@ export {
       // `session` is the worker's session, or null while it restarts. Takes the consumer itself, as the
       // lambdas callers pass build it in place.
       template <typename Consumer>
-      TBC_GENERIC void step(Session<ConcurrentMemory>* session, int wake, const CancellationSignal& cancellation, Consumer consume, bool immediate = false) {
+      [[tbc::generic]] void step(Session<ConcurrentMemory>* session, int wake, const CancellationSignal& cancellation, Consumer consume, bool immediate = false) {
         if (openControls(session, consume)) {
           return;
         }
@@ -546,7 +545,7 @@ export {
       // Opens each control connection not yet open, and dispatches the first that failed or timed out;
       // whether it dispatched one, which ends the step.
       template <typename Consumer>
-      TBC_GENERIC bool openControls(Session<ConcurrentMemory>* session, Consumer& consume) {
+      [[tbc::generic]] bool openControls(Session<ConcurrentMemory>* session, Consumer& consume) {
         for (std::size_t index = 0; index < connections_.size(); ++index) {
           auto& connection = connections_.atMut(index);
           if (!connection || connection->registration.stage != TrafficStage::control) {
@@ -574,7 +573,7 @@ export {
 
       // Tells each registration that waits for it that its worker restarted.
       template <typename Consumer>
-      TBC_GENERIC void announceRestart(Session<ConcurrentMemory>* session, Consumer& consume) {
+      [[tbc::generic]] void announceRestart(Session<ConcurrentMemory>* session, Consumer& consume) {
         for (std::size_t index = 0; index < connections_.size(); ++index) {
           auto& connection = connections_.atMut(index);
           if (connection && connection->notify_ready) {
@@ -589,7 +588,7 @@ export {
       }
 
       template <typename Consumer>
-      TBC_GENERIC void serveControl(Session<ConcurrentMemory>* session, std::size_t index, const pollfd& watch, Consumer& consume) {
+      [[tbc::generic]] void serveControl(Session<ConcurrentMemory>* session, std::size_t index, const pollfd& watch, Consumer& consume) {
         const auto readiness = watch.revents;
         auto& connection = connections_.atMut(index);
         ds::Option<SensitiveAllocation<ConcurrentMemory>> frame;
@@ -621,7 +620,7 @@ export {
       }
 
       template <typename Consumer>
-      TBC_GENERIC void serveTraffic(Session<ConcurrentMemory>* session, std::size_t index, const pollfd& watch, Consumer& consume) {
+      [[tbc::generic]] void serveTraffic(Session<ConcurrentMemory>* session, std::size_t index, const pollfd& watch, Consumer& consume) {
         const auto readiness = watch.revents;
         auto& connection = connections_.atMut(index);
 
@@ -693,7 +692,7 @@ export {
 
       // A control connection is spent once its event is sent; the callback's reply may change the table.
       template <typename Consumer>
-      TBC_GENERIC void dispatchControl(Session<ConcurrentMemory>* session, std::size_t index, std::span<const Byte> frame, std::string_view error, Consumer& consume) {
+      [[tbc::generic]] void dispatchControl(Session<ConcurrentMemory>* session, std::size_t index, std::span<const Byte> frame, std::string_view error, Consumer& consume) {
         auto& connection = connections_.atMut(index);
 
         if (!session) {
@@ -723,7 +722,7 @@ export {
 
       // The result owns the reply and finds its effects again where the outcome saw them.
       template <typename Consumer>
-      TBC_GENERIC void publishEffects(std::uint64_t event_id, SensitiveAllocation<ConcurrentMemory> response, std::span<const Byte> effects, Consumer& consume) {
+      [[tbc::generic]] void publishEffects(std::uint64_t event_id, SensitiveAllocation<ConcurrentMemory> response, std::span<const Byte> effects, Consumer& consume) {
         if (effects.empty()) {
           return;
         }
@@ -741,7 +740,7 @@ export {
 
       // The connection is named by its slot, as the callback's reply may change the table it lives in.
       template <typename Consumer>
-      TBC_GENERIC void dispatch(Session<ConcurrentMemory>* session, std::size_t index, std::span<const Byte> frame, std::uint64_t dropped, Consumer& consume) {
+      [[tbc::generic]] void dispatch(Session<ConcurrentMemory>* session, std::size_t index, std::span<const Byte> frame, std::uint64_t dropped, Consumer& consume) {
         auto& connection = connections_.atMut(index).getMut();
         const auto event = traffic::Protocol::decode(frame);
         const bool control = event.kind == traffic::Kind::intercept_request || event.kind == traffic::Kind::http_intercept_request;
@@ -857,10 +856,10 @@ export {
     // A package's worker thread. The proxy submits exchanges, the runtime reads metrics and the trust
     // monitor revokes it from their own threads: what they touch is atomic or a synchronized channel, and
     // the session, the bridge and the thread's state belong to its thread alone. That split is audited
-    // here, so the worker is TBC_SHARED; its thread keeps `this`, so it stays where it was built. Built in
+    // here, so the worker is [[tbc::shared]]; its thread keeps `this`, so it stays where it was built. Built in
     // worker.cpp for the steady clock.
     template <WorkerClock Clock = std::chrono::steady_clock>
-    class TBC_SHARED Worker {
+    class [[tbc::shared]] Worker {
     public:
       using Shared = std::shared_ptr<SharedExchange>;
 

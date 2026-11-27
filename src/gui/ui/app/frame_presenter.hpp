@@ -4,7 +4,6 @@ static_assert(true);
 #endif
 
 #include "foundation/core/application_memory.hpp"
-#include "tbc/annotations.hpp"
 #include "ui/app/panes/terminal/history/history_controller.hpp"
 #include "ui/kit/store/store.hpp"
 #include "ui/kit/timing/window_frame_pacer.hpp"
@@ -116,7 +115,7 @@ namespace telar::gui::qt {
     // The frames the scene graph's synchronization prepares, shared by its before and after callbacks,
     // which run in turn on the render thread while the GUI thread is blocked, as Rust's
     // Rc<RefCell<…>> lets two closures share one value.
-    struct TBC_SHARED PresentedFrames {
+    struct [[tbc::shared]] PresentedFrames {
       ds::Array<PresentedFrame, 2> prepared;
       ds::Array<std::uint64_t, 2> sequences{};
       std::uint64_t sequence = 0;

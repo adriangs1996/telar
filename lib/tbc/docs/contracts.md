@@ -294,8 +294,10 @@ it does not silently narrow that public promise at call sites.
 `lt::a` is a signature variable, not global storage or a request to extend an
 owner's life. Calls instantiate labels independently. `lt::a`, `lt::b`, `lt::c`,
 and `lt::d` are predefined. `tbc::lifetime<tag>` permits descriptive labels.
-Distinct labels do not imply an outlives relationship; explicit outlives bounds
-are not supported.
+Distinct labels do not imply an outlives relationship unless stated explicitly
+with `[[tbc_outlives("longer", "shorter")]]` or `requires tbc::outlives<longer, shorter>`.
+Two-level regions can be expressed with `tbc::view<type, outer, inner>` (for
+example `&'b Stream<'a>`).
 
 `lt::static_storage` is the one fixed region: storage that outlives every caller,
 like Rust's `'static`. A result labeled with it depends on no argument or receiver,
@@ -325,9 +327,8 @@ std::string_view prefix(std::string_view renamed) {
 ```
 
 The checker still checks that declaration's explicit region against the plain
-C++ definition. Parameter spelling does not matter. Do not declare conflicting
-contracts on different redeclarations; validating every such conflict remains
-outside the current checks.
+C++ definition. Parameter spelling does not matter. Conflicting explicit
+contracts across redeclarations are rejected with `tbc-contract-violation`.
 
 ## Code the project does not control
 
@@ -610,7 +611,7 @@ carry no label still keeps every argument that lends.
 
 ## Owners
 
-A class template marked `TBC_OWNER`, from `<tbc/annotations.hpp>`, owns one value in an
+A class template marked `[[tbc::owner]]` owns one value in an
 allocation of its own, as Rust's `Box` does. The checker reads it as the standard library's
 unique owner: its value lies one level below it, so a borrow of the value outlives the owner's
 moves, as a vector of them growing; resetting or reassigning it destroys the value; and
@@ -620,7 +621,7 @@ and it declares `element_type` and deletes its copy constructor, as `std::unique
 
 ## Shared types
 
-A class marked `TBC_SHARED`, from `<tbc/annotations.hpp>`, keeps every borrow it hands
+A class marked `[[tbc::shared]]` keeps every borrow it hands
 out valid whatever is done through it, as a Rust type with interior mutability
 does through `&self`. An allocator is the usual case: many objects keep a
 reference to it, a call through it invalidates nothing, and two arguments may
@@ -630,7 +631,7 @@ for it.
 
 ```cpp
 template <typename Upstream>
-class TBC_SHARED SynchronizedAllocator {
+class [[tbc::shared]] SynchronizedAllocator {
   // ...
 };
 ```
@@ -672,7 +673,7 @@ copyable nor movable, as Rust shares such a field behind `Pin`
 ```cpp
 class pool {
 public:
-  pool() : lender_(memory_) {}   // accepted: arena is TBC_SHARED and pool is pinned
+  pool() : lender_(memory_) {}   // accepted: arena is [[tbc::shared]] and pool is pinned
   pool(const pool &) = delete;
   pool &operator=(const pool &) = delete;
 
@@ -684,7 +685,7 @@ private:
 
 ## Constructing factories
 
-A function template marked `TBC_CONSTRUCTS` builds its first template argument
+A function template marked `[[tbc::constructs]]` builds its first template argument
 from the arguments of its trailing pack, as `Box::new(Value::new(arguments))`
 does. Its result keeps what that type's constructors keep of those arguments, by
 their declarations, and borrows the arguments before the pack, such as the
@@ -692,7 +693,7 @@ allocator `makeOwned` takes:
 
 ```cpp
 template <typename Value, Allocator Memory, typename... Arguments>
-TBC_CONSTRUCTS Owned<Value, Memory> makeOwned(Memory &memory, Arguments &&...arguments);
+[[tbc::constructs]] Owned<Value, Memory> makeOwned(Memory &memory, Arguments &&...arguments);
 ```
 
 The standard library's `std::make_unique`, `std::make_shared` and
@@ -700,7 +701,7 @@ The standard library's `std::make_unique`, `std::make_shared` and
 what they build keeps what `T`'s constructors keep, and `allocate_shared` keeps
 what the allocator it copies holds.
 
-A constructor template marked `TBC_CONSTRUCTS` builds its class's first template
+A constructor template marked `[[tbc::constructs]]` builds its class's first template
 argument in place from its trailing pack, as `ds::Option`'s `in_place` one does
 for a value that cannot move: the object keeps what that type's constructors keep
 of the pack.

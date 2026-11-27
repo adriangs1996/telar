@@ -1,6 +1,3 @@
-module;
-#include "tbc/annotations.hpp"
-
 export module telar.runtime.terminal.shell_integration.words;
 
 import std;
@@ -125,7 +122,7 @@ export namespace telar::runtime {
 
     // The consumer is the caller's type; the queue's collect is a template over it too.
     template <typename Consumer>
-    TBC_GENERIC inline void collect(Consumer&& consume) {
+    [[tbc::generic]] inline void collect(Consumer&& consume) {
       queue_.collect(worker_, std::forward<Consumer>(consume));
     }
 

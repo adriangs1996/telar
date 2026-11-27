@@ -1,6 +1,3 @@
-module;
-#include "tbc/annotations.hpp"
-
 export module telar.gui.foundation.core:json_writer;
 
 import std;
@@ -19,17 +16,17 @@ export {
       explicit JsonWriter(tbc::val_a<std::span<char>> buffer) noexcept;
 
       template <typename Consumer>
-      TBC_GENERIC void object(Consumer&& consume) {
+      [[tbc::generic]] void object(Consumer&& consume) {
         container(Container::object, std::forward<Consumer>(consume));
       }
 
       template <typename Consumer>
-      TBC_GENERIC void array(Consumer&& consume) {
+      [[tbc::generic]] void array(Consumer&& consume) {
         container(Container::array, std::forward<Consumer>(consume));
       }
 
       template <typename Value>
-      TBC_GENERIC void member(std::string_view name, const Value& value) {
+      [[tbc::generic]] void member(std::string_view name, const Value& value) {
         separator();
         write(name);
         append(":");
@@ -37,7 +34,7 @@ export {
       }
 
       template <typename Value>
-      TBC_GENERIC void element(const Value& value) {
+      [[tbc::generic]] void element(const Value& value) {
         separator();
         write(value);
       }
@@ -45,7 +42,7 @@ export {
       [[nodiscard]] tbc::val_a<std::string_view> view() const noexcept;
 
       template <typename Value>
-      TBC_GENERIC void value(const Value& value) {
+      [[tbc::generic]] void value(const Value& value) {
         write(value);
       }
 
@@ -58,7 +55,7 @@ export {
       };
 
       template <typename Consumer>
-      TBC_GENERIC void container(Container kind, Consumer&& consume) {
+      [[tbc::generic]] void container(Container kind, Consumer&& consume) {
         open(kind);
         const auto previous = std::exchange(first_, true);
 
@@ -78,7 +75,7 @@ export {
 
       template <typename Text>
         requires(std::is_array_v<Text> && std::same_as<std::remove_extent_t<Text>, char>)
-      TBC_GENERIC void write(const Text& text) {
+      [[tbc::generic]] void write(const Text& text) {
         const auto bytes = std::span{text};
         const auto end = std::ranges::find(bytes, '\0');
 
@@ -92,7 +89,7 @@ export {
       void write(std::nullptr_t);
 
       template <typename Value>
-      TBC_GENERIC void write(const ds::Option<Value>& value) {
+      [[tbc::generic]] void write(const ds::Option<Value>& value) {
         if (value) {
           write(*value);
         } else {
@@ -102,7 +99,7 @@ export {
 
       template <std::integral Number>
         requires(!std::same_as<Number, bool>)
-      TBC_GENERIC void write(Number value) {
+      [[tbc::generic]] void write(Number value) {
         if constexpr (std::is_signed_v<Number>) {
           writeSigned(value);
         } else {
@@ -115,7 +112,7 @@ export {
 
       template <typename Consumer>
         requires std::invocable<Consumer, JsonWriter&>
-      TBC_GENERIC void write(Consumer&& consume) {
+      [[tbc::generic]] void write(Consumer&& consume) {
         std::invoke(std::forward<Consumer>(consume), *this);
       }
 

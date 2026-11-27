@@ -275,16 +275,16 @@ namespace telar::gui::qt {
   QVariantList PromptEditorItem::choices() const {
     const auto line = controller_ == nullptr ? ds::none : controller_->line(pane_id_);
     if (!line || !line->menu()) {
-      choices_line_ = nullptr;
+      choices_.line = nullptr;
       return {};
     }
 
-    if (choices_line_ == line->identity() && choices_revision_ == line->revision()) {
-      return choices_;
+    if (choices_.line == line->identity() && choices_.revision == line->revision()) {
+      return choices_.choices;
     }
 
-    choices_line_ = line->identity();
-    choices_revision_ = line->revision();
+    choices_.line = line->identity();
+    choices_.revision = line->revision();
     QVariantList result;
     const auto& menu = *line->menu();
     const auto [first, last] = menuPage(menu);
@@ -329,7 +329,7 @@ namespace telar::gui::qt {
       result.push_back(QVariantMap{{QStringLiteral("text"), QStringLiteral("…")}, {QStringLiteral("description"), QString{}}, {QStringLiteral("selected"), false}});
     }
 
-    choices_ = result;
+    choices_.choices = result;
     return result;
   }
 

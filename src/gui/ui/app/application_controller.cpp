@@ -1051,26 +1051,26 @@ namespace telar::gui::qt {
   void ApplicationController::publishConfiguration() {
     // Qt notifies QML bindings before any connected slot, so the cache is dropped before the
     // signal rather than in a slot of it.
-    colors_.reset();
-    font_.reset();
+    cache_.colors.reset();
+    cache_.font.reset();
     emit configurationChanged();
   }
 
   // Each pane delegate reads the theme a score of times; it is built once per configuration.
   QVariantMap ApplicationController::colors() const {
-    if (!colors_) {
-      colors_ = themeColors(session().configuration);
+    if (!cache_.colors) {
+      cache_.colors = themeColors(session().configuration);
     }
 
-    return *colors_;
+    return *cache_.colors;
   }
 
   QVariantMap ApplicationController::font() const {
-    if (!font_) {
-      font_ = fontSettings(session().configuration.font);
+    if (!cache_.font) {
+      cache_.font = fontSettings(session().configuration.font);
     }
 
-    return *font_;
+    return *cache_.font;
   }
 
   ResolvedFont ApplicationController::resolveFont(qreal scale) {

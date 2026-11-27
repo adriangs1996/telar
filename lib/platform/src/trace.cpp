@@ -1,4 +1,5 @@
 #if TELAR_DEBUG
+
 // Outside the module: the sink imports telar.platform.fs and .thread, which import
 // telar.platform.primitives, whose interface declares these functions in the global module.
 import std;
@@ -14,7 +15,7 @@ import telar.tbc;
 namespace telar::runtime::trace {
   namespace {
 
-    struct Sink {
+    struct [[tbc::shared]] Sink {
       std::mutex mutex;
       std::condition_variable wake;
       std::atomic<bool> enabled{false};

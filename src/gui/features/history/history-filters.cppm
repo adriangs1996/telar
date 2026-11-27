@@ -1,5 +1,4 @@
 module;
-#include "tbc/annotations.hpp"
 
 // The panel's actions and keys, its filter chips and what it says while empty.
 export module telar.gui.features.history:filters;

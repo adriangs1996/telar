@@ -1,5 +1,4 @@
 module;
-#include "tbc/annotations.hpp"
 
 #include <openssl/crypto.h>
 #include <openssl/err.h>
@@ -42,7 +41,7 @@ export {
 
     // A unique_ptr deleter used with every OpenSSL handle type; it stays inline so a release is one direct call.
     template <typename Value, auto Destroy>
-    struct TBC_GENERIC TlsDeleter {
+    struct [[tbc::generic]] TlsDeleter {
       inline void operator()(Value* value) const noexcept {
         Destroy(value);
       }
@@ -180,8 +179,8 @@ export {
       static void* reallocate(void* pointer, std::size_t size, const char* file, int line) noexcept;
 
       // OpenSSL cannot be reinitialized after cleanup, and its callbacks have no context argument.
-      inline static ConcurrentMemory* configured_memory = nullptr;
-      inline static bool configured = false;
+      inline static std::atomic<ConcurrentMemory*> configured_memory{nullptr};
+      inline static std::atomic<bool> configured{false};
     };
 
   }
@@ -250,7 +249,7 @@ export {
 
     // Generic over the caller's environment, so it stays here and hands it to proxyAuthorityDirectoryFrom.
     template <Allocator Memory, EnvironmentLookup Environment>
-    TBC_GENERIC tbc::val_a<ds::String<Memory>> proxyAuthorityDirectory(tbc::mut_a<Memory> memory, const Environment& environment) {
+    [[tbc::generic]] tbc::val_a<ds::String<Memory>> proxyAuthorityDirectory(tbc::mut_a<Memory> memory, const Environment& environment) {
       return proxyAuthorityDirectoryFrom(memory, EnvironmentOf{environment});
     }
 
@@ -336,7 +335,7 @@ export {
       // Generic over the caller's text type, so it stays here and forwards to the string_view constructor.
       template <typename Text>
         requires std::convertible_to<const Text&, std::string_view>
-      TBC_GENERIC Destination(const Text& path) // NOLINT(cppcoreguidelines-explicit-constructor,misc-explicit-constructor,hicpp-explicit-conversions): converts as the string_view constructor does
+      [[tbc::generic]] Destination(const Text& path) // NOLINT(cppcoreguidelines-explicit-constructor,misc-explicit-constructor,hicpp-explicit-conversions): converts as the string_view constructor does
           : Destination(std::string_view{path}) {}
 
       Destination(Backend selected, std::string_view path);
@@ -364,13 +363,13 @@ export {
 
       // Generic over the caller's environment, so it stays here and hands it to keychainFrom.
       template <EnvironmentLookup Environment>
-      TBC_GENERIC static ds::String<ConcurrentMemory> keychain(ConcurrentMemory& memory, const Environment& environment) {
+      [[tbc::generic]] static ds::String<ConcurrentMemory> keychain(ConcurrentMemory& memory, const Environment& environment) {
         return keychainFrom(memory, EnvironmentOf{environment});
       }
 
       // Generic over the caller's environment, so it stays here and hands it to nativeDestinationFrom.
       template <EnvironmentLookup Environment>
-      TBC_GENERIC Destination nativeDestination(ConcurrentMemory& memory, const Environment& environment, ds::Option<Backend> selected = ds::none) const {
+      [[tbc::generic]] Destination nativeDestination(ConcurrentMemory& memory, const Environment& environment, ds::Option<Backend> selected = ds::none) const {
         return nativeDestinationFrom(memory, selected, EnvironmentOf{environment});
       }
 

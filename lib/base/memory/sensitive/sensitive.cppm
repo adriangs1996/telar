@@ -1,6 +1,3 @@
-module;
-#include "tbc/annotations.hpp"
-
 export module telar.base.memory.sensitive;
 
 import std;
@@ -24,7 +21,7 @@ export {
 
     // The release path of every secure container and of SensitiveAllocation, over any composed upstream.
     template <Allocator Upstream>
-    class TBC_SHARED TBC_GENERIC ErasingAllocator {
+    class [[tbc::shared]] [[tbc::generic]] ErasingAllocator {
     public:
       static constexpr bool thread_safe = ConcurrentAllocator<Upstream>;
       static constexpr bool erasing = true;
@@ -58,7 +55,7 @@ export {
   namespace telar {
 
     template <Allocator Upstream>
-    class TBC_SHARED RecyclingAllocator {
+    class [[tbc::shared]] RecyclingAllocator {
     public:
       static constexpr bool thread_safe = false;
       // Every block it releases or keeps for reuse is erased first.
@@ -111,7 +108,7 @@ export {
 
     // Bytes erased on release, allocated from an allocator in region `a`.
     template <Allocator Memory>
-    class TBC_GENERIC SensitiveAllocation {
+    class [[tbc::generic]] SensitiveAllocation {
     public:
       inline explicit SensitiveAllocation(tbc::mut_a<Memory> memory, std::size_t size)
           : memory_(&memory),
@@ -179,7 +176,7 @@ export {
 
     // Generic over its capacity, so no implementation unit can instantiate it for every importer.
     template <std::size_t Capacity>
-    class TBC_GENERIC SensitiveBuffer {
+    class [[tbc::generic]] SensitiveBuffer {
     public:
       inline SensitiveBuffer() noexcept {} // NOLINT(modernize-use-equals-default): user-provided, so that value-initializing one leaves its bytes unwritten
 
@@ -209,7 +206,7 @@ export {
 
     // Generic over its capacity, so no implementation unit can instantiate it for every importer.
     template <std::size_t Capacity>
-    class TBC_GENERIC SensitiveText {
+    class [[tbc::generic]] SensitiveText {
     public:
       inline SensitiveText() noexcept {} // NOLINT(modernize-use-equals-default): user-provided, so that value-initializing one leaves its bytes unwritten
 

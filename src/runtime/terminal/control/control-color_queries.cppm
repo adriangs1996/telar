@@ -1,5 +1,4 @@
 module;
-#include "tbc/annotations.hpp"
 #include "telar_base/diagnostics/config.hpp"
 
 export module telar.runtime.terminal.control:color_queries;
@@ -23,7 +22,7 @@ export namespace telar::runtime::control {
   // views are borrowed only for this synchronous call.
   // Generic over the caller's allocator and response sink, so it stays here.
   template <Allocator Memory>
-  class TBC_GENERIC ColorQueries {
+  class [[tbc::generic]] ColorQueries {
   public:
     // The engine state a query reads and the reply it writes, lent to each call.
     struct Context {

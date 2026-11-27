@@ -1,5 +1,4 @@
 module;
-#include "tbc/annotations.hpp"
 
 #include <lauxlib.h>
 #include <lua.h>
@@ -26,7 +25,7 @@ export {
     public:
       template <typename... Parts>
         requires std::is_constructible_v<ErrorText<message_bytes>, const Parts&...>
-      TBC_GENERIC explicit Error(const Parts&... parts) noexcept
+      [[tbc::generic]] explicit Error(const Parts&... parts) noexcept
           : message_(parts...) {}
 
       [[nodiscard]] const char* what() const noexcept override;
@@ -48,7 +47,7 @@ export {
     // every call mutates it through that pointer, as Rust's Lua handle does through `&self`, so what a
     // value reads of it stays valid. The machine can be neither copied nor moved.
     template <Allocator Memory>
-    class TBC_SHARED Vm {
+    class [[tbc::shared]] Vm {
     public:
       explicit Vm(Memory& memory, Limits limits = {});
       ~Vm();
@@ -150,7 +149,7 @@ export {
 
       // Generic over the caller's visitor, so it stays here and hands the walk to visitNames.
       template <typename Visitor>
-      TBC_GENERIC void visitLoadedNames(lua_State* state, Visitor&& visit) const {
+      [[tbc::generic]] void visitLoadedNames(lua_State* state, Visitor&& visit) const {
         using Target = std::remove_reference_t<Visitor>;
         auto&& visitor = std::forward<Visitor>(visit);
 
@@ -244,7 +243,7 @@ export {
 
       // Generic over the caller's consumer, so it stays here and hands the walk to visitFields.
       template <typename Consumer>
-      TBC_GENERIC void eachField(Consumer&& consume) const {
+      [[tbc::generic]] void eachField(Consumer&& consume) const {
         using Target = std::remove_reference_t<Consumer>;
         auto&& consumer = std::forward<Consumer>(consume);
 
@@ -255,7 +254,7 @@ export {
 
       // Throws an error naming this value's path, then the parts of the message.
       template <typename... Parts>
-      [[noreturn]] TBC_GENERIC void fail(const Parts&... parts) const {
+      [[noreturn]] [[tbc::generic]] void fail(const Parts&... parts) const {
         throw Error{label_.view(), " ", parts...};
       }
 

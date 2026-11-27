@@ -1,5 +1,4 @@
 module;
-#include "tbc/annotations.hpp"
 
 // The inspection of one command: its labels, facts and output, and the modal that shows it.
 export module telar.gui.features.history:inspection;

@@ -4,7 +4,6 @@ static_assert(true);
 #endif
 
 #include "nvim_grid_item.hpp"
-#include "tbc/annotations.hpp"
 #include "ui/kit/cell_scene/terminal_scene.hpp"
 #include "ui/kit/scene/window_animation_clock.hpp"
 #include <QQuickWindow>

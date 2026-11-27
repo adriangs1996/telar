@@ -1,6 +1,3 @@
-module;
-#include "tbc/annotations.hpp"
-
 export module telar.runtime.traffic.proxy.relay_direction;
 
 import std;
@@ -20,7 +17,7 @@ export {
 
     // Generic over the caller's resolver.
     template <HostnameResolver Resolver>
-    class TBC_GENERIC OriginConnection {
+    class [[tbc::generic]] OriginConnection {
     public:
       enum class State : std::uint8_t {
         resolving,
@@ -152,7 +149,7 @@ export {
 
     // The relay's loop for every read, generic over the caller's streams and buffer size.
     template <std::size_t BufferCapacity = default_relay_buffer_bytes>
-    class TBC_GENERIC RelayDirection {
+    class [[tbc::generic]] RelayDirection {
       static_assert(BufferCapacity != 0);
 
     public:

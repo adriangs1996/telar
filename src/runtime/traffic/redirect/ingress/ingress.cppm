@@ -1,6 +1,3 @@
-module;
-#include "tbc/annotations.hpp"
-
 export module telar.runtime.traffic.redirect.ingress;
 
 import std;
@@ -43,7 +40,7 @@ export {
     // lay it out: a copy of constant size, which compiles to loads, rather than a cast. Bytes too
     // few to hold it are a bug, which stops the process.
     template <typename Value>
-    TBC_GENERIC Value loadValue(std::span<const std::byte> bytes) noexcept {
+    [[tbc::generic]] Value loadValue(std::span<const std::byte> bytes) noexcept {
       static_assert(std::is_trivially_copyable_v<Value>);
 
       if (bytes.size() < sizeof(Value)) {
@@ -58,7 +55,7 @@ export {
 
     // Writes `value` over the front of `bytes`, which must hold it.
     template <typename Value>
-    TBC_GENERIC void storeValue(std::span<std::byte> bytes, const Value& value) noexcept {
+    [[tbc::generic]] void storeValue(std::span<std::byte> bytes, const Value& value) noexcept {
       static_assert(std::is_trivially_copyable_v<Value>);
 
       if (bytes.size() < sizeof(Value)) {
@@ -70,13 +67,13 @@ export {
 
     // The address a sockaddr_storage holds, in the layout of its family's sockaddr.
     template <typename Address>
-    TBC_GENERIC Address addressAs(const sockaddr_storage& storage) noexcept {
+    [[tbc::generic]] Address addressAs(const sockaddr_storage& storage) noexcept {
       return loadValue<Address>(std::as_bytes(std::span{&storage, 1}));
     }
 
     // Whether two values of one size hold the same bytes, as memcmp compares them.
     template <typename Left, typename Right>
-    TBC_GENERIC bool sameBytes(const Left& left, const Right& right) noexcept {
+    [[tbc::generic]] bool sameBytes(const Left& left, const Right& right) noexcept {
       static_assert(sizeof(Left) == sizeof(Right));
 
       return std::ranges::equal(std::as_bytes(std::span{&left, 1}), std::as_bytes(std::span{&right, 1}));
@@ -99,7 +96,7 @@ export {
     // Writes one formatted line to stderr, cut at error_line_bytes, without allocating, throwing
     // or stdio's shared state: a failed write is dropped, as fprintf drops it.
     template <typename... Arguments>
-    TBC_GENERIC void writeErrorLine(std::format_string<Arguments...> format, Arguments&&... arguments) noexcept {
+    [[tbc::generic]] void writeErrorLine(std::format_string<Arguments...> format, Arguments&&... arguments) noexcept {
       ds::Array<char, error_line_bytes> line{};
       const auto written = std::format_to_n(line.dataMut(), static_cast<std::ptrdiff_t>(line.size() - 1), format, std::forward<Arguments>(arguments)...);
       const auto length = std::min(static_cast<std::size_t>(written.size), line.size() - 1);
@@ -234,7 +231,7 @@ export {
 
     // Generic over the caller's sink and peer policy.
     template <typename Sink, typename PeerPolicy = PrivilegedPeer>
-    class TBC_GENERIC Ingress {
+    class [[tbc::generic]] Ingress {
       struct Peer {
         FileDescriptor socket;
         Incoming incoming;
@@ -483,7 +480,7 @@ export {
 
     // Generic over the caller's resolver.
     template <HostnameResolver Resolver = SystemNameResolver>
-    class TBC_GENERIC Selection {
+    class [[tbc::generic]] Selection {
       using Resolutions = NameResolutions<Resolver>;
       using Clock = std::chrono::steady_clock;
 

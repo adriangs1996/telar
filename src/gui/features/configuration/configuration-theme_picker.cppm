@@ -1,5 +1,4 @@
 module;
-#include "tbc/annotations.hpp"
 
 // What the theme picker lists and keeps: the presets beside the themes a configuration names,
 // the command it runs once a theme is chosen, and the choice it saves for every window.
@@ -92,7 +91,7 @@ export {
       // Hands each argument to `visit`, the theme's name in place of every one that is exactly
       // "{}" after the program.
       template <typename Visit>
-      TBC_GENERIC void each(std::string_view theme, const Visit& visit) const {
+      [[tbc::generic]] void each(std::string_view theme, const Visit& visit) const {
         auto rest = text_.view();
 
         for (std::size_t index = 0; index < count_; ++index) {

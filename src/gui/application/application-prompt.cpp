@@ -53,15 +53,14 @@ namespace telar::gui::application::prompt {
 
     // The commands people typed, most recent first and each once, for the editor's suggestions.
     void requestHistory(Session& session) {
-      auto& state = session.prompt;
-      if (!session.ready() || !session.configuration.prompt.ghost || features::prompt::historyAsked(state)) {
+      if (!session.ready() || !session.configuration.prompt.ghost || features::prompt::historyAsked(session.prompt)) {
         return;
       }
 
       const auto query = features::prompt::historyQuery(session.link.nextRequest());
 
       if (session.link.offer(query)) {
-        features::prompt::askedHistory(state, query.request_id);
+        features::prompt::askedHistory(session.prompt, query.request_id);
       }
     }
 
@@ -93,6 +92,8 @@ namespace telar::gui::application::prompt {
     void complete(Session& session, std::uint64_t pane_id, shell::Dialect dialect) {
       using features::prompt::SpecState;
       const bool ready = session.ready();
+      const bool reads_directories = session.speaks(handshake::directory_words);
+      const bool reads_references = session.speaks(handshake::reference_words);
       const auto* pane = findPane(session.panes, pane_id);
       auto* line = features::prompt::find(session.prompt_lines, pane_id);
       if (pane == nullptr || line == nullptr) {
@@ -124,7 +125,7 @@ namespace telar::gui::application::prompt {
         }
       }
 
-      auto plan = features::prompt::plan(state, *line, std::move(context.getMut()), {.specified = specified, .asks = asks, .directory = std::string_view{pane->cwd}, .dialect = dialect, .reads_directories = session.speaks(handshake::directory_words), .reads_references = session.speaks(handshake::reference_words)});
+      auto plan = features::prompt::plan(state, *line, std::move(context.getMut()), {.specified = specified, .asks = asks, .directory = std::string_view{pane->cwd}, .dialect = dialect, .reads_directories = reads_directories, .reads_references = reads_references});
 
       for (std::size_t index = 0; index < features::prompt::questions(plan); ++index) {
         const auto request_id = session.link.nextRequest();
@@ -345,7 +346,9 @@ namespace telar::gui::application::prompt {
 
   void text(Session& session, std::uint64_t pane_id, std::string_view text) {
     static_cast<void>(open(session, pane_id));
-    features::prompt::insert(session.prompt, *features::prompt::find(session.prompt_lines, pane_id), text);
+    if (auto* line = features::prompt::find(session.prompt_lines, pane_id)) {
+      features::prompt::insert(session.prompt, *line, text);
+    }
   }
 
   CommandPresence commandPresence(Session& session, std::uint64_t pane_id, std::string_view word) {
@@ -354,6 +357,7 @@ namespace telar::gui::application::prompt {
       return CommandPresence::unknown;
     }
 
+    const bool reads_directories = session.speaks(handshake::directory_words);
     auto& state = session.prompt;
     const auto asked = commands(*pane);
     if (const auto known = features::prompt::presence(state, asked, word)) {
@@ -363,7 +367,7 @@ namespace telar::gui::application::prompt {
     const auto request_id = session.link.nextRequest();
 
     try {
-      const auto query = features::prompt::ask(state.command_root, asked, word, request_id, session.speaks(handshake::directory_words));
+      const auto query = features::prompt::ask(state.command_root, asked, word, request_id, reads_directories);
       if (!query) {
         return CommandPresence::unknown;
       }
@@ -393,12 +397,19 @@ namespace telar::gui::application::prompt {
       requestHistory(session);
     }
 
-    return *features::prompt::find(session.prompt_lines, pane_id);
+    auto* line = features::prompt::find(session.prompt_lines, pane_id);
+    if (line == nullptr) {
+      throw std::logic_error{"Opened prompt line missing"};
+    }
+
+    return *line;
   }
 
   void write(Session& session, std::uint64_t pane_id, std::string_view command) {
     static_cast<void>(open(session, pane_id));
-    features::prompt::write(session.prompt, *features::prompt::find(session.prompt_lines, pane_id), command);
+    if (auto* line = features::prompt::find(session.prompt_lines, pane_id)) {
+      features::prompt::write(session.prompt, *line, command);
+    }
   }
 
   void typeSecret(Session& session, std::uint64_t pane_id, char byte) {

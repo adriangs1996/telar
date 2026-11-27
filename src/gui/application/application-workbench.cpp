@@ -167,8 +167,7 @@ namespace telar::gui::application::workbench {
   }
 
   void reserveBottom(Session& session, ds::Option<PaneBottomReservation> reservation) {
-    auto& state = session.workbench;
-    const auto reserved = feature::reserve(state, reservation, Access::tabsMut(session));
+    const auto reserved = feature::reserve(session.workbench, reservation, session.tabs.viewMut());
 
     if (reserved.changed) {
       ++session.view_version.viewport;
@@ -177,7 +176,7 @@ namespace telar::gui::application::workbench {
     if (reserved.resize) {
       resizeVisible(session);
 
-      feature::resized(state);
+      feature::resized(session.workbench);
     }
   }
 

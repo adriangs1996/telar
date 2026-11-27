@@ -29,12 +29,12 @@ namespace tbc_lint {
       violation kind;
     };
 
-    // TBC_HOT_PATH keeps a body for importers to inline; TBC_GENERIC, one that only the caller's type
-    // can instantiate.
-    constexpr llvm::StringLiteral hot_path = "tbc::hot_path";
-    constexpr llvm::StringLiteral generic = "tbc::generic";
+    // [[tbc::hot_path]] keeps a body for importers to inline; [[tbc::generic]], one that only the
+    // caller's type can instantiate.
+    constexpr llvm::StringLiteral hot_path_attr = "tbc::hot_path";
+    constexpr llvm::StringLiteral generic_attr = "tbc::generic";
 
-    bool annotated(const clang::Decl& declaration, llvm::StringRef mark) {
+    bool hasAttr(const clang::Decl& declaration, llvm::StringRef mark) {
       return llvm::any_of(declaration.redecls(), [mark](const clang::Decl* redeclaration) {
         return llvm::any_of(redeclaration->specific_attrs<clang::AnnotateAttr>(), [mark](const clang::AnnotateAttr* attribute) {
           return attribute->getAnnotation() == mark;
@@ -50,12 +50,12 @@ namespace tbc_lint {
           continue;
         }
 
-        if (annotated(*record, mark)) {
+        if (hasAttr(*record, mark)) {
           return true;
         }
 
         const auto* specialization = llvm::dyn_cast<clang::ClassTemplateSpecializationDecl>(record);
-        if (specialization != nullptr && annotated(*specialization->getSpecializedTemplate()->getTemplatedDecl(), mark)) {
+        if (specialization != nullptr && hasAttr(*specialization->getSpecializedTemplate()->getTemplatedDecl(), mark)) {
           return true;
         }
       }
@@ -66,7 +66,7 @@ namespace tbc_lint {
     // The semantic parents reach the class of a member defined outside it; the lexical ones, the class
     // that defines a friend.
     bool marked(const clang::Decl& declaration, llvm::StringRef mark) {
-      return annotated(declaration, mark) || insideMarkedClass(declaration.getDeclContext(), false, mark) || insideMarkedClass(declaration.getLexicalDeclContext(), true, mark);
+      return hasAttr(declaration, mark) || insideMarkedClass(declaration.getDeclContext(), false, mark) || insideMarkedClass(declaration.getLexicalDeclContext(), true, mark);
     }
 
     // Collects the bodies a module interface unit keeps in its purview. A body's local classes and
@@ -140,12 +140,12 @@ namespace tbc_lint {
 
         const auto* primary = function.getPrimaryTemplate();
         const auto carries = [&](llvm::StringRef mark) {
-          return marked(function, mark) || (primary != nullptr && annotated(*primary->getTemplatedDecl(), mark));
+          return marked(function, mark) || (primary != nullptr && hasAttr(*primary->getTemplatedDecl(), mark));
         };
 
         const auto templated = function.isTemplated();
 
-        if (carries(generic)) {
+        if (carries(generic_attr)) {
           if (!templated) {
             bodies_.push_back(body{.location = function.getLocation(), .kind = violation::not_template});
           }
@@ -153,7 +153,7 @@ namespace tbc_lint {
           return;
         }
 
-        if (!carries(hot_path)) {
+        if (!carries(hot_path_attr)) {
           bodies_.push_back(body{.location = function.getLocation(), .kind = violation::body});
         } else if (!templated && !function.isInlined()) {
           bodies_.push_back(body{.location = function.getLocation(), .kind = violation::not_inline});
@@ -175,11 +175,11 @@ namespace tbc_lint {
             return;
           }
 
-          if (marked(owner, generic)) {
+          if (marked(owner, generic_attr)) {
             if (!owner.isTemplated()) {
               bodies_.push_back(body{.location = lambda->getBeginLoc(), .kind = violation::not_template});
             }
-          } else if (!marked(owner, hot_path)) {
+          } else if (!marked(owner, hot_path_attr)) {
             bodies_.push_back(body{.location = lambda->getBeginLoc(), .kind = violation::body});
           }
 
@@ -311,9 +311,9 @@ namespace tbc_lint {
     }
 
     const auto severity = errors_ ? clang::DiagnosticsEngine::Error : clang::DiagnosticsEngine::Warning;
-    const auto in_interface = diagnostics.getCustomDiagID(severity, "function body in the interface of module '%0'; define it in an implementation unit, mark a hot path TBC_HOT_PATH, or mark a template over its caller's type TBC_GENERIC [tbc-interface-body]");
+    const auto in_interface = diagnostics.getCustomDiagID(severity, "function body in the interface of module '%0'; define it in an implementation unit, mark a hot path [[tbc::hot_path]], or mark a template over its caller's type [[tbc::generic]] [tbc-interface-body]");
     const auto not_inline = diagnostics.getCustomDiagID(severity, "hot path in the interface of module '%0' is not inline, so importers cannot inline its body [tbc-interface-body]");
-    const auto not_template = diagnostics.getCustomDiagID(severity, "TBC_GENERIC body in the interface of module '%0' is neither a template nor a member of one; define it in an implementation unit [tbc-interface-body]");
+    const auto not_template = diagnostics.getCustomDiagID(severity, "[[tbc::generic]] body in the interface of module '%0' is neither a template nor a member of one; define it in an implementation unit [tbc-interface-body]");
 
     const auto identifier = [&](violation kind) {
       if (kind == violation::body) {

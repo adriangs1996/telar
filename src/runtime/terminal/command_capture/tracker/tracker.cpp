@@ -458,6 +458,10 @@ namespace telar::runtime {
     constexpr std::string_view names_option = ";names=";
 
     if (body.contains(names_option)) {
+      if (memory_ == nullptr) {
+        return false;
+      }
+
       // The last option, so its names may be anything but the sequence's terminators.
       const auto names = body.substr(body.find(names_option) + names_option.size());
 

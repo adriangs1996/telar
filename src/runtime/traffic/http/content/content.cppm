@@ -1,6 +1,3 @@
-module;
-#include "tbc/annotations.hpp"
-
 export module telar.runtime.traffic.http.content;
 
 import std;
@@ -61,7 +58,7 @@ export {
     // The allocator a C codec calls back through its context pointer. Its blocks stay valid whatever is
     // allocated after them, as the erasing allocator and the block table it wraps keep theirs.
     template <Allocator Memory>
-    class TBC_SHARED DecoderMemory {
+    class [[tbc::shared]] DecoderMemory {
     public:
       explicit DecoderMemory(Memory& memory) noexcept;
 

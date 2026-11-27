@@ -109,6 +109,10 @@ analyze depth="shallow": lint-scope (configure "dev")
 lint-scope: tbc-configure
     "{{ cpp }}" build tbc -B lib/tbc/out/release -- --target tbc-tidy-scope
 
+# Build the Clang compiler plugin that parses [[tbc::...]] attributes and runs checks during compilation.
+tbc-plugin: tbc-configure
+    "{{ cpp }}" build tbc -B lib/tbc/out/release -- --target tbc-plugin
+
 # Build the optimized lifetime checker that the repository's .tbc.json names.
 lifetime-checker: tbc-configure
     "{{ cpp }}" build tbc -B lib/tbc/out/release -- --target tbc-lint
@@ -116,6 +120,10 @@ lifetime-checker: tbc-configure
 # Check the lifetimes of the C++ sources of the dev tree.
 lifetime: lifetime-checker (configure "dev")
     "{{ cpp }}" exec -- cmake -DCHECK=lifetime "-DBUILD_DIRECTORY={{ build_dir }}/dev" -P cmake/scripts/check.cmake
+
+# Check static indexing bounds of the C++ sources of the dev tree.
+bounds: lifetime-checker (configure "dev")
+    "{{ cpp }}" exec -- cmake -DCHECK=bounds "-DBUILD_DIRECTORY={{ build_dir }}/dev" -P cmake/scripts/check.cmake
 
 # Run tbc-lint's four checks over the dev tree in one pass, which parses each source once.
 checks: lifetime-checker (configure "dev")
@@ -171,7 +179,7 @@ ebnf-test *args:
     GTEST_COLOR=yes "{{ cpp }}" test ci -- -L lib.ebnf -V "$@"
 
 # Configure the tree of PRESET; a tree with tests runs the GUI's integration tests against the development CLI.
-configure preset="dev":
+configure preset="dev": tbc-plugin
     "{{ cpp }}" configure {{ preset }} -- {{ if preset == "release" { "" } else if preset == "dist" { "" } else { test_options } }}
 
 playground:

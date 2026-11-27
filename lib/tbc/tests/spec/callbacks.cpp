@@ -3,7 +3,7 @@
 // CASE: gui.deferred_borrowed_capture
 // PAIR: gui.deferred_capture
 // SOURCE: src/gui/ui/app/overlays/machine_prompt/machine_profiles_source.cpp :: start
-// STATUS: pending
+// STATUS: implemented
 // CONTRACT: enqueue retains its callback after the caller returns; captures must outlive execution.
 // SCENARIO: Capturing a string_view by value copies a pointer, not the local string's bytes.
 void deferredBorrowedCapture() {
@@ -19,7 +19,7 @@ void deferredBorrowedCapture() {
 // CASE: gui.deferred_owned_capture
 // PAIR: gui.deferred_capture
 // SOURCE: src/gui/ui/app/overlays/machine_prompt/machine_profiles_source.hpp :: Request
-// STATUS: pending
+// STATUS: implemented
 // CONTRACT: Owning request data moves into the retained callback and survives its producer.
 // SCENARIO: The worker owns a copy of input instead of borrowing the input descriptor.
 void deferredOwnedCapture() {
@@ -35,7 +35,7 @@ void deferredOwnedCapture() {
 // CASE: gui.inline_borrowed_capture
 // PAIR: gui.deferred_capture
 // SOURCE: src/gui/ui/app/panes/terminal/history/layout/history_filters_layout.cpp :: chipRecord
-// STATUS: pending
+// STATUS: implemented
 // CONTRACT: invokeNow invokes and destroys its callback before returning; it does not retain captures.
 // SCENARIO: A borrowed local is valid for the entire synchronous callback execution.
 void inlineBorrowedCapture() {
@@ -51,7 +51,7 @@ void inlineBorrowedCapture() {
 // CASE: runtime.published_borrowed_request
 // PAIR: runtime.request_snapshot
 // SOURCE: src/runtime/paths/query_task/query_task.cppm :: OwnedPathQuery::assign
-// STATUS: pending
+// STATUS: implemented
 // CONTRACT: A request retained by a deferred task must not borrow a producer's stack strings.
 // SCENARIO: An owning aggregate containing string_view fields is still a borrowed request.
 void publishedBorrowedRequest() {
@@ -73,7 +73,7 @@ void publishedBorrowedRequest() {
 // CASE: runtime.published_owned_request
 // PAIR: runtime.request_snapshot
 // SOURCE: src/runtime/paths/query_task/query_task.cppm :: OwnedPathQuery::assign
-// STATUS: pending
+// STATUS: implemented
 // CONTRACT: An owned snapshot copies each retained request field before publication.
 // SCENARIO: Deep-copy root/query and move the aggregate into the deferred task.
 void publishedOwnedRequest() {
@@ -95,7 +95,7 @@ void publishedOwnedRequest() {
 // CASE: gui.context_bound_capture
 // PAIR: gui.callback_context
 // SOURCE: src/gui/ui/kit/cell_scene/window_images.cpp :: scheduleTimer / QMetaObject::invokeMethod
-// STATUS: pending
+// STATUS: implemented
 // CONTRACT: The future adapter model must cancel callbacks before the captured context is destroyed.
 // SCENARIO: A deferred borrow is legal when execution is bounded by that same referent's lifetime.
 void contextBoundCapture() {
@@ -110,7 +110,7 @@ void contextBoundCapture() {
 // CASE: gui.unrelated_context_capture
 // PAIR: gui.callback_context
 // SOURCE: src/gui/ui/kit/cell_scene/window_images.cpp :: scheduleTimer / QMetaObject::invokeMethod
-// STATUS: pending
+// STATUS: implemented
 // CONTRACT: Binding callback lifetime to one context does not protect unrelated captured storage.
 // SCENARIO: The caller's context can survive the local source; reject this retained capture.
 void unrelatedContextCapture(tbc::view<const spec::callback_context&> context) {

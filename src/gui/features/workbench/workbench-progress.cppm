@@ -1,5 +1,4 @@
 module;
-#include "tbc/annotations.hpp"
 
 // The progress a pane reports, as its bar moves to each report and turns while it is unknown.
 export module telar.gui.features.workbench:progress;
@@ -26,7 +25,7 @@ export {
 
       // Generic over the caller's cosine, so it stays here; a few float operations per frame.
       template <Cosine Function = StandardCosine>
-      [[nodiscard]] TBC_GENERIC static Frame indeterminate(std::uint64_t now_ns) noexcept {
+      [[nodiscard]] [[tbc::generic]] static Frame indeterminate(std::uint64_t now_ns) noexcept {
         const auto phase = static_cast<float>(now_ns % period_ns) / static_cast<float>(period_ns);
         const auto angle = phase * 2 * std::numbers::pi_v<float>;
         const auto cosine = Function::evaluate(angle);

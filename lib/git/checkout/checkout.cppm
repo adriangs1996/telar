@@ -1,6 +1,3 @@
-module;
-#include "tbc/annotations.hpp"
-
 export module telar.git.checkout;
 
 import std;
@@ -135,7 +132,7 @@ export {
       // `run(command)` returns the command's exit status and its output; `reject()` throws the
       // caller's failure.
       template <typename Run, typename Reject>
-      TBC_GENERIC void inspect(Run&& run, Reject&& reject) {
+      [[tbc::generic]] void inspect(Run&& run, Reject&& reject) {
         // Stays generic over the caller's runner and failure; the listing is read in the implementation unit.
         const auto [status, text] = with({"config", "--show-scope", "-z", "--get-regexp", R"(^(filter\.|extensions\.partialclone$|remote\..*\.(promisor|partialclonefilter|uploadpack)$))"}, run);
         const auto may_fetch = overrideFilters(status, text);
@@ -156,7 +153,7 @@ export {
       // in the repository; a command keeps its address, so it lives for this call. The result borrows
       // only what `use` holds, region `a`, never `use` itself, as a Rust closure's result does.
       template <typename Use>
-      TBC_GENERIC tbc::val_a<std::invoke_result_t<Use&, Command<Memory>&>> with(std::span<const std::string_view> arguments, tbc::holds<Use&&, tbc::lt::a> use) const {
+      [[tbc::generic]] tbc::val_a<std::invoke_result_t<Use&, Command<Memory>&>> with(std::span<const std::string_view> arguments, tbc::holds<Use&&, tbc::lt::a> use) const {
         // Stays generic over the caller's use of the command; its command line is built in the implementation unit.
         auto command = commandFor(arguments);
 
@@ -165,7 +162,7 @@ export {
       }
 
       template <typename Use>
-      TBC_GENERIC tbc::val_a<std::invoke_result_t<Use&, Command<Memory>&>> with(std::initializer_list<std::string_view> arguments, tbc::holds<Use&&, tbc::lt::a> use) const {
+      [[tbc::generic]] tbc::val_a<std::invoke_result_t<Use&, Command<Memory>&>> with(std::initializer_list<std::string_view> arguments, tbc::holds<Use&&, tbc::lt::a> use) const {
         // Stays generic over the caller's use of the command.
         return with(std::span{arguments.begin(), arguments.size()}, std::forward<Use>(use));
       }

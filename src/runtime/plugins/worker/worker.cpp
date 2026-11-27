@@ -209,17 +209,17 @@ namespace telar::runtime::plugins {
   }
 
   tbc::val_a<ds::Array<char*, TapWorkerOptions::argument_capacity>> TapWorkerOptions::arguments(tbc::ref_a<TapWorkerOptions> options, tbc::val_a<const char*> executable) noexcept {
-    ds::Array<char*, argument_capacity> words{const_cast<char*>(executable), const_cast<char*>(command.data()), const_cast<char*>(options.entry)}; // NOLINT(cppcoreguidelines-pro-type-const-cast): execve takes argv as char* const[], and never writes the words
+    ds::Array<char*, argument_capacity> words{tbc::raw(const_cast<char*>(executable)), tbc::raw(const_cast<char*>(command.data())), tbc::raw(const_cast<char*>(options.entry))}; // NOLINT(cppcoreguidelines-pro-type-const-cast): execve takes argv as char* const[], and never writes the words
     std::size_t count = 3;
 
     if (options.traffic) {
-      words.atMut(count++) = const_cast<char*>("--traffic"); // NOLINT(cppcoreguidelines-pro-type-const-cast): execve takes argv as char* const[], and never writes the words
+      words.atMut(count++) = tbc::raw(const_cast<char*>("--traffic")); // NOLINT(cppcoreguidelines-pro-type-const-cast): execve takes argv as char* const[], and never writes the words
     }
 
 #if TELAR_DEBUG
     if (options.trace_path != nullptr) {
-      words.atMut(count++) = const_cast<char*>("--trace");          // NOLINT(cppcoreguidelines-pro-type-const-cast): execve takes argv as char* const[], and never writes the words
-      words.atMut(count++) = const_cast<char*>(options.trace_path); // NOLINT(cppcoreguidelines-pro-type-const-cast): execve takes argv as char* const[], and never writes the words
+      words.atMut(count++) = tbc::raw(const_cast<char*>("--trace"));          // NOLINT(cppcoreguidelines-pro-type-const-cast): execve takes argv as char* const[], and never writes the words
+      words.atMut(count++) = tbc::raw(const_cast<char*>(options.trace_path)); // NOLINT(cppcoreguidelines-pro-type-const-cast): execve takes argv as char* const[], and never writes the words
     }
 
 #endif

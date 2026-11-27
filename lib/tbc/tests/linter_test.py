@@ -158,6 +158,18 @@ class PublicSignatureTest(unittest.TestCase):
         )
         self.assertEqual(result.returncode, 0, result.stderr)
 
+    def test_two_level_regions_and_outlives_compile_as_ordinary_cpp(self):
+        result = self.compile_source(
+            'struct stream { std::string_view text; };\n'
+            'using outer_stream = tbc::view<const stream &, tbc::lt::b, tbc::lt::a>;\n'
+            'tbc::val_a<std::string_view> read(outer_stream s) { return s.text; }\n'
+            'template <typename tag = void>\n'
+            'tbc::val_a<std::string_view> readConcept(tbc::val_b<std::string_view> s)\n'
+            '  requires tbc::outlives<tbc::lt::b, tbc::lt::a>\n'
+            '{ return s; }\n',
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+
     def test_invalid_signature_types_are_rejected_by_the_compiler(self):
         invalid = {
             "not_a_region": 'tbc::view<std::string_view, int>',

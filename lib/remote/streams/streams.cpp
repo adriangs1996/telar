@@ -182,6 +182,10 @@ namespace telar::remote {
       }
 
       void queueExit() noexcept {
+        if (process_ == nullptr) {
+          return;
+        }
+
         const auto status = process_->reap(process_->context);
         if (!status || outgoing_.room().size() < header_bytes + sizeof(std::uint32_t)) {
           return;

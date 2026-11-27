@@ -42,7 +42,7 @@ namespace telar::runtime {
 #endif
 
   SqliteAllocator::SqliteAllocator(ConcurrentMemory& memory) {
-    if (active_memory != nullptr || sqlite3_config(SQLITE_CONFIG_GETMALLOC, &previous_) != SQLITE_OK) { // NOLINT(cppcoreguidelines-pro-type-vararg): sqlite3_config's C signature is variadic
+    if (active_memory.load(std::memory_order_acquire) != nullptr || sqlite3_config(SQLITE_CONFIG_GETMALLOC, &previous_) != SQLITE_OK) { // NOLINT(cppcoreguidelines-pro-type-vararg): sqlite3_config's C signature is variadic
       throw std::logic_error{"SQLite allocation must be configured before opening databases"};
     }
 
@@ -63,7 +63,7 @@ namespace telar::runtime {
     if (sqlite3_initialize() != SQLITE_OK) {
       sqlite3_shutdown();
       sqlite3_config(SQLITE_CONFIG_MALLOC, &previous_); // NOLINT(cppcoreguidelines-pro-type-vararg): sqlite3_config's C signature is variadic
-      active_memory = nullptr;
+      active_memory.store(nullptr, std::memory_order_release);
       throw std::bad_alloc{};
     }
   }
@@ -71,11 +71,11 @@ namespace telar::runtime {
   SqliteAllocator::~SqliteAllocator() {
     sqlite3_shutdown();
     sqlite3_config(SQLITE_CONFIG_MALLOC, &previous_); // NOLINT(cppcoreguidelines-pro-type-vararg): sqlite3_config's C signature is variadic
-    active_memory = nullptr;
+    active_memory.store(nullptr, std::memory_order_release);
   }
 
   int SqliteAllocator::initialize(void* context) noexcept {
-    active_memory = static_cast<ConcurrentMemory*>(context);
+    active_memory.store(static_cast<ConcurrentMemory*>(context), std::memory_order_release);
     return SQLITE_OK;
   }
 
@@ -86,7 +86,12 @@ namespace telar::runtime {
       return nullptr;
     }
 
-    auto* header = static_cast<Header*>(active_memory->allocate(sizeof(Header) + static_cast<std::size_t>(bytes), alignof(Header)));
+    auto* memory = active_memory.load(std::memory_order_acquire);
+    if (memory == nullptr) {
+      return nullptr;
+    }
+
+    auto* header = static_cast<Header*>(memory->allocate(sizeof(Header) + static_cast<std::size_t>(bytes), alignof(Header)));
     if (header == nullptr) {
       return nullptr;
     }
@@ -108,7 +113,9 @@ namespace telar::runtime {
     auto* header = static_cast<Header*>(pointer) - 1;
 #pragma clang unsafe_buffer_usage end
 
-    active_memory->deallocate(header, sizeof(Header) + static_cast<std::size_t>(header->bytes), alignof(Header));
+    if (auto* memory = active_memory.load(std::memory_order_acquire)) {
+      memory->deallocate(header, sizeof(Header) + static_cast<std::size_t>(header->bytes), alignof(Header));
+    }
   }
 
   void* SqliteAllocator::reallocate(void* pointer, int bytes) noexcept {

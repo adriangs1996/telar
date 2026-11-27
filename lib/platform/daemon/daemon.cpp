@@ -6,6 +6,7 @@ import telar.sys.process;
 import telar.sys.socket;
 import telar.platform.error;
 import telar.base.ds;
+import telar.tbc;
 
 namespace telar::runtime::cli {
 
@@ -51,7 +52,7 @@ namespace telar::runtime::cli {
 
     arguments.reserve((2 * options.engine_argument_count) + other_arguments);
     const auto append = [&](std::string_view value) {
-      arguments.push(const_cast<char*>(value.data())); // NOLINT(cppcoreguidelines-pro-type-const-cast): posix_spawn's C signature takes the arguments as char*, and does not write them
+      arguments.push(tbc::raw(const_cast<char*>(value.data()))); // NOLINT(cppcoreguidelines-pro-type-const-cast): posix_spawn's C signature takes the arguments as char*, and does not write them
     };
 
     append(executable.view());

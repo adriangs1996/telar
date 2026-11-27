@@ -1,5 +1,4 @@
 module;
-#include "tbc/annotations.hpp"
 #include "telar_platform/trace_macro.hpp"
 
 export module telar.runtime.host.process_probe;
@@ -113,7 +112,7 @@ export {
 
     // Reads the operating system's process table: every query is const and keeps no state, so threads
     // share one inspector.
-    class TBC_SHARED ProcessInspector {
+    class [[tbc::shared]] ProcessInspector {
     public:
       explicit ProcessInspector(const AgentManifests& manifests = builtinManifests(), uid_t uid = ::geteuid()) noexcept;
 
@@ -165,7 +164,7 @@ export {
 
     // Kept whole: tests instantiate it with their own fake Inspector (descent_test's GatedLineageInspector).
     template <LineageInspector Inspector>
-    class TBC_GENERIC DescentProbe {
+    class [[tbc::generic]] DescentProbe {
     public:
       static constexpr std::size_t batch_capacity = 32;
 
@@ -274,7 +273,7 @@ export {
     // Kept whole: tests instantiate it with their own fake Inspector (process_identification_test's
     // LeaderlessGroupInspector).
     template <ProcessProbeInspector Inspector>
-    class TBC_SHARED TBC_GENERIC ProcessProbe {
+    class [[tbc::shared]] [[tbc::generic]] ProcessProbe {
     public:
       static constexpr std::size_t batch_capacity = 16;
 

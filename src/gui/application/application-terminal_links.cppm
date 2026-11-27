@@ -1,5 +1,4 @@
 module;
-#include "tbc/annotations.hpp"
 
 // The links in a terminal as ui drives them: the types a terminal's pointer holds over a link,
 // and a file link opened in an editor beside its pane.
@@ -59,7 +58,7 @@ export namespace telar::gui::application::terminal::links {
   // Opens `path` in an editor: in a pane beside pane `source_id`, or in a tab without one. A
   // relative path is anchored at that pane's cwd, after `environment` expands it.
   template <PathEnvironment Environment>
-  TBC_GENERIC void openFile(Session& session, const FilePath& path, std::string_view executable, const Environment& environment, ds::Option<std::uint64_t> source_id = {}) {
+  [[tbc::generic]] void openFile(Session& session, const FilePath& path, std::string_view executable, const Environment& environment, ds::Option<std::uint64_t> source_id = {}) {
     const auto anchor = base(session, path, executable, source_id);
     const auto anchored = anchor ? PathExpansion::expand({.text = path.text(), .base = *anchor}, environment) : PathExpansion::PathText{};
 

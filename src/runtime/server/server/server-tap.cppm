@@ -1,6 +1,3 @@
-module;
-#include "tbc/annotations.hpp"
-
 export module telar.runtime.server.server:tap;
 
 import std;
@@ -15,7 +12,7 @@ export {
 
     // Generic over the caller's plugins, and called for every captured exchange.
     template <typename Plugins>
-    class TBC_GENERIC Tap {
+    class [[tbc::generic]] Tap {
     public:
       inline explicit Tap(Plugins& plugins, Service* traffic) noexcept
           : plugins_(plugins),

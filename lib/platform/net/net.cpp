@@ -76,6 +76,7 @@ namespace telar::runtime {
     if (::getsockopt(socket, SOL_SOCKET, SO_PEERCRED, &credentials, &length) != 0 || length != sizeof(credentials)) {
       return ds::none;
     }
+
     return PeerCredentials{credentials.uid, credentials.gid};
 #endif
   }

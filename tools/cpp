@@ -179,6 +179,12 @@ def main():
             options = ['-G', 'Ninja', '-DCMAKE_BUILD_TYPE=' + args.config, '-DCMAKE_TOOLCHAIN_FILE=' + str(chain),
                        '-DLLVM_DIR=' + str(llvm / 'lib/cmake/llvm'), '-DClang_DIR=' + str(llvm / 'lib/cmake/clang')]
         else:
+            plugin_disabled = any(arg.startswith('-DTELAR_TBC_PLUGIN=OFF') for arg in extra)
+            plugin_override = any(arg.startswith('-DTBC_PLUGIN=') for arg in extra)
+            if not plugin_disabled and not plugin_override and not (ROOT / 'lib/tbc/out/release/tbc-plugin.so').is_file():
+                tbc_build = ROOT / 'lib/tbc/out/release'
+                run(sys.executable, __file__, 'configure', TBC, '-B', str(tbc_build), '--config', 'Release', '--', '-DBUILD_TESTING=OFF')
+                run(sys.executable, __file__, 'build', TBC, '-B', str(tbc_build), '--', '--target', 'tbc-plugin')
             options = ['--preset', preset]
             if not any(arg.startswith('-DGHOSTTY_VT_ROOT=') for arg in extra):
                 options.append('-DGHOSTTY_VT_ROOT=' + str(vt()))

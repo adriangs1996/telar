@@ -21,7 +21,22 @@ typedef struct {
   bool dirty, configured, opaque, blurred, warned;
 } telar_background_effect;
 
+#ifdef __cplusplus
+[[tbc::raw]]
+#endif
 void telar_background_effect_global(telar_background_effect* self, uint32_t name, const char* interface);
+
+#ifdef __cplusplus
+[[tbc::raw]]
+#endif
 void telar_background_effect_remove(telar_background_effect* self, uint32_t name);
+
+#ifdef __cplusplus
+[[tbc::raw]]
+#endif
 bool telar_background_effect_apply(telar_background_effect* self, telar_gui_viewport viewport, float opacity, uint32_t blur);
+
+#ifdef __cplusplus
+[[tbc::raw]]
+#endif
 void telar_background_effect_deinit(telar_background_effect* self);

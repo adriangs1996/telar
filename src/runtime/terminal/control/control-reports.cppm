@@ -1,6 +1,3 @@
-module;
-#include "tbc/annotations.hpp"
-
 export module telar.runtime.terminal.control:reports;
 
 import std;
@@ -26,7 +23,7 @@ export namespace telar::runtime::control {
 
   // Generic over the caller's allocator and response sink, so it stays here.
   template <Allocator Memory>
-  class TBC_GENERIC Reports {
+  class [[tbc::generic]] Reports {
   public:
     explicit Reports(Memory& memory)
         : reply_(memory) {}

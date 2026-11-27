@@ -1,5 +1,4 @@
 module;
-#include "tbc/annotations.hpp"
 
 #include "telar_config/graphics/limits.hpp"
 
@@ -58,7 +57,7 @@ export {
     // The value of `name` in `names` as an enum whose values follow the table. Stays in the
     // interface because it is a template over the caller's enum; the lookup is out of line.
     template <typename Enum, std::size_t Count>
-    [[nodiscard]] TBC_GENERIC ds::Option<Enum> optionalChoice(const lua::Value& value, const ds::Array<std::string_view, Count>& names) {
+    [[nodiscard]] [[tbc::generic]] ds::Option<Enum> optionalChoice(const lua::Value& value, const ds::Array<std::string_view, Count>& names) {
       const auto index = optionalChoiceIndex(value, names);
 
       return index ? ds::Option{static_cast<Enum>(*index)} : ds::none;
@@ -71,7 +70,7 @@ export {
 
     // Stays in the interface because it is a template over the caller's integer type.
     template <typename Integer>
-    [[nodiscard]] TBC_GENERIC ds::Option<Integer> optionalWhole(const lua::Value& value, Bounds<double> bounds) {
+    [[nodiscard]] [[tbc::generic]] ds::Option<Integer> optionalWhole(const lua::Value& value, Bounds<double> bounds) {
       const auto number = optionalWholeValue(value, bounds);
 
       return number ? ds::Option{static_cast<Integer>(*number)} : ds::none;

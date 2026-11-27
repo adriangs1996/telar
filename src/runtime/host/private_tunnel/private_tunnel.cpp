@@ -8,6 +8,7 @@ import telar.sys.apple;
 #endif
 #ifdef __linux__
 import telar.sys.linux_api;
+import telar.tbc;
 #endif
 
 #ifdef __linux__
@@ -49,7 +50,8 @@ namespace telar::runtime {
       return -1;
     }
 
-    std::uint32_t family;
+    std::uint32_t family = 0;
+
     std::memcpy(&family, bytes.data(), sizeof(family));
     family = ntohl(family);
     if (family != AF_INET && family != AF_INET6) {
@@ -58,9 +60,11 @@ namespace telar::runtime {
     }
 
     tun_pi header{};
+
     header.proto = htons(family == AF_INET ? ETH_P_IP : ETH_P_IPV6);
     const auto payload = bytes.subspan(family_bytes);
-    const ds::Array buffers{iovec{&header, sizeof(header)}, iovec{const_cast<std::uint8_t*>(payload.data()), payload.size()}};
+    const ds::Array buffers{iovec{&header, sizeof(header)}, iovec{tbc::raw(const_cast<std::uint8_t*>(payload.data())), payload.size()}};
+
     return ::writev(tunnel_.get(), buffers.data(), buffers.size());
   }
 

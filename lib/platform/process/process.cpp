@@ -281,8 +281,8 @@ namespace telar::runtime {
         .executable = executable_.data(),
         .cwd = cwd_.data(),
         // POSIX declares argv and envp `char* const[]` for C's sake and never writes them.
-        .arguments = const_cast<char* const*>(argument_pointers_.data()),
-        .environment = const_cast<char* const*>(environment_pointers_.data()),
+        .arguments = tbc::raw(const_cast<char* const*>(argument_pointers_.data())),
+        .environment = tbc::raw(const_cast<char* const*>(environment_pointers_.data())),
         .size = size,
     };
   }

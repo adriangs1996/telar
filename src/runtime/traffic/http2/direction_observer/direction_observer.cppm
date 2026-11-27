@@ -1,6 +1,3 @@
-module;
-#include "tbc/annotations.hpp"
-
 export module telar.runtime.traffic.http2.direction_observer;
 
 import std;
@@ -106,7 +103,7 @@ export {
         requires requires(Visitor visit, std::string_view name, std::string_view value) {
           { visit(name, value) } noexcept -> std::same_as<void>;
         }
-      TBC_GENERIC bool decode(std::span<const std::uint8_t> bytes, Visitor visit) noexcept {
+      [[tbc::generic]] bool decode(std::span<const std::uint8_t> bytes, Visitor visit) noexcept {
         if (!ready_) {
           return false;
         }
@@ -197,7 +194,7 @@ export {
 
       // Generic over the caller's sink, and called for every chunk relayed.
       template <Http2EventSink Sink>
-      TBC_GENERIC void observe(std::span<const std::uint8_t> bytes, Sink& sink) noexcept {
+      [[tbc::generic]] void observe(std::span<const std::uint8_t> bytes, Sink& sink) noexcept {
         framing_.feed(bytes, [&](const Http2FrameEvent& event) noexcept {
           switch (event.kind) {
           case Http2FrameEvent::Kind::begin:
@@ -232,7 +229,7 @@ export {
       void beginFrame(const Http2Frame& frame) noexcept;
 
       template <Http2EventSink Sink>
-      TBC_GENERIC void payload(const Http2FrameEvent& event, Sink& sink) noexcept {
+      [[tbc::generic]] void payload(const Http2FrameEvent& event, Sink& sink) noexcept {
         if (event.frame.kind == Http2FrameKind::data && !event.bytes.empty()) {
           Http2StreamTracker::Response response;
 
@@ -276,7 +273,7 @@ export {
       }
 
       template <Http2EventSink Sink>
-      TBC_GENERIC void finishFrame(const Http2Frame& frame, Sink& sink) noexcept {
+      [[tbc::generic]] void finishFrame(const Http2Frame& frame, Sink& sink) noexcept {
         if (frame.containsHeaders()) {
           if (frame.has(Http2Flag::end_headers)) {
             continuation_stream_ = 0;
@@ -300,7 +297,7 @@ export {
       }
 
       template <Http2EventSink Sink>
-      TBC_GENERIC void finishHeaders(Sink& sink) noexcept {
+      [[tbc::generic]] void finishHeaders(Sink& sink) noexcept {
         const auto metadata = statistics_.decode_failed ? Http2HeaderMetadata{} : decodeHeaders(sink);
 
         if (block_kind_ == BlockKind::headers) {
@@ -325,7 +322,7 @@ export {
       }
 
       template <Http2EventSink Sink>
-      TBC_GENERIC void finishStream(std::uint32_t stream, Sink& sink) noexcept {
+      [[tbc::generic]] void finishStream(std::uint32_t stream, Sink& sink) noexcept {
         if (direction_ == Http2Direction::request) {
           sink.emit({.kind = Http2Event::Kind::request_finished, .stream = stream});
           streams_.finishRequest(stream);
@@ -336,7 +333,7 @@ export {
       }
 
       template <Http2EventSink Sink>
-      TBC_GENERIC Http2HeaderMetadata decodeHeaders(Sink& sink) noexcept {
+      [[tbc::generic]] Http2HeaderMetadata decodeHeaders(Sink& sink) noexcept {
         Http2HeaderMetadata metadata;
         const bool decoded = decoder_.decode(block_.bytes().first(block_length_), [&](std::string_view name, std::string_view value) noexcept {
           if (block_kind_ == BlockKind::headers) {
@@ -394,7 +391,7 @@ export {
 
       // Generic over the caller's sink, and called for every chunk relayed.
       template <Http2EventSink Sink>
-      TBC_GENERIC void observe(std::span<const std::uint8_t> bytes, Sink& sink) noexcept {
+      [[tbc::generic]] void observe(std::span<const std::uint8_t> bytes, Sink& sink) noexcept {
         if (direction_ == Http2Direction::request && preface_offset_ < client_preface.size()) {
           const auto count = std::min(client_preface.size() - preface_offset_, bytes.size());
           if (std::memcmp(bytes.data(), client_preface.data() + preface_offset_, count) != 0) {

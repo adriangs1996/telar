@@ -45,10 +45,12 @@ namespace telar::gui::application::paths {
       return false;
     }
 
-    auto& state = session.paths;
+    const auto word = caretWord(session, pane->id);
+    ds::String<Memory> seed_text{session.memory};
 
-    features::paths::open(state, pane->id, pane->cwd, caretWord(session, pane->id));
-    search(session, features::paths::seed(state).text);
+    seed_text.assign(word.text);
+    features::paths::open(session.paths, pane->id, pane->cwd, {.pane_id = word.pane_id, .begin = word.begin, .text = seed_text.view()});
+    search(session, features::paths::seed(session.paths).text);
 
     return true;
   }
@@ -58,11 +60,11 @@ namespace telar::gui::application::paths {
   }
 
   bool search(Session& session, std::string_view query) {
-    auto& state = session.paths;
-    if (!session.ready() || features::paths::page(state).paneId() == 0) {
+    if (!session.ready() || features::paths::page(session.paths).paneId() == 0) {
       return false;
     }
 
+    auto& state = session.paths;
     const auto request = features::paths::search(state, query, session.link.nextRequest());
 
     if (!session.link.offer(request)) {
@@ -101,20 +103,19 @@ namespace telar::gui::application::paths {
   }
 
   bool insert(Session& session, std::size_t selection, bool absolute) {
-    auto& state = session.paths;
-    if (!features::paths::insertable(state)) {
+    if (!features::paths::insertable(session.paths)) {
       return false;
     }
 
     const auto* pane = focusedPane(session.panes, session.tabs, session.active_tab);
     if (!session.ready() || pane == nullptr || !pane->attached || pane->exited || terminal::copy_mode::view(session).active()) {
-      features::paths::report(state, "Input is busy; retry");
+      features::paths::report(session.paths, "Input is busy; retry");
 
       return false;
     }
 
     const bool editor = prompt::edits(session, pane->id);
-    const auto paste = features::paths::insertion(state, {.selection = selection, .absolute = absolute, .bracketed = !editor && pane->screen.modes().bracketed_paste});
+    const auto paste = features::paths::insertion(session.paths, {.selection = selection, .absolute = absolute, .bracketed = !editor && pane->screen.modes().bracketed_paste});
     if (!paste) {
       return false;
     }
@@ -130,7 +131,7 @@ namespace telar::gui::application::paths {
         prompt::text(session, pane_id, text.view());
       }
     } catch (const std::length_error&) {
-      features::paths::report(state, "Input is busy; retry");
+      features::paths::report(session.paths, "Input is busy; retry");
 
       return false;
     }

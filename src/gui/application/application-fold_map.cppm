@@ -1,6 +1,3 @@
-module;
-#include "tbc/annotations.hpp"
-
 export module telar.gui.application:fold_map;
 
 import std;
@@ -19,7 +16,7 @@ export namespace telar::gui::application {
   // order, the last one taking the rest, and when it shows more rows than it has, its last row
   // stands for the display rows past them.
   template <Allocator Memory = telar::Memory>
-  class TBC_GENERIC FoldMap {
+  class [[tbc::generic]] FoldMap {
   public:
     struct Span {
       // The first row and how many rows from it the span stands for.

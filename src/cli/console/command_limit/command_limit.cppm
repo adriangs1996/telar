@@ -1,6 +1,3 @@
-module;
-#include "tbc/annotations.hpp"
-
 export module telar.cli.console.command_limit;
 
 import std;
@@ -164,7 +161,7 @@ export {
       ~DescriptorWriter() = default;
 
       template <typename... Arguments>
-      TBC_GENERIC void print(std::format_string<Arguments...> format, Arguments&&... arguments) {
+      [[tbc::generic]] void print(std::format_string<Arguments...> format, Arguments&&... arguments) {
         std::format_to(Appender{this}, format, std::forward<Arguments>(arguments)...);
       }
 
@@ -172,7 +169,7 @@ export {
 
     private:
       // Called for each character the text formats to.
-      struct TBC_HOT_PATH Appender {
+      struct [[tbc::hot_path]] Appender {
         using difference_type = std::ptrdiff_t;
 
         DescriptorWriter* writer;
@@ -195,7 +192,7 @@ export {
         }
       };
 
-      TBC_HOT_PATH inline void push(char character) {
+      [[tbc::hot_path]] inline void push(char character) {
         if (used_ == buffer_.size()) {
           flush();
         }
@@ -212,7 +209,7 @@ export {
 
     // Writes the formatted text to `descriptor`, as one write when it fits the writer's buffer.
     template <typename... Arguments>
-    TBC_GENERIC void writeFormatted(int descriptor, std::format_string<Arguments...> format, Arguments&&... arguments) {
+    [[tbc::generic]] void writeFormatted(int descriptor, std::format_string<Arguments...> format, Arguments&&... arguments) {
       DescriptorWriter writer{descriptor};
 
       writer.print(format, std::forward<Arguments>(arguments)...);
@@ -260,7 +257,7 @@ struct std::formatter<telar::runtime::cli::EscapedField, char> {
   }
 
   template <typename Context>
-  TBC_GENERIC tbc::val_a<typename Context::iterator> format(const telar::runtime::cli::EscapedField& field, tbc::mut_a<Context> context) const {
+  [[tbc::generic]] tbc::val_a<typename Context::iterator> format(const telar::runtime::cli::EscapedField& field, tbc::mut_a<Context> context) const {
     auto output = context.out();
 
     for (const char character : field.text) {
@@ -296,7 +293,7 @@ struct std::formatter<telar::runtime::cli::NumberOrNull<Number>, char> {
   }
 
   template <typename Context>
-  TBC_GENERIC tbc::val_a<typename Context::iterator> format(const telar::runtime::cli::NumberOrNull<Number>& number, tbc::mut_a<Context> context) const {
+  [[tbc::generic]] tbc::val_a<typename Context::iterator> format(const telar::runtime::cli::NumberOrNull<Number>& number, tbc::mut_a<Context> context) const {
     return number.value ? std::format_to(context.out(), "{}", *number.value) : std::format_to(context.out(), "null");
   }
 };
@@ -308,7 +305,7 @@ struct std::formatter<telar::runtime::cli::LimitDescription, char> {
   }
 
   template <typename Context>
-  TBC_GENERIC tbc::val_a<typename Context::iterator> format(const telar::runtime::cli::LimitDescription& description, tbc::mut_a<Context> context) const {
+  [[tbc::generic]] tbc::val_a<typename Context::iterator> format(const telar::runtime::cli::LimitDescription& description, tbc::mut_a<Context> context) const {
     const auto& reach = description.reach;
     auto output = std::format_to(context.out(), "{}: ", reach.name);
     const std::string_view space = reach.noun.empty() ? "" : " ";

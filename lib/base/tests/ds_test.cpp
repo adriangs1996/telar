@@ -3,8 +3,6 @@
 static_assert(true);
 #endif
 
-#include "tbc/annotations.hpp"
-
 import std;
 import telar.testing;
 import telar.base.ds;
@@ -17,7 +15,7 @@ namespace {
   using namespace telar;
 
   // How many values are alive, shared by all of them as a Rust `Rc<Cell<i32>>` would be.
-  class TBC_SHARED Lives {
+  class [[tbc::shared]] Lives {
   public:
     void born() noexcept {
       ++count_;

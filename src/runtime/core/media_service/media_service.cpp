@@ -1,5 +1,4 @@
 module;
-#include "tbc/annotations.hpp"
 #include "telar_base/diagnostics/config.hpp"
 #include "telar_platform/trace_macro.hpp"
 
@@ -284,6 +283,9 @@ namespace telar::runtime {
       agents.changed();
     }
 
+    bool failed = false;
+    ds::Option<DescriptionRequest> request;
+
     for (auto& agent : agents.recordsMut()) {
       if (agent->description_phase != DescriptionPhase::queued) {
         continue;
@@ -295,16 +297,21 @@ namespace telar::runtime {
         agent.getMut().description_capture.clear();
         agent.getMut().description_phase = DescriptionPhase::running;
         agent.getMut().description_revision = ++description_revision_;
-        return DescriptionRequest{.identity = {.pane = agent->pane, .generation = agent->generation, .session = agent->session_id, .revision = agent->description_revision}, .query = std::move(query)};
+        request = DescriptionRequest{.identity = {.pane = agent->pane, .generation = agent->generation, .session = agent->session_id, .revision = agent->description_revision}, .query = std::move(query)};
+        break;
       } catch (const EncodingError&) {
         agent.getMut().description_capture.clear();
         agent.getMut().description_phase = DescriptionPhase::failed;
         agent.getMut().title_state = AgentTitleState::failed;
-        agents.changed();
+        failed = true;
       }
     }
 
-    return ds::none;
+    if (failed) {
+      agents.changed();
+    }
+
+    return request;
   }
 
   ds::Option<HistorySessionTitle> DescriptionQueue::completeDescription(AgentRegistry<ConcurrentMemory>& agents, const DescriptionResult& result) {

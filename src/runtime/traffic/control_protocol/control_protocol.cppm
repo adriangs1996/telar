@@ -1,6 +1,3 @@
-module;
-#include "tbc/annotations.hpp"
-
 export module telar.runtime.traffic.control_protocol;
 
 import std;
@@ -438,7 +435,7 @@ export {
     };
 
     // What hooks decide about proxied flows, which every flow reports to at once.
-    class TBC_SHARED FlowControl {
+    class [[tbc::shared]] FlowControl {
     public:
       using Time = std::chrono::steady_clock::time_point;
       static constexpr std::size_t chunk_bytes = std::size_t{64} * 1024;
@@ -473,7 +470,7 @@ export {
     };
 
     // What hooks decide about intercepted HTTP, which every relay asks at once, as FlowControl.
-    class TBC_SHARED HttpControl {
+    class [[tbc::shared]] HttpControl {
     public:
       virtual ~HttpControl() = default;
       virtual HttpPolicy policy(const FlowEvent& context) noexcept = 0;

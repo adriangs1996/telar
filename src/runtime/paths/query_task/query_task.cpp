@@ -582,6 +582,7 @@ namespace telar::runtime {
         }
 
         const auto before = storage_.count;
+
         if (!appendTracked(relative, directories)) {
           return false;
         }

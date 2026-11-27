@@ -1,5 +1,4 @@
 module;
-#include "tbc/annotations.hpp"
 #include "telar_platform/trace_macro.hpp"
 
 export module telar.runtime.core.persistence.session_store;
@@ -191,7 +190,7 @@ export {
 
       // Generic over the caller's consumer, which each record is handed to.
       template <typename Consumer>
-      TBC_GENERIC inline void read(Consumer consume) {
+      [[tbc::generic]] inline void read(Consumer consume) {
         for (;;) {
           const auto kind = u8::decode(input_);
           if (kind > static_cast<Byte>(Kind::places)) {
@@ -283,7 +282,7 @@ export {
 
     // Kept whole: generic over the pane launcher, PaneService in telar.runtime.core, which imports this module.
     template <PaneLauncher Panes>
-    class TBC_GENERIC Restore {
+    class [[tbc::generic]] Restore {
     public:
       // The panes it launches keep the allocator, so everything the restore reaches lives in region `a`.
       inline explicit Restore(tbc::mut_a<ConcurrentMemory> memory, tbc::mut_a<RuntimeModel> model, tbc::mut_a<Panes> panes, tbc::mut_a<ClientLayouts> layouts, bool resume_agents)
@@ -384,7 +383,9 @@ export {
         const auto registered = model_.worktrees.registerEntry(record.registration, record.id);
 
         if (record.workspace != 0) {
-          model_.worktrees.find(registered.worktree)->workspace = record.workspace;
+          if (auto* worktree = model_.worktrees.find(registered.worktree)) {
+            worktree->workspace = record.workspace;
+          }
         }
       }
 
@@ -392,7 +393,12 @@ export {
         const TerminalSize size{.cols = record.columns == 0 ? std::uint16_t{80} : record.columns, .rows = record.rows == 0 ? std::uint16_t{24} : record.rows, .cell_width_px = 0, .cell_height_px = 0};
         const auto restored = panes_.launchExplorer(model_, {.location = TabLocation{.workspace = {.id = record.workspace}, .tab_id = record.tab}, .size = size}, record.cwd, record.id).core.id;
 
-        model_.workspaces.find(record.workspace)->tabMut(record.tab)->panes.push(restored);
+        if (auto* workspace = model_.workspaces.find(record.workspace)) {
+          if (auto* tab = workspace->tabMut(record.tab)) {
+            tab->panes.push(restored);
+          }
+        }
+
         if (record.explorer.empty()) {
           return;
         }
@@ -450,7 +456,12 @@ export {
         if (record.kind == PaneKind::nvim) {
           const auto restored = panes_.launchEditor(model_, {.location = TabLocation{.workspace = {.id = record.workspace}, .tab_id = record.tab}, .size = size}, Launch{.cwd = record.cwd, .arguments = std::span<const std::string_view>{original}.first(record.argument_count)}, record.id).core.id;
 
-          model_.workspaces.find(record.workspace)->tabMut(record.tab)->panes.push(restored);
+          if (auto* target_workspace = model_.workspaces.find(record.workspace)) {
+            if (auto* target_tab = target_workspace->tabMut(record.tab)) {
+              target_tab->panes.push(restored);
+            }
+          }
+
           return;
         }
 
@@ -458,7 +469,12 @@ export {
         // No client asked for it: its shell keeps its prompt, which telar's editor covers.
         const auto identity = panes_.launch(model_, {.location = TabLocation{.workspace = {.id = record.workspace}, .tab_id = record.tab}, .size = size}, command, record.id).core.id;
 
-        model_.workspaces.find(record.workspace)->tabMut(record.tab)->panes.push(identity);
+        if (auto* target_workspace = model_.workspaces.find(record.workspace)) {
+          if (auto* target_tab = target_workspace->tabMut(record.tab)) {
+            target_tab->panes.push(identity);
+          }
+        }
+
         // A restored pane is a terminal: its record is the command that runs on its PTY.
         auto pane = requireTerminal(model_.panes, identity);
 
@@ -626,7 +642,7 @@ export {
     // only the stamps that tell whether the session changed.
     // Kept whole: generic over the agents, AgentService in telar.runtime.core and persistence_test's SnapshotAgents.
     template <AgentSource Agents>
-    class TBC_GENERIC Snapshot {
+    class [[tbc::generic]] Snapshot {
     public:
       // The bytes view the buffer.
       inline static tbc::val_a<std::span<const Byte>> encode(const RuntimeModel& model, const ClientLayouts& layouts, const Agents& agents, tbc::val_a<std::span<Byte>> buffer, std::size_t& dropped) {
@@ -749,7 +765,7 @@ export {
 
     // Kept whole: generic over the agents, AgentService in telar.runtime.core, which imports this module.
     template <AgentSource Agents>
-    class TBC_GENERIC SessionStore {
+    class [[tbc::generic]] SessionStore {
       using Clock = std::chrono::steady_clock;
 
     public:

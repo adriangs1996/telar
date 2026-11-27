@@ -1,5 +1,4 @@
 module;
-#include "tbc/annotations.hpp"
 #include "telar_base/diagnostics/config.hpp"
 
 export module telar.runtime.terminal.control:pty_response_queue;
@@ -12,7 +11,7 @@ export namespace telar::runtime {
 
   // Responses a terminal produces and its pane's writer drains, under one mutex. Like a Rust channel, it
   // is shared by both ends and its implementation is trusted.
-  class TBC_SHARED PtyResponseQueue {
+  class [[tbc::shared]] PtyResponseQueue {
   public:
     static constexpr std::size_t message_capacity = 64;
     static constexpr std::size_t message_byte_capacity = 1024;
@@ -37,7 +36,7 @@ export namespace telar::runtime {
 
       // Generic over the reply's length, which the caller fixes, so it stays here.
       template <std::size_t Length>
-      TBC_GENERIC bool tryPushFixed(const ds::Array<std::uint8_t, Length>& response) noexcept {
+      [[tbc::generic]] bool tryPushFixed(const ds::Array<std::uint8_t, Length>& response) noexcept {
         static_assert(Length <= message_byte_capacity);
 
         if (!acquire()) {
@@ -127,7 +126,7 @@ export namespace telar::runtime {
 
     // A fixed reply copies its known length, which the producer's caller fixes, so it stays here.
     template <std::size_t Length>
-    TBC_GENERIC bool appendFixed(const ds::Array<std::uint8_t, Length>& response) noexcept {
+    [[tbc::generic]] bool appendFixed(const ds::Array<std::uint8_t, Length>& response) noexcept {
       if (!admits(Length)) {
         return false;
       }

@@ -279,33 +279,40 @@ namespace telar::runtime {
     // Where this account's trash keeps files: the one of its home, or the one of the volume
     // `top` is the root of, as macOS and the XDG trash specification place them.
     tbc::val_a<Path> trashFiles(tbc::mut_a<ConcurrentMemory> memory, std::string_view top) {
+#ifdef __APPLE__
       Path directory{memory};
 
-#ifdef __APPLE__
       if (top.empty()) {
         directory.assign(accountHome());
         directory.append("/.Trash");
       } else {
         ds::formatTo(directory, "{}/.Trashes/{}", top == "/" ? std::string_view{} : top, ::getuid());
       }
+
+      return directory;
 #else
       if (top.empty()) {
         const char* data = std::getenv("XDG_DATA_HOME"); // NOLINT(concurrency-mt-unsafe): the runtime does not change its environment once it started
 
         if (data != nullptr && data[0] == '/') {
-          directory.assign(data);
-        } else {
-          directory.assign(accountHome());
-          directory.append("/.local/share");
+          Path directory{memory, std::string_view{data}};
+
+          directory.append("/Trash/files");
+          return directory;
         }
 
-        directory.append("/Trash/files");
-      } else {
-        ds::formatTo(directory, "{}/.Trash-{}/files", top == "/" ? std::string_view{} : top, ::getuid());
-      }
-#endif
+        Path directory{memory};
 
+        directory.assign(accountHome());
+        directory.append("/.local/share/Trash/files");
+        return directory;
+      }
+
+      Path directory{memory};
+
+      ds::formatTo(directory, "{}/.Trash-{}/files", top == "/" ? std::string_view{} : top, ::getuid());
       return directory;
+#endif
     }
 
     // The root of the volume `path` is on: the highest directory above it on the same device.

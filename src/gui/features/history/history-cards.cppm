@@ -1,5 +1,4 @@
 module;
-#include "tbc/annotations.hpp"
 
 // The rows of the panel: a command's card, its facts and the footer under the list.
 export module telar.gui.features.history:cards;
@@ -169,7 +168,7 @@ export {
 
       // Stays here: generic over the caller's sink, which the facts reach through a function pointer.
       template <HistoryFactSink Sink>
-      TBC_GENERIC static void visit(const HistoryFactData& data, Sink& sink) {
+      [[tbc::generic]] static void visit(const HistoryFactData& data, Sink& sink) {
         auto call = [&sink](std::string_view text, PaletteRole color) {
           sink(text, color);
         };

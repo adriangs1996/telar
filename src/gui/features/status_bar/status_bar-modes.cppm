@@ -1,5 +1,4 @@
 module;
-#include "tbc/annotations.hpp"
 
 // The mode bar's words: the mode that holds the keyboard, the keys it answers and the prefix
 // bindings it hints at.
@@ -52,7 +51,7 @@ export {
       // Stays here: generic over the caller's router.
       template <PrefixHintRouter Router>
       // The labels of the hints a router binds are literals.
-      [[nodiscard]] TBC_GENERIC static tbc::val_static<ModeHints> resolve(const Router& router) noexcept {
+      [[nodiscard]] [[tbc::generic]] static tbc::val_static<ModeHints> resolve(const Router& router) noexcept {
         ModeHints result;
 
         for (const auto& [action, label] : actions) {

@@ -1,6 +1,3 @@
-module;
-#include "tbc/annotations.hpp"
-
 export module telar.runtime.terminal.control:parser;
 
 import std;
@@ -17,7 +14,7 @@ export namespace telar::runtime::control {
 
   // Generic over the caller's allocator and consumer, so it stays here.
   template <Allocator Memory>
-  class TBC_GENERIC Parser {
+  class [[tbc::generic]] Parser {
   public:
     static constexpr std::size_t inline_bytes = 256;
     static constexpr std::size_t header_limit = 8192;

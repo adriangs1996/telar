@@ -73,8 +73,7 @@ class SpecRunnerTest(unittest.TestCase):
 
     def test_metadata_has_provenance_and_both_outcomes(self):
         cases = spec_runner.load_cases()
-        self.assertTrue(any(case.fields["STATUS"] == "pending" for case in cases))
-        self.assertTrue(any(case.fields["STATUS"] == "implemented" for case in cases))
+        self.assertTrue(all(case.fields["STATUS"] == "implemented" for case in cases))
         self.assertTrue(all(case.fields["CONTRACT"] and case.fields["SCENARIO"] for case in cases))
 
     def test_fixtures_use_the_public_contract_api(self):
@@ -88,7 +87,7 @@ class SpecRunnerTest(unittest.TestCase):
                 continue
             with self.subTest(source=path.name):
                 text = path.read_text()
-                self.assertIsNone(re.search(r"\bTBC_[A-Z_]+\s*\(", text))
+                self.assertIsNone(re.search(r"\bTBC_(?!OUTLIVES\b)[A-Z_]+\s*\(", text))
                 self.assertNotIn("clang::annotate", text)
                 self.assertNotIn("function_contract", text)
                 self.assertNotIn("type_contract", text)

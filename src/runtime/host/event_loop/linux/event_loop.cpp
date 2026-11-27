@@ -14,12 +14,12 @@ namespace telar::runtime {
 
     void notify(int number) noexcept {
       const int saved_error = sys::lastError();
-      auto& registration = registrations.atMut(number);
+      auto& registration = registrations.slots.atMut(number);
       registration.writers.fetch_add(1);
       const auto destination = registration.destination.load();
       if (destination > 0 && !registration.pending.exchange(true)) {
         const auto value = static_cast<unsigned char>(number);
-        ssize_t count;
+        ssize_t count = 0;
         do {
           count = ::write(destination - 1, &value, sizeof(value));
         } while (count < 0 && sys::lastError() == EINTR);
@@ -43,7 +43,7 @@ namespace telar::runtime {
   Epoll<Memory>::~Epoll() {
     for (int number = 1; number < NSIG; ++number) {
       if (signals_[number]) {
-        auto& registration = linux_signals::registrations.atMut(number);
+        auto& registration = linux_signals::registrations.slots.atMut(number);
         registration.destination.store(0);
         ::sigaction(number, &previous_signals_[number], nullptr);
         while (registration.writers.load() != 0) {
@@ -94,7 +94,7 @@ namespace telar::runtime {
     if (signals_[number]) {
       return;
     }
-    auto& registration = linux_signals::registrations.atMut(number);
+    auto& registration = linux_signals::registrations.slots.atMut(number);
     if (registration.destination.load() != 0) {
       throw SystemError{"Runtime signal already has an event queue", EBUSY};
     }
@@ -133,7 +133,7 @@ namespace telar::runtime {
     const timespec duration{.tv_sec = seconds.count(), .tv_nsec = (timeout - seconds).count()};
     // glibc's epoll_pwait2 and musl, which declares none, both reach this kernel call; with no
     // mask, the kernel ignores the mask's size.
-    const auto count = static_cast<int>(::syscall(SYS_epoll_pwait2, queue_.get(), kernel_events_.data(), kernel_events_.size(), &duration, nullptr, 0));
+    const auto count = static_cast<int>(::syscall(SYS_epoll_pwait2, queue_.get(), kernel_events_.dataMut(), kernel_events_.size(), &duration, nullptr, 0));
     if (count < 0) {
       if (sys::lastError() == EINTR) {
         return {};
@@ -154,7 +154,7 @@ namespace telar::runtime {
         const auto ignored = ::read(descriptor, pending.dataMut(), pending.size());
         (void)ignored;
         for (int number = 1; number < NSIG; ++number) {
-          if (signals_[number] && linux_signals::registrations.atMut(number).pending.exchange(false)) {
+          if (signals_[number] && linux_signals::registrations.slots.atMut(number).pending.exchange(false)) {
             events[produced++] = {EventKind::signal, number, 0, false};
           }
         }
@@ -189,7 +189,7 @@ namespace telar::runtime {
     const auto mask = enabled ? interest.mask | kind : interest.mask & ~kind;
     if (mask == 0) {
       remove(descriptor);
-      interest.token = token;
+      interests_.atMut(descriptor).token = token;
       return;
     }
 

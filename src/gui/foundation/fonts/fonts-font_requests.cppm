@@ -1,6 +1,3 @@
-module;
-#include "tbc/annotations.hpp"
-
 export module telar.gui.foundation.fonts:font_requests;
 
 import std;
@@ -29,7 +26,7 @@ export {
     struct FontCascade {
       // Generic over the caller's font provider; asked once per text run that needs a face.
       template <FontProvider Fonts>
-      TBC_GENERIC [[nodiscard]] static ds::Option<FontRole> source(Fonts& fonts, std::string_view text, FontRole preferred) {
+      [[tbc::generic]] [[nodiscard]] static ds::Option<FontRole> source(Fonts& fonts, std::string_view text, FontRole preferred) {
         if (FontCoverage::covers(fonts.face(preferred), text)) {
           return preferred;
         }

@@ -1,5 +1,4 @@
 module;
-#include "tbc/annotations.hpp"
 #include "telar_base/diagnostics/config.hpp"
 
 export module telar.runtime.terminal.control:size_report;
@@ -41,7 +40,7 @@ export namespace telar::runtime::control {
 
   // Generic over the caller's allocator, so it stays here.
   template <SizeReport Kind, Allocator Memory>
-  TBC_GENERIC void sizeReport(Reply<Memory>& reply, TerminalSize size) {
+  [[tbc::generic]] void sizeReport(Reply<Memory>& reply, TerminalSize size) {
     // Two uint16 dimensions and two uint32 products fit, including separators.
     constexpr std::size_t maximum_reply_bytes = 48;
     static_assert(sizeof(size.rows) == sizeof(std::uint16_t));

@@ -540,12 +540,11 @@ namespace telar::gui::application::explorer {
     // it is asked for them once, they are taken when it answers, and it is given them again
     // when they changed, which no key does that only moves the cursor.
     void remember(Session& session, View& view, const Context& context) {
-      auto& state = session.explorer;
-
       if (!context.local || !available(session)) {
         return;
       }
 
+      auto& state = session.explorer;
       if (state.recall == feature::Recall::unasked) {
         if (const auto request = session.link.ask(QueryPlaces{})) {
           feature::recalling(state, *request);

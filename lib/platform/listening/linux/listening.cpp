@@ -129,7 +129,8 @@ namespace telar::runtime {
     constexpr std::size_t link_bytes = 64;
     constexpr std::string_view prefix = "socket:[";
     ds::Array<ListeningSocket, maximum_sockets> sockets;
-    const auto listening = std::span{sockets}.first(listeningSockets(user, sockets.viewMut()));
+    const auto socket_count = listeningSockets(user, sockets.viewMut());
+    const auto listening = std::span{sockets}.first(socket_count);
     ds::Array<pid_t, maximum_group_processes> members;
     std::size_t count = 0;
 
@@ -138,7 +139,8 @@ namespace telar::runtime {
     }
 
     // A process holds a listening socket when one of its descriptors names the socket's inode.
-    for (const auto member : std::span{members}.first(processGroupMembers(group, members.viewMut()))) {
+    const auto member_count = processGroupMembers(group, members.viewMut());
+    for (const auto member : std::span{members}.first(member_count)) {
       ds::Array<char, sizeof("/proc//fd") + std::numeric_limits<pid_t>::digits10 + 1> path{};
 
       std::format_to_n(path.dataMut(), path.size() - 1, "/proc/{}/fd", member);
@@ -171,7 +173,8 @@ namespace telar::runtime {
   std::size_t userListeningPorts(uid_t user, std::span<std::uint16_t> ports) noexcept {
     constexpr std::size_t maximum_sockets = 512;
     ds::Array<ListeningSocket, maximum_sockets> sockets;
-    const auto listening = sockets.viewMut().first(listeningSockets(user, sockets.viewMut()));
+    const auto socket_count = listeningSockets(user, sockets.viewMut());
+    const auto listening = sockets.viewMut().first(socket_count);
 
     // A port bound on both families listens twice and is told once.
     std::ranges::sort(listening, {}, &ListeningSocket::port);

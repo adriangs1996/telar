@@ -1,5 +1,4 @@
 module;
-#include "tbc/annotations.hpp"
 
 // The command history panel: searching the commands run in every pane, paging through them,
 // inspecting one with its output, and the panel's presentation.
@@ -45,7 +44,7 @@ export namespace telar::gui::features::history {
   // What the panel reads of the history: a view of the state, valid until a use case changes it.
   // Inline, as the pointer reads it on every move over the panel.
   // A view of a history browser, region `a`: what it reads lies in the browser, not in the view.
-  class TBC_HOT_PATH HistoryView {
+  class [[tbc::hot_path]] HistoryView {
   public:
     inline explicit HistoryView(tbc::ref_a<HistoryBrowser<Memory>> browser) noexcept
         : browser_(&browser) {}
@@ -134,7 +133,7 @@ export namespace telar::gui::features::history {
     tbc::val_a<const HistoryBrowser<Memory>*> browser_;
   };
 
-  [[nodiscard]] TBC_HOT_PATH inline HistoryView view(const State& state) noexcept;
+  [[nodiscard]] [[tbc::hot_path]] inline HistoryView view(const State& state) noexcept;
 
   // A new search: `request` says what to look for, its query text read by HistorySearch (a
   // leading '!' asks for failures only). Returns the request to send; throws EncodingError when

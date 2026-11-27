@@ -430,7 +430,7 @@ namespace telar::runtime {
   }
 
   bool FrameSync::acknowledge(std::uint64_t frame_id) noexcept {
-    TELAR_DIAGNOSTIC(diagnostics::TimedScope timing{counters_.ack});
+    TELAR_DIAGNOSTIC(diagnostics::TimedScope timing{counters_.value.ack});
     if (frame_id == 0 || frame_id != outstanding_id_) {
       return false;
     }
@@ -462,7 +462,7 @@ namespace telar::runtime {
 
   std::span<const Byte> FrameSync::prepare(const Screen& screen) {
     TELAR_TRACE("frame_sync.prepare");
-    TELAR_DIAGNOSTIC(diagnostics::TimedScope timing{counters_.encode});
+    TELAR_DIAGNOSTIC(diagnostics::TimedScope timing{counters_.value.encode});
     if (screen.cols != previous_header_.cols || screen.rows != previous_header_.rows) {
       outstanding_id_ = 0;
       snapshot_pending_ = true;
@@ -497,7 +497,7 @@ namespace telar::runtime {
     } else {
       appendDamage(screen, written);
       if (spans_.empty() && !metadata_changed && sameHeader(header, previous_header_)) {
-        TELAR_DIAGNOSTIC(diagnostics::accumulate(counters_.noop_frames));
+        TELAR_DIAGNOSTIC(diagnostics::accumulate(counters_.value.noop_frames));
         observed_revision_ = screen.revision;
         metadata_revision_ = screen.metadata_revision;
         return {};
@@ -547,8 +547,12 @@ namespace telar::runtime {
   }
 
 #if TELAR_DIAGNOSTICS
+  diagnostics::FrameCounters FrameSync::Counters::take() const noexcept {
+    return std::exchange(value, {});
+  }
+
   diagnostics::FrameCounters FrameSync::takeCounters() const noexcept {
-    return std::exchange(counters_, {});
+    return counters_.take();
   }
 #endif
 
@@ -592,8 +596,8 @@ namespace telar::runtime {
         --end;
       }
 
-      TELAR_DIAGNOSTIC(diagnostics::accumulate(counters_.damaged_rows));
-      TELAR_DIAGNOSTIC(diagnostics::accumulate(counters_.diff_scanned_cells, first - row_start + row_start + screen.cols - end + (first < end ? 2 : 0)));
+      TELAR_DIAGNOSTIC(diagnostics::accumulate(counters_.value.damaged_rows));
+      TELAR_DIAGNOSTIC(diagnostics::accumulate(counters_.value.diff_scanned_cells, first - row_start + row_start + screen.cols - end + (first < end ? 2 : 0)));
 
       if (first == end) {
         continue;
@@ -626,13 +630,13 @@ namespace telar::runtime {
 
 #if TELAR_DIAGNOSTICS
   void FrameSync::recordFrame(std::size_t bytes, bool snapshot) noexcept {
-    diagnostics::accumulate(counters_.frames);
-    diagnostics::accumulate(counters_.frame_bytes, bytes);
-    diagnostics::accumulate(counters_.frame_spans, spans_.size());
-    diagnostics::accumulate(counters_.snapshots, static_cast<std::uint64_t>(snapshot));
-    diagnostics::accumulate(counters_.cursor_only_frames, static_cast<std::uint64_t>(spans_.empty()));
+    diagnostics::accumulate(counters_.value.frames);
+    diagnostics::accumulate(counters_.value.frame_bytes, bytes);
+    diagnostics::accumulate(counters_.value.frame_spans, spans_.size());
+    diagnostics::accumulate(counters_.value.snapshots, static_cast<std::uint64_t>(snapshot));
+    diagnostics::accumulate(counters_.value.cursor_only_frames, static_cast<std::uint64_t>(spans_.empty()));
     for (const auto& span : spans_) {
-      diagnostics::accumulate(counters_.frame_cells, span.count);
+      diagnostics::accumulate(counters_.value.frame_cells, span.count);
     }
   }
 #endif

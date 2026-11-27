@@ -1,6 +1,3 @@
-module;
-#include "tbc/annotations.hpp"
-
 export module telar.config.gui;
 
 import std;
@@ -183,7 +180,7 @@ export {
       // table's order. Both view the strings the Lua state holds. Stays in the interface because
       // it is a template over the caller's callable.
       template <typename Consume>
-      TBC_GENERIC static void named(const lua::Value& configuration, const Consume& consume) {
+      [[tbc::generic]] static void named(const lua::Value& configuration, const Consume& consume) {
         const auto themes = configuration.field("themes");
         if (!themes.present()) {
           return;

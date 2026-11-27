@@ -1,5 +1,4 @@
 module;
-#include "tbc/annotations.hpp"
 
 // How a path is inserted at the shell and how the picker shows its matches, labels, hints and
 // where it sits beside the cursor.
@@ -167,7 +166,7 @@ export {
       // The footer places only its own literal hints; the status is measured, not kept.
       // Generic over the caller's measure, so it stays here.
       template <TextColumnMeasure MeasureColumns>
-      [[nodiscard]] TBC_GENERIC static tbc::val_static<PathPickerFooter> measure(CellRectangle row, std::string_view status, bool mac_style, MeasureColumns measure_columns) {
+      [[nodiscard]] [[tbc::generic]] static tbc::val_static<PathPickerFooter> measure(CellRectangle row, std::string_view status, bool mac_style, MeasureColumns measure_columns) {
         PathPickerFooter result;
         const auto& labels = mac_style ? mac_hints : pc_hints;
         std::uint32_t used = measure_columns(status) + status_gap;

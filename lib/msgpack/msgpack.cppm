@@ -1,6 +1,3 @@
-module;
-#include "tbc/annotations.hpp"
-
 export module telar.msgpack;
 
 import std;
@@ -83,7 +80,7 @@ export namespace telar::msgpack {
   // Reads the values of a buffer one head at a time. A typed read that finds another kind, or
   // the end of the input, fails the reader for good: a caller reads a whole message and asks
   // `failed()` once.
-  class TBC_HOT_PATH Reader {
+  class [[tbc::hot_path]] Reader {
   public:
     constexpr explicit Reader(tbc::val_a<std::span<const std::uint8_t>> input) noexcept
         : input_(input) {}

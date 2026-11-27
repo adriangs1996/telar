@@ -182,7 +182,7 @@ namespace telar {
       }
 
       // SpanCountField created these mutable objects in the caller's storage.
-      auto* output = const_cast<ElementCodec::value_type*>(values.data());
+      auto* output = tbc::raw(const_cast<ElementCodec::value_type*>(values.data()));
 
       for (std::size_t i = 0; i < values.size(); ++i) {
         output[i] = decodeValue<ElementCodec>(input, storage);
