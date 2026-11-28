@@ -204,6 +204,12 @@ namespace telar::runtime {
       throw std::invalid_argument{"Too many HTTP content codings"};
     }
 
+    // An empty entity, such as a Content-Length: 0 body under a Content-Encoding, carries no coded
+    // stream for a decoder to read.
+    if (!encode && entity.empty()) {
+      return {ds::none, entity};
+    }
+
     const auto codings = parsed.codings;
     const auto count = parsed.count;
 
