@@ -1,0 +1,33 @@
+{
+  "manifest_version": 3,
+  "name": "Transylvania Luna",
+  "version": "1.0.0",
+  "description": "Telar's Transylvania Luna theme for Chrome.",
+  "theme": {
+    "colors": {
+      "frame": [17, 19, 22],
+      "frame_inactive": [17, 19, 22],
+      "frame_incognito": [17, 19, 22],
+      "frame_incognito_inactive": [17, 19, 22],
+      "background_tab": [17, 19, 22],
+      "background_tab_inactive": [17, 19, 22],
+      "background_tab_incognito": [17, 19, 22],
+      "background_tab_incognito_inactive": [17, 19, 22],
+      "toolbar": [31, 33, 37],
+      "toolbar_text": [214, 213, 209],
+      "toolbar_button_icon": [163, 182, 209],
+      "tab_text": [214, 213, 209],
+      "tab_background_text": [155, 162, 171],
+      "tab_background_text_inactive": [117, 124, 134],
+      "tab_background_text_incognito": [155, 162, 171],
+      "tab_background_text_incognito_inactive": [117, 124, 134],
+      "bookmark_text": [155, 162, 171],
+      "omnibox_background": [22, 24, 27],
+      "omnibox_text": [214, 213, 209],
+      "ntp_background": [22, 24, 27],
+      "ntp_text": [214, 213, 209],
+      "ntp_link": [163, 182, 209],
+      "ntp_header": [31, 33, 37]
+    }
+  }
+}

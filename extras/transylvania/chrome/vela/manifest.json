@@ -1,0 +1,33 @@
+{
+  "manifest_version": 3,
+  "name": "Transylvania Vela",
+  "version": "1.0.0",
+  "description": "Telar's Transylvania Vela theme for Chrome.",
+  "theme": {
+    "colors": {
+      "frame": [20, 18, 16],
+      "frame_inactive": [20, 18, 16],
+      "frame_incognito": [20, 18, 16],
+      "frame_incognito_inactive": [20, 18, 16],
+      "background_tab": [20, 18, 16],
+      "background_tab_inactive": [20, 18, 16],
+      "background_tab_incognito": [20, 18, 16],
+      "background_tab_incognito_inactive": [20, 18, 16],
+      "toolbar": [35, 31, 28],
+      "toolbar_text": [221, 212, 198],
+      "toolbar_button_icon": [227, 168, 87],
+      "tab_text": [221, 212, 198],
+      "tab_background_text": [163, 154, 142],
+      "tab_background_text_inactive": [127, 118, 108],
+      "tab_background_text_incognito": [163, 154, 142],
+      "tab_background_text_incognito_inactive": [127, 118, 108],
+      "bookmark_text": [163, 154, 142],
+      "omnibox_background": [26, 23, 21],
+      "omnibox_text": [221, 212, 198],
+      "ntp_background": [26, 23, 21],
+      "ntp_text": [221, 212, 198],
+      "ntp_link": [227, 168, 87],
+      "ntp_header": [35, 31, 28]
+    }
+  }
+}
