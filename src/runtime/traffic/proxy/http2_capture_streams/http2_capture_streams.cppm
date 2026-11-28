@@ -627,6 +627,15 @@ export {
           return;
         }
 
+        // An informational (1xx) response precedes the final one, whose status starts the head again.
+        constexpr std::uint16_t first_informational_status = 100;
+        constexpr std::uint16_t first_successful_status = 200;
+        const bool after_informational = half->status_code >= first_informational_status && half->status_code < first_successful_status;
+        if (context_.side == CaptureSide::response && event.name == ":status" && after_informational) {
+          half->head.reset();
+          half->setEncoding({});
+        }
+
         const auto part = half->headPart();
 
         half->append(part, event.name);
@@ -641,14 +650,7 @@ export {
             half->setTarget(event.value);
           }
         } else if (event.name == ":status") {
-          // An informational (1xx) response precedes the final one, whose head replaces it.
-          constexpr std::uint16_t first_informational_status = 100;
-          constexpr std::uint16_t first_successful_status = 200;
-
           half->status_code = parseHttpStatus(event.value).valueOr(0);
-          if (half->status_code >= first_informational_status && half->status_code < first_successful_status) {
-            half->head.reset();
-          }
         }
 
         if (asciiEqualIgnoreCase(event.name, "content-encoding")) {

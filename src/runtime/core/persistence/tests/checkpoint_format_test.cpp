@@ -317,7 +317,32 @@ namespace {
     check(after == 1, "and the record after them reads");
   }
 
+  // A record that cannot be written, such as a workspace whose path holds a NUL, is left out
+  // alone: the records around it are kept, and the checkpoint still reads.
+  void testInvalidRecordLeftOut() {
+    using namespace std::string_view_literals;
+    ds::Array<Byte, 4096> buffer;
+    checkpoint::Writer writer{buffer.viewMut(), checkpoint::Counters{}};
+
+    writer.append(checkpoint::WorkspaceRecord{5, "/tmp", "Before", 6, "Shell"});
+    writer.append(checkpoint::WorkspaceRecord{7, "/tmp\0evil"sv, "Invalid", 8, "Shell"});
+    writer.append(checkpoint::WorkspaceRecord{9, "/tmp", "After", 10, "Shell"});
+
+    const auto bytes = writer.finish();
+    checkpoint::Reader reader{bytes};
+    std::vector<std::uint64_t> read;
+
+    reader.read([&]<typename Record>(const Record& record) {
+      if constexpr (std::same_as<Record, checkpoint::WorkspaceRecord>) {
+        read.push_back(record.id);
+      }
+    });
+
+    check(read == std::vector<std::uint64_t>{5, 9} && writer.dropped() == 1);
+  }
+
   const telar::testing::Case case_places_round_trip{"checkpoint_format.places_round_trip", testPlacesRoundTrip};
+  const telar::testing::Case case_invalid_record_left_out{"checkpoint_format.invalid_record_left_out", testInvalidRecordLeftOut};
   const telar::testing::Case case_worktree_round_trip{"checkpoint_format.worktree_round_trip", testWorktreeRoundTrip};
   const telar::testing::Case case_older_versions_decode{"checkpoint_format.older_versions_decode", testOlderVersionsDecode};
   const telar::testing::Case case_pane_kinds{"checkpoint_format.pane_kinds", testPaneKinds};

@@ -9,6 +9,7 @@ import json
 import os
 from pathlib import Path
 import re
+import shutil
 import signal
 import subprocess
 import tempfile
@@ -335,6 +336,14 @@ class Stack:
         assert other_path.is_dir() and self.git('branch', '--list', 'unmerged').strip()
         self.call('worktree-remove-keep-branch', 'worktree', 'remove', 'unmerged', '--json')
         assert self.git('branch', '--list', 'unmerged').strip()
+        # A checkout deleted behind Git's back leaves no repository to delete its branch from.
+        vanished = Path(self.call('worktree-create-vanished', 'worktree', 'create', 'vanished', '--json')['path'])
+        shutil.rmtree(vanished)
+        removed = self.call('worktree-remove-vanished', 'worktree', 'remove', 'vanished', '--delete-branch', '--json')
+        assert removed['branch_deleted'] is False, removed
+        assert self.git('branch', '--list', 'vanished').strip()
+        self.git('worktree', 'prune')
+        self.git('branch', '-D', 'vanished')
         self.call('worktree-list-empty', 'worktree', 'list', '--json')
         self.call('worktree-list-empty-text', 'worktree', 'list')
         self.git('worktree', 'add', '-qb', 'manual', str(self.root / 'manual'))

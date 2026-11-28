@@ -78,6 +78,20 @@ namespace telar::remote {
       return left.port == right.port && left.key == right.key && left.host.view() == right.host.view();
     }
 
+    // Removes the socket that was the runtime of the machine at `endpoint`.
+    void removeSocket(const LinkPaths& paths, const Endpoint& endpoint) noexcept {
+      ds::Array<char, sizeof(sockaddr_un::sun_path) + 1> file{};
+
+      try {
+        std::ranges::copy(paths.machine(endpoint.destination().view()).view(), file.viewMut().begin());
+      } catch (const std::exception&) {
+        // A path that cannot be named was never bound.
+        return;
+      }
+
+      ::unlink(file.data());
+    }
+
     bool ownedByUser(int socket) noexcept {
       const auto peer = runtime::peerCredentials(socket);
 
@@ -344,8 +358,9 @@ namespace telar::remote {
     const std::scoped_lock lock{mutex_};
 
     for (std::size_t index = 0; index < machines_.size(); ++index) {
+      machines_.atMut(index).retired.reset();
       if (machines_[index].used && machines_[index].listener) {
-        waits.add(machines_[index].listener.get(), {.role = Role::machine, .index = index});
+        waits.add(machines_[index].listener.get(), {.role = Role::machine, .index = index, .generation = machines_[index].generation});
       }
     }
 
@@ -374,7 +389,11 @@ namespace telar::remote {
 
     for (auto socket = acceptConnection(listener); socket; socket = acceptConnection(listener)) {
       admitted = true;
-      threads_.fetch_add(1);
+      if (threads_.fetch_add(1) >= maximum_threads) {
+        threads_.fetch_sub(1);
+        continue;
+      }
+
       try {
         // The descriptor crosses as a number, and is the thread's once the thread has started:
         // one that could not start leaves the connection here, which closes it.
@@ -521,12 +540,45 @@ namespace telar::remote {
       }
     }
 
-    if (slot) {
-      machines_.atMut(*slot).endpoint = endpoint;
-      machines_.atMut(*slot).used = true;
+    // Every slot is taken: one whose machine nothing uses now serves this one, its socket gone.
+    if (!slot) {
+      slot = unusedMachine();
+      if (!slot) {
+        return slot;
+      }
+
+      auto& entry = machines_.atMut(*slot);
+
+      if (entry.listener) {
+        removeSocket(paths_, entry.endpoint);
+        entry.retired = std::move(entry.listener);
+      }
+
+      // Nothing holds, attaches to, watches or readies a machine whose slot is free.
+      entry.retry_at = {};
+      entry.ready.reset();
+      ++entry.generation;
+      wake();
     }
 
+    machines_.atMut(*slot).endpoint = endpoint;
+    machines_.atMut(*slot).used = true;
     return slot;
+  }
+
+  ds::Option<std::size_t> Link::unusedMachine() const noexcept {
+    for (std::size_t index = 0; index < machines_.size(); ++index) {
+      const auto& machine = machines_[index];
+      const bool forwarded = std::ranges::any_of(forwards_, [&](const Forward& forward) {
+        return forward.used && sameMachine(forward.endpoint, machine.endpoint);
+      });
+
+      if (machine.holds == 0 && machine.attachments == 0 && !machine.watched && !machine.readying && !forwarded) {
+        return index;
+      }
+    }
+
+    return ds::none;
   }
 
   void Link::watchMachine(std::size_t machine) noexcept {
@@ -822,15 +874,36 @@ namespace telar::remote {
 
     {
       const std::scoped_lock lock{mutex_};
+      auto& machine = machines_.atMut(accepted.index);
 
-      endpoint = machines_[accepted.index].endpoint;
+      // A connection to the socket of a machine whose slot serves another one now ends.
+      if (!machine.used || machine.generation != accepted.generation) {
+        return;
+      }
+
+      endpoint = machine.endpoint;
+      ++machine.attachments;
     }
 
-    auto channel = Channel::dial(contexts_, endpoint, Service::attach, Clock::now() + dial_timeout);
+    // An attachment keeps the slot its machine's until it ends, however it ends.
+    const auto detach = [this, &accepted] {
+      const std::scoped_lock lock{mutex_};
 
-    // What the window has to say travels with the handshake's last flight instead of waiting a
-    // round trip for the gateway's answer.
-    static_cast<void>(relayOnceAnswered(channel, socket));
+      --machines_.atMut(accepted.index).attachments;
+    };
+
+    try {
+      auto channel = Channel::dial(contexts_, endpoint, Service::attach, Clock::now() + dial_timeout);
+
+      // What the window has to say travels with the handshake's last flight instead of waiting a
+      // round trip for the gateway's answer.
+      static_cast<void>(relayOnceAnswered(channel, socket));
+    } catch (...) {
+      detach();
+      throw;
+    }
+
+    detach();
   }
 
   ds::Option<std::size_t> Link::listeningForward(const Endpoint& endpoint, std::uint16_t port) const noexcept {
@@ -1046,7 +1119,7 @@ namespace telar::remote {
       const std::scoped_lock lock{mutex_};
       auto& forward = forwards_.atMut(accepted.index);
 
-      if (!forward.used || forward.generation != accepted.generation || forward.holders == 0) {
+      if (!forward.used || forward.generation != accepted.generation || forward.holders == 0 || forward.connections >= maximum_forward_connections) {
         return;
       }
 
@@ -1375,7 +1448,12 @@ namespace telar::remote {
     request.atMut(secret_bytes) = static_cast<std::uint8_t>(length);
     std::ranges::copy(enrollment.name.substr(0, length), request.viewMut().subspan(secret_bytes + 1).begin());
     channel.send(request.view().first(secret_bytes + 1 + length), Clock::now() + exchange_timeout);
-    if (receiveReply(channel) != Reply::accepted) {
+    const auto reply = receiveReply(channel);
+    if (reply == Reply::unavailable) {
+      throw ChannelFailure{"The gateway already admits as many clients as it keeps; revoke one there, and the same code pairs this machine"};
+    }
+
+    if (reply != Reply::accepted) {
       throw ChannelFailure{"The gateway refused the pairing code: it was used, it expired or it was mistyped"};
     }
 

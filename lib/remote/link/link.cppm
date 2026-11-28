@@ -45,6 +45,10 @@ export {
     public:
       static constexpr std::size_t maximum_machines = 16;
       static constexpr std::size_t maximum_forwards = 64;
+      // The most connections one forward carries at once, each a connection to the gateway, and
+      // the most threads the link runs: any program here may connect to a forwarded port.
+      static constexpr unsigned maximum_forward_connections = 32;
+      static constexpr unsigned maximum_threads = 256;
       static constexpr std::size_t origin_bytes = PortNotice::origin_bytes;
 
       // Binds the control socket; throws SystemError when another link already serves `paths`.
@@ -73,9 +77,17 @@ export {
       struct Machine {
         Endpoint endpoint;
         runtime::FileDescriptor listener;
+        // The listener of the machine the slot served before, closed between two waits so that
+        // no wait names a descriptor another thread closed.
+        runtime::FileDescriptor retired;
         // When its ports may next be asked for, after the gateway could not be reached.
         Clock::time_point retry_at;
         unsigned holds = 0;
+        // The connections its socket carries to its runtime now.
+        unsigned attachments = 0;
+        // Bumped each time the slot is given to another machine, so a connection accepted on the
+        // last one's socket knows it.
+        unsigned generation = 0;
         // A thread hears of its ports as they open and close.
         bool watched = false;
         bool used = false;
@@ -159,9 +171,13 @@ export {
       // The caller holds the lock.
       [[nodiscard]] ds::Option<std::size_t> listeningForward(const Endpoint& endpoint, std::uint16_t port) const noexcept;
 
-      // The slot of a machine, taken when it has none; none when every slot is taken. The
-      // caller holds the lock.
+      // The slot of a machine, taken when it has none, from a machine nothing uses when every
+      // slot is taken; none when each is in use. The caller holds the lock.
       [[nodiscard]] ds::Option<std::size_t> machineSlot(const Endpoint& endpoint) noexcept;
+
+      // A slot whose machine nothing holds, attaches to, watches, readies or forwards a port of.
+      // The caller holds the lock.
+      [[nodiscard]] ds::Option<std::size_t> unusedMachine() const noexcept;
 
       // Starts the thread that hears of a machine's ports, unless one runs or the gateway was
       // unreachable a moment ago. The caller holds the lock.

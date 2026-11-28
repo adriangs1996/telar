@@ -32,6 +32,13 @@ namespace telar::runtime {
       return error == EAGAIN || (distinct_would_block && error == EWOULDBLOCK) || error == EINTR;
     }
 
+    // Whether accept failed for want of a descriptor or memory, which closing others gives back.
+    bool exhausted(int error) noexcept {
+      return error == EMFILE || error == ENFILE || error == ENOBUFS || error == ENOMEM;
+    }
+
+    constexpr auto exhausted_rest = std::chrono::milliseconds{100};
+
     // Readies an accepted connection for the event loop; false when its peer may not connect.
     bool admit(int connection, LocalPeerPolicy policy) {
       const auto peer = peerCredentials(connection);
@@ -181,15 +188,31 @@ namespace telar::runtime {
     return socket_.get();
   }
 
+  int LocalListener::waitDescriptor() const noexcept {
+    if (resting_until_ != std::chrono::steady_clock::time_point{} && std::chrono::steady_clock::now() < resting_until_) {
+      return -1;
+    }
+
+    return socket_.get();
+  }
+
   FileDescriptor LocalListener::accept(LocalPeerPolicy policy) {
     FileDescriptor connection{::accept(socket_.get(), nullptr, nullptr)};
     if (!connection) {
-      if (nothingPending(sys::lastError())) {
+      const auto error = sys::lastError();
+      if (nothingPending(error)) {
         return connection;
       }
 
-      throw SystemError{"accept runtime client"};
+      if (exhausted(error)) {
+        resting_until_ = std::chrono::steady_clock::now() + exhausted_rest;
+        return connection;
+      }
+
+      throw SystemError{"accept runtime client", error};
     }
+
+    resting_until_ = {};
 
     if (!admit(connection.get(), policy)) {
       connection.reset();

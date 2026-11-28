@@ -134,8 +134,9 @@ namespace {
     check(::chmod(path.c_str(), 0700) == 0);
   }
 
-  // A bare program name is looked up along the PATH the launch gives, relative entries against
-  // the launch's cwd, and a miss is ENOENT rather than a program from the runtime's own PATH.
+  // A bare program name is looked up along the absolute directories of the PATH the launch gives,
+  // never a relative one, which names a directory of the launch's cwd such as a repository's own
+  // `bin`, and a miss is ENOENT rather than a program from the runtime's own PATH.
   void testBareProgramUsesLaunchPath() {
     telar::testing::TestMemory adapter;
     Memory& memory = adapter;
@@ -151,24 +152,25 @@ namespace {
       return command.specification({}).executable;
     };
 
+    const auto failure = [&](std::string_view path, std::string_view cwd) {
+      try {
+        static_cast<void>(executable(path, cwd));
+      } catch (const SystemError& error) {
+        return error.code();
+      }
+
+      return 0;
+    };
+
     const auto absolute = base + "/bin";
 
     check(executable("/nonexistent:" + absolute, "/") == base + "/bin/telar-launch-path-tool");
-    check(executable("bin", base) == base + "/bin/telar-launch-path-tool");
+    check(failure("bin:", base) == ENOENT, "a relative directory is not searched");
 
     // A directory named as the program is not the program: the search goes on past it.
     std::filesystem::create_directories(base + "/shadow/telar-launch-path-tool");
     check(executable(base + "/shadow:" + absolute, "/") == base + "/bin/telar-launch-path-tool");
-
-    int failure = 0;
-
-    try {
-      static_cast<void>(executable(base, "/"));
-    } catch (const SystemError& error) {
-      failure = error.code();
-    }
-
-    check(failure == ENOENT);
+    check(failure(base, "/") == ENOENT);
   }
 
   // `shell -c loginShellScript(shell) program args...` runs the program with exactly those

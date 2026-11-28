@@ -43,6 +43,21 @@ namespace {
     check(refused);
   }
 
+  // A Content-Length: 0 body under a Content-Encoding holds no coded stream, and decodes to itself
+  // instead of failing the decoder.
+  void testEmptyEntity() {
+    telar::testing::TestMemory adapter;
+    Memory& memory = adapter;
+    HttpContentCodec codec{memory};
+
+    for (const std::string_view encoding : {"gzip", "deflate", "br", "zstd", "gzip, br"}) {
+      const auto decoded = codec.decode({}, encoding, 1024);
+
+      check(decoded.decoded && decoded.bytes().empty());
+    }
+  }
+
   const telar::testing::Case case_zstd_window_limit{"http_content.zstd_window_limit", testZstdWindowLimit};
+  const telar::testing::Case case_empty_entity{"http_content.empty_entity", testEmptyEntity};
 
 }

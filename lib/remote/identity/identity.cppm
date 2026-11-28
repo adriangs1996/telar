@@ -137,6 +137,18 @@ export {
 
       [[nodiscard]] static AuthorizedClients load(int directory);
 
+      // What tells one saved list from the next, as each save replaces the file; zero while
+      // there is none.
+      struct Stamp {
+        std::uint64_t inode = 0;
+        std::uint64_t size = 0;
+        std::int64_t modified_ns = 0;
+
+        [[nodiscard]] bool operator==(const Stamp&) const noexcept = default;
+      };
+
+      [[nodiscard]] static Stamp stamp(int directory) noexcept;
+
       [[nodiscard]] bool admits(const PublicKey& key) const noexcept;
       [[nodiscard]] std::span<const Client> rows() const noexcept;
 
@@ -182,6 +194,9 @@ export {
 
       // Whether `secret` is a pending code, which it then no longer is.
       [[nodiscard]] static bool redeem(int directory, const Secret& secret);
+      // The same under a lock the caller holds: a second lock of the state, on another
+      // descriptor, would wait for the first forever.
+      [[nodiscard]] static bool redeem(int directory, const Secret& secret, const StateLock& held);
     };
 
   }

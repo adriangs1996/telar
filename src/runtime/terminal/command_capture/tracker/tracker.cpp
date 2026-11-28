@@ -677,7 +677,8 @@ namespace telar::runtime {
       const auto host = remainder.substr(0, slash);
 
       if (!remote_) {
-        if (count) {
+        // No path holds a NUL; one decoded from %00 would reach every place the directory is kept.
+        if (count && !std::string_view{decoded.data(), *count}.contains('\0')) {
           directory_.assign({decoded.data(), *count});
         }
 

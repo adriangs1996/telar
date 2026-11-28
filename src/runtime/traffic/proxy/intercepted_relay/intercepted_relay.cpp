@@ -113,7 +113,8 @@ namespace telar::runtime {
     }
 
     const auto line = trimText(text(write_length_), " \t\r\n");
-    const auto length = parseHttpNumber<16>(substring(line, 0, line.find(';')));
+    // RFC 9112 7.1.1 allows whitespace between the size and its extensions.
+    const auto length = parseHttpNumber<16>(trimText(substring(line, 0, line.find(';')), " \t"));
     if (!length) {
       state_ = State::failed;
     } else if (*length == 0) {

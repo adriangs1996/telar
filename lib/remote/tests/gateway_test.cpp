@@ -297,6 +297,29 @@ namespace {
     check(pair.run(pair.client.state, pair.destination, "echo no").status == connection_lost_status, "a revoked client is refused at once");
   }
 
+  // A client revoked while a command of its runs there is cut then, not once it ends.
+  void aClientRevokedWhileServedIsCut() {
+    const Pair pair;
+    const auto started = std::chrono::steady_clock::now();
+    Pair::Result result;
+    std::thread running{[&] {
+      result = pair.run(pair.client.state, pair.destination, "echo started; sleep 30");
+    }};
+
+    std::this_thread::sleep_for(std::chrono::seconds{1});
+    {
+      const StateLock lock{pair.server.state.directory()};
+      auto clients = AuthorizedClients::load(pair.server.state.directory());
+
+      check(clients.revoke("test-client") == 1);
+      clients.save(pair.server.state.directory());
+    }
+
+    running.join();
+    check(result.output == "started\n" && result.status != 0, "the command ran until the revocation");
+    check(std::chrono::steady_clock::now() - started < std::chrono::seconds{15}, "the revoked client was cut");
+  }
+
   void clientsRefuseAGatewayWithAnotherKey() {
     const Pair pair;
     auto endpoint = Endpoint::parse(pair.destination);
@@ -329,6 +352,57 @@ namespace {
     check(refused, "a code that enrolled a client enrolls no other");
   }
 
+  // Connections that never start their handshake hold a few of the places of the address they
+  // come from, not every place: the next one from that address is closed at once.
+  void oneAddressHoldsAFewHandshakes() {
+    const Pair pair;
+    std::vector<FileDescriptor> idle;
+
+    for (unsigned index = 0; index < Server::maximum_handshakes_per_source; ++index) {
+      idle.push_back(connectLocalPort(pair.gateway.port()));
+      check(static_cast<bool>(idle.back()));
+    }
+
+    const auto refused = connectLocalPort(pair.gateway.port());
+    pollfd entry{.fd = refused.get(), .events = POLLIN, .revents = 0};
+    char byte = 0;
+
+    check(static_cast<bool>(refused));
+    check(::poll(&entry, 1, 3000) == 1 && ::read(refused.get(), &byte, 1) <= 0, "a connection past its address's places is closed, not left to its handshake");
+  }
+
+  // A gateway that admits as many clients as it keeps refuses a new one without spending its
+  // code: the same code pairs it once a client is revoked.
+  void aFullClientListLeavesThePairingCodePending() {
+    const Pair pair;
+    auto clients = AuthorizedClients::load(pair.server.state.directory());
+
+    for (std::size_t index = clients.rows().size(); index < AuthorizedClients::maximum; ++index) {
+      PublicKey key{};
+
+      key.atMut(0) = static_cast<std::uint8_t>(index);
+      key.atMut(1) = 0xa5;
+      clients.admit(key, std::format("filler-{}", index));
+    }
+
+    clients.save(pair.server.state.directory());
+    const tests::Gateway newcomer;
+    auto endpoint = Endpoint::parse(pair.unpaired);
+    std::string refusal;
+
+    endpoint.secret = PairingCodes::mint(pair.server.state.directory());
+    try {
+      static_cast<void>(enroll(newcomer.state, {.address = endpoint.format().view(), .name = "newcomer"}));
+    } catch (const ChannelFailure& failure) {
+      refusal = failure.what();
+    }
+
+    check(refusal.contains("as many clients"), "a full list is told apart from a wrong code");
+    check(clients.revoke("filler-1") == 1);
+    clients.save(pair.server.state.directory());
+    check(enroll(newcomer.state, {.address = endpoint.format().view(), .name = "newcomer"}).view() == pair.unpaired, "the code was left pending");
+  }
+
   void theLinkOffersAMachinesRuntimeOnALocalSocket() {
     const Pair pair;
     const LocalLink local{pair};
@@ -350,6 +424,62 @@ namespace {
 
     check(readExactly(socket.get(), large.size()) == large, "the socket carries more than a buffer each way");
     writer.join();
+  }
+
+  // A link that serves as many machines as it keeps gives the slot of one nothing uses to the
+  // next machine, and removes the socket of the one it let go.
+  void theLinkReusesTheSlotOfAMachineNothingUses() {
+    const Pair pair;
+    const LocalLink local{pair};
+    auto endpoint = Endpoint::parse(pair.destination);
+    std::vector<std::string> sockets;
+
+    for (std::size_t index = 0; index <= Link::maximum_machines; ++index) {
+      endpoint.port = static_cast<std::uint16_t>(20000 + index);
+      sockets.emplace_back(LinkClient::socket(local.paths(), endpoint.destination().view()).view());
+    }
+
+    check(::access(sockets.front().c_str(), F_OK) != 0, "the socket of the machine whose slot was taken is gone");
+    check(::access(sockets.back().c_str(), F_OK) == 0, "the next machine has a socket");
+  }
+
+  // Any program here may connect to a forwarded port, and each connection is one to the
+  // gateway: a forward carries a few at once, and closes the next.
+  void aForwardCarriesAFewConnectionsAtOnce() {
+    const Pair pair;
+    const LocalLink local{pair};
+    auto listener = listenTcp("127.0.0.1", 0);
+    const auto port = listener.port;
+    EchoServer echo{std::move(listener.socket)};
+    int reply[2];
+
+    check(::pipe(reply) == 0);
+    std::thread holder{[&] {
+      static_cast<void>(LinkClient::forward(local.paths(), pair.destination, port, "test origin", reply[1]));
+    }};
+    const auto local_port = static_cast<std::uint16_t>(std::stoul(readSome(reply[0], 16)));
+
+    {
+      std::vector<FileDescriptor> carried;
+
+      for (unsigned index = 0; index < Link::maximum_forward_connections; ++index) {
+        carried.push_back(connectLocalPort(local_port));
+        writeAll(carried.back().get(), "x");
+        check(readExactly(carried.back().get(), 1) == "x", "a connection within the bound is carried");
+      }
+
+      const auto refused = connectLocalPort(local_port);
+      pollfd entry{.fd = refused.get(), .events = POLLIN, .revents = 0};
+      char byte = 0;
+
+      check(::poll(&entry, 1, 3000) == 1 && ::read(refused.get(), &byte, 1) <= 0, "the connection past the bound is closed");
+    }
+
+    echo.stop();
+    holder.join();
+    for (const int descriptor : reply) {
+      ::close(descriptor);
+    }
   }
 
   void theLinkForwardsAPortUntilItClosesThere() {
@@ -710,9 +840,14 @@ namespace {
   const telar::testing::Case case_commands_run_with_their_streams_and_status{"gateway.commands_run_with_their_streams_and_status", commandsRunWithTheirStreamsAndStatus};
   const telar::testing::Case case_commands_carry_more_than_their_buffers{"gateway.commands_carry_more_than_their_buffers", commandsCarryMoreThanTheirBuffers};
   const telar::testing::Case case_only_paired_clients_are_served{"gateway.only_paired_clients_are_served", onlyPairedClientsAreServed};
+  const telar::testing::Case case_a_client_revoked_while_served_is_cut{"gateway.a_client_revoked_while_served_is_cut", aClientRevokedWhileServedIsCut};
   const telar::testing::Case case_clients_refuse_a_gateway_with_another_key{"gateway.clients_refuse_a_gateway_with_another_key", clientsRefuseAGatewayWithAnotherKey};
   const telar::testing::Case case_pairing_codes_enroll_once{"gateway.pairing_codes_enroll_once", pairingCodesEnrollOnce};
+  const telar::testing::Case case_one_address_holds_a_few_handshakes{"gateway.one_address_holds_a_few_handshakes", oneAddressHoldsAFewHandshakes};
+  const telar::testing::Case case_a_full_client_list_leaves_the_pairing_code_pending{"gateway.a_full_client_list_leaves_the_pairing_code_pending", aFullClientListLeavesThePairingCodePending};
   const telar::testing::Case case_the_link_offers_a_machines_runtime_on_a_local_socket{"gateway.the_link_offers_a_machines_runtime_on_a_local_socket", theLinkOffersAMachinesRuntimeOnALocalSocket};
+  const telar::testing::Case case_the_link_reuses_the_slot_of_a_machine_nothing_uses{"gateway.the_link_reuses_the_slot_of_a_machine_nothing_uses", theLinkReusesTheSlotOfAMachineNothingUses};
+  const telar::testing::Case case_a_forward_carries_a_few_connections_at_once{"gateway.a_forward_carries_a_few_connections_at_once", aForwardCarriesAFewConnectionsAtOnce};
   const telar::testing::Case case_the_link_forwards_a_port_until_it_closes_there{"gateway.the_link_forwards_a_port_until_it_closes_there", theLinkForwardsAPortUntilItClosesThere};
   const telar::testing::Case case_a_port_a_machine_shares_is_forwarded_to_whoever_holds_it{"gateway.a_port_a_machine_shares_is_forwarded_to_whoever_holds_it", aPortAMachineSharesIsForwardedToWhoeverHoldsIt};
   const telar::testing::Case case_the_link_lets_go_of_a_holder_whose_request_came_late{"gateway.the_link_lets_go_of_a_holder_whose_request_came_late", theLinkLetsGoOfAHolderWhoseRequestCameLate};

@@ -1633,8 +1633,10 @@ namespace telar::runtime::cli::sessions {
           throw Failure{"removal cancelled"};
         }
 
-        const bool merged = options_.delete_branch && root && git_.merged({.root = *root, .branch = entry->branch});
-        if (options_.delete_branch && !merged && !confirmRemoval("Also delete its branch and the commits no other branch has")) {
+        // A checkout Git no longer knows has no repository to delete its branch from.
+        const bool deleting = options_.delete_branch && root;
+        const bool merged = deleting && git_.merged({.root = *root, .branch = entry->branch});
+        if (deleting && !merged && !confirmRemoval("Also delete its branch and the commits no other branch has")) {
           throw Failure{"removal cancelled"};
         }
 
@@ -1648,12 +1650,12 @@ namespace telar::runtime::cli::sessions {
 
         // Only a checkout that is gone leaves the runtime's catalog; one Git kept stays tracked.
         session_.template exchange<RequestCompleted>(ForgetWorktree{.worktree = entry->worktree});
-        if (root && options_.delete_branch) {
+        if (deleting) {
           git_.run({"git", "-C", *root, "branch", merged ? "-d" : "-D", "--", entry->branch}, "git branch deletion failed; the branch may not be merged");
         }
 
         if (options_.json) {
-          output_.text("{\"worktree_id\":").number(entry->worktree).text(",\"path\":").json(entry->path).text(",\"branch_deleted\":").boolean(options_.delete_branch).text("}\n");
+          output_.text("{\"worktree_id\":").number(entry->worktree).text(",\"path\":").json(entry->path).text(",\"branch_deleted\":").boolean(deleting).text("}\n");
         } else {
           output_.text("removed ").text(entry->branch).text(" at ").text(entry->path).text("\n");
         }

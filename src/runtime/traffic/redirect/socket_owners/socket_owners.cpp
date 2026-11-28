@@ -616,6 +616,17 @@ namespace telar::runtime::redirect {
 
   namespace {
 
+    // The signals that stop the helper and remove its rules; closing its terminal sends SIGHUP.
+    constexpr ds::Array<int, 4> shutdown_signals{SIGINT, SIGTERM, SIGHUP, SIGQUIT};
+
+    bool shutdownPending() noexcept {
+      sigset_t pending{};
+
+      return ::sigpending(&pending) == 0 && std::ranges::any_of(shutdown_signals, [&](int code) {
+        return sigismember(&pending, code) != 0;
+      });
+    }
+
     // Reports why an incoming origin connection failed.
     void reportOriginFailure(int code) noexcept {
       constexpr std::size_t error_text_bytes = 128;
@@ -690,8 +701,10 @@ namespace telar::runtime::redirect {
 
   ShutdownSignals::ShutdownSignals() {
     sigemptyset(&selected_);
-    sigaddset(&selected_, SIGINT);
-    sigaddset(&selected_, SIGTERM);
+    for (const int code : shutdown_signals) {
+      sigaddset(&selected_, code);
+    }
+
     const auto result = ::pthread_sigmask(SIG_BLOCK, &selected_, &previous_);
     if (result != 0) {
       throw SystemError{"Block redirect shutdown signals", result};
@@ -700,8 +713,7 @@ namespace telar::runtime::redirect {
 
   ShutdownSignals::~ShutdownSignals() {
     // Consume the handled shutdown signal before restoring the old mask.
-    sigset_t pending{};
-    if (::sigpending(&pending) == 0 && ((sigismember(&pending, SIGINT) != 0) || (sigismember(&pending, SIGTERM) != 0))) {
+    if (shutdownPending()) {
       int received = 0;
 
       ::sigwait(&selected_, &received);
@@ -711,9 +723,7 @@ namespace telar::runtime::redirect {
   }
 
   bool ShutdownSignals::stopping() noexcept {
-    sigset_t pending{};
-
-    return ::sigpending(&pending) == 0 && ((sigismember(&pending, SIGINT) != 0) || (sigismember(&pending, SIGTERM) != 0));
+    return shutdownPending();
   }
 
   Helper::Helper(Memory& memory, std::string_view endpoint, std::span<const Target> targets, std::span<const ProcessIdentity> processes, Direction direction)
@@ -1003,6 +1013,14 @@ namespace telar::runtime::redirect {
       return Tracking::known;
     }
 
+    const auto& source = key.source.endpoint.storage;
+    const auto unaccepted_from_source = [&](const auto& flow) {
+      return flow && flow->incoming && !flow->accepted && flow->key.source.endpoint.storage.ss_family == source.ss_family && sameHost(flow->key.source.endpoint.storage, source);
+    };
+    if (incoming && std::cmp_greater_equal(std::ranges::count_if(flows_, unaccepted_from_source), maximum_unaccepted_per_source)) {
+      return Tracking::full;
+    }
+
     const auto flows = flows_.viewMut();
     const auto empty = std::ranges::find_if(flows, [](const auto& flow) {
       return !flow;
@@ -1011,7 +1029,7 @@ namespace telar::runtime::redirect {
       return Tracking::full;
     }
 
-    Flow flow{.key = key, .incoming = incoming};
+    Flow flow{.key = key, .deadline = std::chrono::steady_clock::now() + (incoming ? incoming_grace : connection_grace), .incoming = incoming};
 
     if (owners_) {
       const auto owner = owners_.getMut().find(key);
@@ -1085,7 +1103,12 @@ namespace telar::runtime::redirect {
         continue;
       }
 
+      // The accepted flow waits for its origin as long as the pending connection does, not until
+      // the deadline its SYN set.
+      const auto deadline = std::chrono::steady_clock::now() + connection_grace;
+
       flow->getMut().accepted = true;
+      flow->getMut().deadline = deadline;
       if ((*flow)->incoming) {
         writeErrorLine("telar redirect: accepted incoming TCP for destination port {}", target.port);
       }
@@ -1094,7 +1117,7 @@ namespace telar::runtime::redirect {
       if (::connect(connection.origin.get(), target.endpoint.address(), target.endpoint.length) == 0) {
         handoff(connection, index);
       } else if (sys::lastError() == EINPROGRESS || sys::lastError() == EINTR) {
-        slot->emplace(Pending{.connection = std::move(connection), .deadline = std::chrono::steady_clock::now() + connection_grace, .flow = index});
+        slot->emplace(Pending{.connection = std::move(connection), .deadline = deadline, .flow = index});
       } else if ((*flow)->incoming) {
         reportOriginFailure(sys::lastError());
       }

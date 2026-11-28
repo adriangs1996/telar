@@ -10,6 +10,7 @@ import telar.platform.process;
 import telar.platform.thread;
 import telar.remote.streams;
 import telar.sys.process;
+import telar.sys.socket;
 
 namespace telar::remote {
 
@@ -29,6 +30,8 @@ namespace telar::remote {
     // How old the list must be for a port missing from it to be worth reading it again.
     constexpr auto listening_recheck = std::chrono::milliseconds{20};
     constexpr auto line_timeout = std::chrono::seconds{2};
+    // How often the list of clients is looked at for one revoked while it is served.
+    constexpr auto revocation_interval = std::chrono::seconds{1};
     constexpr std::size_t line_bytes = 256;
     constexpr unsigned byte_bits = 8;
 
@@ -168,12 +171,69 @@ namespace telar::remote {
           pollfd{.fd = sharing_.get(), .events = POLLIN, .revents = 0},
       };
 
-      if (::poll(entries.dataMut(), entries.size(), -1) < 0 && sys::lastError() != EINTR) {
+      if (::poll(entries.dataMut(), entries.size(), static_cast<int>(std::chrono::milliseconds{revocation_interval}.count())) < 0 && sys::lastError() != EINTR) {
         return;
       }
 
       admitClients();
       admitPrograms();
+      cutRevoked();
+    }
+  }
+
+  Server::LiveChannel::LiveChannel(Server& server, const Channel& channel) noexcept
+      : server_(server),
+        descriptor_(channel.descriptor()) {
+    const std::scoped_lock lock{server_.mutex_};
+    // A place for each connection the server answers, so one is free.
+    const auto live = server_.live_.viewMut();
+    const auto vacant = std::ranges::find(live, -1, &Live::descriptor);
+    if (vacant == live.end()) {
+      descriptor_ = -1;
+      return;
+    }
+
+    *vacant = {.peer = channel.peer(), .descriptor = descriptor_};
+  }
+
+  Server::LiveChannel::~LiveChannel() {
+    if (descriptor_ < 0) {
+      return;
+    }
+
+    const std::scoped_lock lock{server_.mutex_};
+    const auto live = server_.live_.viewMut();
+
+    if (const auto entry = std::ranges::find(live, descriptor_, &Live::descriptor); entry != live.end()) {
+      entry->descriptor = -1;
+    }
+  }
+
+  void Server::cutRevoked() noexcept {
+    const auto now = Clock::now();
+    if (now - clients_checked_ < revocation_interval) {
+      return;
+    }
+
+    clients_checked_ = now;
+    const auto stamp = AuthorizedClients::stamp(state_.directory());
+    if (stamp == clients_stamp_) {
+      return;
+    }
+
+    clients_stamp_ = stamp;
+    try {
+      const auto clients = AuthorizedClients::load(state_.directory());
+      const std::scoped_lock lock{mutex_};
+
+      for (const auto& entry : live_) {
+        if (entry.descriptor >= 0 && !clients.admits(entry.peer)) {
+          ::shutdown(entry.descriptor, SHUT_RDWR);
+        }
+      }
+    } catch (const std::exception&) {
+      // A list that cannot be read now is read again once it changes.
+      clients_stamp_ = {};
     }
   }
 
@@ -184,15 +244,22 @@ namespace telar::remote {
         continue;
       }
 
+      const auto source = Source::of(socket.get());
+      if (!enterHandshake(source)) {
+        connections_.fetch_sub(1);
+        continue;
+      }
+
       try {
         // The descriptor crosses as a number, and is the thread's once the thread has started:
         // one that could not start leaves the connection here, which closes it.
-        runtime::startThread("Start a gateway connection", [this, descriptor = socket.get()] {
-          answer(FileDescriptor{descriptor});
+        runtime::startThread("Start a gateway connection", [this, descriptor = socket.get(), source] {
+          answer(FileDescriptor{descriptor}, source);
         }).detach();
 
         static_cast<void>(socket.release());
       } catch (const SystemError&) {
+        leaveHandshake(source);
         connections_.fetch_sub(1);
       }
     }
@@ -220,43 +287,137 @@ namespace telar::remote {
     static_cast<void>(::write(wake_[1], &byte, 1));
   }
 
-  void Server::answer(FileDescriptor socket) noexcept {
-    try {
-      if (handshakes_.fetch_add(1) >= maximum_handshakes) {
-        handshakes_.fetch_sub(1);
-        connections_.fetch_sub(1);
-        return;
+  Server::Source Server::Source::of(int socket) noexcept {
+    sockaddr_storage address{};
+    socklen_t size = sizeof(address);
+    Source source;
+
+    // A connection whose address cannot be read counts with the others that have none.
+    if (::getpeername(socket, reinterpret_cast<sockaddr*>(&address), &size) != 0) { // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast): the socket API takes every address family as a sockaddr
+      return source;
+    }
+
+    // The host's bytes alone: each connection of one host comes from a port of its own.
+    const auto keep = [&source](std::span<const std::byte> host) {
+      std::ranges::transform(host, source.address.viewMut().begin(), [](std::byte byte) {
+        return std::to_integer<std::uint8_t>(byte);
+      });
+
+      source.length = host.size();
+    };
+
+    const auto stored = std::as_bytes(std::span{&address, 1});
+
+    if (address.ss_family == AF_INET) {
+      sockaddr_in ipv4{};
+
+      std::ranges::copy(stored.first(sizeof(ipv4)), std::as_writable_bytes(std::span{&ipv4, 1}).begin());
+      keep(std::as_bytes(std::span{&ipv4.sin_addr, 1}));
+    } else if (address.ss_family == AF_INET6) {
+      sockaddr_in6 ipv6{};
+
+      std::ranges::copy(stored.first(sizeof(ipv6)), std::as_writable_bytes(std::span{&ipv6, 1}).begin());
+      keep(std::as_bytes(std::span{&ipv6.sin6_addr, 1}));
+    }
+
+    return source;
+  }
+
+  Server::HandshakePlace::HandshakePlace(Server& server, const Source& source) noexcept
+      : server_(server),
+        source_(source) {}
+
+  Server::HandshakePlace::~HandshakePlace() {
+    leave();
+  }
+
+  void Server::HandshakePlace::leave() noexcept {
+    if (std::exchange(held_, false)) {
+      server_.leaveHandshake(source_);
+    }
+  }
+
+  bool Server::enterHandshake(const Source& source) noexcept {
+    const std::scoped_lock lock{mutex_};
+
+    if (handshakes_ >= maximum_handshakes) {
+      return false;
+    }
+
+    auto* vacant = static_cast<Handshakes*>(nullptr);
+
+    for (auto& entry : handshaking_.viewMut()) {
+      if (entry.count != 0 && entry.source == source) {
+        if (entry.count >= maximum_handshakes_per_source) {
+          return false;
+        }
+
+        ++entry.count;
+        ++handshakes_;
+        return true;
       }
 
+      if (entry.count == 0 && vacant == nullptr) {
+        vacant = &entry;
+      }
+    }
+
+    // Fewer places are taken than the table holds sources, so one is vacant.
+    vacant->source = source;
+    vacant->count = 1;
+    ++handshakes_;
+    return true;
+  }
+
+  void Server::leaveHandshake(const Source& source) noexcept {
+    const std::scoped_lock lock{mutex_};
+
+    for (auto& entry : handshaking_.viewMut()) {
+      if (entry.count != 0 && entry.source == source) {
+        --entry.count;
+        --handshakes_;
+        return;
+      }
+    }
+  }
+
+  void Server::answer(FileDescriptor socket, const Source& source) noexcept {
+    try {
+      HandshakePlace place{*this, source};
       ds::Option<Channel> channel;
 
       try {
         channel.emplace(Channel::accept(contexts_, std::move(socket), Clock::now() + handshake_timeout));
       } catch (const std::exception&) {
-        handshakes_.fetch_sub(1);
+        place.leave();
         connections_.fetch_sub(1);
         return;
       }
 
-      handshakes_.fetch_sub(1);
-      serve(channel.getMut());
+      serve(channel.getMut(), place);
     } catch (const std::exception&) { // NOLINT(bugprone-empty-catch): a connection that fails ends alone; the others go on
     }
 
     connections_.fetch_sub(1);
   }
 
-  void Server::serve(Channel& channel) {
+  void Server::serve(Channel& channel, HandshakePlace& place) {
+    // A pairing keeps its place until it ends, admitted or not.
     if (channel.service() == Service::pair) {
       pair(channel);
       return;
     }
+
+    // Listed before the list is read, so that a client revoked once it is read is cut.
+    const LiveChannel live{*this, channel};
 
     // The list is read for every connection, so a client revoked now is refused now.
     if (!AuthorizedClients::load(state_.directory()).admits(channel.peer())) {
       refuse(channel);
       return;
     }
+
+    place.leave();
 
     switch (channel.service()) {
     case Service::attach:
@@ -405,22 +566,30 @@ namespace telar::remote {
     Secret secret{};
 
     std::ranges::copy(request.view().first(secret_bytes), secret.viewMut().begin());
-    if (!PairingCodes::redeem(state_.directory(), secret)) {
-      // A wrong code costs its sender a second, whatever it guessed.
-      std::this_thread::sleep_for(refusal_delay);
-      refuse(channel);
-      return;
-    }
+    auto reply = Reply::accepted;
 
+    // The list is read before the code is spent: a list with no room for a new client leaves the
+    // code pending, for once a client is revoked.
     {
       const StateLock lock{state_.directory()};
       auto clients = AuthorizedClients::load(state_.directory());
 
-      clients.admit(channel.peer(), {reinterpret_cast<const char*>(name.data()), length}); // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast): the name's bytes are read as text
-      clients.save(state_.directory());
+      if (!clients.admits(channel.peer()) && clients.rows().size() == AuthorizedClients::maximum) {
+        reply = Reply::unavailable;
+      } else if (!PairingCodes::redeem(state_.directory(), secret, lock)) {
+        reply = Reply::refused;
+      } else {
+        clients.admit(channel.peer(), {reinterpret_cast<const char*>(name.data()), length}); // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast): the name's bytes are read as text
+        clients.save(state_.directory());
+      }
     }
 
-    refuse(channel, Reply::accepted);
+    // A wrong code costs its sender a second, whatever it guessed.
+    if (reply == Reply::refused) {
+      std::this_thread::sleep_for(refusal_delay);
+    }
+
+    refuse(channel, reply);
   }
 
   bool Server::listening(std::uint16_t port) noexcept {

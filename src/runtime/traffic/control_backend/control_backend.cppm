@@ -1531,7 +1531,7 @@ export {
         constexpr int poll_ms = 100;
         ds::Array<pollfd, Limits::peers + 2> descriptors{};
 
-        descriptors.atMut(0) = {.fd = listener_.descriptor(), .events = POLLIN, .revents = 0};
+        descriptors.atMut(0) = {.fd = listener_.waitDescriptor(), .events = POLLIN, .revents = 0};
         descriptors.atMut(1) = {.fd = wake_.descriptor(), .events = POLLIN, .revents = 0};
         for (std::size_t index = 0; index < peers_.size(); ++index) {
           const auto& peer = peers_[index];

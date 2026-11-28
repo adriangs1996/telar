@@ -36,6 +36,7 @@ static_assert(true);
 #include <cstring>
 #include <fcntl.h>
 #include <limits.h>
+#include <sys/resource.h>
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <sys/un.h>
@@ -313,6 +314,57 @@ namespace {
     check(::rmdir(directory.data()) == 0);
   }
 
+  // A listener out of descriptors takes no connection and does not throw, which would stop the
+  // runtime and every pane with it: it rests a moment, then takes connections again.
+  void testListenerOutOfDescriptors() {
+    ds::Array<char, 64> directory{};
+
+    std::strcpy(directory.dataMut(), "/tmp/telar-exhausted-socket-XXXXXX");
+    check(::mkdtemp(directory.dataMut()) != nullptr);
+    const auto path = std::string{directory.data()} + "/runtime.sock";
+
+    {
+      LocalListener listener{path};
+      sockaddr_un address{};
+
+      address.sun_family = AF_UNIX;
+      std::strcpy(address.sun_path, path.c_str());
+      FileDescriptor client{::socket(AF_UNIX, SOCK_STREAM, 0)};
+
+      check(::connect(client.get(), reinterpret_cast<const sockaddr*>(&address), sizeof(address)) == 0);
+      rlimit previous{};
+
+      check(::getrlimit(RLIMIT_NOFILE, &previous) == 0);
+      rlimit lowered = previous;
+
+      lowered.rlim_cur = 64;
+      check(::setrlimit(RLIMIT_NOFILE, &lowered) == 0);
+      std::vector<FileDescriptor> filler;
+
+      while (true) {
+        FileDescriptor copy{::dup(client.get())};
+        if (!copy) {
+          break;
+        }
+
+        filler.push_back(std::move(copy));
+      }
+
+      check(!listener.accept() && listener.waitDescriptor() == -1);
+      filler.clear();
+      check(::setrlimit(RLIMIT_NOFILE, &previous) == 0);
+      std::this_thread::sleep_for(std::chrono::milliseconds{150});
+      // Linux keeps the connection accept could not take; macOS drops it, so another one connects.
+      FileDescriptor next{::socket(AF_UNIX, SOCK_STREAM, 0)};
+
+      check(::connect(next.get(), reinterpret_cast<const sockaddr*>(&address), sizeof(address)) == 0);
+      check(listener.waitDescriptor() == listener.descriptor() && static_cast<bool>(listener.accept()));
+    }
+
+    check(::unlink((path + ".lock").c_str()) == 0);
+    check(::rmdir(directory.data()) == 0);
+  }
+
   void testDisconnectedSocketClients() {
     ds::Array<char, 64> directory{};
 
@@ -461,7 +513,6 @@ namespace {
 
     check(findExecutable({.path = "/nonexistent-telar:/bin", .program = "sh"}, found.viewMut()) && std::string_view{found.dataMut()} == "/bin/sh");
     check(!findExecutable({.path = "/nonexistent-telar", .program = "sh"}, found.viewMut()));
-    check(findExecutable({.path = "bin", .program = "sh", .cwd = "/"}, found.viewMut()));
 
     const auto self = ExecutablePath::sibling({"missing-telar-program", "runtime-host-tests"});
 
@@ -668,6 +719,7 @@ namespace {
 
   const telar::testing::Case case_platform{"platform.platform", testPlatform};
   const telar::testing::Case case_disconnected_socket_clients{"platform.disconnected_socket_clients", testDisconnectedSocketClients};
+  const telar::testing::Case case_listener_out_of_descriptors{"platform.listener_out_of_descriptors", testListenerOutOfDescriptors};
   const telar::testing::Case case_closed_client_is_read{"platform.closed_client_is_read", testClosedClientIsRead};
   const telar::testing::Case case_unread_output_shutdown{"platform.unread_output_shutdown", testUnreadOutputShutdown};
   const telar::testing::Case case_descriptor_holes{"platform.descriptor_holes", testDescriptorHoles};

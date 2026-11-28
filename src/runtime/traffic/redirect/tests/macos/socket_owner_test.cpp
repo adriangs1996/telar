@@ -323,6 +323,43 @@ namespace {
     }
   }
 
+  // A host of the network that sends SYNs and never completes them holds a few flows, not the
+  // whole table: another host's SYN still finds room.
+  void unacceptedFlowsPerSource() {
+    using Tracking = redirect::Helper::Tracking;
+    telar::testing::TestMemory adapter;
+    const ds::Array targets{redirect::Target::parse("127.0.0.1:1")};
+    redirect::Helper helper{static_cast<Memory&>(adapter), "/tmp/fixture.sock", targets};
+    const auto from = [&](std::string_view host, unsigned port) {
+      return redirect::FlowKey{.source = redirect::Target::parse(std::format("{}:{}", host, port)), .destination = targets[0]};
+    };
+
+    unsigned held = 0;
+
+    while (held < 1000 && helper.track(from("192.0.2.7", 40000 + held), true, nullptr) == Tracking::added) {
+      ++held;
+    }
+
+    check(held > 0 && held < 64);
+    check(helper.track(from("192.0.2.7", 40000 + held), true, nullptr) == Tracking::full);
+    check(helper.track(from("192.0.2.8", 40000), true, nullptr) == Tracking::added);
+    check(helper.track(from("192.0.2.7", 50000), false, nullptr) == Tracking::added);
+  }
+
+  // Closing the helper's terminal sends SIGHUP: it stops the helper like SIGTERM, so that its
+  // rules are removed, instead of killing it.
+  void shutdownSignals() {
+    for (const int code : {SIGHUP, SIGQUIT}) {
+      const redirect::ShutdownSignals signals;
+
+      check(!redirect::ShutdownSignals::stopping());
+      check(::raise(code) == 0);
+      check(redirect::ShutdownSignals::stopping());
+    }
+
+    check(!redirect::ShutdownSignals::stopping());
+  }
+
   const telar::testing::Case case_account_snapshot_ipv4{
       "socket_owner.account_snapshot_ipv4",
       [] {
@@ -348,5 +385,7 @@ namespace {
       },
   };
   const telar::testing::Case case_local_addresses{"socket_owner.local_addresses", localAddresses};
+  const telar::testing::Case case_shutdown_signals{"socket_owner.shutdown_signals", shutdownSignals};
+  const telar::testing::Case case_unaccepted_flows_per_source{"socket_owner.unaccepted_flows_per_source", unacceptedFlowsPerSource};
 
 }

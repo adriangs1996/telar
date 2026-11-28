@@ -275,11 +275,12 @@ namespace {
         capture.observe(response, {.kind = Http2Event::Kind::response_header, .stream = 1, .name = ":status", .value = "103"});
         capture.observe(response, {.kind = Http2Event::Kind::response_header, .stream = 1, .name = "content-encoding", .value = "gzip"});
         capture.observe(response, {.kind = Http2Event::Kind::response_header, .stream = 1, .name = ":status", .value = "500"});
+        capture.observe(response, {.kind = Http2Event::Kind::response_header, .stream = 1, .name = "content-encoding", .value = "br"});
         capture.observe(response, {.kind = Http2Event::Kind::response_ended, .stream = 1, .status = 500});
         auto failed = producer.tryReceive();
 
         check(failed && (*failed)->status_code == 500 && (*failed)->outcome == CaptureOutcome::failed);
-        check(text((*failed)->head.bytes()) == "content-encoding: gzip\r\n:status: 500\r\n" && (*failed)->encoding() == "gzip");
+        check(text((*failed)->head.bytes()) == ":status: 500\r\ncontent-encoding: br\r\n" && (*failed)->encoding() == "br");
 
         for (std::uint32_t stream = 2; stream <= 130; ++stream) {
           capture.observe(response, {.kind = Http2Event::Kind::response_header, .stream = stream, .name = ":status", .value = "200"});
@@ -301,6 +302,28 @@ namespace {
       }
 
       check(producer.reservedBytes() == 0);
+    }
+
+    // An origin's RST_STREAM ends the request still being sent as well as the response, so the
+    // request's slot is freed.
+    void testHttp2CaptureReset() {
+      telar::testing::TestMemory adapter;
+      ConcurrentMemory& memory = adapter;
+      CaptureProducer producer{memory, ProxyCaptureLimits{.enabled = true}};
+      ProxyCounters counters;
+      Http2Capture capture{&producer, counters, CaptureStart{.key = {9, 0}, .protocol = CaptureProtocol::http2}};
+
+      capture.observe(Http2Direction::request, {.kind = Http2Event::Kind::request_header, .stream = 1, .name = ":method", .value = "POST"});
+      capture.observe(Http2Direction::response, {.kind = Http2Event::Kind::response_header, .stream = 1, .name = ":status", .value = "200"});
+      capture.observe(Http2Direction::response, {.kind = Http2Event::Kind::stream_reset, .stream = 1});
+
+      for (const auto side : {CaptureSide::request, CaptureSide::response}) {
+        auto half = producer.tryReceive();
+
+        check(half && (*half)->side == side && (*half)->key.stream == 1 && (*half)->outcome == CaptureOutcome::failed);
+      }
+
+      check(producer.metrics().queued == 0);
     }
 
     void testHttp2CaptureMalformedHeaders() {
@@ -461,5 +484,6 @@ namespace {
   }
 
   const telar::testing::Case case_transport_capture{"transport_capture.transport_capture", testTransportCapture};
+  const telar::testing::Case case_http2_capture_reset{"transport_capture.http2_capture_reset", testHttp2CaptureReset};
 
 }

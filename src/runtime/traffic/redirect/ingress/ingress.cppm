@@ -281,7 +281,7 @@ export {
       inline void step() {
         ds::Array<pollfd, maximum_peers + 2> descriptors{};
 
-        descriptors.atMut(0) = {.fd = listener_.descriptor(), .events = POLLIN, .revents = 0};
+        descriptors.atMut(0) = {.fd = listener_.waitDescriptor(), .events = POLLIN, .revents = 0};
         descriptors.atMut(1) = {.fd = wake_.descriptor(), .events = POLLIN, .revents = 0};
         for (std::size_t index = 0; index < peers_.size(); ++index) {
           descriptors.atMut(index + 2) = {.fd = peers_[index] ? peers_[index]->socket.get() : -1, .events = POLLIN, .revents = 0};

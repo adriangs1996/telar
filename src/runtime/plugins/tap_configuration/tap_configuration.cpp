@@ -253,13 +253,9 @@ namespace telar::runtime::plugins {
       return count_ == restarts_.size() && now - restarts_.front() <= Limits::restart_window;
     }
 
-    if (now - restarts_.front() <= Limits::restart_window) {
-      return true;
-    }
-
     std::ranges::move(restarts_.viewMut().subspan(1), restarts_.viewMut().begin());
     restarts_.atMut(restarts_.size() - 1) = now;
-    return false;
+    return now - restarts_.front() <= Limits::restart_window;
   }
 
   TapBudget::Charge::Charge(CaptureQuota& quota, std::size_t bytes) noexcept
