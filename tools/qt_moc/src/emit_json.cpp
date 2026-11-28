@@ -42,7 +42,15 @@ namespace {
     }
   }
 
-  void emitMethodArray(std::ostringstream& out, const char* key, const std::vector<MethodMeta>& methods, int base_index, bool& need_comma) {
+  // A type the class itself declares, as moc spells it in a method's signature: by its own name,
+  // which QML resolves in the scope of the class's component.
+  std::string memberType(const std::string& type, const std::string& owner) {
+    const auto prefix = owner + "::";
+
+    return type.starts_with(prefix) && type.find("::", prefix.size()) == std::string::npos ? type.substr(prefix.size()) : type;
+  }
+
+  void emitMethodArray(std::ostringstream& out, const char* key, const std::vector<MethodMeta>& methods, const std::string& owner, int base_index, bool& need_comma) {
     if (methods.empty()) {
       return;
     }
@@ -60,7 +68,7 @@ namespace {
       if (!m.params.empty()) {
         out << "            \"arguments\": [\n";
         for (std::size_t p = 0; p < m.params.size(); ++p) {
-          out << "              {\"name\": \"" << jsonEscape(m.params[p].name) << "\", \"type\": \"" << jsonEscape(m.params[p].normalized_type) << "\"}";
+          out << "              {\"name\": \"" << jsonEscape(m.params[p].name) << "\", \"type\": \"" << jsonEscape(memberType(m.params[p].normalized_type, owner)) << "\"}";
           if (p + 1 < m.params.size()) {
             out << ",";
           }
@@ -74,10 +82,14 @@ namespace {
         out << "            \"isCloned\": true,\n";
       }
 
+      if (m.is_const) {
+        out << "            \"isConst\": true,\n";
+      }
+
       out << "            \"index\": " << (base_index + static_cast<int>(idx)) << ",\n";
       out << "            \"lineNumber\": " << m.line << ",\n";
       out << "            \"name\": \"" << jsonEscape(m.name) << "\",\n";
-      out << "            \"returnType\": \"" << jsonEscape(m.normalized_return_type) << "\"\n";
+      out << "            \"returnType\": \"" << jsonEscape(memberType(m.normalized_return_type, owner)) << "\"\n";
       out << "          }";
       if (idx + 1 < methods.size()) {
         out << ",";
@@ -203,9 +215,9 @@ namespace telar::qt_moc {
       }
 
       out << ",\n        \"qualifiedClassName\": \"" << jsonEscape(cls.qualified_name) << "\"";
-      emitMethodArray(out, "signals", cls.signals, 0, need_comma);
-      emitMethodArray(out, "slots", cls.slots, static_cast<int>(cls.signals.size()), need_comma);
-      emitMethodArray(out, "methods", cls.invokables, static_cast<int>(cls.signals.size() + cls.slots.size()), need_comma);
+      emitMethodArray(out, "signals", cls.signals, cls.qualified_name, 0, need_comma);
+      emitMethodArray(out, "slots", cls.slots, cls.qualified_name, static_cast<int>(cls.signals.size()), need_comma);
+      emitMethodArray(out, "methods", cls.invokables, cls.qualified_name, static_cast<int>(cls.signals.size() + cls.slots.size()), need_comma);
       if (!cls.super_class.empty()) {
         out << ",\n        \"superClasses\": [{\"access\": \"public\", \"name\": \"" << jsonEscape(cls.super_class) << "\"}]";
       }

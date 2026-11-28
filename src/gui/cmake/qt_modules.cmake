@@ -4,16 +4,19 @@ include_guard(GLOBAL)
 # and generating Qt 6.12 meta-objects, QML type registrations, and .qmltypes
 # with telar-moc (zero Qt moc / zero AUTOMOC).
 
-set(TELAR_QT_PLUGIN "${TELAR_ROOT}/tools/qt_moc/out/release/telar-qt-plugin.so"
-  CACHE FILEPATH "Path to telar-qt-plugin.so")
-set(TELAR_QT_MOC "${TELAR_ROOT}/tools/qt_moc/out/release/telar-moc"
+# TELAR_QT_PLUGIN is the cache entry cmake/TelarBuild.cmake loads into every C++ target.
+set(TELAR_QT_MOC "${CMAKE_SOURCE_DIR}/tools/qt_moc/out/release/telar-moc"
   CACHE FILEPATH "Path to telar-moc")
 
 if(NOT EXISTS "${TELAR_QT_PLUGIN}" OR NOT EXISTS "${TELAR_QT_MOC}")
   message(FATAL_ERROR
-    "telar-qt-plugin.so or telar-moc not found in ${TELAR_ROOT}/tools/qt_moc/out/release/. "
-    "Build tools/qt_moc with its release preset (or run tools/cpp configure).")
+    "telar-qt-plugin.so (${TELAR_QT_PLUGIN}) or telar-moc (${TELAR_QT_MOC}) is missing. "
+    "Build tools/qt_moc with just qt-moc, or configure through tools/cpp configure.")
 endif()
+
+# The Qt modules whose types the QML types of the window derive from or name, as
+# qt_add_qml_module passes them to qmltyperegistrar for gui-quick.
+set(TELAR_QT_FOREIGN_METATYPES core gui concurrent quick qml network opengl quickcontrols2 svg)
 
 # telar-qt-plugin.so is loaded build-wide through telar::build_flags (cmake/TelarBuild.cmake)
 # so every C++23 module target shares identical BMI compile flags.
@@ -29,7 +32,7 @@ endfunction()
 function(telar_add_qt_moc target)
   cmake_parse_arguments(PARSE_ARGV 1 qt_moc ""
     "MODULES_TARGET;QML_URI;QML_MAJOR;QML_MINOR;QML_OUTPUT_DIR;QML_TYPEINFO"
-    "SOURCES;FOREIGN_QT_TARGETS")
+    "SOURCES")
   if(qt_moc_UNPARSED_ARGUMENTS)
     message(FATAL_ERROR "telar_add_qt_moc(${target}): unexpected arguments ${qt_moc_UNPARSED_ARGUMENTS}")
   endif()
@@ -121,14 +124,15 @@ function(telar_add_qt_moc target)
     set_source_files_properties("${reg_cpp}" PROPERTIES GENERATED TRUE CXX_SCAN_FOR_MODULES ON SKIP_AUTOMOC ON)
     target_sources(${target} PRIVATE "${reg_cpp}")
 
-    set(foreign_files)
-    file(GLOB qt_metatype_jsons "${TELAR_GUI_QT_PREFIX}/lib/metatypes/qt6*_metatypes.json")
-    list(SORT qt_metatype_jsons)
-    list(JOIN qt_metatype_jsons "," foreign_arg)
-    set(foreign_flag)
-    if(foreign_arg)
-      set(foreign_flag "--foreign-types=${foreign_arg}")
-    endif()
+    set(foreign_jsons)
+    foreach(module IN LISTS TELAR_QT_FOREIGN_METATYPES)
+      set(json "${QT6_INSTALL_PREFIX}/metatypes/qt6${module}_metatypes.json")
+      if(NOT EXISTS "${json}")
+        message(FATAL_ERROR "telar_add_qt_moc(${target}): Qt has no metatypes for ${module} at ${json}")
+      endif()
+      list(APPEND foreign_jsons "${json}")
+    endforeach()
+    list(JOIN foreign_jsons "," foreign_arg)
 
     add_custom_command(
       OUTPUT "${qmltypes_file}"
@@ -138,10 +142,10 @@ function(telar_add_qt_moc target)
         "--import-name=${qt_moc_QML_URI}"
         "--major-version=${qt_moc_QML_MAJOR}"
         "--minor-version=${qt_moc_QML_MINOR}"
-        ${foreign_flag}
+        "--foreign-types=${foreign_arg}"
         -o "${unused_reg_cpp}"
         "${merged_json}"
-      DEPENDS "${merged_json}" Qt6::qmltyperegistrar
+      DEPENDS "${merged_json}" ${foreign_jsons} Qt6::qmltyperegistrar
       COMMENT "Generating ${qt_moc_QML_TYPEINFO} for ${target}"
       VERBATIM)
 

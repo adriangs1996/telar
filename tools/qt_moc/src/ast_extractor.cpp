@@ -45,6 +45,11 @@ namespace {
   std::string normalizeQtType(const clang::ASTContext& context, clang::QualType type) {
     const auto base = type.getNonReferenceType().getUnqualifiedType();
 
+    // An alias of an enum names the enum where it is declared, where QML finds it registered.
+    if (base->getAs<clang::TypedefType>() != nullptr && base.getCanonicalType()->isEnumeralType()) {
+      return formatType(context, base.getCanonicalType());
+    }
+
     return formatType(context, base);
   }
 

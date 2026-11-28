@@ -113,14 +113,11 @@ endif()
 # Load telar-qt-plugin.so uniformly through telar::build_flags when built so all C++23 module
 # targets share identical BMI flags (preventing CMake @synth BMI duplication) and recognize
 # [[qt::...]] attributes natively.
-set(TELAR_QT_PLUGIN "" CACHE FILEPATH "Path to telar-qt-plugin.so; defaults to tools/qt_moc/out/release/telar-qt-plugin.so")
-set(telar_qt_plugin "${TELAR_QT_PLUGIN}")
-if(NOT telar_qt_plugin)
-  set(telar_qt_plugin "${CMAKE_SOURCE_DIR}/tools/qt_moc/out/release/telar-qt-plugin.so")
-endif()
-if(EXISTS "${telar_qt_plugin}")
+set(TELAR_QT_PLUGIN "${CMAKE_SOURCE_DIR}/tools/qt_moc/out/release/telar-qt-plugin.so"
+  CACHE FILEPATH "Path to telar-qt-plugin.so")
+if(EXISTS "${TELAR_QT_PLUGIN}")
   target_compile_options(telar-build-flags INTERFACE
-    "$<$<COMPILE_LANGUAGE:CXX>:-fplugin=${telar_qt_plugin}>")
+    "$<$<COMPILE_LANGUAGE:CXX>:-fplugin=${TELAR_QT_PLUGIN}>")
 endif()
 
 # Optimized builds link with ThinLTO, so a function body can inline into
