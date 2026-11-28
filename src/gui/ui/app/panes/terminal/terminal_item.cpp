@@ -940,7 +940,7 @@ namespace telar::gui::qt {
     tip.removeAll(QString{});
 
     return QVariantMap{
-        {u"place"_s, place.join(u_s)},
+        {u"place"_s, place.join(u"  "_s)},
         {u"where"_s, where},
         {u"started"_s, started},
         {u"restored"_s, block.restored},

@@ -10,6 +10,7 @@ import telar.gui.foundation.core;
 import telar.gui.foundation.text;
 import telar.base.ds;
 import telar.base.memory.allocators;
+import telar.wire.vocabulary;
 
 extern "C++" namespace telar::gui::test {
   struct HistoryPresentation;
@@ -211,7 +212,7 @@ export namespace telar::gui::qt {
       bool neighbour = false;
       QVariantMap record;
 
-      [[nodiscard]] bool same(const CachedRecord& other) const noexcept {
+      [[tbc::hot_path]] [[nodiscard]] inline bool same(const CachedRecord& other) const noexcept {
         return status == other.status && duration_ns == other.duration_ns && exit_code == other.exit_code && age.view() == other.age.view() && date.view() == other.date.view() && today == other.today && ranges == other.ranges && excerpt_ranges == other.excerpt_ranges && excerpt == other.excerpt && neighbour == other.neighbour;
       }
     };
