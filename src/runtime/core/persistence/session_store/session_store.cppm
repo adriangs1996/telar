@@ -900,9 +900,10 @@ export {
 
             restore.apply(buffer_);
           }
-        } catch (const EncodingError&) {
+        } catch (const std::exception&) {
+          // A session that cannot be read, or not safely, such as one others can read, starts empty
+          // and is kept aside before the next checkpoint replaces it.
           file.quarantine();
-        } catch (const std::exception&) { // NOLINT(bugprone-empty-catch): a session that cannot be read starts empty, and the next checkpoint replaces it
         }
 
         // A copy: the filters are the configuration's data, read for every checkpoint.

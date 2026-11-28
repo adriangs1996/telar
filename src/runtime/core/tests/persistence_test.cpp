@@ -455,6 +455,43 @@ namespace {
     check(entry.coordinator && entry.coordinator->session_id == coordinator.session_id && entry.coordinator->pane_id == 3 && entry.coordinator->pane_generation == 4);
   }
 
+  // A well-formed session file the runtime refuses to read, here one others can read, is kept aside
+  // too, not replaced by the empty session the runtime starts with.
+  void testUnsafeSessionKept() {
+    telar::testing::TestMemory adapter;
+    ConcurrentMemory& memory = adapter;
+    ds::Array<Byte, 4096> fixture_buffer;
+    const auto fixture = checkpointFixture(fixture_buffer.viewMut());
+    ds::Array<char, 64> directory{};
+
+    std::strcpy(directory.dataMut(), "/tmp/telar-unsafe-session-test-XXXXXX");
+    check(::mkdtemp(directory.dataMut()) != nullptr);
+    const std::filesystem::path root{directory.data()};
+    const auto path = (root / "session.ckpt").string();
+
+    std::ofstream{path, std::ios::binary}.write(reinterpret_cast<const char*>(fixture.data()), static_cast<std::streamsize>(fixture.size()));
+    check(::chmod(path.c_str(), 0644) == 0);
+    RuntimeModel model{memory};
+    LimitService limits;
+    NativeEventLoop<ConcurrentMemory> poller{memory};
+    PaneService panes{memory, poller, limits, PaneLaunchOptions{.socket = "/tmp/unused-checkpoint-test.sock"}};
+    ClientLayouts layouts{memory};
+    SnapshotAgents agents;
+
+    {
+      checkpoint::SessionStore<SnapshotAgents> store{memory};
+
+      store.configure(model, panes, layouts, checkpoint::Options{.path = path});
+      store.finish(model, layouts, agents);
+    }
+
+    std::ifstream kept{(root / "session.ckpt.corrupt").string(), std::ios::binary};
+    const std::vector<Byte> evidence{std::istreambuf_iterator<char>{kept}, {}};
+
+    check(std::ranges::equal(evidence, fixture), "the unreadable session was replaced");
+    std::filesystem::remove_all(root);
+  }
+
   // A session file the runtime cannot read: it starts empty, keeps the file aside as evidence, and
   // saves the new session where the old one was.
   void testCorruptSessionQuarantined() {
@@ -828,6 +865,7 @@ namespace {
   const telar::testing::Case case_places_restore{"persistence.places_restore", testPlacesRestore};
   const telar::testing::Case case_worktree_restore{"persistence.worktree_restore", testWorktreeRestore};
   const telar::testing::Case case_corrupt_session_quarantined{"persistence.corrupt_session_quarantined", testCorruptSessionQuarantined};
+  const telar::testing::Case case_unsafe_session_kept{"persistence.unsafe_session_kept", testUnsafeSessionKept};
   const telar::testing::Case case_agent_resume{"persistence.agent_resume", testAgentResume};
   const telar::testing::Case case_write_failure_retried{"persistence.write_failure_retried", testWriteFailureRetried};
   const telar::testing::Case case_invalid_worktree_skipped{"persistence.invalid_worktree_skipped", testInvalidWorktreeSkipped};
