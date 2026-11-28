@@ -256,6 +256,12 @@ export {
       ds::Vec<NvimChunk, ConcurrentMemory> chunks;
     };
 
+    // A run of colors telar gives a surface's text: how many bytes, drawn how.
+    struct NvimColoredRun {
+      std::uint32_t bytes = 0;
+      NvimHighlight highlight;
+    };
+
     // The command line Neovim edits at one level, the innermost being the one shown.
     struct NvimCommandLine {
       explicit NvimCommandLine(ConcurrentMemory& memory);
@@ -273,6 +279,12 @@ export {
       bool visible = false;
       // The lines of a block shown above it, each ended by a newline.
       NvimStyledText block;
+      // Neovim sends `:` uncolored: the configuration's colors for the text `colored` is, run
+      // after run, and what that text completes as getcmdcompltype() names it. They are the
+      // line's while its text is that one.
+      ds::String<ConcurrentMemory> colored;
+      ds::Vec<NvimColoredRun, ConcurrentMemory> coloring;
+      ds::String<ConcurrentMemory> completes;
       std::uint64_t changed_at = 0;
     };
 
@@ -412,6 +424,9 @@ export {
       bool markTabs(std::span<const NvimTabs::Mark> marks, bool buffers = false);
       // The files the listed buffers show; false when they are the ones it held.
       bool showFiles(std::span<const NvimOpenFile> files);
+      // The configuration's colors for a text of the command line and what it completes; true
+      // when the line shows that text, which is then sent again.
+      bool colorCommandLine(std::string_view text, std::span<const NvimColoredRun> runs, std::string_view completes);
       // A float placed since its frame was last asked for: its window, which then counts as
       // asked, or zero when there is none.
       [[nodiscard]] std::uint64_t nextUnframed() noexcept;

@@ -1011,6 +1011,66 @@ return {api_version = 2, client = {
       press(Qt::Key_Escape, QString{});
       QTRY_VERIFY_WITH_TIMEOUT(!view->cmdline().value(QStringLiteral("visible")).toBool() && !view->popupMenu().value(QStringLiteral("visible")).toBool(), runtime_wait_ms);
 
+      // The line names what is written in it as a mode, hides the prefix that opened the mode,
+      // and colors the text in its language, which Neovim sends uncolored.
+      const auto mode = [&] {
+        for (const auto* chip : test::visualItems(*window_->contentItem(), QStringLiteral("cmdlineMode"))) {
+          if (chip->isVisible() && chip->opacity() > 0) {
+            return chip->property("label").toString();
+          }
+        }
+
+        return QString{};
+      };
+      const auto leave = [&] {
+        press(Qt::Key_Escape, QString{});
+        QTRY_VERIFY_WITH_TIMEOUT(!view->cmdline().value(QStringLiteral("visible")).toBool() && !view->popupMenu().value(QStringLiteral("visible")).toBool(), runtime_wait_ms);
+      };
+
+      view->send(QStringLiteral(":lua vim.fn.has('nvim')"));
+      QTRY_VERIFY2_WITH_TIMEOUT(mode() == QStringLiteral("Lua"), qPrintable(mode() + QLatin1Char('|') + view->cmdline().value(QStringLiteral("text")).toString() + QLatin1Char('|') + view->cmdline().value(QStringLiteral("first")).toString()), runtime_wait_ms);
+      QTRY_VERIFY_WITH_TIMEOUT(view->cmdline().value(QStringLiteral("runs")).toList().size() > 2, runtime_wait_ms);
+      shoot(QStringLiteral("editor-cmdline-lua"));
+      leave();
+
+      view->send(QStringLiteral(":!git log --oneline -5"));
+      QTRY_COMPARE_WITH_TIMEOUT(mode(), QStringLiteral("Shell"), runtime_wait_ms);
+      shoot(QStringLiteral("editor-cmdline-shell"));
+      leave();
+
+      view->send(QStringLiteral("/TELAR"));
+      QTRY_COMPARE_WITH_TIMEOUT(mode(), QStringLiteral("Search \u2193"), runtime_wait_ms);
+      shoot(QStringLiteral("editor-cmdline-search"));
+      leave();
+
+      // A path being completed lists files and folders with their icons, inside the line.
+      {
+        const QTemporaryDir completed;
+        QVERIFY(QDir{completed.path()}.mkpath(QStringLiteral("src/gui")));
+        QVERIFY(QDir{completed.path()}.mkpath(QStringLiteral("scripts")));
+        writeTestFile(QDir{completed.path()}.filePath(QStringLiteral("setup.lua")), "return {}\n");
+        writeTestFile(QDir{completed.path()}.filePath(QStringLiteral("SECURITY.md")), "# Security\n");
+        view->send(QStringLiteral("<Cmd>silent cd %1<CR>:edit s").arg(completed.path()));
+        QTRY_COMPARE_WITH_TIMEOUT(view->cmdline().value(QStringLiteral("text")).toString(), QStringLiteral("edit s"), runtime_wait_ms);
+        press(Qt::Key_Tab, QStringLiteral("\t"));
+        press(Qt::Key_Tab, QStringLiteral("\t"));
+
+        const auto icons = [&] {
+          QStringList found;
+
+          for (const auto& item : view->popupMenu().value(QStringLiteral("items")).toList()) {
+            found.append(item.toMap().value(QStringLiteral("kind")).toString());
+          }
+
+          return found;
+        };
+
+        QTRY_VERIFY2_WITH_TIMEOUT(icons().contains(QStringLiteral("folder")) && icons().contains(QStringLiteral("file")) && !icons().contains(QString{}), qPrintable(icons().join(QLatin1Char(','))), runtime_wait_ms);
+        shoot(QStringLiteral("editor-cmdline-files"));
+        leave();
+        view->send(QStringLiteral("<Cmd>silent cd -<CR>"));
+      }
+
       // The command line's text comes with Neovim's highlights, as a prompt that colors what is
       // typed in it asks for.
       view->send(QStringLiteral(":call input({'prompt': 'Color ', 'highlight': {typed -> [[0, len(typed), 'ErrorMsg']]}})<CR>red"));
@@ -1073,6 +1133,65 @@ return {api_version = 2, client = {
       QTRY_VERIFY_WITH_TIMEOUT(said(), runtime_wait_ms);
       QTRY_COMPARE_WITH_TIMEOUT(view->mode(), QStringLiteral("normal"), runtime_wait_ms);
       shoot(QStringLiteral("editor-message"));
+
+      // Each thing said goes where it is read: what is said is gone when the person says so.
+      const auto forget = [&] {
+        for (const auto& item : view->messages().value(QStringLiteral("items")).toList()) {
+          view->dismissMessage(item.toMap().value(QStringLiteral("key")).toString());
+        }
+
+        QTRY_VERIFY_WITH_TIMEOUT(view->messages().value(QStringLiteral("items")).toList().isEmpty(), runtime_wait_ms);
+      };
+      const auto visibleItem = [&](const QString& name) -> QQuickItem* {
+        for (auto* item : test::visualItems(*window_->contentItem(), name)) {
+          if (item->isVisible()) {
+            return item;
+          }
+        }
+
+        return nullptr;
+      };
+
+      forget();
+      // An error, its code apart from what it says.
+      view->send(QStringLiteral(":Wq<CR>"));
+      QTRY_VERIFY_WITH_TIMEOUT(std::ranges::any_of(view->messages().value(QStringLiteral("items")).toList(), [](const QVariant& item) {
+        return item.toMap().value(QStringLiteral("kind")).toString() == QStringLiteral("error");
+      }),
+          runtime_wait_ms);
+      shoot(QStringLiteral("editor-message-error"));
+      forget();
+
+      // A task's progress, a bar that fills in place.
+      view->send(QStringLiteral("<Cmd>lua vim.api.nvim_echo({{'Indexing 412 of 958 files'}}, false, {kind = 'progress', percent = 43, title = 'clangd', status = 'running', source = 'telar'})<CR>"));
+      QTRY_VERIFY_WITH_TIMEOUT(std::ranges::any_of(view->messages().value(QStringLiteral("items")).toList(), [](const QVariant& item) {
+        return item.toMap().value(QStringLiteral("kind")).toString() == QStringLiteral("progress");
+      }),
+          runtime_wait_ms);
+      shoot(QStringLiteral("editor-message-progress"));
+      forget();
+
+      // The count of a search is on the status line, never a notice.
+      view->send(QStringLiteral("<Cmd>call setline(1, ['obs one', 'obs two', 'obs three'])<CR>/obs<CR>n"));
+      QTRY_VERIFY2_WITH_TIMEOUT(visibleItem(QStringLiteral("editorSearchCount")) != nullptr && visibleItem(QStringLiteral("editorSearchCount"))->property("label").toString().contains(QStringLiteral(" of ")), qPrintable(said() ? QStringLiteral("said") : QStringLiteral("nothing")), runtime_wait_ms);
+      for (const auto& item : view->messages().value(QStringLiteral("items")).toList()) {
+        QCOMPARE(item.toMap().value(QStringLiteral("kind")).toString(), QStringLiteral("search"));
+      }
+
+      shoot(QStringLiteral("editor-search-count"));
+      forget();
+      QTRY_VERIFY_WITH_TIMEOUT(visibleItem(QStringLiteral("editorSearchCount")) == nullptr, runtime_wait_ms);
+
+      // What a command lists is a panel under it, to read and copy.
+      view->send(QStringLiteral(":ls"));
+      QTRY_COMPARE_WITH_TIMEOUT(view->cmdline().value(QStringLiteral("text")).toString(), QStringLiteral("ls"), runtime_wait_ms);
+      view->send(QStringLiteral("<CR>"));
+      QTRY_VERIFY_WITH_TIMEOUT(visibleItem(QStringLiteral("editorOutput")) != nullptr && !visibleItem(QStringLiteral("editorOutput"))->property("text").toString().isEmpty(), runtime_wait_ms);
+      QCOMPARE(visibleItem(QStringLiteral("editorOutputPanel"))->property("title").toString(), QStringLiteral(":ls"));
+      shoot(QStringLiteral("editor-output"));
+      forget();
+      QTRY_VERIFY_WITH_TIMEOUT(visibleItem(QStringLiteral("editorOutput")) == nullptr, runtime_wait_ms);
+      view->send(QStringLiteral("<Cmd>silent undo<CR>"));
 
       // vim.ui.select is the window's dialog, whatever asked, and its answer reaches the caller.
       view->send(QStringLiteral(":lua vim.ui.select({'Rename symbol', 'Extract function', 'Inline variable'}, {prompt = 'Code actions', kind = 'refactor'}, function(choice) vim.g.telar_choice = choice end)<CR>"));
@@ -1286,11 +1405,25 @@ return {api_version = 2, client = {
           view->send(QStringLiteral("<Cmd>call system('export GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1 && git init -q && git add screen.cpp redraw.cpp && git -c user.name=t -c user.email=t@t -c commit.gpgsign=false commit -qm first') | call writefile(['// screen', '// changed'], 'screen.cpp')<CR>"));
         }
 
+        // Two of the files open in the editor, the one edited last of them screen.cpp.
+        view->send(QStringLiteral("<Cmd>edit redraw.cpp | edit screen.cpp<CR>"));
         view->send(QStringLiteral("<Cmd>Telar files<CR>"));
         QTRY_VERIFY_WITH_TIMEOUT(view->picker().value(QStringLiteral("open")).toBool(), runtime_wait_ms);
         QCOMPARE(view->picker().value(QStringLiteral("source")).toString(), QStringLiteral("files"));
-        // Without a query, what the directory holds.
-        QTRY_VERIFY2_WITH_TIMEOUT(names().size() == 3 && names().contains(QStringLiteral("screen.cpp")), qPrintable(names().join(QLatin1Char(' '))), runtime_wait_ms);
+        // Without a query, what the directory holds: the files open first, the one being
+        // edited last of them, each group titled.
+        const auto sections = [&] {
+          QStringList found;
+
+          for (const auto& row : rows()) {
+            found.append(row.toMap().value(QStringLiteral("section")).toString());
+          }
+
+          return found;
+        };
+
+        QTRY_VERIFY2_WITH_TIMEOUT(names() == (QStringList{QStringLiteral("redraw.cpp"), QStringLiteral("screen.cpp"), QStringLiteral("frames.cpp")}), qPrintable(names().join(QLatin1Char(' '))), runtime_wait_ms);
+        QCOMPARE(sections(), (QStringList{QStringLiteral("Open"), QStringLiteral("Open"), QStringLiteral("Files")}));
         if (versioned) {
           const auto mark = [&](const QString& name) {
             for (const auto& row : rows()) {
@@ -1302,10 +1435,13 @@ return {api_version = 2, client = {
             return QStringLiteral("absent");
           };
 
-          QTRY_COMPARE_WITH_TIMEOUT(mark(QStringLiteral("screen.cpp")), QStringLiteral("M"), runtime_wait_ms);
-          QCOMPARE(mark(QStringLiteral("frames.cpp")), QStringLiteral("U"));
+          // An open file is marked as the one being edited, not by git.
+          QTRY_COMPARE_WITH_TIMEOUT(mark(QStringLiteral("frames.cpp")), QStringLiteral("U"), runtime_wait_ms);
+          QCOMPARE(mark(QStringLiteral("screen.cpp")), QStringLiteral("current"));
           QCOMPARE(mark(QStringLiteral("redraw.cpp")), QString{});
         }
+
+        shoot(QStringLiteral("editor-picker-browse"));
 
         view->searchPicker(QStringLiteral("fram"));
         QTRY_COMPARE_WITH_TIMEOUT(names(), QStringList{QStringLiteral("frames.cpp")}, runtime_wait_ms);
@@ -1329,10 +1465,10 @@ return {api_version = 2, client = {
             }
 
             QVERIFY2(room.contains(cells), qPrintable(QStringLiteral("preview %1,%2 %3x%4 past %5,%6 %7x%8").arg(cells.x()).arg(cells.y()).arg(cells.width()).arg(cells.height()).arg(room.x()).arg(room.y()).arg(room.width()).arg(room.height())));
-            // The panel stands on the editor's cells: the preview starts where its room does,
-            // right under the header, and fills it but for less than a cell.
-            QVERIFY2(cells.x() - room.x() < 1 && cells.y() - room.y() < 1, qPrintable(QStringLiteral("preview at %1,%2, room at %3,%4").arg(cells.x()).arg(cells.y()).arg(room.x()).arg(room.y())));
-            QVERIFY2(room.right() - cells.right() < view->cellWidth() && room.bottom() - cells.bottom() < view->cellHeight(), qPrintable(QStringLiteral("preview %1x%2 in room %3x%4").arg(cells.width()).arg(cells.height()).arg(room.width()).arg(room.height())));
+            // The float holds the whole cells of the room, which the pane draws it at the corner
+            // of: it fills the room but for less than a cell on each side.
+            QVERIFY2(cells.x() - room.x() < view->cellWidth() && cells.y() - room.y() < view->cellHeight(), qPrintable(QStringLiteral("preview at %1,%2, room at %3,%4").arg(cells.x()).arg(cells.y()).arg(room.x()).arg(room.y())));
+            QVERIFY2(room.right() - cells.right() < 2 * view->cellWidth() && room.bottom() - cells.bottom() < 2 * view->cellHeight(), qPrintable(QStringLiteral("preview %1x%2 in room %3x%4").arg(cells.width()).arg(cells.height()).arg(room.width()).arg(room.height())));
             ++inside;
           }
         }
@@ -1366,7 +1502,28 @@ return {api_version = 2, client = {
         QTRY_VERIFY_WITH_TIMEOUT(!view->picker().value(QStringLiteral("open")).toBool(), runtime_wait_ms);
         QTRY_VERIFY2_WITH_TIMEOUT(shown().contains(QStringLiteral("the needle is here")), qPrintable(shown()), runtime_wait_ms);
         QTRY_COMPARE_WITH_TIMEOUT(floats(), before, runtime_wait_ms);
-        view->send(QStringLiteral("<Cmd>bwipeout! | cd ..<CR>"));
+        view->send(QStringLiteral("<Cmd>bwipeout! | silent! bwipeout! redraw.cpp screen.cpp | cd ..<CR>"));
+      }
+
+      // A run that takes pictures of a repository of the person's, TELAR_EDITOR_SHOT_ROOT, shows
+      // the picker on it: with nothing typed, then searching TELAR_EDITOR_SHOT_QUERY.
+      if (const auto shot_root = qEnvironmentVariable("TELAR_EDITOR_SHOT_ROOT"); !shots.isEmpty() && !shot_root.isEmpty()) {
+        const auto rows = [&] {
+          return view->picker().value(QStringLiteral("rows")).toList();
+        };
+
+        view->send(QStringLiteral("<Cmd>silent cd %1 | silent! edit %2<CR>").arg(shot_root, qEnvironmentVariable("TELAR_EDITOR_SHOT_OPEN")));
+        view->send(QStringLiteral("<Cmd>Telar files<CR>"));
+        QTRY_VERIFY_WITH_TIMEOUT(view->picker().value(QStringLiteral("open")).toBool() && rows().size() > 3, runtime_wait_ms);
+        QTest::qWait(400);
+        shoot(QStringLiteral("editor-picker-repo-browse"));
+        view->searchPicker(qEnvironmentVariable("TELAR_EDITOR_SHOT_QUERY", QStringLiteral("runtime")));
+        QTRY_VERIFY_WITH_TIMEOUT(!view->picker().value(QStringLiteral("loading")).toBool() && rows().size() > 3, runtime_wait_ms);
+        QTest::qWait(400);
+        shoot(QStringLiteral("editor-picker-repo-search"));
+        view->closePicker();
+        QTRY_VERIFY_WITH_TIMEOUT(!view->picker().value(QStringLiteral("open")).toBool(), runtime_wait_ms);
+        view->send(QStringLiteral("<Cmd>silent! %bwipeout! | silent cd -<CR>"));
       }
 
       // A scroll slides the rows to their places: the grid clips itself while they travel, and

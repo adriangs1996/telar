@@ -64,8 +64,6 @@ namespace telar::gui::qt {
     Q_PROPERTY(QVariantMap statusLine READ statusLine NOTIFY statusLineChanged)
     Q_PROPERTY(QVariantMap prompt READ prompt NOTIFY promptChanged)
     Q_PROPERTY(QVariantMap picker READ picker NOTIFY pickerChanged)
-    // The cells a row of the picker has for its path: a longer one is cut to them.
-    Q_PROPERTY(int pickerColumns READ pickerColumns WRITE setPickerColumns NOTIFY pickerColumnsChanged)
     Q_PROPERTY(QString prediction READ prediction NOTIFY predictionChanged)
     Q_PROPERTY(QPointF predictionOrigin READ predictionOrigin NOTIFY predictionChanged)
 
@@ -127,12 +125,6 @@ namespace telar::gui::qt {
     [[nodiscard]] QVariantMap picker() const {
       return picker_;
     }
-
-    [[nodiscard]] int pickerColumns() const noexcept {
-      return picker_columns_;
-    }
-
-    void setPickerColumns(int columns);
 
     // The letters typed in insert mode that the editor has not shown yet, where the way to it
     // is slow, and the corner of the cell the first goes in.
@@ -228,7 +220,6 @@ namespace telar::gui::qt {
     void readyChanged();
     void separatorsChanged();
     void pickerChanged();
-    void pickerColumnsChanged();
     void predictionChanged();
     void cmdlineChanged();
     void popupMenuChanged();
@@ -301,11 +292,6 @@ namespace telar::gui::qt {
     QString prediction_;
     QPointF prediction_origin_;
     std::uint64_t picker_revision_ = 0;
-    static constexpr int minimum_picker_columns = 8;
-    static constexpr int maximum_picker_columns = 512;
-    // Until the picker says how many it has, the cells of a list of the usual width.
-    static constexpr std::uint16_t usual_picker_columns = 96;
-    std::uint16_t picker_columns_ = usual_picker_columns;
     // The cells the picker's preview was last asked to cover: the float found there is it.
     application::nvim::PreviewArea preview_area_;
     // What it was asked for, in pixels: a font of another size covers it with other cells.

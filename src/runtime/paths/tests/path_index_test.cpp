@@ -274,6 +274,25 @@ namespace {
     }
   }
 
+  // A query that starts as a folder's name finds first the files named so, not every file under
+  // a folder of that name, nearer the root as those are.
+  void testNameOutranksFolder() {
+    telar::testing::TestMemory adapter;
+    ConcurrentMemory& memory = adapter;
+    TemporaryDirectory directory{"/tmp/telar-paths-XXXXXX"};
+    const std::string root{directory.path()};
+
+    write(root + "/src/runtime/a.lua");
+    write(root + "/src/core/runtime.cpp");
+    PathIndex index{memory};
+    const auto found = listing(memory, index, root, "runti");
+
+    const auto named = std::ranges::find(found.paths, std::string_view{"src/core/runtime.cpp"}, &Found::path);
+    const auto under = std::ranges::find(found.paths, std::string_view{"src/runtime/a.lua"}, &Found::path);
+
+    check(named != found.paths.end() && under != found.paths.end() && named < under, "the file named as the query is not ahead of the one under a folder of that name");
+  }
+
   void testSymlinksNotFollowed() {
     telar::testing::TestMemory adapter;
     ConcurrentMemory& memory = adapter;
@@ -305,5 +324,6 @@ namespace {
   const telar::testing::Case case_skips_heavy_directories{"path_index.skips_heavy_directories", testSkipsHeavyDirectories};
   const telar::testing::Case case_ranking_contract{"path_index.ranking_contract", testRankingContract};
   const telar::testing::Case case_symlinks_not_followed{"path_index.symlinks_not_followed", testSymlinksNotFollowed};
+  const telar::testing::Case case_name_outranks_folder{"path_index.name_outranks_folder", testNameOutranksFolder};
 
 }

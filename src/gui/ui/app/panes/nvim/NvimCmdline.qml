@@ -5,36 +5,93 @@ import Telar.Gui
 
 // Neovim's command line as a surface of telar's own: what is typed after `:`, a search or a
 // prompt, with the caret where Neovim has it. Neovim edits the line; this only shows it.
+//
+// The line names what is being written as a mode: a command, a search, a shell command, Lua,
+// help, an expression or the question of a prompt. Each has its label, its icon and its color,
+// which tints the edge, the caret and the completion chosen, and the keys that leave it say what
+// they do. The prefix that opens a mode, as `lua ` or `!`, is hidden while the caret is past
+// it: the label says it.
 Item {
     id: root
 
-    // The editor's command line: visible, first, prompt, text, position, indent, level, block.
+    // The editor's command line: visible, first, prompt, text, runs, position, indent, level,
+    // block.
     required property var line
     required property var colors
     required property var typography
     property real ratio: 1
+    // The room the completion menu takes inside the surface while it completes this line, and
+    // whether one of its items is chosen.
+    property real menuHeight: 0
+    property bool menuChosen: false
     readonly property bool shown: line.visible ?? false
     readonly property string first: line.first ?? ""
-    readonly property string leading: (line.prompt ?? "").length > 0 ? line.prompt : first
-    readonly property bool searching: first === "/" || first === "?"
+    readonly property string prompt: (line.prompt ?? "").trim()
+    readonly property string written: line.text ?? ""
+    readonly property int caretAt: line.position ?? 0
     readonly property var blockLines: (line.block ?? "").length > 0 ? line.block.replace(/\n$/, "").split("\n") : []
-    readonly property real inset: 14 * ratio
-    readonly property real rowHeight: 40 * ratio
-    readonly property real footerHeight: 30 * ratio
-    // The room the key that leaves the line takes at its end.
-    readonly property real leaveWidth: 44 * ratio
+    readonly property var mode: modeOf(first, prompt, written)
+    // The characters of the prefix hidden: none while the caret is in it.
+    readonly property int hidden: caretAt >= mode.prefix ? mode.prefix : 0
+    readonly property color tone: mode.tone
+    readonly property real inset: 16 * ratio
+    readonly property real inputHeight: 52 * ratio
+    readonly property real footerHeight: 34 * ratio
+    // Where the completion menu stands in the surface.
+    readonly property real menuTop: blockColumn.height + inputHeight
     readonly property real cellWidth: typography.grid?.cellWidth ?? 8
     // The height of the editor's rows: the surface sits on a row's edge, so it never cuts a
     // line of text in half.
     property real cellHeight: 0
     readonly property real place: Math.min(parent.height * 0.16, parent.height - height - 16 * ratio)
     readonly property real rest: cellHeight > 0 ? Math.round(place / cellHeight) * cellHeight : Math.round(place)
-    // Where a completion menu hangs from: under the character the caret is on.
-    readonly property real caretX: field.x + caret.x
     property real reveal: shown ? 1 : 0
 
-    width: Math.min(parent.width - 32 * ratio, 620 * ratio)
-    height: rowHeight + blockColumn.height + footerHeight
+    // What is being written, by what opened the line and how its text starts: the modes of
+    // noice.nvim, which telar's window replaces.
+    function modeOf(first, prompt, text) {
+        const make = (label, glyph, tone, prefix, run) => ({label: label, glyph: glyph, tone: tone, prefix: prefix, run: run});
+
+        if (first === "/" || first === "?")
+            return make(first === "/" ? "Search ↓" : "Search ↑", "\uea6d", root.colors.yellow, 0, "Search");
+        if (first === "=")
+            return make("Expression", "\ueb64", root.colors.peach, 0, "Evaluate");
+        if (first !== ":")
+            return make(prompt.replace(/[:?]\s*$/, "").trim() || "Input", "\uea73", root.colors.peach, 0, "Accept");
+
+        let found = /^\s*!/.exec(text);
+        if (found)
+            return make("Shell", "\uebc4", root.colors.green, found[0].length, "Run in shell");
+        found = /^\s*(lua\s*=\s*|lua\s+|=\s*)/.exec(text);
+        if (found)
+            return make("Lua", "\udb82\udcb1", root.colors.teal, found[0].length, "Run Lua");
+        found = /^\s*he?l?p?\s+/.exec(text);
+        if (found)
+            return make("Help", "\ueb32", root.colors.mauve, found[0].length, "Open help");
+        return make("Command", "\uea85", root.colors.accent, 0, "Run");
+    }
+
+    // The runs of the text after the hidden prefix.
+    function shownRuns(runs, text, hidden) {
+        const all = runs.length > 0 ? runs : [{text: text, color: "", bold: false}];
+        let skip = hidden;
+        const kept = [];
+
+        for (const run of all) {
+            if (skip >= run.text.length) {
+                skip -= run.text.length;
+                continue;
+            }
+
+            kept.push({text: run.text.slice(skip), color: run.color, bold: run.bold});
+            skip = 0;
+        }
+
+        return kept;
+    }
+
+    width: Math.min(parent.width - 32 * ratio, 640 * ratio)
+    height: blockColumn.height + inputHeight + menuHeight + footerHeight
     x: Math.round((parent.width - width) / 2)
     y: rest - (1 - reveal) * 8 * ratio
     opacity: reveal
@@ -48,13 +105,14 @@ Item {
         anchors.fill: parent
         colors: root.colors
         ratio: root.ratio
+        tint: root.tone
     }
 
     // A function or a loop being typed: the lines above the one Neovim edits.
     Column {
         id: blockColumn
         x: root.inset
-        y: root.blockLines.length > 0 ? 8 * root.ratio : 0
+        y: root.blockLines.length > 0 ? 10 * root.ratio : 0
         width: root.width - 2 * root.inset
 
         Repeater {
@@ -73,65 +131,64 @@ Item {
     }
 
     Item {
+        id: input
         y: blockColumn.height
         width: root.width
-        height: root.rowHeight
+        height: root.inputHeight
 
-        // What opened the line stands as the key it was.
+        // What is being written, as a chip in the mode's color.
         Rectangle {
-            x: root.inset - 7 * root.ratio
+            id: chip
+            objectName: "cmdlineMode"
+            readonly property string label: root.mode.label
+            x: root.inset - 4 * root.ratio
             y: Math.round((parent.height - height) / 2)
-            width: Math.max(glass.width, lead.width) + 14 * root.ratio
-            height: 24 * root.ratio
-            radius: 6 * root.ratio
-            color: Qt.alpha(root.colors.text, 0.07)
-            border.width: Math.max(1, root.ratio) / Screen.devicePixelRatio
-            border.color: Qt.alpha(root.colors.text, 0.14)
-            visible: glass.visible || lead.visible
-        }
+            width: Math.min(chipRow.implicitWidth + 18 * root.ratio, root.width * 0.42)
+            height: 26 * root.ratio
+            radius: 7 * root.ratio
+            color: Qt.alpha(root.tone, 0.14)
 
-        // What opened the line: a command's prompt or the search glass as icons, or the prompt
-        // Neovim gave.
-        ChromeIcon {
-            id: glass
-            x: root.inset
-            width: visible ? 18 * root.ratio : 0
-            height: parent.height
-            glyph: root.searching ? "\uea6d" : "\uea85"
-            pixelSize: root.typography.body
-            color: root.colors.accent
-            visible: (root.searching || root.first === ":") && (root.line.prompt ?? "").length === 0
-        }
+            Row {
+                id: chipRow
+                x: 8 * root.ratio
+                height: parent.height
+                spacing: 7 * root.ratio
 
-        CellText {
-            id: lead
-            x: root.inset
-            height: parent.height
-            width: visible ? implicitWidth : 0
-            text: root.leading
-            grid: root.typography.grid
-            color: root.colors.accent
-            bold: true
-            visible: !glass.visible && root.leading.length > 0
+                ChromeIcon {
+                    width: Math.round(root.typography.body * 1.05)
+                    height: parent.height
+                    glyph: root.mode.glyph
+                    pixelSize: width
+                    color: root.tone
+                }
+
+                ChromeText {
+                    width: Math.min(implicitWidth, chip.width - x - 10 * root.ratio)
+                    height: parent.height
+                    text: root.mode.label
+                    pixelSize: root.typography.small
+                    emphasized: true
+                    color: root.tone
+                }
+            }
         }
 
         Item {
             id: field
-            x: root.inset + Math.max(glass.width, lead.width) + 18 * root.ratio + (root.line.indent ?? 0) * root.cellWidth
-            width: Math.max(0, root.width - x - root.inset - root.leaveWidth)
+            x: chip.x + chip.width + 12 * root.ratio + (root.line.indent ?? 0) * root.cellWidth
+            width: Math.max(0, leaveKey.x - x - 12 * root.ratio)
             height: parent.height
             clip: true
 
-            // The line as Neovim highlights it, run after run; all of it in the text's color when
-            // it has no highlight.
+            // The line as it is colored, run after run, after its hidden prefix.
             Row {
                 id: typed
                 // The line follows its caret once it is longer than the field.
-                x: Math.min(0, field.width - 2 * root.cellWidth - (root.line.position ?? 0) * root.cellWidth)
+                x: Math.min(0, field.width - 2 * root.cellWidth - (root.caretAt - root.hidden) * root.cellWidth)
                 height: parent.height
 
                 Repeater {
-                    model: (root.line.runs ?? []).length > 0 ? root.line.runs : [{text: root.line.text ?? "", color: "", bold: false}]
+                    model: root.shownRuns(root.line.runs ?? [], root.written, root.hidden)
 
                     delegate: CellText {
                         required property var modelData
@@ -146,24 +203,32 @@ Item {
 
             Rectangle {
                 id: caret
-                x: typed.x + (root.line.position ?? 0) * root.cellWidth
+                x: typed.x + (root.caretAt - root.hidden) * root.cellWidth
                 y: Math.round((parent.height - height) / 2)
-                width: Math.max(1.5 * root.ratio, 1)
-                height: Math.round(18 * root.ratio)
+                width: Math.max(2 * root.ratio, 1)
+                height: Math.round(20 * root.ratio)
                 radius: width / 2
-                color: root.colors.accent
+                color: root.tone
             }
         }
 
         ChromeText {
+            id: leaveKey
             x: root.width - width - root.inset
-            width: root.leaveWidth - 8 * root.ratio
+            width: implicitWidth
             height: parent.height
-            horizontalAlignment: Text.AlignRight
             text: "esc"
             pixelSize: root.typography.small
-            color: Qt.alpha(root.colors.text, 0.45)
+            color: Qt.alpha(root.colors.text, 0.4)
         }
+    }
+
+    Rectangle {
+        y: root.menuTop
+        width: root.width
+        height: Math.max(1, root.ratio) / Screen.devicePixelRatio
+        color: Qt.alpha(root.colors.text, 0.08)
+        visible: root.menuHeight > 0
     }
 
     KeyHintBar {
@@ -173,7 +238,9 @@ Item {
         colors: root.colors
         typography: root.typography
         ratio: root.ratio
-        hints: root.searching ? [] : [{keys: ["⇥"], word: "Complete"}]
-        trailing: ({keys: ["↵"], word: root.searching ? "Search" : "Run"})
+        hints: root.menuChosen ? [{keys: ["⇥"], word: "Next"}, {keys: ["⇧⇥"], word: "Previous"}]
+            : root.first === "/" || root.first === "?" ? [{keys: ["⌃G"], word: "Next match"}, {keys: ["⌃T"], word: "Previous"}]
+            : root.first === ":" ? [{keys: ["⇥"], word: "Complete"}] : []
+        trailing: ({keys: ["↵"], word: root.mode.run})
     }
 }

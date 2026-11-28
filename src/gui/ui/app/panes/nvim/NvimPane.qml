@@ -15,6 +15,10 @@ FocusScope {
     required property var colors
     required property var typography
     property real ratio: 1
+    // The last command line run and when it closed: the output a command prints right after
+    // is titled by it.
+    property string lastCommand: ""
+    property double lastCommandAt: 0
     // How far a float's surface reaches past its cells.
     readonly property real floatInset: 6 * ratio
     readonly property alias editor: view
@@ -44,7 +48,6 @@ FocusScope {
         focus: true
         controller: root.controller
         paneId: root.paneId
-        pickerColumns: pick.columns
         onPressed: root.pressed()
 
         Repeater {
@@ -64,8 +67,10 @@ FocusScope {
                 // preview comes with its picker instead.
                 property real reveal: floating && !preview ? 0 : 1
 
-                x: record.x
-                y: record.y + (1 - reveal) * 6 * root.ratio
+                // The preview stands where the picker's column leaves it room, to the pixel; the
+                // rest on their cells.
+                x: preview ? room.x : record.x
+                y: (preview ? room.y : record.y) + (1 - reveal) * 6 * root.ratio
                 // The picker's preview is a float of Neovim's, drawn over the picker's surface.
                 z: preview ? 995 : record.layer
                 width: record.width
@@ -378,6 +383,14 @@ FocusScope {
             objectName: "editorSaid"
             readonly property var shown: view.messages
             readonly property bool docked: bar.visible
+            // The count of the last search, as Neovim says it after one: `/obs [3/4]`, until
+            // Neovim clears it. Its pattern and where the match is among them.
+            readonly property var searched: {
+                const said = (shown.items ?? []).filter(item => item.kind === "search");
+                const found = said.length > 0 ? /^\s*([/?])?(.*?)\s*\[([^\]]+)\]\s*$/.exec(said[said.length - 1].text) : null;
+
+                return found ? {pattern: found[2].trim(), count: found[3].replace("/", " of ")} : null;
+            }
 
             z: 5
             x: docked ? bar.reservedX : view.width - width - 8 * root.ratio
@@ -402,6 +415,53 @@ FocusScope {
                 height: parent.height
                 spacing: 14 * root.ratio
 
+                // The search being walked: its pattern and which of its matches the cursor is on.
+                Item {
+                    objectName: "editorSearchCount"
+                    readonly property string label: status.searched ? status.searched.count : ""
+                    visible: status.searched !== null
+                    width: searchRow.implicitWidth + 16 * root.ratio
+                    height: parent.height
+
+                    Rectangle {
+                        y: Math.round((parent.height - height) / 2)
+                        width: parent.width
+                        height: Math.min(parent.height - 2 * root.ratio, 20 * root.ratio)
+                        radius: 6 * root.ratio
+                        color: Qt.alpha(root.colors.yellow, 0.14)
+                    }
+
+                    Row {
+                        id: searchRow
+                        x: 8 * root.ratio
+                        height: parent.height
+                        spacing: 8 * root.ratio
+
+                        Text {
+                            visible: text.length > 0
+                            height: parent.height
+                            verticalAlignment: Text.AlignVCenter
+                            text: status.searched?.pattern ?? ""
+                            color: root.colors.text
+                            font.family: root.typography.primaryFamily || "Telar Forma"
+                            font.pixelSize: root.typography.small
+                            textFormat: Text.PlainText
+                            renderType: Text.NativeRendering
+                            elide: Text.ElideRight
+                            width: Math.min(implicitWidth, 160 * root.ratio)
+                        }
+
+                        ChromeText {
+                            width: implicitWidth
+                            height: parent.height
+                            text: status.searched?.count ?? ""
+                            pixelSize: root.typography.small
+                            emphasized: true
+                            color: root.colors.yellow
+                        }
+                    }
+                }
+
                 ChromeText {
                     visible: text.length > 0
                     width: implicitWidth
@@ -423,6 +483,22 @@ FocusScope {
             }
         }
 
+        // What a command that lists printed, at the foot of the editor over its last rows.
+        NvimOutput {
+            z: 945
+            // A picker has the pane: the output waits behind it, out of sight.
+            visible: reveal > 0 && !(view.picker.open ?? false)
+            ground: bar.visible ? bar.y : view.height
+            messages: view.messages
+            command: root.lastCommand
+            commandAt: root.lastCommandAt
+            cellHeight: view.cellHeight
+            colors: root.colors
+            typography: root.typography
+            ratio: root.ratio
+            onDismissed: key => view.dismissMessage(key)
+        }
+
         NvimMessages {
             z: 950
             // A picker has the pane: notices wait behind it, out of sight.
@@ -436,21 +512,45 @@ FocusScope {
             ratio: root.ratio
         }
 
+        // The command line the person ran last: the text it had as it closed.
+        Connections {
+            target: line
+
+            function onWrittenChanged() {
+                // As it closes the line is emptied: what it held before is what ran. The line as
+                // Neovim sent it says whether it is open, whichever of its parts changed first.
+                if ((view.cmdline.visible ?? false) && (view.cmdline.first ?? "") === ":" && line.written.length > 0)
+                    root.lastCommand = ":" + line.written;
+            }
+
+            function onShownChanged() {
+                if (!line.shown)
+                    root.lastCommandAt = Date.now();
+            }
+        }
+
         NvimCmdline {
             id: line
             z: 960
             line: view.cmdline
             cellHeight: view.cellHeight
+            // The completions of the line are part of its surface.
+            menuHeight: completion.embedded && completion.shown ? completion.fullHeight : 0
+            menuChosen: completion.embedded && completion.shown && completion.selected >= 0
             colors: root.colors
             typography: root.typography
             ratio: root.ratio
         }
 
         NvimPopupMenu {
+            id: completion
             z: 970
             menu: view.popupMenu
-            // Under the cell Neovim names, or under the command line it completes.
-            anchor: (view.popupMenu.onCmdline ?? false) ? Qt.point(line.x + line.caretX, line.y + line.height - view.cellHeight) : Qt.point(view.popupMenu.x ?? 0, view.popupMenu.y ?? 0)
+            // Under the cell Neovim names, or inside the command line it completes.
+            embedded: (view.popupMenu.onCmdline ?? false) && line.shown
+            dock: Qt.rect(line.x, line.y + line.menuTop, line.width, 0)
+            tone: line.tone
+            anchor: Qt.point(view.popupMenu.x ?? 0, view.popupMenu.y ?? 0)
             cellHeight: view.cellHeight
             colors: root.colors
             typography: root.typography

@@ -499,28 +499,6 @@ namespace telar::gui::qt {
     }
   }
 
-  void NvimItem::setPickerColumns(int columns) {
-    const auto kept = static_cast<std::uint16_t>(std::clamp(columns, minimum_picker_columns, maximum_picker_columns));
-    if (kept == picker_columns_) {
-      return;
-    }
-
-    picker_columns_ = kept;
-    emit pickerColumnsChanged();
-    // The rows are cut again to the new width, once the binding that asked for it is done:
-    // the width follows the picker, which the rows change.
-    QMetaObject::invokeMethod(
-        this,
-        [this] {
-          if (const auto* editor = editorState()) {
-            picker_revision_ = 0;
-            projectPicker(*editor);
-          }
-        },
-        Qt::QueuedConnection
-    );
-  }
-
   void NvimItem::projectPicker(const nvim::Editor& editor) {
     if (picker_revision_ == editor.picker_revision) {
       return;
@@ -529,6 +507,11 @@ namespace telar::gui::qt {
     const auto& picker = editor.picker;
     const std::string_view text{picker.text.data(), picker.text.size()};
     const auto query = picker.query.view();
+    // With nothing typed the files open in the editor are a group of their own, ahead of the rest.
+    const bool browsing = std::ranges::any_of(picker.matches, [](const nvim::PickMatch& match) {
+      return match.open;
+    });
+
     QVariantList rows;
 
     picker_revision_ = editor.picker_revision;
@@ -540,10 +523,11 @@ namespace telar::gui::qt {
       const auto line = match.text.of(text);
       const auto marks = std::span<const std::uint16_t>{std::as_const(picker.positions).view()}.subspan(match.first_position, match.position_count);
 
-      // The path as it is read, its directory quiet before its name, cut to the cells the
-      // list has: the terminal's path picker shows its paths with the same runs.
+      // The whole path, its folder quiet before its name, with what the query matched in
+      // each: the list reads its name and its folder apart, and cuts what does not fit.
+      constexpr auto whole = std::numeric_limits<std::uint16_t>::max();
       QVariantMap row{
-          {QStringLiteral("runs"), pathLabelRuns(path, marks, picker_columns_)},
+          {QStringLiteral("runs"), pathLabelRuns(path, marks, whole)},
           {QStringLiteral("name"), shown(path.substr(name_start))},
           {QStringLiteral("directory"), shown(slash == std::string_view::npos ? std::string_view{} : path.substr(0, slash))},
           {QStringLiteral("line"), static_cast<int>(match.line)},
@@ -553,6 +537,15 @@ namespace telar::gui::qt {
 
       putIcon(row, fileIcon(path));
       putChange(row, match.change);
+      if (browsing) {
+        row.insert(QStringLiteral("section"), match.open ? QStringLiteral("Open") : QStringLiteral("Files"));
+      }
+
+      if (match.current) {
+        row.insert(QStringLiteral("badge"), QStringLiteral("current"));
+        row.insert(QStringLiteral("badgeTone"), QStringLiteral("overlay1"));
+      }
+
       rows.append(std::move(row));
     }
 
@@ -973,8 +966,13 @@ namespace telar::gui::qt {
           {QStringLiteral("menu"), shown(item.menu.of(text))},
       };
 
-      // What the item is, by the icon of its kind; an item that says no kind has none.
-      if (!kind.empty()) {
+      // What the item is, by the icon of its kind; an item that says no kind has none. A file
+      // the command line completes has its own icon, as in the picker.
+      if (kind == "file") {
+        putIcon(entry, fileIcon(item.word.of(text)));
+      } else if (kind == "folder") {
+        putIcon(entry, directoryIcon());
+      } else if (!kind.empty()) {
         putIcon(entry, kindIcon(kind));
       }
 
