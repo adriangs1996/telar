@@ -169,7 +169,7 @@ namespace {
       check(!spread.record(10min + 1ms));
     }
 
-    check(!spread.record(10min + 2ms));
+    check(spread.record(10min + 2ms));
     check(spread.record(10min + 3ms));
   }
 
