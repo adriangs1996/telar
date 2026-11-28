@@ -1013,6 +1013,14 @@ namespace telar::runtime::redirect {
       return Tracking::known;
     }
 
+    const auto& source = key.source.endpoint.storage;
+    const auto unacceptedFromSource = [&](const auto& flow) {
+      return flow && flow->incoming && !flow->accepted && flow->key.source.endpoint.storage.ss_family == source.ss_family && sameHost(flow->key.source.endpoint.storage, source);
+    };
+    if (incoming && std::cmp_greater_equal(std::ranges::count_if(flows_, unacceptedFromSource), maximum_unaccepted_per_source)) {
+      return Tracking::full;
+    }
+
     const auto flows = flows_.viewMut();
     const auto empty = std::ranges::find_if(flows, [](const auto& flow) {
       return !flow;
@@ -1021,7 +1029,7 @@ namespace telar::runtime::redirect {
       return Tracking::full;
     }
 
-    Flow flow{.key = key, .incoming = incoming};
+    Flow flow{.key = key, .deadline = std::chrono::steady_clock::now() + (incoming ? incoming_grace : connection_grace), .incoming = incoming};
 
     if (owners_) {
       const auto owner = owners_.getMut().find(key);

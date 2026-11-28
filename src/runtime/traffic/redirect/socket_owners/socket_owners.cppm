@@ -474,6 +474,11 @@ export {
 
       // How long a discovered flow waits for its connection, and an accepted one for its origin.
       static constexpr auto connection_grace = std::chrono::seconds{10};
+      // An incoming SYN comes from any host of the network: its flow waits less, and one host holds
+      // a few unaccepted flows at a time, so that a host that never completes its connections does
+      // not fill the table.
+      static constexpr auto incoming_grace = std::chrono::seconds{2};
+      static constexpr std::size_t maximum_unaccepted_per_source = 16;
 
       struct Flow {
         FlowKey key;
@@ -490,6 +495,17 @@ export {
       [[nodiscard]] ds::String<Memory> plan(uid_t uid, const PfIdentity<Memory>& identity, bool dry_run = false) const;
 
       void run(const PfIdentity<Memory>& identity);
+
+      enum class Tracking : std::uint8_t {
+        known,
+        added,
+        full,
+      };
+
+      // Records a newly discovered flow, with the direct route for one the process selection leaves
+      // alone; full when the table has no room or the flow's source holds as many unaccepted
+      // incoming flows as one host may. Discovery calls it; its limits are checked without pf.
+      Tracking track(const FlowKey& key, bool incoming, const PacketLog::Metadata* metadata);
 
     private:
       // Generic over the caller's session.
@@ -534,22 +550,12 @@ export {
         discovery_.getMut().inject(packet);
       }
 
-      enum class Tracking : std::uint8_t {
-        known,
-        added,
-        full,
-      };
-
       // Whether the session redirects a flow to this destination in this direction.
       [[nodiscard]] bool selects(const FlowKey& key, bool incoming) const;
 
       // Whether an incoming flow arrived on, and still reaches, a local interface other than loopback
       // and the discovery tunnel.
       [[nodiscard]] bool reachesLocally(const PacketLog::Metadata& metadata, const Target& destination) const;
-
-      // Records a newly discovered flow, with the direct route for one the process selection leaves
-      // alone; full when the table has no room.
-      Tracking track(const FlowKey& key, bool incoming, const PacketLog::Metadata* metadata);
 
       static void readAll(int socket, std::span<Byte> bytes);
 
