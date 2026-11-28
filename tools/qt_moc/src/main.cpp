@@ -8,10 +8,10 @@
 #include <clang/Tooling/CommonOptionsParser.h>
 #include <clang/Tooling/Tooling.h>
 #include <llvm/Support/CommandLine.h>
-#include <llvm/Support/PrettyStackTrace.h>
-#include <llvm/Support/Signals.h>
 #include <llvm/Support/JSON.h>
 #include <llvm/Support/Path.h>
+#include <llvm/Support/PrettyStackTrace.h>
+#include <llvm/Support/Signals.h>
 #include <llvm/Support/raw_ostream.h>
 #include <llvm/Support/thread.h>
 
@@ -20,6 +20,7 @@
 #include <map>
 #include <memory>
 #include <optional>
+#include <set>
 #include <sstream>
 #include <string>
 #include <vector>
@@ -87,11 +88,11 @@ namespace {
   std::map<std::string, std::string> loadCxxModulesMaps(const std::vector<std::string>& paths, const std::string& build_root) {
     std::map<std::string, std::string> modules;
     std::vector<std::string> queue = paths;
-    std::map<std::string, bool> visited;
+    std::set<std::string> visited;
 
     for (std::size_t idx = 0; idx < queue.size(); ++idx) {
       const auto norm = std::filesystem::path(queue[idx]).lexically_normal().string();
-      if (!visited.emplace(norm, true).second) {
+      if (!visited.insert(norm).second) {
         continue;
       }
 
@@ -218,10 +219,123 @@ namespace {
     };
   }
 
-}
+  int run(int argc, const char** argv) {
+    registerAttributes();
 
-namespace {
-  int run(int argc, const char** argv);
+    llvm::cl::OptionCategory category("telar-moc options");
+    const llvm::cl::opt<std::string> moc_out("moc-out", llvm::cl::desc("Output path for generated module implementation unit or fragment"), llvm::cl::cat(category));
+    const llvm::cl::opt<std::string> json_out("json-out", llvm::cl::desc("Output path for Qt 6.12 metatypes JSON"), llvm::cl::cat(category));
+    const llvm::cl::opt<std::string> qml_meta_out("qml-meta-out", llvm::cl::desc("Output path for per-unit QML module registration metadata"), llvm::cl::cat(category));
+    const llvm::cl::opt<std::string> reg_out("reg-out", llvm::cl::desc("Output path for QML type registration C++"), llvm::cl::cat(category));
+    const llvm::cl::opt<std::string> merge_json("merge-json", llvm::cl::desc("Output path for merged metatypes JSON (in --collect mode)"), llvm::cl::cat(category));
+    const llvm::cl::opt<std::string> qt_module("qt-module", llvm::cl::desc("Qt wrapper module name to import"), llvm::cl::init("telar.gui.qt"), llvm::cl::cat(category));
+    const llvm::cl::opt<std::string> qml_uri("uri", llvm::cl::desc("QML module URI"), llvm::cl::init("Telar.Gui"), llvm::cl::cat(category));
+    const llvm::cl::opt<int> qml_major("major", llvm::cl::desc("QML module major version"), llvm::cl::init(1), llvm::cl::cat(category));
+    const llvm::cl::opt<int> qml_minor("minor", llvm::cl::desc("QML module minor version"), llvm::cl::init(0), llvm::cl::cat(category));
+    const llvm::cl::opt<bool> fragment("fragment", llvm::cl::desc("Emit a #include-able fragment without module/import header"), llvm::cl::init(false), llvm::cl::cat(category));
+    const llvm::cl::opt<bool> collect("collect", llvm::cl::desc("Collect per-unit .qmlmeta / .json files without running Clang"), llvm::cl::init(false), llvm::cl::cat(category));
+    const llvm::cl::list<std::string> cxx_modules_json("cxx-modules-json", llvm::cl::desc("CMake CXXModules.json paths providing BMI mappings when .modmap does not exist yet"), llvm::cl::cat(category));
+    const llvm::cl::opt<std::string> build_root("build-root", llvm::cl::desc("Build root directory for resolving relative paths in CXXModules.json"), llvm::cl::cat(category));
+
+    auto options = clang::tooling::CommonOptionsParser::create(argc, argv, category, llvm::cl::ZeroOrMore);
+    if (!options) {
+      llvm::errs() << options.takeError();
+      return 2;
+    }
+
+    const auto& sources = options->getSourcePathList();
+
+    if (collect) {
+      std::vector<UnitMeta> units;
+      std::vector<std::string> json_texts;
+
+      for (const auto& path : sources) {
+        if (llvm::StringRef(path).ends_with(".json")) {
+          json_texts.push_back(readText(path));
+        } else {
+          units.push_back(parseQmlMeta(readText(path)));
+        }
+      }
+
+      if (!reg_out.empty()) {
+        if (!writeText(reg_out, emitQmlRegistrations(units, qt_module, qml_uri, qml_major, qml_minor))) {
+          return 1;
+        }
+      }
+
+      if (!merge_json.empty()) {
+        if (!writeText(merge_json, mergeMetatypesJson(json_texts))) {
+          return 1;
+        }
+      }
+
+      return 0;
+    }
+
+    const std::vector<std::string> json_paths(cxx_modules_json.begin(), cxx_modules_json.end());
+    const auto fallback_modules = loadCxxModulesMaps(json_paths, build_root);
+
+    SingleCommandDatabase single_db(options->getCompilations());
+    std::vector<UnitMeta> units;
+
+    units.reserve(sources.size());
+    for (const auto& source : sources) {
+      UnitMeta unit;
+      clang::tooling::ClangTool tool(single_db, {source});
+
+      tool.appendArgumentsAdjuster(makeAdjuster(fallback_modules));
+      tool.appendArgumentsAdjuster(clang::tooling::getInsertArgumentAdjuster("-DTELAR_MOC_RUN=1", clang::tooling::ArgumentInsertPosition::END));
+      tool.appendArgumentsAdjuster(clang::tooling::getInsertArgumentAdjuster("-Wno-unknown-attributes", clang::tooling::ArgumentInsertPosition::END));
+      if (fragment) {
+        tool.appendArgumentsAdjuster(clang::tooling::getInsertArgumentAdjuster("-Wno-undefined-internal", clang::tooling::ArgumentInsertPosition::END));
+        tool.appendArgumentsAdjuster(clang::tooling::getInsertArgumentAdjuster("-Wno-unused-const-variable", clang::tooling::ArgumentInsertPosition::END));
+      }
+
+      tool.appendArgumentsAdjuster(clang::tooling::getInsertArgumentAdjuster("-resource-dir=" TELAR_QT_MOC_RESOURCE_DIR, clang::tooling::ArgumentInsertPosition::END));
+      ExtractActionFactory factory(unit);
+
+      if (tool.run(&factory) != 0) {
+        return 1;
+      }
+
+      if (!unit.errors.empty()) {
+        for (const auto& error : unit.errors) {
+          llvm::errs() << "telar-moc: " << source << ": " << error << "\n";
+        }
+
+        return 1;
+      }
+
+      units.push_back(std::move(unit));
+    }
+
+    if (!moc_out.empty() && !units.empty()) {
+      if (!writeText(moc_out, emitMocCpp(units.front(), qt_module, fragment))) {
+        return 1;
+      }
+    }
+
+    if (!json_out.empty() && !units.empty()) {
+      if (!writeText(json_out, emitMetatypesJson(units.front()))) {
+        return 1;
+      }
+    }
+
+    if (!qml_meta_out.empty() && !units.empty()) {
+      if (!writeText(qml_meta_out, emitQmlMeta(units.front()))) {
+        return 1;
+      }
+    }
+
+    if (!reg_out.empty()) {
+      if (!writeText(reg_out, emitQmlRegistrations(units, qt_module, qml_uri, qml_major, qml_minor))) {
+        return 1;
+      }
+    }
+
+    return 0;
+  }
+
 }
 
 int main(int argc, const char** argv) {
@@ -239,119 +353,4 @@ int main(int argc, const char** argv) {
 
   worker.join();
   return status;
-}
-
-namespace {
-
-int run(int argc, const char** argv) {
-  registerAttributes();
-
-  llvm::cl::OptionCategory category("telar-moc options");
-  const llvm::cl::opt<std::string> moc_out("moc-out", llvm::cl::desc("Output path for generated module implementation unit or fragment"), llvm::cl::cat(category));
-  const llvm::cl::opt<std::string> json_out("json-out", llvm::cl::desc("Output path for Qt 6.12 metatypes JSON"), llvm::cl::cat(category));
-  const llvm::cl::opt<std::string> qml_meta_out("qml-meta-out", llvm::cl::desc("Output path for per-unit QML module registration metadata"), llvm::cl::cat(category));
-  const llvm::cl::opt<std::string> reg_out("reg-out", llvm::cl::desc("Output path for QML type registration C++"), llvm::cl::cat(category));
-  const llvm::cl::opt<std::string> merge_json("merge-json", llvm::cl::desc("Output path for merged metatypes JSON (in --collect mode)"), llvm::cl::cat(category));
-  const llvm::cl::opt<std::string> qt_module("qt-module", llvm::cl::desc("Qt wrapper module name to import"), llvm::cl::init("telar.gui.qt"), llvm::cl::cat(category));
-  const llvm::cl::opt<std::string> qml_uri("uri", llvm::cl::desc("QML module URI"), llvm::cl::init("Telar.Gui"), llvm::cl::cat(category));
-  const llvm::cl::opt<int> qml_major("major", llvm::cl::desc("QML module major version"), llvm::cl::init(1), llvm::cl::cat(category));
-  const llvm::cl::opt<int> qml_minor("minor", llvm::cl::desc("QML module minor version"), llvm::cl::init(0), llvm::cl::cat(category));
-  const llvm::cl::opt<bool> fragment("fragment", llvm::cl::desc("Emit a #include-able fragment without module/import header"), llvm::cl::init(false), llvm::cl::cat(category));
-  const llvm::cl::opt<bool> collect("collect", llvm::cl::desc("Collect per-unit .qmlmeta / .json files without running Clang"), llvm::cl::init(false), llvm::cl::cat(category));
-  const llvm::cl::list<std::string> cxx_modules_json("cxx-modules-json", llvm::cl::desc("CMake CXXModules.json paths providing BMI mappings when .modmap does not exist yet"), llvm::cl::cat(category));
-  const llvm::cl::opt<std::string> build_root("build-root", llvm::cl::desc("Build root directory for resolving relative paths in CXXModules.json"), llvm::cl::cat(category));
-
-  auto options = clang::tooling::CommonOptionsParser::create(argc, argv, category, llvm::cl::ZeroOrMore);
-  if (!options) {
-    llvm::errs() << options.takeError();
-    return 2;
-  }
-
-  const auto& sources = options->getSourcePathList();
-
-  if (collect) {
-    std::vector<UnitMeta> units;
-    std::vector<std::string> json_texts;
-
-    for (const auto& path : sources) {
-      if (llvm::StringRef(path).ends_with(".json")) {
-        json_texts.push_back(readText(path));
-      } else {
-        UnitMeta unit;
-
-        parseQmlMeta(readText(path), unit);
-        units.push_back(std::move(unit));
-      }
-    }
-
-    if (!reg_out.empty()) {
-      if (!writeText(reg_out, emitQmlRegistrations(units, qt_module, qml_uri, qml_major, qml_minor))) {
-        return 1;
-      }
-    }
-
-    if (!merge_json.empty()) {
-      if (!writeText(merge_json, mergeMetatypesJson(json_texts))) {
-        return 1;
-      }
-    }
-
-    return 0;
-  }
-
-  std::vector<std::string> json_paths(cxx_modules_json.begin(), cxx_modules_json.end());
-  const auto fallback_modules = loadCxxModulesMaps(json_paths, build_root);
-
-  SingleCommandDatabase single_db(options->getCompilations());
-  std::vector<UnitMeta> units;
-
-  units.reserve(sources.size());
-  for (const auto& source : sources) {
-    UnitMeta unit;
-    clang::tooling::ClangTool tool(single_db, {source});
-
-    tool.appendArgumentsAdjuster(makeAdjuster(fallback_modules));
-    tool.appendArgumentsAdjuster(clang::tooling::getInsertArgumentAdjuster("-DTELAR_MOC_RUN=1", clang::tooling::ArgumentInsertPosition::END));
-    tool.appendArgumentsAdjuster(clang::tooling::getInsertArgumentAdjuster("-Wno-unknown-attributes", clang::tooling::ArgumentInsertPosition::END));
-    if (fragment) {
-      tool.appendArgumentsAdjuster(clang::tooling::getInsertArgumentAdjuster("-Wno-undefined-internal", clang::tooling::ArgumentInsertPosition::END));
-      tool.appendArgumentsAdjuster(clang::tooling::getInsertArgumentAdjuster("-Wno-unused-const-variable", clang::tooling::ArgumentInsertPosition::END));
-    }
-    tool.appendArgumentsAdjuster(clang::tooling::getInsertArgumentAdjuster("-resource-dir=" TELAR_QT_MOC_RESOURCE_DIR, clang::tooling::ArgumentInsertPosition::END));
-    ExtractActionFactory factory(unit);
-
-    if (tool.run(&factory) != 0) {
-      return 1;
-    }
-
-    units.push_back(std::move(unit));
-  }
-
-  if (!moc_out.empty() && !units.empty()) {
-    if (!writeText(moc_out, emitMocCpp(units.front(), qt_module, fragment))) {
-      return 1;
-    }
-  }
-
-  if (!json_out.empty() && !units.empty()) {
-    if (!writeText(json_out, emitMetatypesJson(units.front()))) {
-      return 1;
-    }
-  }
-
-  if (!qml_meta_out.empty() && !units.empty()) {
-    if (!writeText(qml_meta_out, emitQmlMeta(units.front()))) {
-      return 1;
-    }
-  }
-
-  if (!reg_out.empty()) {
-    if (!writeText(reg_out, emitQmlRegistrations(units, qt_module, qml_uri, qml_major, qml_minor))) {
-      return 1;
-    }
-  }
-
-  return 0;
-}
-
 }

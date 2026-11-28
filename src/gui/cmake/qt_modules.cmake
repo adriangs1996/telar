@@ -18,11 +18,6 @@ endif()
 # qt_add_qml_module passes them to qmltyperegistrar for gui-quick.
 set(TELAR_QT_FOREIGN_METATYPES core gui concurrent quick qml network opengl quickcontrols2 svg)
 
-# telar-qt-plugin.so is loaded build-wide through telar::build_flags (cmake/TelarBuild.cmake)
-# so every C++23 module target shares identical BMI compile flags.
-function(telar_enable_qt_plugin target)
-endfunction()
-
 # Generates Qt 6.12 meta-object implementation units (*_moc.cpp) for every module interface
 # in SOURCES that declares [[qt::object]] or [[qt::ns]], and optionally generates the QML
 # type registration unit and .qmltypes file for a QML module.
@@ -95,10 +90,10 @@ function(telar_add_qt_moc target)
   endif()
 
   if(qt_moc_QML_URI AND meta_jsons)
-    if(NOT qt_moc_QML_MAJOR)
+    if(NOT DEFINED qt_moc_QML_MAJOR)
       set(qt_moc_QML_MAJOR 1)
     endif()
-    if(NOT qt_moc_QML_MINOR)
+    if(NOT DEFINED qt_moc_QML_MINOR)
       set(qt_moc_QML_MINOR 0)
     endif()
     if(NOT qt_moc_QML_TYPEINFO)
@@ -200,22 +195,17 @@ endfunction()
 # Generates #include-able <stem>.moc fragments via telar-moc --fragment for QtTest
 # translation units that declare [[qt::object]] classes directly inside *_test.cpp.
 function(telar_add_qt_test_moc target)
-  cmake_parse_arguments(PARSE_ARGV 1 qt_test "" "" "MODULE_DEPS;SOURCES")
-  if(qt_test_UNPARSED_ARGUMENTS)
-    message(FATAL_ERROR "telar_add_qt_test_moc(${target}): unexpected arguments ${qt_test_UNPARSED_ARGUMENTS}")
+  if(ARGC GREATER 1)
+    message(FATAL_ERROR "telar_add_qt_test_moc(${target}): unexpected extra arguments")
   endif()
 
-  telar_enable_qt_plugin(${target} PRIVATE)
   set_target_properties(${target} PROPERTIES AUTOMOC OFF AUTOUIC OFF)
 
-  if(NOT qt_test_SOURCES)
-    get_target_property(qt_test_SOURCES ${target} SOURCES)
-  endif()
+  get_target_property(qt_test_SOURCES ${target} SOURCES)
 
-  set(auto_deps)
+  set(qt_test_MODULE_DEPS)
   set(visited)
-  _telar_collect_module_deps(${target} auto_deps visited)
-  list(APPEND qt_test_MODULE_DEPS ${auto_deps})
+  _telar_collect_module_deps(${target} qt_test_MODULE_DEPS visited)
   list(REMOVE_DUPLICATES qt_test_MODULE_DEPS)
 
   set(cxx_mod_args)

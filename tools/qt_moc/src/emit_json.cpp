@@ -7,30 +7,6 @@ namespace {
 
   using namespace telar::qt_moc;
 
-  std::string jsonEscape(const std::string& text) {
-    std::string out;
-
-    out.reserve(text.size() + 2);
-    for (const char ch : text) {
-      switch (ch) {
-      case '\\':
-        out += "\\\\";
-        break;
-      case '"':
-        out += "\\\"";
-        break;
-      case '\n':
-        out += "\\n";
-        break;
-      default:
-        out += ch;
-        break;
-      }
-    }
-
-    return out;
-  }
-
   const char* accessName(Access access) {
     switch (access) {
     case Access::public_:
@@ -68,7 +44,7 @@ namespace {
       if (!m.params.empty()) {
         out << "            \"arguments\": [\n";
         for (std::size_t p = 0; p < m.params.size(); ++p) {
-          out << "              {\"name\": \"" << jsonEscape(m.params[p].name) << "\", \"type\": \"" << jsonEscape(memberType(m.params[p].normalized_type, owner)) << "\"}";
+          out << "              {\"name\": \"" << escapeString(m.params[p].name) << "\", \"type\": \"" << escapeString(memberType(m.params[p].normalized_type, owner)) << "\"}";
           if (p + 1 < m.params.size()) {
             out << ",";
           }
@@ -88,8 +64,8 @@ namespace {
 
       out << "            \"index\": " << (base_index + static_cast<int>(idx)) << ",\n";
       out << "            \"lineNumber\": " << m.line << ",\n";
-      out << "            \"name\": \"" << jsonEscape(m.name) << "\",\n";
-      out << "            \"returnType\": \"" << jsonEscape(memberType(m.normalized_return_type, owner)) << "\"\n";
+      out << "            \"name\": \"" << escapeString(m.name) << "\",\n";
+      out << "            \"returnType\": \"" << escapeString(memberType(m.normalized_return_type, owner)) << "\"\n";
       out << "          }";
       if (idx + 1 < methods.size()) {
         out << ",";
@@ -118,7 +94,7 @@ namespace telar::qt_moc {
       if (!cls.class_infos.empty()) {
         out << "        \"classInfos\": [\n";
         for (std::size_t i = 0; i < cls.class_infos.size(); ++i) {
-          out << "          {\"name\": \"" << jsonEscape(cls.class_infos[i].name) << "\", \"value\": \"" << jsonEscape(cls.class_infos[i].value) << "\"}";
+          out << "          {\"name\": \"" << escapeString(cls.class_infos[i].name) << "\", \"value\": \"" << escapeString(cls.class_infos[i].value) << "\"}";
           if (i + 1 < cls.class_infos.size()) {
             out << ",";
           }
@@ -132,7 +108,7 @@ namespace telar::qt_moc {
       if (need_comma) {
         out << ",\n";
       }
-      out << "        \"className\": \"" << jsonEscape(cls.class_name) << "\"";
+      out << "        \"className\": \"" << escapeString(cls.class_name) << "\"";
       need_comma = true;
 
       if (!cls.enums.empty()) {
@@ -144,14 +120,14 @@ namespace telar::qt_moc {
           out << "            \"isClass\": " << (en.is_scoped ? "true" : "false") << ",\n";
           out << "            \"isFlag\": false,\n";
           out << "            \"lineNumber\": " << en.line << ",\n";
-          out << "            \"name\": \"" << jsonEscape(en.name) << "\",\n";
-          out << "            \"type\": \"" << jsonEscape(en.underlying_type) << "\",\n";
+          out << "            \"name\": \"" << escapeString(en.name) << "\",\n";
+          out << "            \"type\": \"" << escapeString(en.underlying_type) << "\",\n";
           out << "            \"values\": [";
           for (std::size_t vi = 0; vi < en.values.size(); ++vi) {
             if (vi > 0) {
               out << ", ";
             }
-            out << "\"" << jsonEscape(en.values[vi].name) << "\"";
+            out << "\"" << escapeString(en.values[vi].name) << "\"";
           }
 
           out << "]\n";
@@ -183,25 +159,25 @@ namespace telar::qt_moc {
           out << "            \"final\": " << (p.is_final ? "true" : "false") << ",\n";
           out << "            \"index\": " << pi << ",\n";
           out << "            \"lineNumber\": " << p.line << ",\n";
-          out << "            \"name\": \"" << jsonEscape(p.name) << "\",\n";
+          out << "            \"name\": \"" << escapeString(p.name) << "\",\n";
           if (!p.notify.empty()) {
-            out << "            \"notify\": \"" << jsonEscape(p.notify) << "\",\n";
+            out << "            \"notify\": \"" << escapeString(p.notify) << "\",\n";
           }
 
           out << "            \"override\": false,\n";
-          out << "            \"read\": \"" << jsonEscape(p.read) << "\",\n";
+          out << "            \"read\": \"" << escapeString(p.read) << "\",\n";
           out << "            \"required\": " << (p.required ? "true" : "false") << ",\n";
           if (!p.reset.empty()) {
-            out << "            \"reset\": \"" << jsonEscape(p.reset) << "\",\n";
+            out << "            \"reset\": \"" << escapeString(p.reset) << "\",\n";
           }
 
           out << "            \"scriptable\": true,\n";
           out << "            \"stored\": true,\n";
-          out << "            \"type\": \"" << jsonEscape(p.string_type) << "\",\n";
+          out << "            \"type\": \"" << escapeString(p.string_type) << "\",\n";
           out << "            \"user\": false,\n";
           out << "            \"virtual\": false";
           if (!p.write.empty()) {
-            out << ",\n            \"write\": \"" << jsonEscape(p.write) << "\"";
+            out << ",\n            \"write\": \"" << escapeString(p.write) << "\"";
           }
 
           out << "\n          }";
@@ -214,12 +190,12 @@ namespace telar::qt_moc {
         out << "        ]";
       }
 
-      out << ",\n        \"qualifiedClassName\": \"" << jsonEscape(cls.qualified_name) << "\"";
+      out << ",\n        \"qualifiedClassName\": \"" << escapeString(cls.qualified_name) << "\"";
       emitMethodArray(out, "signals", cls.signals, cls.qualified_name, 0, need_comma);
       emitMethodArray(out, "slots", cls.slots, cls.qualified_name, static_cast<int>(cls.signals.size()), need_comma);
       emitMethodArray(out, "methods", cls.invokables, cls.qualified_name, static_cast<int>(cls.signals.size() + cls.slots.size()), need_comma);
       if (!cls.super_class.empty()) {
-        out << ",\n        \"superClasses\": [{\"access\": \"public\", \"name\": \"" << jsonEscape(cls.super_class) << "\"}]";
+        out << ",\n        \"superClasses\": [{\"access\": \"public\", \"name\": \"" << escapeString(cls.super_class) << "\"}]";
       }
 
       out << "\n      }";
@@ -230,7 +206,7 @@ namespace telar::qt_moc {
     }
 
     out << "    ],\n";
-    out << "    \"inputFile\": \"" << jsonEscape(unit.input_file) << "\",\n";
+    out << "    \"inputFile\": \"" << escapeString(unit.input_file) << "\",\n";
     out << "    \"outputRevision\": 69\n";
     out << "  }\n";
     out << "]\n";

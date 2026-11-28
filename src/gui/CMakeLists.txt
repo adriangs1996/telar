@@ -8,13 +8,6 @@ endif()
 telar_process(gui OPTIONS ${TELAR_WARNINGS} -ffp-contract=off ${gui_position_independent} QML ui)
 
 option(TELAR_GUI_NATIVE "Build the native window" ON)
-# clangd, lint and per-file incremental rebuilds need one compile command per source.
-if(CMAKE_BUILD_TYPE STREQUAL "Debug")
-  set(telar_gui_batch_default 0)
-else()
-  set(telar_gui_batch_default 12)
-endif()
-set(TELAR_GUI_BATCH_SIZE ${telar_gui_batch_default} CACHE STRING "Sources compiled together in gui-quick; 0 compiles each one alone")
 
 get_filename_component(TELAR_ROOT "../.." ABSOLUTE)
 find_package(Python3 REQUIRED COMPONENTS Interpreter)
@@ -94,7 +87,6 @@ if(TELAR_GUI_NATIVE)
   target_sources(gui-machine-profiles-modules PUBLIC FILE_SET CXX_MODULES BASE_DIRS "${CMAKE_CURRENT_SOURCE_DIR}/ui"
     FILES ui/app/overlays/machine_prompt/machine_profiles_source/machine_profiles_source.cppm)
   target_link_libraries(gui-machine-profiles-modules PUBLIC gui-foundation-core gui-foundation-system gui-posix gui-platform gui-application gui-qt telar::base Qt6::Concurrent)
-  telar_enable_qt_plugin(gui-machine-profiles-modules PRIVATE)
   set_target_properties(gui-machine-profiles-modules PROPERTIES POSITION_INDEPENDENT_CODE ON)
 
   add_library(gui-machine-profiles STATIC ui/app/overlays/machine_prompt/machine_profiles_source/machine_profiles_source.cpp)
@@ -190,7 +182,6 @@ if(TELAR_GUI_NATIVE)
       ui/app/panes/attachments/clipboard/clipboard-attachment_preview.cppm
       ui/app/panes/attachments/clipboard/clipboard-clipboard_images.cppm)
   target_link_libraries(gui-clipboard-images-modules PUBLIC gui-foundation-core gui-platform gui-platform-native gui-application gui-qt gui-qt-platform telar::base telar::platform telar::tbc Qt6::Concurrent)
-  telar_enable_qt_plugin(gui-clipboard-images-modules PRIVATE)
   set_target_properties(gui-clipboard-images-modules PROPERTIES POSITION_INDEPENDENT_CODE ON)
 
   add_library(gui-clipboard-images STATIC ui/app/panes/attachments/clipboard/attachment_preview.cpp ui/app/panes/attachments/clipboard/clipboard_images.cpp)
@@ -217,7 +208,6 @@ if(TELAR_GUI_NATIVE)
     gui-clipboard-images gui-platform-native gui-keyboard gui-fonts-native gui-machine-profiles gui-surface-command
     Qt6::Quick Qt6::QuickControls2 Qt6::Network Qt6::Concurrent Qt6::Svg
     PRIVATE Qt6::GuiPrivate)
-  telar_enable_qt_plugin(gui-quick-modules PRIVATE)
 
   qt_add_library(gui-quick STATIC)
   set_target_properties(gui-quick PROPERTIES POSITION_INDEPENDENT_CODE ON)
@@ -344,56 +334,6 @@ if(TELAR_GUI_NATIVE)
   install(FILES "${gui_font_directory}/JetBrainsMono-OFL.txt" "${gui_font_directory}/TelarForma-OFL.txt" DESTINATION share/licenses/telar-gui)
 endif()
 
-# Nearly all of a gui-quick compilation is its imported BMIs and Qt headers, which
-# every source repeats, so sources compiled together cost little more than one.
-# CMake's UNITY_BUILD refuses sources it scans for modules; ordinary generated
-# units including them keep the native dependency scan. File-local names must
-# therefore stay unique across the batched ui/*.cpp sources.
-function(telar_gui_batch_sources target batch_size)
-  get_target_property(target_sources ${target} SOURCES)
-  set(kept)
-  set(batched)
-  # The folders of ui/ add their sources by absolute path (CMP0076).
-  set(ui "${CMAKE_CURRENT_SOURCE_DIR}/ui")
-  foreach(source IN LISTS target_sources)
-    cmake_path(ABSOLUTE_PATH source BASE_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}" NORMALIZE OUTPUT_VARIABLE path)
-    cmake_path(IS_PREFIX ui "${path}" NORMALIZE in_ui)
-    if(in_ui AND path MATCHES "\\.cpp$")
-      # The GUI's domains already give every gui-quick source -ffp-contract=off
-      # (telar_process OPTIONS), so a source that only repeats it can share a unit.
-      get_source_file_property(source_options "${path}" COMPILE_OPTIONS)
-      if(NOT source_options OR source_options STREQUAL "-ffp-contract=off")
-        list(APPEND batched "${path}")
-        # AUTOMOC finds a header through its source, which leaves the target.
-        string(REGEX REPLACE "\\.cpp$" ".hpp" header "${path}")
-        if(EXISTS "${header}")
-          list(APPEND kept "${header}")
-        endif()
-        continue()
-      endif()
-    endif()
-    list(APPEND kept "${source}")
-  endforeach()
-  list(SORT batched)
-  list(LENGTH batched batched_count)
-  set(index 0)
-  set(batch 0)
-  while(index LESS batched_count)
-    list(SUBLIST batched ${index} ${batch_size} members)
-    set(content "")
-    foreach(member IN LISTS members)
-      string(APPEND content "#include \"${member}\"\n")
-    endforeach()
-    set(unit "${CMAKE_CURRENT_BINARY_DIR}/${target}_batch_${batch}.cpp")
-    file(GENERATE OUTPUT "${unit}" CONTENT "${content}")
-    set_source_files_properties("${unit}" PROPERTIES GENERATED TRUE CXX_SCAN_FOR_MODULES ON SKIP_AUTOMOC ON)
-    list(APPEND kept "${unit}")
-    math(EXPR index "${index} + ${batch_size}")
-    math(EXPR batch "${batch} + 1")
-  endwhile()
-  list(REMOVE_DUPLICATES kept)
-  set_target_properties(${target} PROPERTIES SOURCES "${kept}")
-endfunction()
 if(BUILD_TESTING)
   add_subdirectory(tests)
 endif()

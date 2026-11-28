@@ -8,7 +8,6 @@ static_assert(true);
 #include <QProcess>
 #include <QString>
 #include <QStringList>
-#include <QStringLiteral>
 #include <QtCore/qtmetamacros.h>
 #include <QtTest/QTest>
 #include <QtTest/qtestcase.h>

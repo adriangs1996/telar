@@ -12,7 +12,6 @@ static_assert(true);
 #include <QObject>
 #include <QRawFont>
 #include <QString>
-#include <QStringLiteral>
 #include <QtCore/qiodevicebase.h>
 #include <QtCore/qtmetamacros.h>
 #include <QtCore/qtypes.h>

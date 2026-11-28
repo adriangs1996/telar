@@ -6,7 +6,6 @@
 #include <QProcess>
 #include <QString>
 #include <QStringList>
-#include <QStringLiteral>
 #include <QTemporaryDir>
 #include <QTimer>
 #include <QtCore/qcontainerfwd.h>

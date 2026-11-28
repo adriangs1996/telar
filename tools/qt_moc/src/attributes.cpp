@@ -126,7 +126,7 @@ namespace {
       const auto* key = llvm::dyn_cast_or_null<clang::StringLiteral>(attribute.getArgAsExpr(0)->IgnoreParenImpCasts());
       const auto* value = llvm::dyn_cast_or_null<clang::StringLiteral>(attribute.getArgAsExpr(1)->IgnoreParenImpCasts());
       if (key == nullptr || value == nullptr || key->getString().empty()) {
-        const auto id = diagnostics.getCustomDiagID(clang::DiagnosticsEngine::Error, "'qt::classinfo' arguments must be string literals with a non-empty key");
+        const auto id = diagnostics.getCustomDiagID(clang::DiagnosticsEngine::Error, "'qt_classinfo' arguments must be string literals with a non-empty key");
 
         diagnostics.Report(attribute.getLoc(), id);
         return AttributeNotApplied;

@@ -40,9 +40,6 @@ telar_add_test(gui-bindings-test SOURCES input_test.cpp LIBRARIES gui-foundation
 if(TELAR_GUI_NATIVE)
   telar_add_test(gui-font-coverage-probe PROBE SOURCES ${TELAR_PROCESS_SOURCE_DIR}/tools/font_coverage_probe.cpp LIBRARIES gui-foundation-core gui-foundation-fonts gui-fonts-native)
 
-  set(CMAKE_AUTOMOC OFF)
-  set(CMAKE_AUTOUIC OFF)
-
   find_package(Qt6 ${TELAR_QT_VERSION} EXACT REQUIRED COMPONENTS Test
     PATHS "${TELAR_GUI_QT_PREFIX}/lib/cmake/Qt6" NO_DEFAULT_PATH)
 

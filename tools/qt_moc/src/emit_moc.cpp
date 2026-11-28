@@ -1,9 +1,13 @@
 #include "meta_model.hpp"
 
+#include <array>
 #include <cctype>
 #include <sstream>
 #include <string>
+#include <string_view>
 #include <unordered_map>
+#include <unordered_set>
+#include <utility>
 #include <vector>
 
 namespace {
@@ -27,93 +31,57 @@ namespace {
     }
   };
 
-  std::string escapeCpp(const std::string& text) {
-    std::string out;
+  std::string_view builtinMetaType(std::string_view normalized) {
+    static constexpr std::array<std::pair<std::string_view, std::string_view>, 33> builtins{{
+        {"void", "QMetaType::Void"},
+        {"bool", "QMetaType::Bool"},
+        {"int", "QMetaType::Int"},
+        {"unsigned int", "QMetaType::UInt"},
+        {"uint", "QMetaType::UInt"},
+        {"double", "QMetaType::Double"},
+        {"qreal", "QMetaType::QReal"},
+        {"float", "QMetaType::Float"},
+        {"long long", "QMetaType::LongLong"},
+        {"qlonglong", "QMetaType::LongLong"},
+        {"qint64", "QMetaType::LongLong"},
+        {"unsigned long long", "QMetaType::ULongLong"},
+        {"qulonglong", "QMetaType::ULongLong"},
+        {"quint64", "QMetaType::ULongLong"},
+        {"QString", "QMetaType::QString"},
+        {"QByteArray", "QMetaType::QByteArray"},
+        {"QVariant", "QMetaType::QVariant"},
+        {"QVariantList", "QMetaType::QVariantList"},
+        {"QVariantMap", "QMetaType::QVariantMap"},
+        {"QStringList", "QMetaType::QStringList"},
+        {"QUrl", "QMetaType::QUrl"},
+        {"QObject*", "QMetaType::QObjectStar"},
+        {"QColor", "QMetaType::QColor"},
+        {"QFont", "QMetaType::QFont"},
+        {"QImage", "QMetaType::QImage"},
+        {"QPoint", "QMetaType::QPoint"},
+        {"QPointF", "QMetaType::QPointF"},
+        {"QRect", "QMetaType::QRect"},
+        {"QRectF", "QMetaType::QRectF"},
+        {"QSize", "QMetaType::QSize"},
+        {"QSizeF", "QMetaType::QSizeF"},
+        {"QDate", "QMetaType::QDate"},
+        {"QDateTime", "QMetaType::QDateTime"},
+    }};
 
-    out.reserve(text.size() + 2);
-    for (const char ch : text) {
-      switch (ch) {
-      case '\\':
-        out += "\\\\";
-        break;
-      case '"':
-        out += "\\\"";
-        break;
-      case '\n':
-        out += "\\n";
-        break;
-      default:
-        out += ch;
-        break;
+    for (const auto& [name, id] : builtins) {
+      if (normalized == name) {
+        return id;
       }
     }
 
-    return out;
-  }
-
-  std::string builtinMetaType(const std::string& normalized) {
-    if (normalized == "void") {
-      return "QMetaType::Void";
-    }
-    if (normalized == "bool") {
-      return "QMetaType::Bool";
-    }
-    if (normalized == "int") {
-      return "QMetaType::Int";
-    }
-    if (normalized == "unsigned int" || normalized == "uint") {
-      return "QMetaType::UInt";
-    }
-    if (normalized == "double") {
-      return "QMetaType::Double";
-    }
-    if (normalized == "qreal") {
-      return "QMetaType::QReal";
-    }
-    if (normalized == "float") {
-      return "QMetaType::Float";
-    }
-    if (normalized == "long long" || normalized == "qlonglong" || normalized == "qint64") {
-      return "QMetaType::LongLong";
-    }
-    if (normalized == "unsigned long long" || normalized == "qulonglong" || normalized == "quint64") {
-      return "QMetaType::ULongLong";
-    }
-    if (normalized == "QString") {
-      return "QMetaType::QString";
-    }
-    if (normalized == "QByteArray") {
-      return "QMetaType::QByteArray";
-    }
-    if (normalized == "QVariant") {
-      return "QMetaType::QVariant";
-    }
-    if (normalized == "QVariantList") {
-      return "QMetaType::QVariantList";
-    }
-    if (normalized == "QVariantMap") {
-      return "QMetaType::QVariantMap";
-    }
-    if (normalized == "QStringList") {
-      return "QMetaType::QStringList";
-    }
-    if (normalized == "QUrl") {
-      return "QMetaType::QUrl";
-    }
-    if (normalized == "QObject*") {
-      return "QMetaType::QObjectStar";
-    }
     return {};
   }
 
-  std::string typeExpr(StringTable& strings, const std::string& normalized, bool& is_builtin) {
-    const auto builtin = builtinMetaType(normalized);
-    if (!builtin.empty()) {
-      is_builtin = true;
-      return builtin;
+  std::string typeExpr(StringTable& strings, const std::string& normalized) {
+    if (const auto builtin = builtinMetaType(normalized); !builtin.empty()) {
+      return std::string(builtin);
     }
 
-    is_builtin = false;
     return "0x80000000 | " + std::to_string(strings.add(normalized));
   }
 
@@ -177,8 +145,7 @@ namespace {
     for (const auto& method : methods) {
       const int name_idx = strings.add(method.name);
       const int empty_idx = strings.add("");
-      bool ret_builtin = false;
-      const auto ret_expr = typeExpr(strings, method.normalized_return_type, ret_builtin);
+      const auto ret_expr = typeExpr(strings, method.normalized_return_type);
       std::string flags = accessFlag(method.access);
 
       if (method.is_cloned) {
@@ -190,8 +157,7 @@ namespace {
       if (!method.params.empty()) {
         out << ", {{\n";
         for (std::size_t idx = 0; idx < method.params.size(); ++idx) {
-          bool param_builtin = false;
-          const auto param_expr = typeExpr(strings, method.params[idx].normalized_type, param_builtin);
+          const auto param_expr = typeExpr(strings, method.params[idx].normalized_type);
           const int param_name_idx = strings.add(method.params[idx].name);
 
           out << "      { " << param_expr << ", " << param_name_idx << " },\n";
@@ -225,8 +191,7 @@ namespace {
 
     for (const auto& prop : cls.properties) {
       const int name_idx = strings.add(prop.name);
-      bool builtin = false;
-      const auto type_id = typeExpr(strings, prop.string_type, builtin);
+      const auto type_id = typeExpr(strings, prop.string_type);
       std::string flags = "QMC::DefaultPropertyFlags";
 
       if (!prop.write.empty()) {
@@ -249,7 +214,7 @@ namespace {
         flags += " | QMC::Required";
       }
 
-      if (!builtin) {
+      if (prop.is_enum_or_flag) {
         flags += " | QMC::EnumOrFlag";
       }
 
@@ -291,7 +256,7 @@ namespace {
     out << "    namespace QMC = QtMocConstants;\n";
     out << "    QtMocHelpers::StringRefStorage qt_stringData {\n";
     for (std::size_t idx = 0; idx < strings.entries.size(); ++idx) {
-      out << "      \"" << escapeCpp(strings.entries[idx]) << "\"";
+      out << "      \"" << escapeString(strings.entries[idx]) << "\"";
       if (idx + 1 < strings.entries.size()) {
         out << ",";
       }
@@ -637,6 +602,30 @@ namespace telar::qt_moc {
     return colon == std::string::npos ? module_name : module_name.substr(0, colon);
   }
 
+  std::string escapeString(std::string_view text) {
+    std::string out;
+
+    out.reserve(text.size() + 2);
+    for (const char ch : text) {
+      switch (ch) {
+      case '\\':
+        out += "\\\\";
+        break;
+      case '"':
+        out += "\\\"";
+        break;
+      case '\n':
+        out += "\\n";
+        break;
+      default:
+        out += ch;
+        break;
+      }
+    }
+
+    return out;
+  }
+
   std::string emitMocCpp(const UnitMeta& unit, const std::string& qt_module, bool fragment) {
     std::ostringstream out;
 
@@ -650,16 +639,14 @@ namespace telar::qt_moc {
       out << "import std;\n";
       out << "import " << qt_module << ";\n";
 
-      std::unordered_map<std::string, bool> emitted;
+      std::unordered_set<std::string> emitted{"std", qt_module};
 
-      emitted.emplace("std", true);
-      emitted.emplace(qt_module, true);
       if (!primary.empty()) {
-        emitted.emplace(primary, true);
+        emitted.insert(primary);
       }
 
       for (const auto& mod : unit.imported_modules) {
-        if (emitted.emplace(mod, true).second) {
+        if (emitted.insert(mod).second) {
           out << "import " << mod << ";\n";
         }
       }

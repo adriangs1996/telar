@@ -47,7 +47,8 @@ namespace telar::qt_moc {
     return out.str();
   }
 
-  bool parseQmlMeta(const std::string& text, UnitMeta& out) {
+  UnitMeta parseQmlMeta(const std::string& text) {
+    UnitMeta out;
     std::istringstream in(text);
     std::string line;
 
@@ -76,7 +77,7 @@ namespace telar::qt_moc {
       }
     }
 
-    return true;
+    return out;
   }
 
   std::string emitQmlRegistrations(const std::vector<UnitMeta>& units, const std::string& qt_module, const std::string& uri, int major, int minor) {

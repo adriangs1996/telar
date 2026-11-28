@@ -8,7 +8,6 @@ static_assert(true);
 #include <QLocalServer>
 #include <QLocalSocket>
 #include <QString>
-#include <QStringLiteral>
 #include <QTemporaryDir>
 #include <QtCore/qtmetamacros.h>
 #include <QtTest/QTest>

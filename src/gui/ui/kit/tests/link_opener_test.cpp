@@ -7,7 +7,6 @@ static_assert(true);
 #include <QProcess>
 #include <QString>
 #include <QStringList>
-#include <QStringLiteral>
 #include <QtCore/qcontainerfwd.h>
 #include <QtCore/qnamespace.h>
 #include <QtCore/qobject.h>

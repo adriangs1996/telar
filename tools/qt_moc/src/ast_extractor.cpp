@@ -89,6 +89,16 @@ namespace {
     return derivesFrom(pointee->getAsCXXRecordDecl(), "QObject");
   }
 
+  bool isEnumOrFlagType(clang::QualType type) {
+    if (type->isEnumeralType()) {
+      return true;
+    }
+
+    const auto* record = type.getCanonicalType()->getAsCXXRecordDecl();
+
+    return record != nullptr && record->getName() == "QFlags";
+  }
+
   std::string stripAnonymousPrefix(std::string qualified) {
     constexpr std::string_view anon = "(anonymous namespace)::";
 
@@ -181,6 +191,7 @@ namespace {
           prop.normalized_type = normalizeQtType(context, ret);
           prop.string_type = prop.normalized_type;
           prop.is_qobject_ptr = isQObjectPointer(ret);
+          prop.is_enum_or_flag = isEnumOrFlagType(ret_base);
 
           if (const auto* enum_type = ret_base->getAs<clang::EnumType>()) {
             const auto* enum_decl = enum_type->getDecl();
@@ -344,7 +355,6 @@ namespace {
 
       meta.module_name = output_.module_name;
       meta.class_name = record->getNameAsString();
-      meta.is_anonymous_ns = record->isInAnonymousNamespace();
       meta.qualified_name = stripAnonymousPrefix(record->getQualifiedNameAsString());
       meta.inherits_quick_item = derivesFrom(record, "QQuickItem");
       meta.line = context_.getSourceManager().getSpellingLineNumber(record->getLocation());
@@ -375,6 +385,8 @@ namespace {
               const auto line = context_.getSourceManager().getSpellingLineNumber(var->getLocation());
 
               extractPropertyList(context_, record, *value, line, meta.properties);
+            } else {
+              output_.errors.push_back(meta.qualified_name + "::qt_properties could not be constant-evaluated");
             }
           }
         }
@@ -387,6 +399,10 @@ namespace {
               prop.notify_index = static_cast<int>(idx);
               break;
             }
+          }
+
+          if (prop.notify_index < 0) {
+            output_.errors.push_back("property '" + prop.name + "' in '" + meta.qualified_name + "' references notify signal '" + prop.notify + "' which is not declared with [[qt::signal]]");
           }
         }
       }

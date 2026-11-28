@@ -2,6 +2,7 @@
 
 #include <cstdint>
 #include <string>
+#include <string_view>
 #include <vector>
 
 namespace telar::qt_moc {
@@ -52,6 +53,7 @@ namespace telar::qt_moc {
     bool is_final = false;
     bool required = false;
     bool is_qobject_ptr = false;
+    bool is_enum_or_flag = false;
     unsigned line = 0;
   };
 
@@ -80,7 +82,6 @@ namespace telar::qt_moc {
     std::string qualified_name;
     std::string super_class;
     bool is_namespace = false;
-    bool is_anonymous_ns = false;
     bool qml_exposed = false;
     bool inherits_quick_item = false;
     unsigned line = 0;
@@ -97,14 +98,16 @@ namespace telar::qt_moc {
     std::string module_name;
     std::vector<std::string> imported_modules;
     std::vector<ClassMeta> classes;
+    std::vector<std::string> errors;
   };
 
   std::string primaryModuleName(const std::string& module_name);
+  std::string escapeString(std::string_view text);
   std::string emitMocCpp(const UnitMeta& unit, const std::string& qt_module, bool fragment);
   std::string emitMetatypesJson(const UnitMeta& unit);
   std::string mergeMetatypesJson(const std::vector<std::string>& json_texts);
   std::string emitQmlMeta(const UnitMeta& unit);
   std::string emitQmlRegistrations(const std::vector<UnitMeta>& units, const std::string& qt_module, const std::string& uri, int major, int minor);
-  bool parseQmlMeta(const std::string& text, UnitMeta& out);
+  UnitMeta parseQmlMeta(const std::string& text);
 
 }
