@@ -866,7 +866,8 @@ namespace {
     }
 
     // The origin closing with a request still unanswered resets that stream, so the client does not
-    // wait on it forever.
+    // wait on it forever, and the connection finishes instead of waiting on an RST_STREAM it can
+    // no longer send.
     void originEofInflight() {
       Fixture fixture;
 
@@ -884,6 +885,9 @@ namespace {
       });
 
       check(fixture.client.streams[stream].reset != 0 && !fixture.client.streams[stream].complete);
+      fixture.until([&] {
+        return fixture.connection.finished();
+      });
     }
   }
 

@@ -2153,6 +2153,8 @@ export {
         // By index: what each stream does borrows this connection.
         for (std::size_t index = 0; index < streams_.size(); ++index) {
           if (auto* stream = tbc::raw(streams_[index] ? &streams_.atMut(index).getMut() : nullptr); stream && !stream->origin_closed) {
+            // The origin can take no RST_STREAM: the stream is closed on its side now, not once one is sent.
+            stream->origin_closed = true;
             reject(*stream, "http2_origin_closed");
           }
         }
