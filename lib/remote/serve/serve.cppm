@@ -26,10 +26,13 @@ export {
 
     class Server {
     public:
-      // The most connections answered at once, and of those the most still in their handshake:
-      // a client that is not admitted yet cannot take the places of those that are.
+      // The most connections answered at once, and of those the most not admitted yet, from
+      // their acceptance until their client is admitted or their pairing ended: a client that is
+      // not admitted cannot take the places of those that are, and one address holds a few of
+      // the places at most, so that it cannot keep every other client out.
       static constexpr unsigned maximum_connections = 256;
       static constexpr unsigned maximum_handshakes = 32;
+      static constexpr unsigned maximum_handshakes_per_source = 8;
       static constexpr auto handshake_timeout = std::chrono::seconds{10};
 
       // The most ports programs of this machine share with every client at once.
@@ -60,13 +63,46 @@ export {
       void stop() noexcept;
 
     private:
+      // The address a connection comes from, by which the places in the handshake are counted.
+      struct Source {
+        ds::Array<std::uint8_t, 16> address{};
+        std::size_t length = 0;
+
+        [[nodiscard]] static Source of(int socket) noexcept;
+        [[nodiscard]] bool operator==(const Source&) const noexcept = default;
+      };
+
+      // A place among the connections not admitted yet, held until its client is admitted or the
+      // connection ends.
+      class HandshakePlace {
+      public:
+        HandshakePlace(Server& server, const Source& source) noexcept;
+        ~HandshakePlace();
+
+        HandshakePlace(const HandshakePlace&) = delete;
+        HandshakePlace& operator=(const HandshakePlace&) = delete;
+        HandshakePlace(HandshakePlace&&) = delete;
+        HandshakePlace& operator=(HandshakePlace&&) = delete;
+
+        void leave() noexcept;
+
+      private:
+        Server& server_;
+        Source source_;
+        bool held_ = true;
+      };
+
+      // Takes a place for a connection from `source`; false when none is left for it.
+      [[nodiscard]] bool enterHandshake(const Source& source) noexcept;
+      void leaveHandshake(const Source& source) noexcept;
+
       // Hand each connection waiting on the TCP listener, and on the sharing socket, to a thread
       // of its own.
       void admitClients() noexcept;
       void admitPrograms() noexcept;
 
-      void answer(runtime::FileDescriptor socket) noexcept;
-      void serve(Channel& channel);
+      void answer(runtime::FileDescriptor socket, const Source& source) noexcept;
+      void serve(Channel& channel, HandshakePlace& place);
       void attach(Channel& channel);
       void runCommand(Channel& channel);
       static void forward(Channel& channel);
@@ -132,8 +168,16 @@ export {
       Clock::time_point listening_read_;
       unsigned owners_ = 0;
       ds::Array<int, 2> wake_{-1, -1};
+
+      // The connections not admitted yet, by the address they come from, under the mutex.
+      struct Handshakes {
+        Source source;
+        unsigned count = 0;
+      };
+
+      ds::Array<Handshakes, maximum_handshakes> handshaking_;
+      unsigned handshakes_ = 0;
       std::atomic<unsigned> connections_{0};
-      std::atomic<unsigned> handshakes_{0};
       std::atomic<bool> stopping_{false};
     };
 

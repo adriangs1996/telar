@@ -329,6 +329,25 @@ namespace {
     check(refused, "a code that enrolled a client enrolls no other");
   }
 
+  // Connections that never start their handshake hold a few of the places of the address they
+  // come from, not every place: the next one from that address is closed at once.
+  void oneAddressHoldsAFewHandshakes() {
+    const Pair pair;
+    std::vector<FileDescriptor> idle;
+
+    for (unsigned index = 0; index < Server::maximum_handshakes_per_source; ++index) {
+      idle.push_back(connectLocalPort(pair.gateway.port()));
+      check(static_cast<bool>(idle.back()));
+    }
+
+    const auto refused = connectLocalPort(pair.gateway.port());
+    pollfd entry{.fd = refused.get(), .events = POLLIN, .revents = 0};
+    char byte = 0;
+
+    check(static_cast<bool>(refused));
+    check(::poll(&entry, 1, 3000) == 1 && ::read(refused.get(), &byte, 1) <= 0, "a connection past its address's places is closed, not left to its handshake");
+  }
+
   // A gateway that admits as many clients as it keeps refuses a new one without spending its
   // code: the same code pairs it once a client is revoked.
   void aFullClientListLeavesThePairingCodePending() {
@@ -744,6 +763,7 @@ namespace {
   const telar::testing::Case case_only_paired_clients_are_served{"gateway.only_paired_clients_are_served", onlyPairedClientsAreServed};
   const telar::testing::Case case_clients_refuse_a_gateway_with_another_key{"gateway.clients_refuse_a_gateway_with_another_key", clientsRefuseAGatewayWithAnotherKey};
   const telar::testing::Case case_pairing_codes_enroll_once{"gateway.pairing_codes_enroll_once", pairingCodesEnrollOnce};
+  const telar::testing::Case case_one_address_holds_a_few_handshakes{"gateway.one_address_holds_a_few_handshakes", oneAddressHoldsAFewHandshakes};
   const telar::testing::Case case_a_full_client_list_leaves_the_pairing_code_pending{"gateway.a_full_client_list_leaves_the_pairing_code_pending", aFullClientListLeavesThePairingCodePending};
   const telar::testing::Case case_the_link_offers_a_machines_runtime_on_a_local_socket{"gateway.the_link_offers_a_machines_runtime_on_a_local_socket", theLinkOffersAMachinesRuntimeOnALocalSocket};
   const telar::testing::Case case_the_link_forwards_a_port_until_it_closes_there{"gateway.the_link_forwards_a_port_until_it_closes_there", theLinkForwardsAPortUntilItClosesThere};
