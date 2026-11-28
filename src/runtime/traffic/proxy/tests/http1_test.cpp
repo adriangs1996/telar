@@ -145,6 +145,21 @@ namespace {
     }
   }
 
+  // RFC 9112 7.1.1 allows whitespace between a chunk's size and its extensions.
+  void checkChunkSizeWhitespace() {
+    const std::string message = "POST / HTTP/1.1\r\nTransfer-Encoding: chunked\r\n\r\n5 ;ext\r\nhello\r\n3\t;a=b\r\nabc\r\n0\r\n\r\n";
+    TestByteStream source;
+
+    source.input = message;
+    TestByteStream destination;
+    Http1MessageRelay relay;
+    MessageObserver observer;
+
+    driveMessage(relay, source, destination, observer);
+    check(relay.state() == Http1MessageRelay::State::complete);
+    check(destination.output == message && observer.captured_body == "helloabc");
+  }
+
   void checkMessageFailures() {
     using State = Http1MessageRelay::State;
     const std::string head = "POST / HTTP/1.1\r\nTransfer-Encoding: chunked\r\n\r\n";
@@ -160,7 +175,6 @@ namespace {
              Fixture{head + "wrong\r\n", head.size() + 7},
              Fixture{head + "+2\r\nab\r\n", head.size() + 4},
              Fixture{head + "1_0\r\n", head.size() + 5},
-             Fixture{head + "3 ;extra\r\nabc\r\n", head.size() + 10},
              Fixture{head + "123", head.size() + 3},
              Fixture{head + std::string(1025, 'a'), head.size() + 1024, 1},
              Fixture{head + "0\r\n" + std::string(8193, 'a'), head.size() + 3 + 8192, 0, 1},
@@ -285,6 +299,7 @@ namespace {
   const telar::testing::Case case_check_head_analysis{"http1.check_head_analysis", checkHeadAnalysis};
   const telar::testing::Case case_check_message_fragments{"http1.check_message_fragments", checkMessageFragments};
   const telar::testing::Case case_check_message_failures{"http1.check_message_failures", checkMessageFailures};
+  const telar::testing::Case case_check_chunk_size_whitespace{"http1.check_chunk_size_whitespace", checkChunkSizeWhitespace};
   const telar::testing::Case case_check_connection_ordering{"http1.check_connection_ordering", checkConnectionOrdering};
   const telar::testing::Case case_check_connection_endings{"http1.check_connection_endings", checkConnectionEndings};
 
