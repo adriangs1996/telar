@@ -993,6 +993,8 @@ export {
       [[no_unique_address]] diagnostics::RuntimeTelemetry telemetry_;
       static constexpr auto pane_poll_interval = std::chrono::milliseconds{100};
       Clock::time_point next_pane_poll_;
+      // Whether the listener's read interest is off while it rests after running out of descriptors.
+      bool listener_resting_ = false;
       // Set when SIGCHLD arrives; true at first so a child that exited before the loop is reaped.
       bool children_exited_ = true;
     };

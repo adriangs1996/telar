@@ -27,6 +27,13 @@ export {
 
       [[nodiscard]] int descriptor() const noexcept;
 
+      // The descriptor to wait on for a connection, or -1 for a moment after accept ran out of
+      // descriptors or memory: a loop that waited on the listener would wake again at once for
+      // each connection still pending, until other connections close.
+      [[nodiscard]] int waitDescriptor() const noexcept;
+
+      // Nothing while no connection is pending, or while the process lacks a descriptor or memory
+      // to take one.
       FileDescriptor accept(LocalPeerPolicy policy = LocalPeerPolicy::same_user);
 
       [[nodiscard]] std::string_view path() const noexcept;
@@ -41,6 +48,8 @@ export {
       dev_t device_ = 0;
       ino_t inode_ = 0;
       bool bound_ = false;
+      // When accept may run again after it ran out of descriptors or memory.
+      std::chrono::steady_clock::time_point resting_until_{};
     };
 
   }

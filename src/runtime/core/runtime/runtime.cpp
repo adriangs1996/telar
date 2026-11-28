@@ -2042,8 +2042,22 @@ namespace telar::runtime {
     constexpr unsigned accept_batch = 16;
 
     for (unsigned index = 0; index < accept_batch; ++index) {
-      auto descriptor = listener_.accept();
+      FileDescriptor descriptor;
+
+      // A connection the runtime cannot take is no reason to stop it, and every pane with it.
+      try {
+        descriptor = listener_.accept();
+      } catch (const SystemError&) {
+        return;
+      }
+
       if (!descriptor) {
+        // Out of descriptors or memory, the listener rests until publish takes it back.
+        if (listener_.waitDescriptor() < 0) {
+          poller_.readInterest(listener_.descriptor(), eventToken(EventSource::listener, 0), false);
+          listener_resting_ = true;
+        }
+
         return;
       }
 
@@ -3971,6 +3985,13 @@ namespace telar::runtime {
     constexpr auto idle_wait = std::chrono::milliseconds{100};
     constexpr auto execution_wait = std::chrono::milliseconds{10};
     std::chrono::nanoseconds timeout = idle_wait;
+
+    // The listener's rest is shorter than the longest wait: the next publish ends it.
+    if (listener_resting_ && listener_.waitDescriptor() >= 0) {
+      poller_.readInterest(listener_.descriptor(), eventToken(EventSource::listener, 0), true);
+      listener_resting_ = false;
+    }
+
     // Panes are polled for what changes without a sound on a beat, not on every wake: output
     // from any pane wakes the loop, and asking each of them would cost syscalls per pane.
     const bool poll_panes = now >= next_pane_poll_;

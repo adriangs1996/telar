@@ -754,7 +754,7 @@ namespace telar::runtime::traffic {
   void Service::step() {
     ds::Array<pollfd, maximum_peers + 3> descriptors{};
 
-    descriptors.atMut(0) = {.fd = listener_.descriptor(), .events = POLLIN, .revents = 0};
+    descriptors.atMut(0) = {.fd = listener_.waitDescriptor(), .events = POLLIN, .revents = 0};
     descriptors.atMut(1) = {.fd = wake_.descriptor(), .events = POLLIN, .revents = 0};
     descriptors.atMut(2) = {.fd = interception_.requestDescriptor(), .events = POLLIN, .revents = 0};
     for (std::size_t index = 0; index < peers_.size(); ++index) {
