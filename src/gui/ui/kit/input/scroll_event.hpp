@@ -1,11 +1,17 @@
-#pragma once
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
 
-#include "foundation/core/wheel_accumulator.hpp"
 #include <QInputDevice>
 #include <QPointF>
 #include <QWheelEvent>
 #include <QtCore/qnamespace.h>
 #include <cstdint>
+
+#pragma once
+
+import telar.gui.foundation.core;
 
 namespace telar::gui::qt {
 

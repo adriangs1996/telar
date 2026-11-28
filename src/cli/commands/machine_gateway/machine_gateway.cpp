@@ -239,7 +239,7 @@ namespace telar::runtime::cli::config_receive {
         return false;
       }
 
-      FileDescriptor existing{::openat(parent, name, combineFlags(O_RDONLY, O_NOFOLLOW, O_NONBLOCK, O_CLOEXEC))}; // NOLINT(cppcoreguidelines-pro-type-vararg): openat's C signature is variadic
+      const FileDescriptor existing{::openat(parent, name, combineFlags(O_RDONLY, O_NOFOLLOW, O_NONBLOCK, O_CLOEXEC))}; // NOLINT(cppcoreguidelines-pro-type-vararg): openat's C signature is variadic
       if (!existing) {
         throw fileError(sys::lastError());
       }
@@ -364,7 +364,7 @@ namespace telar::runtime::cli::config_receive {
       throw CommandError{"HomeUnavailable"};
     }
 
-    FileDescriptor home{::open(home_path, home_flags)}; // NOLINT(cppcoreguidelines-pro-type-vararg): open's C signature is variadic
+    const FileDescriptor home{::open(home_path, home_flags)}; // NOLINT(cppcoreguidelines-pro-type-vararg): open's C signature is variadic
     if (!home) {
       throw fileError(sys::lastError());
     }

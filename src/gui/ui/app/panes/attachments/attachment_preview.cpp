@@ -4,14 +4,6 @@ static_assert(true);
 #endif
 
 #include "attachment_preview.hpp"
-#include "features/terminal/attachments/capture.hpp"
-#include "features/terminal/attachments/secure_erase.hpp"
-#include "features/terminal/attachments/sensitive_bytes.hpp"
-#include "features/terminal/attachments/types.hpp"
-#include "foundation/core/application_memory.hpp"
-#include "foundation/core/memory.hpp"
-#include "telar_base/ds/containers.hpp"
-#include "telar_base/memory/allocator.hpp"
 #include <QBuffer>
 #include <QByteArray>
 #include <QByteArrayView>
@@ -29,6 +21,8 @@ static_assert(true);
 #include <utility>
 
 import telar.gui.application;
+import telar.gui.foundation.core;
+import telar.base.ds;
 
 namespace telar::gui::qt {
 

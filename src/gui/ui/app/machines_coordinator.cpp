@@ -5,11 +5,7 @@ static_assert(true);
 
 #include "machines_coordinator.hpp"
 #include "dialogs.hpp"
-#include "foundation/core/memory.hpp"
 #include "frame_presenter.hpp"
-#include "telar_base/memory/fixed_text.hpp"
-#include "telar_wire/codecs/telar_wire.hpp"
-#include "telar_wire/serializers/telar_messages.hpp"
 #include "ui/kit/machines/machine_client.hpp"
 #include "ui/kit/machines/remote_bridge.hpp"
 #include "ui/kit/machines/runtime_connection.hpp"
@@ -40,6 +36,7 @@ import telar.gui.application;
 import telar.client;
 import telar.wire.vocabulary;
 import telar.base.ds;
+import telar.gui.foundation.core;
 
 namespace telar::gui::qt {
 

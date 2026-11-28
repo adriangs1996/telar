@@ -7,7 +7,6 @@
 //       case_symbols{"chrome_icon.symbols_fallback"};
 //
 // The program links gui-testing-main, whose QGuiApplication the slot runs in.
-#include "telar_base/ds/values.hpp"
 #include <QObject>
 #include <QString>
 #include <QStringList>
@@ -16,6 +15,7 @@
 #include <string_view>
 
 import telar.testing;
+import telar.base.ds;
 
 namespace telar::gui::test {
 

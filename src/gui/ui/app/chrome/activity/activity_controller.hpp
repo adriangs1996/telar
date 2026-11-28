@@ -3,9 +3,6 @@
 static_assert(true);
 #endif
 
-#include "foundation/core/application_memory.hpp"
-#include "foundation/core/memory.hpp"
-#include "telar_base/memory/fixed_text.hpp"
 #include "ui/design/elements/element_slots.hpp"
 #include "ui/kit/models/list_model.hpp"
 #include "ui/kit/store/store.hpp"
@@ -25,6 +22,8 @@ static_assert(true);
 
 import telar.gui.application;
 import telar.base.ds;
+import telar.gui.foundation.core;
+import telar.base.memory.containers;
 
 namespace telar::gui::qt {
 

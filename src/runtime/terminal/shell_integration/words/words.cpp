@@ -99,7 +99,7 @@ namespace telar::runtime {
         }
 
         *std::ranges::copy(entry, name.dataMut()).out = '\0';
-        FileDescriptor directory{::open(name.data(), combineFlags(O_RDONLY, O_DIRECTORY, O_CLOEXEC))}; // NOLINT(cppcoreguidelines-pro-type-vararg): open's C signature is variadic
+        const FileDescriptor directory{::open(name.data(), combineFlags(O_RDONLY, O_DIRECTORY, O_CLOEXEC))}; // NOLINT(cppcoreguidelines-pro-type-vararg): open's C signature is variadic
         if (directory && !visit(directory.get())) {
           return;
         }
@@ -109,7 +109,7 @@ namespace telar::runtime {
     // Reads a regular file of at most `limit` bytes; empty when it is missing or larger.
     tbc::val_a<Text> readSmall(tbc::mut_a<ConcurrentMemory> memory, int directory, const char* name, std::size_t limit = WordReader::maximum_file) {
       Text bytes{memory};
-      FileDescriptor file{::openat(directory, name, combineFlags(O_RDONLY, O_CLOEXEC, O_NONBLOCK))}; // NOLINT(cppcoreguidelines-pro-type-vararg): openat's C signature is variadic
+      const FileDescriptor file{::openat(directory, name, combineFlags(O_RDONLY, O_CLOEXEC, O_NONBLOCK))}; // NOLINT(cppcoreguidelines-pro-type-vararg): openat's C signature is variadic
       struct stat state{};
       if (!file || ::fstat(file.get(), &state) != 0 || !S_ISREG(state.st_mode) || std::cmp_greater(state.st_size, limit)) {
         return bytes;
@@ -167,7 +167,7 @@ namespace telar::runtime {
       Text file{memory};
 
       for (int depth = 0; depth < maximum_parent_depth && current.view().starts_with('/'); ++depth) {
-        FileDescriptor folder{::open(current.data(), combineFlags(O_RDONLY, O_DIRECTORY, O_CLOEXEC))}; // NOLINT(cppcoreguidelines-pro-type-vararg): open's C signature is variadic
+        const FileDescriptor folder{::open(current.data(), combineFlags(O_RDONLY, O_DIRECTORY, O_CLOEXEC))}; // NOLINT(cppcoreguidelines-pro-type-vararg): open's C signature is variadic
         if (folder) {
           if (auto bytes = firstOf(memory, folder.get(), names, file); !bytes.empty()) {
             return bytes;
@@ -635,7 +635,7 @@ namespace telar::runtime {
       Text directory_name{memory, home};
 
       directory_name.append("/.ssh");
-      FileDescriptor directory{::open(directory_name.data(), combineFlags(O_RDONLY, O_DIRECTORY, O_CLOEXEC))}; // NOLINT(cppcoreguidelines-pro-type-vararg): open's C signature is variadic
+      const FileDescriptor directory{::open(directory_name.data(), combineFlags(O_RDONLY, O_DIRECTORY, O_CLOEXEC))}; // NOLINT(cppcoreguidelines-pro-type-vararg): open's C signature is variadic
       if (!directory) {
         return;
       }
@@ -670,7 +670,7 @@ namespace telar::runtime {
       }
 
       const Text directory_name{memory, directory_path};
-      FileDescriptor directory{::open(directory_name.data(), combineFlags(O_RDONLY, O_DIRECTORY, O_CLOEXEC))}; // NOLINT(cppcoreguidelines-pro-type-vararg): open's C signature is variadic
+      const FileDescriptor directory{::open(directory_name.data(), combineFlags(O_RDONLY, O_DIRECTORY, O_CLOEXEC))}; // NOLINT(cppcoreguidelines-pro-type-vararg): open's C signature is variadic
       if (!directory) {
         return;
       }
@@ -847,7 +847,7 @@ namespace telar::runtime {
         return;
       }
 
-      FileDescriptor directory{::open(path.data(), combineFlags(O_RDONLY, O_DIRECTORY, O_CLOEXEC))}; // NOLINT(cppcoreguidelines-pro-type-vararg): open's C signature is variadic
+      const FileDescriptor directory{::open(path.data(), combineFlags(O_RDONLY, O_DIRECTORY, O_CLOEXEC))}; // NOLINT(cppcoreguidelines-pro-type-vararg): open's C signature is variadic
       if (!directory) {
         return;
       }
@@ -1085,7 +1085,7 @@ namespace telar::runtime {
       return source;
     }
 
-    FileDescriptor folder{::open(completions_.data(), combineFlags(O_RDONLY, O_DIRECTORY, O_CLOEXEC))}; // NOLINT(cppcoreguidelines-pro-type-vararg): open's C signature is variadic
+    const FileDescriptor folder{::open(completions_.data(), combineFlags(O_RDONLY, O_DIRECTORY, O_CLOEXEC))}; // NOLINT(cppcoreguidelines-pro-type-vararg): open's C signature is variadic
     if (!folder) {
       return source;
     }

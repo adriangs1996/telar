@@ -1,6 +1,9 @@
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
+
 #include "platform/clipboard_image_monitor.hpp"
-#include "foundation/core/application_memory.hpp"
-#include "platform/clipboard_image_source.hpp"
 #include <QClipboard>
 #include <QGuiApplication>
 #include <QtCore/qtconfigmacros.h>
@@ -8,6 +11,9 @@
 #include <QtWaylandClient/private/qwayland-wayland.h>
 #include <QtWaylandClient/private/qwaylandinputdevice_p.h>
 #include <cstdint>
+
+import telar.gui.foundation.core;
+import telar.gui.platform;
 
 namespace telar::gui::platform {
 

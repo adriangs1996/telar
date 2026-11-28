@@ -1,5 +1,3 @@
-#include "features/terminal/attachments/sensitive_bytes.hpp"
-#include "features/terminal/attachments/types.hpp"
 #include <array>
 #include <cstddef>
 #include <cstdint>
@@ -8,12 +6,14 @@
 #include <stdexcept>
 #include <string_view>
 #include <utility>
+#include <variant>
 
 import telar.testing;
 import telar.gui.features.terminal.attachments;
 import telar.gui.tests.erasure_allocator;
 import telar.gui.foundation.terminal;
 import telar.base.ds;
+import telar.gui.foundation.core;
 
 namespace {
 

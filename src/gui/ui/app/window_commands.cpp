@@ -8,10 +8,6 @@ static_assert(true);
 #include "dialogs.hpp"
 #include "key_bindings.hpp"
 #include "machines_coordinator.hpp"
-#include "telar_base/memory/allocator.hpp"
-#include "telar_base/memory/fixed_text.hpp"
-#include "telar_base/text/utf8.hpp"
-#include "telar_wire/serializers/telar_messages.hpp"
 #include "ui/app/chrome/components/components_controller.hpp"
 #include "ui/app/overlays/machine_prompt/machine_profiles_source.hpp"
 #include "ui/app/overlays/notifications/notifications_controller.hpp"
@@ -65,6 +61,7 @@ import telar.gui.application;
 import telar.config.client;
 import telar.wire.vocabulary;
 import telar.base.ds;
+import telar.base.text.utf8;
 
 namespace telar::gui::qt {
 

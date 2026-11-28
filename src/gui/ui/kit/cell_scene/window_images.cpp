@@ -6,7 +6,6 @@ static_assert(true);
 #include "window_images.hpp"
 #include "graphics_scene.hpp"
 #include "image_resource.hpp"
-#include "telar_wire/serializers/telar_messages.hpp"
 #include "ui/kit/scene/scene_nodes.hpp"
 #include "ui/kit/timing/deadline_timer.hpp"
 #include <QEvent>
@@ -36,6 +35,7 @@ static_assert(true);
 import telar.gui.application;
 import telar.gui.foundation.system;
 import telar.base.ds;
+import telar.wire.vocabulary;
 
 namespace telar::gui::qt {
 

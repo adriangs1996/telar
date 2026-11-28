@@ -1,12 +1,10 @@
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
+
 #include "wayland_clipboard_image_monitor.hpp"
-#include "foundation/core/application_memory.hpp"
-#include "foundation/core/memory.hpp"
 #include "platform/clipboard_image_file.h"
-#include "platform/clipboard_image_source.hpp"
-#include "tbc/view.hpp"
-#include "telar_base/ds/values.hpp"
-#include "telar_base/memory/allocator.hpp"
-#include "telar_platform/file_descriptor.hpp"
 #include <QString>
 #include <QtCore/qstringliteral.h>
 #include <QtWaylandClient/private/qwayland-wayland.h>
@@ -19,6 +17,12 @@
 #include <optional>
 #include <wayland-client-core.h>
 #include <wayland-util.h>
+
+import telar.base.ds;
+import telar.gui.foundation.core;
+import telar.gui.platform;
+import telar.platform.primitives;
+import telar.tbc;
 
 namespace telar::gui::platform {
 

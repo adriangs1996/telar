@@ -815,4 +815,3 @@ namespace {
 }
 
 #include "chrome_text_test.moc"
-#include "telar_base/ds/values.hpp"

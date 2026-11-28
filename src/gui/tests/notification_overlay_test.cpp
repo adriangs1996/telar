@@ -3,10 +3,8 @@
 static_assert(true);
 #endif
 
-#include "foundation/core/application_memory.hpp"
 #include "platform/window_activation.hpp"
 #include "qml_fixture.hpp"
-#include "telar_wire/serializers/telar_messages.hpp"
 #include "ui/app/application_controller.hpp"
 #include "ui/app/overlays/notifications/notification_layout.hpp"
 #include "ui/kit/fonts/bundled_fonts.hpp"
@@ -47,6 +45,8 @@ static_assert(true);
 import telar.gui.application;
 import telar.gui.features.notifications;
 import telar.base.ds;
+import telar.gui.foundation.core;
+import telar.wire.vocabulary;
 
 namespace {
 

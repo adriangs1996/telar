@@ -5,7 +5,6 @@ static_assert(true);
 
 #include "components_controller.hpp"
 #include "component_surface_state.hpp"
-#include "telar_wire/serializers/telar_messages.hpp"
 #include "ui/design/elements/component_projection.hpp"
 #include "ui/kit/config/configuration_source.hpp"
 #include "ui/kit/machines/machine_client.hpp"
@@ -45,6 +44,7 @@ static_assert(true);
 
 import telar.gui.application;
 import telar.base.ds;
+import telar.wire.vocabulary;
 
 namespace telar::gui::qt {
 

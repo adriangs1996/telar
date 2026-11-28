@@ -3,7 +3,6 @@
 static_assert(true);
 #endif
 
-#include "foundation/core/memory.hpp"
 #include "tbc/view.hpp"
 #include <cstdint>
 #include <memory>
@@ -13,6 +12,7 @@ static_assert(true);
 
 import telar.gui.foundation.fonts;
 import telar.base.ds;
+import telar.gui.foundation.core;
 
 namespace telar::gui::qt {
 

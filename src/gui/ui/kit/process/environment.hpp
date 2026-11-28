@@ -1,12 +1,18 @@
-#pragma once
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
 
-#include "telar_base/ds/values.hpp"
 #include <QByteArray>
 #include <QHash>
 #include <QtCore/qtenvironmentvariables.h>
 #include <cstddef>
 #include <optional>
 #include <string_view>
+
+#pragma once
+
+import telar.base.ds;
 
 namespace telar::gui::qt {
 

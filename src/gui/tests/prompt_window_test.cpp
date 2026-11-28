@@ -3,17 +3,10 @@
 static_assert(true);
 #endif
 
-#include "foundation/core/application_memory.hpp"
 #include "frame_fixture.hpp"
 #include "gui_wait.hpp"
 #include "qml_fixture.hpp"
 #include "screen_fixture.hpp"
-#include "telar_base/memory/allocator.hpp"
-#include "telar_base/memory/fixed_text.hpp"
-#include "telar_base/text/utf8.hpp"
-#include "telar_wire/codecs/telar_value_codec.hpp"
-#include "telar_wire/protocol/pane_io.hpp"
-#include "telar_wire/serializers/telar_messages.hpp"
 #include "ui/app/application_controller.hpp"
 #include "ui/kit/input/key_adapter.hpp"
 #include <QByteArray>
@@ -68,10 +61,6 @@ static_assert(true);
 #ifdef __APPLE__
 #include <QtGui/qtestsupport_gui.h>
 #endif
-#include "telar_wire/codecs/telar_cells.hpp"
-#include "telar_wire/codecs/telar_wire.hpp"
-#include "telar_wire/serializers/telar_cells.hpp"
-#include "telar_wire/serializers/telar_frame.hpp"
 #include "ui/app/chrome/components/machine_chrome/machine_chrome_layout.hpp"
 #include "ui/app/panes/terminal/prompt/prompt_editor_item.hpp"
 #include "ui/app/panes/terminal/terminal_item.hpp"
@@ -137,6 +126,9 @@ import telar.wire.history;
 import telar.wire.layout;
 import telar.gui.features.machines;
 import telar.base.ds;
+import telar.gui.foundation.core;
+import telar.wire.vocabulary;
+import telar.wire.pane_io;
 
 namespace {
 

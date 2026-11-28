@@ -3,10 +3,7 @@
 static_assert(true);
 #endif
 
-#include "foundation/core/application_memory.hpp"
 #include "key_bindings.hpp"
-#include "telar_wire/protocol/clients.hpp"
-#include "telar_wire/serializers/telar_messages.hpp"
 #include "ui/kit/config/configuration_source.hpp"
 #include "ui/kit/input/window_actions.hpp"
 #include "ui/kit/plugins/plugin_runner.hpp"
@@ -31,6 +28,9 @@ static_assert(true);
 
 import telar.gui.application;
 import telar.base.ds;
+import telar.gui.foundation.core;
+import telar.wire.clients;
+import telar.wire.vocabulary;
 
 namespace telar::gui::qt {
 

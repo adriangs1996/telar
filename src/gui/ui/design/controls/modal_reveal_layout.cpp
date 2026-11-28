@@ -4,7 +4,6 @@ static_assert(true);
 #endif
 
 #include "modal_reveal_layout.hpp"
-#include "telar_base/ds/values.hpp"
 #include "ui/kit/scene/window_animation_clock.hpp"
 #include <QMetaObject>
 #include <QPointer>
@@ -16,6 +15,8 @@ static_assert(true);
 #include <cstdint>
 #include <functional>
 #include <optional>
+
+import telar.base.ds;
 
 namespace telar::gui::qt {
 

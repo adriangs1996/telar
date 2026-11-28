@@ -1,5 +1,8 @@
-#include "foundation/core/application_memory.hpp"
-#include "telar_base/ds/values.hpp"
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
+
 #include "ui/app/panes/attachments/clipboard_images.hpp"
 #include <QByteArray>
 #include <QByteArrayView>
@@ -28,6 +31,9 @@
 #include <optional>
 #include <span>
 #include <utility>
+
+import telar.gui.foundation.core;
+import telar.base.ds;
 
 namespace {
 

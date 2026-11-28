@@ -6,7 +6,6 @@ static_assert(true);
 #include "alpha_mask_material.hpp"
 #include "physical_pixel_matrix.hpp"
 #include "qt_buffers.hpp"
-#include "telar_base/ds/values.hpp"
 #include <QByteArray>
 #include <QSGMaterial>
 #include <QSGMaterialShader>
@@ -23,6 +22,8 @@ static_assert(true);
 #include <span>
 #include <tuple>
 #include <utility>
+
+import telar.base.ds;
 
 namespace telar::gui::qt {
   namespace {

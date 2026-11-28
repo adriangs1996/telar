@@ -1,11 +1,17 @@
-#pragma once
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
 
-#include "telar_base/ds/values.hpp"
 #include <QFont>
 #include <QSizeF>
 #include <QVariantMap>
 #include <array>
 #include <cstddef>
+
+#pragma once
+
+import telar.base.ds;
 
 namespace telar::gui::qt {
   struct TerminalFont {

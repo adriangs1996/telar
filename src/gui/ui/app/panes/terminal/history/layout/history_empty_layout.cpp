@@ -4,7 +4,6 @@ static_assert(true);
 #endif
 
 #include "history_empty_layout.hpp"
-#include "telar_wire/serializers/telar_messages.hpp"
 #include "ui/kit/models/projection.hpp"
 #include <QPointer>
 #include <QQuickItem>
@@ -26,6 +25,7 @@ static_assert(true);
 
 import telar.gui.application;
 import telar.gui.foundation.forms;
+import telar.wire.vocabulary;
 
 namespace telar::gui::qt {
 

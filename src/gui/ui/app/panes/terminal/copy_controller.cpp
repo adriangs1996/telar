@@ -4,10 +4,11 @@ static_assert(true);
 #endif
 
 #include "copy_controller.hpp"
-#include "telar_base/ds/values.hpp"
 #include "ui/kit/input/key_adapter.hpp"
 #include <QByteArray>
 #include <exception>
+
+import telar.base.ds;
 
 namespace telar::gui::qt {
 

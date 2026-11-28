@@ -3,12 +3,11 @@
 static_assert(true);
 #endif
 
-#include "telar_wire/serializers/telar_messages.hpp"
-
 import std;
 import telar.testing;
 import telar.gui.foundation.system;
 import telar.gui.foundation.core;
+import telar.wire.vocabulary;
 
 namespace {
 

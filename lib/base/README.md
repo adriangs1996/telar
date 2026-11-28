@@ -13,7 +13,6 @@ owns their lifetime; consumers inject them by reference. `Memory` is the
 type-erased allocator a service can take instead of a template parameter:
 `MemoryAdapter<A>` puts any `Allocator` behind it, as `ConcurrentMemory` when `A`
 is thread safe and as `ErasingMemory` when `A` erases what it releases.
-`allocator.hpp` declares them too, so Qt and Objective-C++ code can name them.
 
 `JsonError` reports malformed JSON without a protocol failure code. Protocol
 boundaries translate it to `FailureCode::invalid_request`; `RequestError` lives
@@ -26,7 +25,6 @@ target_link_libraries(your_target PRIVATE telar::base)
 ```
 
 ```cpp
-#include "telar_base/memory/allocator.hpp" // Native allocator ABI
 import telar.base.text.json;
 import telar.base.memory.allocators;
 import telar.base.diagnostics;

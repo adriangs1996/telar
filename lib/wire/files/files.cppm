@@ -12,9 +12,7 @@ export namespace telar {
   using telar::MessageSchema;
 }
 
-// Declared in the global module, with the vocabulary these schemas build on.
-// NOLINTBEGIN(misc-use-internal-linkage): exported, and declared in the global module as the vocabulary is.
-export extern "C++" {
+export {
   namespace telar {
 
     // What an entry of a directory is, without following a link.
@@ -808,4 +806,3 @@ export extern "C++" {
 
   }
 }
-// NOLINTEND(misc-use-internal-linkage)

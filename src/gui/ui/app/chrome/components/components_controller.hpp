@@ -4,7 +4,6 @@ static_assert(true);
 #endif
 
 #include "component_surface_state.hpp"
-#include "foundation/core/application_memory.hpp"
 #include "pick_controller.hpp"
 #include "tbc/view.hpp"
 #include "ui/design/elements/element_slots.hpp"
@@ -29,6 +28,7 @@ static_assert(true);
 
 import telar.gui.application;
 import telar.base.ds;
+import telar.gui.foundation.core;
 
 namespace telar::gui::test {
   struct ComponentActions;

@@ -4,13 +4,14 @@ static_assert(true);
 #endif
 
 #include "notifications_controller.hpp"
-#include "telar_base/ds/values.hpp"
 #include "ui/kit/models/projection.hpp"
 #include "ui/kit/timing/deadline_timer.hpp"
 #include <QLatin1Char>
 #include <QMetaObject>
 #include <exception>
 #include <limits>
+
+import telar.base.ds;
 
 namespace telar::gui::qt {
 

@@ -807,7 +807,7 @@ namespace telar::runtime {
     }
 
     TELAR_TRACE("media.process");
-    TELAR_DIAGNOSTIC(AllocationScope allocation_scope{AllocationPath::media});
+    TELAR_DIAGNOSTIC(const AllocationScope allocation_scope{AllocationPath::media});
     TELAR_DIAGNOSTIC(diagnostics::TimedScope timing{batch_metrics_.ingest});
     const auto& batch = batches_[sealed_];
 

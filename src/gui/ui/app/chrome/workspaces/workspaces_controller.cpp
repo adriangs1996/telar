@@ -5,7 +5,6 @@ static_assert(true);
 
 #include "workspaces_controller.hpp"
 #include "project_projection.hpp"
-#include "telar_base/ds/values.hpp"
 #include "ui/kit/models/projection.hpp"
 #include <QVarLengthArray>
 #include <algorithm>
@@ -13,6 +12,9 @@ static_assert(true);
 #include <numeric>
 #include <span>
 #include <utility>
+
+import telar.base.ds;
+import telar.base.memory.allocators;
 
 namespace telar::gui::qt {
 

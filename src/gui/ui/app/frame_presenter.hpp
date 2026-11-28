@@ -3,7 +3,6 @@
 static_assert(true);
 #endif
 
-#include "foundation/core/application_memory.hpp"
 #include "ui/app/panes/terminal/history/history_controller.hpp"
 #include "ui/kit/store/store.hpp"
 #include "ui/kit/timing/window_frame_pacer.hpp"
@@ -23,6 +22,7 @@ static_assert(true);
 import telar.gui.foundation.model;
 import telar.gui.application;
 import telar.base.ds;
+import telar.gui.foundation.core;
 
 namespace telar::gui::test {
   struct FramePacing;

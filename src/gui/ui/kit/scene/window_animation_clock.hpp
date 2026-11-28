@@ -3,9 +3,6 @@
 static_assert(true);
 #endif
 
-#include "foundation/core/memory.hpp"
-#include "telar_base/ds/containers.hpp"
-#include "telar_base/ds/values.hpp"
 #include <QList>
 #include <QObject>
 #include <QPointer>
@@ -20,6 +17,10 @@ static_assert(true);
 #include <typeinfo>
 
 #pragma once
+
+import telar.gui.foundation.core;
+import telar.base.ds;
+import telar.base.memory.allocators;
 
 namespace telar::gui::qt {
 

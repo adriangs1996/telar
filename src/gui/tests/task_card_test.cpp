@@ -4,7 +4,6 @@ static_assert(true);
 #endif
 
 #include "qml_fixture.hpp"
-#include "telar_wire/serializers/telar_messages.hpp"
 #include "ui/app/chrome/activity/activity_projection.hpp"
 #include "ui/app/chrome/activity/agent_projection.hpp"
 #include "ui/app/chrome/sidebar_projection.hpp"
@@ -55,6 +54,8 @@ import telar.gui.foundation.system;
 import telar.gui.features.activity;
 import telar.gui.features.workbench;
 import telar.base.ds;
+import telar.wire.vocabulary;
+import telar.base.memory.allocators;
 
 namespace {
 

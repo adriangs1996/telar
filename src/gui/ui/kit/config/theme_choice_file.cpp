@@ -4,7 +4,6 @@ static_assert(true);
 #endif
 
 #include "theme_choice_file.hpp"
-#include "telar_base/memory/allocator.hpp"
 #include <QFile>
 #include <cerrno>
 #include <cstdint>

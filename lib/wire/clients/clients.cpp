@@ -3,8 +3,6 @@ module telar.wire.clients;
 import std;
 import telar.wire.vocabulary;
 
-// The owned header declares these in the global module, so their definitions belong to it too.
-extern "C++" {
 namespace telar {
 
   void ClientList::validate() const {
@@ -17,5 +15,4 @@ namespace telar {
     }
   }
 
-}
 }

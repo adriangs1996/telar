@@ -3,7 +3,6 @@
 static_assert(true);
 #endif
 
-#include "foundation/core/memory.hpp"
 #include "ui/kit/fonts/font_collection.hpp"
 #include "ui/kit/fonts/resident_fonts.hpp"
 #include "ui/kit/scene/ancestor_geometry.hpp"
@@ -26,6 +25,7 @@ static_assert(true);
 
 #include "tbc/view.hpp"
 
+import telar.base.memory.allocators;
 import telar.gui.foundation.core;
 import telar.gui.foundation.fonts;
 import telar.gui.foundation.terminal;

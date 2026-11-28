@@ -36,6 +36,7 @@ add_library(gui-posix STATIC platform/clipboard_image_file.c foundation/system/s
   foundation/system/system-runtime_endpoint.cpp foundation/system/system-login_shell.cpp)
 target_sources(gui-posix PRIVATE platform/platform-clipboard_image_pipe.cpp)
 target_link_libraries(gui-posix PUBLIC gui-foundation-core gui-foundation-system gui-platform Threads::Threads)
+set_target_properties(gui-posix PROPERTIES POSITION_INDEPENDENT_CODE ON)
 add_executable(telar-gui-command platform/surface_command_main.c)
 target_compile_definitions(telar-gui-command PRIVATE "$<$<PLATFORM_ID:Linux>:_GNU_SOURCE>")
 target_compile_options(telar-gui-command PRIVATE ${TELAR_WARNINGS})
@@ -62,6 +63,7 @@ if(TELAR_GUI_NATIVE)
   target_link_libraries(gui-fonts-native PUBLIC gui-foundation-core gui-foundation-terminal gui-foundation-fonts gui-harfbuzz)
   target_link_libraries(gui-editor-context INTERFACE gui-fonts-native)
   target_compile_options(gui-fonts-native PRIVATE -ffp-contract=off)
+  set_target_properties(gui-fonts-native PROPERTIES POSITION_INDEPENDENT_CODE ON)
 
   include(cmake/qt.cmake)
   find_package(Qt6 ${TELAR_QT_VERSION} EXACT REQUIRED COMPONENTS Gui Qml Quick QuickControls2 Network Concurrent ShaderTools Svg
@@ -70,18 +72,21 @@ if(TELAR_GUI_NATIVE)
     PATHS "${TELAR_GUI_QT_PREFIX}/lib/cmake/Qt6GuiPrivate" NO_DEFAULT_PATH)
   qt_standard_project_setup(REQUIRES 6.7)
   add_library(gui-surface-command STATIC ui/kit/process/surface_command.cpp)
-  target_link_libraries(gui-surface-command PUBLIC gui-posix gui-platform Qt6::Core)
+  target_link_libraries(gui-surface-command PUBLIC gui-foundation-core gui-foundation-system gui-posix gui-platform telar::base Qt6::Core)
+  set_target_properties(gui-surface-command PROPERTIES POSITION_INDEPENDENT_CODE ON)
   add_dependencies(gui-surface-command telar-gui-command)
 
   add_library(gui-machine-profiles STATIC ui/app/overlays/machine_prompt/machine_profiles_source.cpp ui/app/overlays/machine_prompt/machine_profiles_source.hpp)
-  target_link_libraries(gui-machine-profiles PUBLIC gui-posix gui-platform gui-application Qt6::Concurrent)
+  target_link_libraries(gui-machine-profiles PUBLIC gui-foundation-core gui-foundation-system gui-posix gui-platform gui-application telar::base Qt6::Concurrent)
+  set_target_properties(gui-machine-profiles PROPERTIES POSITION_INDEPENDENT_CODE ON)
   if(Qt6_VERSION VERSION_GREATER_EQUAL 6.8)
     qt_policy(SET QTP0004 NEW)
   endif()
 
   # The platform domain's native window, fonts and clipboard images, on Qt.
   add_library(gui-platform-native STATIC foundation/system/system-host_name.cpp)
-  target_link_libraries(gui-platform-native PUBLIC gui-foundation-system gui-foundation-fonts gui-platform gui-posix Qt6::Gui PRIVATE Qt6::Quick)
+  target_link_libraries(gui-platform-native PUBLIC gui-foundation-core gui-foundation-system gui-foundation-fonts gui-platform gui-posix telar::base telar::platform telar::tbc Qt6::Gui PRIVATE Qt6::Quick)
+  set_target_properties(gui-platform-native PROPERTIES POSITION_INDEPENDENT_CODE ON)
   if(APPLE)
     if(NOT DEFINED CMAKE_OBJCXX_COMPILER AND "$ENV{OBJCXX}" STREQUAL "" AND CMAKE_CXX_COMPILER_ID MATCHES "Clang")
       set(CMAKE_OBJCXX_COMPILER "${CMAKE_CXX_COMPILER}")
@@ -97,10 +102,10 @@ if(TELAR_GUI_NATIVE)
     set(CMAKE_OBJCXX_STANDARD_REQUIRED ON)
     include(CheckOBJCXXCompilerFlag)
     check_objcxx_compiler_flag(-fno-objc-msgsend-class-selector-stubs TELAR_GUI_HAS_OBJC_CLASS_STUB_CONTROL)
-    target_sources(gui-platform-native PRIVATE platform/macos/window.mm platform/macos/blur_symbols.m platform/macos/text_input.mm platform/macos/scroll_event.mm platform/macos/clipboard_image_source.mm)
+    target_sources(gui-platform-native PRIVATE platform/macos/window.mm platform/macos/blur_symbols.m platform/macos/text_input.mm platform/macos/scroll_event.mm platform/macos/scroll_event.cpp platform/macos/clipboard_image_source.mm platform/macos/clipboard_image_source.cpp)
     target_sources(gui-platform-native PRIVATE platform/macos/font.mm platform/macos/glyph_rasterizer.mm foundation/fonts/fonts-glyph_rasterizer.cpp)
-    target_sources(gui-platform-native PRIVATE platform/macos/optical_text.mm)
-    target_sources(gui-platform-native PRIVATE platform/macos/file_drag.mm)
+    target_sources(gui-platform-native PRIVATE platform/macos/optical_text.cpp)
+    target_sources(gui-platform-native PRIVATE platform/macos/file_drag.mm platform/macos/file_drag.cpp)
     target_link_libraries(gui-platform-native PRIVATE Qt6::GuiPrivate)
     target_compile_options(gui-platform-native PRIVATE "$<$<COMPILE_LANGUAGE:OBJC,OBJCXX>:-fobjc-arc>")
     if(TELAR_GUI_HAS_OBJC_CLASS_STUB_CONTROL)
@@ -110,7 +115,7 @@ if(TELAR_GUI_NATIVE)
     target_link_libraries(gui-platform-native PRIVATE "-framework AppKit" "-framework Carbon" "-framework CoreText" "-framework CoreGraphics" "-framework ImageIO" "-framework UniformTypeIdentifiers")
     # The clipboard image source test checks this source under the sanitizers.
     if(BUILD_TESTING AND TELAR_SANITIZERS)
-      set_property(SOURCE platform/macos/clipboard_image_source.mm APPEND PROPERTY COMPILE_OPTIONS -fsanitize=address,undefined -fno-omit-frame-pointer)
+      set_property(SOURCE platform/macos/clipboard_image_source.mm platform/macos/clipboard_image_source.cpp APPEND PROPERTY COMPILE_OPTIONS -fsanitize=address,undefined -fno-omit-frame-pointer)
     endif()
 
   elseif(CMAKE_SYSTEM_NAME STREQUAL "Linux")
@@ -148,32 +153,32 @@ if(TELAR_GUI_NATIVE)
 
   add_library(gui-keyboard STATIC ui/kit/input/terminal_input.cpp)
   # It imports no domain; the lowest, gui-foundation-core, gives it the GUI's settings.
-  target_link_libraries(gui-keyboard PUBLIC gui-foundation-core Qt6::Gui)
+  target_link_libraries(gui-keyboard PUBLIC gui-foundation-core telar::base telar::wire Qt6::Gui)
+  set_target_properties(gui-keyboard PROPERTIES POSITION_INDEPENDENT_CODE ON)
 
   add_library(gui-clipboard-images STATIC ui/app/panes/attachments/attachment_preview.cpp ui/app/panes/attachments/attachment_preview.hpp ui/app/panes/attachments/clipboard_images.cpp ui/app/panes/attachments/clipboard_images.hpp)
-  target_link_libraries(gui-clipboard-images PUBLIC gui-platform-native gui-application Qt6::Concurrent)
+  target_link_libraries(gui-clipboard-images PUBLIC gui-foundation-core gui-platform gui-platform-native gui-application telar::base telar::platform telar::tbc Qt6::Concurrent)
+  set_target_properties(gui-clipboard-images PROPERTIES POSITION_INDEPENDENT_CODE ON)
+
+  set(gui_quick_module_targets
+    gui-foundation-core gui-foundation-system gui-foundation-text
+    gui-foundation-terminal gui-foundation-fonts gui-foundation-actions gui-foundation-keys gui-foundation-model
+    gui-foundation-agents gui-foundation-drawing gui-foundation-forms gui-foundation-icons
+    gui-platform gui-application
+    telar::base telar::wire telar::platform telar::tbc)
 
   qt_add_library(gui-quick STATIC)
+  set_target_properties(gui-quick PROPERTIES POSITION_INDEPENDENT_CODE ON)
   target_link_libraries(gui-quick PRIVATE Qt6::GuiPrivate)
   target_link_libraries(gui-quick PUBLIC gui-clipboard-images)
   set_source_files_properties(ui/app/panes/attachments/attachment_preview.cpp PROPERTIES COMPILE_OPTIONS "-ffp-contract=off")
 
-  target_link_libraries(gui-quick PUBLIC gui-foundation-core gui-foundation-system gui-foundation-text
-    gui-foundation-terminal gui-foundation-fonts gui-foundation-actions gui-foundation-keys gui-foundation-model
-    gui-foundation-agents gui-foundation-drawing gui-foundation-forms gui-foundation-icons
-    gui-platform
-    gui-application gui-platform-native gui-keyboard gui-fonts-native gui-machine-profiles Qt6::Quick
-    Qt6::QuickControls2 Qt6::Network Qt6::Concurrent)
-  # Most of a gui-quick compilation parses the same Qt headers again; the ones
-  # that at least two in five Qt adapters include are parsed once per build.
-  option(TELAR_GUI_PRECOMPILED_HEADERS "Precompile the Qt headers shared by gui-quick sources" ON)
-  if(TELAR_GUI_PRECOMPILED_HEADERS)
-    target_precompile_headers(gui-quick PRIVATE
-      <QByteArray> <QColor> <QDir> <QFont> <QFutureWatcher> <QHash> <QIODevice> <QImage>
-      <QKeyEvent> <QList> <QMetaObject> <QMouseEvent> <QObject> <QPointF> <QPointer>
-      <QQuickItem> <QQuickWindow> <QRectF> <QSizeF> <QString> <QStringList> <QThread>
-      <QTimer> <QVariant> <QVariantMap> <QWindow> <QtQml/qqmlregistration.h>)
-  endif()
+  target_link_libraries(gui-quick PUBLIC ${gui_quick_module_targets}
+    gui-platform-native gui-keyboard gui-fonts-native gui-machine-profiles
+    Qt6::Quick Qt6::QuickControls2 Qt6::Network Qt6::Concurrent)
+  # Qt adapters import C++23 modules that import `std`; Clang does not merge stdlib types
+  # such as std::string_view across a precompiled header (-include-pch) and the `std` BMI,
+  # so gui-quick compiles without a precompiled header.
   set(TELAR_GUI_LINK_HOST_HEADER "" CACHE FILEPATH "Header selecting a compile-time external link host")
   if(TELAR_GUI_LINK_HOST_HEADER)
     get_filename_component(gui_link_host_header "${TELAR_GUI_LINK_HOST_HEADER}" ABSOLUTE)
@@ -230,6 +235,7 @@ if(TELAR_GUI_NATIVE)
     QML_FILES ${gui_quick_qml_files})
 
   qt_add_executable(telar-gui main.cpp)
+  set_target_properties(telar-gui PROPERTIES POSITION_INDEPENDENT_CODE ON)
   if(APPLE)
     target_link_options(telar-gui PRIVATE -Wl,-headerpad_max_install_names)
     add_executable(telar-gui-launcher tools/macos_launcher.cpp foundation/system/system-login_shell.cpp)
@@ -239,13 +245,13 @@ if(TELAR_GUI_NATIVE)
     set_target_properties(telar-gui-launcher PROPERTIES AUTOMOC OFF AUTOUIC OFF AUTORCC OFF)
     add_dependencies(telar-gui telar-gui-launcher)
   endif()
-  target_link_libraries(telar-gui PRIVATE gui-platform gui-quick gui-quickplugin)
+  target_link_libraries(telar-gui PRIVATE ${gui_quick_module_targets} gui-quick gui-quickplugin)
   add_dependencies(telar-gui telar-gui-command)
   # Run by hand by tools/measure_startup.py, in Release too, so a tree configured
   # without tests builds it.
-  telar_add_test(gui-startup-probe QT PROBE SOURCES tools/startup_probe.cpp LIBRARIES gui-quick gui-quickplugin)
+  telar_add_test(gui-startup-probe QT PROBE SOURCES tools/startup_probe.cpp LIBRARIES ${gui_quick_module_targets} gui-quick gui-quickplugin)
   # Shows a QML file of the ignored playground/ and shows it again when it changes.
-  telar_add_test(gui-playground QT PROBE SOURCES tools/playground.cpp LIBRARIES gui-quick gui-quickplugin)
+  telar_add_test(gui-playground QT PROBE SOURCES tools/playground.cpp LIBRARIES ${gui_quick_module_targets} gui-quick gui-quickplugin)
 
   set(gui_font_directory "${TELAR_ROOT}/assets")
   qt_add_resources(gui-quick gui-fonts

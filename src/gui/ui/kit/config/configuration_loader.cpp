@@ -4,9 +4,6 @@ static_assert(true);
 #endif
 
 #include "configuration_loader.hpp"
-#include "foundation/core/application_memory.hpp"
-#include "foundation/core/memory.hpp"
-#include "telar_base/memory/allocator.hpp"
 #include <array>
 #include <cstddef>
 #include <cstdio>
@@ -17,7 +14,6 @@ static_assert(true);
 #include <string_view>
 #include <utility>
 
-#include "telar_config/terminal/control/policy.hpp"
 #include "ui/kit/models/projection.hpp"
 #include <QDir>
 #include <QFile>
@@ -34,6 +30,8 @@ import telar.gui.foundation.actions;
 
 import telar.gui.application;
 import telar.base.ds;
+import telar.gui.foundation.core;
+import telar.config.runtime;
 
 namespace telar::gui::qt {
 

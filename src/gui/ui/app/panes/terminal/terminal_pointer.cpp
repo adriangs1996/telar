@@ -3,8 +3,6 @@
 static_assert(true);
 #endif
 
-#include "foundation/core/wheel_accumulator.hpp"
-#include "telar_wire/serializers/telar_frame.hpp"
 #include "terminal_item.hpp"
 #include "ui/kit/input/key_adapter.hpp"
 #include "ui/kit/input/mouse_buttons.hpp"
@@ -27,6 +25,8 @@ static_assert(true);
 #include <utility>
 
 import telar.gui.application;
+import telar.gui.foundation.core;
+import telar.wire.vocabulary;
 
 namespace telar::gui::qt {
 

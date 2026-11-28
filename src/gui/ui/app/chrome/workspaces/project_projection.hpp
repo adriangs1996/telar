@@ -3,7 +3,6 @@
 static_assert(true);
 #endif
 
-#include "foundation/core/memory.hpp"
 #include "ui/kit/models/projection.hpp"
 #include <QString>
 #include <QVariantMap>
@@ -17,6 +16,7 @@ static_assert(true);
 import telar.gui.foundation.agents;
 import telar.gui.foundation.model;
 import telar.gui.application;
+import telar.gui.foundation.core;
 
 namespace telar::gui::qt {
 

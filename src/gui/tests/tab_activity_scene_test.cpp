@@ -5,7 +5,6 @@ static_assert(true);
 
 #include "qml_fixture.hpp"
 #include "shape_atlas.hpp"
-#include "telar_wire/serializers/telar_messages.hpp"
 #include "ui/app/chrome/tabs/tab_strip_layout.hpp"
 #include "ui/design/controls/native_agent_status.hpp"
 #include "ui/design/controls/native_progress_ring.hpp"
@@ -57,6 +56,7 @@ import telar.gui.features.workbench;
 import telar.gui.foundation.drawing;
 import telar.gui.features.activity;
 import telar.base.ds;
+import telar.wire.vocabulary;
 
 namespace {
 

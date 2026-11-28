@@ -1,8 +1,12 @@
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
+
 #pragma once
 
-#include "foundation/core/application_memory.hpp"
-#include "foundation/core/memory.hpp"
-#include "telar_base/ds/containers.hpp"
+import telar.gui.foundation.core;
+import telar.base.ds;
 
 namespace telar::gui::qt {
 

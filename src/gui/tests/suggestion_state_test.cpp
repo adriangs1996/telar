@@ -3,10 +3,6 @@
 static_assert(true);
 #endif
 #include "assertions.hpp"
-#include "telar_base/memory/fixed_text.hpp"
-#include "telar_wire/codecs/telar_wire.hpp"
-#include "telar_wire/serializers/telar_cells.hpp"
-#include "telar_wire/serializers/telar_frame.hpp"
 #include <algorithm>
 #include <array>
 #include <bit>
@@ -34,6 +30,7 @@ import telar.gui.features.palette;
 import telar.gui.foundation.model;
 import telar.gui.foundation.terminal;
 import telar.base.ds;
+import telar.wire.vocabulary;
 
 namespace {
 

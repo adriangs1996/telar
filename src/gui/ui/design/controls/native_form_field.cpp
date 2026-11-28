@@ -7,8 +7,6 @@ static_assert(true);
 #include "cell_text_grid.hpp"
 #include "form_input_context.hpp"
 #include "form_text_grid.hpp"
-#include "telar_base/ds/values.hpp"
-#include "telar_base/text/utf8.hpp"
 #include "ui/kit/text/utf16_encoding.hpp"
 #include <QClipboard>
 #include <QGuiApplication>
@@ -36,6 +34,9 @@ static_assert(true);
 #include <optional>
 #include <string_view>
 #include <utility>
+
+import telar.base.ds;
+import telar.base.text.utf8;
 
 namespace telar::gui::qt {
 

@@ -24,8 +24,8 @@ namespace telar::runtime::cli {
   }
 
   pid_t spawnDaemon(const char* executable, char* const* arguments, const char* log_path) {
-    auto log = openStartLog(log_path);
-    FileDescriptor ignored{::open("/dev/null", combineFlags(O_RDWR, O_CLOEXEC))}; // NOLINT(cppcoreguidelines-pro-type-vararg): open's C signature is variadic
+    const auto log = openStartLog(log_path);
+    const FileDescriptor ignored{::open("/dev/null", combineFlags(O_RDWR, O_CLOEXEC))}; // NOLINT(cppcoreguidelines-pro-type-vararg): open's C signature is variadic
     if (!ignored) {
       throw SystemError{"Open daemon standard streams"};
     }

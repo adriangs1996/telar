@@ -5,7 +5,6 @@ static_assert(true);
 
 #include "curve_scene.hpp"
 #include "scene_nodes.hpp"
-#include "telar_wire/serializers/telar_cells.hpp"
 #include "ui/kit/fonts/box_font.hpp"
 #include "ui/kit/models/projection.hpp"
 #include <algorithm>
@@ -33,6 +32,7 @@ static_assert(true);
 import telar.gui.foundation.core;
 import telar.gui.foundation.fonts;
 import telar.base.ds;
+import telar.wire.vocabulary;
 
 namespace telar::gui::qt {
 

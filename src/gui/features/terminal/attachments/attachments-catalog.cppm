@@ -1,5 +1,4 @@
 module;
-#include "features/terminal/attachments/capture.hpp"
 #include "telar_base/diagnostics/config.hpp"
 
 // The images attached to a pane's prompt: the shelf's catalog of them, and the markers the
@@ -7,14 +6,12 @@ module;
 export module telar.gui.features.terminal.attachments:catalog;
 
 import std;
+import telar.base.memory.allocators;
+import telar.gui.foundation.core;
 import telar.gui.foundation.terminal;
 import telar.wire.vocabulary;
 import telar.base.ds;
 
-// The capture types stay textual because the Objective-C++ clipboard source
-// shares them, in telar::gui; importers reach their names through these
-// declarations instead of including them. Markers and the catalog are module
-// code: they read the terminal screen and cells through their owner modules.
 export namespace telar::gui::features::terminal::attachments {
   using telar::gui::AttachmentCapture;
   using telar::gui::AttachmentLimits;

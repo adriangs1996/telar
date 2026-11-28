@@ -1,10 +1,4 @@
 #include "agent_report_fixture.hpp"
-#include "foundation/core/application_memory.hpp"
-#include "telar_wire/codecs/telar_codec.hpp"
-#include "telar_wire/codecs/telar_wire.hpp"
-#include "telar_wire/protocol/pane_io.hpp"
-#include "telar_wire/protocol/runtime.hpp"
-#include "telar_wire/serializers/telar_messages.hpp"
 #include "ui/kit/machines/runtime_connection.hpp"
 #include <QByteArrayView>
 #include <QCoreApplication>
@@ -24,6 +18,10 @@
 
 import telar.wire.agents;
 import telar.base.ds;
+import telar.gui.foundation.core;
+import telar.wire.vocabulary;
+import telar.wire.pane_io;
+import telar.wire.runtime;
 
 namespace {
 

@@ -3,12 +3,6 @@
 static_assert(true);
 #endif
 
-#include "foundation/core/application_memory.hpp"
-#include "telar_wire/codecs/telar_codec.hpp"
-#include "telar_wire/codecs/telar_wire.hpp"
-#include "telar_wire/protocol/pane_io.hpp"
-#include "telar_wire/protocol/runtime.hpp"
-#include "telar_wire/serializers/telar_messages.hpp"
 #include "ui/kit/machines/remote_bridge.hpp"
 #include "ui/kit/machines/runtime_connection.hpp"
 #include <QByteArray>
@@ -45,6 +39,10 @@ import telar.client;
 import telar.gui.application;
 import telar.wire.layout;
 import telar.base.ds;
+import telar.gui.foundation.core;
+import telar.wire.vocabulary;
+import telar.wire.pane_io;
+import telar.wire.runtime;
 
 namespace {
 

@@ -4,8 +4,6 @@ static_assert(true);
 #endif
 
 #include "frame_presenter.hpp"
-#include "foundation/core/application_memory.hpp"
-#include "foundation/core/memory.hpp"
 #include "platform/window.hpp"
 #include "pointer_dispatcher.hpp"
 #include "ui/app/chrome/tabs/tabs_controller.hpp"
@@ -29,6 +27,7 @@ static_assert(true);
 import telar.gui.application;
 import telar.wire.vocabulary;
 import telar.base.ds;
+import telar.gui.foundation.core;
 
 namespace telar::gui::qt {
 

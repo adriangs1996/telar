@@ -3,15 +3,7 @@
 static_assert(true);
 #endif
 
-#include "foundation/core/application_memory.hpp"
-#include "foundation/core/memory.hpp"
-#include "telar_base/memory/allocator.hpp"
-#include "telar_base/memory/fixed_text.hpp"
-#include "telar_platform/file_descriptor.hpp"
 #include "telar_platform/open_directory.h"
-#include "telar_wire/codecs/telar_value_codec.hpp"
-#include "telar_wire/codecs/telar_wire.hpp"
-#include "telar_wire/serializers/telar_messages.hpp"
 #include "ui/kit/config/plugin_packages.hpp"
 #include "ui/kit/process/command_process.hpp"
 #include <QDebug>
@@ -60,6 +52,8 @@ import telar.gui.foundation.actions;
 import telar.config.client;
 import telar.gui.application;
 import telar.base.ds;
+import telar.gui.foundation.core;
+import telar.wire.vocabulary;
 
 namespace telar::gui::qt {
 

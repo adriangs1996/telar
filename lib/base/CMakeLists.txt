@@ -1,7 +1,7 @@
 # The lifetime annotations its interfaces declare come from telar.tbc, and the socket
 # addresses text.cpp parses from telar.sys.
 telar_add_library(telar-base
-  SOURCES diagnostics/diagnostics.cpp editors/editors.cpp history/history.cpp text/text.cpp text/json/json.cpp memory/containers/containers.cpp memory/sensitive/sensitive.cpp
+  SOURCES diagnostics/diagnostics.cpp editors/editors.cpp history/history.cpp text/text.cpp text/json/json.cpp text/utf8/utf8.cpp memory/allocators/allocators.cpp memory/containers/containers.cpp memory/sensitive/sensitive.cpp
   INCLUDES "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>" "$<INSTALL_INTERFACE:include>"
   DEPS telar::tbc telar::sys)
 # A ThinLTO archive holds bitcode, which a linker reads only through the compiler's LTO: ld64

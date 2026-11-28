@@ -3,14 +3,6 @@
 static_assert(true);
 #endif
 
-#include "foundation/core/memory.hpp"
-#include "telar_base/memory/fixed_text.hpp"
-#include "telar_base/text/utf8.hpp"
-#include "telar_wire/codecs/telar_codec.hpp"
-#include "telar_wire/codecs/telar_value_codec.hpp"
-#include "telar_wire/codecs/telar_wire.hpp"
-#include "telar_wire/serializers/telar_messages.hpp"
-#include "telar_wire/serializers/telar_serializer.hpp"
 #include <algorithm>
 #include <array>
 #include <charconv>
@@ -35,6 +27,10 @@ import telar.gui.features.machines;
 import telar.client;
 import telar.gui.application;
 import telar.base.ds;
+import telar.gui.foundation.core;
+import telar.wire.vocabulary;
+import telar.base.text.utf8;
+import telar.base.memory.allocators;
 
 namespace {
 

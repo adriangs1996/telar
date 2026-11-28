@@ -4,7 +4,6 @@ static_assert(true);
 #endif
 
 #include "attachment_shelf.hpp"
-#include "foundation/core/application_memory.hpp"
 #include "ui/kit/store/store.hpp"
 #include <QKeyEvent>
 #include <QObject>

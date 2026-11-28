@@ -1,9 +1,10 @@
+#pragma once
+
+import telar.base.ds;
+
 // Frozen parser from ab35af576; differential oracle for owned OSC accumulation. The test that
 // includes it imports std, telar.base.memory.allocators and telar.runtime.terminal.control first,
 // which declare the sequences, the APC borrow and the allocators it uses.
-#pragma once
-#include "telar_base/ds/containers.hpp"
-#include "telar_base/ds/values.hpp"
 
 namespace telar::runtime::control {
 

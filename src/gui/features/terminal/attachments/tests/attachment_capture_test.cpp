@@ -3,7 +3,6 @@
 static_assert(true);
 #endif
 
-#include "features/terminal/attachments/types.hpp"
 #include <cstdint>
 #include <initializer_list>
 #include <limits>
@@ -13,6 +12,7 @@ static_assert(true);
 
 import telar.testing;
 import telar.gui.features.terminal.attachments;
+import telar.gui.foundation.core;
 
 namespace {
 

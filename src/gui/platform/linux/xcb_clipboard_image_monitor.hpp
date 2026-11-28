@@ -1,9 +1,13 @@
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
+
 #pragma once
 
-#include "foundation/core/application_memory.hpp"
-#include "foundation/core/memory.hpp"
-#include "platform/clipboard_image_source.hpp"
-#include "telar_base/ds/containers.hpp"
+import telar.base.ds;
+import telar.gui.foundation.core;
+import telar.gui.platform;
 
 namespace telar::gui::platform {
 

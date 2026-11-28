@@ -54,7 +54,7 @@ namespace telar::runtime {
     // Writes a file of telar's configuration unless it is there: its directory is named by what
     // it holds.
     void keep(const ds::String<ConcurrentMemory>& root, std::string_view name, std::string_view content) {
-      FileDescriptor opened{::open(root.data(), combineFlags(O_RDONLY, O_DIRECTORY, O_NOFOLLOW, O_CLOEXEC))}; // NOLINT(cppcoreguidelines-pro-type-vararg): open's C signature is variadic
+      const FileDescriptor opened{::open(root.data(), combineFlags(O_RDONLY, O_DIRECTORY, O_NOFOLLOW, O_CLOEXEC))}; // NOLINT(cppcoreguidelines-pro-type-vararg): open's C signature is variadic
       if (!opened) {
         throw SystemError{"Open the editor's configuration directory"};
       }

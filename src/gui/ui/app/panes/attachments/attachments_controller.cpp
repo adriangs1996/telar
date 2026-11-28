@@ -4,8 +4,6 @@ static_assert(true);
 #endif
 
 #include "attachments_controller.hpp"
-#include "features/terminal/attachments/types.hpp"
-#include "platform/clipboard_image_source.hpp"
 #include "ui/kit/models/projection.hpp"
 #include <QByteArray>
 #include <QEvent>
@@ -16,6 +14,8 @@ static_assert(true);
 import telar.gui.application;
 import telar.gui.foundation.actions;
 import telar.base.ds;
+import telar.gui.foundation.core;
+import telar.gui.platform;
 
 namespace telar::gui::qt {
 

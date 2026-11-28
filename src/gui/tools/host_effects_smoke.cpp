@@ -3,7 +3,6 @@
 static_assert(true);
 #endif
 
-#include "telar_wire/serializers/telar_messages.hpp"
 #include "ui/app/overlays/notifications/sound_player.hpp"
 #include "ui/app/overlays/notifications/system_notifier.hpp"
 #include "ui/kit/process/command_process.hpp"
@@ -26,6 +25,7 @@ static_assert(true);
 
 import telar.gui.foundation.system;
 import telar.base.ds;
+import telar.wire.vocabulary;
 
 namespace {
 

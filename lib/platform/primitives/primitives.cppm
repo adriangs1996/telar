@@ -1,6 +1,3 @@
-module;
-#include "telar_platform/file_descriptor.hpp"
-
 export module telar.platform.primitives;
 
 import std;
@@ -15,13 +12,45 @@ import telar.base.ds;
 import telar.base.memory.allocators;
 #endif
 
-// Owned textual headers stay in this global module fragment only; importers
-// reach their names through these declarations instead of including them.
 export namespace telar::runtime {
-  using telar::runtime::duplicateCloseOnExec;
-  using telar::runtime::FileDescriptor;
-  using telar::runtime::setCloseOnExec;
-  using telar::runtime::setNonblocking;
+
+  class FileDescriptor {
+  public:
+    constexpr explicit FileDescriptor(int descriptor = -1) noexcept
+        : descriptor_(descriptor) {}
+
+    ~FileDescriptor();
+
+    FileDescriptor(const FileDescriptor&) = delete;
+    FileDescriptor& operator=(const FileDescriptor&) = delete;
+
+    constexpr FileDescriptor(FileDescriptor&& other) noexcept
+        : descriptor_(other.release()) {}
+
+    FileDescriptor& operator=(FileDescriptor&& other) noexcept;
+
+    [[nodiscard]] constexpr int get() const noexcept {
+      return descriptor_;
+    }
+
+    constexpr explicit operator bool() const noexcept {
+      return descriptor_ >= 0;
+    }
+
+    constexpr int release() noexcept {
+      return std::exchange(descriptor_, -1);
+    }
+
+    void reset(int descriptor = -1) noexcept;
+
+  private:
+    int descriptor_;
+  };
+
+  void setNonblocking(int descriptor);
+  void setCloseOnExec(int descriptor);
+  [[nodiscard]] FileDescriptor duplicateCloseOnExec(int descriptor, int minimum);
+
 }
 
 export namespace telar::runtime {

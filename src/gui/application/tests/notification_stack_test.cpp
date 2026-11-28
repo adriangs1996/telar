@@ -3,7 +3,6 @@
 static_assert(true);
 #endif
 
-#include "telar_wire/serializers/telar_messages.hpp"
 #include <cstddef>
 #include <cstdint>
 #include <optional>
@@ -13,6 +12,7 @@ import telar.testing;
 import telar.gui.application;
 import telar.gui.foundation.core;
 import telar.gui.features.notifications;
+import telar.wire.vocabulary;
 
 namespace {
 

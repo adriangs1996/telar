@@ -1,11 +1,17 @@
-#pragma once
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
 
-#include "tbc/view.hpp"
-#include "telar_base/ds/containers.hpp"
 #include <cstdint>
 #include <memory>
 #include <span>
 #include <string_view>
+
+#pragma once
+
+import telar.base.ds;
+import telar.tbc;
 
 class QWindow;
 
@@ -65,16 +71,14 @@ namespace telar::gui::platform {
     // there. A ticket that was told of already, or that no file has, tells nothing.
     void end(std::uint64_t ticket, std::string_view failure);
 
-    // What it holds of AppKit's, which `platform/macos/file_drag_writers.h` reads for a test.
-    struct Native;
-    friend const Native& nativeOf(const FileDrag& drag) noexcept;
+    // What it holds of AppKit's writers array, which tests inspect through an Objective-C bridge.
+    [[nodiscard]] const void* nativeWriters() const noexcept;
 
   private:
+    struct Native;
     // It keeps who the system's requests are given to, which it was given with the rows.
     tbc::val_a<std::unique_ptr<Native>> native_;
   };
-
-  const FileDrag::Native& nativeOf(const FileDrag& drag) noexcept;
 #else
   inline constexpr bool file_promises = false;
 

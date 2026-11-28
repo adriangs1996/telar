@@ -3,7 +3,6 @@
 static_assert(true);
 #endif
 
-#include "foundation/core/memory.hpp"
 #include "nvim_host.hpp"
 #include "tbc/view.hpp"
 #include "ui/kit/store/store.hpp"
@@ -18,6 +17,7 @@ static_assert(true);
 
 import telar.gui.foundation.core;
 import telar.gui.application;
+import telar.base.memory.allocators;
 
 namespace telar::gui::qt {
 

@@ -3,9 +3,6 @@
 static_assert(true);
 #endif
 
-#include "foundation/core/memory.hpp"
-#include "telar_base/memory/allocator.hpp"
-#include "telar_base/text/utf8.hpp"
 #include <array>
 #include <cstddef>
 #include <cstring>
@@ -15,8 +12,7 @@ static_assert(true);
 #include <string>
 #include <string_view>
 
-#include "telar_wire/serializers/telar_cells.hpp"
-
+#include <algorithm>
 #include <climits>
 
 import telar.testing;
@@ -30,6 +26,7 @@ import telar.gui.application.tests.session_fixture;
 import telar.wire.pane_io;
 import telar.wire.vocabulary;
 import telar.base.ds;
+import telar.base.memory.allocators;
 
 namespace {
 

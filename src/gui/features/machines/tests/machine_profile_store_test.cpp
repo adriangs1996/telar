@@ -3,10 +3,6 @@
 static_assert(true);
 #endif
 
-#include "foundation/core/memory.hpp"
-#include "telar_base/memory/allocator.hpp"
-#include "telar_base/memory/fixed_text.hpp"
-#include "telar_wire/codecs/telar_wire.hpp"
 #include <algorithm>
 #include <array>
 #include <cstddef>
@@ -21,6 +17,10 @@ static_assert(true);
 import telar.testing;
 import telar.gui.features.machines;
 import telar.base.ds;
+import telar.gui.foundation.core;
+import telar.wire.vocabulary;
+import telar.base.memory.allocators;
+import telar.base.memory.containers;
 
 namespace {
 

@@ -1,9 +1,15 @@
-#pragma once
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
 
-#include "telar_wire/serializers/telar_messages.hpp"
 #include <QImage>
 #include <QString>
 #include <QStringView>
+
+#pragma once
+
+import telar.wire.vocabulary;
 
 namespace telar::gui::qt {
 

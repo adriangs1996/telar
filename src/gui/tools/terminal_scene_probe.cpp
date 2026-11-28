@@ -3,12 +3,8 @@
 static_assert(true);
 #endif
 
-#include "foundation/core/application_memory.hpp"
 #include "platform/window.hpp"
 #include "tbc/view.hpp"
-#include "telar_wire/codecs/telar_cells.hpp"
-#include "telar_wire/serializers/telar_cells.hpp"
-#include "telar_wire/serializers/telar_frame.hpp"
 #include "ui/kit/cell_scene/terminal_scene.hpp"
 #include "ui/kit/cell_scene/window_images.hpp"
 #include "ui/kit/fonts/bundled_fonts.hpp"
@@ -55,6 +51,8 @@ import telar.config.gui;
 import telar.gui.foundation.terminal;
 import telar.gui.application;
 import telar.base.ds;
+import telar.gui.foundation.core;
+import telar.wire.vocabulary;
 
 namespace {
 

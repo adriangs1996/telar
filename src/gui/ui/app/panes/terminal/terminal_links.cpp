@@ -3,7 +3,6 @@
 static_assert(true);
 #endif
 
-#include "telar_wire/serializers/telar_frame.hpp"
 #include "terminal_item.hpp"
 #include "ui/app/panes/terminal/links/link_preview.hpp"
 #include "ui/kit/input/key_adapter.hpp"
@@ -35,6 +34,7 @@ static_assert(true);
 import telar.gui.foundation.terminal;
 import telar.gui.application;
 import telar.base.ds;
+import telar.wire.vocabulary;
 
 namespace telar::gui::qt {
 

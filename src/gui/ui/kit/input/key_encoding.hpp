@@ -4,7 +4,6 @@ static_assert(true);
 #endif
 
 #include "key_adapter.hpp"
-#include "telar_wire/serializers/telar_frame.hpp"
 #include "terminal_input.hpp"
 #include <QByteArray>
 #include <QKeyEvent>
@@ -26,6 +25,7 @@ static_assert(true);
 #pragma once
 
 import telar.gui.foundation.keys;
+import telar.wire.vocabulary;
 
 namespace telar::gui::qt {
 

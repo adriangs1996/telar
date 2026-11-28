@@ -6,14 +6,13 @@
 
 # telar::ds keeps raw storage in C arrays: Array its values, as std::array does, and String and
 # Function their inline bytes. These entries stay.
-lib/base/include/telar_base/ds/containers.hpp
-lib/base/include/telar_base/ds/values.hpp
+lib/base/ds/values/values.cppm
 
 # The C interface the GUI's font code shares with Objective-C++: plain C structs, so C arrays.
 src/gui/platform/font.h
 
 # FixedString takes a string literal as a template argument, and a literal's type is a C array.
-lib/wire/include/telar_wire/codecs/telar_wire.hpp
+lib/wire/vocabulary/vocabulary-wire.cppm
 
 # Libraries that do not depend on telar's base library, and so cannot use telar::ds.
 lib/ebnf/

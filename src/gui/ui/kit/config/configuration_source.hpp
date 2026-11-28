@@ -4,19 +4,8 @@ static_assert(true);
 #endif
 
 #include "configuration_loader.hpp"
-#include "foundation/core/application_memory.hpp"
-#include "foundation/core/memory.hpp"
 #include "lua_host.hpp"
 #include "tbc/view.hpp"
-#include "telar_base/memory/allocator.hpp"
-#include "telar_base/memory/fixed_text.hpp"
-#include "telar_base/text/utf8.hpp"
-#include "telar_platform/file_descriptor.hpp"
-#include "telar_wire/codecs/telar_value_codec.hpp"
-#include "telar_wire/codecs/telar_wire.hpp"
-#include "telar_wire/serializers/telar_cells.hpp"
-#include "telar_wire/serializers/telar_frame.hpp"
-#include "telar_wire/serializers/telar_messages.hpp"
 #include "theme_choice_file.hpp"
 #include "ui/kit/fonts/font_cache.hpp"
 #include <algorithm>
@@ -67,6 +56,8 @@ import telar.gui.foundation.core;
 import telar.gui.foundation.keys;
 import telar.config.client;
 import telar.base.ds;
+import telar.platform.primitives;
+import telar.wire.vocabulary;
 
 namespace telar::gui::qt {
 

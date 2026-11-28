@@ -4,8 +4,6 @@ static_assert(true);
 #endif
 
 #include "copy_controller.hpp"
-#include "foundation/core/application_memory.hpp"
-#include "foundation/core/memory.hpp"
 #include "terminal_host.hpp"
 #include "ui/app/panes/terminal/prompt/prompt_controller.hpp"
 #include "ui/kit/input/mouse_buttons.hpp"

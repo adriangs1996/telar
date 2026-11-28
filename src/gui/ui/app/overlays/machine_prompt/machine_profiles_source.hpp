@@ -3,7 +3,6 @@
 static_assert(true);
 #endif
 
-#include "foundation/core/application_memory.hpp"
 #include <QByteArray>
 #include <QFutureWatcher>
 #include <QObject>
@@ -20,6 +19,7 @@ static_assert(true);
 import telar.gui.foundation.system;
 import telar.gui.application;
 import telar.base.ds;
+import telar.gui.foundation.core;
 
 namespace telar::gui::qt {
 

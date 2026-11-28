@@ -3,8 +3,6 @@ module telar.wire.clipboard;
 import std;
 import telar.wire.vocabulary;
 
-// The interface declares these in the global module, so their definitions belong to it too.
-extern "C++" {
 namespace telar {
 
   void validateClipboardContents(std::span<const ClipboardRepresentation> contents) {
@@ -54,5 +52,4 @@ namespace telar {
     }
   }
 
-}
 }

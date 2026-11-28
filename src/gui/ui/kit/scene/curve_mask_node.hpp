@@ -4,7 +4,6 @@ static_assert(true);
 #endif
 
 #include "curve_mask.hpp"
-#include "telar_wire/serializers/telar_cells.hpp"
 #include <QRectF>
 #include <QSGNode>
 #include <array>
@@ -16,6 +15,7 @@ static_assert(true);
 #pragma once
 
 import telar.gui.foundation.core;
+import telar.wire.vocabulary;
 
 namespace telar::gui::qt {
 

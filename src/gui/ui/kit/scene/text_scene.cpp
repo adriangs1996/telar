@@ -6,12 +6,8 @@ static_assert(true);
 #include "text_scene.hpp"
 #include "chrome_glyph_images.hpp"
 #include "chrome_text_scene.hpp"
-#include "foundation/core/memory.hpp"
 #include "platform/font.h"
 #include "scene_nodes.hpp"
-#include "telar_base/memory/fixed_text.hpp"
-#include "telar_wire/serializers/telar_cells.hpp"
-#include "telar_wire/serializers/telar_frame.hpp"
 #include "ui/kit/fonts/font_collection.hpp"
 #include "ui/kit/fonts/resident_fonts.hpp"
 #include "ui/kit/models/projection.hpp"
@@ -54,8 +50,11 @@ static_assert(true);
 #include <exception>
 
 #ifdef Q_OS_MACOS
-#include "telar_base/ds/values.hpp"
 #endif
+
+import telar.gui.foundation.core;
+import telar.wire.vocabulary;
+import telar.base.ds;
 
 namespace telar::gui::qt {
 

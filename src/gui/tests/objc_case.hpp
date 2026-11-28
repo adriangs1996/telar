@@ -1,14 +1,13 @@
-#pragma once
-
 // A case of telar::testing for an Objective-C++ test, which cannot import a module: the .mm
 // defines one at namespace scope and fails it with check, as a C++ test does:
 //
 //   const telar::gui::test::ObjcCase case_phases{"native_scroll_input.phases", phases};
 //
 // objc_case.cpp, a C++ unit of the same program, defines both with telar.testing.
-#include "telar_base/ds/values.hpp"
-#include <array>
+#pragma once
+
 #include <cstddef>
+#include <iterator>
 #include <source_location>
 #include <string_view>
 
@@ -31,7 +30,11 @@ namespace telar::gui::test {
 
   private:
     // The telar::testing::Case it registers, built in place: a name, a function and a link.
-    alignas(void*) ds::Array<std::byte, 4 * sizeof(void*)> storage_{};
+    struct Storage {
+      alignas(void*) std::byte bytes[4 * sizeof(void*)]; // NOLINT(cppcoreguidelines-avoid-c-arrays,modernize-avoid-c-arrays): Objective-C++ cannot import telar.base.ds.
+    };
+
+    Storage storage_{};
   };
 
   // telar::testing::fail: writes where the check failed and aborts the process.

@@ -3,13 +3,6 @@
 static_assert(true);
 #endif
 
-#include "foundation/core/memory.hpp"
-#include "telar_base/memory/allocator.hpp"
-#include "telar_base/text/utf8.hpp"
-#include "telar_wire/codecs/telar_codec.hpp"
-#include "telar_wire/protocol/pane_io.hpp"
-#include "telar_wire/protocol/runtime.hpp"
-#include "telar_wire/serializers/telar_messages.hpp"
 #include <array>
 #include <cstddef>
 #include <cstdint>
@@ -25,6 +18,11 @@ import telar.wire.layout;
 import telar.wire.runtime;
 import telar.wire.worktrees;
 import telar.base.ds;
+import telar.gui.foundation.core;
+import telar.wire.vocabulary;
+import telar.wire.pane_io;
+import telar.base.memory.allocators;
+import telar.base.text.utf8;
 
 namespace {
 

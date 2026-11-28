@@ -6,8 +6,6 @@ static_assert(true);
 #include "agent_report_fixture.hpp"
 #include "appearance_fixture.hpp"
 #include "clipboard_fixture.hpp"
-#include "foundation/core/application_memory.hpp"
-#include "foundation/core/memory.hpp"
 #include "frame_fixture.hpp"
 #include "frame_pacing_fixture.hpp"
 #include "gui_wait.hpp"
@@ -17,18 +15,6 @@ static_assert(true);
 #include "platform/window_activation.hpp"
 #include "qml_fixture.hpp"
 #include "screen_fixture.hpp"
-#include "telar_base/memory/allocator.hpp"
-#include "telar_base/memory/fixed_text.hpp"
-#include "telar_base/text/utf8.hpp"
-#include "telar_config/graphics/limits.hpp"
-#include "telar_wire/codecs/telar_codec.hpp"
-#include "telar_wire/codecs/telar_value_codec.hpp"
-#include "telar_wire/codecs/telar_wire.hpp"
-#include "telar_wire/protocol/clients.hpp"
-#include "telar_wire/protocol/runtime.hpp"
-#include "telar_wire/serializers/telar_cells.hpp"
-#include "telar_wire/serializers/telar_frame.hpp"
-#include "telar_wire/serializers/telar_messages.hpp"
 #include "terminal_cursor_fixture.hpp"
 #include "ui/app/application_controller.hpp"
 #include "ui/app/chrome/mode_bar/native_mode_layout.hpp"
@@ -151,6 +137,10 @@ import telar.gui.features.notifications;
 import telar.wire.history;
 import telar.gui.features.window;
 import telar.base.ds;
+import telar.wire.vocabulary;
+import telar.wire.clients;
+import telar.wire.runtime;
+import telar.base.memory.allocators;
 
 namespace telar::gui::test {
 

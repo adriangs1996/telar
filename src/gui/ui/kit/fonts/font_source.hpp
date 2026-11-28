@@ -3,9 +3,7 @@
 static_assert(true);
 #endif
 
-#include "foundation/core/memory.hpp"
 #include "tbc/view.hpp"
-#include "telar_wire/codecs/telar_wire.hpp"
 #include <QByteArray>
 #include <QString>
 #include <cstdint>
@@ -17,6 +15,7 @@ static_assert(true);
 import telar.gui.foundation.core;
 import telar.gui.foundation.fonts;
 import telar.base.ds;
+import telar.wire.vocabulary;
 
 namespace telar::gui::qt {
 

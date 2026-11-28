@@ -1,4 +1,3 @@
-#include "foundation/core/application_memory.hpp"
 #include "ui/kit/input/native_pointer_events.hpp"
 #include <QCoreApplication>
 #include <QEvent>
@@ -19,6 +18,7 @@
 
 import telar.testing;
 import telar.base.ds;
+import telar.gui.foundation.core;
 
 namespace {
 

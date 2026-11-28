@@ -588,7 +588,7 @@ namespace pointers {
 
 // CASE: pointer.member_pointer_field
 // PAIR: pointer.member_pointer
-// SOURCE: lib/wire/include/telar_wire/serializers/telar_serializer.hpp :: memberValue
+// SOURCE: lib/wire/vocabulary/vocabulary-serializer.cppm :: memberValue
 // STATUS: implemented
 // CONTRACT: A member pointer selects a field of its object, so the result lies in that object's storage.
 // SCENARIO: The selected field of a live caller object is observed in place; accept.
@@ -601,7 +601,7 @@ void memberPointerField(pointers::labeled& record) {
 
 // CASE: pointer.member_pointer_escape
 // PAIR: pointer.member_pointer
-// SOURCE: lib/wire/include/telar_wire/serializers/telar_serializer.hpp :: memberValue
+// SOURCE: lib/wire/vocabulary/vocabulary-serializer.cppm :: memberValue
 // STATUS: implemented
 // CONTRACT: A member pointer selects a field of its object, so the result lies in that object's storage.
 // SCENARIO: The selected string belongs to a local object that dies when the function returns.
@@ -830,7 +830,7 @@ tbc::view<std::string_view, tbc::lt::a> pointerFunctionSignatureElided(tbc::view
 
 // CASE: pointer.function_signature_labeled
 // PAIR: pointer.function_signature
-// SOURCE: lib/base/include/telar_base/ds/containers.hpp :: Function::operator() (the callable's result borrows its storage, never the arguments)
+// SOURCE: lib/base/ds/ds.cppm :: Function::operator() (the callable's result borrows its storage, never the arguments)
 // STATUS: implemented
 // CONTRACT: A call through a function pointer borrows by the pointer's own signature, as Rust reads a `fn(&'a T) -> &'a U`: a result labeled with a region borrows what that region's parameters lend, and an unlabeled one what its one lending parameter lends.
 // SCENARIO: A pointer whose result borrows only its first parameter is given a local as the second; accept.

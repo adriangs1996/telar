@@ -3,8 +3,6 @@
 static_assert(true);
 #endif
 
-#include "telar_base/memory/allocator.hpp"
-
 import std;
 import telar.testing;
 import telar.testing.test_memory;
@@ -14,6 +12,7 @@ import telar.render.markdown;
 import telar.wire.content;
 import telar.wire.vocabulary;
 import telar.render.document;
+import telar.base.memory.allocators;
 
 namespace {
 

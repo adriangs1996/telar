@@ -100,7 +100,7 @@ namespace contracts {
 
 // CASE: contract.static_result_caller
 // PAIR: contract.static_result
-// SOURCE: lib/clipboard/include/telar_clipboard/clipboard.hpp :: read / content::mime_type
+// SOURCE: lib/clipboard/clipboard.cppm :: read / content::mime_type
 // STATUS: implemented
 // CONTRACT: A static result borrows storage that outlives every caller, never an argument.
 // SCENARIO: The declaration has no visible body; its result stays valid after the temporary argument dies.
@@ -507,7 +507,7 @@ namespace contracts {
 
 // CASE: contract.anonymous_union_field
 // PAIR: contract.anonymous_union
-// SOURCE: lib/base/include/telar_base/ds/values.hpp :: Option
+// SOURCE: lib/base/ds/values/values.cppm :: Option
 // STATUS: implemented
 // CONTRACT: A member of an anonymous union is a field of the record that holds it, labeled as any other.
 // SCENARIO: The constructor, the assignment and the read keep the view in the labeled member's region; accept.
@@ -551,7 +551,7 @@ std::size_t anonymousUnionField(std::string_view text) {
 
 // CASE: contract.anonymous_union_escape
 // PAIR: contract.anonymous_union
-// SOURCE: lib/base/include/telar_base/ds/values.hpp :: Option
+// SOURCE: lib/base/ds/values/values.cppm :: Option
 // STATUS: implemented
 // CONTRACT: A member of an anonymous union is a field of the record that holds it, labeled as any other.
 // SCENARIO: The holder keeps a view of a local string through the union's member and outlives it; reject.
@@ -567,7 +567,7 @@ contracts::maybe_text anonymousUnionEscape() {
 
 // CASE: contract.array_member_copy
 // PAIR: contract.array_member
-// SOURCE: lib/base/include/telar_base/ds/values.hpp :: Array
+// SOURCE: lib/base/ds/values/values.cppm :: Array
 // STATUS: implemented
 // CONTRACT: A copy of a record whose member is a C array holds what the copied array holds, element by element.
 // SCENARIO: The copy keeps views of the caller's text, which outlives it; accept.
@@ -588,7 +588,7 @@ contracts::view_pair arrayMemberCopy(std::string_view first, std::string_view se
 
 // CASE: contract.array_member_escape
 // PAIR: contract.array_member
-// SOURCE: lib/base/include/telar_base/ds/values.hpp :: Array
+// SOURCE: lib/base/ds/values/values.cppm :: Array
 // STATUS: implemented
 // CONTRACT: A copy of a record whose member is a C array holds what the copied array holds, element by element.
 // SCENARIO: The copy keeps a view of a local string that dies when the function returns; reject.

@@ -39,11 +39,11 @@ if(TELAR_GUI_NATIVE)
       TEST gui-native-window-update LABELS gui.platform ENVIRONMENT QT_QPA_PLATFORM=cocoa TIMEOUT 30)
   elseif(CMAKE_SYSTEM_NAME STREQUAL "Linux")
     telar_add_test(gui-clipboard-wayland-provider QT NO_TEST SOURCES ${TELAR_PROCESS_SOURCE_DIR}/tools/clipboard_wayland_provider.cpp LIBRARIES Qt6::Quick)
-    telar_add_test(gui-clipboard-wayland-probe QT NO_TEST SOURCES ${TELAR_PROCESS_SOURCE_DIR}/tools/clipboard_wayland_probe.cpp LIBRARIES gui-clipboard-images Qt6::Quick gui-features-machines)
+    telar_add_test(gui-clipboard-wayland-probe QT NO_TEST SOURCES ${TELAR_PROCESS_SOURCE_DIR}/tools/clipboard_wayland_probe.cpp LIBRARIES gui-foundation-core gui-platform gui-application gui-clipboard-images Qt6::Quick gui-features-machines)
     target_include_directories(gui-clipboard-wayland-probe PRIVATE "${TELAR_PROCESS_SOURCE_DIR}")
     set_target_properties(gui-clipboard-wayland-provider gui-clipboard-wayland-probe PROPERTIES QT_QML_MODULE_NO_IMPORT_SCAN TRUE)
   endif()
-  telar_add_test(gui-attachment-preview-test SOURCES attachment_preview_test.cpp ${TELAR_PROCESS_SOURCE_DIR}/ui/app/panes/attachments/attachment_preview.cpp LIBRARIES gui-features-terminal-attachments gui-features-terminal-graphics gui-application Qt6::Gui
+  telar_add_test(gui-attachment-preview-test SOURCES attachment_preview_test.cpp ${TELAR_PROCESS_SOURCE_DIR}/ui/app/panes/attachments/attachment_preview.cpp LIBRARIES gui-foundation-core gui-features-terminal-attachments gui-features-terminal-graphics gui-application telar::base Qt6::Gui
     TEST gui-attachment-preview LABELS gui.ui TIMEOUT 30)
   target_include_directories(gui-attachment-preview-test PRIVATE "${TELAR_PROCESS_SOURCE_DIR}")
   telar_add_test(gui-qt-dependency COMMAND Python3::Interpreter "${TELAR_PROCESS_SOURCE_DIR}/tools/test_qt_dependency.py"
@@ -64,7 +64,8 @@ if(TELAR_GUI_NATIVE)
   endif()
   telar_add_tests(gui-platform-tests LABEL gui.platform DIRECTORY ../platform/tests QT MAIN gui-testing-main
     LINK telar::gui::platform gui-platform-native gui-posix gui-test-fixtures Qt6::Quick
-    SOURCES ../platform/tests/clipboard_pipe_status/clipboard_pipe_status.c MACOS_SOURCES objc_case.cpp
+    SOURCES ../platform/tests/clipboard_pipe_status/clipboard_pipe_status.c
+    MACOS_SOURCES objc_case.cpp ../platform/tests/macos/scroll_fixture.mm ../platform/tests/macos/pasteboard_fixture.mm ../platform/tests/macos/file_drag_verifier.mm
     ${gui_platform_native} TIMEOUT 30)
   target_include_directories(gui-platform-tests PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}")
   if(TELAR_GUI_HAS_OBJC_CLASS_STUB_CONTROL)
@@ -128,7 +129,7 @@ if(TELAR_GUI_NATIVE)
   telar_add_test(gui-machine-window-test QT SOURCES machine_window_test.cpp LIBRARIES gui-quick gui-quickplugin Qt6::Test gui-test-fixtures
     TEST gui-machine-window LABELS gui.ui ENVIRONMENT QT_QUICK_BACKEND=software QT_QPA_PLATFORM=offscreen TIMEOUT 30)
   if(APPLE)
-    target_sources(gui-machine-window-test PRIVATE platform/macos/private_clipboard.mm platform/macos/promised_file.mm)
+    target_sources(gui-machine-window-test PRIVATE platform/macos/private_clipboard.mm platform/macos/promised_file.mm platform/macos/promised_file.cpp)
     target_include_directories(gui-machine-window-test PRIVATE "${TELAR_PROCESS_SOURCE_DIR}")
     target_include_directories(gui-machine-window-test PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}")
     target_compile_options(gui-machine-window-test PRIVATE "$<$<COMPILE_LANGUAGE:OBJCXX>:-fobjc-arc>")

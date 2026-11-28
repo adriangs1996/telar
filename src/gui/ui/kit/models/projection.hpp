@@ -3,14 +3,6 @@
 static_assert(true);
 #endif
 
-#include "foundation/core/memory.hpp"
-#include "telar_base/memory/fixed_text.hpp"
-#include "telar_base/text/utf8.hpp"
-#include "telar_config/graphics/limits.hpp"
-#include "telar_wire/codecs/telar_value_codec.hpp"
-#include "telar_wire/serializers/telar_cells.hpp"
-#include "telar_wire/serializers/telar_frame.hpp"
-#include "telar_wire/serializers/telar_messages.hpp"
 #include "ui/kit/models/pane_attention_value.hpp"
 #include "ui/kit/models/progress_value.hpp"
 #include <QChar>
@@ -51,6 +43,7 @@ import telar.gui.foundation.text;
 import telar.gui.foundation.agents;
 import telar.config.gui;
 import telar.config.core;
+import telar.wire.vocabulary;
 
 namespace telar::gui::qt {
 

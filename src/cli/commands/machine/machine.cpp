@@ -58,7 +58,7 @@ namespace telar::runtime::cli::machine {
       const auto name = absolute.view().substr(slash + 1);
 
       createPrivateDirectory(absolute.view().substr(0, slash == 0 ? 1 : slash));
-      auto parent = openPrivateParent(absolute);
+      const auto parent = openPrivateParent(absolute);
       const auto lock_name = ds::format(memory, "{}.lock", name);
       const auto lock = openLockFile(parent.get(), lock_name.data());
       constexpr mode_t shared_permissions = 0077;
@@ -1053,7 +1053,7 @@ fetch() {
           return;
         }
 
-        FileDescriptor file{::open(real->data(), combineFlags(O_RDONLY, O_NOFOLLOW, O_NONBLOCK, O_CLOEXEC))}; // NOLINT(cppcoreguidelines-pro-type-vararg): open's C signature is variadic
+        const FileDescriptor file{::open(real->data(), combineFlags(O_RDONLY, O_NOFOLLOW, O_NONBLOCK, O_CLOEXEC))}; // NOLINT(cppcoreguidelines-pro-type-vararg): open's C signature is variadic
         struct stat state{};
         if (!file || ::fstat(file.get(), &state) != 0 || !S_ISREG(state.st_mode)) {
           return;
@@ -1156,7 +1156,7 @@ fetch() {
         }
 
         const Text local_text{memory_, local};
-        FileDescriptor directory{::open(local_text.data(), combineFlags(O_RDONLY, O_DIRECTORY, O_CLOEXEC))}; // NOLINT(cppcoreguidelines-pro-type-vararg): open's C signature is variadic
+        const FileDescriptor directory{::open(local_text.data(), combineFlags(O_RDONLY, O_DIRECTORY, O_CLOEXEC))}; // NOLINT(cppcoreguidelines-pro-type-vararg): open's C signature is variadic
         if (!directory) {
           return;
         }
@@ -2657,7 +2657,7 @@ fetch() {
 
     Digest fileDigest(const char* path) {
       constexpr std::size_t chunk_bytes = 64 * std::size_t{1024};
-      FileDescriptor file{::open(path, combineFlags(O_RDONLY, O_NONBLOCK, O_CLOEXEC))}; // NOLINT(cppcoreguidelines-pro-type-vararg): open's C signature is variadic
+      const FileDescriptor file{::open(path, combineFlags(O_RDONLY, O_NONBLOCK, O_CLOEXEC))}; // NOLINT(cppcoreguidelines-pro-type-vararg): open's C signature is variadic
       struct stat state{};
       if (!file || ::fstat(file.get(), &state) != 0 || !S_ISREG(state.st_mode)) {
         throw CommandError{"SetupBinaryUnreadable"};
@@ -2848,7 +2848,7 @@ fetch() {
             throw CommandError{"MachineUnreachable"};
           }
 
-          FileDescriptor runtime{::open(sibling.data(), combineFlags(O_RDONLY, O_CLOEXEC))}; // NOLINT(cppcoreguidelines-pro-type-vararg): open's C signature is variadic
+          const FileDescriptor runtime{::open(sibling.data(), combineFlags(O_RDONLY, O_CLOEXEC))}; // NOLINT(cppcoreguidelines-pro-type-vararg): open's C signature is variadic
           if (!runtime) {
             throw fileError(sys::lastError());
           }
@@ -2888,7 +2888,7 @@ cat > "$temporary" && [ "$(hash "$temporary")" = "$expected" ] && chmod 755 "$te
       const auto short_digest = build.digest->view().substr(0, MachineId::hex_digits);
       const auto upload_command = ds::format(memory, R"(exec /bin/sh -c 'umask 077 && mkdir -p "$HOME/.local/share/telar/versions" && exec cat > "$HOME/.local/share/telar/versions/.upload-{}"')", short_digest);
       const Text binary_path{memory, *build.binary};
-      FileDescriptor binary{::open(binary_path.data(), combineFlags(O_RDONLY, O_CLOEXEC))}; // NOLINT(cppcoreguidelines-pro-type-vararg): open's C signature is variadic
+      const FileDescriptor binary{::open(binary_path.data(), combineFlags(O_RDONLY, O_CLOEXEC))}; // NOLINT(cppcoreguidelines-pro-type-vararg): open's C signature is variadic
       if (!binary) {
         report.end(Step::telar, Status::failed, "{}: cannot open --binary", fileError(sys::lastError()).what());
         return false;

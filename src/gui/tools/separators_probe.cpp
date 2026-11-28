@@ -11,13 +11,6 @@ static_assert(true);
 #include "../tests/gui_wait.hpp"
 #include "../tests/qml_fixture.hpp"
 #include "../tests/wire_runtime.hpp"
-#include "foundation/core/application_memory.hpp"
-#include "telar_wire/codecs/telar_cells.hpp"
-#include "telar_wire/codecs/telar_wire.hpp"
-#include "telar_wire/protocol/pane_io.hpp"
-#include "telar_wire/serializers/telar_cells.hpp"
-#include "telar_wire/serializers/telar_frame.hpp"
-#include "telar_wire/serializers/telar_messages.hpp"
 #include "ui/app/application_controller.hpp"
 #include "ui/app/panes/terminal/terminal_item.hpp"
 #include <QCommandLineParser>
@@ -45,6 +38,9 @@ static_assert(true);
 import telar.wire.content;
 import telar.wire.layout;
 import telar.base.ds;
+import telar.gui.foundation.core;
+import telar.wire.vocabulary;
+import telar.wire.pane_io;
 
 namespace {
 

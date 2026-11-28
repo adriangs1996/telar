@@ -3,7 +3,6 @@
 static_assert(true);
 #endif
 
-#include "foundation/core/application_memory.hpp"
 #include "platform/window.hpp"
 #include "ui/app/application_controller.hpp"
 #include "ui/app/local_runtime_endpoint.hpp"
@@ -31,6 +30,7 @@ import telar.gui.application;
 import telar.gui.foundation.system;
 import telar.platform.paths;
 import telar.base.ds;
+import telar.gui.foundation.core;
 
 namespace {
 

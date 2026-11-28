@@ -4,7 +4,6 @@ static_assert(true);
 #endif
 
 #include "native_agent_status.hpp"
-#include "telar_wire/serializers/telar_messages.hpp"
 #include "ui/kit/models/agent_status_value.hpp"
 #include "ui/kit/scene/window_animation_clock.hpp"
 #include <QAnyStringView>
@@ -26,6 +25,7 @@ import telar.gui.foundation.system;
 import telar.gui.foundation.agents;
 import telar.gui.application;
 import telar.base.ds;
+import telar.wire.vocabulary;
 
 namespace telar::gui::qt {
 

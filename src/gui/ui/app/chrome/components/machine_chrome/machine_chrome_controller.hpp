@@ -3,7 +3,6 @@
 static_assert(true);
 #endif
 
-#include "telar_wire/serializers/telar_cells.hpp"
 #include "ui/kit/store/store.hpp"
 #include <QColor>
 #include <QObject>
@@ -18,6 +17,7 @@ static_assert(true);
 
 import telar.gui.foundation.core;
 import telar.gui.application;
+import telar.wire.vocabulary;
 
 namespace telar::gui::qt {
 

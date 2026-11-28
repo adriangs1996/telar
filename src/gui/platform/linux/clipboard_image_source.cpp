@@ -1,17 +1,4 @@
-#ifdef __clangd__
-// Keep textual ABI declarations and module imports in one clangd parse.
-static_assert(true);
-#endif
-
-#include "../clipboard_image_source.hpp"
-#include "features/terminal/attachments/capture.hpp"
-#include "features/terminal/attachments/secure_erase.hpp"
-#include "features/terminal/attachments/sensitive_bytes.hpp"
-#include "features/terminal/attachments/types.hpp"
-#include "foundation/core/application_memory.hpp"
-#include "foundation/core/memory.hpp"
-#include "telar_base/memory/allocator.hpp"
-#include "telar_platform/file_descriptor.hpp"
+module;
 #include <QBuffer>
 #include <QByteArray>
 #include <QByteArrayView>
@@ -23,24 +10,14 @@ static_assert(true);
 #include <QSize>
 #include <QString>
 #include <QtCore/qstringliteral.h>
-#include <algorithm>
-#include <array>
-#include <atomic>
-#include <cerrno>
-#include <chrono>
-#include <cstddef>
-#include <cstdint>
-#include <memory>
-#include <optional>
-#include <poll.h>
-#include <span>
-#include <stdexcept>
-#include <time.h>
-#include <unistd.h>
-#include <utility>
 
-import telar.gui.platform;
+module telar.gui.platform;
+
+import std;
 import telar.base.ds;
+import telar.gui.foundation.core;
+import telar.platform.primitives;
+import telar.tbc;
 
 namespace telar::gui::platform {
 
@@ -125,13 +102,14 @@ namespace telar::gui::platform {
     }
   }
 
-  AttachmentCapture<ApplicationAllocator> ClipboardImageSource::read(ApplicationAllocator& memory, ClipboardCaptureRequest request) const {
+  tbc::val_a<AttachmentCapture<ApplicationAllocator>> ClipboardImageSource::read(tbc::mut_a<ApplicationAllocator> memory, ClipboardCaptureRequest request) const {
     if (native_ == nullptr) {
       throw ClipboardImageFailure{ClipboardImageError::no_image};
     }
 
     const auto& transfer = *static_cast<const Transfer*>(native_);
     SensitiveBytes png{memory};
+
     if (transfer.pipe) {
       try {
         png = ClipboardImagePipe::read(memory, transfer.pipe.get());

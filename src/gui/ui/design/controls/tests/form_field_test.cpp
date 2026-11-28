@@ -8,7 +8,6 @@ static_assert(true);
 #include "platform/window_activation.hpp"
 #include "qml_fixture.hpp"
 #include "qt_case.hpp"
-#include "telar_base/text/utf8.hpp"
 #include "ui/design/controls/form_input_context.hpp"
 #include "ui/design/controls/native_form_field.hpp"
 #include "ui/kit/fonts/bundled_fonts.hpp"
@@ -48,6 +47,8 @@ static_assert(true);
 #include <optional>
 #include <string_view>
 #include <utility>
+
+import telar.base.text.utf8;
 
 namespace {
 
@@ -363,4 +364,3 @@ namespace {
 }
 
 #include "form_field_test.moc"
-#include "telar_base/ds/values.hpp"

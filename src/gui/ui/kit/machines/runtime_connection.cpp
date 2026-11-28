@@ -4,16 +4,6 @@ static_assert(true);
 #endif
 
 #include "runtime_connection.hpp"
-#include "foundation/core/application_memory.hpp"
-#include "foundation/core/memory.hpp"
-#include "telar_base/memory/fixed_text.hpp"
-#include "telar_platform/file_descriptor.hpp"
-#include "telar_wire/codecs/telar_codec.hpp"
-#include "telar_wire/codecs/telar_wire.hpp"
-#include "telar_wire/protocol/runtime.hpp"
-#include "telar_wire/serializers/telar_frame.hpp"
-#include "telar_wire/serializers/telar_messages.hpp"
-#include "telar_wire/serializers/telar_serializer.hpp"
 #include "ui/kit/machines/remote_bridge.hpp"
 #include <QElapsedTimer>
 #include <QScopedValueRollback>
@@ -43,6 +33,11 @@ static_assert(true);
 import telar.client;
 import telar.gui.application;
 import telar.base.ds;
+import telar.gui.foundation.core;
+import telar.platform.primitives;
+import telar.wire.vocabulary;
+import telar.wire.runtime;
+import telar.wire.pane_io;
 
 namespace telar::gui::qt {
 

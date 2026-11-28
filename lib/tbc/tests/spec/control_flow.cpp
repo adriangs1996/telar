@@ -94,7 +94,7 @@ void invalidatingBranchReturns(tbc::view<spec::byte_queue&> queue, bool grow) {
 
 // CASE: flow.unwind_destroys_source
 // PAIR: flow.exception_cleanup
-// SOURCE: lib/base/include/telar_base/memory/allocator.hpp :: makeOwned exception cleanup
+// SOURCE: lib/base/memory/allocators/allocators.cppm :: makeOwned exception cleanup
 // STATUS: implemented
 // CONTRACT: Unwinding destroys local owners before entering the surrounding handler.
 // SCENARIO: A descriptor assigned outside try still points into an unwound local string.
@@ -113,7 +113,7 @@ void unwindDestroysSource() {
 
 // CASE: flow.unwind_preserves_owned_copy
 // PAIR: flow.exception_cleanup
-// SOURCE: lib/base/include/telar_base/memory/allocator.hpp :: makeOwned exception cleanup
+// SOURCE: lib/base/memory/allocators/allocators.cppm :: makeOwned exception cleanup
 // STATUS: implemented
 // CONTRACT: An owned copy declared outside try is not destroyed by unwinding its inner scope.
 // SCENARIO: Copy the text before throwing; catch may safely read the independent owner.

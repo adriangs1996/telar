@@ -312,4 +312,3 @@ namespace {
 }
 
 #include "chrome_icon_test.moc"
-#include "telar_base/ds/values.hpp"

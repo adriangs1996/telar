@@ -1,6 +1,3 @@
-module;
-#include "telar_config/terminal/control/policy.hpp"
-
 export module telar.config.runtime;
 
 import std;
@@ -16,12 +13,34 @@ import telar.base.memory.containers;
 import telar.lua;
 import telar.base.ds;
 
-// Owned textual headers stay in this global module fragment only; importers
-// reach their names through these declarations instead of including them.
-export namespace telar::runtime::control {
-  using telar::runtime::control::Access;
-  using telar::runtime::control::ColorFormat;
-  using telar::runtime::control::Policy;
+export {
+  namespace telar::runtime::control {
+
+    enum class Access : std::uint8_t {
+      deny,
+      ask,
+      allow,
+    };
+
+    enum class ColorFormat : std::uint8_t {
+      none,
+      eight_bit,
+      sixteen_bit,
+    };
+
+    struct Policy {
+      static constexpr std::size_t answerback_capacity = 1024;
+
+      Access clipboard_read = Access::ask;
+      Access clipboard_write = Access::allow;
+      ColorFormat color_format = ColorFormat::sixteen_bit;
+      bool title_report = false;
+      bool checksum_report = false;
+      ds::Array<char, answerback_capacity> answerback{};
+      std::uint16_t answerback_length = 0;
+    };
+
+  }
 }
 
 // Interface: telar_config/agents/evidence.cppm

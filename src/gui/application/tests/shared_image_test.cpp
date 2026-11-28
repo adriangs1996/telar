@@ -3,19 +3,6 @@
 static_assert(true);
 #endif
 
-#include "foundation/core/memory.hpp"
-#include "foundation/core/wheel_accumulator.hpp"
-#include "telar_base/memory/allocator.hpp"
-#include "telar_base/memory/fixed_text.hpp"
-#include "telar_base/text/utf8.hpp"
-#include "telar_config/graphics/limits.hpp"
-#include "telar_platform/file_descriptor.hpp"
-#include "telar_wire/codecs/telar_codec.hpp"
-#include "telar_wire/codecs/telar_value_codec.hpp"
-#include "telar_wire/codecs/telar_wire.hpp"
-#include "telar_wire/serializers/telar_cells.hpp"
-#include "telar_wire/serializers/telar_frame.hpp"
-#include "telar_wire/serializers/telar_messages.hpp"
 #include <algorithm>
 #include <array>
 #include <atomic>
@@ -55,6 +42,11 @@ import telar.gui.foundation.system;
 import telar.platform.graphics;
 import telar.wire.graphics;
 import telar.base.ds;
+import telar.gui.foundation.core;
+import telar.platform.primitives;
+import telar.wire.vocabulary;
+import telar.base.memory.allocators;
+import telar.base.text.utf8;
 
 namespace {
 

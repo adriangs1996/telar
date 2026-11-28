@@ -25,8 +25,8 @@ namespace telar::runtime {
         return canonical;
       }
 
-      auto parent = openPrivateParent(path);
-      FileDescriptor file{::open(path, combineFlags(O_RDWR, O_CREAT, O_CLOEXEC, O_NOFOLLOW), private_file_mode)}; // NOLINT(cppcoreguidelines-pro-type-vararg): open's C signature is variadic
+      const auto parent = openPrivateParent(path);
+      const FileDescriptor file{::open(path, combineFlags(O_RDWR, O_CREAT, O_CLOEXEC, O_NOFOLLOW), private_file_mode)}; // NOLINT(cppcoreguidelines-pro-type-vararg): open's C signature is variadic
       if (!file) {
         throw SystemError{"open history database"};
       }

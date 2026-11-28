@@ -2,7 +2,7 @@
 
 // CASE: runtime.allocator_escape
 // PAIR: runtime.allocator_dependency
-// SOURCE: lib/base/include/telar_base/memory/allocator.hpp :: AllocationDeleter / makeOwned
+// SOURCE: lib/base/memory/allocators/allocators.cppm :: AllocationDeleter / makeOwned
 // STATUS: implemented
 // CONTRACT: An allocated owner's deleter borrows the allocator until owner destruction.
 // SCENARIO: Heap-allocated pointee lifetime does not rescue a dead stack allocator.
@@ -15,7 +15,7 @@ tbc::view<spec::allocated_int, tbc::lt::a> allocatorEscape() {
 
 // CASE: runtime.allocator_caller_owned
 // PAIR: runtime.allocator_dependency
-// SOURCE: lib/base/include/telar_base/memory/allocator.hpp :: AllocationDeleter / makeOwned
+// SOURCE: lib/base/memory/allocators/allocators.cppm :: AllocationDeleter / makeOwned
 // STATUS: implemented
 // CONTRACT: A returned owner's allocator dependency is propagated to its caller.
 // SCENARIO: The allocator is borrowed from a reference parameter, not created locally.
@@ -27,7 +27,7 @@ tbc::view<spec::allocated_int, tbc::lt::a> allocatorCallerOwned(tbc::view<spec::
 
 // CASE: runtime.moved_owner_releases_view
 // PAIR: runtime.owner_transfer
-// SOURCE: lib/base/include/telar_base/memory/allocator.hpp :: Owned
+// SOURCE: lib/base/memory/allocators/allocators.cppm :: Owned
 // STATUS: implemented
 // CONTRACT: Moving unique_ptr transfers ownership; destroying the new owner invalidates views.
 // SCENARIO: Follow the allocation to destination and diagnose reset, not the prior move.
@@ -43,7 +43,7 @@ void movedOwnerReleasesView() {
 
 // CASE: runtime.moved_owner_preserves_view
 // PAIR: runtime.owner_transfer
-// SOURCE: lib/base/include/telar_base/memory/allocator.hpp :: Owned
+// SOURCE: lib/base/memory/allocators/allocators.cppm :: Owned
 // STATUS: implemented
 // CONTRACT: Moving a unique_ptr does not move its pointee or immediately dangle its views.
 // SCENARIO: Accept a pointee read while the transferred allocation remains owned.
@@ -90,7 +90,7 @@ void queueTakenOwner(tbc::view<spec::request_queue&> queue) {
 
 // CASE: runtime.box_growth_keeps_value
 // PAIR: runtime.box_owner
-// SOURCE: lib/base/include/telar_base/ds/containers.hpp :: Box
+// SOURCE: lib/base/ds/ds.cppm :: Box
 // STATUS: implemented
 // CONTRACT: A class marked TBC_OWNER owns its value through an allocation of its own, as the standard library's unique owner does: the value lies one level below it, so moving the owner, as a growing vector does, leaves borrows of the value valid.
 // SCENARIO: A boxed record's name is read after the vector holding the boxes grows; accept.
@@ -160,7 +160,7 @@ void runtimeBoxGrowthKeepsValue(std::vector<spec_box::box<spec_box::record>>& bo
 
 // CASE: runtime.box_reset_ends_value
 // PAIR: runtime.box_owner
-// SOURCE: lib/base/include/telar_base/ds/containers.hpp :: Box
+// SOURCE: lib/base/ds/ds.cppm :: Box
 // STATUS: implemented
 // CONTRACT: A class marked TBC_OWNER owns its value through an allocation of its own, as the standard library's unique owner does: resetting it destroys the value, which ends every borrow of it.
 // SCENARIO: A boxed record's name is read after its owner is reset; reject at the reset.

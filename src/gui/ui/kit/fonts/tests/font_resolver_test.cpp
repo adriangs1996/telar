@@ -3,10 +3,8 @@
 static_assert(true);
 #endif
 
-#include "foundation/core/memory.hpp"
 #include "platform/font.h"
 #include "qt_case.hpp"
-#include "telar_wire/codecs/telar_wire.hpp"
 #include "ui/kit/fonts/bundled_fonts.hpp"
 #include "ui/kit/fonts/font_cache.hpp"
 #include "ui/kit/fonts/font_resolver.hpp"
@@ -40,6 +38,10 @@ static_assert(true);
 #include <stdexcept>
 #include <string_view>
 #include <vector>
+
+import telar.gui.foundation.core;
+import telar.wire.vocabulary;
+import telar.base.ds;
 
 namespace {
 
@@ -552,5 +554,3 @@ namespace {
 }
 
 #include "font_resolver_test.moc"
-#include "telar_base/ds/containers.hpp"
-#include "telar_base/ds/values.hpp"

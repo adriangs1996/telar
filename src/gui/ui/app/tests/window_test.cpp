@@ -1,4 +1,8 @@
-#include "foundation/core/application_memory.hpp"
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
+
 #include "platform/window.hpp"
 #include "qt_case.hpp"
 #include "ui/app/application_controller.hpp"
@@ -23,6 +27,9 @@
 #include <QtTest/qtestcase.h>
 #include <array>
 #include <memory>
+
+import telar.gui.foundation.core;
+import telar.base.ds;
 
 namespace {
 
@@ -277,5 +284,4 @@ namespace {
 
 }
 
-#include "telar_base/ds/values.hpp"
 #include "window_test.moc"

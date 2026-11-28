@@ -1,9 +1,14 @@
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
+
 #include "native_pointer_events.hpp"
-#include "foundation/core/application_memory.hpp"
-#include "foundation/core/memory.hpp"
 #include "tbc/view.hpp"
 #include <QEvent>
 #include <QtGui/qpa/qwindowsysteminterface_p.h>
+
+import telar.gui.foundation.core;
 
 namespace telar::gui::qt {
 

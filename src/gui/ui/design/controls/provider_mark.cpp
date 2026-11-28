@@ -6,7 +6,6 @@ static_assert(true);
 #include "provider_mark.hpp"
 #include "provider_artwork.hpp"
 #include "tbc/view.hpp"
-#include "telar_wire/serializers/telar_messages.hpp"
 #include "ui/kit/scene/scene_nodes.hpp"
 #include <QColor>
 #include <QImage>
@@ -30,6 +29,7 @@ static_assert(true);
 #include <utility>
 
 import telar.gui.application;
+import telar.wire.vocabulary;
 
 namespace telar::gui::qt {
 

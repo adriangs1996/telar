@@ -51,7 +51,7 @@ namespace telar::runtime::cli::integration {
   }
 
   tbc::val_a<ds::Option<ds::String<Memory>>> read(tbc::mut_a<Memory> memory, const ds::String<Memory>& path, std::size_t maximum_bytes) {
-    FileDescriptor file{::open(path.data(), combineFlags(O_RDONLY, O_CLOEXEC, O_NONBLOCK, O_NOCTTY))}; // NOLINT(cppcoreguidelines-pro-type-vararg): open's C signature is variadic
+    const FileDescriptor file{::open(path.data(), combineFlags(O_RDONLY, O_CLOEXEC, O_NONBLOCK, O_NOCTTY))}; // NOLINT(cppcoreguidelines-pro-type-vararg): open's C signature is variadic
     if (!file) {
       if (sys::lastError() == ENOENT) {
         return ds::none;
@@ -111,7 +111,7 @@ namespace telar::runtime::cli::integration {
       createParents(target);
       const auto separator = target.view().rfind('/');
       const ds::String<Memory> parent{memory, std::string_view{target.data(), separator == 0 ? 1 : separator}};
-      FileDescriptor directory{::open(parent.data(), combineFlags(O_RDONLY, O_DIRECTORY, O_CLOEXEC))}; // NOLINT(cppcoreguidelines-pro-type-vararg): open's C signature is variadic
+      const FileDescriptor directory{::open(parent.data(), combineFlags(O_RDONLY, O_DIRECTORY, O_CLOEXEC))}; // NOLINT(cppcoreguidelines-pro-type-vararg): open's C signature is variadic
       if (!directory) {
         throw SystemError{"Open integration directory"};
       }

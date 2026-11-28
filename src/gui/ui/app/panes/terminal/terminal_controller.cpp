@@ -4,7 +4,6 @@ static_assert(true);
 #endif
 
 #include "terminal_controller.hpp"
-#include "telar_base/memory/allocator.hpp"
 #include "terminal_item.hpp"
 #include "ui/kit/cell_scene/window_images.hpp"
 #include "ui/kit/models/projection.hpp"
@@ -19,6 +18,7 @@ static_assert(true);
 import telar.gui.application;
 import telar.gui.foundation.model;
 import telar.base.ds;
+import telar.base.memory.allocators;
 
 namespace telar::gui::qt {
 

@@ -8,15 +8,10 @@ static_assert(true);
 #include "alpha_mask_material.hpp"
 #include "alpha_mask_vertex.hpp"
 #include "chrome_glyph_images.hpp"
-#include "foundation/core/memory.hpp"
 #include "platform/font.h"
 #include "qt_buffers.hpp"
 #include "scene_nodes.hpp"
 #include "tbc/view.hpp"
-#include "telar_base/ds/values.hpp"
-#include "telar_base/memory/fixed_text.hpp"
-#include "telar_wire/serializers/telar_cells.hpp"
-#include "telar_wire/serializers/telar_frame.hpp"
 #include "ui/kit/fonts/font_collection.hpp"
 #include "ui/kit/fonts/resident_fonts.hpp"
 #include <QColor>
@@ -59,6 +54,10 @@ static_assert(true);
 #include <string_view>
 #include <type_traits>
 #include <utility>
+
+import telar.gui.foundation.core;
+import telar.wire.vocabulary;
+import telar.base.ds;
 
 namespace telar::gui::qt {
   namespace {

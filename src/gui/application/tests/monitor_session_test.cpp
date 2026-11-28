@@ -3,9 +3,6 @@
 static_assert(true);
 #endif
 
-#include "telar_base/memory/allocator.hpp"
-#include "telar_wire/serializers/telar_frame.hpp"
-#include "telar_wire/serializers/telar_messages.hpp"
 #include <cstddef>
 #include <cstdint>
 #include <span>
@@ -18,6 +15,8 @@ import telar.wire.monitor;
 import telar.wire.pane_io;
 import telar.wire.runtime;
 import telar.base.ds;
+import telar.wire.vocabulary;
+import telar.base.memory.allocators;
 
 namespace {
 

@@ -3,7 +3,6 @@
 static_assert(true);
 #endif
 
-#include "foundation/core/wheel_accumulator.hpp"
 #include <QQuickItem>
 #include <QRectF>
 #include <QString>

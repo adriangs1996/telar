@@ -4,8 +4,6 @@ static_assert(true);
 #endif
 
 #include "appearance_fixture.hpp"
-#include "foundation/core/application_memory.hpp"
-#include "telar_wire/serializers/telar_messages.hpp"
 #include <array>
 #include <cerrno>
 #include <climits>
@@ -55,6 +53,8 @@ import telar.gui.features.configuration;
 import telar.base.text.json;
 import telar.plugins;
 import telar.base.ds;
+import telar.gui.foundation.core;
+import telar.wire.vocabulary;
 
 namespace telar::gui::qt {
   namespace {

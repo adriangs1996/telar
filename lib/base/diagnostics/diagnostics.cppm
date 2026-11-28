@@ -1,23 +1,26 @@
-module;
-#include "telar_base/diagnostics/limit_reach.hpp"
-#include "telar_base/diagnostics/timing.hpp"
-
 export module telar.base.diagnostics;
 
 import std;
+import telar.base.diagnostics.timing;
 import telar.base.memory.containers;
 import telar.base.ds;
 
-// Owned textual headers stay in this global module fragment only; importers
-// reach their names through these declarations instead of including them.
 export namespace telar {
   using telar::accumulate;
-  using telar::LimitReach;
   using telar::Timing;
 }
 
 export {
   namespace telar {
+
+    // A limit's names view literals where the program declares it, or the frame or row it was read from.
+    struct LimitReach {
+      std::string_view name;
+      std::string_view noun;
+      std::uint64_t value = 0;
+      ds::Option<std::uint64_t> requested;
+      std::string_view route;
+    };
 
     class TimedScope {
     public:

@@ -3,11 +3,6 @@
 static_assert(true);
 #endif
 
-#include "foundation/core/memory.hpp"
-#include "telar_base/memory/fixed_text.hpp"
-#include "telar_wire/serializers/telar_cells.hpp"
-#include "telar_wire/serializers/telar_frame.hpp"
-#include "telar_wire/serializers/telar_messages.hpp"
 #include "ui/kit/process/command_process.hpp"
 #include "ui/kit/process/host_command.hpp"
 #include <QProcess>
@@ -33,6 +28,8 @@ static_assert(true);
 import telar.gui.application;
 import telar.gui.foundation.system;
 import telar.base.ds;
+import telar.gui.foundation.core;
+import telar.wire.vocabulary;
 
 namespace telar::gui::qt {
 

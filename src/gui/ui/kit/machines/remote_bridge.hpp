@@ -3,13 +3,6 @@
 static_assert(true);
 #endif
 
-#include "telar_base/memory/fixed_text.hpp"
-#include "telar_platform/file_descriptor.hpp"
-#include "telar_wire/codecs/telar_codec.hpp"
-#include "telar_wire/codecs/telar_value_codec.hpp"
-#include "telar_wire/codecs/telar_wire.hpp"
-#include "telar_wire/serializers/telar_messages.hpp"
-#include "telar_wire/serializers/telar_serializer.hpp"
 #include <QByteArray>
 #include <QFutureWatcher>
 #include <QIODevice>
@@ -43,6 +36,8 @@ import telar.gui.foundation.system;
 import telar.gui.application;
 import telar.platform.fs;
 import telar.base.ds;
+import telar.platform.primitives;
+import telar.wire.vocabulary;
 
 namespace telar::gui::qt {
 

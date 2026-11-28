@@ -3,13 +3,6 @@
 static_assert(true);
 #endif
 
-#include "foundation/core/memory.hpp"
-#include "foundation/core/wheel_accumulator.hpp"
-#include "telar_base/memory/fixed_text.hpp"
-#include "telar_wire/codecs/telar_value_codec.hpp"
-#include "telar_wire/serializers/telar_cells.hpp"
-#include "telar_wire/serializers/telar_frame.hpp"
-#include "telar_wire/serializers/telar_messages.hpp"
 #include "terminal_controller.hpp"
 #include "ui/app/panes/terminal/links/link_preview.hpp"
 #include "ui/kit/fonts/font_collection.hpp"
@@ -47,6 +40,7 @@ import telar.gui.foundation.keys;
 import telar.gui.foundation.terminal;
 import telar.gui.application;
 import telar.base.ds;
+import telar.wire.vocabulary;
 
 namespace telar::gui::test {
   class TerminalCursor;

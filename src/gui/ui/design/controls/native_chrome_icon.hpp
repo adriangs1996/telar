@@ -3,7 +3,6 @@
 static_assert(true);
 #endif
 
-#include "foundation/core/memory.hpp"
 #include "tbc/view.hpp"
 #include "ui/kit/fonts/font_asset.hpp"
 #include "ui/kit/fonts/resident_fonts.hpp"
@@ -19,6 +18,7 @@ static_assert(true);
 
 #pragma once
 
+import telar.base.memory.allocators;
 import telar.gui.foundation.core;
 import telar.gui.foundation.fonts;
 

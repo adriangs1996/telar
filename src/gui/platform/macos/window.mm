@@ -1,7 +1,6 @@
 #include "platform/window.hpp"
 #include "blur_radius.hpp"
 #include "blur_symbols.h"
-#include "telar_base/ds/values.hpp"
 #include <AppKit/AppKit.h>
 #include <QGuiApplication>
 #include <QMetaObject>
@@ -11,7 +10,6 @@
 #include <QWindow>
 #include <QtCore/qtenvironmentvariables.h>
 #include <algorithm>
-#include <array>
 #include <bit>
 #include <cmath>
 #include <cstdint>
@@ -165,8 +163,6 @@ namespace telar::gui::platform {
       BlurRadius radius_;
     };
 
-    constexpr ds::Array control_kinds{NSWindowCloseButton, NSWindowMiniaturizeButton, NSWindowZoomButton};
-
     // AppKit lays the title bar out again whenever it retiles the window (showing it,
     // resizing it, leaving full screen), putting the buttons back in its own 32-point
     // strip. Every relayout moves a button or the container, so their frame
@@ -291,7 +287,7 @@ namespace telar::gui::platform {
         auto* const views = [NSMutableArray<NSView*> arrayWithObject:container];
         CGFloat horizontal = controls_leading;
 
-        for (const auto kind : control_kinds) {
+        for (const NSWindowButton kind : {NSWindowCloseButton, NSWindowMiniaturizeButton, NSWindowZoomButton}) {
           NSButton* const control = [window standardWindowButton:kind];
           const NSPoint origin{.x = horizontal, .y = std::round((height_ - control.frame.size.height) / 2)};
           if (!NSEqualPoints(origin, control.frame.origin)) {

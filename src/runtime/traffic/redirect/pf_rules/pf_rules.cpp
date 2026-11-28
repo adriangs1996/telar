@@ -435,7 +435,7 @@ namespace telar::runtime::redirect {
       throw std::invalid_argument{"Invalid route interface scope"};
     }
 
-    FileDescriptor socket{::socket(PF_ROUTE, SOCK_RAW, 0)};
+    const FileDescriptor socket{::socket(PF_ROUTE, SOCK_RAW, 0)};
     if (!socket) {
       throw SystemError{"Open route lookup socket"};
     }

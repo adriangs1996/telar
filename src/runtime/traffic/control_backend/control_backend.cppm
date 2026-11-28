@@ -1350,7 +1350,7 @@ export {
         Command command{memory_, Launch{.arguments = std::span{arguments}.first(count - 1)}, CommandPurpose::administration};
         const auto specification = command.specification({});
         SpawnOptions spawn{0};
-        FileDescriptor input{::open("/dev/null", combineFlags(O_RDONLY, O_CLOEXEC))}; // NOLINT(cppcoreguidelines-pro-type-vararg): open's C signature is variadic
+        const FileDescriptor input{::open("/dev/null", combineFlags(O_RDONLY, O_CLOEXEC))}; // NOLINT(cppcoreguidelines-pro-type-vararg): open's C signature is variadic
         if (!input) {
           throw SystemError{"Prepare privileged helper input"};
         }

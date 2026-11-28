@@ -1,12 +1,17 @@
 module telar.vocabulary;
 
-// The header declares RequestError in the global module, so its definitions belong to it too.
-extern "C++" {
 namespace telar::runtime {
+
+  RequestError::RequestError(FailureCode code, const char* message) noexcept
+      : code_(code),
+        message_(message) {}
+
+  FailureCode RequestError::code() const noexcept {
+    return code_;
+  }
 
   const char* RequestError::what() const noexcept {
     return message_;
   }
 
-}
 }

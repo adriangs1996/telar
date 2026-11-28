@@ -61,7 +61,7 @@ namespace telar::runtime::cli {
       return fail(path, "name the file after its command, as nmap.ebnf");
     }
 
-    FileDescriptor file{::open(words[1], combineFlags(O_RDONLY, O_CLOEXEC))}; // NOLINT(cppcoreguidelines-pro-type-vararg): open's C signature is variadic
+    const FileDescriptor file{::open(words[1], combineFlags(O_RDONLY, O_CLOEXEC))}; // NOLINT(cppcoreguidelines-pro-type-vararg): open's C signature is variadic
     struct stat state{};
     if (!file || ::fstat(file.get(), &state) != 0) {
       return failWithError(path, sys::lastError());

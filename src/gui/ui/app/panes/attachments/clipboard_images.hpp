@@ -1,12 +1,10 @@
-#pragma once
+#ifdef __clangd__
+// Keep textual ABI declarations and module imports in one clangd parse.
+static_assert(true);
+#endif
 
 #include "attachment_preview.hpp"
-#include "features/terminal/attachments/capture.hpp"
-#include "features/terminal/attachments/types.hpp"
-#include "foundation/core/application_memory.hpp"
 #include "platform/clipboard_image_monitor.hpp"
-#include "platform/clipboard_image_source.hpp"
-#include "tbc/view.hpp"
 #include <QFutureWatcher>
 #include <QObject>
 #include <QString>
@@ -14,8 +12,13 @@
 #include <cstdint>
 #include <optional>
 
+#pragma once
+
 import telar.gui.application;
 import telar.base.ds;
+import telar.gui.foundation.core;
+import telar.gui.platform;
+import telar.tbc;
 
 namespace telar::gui::qt {
 

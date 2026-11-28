@@ -18,6 +18,7 @@ static_assert(true);
 #include <string_view>
 
 import telar.gui.application;
+import telar.base.memory.allocators;
 
 namespace telar::gui::qt {
 

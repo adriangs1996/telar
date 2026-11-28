@@ -13,6 +13,7 @@ static_assert(true);
 #pragma once
 
 import telar.gui.application;
+import telar.base.memory.allocators;
 
 namespace telar::gui::qt {
 

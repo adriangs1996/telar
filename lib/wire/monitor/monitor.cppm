@@ -13,9 +13,7 @@ export namespace telar {
   using telar::MessageSchema;
 }
 
-// Declared in the global module, with the vocabulary these schemas build on.
-// NOLINTBEGIN(misc-use-internal-linkage): exported, and declared in the global module as the vocabulary is.
-export extern "C++" {
+export {
   namespace telar {
 
     // The monitor: the host's processors, memory, disks and network, and its processes, read by the
@@ -463,4 +461,3 @@ export extern "C++" {
 
   }
 }
-// NOLINTEND(misc-use-internal-linkage)
