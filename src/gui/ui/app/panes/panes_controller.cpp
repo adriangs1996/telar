@@ -1,26 +1,13 @@
-#ifdef __clangd__
-// Keep textual ABI declarations and module imports in one clangd parse.
-static_assert(true);
-#endif
+module telar.gui.ui.app.panes;
 
-#include "panes_controller.hpp"
-#include "pane_projection.hpp"
-#include "ui/kit/models/projection.hpp"
-#include <QList>
-#include <QString>
-#include <algorithm>
-#include <cmath>
-#include <cstddef>
-#include <cstdint>
-#include <exception>
-#include <optional>
-#include <span>
-#include <utility>
-
+import std;
+import telar.gui.qt;
+import telar.gui.ui.kit.models;
 import telar.wire.vocabulary;
 import telar.base.ds;
 
 namespace telar::gui::qt {
+  using Qt::StringLiterals::operator""_s;
 
   PanesController::PanesController(Store& store, ElementSlots& elements, QObject* parent)
       : QObject(parent),
@@ -47,7 +34,7 @@ namespace telar::gui::qt {
         synchronize();
       }
     } catch (const std::exception& error) {
-      emit failed(QString::fromUtf8(error.what()));
+      failed(QString::fromUtf8(error.what()));
     }
   }
 
@@ -124,7 +111,7 @@ namespace telar::gui::qt {
       const auto& geometry = application::workbench::geometry(session);
       const auto fullscreen = tab->fullscreen ? ds::Option{tab->focused_pane} : ds::none;
       const auto fullscreen_entries = fullscreenEntries(*tab);
-      const auto motion_context = QStringLiteral("%1/%2/%3/%4/%5")
+      const auto motion_context = u"%1/%2/%3/%4/%5"_s
                                       .arg(store_.machineView())
                                       .arg(static_cast<int>(tab->location.workspace.kind))
                                       .arg(tab->location.workspace.id)
@@ -146,24 +133,24 @@ namespace telar::gui::qt {
         auto record = paneRecord(*pane, placement, geometry, tab->focused_pane == pane->id, scale_);
 
         // What draws the pane's content: an editor's grids, or a terminal's rows.
-        record.insert(QStringLiteral("editor"), application::nvim::editor(session, pane->id) != nullptr);
+        record.insert(u"editor"_s, application::nvim::editor(session, pane->id) != nullptr);
         // The explorer draws itself in the room of the pane it stands as.
-        record.insert(QStringLiteral("explorer"), application::explorer::docked(session.explorer, pane->id) != nullptr);
-        record.insert(QStringLiteral("motionContext"), motion_context);
-        record.insert(QStringLiteral("fullscreen"), tab->fullscreen);
+        record.insert(u"explorer"_s, application::explorer::docked(session.explorer, pane->id) != nullptr);
+        record.insert(u"motionContext"_s, motion_context);
+        record.insert(u"fullscreen"_s, tab->fullscreen);
         if (tab->fullscreen) {
-          record.insert(QStringLiteral("fullscreenEntries"), fullscreen_entries);
+          record.insert(u"fullscreenEntries"_s, fullscreen_entries);
         }
 
         auto chrome = paneChromeRecord(*pane, std::span<const Agent<Memory>>{session.agents()}, placement.display_index, application::terminal::graphics::paused(session, pane->id));
 
         // A tab's only pane works where the tab says: its header does not repeat the directory.
-        chrome.insert(QStringLiteral("aloneInTab"), leaves == 1);
+        chrome.insert(u"aloneInTab"_s, leaves == 1);
         if (elements_.active()) {
-          chrome.insert(QStringLiteral("elements"), elements_.elements(ElementSlots::pane_slots, record.value(QStringLiteral("key")).toString(), ElementSlots::paneItem(record, chrome)));
+          chrome.insert(u"elements"_s, elements_.elements(ElementSlots::pane_slots, record.value(u"key"_s).toString(), ElementSlots::paneItem(record, chrome)));
         }
 
-        record.insert(QStringLiteral("chrome"), std::move(chrome));
+        record.insert(u"chrome"_s, std::move(chrome));
         panes.append(std::move(record));
       }
 
@@ -171,12 +158,12 @@ namespace telar::gui::qt {
         const auto bounds = geometry.pixels(divider.bounds);
         QVariantMap record;
 
-        record.insert(QStringLiteral("key"), QString::number(divider.node_index));
-        record.insert(QStringLiteral("x"), static_cast<double>(bounds.x) / scale_);
-        record.insert(QStringLiteral("y"), static_cast<double>(bounds.y) / scale_);
-        record.insert(QStringLiteral("width"), static_cast<double>(bounds.width) / scale_);
-        record.insert(QStringLiteral("height"), static_cast<double>(bounds.height) / scale_);
-        record.insert(QStringLiteral("horizontal"), divider.axis == ClientLayoutAxis::horizontal);
+        record.insert(u"key"_s, QString::number(divider.node_index));
+        record.insert(u"x"_s, static_cast<double>(bounds.x) / scale_);
+        record.insert(u"y"_s, static_cast<double>(bounds.y) / scale_);
+        record.insert(u"width"_s, static_cast<double>(bounds.width) / scale_);
+        record.insert(u"height"_s, static_cast<double>(bounds.height) / scale_);
+        record.insert(u"horizontal"_s, divider.axis == ClientLayoutAxis::horizontal);
         dividers.append(record);
       }
     }

@@ -1,35 +1,7 @@
-#ifdef __clangd__
-// Keep textual ABI declarations and module imports in one clangd parse.
-static_assert(true);
-#endif
+module telar.gui.ui.kit.machines;
 
-#include "runtime_connection.hpp"
-#include "ui/kit/machines/remote_bridge.hpp"
-#include <QElapsedTimer>
-#include <QScopedValueRollback>
-#include <QStringLiteral>
-#include <QTimer>
-#include <QtCore/qobject.h>
-#include <QtCore/qstring.h>
-#include <QtCore/qtmetamacros.h>
-#include <QtCore/qtypes.h>
-#include <array>
-#include <charconv>
-#include <chrono>
-#include <concepts>
-#include <cstddef>
-#include <cstdint>
-#include <cstring>
-#include <exception>
-#include <optional>
-#include <span>
-#include <stdexcept>
-#include <string_view>
-#include <system_error>
-#include <type_traits>
-#include <utility>
-#include <variant>
-
+import std;
+import telar.gui.qt;
 import telar.client;
 import telar.gui.application;
 import telar.base.ds;
@@ -40,6 +12,7 @@ import telar.wire.runtime;
 import telar.wire.pane_io;
 
 namespace telar::gui::qt {
+  using Qt::StringLiterals::operator""_s;
 
   RuntimeConnection::RuntimeConnection(ApplicationAllocator& memory, QObject* parent)
       : QObject(parent),
@@ -53,7 +26,7 @@ namespace telar::gui::qt {
     connect(&retry_, &QTimer::timeout, this, &RuntimeConnection::connectSocket);
 
     connect(&deadline_, &QTimer::timeout, this, [this] {
-      fail(QStringLiteral("Runtime handshake timed out"));
+      fail(u"Runtime handshake timed out"_s);
     });
 
     connect(&socket_, &QLocalSocket::readyRead, this, &RuntimeConnection::read);
@@ -74,7 +47,7 @@ namespace telar::gui::qt {
     closed_ = false;
     link_.start("this machine");
     error_.clear();
-    emit linkChanged();
+    linkChanged();
     connectSocket();
   }
 
@@ -90,7 +63,7 @@ namespace telar::gui::qt {
 
     link_.start({destination.constData(), static_cast<std::size_t>(destination.size())});
     error_.clear();
-    emit linkChanged();
+    linkChanged();
     connectSocket();
   }
 
@@ -100,7 +73,7 @@ namespace telar::gui::qt {
     }
 
     schema_ = discovery.schema();
-    emit discovered(discovery);
+    discovered(discovery);
   }
 
   void RuntimeConnection::remoteChannelReady(runtime::FileDescriptor channel) {
@@ -229,7 +202,7 @@ namespace telar::gui::qt {
   void RuntimeConnection::dismissError() {
     if (!error_.isEmpty()) {
       error_.clear();
-      emit errorChanged();
+      errorChanged();
     }
   }
 
@@ -306,14 +279,14 @@ namespace telar::gui::qt {
       }
 
       remote_.getMut().open(*remote_target_);
-      emit linkChanged();
+      linkChanged();
 
       return;
     }
 
     deadline_.start();
     socket_.connectToServer(path_);
-    emit linkChanged();
+    linkChanged();
   }
 
   void RuntimeConnection::beginHandshake() {
@@ -322,7 +295,7 @@ namespace telar::gui::qt {
     }
 
     if (!remote_target_ && !system::isCurrentUser(socket_.socketDescriptor())) {
-      fail(QStringLiteral("Runtime socket belongs to another user"));
+      fail(u"Runtime socket belongs to another user"_s);
 
       return;
     }
@@ -376,7 +349,7 @@ namespace telar::gui::qt {
       return;
     }
 
-    fail(error == QLocalSocket::PeerClosedError ? QStringLiteral("EndOfStream") : socket_.errorString());
+    fail(error == QLocalSocket::PeerClosedError ? u"EndOfStream"_s : socket_.errorString());
   }
 
   void RuntimeConnection::read() {
@@ -472,16 +445,16 @@ namespace telar::gui::qt {
       link_.adopt(system::AwakeClock::nowNanoseconds());
       deadline_.stop();
       error_.clear();
-      emit errorChanged();
-      emit connected();
-      emit linkChanged();
+      errorChanged();
+      connected();
+      linkChanged();
 
       return;
     }
 
     const QScopedValueRollback<bool> dispatching{dispatching_payload_, true};
 
-    emit payloadReceived(QByteArrayView{
+    payloadReceived(QByteArrayView{
         payload.data(),
         static_cast<qsizetype>(payload.size()),
     });
@@ -548,9 +521,9 @@ namespace telar::gui::qt {
     }
 
     deadline_.stop();
-    emit errorChanged();
-    emit disconnected();
-    emit linkChanged();
+    errorChanged();
+    disconnected();
+    linkChanged();
 
     if (!closed_ && link_.phase == application::machines::MachinePhase::lost) {
       retry_.start(link_.retryDelayMilliseconds());

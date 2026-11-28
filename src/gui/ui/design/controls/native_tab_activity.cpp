@@ -1,41 +1,16 @@
-#ifdef __clangd__
-// Keep textual ABI declarations and module imports in one clangd parse.
-static_assert(true);
-#endif
+module telar.gui.ui.design.controls;
 
-#include "native_tab_activity.hpp"
-#include "ui/kit/models/progress_value.hpp"
-#include "ui/kit/scene/rounded_paints_scene.hpp"
-#include "ui/kit/scene/window_animation_clock.hpp"
-#include <QColor>
-#include <QMetaObject>
-#include <QPointer>
-#include <QQuickItem>
-#include <QQuickWindow>
-#include <QRectF>
-#include <QSGNode>
-#include <QString>
-#include <QVariant>
-#include <QVariantMap>
-#include <QtCore/qcontainerfwd.h>
-#include <QtCore/qnamespace.h>
-#include <QtCore/qstringliteral.h>
-#include <QtCore/qtmetamacros.h>
-#include <QtCore/qtypes.h>
-#include <algorithm>
-#include <cmath>
-#include <cstdint>
-#include <functional>
-#include <limits>
-#include <memory>
-#include <optional>
-
+import std;
+import telar.gui.qt;
+import telar.gui.ui.kit.models;
+import telar.gui.ui.kit.scene;
 import telar.gui.foundation.system;
 import telar.gui.application;
 import telar.base.ds;
 import telar.wire.vocabulary;
 
 namespace telar::gui::qt {
+  using Qt::StringLiterals::operator""_s;
 
   NativeTabActivity::NativeTabActivity(QQuickItem* parent)
       : QQuickItem(parent),
@@ -74,7 +49,7 @@ namespace telar::gui::qt {
     if (compact_ != compact) {
       compact_ = compact;
       update();
-      emit compactChanged();
+      compactChanged();
     }
   }
 
@@ -92,10 +67,10 @@ namespace telar::gui::qt {
     }
 
     record_ = record;
-    const auto kind = record.value(QStringLiteral("activityKind")).toInt();
+    const auto kind = record.value(u"activityKind"_s).toInt();
 
     kind_ = kind >= static_cast<int>(application::activity::TabActivity::Kind::none) && kind <= static_cast<int>(application::activity::TabActivity::Kind::progress) ? static_cast<application::activity::TabActivity::Kind>(kind) : application::activity::TabActivity::Kind::none;
-    const auto value = record.value(QStringLiteral("progressSample"));
+    const auto value = record.value(u"progressSample"_s);
 
     progress_ = progressSample(value).valueOr(application::workbench::ProgressSample{});
     if (kind_ != application::activity::TabActivity::Kind::progress) {
@@ -107,7 +82,7 @@ namespace telar::gui::qt {
     synchronize();
     if (alive) {
       update();
-      emit recordChanged();
+      recordChanged();
     }
   }
 
@@ -115,7 +90,7 @@ namespace telar::gui::qt {
     if (color.isValid() && color_ != color) {
       color_ = color;
       update();
-      emit colorChanged();
+      colorChanged();
     }
   }
 
@@ -124,7 +99,7 @@ namespace telar::gui::qt {
     if (std::isfinite(ratio) && ratio > 0 && ratio <= static_cast<qreal>(maximum) && !std::equal_to<>{}(ratio_, ratio)) {
       ratio_ = ratio;
       update();
-      emit ratioChanged();
+      ratioChanged();
     }
   }
 
@@ -135,7 +110,7 @@ namespace telar::gui::qt {
 
       synchronize();
       if (alive) {
-        emit runningChanged();
+        runningChanged();
       }
     }
   }
@@ -195,7 +170,7 @@ namespace telar::gui::qt {
         animation_notification_pending_ = true;
         QMetaObject::invokeMethod(this, [this] {
           animation_notification_pending_ = false;
-          emit animationChanged();
+          animationChanged();
         },
             Qt::QueuedConnection);
       }

@@ -1,23 +1,14 @@
-#ifdef __clangd__
-// Keep textual ABI declarations and module imports in one clangd parse.
-static_assert(true);
-#endif
+module telar.gui.ui.app.overlays.theme_picker;
 
-#include "theme_picker_controller.hpp"
-#include "ui/kit/models/projection.hpp"
-#include <QDateTime>
-#include <QTimer>
-#include <QVariantMap>
-#include <algorithm>
-#include <chrono>
-#include <exception>
-#include <string_view>
-
+import std;
+import telar.gui.qt;
+import telar.gui.ui.kit.models;
 import telar.gui.application;
 import telar.gui.foundation.core;
 import telar.base.ds;
 
 namespace telar::gui::qt {
+  using Qt::StringLiterals::operator""_s;
 
   namespace {
 
@@ -31,16 +22,16 @@ namespace telar::gui::qt {
       }
 
       return {
-          {QStringLiteral("background"), toQColor(theme.background)},
-          {QStringLiteral("foreground"), toQColor(theme.foreground)},
-          {QStringLiteral("panel"), toQColor(theme.chromeColor(PaletteRole::panel_bg))},
-          {QStringLiteral("sidebar"), toQColor(theme.chromeColor(PaletteRole::surface_dim))},
-          {QStringLiteral("surface"), toQColor(theme.chromeColor(PaletteRole::surface0))},
-          {QStringLiteral("border"), toQColor(theme.chromeColor(PaletteRole::surface1))},
-          {QStringLiteral("accent"), toQColor(theme.chromeColor(PaletteRole::accent))},
-          {QStringLiteral("text"), toQColor(theme.chromeColor(PaletteRole::text))},
-          {QStringLiteral("subtext"), toQColor(theme.chromeColor(PaletteRole::subtext0))},
-          {QStringLiteral("ansi"), ansi},
+          {u"background"_s, toQColor(theme.background)},
+          {u"foreground"_s, toQColor(theme.foreground)},
+          {u"panel"_s, toQColor(theme.chromeColor(PaletteRole::panel_bg))},
+          {u"sidebar"_s, toQColor(theme.chromeColor(PaletteRole::surface_dim))},
+          {u"surface"_s, toQColor(theme.chromeColor(PaletteRole::surface0))},
+          {u"border"_s, toQColor(theme.chromeColor(PaletteRole::surface1))},
+          {u"accent"_s, toQColor(theme.chromeColor(PaletteRole::accent))},
+          {u"text"_s, toQColor(theme.chromeColor(PaletteRole::text))},
+          {u"subtext"_s, toQColor(theme.chromeColor(PaletteRole::subtext0))},
+          {u"ansi"_s, ansi},
       };
     }
 
@@ -77,12 +68,12 @@ namespace telar::gui::qt {
     names_.clear();
     themes_.clear();
     themes_.append(QVariantMap{
-        {QStringLiteral("name"), QString{}},
-        {QStringLiteral("label"), QStringLiteral("Configuration")},
-        {QStringLiteral("detail"), same == entries.end() ? QStringLiteral("config.lua") : QStringLiteral("config.lua · ") + label(*same)},
-        {QStringLiteral("configuration"), true},
-        {QStringLiteral("light"), application::configuration::lightTheme(configured)},
-        {QStringLiteral("colors"), sliceColors(configured)},
+        {u"name"_s, QString{}},
+        {u"label"_s, u"Configuration"_s},
+        {u"detail"_s, same == entries.end() ? u"config.lua"_s : u"config.lua · "_s + label(*same)},
+        {u"configuration"_s, true},
+        {u"light"_s, application::configuration::lightTheme(configured)},
+        {u"colors"_s, sliceColors(configured)},
     });
 
     focus_ = configuration_slot;
@@ -93,18 +84,18 @@ namespace telar::gui::qt {
 
       names_.append(QByteArray{entry.name.view().data(), static_cast<qsizetype>(entry.name.view().size())});
       themes_.append(QVariantMap{
-          {QStringLiteral("name"), toQString(entry.name.view())},
-          {QStringLiteral("label"), label(entry)},
-          {QStringLiteral("detail"), entry.light ? QStringLiteral("light") : QStringLiteral("dark")},
-          {QStringLiteral("configuration"), false},
-          {QStringLiteral("light"), entry.light},
-          {QStringLiteral("colors"), sliceColors(entry.values)},
+          {u"name"_s, toQString(entry.name.view())},
+          {u"label"_s, label(entry)},
+          {u"detail"_s, entry.light ? u"light"_s : u"dark"_s},
+          {u"configuration"_s, false},
+          {u"light"_s, entry.light},
+          {u"colors"_s, sliceColors(entry.values)},
       });
     }
 
     typed_.clear();
     open_ = true;
-    emit changed();
+    changed();
   }
 
   void ThemePickerController::dismiss() {
@@ -115,7 +106,7 @@ namespace telar::gui::qt {
     preview_pending_ = false;
     source_.previewTheme(ds::none);
     open_ = false;
-    emit changed();
+    changed();
   }
 
   void ThemePickerController::focusTheme(int index) {
@@ -124,7 +115,7 @@ namespace telar::gui::qt {
     }
 
     focus_ = index;
-    emit changed();
+    changed();
     preview();
   }
 
@@ -197,7 +188,7 @@ namespace telar::gui::qt {
     try {
       source_.chooseTheme(name.isEmpty() ? ds::none : ds::Option{std::string_view{name.constData(), static_cast<std::size_t>(name.size())}});
     } catch (const std::exception& error) {
-      emit failed(QStringLiteral("Theme picker: ") + QString::fromUtf8(error.what()));
+      failed(u"Theme picker: "_s + QString::fromUtf8(error.what()));
     }
 
     if (!name.isEmpty()) {
@@ -209,13 +200,13 @@ namespace telar::gui::qt {
 
   void ThemePickerController::cancel() {
     dismiss();
-    emit closeRequested();
+    closeRequested();
   }
 
   void ThemePickerController::close() {
     open_ = false;
-    emit changed();
-    emit closeRequested();
+    changed();
+    closeRequested();
   }
 
   void ThemePickerController::runOnSelect(const QByteArray& name) {
@@ -225,7 +216,7 @@ namespace telar::gui::qt {
     }
 
     if (on_select_.active()) {
-      emit failed(QStringLiteral("Theme picker: the previous on_select command is still running"));
+      failed(u"Theme picker: the previous on_select command is still running"_s);
       return;
     }
 
@@ -239,7 +230,7 @@ namespace telar::gui::qt {
     request.output = SurfaceOutputUse::ignored;
     on_select_.start(request, [this](const SurfaceCommandResult& result) {
       if (result.failure) {
-        emit failed(result.failure == SurfaceCommandFailure::timeout ? QStringLiteral("Theme picker: on_select timed out") : QStringLiteral("Theme picker: on_select failed"));
+        failed(result.failure == SurfaceCommandFailure::timeout ? u"Theme picker: on_select timed out"_s : u"Theme picker: on_select failed"_s);
       }
     });
   }

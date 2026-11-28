@@ -1,31 +1,12 @@
-#ifdef __clangd__
-// Keep textual ABI declarations and module imports in one clangd parse.
-static_assert(true);
-#endif
+module telar.gui.ui.kit.scene;
 
-#include "alpha_mask_material.hpp"
-#include "physical_pixel_matrix.hpp"
-#include "qt_buffers.hpp"
-#include <QByteArray>
-#include <QSGMaterial>
-#include <QSGMaterialShader>
-#include <QSGRendererInterface>
-#include <QSGTexture>
-#include <QString>
-#include <QtCore/qlogging.h>
-#include <QtCore/qtypes.h>
-#include <QtQuick/qsgmaterialtype.h>
-#include <algorithm>
-#include <array>
-#include <cstddef>
-#include <memory>
-#include <span>
-#include <tuple>
-#include <utility>
-
+import std;
+import telar.gui.qt;
 import telar.base.ds;
 
 namespace telar::gui::qt {
+  using Qt::StringLiterals::operator""_s;
+
   namespace {
     struct MaskUniforms {
       static constexpr std::size_t matrix_side = 4;
@@ -36,21 +17,21 @@ namespace telar::gui::qt {
 
     QString fragmentShader(AlphaMaskSampling sampling) {
       if (sampling == AlphaMaskSampling::stable_nearest) {
-        return QStringLiteral("nearest_alpha_mask.frag.qsb");
+        return u"nearest_alpha_mask.frag.qsb"_s;
       }
 
       if (sampling == AlphaMaskSampling::filtered) {
-        return QStringLiteral("filtered_alpha_mask.frag.qsb");
+        return u"filtered_alpha_mask.frag.qsb"_s;
       }
 
-      return QStringLiteral("alpha_mask.frag.qsb");
+      return u"alpha_mask.frag.qsb"_s;
     }
 
     class MaskShader final : public QSGMaterialShader {
     public:
       MaskShader(AlphaMaskSampling sampling, AlphaMaskBlend blend) {
-        setShaderFileName(VertexStage, QStringLiteral(":/telar/shaders/alpha_mask.vert.qsb"));
-        const auto prefix = blend == AlphaMaskBlend::straight ? QStringLiteral(":/telar/shaders/straight/") : QStringLiteral(":/telar/shaders/");
+        setShaderFileName(VertexStage, u":/telar/shaders/alpha_mask.vert.qsb"_s);
+        const auto prefix = blend == AlphaMaskBlend::straight ? u":/telar/shaders/straight/"_s : u":/telar/shaders/"_s;
         const auto fragment = fragmentShader(sampling);
 
         setShaderFileName(FragmentStage, prefix + fragment);
@@ -67,7 +48,7 @@ namespace telar::gui::qt {
     bool MaskShader::updateUniformData(RenderState& state, QSGMaterial* new_material, QSGMaterial* old_material) {
       auto& buffer = *state.uniformData();
       if (buffer.size() < static_cast<qsizetype>(sizeof(MaskUniforms))) {
-        qFatal("Curve mask uniform buffer is too small");
+        telar::qt::fatal("Curve mask uniform buffer is too small");
       }
 
       bool changed = false;
@@ -75,14 +56,14 @@ namespace telar::gui::qt {
       if (state.isMatrixDirty() || old_material == nullptr) {
         const auto matrix = physicalPixelMatrix(state);
 
-        writeUniform<offsetof(MaskUniforms, matrix)>(buffer, std::as_bytes(matrixValues(matrix)));
+        writeUniform<__builtin_offsetof(MaskUniforms, matrix)>(buffer, std::as_bytes(matrixValues(matrix)));
         changed = true;
       }
 
       if (state.isOpacityDirty() || old_material == nullptr) {
         const auto opacity = state.opacity();
 
-        writeUniform<offsetof(MaskUniforms, opacity)>(buffer, std::as_bytes(std::span<const float, 1>{&opacity, 1}));
+        writeUniform<__builtin_offsetof(MaskUniforms, opacity)>(buffer, std::as_bytes(std::span<const float, 1>{&opacity, 1}));
         changed = true;
       }
 
@@ -93,11 +74,11 @@ namespace telar::gui::qt {
       ds::Array<float, 4> previous_foreground{};
       const auto material_changed = new_material != old_material || state.dirtyStates().testFlag(RenderState::DirtyCachedMaterialData);
       if (!material_changed) {
-        std::ranges::copy(std::as_bytes(std::span<const char>{std::as_const(buffer)}.subspan<offsetof(MaskUniforms, foreground), sizeof(previous_foreground)>()), std::as_writable_bytes(previous_foreground.viewMut()).begin());
+        std::ranges::copy(std::as_bytes(std::span<const char>{std::as_const(buffer)}.subspan<__builtin_offsetof(MaskUniforms, foreground), sizeof(previous_foreground)>()), std::as_writable_bytes(previous_foreground.viewMut()).begin());
       }
 
       if (material_changed || previous_foreground != foreground) {
-        writeUniform<offsetof(MaskUniforms, foreground)>(buffer, std::as_bytes(foreground.view()));
+        writeUniform<__builtin_offsetof(MaskUniforms, foreground)>(buffer, std::as_bytes(foreground.view()));
         changed = true;
       }
 

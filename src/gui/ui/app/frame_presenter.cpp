@@ -1,29 +1,10 @@
-#ifdef __clangd__
-// Keep textual ABI declarations and module imports in one clangd parse.
-static_assert(true);
-#endif
+module telar.gui.ui.app;
 
-#include "frame_presenter.hpp"
-#include "platform/window.hpp"
-#include "pointer_dispatcher.hpp"
-#include "ui/app/chrome/tabs/tabs_controller.hpp"
-#include "ui/app/panes/terminal/terminal_controller.hpp"
-#include "ui/app/panes/terminal/terminal_item.hpp"
-#include "ui/kit/cell_scene/window_images.hpp"
-#include "ui/kit/scene/window_animation_clock.hpp"
-#include "window_display.hpp"
-#include "window_status.hpp"
-#include <QPointer>
-#include <QQuickWindow>
-#include <array>
-#include <cstddef>
-#include <cstdint>
-#include <exception>
-#include <memory>
-#include <optional>
-#include <span>
-#include <utility>
-
+import std;
+import telar.gui.qt;
+import telar.gui.qt.platform;
+import telar.gui.ui.kit.cell_scene;
+import telar.gui.ui.kit.scene;
 import telar.gui.application;
 import telar.wire.vocabulary;
 import telar.base.ds;

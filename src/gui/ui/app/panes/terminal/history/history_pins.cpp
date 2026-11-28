@@ -1,15 +1,7 @@
-#ifdef __clangd__
-// Keep textual ABI declarations and module imports in one clangd parse.
-static_assert(true);
-#endif
+module telar.gui.ui.app.panes.terminal.history;
 
-#include "history_controller.hpp"
-#include <QFile>
-#include <cstddef>
-#include <cstdint>
-#include <exception>
-#include <string_view>
-
+import std;
+import telar.gui.qt;
 import telar.platform.error;
 import telar.platform.fs;
 import telar.gui.application;

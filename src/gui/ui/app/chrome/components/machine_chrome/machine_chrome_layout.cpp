@@ -1,58 +1,30 @@
-#ifdef __clangd__
-// Keep textual ABI declarations and module imports in one clangd parse.
-static_assert(true);
-#endif
+module telar.gui.ui.app.chrome.components.machine_chrome;
 
-#include "machine_chrome_layout.hpp"
-#include "ui/kit/fonts/resident_fonts.hpp"
-#include "ui/kit/fonts/window_font_catalog.hpp"
-#include "ui/kit/machines/machine_client.hpp"
-#include "ui/kit/models/projection.hpp"
-#include <QAbstractItemModel>
-#include <QColor>
-#include <QLatin1StringView>
-#include <QList>
-#include <QObject>
-#include <QQuickItem>
-#include <QQuickWindow>
-#include <QRectF>
-#include <QString>
-#include <QtCore/qchar.h>
-#include <QtCore/qcontainerfwd.h>
-#include <QtCore/qnamespace.h>
-#include <QtCore/qstring.h>
-#include <QtCore/qstringfwd.h>
-#include <QtCore/qstringliteral.h>
-#include <QtCore/qtmetamacros.h>
-#include <QtCore/qtypes.h>
-#include <algorithm>
-#include <array>
-#include <cmath>
-#include <cstddef>
-#include <cstdint>
-#include <cstring>
-#include <exception>
-#include <functional>
-#include <memory>
-#include <optional>
-#include <span>
-#include <string_view>
-#include <utility>
-#include <variant>
-
+import std;
+import telar.gui.qt;
+import telar.gui.ui.kit.fonts;
+import telar.gui.ui.kit.machines;
+import telar.gui.ui.kit.models;
 import telar.gui.foundation.drawing;
 import telar.gui.application;
 import telar.base.ds;
 import telar.wire.vocabulary;
 import telar.base.memory.allocators;
+import telar.config.core;
+import telar.gui.foundation.agents;
+import telar.gui.foundation.fonts;
+import telar.gui.foundation.text;
+import telar.tbc;
 
 namespace telar::gui::qt {
+  using Qt::StringLiterals::operator""_s;
+
   namespace {
 
     constexpr std::string_view segment_suffix = " ▾";
 
     QString machineKey(application::machines::MachineToken token) {
-      return QStringLiteral("machine:") + QString::number(token.slot) + QLatin1Char(':') + QString::number(token.generation);
+      return u"machine:"_s + QString::number(token.slot) + QLatin1Char(':') + QString::number(token.generation);
     }
 
   }
@@ -85,7 +57,7 @@ namespace telar::gui::qt {
     items_.reconcile({});
     observeSources();
     invalidate();
-    emit rosterChanged();
+    rosterChanged();
   }
 
   qreal MachineChromeLayout::preferredWidth() const noexcept {
@@ -122,13 +94,13 @@ namespace telar::gui::qt {
       connect(controller_, &QObject::destroyed, this, [this] {
         controller_ = nullptr;
         observeSources();
-        emit controllerChanged();
+        controllerChanged();
       });
     }
 
     observeSources();
     invalidate();
-    emit controllerChanged();
+    controllerChanged();
   }
 
   void MachineChromeLayout::setSegment(bool segment) {
@@ -155,11 +127,11 @@ namespace telar::gui::qt {
     observeSources();
     invalidate();
     if ((previous == Mode::segment) != (mode_ == Mode::segment)) {
-      emit segmentChanged();
+      segmentChanged();
     }
 
     if ((previous == Mode::facts) != (mode_ == Mode::facts)) {
-      emit inlineFactsChanged();
+      inlineFactsChanged();
     }
   }
 
@@ -191,7 +163,7 @@ namespace telar::gui::qt {
 
     if (std::not_equal_to<>{}(height, preferred_height_)) {
       preferred_height_ = height;
-      emit rowsChanged();
+      rowsChanged();
     }
   }
 
@@ -224,7 +196,7 @@ namespace telar::gui::qt {
     if (shown_ != shown) {
       shown_ = shown;
       invalidate();
-      emit shownChanged();
+      shownChanged();
     }
   }
 
@@ -264,11 +236,11 @@ namespace telar::gui::qt {
 
   QVariantMap MachineChromeLayout::geometryRecord(const application::machines::MachineChromeGeometry::Control& geometry) const {
     return {
-        {QStringLiteral("bounds"), toQRectF(geometry.bounds, density_)},
-        {QStringLiteral("labelBounds"), toQRectF(geometry.label, density_)},
-        {QStringLiteral("discBounds"), toQRectF(geometry.disc, density_)},
-        {QStringLiteral("attentionBounds"), toQRectF(geometry.attention, density_)},
-        {QStringLiteral("radius"), static_cast<qreal>(geometry.radius) / density_},
+        {u"bounds"_s, toQRectF(geometry.bounds, density_)},
+        {u"labelBounds"_s, toQRectF(geometry.label, density_)},
+        {u"discBounds"_s, toQRectF(geometry.disc, density_)},
+        {u"attentionBounds"_s, toQRectF(geometry.attention, density_)},
+        {u"radius"_s, static_cast<qreal>(geometry.radius) / density_},
     };
   }
 
@@ -279,13 +251,13 @@ namespace telar::gui::qt {
     const auto geometry = Geometry::control(bounds, chrome_, segment ? Geometry::Kind::segment : Geometry::Kind::switcher, advance, attention);
     auto record = geometryRecord(geometry);
 
-    record.insert(QStringLiteral("key"), segment ? QStringLiteral("machine:picker") : machineKey(source.token));
-    record.insert(QStringLiteral("text"), toQString(source.label.view()) + (segment ? QStringLiteral(" ▾") : QString{}));
-    record.insert(QStringLiteral("accessible"), segment ? QStringLiteral("Switch machine") : toQString(source.label.view()));
-    record.insert(QStringLiteral("active"), !segment && source.active);
-    record.insert(QStringLiteral("bold"), segment || source.active);
-    record.insert(QStringLiteral("ink"), ink(source.color.view()));
-    record.insert(QStringLiteral("enabled"), segment || source.live);
+    record.insert(u"key"_s, segment ? u"machine:picker"_s : machineKey(source.token));
+    record.insert(u"text"_s, toQString(source.label.view()) + (segment ? u" ▾"_s : QString{}));
+    record.insert(u"accessible"_s, segment ? u"Switch machine"_s : toQString(source.label.view()));
+    record.insert(u"active"_s, !segment && source.active);
+    record.insert(u"bold"_s, segment || source.active);
+    record.insert(u"ink"_s, ink(source.color.view()));
+    record.insert(u"enabled"_s, segment || source.live);
 
     return record;
   }
@@ -295,7 +267,7 @@ namespace telar::gui::qt {
       items_.reconcile({});
       if (std::not_equal_to<>{}(preferred_width_, 0)) {
         preferred_width_ = 0;
-        emit layoutChanged();
+        layoutChanged();
       }
 
       return;
@@ -320,23 +292,23 @@ namespace telar::gui::qt {
     };
 
     QVariantMap style{
-        {QStringLiteral("activeBackground"), active_background},
-        {QStringLiteral("hoverBackground"), hover_background},
-        {QStringLiteral("activeText"), toQColor(theme.chromeColor(PaletteRole::text))},
-        {QStringLiteral("attention"), fill(theme.chrome[static_cast<std::size_t>(PaletteRole::yellow)])},
-        {QStringLiteral("pixelSize"), (mode_ == Mode::facts ? chrome_.small : chrome_.body) / density_},
-        {QStringLiteral("smallSize"), chrome_.small / density_},
-        {QStringLiteral("rowRadius"), length(mode_ == Mode::list ? gui::ChromeStyle::surface_radius : gui::ChromeStyle::control_radius)},
-        {QStringLiteral("tileWidth"), length(application::workbench::TabStripGeometry::tile_width)},
-        {QStringLiteral("tileHeight"), length(application::workbench::TabStripGeometry::tile_height)},
-        {QStringLiteral("tileRadius"), length(application::workbench::TabStripGeometry::tile_radius)},
+        {u"activeBackground"_s, active_background},
+        {u"hoverBackground"_s, hover_background},
+        {u"activeText"_s, toQColor(theme.chromeColor(PaletteRole::text))},
+        {u"attention"_s, fill(theme.chrome[static_cast<std::size_t>(PaletteRole::yellow)])},
+        {u"pixelSize"_s, (mode_ == Mode::facts ? chrome_.small : chrome_.body) / density_},
+        {u"smallSize"_s, chrome_.small / density_},
+        {u"rowRadius"_s, length(mode_ == Mode::list ? gui::ChromeStyle::surface_radius : gui::ChromeStyle::control_radius)},
+        {u"tileWidth"_s, length(application::workbench::TabStripGeometry::tile_width)},
+        {u"tileHeight"_s, length(application::workbench::TabStripGeometry::tile_height)},
+        {u"tileRadius"_s, length(application::workbench::TabStripGeometry::tile_radius)},
     };
 
     if (mode_ == Mode::list) {
       const auto columns = application::machines::MachineChromeGeometry::listColumns(chrome_);
 
-      style.insert(QStringLiteral("markCenter"), static_cast<qreal>(columns.mark_center) / density_);
-      style.insert(QStringLiteral("textX"), static_cast<qreal>(columns.text_x) / density_);
+      style.insert(u"markCenter"_s, static_cast<qreal>(columns.mark_center) / density_);
+      style.insert(u"textX"_s, static_cast<qreal>(columns.text_x) / density_);
     }
 
     QList<QVariantMap> records;
@@ -358,7 +330,7 @@ namespace telar::gui::qt {
     if (style != style_ || std::not_equal_to<>{}(preferred, preferred_width_)) {
       style_ = std::move(style);
       preferred_width_ = preferred;
-      emit layoutChanged();
+      layoutChanged();
     }
 
     items_.reconcile(std::move(records));
@@ -428,13 +400,13 @@ namespace telar::gui::qt {
       const auto& pose = application::workbench::TabCardMotion::rest[rank];
       auto record = applicationMarkRecord(runtime::describeProvider(static_cast<AgentProvider>(card.provider)).display_name);
 
-      record.insert(QStringLiteral("x"), static_cast<qreal>(chrome_.textPx(pose.x)) / density_);
-      record.insert(QStringLiteral("y"), static_cast<qreal>(chrome_.textPx(pose.y)) / density_);
-      record.insert(QStringLiteral("rotation"), pose.rotation);
-      record.insert(QStringLiteral("scale"), pose.scale);
-      record.insert(QStringLiteral("layer"), static_cast<int>(stack_cards - 1 - rank));
+      record.insert(u"x"_s, static_cast<qreal>(chrome_.textPx(pose.x)) / density_);
+      record.insert(u"y"_s, static_cast<qreal>(chrome_.textPx(pose.y)) / density_);
+      record.insert(u"rotation"_s, pose.rotation);
+      record.insert(u"scale"_s, pose.scale);
+      record.insert(u"layer"_s, static_cast<int>(stack_cards - 1 - rank));
       // The row has no focused pane, so whichever card waits on the person is tinted, front one included.
-      record.insert(QStringLiteral("attentionColor"), application::activity::AgentOrder::attention(status) == application::activity::AgentOrder::Attention::needs_input ? QString::fromLatin1(palette_names[static_cast<std::size_t>(AgentStatusPresentation::color(status))]) : QString{});
+      record.insert(u"attentionColor"_s, application::activity::AgentOrder::attention(status) == application::activity::AgentOrder::Attention::needs_input ? QString::fromLatin1(palette_names[static_cast<std::size_t>(AgentStatusPresentation::color(status))]) : QString{});
       cards.append(std::move(record));
     }
 
@@ -443,23 +415,23 @@ namespace telar::gui::qt {
     const auto status = application::machines::MachineChromeGeometry::listStatus(source.live, source.agent_count, storage.viewMut());
 
     return {
-        {QStringLiteral("key"), machineKey(source.token)},
-        {QStringLiteral("bounds"), toQRectF(row.bounds, density_)},
-        {QStringLiteral("avatarBounds"), toQRectF(row.avatar, density_)},
-        {QStringLiteral("dotBounds"), toQRectF(row.dot, density_)},
-        {QStringLiteral("labelBounds"), toQRectF(row.label, density_)},
-        {QStringLiteral("statusBounds"), toQRectF(row.status, density_)},
-        {QStringLiteral("stackBounds"), toQRectF(row.stack, density_)},
-        {QStringLiteral("markBounds"), toQRectF(row.mark, density_)},
-        {QStringLiteral("text"), label},
-        {QStringLiteral("initial"), MachineChromeController::initial(label)},
-        {QStringLiteral("status"), toQString(status)},
-        {QStringLiteral("ink"), ink(source.color.view())},
-        {QStringLiteral("enabled"), source.live},
-        {QStringLiteral("active"), source.active},
-        {QStringLiteral("attention"), source.attention},
-        {QStringLiteral("cards"), cards},
-        {QStringLiteral("accessible"), label + (source.attention ? QStringLiteral(", needs attention") : QString{}) + (source.card_count == 0 ? QString{} : QStringLiteral(", ") + QString::number(source.card_count) + QStringLiteral(" agents active"))},
+        {u"key"_s, machineKey(source.token)},
+        {u"bounds"_s, toQRectF(row.bounds, density_)},
+        {u"avatarBounds"_s, toQRectF(row.avatar, density_)},
+        {u"dotBounds"_s, toQRectF(row.dot, density_)},
+        {u"labelBounds"_s, toQRectF(row.label, density_)},
+        {u"statusBounds"_s, toQRectF(row.status, density_)},
+        {u"stackBounds"_s, toQRectF(row.stack, density_)},
+        {u"markBounds"_s, toQRectF(row.mark, density_)},
+        {u"text"_s, label},
+        {u"initial"_s, MachineChromeController::initial(label)},
+        {u"status"_s, toQString(status)},
+        {u"ink"_s, ink(source.color.view())},
+        {u"enabled"_s, source.live},
+        {u"active"_s, source.active},
+        {u"attention"_s, source.attention},
+        {u"cards"_s, cards},
+        {u"accessible"_s, label + (source.attention ? u", needs attention"_s : QString{}) + (source.card_count == 0 ? QString{} : u", "_s + QString::number(source.card_count) + u" agents active"_s)},
     };
   }
 
@@ -496,17 +468,17 @@ namespace telar::gui::qt {
     const auto role = application::machines::MachineFacts::glyphInk(source.phase, source.attention);
 
     return {
-        {QStringLiteral("key"), machineKey(source.token)},
-        {QStringLiteral("bounds"), toQRectF(geometry.bounds, density_)},
-        {QStringLiteral("glyphBounds"), toQRectF(geometry.glyph, density_)},
-        {QStringLiteral("labelBounds"), toQRectF(geometry.label, density_)},
-        {QStringLiteral("cpuBounds"), toQRectF(geometry.cpu, density_)},
-        {QStringLiteral("text"), toQString(source.label.view())},
-        {QStringLiteral("glyph"), toQString(glyph)},
-        {QStringLiteral("cpu"), toQString(cpu.view())},
-        {QStringLiteral("bold"), source.active},
-        {QStringLiteral("ink"), toQColor(controller_->configuration().theme.chromeColor(role))},
-        {QStringLiteral("accessible"), toQString(source.label.view()) + QStringLiteral(" ") + toQString(application::machines::MachineFacts::phaseName(source.phase)) + (source.attention ? QStringLiteral(" attention") : QString{}) + (cpu.view().empty() ? QString{} : QStringLiteral(" ") + toQString(cpu.view()))},
+        {u"key"_s, machineKey(source.token)},
+        {u"bounds"_s, toQRectF(geometry.bounds, density_)},
+        {u"glyphBounds"_s, toQRectF(geometry.glyph, density_)},
+        {u"labelBounds"_s, toQRectF(geometry.label, density_)},
+        {u"cpuBounds"_s, toQRectF(geometry.cpu, density_)},
+        {u"text"_s, toQString(source.label.view())},
+        {u"glyph"_s, toQString(glyph)},
+        {u"cpu"_s, toQString(cpu.view())},
+        {u"bold"_s, source.active},
+        {u"ink"_s, toQColor(controller_->configuration().theme.chromeColor(role))},
+        {u"accessible"_s, toQString(source.label.view()) + u" "_s + toQString(application::machines::MachineFacts::phaseName(source.phase)) + (source.attention ? u" attention"_s : QString{}) + (cpu.view().empty() ? QString{} : u" "_s + toQString(cpu.view()))},
     };
   }
 
@@ -546,7 +518,7 @@ namespace telar::gui::qt {
     bool delivered = false;
 
     for (int index = 0; index < items_.rowCount(); ++index) {
-      if (items_.data(items_.index(index), ListModel::record_role).toMap().value(QStringLiteral("key")).toString() == identity) {
+      if (items_.data(items_.index(index), ListModel::record_role).toMap().value(u"key"_s).toString() == identity) {
         delivered = true;
         break;
       }

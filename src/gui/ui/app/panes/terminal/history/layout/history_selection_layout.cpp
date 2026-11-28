@@ -1,29 +1,13 @@
-#ifdef __clangd__
-// Keep textual ABI declarations and module imports in one clangd parse.
-static_assert(true);
-#endif
+module telar.gui.ui.app.panes.terminal.history.layout;
 
-#include "history_selection_layout.hpp"
-#include "ui/kit/scene/window_animation_clock.hpp"
-#include <QMetaObject>
-#include <QPointer>
-#include <QQuickItem>
-#include <QQuickWindow>
-#include <QString>
-#include <QVariantMap>
-#include <QtCore/qcontainerfwd.h>
-#include <QtCore/qstringliteral.h>
-#include <QtCore/qtmetamacros.h>
-#include <QtCore/qtypes.h>
-#include <cstddef>
-#include <cstdint>
-#include <functional>
-#include <optional>
-
+import std;
+import telar.gui.qt;
+import telar.gui.ui.kit.scene;
 import telar.gui.application;
 import telar.base.ds;
 
 namespace telar::gui::qt {
+  using Qt::StringLiterals::operator""_s;
 
   HistorySelectionLayout::HistorySelectionLayout(QQuickItem* parent)
       : QQuickItem(parent) {
@@ -67,17 +51,17 @@ namespace telar::gui::qt {
     selected_.reset();
     bool generation_valid = false;
     bool id_valid = false;
-    const auto generation = selection.value(QStringLiteral("generation")).toString().toULongLong(&generation_valid);
-    const auto id = selection.value(QStringLiteral("id")).toString().toULongLong(&id_valid);
-    const auto index = selection.value(QStringLiteral("index"), -1).toInt();
-    if (selection.value(QStringLiteral("active")).toBool() && generation_valid && id_valid && index >= 0) {
+    const auto generation = selection.value(u"generation"_s).toString().toULongLong(&generation_valid);
+    const auto id = selection.value(u"id"_s).toString().toULongLong(&id_valid);
+    const auto index = selection.value(u"index"_s, -1).toInt();
+    if (selection.value(u"active"_s).toBool() && generation_valid && id_valid && index >= 0) {
       generation_ = generation;
       selected_ = application::history::HistoryPosition{.index = static_cast<std::size_t>(index), .id = id};
     }
 
     dirty_ = true;
     synchronize();
-    emit selectionChanged();
+    selectionChanged();
   }
 
   bool HistorySelectionLayout::eligible() const noexcept {
@@ -115,7 +99,7 @@ namespace telar::gui::qt {
     frame_requested_ = false;
     clock_->requestSynchronization();
     if (changed) {
-      emit frameChanged();
+      frameChanged();
     }
   }
 

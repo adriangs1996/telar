@@ -2,18 +2,6 @@
 // Keep textual ABI declarations and module imports in one clangd parse.
 static_assert(true);
 #endif
-
-#include "frame_fixture.hpp"
-#include "qml_fixture.hpp"
-#include "ui/app/panes/terminal/history/layout/history_empty_layout.hpp"
-#include "ui/app/panes/terminal/history/layout/history_filters_layout.hpp"
-#include "ui/app/panes/terminal/history/layout/history_footer_layout.hpp"
-#include "ui/app/panes/terminal/history/layout/history_inspection_layout.hpp"
-#include "ui/app/panes/terminal/history/layout/history_loading_layout.hpp"
-#include "ui/app/panes/terminal/history/layout/history_selection_layout.hpp"
-#include "ui/kit/fonts/bundled_fonts.hpp"
-#include "ui/kit/input/scroll_event.hpp"
-#include "ui/kit/models/projection.hpp"
 #include <QColor>
 #include <QCoreApplication>
 #include <QElapsedTimer>
@@ -69,6 +57,13 @@ import telar.gui.features.window;
 import telar.base.ds;
 import telar.gui.foundation.core;
 import telar.wire.vocabulary;
+import telar.gui.ui.app.panes.terminal.history.layout;
+import telar.gui.ui.kit.fonts;
+import telar.gui.ui.kit.input;
+import telar.gui.ui.kit.models;
+import telar.gui.tests.frame_fixture;
+import telar.gui.tests.qml_fixture;
+import telar.gui.qt;
 
 namespace {
 
@@ -297,19 +292,25 @@ namespace {
     std::unique_ptr<QQuickItem> item;
   };
 
-  class HistoryControlsTest final : public QObject {
-    Q_OBJECT
+  class [[qt::object]] HistoryControlsTest final : public QObject {
+  public:
+    static const QMetaObject staticMetaObject;
+    const QMetaObject* metaObject() const override;
+    void* qt_metacast(const char* name) override;
+    int qt_metacall(QMetaObject::Call call, int id, void** args) override;
+    static void qt_static_metacall(QObject* object, QMetaObject::Call call, int id, void** args);
 
-    Q_SLOT static void initTestCase() {
+  private:
+    [[qt::slot]] static void initTestCase() {
       bundledFonts();
       QGuiApplication::setFont(QFont{QStringLiteral("IBM Plex Sans")});
     }
 
-    Q_SLOT static void init() {
+    [[qt::slot]] static void init() {
       QTest::failOnWarning(QRegularExpression{QStringLiteral(".*")});
     }
 
-    Q_SLOT static void emptyStatesWorkWithoutAnApplicationController() {
+    [[qt::slot]] static void emptyStatesWorkWithoutAnApplicationController() {
       QQuickWindow window;
       QQmlEngine engine;
       constexpr int empty_height = 360;
@@ -368,7 +369,7 @@ namespace {
       QTRY_COMPARE_WITH_TIMEOUT(item->property("title").toString(), QStringLiteral("No matches in this workspace"), wait_ms);
     }
 
-    Q_SLOT static void emptyRecoveryRetiresHiddenPresses() {
+    [[qt::slot]] static void emptyRecoveryRetiresHiddenPresses() {
       QQuickWindow window;
       QQmlEngine engine;
       constexpr int empty_height = 360;
@@ -399,7 +400,7 @@ namespace {
       QCOMPARE(recovered.size(), 1);
     }
 
-    Q_SLOT static void replacementLoadingWaitsAndStops() {
+    [[qt::slot]] static void replacementLoadingWaitsAndStops() {
       QQuickWindow window;
       QQmlEngine engine;
       auto item = createChrome(engine, QStringLiteral("HistorySearchBar"), {{QStringLiteral("colors"), themeColors({})}, {QStringLiteral("typography"), historyTypography()}, {QStringLiteral("width"), wide_width}, {QStringLiteral("height"), search_height}});
@@ -435,7 +436,7 @@ namespace {
       QTRY_VERIFY_WITH_TIMEOUT(!timer->isActive(), wait_ms);
     }
 
-    Q_SLOT static void selectionMotionStartsOnAFrameAndParksItsClock() {
+    [[qt::slot]] static void selectionMotionStartsOnAFrameAndParksItsClock() {
       QQuickWindow window;
 
       window.resize(wide_width, search_height);
@@ -486,7 +487,7 @@ namespace {
       QCOMPARE(motion.leavingIndex(), -1);
     }
 
-    Q_SLOT static void selectionClockRetiresDestroyedItems() {
+    [[qt::slot]] static void selectionClockRetiresDestroyedItems() {
       QQuickWindow window;
 
       window.resize(wide_width, search_height);
@@ -505,7 +506,7 @@ namespace {
       QVERIFY(waitForSynchronizedFrame(window, wait_ms));
     }
 
-    Q_SLOT static void loadingClockRetiresDestroyedItems() {
+    [[qt::slot]] static void loadingClockRetiresDestroyedItems() {
       QQuickWindow window;
 
       window.resize(wide_width, search_height);
@@ -523,7 +524,7 @@ namespace {
       QVERIFY(waitForSynchronizedFrame(window, wait_ms));
     }
 
-    Q_SLOT static void emptyGeometryRejectsNonfiniteTypography() {
+    [[qt::slot]] static void emptyGeometryRejectsNonfiniteTypography() {
       QQuickWindow window;
       HistoryEmptyLayout item{window.contentItem()};
 
@@ -535,7 +536,7 @@ namespace {
       QCOMPARE(item.layout().value(QStringLiteral("subtitle")).toRectF().height(), qreal{0});
     }
 
-    Q_SLOT static void stateObserversCanRetireTheComponent() {
+    [[qt::slot]] static void stateObserversCanRetireTheComponent() {
       auto empty = std::make_unique<HistoryEmptyLayout>();
 
       QObject::connect(empty.get(), &HistoryEmptyLayout::inputChanged, [&empty] {
@@ -566,7 +567,7 @@ namespace {
       QVERIFY(ratio == nullptr);
     }
 
-    Q_SLOT static void filterHoverTargetsTrackPresentedGeometryAndStableActions() {
+    [[qt::slot]] static void filterHoverTargetsTrackPresentedGeometryAndStableActions() {
       QQuickWindow window;
       QQmlEngine engine;
       auto state = historyState();
@@ -634,7 +635,7 @@ namespace {
       QCOMPARE(layout->hoverTargets(generation, targets.viewMut()), std::size_t{0});
     }
 
-    Q_SLOT static void filtersWorkWithoutAnApplicationController() {
+    [[qt::slot]] static void filtersWorkWithoutAnApplicationController() {
       QQuickWindow window;
       QQmlEngine engine;
       auto filters = createChrome(engine, QStringLiteral("HistoryFilters"), {
@@ -681,7 +682,7 @@ namespace {
       QTRY_VERIFY_WITH_TIMEOUT(!author_group->isVisible(), wait_ms);
     }
 
-    Q_SLOT static void filtersShowTheSelectedScopeValueAndKeyHints() {
+    [[qt::slot]] static void filtersShowTheSelectedScopeValueAndKeyHints() {
       QQuickWindow window;
       QQmlEngine engine;
       auto state = historyState();
@@ -748,7 +749,7 @@ namespace {
       QVERIFY(key_labels.contains(QStringLiteral("exit:fail")));
     }
 
-    Q_SLOT static void filtersHideKeyHintsBeforeTheRightControls() {
+    [[qt::slot]] static void filtersHideKeyHintsBeforeTheRightControls() {
       QQuickWindow window;
       QQmlEngine engine;
       auto state = historyState();
@@ -798,7 +799,7 @@ namespace {
       QCOMPARE(toggled.size(), 1);
     }
 
-    Q_SLOT static void searchControlsKeepTheInputBetweenTheIconAndCloseAction() {
+    [[qt::slot]] static void searchControlsKeepTheInputBetweenTheIconAndCloseAction() {
       QQuickWindow window;
       QQmlEngine engine;
       auto search = createChrome(engine, QStringLiteral("HistorySearchBar"), {
@@ -833,7 +834,7 @@ namespace {
       QCOMPARE(field->x() + field->width(), close->x() - expected_gap);
     }
 
-    Q_SLOT static void rowsFitFactsAndSelectWithoutAnApplicationController() {
+    [[qt::slot]] static void rowsFitFactsAndSelectWithoutAnApplicationController() {
       SystemAllocator memory;
       application::history::HistoryRow<SystemAllocator> entry{memory};
 
@@ -897,7 +898,7 @@ namespace {
 
     // A row tells the machine it ran on when asked, shows the output's excerpt in place of its
     // directory, and a run shown around a match is dimmed.
-    Q_SLOT static void rowsShowTheMachineTheExcerptAndNeighbours() {
+    [[qt::slot]] static void rowsShowTheMachineTheExcerptAndNeighbours() {
       SystemAllocator memory;
       application::history::HistoryRow<SystemAllocator> entry{memory};
       const telar::ds::Array excerpt_ranges{telar::HistoryRange{.start = 7, .end = 13}};
@@ -944,7 +945,7 @@ namespace {
       }
     }
 
-    Q_SLOT static void rowsRetireGesturesWhenTheContentRevisionChanges() {
+    [[qt::slot]] static void rowsRetireGesturesWhenTheContentRevisionChanges() {
       SystemAllocator memory;
       application::history::HistoryRow<SystemAllocator> entry{memory};
 
@@ -984,7 +985,7 @@ namespace {
       QCOMPARE(activated.size(), 1);
     }
 
-    Q_SLOT static void queryChangesPreserveRowMeasurements() {
+    [[qt::slot]] static void queryChangesPreserveRowMeasurements() {
       SystemAllocator memory;
       application::history::HistoryRow<SystemAllocator> entry{memory};
 
@@ -1073,7 +1074,7 @@ namespace {
       QCOMPARE(row->property("geometryRegions").toMap(), geometry());
     }
 
-    Q_SLOT static void matchDelegatesRetainPositionsAcrossQueryChanges() {
+    [[qt::slot]] static void matchDelegatesRetainPositionsAcrossQueryChanges() {
       SystemAllocator memory;
       application::history::HistoryRow<SystemAllocator> entry{memory};
 
@@ -1135,7 +1136,7 @@ namespace {
       }
     }
 
-    Q_SLOT static void selectedCardsShowEveryExplicitCommandLine() {
+    [[qt::slot]] static void selectedCardsShowEveryExplicitCommandLine() {
       SystemAllocator memory;
       application::history::HistoryRow<SystemAllocator> entry{memory};
 
@@ -1205,7 +1206,7 @@ namespace {
       QVERIFY(details->property("text").toString().contains(QStringLiteral("+2 more lines")));
     }
 
-    Q_SLOT static void runningCardsNameTheirOutcome() {
+    [[qt::slot]] static void runningCardsNameTheirOutcome() {
       SystemAllocator memory;
       application::history::HistoryRow<SystemAllocator> entry{memory};
 
@@ -1236,7 +1237,7 @@ namespace {
       QTRY_VERIFY_WITH_TIMEOUT(details->property("text").toString().contains(QStringLiteral("running")), wait_ms);
     }
 
-    Q_SLOT static void metadataActionsWorkWithoutAnApplicationController() {
+    [[qt::slot]] static void metadataActionsWorkWithoutAnApplicationController() {
       constexpr int metadata_height = 28;
       const QVariantMap record{
           {QStringLiteral("status"), static_cast<int>(telar::HistoryStatus::completed)},
@@ -1305,7 +1306,7 @@ namespace {
       QTRY_COMPARE_WITH_TIMEOUT(action_count(), 0, wait_ms);
     }
 
-    Q_SLOT static void metadataRefreshesWhenTheSelectedCommandChanges() {
+    [[qt::slot]] static void metadataRefreshesWhenTheSelectedCommandChanges() {
       SystemAllocator memory;
       application::history::HistoryRow<SystemAllocator> entry{memory};
 
@@ -1351,7 +1352,7 @@ namespace {
       QCOMPARE(metadata->property("facts").toList().front().toMap().value(QStringLiteral("color")).toString(), QStringLiteral("yellow"));
     }
 
-    Q_SLOT static void footerHoverTargetsPreserveChoicePrecisionAndRenderedBounds() {
+    [[qt::slot]] static void footerHoverTargetsPreserveChoicePrecisionAndRenderedBounds() {
       QQuickWindow window;
       QQmlEngine engine;
       auto state = historyFooterState();
@@ -1414,7 +1415,7 @@ namespace {
       QCOMPARE(submit->choice.index, std::size_t{3});
     }
 
-    Q_SLOT static void footerHoverTargetsRespectAbsenceAndKeepDisabledIdentities() {
+    [[qt::slot]] static void footerHoverTargetsRespectAbsenceAndKeepDisabledIdentities() {
       QQuickWindow window;
       QQmlEngine engine;
       auto state = historyFooterState();
@@ -1455,7 +1456,7 @@ namespace {
       QCOMPARE(layout->hoverTargets(generation, targets.viewMut()), std::size_t{0});
     }
 
-    Q_SLOT static void footerActionsNeedNoApplicationController() {
+    [[qt::slot]] static void footerActionsNeedNoApplicationController() {
       QQuickWindow window;
       QQmlEngine engine;
       auto state = historyFooterState();
@@ -1509,7 +1510,7 @@ namespace {
       QCOMPARE(activated.size(), inspect_actions);
     }
 
-    Q_SLOT static void footerSubmissionsKeepCaptureWhenEnterBehaviorChanges() {
+    [[qt::slot]] static void footerSubmissionsKeepCaptureWhenEnterBehaviorChanges() {
       const telar::ds::Array actions{QStringLiteral("submit"), QStringLiteral("alternate")};
 
       for (const auto& action : actions) {
@@ -1550,7 +1551,7 @@ namespace {
       }
     }
 
-    Q_SLOT static void inspectionHoverTargetsMatchRenderedButtonsAndChoice() {
+    [[qt::slot]] static void inspectionHoverTargetsMatchRenderedButtonsAndChoice() {
       InspectionFixture fixture;
       constexpr auto revision = std::numeric_limits<std::uint64_t>::max();
       constexpr auto generation = std::numeric_limits<std::uint64_t>::max();
@@ -1614,7 +1615,7 @@ namespace {
       }
     }
 
-    Q_SLOT static void inspectionHoverTargetsRespectAvailabilityAndBoundedStorage() {
+    [[qt::slot]] static void inspectionHoverTargetsRespectAvailabilityAndBoundedStorage() {
       InspectionFixture fixture;
 
       fixture.state.insert(QStringLiteral("paneOpen"), true);
@@ -1650,7 +1651,7 @@ namespace {
       QCOMPARE(layout->hoverTargets(generation, targets.viewMut()), std::size_t{0});
     }
 
-    Q_SLOT static void inspectionSubmissionsKeepCaptureWhenEnterBehaviorChanges() {
+    [[qt::slot]] static void inspectionSubmissionsKeepCaptureWhenEnterBehaviorChanges() {
       const telar::ds::Array actions{QStringLiteral("submit"), QStringLiteral("alternate")};
 
       for (const auto& action : actions) {
@@ -1679,7 +1680,7 @@ namespace {
       }
     }
 
-    Q_SLOT static void inspectionSemanticActionsKeepCaptureAcrossChoiceChanges() {
+    [[qt::slot]] static void inspectionSemanticActionsKeepCaptureAcrossChoiceChanges() {
       const telar::ds::Array actions{QStringLiteral("copy"), QStringLiteral("erase"), QStringLiteral("visit")};
 
       for (const auto& action : actions) {
@@ -1708,7 +1709,7 @@ namespace {
       }
     }
 
-    Q_SLOT static void footerCancelsPressesWhenTheChoiceChanges() {
+    [[qt::slot]] static void footerCancelsPressesWhenTheChoiceChanges() {
       QQuickWindow window;
       QQmlEngine engine;
       auto state = historyFooterState();
@@ -1748,7 +1749,7 @@ namespace {
       QCOMPARE(activated.size(), 2);
     }
 
-    Q_SLOT static void footerKeepsSemanticActionsAcrossSelectionRevisions() {
+    [[qt::slot]] static void footerKeepsSemanticActionsAcrossSelectionRevisions() {
       QQuickWindow window;
       QQmlEngine engine;
       auto state = historyFooterState();
@@ -1779,7 +1780,7 @@ namespace {
       QCOMPARE(activated.back().front().toString(), QStringLiteral("inspect"));
     }
 
-    Q_SLOT static void footerFitsRangesAndReplacesControlsWithErrors() {
+    [[qt::slot]] static void footerFitsRangesAndReplacesControlsWithErrors() {
       QQuickWindow window;
       QQmlEngine engine;
       auto state = historyFooterState();
@@ -1833,7 +1834,7 @@ namespace {
       QCOMPARE(footer->property("hints").toList().front().toMap().value(QStringLiteral("word")).toString(), QStringLiteral("run"));
     }
 
-    Q_SLOT static void inspectionScrollsTheWholeDocumentAndRetiresItsIdentity() {
+    [[qt::slot]] static void inspectionScrollsTheWholeDocumentAndRetiresItsIdentity() {
       InspectionFixture fixture;
 
       QVERIFY(showComponentWindow(fixture.window, wait_ms));
@@ -1870,7 +1871,7 @@ namespace {
       }
     }
 
-    Q_SLOT static void inspectionSubmissionsRetireChoicesAndKeepBehaviorChanges() {
+    [[qt::slot]] static void inspectionSubmissionsRetireChoicesAndKeepBehaviorChanges() {
       InspectionFixture fixture;
 
       QVERIFY(showComponentWindow(fixture.window, wait_ms));
@@ -1917,7 +1918,7 @@ namespace {
       QCOMPARE(activated.back().front().toString(), QStringLiteral("submit"));
     }
 
-    Q_SLOT static void inspectionAccumulatesFractionalWheelAndTrackpadInput() {
+    [[qt::slot]] static void inspectionAccumulatesFractionalWheelAndTrackpadInput() {
       InspectionFixture fixture;
 
       QVERIFY(showComponentWindow(fixture.window, wait_ms));
@@ -1950,7 +1951,7 @@ namespace {
       QTRY_COMPARE_WITH_TIMEOUT(fixture.item->property("scroll").toInt(), 1, wait_ms);
     }
 
-    Q_SLOT static void wheelMetadataKeepsStepAndPreciseUnitsSeparate() {
+    [[qt::slot]] static void wheelMetadataKeepsStepAndPreciseUnitsSeparate() {
       constexpr int estimated_pixels = 20;
       constexpr int angle_notch = 120;
       constexpr double row_pixels = 40;
@@ -1977,7 +1978,7 @@ namespace {
       QCOMPARE(accumulated.consume(scrollSample(update, row_pixels)), 1);
     }
 
-    Q_SLOT static void compatibilityBeginsPreserveTheNativeFraction() {
+    [[qt::slot]] static void compatibilityBeginsPreserveTheNativeFraction() {
       const QPointF position{1, 1};
       constexpr int half_notch = 60;
       constexpr unsigned long gesture_time = 100;
@@ -2006,4 +2007,6 @@ namespace {
 }
 
 QTEST_MAIN(HistoryControlsTest)
+#ifndef TELAR_MOC_RUN
 #include "history_controls_test.moc"
+#endif

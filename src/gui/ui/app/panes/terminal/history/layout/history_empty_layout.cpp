@@ -1,33 +1,14 @@
-#ifdef __clangd__
-// Keep textual ABI declarations and module imports in one clangd parse.
-static_assert(true);
-#endif
+module telar.gui.ui.app.panes.terminal.history.layout;
 
-#include "history_empty_layout.hpp"
-#include "ui/kit/models/projection.hpp"
-#include <QPointer>
-#include <QQuickItem>
-#include <QQuickWindow>
-#include <QRectF>
-#include <QString>
-#include <QVariantMap>
-#include <QtCore/qcontainerfwd.h>
-#include <QtCore/qstringliteral.h>
-#include <QtCore/qtmetamacros.h>
-#include <QtCore/qtypes.h>
-#include <algorithm>
-#include <cmath>
-#include <cstddef>
-#include <cstdint>
-#include <cstring>
-#include <limits>
-#include <string_view>
-
+import std;
+import telar.gui.qt;
+import telar.gui.ui.kit.models;
 import telar.gui.application;
 import telar.gui.foundation.forms;
 import telar.wire.vocabulary;
 
 namespace telar::gui::qt {
+  using Qt::StringLiterals::operator""_s;
 
   HistoryEmptyLayout::HistoryEmptyLayout(QQuickItem* parent)
       : QQuickItem(parent) {}
@@ -55,15 +36,15 @@ namespace telar::gui::qt {
   QString HistoryEmptyLayout::action() const {
     switch (content_.action) {
     case application::history::HistoryEmpty::Action::import:
-      return QStringLiteral("import");
+      return u"import"_s;
     case application::history::HistoryEmpty::Action::everywhere:
-      return QStringLiteral("everywhere");
+      return u"everywhere"_s;
     case application::history::HistoryEmpty::Action::none:
-      return QStringLiteral("none");
+      return u"none"_s;
     }
 
     // An action outside the enum offers none.
-    return QStringLiteral("none");
+    return u"none"_s;
   }
 
   void HistoryEmptyLayout::setInput(const QVariantMap& input) {
@@ -73,9 +54,9 @@ namespace telar::gui::qt {
       polish();
       const QPointer<HistoryEmptyLayout> alive{this};
 
-      emit inputChanged();
+      inputChanged();
       if (alive) {
-        emit labelsChanged();
+        labelsChanged();
       }
     }
   }
@@ -84,42 +65,42 @@ namespace telar::gui::qt {
     if (measurements_ != measurements) {
       measurements_ = measurements;
       polish();
-      emit measurementsChanged();
+      measurementsChanged();
     }
   }
 
   void HistoryEmptyLayout::prepareLabels() {
-    const auto state = input_.value(QStringLiteral("state")).toMap();
-    const auto phase = state.value(QStringLiteral("phase")).toString();
-    const auto scope = state.value(QStringLiteral("effectiveScope")).toString();
-    const auto workspace = input_.value(QStringLiteral("workspace")).toString().toUtf8();
+    const auto state = input_.value(u"state"_s).toMap();
+    const auto phase = state.value(u"phase"_s).toString();
+    const auto scope = state.value(u"effectiveScope"_s).toString();
+    const auto workspace = input_.value(u"workspace"_s).toString().toUtf8();
     application::history::HistoryEmptyOptions options{
         .workspace = {workspace.constData(), static_cast<std::size_t>(workspace.size())},
-        .page_offset = static_cast<std::uint32_t>(std::min(state.value(QStringLiteral("offset")).toULongLong(), qulonglong{std::numeric_limits<std::uint32_t>::max()})),
-        .has_page = state.value(QStringLiteral("hasPage")).toBool(),
-        .has_query = !state.value(QStringLiteral("query")).toString().isEmpty(),
-        .failed_only = state.value(QStringLiteral("failedOnly")).toBool(),
+        .page_offset = static_cast<std::uint32_t>(std::min(state.value(u"offset"_s).toULongLong(), qulonglong{std::numeric_limits<std::uint32_t>::max()})),
+        .has_page = state.value(u"hasPage"_s).toBool(),
+        .has_query = !state.value(u"query"_s).toString().isEmpty(),
+        .failed_only = state.value(u"failedOnly"_s).toBool(),
     };
 
-    if (phase == QStringLiteral("loading")) {
+    if (phase == u"loading"_s) {
       options.phase = application::history::HistoryPhase::loading;
-    } else if (phase == QStringLiteral("failed")) {
+    } else if (phase == u"failed"_s) {
       options.phase = application::history::HistoryPhase::failed;
-    } else if (phase == QStringLiteral("ready")) {
+    } else if (phase == u"ready"_s) {
       options.phase = application::history::HistoryPhase::ready;
     }
 
-    if (scope == QStringLiteral("workspace")) {
+    if (scope == u"workspace"_s) {
       options.scope = HistoryScope::workspace;
-    } else if (scope == QStringLiteral("cwd")) {
+    } else if (scope == u"cwd"_s) {
       options.scope = HistoryScope::cwd;
-    } else if (scope == QStringLiteral("pane") || scope == QStringLiteral("session")) {
+    } else if (scope == u"pane"_s || scope == u"session"_s) {
       options.scope = HistoryScope::pane;
     }
 
-    if (const auto author = state.value(QStringLiteral("author")).toString(); author == QStringLiteral("all")) {
+    if (const auto author = state.value(u"author"_s).toString(); author == u"all"_s) {
       options.author = HistoryAuthorFilter::all;
-    } else if (author == QStringLiteral("agent")) {
+    } else if (author == u"agent"_s) {
       options.author = HistoryAuthorFilter::agent;
     }
 
@@ -128,19 +109,19 @@ namespace telar::gui::qt {
 
   QVariantMap HistoryEmptyLayout::layout() const {
     return {
-        {QStringLiteral("title"), toQRectF(geometry_.title, density_)},
-        {QStringLiteral("subtitle"), toQRectF(geometry_.subtitle, density_)},
-        {QStringLiteral("action"), toQRectF(geometry_.action, density_)},
-        {QStringLiteral("importInset"), static_cast<qreal>(application::history::HistoryEmptyGeometry::import_inset) * ratio_},
-        {QStringLiteral("importRadius"), static_cast<qreal>(application::history::HistoryEmptyGeometry::import_radius) * ratio_},
-        {QStringLiteral("buttonRadius"), static_cast<qreal>(FormButtonStyle::radius) * ratio_},
-        {QStringLiteral("disabledAlpha"), FormButtonStyle::disabled_alpha},
-        {QStringLiteral("pressedAlpha"), FormButtonStyle::pressed_alpha},
+        {u"title"_s, toQRectF(geometry_.title, density_)},
+        {u"subtitle"_s, toQRectF(geometry_.subtitle, density_)},
+        {u"action"_s, toQRectF(geometry_.action, density_)},
+        {u"importInset"_s, static_cast<qreal>(application::history::HistoryEmptyGeometry::import_inset) * ratio_},
+        {u"importRadius"_s, static_cast<qreal>(application::history::HistoryEmptyGeometry::import_radius) * ratio_},
+        {u"buttonRadius"_s, static_cast<qreal>(FormButtonStyle::radius) * ratio_},
+        {u"disabledAlpha"_s, FormButtonStyle::disabled_alpha},
+        {u"pressedAlpha"_s, FormButtonStyle::pressed_alpha},
     };
   }
 
   void HistoryEmptyLayout::updatePolish() {
-    const auto ratio = input_.value(QStringLiteral("ratio"), 1).toDouble();
+    const auto ratio = input_.value(u"ratio"_s, 1).toDouble();
     if (!std::isfinite(ratio) || ratio <= 0) {
       return;
     }
@@ -156,16 +137,16 @@ namespace telar::gui::qt {
       return std::isfinite(value) ? static_cast<std::uint16_t>(std::clamp(std::round(value), 0.0, static_cast<double>(std::numeric_limits<std::uint16_t>::max()))) : std::uint16_t{0};
     };
 
-    chrome.body = pixels(QStringLiteral("bodyPixels"));
-    chrome.small = pixels(QStringLiteral("smallPixels"));
+    chrome.body = pixels(u"bodyPixels"_s);
+    chrome.small = pixels(u"smallPixels"_s);
     const auto advance = [this](const QString& key) {
       return std::max(0.0F, static_cast<float>(measurements_.value(key).toDouble() * density_));
     };
 
-    const application::history::HistoryEmptyMeasurements measured{.title = advance(QStringLiteral("title")), .subtitle = advance(QStringLiteral("subtitle")), .import = advance(QStringLiteral("import")), .action = content_.action};
+    const application::history::HistoryEmptyMeasurements measured{.title = advance(u"title"_s), .subtitle = advance(u"subtitle"_s), .import = advance(u"import"_s), .action = content_.action};
 
     geometry_ = application::history::HistoryEmptyGeometry::derive({.width = static_cast<float>(width() * density_), .height = static_cast<float>(height() * density_)}, chrome, measured);
-    emit layoutChanged();
+    layoutChanged();
   }
 
   void HistoryEmptyLayout::componentComplete() {

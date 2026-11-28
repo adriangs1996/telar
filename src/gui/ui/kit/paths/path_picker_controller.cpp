@@ -1,18 +1,13 @@
-#ifdef __clangd__
-// Keep textual ABI declarations and module imports in one clangd parse.
-static_assert(true);
-#endif
+module telar.gui.ui.kit.paths;
 
-#include "path_picker_controller.hpp"
-#include "ui/kit/models/projection.hpp"
-#include "ui/kit/text/utf16_encoding.hpp"
-#include <QByteArray>
-#include <QStringView>
-#include <algorithm>
-#include <cstdint>
-#include <string_view>
+import std;
+import telar.gui.qt;
+import telar.gui.ui.kit.models;
+import telar.gui.ui.kit.text;
+import telar.gui.foundation.text;
 
 namespace telar::gui::qt {
+  using Qt::StringLiterals::operator""_s;
 
   PathPickerController::PathPickerController(Store& store, QObject* parent)
       : QObject(parent),
@@ -27,11 +22,11 @@ namespace telar::gui::qt {
 
   void PathPickerController::setDisplay(const application::window::DisplayMetrics& display) {
     display_ = display;
-    emit geometryChanged();
+    geometryChanged();
   }
 
   void PathPickerController::publishGeometry() {
-    emit geometryChanged();
+    geometryChanged();
   }
 
   bool PathPickerController::open() {
@@ -50,7 +45,7 @@ namespace telar::gui::qt {
     const auto count = application::paths::page(store_.session()).matches().size();
 
     selection_ = count == 0 ? 0 : std::min(selection_, count - 1);
-    emit changed();
+    changed();
   }
 
   void PathPickerController::search(const QString& text) {
@@ -98,7 +93,7 @@ namespace telar::gui::qt {
     const auto maximum = count == 0 ? 0 : static_cast<std::int64_t>(count - 1);
 
     selection_ = static_cast<std::size_t>(std::clamp(static_cast<std::int64_t>(selection_) + direction, std::int64_t{0}, maximum));
-    emit changed();
+    changed();
   }
 
   void PathPickerController::descend() {
@@ -128,7 +123,7 @@ namespace telar::gui::qt {
       }
 
       if (application::paths::insert(store_.sessionMut(), selection_, absolute)) {
-        emit closeRequested();
+        closeRequested();
       }
 
       refresh();
@@ -137,11 +132,11 @@ namespace telar::gui::qt {
 
   void PathPickerController::activate(const QVariantMap& choice) {
     const auto page = application::paths::page(store_.session());
-    if (!isOpen() || choice.value(QStringLiteral("revision")).toString() != QString::number(page.revision())) {
+    if (!isOpen() || choice.value(u"revision"_s).toString() != QString::number(page.revision())) {
       return;
     }
 
-    const auto key = choice.value(QStringLiteral("path")).toString().toUtf8();
+    const auto key = choice.value(u"path"_s).toString().toUtf8();
     const std::string_view path{key.constData(), static_cast<std::size_t>(key.size())};
     const auto found = std::ranges::find_if(page.matches(), [&](const auto& match) {
       return page.path(match) == path;
@@ -151,24 +146,24 @@ namespace telar::gui::qt {
     }
 
     selection_ = static_cast<std::size_t>(found - page.matches().begin());
-    insert(choice.value(QStringLiteral("absolute")).toBool());
+    insert(choice.value(u"absolute"_s).toBool());
   }
 
   QVariantMap PathPickerController::state() const {
     const auto page = application::paths::page(store_.session());
 
     return {
-        {QStringLiteral("editorText"), query_},
-        {QStringLiteral("root"), toQString(page.root())},
-        {QStringLiteral("rootLabel"), toQString(application::paths::PathPickerLabels::root(page.root()))},
-        {QStringLiteral("countText"), toQString(application::paths::PathPickerLabels::count(page).view())},
-        {QStringLiteral("status"), toQString(application::paths::PathPickerLabels::status(page).view())},
-        {QStringLiteral("emptyText"), toQString(application::paths::PathPickerLabels::empty(page))},
-        {QStringLiteral("failed"), page.phase() == application::paths::PathPickerPhase::failed},
-        {QStringLiteral("count"), static_cast<qulonglong>(page.matches().size())},
-        {QStringLiteral("selection"), static_cast<qulonglong>(selection_)},
-        {QStringLiteral("revision"), QString::number(page.revision())},
-        {QStringLiteral("maximumQueryBytes"), static_cast<qulonglong>(application::paths::PathPickerLimits::query_bytes)},
+        {u"editorText"_s, query_},
+        {u"root"_s, toQString(page.root())},
+        {u"rootLabel"_s, toQString(application::paths::PathPickerLabels::root(page.root()))},
+        {u"countText"_s, toQString(application::paths::PathPickerLabels::count(page).view())},
+        {u"status"_s, toQString(application::paths::PathPickerLabels::status(page).view())},
+        {u"emptyText"_s, toQString(application::paths::PathPickerLabels::empty(page))},
+        {u"failed"_s, page.phase() == application::paths::PathPickerPhase::failed},
+        {u"count"_s, static_cast<qulonglong>(page.matches().size())},
+        {u"selection"_s, static_cast<qulonglong>(selection_)},
+        {u"revision"_s, QString::number(page.revision())},
+        {u"maximumQueryBytes"_s, static_cast<qulonglong>(application::paths::PathPickerLimits::query_bytes)},
     };
   }
 

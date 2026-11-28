@@ -1,53 +1,11 @@
-#ifdef __clangd__
-// Keep textual ABI declarations and module imports in one clangd parse.
-static_assert(true);
-#endif
+module telar.gui.ui.app;
 
-#include "pointer_dispatcher.hpp"
-#include "platform/scroll_event.hpp"
-#include "ui/app/chrome/activity/activity_controller.hpp"
-#include "ui/app/chrome/tabs/tabs_controller.hpp"
-#include "ui/app/panes/attachments/attachment_shelf.hpp"
-#include "ui/app/panes/attachments/attachments_controller.hpp"
-#include "ui/app/panes/terminal/history/history_controller.hpp"
-#include "ui/app/panes/terminal/terminal_controller.hpp"
-#include "ui/app/panes/terminal/terminal_item.hpp"
-#include "ui/kit/input/mouse_buttons.hpp"
-#include "ui/kit/input/native_pointer_events.hpp"
-#include "ui/kit/store/store.hpp"
-#include "window_display.hpp"
-#include <QCoreApplication>
-#include <QKeyEvent>
-#include <QMouseEvent>
-#include <QQuickWindow>
-#include <QScopedValueRollback>
-#include <QString>
-#include <QWheelEvent>
-#include <QWindow>
-#include <QtCore/qnamespace.h>
-#include <QtCore/qobject.h>
-#include <QtCore/qstringliteral.h>
-#include <QtCore/qtmetamacros.h>
-#include <QtCore/qtypes.h>
-#include <algorithm>
-#include <array>
-#include <atomic>
-#include <charconv>
-#include <cmath>
-#include <concepts>
-#include <cstddef>
-#include <cstdint>
-#include <cstring>
-#include <exception>
-#include <limits>
-#include <optional>
-#include <span>
-#include <stdexcept>
-#include <string_view>
-#include <system_error>
-#include <utility>
-#include <variant>
-
+import std;
+import telar.gui.qt;
+import telar.gui.qt.platform;
+import telar.gui.ui.app.panes.terminal;
+import telar.gui.ui.kit.input;
+import telar.gui.ui.kit.store;
 import telar.gui.application;
 import telar.base.ds;
 import telar.gui.foundation.core;
@@ -288,7 +246,7 @@ namespace telar::gui::qt {
       }
     } catch (const std::exception& error) {
       cancel();
-      emit failed(QString::fromUtf8(error.what()));
+      failed(QString::fromUtf8(error.what()));
 
       return true;
     }

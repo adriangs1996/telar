@@ -1,69 +1,21 @@
-#ifdef __clangd__
-// Keep textual ABI declarations and module imports in one clangd parse.
-static_assert(true);
-#endif
+module telar.gui.ui.app;
 
-#include "window_commands.hpp"
-#include "activity_selection.hpp"
-#include "dialogs.hpp"
-#include "key_bindings.hpp"
-#include "machines_coordinator.hpp"
-#include "ui/app/chrome/components/components_controller.hpp"
-#include "ui/app/overlays/machine_prompt/machine_profiles_source.hpp"
-#include "ui/app/overlays/notifications/notifications_controller.hpp"
-#include "ui/app/overlays/palette/palette_controller.hpp"
-#include "ui/app/overlays/workspace_form/workspace_form_controller.hpp"
-#include "ui/app/panes/attachments/attachments_controller.hpp"
-#include "ui/app/panes/terminal/copy_controller.hpp"
-#include "ui/app/panes/terminal/history/history_controller.hpp"
-#include "ui/app/panes/terminal/prompt/prompt_controller.hpp"
-#include "ui/app/panes/terminal/terminal_controller.hpp"
-#include "ui/design/controls/native_form_field.hpp"
-#include "ui/design/elements/element_slots.hpp"
-#include "ui/kit/config/configuration_source.hpp"
-#include "ui/kit/links/links_controller.hpp"
-#include "window_display.hpp"
-#include "window_status.hpp"
-#include <QScopeGuard>
-#include <algorithm>
-#include <array>
-#include <cstddef>
-#include <cstdint>
-#include <cstdio>
-#include <cstring>
-#include <exception>
-#include <initializer_list>
-#include <optional>
-#include <span>
-#include <stdexcept>
-#include <string_view>
-#include <utility>
-#include <variant>
-
-#include "platform/window.hpp"
-#include "ui/kit/models/projection.hpp"
-#include <QString>
-#include <QStringLiteral>
-#include <QVariantList>
-#include <QVariantMap>
-#include <QtCore/qchar.h>
-#include <QtCore/qcontainerfwd.h>
-#include <QtCore/qcoreevent.h>
-#include <QtCore/qnamespace.h>
-#include <QtCore/qobject.h>
-#include <QtCore/qtmetamacros.h>
-#include <QtCore/qtypes.h>
-#include <QtGui/qevent.h>
-#include <QtQuick/qquickitem.h>
-
+import std;
+import telar.gui.qt;
+import telar.gui.qt.platform;
+import telar.gui.ui.app.chrome.components;
+import telar.gui.ui.design.controls;
+import telar.gui.ui.design.elements;
+import telar.gui.ui.kit.config;
+import telar.gui.ui.kit.models;
 import telar.gui.application;
-
 import telar.config.client;
 import telar.wire.vocabulary;
 import telar.base.ds;
 import telar.base.text.utf8;
 
 namespace telar::gui::qt {
+  using Qt::StringLiterals::operator""_s;
 
   namespace {
 
@@ -391,10 +343,10 @@ namespace telar::gui::qt {
       }
 
       commands.append(QVariantMap{
-          {QStringLiteral("action"), QVariant::fromValue(*action)},
-          {QStringLiteral("label"), toQString(entry.label)},
-          {QStringLiteral("shortcut"), bindingShortcut(entry.action)},
-          {QStringLiteral("destructive"), entry.destructive},
+          {u"action"_s, QVariant::fromValue(*action)},
+          {u"label"_s, toQString(entry.label)},
+          {u"shortcut"_s, bindingShortcut(entry.action)},
+          {u"destructive"_s, entry.destructive},
       });
     }
 
@@ -679,12 +631,12 @@ namespace telar::gui::qt {
   void WindowCommands::executeCommandTab(BindingAction action, const ConfigurationSource::Actions* resolved) {
     const auto command = configuration_source_.commandTab(action, resolved);
     if (!command) {
-      emit notified(QStringLiteral("That command tab expired"));
+      notified(u"That command tab expired"_s);
     } else if (application::nvim::editCommand(store_.sessionMut(), command->argv())) {
       // `telar.action.edit`: the window opened the file itself, without a tab for the command.
       return;
     } else if (application::workbench::createCommandTab(store_.sessionMut(), *command) == application::TabCreationOutcome::busy) {
-      emit notified(QStringLiteral("tabs.one_operation_in_flight: limit 1 tab operation reached"));
+      notified(u"tabs.one_operation_in_flight: limit 1 tab operation reached"_s);
     }
   }
 
@@ -713,7 +665,7 @@ namespace telar::gui::qt {
   void WindowCommands::scrollBinding(application::ScrollDirection direction) {
     application::terminal::input::scroll(store_.sessionMut(), direction);
     if (const auto* pane = store_.session().focusedPane()) {
-      emit terminals_.terminalChanged(pane->id);
+      terminals_.terminalChanged(pane->id);
     }
   }
 
@@ -901,8 +853,8 @@ namespace telar::gui::qt {
 
   void WindowCommands::submitDialog(const QVariantMap& input) {
     interact([&] {
-      const auto name = input.value(QStringLiteral("text")).toString().toUtf8();
-      const auto path = input.value(QStringLiteral("path")).toString().toUtf8();
+      const auto name = input.value(u"text"_s).toString().toUtf8();
+      const auto path = input.value(u"path"_s).toString().toUtf8();
       const std::string_view text{name.constData(), static_cast<std::size_t>(name.size())};
 
       if (store_.dialog().kind == Dialog::new_workspace) {
@@ -963,7 +915,7 @@ namespace telar::gui::qt {
     // The picker of the tab's editor pane, which takes the focus.
     if (const auto source = pickerSource(action)) {
       if (!application::nvim::find(store_.sessionMut(), *source)) {
-        status_.report(QStringLiteral("This tab has no editor pane"));
+        status_.report(u"This tab has no editor pane"_s);
       }
 
       return true;
@@ -1058,7 +1010,7 @@ namespace telar::gui::qt {
 
     // The monitor and its process actions belong to the monitor's controller.
     if (action >= window_actions::Action::monitor && action <= window_actions::Action::process_review_logs) {
-      emit monitorRequested(action);
+      monitorRequested(action);
       return;
     }
 
@@ -1088,12 +1040,12 @@ namespace telar::gui::qt {
     } else if (action == window_actions::Action::copy_mode) {
       if (store_.dialog().kind == Dialog::none && store_.sessionMut().enterBlocks()) {
         prompt_.publish(store_.session().changedPane());
-        emit terminals_.terminalChanged(store_.session().changedPane());
+        terminals_.terminalChanged(store_.session().changedPane());
       } else if (store_.dialog().kind == Dialog::none) {
         static_cast<void>(application::terminal::copy_mode::enter(store_.sessionMut()));
         status_.publish();
         if (const auto& copy = application::terminal::copy_mode::view(store_.session()).state()) {
-          emit terminals_.terminalChanged(copy->pane_id);
+          terminals_.terminalChanged(copy->pane_id);
         }
       }
     } else if (action == window_actions::Action::cancel) {
@@ -1104,12 +1056,12 @@ namespace telar::gui::qt {
   bool WindowCommands::requestOverlay(window_actions::Action action) {
     // The explorer and the theme picker belong to controllers of their own.
     if (action == window_actions::Action::explorer) {
-      emit explorerRequested();
+      explorerRequested();
       return true;
     }
 
     if (action == window_actions::Action::theme_picker) {
-      emit themesRequested();
+      themesRequested();
       return true;
     }
 
@@ -1127,7 +1079,7 @@ namespace telar::gui::qt {
       const auto pane_id = copy->pane_id;
 
       application::terminal::copy_mode::leave(store_.sessionMut());
-      emit terminals_.terminalChanged(pane_id);
+      terminals_.terminalChanged(pane_id);
       status_.publish();
     }
 

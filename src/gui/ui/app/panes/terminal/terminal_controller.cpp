@@ -1,20 +1,9 @@
-#ifdef __clangd__
-// Keep textual ABI declarations and module imports in one clangd parse.
-static_assert(true);
-#endif
+module telar.gui.ui.app.panes.terminal;
 
-#include "terminal_controller.hpp"
-#include "terminal_item.hpp"
-#include "ui/kit/cell_scene/window_images.hpp"
-#include "ui/kit/models/projection.hpp"
-#include <QClipboard>
-#include <QCoreApplication>
-#include <QGuiApplication>
-#include <QtCore/qtypes.h>
-#include <algorithm>
-#include <exception>
-#include <utility>
-
+import std;
+import telar.gui.qt;
+import telar.gui.ui.kit.cell_scene;
+import telar.gui.ui.kit.models;
 import telar.gui.application;
 import telar.gui.foundation.model;
 import telar.base.ds;
@@ -90,7 +79,7 @@ namespace telar::gui::qt {
       session.input(pane_id, {bytes.constData(), static_cast<std::size_t>(bytes.size())}, source);
       delivered = true;
     } catch (const std::exception& error) {
-      emit failed(QString::fromUtf8(error.what()));
+      failed(QString::fromUtf8(error.what()));
     }
 
     if (previous != 0 && !application::terminal::copy_mode::view(session).state()) {
@@ -106,7 +95,7 @@ namespace telar::gui::qt {
 
       store_.sessionMut().paste(pane_id, {bytes.constData(), static_cast<std::size_t>(bytes.size())});
     } catch (const std::exception& error) {
-      emit failed(QString::fromUtf8(error.what()));
+      failed(QString::fromUtf8(error.what()));
     }
 
     prompt_.publishWrite();
@@ -116,7 +105,7 @@ namespace telar::gui::qt {
     try {
       store_.sessionMut().resize(pane_id, size);
     } catch (const std::exception& error) {
-      emit failed(QString::fromUtf8(error.what()));
+      failed(QString::fromUtf8(error.what()));
     }
   }
 
@@ -124,7 +113,7 @@ namespace telar::gui::qt {
     try {
       store_.sessionMut().scroll(delta);
     } catch (const std::exception& error) {
-      emit failed(QString::fromUtf8(error.what()));
+      failed(QString::fromUtf8(error.what()));
     }
   }
 
@@ -132,7 +121,7 @@ namespace telar::gui::qt {
     try {
       store_.sessionMut().scrollToRow(pane_id, row);
     } catch (const std::exception& error) {
-      emit failed(QString::fromUtf8(error.what()));
+      failed(QString::fromUtf8(error.what()));
     }
   }
 
@@ -142,7 +131,7 @@ namespace telar::gui::qt {
     try {
       static_cast<void>(session.copyBlock({.pane_id = pane_id, .index = index}, what));
     } catch (const std::exception& error) {
-      emit failed(QString::fromUtf8(error.what()));
+      failed(QString::fromUtf8(error.what()));
     }
 
     // A command copied from the block's own text, not its rows, is written here.
@@ -150,89 +139,89 @@ namespace telar::gui::qt {
       QGuiApplication::clipboard()->setText(toQString(session.clipboard()));
     }
 
-    emit terminalChanged(pane_id);
+    terminalChanged(pane_id);
   }
 
   void TerminalController::stepBlock(std::uint64_t pane_id, application::BlockStep direction) {
     try {
       store_.sessionMut().stepBlockFromWindow(pane_id, direction);
     } catch (const std::exception& error) {
-      emit failed(QString::fromUtf8(error.what()));
+      failed(QString::fromUtf8(error.what()));
     }
 
     prompt_.publish(pane_id);
-    emit terminalChanged(pane_id);
+    terminalChanged(pane_id);
   }
 
   void TerminalController::reuseBlock(std::uint64_t pane_id, std::size_t index, application::BlockReuse how) {
     try {
       static_cast<void>(store_.sessionMut().reuseBlock({.pane_id = pane_id, .index = index}, how));
     } catch (const std::exception& error) {
-      emit failed(QString::fromUtf8(error.what()));
+      failed(QString::fromUtf8(error.what()));
     }
 
     prompt_.publishWrite();
     prompt_.publish(pane_id);
-    emit terminalChanged(pane_id);
+    terminalChanged(pane_id);
   }
 
   void TerminalController::reuseRestored(std::uint64_t pane_id, std::size_t index, application::BlockReuse how) {
     try {
       static_cast<void>(store_.sessionMut().reuseRestored(pane_id, index, how));
     } catch (const std::exception& error) {
-      emit failed(QString::fromUtf8(error.what()));
+      failed(QString::fromUtf8(error.what()));
     }
 
     prompt_.publishWrite();
     prompt_.publish(pane_id);
-    emit terminalChanged(pane_id);
+    terminalChanged(pane_id);
   }
 
   void TerminalController::openFilter(std::uint64_t pane_id, std::size_t index) {
     try {
       static_cast<void>(application::terminal::filter::open(store_.sessionMut(), {.pane_id = pane_id, .index = index}));
     } catch (const std::exception& error) {
-      emit failed(QString::fromUtf8(error.what()));
+      failed(QString::fromUtf8(error.what()));
     }
 
-    emit terminalChanged(pane_id);
+    terminalChanged(pane_id);
   }
 
   void TerminalController::queryFilter(std::uint64_t pane_id, const application::terminal::filter::Query& query) {
     try {
       static_cast<void>(application::terminal::filter::query(store_.sessionMut(), query));
     } catch (const std::exception& error) {
-      emit failed(QString::fromUtf8(error.what()));
+      failed(QString::fromUtf8(error.what()));
     }
 
-    emit terminalChanged(pane_id);
+    terminalChanged(pane_id);
   }
 
   void TerminalController::closeFilter(std::uint64_t pane_id) {
     try {
       application::terminal::filter::close(store_.sessionMut());
     } catch (const std::exception& error) {
-      emit failed(QString::fromUtf8(error.what()));
+      failed(QString::fromUtf8(error.what()));
     }
 
-    emit terminalChanged(pane_id);
+    terminalChanged(pane_id);
   }
 
   void TerminalController::selectBlock(std::uint64_t pane_id, ds::Option<std::size_t> index, bool typing_leaves) {
     try {
       store_.sessionMut().selectBlock(pane_id, index, typing_leaves);
     } catch (const std::exception& error) {
-      emit failed(QString::fromUtf8(error.what()));
+      failed(QString::fromUtf8(error.what()));
     }
 
     prompt_.publish(pane_id);
-    emit terminalChanged(pane_id);
+    terminalChanged(pane_id);
   }
 
   void TerminalController::observePointerModifiers(Qt::KeyboardModifiers modifiers) {
     if (pointer_modifiers_ != modifiers) {
       pointer_modifiers_ = modifiers;
-      emit pointerModifiersChanged();
+      pointerModifiersChanged();
     }
   }
 
@@ -267,13 +256,13 @@ namespace telar::gui::qt {
 
     if (const auto reach = WindowImages::forWindow(*window_).preparePlacements(std::span{sources}.first(count))) {
       application::notifications::reportLimit(session, *reach);
-      emit notificationPublished();
+      notificationPublished();
     }
   }
 
   void TerminalController::releaseInput(std::uint64_t pane_id) {
     cancelPane(pane_id);
-    emit inputReleasing(pane_id);
+    inputReleasing(pane_id);
   }
 
   TerminalController::Capture* TerminalController::capture(Qt::MouseButton button) noexcept {

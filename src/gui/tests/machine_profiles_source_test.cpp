@@ -4,7 +4,6 @@ static_assert(true);
 #endif
 
 #include "assertions.hpp"
-#include "ui/app/overlays/machine_prompt/machine_profiles_source.hpp"
 #include <QCoreApplication>
 #include <QElapsedTimer>
 #include <QFile>
@@ -34,6 +33,8 @@ import telar.gui.foundation.system;
 import telar.base.ds;
 import telar.gui.foundation.core;
 import telar.wire.vocabulary;
+import telar.gui.ui.app.overlays.machine_prompt.machine_profiles_source;
+import telar.gui.qt;
 
 namespace {
 
@@ -60,21 +61,27 @@ namespace {
     return QString::fromUtf8(text.data(), static_cast<qsizetype>(text.size()));
   }
 
-  class MachineProfilesSourceTest final : public QObject {
-    Q_OBJECT
+  class [[qt::object]] MachineProfilesSourceTest final : public QObject {
+  public:
+    static const QMetaObject staticMetaObject;
+    const QMetaObject* metaObject() const override;
+    void* qt_metacast(const char* name) override;
+    int qt_metacall(QMetaObject::Call call, int id, void** args) override;
+    static void qt_static_metacall(QObject* object, QMetaObject::Call call, int id, void** args);
 
+  private:
   private:
     // A machine is added by pairing with its gateway, so the program that pairs is a stand-in
     // found on PATH for the whole test.
     QTemporaryDir programs_;
 
-    Q_SLOT void initTestCase() {
+    [[qt::slot]] void initTestCase() {
       QVERIFY(programs_.isValid());
       QVERIFY(QFile::link(QCoreApplication::applicationDirPath() + QStringLiteral("/gui-gateway-runtime-fixture"), programs_.filePath(QStringLiteral("telar-gateway"))));
       QVERIFY(qputenv("PATH", programs_.path().toUtf8() + ":" + qgetenv("PATH")));
     }
 
-    Q_SLOT static void loadsMissingProfilesAndPollsExternalReplacements() {
+    [[qt::slot]] static void loadsMissingProfilesAndPollsExternalReplacements() {
       const QTemporaryDir directory;
 
       QVERIFY(directory.isValid());
@@ -104,7 +111,7 @@ namespace {
       QCOMPARE(source.revision(), unchanged_revision);
     }
 
-    Q_SLOT static void copiesPendingEditsAndRefusesAnotherConcurrentEdit() {
+    [[qt::slot]] static void copiesPendingEditsAndRefusesAnotherConcurrentEdit() {
       const QTemporaryDir directory;
 
       QVERIFY(directory.isValid());
@@ -146,7 +153,7 @@ namespace {
       QVERIFY(source.error().isEmpty());
     }
 
-    Q_SLOT static void recoversAfterAnUnreadableFileAndRetainsTheLastValidProfiles() {
+    [[qt::slot]] static void recoversAfterAnUnreadableFileAndRetainsTheLastValidProfiles() {
       const QTemporaryDir directory;
 
       QVERIFY(directory.isValid());
@@ -177,7 +184,7 @@ namespace {
       QVERIFY(source.error().isEmpty());
     }
 
-    Q_SLOT static void savingForcesAReadEvenWhenAnotherWriterRestoresTheOldStamp() {
+    [[qt::slot]] static void savingForcesAReadEvenWhenAnotherWriterRestoresTheOldStamp() {
       const QTemporaryDir directory;
 
       QVERIFY(directory.isValid());
@@ -223,7 +230,7 @@ namespace {
       QCOMPARE(fromText(source.profiles().rows().front().label()), QStringLiteral("third"));
     }
 
-    Q_SLOT static void shutdownCancelsAnEditWaitingForAnotherWriter() {
+    [[qt::slot]] static void shutdownCancelsAnEditWaitingForAnotherWriter() {
       const QTemporaryDir directory;
 
       QVERIFY(directory.isValid());
@@ -248,7 +255,7 @@ namespace {
       QVERIFY(!file.read(memory).hasValue());
     }
 
-    Q_SLOT static void reopeningIgnoresThePreviousWorkerAndSupportsReentrantChanges() {
+    [[qt::slot]] static void reopeningIgnoresThePreviousWorkerAndSupportsReentrantChanges() {
       const QTemporaryDir directory;
 
       QVERIFY(directory.isValid());
@@ -279,4 +286,6 @@ namespace {
 }
 
 QTEST_GUILESS_MAIN(MachineProfilesSourceTest)
+#ifndef TELAR_MOC_RUN
 #include "machine_profiles_source_test.moc"
+#endif

@@ -1,42 +1,17 @@
-#ifdef __clangd__
-// Keep textual ABI declarations and module imports in one clangd parse.
-static_assert(true);
-#endif
+module telar.gui.ui.app.panes.terminal;
 
-#include "terminal_item.hpp"
-#include "ui/app/panes/terminal/links/link_preview.hpp"
-#include "ui/kit/input/key_adapter.hpp"
-#include "ui/kit/models/projection.hpp"
-#include <QClipboard>
-#include <QGuiApplication>
-#include <QHoverEvent>
-#include <QMouseEvent>
-#include <QPointF>
-#include <QtCore/qcontainerfwd.h>
-#include <QtCore/qnamespace.h>
-#include <QtCore/qstring.h>
-#include <QtCore/qtmetamacros.h>
-#include <QtCore/qtypes.h>
-#include <QtQuick/qquickwindow.h>
-#include <algorithm>
-#include <array>
-#include <bit>
-#include <cmath>
-#include <cstddef>
-#include <cstdint>
-#include <exception>
-#include <memory>
-#include <optional>
-#include <span>
-#include <string_view>
-#include <utility>
-
+import std;
+import telar.gui.qt;
+import telar.gui.ui.app.panes.terminal.links;
+import telar.gui.ui.kit.input;
+import telar.gui.ui.kit.models;
 import telar.gui.foundation.terminal;
 import telar.gui.application;
 import telar.base.ds;
 import telar.wire.vocabulary;
 
 namespace telar::gui::qt {
+  using Qt::StringLiterals::operator""_s;
 
   TerminalSurface TerminalItem::terminalSurface() const {
     const auto bounds = mapRectToScene(boundingRect());
@@ -295,7 +270,7 @@ namespace telar::gui::qt {
     setCursor(resolved.affordance == application::terminal::links::LinkAffordance::text ? Qt::IBeamCursor : Qt::PointingHandCursor);
     if (changed || rebuild_preview) {
       link_preview_ = link_hover_.current() ? LinkPreview::layout(*link_hover_.current(), surface, font_.faces.front(), controller_->chromeRatio()) : ds::none;
-      emit linkHoverChanged();
+      linkHoverChanged();
       update();
     }
   }
@@ -310,7 +285,7 @@ namespace telar::gui::qt {
     link_preview_.reset();
     setCursor(Qt::IBeamCursor);
     if (changed) {
-      emit linkHoverChanged();
+      linkHoverChanged();
       update();
     }
   }
@@ -326,7 +301,7 @@ namespace telar::gui::qt {
 
     const auto& preview = *link_preview_;
 
-    return {{QStringLiteral("visible"), true}, {QStringLiteral("x"), preview.bounds.x()}, {QStringLiteral("y"), preview.bounds.y()}, {QStringLiteral("width"), preview.bounds.width()}, {QStringLiteral("height"), preview.bounds.height()}, {QStringLiteral("lines"), preview.lines}, {QStringLiteral("font"), preview.font}, {QStringLiteral("inset"), preview.inset}, {QStringLiteral("rowHeight"), preview.row_height}, {QStringLiteral("radius"), preview.corner_radius}};
+    return {{u"visible"_s, true}, {u"x"_s, preview.bounds.x()}, {u"y"_s, preview.bounds.y()}, {u"width"_s, preview.bounds.width()}, {u"height"_s, preview.bounds.height()}, {u"lines"_s, preview.lines}, {u"font"_s, preview.font}, {u"inset"_s, preview.inset}, {u"rowHeight"_s, preview.row_height}, {u"radius"_s, preview.corner_radius}};
   }
 
   void TerminalItem::setLinkPreviewBounds(const QRectF& bounds) {

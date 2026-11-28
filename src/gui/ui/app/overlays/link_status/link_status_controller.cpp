@@ -1,17 +1,13 @@
-#ifdef __clangd__
-// Keep textual ABI declarations and module imports in one clangd parse.
-static_assert(true);
-#endif
+module telar.gui.ui.app.overlays.link_status;
 
-#include "link_status_controller.hpp"
-#include "ui/kit/models/projection.hpp"
-#include <QString>
-#include <optional>
-#include <string_view>
-
+import std;
+import telar.gui.qt;
+import telar.gui.ui.kit.models;
 import telar.gui.application;
+import telar.gui.foundation.core;
 
 namespace telar::gui::qt {
+  using Qt::StringLiterals::operator""_s;
 
   LinkStatusController::LinkStatusController(Store& store, QObject* parent)
       : QObject(parent),
@@ -21,7 +17,7 @@ namespace telar::gui::qt {
     const auto& link = store_.connection().link();
     const auto detail = link.failure().valueOr(std::string_view{});
 
-    return {{QStringLiteral("visible"), link.phase != application::machines::MachinePhase::connected}, {QStringLiteral("headline"), toQString(link.headline().view())}, {QStringLiteral("detail"), toQString(detail)}, {QStringLiteral("hasDetail"), link.failure().hasValue()}, {QStringLiteral("dimAlpha"), application::terminal::links::LinkStatusGeometry::dim_alpha}};
+    return {{u"visible"_s, link.phase != application::machines::MachinePhase::connected}, {u"headline"_s, toQString(link.headline().view())}, {u"detail"_s, toQString(detail)}, {u"hasDetail"_s, link.failure().hasValue()}, {u"dimAlpha"_s, application::terminal::links::LinkStatusGeometry::dim_alpha}};
   }
 
   QVariantMap LinkStatusController::geometry() const {
@@ -39,16 +35,16 @@ namespace telar::gui::qt {
       return toQRectF(region, density);
     };
 
-    return {{QStringLiteral("bounds"), toQRectF(geometry.bounds, density)}, {QStringLiteral("headline"), local(geometry.headline)}, {QStringLiteral("detail"), local(geometry.detail)}};
+    return {{u"bounds"_s, toQRectF(geometry.bounds, density)}, {u"headline"_s, local(geometry.headline)}, {u"detail"_s, local(geometry.detail)}};
   }
 
   void LinkStatusController::publish() {
-    emit changed();
+    changed();
   }
 
   void LinkStatusController::setDisplay(const application::window::DisplayMetrics& display) {
     display_ = display;
-    emit changed();
+    changed();
   }
 
 }

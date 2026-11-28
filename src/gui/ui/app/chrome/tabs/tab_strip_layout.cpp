@@ -1,41 +1,10 @@
-#ifdef __clangd__
-// Keep textual ABI declarations and module imports in one clangd parse.
-static_assert(true);
-#endif
+module telar.gui.ui.app.chrome.tabs;
 
-#include "tab_strip_layout.hpp"
-#include "ui/kit/fonts/chrome_fonts.hpp"
-#include "ui/kit/models/list_model.hpp"
-#include "ui/kit/scene/window_animation_clock.hpp"
-#include <QAbstractItemModel>
-#include <QByteArray>
-#include <QFont>
-#include <QFontMetricsF>
-#include <QList>
-#include <QObject>
-#include <QQuickItem>
-#include <QQuickWindow>
-#include <QVariant>
-#include <QVariantMap>
-#include <QtCore/qcontainerfwd.h>
-#include <QtCore/qstring.h>
-#include <QtCore/qstringliteral.h>
-#include <QtCore/qtmetamacros.h>
-#include <QtCore/qtypes.h>
-#include <algorithm>
-#include <array>
-#include <cmath>
-#include <cstddef>
-#include <cstdint>
-#include <cstring>
-#include <exception>
-#include <functional>
-#include <limits>
-#include <optional>
-#include <span>
-#include <string_view>
-#include <utility>
-
+import std;
+import telar.gui.qt;
+import telar.gui.ui.kit.fonts;
+import telar.gui.ui.kit.models;
+import telar.gui.ui.kit.scene;
 import telar.gui.foundation.core;
 import telar.gui.foundation.drawing;
 import telar.gui.foundation.model;
@@ -44,6 +13,7 @@ import telar.base.ds;
 import telar.wire.vocabulary;
 
 namespace telar::gui::qt {
+  using Qt::StringLiterals::operator""_s;
 
   namespace {
 
@@ -51,7 +21,7 @@ namespace telar::gui::qt {
 
     void previewOrder(std::span<std::size_t> order, const QList<QVariantMap>& records, const application::workbench::TabDragMove& move) {
       const auto id_at = [&](std::size_t index) {
-        return records[static_cast<qsizetype>(index)].value(QStringLiteral("key")).toString().toULongLong();
+        return records[static_cast<qsizetype>(index)].value(u"key"_s).toString().toULongLong();
       };
 
       const auto source = std::ranges::find(order, move.location.tab_id, id_at);
@@ -81,14 +51,14 @@ namespace telar::gui::qt {
       const auto caption_width = std::max(0.0F, caption_right - caption_left);
 
       return {
-          {QStringLiteral("key"), tab.value(QStringLiteral("key"))},
-          {QStringLiteral("tab"), tab},
-          {QStringLiteral("bounds"), bounds},
-          {QStringLiteral("chip"), chip},
-          {QStringLiteral("caption"), QRectF{static_cast<qreal>(caption_left), 0, static_cast<qreal>(caption_width), static_cast<qreal>(height)}},
-          {QStringLiteral("status"), QRectF{static_cast<qreal>(status_right - size.status), 0, static_cast<qreal>(size.status), bounds.height()}},
-          {QStringLiteral("compact"), fit == Geometry::Fit::compact},
-          {QStringLiteral("truncated"), fit != Geometry::Fit::compact && size.caption > caption_width},
+          {u"key"_s, tab.value(u"key"_s)},
+          {u"tab"_s, tab},
+          {u"bounds"_s, bounds},
+          {u"chip"_s, chip},
+          {u"caption"_s, QRectF{static_cast<qreal>(caption_left), 0, static_cast<qreal>(caption_width), static_cast<qreal>(height)}},
+          {u"status"_s, QRectF{static_cast<qreal>(status_right - size.status), 0, static_cast<qreal>(size.status), bounds.height()}},
+          {u"compact"_s, fit == Geometry::Fit::compact},
+          {u"truncated"_s, fit != Geometry::Fit::compact && size.caption > caption_width},
       };
     }
 
@@ -97,7 +67,7 @@ namespace telar::gui::qt {
 
       for (qsizetype index = 0; index < records.size(); ++index) {
         if (!plan.shows(static_cast<std::size_t>(index))) {
-          const auto color = records[index].value(QStringLiteral("attentionColor")).toString();
+          const auto color = records[index].value(u"attentionColor"_s).toString();
           if (!color.isEmpty()) {
             attention = color;
           }
@@ -128,7 +98,7 @@ namespace telar::gui::qt {
   void TabStripLayout::setPointerHover(ds::Option<std::uint64_t> tab) {
     if (hovered_tab_ != tab) {
       hovered_tab_ = tab;
-      emit pointerHoverChanged();
+      pointerHoverChanged();
     }
   }
 
@@ -279,7 +249,7 @@ namespace telar::gui::qt {
           connect(model, &QAbstractItemModel::modelReset, this, changed),
           connect(model, &QObject::destroyed, this, [this] {
             model_ = nullptr;
-            emit modelChanged();
+            modelChanged();
             polish();
           }),
       };
@@ -287,14 +257,14 @@ namespace telar::gui::qt {
 
     anchor_.clear();
     selection_motion_.reset();
-    emit modelChanged();
+    modelChanged();
     polish();
   }
 
   void TabStripLayout::setFont(const QFont& font) {
     if (font_ != font) {
       font_ = font;
-      emit fontChanged();
+      fontChanged();
       polish();
     }
   }
@@ -302,7 +272,7 @@ namespace telar::gui::qt {
   void TabStripLayout::setPixelSize(qreal size) {
     if (std::isfinite(size) && size > 0 && size <= static_cast<qreal>(ChromeMetrics::maximum_text) && std::not_equal_to<>{}(pixel_size_, size)) {
       pixel_size_ = size;
-      emit fontChanged();
+      fontChanged();
       polish();
     }
   }
@@ -311,7 +281,7 @@ namespace telar::gui::qt {
     constexpr auto maximum_ratio = std::numeric_limits<float>::max() / Geometry::selected_maximum;
     if (std::isfinite(ratio) && ratio > 0 && ratio <= static_cast<qreal>(maximum_ratio) && std::not_equal_to<>{}(ratio_, ratio)) {
       ratio_ = ratio;
-      emit ratioChanged();
+      ratioChanged();
       polish();
     }
   }
@@ -319,7 +289,7 @@ namespace telar::gui::qt {
   void TabStripLayout::setHovered(bool hovered) {
     if (hovered_ != hovered) {
       hovered_ = hovered;
-      emit hoveredChanged();
+      hoveredChanged();
       polish();
     }
   }
@@ -331,19 +301,19 @@ namespace telar::gui::qt {
   void TabStripLayout::setPlus(const QRectF& plus) {
     if (plus_ != plus) {
       plus_ = plus;
-      emit plusChanged();
+      plusChanged();
     }
   }
 
   QVariantMap TabStripLayout::style() const {
     return {
-        {QStringLiteral("pillRadius"), static_cast<qreal>(Geometry::pill_radius) * ratio_},
-        {QStringLiteral("tileWidth"), static_cast<qreal>(Geometry::tile_width) * ratio_},
-        {QStringLiteral("tileHeight"), static_cast<qreal>(Geometry::tile_height) * ratio_},
-        {QStringLiteral("tileRadius"), static_cast<qreal>(Geometry::tile_radius) * ratio_},
-        {QStringLiteral("pathGap"), static_cast<qreal>(Geometry::path_gap) * ratio_},
-        {QStringLiteral("markSide"), static_cast<qreal>(Geometry::mark_side) * ratio_},
-        {QStringLiteral("fadeWidth"), static_cast<qreal>(Geometry::fade_width) * ratio_},
+        {u"pillRadius"_s, static_cast<qreal>(Geometry::pill_radius) * ratio_},
+        {u"tileWidth"_s, static_cast<qreal>(Geometry::tile_width) * ratio_},
+        {u"tileHeight"_s, static_cast<qreal>(Geometry::tile_height) * ratio_},
+        {u"tileRadius"_s, static_cast<qreal>(Geometry::tile_radius) * ratio_},
+        {u"pathGap"_s, static_cast<qreal>(Geometry::path_gap) * ratio_},
+        {u"markSide"_s, static_cast<qreal>(Geometry::mark_side) * ratio_},
+        {u"fadeWidth"_s, static_cast<qreal>(Geometry::fade_width) * ratio_},
     };
   }
 
@@ -385,7 +355,7 @@ namespace telar::gui::qt {
 
   float TabStripLayout::captionAdvance(const QString& label) {
     const auto requested_size = pixel_size_ > 0 ? pixel_size_ : font_.pixelSize();
-    if (requested_size > 0 && font_.family() == QStringLiteral("IBM Plex Sans") && font_.weight() == QFont::Normal && !font_.italic()) {
+    if (requested_size > 0 && font_.family() == u"IBM Plex Sans"_s && font_.weight() == QFont::Normal && !font_.italic()) {
       try {
         if (!fonts_) {
           fonts_ = ChromeFonts::shared();
@@ -418,20 +388,20 @@ namespace telar::gui::qt {
     for (int index = 0; index < count; ++index) {
       auto record = model_->data(model_->index(index, 0), ListModel::record_role).toMap();
 
-      record.insert(QStringLiteral("number"), index + 1);
+      record.insert(u"number"_s, index + 1);
       const auto slot = static_cast<std::size_t>(index);
-      const auto kind = record.value(QStringLiteral("activityKind")).toInt();
-      const auto status_width = kind == static_cast<int>(application::activity::TabActivity::Kind::progress) ? ProgressGeometry::compactWidth(ratio) : record.value(QStringLiteral("statusWidth")).toFloat() * ratio;
-      const auto title = record.value(QStringLiteral("title"), record.value(QStringLiteral("label"))).toString();
-      const auto path = record.value(QStringLiteral("path")).toString();
-      const auto stacked = std::min(static_cast<std::size_t>(std::max<qsizetype>(record.value(QStringLiteral("cards")).toList().size(), 1)), Geometry::chip_widths.size());
+      const auto kind = record.value(u"activityKind"_s).toInt();
+      const auto status_width = kind == static_cast<int>(application::activity::TabActivity::Kind::progress) ? ProgressGeometry::compactWidth(ratio) : record.value(u"statusWidth"_s).toFloat() * ratio;
+      const auto title = record.value(u"title"_s, record.value(u"label"_s)).toString();
+      const auto path = record.value(u"path"_s).toString();
+      const auto stacked = std::min(static_cast<std::size_t>(std::max<qsizetype>(record.value(u"cards"_s).toList().size(), 1)), Geometry::chip_widths.size());
       const auto caption = captionAdvance(title) + (path.isEmpty() ? 0 : (Geometry::path_gap * ratio) + captionAdvance(path));
 
       sizes[slot] = {.caption = caption, .chip = Geometry::chip_widths[stacked - 1] * ratio, .status = status_width};
       // A mod tab that sets a root width takes exactly that width.
-      const auto drawn = record.value(QStringLiteral("elements")).toMap().value(QStringLiteral("tab")).toMap().value(QStringLiteral("nodes")).toList();
+      const auto drawn = record.value(u"elements"_s).toMap().value(u"tab"_s).toMap().value(u"nodes"_s).toList();
       if (!drawn.isEmpty()) {
-        const auto width = drawn.front().toMap().value(QStringLiteral("width")).toFloat();
+        const auto width = drawn.front().toMap().value(u"width"_s).toFloat();
         if (width >= 0) {
           const auto metrics = Geometry::Metrics::scaled(ratio);
 
@@ -439,11 +409,11 @@ namespace telar::gui::qt {
         }
       }
 
-      if (record.value(QStringLiteral("selected")).toBool()) {
+      if (record.value(u"selected"_s).toBool()) {
         active = slot;
       }
 
-      if (record.value(QStringLiteral("key")).toString() == anchor_) {
+      if (record.value(u"key"_s).toString() == anchor_) {
         focus = slot;
         anchored = true;
       }
@@ -493,7 +463,7 @@ namespace telar::gui::qt {
   }
 
   QVariantList TabStripLayout::placeCards(const QVariantMap& tab, application::workbench::TabMotionFrame& frame) {
-    const auto source = tab.value(QStringLiteral("cards")).toList();
+    const auto source = tab.value(u"cards"_s).toList();
     ds::Array<application::workbench::TabCardInput, PaneLayout::maximum_panes> inputs{};
     std::size_t count = 0;
 
@@ -504,7 +474,7 @@ namespace telar::gui::qt {
 
       const auto card = entry.toMap();
 
-      inputs.atMut(count++) = {.pane = card.value(QStringLiteral("key")).toString().toULongLong(), .focused = card.value(QStringLiteral("focused")).toBool(), .attention = !card.value(QStringLiteral("attentionColor")).toString().isEmpty()};
+      inputs.atMut(count++) = {.pane = card.value(u"key"_s).toString().toULongLong(), .focused = card.value(u"focused"_s).toBool(), .attention = !card.value(u"attentionColor"_s).toString().isEmpty()};
     }
 
     ds::Array<application::workbench::TabCardPlacement, application::workbench::TabCardMotions::maximum_cards> placed{};
@@ -519,17 +489,17 @@ namespace telar::gui::qt {
 
     for (const auto& card : std::span{placed}.first(written)) {
       const auto row = std::ranges::find(source, card.pane, [](const QVariant& entry) {
-        return entry.toMap().value(QStringLiteral("key")).toString().toULongLong();
+        return entry.toMap().value(u"key"_s).toString().toULongLong();
       });
 
       auto record = row->toMap();
 
-      record.insert(QStringLiteral("x"), static_cast<qreal>(card.pose.x) * ratio_);
-      record.insert(QStringLiteral("y"), static_cast<qreal>(card.pose.y) * ratio_);
-      record.insert(QStringLiteral("rotation"), card.pose.rotation);
-      record.insert(QStringLiteral("scale"), card.pose.scale);
-      record.insert(QStringLiteral("rank"), static_cast<qulonglong>(card.rank));
-      record.insert(QStringLiteral("layer"), card.lifted ? static_cast<int>(application::workbench::TabCardMotions::maximum_cards) : static_cast<int>(application::workbench::TabCardMotions::maximum_cards - 1 - card.rank));
+      record.insert(u"x"_s, static_cast<qreal>(card.pose.x) * ratio_);
+      record.insert(u"y"_s, static_cast<qreal>(card.pose.y) * ratio_);
+      record.insert(u"rotation"_s, card.pose.rotation);
+      record.insert(u"scale"_s, card.pose.scale);
+      record.insert(u"rank"_s, static_cast<qulonglong>(card.rank));
+      record.insert(u"layer"_s, card.lifted ? static_cast<int>(application::workbench::TabCardMotions::maximum_cards) : static_cast<int>(application::workbench::TabCardMotions::maximum_cards - 1 - card.rank));
       cards.append(std::move(record));
     }
 
@@ -558,7 +528,7 @@ namespace telar::gui::qt {
     drop_slot_count_ = 0;
     counter_.clear();
     items_.reconcile({});
-    emit layoutChanged();
+    layoutChanged();
   }
 
   float TabStripLayout::placeCounter(const QList<QVariantMap>& records, const application::workbench::TabStripGeometry::Plan& plan, const application::workbench::TabStripGeometry::Metrics& metrics, StripRow row, float left) {
@@ -573,13 +543,13 @@ namespace telar::gui::qt {
     const auto attention = hiddenAttention(records, plan);
 
     counter_ = {
-        {QStringLiteral("bounds"), QRectF{static_cast<qreal>(left), static_cast<qreal>(row.top), static_cast<qreal>(counter_width), static_cast<qreal>(row.height)}},
-        {QStringLiteral("count"), static_cast<qulonglong>(plan.hidden())},
-        {QStringLiteral("attentionColor"), attention},
-        {QStringLiteral("key"), records[static_cast<qsizetype>(*nearest)].value(QStringLiteral("key"))},
+        {u"bounds"_s, QRectF{static_cast<qreal>(left), static_cast<qreal>(row.top), static_cast<qreal>(counter_width), static_cast<qreal>(row.height)}},
+        {u"count"_s, static_cast<qulonglong>(plan.hidden())},
+        {u"attentionColor"_s, attention},
+        {u"key"_s, records[static_cast<qsizetype>(*nearest)].value(u"key"_s)},
     };
 
-    const auto id = records[static_cast<qsizetype>(*nearest)].value(QStringLiteral("key")).toString().toULongLong();
+    const auto id = records[static_cast<qsizetype>(*nearest)].value(u"key"_s).toString().toULongLong();
 
     drop_slots_.atMut(drop_slot_count_++) = {.id = id, .bounds = {.x = left, .y = row.top, .width = counter_width, .height = row.height}};
 
@@ -670,12 +640,12 @@ namespace telar::gui::qt {
 
       QRectF bounds{static_cast<qreal>(left), static_cast<qreal>(top), static_cast<qreal>(plan.widths[index]), static_cast<qreal>(height)};
       const auto& record = records.at(static_cast<qsizetype>(index));
-      const auto id = record.value(QStringLiteral("key")).toString().toULongLong();
+      const auto id = record.value(u"key"_s).toString().toULongLong();
       const auto dragging = dragged_ == id;
       const auto target = bounds;
 
       bounds = placeTab(id, bounds, frame);
-      if (record.value(QStringLiteral("selected")).toBool()) {
+      if (record.value(u"selected"_s).toBool()) {
         const auto selected_bounds = dragging ? bounds : target;
 
         selection = Rect{.x = static_cast<float>(selected_bounds.x() * density), .y = static_cast<float>(selected_bounds.y() * density), .width = static_cast<float>(selected_bounds.width() * density), .height = static_cast<float>(selected_bounds.height() * density)};
@@ -684,9 +654,9 @@ namespace telar::gui::qt {
 
       auto entry = positionedTab(record, sizes[index], bounds, plan.fits[index], metrics);
 
-      entry.insert(QStringLiteral("dragging"), dragging);
-      entry.insert(QStringLiteral("cards"), placeCards(record, frame));
-      entry.insert(QStringLiteral("separator"), position + 1 < shown && !record.value(QStringLiteral("selected")).toBool() && !records.at(static_cast<qsizetype>(order[position + 1])).value(QStringLiteral("selected")).toBool());
+      entry.insert(u"dragging"_s, dragging);
+      entry.insert(u"cards"_s, placeCards(record, frame));
+      entry.insert(u"separator"_s, position + 1 < shown && !record.value(u"selected"_s).toBool() && !records.at(static_cast<qsizetype>(order[position + 1])).value(u"selected"_s).toBool());
       positioned.append(std::move(entry));
       drop_slots_.atMut(drop_slot_count_++) = {.id = id, .bounds = {.x = static_cast<float>(bounds.x()), .y = static_cast<float>(bounds.y()), .width = static_cast<float>(bounds.width()), .height = static_cast<float>(bounds.height())}};
       left += plan.widths[index];
@@ -699,12 +669,12 @@ namespace telar::gui::qt {
     placeSelection(selection, selection_dragging, frame, density);
 
     if (count != 0) {
-      anchor_ = records[static_cast<qsizetype>(plan.focus)].value(QStringLiteral("key")).toString();
+      anchor_ = records[static_cast<qsizetype>(plan.focus)].value(u"key"_s).toString();
     }
 
     finishMotions(frame);
     items_.reconcile(std::move(positioned));
-    emit layoutChanged();
+    layoutChanged();
   }
 
 }

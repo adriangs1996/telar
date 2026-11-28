@@ -1,8 +1,9 @@
-#include "ui/app/panes/nvim/predictive_echo.hpp"
+#include <algorithm>
 #include <array>
 #include <string_view>
 
 import telar.testing;
+import telar.gui.ui.app.panes.nvim;
 
 namespace {
 

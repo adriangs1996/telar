@@ -1,19 +1,16 @@
-#ifdef __clangd__
-// Keep textual ABI declarations and module imports in one clangd parse.
-static_assert(true);
-#endif
+module telar.gui.ui.app.overlays.machine_prompt;
 
-#include "machine_prompt_controller.hpp"
-#include "ui/kit/models/projection.hpp"
-#include "ui/kit/text/utf16_encoding.hpp"
-#include <QByteArray>
-#include <QStringView>
-#include <string_view>
-
+import std;
+import telar.gui.qt;
+import telar.gui.ui.kit.models;
+import telar.gui.ui.kit.text;
 import telar.gui.foundation.forms;
 import telar.gui.application;
+import telar.gui.foundation.core;
+import telar.gui.foundation.text;
 
 namespace telar::gui::qt {
+  using Qt::StringLiterals::operator""_s;
 
   MachinePromptController::MachinePromptController(Store& store, MachineProfilesSource& profiles, QObject* parent)
       : QObject(parent),
@@ -26,7 +23,7 @@ namespace telar::gui::qt {
 
   void MachinePromptController::setDisplay(const application::window::DisplayMetrics& display) {
     display_ = display;
-    emit changed();
+    changed();
   }
 
   void MachinePromptController::forget() noexcept {
@@ -58,7 +55,7 @@ namespace telar::gui::qt {
       prompt_.getMut().text = QString::fromUtf8(prompt_->text.toUtf8());
     }
 
-    emit changed();
+    changed();
     if (measured.bytes < measured.requested_bytes) {
       reportLimit(static_cast<qulonglong>(measured.requested_bytes));
     }
@@ -86,14 +83,14 @@ namespace telar::gui::qt {
     }
 
     prompt_.reset();
-    emit closeRequested();
+    closeRequested();
   }
 
   QVariantMap MachinePromptController::state() const {
     const auto text = prompt_ ? prompt_->text : QString{};
-    const auto title = prompt_ ? QStringLiteral("Rename machine") : QString{};
+    const auto title = prompt_ ? u"Rename machine"_s : QString{};
 
-    return {{QStringLiteral("revision"), QString::number(store_.dialog().generation)}, {QStringLiteral("title"), title}, {QStringLiteral("editorText"), text}, {QStringLiteral("maximumBytes"), static_cast<qulonglong>(limit())}};
+    return {{u"revision"_s, QString::number(store_.dialog().generation)}, {u"title"_s, title}, {u"editorText"_s, text}, {u"maximumBytes"_s, static_cast<qulonglong>(limit())}};
   }
 
   QVariantMap MachinePromptController::geometry() const {
@@ -114,7 +111,7 @@ namespace telar::gui::qt {
       return toQRectF(area, density);
     };
 
-    return {{QStringLiteral("bounds"), toQRectF(bounds, density)}, {QStringLiteral("title"), local(geometry.title)}, {QStringLiteral("field"), local(geometry.field)}, {QStringLiteral("footer"), local(geometry.footer)}};
+    return {{u"bounds"_s, toQRectF(bounds, density)}, {u"title"_s, local(geometry.title)}, {u"field"_s, local(geometry.field)}, {u"footer"_s, local(geometry.footer)}};
   }
 
 }

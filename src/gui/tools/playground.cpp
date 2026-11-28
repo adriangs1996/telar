@@ -4,8 +4,6 @@ static_assert(true);
 #endif
 
 #include "platform/window.hpp"
-#include "ui/app/application_controller.hpp"
-#include "ui/kit/fonts/bundled_fonts.hpp"
 #include <QDir>
 #include <QFileInfo>
 #include <QFileSystemWatcher>
@@ -25,6 +23,8 @@ static_assert(true);
 
 import telar.gui.foundation.core;
 
+import telar.gui.ui.app;
+import telar.gui.ui.kit.fonts;
 // Shows a QML file from disk and shows it again whenever a QML file beside it changes.
 //
 //   gui-playground src/gui/playground/Tiles.qml

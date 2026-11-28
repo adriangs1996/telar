@@ -1,16 +1,9 @@
-#ifdef __clangd__
-// Keep textual ABI declarations and module imports in one clangd parse.
-static_assert(true);
-#endif
+module telar.gui.ui.app.overlays.notifications;
 
-#include "notifications_controller.hpp"
-#include "ui/kit/models/projection.hpp"
-#include "ui/kit/timing/deadline_timer.hpp"
-#include <QLatin1Char>
-#include <QMetaObject>
-#include <exception>
-#include <limits>
-
+import std;
+import telar.gui.qt;
+import telar.gui.ui.kit.models;
+import telar.gui.ui.kit.timing;
 import telar.base.ds;
 
 namespace telar::gui::qt {
@@ -93,7 +86,7 @@ namespace telar::gui::qt {
   void NotificationsController::setDisplay(const application::window::DisplayMetrics& display, TerminalGrid grid) {
     display_ = display;
     grid_ = grid;
-    emit displayChanged();
+    displayChanged();
   }
 
   void NotificationsController::publish(application::notifications::NotificationInput input) {
@@ -104,7 +97,7 @@ namespace telar::gui::qt {
   void NotificationsController::refresh() {
     presented_ = application::notifications::revision(store_.session());
     schedule();
-    emit changed();
+    changed();
   }
 
   void NotificationsController::present() {
@@ -114,7 +107,7 @@ namespace telar::gui::qt {
   }
 
   void NotificationsController::publishView() {
-    emit viewChanged();
+    viewChanged();
   }
 
   void NotificationsController::schedule() {
@@ -127,7 +120,7 @@ namespace telar::gui::qt {
     const auto id = resolve(identity);
     if (id && application::notifications::dismiss(store_.sessionMut(), *id)) {
       refresh();
-      emit focusRestoreRequested();
+      focusRestoreRequested();
     }
   }
 
@@ -144,15 +137,15 @@ namespace telar::gui::qt {
         [&] {
           if (application::notifications::activate(store_.sessionMut(), *id)) {
             if (!link.isEmpty()) {
-              emit linkRequested(link);
+              linkRequested(link);
             }
 
             refresh();
-            emit focusRestoreRequested();
+            focusRestoreRequested();
           }
         },
         [this](const std::exception& error) {
-          emit failed(QString::fromUtf8(error.what()));
+          failed(QString::fromUtf8(error.what()));
         }
     );
   }
@@ -183,7 +176,7 @@ namespace telar::gui::qt {
 
       const NotificationFocus present{.window = window_generation_, .machine = store_.machineView(), .pane = current->id, .generation = current->generation, .attachment = current->attachment_generation};
       if (present == target) {
-        emit focusRestoreRequested();
+        focusRestoreRequested();
       }
     },
         Qt::QueuedConnection);

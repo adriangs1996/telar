@@ -4,10 +4,6 @@ static_assert(true);
 #endif
 
 #include "platform/window.hpp"
-#include "qt_case.hpp"
-#include "ui/app/application_controller.hpp"
-#include "ui/app/panes/terminal/terminal_item.hpp"
-#include "ui/kit/fonts/bundled_fonts.hpp"
 #include <QCoreApplication>
 #include <QEvent>
 #include <QGuiApplication>
@@ -30,23 +26,35 @@ static_assert(true);
 
 import telar.gui.foundation.core;
 import telar.base.ds;
+import telar.gui.ui.app;
+import telar.gui.ui.app.panes.terminal;
+import telar.gui.ui.kit.fonts;
+import telar.gui.tests.qt_case;
+import telar.gui.qt;
 
 namespace {
+  using Qt::StringLiterals::operator""_s;
 
   using namespace telar::gui;
   using namespace telar::gui::qt;
 
   constexpr int native_wait_ms = 5'000;
 
-  class WindowTest final : public QObject {
-    Q_OBJECT
+  class [[qt::object]] WindowTest final : public QObject {
+  public:
+    static const QMetaObject staticMetaObject;
+    const QMetaObject* metaObject() const override;
+    void* qt_metacast(const char* name) override;
+    int qt_metacall(QMetaObject::Call call, int id, void** args) override;
+    static void qt_static_metacall(QObject* object, QMetaObject::Call call, int id, void** args);
 
   private:
-    Q_SLOT static void initTestCase() {
+  private:
+    [[qt::slot]] static void initTestCase() {
       bundledFonts();
     }
 
-    Q_SLOT static void readingControlsDoesNotCreateNativeResources() {
+    [[qt::slot]] static void readingControlsDoesNotCreateNativeResources() {
       const QWindow window;
 
       QVERIFY(window.handle() == nullptr);
@@ -54,7 +62,7 @@ namespace {
       QVERIFY(window.handle() == nullptr);
     }
 
-    Q_SLOT static void rebindingTheCurrentWindowPreservesConnections() {
+    [[qt::slot]] static void rebindingTheCurrentWindowPreservesConnections() {
       ApplicationMemory application_memory;
       ApplicationAllocator& memory = application_memory.memory();
       ApplicationController client{memory};
@@ -70,7 +78,7 @@ namespace {
       QCOMPARE(geometry.size(), 1);
     }
 
-    Q_SLOT static void aPreviousWindowCannotPublishScreenChanges() {
+    [[qt::slot]] static void aPreviousWindowCannotPublishScreenChanges() {
       ApplicationMemory application_memory;
       ApplicationAllocator& memory = application_memory.memory();
       ApplicationController client{memory};
@@ -88,7 +96,7 @@ namespace {
       QCOMPARE(geometry.size(), 1);
     }
 
-    Q_SLOT static void destroyingAPreviousWindowPreservesTheCurrentBinding() {
+    [[qt::slot]] static void destroyingAPreviousWindowPreservesTheCurrentBinding() {
       ApplicationMemory application_memory;
       ApplicationAllocator& memory = application_memory.memory();
       ApplicationController client{memory};
@@ -107,7 +115,7 @@ namespace {
       QCOMPARE(geometry.size(), 1);
     }
 
-    Q_SLOT static void onlyTheCurrentWindowPublishesDensityChanges() {
+    [[qt::slot]] static void onlyTheCurrentWindowPublishesDensityChanges() {
       constexpr QSize target_size{320, 240};
       constexpr qreal scale_factor = 1.25;
       ApplicationMemory application_memory;
@@ -139,7 +147,7 @@ namespace {
       QCOMPARE(geometry.size(), 1);
     }
 
-    Q_SLOT static void aWindowCanBeDestroyedBeforeItsApplication() {
+    [[qt::slot]] static void aWindowCanBeDestroyedBeforeItsApplication() {
       ApplicationMemory application_memory;
       ApplicationAllocator& memory = application_memory.memory();
       ApplicationController client{memory};
@@ -159,7 +167,7 @@ namespace {
       QCOMPARE(geometry.size(), 1);
     }
 
-    Q_SLOT static void chromeBandsAndRowsFollowTheRenderTargetDensity() {
+    [[qt::slot]] static void chromeBandsAndRowsFollowTheRenderTargetDensity() {
       ApplicationMemory application_memory;
       ApplicationAllocator& memory = application_memory.memory();
       ApplicationController client{memory};
@@ -195,18 +203,18 @@ namespace {
         QCoreApplication::sendEvent(&window, &changed);
         QCOMPARE(window.effectiveDevicePixelRatio(), sample.density);
         const auto geometry = client.display()->geometry();
-        const auto typography = geometry.value(QStringLiteral("typography")).toMap();
+        const auto typography = geometry.value(u"typography"_s).toMap();
 
-        QCOMPARE(geometry.value(QStringLiteral("navigation")).toRectF().height(), sample.navigation / sample.density);
-        QCOMPARE(geometry.value(QStringLiteral("status")).toRectF().height(), sample.footer / sample.density);
-        QCOMPARE(typography.value(QStringLiteral("smallRow")).toReal(), sample.small_row / sample.density);
+        QCOMPARE(geometry.value(u"navigation"_s).toRectF().height(), sample.navigation / sample.density);
+        QCOMPARE(geometry.value(u"status"_s).toRectF().height(), sample.footer / sample.density);
+        QCOMPARE(typography.value(u"smallRow"_s).toReal(), sample.small_row / sample.density);
         const auto sidebar = client.sidebar()->regions();
 
-        QCOMPARE(sidebar.value(QStringLiteral("typography")).toMap().value(QStringLiteral("smallRow")).toReal(), sample.small_row / sample.density);
+        QCOMPARE(sidebar.value(u"typography"_s).toMap().value(u"smallRow"_s).toReal(), sample.small_row / sample.density);
       }
     }
 
-    Q_SLOT static void nativeWindowDimensionsNeedNoQmlObserver() {
+    [[qt::slot]] static void nativeWindowDimensionsNeedNoQmlObserver() {
       constexpr QSize initial_size{900, 700};
       constexpr QSize replacement_size{1100, 800};
       ApplicationMemory application_memory;
@@ -216,15 +224,15 @@ namespace {
 
       window.resize(initial_size);
       client.setWindow(window);
-      QCOMPARE(client.display()->geometry().value(QStringLiteral("navigation")).toRectF().width(), initial_size.width());
+      QCOMPARE(client.display()->geometry().value(u"navigation"_s).toRectF().width(), initial_size.width());
 
       window.resize(replacement_size);
       QTRY_COMPARE_WITH_TIMEOUT(window.size(), replacement_size, native_wait_ms);
-      QTRY_COMPARE_WITH_TIMEOUT(client.display()->geometry().value(QStringLiteral("navigation")).toRectF().width(), replacement_size.width(), native_wait_ms);
-      QTRY_COMPARE_WITH_TIMEOUT(client.display()->geometry().value(QStringLiteral("status")).toRectF().bottom(), replacement_size.height(), native_wait_ms);
+      QTRY_COMPARE_WITH_TIMEOUT(client.display()->geometry().value(u"navigation"_s).toRectF().width(), replacement_size.width(), native_wait_ms);
+      QTRY_COMPARE_WITH_TIMEOUT(client.display()->geometry().value(u"status"_s).toRectF().bottom(), replacement_size.height(), native_wait_ms);
     }
 
-    Q_SLOT static void densityChangesRemeasureAnIndependentTerminal() {
+    [[qt::slot]] static void densityChangesRemeasureAnIndependentTerminal() {
       constexpr QSize target_size{320, 240};
       constexpr telar::ds::Array scales{1.25, 2.0, 1.0};
       ApplicationMemory application_memory;
@@ -248,7 +256,7 @@ namespace {
       }
     }
 
-    Q_SLOT static void anApplicationCanBeDestroyedBeforeItsWindow() {
+    [[qt::slot]] static void anApplicationCanBeDestroyedBeforeItsWindow() {
       ApplicationMemory application_memory;
       ApplicationAllocator& memory = application_memory.memory();
       QQuickWindow window;
@@ -284,4 +292,6 @@ namespace {
 
 }
 
+#ifndef TELAR_MOC_RUN
 #include "window_test.moc"
+#endif

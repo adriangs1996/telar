@@ -2,18 +2,12 @@
 // Keep textual ABI declarations and module imports in one clangd parse.
 static_assert(true);
 #endif
-
-#include "qt_case.hpp"
-#include "ui/app/overlays/notifications/sound_player.hpp"
-#include "ui/app/overlays/notifications/system_notifier.hpp"
-#include "ui/kit/process/command_process.hpp"
 #include <QCoreApplication>
 #include <QIODevice>
 #include <QObject>
 #include <QProcess>
 #include <QString>
 #include <QStringList>
-#include <QStringLiteral>
 #include <QtCore/qtmetamacros.h>
 #include <QtTest/QTest>
 #include <QtTest/qtestcase.h>
@@ -35,8 +29,13 @@ import telar.gui.foundation.system;
 import telar.base.ds;
 import telar.gui.foundation.core;
 import telar.wire.vocabulary;
+import telar.gui.ui.app.overlays.notifications;
+import telar.gui.ui.kit.process;
+import telar.gui.tests.qt_case;
+import telar.gui.qt;
 
 namespace {
+  using Qt::StringLiterals::operator""_s;
 
   using namespace telar::gui;
   using namespace telar::gui::qt;
@@ -61,23 +60,23 @@ namespace {
     static void start(QProcess& process, system::SoundAttempt request) {
       started.push_back(request);
       if (request.backend >= successful_backend) {
-        process.start(QStringLiteral("/bin/sh"), {QStringLiteral("-c"), QStringLiteral("exit 0")}, QIODevice::ReadOnly);
+        process.start(u"/bin/sh"_s, {u"-c"_s, u"exit 0"_s}, QIODevice::ReadOnly);
 
         return;
       }
 
       switch (failure) {
       case FailureMode::launch:
-        process.start(QStringLiteral("/"));
+        process.start(u"/"_s);
         break;
       case FailureMode::timeout:
-        process.start(QStringLiteral("/bin/sleep"), {QStringLiteral("60")});
+        process.start(u"/bin/sleep"_s, {u"60"_s});
         break;
       case FailureMode::output:
-        process.start(QStringLiteral("/bin/sh"), {QStringLiteral("-c"), QStringLiteral("dd if=/dev/zero bs=4097 count=1 2>/dev/null")}, QIODevice::ReadOnly);
+        process.start(u"/bin/sh"_s, {u"-c"_s, u"dd if=/dev/zero bs=4097 count=1 2>/dev/null"_s}, QIODevice::ReadOnly);
         break;
       case FailureMode::process:
-        process.start(QStringLiteral("/bin/sh"), {QStringLiteral("-c"), QStringLiteral("exit 1")}, QIODevice::ReadOnly);
+        process.start(u"/bin/sh"_s, {u"-c"_s, u"exit 1"_s}, QIODevice::ReadOnly);
         break;
       }
     }
@@ -104,20 +103,26 @@ namespace {
     static void start(QProcess& process, const NotificationPayload& payload) {
       started.push_back(payload);
       if (!succeeds && failure == FailureMode::launch) {
-        process.start(QStringLiteral("/"));
+        process.start(u"/"_s);
       } else if (!succeeds && failure == FailureMode::timeout) {
-        process.start(QStringLiteral("/bin/sleep"), {QStringLiteral("60")});
+        process.start(u"/bin/sleep"_s, {u"60"_s});
       } else {
-        process.start(QStringLiteral("/bin/sh"), {QStringLiteral("-c"), succeeds ? QStringLiteral("exit 0") : QStringLiteral("exit 1")}, QIODevice::ReadOnly);
+        process.start(u"/bin/sh"_s, {u"-c"_s, succeeds ? u"exit 0"_s : u"exit 1"_s}, QIODevice::ReadOnly);
       }
     }
   };
 
-  class HostEffectsTest final : public QObject {
-    Q_OBJECT
+  class [[qt::object]] HostEffectsTest final : public QObject {
+  public:
+    static const QMetaObject staticMetaObject;
+    const QMetaObject* metaObject() const override;
+    void* qt_metacast(const char* name) override;
+    int qt_metacall(QMetaObject::Call call, int id, void** args) override;
+    static void qt_static_metacall(QObject* object, QMetaObject::Call call, int id, void** args);
 
   private:
-    Q_SLOT static void init() {
+  private:
+    [[qt::slot]] static void init() {
       SoundHost::started.clear();
       SoundHost::successful_backend = 0;
       SoundHost::failure = FailureMode::process;
@@ -126,7 +131,7 @@ namespace {
       NotificationHost::failure = FailureMode::process;
     }
 
-    Q_SLOT static void successfulAudioStopsAtTheFirstAvailableBackend() {
+    [[qt::slot]] static void successfulAudioStopsAtTheFirstAvailableBackend() {
       Observer observer;
       SoundPlayer<SoundHost, Observer> player{observer};
 
@@ -137,7 +142,7 @@ namespace {
       QVERIFY(!player.active());
     }
 
-    Q_SLOT static void failedBackendsRetainTheSemanticSoundAndStopAfterSuccess() {
+    [[qt::slot]] static void failedBackendsRetainTheSemanticSoundAndStopAfterSuccess() {
       constexpr std::size_t successful_backend = 2;
 
       SoundHost::successful_backend = successful_backend;
@@ -154,7 +159,7 @@ namespace {
       }
     }
 
-    Q_SLOT static void exhaustingAllBackendsCompletesOnceAndPermitsTheNextSound() {
+    [[qt::slot]] static void exhaustingAllBackendsCompletesOnceAndPermitsTheNextSound() {
       SoundHost::successful_backend = SoundHost::attempts;
       Observer observer;
       SoundPlayer<SoundHost, Observer> player{observer};
@@ -171,7 +176,7 @@ namespace {
       QVERIFY(!observer.results.back());
     }
 
-    Q_SLOT static void launchTimeoutAndOutputFailuresAlsoFallBack() {
+    [[qt::slot]] static void launchTimeoutAndOutputFailuresAlsoFallBack() {
       for (const auto failure : {FailureMode::launch, FailureMode::timeout, FailureMode::output}) {
         SoundHost::started.clear();
         SoundHost::successful_backend = 1;
@@ -186,7 +191,7 @@ namespace {
       }
     }
 
-    Q_SLOT static void aSecondStartCannotReplaceTheActiveAttempt() {
+    [[qt::slot]] static void aSecondStartCannotReplaceTheActiveAttempt() {
       SoundHost::successful_backend = 1;
       Observer observer;
       SoundPlayer<SoundHost, Observer> player{observer};
@@ -198,7 +203,7 @@ namespace {
       QCOMPARE(SoundHost::started.back().sound, AgentSound::needs_input);
     }
 
-    Q_SLOT static void teardownCancelsDeferredAudioWithoutCallingTheHost() {
+    [[qt::slot]] static void teardownCancelsDeferredAudioWithoutCallingTheHost() {
       Observer observer;
 
       {
@@ -212,7 +217,7 @@ namespace {
       QVERIFY(observer.results.empty());
     }
 
-    Q_SLOT static void completionMayDestroyThePlayer() {
+    [[qt::slot]] static void completionMayDestroyThePlayer() {
       Observer observer;
       auto player = std::make_unique<SoundPlayer<SoundHost, Observer>>(observer);
 
@@ -225,7 +230,7 @@ namespace {
       QCOMPARE(observer.results.size(), std::size_t{1});
     }
 
-    Q_SLOT static void noticesOwnDeferredPayloadAndReuseCompletedCapacity() {
+    [[qt::slot]] static void noticesOwnDeferredPayloadAndReuseCompletedCapacity() {
       SystemAllocator memory;
       SystemNotifier<NotificationHost, SystemAllocator> notifier{memory};
       auto payload = NotificationPayload::create("Original", "Owned message");
@@ -240,7 +245,7 @@ namespace {
       QCOMPARE(NotificationHost::started.back().title.view(), std::string_view{"Modified"});
     }
 
-    Q_SLOT static void desktopSaturationDropsNewWorkWithoutReplacingRetainedNotices() {
+    [[qt::slot]] static void desktopSaturationDropsNewWorkWithoutReplacingRetainedNotices() {
       constexpr std::size_t capacity = 4;
       SystemAllocator memory;
       SystemNotifier<NotificationHost, SystemAllocator, capacity> notifier{memory};
@@ -259,7 +264,7 @@ namespace {
       }
     }
 
-    Q_SLOT static void desktopFailuresAreNotRetriedAndReleaseTheirSlot() {
+    [[qt::slot]] static void desktopFailuresAreNotRetriedAndReleaseTheirSlot() {
       for (const auto failure : {FailureMode::launch, FailureMode::timeout, FailureMode::process}) {
         NotificationHost::started.clear();
         NotificationHost::succeeds = false;
@@ -273,7 +278,7 @@ namespace {
       }
     }
 
-    Q_SLOT static void desktopAdmissionUsesTheInjectedAllocatorAndReusesItsStorage() {
+    [[qt::slot]] static void desktopAdmissionUsesTheInjectedAllocatorAndReusesItsStorage() {
       SystemAllocator memory;
       test::AllocationGate<SystemAllocator> gated{memory};
       SystemNotifier<NotificationHost, decltype(gated)> notifier{gated};
@@ -309,4 +314,6 @@ namespace {
 
 }
 
+#ifndef TELAR_MOC_RUN
 #include "host_effects_test.moc"
+#endif

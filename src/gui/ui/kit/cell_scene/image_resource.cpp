@@ -1,56 +1,24 @@
-#ifdef __clangd__
-// Keep textual ABI declarations and module imports in one clangd parse.
-static_assert(true);
-#endif
-
-// graphics_scene.hpp declares telar::String textually; it comes before the header that imports
-// telar.gui.application, or clang does not merge the std::basic_string_view the two declare.
-#include "image_resource.hpp"
-#include "graphics_scene.hpp"
-#include "tbc/view.hpp"
-#include "ui/kit/scene/qt_buffers.hpp"
-#include "ui/kit/scene/scene_nodes.hpp"
-#include <QImage>
-#include <QRgb>
-#include <QScopeGuard>
-#include <QThread>
-#include <QThreadPool>
-#include <QtConcurrent/QtConcurrentRun>
-#include <algorithm>
-#include <array>
-#include <atomic>
-#include <cmath>
-#include <concepts>
-#include <cstddef>
-#include <cstdint>
-#include <limits>
-#include <optional>
-#include <span>
+module;
 #ifdef __aarch64__
 #include <arm_neon.h>
 #endif
-#include <QQuickWindow>
-#include <QSGImageNode>
-#include <QSGNode>
-#include <QSGOpacityNode>
-#include <QSGTexture>
-#include <QSize>
-#include <QtCore/qendian.h>
-#include <QtCore/qtversionchecks.h>
-#include <QtCore/qtypes.h>
-#include <bit>
-#include <cstring>
-#include <memory>
-#include <rhi/qrhi.h>
-#include <tuple>
-#include <utility>
 
-#ifdef __aarch64__
-#endif
+module telar.gui.ui.kit.cell_scene;
 
+import std;
+import telar.gui.qt;
+import telar.gui.qt.private_gui;
+import telar.tbc;
+import telar.gui.ui.kit.scene;
 import telar.gui.application;
 import telar.base.ds;
 import telar.wire.vocabulary;
+
+// graphics_scene.hpp declares telar::String textually; it comes before the header that imports
+// telar.gui.application, or clang does not merge the std::basic_string_view the two declare.
+
+#ifdef __aarch64__
+#endif
 
 namespace telar::gui::qt {
 
@@ -119,9 +87,7 @@ namespace telar::gui::qt {
           constexpr int maximum_workers = 2;
 
           pool.setMaxThreadCount(std::clamp(QThread::idealThreadCount() - 1, 1, maximum_workers));
-#if QT_VERSION >= QT_VERSION_CHECK(6, 9, 0)
           pool.setServiceLevel(QThread::QualityOfService::High);
-#endif
         }
       };
 

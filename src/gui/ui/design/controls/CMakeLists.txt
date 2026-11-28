@@ -1,29 +1,18 @@
 telar_add_qml_sources(gui-quick
   SOURCES
-    chrome_style.hpp
     form_composition_events.cpp
     modal_reveal_layout.cpp
-    modal_reveal_layout.hpp
     native_agent_status.cpp
-    native_agent_status.hpp
     native_cell_text.cpp
-    native_cell_text.hpp
     native_chrome_icon.cpp
-    native_chrome_icon.hpp
     native_chrome_text.cpp
-    native_chrome_text.hpp
     native_form_field.cpp
-    native_form_field.hpp
     native_form_field_input.cpp
     native_progress_ring.cpp
-    native_progress_ring.hpp
     native_rounded_rectangle.cpp
-    native_rounded_rectangle.hpp
     native_tab_activity.cpp
-    native_tab_activity.hpp
     provider_artwork.cpp
     provider_mark.cpp
-    provider_mark.hpp
   QML_FILES
     ActionPointer.qml
     ApplicationMark.qml
@@ -53,5 +42,4 @@ telar_add_qml_sources(gui-quick
     native_progress_ring.cpp
     native_rounded_rectangle.cpp
     native_tab_activity.cpp
-    provider_artwork.cpp
-  REGISTERS)
+    provider_artwork.cpp)

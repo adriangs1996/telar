@@ -1,31 +1,9 @@
-#ifdef __clangd__
-// Keep textual ABI declarations and module imports in one clangd parse.
-static_assert(true);
-#endif
+module telar.gui.ui.design.controls;
 
-#include "native_chrome_icon.hpp"
-#include "ui/kit/fonts/resident_fonts.hpp"
-#include "ui/kit/scene/chrome_icon_scene.hpp"
-#include <QByteArray>
-#include <QColor>
-#include <QMetaObject>
-#include <QQuickItem>
-#include <QQuickWindow>
-#include <QRectF>
-#include <QSGNode>
-#include <QString>
-#include <QtCore/qnamespace.h>
-#include <QtCore/qtmetamacros.h>
-#include <QtCore/qtypes.h>
-#include <algorithm>
-#include <cmath>
-#include <cstddef>
-#include <cstdint>
-#include <cstring>
-#include <exception>
-#include <functional>
-#include <memory>
-#include <string_view>
+import std;
+import telar.gui.qt;
+import telar.gui.ui.kit.fonts;
+import telar.gui.ui.kit.scene;
 
 namespace telar::gui::qt {
 
@@ -63,7 +41,7 @@ namespace telar::gui::qt {
   void NativeChromeIcon::setGlyph(const QString& glyph) {
     if (glyph_ != glyph) {
       glyph_ = glyph;
-      emit glyphChanged();
+      glyphChanged();
       invalidateLayout();
     }
   }
@@ -71,7 +49,7 @@ namespace telar::gui::qt {
   void NativeChromeIcon::setColor(const QColor& color) {
     if (color_ != color) {
       color_ = color;
-      emit colorChanged();
+      colorChanged();
       update();
     }
   }
@@ -79,7 +57,7 @@ namespace telar::gui::qt {
   void NativeChromeIcon::setPixelSize(qreal size) {
     if (std::isfinite(size) && size > 0 && size <= static_cast<qreal>(ChromeMetrics::maximum_text) && !std::equal_to<>{}(pixel_size_, size)) {
       pixel_size_ = size;
-      emit pixelSizeChanged();
+      pixelSizeChanged();
       invalidateLayout();
     }
   }
@@ -88,7 +66,7 @@ namespace telar::gui::qt {
     if (primary_family_ != family) {
       primary_family_ = family;
       source_.reset();
-      emit fontChanged();
+      fontChanged();
       invalidateLayout();
     }
   }
@@ -97,7 +75,7 @@ namespace telar::gui::qt {
     if (primary_style_ != style) {
       primary_style_ = style;
       source_.reset();
-      emit fontChanged();
+      fontChanged();
       invalidateLayout();
     }
   }
@@ -105,7 +83,7 @@ namespace telar::gui::qt {
   void NativeChromeIcon::setAvailable(bool available) {
     if (available_ != available) {
       available_ = available;
-      emit availabilityChanged();
+      availabilityChanged();
     }
   }
 

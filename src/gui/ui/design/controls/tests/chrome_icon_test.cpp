@@ -2,14 +2,6 @@
 // Keep textual ABI declarations and module imports in one clangd parse.
 static_assert(true);
 #endif
-
-#include "frame_fixture.hpp"
-#include "qml_fixture.hpp"
-#include "qt_case.hpp"
-#include "ui/design/controls/native_chrome_icon.hpp"
-#include "ui/kit/fonts/bundled_fonts.hpp"
-#include "ui/kit/fonts/resident_fonts.hpp"
-#include "ui/kit/scene/alpha_mask_material.hpp"
 #include <QColor>
 #include <QDebug>
 #include <QGuiApplication>
@@ -44,7 +36,19 @@ static_assert(true);
 #include <future>
 #include <thread>
 
+import telar.gui.ui.design.controls;
+import telar.gui.ui.kit.fonts;
+import telar.gui.ui.kit.scene;
+import telar.gui.tests.frame_fixture;
+import telar.gui.tests.qml_fixture;
+import telar.gui.tests.qt_case;
+import telar.base.ds;
+import telar.gui.foundation.core;
+import telar.gui.foundation.fonts;
+import telar.gui.qt;
+
 namespace {
+  using Qt::StringLiterals::operator""_s;
 
   using namespace telar::gui;
   using namespace telar::gui::qt;
@@ -110,23 +114,29 @@ namespace {
     QColor color;
   };
 
-  class ChromeIconTest final : public QObject {
-    Q_OBJECT
+  class [[qt::object]] ChromeIconTest final : public QObject {
+  public:
+    static const QMetaObject staticMetaObject;
+    const QMetaObject* metaObject() const override;
+    void* qt_metacast(const char* name) override;
+    int qt_metacall(QMetaObject::Call call, int id, void** args) override;
+    static void qt_static_metacall(QObject* object, QMetaObject::Call call, int id, void** args);
 
   private:
-    Q_SLOT static void initTestCase() {
+  private:
+    [[qt::slot]] static void initTestCase() {
       bundledFonts();
     }
 
-    Q_SLOT static void symbolsFallbackKeepsOriginalCoverage() {
-      verifyReference({.glyph = QStringLiteral("\uf07b"), .filename = QStringLiteral("folder-small.png"), .size = folder_size, .pixel_size = small_pixels, .color = QColor{shade_subtext}});
+    [[qt::slot]] static void symbolsFallbackKeepsOriginalCoverage() {
+      verifyReference({.glyph = u"\uf07b"_s, .filename = u"folder-small.png"_s, .size = folder_size, .pixel_size = small_pixels, .color = QColor{shade_subtext}});
     }
 
-    Q_SLOT static void preferredSansKeepsOriginalCoverage() {
-      verifyReference({.glyph = QStringLiteral("?"), .filename = QStringLiteral("unknown-status.png"), .size = status_size, .pixel_size = title_pixels, .color = QColor{shade_overlay}});
+    [[qt::slot]] static void preferredSansKeepsOriginalCoverage() {
+      verifyReference({.glyph = u"?"_s, .filename = u"unknown-status.png"_s, .size = status_size, .pixel_size = title_pixels, .color = QColor{shade_overlay}});
     }
 
-    Q_SLOT static void fontFacesRemainSeparateAcrossThreads() {
+    [[qt::slot]] static void fontFacesRemainSeparateAcrossThreads() {
       const auto source = ResidentFonts::resolveSource({}, {});
       const auto gui_fonts = ResidentFonts::shared(source);
       std::promise<bool> result;
@@ -141,7 +151,7 @@ namespace {
       QVERIFY(completed.get());
     }
 
-    Q_SLOT static void differentSamplersCannotBatchTogether() {
+    [[qt::slot]] static void differentSamplersCannotBatchTogether() {
       AtlasTexture nearest;
       AtlasTexture linear;
 
@@ -157,7 +167,7 @@ namespace {
       QVERIFY(first.compare(&stable) != 0);
     }
 
-    Q_SLOT static void adjacentColorsMatchIsolatedRenderingAfterRecoloring() {
+    [[qt::slot]] static void adjacentColorsMatchIsolatedRenderingAfterRecoloring() {
       QQmlEngine engine;
       QQuickWindow window;
 
@@ -165,9 +175,9 @@ namespace {
       window.setMinimumSize(window_size);
       window.setMaximumSize(window_size);
       window.setColor(QColor{shade_background});
-      const QVariantMap properties{{QStringLiteral("glyph"), QStringLiteral("\uf07b")}, {QStringLiteral("pixelSize"), title_pixels}, {QStringLiteral("color"), QColor{Qt::white}}};
-      auto first = createChrome(engine, QStringLiteral("ChromeIcon"), properties);
-      auto second = createChrome(engine, QStringLiteral("ChromeIcon"), properties);
+      const QVariantMap properties{{u"glyph"_s, u"\uf07b"_s}, {u"pixelSize"_s, title_pixels}, {u"color"_s, QColor{Qt::white}}};
+      auto first = createChrome(engine, u"ChromeIcon"_s, properties);
+      auto second = createChrome(engine, u"ChromeIcon"_s, properties);
 
       first->setParentItem(window.contentItem());
       second->setParentItem(window.contentItem());
@@ -212,9 +222,9 @@ namespace {
       }
     }
 
-    Q_SLOT static void qmlIconNeedsNoApplicationController() {
+    [[qt::slot]] static void qmlIconNeedsNoApplicationController() {
       QQmlEngine engine;
-      const auto icon = createChrome(engine, QStringLiteral("ChromeIcon"), {{QStringLiteral("glyph"), QStringLiteral("?")}, {QStringLiteral("pixelSize"), title_pixels}, {QStringLiteral("color"), QColor{shade_overlay}}});
+      const auto icon = createChrome(engine, u"ChromeIcon"_s, {{u"glyph"_s, u"?"_s}, {u"pixelSize"_s, title_pixels}, {u"color"_s, QColor{shade_overlay}}});
 
       icon->setSize(status_size);
       QQuickWindow window;
@@ -227,7 +237,7 @@ namespace {
     }
 
     static void verifyReference(const IconReference& expected) {
-      const QImage golden{QStringLiteral(":/telar/test-icons/") + expected.filename};
+      const QImage golden{u":/telar/test-icons/"_s + expected.filename};
 
       QVERIFY(!golden.isNull());
       QQuickWindow window;
@@ -256,8 +266,8 @@ namespace {
           QTemporaryDir diagnostic;
 
           diagnostic.setAutoRemove(false);
-          QVERIFY(last_mismatch.save(diagnostic.filePath(QStringLiteral("actual.png"))));
-          QVERIFY(golden.save(diagnostic.filePath(QStringLiteral("expected.png"))));
+          QVERIFY(last_mismatch.save(diagnostic.filePath(u"actual.png"_s)));
+          QVERIFY(golden.save(diagnostic.filePath(u"expected.png"_s)));
           qInfo() << "Final icon pixel mismatch:" << diagnostic.path();
         }
       });
@@ -278,8 +288,8 @@ namespace {
         QTemporaryDir diagnostic;
 
         diagnostic.setAutoRemove(false);
-        QVERIFY(actual.save(diagnostic.filePath(QStringLiteral("actual.png"))));
-        QVERIFY(golden.save(diagnostic.filePath(QStringLiteral("expected.png"))));
+        QVERIFY(actual.save(diagnostic.filePath(u"actual.png"_s)));
+        QVERIFY(golden.save(diagnostic.filePath(u"expected.png"_s)));
         qInfo() << "Icon pixel mismatch:" << diagnostic.path();
       }
 
@@ -292,7 +302,7 @@ namespace {
       ancestor.setX(0);
       QTRY_VERIFY_WITH_TIMEOUT(matches(physical_origin), wait_ms);
 
-      icon.setPrimaryFamily(QStringLiteral("__telar_missing_icon_font__"));
+      icon.setPrimaryFamily(u"__telar_missing_icon_font__"_s);
       QTRY_VERIFY_WITH_TIMEOUT(!icon.available(), wait_ms);
       icon.setPrimaryFamily({});
       QTRY_VERIFY_WITH_TIMEOUT(icon.available(), wait_ms);
@@ -311,4 +321,6 @@ namespace {
 
 }
 
+#ifndef TELAR_MOC_RUN
 #include "chrome_icon_test.moc"
+#endif

@@ -1,21 +1,8 @@
-#ifdef __clangd__
-// Keep textual ABI declarations and module imports in one clangd parse.
-static_assert(true);
-#endif
+module telar.gui.ui.design.controls;
 
-#include "modal_reveal_layout.hpp"
-#include "ui/kit/scene/window_animation_clock.hpp"
-#include <QMetaObject>
-#include <QPointer>
-#include <QQuickItem>
-#include <QQuickWindow>
-#include <QString>
-#include <QtCore/qtmetamacros.h>
-#include <QtCore/qtypes.h>
-#include <cstdint>
-#include <functional>
-#include <optional>
-
+import std;
+import telar.gui.qt;
+import telar.gui.ui.kit.scene;
 import telar.base.ds;
 
 namespace telar::gui::qt {
@@ -56,7 +43,7 @@ namespace telar::gui::qt {
     identity_ = valid ? ds::Option<std::uint64_t>{identity} : ds::none;
     dirty_ = true;
     synchronize();
-    emit generationChanged();
+    generationChanged();
   }
 
   void ModalRevealLayout::setActive(bool active) {
@@ -67,7 +54,7 @@ namespace telar::gui::qt {
     active_ = active;
     dirty_ = true;
     synchronize();
-    emit activeChanged();
+    activeChanged();
   }
 
   bool ModalRevealLayout::eligible() const noexcept {
@@ -104,7 +91,7 @@ namespace telar::gui::qt {
     frame_requested_ = false;
     clock_->requestSynchronization();
     if (changed) {
-      emit frameChanged();
+      frameChanged();
     }
   }
 

@@ -1,0 +1,33 @@
+{
+  "manifest_version": 3,
+  "name": "Transylvania Sangre",
+  "version": "1.0.0",
+  "description": "Telar's Transylvania Sangre theme for Chrome.",
+  "theme": {
+    "colors": {
+      "frame": [18, 16, 21],
+      "frame_inactive": [18, 16, 21],
+      "frame_incognito": [18, 16, 21],
+      "frame_incognito_inactive": [18, 16, 21],
+      "background_tab": [18, 16, 21],
+      "background_tab_inactive": [18, 16, 21],
+      "background_tab_incognito": [18, 16, 21],
+      "background_tab_incognito_inactive": [18, 16, 21],
+      "toolbar": [32, 29, 36],
+      "toolbar_text": [216, 210, 207],
+      "toolbar_button_icon": [217, 89, 108],
+      "tab_text": [216, 210, 207],
+      "tab_background_text": [156, 150, 163],
+      "tab_background_text_inactive": [125, 119, 131],
+      "tab_background_text_incognito": [156, 150, 163],
+      "tab_background_text_incognito_inactive": [125, 119, 131],
+      "bookmark_text": [156, 150, 163],
+      "omnibox_background": [23, 21, 26],
+      "omnibox_text": [216, 210, 207],
+      "ntp_background": [23, 21, 26],
+      "ntp_text": [216, 210, 207],
+      "ntp_link": [217, 89, 108],
+      "ntp_header": [32, 29, 36]
+    }
+  }
+}

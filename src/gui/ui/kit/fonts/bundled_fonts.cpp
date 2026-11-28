@@ -1,17 +1,7 @@
-#ifdef __clangd__
-// Keep textual ABI declarations and module imports in one clangd parse.
-static_assert(true);
-#endif
+module telar.gui.ui.kit.fonts;
 
-#include "bundled_fonts.hpp"
-#include <QDebug>
-#include <QFontDatabase>
-#include <QString>
-#include <QStringList>
-#include <QtCore/qcontainerfwd.h>
-#include <QtCore/qlogging.h>
-#include <array>
-
+import std;
+import telar.gui.qt;
 import telar.base.ds;
 
 namespace telar::gui::qt {
@@ -28,7 +18,7 @@ namespace telar::gui::qt {
       for (const auto* resource :
           {":/telar/fonts/IBMPlexSans-Regular.ttf", ":/telar/fonts/IBMPlexSans-SemiBold.ttf"}) {
         if (QFontDatabase::addApplicationFont(QString::fromLatin1(resource)) < 0) {
-          qWarning() << "Could not register the bundled font" << resource;
+          telar::qt::warning() << "Could not register the bundled font" << resource;
         }
       }
 
@@ -36,7 +26,7 @@ namespace telar::gui::qt {
         const auto id = QFontDatabase::addApplicationFont(QString::fromLatin1(resource));
 
         if (id < 0) {
-          qWarning() << "Could not register the bundled font" << resource;
+          telar::qt::warning() << "Could not register the bundled font" << resource;
           continue;
         }
 

@@ -3,9 +3,6 @@
 static_assert(true);
 #endif
 
-#include "ui/app/overlays/notifications/sound_player.hpp"
-#include "ui/app/overlays/notifications/system_notifier.hpp"
-#include "ui/kit/process/command_process.hpp"
 #include <QByteArray>
 #include <QCoreApplication>
 #include <QElapsedTimer>
@@ -26,6 +23,9 @@ static_assert(true);
 import telar.gui.foundation.system;
 import telar.base.ds;
 import telar.wire.vocabulary;
+
+import telar.gui.ui.app.overlays.notifications;
+import telar.gui.ui.kit.process;
 
 namespace {
 

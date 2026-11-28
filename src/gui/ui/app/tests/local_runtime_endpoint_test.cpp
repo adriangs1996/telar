@@ -2,16 +2,12 @@
 // Keep textual ABI declarations and module imports in one clangd parse.
 static_assert(true);
 #endif
-
-#include "qt_case.hpp"
-#include "ui/app/local_runtime_endpoint.hpp"
 #include <QByteArray>
 #include <QCoreApplication>
 #include <QDir>
 #include <QLocalServer>
 #include <QLocalSocket>
 #include <QString>
-#include <QStringLiteral>
 #include <QTemporaryDir>
 #include <QtCore/qtmetamacros.h>
 #include <QtTest/QTest>
@@ -22,8 +18,13 @@ static_assert(true);
 #include <string_view>
 
 import telar.gui.foundation.core;
+import telar.gui.ui.app;
+import telar.gui.tests.qt_case;
+import telar.gui.qt;
+import telar.platform.paths;
 
 namespace {
+  using Qt::StringLiterals::operator""_s;
 
   using namespace telar::gui;
   using namespace telar::gui::qt;
@@ -60,26 +61,32 @@ namespace {
     [[nodiscard]] static QString resolve() {
       ++calls;
 
-      return QStringLiteral("/owned-startup/runtime.sock");
+      return u"/owned-startup/runtime.sock"_s;
     }
   };
 
-  class LocalRuntimeEndpointTest : public QObject {
-    Q_OBJECT
+  class [[qt::object]] LocalRuntimeEndpointTest : public QObject {
+  public:
+    static const QMetaObject staticMetaObject;
+    const QMetaObject* metaObject() const override;
+    void* qt_metacast(const char* name) override;
+    int qt_metacall(QMetaObject::Call call, int id, void** args) override;
+    static void qt_static_metacall(QObject* object, QMetaObject::Call call, int id, void** args);
 
   private:
-    Q_SLOT static void init() {
+  private:
+    [[qt::slot]] static void init() {
       Startup::calls = 0;
     }
 
-    Q_SLOT static void existingManagedSocketAvoidsRuntimeStartup() {
-      const QTemporaryDir directory{QStringLiteral("/tmp/telar-endpoint-XXXXXX")};
+    [[qt::slot]] static void existingManagedSocketAvoidsRuntimeStartup() {
+      const QTemporaryDir directory{u"/tmp/telar-endpoint-XXXXXX"_s};
 
       QVERIFY(directory.isValid());
-      QVERIFY(QDir{directory.path()}.mkdir(QStringLiteral("telar")));
+      QVERIFY(QDir{directory.path()}.mkdir(u"telar"_s));
       const auto base = directory.path().toUtf8();
       const Environment environment{{.runtime_directory = {base.constData(), static_cast<std::size_t>(base.size())}}};
-      const auto endpoint = directory.filePath(QStringLiteral("telar/runtime.sock"));
+      const auto endpoint = directory.filePath(u"telar/runtime.sock"_s);
       QLocalServer server;
 
       QVERIFY(server.listen(endpoint));
@@ -95,12 +102,12 @@ namespace {
       QTRY_COMPARE(probe->state(), QLocalSocket::UnconnectedState);
     }
 
-    Q_SLOT static void explicitAndPaneEndpointsKeepTheirPrecedence() {
-      const QTemporaryDir directory{QStringLiteral("/tmp/telar-endpoint-XXXXXX")};
+    [[qt::slot]] static void explicitAndPaneEndpointsKeepTheirPrecedence() {
+      const QTemporaryDir directory{u"/tmp/telar-endpoint-XXXXXX"_s};
 
       QVERIFY(directory.isValid());
-      const auto explicit_path = directory.filePath(QStringLiteral("explicit.sock"));
-      const auto pane_path = directory.filePath(QStringLiteral("pane.sock"));
+      const auto explicit_path = directory.filePath(u"explicit.sock"_s);
+      const auto pane_path = directory.filePath(u"pane.sock"_s);
       QLocalServer explicit_server;
       QLocalServer pane_server;
 
@@ -117,19 +124,19 @@ namespace {
       QCOMPARE(Startup::calls, std::size_t{0});
     }
 
-    Q_SLOT static void missingSocketUsesTheConfiguredStartup() {
-      const QTemporaryDir directory{QStringLiteral("/tmp/telar-endpoint-XXXXXX")};
+    [[qt::slot]] static void missingSocketUsesTheConfiguredStartup() {
+      const QTemporaryDir directory{u"/tmp/telar-endpoint-XXXXXX"_s};
 
       QVERIFY(directory.isValid());
-      const auto path = directory.filePath(QStringLiteral("missing.sock")).toUtf8();
+      const auto path = directory.filePath(u"missing.sock"_s).toUtf8();
       const Environment environment{{.socket = {path.constData(), static_cast<std::size_t>(path.size())}}};
       SystemAllocator memory;
 
-      QCOMPARE(LocalRuntimeEndpoint<Startup>::resolve(memory, environment), QStringLiteral("/owned-startup/runtime.sock"));
+      QCOMPARE(LocalRuntimeEndpoint<Startup>::resolve(memory, environment), u"/owned-startup/runtime.sock"_s);
       QCOMPARE(Startup::calls, std::size_t{1});
     }
 
-    Q_SLOT static void invalidPathsCannotLaunchARuntime() {
+    [[qt::slot]] static void invalidPathsCannotLaunchARuntime() {
       const Environment environment{{.socket = "relative.sock"}};
       SystemAllocator memory;
 
@@ -147,4 +154,6 @@ namespace {
 
 }
 
+#ifndef TELAR_MOC_RUN
 #include "local_runtime_endpoint_test.moc"
+#endif

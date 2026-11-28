@@ -3,8 +3,6 @@
 static_assert(true);
 #endif
 
-#include "ui/kit/input/key_adapter.hpp"
-#include "ui/kit/input/key_encoding.hpp"
 #include <QCoreApplication>
 #include <QKeyEvent>
 #include <QString>
@@ -19,10 +17,15 @@ static_assert(true);
 #include <string_view>
 
 import telar.testing;
+import telar.gui.foundation.actions;
 import telar.gui.foundation.core;
+import telar.gui.foundation.keys;
+import telar.gui.foundation.system;
 import telar.base.ds;
+import telar.gui.ui.kit.input;
 
 namespace {
+  using Qt::StringLiterals::operator""_s;
 
   using telar::testing::check;
   using namespace telar::gui;
@@ -33,15 +36,15 @@ namespace {
   template <system::KeyboardConvention Convention>
   void platformConventions() {
     using Adapter = KeyAdapter<Convention>;
-    const QKeyEvent control{QEvent::KeyPress, Qt::Key_A, Adapter::control_modifier | Qt::ShiftModifier, QStringLiteral("\x01")};
+    const QKeyEvent control{QEvent::KeyPress, Qt::Key_A, Adapter::control_modifier | Qt::ShiftModifier, u"\x01"_s};
     const auto normalized = Adapter::terminalKey(control);
 
     check(normalized && normalized->codepoint == 'a' && normalized->has(Modifier::control) && normalized->has(Modifier::shift) && !normalized->has(Modifier::super), "physical Control must normalize independently of Qt's Apple convention");
-    const QKeyEvent command{QEvent::KeyPress, Qt::Key_A, Adapter::super_modifier, QStringLiteral("a")};
+    const QKeyEvent command{QEvent::KeyPress, Qt::Key_A, Adapter::super_modifier, u"a"_s};
     const auto shortcut = Adapter::terminalKey(command);
 
     check(shortcut && shortcut->has(Modifier::super) && !shortcut->has(Modifier::control), "Command or Super must remain a GUI modifier");
-    const QKeyEvent shifted{QEvent::KeyPress, Qt::Key_A, Qt::ShiftModifier, QStringLiteral("A")};
+    const QKeyEvent shifted{QEvent::KeyPress, Qt::Key_A, Qt::ShiftModifier, u"A"_s};
     const auto text = Adapter::terminalKey(shifted);
 
     check(text && text->codepoint == 'A' && !text->has(Modifier::shift), "native text must retain its Unicode while clearing consumed Shift");
@@ -89,14 +92,14 @@ namespace {
     using Adapter = KeyAdapter<Convention>;
 
     const telar::ds::Array cases{
-        AltCase{.key = Qt::Key_H, .text = QStringLiteral("˙"), .character = 'h'},
-        AltCase{.key = Qt::Key_J, .text = QStringLiteral("∆"), .character = 'j'},
-        AltCase{.key = Qt::Key_K, .text = QStringLiteral("˚"), .character = 'k'},
-        AltCase{.key = Qt::Key_L, .text = QStringLiteral("¬"), .character = 'l'},
-        AltCase{.key = Qt::Key_N, .text = QStringLiteral("˜"), .character = 'n'},
-        AltCase{.key = Qt::Key_M, .text = QStringLiteral("µ"), .character = 'm'},
+        AltCase{.key = Qt::Key_H, .text = u"˙"_s, .character = 'h'},
+        AltCase{.key = Qt::Key_J, .text = u"∆"_s, .character = 'j'},
+        AltCase{.key = Qt::Key_K, .text = u"˚"_s, .character = 'k'},
+        AltCase{.key = Qt::Key_L, .text = u"¬"_s, .character = 'l'},
+        AltCase{.key = Qt::Key_N, .text = u"˜"_s, .character = 'n'},
+        AltCase{.key = Qt::Key_M, .text = u"µ"_s, .character = 'm'},
         AltCase{.key = Qt::Key_N, .text = QString{}, .character = 'n'},
-        AltCase{.key = Qt::Key_1, .text = QStringLiteral("¡"), .character = '1'},
+        AltCase{.key = Qt::Key_1, .text = u"¡"_s, .character = '1'},
     };
 
     for (const auto& entry : cases) {
@@ -109,21 +112,21 @@ namespace {
       check(Adapter::chord(shortcut).character == static_cast<unsigned>(entry.character), "Alt shortcuts must also be recognized before native text composition");
     }
 
-    const QKeyEvent shifted{QEvent::KeyPress, Qt::Key_N, Qt::AltModifier | Qt::ShiftModifier, QStringLiteral("˜")};
+    const QKeyEvent shifted{QEvent::KeyPress, Qt::Key_N, Qt::AltModifier | Qt::ShiftModifier, u"˜"_s};
     const auto upper = Adapter::chord(shifted);
 
     check(upper.character == 'N' && upper.modifiers == static_cast<unsigned>(Modifier::alt), "Alt+Shift must use the uppercase chord representation expected by configuration");
-    const QKeyEvent altgr{QEvent::KeyPress, Qt::Key_Q, Qt::AltModifier | Qt::GroupSwitchModifier, QStringLiteral("@")};
+    const QKeyEvent altgr{QEvent::KeyPress, Qt::Key_Q, Qt::AltModifier | Qt::GroupSwitchModifier, u"@"_s};
 
     check(Adapter::chord(altgr).character == '@', "AltGr text must not be replaced with an Alt shortcut's base key");
     for (const auto extra : {Adapter::control_modifier, Adapter::super_modifier}) {
-      const QKeyEvent combined{QEvent::KeyPress, Qt::Key_H, Qt::AltModifier | extra, QStringLiteral("˙")};
+      const QKeyEvent combined{QEvent::KeyPress, Qt::Key_H, Qt::AltModifier | extra, u"˙"_s};
       const auto chord = Adapter::chord(combined);
 
       check(chord.character == 'h' && chord.modifiers == Adapter::modifiers(combined.modifiers()), "Alt combined with Control or Super must retain both shortcut modifiers");
     }
 
-    const QKeyEvent unicode{QEvent::KeyPress, Qt::Key_unknown, Qt::AltModifier, QStringLiteral("ñ")};
+    const QKeyEvent unicode{QEvent::KeyPress, Qt::Key_unknown, Qt::AltModifier, u"ñ"_s};
 
     check(Adapter::fromChord(Adapter::chord(unicode)).codepoint == U'ñ', "keys without an ASCII base must retain their Unicode shortcut representation");
   }
@@ -135,7 +138,7 @@ namespace {
     using Standard = KeyAdapter<system::KeyboardConvention::standard>;
     KeyEncoder encoder;
 
-    for (const auto& [key, text] : {std::pair{Qt::Key_2, QStringLiteral("@")}, std::pair{Qt::Key_1, QStringLiteral("|")}, std::pair{Qt::Key_QuoteLeft, QStringLiteral("[")}, std::pair{Qt::Key_F, QStringLiteral("ƒ")}}) {
+    for (const auto& [key, text] : {std::pair{Qt::Key_2, u"@"_s}, std::pair{Qt::Key_1, u"|"_s}, std::pair{Qt::Key_QuoteLeft, u"["_s}, std::pair{Qt::Key_F, u"ƒ"_s}}) {
       const QKeyEvent option{QEvent::KeyPress, key, Qt::AltModifier, text};
       const auto typed = Apple::terminalKey(option);
 
@@ -148,19 +151,19 @@ namespace {
       check(Standard::terminalKey(option)->has(Modifier::alt), "Alt stays Meta away from macOS");
     }
 
-    const QKeyEvent same{QEvent::KeyPress, Qt::Key_B, Qt::AltModifier, QStringLiteral("b")};
+    const QKeyEvent same{QEvent::KeyPress, Qt::Key_B, Qt::AltModifier, u"b"_s};
 
     check(Apple::terminalKey(same)->has(Modifier::alt), "Option whose text is its own key stays Alt");
 
     // A Spanish layout's keys of no ASCII character: Option+ñ is `~` and Option+ç is `}`.
-    for (const auto& [key, text] : {std::pair{Qt::Key_Ntilde, QStringLiteral("~")}, std::pair{Qt::Key_Ccedilla, QStringLiteral("}")}, std::pair{Qt::Key_masculine, QStringLiteral("\\")}}) {
+    for (const auto& [key, text] : {std::pair{Qt::Key_Ntilde, u"~"_s}, std::pair{Qt::Key_Ccedilla, u"}"_s}, std::pair{Qt::Key_masculine, u"\\"_s}}) {
       const QKeyEvent option{QEvent::KeyPress, key, Qt::AltModifier, text};
       const auto typed = Apple::terminalKey(option);
 
       check(typed && typed->codepoint == static_cast<unsigned>(text.front().unicode()) && !typed->has(Modifier::alt), "Option types the character a key of no ASCII character gives it");
     }
 
-    const QKeyEvent own{QEvent::KeyPress, Qt::Key_Ntilde, Qt::AltModifier, QStringLiteral("ñ")};
+    const QKeyEvent own{QEvent::KeyPress, Qt::Key_Ntilde, Qt::AltModifier, u"ñ"_s};
 
     check(Apple::terminalKey(own)->has(Modifier::alt), "Option whose text is its own key stays Alt, ASCII or not");
   }
@@ -175,7 +178,7 @@ namespace {
     KeyEncoder encoder;
 
     check(encoder.encode(NativeKeyAdapter::fromChord({}), {}) == std::string_view{"\0", 1}, "synthetic NUL must produce exactly one byte");
-    const QKeyEvent composed{QEvent::KeyPress, Qt::Key_unknown, Qt::NoModifier, QStringLiteral("ab")};
+    const QKeyEvent composed{QEvent::KeyPress, Qt::Key_unknown, Qt::NoModifier, u"ab"_s};
 
     check(!NativeKeyAdapter::terminalKey(composed), "multi-scalar commits must not masquerade as a single physical key");
     const QKeyEvent malformed{QEvent::KeyPress, Qt::Key_unknown, Qt::NoModifier, QString{QChar{static_cast<char16_t>(Utf8Scalar::first_surrogate)}}};

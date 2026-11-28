@@ -2,18 +2,6 @@
 // Keep textual ABI declarations and module imports in one clangd parse.
 static_assert(true);
 #endif
-
-#include "frame_fixture.hpp"
-#include "qt_case.hpp"
-#include "ui/design/controls/native_cell_text.hpp"
-#include "ui/design/controls/native_chrome_text.hpp"
-#include "ui/kit/fonts/bundled_fonts.hpp"
-#include "ui/kit/fonts/chrome_fonts.hpp"
-#include "ui/kit/fonts/font_asset.hpp"
-#include "ui/kit/fonts/font_source.hpp"
-#include "ui/kit/fonts/resident_fonts.hpp"
-#include "ui/kit/fonts/window_font_catalog.hpp"
-#include "ui/kit/scene/chrome_text_scene.hpp"
 #include <QByteArray>
 #include <QColor>
 #include <QDebug>
@@ -53,7 +41,19 @@ static_assert(true);
 #include <string>
 #include <string_view>
 
+import telar.gui.ui.design.controls;
+import telar.gui.ui.kit.fonts;
+import telar.gui.ui.kit.scene;
+import telar.gui.tests.frame_fixture;
+import telar.gui.tests.qt_case;
+import telar.base.ds;
+import telar.gui.foundation.core;
+import telar.gui.foundation.fonts;
+import telar.gui.foundation.terminal;
+import telar.gui.qt;
+
 namespace {
+  using Qt::StringLiterals::operator""_s;
 
   using namespace telar::gui;
   using namespace telar::gui::qt;
@@ -73,7 +73,7 @@ namespace {
   constexpr qreal cell_baseline = 15;
 
   QVariantMap cellTextGrid() {
-    return {{QStringLiteral("cellWidth"), cell_width}, {QStringLiteral("cellHeight"), cell_height}, {QStringLiteral("baseline"), cell_baseline}, {QStringLiteral("pixelHeight"), cell_baseline}, {QStringLiteral("family"), QStringLiteral("JetBrains Mono")}};
+    return {{u"cellWidth"_s, cell_width}, {u"cellHeight"_s, cell_height}, {u"baseline"_s, cell_baseline}, {u"pixelHeight"_s, cell_baseline}, {u"family"_s, u"JetBrains Mono"_s}};
   }
 
   struct ReferencePaint {
@@ -176,19 +176,25 @@ namespace {
   class AncestorItem final : public QQuickItem {
   public:
     [[nodiscard]] auto observerCounts() const {
-      return telar::ds::Array{receivers(SIGNAL(xChanged())), receivers(SIGNAL(yChanged())), receivers(SIGNAL(widthChanged())), receivers(SIGNAL(heightChanged())), receivers(SIGNAL(rotationChanged())), receivers(SIGNAL(scaleChanged())), receivers(SIGNAL(transformOriginChanged(TransformOrigin))), receivers(SIGNAL(parentChanged(QQuickItem*)))};
+      return telar::ds::Array{receivers("2xChanged()"), receivers("2yChanged()"), receivers("2widthChanged()"), receivers("2heightChanged()"), receivers("2rotationChanged()"), receivers("2scaleChanged()"), receivers("2transformOriginChanged(TransformOrigin)"), receivers("2parentChanged(QQuickItem*)")};
     }
   };
 
-  class ChromeTextTest final : public QObject {
-    Q_OBJECT
+  class [[qt::object]] ChromeTextTest final : public QObject {
+  public:
+    static const QMetaObject staticMetaObject;
+    const QMetaObject* metaObject() const override;
+    void* qt_metacast(const char* name) override;
+    int qt_metacall(QMetaObject::Call call, int id, void** args) override;
+    static void qt_static_metacall(QObject* object, QMetaObject::Call call, int id, void** args);
 
   private:
-    Q_SLOT static void initTestCase() {
+  private:
+    [[qt::slot]] static void initTestCase() {
       bundledFonts();
     }
 
-    Q_SLOT static void ancestorConnectionsFollowTheCurrentChain() {
+    [[qt::slot]] static void ancestorConnectionsFollowTheCurrentChain() {
       AncestorItem first;
       AncestorItem second;
       auto middle = std::make_unique<AncestorItem>();
@@ -244,7 +250,7 @@ namespace {
       QCOMPARE(nearest.observerCounts(), absent);
     }
 
-    Q_SLOT static void reparentedAncestorsKeepChromePixelsExact() {
+    [[qt::slot]] static void reparentedAncestorsKeepChromePixelsExact() {
       QQuickWindow window;
 
       window.setColor(Qt::black);
@@ -259,7 +265,7 @@ namespace {
       label.setSize({label_width, label_height});
       label.setPixelSize(font_size);
       label.setColor(Qt::white);
-      label.setText(QStringLiteral("AVATAR fi ffi"));
+      label.setText(u"AVATAR fi ffi"_s);
       label.setElide(Qt::ElideNone);
       const auto scale = window.effectiveDevicePixelRatio();
       constexpr qreal first_phase = 0.1;
@@ -294,7 +300,7 @@ namespace {
       QTRY_VERIFY_WITH_TIMEOUT(matches(), wait_ms);
     }
 
-    Q_SLOT static void failedFontCollectionReleasesPreviousScene() {
+    [[qt::slot]] static void failedFontCollectionReleasesPreviousScene() {
       unsigned destroyed = 0;
       QQuickWindow window;
       QSGNode parent;
@@ -312,7 +318,7 @@ namespace {
       QVERIFY(parent.firstChild() == nullptr);
     }
 
-    Q_SLOT static void cellTextDiscoversTheContinuationGlyph() {
+    [[qt::slot]] static void cellTextDiscoversTheContinuationGlyph() {
       QQuickWindow window;
 
       window.setColor(Qt::black);
@@ -323,7 +329,7 @@ namespace {
       label.setSize({label_width, label_height});
       label.setGrid(cellTextGrid());
       label.setColor(Qt::white);
-      label.setText(QStringLiteral("A↵B"));
+      label.setText(u"A↵B"_s);
       qreal initial_width = 0;
 
       connect(&label, &QQuickItem::implicitWidthChanged, &window, [&] {
@@ -347,13 +353,13 @@ namespace {
       QCOMPARE(label.implicitWidth(), initial_width);
       const auto collection = catalog.collection();
 
-      label.setText(QStringLiteral("B↵A"));
+      label.setText(u"B↵A"_s);
       QTRY_COMPARE_WITH_TIMEOUT(label.implicitWidth(), initial_width, wait_ms);
       QVERIFY(!catalog.busy());
       QCOMPARE(catalog.collection(), collection);
     }
 
-    Q_SLOT static void cellTextPreservesItsPrimaryAcrossCatalogChanges() {
+    [[qt::slot]] static void cellTextPreservesItsPrimaryAcrossCatalogChanges() {
       const auto query = fonts::FontQuery::create("↵");
       if (!query) {
         QFAIL("The continuation marker must produce a font query");
@@ -378,7 +384,7 @@ namespace {
 
       catalog.configure(configuration);
       QVERIFY(ResidentFonts::shared(catalog.collection())->source("↵", fonts::FontRole::primary).hasValue());
-      const auto primary = ResidentFonts::resolveSource(QStringLiteral("JetBrains Mono"), {});
+      const auto primary = ResidentFonts::resolveSource(u"JetBrains Mono"_s, {});
       const auto original = catalog.collectionFor(primary);
 
       QCOMPARE(original->primary, primary);
@@ -389,7 +395,7 @@ namespace {
       label.setSize({label_width, label_height});
       label.setGrid(cellTextGrid());
       label.setColor(Qt::white);
-      label.setText(QStringLiteral("A↵B"));
+      label.setText(u"A↵B"_s);
       qreal initial_width = 0;
 
       connect(&label, &QQuickItem::implicitWidthChanged, &window, [&] {
@@ -415,7 +421,7 @@ namespace {
       QCOMPARE(label.implicitWidth(), initial_width);
     }
 
-    Q_SLOT static void cellTextNotificationsMayRetireTheItem() {
+    [[qt::slot]] static void cellTextNotificationsMayRetireTheItem() {
       std::unique_ptr<NativeCellText> label;
       const auto retire = [&label] {
         label.reset();
@@ -423,7 +429,7 @@ namespace {
 
       label = std::make_unique<NativeCellText>();
       connect(label.get(), &NativeCellText::textChanged, label.get(), retire);
-      label->setText(QStringLiteral("retired"));
+      label->setText(u"retired"_s);
       QVERIFY(!label);
       label = std::make_unique<NativeCellText>();
       connect(label.get(), &NativeCellText::gridChanged, label.get(), retire);
@@ -439,7 +445,7 @@ namespace {
       QVERIFY(!label);
     }
 
-    Q_SLOT static void cellTextLayoutObserversMayRetireTheItem() {
+    [[qt::slot]] static void cellTextLayoutObserversMayRetireTheItem() {
       QQuickWindow window;
 
       window.resize(window_width, window_height);
@@ -447,7 +453,7 @@ namespace {
       const auto create = [&] {
         label = std::make_unique<NativeCellText>(window.contentItem());
         label->setGrid(cellTextGrid());
-        label->setText(QStringLiteral("retired"));
+        label->setText(u"retired"_s);
         label->setColor(Qt::white);
       };
 
@@ -464,7 +470,7 @@ namespace {
       QTRY_VERIFY_WITH_TIMEOUT(!label, wait_ms);
     }
 
-    Q_SLOT static void centeredChromeUsesOriginalWholePixelInset() {
+    [[qt::slot]] static void centeredChromeUsesOriginalWholePixelInset() {
       QQuickWindow window;
 
       window.setColor(Qt::black);
@@ -473,7 +479,7 @@ namespace {
       constexpr qreal physical_font_size = 27;
       constexpr qreal physical_free_space = 5;
       constexpr qreal original_inset = 2;
-      const auto text = QStringLiteral("H");
+      const auto text = u"H"_s;
 
       QVERIFY(ChromeFonts::shared()->covers(text.toStdString(), false));
       NativeChromeText label{window.contentItem()};
@@ -499,7 +505,7 @@ namespace {
       QTRY_VERIFY_WITH_TIMEOUT(matches(), wait_ms);
     }
 
-    Q_SLOT static void centeredFormChromeKeepsOriginalFractionalInset() {
+    [[qt::slot]] static void centeredFormChromeKeepsOriginalFractionalInset() {
       QQuickWindow window;
 
       window.setColor(Qt::black);
@@ -508,7 +514,7 @@ namespace {
       constexpr qreal physical_font_size = 27;
       constexpr qreal physical_free_space = 5;
       constexpr qreal original_inset = 2.5;
-      const auto text = QStringLiteral("H");
+      const auto text = u"H"_s;
 
       QVERIFY(ChromeFonts::shared()->covers(text.toStdString(), false));
       NativeChromeText label{window.contentItem()};
@@ -533,15 +539,15 @@ namespace {
       QTRY_VERIFY_WITH_TIMEOUT(matches(), wait_ms);
     }
 
-    Q_SLOT static void regularMasksAndPositionsMatchOriginalFace() {
+    [[qt::slot]] static void regularMasksAndPositionsMatchOriginalFace() {
       verifyMasks(false);
     }
 
-    Q_SLOT static void emphasizedMasksAndPositionsMatchOriginalFace() {
+    [[qt::slot]] static void emphasizedMasksAndPositionsMatchOriginalFace() {
       verifyMasks(true);
     }
 
-    Q_SLOT static void mixedLabelsRetainPreferredInkDuringDiscovery() {
+    [[qt::slot]] static void mixedLabelsRetainPreferredInkDuringDiscovery() {
       QQuickWindow window;
 
       window.setColor(Qt::black);
@@ -552,7 +558,7 @@ namespace {
       label.setSize({label_width, label_height});
       label.setPixelSize(font_size);
       label.setColor(Qt::white);
-      label.setText(QStringLiteral("ABC \u2387 AV"));
+      label.setText(u"ABC \u2387 AV"_s);
       const QSignalSpy frames{&window, &QQuickWindow::frameSwapped};
 
       QVERIFY(test::showComponentWindow(window, wait_ms));
@@ -570,7 +576,7 @@ namespace {
       const auto matches = [&] {
         const auto actual = grabFrame(window);
 
-        return !actual.isNull() && actual.copy(prefix) == reference(actual.size(), QStringLiteral("ABC "), paint).copy(prefix);
+        return !actual.isNull() && actual.copy(prefix) == reference(actual.size(), u"ABC "_s, paint).copy(prefix);
       };
 
       QTRY_VERIFY_WITH_TIMEOUT(matches(), wait_ms);
@@ -584,7 +590,7 @@ namespace {
       const auto changes = QSignalSpy{&catalog, &WindowFontCatalog::fontsChanged};
       const auto previous_frames = frames.count();
 
-      label.setText(QStringLiteral("ABC \u2387 AV again"));
+      label.setText(u"ABC \u2387 AV again"_s);
       QTRY_VERIFY_WITH_TIMEOUT(label.available(), wait_ms);
       QTRY_VERIFY_WITH_TIMEOUT(frames.count() > previous_frames, wait_ms);
       QVERIFY(!catalog.busy());
@@ -592,7 +598,7 @@ namespace {
       QCOMPARE(changes.count(), 0);
     }
 
-    Q_SLOT static void replacementFontSetRejectsInFlightDiscovery() {
+    [[qt::slot]] static void replacementFontSetRejectsInFlightDiscovery() {
       QQuickWindow window;
       auto& catalog = WindowFontCatalog::forWindow(window);
       const auto previous = catalog.collection();
@@ -618,7 +624,7 @@ namespace {
       qInfo() << "Replacement set discovered branch-font faces:" << catalog.collection()->count;
     }
 
-    Q_SLOT static void destroyingWindowJoinsItsDiscovery() {
+    [[qt::slot]] static void destroyingWindowJoinsItsDiscovery() {
       auto window = std::make_unique<QQuickWindow>();
       auto& catalog = WindowFontCatalog::forWindow(*window);
       const QPointer<WindowFontCatalog> lifetime{&catalog};
@@ -629,7 +635,7 @@ namespace {
       QVERIFY(lifetime.isNull());
     }
 
-    Q_SLOT static void discoveryCallbacksMayDestroyTheirWindow() {
+    [[qt::slot]] static void discoveryCallbacksMayDestroyTheirWindow() {
       auto window = std::make_unique<QQuickWindow>();
       auto& catalog = WindowFontCatalog::forWindow(*window);
       const QPointer<WindowFontCatalog> lifetime{&catalog};
@@ -648,7 +654,7 @@ namespace {
       QTRY_VERIFY_WITH_TIMEOUT(lifetime.isNull(), wait_ms);
     }
 
-    Q_SLOT static void fittedLabelsKeepNativeMasksAndFullMeasurement() {
+    [[qt::slot]] static void fittedLabelsKeepNativeMasksAndFullMeasurement() {
       QQuickWindow window;
 
       window.setColor(Qt::black);
@@ -656,7 +662,7 @@ namespace {
       const auto scale = window.effectiveDevicePixelRatio();
       constexpr qreal narrow_pixels = 50;
       constexpr qreal wider_pixels = 70;
-      const auto original = QStringLiteral("Adrians-MacBook-Pro.local");
+      const auto original = u"Adrians-MacBook-Pro.local"_s;
       NativeChromeText label{window.contentItem()};
 
       label.setPosition({label_left, label_top});
@@ -680,10 +686,10 @@ namespace {
         return !actual.isNull() && actual == reference(actual.size(), text, paint);
       };
 
-      QTRY_VERIFY_WITH_TIMEOUT(matches(QStringLiteral("Adrian…")), wait_ms);
+      QTRY_VERIFY_WITH_TIMEOUT(matches(u"Adrian…"_s), wait_ms);
 
       label.setWidth(wider_pixels / scale);
-      QTRY_VERIFY_WITH_TIMEOUT(matches(QStringLiteral("Adrians-M…")), wait_ms);
+      QTRY_VERIFY_WITH_TIMEOUT(matches(u"Adrians-M…"_s), wait_ms);
       QCOMPARE(label.implicitWidth(), full_width);
 
       label.setWidth(1 / scale);
@@ -694,7 +700,7 @@ namespace {
       label.setWidth(label_width);
       QTRY_VERIFY_WITH_TIMEOUT(matches(original), wait_ms);
       label.setWidth(narrow_pixels / scale);
-      QTRY_VERIFY_WITH_TIMEOUT(matches(QStringLiteral("Adrian…")), wait_ms);
+      QTRY_VERIFY_WITH_TIMEOUT(matches(u"Adrian…"_s), wait_ms);
       label.setElide(Qt::ElideNone);
       label.setWidth(label_width);
       QTRY_VERIFY_WITH_TIMEOUT(matches(original), wait_ms);
@@ -704,9 +710,9 @@ namespace {
       label.setEmphasized(true);
       label.setElide(Qt::ElideRight);
       paint.emphasized = true;
-      QTRY_VERIFY_WITH_TIMEOUT(matches(QStringLiteral("Adria…")), wait_ms);
+      QTRY_VERIFY_WITH_TIMEOUT(matches(u"Adria…"_s), wait_ms);
       label.setWidth(wider_pixels / scale);
-      QTRY_VERIFY_WITH_TIMEOUT(matches(QStringLiteral("Adrians-…")), wait_ms);
+      QTRY_VERIFY_WITH_TIMEOUT(matches(u"Adrians-…"_s), wait_ms);
     }
 
     static void verifyMasks(bool emphasized) {
@@ -723,7 +729,7 @@ namespace {
       label.setColor(Qt::white);
       label.setEmphasized(emphasized);
       label.setElide(Qt::ElideNone);
-      label.setText(QStringLiteral("AVATAR fi ffi · Crème"));
+      label.setText(u"AVATAR fi ffi · Crème"_s);
       label.setClip(true);
       const auto scale = window.effectiveDevicePixelRatio();
       constexpr qreal first_phase = 0.1;
@@ -749,8 +755,8 @@ namespace {
         QTemporaryDir diagnostic;
 
         diagnostic.setAutoRemove(false);
-        const auto actual_path = diagnostic.filePath(QStringLiteral("actual.png"));
-        const auto expected_path = diagnostic.filePath(QStringLiteral("expected.png"));
+        const auto actual_path = diagnostic.filePath(u"actual.png"_s);
+        const auto expected_path = diagnostic.filePath(u"expected.png"_s);
 
         QVERIFY(frame.save(actual_path));
         QVERIFY(expected.save(expected_path));
@@ -772,7 +778,7 @@ namespace {
       label.setColor(Qt::white);
       QTRY_COMPARE_WITH_TIMEOUT(grabFrame(window), shifted, wait_ms);
 
-      label.setText(QStringLiteral("w0 £ ß XYZ"));
+      label.setText(u"w0 £ ß XYZ"_s);
       QTRY_VERIFY_WITH_TIMEOUT(label.available(), wait_ms);
       const auto replaced = reference(frame.size(), label.text(), {.origin = label.mapToScene({0, 0}), .height = label.height(), .scale = scale, .emphasized = emphasized, .red = false});
 
@@ -814,4 +820,6 @@ namespace {
 
 }
 
+#ifndef TELAR_MOC_RUN
 #include "chrome_text_test.moc"
+#endif

@@ -1,33 +1,9 @@
-#ifdef __clangd__
-// Keep textual ABI declarations and module imports in one clangd parse.
-static_assert(true);
-#endif
+module telar.gui.ui.design.controls;
 
-#include "provider_mark.hpp"
-#include "provider_artwork.hpp"
-#include "tbc/view.hpp"
-#include "ui/kit/scene/scene_nodes.hpp"
-#include <QColor>
-#include <QImage>
-#include <QMatrix4x4>
-#include <QObject>
-#include <QPainter>
-#include <QPointF>
-#include <QQuickItem>
-#include <QQuickWindow>
-#include <QRectF>
-#include <QSGNode>
-#include <QSGSimpleTextureNode>
-#include <QSGTexture>
-#include <QSGTransformNode>
-#include <QtCore/qtmetamacros.h>
-#include <QtCore/qtypes.h>
-#include <algorithm>
-#include <cmath>
-#include <functional>
-#include <memory>
-#include <utility>
-
+import std;
+import telar.gui.qt;
+import telar.tbc;
+import telar.gui.ui.kit.scene;
 import telar.gui.application;
 import telar.wire.vocabulary;
 
@@ -109,7 +85,7 @@ namespace telar::gui::qt {
     if (provider_ != value) {
       provider_ = value;
       dirty_ = true;
-      emit providerChanged();
+      providerChanged();
       update();
     }
   }
@@ -122,7 +98,7 @@ namespace telar::gui::qt {
     if (monochrome_ != monochrome) {
       monochrome_ = monochrome;
       dirty_ = true;
-      emit monochromeChanged();
+      monochromeChanged();
       update();
     }
   }
@@ -135,7 +111,7 @@ namespace telar::gui::qt {
     if (theme_ != theme) {
       theme_ = theme;
       dirty_ = true;
-      emit themeChanged();
+      themeChanged();
       update();
     }
   }
@@ -148,7 +124,7 @@ namespace telar::gui::qt {
     if (telar_mark_ != enabled) {
       telar_mark_ = enabled;
       dirty_ = true;
-      emit telarMarkChanged();
+      telarMarkChanged();
       update();
     }
   }
@@ -161,7 +137,7 @@ namespace telar::gui::qt {
     if (symbol_ != symbol) {
       symbol_ = symbol;
       dirty_ = true;
-      emit symbolChanged();
+      symbolChanged();
       update();
     }
   }
@@ -170,7 +146,7 @@ namespace telar::gui::qt {
     if (color_ != color) {
       color_ = color;
       dirty_ = true;
-      emit colorChanged();
+      colorChanged();
       update();
     }
   }
@@ -179,7 +155,7 @@ namespace telar::gui::qt {
     if (std::isfinite(ratio) && ratio > 0 && !std::equal_to<>{}(ratio_, ratio)) {
       ratio_ = ratio;
       dirty_ = true;
-      emit ratioChanged();
+      ratioChanged();
       update();
     }
   }

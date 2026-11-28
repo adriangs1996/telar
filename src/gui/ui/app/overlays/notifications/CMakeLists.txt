@@ -1,11 +1,8 @@
 telar_add_qml_sources(gui-quick
   SOURCES
     notification_layout.cpp
-    notification_layout.hpp
     notifications_controller.cpp
-    notifications_controller.hpp
   QML_FILES
     NotificationOverlay.qml
   FP_CONTRACT_OFF
-    notification_layout.cpp
-  REGISTERS)
+    notification_layout.cpp)

@@ -1,29 +1,10 @@
-#ifdef __clangd__
-// Keep textual ABI declarations and module imports in one clangd parse.
-static_assert(true);
-#endif
+module telar.gui.ui.design.controls;
 
-#include "native_form_field.hpp"
-#include <QFont>
-#include <QGuiApplication>
-#include <QInputMethod>
-#include <QString>
-#include <QStringLiteral>
-#include <QtCore/qcoreapplication.h>
-#include <QtCore/qnamespace.h>
-#include <QtCore/qobject.h>
-#include <QtCore/qstringliteral.h>
-#include <QtCore/qtmetamacros.h>
-#include <QtCore/qtypes.h>
-#include <QtGui/qevent.h>
-#include <QtQuick/qquickitem.h>
-#include <algorithm>
-#include <cmath>
-#include <cstddef>
-#include <cstdint>
-#include <string_view>
+import std;
+import telar.gui.qt;
 
 namespace telar::gui::qt {
+  using Qt::StringLiterals::operator""_s;
 
   bool NativeFormField::editKey(const QKeyEvent& event) {
     if (event.modifiers().testFlag(Qt::ControlModifier) || event.modifiers().testFlag(Qt::MetaModifier)) {
@@ -101,7 +82,7 @@ namespace telar::gui::qt {
     }
 
     if (event->key() == Qt::Key_Return || event->key() == Qt::Key_Enter) {
-      emit accepted();
+      accepted();
       event->accept();
 
       return;
@@ -195,7 +176,7 @@ namespace telar::gui::qt {
       return isEnabled() && isVisible();
     case Qt::ImCursorRectangle:
     case Qt::ImAnchorRectangle:
-      return layout_.value(QStringLiteral("caret"));
+      return layout_.value(u"caret"_s);
     case Qt::ImCursorPosition:
     case Qt::ImAbsolutePosition:
       return input_context_.cursor;
@@ -212,10 +193,10 @@ namespace telar::gui::qt {
     case Qt::ImMaximumTextLength:
       return maximum_bytes_;
     case Qt::ImFont: {
-      QFont font{typography_.value(QStringLiteral("primaryFamily")).toString()};
+      QFont font{typography_.value(u"primaryFamily"_s).toString()};
 
-      font.setStyleName(typography_.value(QStringLiteral("primaryStyle")).toString());
-      font.setPixelSize(static_cast<int>(std::max(qreal{1}, std::round(typography_.value(QStringLiteral("body"), 1).toDouble()))));
+      font.setStyleName(typography_.value(u"primaryStyle"_s).toString());
+      font.setPixelSize(static_cast<int>(std::max(qreal{1}, std::round(typography_.value(u"body"_s, 1).toDouble()))));
 
       return font;
     }

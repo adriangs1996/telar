@@ -1,24 +1,8 @@
-#ifdef __clangd__
-// Keep textual ABI declarations and module imports in one clangd parse.
-static_assert(true);
-#endif
+module telar.gui.ui.design.controls;
 
-#include "native_rounded_rectangle.hpp"
-#include "ui/kit/scene/rounded_rectangle_scene.hpp"
-#include <QColor>
-#include <QQuickItem>
-#include <QQuickWindow>
-#include <QRectF>
-#include <QSGNode>
-#include <QtCore/qtmetamacros.h>
-#include <QtCore/qtypes.h>
-#include <array>
-#include <cmath>
-#include <functional>
-#include <limits>
-#include <memory>
-#include <optional>
-
+import std;
+import telar.gui.qt;
+import telar.gui.ui.kit.scene;
 import telar.gui.foundation.core;
 import telar.base.ds;
 
@@ -57,7 +41,7 @@ namespace telar::gui::qt {
   void NativeRoundedRectangle::setColor(const QColor& color) {
     if (color.isValid() && color_ != color) {
       color_ = color;
-      emit colorChanged();
+      colorChanged();
       update();
     }
   }
@@ -70,7 +54,7 @@ namespace telar::gui::qt {
     if (replace_background_ != replace) {
       replace_background_ = replace;
       update();
-      emit compositionChanged();
+      compositionChanged();
     }
   }
 
@@ -82,7 +66,7 @@ namespace telar::gui::qt {
     if (color.isValid() && backdrop_color_ != color) {
       backdrop_color_ = color;
       update();
-      emit compositionChanged();
+      compositionChanged();
     }
   }
 
@@ -93,7 +77,7 @@ namespace telar::gui::qt {
   void NativeRoundedRectangle::setBorderColor(const QColor& color) {
     if (color.isValid() && border_color_ != color) {
       border_color_ = color;
-      emit borderColorChanged();
+      borderColorChanged();
       update();
     }
   }
@@ -110,7 +94,7 @@ namespace telar::gui::qt {
     const auto scalar = static_cast<float>(alpha);
     if (!std::equal_to<>{}(scalar, border_alpha_)) {
       border_alpha_ = scalar;
-      emit borderAlphaChanged();
+      borderAlphaChanged();
       update();
     }
   }
@@ -122,7 +106,7 @@ namespace telar::gui::qt {
   void NativeRoundedRectangle::setRadius(qreal radius) {
     if (std::isfinite(radius) && radius >= 0 && !std::equal_to<>{}(radius_, radius)) {
       radius_ = radius;
-      emit radiusChanged();
+      radiusChanged();
       update();
     }
   }
@@ -134,7 +118,7 @@ namespace telar::gui::qt {
   void NativeRoundedRectangle::setBorderWidth(qreal width) {
     if (std::isfinite(width) && width >= 0 && !std::equal_to<>{}(border_width_, width)) {
       border_width_ = width;
-      emit borderWidthChanged();
+      borderWidthChanged();
       update();
     }
   }
@@ -149,14 +133,14 @@ namespace telar::gui::qt {
     }
 
     paint_clip_ = bounds;
-    emit paintClipChanged();
+    paintClipChanged();
     update();
   }
 
   void NativeRoundedRectangle::resetPaintClip() {
     if (paint_clip_) {
       paint_clip_.reset();
-      emit paintClipChanged();
+      paintClipChanged();
       update();
     }
   }

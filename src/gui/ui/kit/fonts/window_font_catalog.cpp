@@ -1,33 +1,7 @@
-#ifdef __clangd__
-// Keep textual ABI declarations and module imports in one clangd parse.
-static_assert(true);
-#endif
+module telar.gui.ui.kit.fonts;
 
-#include "window_font_catalog.hpp"
-#include "font_asset.hpp"
-#include "font_collection.hpp"
-#include "font_source.hpp"
-#include "resident_fonts.hpp"
-#include <QFutureWatcher>
-#include <QObject>
-#include <QPointer>
-#include <QQuickWindow>
-#include <QString>
-#include <QtConcurrent/QtConcurrentRun>
-#include <QtCore/qnamespace.h>
-#include <QtCore/qobject.h>
-#include <QtCore/qtmetamacros.h>
-#include <array>
-#include <cstddef>
-#include <cstdint>
-#include <cstring>
-#include <exception>
-#include <memory>
-#include <optional>
-#include <stdexcept>
-#include <string_view>
-#include <utility>
-
+import std;
+import telar.gui.qt;
 import telar.gui.foundation.text;
 
 namespace telar::gui::qt {
@@ -103,7 +77,7 @@ namespace telar::gui::qt {
     primary_collections_.clear();
     requests_ = {};
     ++generation_;
-    emit fontsChanged();
+    fontsChanged();
   }
 
   void WindowFontCatalog::request(std::string_view text, fonts::FontRole preferred, const std::shared_ptr<const FontCollection>& collection) {
@@ -203,7 +177,7 @@ namespace telar::gui::qt {
       }
 
       if (requests_.finish(result.query, changed)) {
-        emit fontsChanged();
+        fontsChanged();
       }
     }
 

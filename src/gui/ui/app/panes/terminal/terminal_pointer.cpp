@@ -1,29 +1,8 @@
-#ifdef __clangd__
-// Keep textual ABI declarations and module imports in one clangd parse.
-static_assert(true);
-#endif
+module telar.gui.ui.app.panes.terminal;
 
-#include "terminal_item.hpp"
-#include "ui/kit/input/key_adapter.hpp"
-#include "ui/kit/input/mouse_buttons.hpp"
-#include "ui/kit/input/scroll_event.hpp"
-#include <QClipboard>
-#include <QGuiApplication>
-#include <QHoverEvent>
-#include <QMouseEvent>
-#include <QPointF>
-#include <QScopeGuard>
-#include <QWheelEvent>
-#include <QtCore/qnamespace.h>
-#include <QtCore/qtypes.h>
-#include <algorithm>
-#include <cmath>
-#include <cstdint>
-#include <limits>
-#include <optional>
-#include <string_view>
-#include <utility>
-
+import std;
+import telar.gui.qt;
+import telar.gui.ui.kit.input;
 import telar.gui.application;
 import telar.gui.foundation.core;
 import telar.wire.vocabulary;

@@ -1,44 +1,13 @@
-#ifdef __clangd__
-// Keep textual ABI declarations and module imports in one clangd parse.
-static_assert(true);
-#endif
+module telar.gui.ui.design.controls;
 
-#include "native_form_field.hpp"
-#include "cell_text_grid.hpp"
-#include "form_input_context.hpp"
-#include "form_text_grid.hpp"
-#include "ui/kit/text/utf16_encoding.hpp"
-#include <QClipboard>
-#include <QGuiApplication>
-#include <QInputMethod>
-#include <QQuickWindow>
-#include <QScopedValueRollback>
-#include <QStringView>
-#include <QtCore/qchar.h>
-#include <QtCore/qcontainerfwd.h>
-#include <QtCore/qhashfunctions.h>
-#include <QtCore/qnamespace.h>
-#include <QtCore/qobject.h>
-#include <QtCore/qstringliteral.h>
-#include <QtCore/qtmetamacros.h>
-#include <QtCore/qtypes.h>
-#include <QtQuick/qquickitem.h>
-#include <algorithm>
-#include <cmath>
-#include <cstddef>
-#include <cstdint>
-#include <cstring>
-#include <exception>
-#include <functional>
-#include <limits>
-#include <optional>
-#include <string_view>
-#include <utility>
-
+import std;
+import telar.gui.qt;
+import telar.gui.ui.kit.text;
 import telar.base.ds;
 import telar.base.text.utf8;
 
 namespace telar::gui::qt {
+  using Qt::StringLiterals::operator""_s;
 
   namespace {
 
@@ -47,7 +16,7 @@ namespace telar::gui::qt {
     }
 
     QVariantMap emptyLayout(const QVariantMap& grid) {
-      return {{QStringLiteral("available"), false}, {QStringLiteral("text"), QString{}}, {QStringLiteral("grid"), grid}, {QStringLiteral("content"), QRectF{}}, {QStringLiteral("caret"), QRectF{}}, {QStringLiteral("selection"), QRectF{}}, {QStringLiteral("underline"), QRectF{}}, {QStringLiteral("composing"), false}};
+      return {{u"available"_s, false}, {u"text"_s, QString{}}, {u"grid"_s, grid}, {u"content"_s, QRectF{}}, {u"caret"_s, QRectF{}}, {u"selection"_s, QRectF{}}, {u"underline"_s, QRectF{}}, {u"composing"_s, false}};
     }
 
   }
@@ -55,7 +24,7 @@ namespace telar::gui::qt {
   NativeFormField::NativeFormField(QQuickItem* parent)
       : QQuickItem(parent),
         composition_events_(*this) {
-    grid_ = {{QStringLiteral("family"), QString{}}, {QStringLiteral("style"), QString{}}, {QStringLiteral("cellWidth"), 1}, {QStringLiteral("cellHeight"), 1}, {QStringLiteral("pixelHeight"), 1}, {QStringLiteral("baseline"), 0}};
+    grid_ = {{u"family"_s, QString{}}, {u"style"_s, QString{}}, {u"cellWidth"_s, 1}, {u"cellHeight"_s, 1}, {u"pixelHeight"_s, 1}, {u"baseline"_s, 0}};
     layout_ = emptyLayout(grid_);
     setFlag(ItemAcceptsInputMethod);
     setAcceptedMouseButtons(Qt::LeftButton);
@@ -85,7 +54,7 @@ namespace telar::gui::qt {
     if (typography_ != typography) {
       typography_ = typography;
       metrics_dirty_ = true;
-      emit typographyChanged();
+      typographyChanged();
       invalidateLayout();
     }
   }
@@ -97,7 +66,7 @@ namespace telar::gui::qt {
   void NativeFormField::setRatio(qreal ratio) {
     if (std::isfinite(ratio) && ratio > 0 && !std::equal_to<>{}(ratio_, ratio)) {
       ratio_ = ratio;
-      emit ratioChanged();
+      ratioChanged();
       invalidateLayout();
     }
   }
@@ -114,7 +83,7 @@ namespace telar::gui::qt {
     if (form_control_ != enabled) {
       form_control_ = enabled;
       metrics_dirty_ = true;
-      emit formControlChanged();
+      formControlChanged();
       invalidateLayout();
     }
   }
@@ -122,7 +91,7 @@ namespace telar::gui::qt {
   void NativeFormField::setMaximumBytes(int capacity) {
     if (capacity >= 0 && std::cmp_less_equal(capacity, text_capacity) && maximum_bytes_ != capacity) {
       maximum_bytes_ = capacity;
-      emit maximumBytesChanged();
+      maximumBytesChanged();
       if (editor_.text().size() > static_cast<std::size_t>(maximum_bytes_)) {
         const auto previous = text_;
 
@@ -200,7 +169,7 @@ namespace telar::gui::qt {
     cancelComposition();
     auto pasted = QGuiApplication::clipboard()->text();
 
-    pasted.replace(QStringLiteral("\r\n"), QStringLiteral(" "));
+    pasted.replace(u"\r\n"_s, u" "_s);
     pasted.replace(QLatin1Char('\r'), QLatin1Char(' '));
     pasted.replace(QLatin1Char('\n'), QLatin1Char(' '));
     insertText(pasted);
@@ -219,7 +188,7 @@ namespace telar::gui::qt {
     editor_.insert(kept);
 
     if (measured.bytes < measured.requested_bytes) {
-      emit limitReached(static_cast<qulonglong>(retained) + static_cast<qulonglong>(measured.requested_bytes));
+      limitReached(static_cast<qulonglong>(retained) + static_cast<qulonglong>(measured.requested_bytes));
     }
   }
 
@@ -230,13 +199,13 @@ namespace telar::gui::qt {
     text_ = value;
     updateInputContext();
     if (changed) {
-      emit textChanged();
+      textChanged();
       if (edited) {
-        emit textEdited();
+        textEdited();
       }
     }
 
-    emit selectionChanged();
+    selectionChanged();
     invalidateLayout();
     if (hasActiveFocus()) {
       QGuiApplication::inputMethod()->update(Qt::ImQueryInput);
@@ -295,16 +264,16 @@ namespace telar::gui::qt {
 
   void NativeFormField::resolveGrid() {
     if (!form_control_) {
-      grid_ = typography_.value(QStringLiteral("grid")).toMap();
+      grid_ = typography_.value(u"grid"_s).toMap();
       font_grid_ = CellTextGrid::resolve(grid_, density_).metrics;
       metrics_dirty_ = false;
 
       return;
     }
 
-    const auto family = typography_.value(QStringLiteral("primaryFamily")).toString();
-    const auto style = typography_.value(QStringLiteral("primaryStyle")).toString();
-    const auto pixels = std::clamp(std::round(typography_.value(QStringLiteral("body"), 1).toDouble() * density_), qreal{1}, static_cast<qreal>(std::numeric_limits<std::uint16_t>::max()));
+    const auto family = typography_.value(u"primaryFamily"_s).toString();
+    const auto style = typography_.value(u"primaryStyle"_s).toString();
+    const auto pixels = std::clamp(std::round(typography_.value(u"body"_s, 1).toDouble() * density_), qreal{1}, static_cast<qreal>(std::numeric_limits<std::uint16_t>::max()));
     const auto resolved = FormTextGrid::resolve(family, style, static_cast<std::uint16_t>(pixels));
 
     font_grid_ = resolved.metrics;
@@ -341,12 +310,12 @@ namespace telar::gui::qt {
 
       const auto underline = geometry_.underline(cellTextColumns(view.text));
 
-      layout_ = {{QStringLiteral("available"), true}, {QStringLiteral("text"), fieldString(view.text)}, {QStringLiteral("grid"), grid_}, {QStringLiteral("content"), logical(geometry_.content)}, {QStringLiteral("caret"), logical(geometry_.caret(view.cursor))}, {QStringLiteral("selection"), logical(view.selection ? geometry_.selection(*view.selection) : Rect{})}, {QStringLiteral("underline"), logical(underline)}, {QStringLiteral("composing"), !composition_.isEmpty()}};
+      layout_ = {{u"available"_s, true}, {u"text"_s, fieldString(view.text)}, {u"grid"_s, grid_}, {u"content"_s, logical(geometry_.content)}, {u"caret"_s, logical(geometry_.caret(view.cursor))}, {u"selection"_s, logical(view.selection ? geometry_.selection(*view.selection) : Rect{})}, {u"underline"_s, logical(underline)}, {u"composing"_s, !composition_.isEmpty()}};
     } catch (const std::exception&) {
       layout_ = emptyLayout(grid_);
     }
 
-    emit layoutChanged();
+    layoutChanged();
     if (hasActiveFocus()) {
       QGuiApplication::inputMethod()->update(Qt::ImCursorRectangle);
     }

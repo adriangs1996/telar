@@ -1,23 +1,17 @@
-#ifdef __clangd__
-// Keep textual ABI declarations and module imports in one clangd parse.
-static_assert(true);
-#endif
+module telar.gui.ui.app.panes.attachments;
 
-#include "attachments_controller.hpp"
-#include "ui/kit/models/projection.hpp"
-#include <QByteArray>
-#include <QEvent>
-#include <algorithm>
-#include <exception>
-#include <string_view>
-
+import std;
+import telar.gui.qt;
+import telar.gui.ui.kit.models;
 import telar.gui.application;
 import telar.gui.foundation.actions;
 import telar.base.ds;
 import telar.gui.foundation.core;
 import telar.gui.platform;
+import telar.wire.vocabulary;
 
 namespace telar::gui::qt {
+  using Qt::StringLiterals::operator""_s;
 
   namespace {
 
@@ -117,7 +111,7 @@ namespace telar::gui::qt {
     const auto area = application::workbench::geometry(session).pixels(tab->layout.reservedArea());
     const auto density = display_.density;
 
-    return {{QStringLiteral("x"), static_cast<double>(area.x) / density}, {QStringLiteral("y"), static_cast<double>(area.y) / density}, {QStringLiteral("width"), static_cast<double>(area.width) / density}, {QStringLiteral("height"), static_cast<double>(area.height) / density}};
+    return {{u"x"_s, static_cast<double>(area.x) / density}, {u"y"_s, static_cast<double>(area.y) / density}, {u"width"_s, static_cast<double>(area.width) / density}, {u"height"_s, static_cast<double>(area.height) / density}};
   }
 
   QVariantMap AttachmentsController::modalGeometry() const {
@@ -142,7 +136,7 @@ namespace telar::gui::qt {
       return toQRectF(area, density);
     };
 
-    return {{QStringLiteral("host"), global(host.pixels(host.cellArea()))}, {QStringLiteral("bounds"), global(bounds)}, {QStringLiteral("title"), local(geometry.title)}, {QStringLiteral("close"), local(geometry.close)}, {QStringLiteral("image"), local(geometry.image)}, {QStringLiteral("footer"), local(geometry.footer)}};
+    return {{u"host"_s, global(host.pixels(host.cellArea()))}, {u"bounds"_s, global(bounds)}, {u"title"_s, local(geometry.title)}, {u"close"_s, local(geometry.close)}, {u"image"_s, local(geometry.image)}, {u"footer"_s, local(geometry.footer)}};
   }
 
   void AttachmentsController::publishGeometry() {
@@ -159,7 +153,7 @@ namespace telar::gui::qt {
 
     if (published_ != inputs) {
       published_ = inputs;
-      emit geometryChanged();
+      geometryChanged();
     }
   }
 
@@ -167,10 +161,10 @@ namespace telar::gui::qt {
     const bool open = !shelf_.modal().isEmpty();
     if (open != modal_open_) {
       modal_open_ = open;
-      emit modalChanged(open);
+      modalChanged(open);
     }
 
-    emit changed();
+    changed();
   }
 
   void AttachmentsController::synchronize() {
@@ -263,7 +257,7 @@ namespace telar::gui::qt {
       static_cast<void>(shelf_.remove(identity));
     }
   } catch (const std::exception& error) {
-    emit failed(QString::fromUtf8(error.what()));
+    failed(QString::fromUtf8(error.what()));
   }
 
   void AttachmentsController::key(std::uint64_t pane_id, const TerminalKey& key) try {
@@ -288,7 +282,7 @@ namespace telar::gui::qt {
       shelf_.observeKey(key, application::terminal::attachments::AttachmentMarkerScreen::from(pane->screen));
     }
   } catch (const std::exception& error) {
-    emit failed(QString::fromUtf8(error.what()));
+    failed(QString::fromUtf8(error.what()));
   }
 
 }

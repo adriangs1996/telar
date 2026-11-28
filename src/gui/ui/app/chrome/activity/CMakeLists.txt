@@ -1,11 +1,9 @@
 telar_add_qml_sources(gui-quick
   SOURCES
     activity_controller.cpp
-    activity_controller.hpp
   QML_FILES
     ActivityFrame.qml
     ActivityList.qml
     AgentCard.qml
     AgentStatus.qml
-    CommandCard.qml
-  REGISTERS)
+    CommandCard.qml)

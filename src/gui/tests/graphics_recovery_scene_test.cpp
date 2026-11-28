@@ -2,13 +2,6 @@
 // Keep textual ABI declarations and module imports in one clangd parse.
 static_assert(true);
 #endif
-
-#include "controlled_awake_clock.hpp"
-#include "qml_fixture.hpp"
-#include "ui/app/application_controller.hpp"
-#include "ui/kit/fonts/bundled_fonts.hpp"
-#include "ui/kit/models/list_model.hpp"
-#include "wire_runtime.hpp"
 #include <QAbstractItemModel>
 #include <QFont>
 #include <QGuiApplication>
@@ -41,9 +34,17 @@ import telar.gui.features.notifications;
 import telar.wire.graphics;
 import telar.wire.layout;
 import telar.base.ds;
+import telar.base.memory.allocators;
 import telar.gui.foundation.core;
 import telar.wire.pane_io;
 import telar.wire.vocabulary;
+import telar.gui.ui.app;
+import telar.gui.ui.kit.fonts;
+import telar.gui.ui.kit.models;
+import telar.gui.tests.controlled_awake_clock;
+import telar.gui.tests.qml_fixture;
+import telar.gui.tests.wire_runtime;
+import telar.gui.qt;
 
 namespace {
 
@@ -79,10 +80,16 @@ namespace {
     return model->data(model->index(0, 0), ListModel::record_role).toMap().value(QStringLiteral("chrome")).toMap();
   }
 
-  class GraphicsRecoverySceneTest : public QObject {
-    Q_OBJECT
+  class [[qt::object]] GraphicsRecoverySceneTest : public QObject {
+  public:
+    static const QMetaObject staticMetaObject;
+    const QMetaObject* metaObject() const override;
+    void* qt_metacast(const char* name) override;
+    int qt_metacall(QMetaObject::Call call, int id, void** args) override;
+    static void qt_static_metacall(QObject* object, QMetaObject::Call call, int id, void** args);
 
-    Q_SLOT static void pauseNoticeHeaderAndTimerFollowTheRuntimeWire() {
+  private:
+    [[qt::slot]] static void pauseNoticeHeaderAndTimerFollowTheRuntimeWire() {
       ControlledAwakeClock::set(0);
       const QTemporaryDir directory;
 
@@ -183,4 +190,6 @@ int main(int argc, char** argv) {
   return QTest::qExec(&test, argc, argv);
 }
 
+#ifndef TELAR_MOC_RUN
 #include "graphics_recovery_scene_test.moc"
+#endif

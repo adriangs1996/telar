@@ -1,32 +1,15 @@
-#ifdef __clangd__
-// Keep textual ABI declarations and module imports in one clangd parse.
-static_assert(true);
-#endif
+module telar.gui.ui.design.controls;
 
-#include "provider_artwork.hpp"
-#include "ui/kit/scene/qt_buffers.hpp"
-#include <QByteArray>
-#include <QFile>
-#include <QIODevice>
-#include <QImage>
-#include <QPainter>
-#include <QSvgRenderer>
-#include <QtCore/qnamespace.h>
-#include <QtCore/qstring.h>
-#include <QtCore/qstringliteral.h>
-#include <QtCore/qtypes.h>
-#include <algorithm>
-#include <array>
-#include <cstddef>
-#include <iterator>
-#include <span>
-
+import std;
+import telar.gui.qt;
+import telar.gui.ui.kit.scene;
 import telar.gui.foundation.core;
 import telar.gui.application;
 import telar.base.ds;
 import telar.wire.vocabulary;
 
 namespace telar::gui::qt {
+  using Qt::StringLiterals::operator""_s;
 
   namespace {
 
@@ -37,7 +20,7 @@ namespace telar::gui::qt {
 
     const QByteArray& providerSheet() {
       [[clang::no_destroy]] static const auto pixels = [] {
-        QFile source{QStringLiteral(":/telar/fonts/provider-symbols-384x64.rgba")};
+        QFile source{u":/telar/fonts/provider-symbols-384x64.rgba"_s};
         if (!source.open(QIODevice::ReadOnly)) {
           return QByteArray{};
         }
@@ -53,7 +36,7 @@ namespace telar::gui::qt {
     // The default mark wears Zenburn, Telar's brand colors; every preset has its own.
     QString telarSource(bool monochrome, int theme) {
       if (monochrome) {
-        return QStringLiteral(":/telar/fonts/telar-mark-mono.svg");
+        return u":/telar/fonts/telar-mark-mono.svg"_s;
       }
 
       struct ThemedMark {
@@ -85,7 +68,7 @@ namespace telar::gui::qt {
         return static_cast<int>(mark.theme) == theme;
       });
 
-      return found == marks.end() ? QStringLiteral(":/telar/fonts/telar-mark.svg") : found->source.toString();
+      return found == marks.end() ? u":/telar/fonts/telar-mark.svg"_s : found->source.toString();
     }
 
   }
@@ -126,7 +109,7 @@ namespace telar::gui::qt {
     static constexpr ds::Array<QStringView, 9> names{u"bot", u"check", u"chevron-down", u"chevron-right", u"git-branch", u"plus", u"search", u"server", u"square-terminal"};
     const auto* const found = std::ranges::find(names, name);
 
-    return found == names.end() ? QImage{} : vector(QStringLiteral(":/telar/icons/%1.svg").arg(name), side);
+    return found == names.end() ? QImage{} : vector(u":/telar/icons/%1.svg"_s.arg(name), side);
   }
 
   QImage ProviderArtwork::vector(const QString& source, int side) {

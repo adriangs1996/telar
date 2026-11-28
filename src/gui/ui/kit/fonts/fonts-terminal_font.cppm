@@ -1,0 +1,19 @@
+export module telar.gui.ui.kit.fonts:terminal_font;
+
+import std;
+import telar.gui.qt;
+import telar.base.ds;
+
+export namespace telar::gui::qt {
+  struct TerminalFont {
+    static constexpr std::size_t face_count = 4;
+    ds::Array<QFont, face_count> faces;
+    QSizeF cell;
+    qreal baseline = 0;
+    bool fixed_pitch = true;
+
+    static TerminalFont resolve(const QVariantMap& settings, qreal scale);
+    static void validate(const QVariantMap& settings);
+    static TerminalFont fromFont(QFont base, QSizeF cell, qreal baseline);
+  };
+}

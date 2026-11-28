@@ -1,21 +1,9 @@
-#ifdef __clangd__
-// Keep textual ABI declarations and module imports in one clangd parse.
-static_assert(true);
-#endif
+module telar.gui.ui.app.panes.nvim;
 
-#include "nvim_grid_item.hpp"
-#include "ui/kit/cell_scene/terminal_scene.hpp"
-#include "ui/kit/scene/window_animation_clock.hpp"
-#include <QQuickWindow>
-#include <QSGNode>
-#include <algorithm>
-#include <cmath>
-#include <cstdint>
-#include <limits>
-#include <memory>
-#include <span>
-#include <utility>
-
+import std;
+import telar.gui.qt;
+import telar.gui.ui.kit.cell_scene;
+import telar.gui.ui.kit.scene;
 import telar.gui.foundation.core;
 import telar.gui.application;
 
@@ -41,7 +29,7 @@ namespace telar::gui::qt {
     }
 
     refresh();
-    emit editorChanged();
+    editorChanged();
   }
 
   void NvimGridItem::setGridId(int grid_id) {
@@ -53,7 +41,7 @@ namespace telar::gui::qt {
     grid_id_ = next;
     font_row_revisions_.clear();
     refresh();
-    emit gridIdChanged();
+    gridIdChanged();
   }
 
   const application::nvim::Grid* NvimGridItem::grid() const noexcept {

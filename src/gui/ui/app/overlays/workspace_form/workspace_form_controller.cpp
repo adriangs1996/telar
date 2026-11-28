@@ -1,23 +1,12 @@
-#ifdef __clangd__
-// Keep textual ABI declarations and module imports in one clangd parse.
-static_assert(true);
-#endif
+module telar.gui.ui.app.overlays.workspace_form;
 
-#include "workspace_form_controller.hpp"
-#include "ui/kit/process/environment.hpp"
-#include <QByteArray>
-#include <QFileInfo>
-#include <QStringList>
-#include <QtConcurrentRun>
-#include <algorithm>
-#include <exception>
-#include <stdexcept>
-#include <string_view>
-#include <utility>
-
+import std;
+import telar.gui.qt;
+import telar.gui.ui.kit.process;
 import telar.gui.application;
 
 namespace telar::gui::qt {
+  using Qt::StringLiterals::operator""_s;
 
   namespace {
 
@@ -51,10 +40,10 @@ namespace telar::gui::qt {
     }
 
     return {
-        {QStringLiteral("entries"), entries},
-        {QStringLiteral("selection"), static_cast<int>(selection_)},
-        {QStringLiteral("confirmCreate"), confirm_create_},
-        {QStringLiteral("completes"), local()},
+        {u"entries"_s, entries},
+        {u"selection"_s, static_cast<int>(selection_)},
+        {u"confirmCreate"_s, confirm_create_},
+        {u"completes"_s, local()},
     };
   }
 
@@ -65,7 +54,7 @@ namespace telar::gui::qt {
     completion_ = {};
     selection_ = 0;
     confirm_create_ = false;
-    emit changed();
+    changed();
   }
 
   // Folders are listed only on this computer: a remote machine's directories are not here to list
@@ -96,7 +85,7 @@ namespace telar::gui::qt {
       list();
     }
 
-    emit changed();
+    changed();
   }
 
   void WorkspaceFormController::move(int delta) {
@@ -108,7 +97,7 @@ namespace telar::gui::qt {
     const auto selected = static_cast<long long>(selection_) + delta;
 
     selection_ = static_cast<std::size_t>(std::clamp(selected, 0LL, static_cast<long long>(count - 1)));
-    emit changed();
+    changed();
   }
 
   QString WorkspaceFormController::accept() {
@@ -174,12 +163,12 @@ namespace telar::gui::qt {
       list();
     }
 
-    emit changed();
+    changed();
   }
 
   bool WorkspaceFormController::submit(const QVariantMap& input) {
-    const auto name = input.value(QStringLiteral("text")).toString();
-    const auto typed = input.value(QStringLiteral("path")).toString();
+    const auto name = input.value(u"text"_s).toString();
+    const auto typed = input.value(u"path"_s).toString();
     const bool on_this_computer = local();
     QString directory;
 
@@ -197,7 +186,7 @@ namespace telar::gui::qt {
 
       if (!folder.exists() && !confirm_create_) {
         confirm_create_ = true;
-        emit changed();
+        changed();
 
         return false;
       }

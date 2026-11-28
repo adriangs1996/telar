@@ -1,43 +1,18 @@
-#ifdef __clangd__
-// Keep textual ABI declarations and module imports in one clangd parse.
-static_assert(true);
-#endif
+module telar.gui.ui.app;
 
-#include "machine_roster.hpp"
-#include "dialogs.hpp"
-#include "machines_coordinator.hpp"
-#include "ui/app/overlays/machine_prompt/machine_profiles_source.hpp"
-#include "ui/app/overlays/notifications/notifications_controller.hpp"
-#include "ui/kit/machines/machine_client.hpp"
-#include "ui/kit/machines/runtime_connection.hpp"
-#include "ui/kit/machines/window_identity.hpp"
-#include "ui/kit/models/projection.hpp"
-#include "ui/kit/process/environment.hpp"
-#include "ui/kit/process/launch_arguments.hpp"
-#include "window_display.hpp"
-#include <QByteArray>
-#include <QByteArrayView>
-#include <QDir>
-#include <QString>
-#include <QStringList>
-#include <QtCore/qobject.h>
-#include <QtCore/qtmetamacros.h>
-#include <QtCore/qtypes.h>
-#include <algorithm>
-#include <array>
-#include <cstddef>
-#include <cstring>
-#include <exception>
-#include <optional>
-#include <stdexcept>
-#include <string_view>
-
+import std;
+import telar.gui.qt;
+import telar.gui.ui.app.overlays.machine_prompt.machine_profiles_source;
+import telar.gui.ui.kit.machines;
+import telar.gui.ui.kit.models;
+import telar.gui.ui.kit.process;
 import telar.config.client;
 import telar.gui.application;
 import telar.base.ds;
 import telar.wire.vocabulary;
 
 namespace telar::gui::qt {
+  using Qt::StringLiterals::operator""_s;
 
   namespace {
 
@@ -115,7 +90,7 @@ namespace telar::gui::qt {
         openRequestedMachine();
       } catch (const application::machines::MachineFailure& failure) {
         remote_launch_.reset();
-        emit launchFailed(QString::fromUtf8(failure.what()));
+        launchFailed(QString::fromUtf8(failure.what()));
       }
 
       retry_.stop();
@@ -221,9 +196,9 @@ namespace telar::gui::qt {
       const auto label = toQString(store_.machines().row(slot).label.view());
 
       machines_.select(store_.machines().token(application::machines::Machines::local_slot));
-      const auto state = reason == Retirement::disabled ? QStringLiteral("disabled") : QStringLiteral("removed");
+      const auto state = reason == Retirement::disabled ? u"disabled"_s : u"removed"_s;
       const auto local = toQString(store_.machines().row(application::machines::Machines::local_slot).label.view());
-      const auto detail = (label + QStringLiteral(" was ") + state + QStringLiteral("; the window shows ") + local).toUtf8();
+      const auto detail = (label + u" was "_s + state + u"; the window shows "_s + local).toUtf8();
 
       notifications_.publish({.title = "Machine left the window", .message = bytes(detail), .link = {}});
     }

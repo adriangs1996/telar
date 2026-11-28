@@ -1,28 +1,17 @@
-#ifdef __clangd__
-// Keep textual ABI declarations and module imports in one clangd parse.
-static_assert(true);
-#endif
+module telar.gui.ui.app.panes.terminal.prompt;
 
-#include "prompt_editor_item.hpp"
-#include "ui/design/controls/native_cell_text.hpp"
-#include "ui/kit/scene/qt_buffers.hpp"
-#include "ui/kit/scene/scene_nodes.hpp"
-#include <QEasingCurve>
-#include <QQuickWindow>
-#include <QSGFlatColorMaterial>
-#include <QSGGeometryNode>
-#include <QSGNode>
-#include <QSGRectangleNode>
-#include <algorithm>
-#include <exception>
-#include <memory>
-
+import std;
+import telar.gui.qt;
+import telar.gui.ui.design.controls;
+import telar.gui.ui.kit.scene;
 import telar.gui.application;
 import telar.gui.foundation.core;
 import telar.shell.syntax;
 import telar.base.ds;
+import telar.wire.vocabulary;
 
 namespace telar::gui::qt {
+  using Qt::StringLiterals::operator""_s;
 
   // How long a completed character takes to sweep in; a completion sweeps one character after
   // another, this far apart.
@@ -128,7 +117,7 @@ namespace telar::gui::qt {
     }
 
     refresh();
-    emit controllerChanged();
+    controllerChanged();
   }
 
   // A pane's output reaches here as often as it paints: the layout is kept when nothing it draws
@@ -150,7 +139,7 @@ namespace telar::gui::qt {
       pane_id_ = next;
       first_row_ = 0;
       refresh();
-      emit paneIdChanged();
+      paneIdChanged();
     }
   }
 
@@ -162,7 +151,7 @@ namespace telar::gui::qt {
     if (grid_ != grid) {
       grid_ = grid;
       refresh();
-      emit gridChanged();
+      gridChanged();
     }
   }
 
@@ -176,7 +165,7 @@ namespace telar::gui::qt {
       cacheColors();
       placeRuns();
       update();
-      emit colorsChanged();
+      colorsChanged();
     }
   }
 
@@ -189,7 +178,7 @@ namespace telar::gui::qt {
     if (maximum_columns_ != columns) {
       maximum_columns_ = columns;
       refresh();
-      emit maximumColumnsChanged();
+      maximumColumnsChanged();
     }
   }
 
@@ -201,43 +190,43 @@ namespace telar::gui::qt {
     if (preedit_ != preedit) {
       preedit_ = preedit;
       refresh();
-      emit preeditChanged();
+      preeditChanged();
     }
   }
 
   QString PromptEditorItem::surface() const {
     switch (static_cast<application::prompt::Surface>(surface_)) {
     case application::prompt::Surface::editor:
-      return QStringLiteral("editor");
+      return u"editor"_s;
     case application::prompt::Surface::running:
-      return QStringLiteral("running");
+      return u"running"_s;
     case application::prompt::Surface::secret:
-      return QStringLiteral("secret");
+      return u"secret"_s;
     case application::prompt::Surface::none:
       break;
     }
 
-    return QStringLiteral("none");
+    return u"none"_s;
   }
 
   QString PromptEditorItem::mode() const {
     const auto line = controller_ == nullptr ? ds::none : controller_->line(pane_id_);
     if (!line || line->keymap() == application::prompt::Keymap::emacs) {
-      return QStringLiteral("emacs");
+      return u"emacs"_s;
     }
 
     switch (line->mode()) {
     case application::prompt::Mode::insert:
-      return QStringLiteral("insert");
+      return u"insert"_s;
     case application::prompt::Mode::normal:
-      return QStringLiteral("normal");
+      return u"normal"_s;
     case application::prompt::Mode::visual:
-      return QStringLiteral("visual");
+      return u"visual"_s;
     case application::prompt::Mode::visual_line:
-      return QStringLiteral("visual-line");
+      return u"visual-line"_s;
     }
 
-    return QStringLiteral("insert");
+    return u"insert"_s;
   }
 
   bool PromptEditorItem::suggesting() const noexcept {
@@ -267,10 +256,10 @@ namespace telar::gui::qt {
     }
 
     if (!(*copy)->anchor) {
-      return QStringLiteral("copy");
+      return u"copy"_s;
     }
 
-    return (*copy)->linewise ? QStringLiteral("visual-line") : QStringLiteral("visual");
+    return (*copy)->linewise ? u"visual-line"_s : u"visual"_s;
   }
 
   bool PromptEditorItem::queued() const noexcept {
@@ -336,7 +325,7 @@ namespace telar::gui::qt {
         if (end > start) {
           const auto piece = shown.substr(start, end - start);
 
-          segments.push_back(QVariantMap{{QStringLiteral("text"), QString::fromUtf8(piece.data(), static_cast<qsizetype>(piece.size()))}, {QStringLiteral("marked"), marked}});
+          segments.push_back(QVariantMap{{u"text"_s, QString::fromUtf8(piece.data(), static_cast<qsizetype>(piece.size()))}, {u"marked"_s, marked}});
           start = end;
         }
       };
@@ -350,15 +339,15 @@ namespace telar::gui::qt {
 
       segment(shown.size(), false);
       result.push_back(QVariantMap{
-          {QStringLiteral("text"), QString::fromUtf8(choice.text.data(), static_cast<qsizetype>(choice.text.size()))},
-          {QStringLiteral("segments"), segments},
-          {QStringLiteral("description"), QString::fromUtf8(choice.description.data(), static_cast<qsizetype>(choice.description.size()))},
-          {QStringLiteral("selected"), index == menu.selected},
+          {u"text"_s, QString::fromUtf8(choice.text.data(), static_cast<qsizetype>(choice.text.size()))},
+          {u"segments"_s, segments},
+          {u"description"_s, QString::fromUtf8(choice.description.data(), static_cast<qsizetype>(choice.description.size()))},
+          {u"selected"_s, index == menu.selected},
       });
     }
 
     if (!menu.requests.empty() && result.isEmpty()) {
-      result.push_back(QVariantMap{{QStringLiteral("text"), QStringLiteral("…")}, {QStringLiteral("description"), QString{}}, {QStringLiteral("selected"), false}});
+      result.push_back(QVariantMap{{u"text"_s, u"…"_s}, {u"description"_s, QString{}}, {u"selected"_s, false}});
     }
 
     choices_.choices = result;
@@ -385,9 +374,9 @@ namespace telar::gui::qt {
 
     // More choices than a page shows: which one is selected, and of how many.
     if (std::cmp_greater(menu.choices.size(), menu_page)) {
-      const auto place = QStringLiteral("%1/%2").arg(menu.selected + 1).arg(menu.choices.size());
+      const auto place = u"%1/%2"_s.arg(menu.selected + 1).arg(menu.choices.size());
 
-      label = label.isEmpty() ? place : label + QStringLiteral(" · ") + place;
+      label = label.isEmpty() ? place : label + u" · "_s + place;
     }
 
     return label;
@@ -426,11 +415,11 @@ namespace telar::gui::qt {
     }
 
     if (key == delete_key) {
-      return QStringLiteral("\u2303?");
+      return u"\u2303?"_s;
     }
 
     if (key < first_printable) {
-      return QStringLiteral("\u2303") + QChar(static_cast<char16_t>(key + caret_notation_offset));
+      return u"\u2303"_s + QChar(static_cast<char16_t>(key + caret_notation_offset));
     }
 
     return {QChar(static_cast<char16_t>(key))};
@@ -491,19 +480,19 @@ namespace telar::gui::qt {
 
   QString PromptEditorItem::motion() const {
     if (controller_ == nullptr) {
-      return QStringLiteral("spring");
+      return u"spring"_s;
     }
 
     switch (controller_->configuration().prompt.motion) {
     case PromptMotion::ease:
-      return QStringLiteral("ease");
+      return u"ease"_s;
     case PromptMotion::none:
-      return QStringLiteral("none");
+      return u"none"_s;
     case PromptMotion::spring:
       break;
     }
 
-    return QStringLiteral("spring");
+    return u"spring"_s;
   }
 
   int PromptEditorItem::rows() const noexcept {
@@ -579,7 +568,7 @@ namespace telar::gui::qt {
       surface_ = 0;
       cursor_hidden_ = false;
       if (previous_surface != surface_ || previous_cursor_hidden) {
-        emit stateChanged();
+        stateChanged();
       }
 
       return;
@@ -620,7 +609,7 @@ namespace telar::gui::qt {
     const bool unchanged = reuse_layout && !cell_changed && !animating(clock_.elapsed()) && display_.view() == laid_.display.view() && std::ranges::equal(styles_.view(), laid_.styles.view()) && std::ranges::equal(groups_.view(), laid_.groups.view()) && caret == laid_.caret && mark == laid_.anchor && range == laid_.range && maximum_columns_ == laid_.columns && maximum_rows_ == laid_.rows;
     if (unchanged) {
       if (state_changed()) {
-        emit stateChanged();
+        stateChanged();
       }
 
       return;
@@ -633,9 +622,9 @@ namespace telar::gui::qt {
     }
 
     ++revision_;
-    emit layoutChanged();
+    layoutChanged();
     if (state_changed()) {
-      emit stateChanged();
+      stateChanged();
     }
 
     update();
@@ -655,7 +644,7 @@ namespace telar::gui::qt {
 
     const bool cell_changed = previous_cell != QSizeF{cellWidth(), cellHeight()};
     if (cell_changed) {
-      emit metricsChanged();
+      metricsChanged();
     }
 
     return cell_changed;
@@ -799,7 +788,7 @@ namespace telar::gui::qt {
 
     if (!glows.isEmpty() || !glows_.isEmpty()) {
       glows_ = std::move(glows);
-      emit glowsChanged();
+      glowsChanged();
     }
   }
 
@@ -852,7 +841,7 @@ namespace telar::gui::qt {
 
     result.color = blend(accent_, result.color, progress);
     if (progress < 1) {
-      glows.push_back(QVariantMap{{QStringLiteral("x"), run.column * width}, {QStringLiteral("y"), (static_cast<int>(run.row) - first_row_) * height}, {QStringLiteral("width"), run.columns * width}, {QStringLiteral("height"), height}, {QStringLiteral("strength"), 1 - progress}});
+      glows.push_back(QVariantMap{{u"x"_s, run.column * width}, {u"y"_s, (static_cast<int>(run.row) - first_row_) * height}, {u"width"_s, run.columns * width}, {u"height"_s, height}, {u"strength"_s, 1 - progress}});
     }
 
     return result;
@@ -871,8 +860,8 @@ namespace telar::gui::qt {
       style_colors_.atMut(index) = roleColor(static_cast<application::prompt::Style>(index));
     }
 
-    accent_ = colors_.value(QStringLiteral("accent")).value<QColor>();
-    underline_ = colors_.value(QStringLiteral("overlay1")).value<QColor>();
+    accent_ = colors_.value(u"accent"_s).value<QColor>();
+    underline_ = colors_.value(u"overlay1"_s).value<QColor>();
   }
 
   QColor PromptEditorItem::roleColor(application::prompt::Style style) const {

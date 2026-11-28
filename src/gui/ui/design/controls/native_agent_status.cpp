@@ -1,26 +1,9 @@
-#ifdef __clangd__
-// Keep textual ABI declarations and module imports in one clangd parse.
-static_assert(true);
-#endif
+module telar.gui.ui.design.controls;
 
-#include "native_agent_status.hpp"
-#include "ui/kit/models/agent_status_value.hpp"
-#include "ui/kit/scene/window_animation_clock.hpp"
-#include <QAnyStringView>
-#include <QPointer>
-#include <QQuickItem>
-#include <QQuickWindow>
-#include <QString>
-#include <QVariant>
-#include <QVariantMap>
-#include <QtCore/qcontainerfwd.h>
-#include <QtCore/qnamespace.h>
-#include <QtCore/qtmetamacros.h>
-#include <QtCore/qtypes.h>
-#include <cstdint>
-#include <functional>
-#include <optional>
-
+import std;
+import telar.gui.qt;
+import telar.gui.ui.kit.models;
+import telar.gui.ui.kit.scene;
 import telar.gui.foundation.system;
 import telar.gui.foundation.agents;
 import telar.gui.application;
@@ -28,6 +11,7 @@ import telar.base.ds;
 import telar.wire.vocabulary;
 
 namespace telar::gui::qt {
+  using Qt::StringLiterals::operator""_s;
 
   NativeAgentStatus::NativeAgentStatus(QQuickItem* parent)
       : QQuickItem(parent) {
@@ -67,7 +51,7 @@ namespace telar::gui::qt {
 
       synchronize();
       if (alive) {
-        emit displayModeChanged();
+        displayModeChanged();
       }
     }
   }
@@ -80,19 +64,19 @@ namespace telar::gui::qt {
     record_ = record;
     const auto timestamp = clock_ ? clock_->now() : system::AwakeClock::nowNanoseconds();
 
-    interval_ = statusAgeInterval(record.value(QStringLiteral("statusClock"))).valueOr(StatusAgeInterval{.age_ns = static_cast<std::uint64_t>(record.value(QStringLiteral("age")).toUInt()) * StatusAgeInterval::nanoseconds_per_second, .sampled_ns = timestamp});
-    const auto state = record.value(QStringLiteral("statusCode")).toInt();
+    interval_ = statusAgeInterval(record.value(u"statusClock"_s)).valueOr(StatusAgeInterval{.age_ns = static_cast<std::uint64_t>(record.value(u"age"_s).toUInt()) * StatusAgeInterval::nanoseconds_per_second, .sampled_ns = timestamp});
+    const auto state = record.value(u"statusCode"_s).toInt();
 
     status_ = state >= static_cast<int>(AgentStatus::unknown) && state <= static_cast<int>(AgentStatus::done) ? static_cast<AgentStatus>(state) : AgentStatus::unknown;
-    const auto reason = record.value(QStringLiteral("blockedReason")).toInt();
+    const auto reason = record.value(u"blockedReason"_s).toInt();
 
     reason_ = reason >= static_cast<int>(AgentBlockedReason::none) && reason <= static_cast<int>(AgentBlockedReason::other) ? static_cast<AgentBlockedReason>(reason) : AgentBlockedReason::none;
-    connected_ = record.value(QStringLiteral("enabled"), true).toBool();
+    connected_ = record.value(u"enabled"_s, true).toBool();
     const QPointer<NativeAgentStatus> alive{this};
 
     synchronize();
     if (alive) {
-      emit recordChanged();
+      recordChanged();
     }
   }
 
@@ -103,7 +87,7 @@ namespace telar::gui::qt {
 
       synchronize();
       if (alive) {
-        emit runningChanged();
+        runningChanged();
       }
     }
   }
@@ -150,11 +134,11 @@ namespace telar::gui::qt {
     const QPointer<NativeAgentStatus> alive{this};
 
     if (text_changed) {
-      emit statusTextChanged();
+      statusTextChanged();
     }
 
     if (alive && alpha_changed) {
-      emit animatedAlphaChanged();
+      animatedAlphaChanged();
     }
   }
 

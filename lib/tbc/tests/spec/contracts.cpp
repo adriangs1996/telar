@@ -185,7 +185,7 @@ contracts::statement opaqueConstructorRetained(contracts::database& owner) {
 
 // CASE: contract.elided_call_temporary
 // PAIR: contract.elided_call
-// SOURCE: src/gui/ui/app/application_controller.hpp :: ApplicationController::session
+// SOURCE: src/gui/ui/app/app-application_controller.cppm :: ApplicationController::session
 // STATUS: implemented
 // CONTRACT: A method declared without a contract and without a visible body returns a borrow of its receiver, as Rust's lifetime elision gives it.
 // SCENARIO: The receiver is a temporary that dies before the result is read.
@@ -198,7 +198,7 @@ void elidedCallTemporary() {
 
 // CASE: contract.elided_call_receiver
 // PAIR: contract.elided_call
-// SOURCE: src/gui/ui/app/application_controller.hpp :: ApplicationController::session
+// SOURCE: src/gui/ui/app/app-application_controller.cppm :: ApplicationController::session
 // STATUS: implemented
 // CONTRACT: A method declared without a contract and without a visible body returns a borrow of its receiver, as Rust's lifetime elision gives it.
 // SCENARIO: The receiver outlives the result; accept.
@@ -210,7 +210,7 @@ void elidedCallReceiver(const elision::registry& registry) {
 
 // CASE: contract.elided_definition_parameter
 // PAIR: contract.elided_definition
-// SOURCE: src/gui/ui/app/application_controller.hpp :: ApplicationController::session
+// SOURCE: src/gui/ui/app/app-application_controller.cppm :: ApplicationController::session
 // STATUS: implemented
 // CONTRACT: An out-of-line definition keeps the elided contract its callers assume without the body.
 // SCENARIO: A method returns its parameter, which callers that only see the declaration take for a borrow of the receiver.
@@ -222,7 +222,7 @@ const std::string& elision::registry::pick(const std::string& fallback) const {
 
 // CASE: contract.elided_definition_receiver
 // PAIR: contract.elided_definition
-// SOURCE: src/gui/ui/app/application_controller.hpp :: ApplicationController::session
+// SOURCE: src/gui/ui/app/app-application_controller.cppm :: ApplicationController::session
 // STATUS: implemented
 // CONTRACT: An out-of-line definition keeps the elided contract its callers assume without the body.
 // SCENARIO: A method returns its receiver's field; accept.
@@ -234,7 +234,7 @@ const std::string& elision::registry::name() const {
 
 // CASE: contract.self_field_internal
 // PAIR: contract.self_field
-// SOURCE: src/gui/ui/kit/fonts/font_asset.hpp :: FontAsset
+// SOURCE: src/gui/ui/kit/fonts/fonts-font_asset.cppm :: FontAsset
 // STATUS: implemented
 // CONTRACT: A field labeled lt::self borrows only its own pinned object, so the object holds no borrow of anything else.
 // SCENARIO: Shared pinned objects whose only borrow is internal cross an opaque two-input call without a contract; accept.
@@ -264,7 +264,7 @@ void selfFieldInternal(const std::shared_ptr<const contracts::self_text>& first,
 
 // CASE: contract.self_field_unlabeled
 // PAIR: contract.self_field
-// SOURCE: src/gui/ui/kit/fonts/font_asset.hpp :: FontAsset
+// SOURCE: src/gui/ui/kit/fonts/fonts-font_asset.cppm :: FontAsset
 // STATUS: implemented
 // CONTRACT: A field labeled lt::self borrows only its own pinned object, so the object holds no borrow of anything else.
 // SCENARIO: Without the label, the object keeps a borrow of itself, rejected where it is taken; its pointer may then borrow anything, so the opaque two-input call needs a contract.
@@ -294,7 +294,7 @@ void selfFieldUnlabeled(const std::shared_ptr<const contracts::borrowed_text>& f
 
 // CASE: contract.self_field_relocatable
 // PAIR: contract.self_field
-// SOURCE: src/gui/ui/kit/fonts/font_asset.hpp :: FontAsset
+// SOURCE: src/gui/ui/kit/fonts/fonts-font_asset.cppm :: FontAsset
 // STATUS: implemented
 // CONTRACT: A field labeled lt::self borrows only its own pinned object, so the object holds no borrow of anything else.
 // SCENARIO: A copy would carry the internal borrow away from its object; reject the labeled field's initializer.
@@ -365,7 +365,7 @@ void selfFieldMutation() {
 
 // CASE: contract.self_field_region
 // PAIR: contract.self_field
-// SOURCE: src/gui/ui/kit/fonts/font_cache.hpp :: FontCache::Generation
+// SOURCE: src/gui/ui/kit/fonts/fonts-font_cache.cppm :: FontCache::Generation
 // STATUS: implemented
 // CONTRACT: A field labeled lt::self borrows only its own pinned object, so the object holds no borrow of anything else.
 // SCENARIO: A pinned object's labeled field reads bytes a sibling allocates in the object's own region; the object already lives within that region, so the internal borrow may carry it; accept.
@@ -418,7 +418,7 @@ void selfFieldRegion(contracts::byte_pool& memory) {
 
 // CASE: contract.elided_constructor_escape
 // PAIR: contract.elided_constructor
-// SOURCE: src/gui/ui/kit/scene/ancestor_geometry.hpp :: AncestorGeometry
+// SOURCE: src/gui/ui/kit/scene/scene-ancestor_geometry.cppm :: AncestorGeometry
 // STATUS: implemented
 // CONTRACT: A constructor without a visible body and without labeled fields may retain any argument that can lend.
 // SCENARIO: The object outlives the temporary text it was built from; reject.
@@ -442,7 +442,7 @@ std::size_t elidedConstructorEscape() {
 
 // CASE: contract.elided_constructor_retained
 // PAIR: contract.elided_constructor
-// SOURCE: src/gui/ui/kit/scene/ancestor_geometry.hpp :: AncestorGeometry
+// SOURCE: src/gui/ui/kit/scene/scene-ancestor_geometry.cppm :: AncestorGeometry
 // STATUS: implemented
 // CONTRACT: A constructor without a visible body and without labeled fields may retain any argument that can lend.
 // SCENARIO: The text outlives the object; accept.
@@ -467,7 +467,7 @@ library::node* elision::painted_item::update(library::node* previous) {
 
 // CASE: contract.labeled_field_storage
 // PAIR: contract.labeled_field
-// SOURCE: src/gui/ui/kit/config/configuration_source.hpp :: ConfigurationSource::commandTab
+// SOURCE: src/gui/ui/kit/config/config-configuration_source.cppm :: ConfigurationSource::commandTab
 // STATUS: implemented
 // CONTRACT: What a field labeled with the result's region owns lives in that region, as a field of `&'a self` does.
 // SCENARIO: The result views the string the labeled field owns; accept.
@@ -487,7 +487,7 @@ namespace contracts {
 
 // CASE: contract.labeled_field_other
 // PAIR: contract.labeled_field
-// SOURCE: src/gui/ui/kit/config/configuration_source.hpp :: ConfigurationSource::commandTab
+// SOURCE: src/gui/ui/kit/config/config-configuration_source.cppm :: ConfigurationSource::commandTab
 // STATUS: implemented
 // CONTRACT: What a field labeled with the result's region owns lives in that region, as a field of `&'a self` does.
 // SCENARIO: The result views a string an unlabeled field owns; reject.

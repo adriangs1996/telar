@@ -5,14 +5,6 @@ static_assert(true);
 
 #include "platform/window.hpp"
 #include "tbc/view.hpp"
-#include "ui/kit/cell_scene/terminal_scene.hpp"
-#include "ui/kit/cell_scene/window_images.hpp"
-#include "ui/kit/fonts/bundled_fonts.hpp"
-#include "ui/kit/fonts/font_asset.hpp"
-#include "ui/kit/fonts/font_collection.hpp"
-#include "ui/kit/fonts/font_resolver.hpp"
-#include "ui/kit/fonts/font_source.hpp"
-#include "ui/kit/fonts/resident_fonts.hpp"
 #include <QColor>
 #include <QCommandLineParser>
 #include <QFile>
@@ -53,6 +45,9 @@ import telar.gui.application;
 import telar.base.ds;
 import telar.gui.foundation.core;
 import telar.wire.vocabulary;
+
+import telar.gui.ui.kit.cell_scene;
+import telar.gui.ui.kit.fonts;
 
 namespace {
 

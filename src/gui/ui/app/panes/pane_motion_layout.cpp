@@ -1,22 +1,18 @@
-#include "pane_motion_layout.hpp"
-#include "ui/kit/scene/window_animation_clock.hpp"
-#include <QQuickWindow>
-#include <QRectF>
-#include <QVariantMap>
-#include <QtCore/qtenvironmentvariables.h>
-#include <algorithm>
-#include <array>
-#include <cstddef>
+module telar.gui.ui.app.panes;
 
+import std;
+import telar.gui.qt;
+import telar.gui.ui.kit.scene;
 import telar.gui.foundation.model;
 import telar.gui.application;
 import telar.base.ds;
 
 namespace telar::gui::qt {
+  using Qt::StringLiterals::operator""_s;
 
   PaneMotionLayout::PaneMotionLayout(QQuickItem* parent)
       : QQuickItem(parent) {
-    enabled_ = qEnvironmentVariable("TELAR_GUI_PANE_ANIMATIONS") != QStringLiteral("0");
+    enabled_ = qEnvironmentVariable("TELAR_GUI_PANE_ANIMATIONS") != u"0"_s;
     bindClock();
   }
 
@@ -60,7 +56,7 @@ namespace telar::gui::qt {
     }
 
     polish();
-    emit modelChanged();
+    modelChanged();
   }
 
   void PaneMotionLayout::setMotionEnabled(bool enabled) {
@@ -71,7 +67,7 @@ namespace telar::gui::qt {
     enabled_ = enabled;
     immediate_ = true;
     polish();
-    emit motionEnabledChanged();
+    motionEnabledChanged();
   }
 
   bool PaneMotionLayout::eligible() const noexcept {
@@ -123,14 +119,14 @@ namespace telar::gui::qt {
       auto record = model_->data(model_->index(index, 0), ListModel::record_role).toMap();
 
       placements.atMut(static_cast<std::size_t>(index)) = {
-          .id = record.value(QStringLiteral("key")).toString().toULongLong(),
-          .bounds = {.x = record.value(QStringLiteral("x")).toFloat(), .y = record.value(QStringLiteral("y")).toFloat(), .width = record.value(QStringLiteral("width")).toFloat(), .height = record.value(QStringLiteral("height")).toFloat()},
+          .id = record.value(u"key"_s).toString().toULongLong(),
+          .bounds = {.x = record.value(u"x"_s).toFloat(), .y = record.value(u"y"_s).toFloat(), .width = record.value(u"width"_s).toFloat(), .height = record.value(u"height"_s).toFloat()},
       };
 
       records.append(std::move(record));
     }
 
-    const auto context = records.isEmpty() ? QString{} : records.front().value(QStringLiteral("motionContext")).toString();
+    const auto context = records.isEmpty() ? QString{} : records.front().value(u"motionContext"_s).toString();
     const auto now = clock_ ? clock_->now() : 0;
 
     motions_.update(std::span{placements}.first(static_cast<std::size_t>(count)), now, immediate_ || !enabled_ || !eligible() || context != context_);
@@ -142,10 +138,10 @@ namespace telar::gui::qt {
       const auto bounds = motions_.place(static_cast<std::size_t>(index), frame);
       const auto& record = records[index];
       const auto visual = bounds == placements[static_cast<std::size_t>(index)].bounds
-                              ? QRectF{record.value(QStringLiteral("x")).toReal(), record.value(QStringLiteral("y")).toReal(), record.value(QStringLiteral("width")).toReal(), record.value(QStringLiteral("height")).toReal()}
+                              ? QRectF{record.value(u"x"_s).toReal(), record.value(u"y"_s).toReal(), record.value(u"width"_s).toReal(), record.value(u"height"_s).toReal()}
                               : QRectF{static_cast<qreal>(bounds.x), static_cast<qreal>(bounds.y), static_cast<qreal>(bounds.width), static_cast<qreal>(bounds.height)};
 
-      records[index].insert(QStringLiteral("visualBounds"), visual);
+      records[index].insert(u"visualBounds"_s, visual);
     }
 
     next_sample_ns_ = frame.deadline_ns;

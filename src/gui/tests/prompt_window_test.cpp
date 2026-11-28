@@ -2,14 +2,6 @@
 // Keep textual ABI declarations and module imports in one clangd parse.
 static_assert(true);
 #endif
-
-#include "frame_fixture.hpp"
-#include "gui_wait.hpp"
-#include "qml_fixture.hpp"
-#include "screen_fixture.hpp"
-#include "shots_fixture.hpp"
-#include "ui/app/application_controller.hpp"
-#include "ui/kit/input/key_adapter.hpp"
 #include <QByteArray>
 #include <QClipboard>
 #include <QColor>
@@ -64,14 +56,6 @@ static_assert(true);
 #ifdef __APPLE__
 #include <QtGui/qtestsupport_gui.h>
 #endif
-#include "ui/app/chrome/components/machine_chrome/machine_chrome_layout.hpp"
-#include "ui/app/panes/terminal/prompt/prompt_editor_item.hpp"
-#include "ui/app/panes/terminal/terminal_item.hpp"
-#include "ui/kit/fonts/bundled_fonts.hpp"
-#include "ui/kit/links/external_link_opener.hpp"
-#include "ui/kit/machines/machine_client.hpp"
-#include "ui/kit/models/list_model.hpp"
-#include "wire_runtime.hpp"
 #include <QAbstractItemModel>
 #include <QCoreApplication>
 #include <QDir>
@@ -132,6 +116,18 @@ import telar.base.ds;
 import telar.gui.foundation.core;
 import telar.wire.vocabulary;
 import telar.wire.pane_io;
+import telar.gui.ui.app;
+import telar.gui.ui.kit.input;
+import telar.gui.ui.app.panes.terminal.prompt;
+import telar.gui.ui.app.panes.terminal;
+import telar.gui.ui.kit.models;
+import telar.gui.tests.shots_fixture;
+import telar.gui.tests.frame_fixture;
+import telar.gui.tests.gui_wait;
+import telar.gui.tests.qml_fixture;
+import telar.gui.tests.screen_fixture;
+import telar.gui.tests.wire_runtime;
+import telar.gui.qt;
 
 namespace {
 
@@ -1030,12 +1026,18 @@ command = "switch" : "Switch branches" | "status" : "Show the working tree statu
     body(application, window, terminal, *line, pane, directory);
   }
 
-  class PromptWindowTest : public QObject {
-    Q_OBJECT
+  class [[qt::object]] PromptWindowTest : public QObject {
+  public:
+    static const QMetaObject staticMetaObject;
+    const QMetaObject* metaObject() const override;
+    void* qt_metacast(const char* name) override;
+    int qt_metacall(QMetaObject::Call call, int id, void** args) override;
+    static void qt_static_metacall(QObject* object, QMetaObject::Call call, int id, void** args);
 
+  private:
     // The prompt line takes the keys of a shell at its prompt, sends the finished command as one
     // paste and Enter, and stands in for the shell's prompt rows.
-    Q_SLOT static void lineEditsAndRunsCommands() {
+    [[qt::slot]] static void lineEditsAndRunsCommands() {
       ApplicationMemory application_memory;
       ApplicationAllocator& memory = application_memory.memory();
       ApplicationController application{memory};
@@ -1100,7 +1102,7 @@ command = "switch" : "Switch branches" | "status" : "Show the working tree statu
     // dialog: they start from the line, take the keyboard, and give it back as they close.
     // A separator stays as its command's rows move and updates in place, so a command that ends
     // under it is settled as one built afresh would be: its clock forgotten, its end recorded.
-    Q_SLOT static void separatorSettlesACommandThatEnds() {
+    [[qt::slot]] static void separatorSettlesACommandThatEnds() {
       ApplicationMemory application_memory;
       ApplicationAllocator& memory = application_memory.memory();
       ApplicationController application{memory};
@@ -1160,7 +1162,7 @@ command = "switch" : "Switch branches" | "status" : "Show the working tree statu
       QVERIFY(!separators->property("started").toMap().contains(QStringLiteral("0")));
     }
 
-    Q_SLOT static void lineHostsSearches() {
+    [[qt::slot]] static void lineHostsSearches() {
       ApplicationMemory application_memory;
       ApplicationAllocator& memory = application_memory.memory();
       ApplicationController application{memory};
@@ -1228,7 +1230,7 @@ command = "switch" : "Switch branches" | "status" : "Show the working tree statu
 
     // In a narrow pane the line turns compact: the mode's chip gives its columns to the context,
     // which never runs past them.
-    Q_SLOT static void lineTurnsCompactWhenNarrow() {
+    [[qt::slot]] static void lineTurnsCompactWhenNarrow() {
       ApplicationMemory application_memory;
       ApplicationAllocator& memory = application_memory.memory();
       ApplicationController application{memory};
@@ -1318,7 +1320,7 @@ command = "switch" : "Switch branches" | "status" : "Show the working tree statu
     // TELAR_SHOTS_DIR is set: Up by the typed prefix, the suggestion for this directory, the fuzzy
     // menu, an option its command refuses, an alias expanded, the command meant after a typo, the
     // notice of a paste too large, and keys typed ahead given back to the line.
-    Q_SLOT static void showsWhatThePromptOffers() {
+    [[qt::slot]] static void showsWhatThePromptOffers() {
       withRealShell("return {api_version=2,client={prompt={mode='telar',expand_aliases=true}}}", [](ApplicationController& application, QQuickWindow& window, TerminalItem& terminal, QQuickItem& line, std::uint64_t pane, const QTemporaryDir& directory) {
         const auto* editor = line.findChild<PromptEditorItem*>();
         const auto text = [&] {
@@ -1429,7 +1431,7 @@ command = "switch" : "Switch branches" | "status" : "Show the working tree statu
     // With the output kept, a word a command printed and never typed is found with `in:output` in
     // the line's history search: its row shows the excerpt of the output, lit where the runtime
     // matched.
-    Q_SLOT static void historyFindsWhatACommandPrinted() {
+    [[qt::slot]] static void historyFindsWhatACommandPrinted() {
       withRealShell(
           telar_config,
           [](ApplicationController& application, QQuickWindow& window, TerminalItem& terminal, QQuickItem& line, std::uint64_t pane, const QTemporaryDir&) {
@@ -1464,7 +1466,7 @@ command = "switch" : "Switch branches" | "status" : "Show the working tree statu
 
     // A command prints for a while; a wheel notch up stops following it, and wheel notches back
     // down to the live end follow it again.
-    Q_SLOT static void followsOutputAfterTheWheelComesBack() {
+    [[qt::slot]] static void followsOutputAfterTheWheelComesBack() {
       withRealShell(telar_config, [](ApplicationController& application, QQuickWindow& window, TerminalItem& terminal, QQuickItem&, std::uint64_t pane, const QTemporaryDir&) {
         QKeyEvent enter{QEvent::KeyPress, Qt::Key_Return, Qt::NoModifier, QStringLiteral("\r")};
 
@@ -1488,7 +1490,7 @@ command = "switch" : "Switch branches" | "status" : "Show the working tree statu
     }
 
     // The same with JumpToEnd's click while the command still prints.
-    Q_SLOT static void followsOutputAfterJumpingToTheEnd() {
+    [[qt::slot]] static void followsOutputAfterJumpingToTheEnd() {
       withRealShell(telar_config, [](ApplicationController& application, QQuickWindow& window, TerminalItem& terminal, QQuickItem&, std::uint64_t pane, const QTemporaryDir&) {
         QKeyEvent enter{QEvent::KeyPress, Qt::Key_Return, Qt::NoModifier, QStringLiteral("\r")};
 
@@ -1509,7 +1511,7 @@ command = "switch" : "Switch branches" | "status" : "Show the working tree statu
 
     // With the vim keymap: Escape, [[ selects the last command, yc copies its command and Y its
     // output.
-    Q_SLOT static void copiesABlockWithVimKeys() {
+    [[qt::slot]] static void copiesABlockWithVimKeys() {
       withRealShell(telar_vim_config, [](ApplicationController& application, QQuickWindow&, TerminalItem& terminal, QQuickItem&, std::uint64_t pane, const QTemporaryDir&) {
         QKeyEvent escape{QEvent::KeyPress, Qt::Key_Escape, Qt::NoModifier, QStringLiteral("\x1b")};
 
@@ -1529,7 +1531,7 @@ command = "switch" : "Switch branches" | "status" : "Show the working tree statu
     }
 
     // With the default keymap, prefix+[ selects the last command (selectBlock here), then yc and Y.
-    Q_SLOT static void copiesABlockFromPrefixBracket() {
+    [[qt::slot]] static void copiesABlockFromPrefixBracket() {
       withRealShell(telar_config, [](ApplicationController& application, QQuickWindow&, TerminalItem& terminal, QQuickItem&, std::uint64_t pane, const QTemporaryDir&) {
         runCommand(application, terminal, pane, "printf 'alpha\\nbeta\\ngamma\\n'");
         QTRY_VERIFY_WITH_TIMEOUT(application.pane(pane)->blocks.size() == 1, runtime_wait_ms);
@@ -1547,7 +1549,7 @@ command = "switch" : "Switch branches" | "status" : "Show the working tree statu
 
     // Y on a command whose output ends right before the live prompt copies all of it, its last
     // line too, and nothing of the prompt.
-    Q_SLOT static void copiesWholeOutputs() {
+    [[qt::slot]] static void copiesWholeOutputs() {
       withRealShell(telar_config, [](ApplicationController& application, QQuickWindow&, TerminalItem& terminal, QQuickItem&, std::uint64_t pane, const QTemporaryDir&) {
         runCommand(application, terminal, pane, "echo one");
         runCommand(application, terminal, pane, "seq 3");
@@ -1570,7 +1572,7 @@ command = "switch" : "Switch branches" | "status" : "Show the working tree statu
     }
 
     // A drag over a row scrolled into view copies the row it is drawn on.
-    Q_SLOT static void selectsTheRowsDrawnWhenScrolled() {
+    [[qt::slot]] static void selectsTheRowsDrawnWhenScrolled() {
       withRealShell(telar_config, [](ApplicationController& application, QQuickWindow& window, TerminalItem& terminal, QQuickItem&, std::uint64_t pane, const QTemporaryDir&) {
         runCommand(application, terminal, pane, "seq 1000 1120");
         wheel(window, terminal, 5);
@@ -1587,7 +1589,7 @@ command = "switch" : "Switch branches" | "status" : "Show the working tree statu
     }
 
     // A drag while a command still prints, scrolled up, copies the row it is drawn on.
-    Q_SLOT static void selectsWhileOutputRuns() {
+    [[qt::slot]] static void selectsWhileOutputRuns() {
       withRealShell(telar_config, [](ApplicationController& application, QQuickWindow& window, TerminalItem& terminal, QQuickItem&, std::uint64_t pane, const QTemporaryDir&) {
         QKeyEvent enter{QEvent::KeyPress, Qt::Key_Return, Qt::NoModifier, QStringLiteral("\r")};
 
@@ -1616,7 +1618,7 @@ command = "switch" : "Switch branches" | "status" : "Show the working tree statu
 
     // With an earlier command folded, a drag over the first output row of the next command copies
     // that row, not the folded command's.
-    Q_SLOT static void selectsUnderAFold() {
+    [[qt::slot]] static void selectsUnderAFold() {
       withRealShell(telar_config, [](ApplicationController& application, QQuickWindow& window, TerminalItem& terminal, QQuickItem&, std::uint64_t pane, const QTemporaryDir&) {
         runCommand(application, terminal, pane, "seq 1 60");
         runCommand(application, terminal, pane, "seq 1000 1060");
@@ -1638,7 +1640,7 @@ command = "switch" : "Switch branches" | "status" : "Show the working tree statu
 
     // A notch up and at once a notch back, or far more notches down than up, while a command
     // prints: the view should be following the output again either way.
-    Q_SLOT static void followsOutputAfterAShortWheel() {
+    [[qt::slot]] static void followsOutputAfterAShortWheel() {
       withRealShell(telar_config, [](ApplicationController& application, QQuickWindow& window, TerminalItem& terminal, QQuickItem&, std::uint64_t pane, const QTemporaryDir&) {
         QKeyEvent enter{QEvent::KeyPress, Qt::Key_Return, Qt::NoModifier, QStringLiteral("\r")};
         constexpr int jiggle_ms = 150;
@@ -1666,7 +1668,7 @@ command = "switch" : "Switch branches" | "status" : "Show the working tree statu
 
     // A block selected as a click on its separator selects it, then a command typed in the
     // default keymap reaches the editor whole.
-    Q_SLOT static void typesAfterAClickedBlock() {
+    [[qt::slot]] static void typesAfterAClickedBlock() {
       withRealShell(telar_config, [](ApplicationController& application, QQuickWindow&, TerminalItem& terminal, QQuickItem&, std::uint64_t pane, const QTemporaryDir&) {
         runCommand(application, terminal, pane, "echo one");
         terminal.selectBlock(0);
@@ -1679,7 +1681,7 @@ command = "switch" : "Switch branches" | "status" : "Show the working tree statu
     }
 
     // Y on a command with no output copies nothing of the next command.
-    Q_SLOT static void copiesNothingOfAnEmptyOutput() {
+    [[qt::slot]] static void copiesNothingOfAnEmptyOutput() {
       withRealShell(telar_config, [](ApplicationController& application, QQuickWindow&, TerminalItem& terminal, QQuickItem&, std::uint64_t pane, const QTemporaryDir&) {
         runCommand(application, terminal, pane, "true");
         runCommand(application, terminal, pane, "echo after");
@@ -1696,7 +1698,7 @@ command = "switch" : "Switch branches" | "status" : "Show the working tree statu
     }
 
     // yc copies the whole command that ran, past 160 bytes.
-    Q_SLOT static void copiesALongCommandWhole() {
+    [[qt::slot]] static void copiesALongCommandWhole() {
       withRealShell(telar_config, [](ApplicationController& application, QQuickWindow&, TerminalItem& terminal, QQuickItem&, std::uint64_t pane, const QTemporaryDir&) {
         const std::string command = "echo " + std::string(200, 'a');
 
@@ -1712,7 +1714,7 @@ command = "switch" : "Switch branches" | "status" : "Show the working tree statu
 
     // Cmd+Up selects the last command from the default keymap, Cmd+C copies its output, the
     // separator's button its command, and typing goes on to the editor.
-    Q_SLOT static void copiesWithTheWindowKeys() {
+    [[qt::slot]] static void copiesWithTheWindowKeys() {
       withRealShell(telar_config, [](ApplicationController& application, QQuickWindow&, TerminalItem& terminal, QQuickItem&, std::uint64_t pane, const QTemporaryDir&) {
         runCommand(application, terminal, pane, "printf 'alpha\\nbeta\\n'");
         QGuiApplication::clipboard()->setText(QStringLiteral("untouched"));
@@ -1736,7 +1738,7 @@ command = "switch" : "Switch branches" | "status" : "Show the working tree statu
     // The filter of a block's output: & opens it on the selected block and the bar it shows
     // filters as its query is typed, by text, by regular expression, with context and inverted;
     // Y copies the lines shown and Escape shows them all again.
-    Q_SLOT static void filtersABlockOutput() {
+    [[qt::slot]] static void filtersABlockOutput() {
       withRealShell(telar_vim_config, [](ApplicationController& application, QQuickWindow& window, TerminalItem& terminal, QQuickItem&, std::uint64_t pane, const QTemporaryDir&) {
         QQmlEngine engine;
         const auto bar = createChrome(engine, QStringLiteral("BlockFilter"), {{QStringLiteral("view"), QVariant::fromValue(static_cast<QObject*>(&terminal))}, {QStringLiteral("colors"), application.colors()}, {QStringLiteral("typography"), application.display()->geometry().value(QStringLiteral("typography"))}});
@@ -1803,7 +1805,7 @@ command = "switch" : "Switch branches" | "status" : "Show the working tree statu
 
     // m marks blocks, which the rail and their separators show, ' goes back to one, and its
     // command goes back to the editor with sudo, or runs again from its separator's "rerun".
-    Q_SLOT static void marksAndReusesBlocks() {
+    [[qt::slot]] static void marksAndReusesBlocks() {
       withRealShell(telar_vim_config, [](ApplicationController& application, QQuickWindow& window, TerminalItem& terminal, QQuickItem&, std::uint64_t pane, const QTemporaryDir&) {
         QKeyEvent escape{QEvent::KeyPress, Qt::Key_Escape, Qt::NoModifier, QStringLiteral("\x1b")};
 
@@ -1837,7 +1839,7 @@ command = "switch" : "Switch branches" | "status" : "Show the working tree statu
     // Each separator says where its command ran: the directory and the branch, and pinned over
     // its output when it started; the rail says it all under the pointer. Output no command
     // printed, as a background job's, is marked down its rows instead of standing a separator.
-    Q_SLOT static void blocksSayWhereTheyRan() {
+    [[qt::slot]] static void blocksSayWhereTheyRan() {
       withRealShell(telar_config, [](ApplicationController& application, QQuickWindow& window, TerminalItem& terminal, QQuickItem&, std::uint64_t pane, const QTemporaryDir& directory) {
         const auto repository = directory.filePath(QStringLiteral("blocks-repo")).toStdString();
 
@@ -1892,7 +1894,7 @@ command = "switch" : "Switch branches" | "status" : "Show the working tree statu
 
     // The commands an earlier runtime kept have no rows: a chip counts them, and opens their
     // list, from which a command goes back to the editor.
-    Q_SLOT static void showsRestoredCommands() {
+    [[qt::slot]] static void showsRestoredCommands() {
       ApplicationMemory application_memory;
       ApplicationAllocator& memory = application_memory.memory();
       ApplicationController application{memory};
@@ -1968,7 +1970,7 @@ command = "switch" : "Switch branches" | "status" : "Show the working tree statu
     }
 
     // zsh's spelling correction asks before the command starts: the answer reaches zsh.
-    Q_SLOT static void answersZshCorrection() {
+    [[qt::slot]] static void answersZshCorrection() {
       withRealShell(telar_config, [](ApplicationController& application, QQuickWindow&, TerminalItem& terminal, QQuickItem&, std::uint64_t pane, const QTemporaryDir&) {
         QKeyEvent enter{QEvent::KeyPress, Qt::Key_Return, Qt::NoModifier, QStringLiteral("\r")};
 
@@ -1986,7 +1988,7 @@ command = "switch" : "Switch branches" | "status" : "Show the working tree statu
 
     // A click in the editor places the cursor; on macOS, Command+A selects the command,
     // Command+X cuts it and Command+Z brings it back.
-    Q_SLOT static void editsWithThePointerAndCommandKeys() {
+    [[qt::slot]] static void editsWithThePointerAndCommandKeys() {
       withRealShell(telar_config, [](ApplicationController& application, QQuickWindow& window, TerminalItem& terminal, QQuickItem& line, std::uint64_t pane, const QTemporaryDir&) {
         auto* editor = line.findChild<PromptEditorItem*>();
 
@@ -2022,7 +2024,7 @@ command = "switch" : "Switch branches" | "status" : "Show the working tree statu
 
     // Wide text an input method wrote: a click lands on the character under the cell, whatever
     // its width, and the input method reads the line around the caret to reconvert it.
-    Q_SLOT static void clicksAndReconvertsWideText() {
+    [[qt::slot]] static void clicksAndReconvertsWideText() {
       withRealShell(telar_config, [](ApplicationController& application, QQuickWindow& window, TerminalItem& terminal, QQuickItem& line, std::uint64_t pane, const QTemporaryDir&) {
         auto* editor = line.findChild<PromptEditorItem*>();
 
@@ -2063,7 +2065,7 @@ command = "switch" : "Switch branches" | "status" : "Show the working tree statu
 
     // The whole chain with nothing faked: the runtime integrates a real zsh, the line takes the
     // keys, and the shell runs the command it receives. Needs TELAR_GUI_TEST_RUNTIME.
-    Q_SLOT static void lineRunsInARealShell() {
+    [[qt::slot]] static void lineRunsInARealShell() {
       withRealShell("return {api_version=2,client={prompt={mode='telar'}}}", [](ApplicationController& application, QQuickWindow& window, TerminalItem& terminal, QQuickItem& line_item, std::uint64_t pane, const QTemporaryDir& directory) {
         auto* line = &line_item;
 
@@ -2087,4 +2089,6 @@ command = "switch" : "Switch branches" | "status" : "Show the working tree statu
 }
 
 QTEST_MAIN(PromptWindowTest)
+#ifndef TELAR_MOC_RUN
 #include "prompt_window_test.moc"
+#endif

@@ -1,26 +1,8 @@
-#ifdef __clangd__
-// Keep textual ABI declarations and module imports in one clangd parse.
-static_assert(true);
-#endif
+module telar.gui.ui.kit.cell_scene;
 
-#include "graphics_scene.hpp"
-#include "ui/kit/scene/scene_nodes.hpp"
-#include "window_images.hpp"
-#include <QQuickWindow>
-#include <QSGTransformNode>
-#include <QtCore/qsize.h>
-#include <QtCore/qtypes.h>
-#include <QtQuick/qsgnode.h>
-#include <algorithm>
-#include <array>
-#include <cmath>
-#include <cstddef>
-#include <cstdint>
-#include <functional>
-#include <optional>
-#include <span>
-#include <stdexcept>
-
+import std;
+import telar.gui.qt;
+import telar.gui.ui.kit.scene;
 import telar.gui.foundation.terminal;
 import telar.gui.application;
 import telar.base.ds;

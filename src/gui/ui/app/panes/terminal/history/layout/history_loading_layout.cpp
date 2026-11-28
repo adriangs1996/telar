@@ -1,27 +1,15 @@
-#ifdef __clangd__
-// Keep textual ABI declarations and module imports in one clangd parse.
-static_assert(true);
-#endif
+module telar.gui.ui.app.panes.terminal.history.layout;
 
-// projection.hpp declares telar::String textually; it comes before the header that imports
-// telar.gui.application, or clang does not merge the std::basic_string_view the two declare.
-#include "history_loading_layout.hpp"
-#include "ui/kit/models/projection.hpp"
-#include "ui/kit/scene/window_animation_clock.hpp"
-#include <QPointer>
-#include <QQuickItem>
-#include <QQuickWindow>
-#include <QRectF>
-#include <QtCore/qtmetamacros.h>
-#include <QtCore/qtypes.h>
-#include <cmath>
-#include <cstdint>
-#include <functional>
-#include <optional>
-
+import std;
+import telar.gui.qt;
+import telar.gui.ui.kit.models;
+import telar.gui.ui.kit.scene;
 import telar.gui.foundation.system;
 import telar.gui.application;
 import telar.base.ds;
+
+// projection.hpp declares telar::String textually; it comes before the header that imports
+// telar.gui.application, or clang does not merge the std::basic_string_view the two declare.
 
 namespace telar::gui::qt {
 
@@ -61,7 +49,7 @@ namespace telar::gui::qt {
       waiting_ = waiting;
       const QPointer<HistoryLoadingLayout> alive{this};
 
-      emit waitingChanged();
+      waitingChanged();
       if (alive) {
         synchronize();
       }
@@ -73,7 +61,7 @@ namespace telar::gui::qt {
       ratio_ = ratio;
       const QPointer<HistoryLoadingLayout> alive{this};
 
-      emit ratioChanged();
+      ratioChanged();
       if (alive) {
         synchronize();
       }
@@ -103,7 +91,7 @@ namespace telar::gui::qt {
     if (cue_visible_ != visible || line_ != line) {
       cue_visible_ = visible;
       line_ = line;
-      emit frameChanged();
+      frameChanged();
     }
   }
 

@@ -1,52 +1,18 @@
-#ifdef __clangd__
-// Keep textual ABI declarations and module imports in one clangd parse.
-static_assert(true);
-#endif
+module telar.gui.ui.app.chrome.components;
 
-#include "components_controller.hpp"
-#include "component_surface_state.hpp"
-#include "ui/design/elements/component_projection.hpp"
-#include "ui/kit/config/configuration_source.hpp"
-#include "ui/kit/machines/machine_client.hpp"
-#include "ui/kit/models/projection.hpp"
-#include "ui/kit/process/surface_command.hpp"
-#include <QByteArray>
-#include <QDateTime>
-#include <QFontDatabase>
-#include <QGuiApplication>
-#include <QPointF>
-#include <QString>
-#include <QStringLiteral>
-#include <QTimer>
-#include <QVariantMap>
-#include <QtCore/qcontainerfwd.h>
-#include <QtCore/qnamespace.h>
-#include <QtCore/qobject.h>
-#include <QtCore/qscopeguard.h>
-#include <QtCore/qtmetamacros.h>
-#include <algorithm>
-#include <array>
-#include <chrono>
-#include <cstddef>
-#include <cstdint>
-#include <cstdio>
-#include <cstring>
-#include <exception>
-#include <initializer_list>
-#include <limits>
-#include <optional>
-#include <span>
-#include <stdexcept>
-#include <string_view>
-#include <type_traits>
-#include <utility>
-#include <variant>
-
+import std;
+import telar.gui.qt;
+import telar.gui.ui.design.elements;
+import telar.gui.ui.kit.config;
+import telar.gui.ui.kit.machines;
+import telar.gui.ui.kit.models;
+import telar.gui.ui.kit.process.surface_command;
 import telar.gui.application;
 import telar.base.ds;
 import telar.wire.vocabulary;
 
 namespace telar::gui::qt {
+  using Qt::StringLiterals::operator""_s;
 
   namespace {
 
@@ -92,15 +58,15 @@ namespace telar::gui::qt {
     QString commandError(SurfaceCommandFailure failure) {
       switch (failure) {
       case SurfaceCommandFailure::launch:
-        return QStringLiteral("Could not launch command");
+        return u"Could not launch command"_s;
       case SurfaceCommandFailure::process:
-        return QStringLiteral("Command failed");
+        return u"Command failed"_s;
       case SurfaceCommandFailure::timeout:
-        return QStringLiteral("Command timed out");
+        return u"Command timed out"_s;
       case SurfaceCommandFailure::cancelled:
-        return QStringLiteral("Command cancelled");
+        return u"Command cancelled"_s;
       case SurfaceCommandFailure::invalid_output:
-        return QStringLiteral("Command returned invalid text");
+        return u"Command returned invalid text"_s;
       }
 
       return {};
@@ -164,7 +130,7 @@ namespace telar::gui::qt {
     registerComponentFonts();
     timer_.setSingleShot(true);
     connect(&timer_, &QTimer::timeout, this, &ComponentsController::tick);
-    connect(qGuiApp, &QGuiApplication::applicationStateChanged, this, [this](Qt::ApplicationState state) {
+    connect(qobject_cast<QGuiApplication*>(QCoreApplication::instance()), &QGuiApplication::applicationStateChanged, this, [this](Qt::ApplicationState state) {
       if (state == Qt::ApplicationActive) {
         project();
         tick();
@@ -176,7 +142,7 @@ namespace telar::gui::qt {
     if (surfaces_.generation != configuration_.configurationGeneration()) {
       reset();
     } else {
-      emit changed();
+      changed();
     }
   }
 
@@ -212,7 +178,7 @@ namespace telar::gui::qt {
       const auto& content = rendered->content;
       const auto& item = content.nodes()[static_cast<std::size_t>(node)];
 
-      return Activation{.action = content.action(item), .url = content.text(item.url), .identity = state.nodes.at(node).toMap().value(QStringLiteral("actionIdentity")).toString(), .actions = &rendered->actions};
+      return Activation{.action = content.action(item), .url = content.text(item.url), .identity = state.nodes.at(node).toMap().value(u"actionIdentity"_s).toString(), .actions = &rendered->actions};
     };
 
     return panel ? activate(state.panel.get()) : activate(bar(index));
@@ -248,14 +214,14 @@ namespace telar::gui::qt {
   }
 
   void ComponentsController::pickFailed(const QString& message) {
-    emit failed(message);
+    failed(message);
   }
 
   QVariantMap ComponentsController::pick() const {
     auto state = pick_.state();
 
     if (pick_.isOpen()) {
-      state.insert(QStringLiteral("geometry"), pickGeometry());
+      state.insert(u"geometry"_s, pickGeometry());
     }
 
     return state;
@@ -274,19 +240,19 @@ namespace telar::gui::qt {
     };
 
     return {
-        {QStringLiteral("bounds"), toQRectF(geometry.bounds, density)},
-        {QStringLiteral("heading"), local(geometry.heading)},
-        {QStringLiteral("search"), local(geometry.search)},
-        {QStringLiteral("results"), local(application::palette::PaletteGeometry::inset(geometry.results, display_.chrome.textPx(application::palette::PaletteRowWindow::content_inset)))},
-        {QStringLiteral("footer"), local(geometry.footer)},
-        {QStringLiteral("rowHeight"), static_cast<double>(geometry.row_height) / density},
+        {u"bounds"_s, toQRectF(geometry.bounds, density)},
+        {u"heading"_s, local(geometry.heading)},
+        {u"search"_s, local(geometry.search)},
+        {u"results"_s, local(application::palette::PaletteGeometry::inset(geometry.results, display_.chrome.textPx(application::palette::PaletteRowWindow::content_inset)))},
+        {u"footer"_s, local(geometry.footer)},
+        {u"rowHeight"_s, static_cast<double>(geometry.row_height) / density},
     };
   }
 
   void ComponentsController::setDisplay(const application::window::DisplayMetrics& display) {
     display_ = display;
     if (pick_.isOpen()) {
-      emit pickChanged();
+      pickChanged();
     }
   }
 
@@ -309,15 +275,15 @@ namespace telar::gui::qt {
         link = application::terminal::links::LinkTarget::fromUri(pressed->url);
       }
     } catch (const std::exception& error) {
-      emit failed(QString::fromUtf8(error.what()));
+      failed(QString::fromUtf8(error.what()));
 
       return;
     }
 
     if (action) {
-      emit bindingRequested(*action, *pressed->actions, anchor);
+      bindingRequested(*action, *pressed->actions, anchor);
     } else if (link) {
-      emit linkRequested(*link);
+      linkRequested(*link);
     }
   }
 
@@ -357,7 +323,7 @@ namespace telar::gui::qt {
       return;
     }
 
-    emit focusRestoreRequested();
+    focusRestoreRequested();
   }
 
   void ComponentsController::filterPick(const QString& query) {
@@ -371,7 +337,7 @@ namespace telar::gui::qt {
         restorePickFocus();
       }
     } catch (const std::exception& error) {
-      emit failed(QString::fromUtf8(error.what()));
+      failed(QString::fromUtf8(error.what()));
     }
   }
 
@@ -389,18 +355,18 @@ namespace telar::gui::qt {
       elements_.finish(ElementSlots::bar_slots);
       if (!element_bars_.isEmpty()) {
         element_bars_.clear();
-        emit elementBarsChanged();
+        elementBarsChanged();
       }
 
       return;
     }
 
-    auto bars = elements_.elements(ElementSlots::bar_slots, QStringLiteral("window"), item);
+    auto bars = elements_.elements(ElementSlots::bar_slots, u"window"_s, item);
 
     elements_.finish(ElementSlots::bar_slots);
     if (bars != element_bars_) {
       element_bars_ = std::move(bars);
-      emit elementBarsChanged();
+      elementBarsChanged();
     }
   }
 
@@ -455,7 +421,7 @@ namespace telar::gui::qt {
       }
     }
 
-    emit changed();
+    changed();
     timer_.start(std::chrono::milliseconds{0});
   }
 
@@ -537,7 +503,7 @@ namespace telar::gui::qt {
       projectSource(*surfaces_.open_panel, true);
     }
 
-    emit changed();
+    changed();
   }
 
   bool ComponentsController::commandCurrent(std::uint64_t generation, application::machines::MachineClientKey source, std::uint64_t runtime) const {
@@ -587,7 +553,7 @@ namespace telar::gui::qt {
       state.error = toQString(error.what());
     }
 
-    emit changed();
+    changed();
   }
 
   // The render runs on the Lua thread; its result replaces the surface only if nothing that
@@ -619,11 +585,11 @@ namespace telar::gui::qt {
           current.bar = std::move(outcome.value.getMut()).intoShared();
         }
 
-        current.error = truncated ? QStringLiteral("Command output exceeded its limit; showing what fits") : QString{};
+        current.error = truncated ? u"Command output exceeded its limit; showing what fits"_s : QString{};
         projectSource(index, panel);
       }
 
-      emit changed();
+      changed();
       timer_.start(std::chrono::milliseconds{0});
     };
 
@@ -659,7 +625,7 @@ namespace telar::gui::qt {
       state.error = toQString(error.what());
     }
 
-    emit changed();
+    changed();
 
     timer_.start(std::chrono::milliseconds{0});
   }
@@ -682,7 +648,7 @@ namespace telar::gui::qt {
 
       if (surfaceState(surfaces_, index, panel).clock_next <= now) {
         projectSource(index, panel);
-        emit changed();
+        changed();
       }
 
       const auto& state = surfaceState(surfaces_, index, panel);
@@ -749,13 +715,13 @@ namespace telar::gui::qt {
       const auto& state = surfaces_.bars[index];
 
       result.insert(QString::fromLatin1(names[index]), QVariantMap{
-                                                           {QStringLiteral("kind"), QString::fromLatin1(kinds[static_cast<std::size_t>(definitions.source(static_cast<application::components::Position>(index)).kind)])},
-                                                           {QStringLiteral("source"), static_cast<int>(index)},
-                                                           {QStringLiteral("nodes"), state.nodes},
-                                                           {QStringLiteral("error"), state.error},
-                                                           {QStringLiteral("generation"), QString::number(surfaces_.generation)},
-                                                           {QStringLiteral("revision"), QString::number(state.revision)},
-                                                           {QStringLiteral("identity"), QString::number(state.identity)},
+                                                           {u"kind"_s, QString::fromLatin1(kinds[static_cast<std::size_t>(definitions.source(static_cast<application::components::Position>(index)).kind)])},
+                                                           {u"source"_s, static_cast<int>(index)},
+                                                           {u"nodes"_s, state.nodes},
+                                                           {u"error"_s, state.error},
+                                                           {u"generation"_s, QString::number(surfaces_.generation)},
+                                                           {u"revision"_s, QString::number(state.revision)},
+                                                           {u"identity"_s, QString::number(state.identity)},
                                                        });
     }
 
@@ -765,24 +731,24 @@ namespace telar::gui::qt {
   QVariantMap ComponentsController::panel() const {
     const auto* definitions = configuration_.definitions();
     if (!surfaces_.open_panel || definitions == nullptr || *surfaces_.open_panel >= definitions->panels().size()) {
-      return {{QStringLiteral("open"), false}};
+      return {{u"open"_s, false}};
     }
 
     const auto& definition = definitions->panels()[*surfaces_.open_panel];
     const auto& state = surfaces_.panel;
 
     return {
-        {QStringLiteral("open"), true},
-        {QStringLiteral("title"), toQString(definition.heading.title.view())},
-        {QStringLiteral("width"), definition.width},
-        {QStringLiteral("nodes"), state.nodes},
-        {QStringLiteral("error"), state.error},
-        {QStringLiteral("renderedAt"), surfaces_.last_render_ms},
-        {QStringLiteral("generation"), QString::number(surfaces_.generation)},
-        {QStringLiteral("revision"), QString::number(state.revision)},
-        {QStringLiteral("identity"), QString::number(state.identity)},
-        {QStringLiteral("source"), static_cast<int>(ComponentSurfaceState::bar_slots)},
-        {QStringLiteral("anchor"), surfaces_.panel_anchor},
+        {u"open"_s, true},
+        {u"title"_s, toQString(definition.heading.title.view())},
+        {u"width"_s, definition.width},
+        {u"nodes"_s, state.nodes},
+        {u"error"_s, state.error},
+        {u"renderedAt"_s, surfaces_.last_render_ms},
+        {u"generation"_s, QString::number(surfaces_.generation)},
+        {u"revision"_s, QString::number(state.revision)},
+        {u"identity"_s, QString::number(state.identity)},
+        {u"source"_s, static_cast<int>(ComponentSurfaceState::bar_slots)},
+        {u"anchor"_s, surfaces_.panel_anchor},
     };
   }
 
@@ -804,7 +770,7 @@ namespace telar::gui::qt {
     surfaces_.panel.revision = surfaces_.panel_identity;
     surfaces_.panel.identity = surfaces_.panel_identity;
     timer_.start(std::chrono::milliseconds{0});
-    emit changed();
+    changed();
   }
 
   void ComponentsController::closePanel() {
@@ -816,7 +782,7 @@ namespace telar::gui::qt {
     surfaces_.panel = {};
     surfaces_.last_render_ms = 0;
     configuration_.closePanel();
-    emit changed();
+    changed();
     arm();
   }
 

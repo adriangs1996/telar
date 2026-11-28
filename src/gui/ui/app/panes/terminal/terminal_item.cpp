@@ -1,81 +1,22 @@
-#ifdef __clangd__
-// Keep textual ABI declarations and module imports in one clangd parse.
-static_assert(true);
-#endif
+module telar.gui.ui.app.panes.terminal;
 
-#include "terminal_item.hpp"
-#include "platform/font.h"
-#include "platform/text_input.hpp"
-#include "platform/window.hpp"
-#include "tbc/view.hpp"
-#include "ui/app/panes/terminal/prompt/prompt_keys.hpp"
-#include "ui/kit/cell_scene/graphics_scene.hpp"
-#include "ui/kit/cell_scene/terminal_scene.hpp"
-#include "ui/kit/cell_scene/window_images.hpp"
-#include "ui/kit/fonts/resident_fonts.hpp"
-#include "ui/kit/fonts/terminal_font.hpp"
-#include "ui/kit/fonts/window_font_catalog.hpp"
-#include "ui/kit/input/key_adapter.hpp"
-#include "ui/kit/input/key_encoding.hpp"
-#include <QClipboard>
-#include <QDate>
-#include <QDateTime>
-#include <QDebug>
-#include <QGuiApplication>
-#include <QHoverEvent>
-#include <QInputMethod>
-#include <QInputMethodEvent>
-#include <QKeyEvent>
-#include <QSGSimpleRectNode>
-#include <QSGTextNode>
-#include <QSGTransformNode>
-#include <QTextLayout>
-#include <QtCore/qbytearrayview.h>
-#include <QtCore/qchar.h>
-#include <QtCore/qcoreevent.h>
-#include <QtCore/qlogging.h>
-#include <QtCore/qnamespace.h>
-#include <QtCore/qobject.h>
-#include <QtCore/qpoint.h>
-#include <QtCore/qsize.h>
-#include <QtCore/qtimer.h>
-#include <QtCore/qtmetamacros.h>
-#include <QtCore/qtypes.h>
-#include <QtCore/qvariant.h>
-#include <QtGui/qtextformat.h>
-#include <QtQuick/qquickitem.h>
-#include <algorithm>
-#include <array>
-#include <atomic>
-#include <bit>
-#include <chrono>
-#include <cmath>
-#include <concepts>
-#include <cstddef>
-#include <cstdint>
-#include <cstring>
-#include <exception>
-#include <freetype/freetype.h>
-#include <functional>
-#include <hb.h>
-#include <limits>
-#include <memory>
-#include <optional>
-#include <span>
-#include <stdexcept>
-#include <string_view>
-#include <tuple>
-#include <type_traits>
-#include <utility>
-#include <variant>
-
+import std;
+import telar.gui.qt;
+import telar.gui.qt.platform;
+import telar.tbc;
+import telar.gui.ui.app.panes.terminal.prompt;
+import telar.gui.ui.kit.cell_scene;
+import telar.gui.ui.kit.fonts;
+import telar.gui.ui.kit.input;
 import telar.gui.foundation.core;
 import telar.gui.foundation.terminal;
 import telar.gui.application;
 import telar.base.ds;
 import telar.wire.vocabulary;
+import telar.gui.foundation.fonts;
 
 namespace telar::gui::qt {
+  using Qt::StringLiterals::operator""_s;
 
   TerminalItem::TerminalItem(QQuickItem* parent)
       : QQuickItem(parent) {
@@ -141,7 +82,7 @@ namespace telar::gui::qt {
       releaseKeys();
       releaseMouse();
     } catch (const std::exception& error) {
-      qWarning() << "Unable to release terminal input:" << error.what();
+      telar::qt::warning() << "Unable to release terminal input:" << error.what();
     }
   }
 
@@ -168,7 +109,7 @@ namespace telar::gui::qt {
       connect(controller_, &QObject::destroyed, this, [this] {
         controller_ = nullptr;
         update();
-        emit controllerChanged();
+        controllerChanged();
       });
 
       connect(controller_, &TerminalController::terminalChanged, this, [this](qulonglong pane_id) {
@@ -211,7 +152,7 @@ namespace telar::gui::qt {
       controller_->registerTerminal(*this);
     }
 
-    emit controllerChanged();
+    controllerChanged();
   }
 
   QString TerminalItem::paneId() const {
@@ -251,7 +192,7 @@ namespace telar::gui::qt {
 
     ++appearance_;
     refresh();
-    emit paneIdChanged();
+    paneIdChanged();
   }
 
   const application::Pane<Memory>* TerminalItem::pane() const noexcept {
@@ -280,7 +221,7 @@ namespace telar::gui::qt {
       update();
       refreshLinkHover();
     } catch (const std::exception& error) {
-      qWarning() << "Terminal font:" << error.what();
+      telar::qt::warning() << "Terminal font:" << error.what();
     }
   }
 
@@ -443,7 +384,7 @@ namespace telar::gui::qt {
         QGuiApplication::inputMethod()->update(Qt::ImCursorRectangle);
       }
 
-      emit promptCaretChanged();
+      promptCaretChanged();
     }
   }
 
@@ -513,20 +454,20 @@ namespace telar::gui::qt {
     QString blockState(CommandBlockState state) {
       switch (state) {
       case CommandBlockState::running:
-        return QStringLiteral("running");
+        return u"running"_s;
       case CommandBlockState::succeeded:
-        return QStringLiteral("succeeded");
+        return u"succeeded"_s;
       case CommandBlockState::failed:
-        return QStringLiteral("failed");
+        return u"failed"_s;
       case CommandBlockState::session:
-        return QStringLiteral("session");
+        return u"session"_s;
       case CommandBlockState::background:
-        return QStringLiteral("background");
+        return u"background"_s;
       case CommandBlockState::interrupted:
         break;
       }
 
-      return QStringLiteral("interrupted");
+      return u"interrupted"_s;
     }
 
     // The rows drawn: the screen's own, or a view's, scrolled by pixels and folded.
@@ -673,22 +614,22 @@ namespace telar::gui::qt {
       const auto [output_first, output_end] = GuiSession::blockRows(pane, index);
 
       QVariantMap separator{
-          {QStringLiteral("row"), row},
-          {QStringLiteral("command"), QString::fromUtf8(block.command.data(), static_cast<qsizetype>(block.command.size()))},
-          {QStringLiteral("lines"), static_cast<int>(block.lines)},
-          {QStringLiteral("state"), blockState(block.state)},
-          {QStringLiteral("status"), block.status},
-          {QStringLiteral("duration"), static_cast<qulonglong>(block.duration_ms)},
-          {QStringLiteral("index"), static_cast<int>(index)},
-          {QStringLiteral("key"), static_cast<qulonglong>(GuiSession::blockKey(pane, index))},
-          {QStringLiteral("selected"), context.selected == index},
-          {QStringLiteral("folded"), context.session.folded({.pane_id = context.pane_id, .index = index})},
-          {QStringLiteral("rows"), static_cast<int>(output_end - output_first)},
-          {QStringLiteral("commandRows"), static_cast<int>(std::max<std::uint32_t>(block.rows, 1))},
-          {QStringLiteral("foldable"), context.mapped && output_end > output_first},
-          {QStringLiteral("remote"), block.nest == CommandBlockNest::inside},
-          {QStringLiteral("host"), index >= context.live_session ? context.host : QString{}},
-          {QStringLiteral("marks"), TerminalItem::markLetters(pane, index)},
+          {u"row"_s, row},
+          {u"command"_s, QString::fromUtf8(block.command.data(), static_cast<qsizetype>(block.command.size()))},
+          {u"lines"_s, static_cast<int>(block.lines)},
+          {u"state"_s, blockState(block.state)},
+          {u"status"_s, block.status},
+          {u"duration"_s, static_cast<qulonglong>(block.duration_ms)},
+          {u"index"_s, static_cast<int>(index)},
+          {u"key"_s, static_cast<qulonglong>(GuiSession::blockKey(pane, index))},
+          {u"selected"_s, context.selected == index},
+          {u"folded"_s, context.session.folded({.pane_id = context.pane_id, .index = index})},
+          {u"rows"_s, static_cast<int>(output_end - output_first)},
+          {u"commandRows"_s, static_cast<int>(std::max<std::uint32_t>(block.rows, 1))},
+          {u"foldable"_s, context.mapped && output_end > output_first},
+          {u"remote"_s, block.nest == CommandBlockNest::inside},
+          {u"host"_s, index >= context.live_session ? context.host : QString{}},
+          {u"marks"_s, TerminalItem::markLetters(pane, index)},
       };
 
       separator.insert(TerminalItem::blockPlace(block));
@@ -707,7 +648,7 @@ namespace telar::gui::qt {
         if (inside && run_first < 0) {
           run_first = static_cast<int>(drawn_index);
         } else if (!inside && run_first >= 0) {
-          lists.background_rows.push_back(QVariantMap{{QStringLiteral("row"), run_first}, {QStringLiteral("rows"), static_cast<int>(drawn_index) - run_first}, {QStringLiteral("index"), static_cast<int>(index)}, {QStringLiteral("selected"), context.selected == index}});
+          lists.background_rows.push_back(QVariantMap{{u"row"_s, run_first}, {u"rows"_s, static_cast<int>(drawn_index) - run_first}, {u"index"_s, static_cast<int>(index)}, {u"selected"_s, context.selected == index}});
           run_first = -1;
         }
       }
@@ -731,7 +672,7 @@ namespace telar::gui::qt {
       for (std::size_t index = 0; index < pane.blocks.size(); ++index) {
         const auto& block = pane.blocks[index];
 
-        lists.rail.push_back(QVariantMap{{QStringLiteral("state"), blockState(block.state)}, {QStringLiteral("index"), static_cast<int>(index)}, {QStringLiteral("key"), static_cast<qulonglong>(GuiSession::blockKey(pane, index))}, {QStringLiteral("selected"), context.selected == index}, {QStringLiteral("marks"), TerminalItem::markLetters(pane, index)}});
+        lists.rail.push_back(QVariantMap{{u"state"_s, blockState(block.state)}, {u"index"_s, static_cast<int>(index)}, {u"key"_s, static_cast<qulonglong>(GuiSession::blockKey(pane, index))}, {u"selected"_s, context.selected == index}, {u"marks"_s, TerminalItem::markLetters(pane, index)}});
         // Output no command printed has no prompt row to stand a separator on: its rows are
         // marked down their edge instead.
         if (block.state == CommandBlockState::background) {
@@ -813,7 +754,7 @@ namespace telar::gui::qt {
         if (inside && run_first < 0) {
           run_first = static_cast<int>(index);
         } else if (!inside && run_first >= 0) {
-          runs.push_back(QVariantMap{{QStringLiteral("row"), run_first}, {QStringLiteral("rows"), static_cast<int>(index) - run_first}});
+          runs.push_back(QVariantMap{{u"row"_s, run_first}, {u"rows"_s, static_cast<int>(index) - run_first}});
           run_first = -1;
         }
       }
@@ -847,7 +788,7 @@ namespace telar::gui::qt {
           return span.first == first && span.shown != 0;
         });
 
-        lists.documents.push_back(QVariantMap{{QStringLiteral("id"), id}, {QStringLiteral("rows"), placed ? static_cast<int>(document.view_rows) : 0}, {QStringLiteral("placed"), placed}});
+        lists.documents.push_back(QVariantMap{{u"id"_s, id}, {u"rows"_s, placed ? static_cast<int>(document.view_rows) : 0}, {u"placed"_s, placed}});
         if (!placed) {
           continue;
         }
@@ -924,7 +865,7 @@ namespace telar::gui::qt {
       constexpr qsizetype room = 28;
       auto path = QString::fromUtf8(directory.data(), static_cast<qsizetype>(directory.size()));
       const auto name = QString::fromUtf8(user.data(), static_cast<qsizetype>(user.size()));
-      const QStringList homes{QStringLiteral("/home/") + name, QStringLiteral("/Users/") + name, name == QStringLiteral("root") ? QStringLiteral("/root") : QString{}};
+      const QStringList homes{u"/home/"_s + name, u"/Users/"_s + name, name == u"root"_s ? u"/root"_s : QString{}};
 
       for (const auto& home : homes) {
         if (!name.isEmpty() && !home.isEmpty() && (path == home || path.startsWith(home + QLatin1Char('/')))) {
@@ -937,7 +878,7 @@ namespace telar::gui::qt {
       for (int kept = 2; path.size() > room && kept > 0; --kept) {
         const auto parts = path.split(QLatin1Char('/'), Qt::SkipEmptyParts);
         if (parts.size() > kept) {
-          path = QStringLiteral("…/") + parts.mid(parts.size() - kept).join(QLatin1Char('/'));
+          path = u"…/"_s + parts.mid(parts.size() - kept).join(QLatin1Char('/'));
         }
       }
 
@@ -953,7 +894,7 @@ namespace telar::gui::qt {
 
       const auto started = QDateTime::fromMSecsSinceEpoch(milliseconds);
 
-      return started.date() == QDate::currentDate() ? started.toString(QStringLiteral("HH:mm:ss")) : started.toString(QStringLiteral("d MMM HH:mm"));
+      return started.date() == QDate::currentDate() ? started.toString(u"HH:mm:ss"_s) : started.toString(u"d MMM HH:mm"_s);
     }
 
     QString textOf(std::string_view text) {
@@ -971,19 +912,19 @@ namespace telar::gui::qt {
     const auto started = startedAt(block.started_ms);
     QStringList place;
 
-    for (const auto& part : {directory, branch.isEmpty() ? QString{} : QStringLiteral("⎇ ") + branch}) {
+    for (const auto& part : {directory, branch.isEmpty() ? QString{} : u"⎇ "_s + branch}) {
       if (!part.isEmpty()) {
         place.append(part);
       }
     }
 
     // What a pointer resting on the block reads: the command, how it ended, where and when.
-    QStringList tip{block.state == CommandBlockState::background ? QStringLiteral("Output no command printed, while the shell waited") : textOf(block.command)};
+    QStringList tip{block.state == CommandBlockState::background ? u"Output no command printed, while the shell waited"_s : textOf(block.command)};
     QStringList detail;
 
     tip.append(textOf(block.directory));
     if (!branch.isEmpty()) {
-      detail.append(QStringLiteral("⎇ ") + branch);
+      detail.append(u"⎇ "_s + branch);
     }
 
     if (!where.isEmpty()) {
@@ -991,19 +932,19 @@ namespace telar::gui::qt {
     }
 
     if (!started.isEmpty()) {
-      detail.append(QStringLiteral("started ") + started);
+      detail.append(u"started "_s + started);
     }
 
     detail.removeAll(QString{});
-    tip.append(detail.join(QStringLiteral(" · ")));
+    tip.append(detail.join(u" · "_s));
     tip.removeAll(QString{});
 
     return QVariantMap{
-        {QStringLiteral("place"), place.join(QStringLiteral("  "))},
-        {QStringLiteral("where"), where},
-        {QStringLiteral("started"), started},
-        {QStringLiteral("restored"), block.restored},
-        {QStringLiteral("tip"), tip.join(QLatin1Char('\n'))},
+        {u"place"_s, place.join(u"  "_s)},
+        {u"where"_s, where},
+        {u"started"_s, started},
+        {u"restored"_s, block.restored},
+        {u"tip"_s, tip.join(QLatin1Char('\n'))},
     };
   }
 
@@ -1015,12 +956,12 @@ namespace telar::gui::qt {
       auto restored = blockPlace(block);
 
       restored.insert(QVariantMap{
-          {QStringLiteral("index"), static_cast<int>(index)},
-          {QStringLiteral("command"), textOf(block.command)},
-          {QStringLiteral("state"), blockState(block.state)},
-          {QStringLiteral("status"), block.status},
-          {QStringLiteral("duration"), static_cast<qulonglong>(block.duration_ms)},
-          {QStringLiteral("whole"), GuiSession::wholeCommand(block)},
+          {u"index"_s, static_cast<int>(index)},
+          {u"command"_s, textOf(block.command)},
+          {u"state"_s, blockState(block.state)},
+          {u"status"_s, block.status},
+          {u"duration"_s, static_cast<qulonglong>(block.duration_ms)},
+          {u"whole"_s, GuiSession::wholeCommand(block)},
       });
 
       list.push_back(std::move(restored));
@@ -1068,7 +1009,7 @@ namespace telar::gui::qt {
 
     if (const auto& note = controller_->session().lastBlockCopy(); note.serial != block_copy_serial_ && note.pane_id == pane_id_) {
       block_copy_serial_ = note.serial;
-      emit blockCopied(static_cast<int>(note.index), note.what == application::BlockCopy::command ? QStringLiteral("command") : QStringLiteral("output"), note.copied);
+      blockCopied(static_cast<int>(note.index), note.what == application::BlockCopy::command ? u"command"_s : u"output"_s, note.copied);
     }
   }
 
@@ -1134,12 +1075,12 @@ namespace telar::gui::qt {
       cursor_row_ = places.cursor_row;
       rows_ = places.screen_rows;
       rows_below_ = places.rows_below;
-      emit placeChanged();
+      placeChanged();
     }
 
     if (lists.documents != documents_) {
       documents_ = std::move(lists.documents);
-      emit documentsChanged();
+      documentsChanged();
     }
 
     refreshBlockFilter();
@@ -1151,7 +1092,7 @@ namespace telar::gui::qt {
       for (const auto& separator : lists.separators) {
         auto row = separator.toMap();
 
-        row.insert(QStringLiteral("key"), row.value(QStringLiteral("index")));
+        row.insert(u"key"_s, row.value(u"index"_s));
         rows.append(std::move(row));
       }
 
@@ -1167,7 +1108,7 @@ namespace telar::gui::qt {
       remote_rows_ = std::move(lists.remote_rows);
       prompt_row_ = places.prompt_row;
       shown_cell_ = font_.cell;
-      emit blocksChanged();
+      blocksChanged();
     }
 
     refreshScrollViews();
@@ -1175,31 +1116,31 @@ namespace telar::gui::qt {
 
   // The filter of one of this pane's blocks, for the bar that shows it.
   void TerminalItem::refreshBlockFilter() {
-    QVariantMap filter{{QStringLiteral("open"), false}};
+    QVariantMap filter{{u"open"_s, false}};
     const auto index = controller_ == nullptr ? ds::none : application::terminal::filter::block(controller_->session(), pane_id_);
 
     if (index && controller_ != nullptr) {
       const auto status = application::terminal::filter::status(controller_->session());
 
       filter = QVariantMap{
-          {QStringLiteral("open"), true},
-          {QStringLiteral("index"), static_cast<int>(*index)},
-          {QStringLiteral("text"), QString::fromUtf8(status.text.data(), static_cast<qsizetype>(status.text.size()))},
-          {QStringLiteral("regex"), status.regex},
-          {QStringLiteral("ignoreCase"), status.ignore_case},
-          {QStringLiteral("invert"), status.invert},
-          {QStringLiteral("context"), static_cast<int>(status.context)},
-          {QStringLiteral("matches"), static_cast<qulonglong>(status.matches)},
-          {QStringLiteral("complete"), status.complete},
-          {QStringLiteral("truncated"), status.truncated},
-          {QStringLiteral("error"), QString::fromUtf8(status.error.data(), static_cast<qsizetype>(status.error.size()))},
-          {QStringLiteral("opened"), static_cast<qulonglong>(status.opened)},
+          {u"open"_s, true},
+          {u"index"_s, static_cast<int>(*index)},
+          {u"text"_s, QString::fromUtf8(status.text.data(), static_cast<qsizetype>(status.text.size()))},
+          {u"regex"_s, status.regex},
+          {u"ignoreCase"_s, status.ignore_case},
+          {u"invert"_s, status.invert},
+          {u"context"_s, static_cast<int>(status.context)},
+          {u"matches"_s, static_cast<qulonglong>(status.matches)},
+          {u"complete"_s, status.complete},
+          {u"truncated"_s, status.truncated},
+          {u"error"_s, QString::fromUtf8(status.error.data(), static_cast<qsizetype>(status.error.size()))},
+          {u"opened"_s, static_cast<qulonglong>(status.opened)},
       };
     }
 
     if (filter != block_filter_) {
       block_filter_ = std::move(filter);
-      emit blockFilterChanged();
+      blockFilterChanged();
     }
   }
 
@@ -1218,7 +1159,7 @@ namespace telar::gui::qt {
     }
 
     focusFromPointer();
-    controller_->reuseRestored(pane_id_, static_cast<std::size_t>(index), how == QStringLiteral("run") ? application::BlockReuse::run : application::BlockReuse::edit);
+    controller_->reuseRestored(pane_id_, static_cast<std::size_t>(index), how == u"run"_s ? application::BlockReuse::run : application::BlockReuse::edit);
   }
 
   QVariantList TerminalItem::remoteRows() const {
@@ -1290,9 +1231,9 @@ namespace telar::gui::qt {
 
     auto reuse = application::BlockReuse::edit;
 
-    if (how == QStringLiteral("run")) {
+    if (how == u"run"_s) {
       reuse = application::BlockReuse::run;
-    } else if (how == QStringLiteral("root")) {
+    } else if (how == u"root"_s) {
       reuse = application::BlockReuse::edit_as_root;
     }
 
@@ -1309,7 +1250,7 @@ namespace telar::gui::qt {
     if (background_provided_ != provided) {
       background_provided_ = provided;
       update();
-      emit backgroundProvidedChanged();
+      backgroundProvidedChanged();
     }
   }
 
@@ -1599,7 +1540,7 @@ namespace telar::gui::qt {
 
         controller_->prompt().reconvert(pane_id_, {.begin = offset(start), .end = offset(end)}, event->commitString());
         if (std::exchange(preedit_, event->preeditString()) != preedit_) {
-          emit preeditChanged();
+          preeditChanged();
         }
 
         polish();
@@ -1620,7 +1561,7 @@ namespace telar::gui::qt {
     }
 
     if (std::exchange(preedit_, event->preeditString()) != preedit_) {
-      emit preeditChanged();
+      preeditChanged();
     }
 
     polish();

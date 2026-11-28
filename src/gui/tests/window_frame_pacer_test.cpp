@@ -2,9 +2,6 @@
 // Keep textual ABI declarations and module imports in one clangd parse.
 static_assert(true);
 #endif
-
-#include "gui_wait.hpp"
-#include "ui/kit/timing/window_frame_pacer.hpp"
 #include <QCoreApplication>
 #include <QEvent>
 #include <QObject>
@@ -21,6 +18,10 @@ static_assert(true);
 
 import telar.gui.features.window;
 import telar.base.ds;
+import telar.gui.ui.kit.timing;
+import telar.gui.tests.gui_wait;
+import telar.gui.foundation.core;
+import telar.gui.qt;
 
 namespace {
 
@@ -149,15 +150,21 @@ namespace {
     telar::ds::Array<FramePacer::Pane, 1> panes_{FramePacer::Pane{.pane_id = 1, .frame_id = 1, .attached = true, .attachment_generation = 1}};
   };
 
-  class WindowFramePacerTest final : public QObject {
-    Q_OBJECT
+  class [[qt::object]] WindowFramePacerTest final : public QObject {
+  public:
+    static const QMetaObject staticMetaObject;
+    const QMetaObject* metaObject() const override;
+    void* qt_metacast(const char* name) override;
+    int qt_metacall(QMetaObject::Call call, int id, void** args) override;
+    static void qt_static_metacall(QObject* object, QMetaObject::Call call, int id, void** args);
 
   private:
-    Q_SLOT static void init() {
+  private:
+    [[qt::slot]] static void init() {
       ControlledClock::now_ns = started_ns;
     }
 
-    Q_SLOT static void pendingFrameArrivesWithoutAnotherUpdate() {
+    [[qt::slot]] static void pendingFrameArrivesWithoutAnotherUpdate() {
       FrameFixture window;
 
       window.request();
@@ -172,7 +179,7 @@ namespace {
       QVERIFY(!window.framePacer().pending());
     }
 
-    Q_SLOT static void visiblePaneOutputUsesItsInputGrace() {
+    [[qt::slot]] static void visiblePaneOutputUsesItsInputGrace() {
       FrameFixture window;
 
       window.request();
@@ -189,7 +196,7 @@ namespace {
       QVERIFY(!window.framePacer().pending());
     }
 
-    Q_SLOT static void outputRequestsAFrameBeforeThePlatformUpdate() {
+    [[qt::slot]] static void outputRequestsAFrameBeforeThePlatformUpdate() {
       FrameFixture window;
 
       ControlledClock::now_ns = idle_input_ns;
@@ -213,7 +220,7 @@ namespace {
           observation_ms));
     }
 
-    Q_SLOT static void inputDuringContinuousRenderingKeepsPlatformDelivery() {
+    [[qt::slot]] static void inputDuringContinuousRenderingKeepsPlatformDelivery() {
       FrameFixture window;
 
       ControlledClock::now_ns = next_input_ns;
@@ -227,7 +234,7 @@ namespace {
       QCOMPARE(window.admitted(), 1);
     }
 
-    Q_SLOT static void graphicsOnlyInputRequestsOneFrameAfterIdle() {
+    [[qt::slot]] static void graphicsOnlyInputRequestsOneFrameAfterIdle() {
       FrameFixture window;
 
       ControlledClock::now_ns = idle_input_ns;
@@ -247,7 +254,7 @@ namespace {
       QCOMPARE(window.admitted(), 1);
     }
 
-    Q_SLOT static void graphicsGraceRequiresFreshAttachedOutputAndDoesNotRefreshItsDeadline() {
+    [[qt::slot]] static void graphicsGraceRequiresFreshAttachedOutputAndDoesNotRefreshItsDeadline() {
       FramePacer pacing;
       FramePacer::Pane pane{.pane_id = 1, .frame_id = 4, .attached = true, .attachment_generation = 2, .graphics_revision = 3};
 
@@ -275,7 +282,7 @@ namespace {
       QVERIFY(!pacing.canAdvanceInput(pane, next_input_ns));
     }
 
-    Q_SLOT static void graphicsGraceConsumesTheExistingFrameBudget() {
+    [[qt::slot]] static void graphicsGraceConsumesTheExistingFrameBudget() {
       FramePacer pacing;
 
       pacing.configure(FramePacer::maximum_interval_ns, telar::ds::none);
@@ -294,7 +301,7 @@ namespace {
       QVERIFY(pacing.waitUntil(panes, next_input_ns));
     }
 
-    Q_SLOT static void earlyInputDeliveryRequiresTwoIdleIntervals() {
+    [[qt::slot]] static void earlyInputDeliveryRequiresTwoIdleIntervals() {
       FrameFixture window;
 
       ControlledClock::now_ns = idle_input_ns - 1;
@@ -312,7 +319,7 @@ namespace {
       QVERIFY(!window.framePacer().pending());
     }
 
-    Q_SLOT static void backgroundOutputDoesNotAdvancePlatformDelivery() {
+    [[qt::slot]] static void backgroundOutputDoesNotAdvancePlatformDelivery() {
       FrameFixture window;
 
       ++window.pane().frame_id;
@@ -328,7 +335,7 @@ namespace {
       QCOMPARE(window.admitted(), 1);
     }
 
-    Q_SLOT static void onlyANewFrameFromTheInputAttachmentCanAdvanceDelivery() {
+    [[qt::slot]] static void onlyANewFrameFromTheInputAttachmentCanAdvanceDelivery() {
       FrameFixture window;
 
       ControlledClock::now_ns = idle_input_ns;
@@ -362,7 +369,7 @@ namespace {
       QCOMPARE(window.admitted(), 0);
     }
 
-    Q_SLOT static void hidingBeforeOutputDeliveryCancelsTheRequest() {
+    [[qt::slot]] static void hidingBeforeOutputDeliveryCancelsTheRequest() {
       FrameFixture window;
 
       ControlledClock::now_ns = idle_input_ns;
@@ -381,7 +388,7 @@ namespace {
       QVERIFY(!window.framePacer().pending());
     }
 
-    Q_SLOT static void anotherPaneCannotReleaseThePendingFrame() {
+    [[qt::slot]] static void anotherPaneCannotReleaseThePendingFrame() {
       FrameFixture window;
 
       window.request();
@@ -407,7 +414,7 @@ namespace {
           wait_ms));
     }
 
-    Q_SLOT static void fasterCadenceReconsidersTheExistingRequest() {
+    [[qt::slot]] static void fasterCadenceReconsidersTheExistingRequest() {
       FrameFixture window;
 
       window.request();
@@ -421,7 +428,7 @@ namespace {
       QVERIFY(!window.framePacer().pending());
     }
 
-    Q_SLOT static void hidingCancelsTheDeferredRequest() {
+    [[qt::slot]] static void hidingCancelsTheDeferredRequest() {
       FrameFixture window;
 
       window.request();
@@ -439,7 +446,7 @@ namespace {
           observation_ms));
     }
 
-    Q_SLOT static void destroyingTheAdapterReturnsTheHeldRequest() {
+    [[qt::slot]] static void destroyingTheAdapterReturnsTheHeldRequest() {
       FrameFixture window;
 
       window.request();
@@ -452,7 +459,7 @@ namespace {
           wait_ms));
     }
 
-    Q_SLOT static void destroyingTheWindowCancelsThePendingTimer() {
+    [[qt::slot]] static void destroyingTheWindowCancelsThePendingTimer() {
       auto window = std::make_unique<ControlledWindow>();
       TestFramePacer pacing{*window};
       const telar::ds::Array panes{FramePacer::Pane{.pane_id = 1, .frame_id = 1, .attached = true, .attachment_generation = 1}};
@@ -473,4 +480,6 @@ int main(int argc, char** argv) {
   return QTest::qExec(&test, argc, argv);
 }
 
+#ifndef TELAR_MOC_RUN
 #include "window_frame_pacer_test.moc"
+#endif

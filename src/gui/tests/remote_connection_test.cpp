@@ -3,8 +3,6 @@
 static_assert(true);
 #endif
 
-#include "ui/kit/machines/remote_bridge.hpp"
-#include "ui/kit/machines/runtime_connection.hpp"
 #include <QByteArray>
 #include <QByteArrayView>
 #include <QCoreApplication>
@@ -43,6 +41,8 @@ import telar.gui.foundation.core;
 import telar.wire.vocabulary;
 import telar.wire.pane_io;
 import telar.wire.runtime;
+import telar.gui.ui.kit.machines;
+import telar.gui.qt;
 
 namespace {
 
@@ -51,9 +51,15 @@ namespace {
   using namespace telar::gui::features::machines;
   using namespace telar::gui::qt;
 
-  class RemoteConnectionTest : public QObject {
-    Q_OBJECT
+  class [[qt::object]] RemoteConnectionTest : public QObject {
+  public:
+    static const QMetaObject staticMetaObject;
+    const QMetaObject* metaObject() const override;
+    void* qt_metacast(const char* name) override;
+    int qt_metacall(QMetaObject::Call call, int id, void** args) override;
+    static void qt_static_metacall(QObject* object, QMetaObject::Call call, int id, void** args);
 
+  private:
   private:
     template <typename Message>
     static QByteArray framedMessage(const Message& message) {
@@ -95,7 +101,7 @@ namespace {
       return received.size();
     }
 
-    Q_SLOT static void openingPaneFlushesTheCompleteOrderedRequest() {
+    [[qt::slot]] static void openingPaneFlushesTheCompleteOrderedRequest() {
       const QTemporaryDir directory;
 
       QVERIFY(directory.isValid());
@@ -137,7 +143,7 @@ namespace {
       QVERIFY(connection.error().isEmpty());
     }
 
-    Q_SLOT static void openingPanePreservesBackpressureAndByteOrder() {
+    [[qt::slot]] static void openingPanePreservesBackpressureAndByteOrder() {
       const QTemporaryDir directory;
 
       QVERIFY(directory.isValid());
@@ -204,7 +210,7 @@ namespace {
       QVERIFY(connection.error().isEmpty());
     }
 
-    Q_SLOT static void resumedSessionDiscardsThePreviousReadTail() {
+    [[qt::slot]] static void resumedSessionDiscardsThePreviousReadTail() {
       const QTemporaryDir directory;
 
       QVERIFY(directory.isValid());
@@ -248,15 +254,15 @@ namespace {
       QCOMPARE(connection.link().sessions, 2);
     }
 
-    Q_SLOT static void emptyHandshakePrefixKeepsOriginalError() {
+    [[qt::slot]] static void emptyHandshakePrefixKeepsOriginalError() {
       verifyHandshakePrefix(0, QStringLiteral("InvalidLength"));
     }
 
-    Q_SLOT static void oversizedHandshakePrefixFailsBeforeItsBody() {
+    [[qt::slot]] static void oversizedHandshakePrefixFailsBeforeItsBody() {
       verifyHandshakePrefix(static_cast<quint32>(HandshakeCodec::max_message_size + 1), QStringLiteral("BufferTooSmall"));
     }
 
-    Q_SLOT static void oversizedTransportPrefixKeepsOriginalError() {
+    [[qt::slot]] static void oversizedTransportPrefixKeepsOriginalError() {
       verifyHandshakePrefix(static_cast<quint32>(max_payload_size + 1), QStringLiteral("FrameTooLarge"));
     }
 
@@ -289,7 +295,7 @@ namespace {
       QCOMPARE(connection.link().phase, MachinePhase::lost);
     }
 
-    Q_SLOT static void incompatibleRuntimeWaitsForExplicitRetry() {
+    [[qt::slot]] static void incompatibleRuntimeWaitsForExplicitRetry() {
       const QTemporaryDir directory;
 
       QVERIFY(directory.isValid());
@@ -327,7 +333,7 @@ namespace {
       QVERIFY(!connection.link().failure());
     }
 
-    Q_SLOT static void auditedLegacyRefusalRetriesOnANewConnection() {
+    [[qt::slot]] static void auditedLegacyRefusalRetriesOnANewConnection() {
       const QTemporaryDir directory;
 
       QVERIFY(directory.isValid());
@@ -387,7 +393,7 @@ namespace {
       QCOMPARE(traffic.sliced(static_cast<qsizetype>(frame_prefix_size)), QByteArray(encoded.data(), static_cast<qsizetype>(encoded.size())));
     }
 
-    Q_SLOT static void auditedFallbackCannotAlternateSchemasForever() {
+    [[qt::slot]] static void auditedFallbackCannotAlternateSchemasForever() {
       const QTemporaryDir directory;
 
       QVERIFY(directory.isValid());
@@ -434,7 +440,7 @@ namespace {
       return result;
     }
 
-    Q_SLOT static void acceptedRuntimeCanPipelineLargerFrames() {
+    [[qt::slot]] static void acceptedRuntimeCanPipelineLargerFrames() {
       const QTemporaryDir directory;
 
       QVERIFY(directory.isValid());
@@ -464,7 +470,7 @@ namespace {
       QTRY_COMPARE(received, payload);
     }
 
-    Q_SLOT static void clientCapacityRefusalKeepsAutomaticRetry() {
+    [[qt::slot]] static void clientCapacityRefusalKeepsAutomaticRetry() {
       const QTemporaryDir directory;
 
       QVERIFY(directory.isValid());
@@ -511,7 +517,7 @@ namespace {
       return peer.write(prefix_text.data(), static_cast<qint64>(prefix_text.size())) == static_cast<qint64>(prefix_text.size()) && peer.write(payload.data(), payload.size()) == payload.size();
     }
 
-    Q_SLOT static void retryBackoffKeepsAnInProgressHandshake() {
+    [[qt::slot]] static void retryBackoffKeepsAnInProgressHandshake() {
       const QTemporaryDir directory;
 
       QVERIFY(directory.isValid());
@@ -566,7 +572,7 @@ namespace {
       QVERIFY(connection.error().isEmpty());
     }
 
-    Q_SLOT static void explicitRetryFromFailureDoesNotArmAnOlderTimer() {
+    [[qt::slot]] static void explicitRetryFromFailureDoesNotArmAnOlderTimer() {
       const QTemporaryDir directory;
 
       QVERIFY(directory.isValid());
@@ -604,7 +610,7 @@ namespace {
       QVERIFY(!listener.hasPendingConnections());
     }
 
-    Q_SLOT static void framedGatewayTransportUsesTheAuditedDiscoverySchema() {
+    [[qt::slot]] static void framedGatewayTransportUsesTheAuditedDiscoverySchema() {
       const QTemporaryDir directory;
 
       QVERIFY(directory.isValid());
@@ -639,7 +645,7 @@ namespace {
       connection.close();
     }
 
-    Q_SLOT static void framedGatewayTransportAndPermanentFailure() {
+    [[qt::slot]] static void framedGatewayTransportAndPermanentFailure() {
       const QTemporaryDir directory;
 
       QVERIFY(directory.isValid());
@@ -726,4 +732,6 @@ int main(int argc, char** argv) {
   return QTest::qExec(&test, argc, argv);
 }
 
+#ifndef TELAR_MOC_RUN
 #include "remote_connection_test.moc"
+#endif

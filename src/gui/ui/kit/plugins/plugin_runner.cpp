@@ -1,12 +1,7 @@
-#ifdef __clangd__
-// Keep textual ABI declarations and module imports in one clangd parse.
-static_assert(true);
-#endif
+module telar.gui.ui.kit.plugins;
 
-#include "plugin_runner.hpp"
-#include "ui/kit/machines/machine_client.hpp"
-#include <exception>
-#include <stdexcept>
+import std;
+import telar.gui.foundation.system;
 
 namespace telar::gui::qt {
 
@@ -66,9 +61,9 @@ namespace telar::gui::qt {
       }
 
       configuration_.authorizePlugin(invocation, *result.effects);
-      emit finished(*result.effects);
+      finished(*result.effects);
     } catch (const std::exception& error) {
-      emit failed(QString::fromUtf8(error.what()));
+      failed(QString::fromUtf8(error.what()));
     }
   }
 

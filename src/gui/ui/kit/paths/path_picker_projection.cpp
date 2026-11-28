@@ -1,30 +1,21 @@
-#ifdef __clangd__
-// Keep textual ABI declarations and module imports in one clangd parse.
-static_assert(true);
-#endif
+module telar.gui.ui.kit.paths;
 
-#include "path_picker_controller.hpp"
-#include "platform/window.hpp"
-#include "ui/kit/fonts/chrome_fonts.hpp"
-#include "ui/kit/models/glyph_icon.hpp"
-#include "ui/kit/models/path_label_runs.hpp"
-#include "ui/kit/models/projection.hpp"
-#include <QVariantList>
-#include <QVariantMap>
-#include <algorithm>
-#include <cmath>
-#include <cstddef>
-#include <cstdint>
-#include <limits>
-#include <optional>
-#include <string_view>
-#include <utility>
-
+import std;
+import telar.gui.qt;
+import telar.gui.qt.platform;
+import telar.gui.ui.kit.fonts;
+import telar.gui.ui.kit.models;
 import telar.gui.foundation.terminal;
 import telar.gui.application;
 import telar.base.ds;
+import telar.gui.foundation.core;
+import telar.gui.foundation.icons;
+import telar.gui.foundation.text;
+import telar.wire.vocabulary;
 
 namespace telar::gui::qt {
+  using Qt::StringLiterals::operator""_s;
+
   namespace {
 
     // A folder's icon, or a file's by its name.
@@ -63,7 +54,7 @@ namespace telar::gui::qt {
 
           run_bounds.width = columns;
 
-          runs.append(QVariantMap{{QStringLiteral("text"), toQString(run.text)}, {QStringLiteral("bounds"), local(run_bounds)}, {QStringLiteral("colorRole"), pathRunColor(run.tone)}, {QStringLiteral("bold"), run.tone == application::paths::PathLabelTone::match}});
+          runs.append(QVariantMap{{u"text"_s, toQString(run.text)}, {u"bounds"_s, local(run_bounds)}, {u"colorRole"_s, pathRunColor(run.tone)}, {u"bold"_s, run.tone == application::paths::PathLabelTone::match}});
           available.x = static_cast<std::uint16_t>(available.x + columns);
           available.width = static_cast<std::uint16_t>(available.width - columns);
         }
@@ -74,12 +65,12 @@ namespace telar::gui::qt {
         icon.x = static_cast<std::uint16_t>(icon.x + inset);
         icon.width = static_cast<std::uint16_t>(std::min<std::uint16_t>(1, icon.width - inset));
         QVariantMap record{
-            {QStringLiteral("path"), toQString(page.path(match))},
-            {QStringLiteral("bounds"), local(row.bounds)},
-            {QStringLiteral("iconBounds"), local(icon)},
-            {QStringLiteral("directory"), match.kind == PathKind::directory},
-            {QStringLiteral("selected"), row.index == selection},
-            {QStringLiteral("runs"), std::move(runs)},
+            {u"path"_s, toQString(page.path(match))},
+            {u"bounds"_s, local(row.bounds)},
+            {u"iconBounds"_s, local(icon)},
+            {u"directory"_s, match.kind == PathKind::directory},
+            {u"selected"_s, row.index == selection},
+            {u"runs"_s, std::move(runs)},
         };
 
         putIcon(record, iconOf(page.path(match), match.kind));
@@ -105,11 +96,11 @@ namespace telar::gui::qt {
       const auto& match = matches[index];
 
       QVariantMap record{
-          {QStringLiteral("index"), static_cast<qulonglong>(index)},
-          {QStringLiteral("path"), toQString(page.path(match))},
-          {QStringLiteral("directory"), match.kind == PathKind::directory},
-          {QStringLiteral("selected"), index == selection_},
-          {QStringLiteral("runs"), pathLabelRuns(page.path(match), match.highlights(), width)},
+          {u"index"_s, static_cast<qulonglong>(index)},
+          {u"path"_s, toQString(page.path(match))},
+          {u"directory"_s, match.kind == PathKind::directory},
+          {u"selected"_s, index == selection_},
+          {u"runs"_s, pathLabelRuns(page.path(match), match.highlights(), width)},
       };
 
       putIcon(record, iconOf(page.path(match), match.kind));
@@ -187,19 +178,19 @@ namespace telar::gui::qt {
     for (std::size_t index = 0; index < footer.count; ++index) {
       const auto& hint = footer.hints[index];
 
-      hints.append(QVariantMap{{QStringLiteral("key"), toQString(hint.label.key)}, {QStringLiteral("word"), toQString(hint.label.word)}, {QStringLiteral("keyBounds"), local(hint.key)}, {QStringLiteral("wordBounds"), local(hint.word)}});
+      hints.append(QVariantMap{{u"key"_s, toQString(hint.label.key)}, {u"word"_s, toQString(hint.label.word)}, {u"keyBounds"_s, local(hint.key)}, {u"wordBounds"_s, local(hint.word)}});
     }
 
     return {
-        {QStringLiteral("bounds"), toQRectF(bounds, density)},
-        {QStringLiteral("root"), local(geometry.root_label)},
-        {QStringLiteral("query"), local(geometry.query)},
-        {QStringLiteral("count"), local(geometry.count_label)},
-        {QStringLiteral("footer"), local(geometry.footer)},
-        {QStringLiteral("empty"), local(geometry.empty)},
-        {QStringLiteral("flipped"), placement.flipped},
-        {QStringLiteral("rows"), pathRows(page, geometry, selection_, local)},
-        {QStringLiteral("hints"), std::move(hints)},
+        {u"bounds"_s, toQRectF(bounds, density)},
+        {u"root"_s, local(geometry.root_label)},
+        {u"query"_s, local(geometry.query)},
+        {u"count"_s, local(geometry.count_label)},
+        {u"footer"_s, local(geometry.footer)},
+        {u"empty"_s, local(geometry.empty)},
+        {u"flipped"_s, placement.flipped},
+        {u"rows"_s, pathRows(page, geometry, selection_, local)},
+        {u"hints"_s, std::move(hints)},
     };
   }
 

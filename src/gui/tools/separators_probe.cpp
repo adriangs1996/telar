@@ -8,11 +8,6 @@ static_assert(true);
 // the QML separators it drives, on the GUI thread's CPU clock. The separators' records and the
 // final rendered window are the oracle a candidate must reproduce.
 
-#include "../tests/gui_wait.hpp"
-#include "../tests/qml_fixture.hpp"
-#include "../tests/wire_runtime.hpp"
-#include "ui/app/application_controller.hpp"
-#include "ui/app/panes/terminal/terminal_item.hpp"
 #include <QCommandLineParser>
 #include <QCryptographicHash>
 #include <QFile>
@@ -41,6 +36,12 @@ import telar.base.ds;
 import telar.gui.foundation.core;
 import telar.wire.vocabulary;
 import telar.wire.pane_io;
+
+import telar.gui.ui.app;
+import telar.gui.ui.app.panes.terminal;
+import telar.gui.tests.gui_wait;
+import telar.gui.tests.qml_fixture;
+import telar.gui.tests.wire_runtime;
 
 namespace {
 

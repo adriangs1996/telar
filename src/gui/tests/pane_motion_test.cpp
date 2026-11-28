@@ -2,11 +2,6 @@
 // Keep textual ABI declarations and module imports in one clangd parse.
 static_assert(true);
 #endif
-
-#include "frame_fixture.hpp"
-#include "gui_wait.hpp"
-#include "ui/app/panes/pane_motion_layout.hpp"
-#include "ui/kit/models/list_model.hpp"
 #include <QGuiApplication>
 #include <QQuickWindow>
 #include <QRectF>
@@ -21,6 +16,11 @@ static_assert(true);
 import telar.gui.features.workbench;
 import telar.gui.foundation.core;
 import telar.base.ds;
+import telar.gui.ui.app.panes;
+import telar.gui.ui.kit.models;
+import telar.gui.tests.frame_fixture;
+import telar.gui.tests.gui_wait;
+import telar.gui.qt;
 
 namespace {
 
@@ -60,10 +60,16 @@ namespace {
     return model->data(model->index(index, 0), ListModel::record_role).toMap().value(QStringLiteral("visualBounds")).toRectF();
   }
 
-  class PaneMotionTest final : public QObject {
-    Q_OBJECT
+  class [[qt::object]] PaneMotionTest final : public QObject {
+  public:
+    static const QMetaObject staticMetaObject;
+    const QMetaObject* metaObject() const override;
+    void* qt_metacast(const char* name) override;
+    int qt_metacall(QMetaObject::Call call, int id, void** args) override;
+    static void qt_static_metacall(QObject* object, QMetaObject::Call call, int id, void** args);
 
-    Q_SLOT static void splitsRevealFromTheFarEdgeWithoutChangingTargets() {
+  private:
+    [[qt::slot]] static void splitsRevealFromTheFarEdgeWithoutChangingTargets() {
       for (const auto& split : {horizontal, vertical}) {
         PaneMotions motions;
 
@@ -89,7 +95,7 @@ namespace {
       }
     }
 
-    Q_SLOT static void closeAndInterruptedTransitionsStartAtTheVisiblePosition() {
+    [[qt::slot]] static void closeAndInterruptedTransitionsStartAtTheVisiblePosition() {
       PaneMotions motions;
 
       motions.update(initial, 0);
@@ -102,7 +108,7 @@ namespace {
       QCOMPARE(sample<0>(motions, now + PaneMotions::closing_ns), whole);
     }
 
-    Q_SLOT static void unchangedRefreshDoesNotRestartAndManualResizeIsImmediate() {
+    [[qt::slot]] static void unchangedRefreshDoesNotRestartAndManualResizeIsImmediate() {
       PaneMotions motions;
 
       motions.update(initial, 0);
@@ -124,7 +130,7 @@ namespace {
       QCOMPARE(sample<0>(motions, snap_ns), whole);
     }
 
-    Q_SLOT static void unrelatedViewsNeverAnimate() {
+    [[qt::slot]] static void unrelatedViewsNeverAnimate() {
       PaneMotions motions;
 
       motions.update(initial, 0);
@@ -137,7 +143,7 @@ namespace {
       QCOMPARE(sample<1>(motions, split_ns), unrelated[1].bounds);
     }
 
-    Q_SLOT static void nativeLayoutSettlesAndStopsTheSharedTimer() {
+    [[qt::slot]] static void nativeLayoutSettlesAndStopsTheSharedTimer() {
       QQuickWindow window;
       ListModel model;
       PaneMotionLayout layout(window.contentItem());
@@ -184,7 +190,7 @@ namespace {
           wait_ms));
     }
 
-    Q_SLOT static void contextChangesAndDisabledMotionSnapToTheTarget() {
+    [[qt::slot]] static void contextChangesAndDisabledMotionSnapToTheTarget() {
       QQuickWindow window;
       ListModel model;
       PaneMotionLayout layout(window.contentItem());
@@ -217,4 +223,6 @@ namespace {
 }
 
 QTEST_MAIN(PaneMotionTest)
+#ifndef TELAR_MOC_RUN
 #include "pane_motion_test.moc"
+#endif

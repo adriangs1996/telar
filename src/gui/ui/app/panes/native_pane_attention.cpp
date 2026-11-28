@@ -1,31 +1,12 @@
-#ifdef __clangd__
-// Keep textual ABI declarations and module imports in one clangd parse.
-static_assert(true);
-#endif
+module telar.gui.ui.app.panes;
 
-#include "native_pane_attention.hpp"
-#include "ui/kit/models/pane_attention_value.hpp"
-#include "ui/kit/scene/rounded_paints_scene.hpp"
-#include "ui/kit/scene/window_animation_clock.hpp"
-#include <QColor>
-#include <QMetaObject>
-#include <QQuickItem>
-#include <QQuickWindow>
-#include <QRectF>
-#include <QSGNode>
-#include <QVariant>
-#include <QtCore/qnamespace.h>
-#include <QtCore/qtmetamacros.h>
-#include <QtCore/qtypes.h>
-#include <cmath>
-#include <cstdint>
-#include <functional>
-#include <limits>
-#include <memory>
-#include <optional>
-
+import std;
+import telar.gui.qt;
+import telar.gui.ui.kit.models;
+import telar.gui.ui.kit.scene;
 import telar.gui.application;
 import telar.base.ds;
+import telar.gui.foundation.drawing;
 
 namespace telar::gui::qt {
 
@@ -52,7 +33,7 @@ namespace telar::gui::qt {
       key_ = key;
       setAlpha(0);
       synchronize();
-      emit attachmentChanged();
+      attachmentChanged();
     }
   }
 
@@ -69,7 +50,7 @@ namespace telar::gui::qt {
       }
 
       synchronize();
-      emit activeChanged();
+      activeChanged();
     }
   }
 
@@ -81,7 +62,7 @@ namespace telar::gui::qt {
     if (color.isValid() && color_ != color) {
       color_ = color;
       update();
-      emit colorChanged();
+      colorChanged();
     }
   }
 
@@ -94,7 +75,7 @@ namespace telar::gui::qt {
     if (std::isfinite(ratio) && ratio > 0 && ratio <= static_cast<qreal>(maximum) && std::not_equal_to<>{}(ratio_, ratio)) {
       ratio_ = ratio;
       update();
-      emit ratioChanged();
+      ratioChanged();
     }
   }
 
@@ -106,7 +87,7 @@ namespace telar::gui::qt {
     if (std::isfinite(radius) && radius >= 0 && radius <= static_cast<qreal>(std::numeric_limits<float>::max()) && std::not_equal_to<>{}(radius_, radius)) {
       radius_ = radius;
       update();
-      emit radiusChanged();
+      radiusChanged();
     }
   }
 
@@ -125,7 +106,7 @@ namespace telar::gui::qt {
       notification_pending_ = true;
       QMetaObject::invokeMethod(this, [this] {
         notification_pending_ = false;
-        emit alphaChanged();
+        alphaChanged();
       },
           Qt::QueuedConnection);
     }

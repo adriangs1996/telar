@@ -1,0 +1,283 @@
+module telar.gui.ui.app.overlays.machine_prompt.machine_profiles_source;
+
+import std;
+import telar.gui.qt;
+import telar.gui.foundation.system;
+import telar.gui.application;
+import telar.base.ds;
+import telar.gui.foundation.core;
+import telar.base.memory.allocators;
+
+namespace telar::gui::qt {
+  using Qt::StringLiterals::operator""_s;
+
+  namespace {
+
+    std::string_view textView(const QByteArray& text) noexcept {
+      return {text.constData(), static_cast<std::size_t>(text.size())};
+    }
+
+    QString errorText(std::string_view text) {
+      return QString::fromUtf8(text.data(), static_cast<qsizetype>(text.size()));
+    }
+
+    using MachineStore = application::machines::MachineProfileStore<ApplicationAllocator, system::ProfileFile>;
+
+    // Presents the pairing code of the address a machine is added by, and returns the address
+    // that leaves to save; none for an address that carries no code. The machine must be one
+    // that can be saved before a pairing code is spent on it.
+    ds::Option<system::runtime_endpoint::Path> pairAdded(MachineStore& store, const application::machines::MachineEdit& edit, system::SecureRandom& random, std::string_view local_label) {
+      const auto address = edit.value;
+      if (!application::machines::MachineAddress::valid(address)) {
+        throw application::machines::MachineFailure{application::machines::MachineError::invalid_destination};
+      }
+
+      auto trial = store.load();
+      auto saved = edit;
+
+      saved.value = application::machines::MachineAddress::saved(address);
+      application::machines::MachineProfileEdits::apply(trial, saved, random, local_label);
+      if (!application::machines::MachineAddress::pairing(address)) {
+        return ds::none;
+      }
+
+      return system::runtime_endpoint::pairMachine(address, local_label);
+    }
+
+  }
+
+  static_assert(ConcurrentAllocator<ApplicationAllocator>);
+
+  MachineProfilesSource::MachineProfilesSource(ApplicationAllocator& memory, QObject* parent)
+      : QObject(parent),
+        memory_(memory) {
+    constexpr int poll_interval_ms = 1000;
+
+    poll_.setInterval(poll_interval_ms);
+    connect(&poll_, &QTimer::timeout, this, &MachineProfilesSource::poll);
+    connect(&task_, &QFutureWatcher<Result>::finished, this, &MachineProfilesSource::complete);
+  }
+
+  MachineProfilesSource::~MachineProfilesSource() {
+    cancellation_.request_stop();
+    task_.disconnect(this);
+    auto future = task_.future();
+    if (!future.isValid()) {
+      return;
+    }
+
+    try {
+      future.waitForFinished();
+      if (future.resultCount() != 0) {
+        static_cast<void>(future.takeResult());
+      }
+    } catch (const std::exception& error) {
+      telar::qt::warning() << "Machine profile worker failed during shutdown:" << error.what();
+    }
+  }
+
+  void MachineProfilesSource::open(const QString& path, const QString& local_label) {
+    cancellation_.request_stop();
+    path_ = path.toUtf8();
+    local_label_ = local_label.toUtf8();
+    ++generation_;
+    known_.reset();
+    pending_edit_.reset();
+    profiles_ = {};
+    error_.clear();
+    loaded_ = false;
+    rescan_pending_ = false;
+    reopen_pending_ = true;
+    ++revision_;
+    poll_.start();
+    changed();
+    editingChanged();
+    if (!busy_) {
+      start();
+    }
+  }
+
+  void MachineProfilesSource::poll() {
+    if (!busy_ && !path_.isEmpty()) {
+      start();
+    }
+  }
+
+  bool MachineProfilesSource::edit(const application::machines::MachineEdit& edit) {
+    if (editing()) {
+      fail(errorText(application::machines::MachineProfileMessages::edit_pending), FailureSource::edit);
+
+      return false;
+    }
+
+    if (path_.isEmpty()) {
+      fail(u"Machine profile path is unavailable"_s, FailureSource::edit);
+
+      return false;
+    }
+
+    try {
+      pending_edit_ = application::machines::OwnedMachineEdit::copy(edit);
+    } catch (const application::machines::MachineFailure& failure) {
+      fail(errorText(application::machines::MachineProfileMessages::failure(failure.code())), FailureSource::edit);
+
+      return false;
+    }
+
+    editingChanged();
+    if (!busy_) {
+      start();
+    }
+
+    return true;
+  }
+
+  const application::machines::MachineProfiles& MachineProfilesSource::profiles() const noexcept {
+    return profiles_;
+  }
+
+  const QString& MachineProfilesSource::error() const noexcept {
+    return error_;
+  }
+
+  bool MachineProfilesSource::editError() const noexcept {
+    return failure_source_ == FailureSource::edit;
+  }
+
+  bool MachineProfilesSource::editing() const noexcept {
+    return editing_ || pending_edit_.hasValue();
+  }
+
+  bool MachineProfilesSource::loaded() const noexcept {
+    return loaded_;
+  }
+
+  bool MachineProfilesSource::busy() const noexcept {
+    return busy_;
+  }
+
+  std::uint64_t MachineProfilesSource::revision() const noexcept {
+    return revision_;
+  }
+
+  MachineProfilesSource::Result MachineProfilesSource::prepare(ApplicationAllocator& memory, const Request& request) {
+    Result result{.profiles = ds::none, .observed = system::FileStamp::read(request.path.constData(), system::FileSymlinks::inspect), .error = {}, .generation = request.generation};
+    if (!request.edit && !request.force && result.observed == request.known) {
+      return result;
+    }
+
+    try {
+      if (request.stop.stop_requested()) {
+        throw system::ProfileOperationCancelled{};
+      }
+
+      system::ProfileFile file{textView(request.path), request.stop};
+      MachineStore store{memory, file};
+
+      if (request.edit) {
+        system::SecureRandom random;
+        auto edit = request.edit->view();
+        // A machine is added by the address its gateway pairs with: the pairing code is
+        // presented once, here on the worker, and the address it leaves is what is saved.
+        const auto paired = edit.kind == application::machines::MachineEditKind::add ? pairAdded(store, edit, random, textView(request.local_label)) : ds::none;
+        if (paired) {
+          edit.value = paired->view();
+        }
+
+        const ds::Array edits{edit};
+
+        result.profiles = store.change(edits, random, textView(request.local_label));
+      } else {
+        result.profiles = store.load();
+      }
+    } catch (const system::ProfileOperationCancelled&) {
+      result.cancelled = true;
+    } catch (const system::InsecureProfileFile&) {
+      result.error = errorText(application::machines::MachineProfileMessages::insecure_file);
+    } catch (const application::machines::MachineFailure& failure) {
+      result.error = errorText(application::machines::MachineProfileMessages::failure(failure.code()));
+    } catch (const std::exception& error) {
+      result.error = QString::fromUtf8(error.what());
+    }
+
+    return result;
+  }
+
+  void MachineProfilesSource::start() {
+    if (busy_) {
+      return;
+    }
+
+    const auto failure_source = pending_edit_ ? FailureSource::edit : FailureSource::profile;
+
+    try {
+      cancellation_ = std::stop_source{};
+      Request request{
+          .path = path_,
+          .local_label = local_label_,
+          .known = known_,
+          .edit = std::move(pending_edit_),
+          .stop = cancellation_.get_token(),
+          .generation = generation_,
+          .force = !loaded_ || rescan_pending_,
+      };
+
+      pending_edit_.reset();
+      busy_ = true;
+      editing_ = request.edit.hasValue();
+      reopen_pending_ = false;
+      task_.setFuture(QtConcurrent::run([memory = &memory_, pending = std::move(request)] {
+        return prepare(*memory, pending);
+      }));
+    } catch (const std::exception& error) {
+      busy_ = false;
+      editing_ = false;
+      pending_edit_.reset();
+      fail(QString::fromUtf8(error.what()), failure_source);
+      editingChanged();
+    }
+  }
+
+  void MachineProfilesSource::complete() {
+    const auto was_editing = editing_;
+
+    busy_ = false;
+    editing_ = false;
+    try {
+      auto future = task_.future();
+      auto result = future.takeResult();
+      if (result.generation == generation_ && !result.cancelled) {
+        known_ = result.observed;
+        loaded_ = true;
+        rescan_pending_ = was_editing;
+        if (result.profiles) {
+          profiles_ = *result.profiles;
+          error_.clear();
+          ++revision_;
+          changed();
+        }
+
+        if (!result.error.isEmpty()) {
+          fail(std::move(result.error), was_editing ? FailureSource::edit : FailureSource::profile);
+        }
+      }
+    } catch (const std::exception& error) {
+      fail(QString::fromUtf8(error.what()), was_editing ? FailureSource::edit : FailureSource::profile);
+    }
+
+    if (was_editing) {
+      editingChanged();
+    }
+
+    if (pending_edit_ || reopen_pending_) {
+      start();
+    }
+  }
+
+  void MachineProfilesSource::fail(QString message, FailureSource source) {
+    failure_source_ = source;
+    error_ = std::move(message);
+    failed();
+  }
+
+}

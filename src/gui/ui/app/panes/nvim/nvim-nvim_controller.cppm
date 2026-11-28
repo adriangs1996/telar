@@ -1,0 +1,91 @@
+export module telar.gui.ui.app.panes.nvim:nvim_controller;
+
+import std;
+import telar.gui.qt;
+import telar.wire.vocabulary;
+import telar.base.ds;
+import telar.tbc;
+import :nvim_host;
+import telar.gui.ui.kit.store;
+import telar.gui.foundation.core;
+import telar.gui.application;
+import telar.base.memory.allocators;
+
+export namespace telar::gui::qt {
+
+  // The editor panes of a window: what their views read from the active session and what they
+  // write to it. A view listens for the frames of its own pane.
+  class [[qt::object, qt_qml_named("NvimController"), qt_qml_uncreatable("Use the window's editors")]] NvimController final : public QObject {
+  public:
+    static const QMetaObject staticMetaObject;
+    [[nodiscard]] const QMetaObject* metaObject() const override;
+    void* qt_metacast(const char* name) override;
+    int qt_metacall(QMetaObject::Call call, int id, void** args) override;
+    static void qt_static_metacall(QObject* object, QMetaObject::Call call, int id, void** args);
+    enum class QmlIsUncreatable : quint8 {
+      yes = 1,
+    };
+    void qt_qmlMarker_uncreatable();
+
+    struct Parts {
+      Store& store;
+      NvimHost& host;
+    };
+
+    // Keeps what the parts refer to, region `a`, not the parts themselves.
+    explicit NvimController(tbc::holds<const Parts&, tbc::lt::a> parts, QObject* parent = nullptr);
+    ~NvimController() override = default;
+
+    NvimController(const NvimController&) = delete;
+    NvimController& operator=(const NvimController&) = delete;
+    NvimController(NvimController&&) = delete;
+    NvimController& operator=(NvimController&&) = delete;
+
+    [[tbc::hot_path]] [[nodiscard]] inline const application::nvim::Editor* editor(std::uint64_t pane_id) const noexcept {
+      return application::nvim::editor(store_.session(), pane_id);
+    }
+
+    [[tbc::hot_path]] [[nodiscard]] inline const application::Pane<Memory>* pane(std::uint64_t pane_id) const noexcept {
+      return store_.session().findPane(pane_id);
+    }
+
+    [[tbc::hot_path]] [[nodiscard]] inline const Configuration& configuration() const noexcept {
+      return store_.session().configuration;
+    }
+
+    [[tbc::hot_path]] [[nodiscard]] inline NvimHost& host() const noexcept {
+      return host_;
+    }
+
+    // What the views write to the session. A failure goes up as failed().
+    void type(std::uint64_t pane_id, std::string_view keys);
+    void paste(std::uint64_t pane_id, const QString& text);
+    void point(const application::nvim::NvimMouse& event);
+    void focus(std::uint64_t pane_id, bool focused);
+    void resize(std::uint64_t pane_id, TerminalSize size);
+    void answer(std::uint64_t pane_id, bool accepted, std::uint32_t index, const QString& text);
+    void choose(std::uint64_t pane_id, std::uint32_t item, bool accept);
+    // The pane's picker: what it lists, the query typed, what is opened from it and where.
+    void pick(std::uint64_t pane_id, application::nvim::NvimPickSource source);
+    void search(std::uint64_t pane_id, const QString& query);
+    void accept(std::uint64_t pane_id, application::nvim::Choice choice);
+    void preview(std::uint64_t pane_id, ds::Option<std::size_t> index, application::nvim::PreviewArea area);
+    void list(std::uint64_t pane_id, std::span<const std::uint32_t> indices);
+    void dismiss(std::uint64_t pane_id);
+    // A message of the editor, by its key, went from sight.
+    void dismissMessage(std::uint64_t pane_id, std::uint64_t key);
+
+    // The pane's editor shows another frame, or asks something else.
+    [[qt::signal]] void editorChanged(qulonglong pane_id);
+    [[qt::signal]] void configurationChanged();
+    [[qt::signal]] void failed(const QString& message);
+
+  private:
+    template <typename Request>
+    void attempt(Request request);
+
+    tbc::mut_a<Store> store_;
+    tbc::mut_a<NvimHost> host_;
+  };
+
+}

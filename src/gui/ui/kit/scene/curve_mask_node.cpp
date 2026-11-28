@@ -1,24 +1,7 @@
-#ifdef __clangd__
-// Keep textual ABI declarations and module imports in one clangd parse.
-static_assert(true);
-#endif
+module telar.gui.ui.kit.scene;
 
-#include "curve_mask_node.hpp"
-#include "alpha_mask_material.hpp"
-#include "alpha_mask_vertex.hpp"
-#include "curve_mask.hpp"
-#include "qt_buffers.hpp"
-#include "scene_nodes.hpp"
-#include <QPointF>
-#include <QRectF>
-#include <QSGGeometry>
-#include <QSGGeometryNode>
-#include <QSGNode>
-#include <array>
-#include <cstddef>
-#include <span>
-#include <utility>
-
+import std;
+import telar.gui.qt;
 import telar.base.ds;
 
 namespace telar::gui::qt {

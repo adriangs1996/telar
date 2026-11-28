@@ -291,6 +291,32 @@ class UiGraph(unittest.TestCase):
             "   QML cycle ['design', 'design/bars']",
         ])
 
+    def test_module_imports_and_qt_attributes_follow_rules(self):
+        rev = self.tree({
+            'kit/store/store.cppm': 'export module telar.gui.ui.kit.store;\n'
+                                    'class [[qt::object, qt_qml_named("Store")]] Store final : public QObject {};\n',
+            'design/controls/controls-chrome_style.cppm':
+                'export module telar.gui.ui.design.controls:chrome_style;\n'
+                'import telar.gui.ui.kit.store;\n'
+                'class [[qt::object, qt::qml_element, qt::qml_singleton]] ChromeStyle final : public QObject {};\n',
+            'kit/input/input-window_actions.cppm':
+                'export module telar.gui.ui.kit.input:window_actions;\n'
+                'namespace [[qt::ns, qt_qml_named("Action")]] window_actions {};\n',
+            'app/Main.qml': 'Item {\n    property int a: Store.Dialog.none\n    property int b: ChromeStyle.x\n    property int c: Action.copy\n}\n',
+        })
+
+        sources = graph.load_sources(rev, self.repository)
+        self.assertEqual(graph.registered_types(sources), {
+            'Store': 'kit/store',
+            'ChromeStyle': 'design/controls',
+            'Action': 'kit/input',
+        })
+        self.assertEqual(graph.include_edges(sources), [
+            (UI + 'design/controls/controls-chrome_style.cppm', 'design/controls', 'kit/store', 'store.cppm'),
+        ])
+        qml = graph.qml_graph(sources)
+        self.assertEqual(sorted(qml['app']), ['design/controls', 'kit/input', 'kit/store'])
+
 
 if __name__ == '__main__':
     unittest.main()

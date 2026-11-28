@@ -4,9 +4,7 @@ static_assert(true);
 #endif
 
 #include "assertions.hpp"
-#include "gui_wait.hpp"
 #include "platform/window.hpp"
-#include "ui/kit/timing/window_frame_pacer.hpp"
 #include <QEvent>
 #include <QGuiApplication>
 #include <QWindow>
@@ -17,6 +15,9 @@ static_assert(true);
 #include <utility>
 
 import telar.gui.features.window;
+import telar.gui.ui.kit.timing;
+import telar.gui.tests.gui_wait;
+import telar.gui.foundation.system;
 
 namespace {
 

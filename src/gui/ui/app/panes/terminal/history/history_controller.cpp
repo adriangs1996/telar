@@ -1,69 +1,60 @@
-#ifdef __clangd__
-// Keep textual ABI declarations and module imports in one clangd parse.
-static_assert(true);
-#endif
+module telar.gui.ui.app.panes.terminal.history;
 
-#include "history_controller.hpp"
-#include "platform/window.hpp"
-#include "ui/kit/models/projection.hpp"
-#include "ui/kit/text/utf16_encoding.hpp"
-#include <QClipboard>
-#include <QGuiApplication>
-#include <QStringView>
-#include <cstddef>
-#include <cstdint>
-#include <exception>
-#include <string_view>
-#include <utility>
-
+import std;
+import telar.gui.qt;
+import telar.gui.qt.platform;
+import telar.gui.ui.kit.models;
+import telar.gui.ui.kit.text;
 import telar.base.text.utf8;
 import telar.gui.application;
+import telar.base.ds;
+import telar.gui.foundation.system;
+import telar.wire.vocabulary;
 import telar.gui.foundation.core;
 import telar.gui.foundation.forms;
-import telar.gui.foundation.system;
-import telar.base.ds;
 
 namespace telar::gui::qt {
+  using Qt::StringLiterals::operator""_s;
 
   namespace {
 
     QString scopeName(HistoryScope scope) {
       switch (scope) {
       case HistoryScope::cwd:
-        return QStringLiteral("cwd");
+        return u"cwd"_s;
       case HistoryScope::workspace:
-        return QStringLiteral("workspace");
+        return u"workspace"_s;
       case HistoryScope::pane:
-        return QStringLiteral("pane");
+        return u"pane"_s;
       case HistoryScope::global:
-        return QStringLiteral("global");
+        return u"global"_s;
       }
 
       // A scope outside the enum reads as global.
-      return QStringLiteral("global");
+      return u"global"_s;
     }
 
     QString authorName(HistoryAuthorFilter author) {
       switch (author) {
       case HistoryAuthorFilter::human:
-        return QStringLiteral("human");
+        return u"human"_s;
       case HistoryAuthorFilter::agent:
-        return QStringLiteral("agent");
+        return u"agent"_s;
       case HistoryAuthorFilter::all:
-        return QStringLiteral("all");
+        return u"all"_s;
       }
 
       // A filter outside the enum reads as all authors.
-      return QStringLiteral("all");
+      return u"all"_s;
     }
 
     // The pane's commands with those from before it started read as a scope of their own.
     QString scopeName(HistoryScope scope, bool preload) {
-      return scope == HistoryScope::pane && preload ? QStringLiteral("session") : scopeName(scope);
+      return scope == HistoryScope::pane && preload ? u"session"_s : scopeName(scope);
     }
 
     void parseScope(const QString& scope, application::history::HistoryFilters& filters) {
-      filters.preload = scope == QStringLiteral("session");
+      filters.preload = scope == u"session"_s;
       if (filters.preload) {
         filters.scope = HistoryScope::pane;
         return;
@@ -97,13 +88,13 @@ namespace telar::gui::qt {
 
         const bool marks = matches.covers(offset, length);
         if (marks != run_marked && !run.isEmpty()) {
-          runs.append(QVariantMap{{QStringLiteral("text"), run}, {QStringLiteral("marked"), run_marked}});
+          runs.append(QVariantMap{{u"text"_s, run}, {u"marked"_s, run_marked}});
           run.clear();
         }
 
         run_marked = marks;
         if (text[offset] == '\n') {
-          run.append(QStringLiteral(" ↵ "));
+          run.append(u" ↵ "_s);
         } else {
           const auto character = text.substr(offset, length);
 
@@ -114,7 +105,7 @@ namespace telar::gui::qt {
       }
 
       if (!run.isEmpty() || runs.isEmpty()) {
-        runs.append(QVariantMap{{QStringLiteral("text"), run}, {QStringLiteral("marked"), run_marked}});
+        runs.append(QVariantMap{{u"text"_s, run}, {u"marked"_s, run_marked}});
       }
 
       return runs;
@@ -157,17 +148,17 @@ namespace telar::gui::qt {
     QString phaseName(application::history::HistoryPhase phase) {
       switch (phase) {
       case application::history::HistoryPhase::loading:
-        return QStringLiteral("loading");
+        return u"loading"_s;
       case application::history::HistoryPhase::ready:
-        return QStringLiteral("ready");
+        return u"ready"_s;
       case application::history::HistoryPhase::failed:
-        return QStringLiteral("failed");
+        return u"failed"_s;
       case application::history::HistoryPhase::idle:
-        return QStringLiteral("idle");
+        return u"idle"_s;
       }
 
       // A phase outside the enum reads as idle.
-      return QStringLiteral("idle");
+      return u"idle"_s;
     }
 
   }
@@ -283,12 +274,12 @@ namespace telar::gui::qt {
 
   void HistoryController::setMetrics(const application::history::HistoryModalMetrics& metrics) {
     metrics_ = metrics;
-    emit changed();
+    changed();
   }
 
   void HistoryController::fail(const std::exception& error) {
     if (!isOpen()) {
-      emit failed(QString::fromUtf8(error.what()));
+      failed(QString::fromUtf8(error.what()));
 
       return;
     }
@@ -379,7 +370,7 @@ namespace telar::gui::qt {
     inspection_ = buildInspection();
     command_ = toQString(browser.selectedCommand());
     output_ = toQString(browser.output());
-    emit changed();
+    changed();
   }
 
   HistoryController::Inputs HistoryController::inputs() {
@@ -438,8 +429,8 @@ namespace telar::gui::qt {
         cached.record = historyRecord(entry, sampled);
       }
 
-      if (cached.record.value(QStringLiteral("groupEnds")).toBool() != group_ends || !cached.record.contains(QStringLiteral("groupEnds"))) {
-        cached.record.insert(QStringLiteral("groupEnds"), group_ends);
+      if (cached.record.value(u"groupEnds"_s).toBool() != group_ends || !cached.record.contains(u"groupEnds"_s)) {
+        cached.record.insert(u"groupEnds"_s, group_ends);
       }
 
       records.append(cached.record);
@@ -552,9 +543,9 @@ namespace telar::gui::qt {
       label.append(QLatin1Char(':'));
       label.append(toQString(chip.value.view()));
       chips.append(QVariantMap{
-          {QStringLiteral("label"), label},
-          {QStringLiteral("applied"), application::history::HistoryFilterKeys::applied(chip)},
-          {QStringLiteral("key"), toQString(application::history::HistoryFilterKeys::name(chip.key))},
+          {u"label"_s, label},
+          {u"applied"_s, application::history::HistoryFilterKeys::applied(chip)},
+          {u"key"_s, toQString(application::history::HistoryFilterKeys::name(chip.key))},
       });
     }
 
@@ -563,55 +554,55 @@ namespace telar::gui::qt {
     }
 
     return {
-        {QStringLiteral("generation"), QString::number(store_.dialog().generation)},
-        {QStringLiteral("selectedId"), state.selection < rows.size() ? QString::number(rows[state.selection].id) : QString{}},
-        {QStringLiteral("phase"), phaseName(state.phase)},
-        {QStringLiteral("hasPage"), state.has_page},
-        {QStringLiteral("revision"), QString::number(browser.revision())},
-        {QStringLiteral("scope"), scopeName(filters_.scope, filters_.preload)},
-        {QStringLiteral("effectiveScope"), scopeName(browser.scope(), browser.preloads())},
-        {QStringLiteral("scopeValue"), synchronized_ ? synchronized_->scope_value : QString{}},
-        {QStringLiteral("author"), authorName(filters_.author)},
-        {QStringLiteral("scopeLabel"), filterLabel(application::history::HistoryFilterLabels::scopes, scopeName(browser.scope(), browser.preloads()))},
-        {QStringLiteral("searchesOutput"), browser.searchesOutput()},
-        {QStringLiteral("raw"), filters_.chips.value(application::history::HistoryFilterKey::raw).hasValue()},
-        {QStringLiteral("showHost"), session.configuration.history.show_host && spansHosts(rows)},
-        {QStringLiteral("authorLabel"), filterLabel(application::history::HistoryFilterLabels::authors, authorName(filters_.author))},
-        {QStringLiteral("failedOnly"), filters_.failed_only},
-        {QStringLiteral("grouped"), query_.isEmpty()},
-        {QStringLiteral("query"), query_},
-        {QStringLiteral("chips"), chips},
-        {QStringLiteral("pins"), shownPins()},
+        {u"generation"_s, QString::number(store_.dialog().generation)},
+        {u"selectedId"_s, state.selection < rows.size() ? QString::number(rows[state.selection].id) : QString{}},
+        {u"phase"_s, phaseName(state.phase)},
+        {u"hasPage"_s, state.has_page},
+        {u"revision"_s, QString::number(browser.revision())},
+        {u"scope"_s, scopeName(filters_.scope, filters_.preload)},
+        {u"effectiveScope"_s, scopeName(browser.scope(), browser.preloads())},
+        {u"scopeValue"_s, synchronized_ ? synchronized_->scope_value : QString{}},
+        {u"author"_s, authorName(filters_.author)},
+        {u"scopeLabel"_s, filterLabel(application::history::HistoryFilterLabels::scopes, scopeName(browser.scope(), browser.preloads()))},
+        {u"searchesOutput"_s, browser.searchesOutput()},
+        {u"raw"_s, filters_.chips.value(application::history::HistoryFilterKey::raw).hasValue()},
+        {u"showHost"_s, session.configuration.history.show_host && spansHosts(rows)},
+        {u"authorLabel"_s, filterLabel(application::history::HistoryFilterLabels::authors, authorName(filters_.author))},
+        {u"failedOnly"_s, filters_.failed_only},
+        {u"grouped"_s, query_.isEmpty()},
+        {u"query"_s, query_},
+        {u"chips"_s, chips},
+        {u"pins"_s, shownPins()},
 
-        {QStringLiteral("marks"), marks},
-        {QStringLiteral("hidden"), browser.hidden() != 0},
-        {QStringLiteral("hiddenCommand"), toQString(browser.hiddenCommand())},
-        {QStringLiteral("undoKey"), platform::usesCommandKey() ? QStringLiteral("⌘Z") : QStringLiteral("Ctrl+Z")},
-        {QStringLiteral("editorText"), query_},
-        {QStringLiteral("maximumQueryBytes"), static_cast<int>(application::history::HistorySearch::maximum_query_bytes)},
-        {QStringLiteral("inspectionKey"), platform::usesCommandKey() ? QStringLiteral("⌃O") : QStringLiteral("Ctrl+O")},
-        {QStringLiteral("macStyle"), platform::usesCommandKey()},
-        {QStringLiteral("paneOpen"), state.selection < rows.size() && session.findPane(rows[state.selection].pane_id) != nullptr},
-        {QStringLiteral("commandLoaded"), state.selection < rows.size() && (rows[state.selection].command_complete || (selected_detail && state.command_phase == application::history::HistoryPhase::ready))},
-        {QStringLiteral("canOlder"), browser.canPage(application::history::HistoryPage::older)},
-        {QStringLiteral("hasMore"), state.has_more},
-        {QStringLiteral("match"), toQString(application::history::HistoryModes::name(browser.match()))},
-        {QStringLiteral("canNewer"), browser.canPage(application::history::HistoryPage::newer)},
-        {QStringLiteral("offset"), static_cast<qulonglong>(state.page_offset)},
-        {QStringLiteral("selection"), static_cast<int>(state.selection)},
-        {QStringLiteral("count"), static_cast<int>(browser.rows().size())},
-        {QStringLiteral("canSubmit"), browser.canSubmit()},
-        {QStringLiteral("commandPhase"), phaseName(selected_detail ? state.command_phase : application::history::HistoryPhase::idle)},
-        {QStringLiteral("enterRuns"), session.configuration.history.enter_runs},
-        {QStringLiteral("showDuration"), session.configuration.history.show_duration},
-        {QStringLiteral("showExit"), session.configuration.history.show_exit},
-        {QStringLiteral("showDirectory"), session.configuration.history.show_directory},
-        {QStringLiteral("relativeTime"), session.configuration.history.relative_time},
-        {QStringLiteral("inspecting"), state.inspecting},
-        {QStringLiteral("outputPhase"), phaseName(state.output_phase)},
-        {QStringLiteral("outputTruncated"), state.output_truncated},
-        {QStringLiteral("deleting"), browser.deleting()},
-        {QStringLiteral("error"), toQString(browser.error())},
+        {u"marks"_s, marks},
+        {u"hidden"_s, browser.hidden() != 0},
+        {u"hiddenCommand"_s, toQString(browser.hiddenCommand())},
+        {u"undoKey"_s, platform::usesCommandKey() ? u"⌘Z"_s : u"Ctrl+Z"_s},
+        {u"editorText"_s, query_},
+        {u"maximumQueryBytes"_s, static_cast<int>(application::history::HistorySearch::maximum_query_bytes)},
+        {u"inspectionKey"_s, platform::usesCommandKey() ? u"⌃O"_s : u"Ctrl+O"_s},
+        {u"macStyle"_s, platform::usesCommandKey()},
+        {u"paneOpen"_s, state.selection < rows.size() && session.findPane(rows[state.selection].pane_id) != nullptr},
+        {u"commandLoaded"_s, state.selection < rows.size() && (rows[state.selection].command_complete || (selected_detail && state.command_phase == application::history::HistoryPhase::ready))},
+        {u"canOlder"_s, browser.canPage(application::history::HistoryPage::older)},
+        {u"hasMore"_s, state.has_more},
+        {u"match"_s, toQString(application::history::HistoryModes::name(browser.match()))},
+        {u"canNewer"_s, browser.canPage(application::history::HistoryPage::newer)},
+        {u"offset"_s, static_cast<qulonglong>(state.page_offset)},
+        {u"selection"_s, static_cast<int>(state.selection)},
+        {u"count"_s, static_cast<int>(browser.rows().size())},
+        {u"canSubmit"_s, browser.canSubmit()},
+        {u"commandPhase"_s, phaseName(selected_detail ? state.command_phase : application::history::HistoryPhase::idle)},
+        {u"enterRuns"_s, session.configuration.history.enter_runs},
+        {u"showDuration"_s, session.configuration.history.show_duration},
+        {u"showExit"_s, session.configuration.history.show_exit},
+        {u"showDirectory"_s, session.configuration.history.show_directory},
+        {u"relativeTime"_s, session.configuration.history.relative_time},
+        {u"inspecting"_s, state.inspecting},
+        {u"outputPhase"_s, phaseName(state.output_phase)},
+        {u"outputTruncated"_s, state.output_truncated},
+        {u"deleting"_s, browser.deleting()},
+        {u"error"_s, toQString(browser.error())},
     };
   }
 
@@ -631,10 +622,10 @@ namespace telar::gui::qt {
     QVariantList facts;
     const auto append = [&facts](const application::history::HistoryInspectionLine& fact) {
       facts.append(QVariantMap{
-          {QStringLiteral("label"), toQString(fact.label)},
-          {QStringLiteral("text"), toQString(fact.text)},
-          {QStringLiteral("color"), QString::fromLatin1(palette_names[static_cast<std::size_t>(fact.color)])},
-          {QStringLiteral("mono"), fact.mono},
+          {u"label"_s, toQString(fact.label)},
+          {u"text"_s, toQString(fact.text)},
+          {u"color"_s, QString::fromLatin1(palette_names[static_cast<std::size_t>(fact.color)])},
+          {u"mono"_s, fact.mono},
       });
     };
 
@@ -662,9 +653,9 @@ namespace telar::gui::qt {
     }
 
     return {
-        {QStringLiteral("identity"), QString::number(entry.id)},
-        {QStringLiteral("facts"), facts},
-        {QStringLiteral("heading"), toQString(application::history::HistoryInspectionFacts::outputHeading(state.output_phase, state.output_truncated, browser.output().size()).view())},
+        {u"identity"_s, QString::number(entry.id)},
+        {u"facts"_s, facts},
+        {u"heading"_s, toQString(application::history::HistoryInspectionFacts::outputHeading(state.output_phase, state.output_truncated, browser.output().size()).view())},
     };
   }
 
@@ -713,7 +704,7 @@ namespace telar::gui::qt {
     buildRows();
     state_ = buildState();
     inspection_ = buildInspection();
-    emit changed();
+    changed();
 
     const auto browser = application::history::view(store_.session());
     if (browser.watching()) {
@@ -768,17 +759,17 @@ namespace telar::gui::qt {
   void HistoryController::toggle(const QString& name) {
     using Key = application::history::HistoryFilterKey;
 
-    if (name != QStringLiteral("sort") && name != QStringLiteral("output") && name != QStringLiteral("raw") && name != QStringLiteral("mode")) {
+    if (name != u"sort"_s && name != u"output"_s && name != u"raw"_s && name != u"mode"_s) {
       return;
     }
 
     auto key = Key::raw;
 
-    if (name == QStringLiteral("sort")) {
+    if (name == u"sort"_s) {
       key = Key::sort;
-    } else if (name == QStringLiteral("output")) {
+    } else if (name == u"output"_s) {
       key = Key::output;
-    } else if (name == QStringLiteral("mode")) {
+    } else if (name == u"mode"_s) {
       key = Key::mode;
     }
 
@@ -850,8 +841,8 @@ namespace telar::gui::qt {
 
       auto line = toQString(command);
 
-      line.replace(QLatin1Char('\n'), QStringLiteral(" ↵ "));
-      shown.append(QVariantMap{{QStringLiteral("text"), line}, {QStringLiteral("index"), static_cast<int>(index)}});
+      line.replace(QLatin1Char('\n'), u" ↵ "_s);
+      shown.append(QVariantMap{{u"text"_s, line}, {u"index"_s, static_cast<int>(index)}});
     }
 
     return shown;
@@ -863,12 +854,12 @@ namespace telar::gui::qt {
       return;
     }
 
-    const auto pin = static_cast<std::size_t>(shown[index].toMap().value(QStringLiteral("index")).toInt());
+    const auto pin = static_cast<std::size_t>(shown[index].toMap().value(u"index"_s).toInt());
 
     interact([&] {
       application::history::pasteCommand(store_.sessionMut(), pins_.at(pin), alternate);
-      emit submitted();
-      emit closeRequested();
+      submitted();
+      closeRequested();
     });
   }
 
@@ -896,16 +887,16 @@ namespace telar::gui::qt {
     interact([&] {
       auto next = filters_;
 
-      if (filters.contains(QStringLiteral("scope"))) {
-        parseScope(filters.value(QStringLiteral("scope")).toString(), next);
+      if (filters.contains(u"scope"_s)) {
+        parseScope(filters.value(u"scope"_s).toString(), next);
       }
 
-      if (filters.contains(QStringLiteral("author"))) {
-        next.author = parseAuthor(filters.value(QStringLiteral("author")).toString());
+      if (filters.contains(u"author"_s)) {
+        next.author = parseAuthor(filters.value(u"author"_s).toString());
       }
 
-      if (filters.contains(QStringLiteral("failedOnly"))) {
-        next.failed_only = filters.value(QStringLiteral("failedOnly")).toBool();
+      if (filters.contains(u"failedOnly"_s)) {
+        next.failed_only = filters.value(u"failedOnly"_s).toBool();
       }
 
       filters_ = next;
@@ -991,19 +982,19 @@ namespace telar::gui::qt {
       break;
     case Action::visit:
       application::history::visit(session, identity);
-      emit closeRequested();
+      closeRequested();
       break;
     case Action::mark:
       application::history::mark(session, identity);
       break;
     case Action::enter:
       application::history::enter(session, identity);
-      emit submitted();
-      emit closeRequested();
+      submitted();
+      closeRequested();
       break;
     case Action::open:
       application::history::open(session, identity);
-      emit closeRequested();
+      closeRequested();
       break;
     case Action::pin:
       static_cast<void>(pins_.toggle(application::history::view(session).command(identity)));
@@ -1037,8 +1028,8 @@ namespace telar::gui::qt {
         application::history::paste(session, entry_id, alternate);
       }
 
-      emit submitted();
-      emit closeRequested();
+      submitted();
+      closeRequested();
     });
   }
 

@@ -81,16 +81,22 @@ namespace {
     tbc_lint::unit_pipeline& pipeline_;
   };
 
-  // Strips compiler plugin flags that load tbc-plugin itself, because tbc-lint already registers
-  // tbc's custom attributes and runs the selected checks directly.
+  // Strips compiler plugin flags that load tbc-plugin or telar-qt-plugin, because tbc-lint
+  // registers tbc's custom attributes itself and does not execute compiler plugins.
   clang::tooling::CommandLineArguments stripTbcPluginFlags(const clang::tooling::CommandLineArguments& arguments, llvm::StringRef /*filename*/) {
     clang::tooling::CommandLineArguments filtered;
+    bool stripped_qt_plugin = false;
 
-    filtered.reserve(arguments.size());
+    filtered.reserve(arguments.size() + 1);
     for (std::size_t index = 0; index < arguments.size(); ++index) {
       const llvm::StringRef arg(arguments[index]);
 
       if (arg.starts_with("-fplugin=") && arg.contains("tbc-plugin")) {
+        continue;
+      }
+
+      if (arg.starts_with("-fplugin=") && arg.contains("telar-qt-plugin")) {
+        stripped_qt_plugin = true;
         continue;
       }
 
@@ -110,6 +116,10 @@ namespace {
       }
 
       filtered.push_back(arguments[index]);
+    }
+
+    if (stripped_qt_plugin) {
+      filtered.emplace_back("-Wno-unknown-attributes");
     }
 
     return filtered;

@@ -17,11 +17,7 @@ static_assert(true);
 #include <utility>
 
 // pick_controller.hpp reads the definitions, so their module comes first.
-import telar.gui.features.components;
 
-#include "ui/app/chrome/components/pick_controller.hpp"
-#include "ui/kit/config/lua_host.hpp"
-#include "ui/kit/process/surface_command.hpp"
 #include <QByteArray>
 #include <QCoreApplication>
 #include <QEventLoop>
@@ -42,9 +38,14 @@ import telar.gui.features.components;
 #include <functional>
 #include <iostream>
 
+import telar.gui.features.components;
 import telar.gui.application;
 import telar.gui.foundation.core;
 import telar.base.memory.allocators;
+import telar.base.ds;
+import telar.gui.ui.app.chrome.components;
+import telar.gui.ui.kit.config;
+import telar.gui.ui.kit.process.surface_command;
 
 namespace {
 

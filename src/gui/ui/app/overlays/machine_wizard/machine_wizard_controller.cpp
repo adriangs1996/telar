@@ -1,24 +1,16 @@
-#ifdef __clangd__
-// Keep textual ABI declarations and module imports in one clangd parse.
-static_assert(true);
-#endif
+module telar.gui.ui.app.overlays.machine_wizard;
 
-#include "machine_wizard_controller.hpp"
-#include "ui/kit/models/projection.hpp"
-#include <QClipboard>
-#include <QDesktopServices>
-#include <QGuiApplication>
-#include <QJsonArray>
-#include <QJsonDocument>
-#include <QRegularExpression>
-#include <QStringList>
-#include <QUrl>
-#include <algorithm>
-
+import std;
+import telar.gui.qt;
+import telar.gui.ui.kit.models;
 import telar.gui.application;
 import telar.base.ds;
+import telar.gui.foundation.system;
 
 namespace telar::gui::qt {
+  using Qt::StringLiterals::operator""_ba;
+
+  using Qt::StringLiterals::operator""_s;
 
   namespace {
 
@@ -89,8 +81,8 @@ namespace telar::gui::qt {
         store_(store),
         program_(toQString(system::runtime_endpoint::program().view())),
         // The address `telar server pair` prints: telar://HOST:PORT#KEY, with .CODE while it pairs.
-        address_pattern_(QStringLiteral(R"(^telar://(\[[0-9A-Fa-f:]+\]|[^\s:#/\[\]]+):(\d{1,5})#([0-9a-f]{64})(?:\.([0-9a-f]{32}))?$)")),
-        label_pattern_(QStringLiteral(R"(^[A-Za-z0-9][A-Za-z0-9._-]{0,31}$)")) {}
+        address_pattern_(uR"(^telar://(\[[0-9A-Fa-f:]+\]|[^\s:#/\[\]]+):(\d{1,5})#([0-9a-f]{64})(?:\.([0-9a-f]{32}))?$)"_s),
+        label_pattern_(uR"(^[A-Za-z0-9][A-Za-z0-9._-]{0,31}$)"_s) {}
 
   MachineWizardController::~MachineWizardController() {
     forget();
@@ -188,7 +180,7 @@ namespace telar::gui::qt {
       wizard.disk_path = value.trimmed();
     }
 
-    emit changed();
+    changed();
   }
 
   void MachineWizardController::setOption(const QString& name, bool value) {
@@ -208,7 +200,7 @@ namespace telar::gui::qt {
       wizard.installed = value;
     }
 
-    emit changed();
+    changed();
   }
 
   QVariantMap MachineWizardController::problems() const {
@@ -217,19 +209,19 @@ namespace telar::gui::qt {
 
     if (wizard.step == Step::pair && wizard.helper) {
       if (wizard.reach_as.isEmpty()) {
-        found.insert(QStringLiteral("reachAs"), QStringLiteral("Required: the machine's host name rarely resolves from here"));
+        found.insert(u"reachAs"_s, u"Required: the machine's host name rarely resolves from here"_s);
       }
 
       if (!wizard.listen_port.isEmpty() && !validPort(wizard.listen_port)) {
-        found.insert(QStringLiteral("listenPort"), QStringLiteral("A port is 1 to 65535"));
+        found.insert(u"listenPort"_s, u"A port is 1 to 65535"_s);
       }
 
       if (wizard.reach == QLatin1String("forward") && !validPort(wizard.dial_port)) {
-        found.insert(QStringLiteral("dialPort"), QStringLiteral("The port this Mac dials, 1 to 65535"));
+        found.insert(u"dialPort"_s, u"The port this Mac dials, 1 to 65535"_s);
       }
     } else if (wizard.step == Step::pair && !wizard.paired) {
       if (!wizard.address.isEmpty() && !address_pattern_.match(wizard.address).hasMatch()) {
-        found.insert(QStringLiteral("address"), QStringLiteral("Not an address telar prints. Paste the whole line, including what follows #"));
+        found.insert(u"address"_s, u"Not an address telar prints. Paste the whole line, including what follows #"_s);
       }
 
       const auto label = wizard.label.toUtf8();
@@ -238,12 +230,12 @@ namespace telar::gui::qt {
       });
 
       if (!wizard.label.isEmpty() && !label_pattern_.match(wizard.label).hasMatch()) {
-        found.insert(QStringLiteral("label"), QStringLiteral("1 to 32 letters, digits, '.', '_' or '-', starting with a letter or a digit"));
+        found.insert(u"label"_s, u"1 to 32 letters, digits, '.', '_' or '-', starting with a letter or a digit"_s);
       } else if (taken) {
-        found.insert(QStringLiteral("label"), QStringLiteral("“%1” is already a machine of this window").arg(wizard.label));
+        found.insert(u"label"_s, u"“%1” is already a machine of this window"_s.arg(wizard.label));
       }
     } else if (wizard.step == Step::telar && wizard.source == QLatin1String("disk") && wizard.disk_path.isEmpty()) {
-      found.insert(QStringLiteral("diskPath"), QStringLiteral("The telar built for that machine, with its companions beside it"));
+      found.insert(u"diskPath"_s, u"The telar built for that machine, with its companions beside it"_s);
     }
 
     return found;
@@ -288,15 +280,15 @@ namespace telar::gui::qt {
 
   QString MachineWizardController::serveCommand() const {
     const auto& wizard = *wizard_;
-    const auto listen = !wizard.listen_port.isEmpty() && wizard.listen_port != QLatin1String("8352") ? QStringLiteral(":") + wizard.listen_port : QString{};
-    const auto host = wizard.reach_as.isEmpty() ? QString{} : QStringLiteral(" --host ") + wizard.reach_as;
-    const auto dial = wizard.reach == QLatin1String("forward") && !wizard.dial_port.isEmpty() ? QStringLiteral(" --port ") + wizard.dial_port : QString{};
+    const auto listen = !wizard.listen_port.isEmpty() && wizard.listen_port != QLatin1String("8352") ? u":"_s + wizard.listen_port : QString{};
+    const auto host = wizard.reach_as.isEmpty() ? QString{} : u" --host "_s + wizard.reach_as;
+    const auto dial = wizard.reach == QLatin1String("forward") && !wizard.dial_port.isEmpty() ? u" --port "_s + wizard.dial_port : QString{};
 
     if (wizard.installed) {
-      return QStringLiteral("telar server enable") + (listen.isEmpty() ? QString{} : QStringLiteral(" ") + listen) + host + dial;
+      return u"telar server enable"_s + (listen.isEmpty() ? QString{} : u" "_s + listen) + host + dial;
     }
 
-    return QStringLiteral("curl -fsSL https://github.com/adriangs1996/telar/releases/latest/download/install.sh | sh -s -- --headless --serve") + (listen.isEmpty() ? QString{} : QStringLiteral(" --listen ") + listen) + host + dial;
+    return u"curl -fsSL https://github.com/adriangs1996/telar/releases/latest/download/install.sh | sh -s -- --headless --serve"_s + (listen.isEmpty() ? QString{} : u" --listen "_s + listen) + host + dial;
   }
 
   void MachineWizardController::next() {
@@ -314,7 +306,7 @@ namespace telar::gui::qt {
       }
 
       if (!wizard.paired) {
-        start(Job::pair, {QStringLiteral("machine"), QStringLiteral("add"), wizard.label, wizard.address});
+        start(Job::pair, {u"machine"_s, u"add"_s, wizard.label, wizard.address});
         return;
       }
 
@@ -324,35 +316,35 @@ namespace telar::gui::qt {
       wizard.step = Step::agents;
       break;
     case Step::agents: {
-      QStringList arguments{QStringLiteral("machine"), QStringLiteral("setup"), wizard.target.isEmpty() ? wizard.label : wizard.target};
-      QStringList skipped{QStringLiteral("login")};
+      QStringList arguments{u"machine"_s, u"setup"_s, wizard.target.isEmpty() ? wizard.label : wizard.target};
+      QStringList skipped{u"login"_s};
 
       if (wizard.source == QLatin1String("build")) {
-        arguments << QStringLiteral("--binary") << program_;
+        arguments << u"--binary"_s << program_;
       } else if (wizard.source == QLatin1String("disk")) {
-        arguments << QStringLiteral("--binary") << wizard.disk_path;
+        arguments << u"--binary"_s << wizard.disk_path;
       }
 
       if (!wizard.agents) {
-        skipped << QStringLiteral("agents");
+        skipped << u"agents"_s;
       }
 
       if (!wizard.configuration) {
-        skipped << QStringLiteral("config");
+        skipped << u"config"_s;
       }
 
       if (!wizard.editor) {
-        skipped << QStringLiteral("editor");
+        skipped << u"editor"_s;
       }
 
-      arguments << QStringLiteral("--skip") << skipped.join(QLatin1Char(',')) << QStringLiteral("--events");
+      arguments << u"--skip"_s << skipped.join(QLatin1Char(',')) << u"--events"_s;
       wizard.step = Step::apply;
       start(Job::apply, arguments);
       return;
     }
     case Step::apply:
       wizard.step = Step::sign_in;
-      start(Job::sign_in, {QStringLiteral("machine"), QStringLiteral("setup"), wizard.target.isEmpty() ? wizard.label : wizard.target, QStringLiteral("--skip"), QStringLiteral("agents,config,editor"), QStringLiteral("--events")});
+      start(Job::sign_in, {u"machine"_s, u"setup"_s, wizard.target.isEmpty() ? wizard.label : wizard.target, u"--skip"_s, u"agents,config,editor"_s, u"--events"_s});
       return;
     case Step::sign_in:
       wizard.step = Step::ready;
@@ -360,13 +352,13 @@ namespace telar::gui::qt {
     case Step::ready: {
       const auto label = wizard.label;
 
-      emit machineOpened(label);
-      emit closeRequested();
+      machineOpened(label);
+      closeRequested();
       return;
     }
     }
 
-    emit changed();
+    changed();
   }
 
   void MachineWizardController::back() {
@@ -392,7 +384,7 @@ namespace telar::gui::qt {
       wizard.step = Step::telar;
     }
 
-    emit changed();
+    changed();
   }
 
   void MachineWizardController::openHelper(bool from_failure) {
@@ -405,8 +397,8 @@ namespace telar::gui::qt {
     if (from_failure) {
       if (const auto match = address_pattern_.match(wizard.address); match.hasMatch()) {
         wizard.reach_as = match.captured(1);
-        if (match.captured(2) != (wizard.listen_port.isEmpty() ? QStringLiteral("8352") : wizard.listen_port)) {
-          wizard.reach = QStringLiteral("forward");
+        if (match.captured(2) != (wizard.listen_port.isEmpty() ? u"8352"_s : wizard.listen_port)) {
+          wizard.reach = u"forward"_s;
           wizard.dial_port = match.captured(2);
         }
       }
@@ -414,7 +406,7 @@ namespace telar::gui::qt {
 
     wizard.helper = true;
     wizard.helper_from_failure = from_failure;
-    emit changed();
+    changed();
   }
 
   void MachineWizardController::closeHelper(bool have_address) {
@@ -431,7 +423,7 @@ namespace telar::gui::qt {
       wizard.failure.clear();
     }
 
-    emit changed();
+    changed();
   }
 
   void MachineWizardController::start(Job job, const QStringList& arguments) {
@@ -477,14 +469,14 @@ namespace telar::gui::qt {
 
     connect(process, &QProcess::errorOccurred, this, [this, process](QProcess::ProcessError error) {
       if (error == QProcess::FailedToStart && process == process_) {
-        errors_ = QByteArrayLiteral("telar could not start: ") + process->program().toUtf8();
+        errors_ = "telar could not start: "_ba + process->program().toUtf8();
         finish(-1);
       }
     });
 
     connect(process, &QProcess::finished, process, &QObject::deleteLater);
     process->start(program_, arguments);
-    emit changed();
+    changed();
   }
 
   void MachineWizardController::read() {
@@ -503,7 +495,7 @@ namespace telar::gui::qt {
       }
     }
 
-    emit changed();
+    changed();
   }
 
   void MachineWizardController::step(const QString& name, const QString& status, const QString& detail) {
@@ -511,10 +503,10 @@ namespace telar::gui::qt {
 
     for (auto& row : rows) {
       auto map = row.toMap();
-      if (map.value(QStringLiteral("step")).toString() == name) {
+      if (map.value(u"step"_s).toString() == name) {
         if (!status.isEmpty()) {
-          map.insert(QStringLiteral("status"), status);
-          map.insert(QStringLiteral("detail"), detail);
+          map.insert(u"status"_s, status);
+          map.insert(u"detail"_s, detail);
         }
 
         row = map;
@@ -522,29 +514,29 @@ namespace telar::gui::qt {
       }
     }
 
-    rows.append(QVariantMap{{QStringLiteral("step"), name}, {QStringLiteral("status"), status}, {QStringLiteral("detail"), detail}, {QStringLiteral("notes"), QStringList{}}});
+    rows.append(QVariantMap{{u"step"_s, name}, {u"status"_s, status}, {u"detail"_s, detail}, {u"notes"_s, QStringList{}}});
   }
 
   void MachineWizardController::receive(const QJsonObject& event) {
-    const auto kind = event.value(QStringLiteral("event")).toString();
+    const auto kind = event.value(u"event"_s).toString();
 
     if (kind == QLatin1String("step")) {
-      step(event.value(QStringLiteral("step")).toString(), event.value(QStringLiteral("status")).toString(), event.value(QStringLiteral("detail")).toString());
+      step(event.value(u"step"_s).toString(), event.value(u"status"_s).toString(), event.value(u"detail"_s).toString());
       return;
     }
 
     if (kind == QLatin1String("note")) {
-      const auto name = event.value(QStringLiteral("step")).toString();
+      const auto name = event.value(u"step"_s).toString();
 
       // The step's row first, which a note may come before; then the note on it.
       step(name, {}, {});
       for (auto& row : wizard_.getMut().rows) {
         auto map = row.toMap();
-        if (map.value(QStringLiteral("step")).toString() == name) {
-          auto notes = map.value(QStringLiteral("notes")).toStringList();
+        if (map.value(u"step"_s).toString() == name) {
+          auto notes = map.value(u"notes"_s).toStringList();
 
-          notes << event.value(QStringLiteral("text")).toString();
-          map.insert(QStringLiteral("notes"), notes);
+          notes << event.value(u"text"_s).toString();
+          map.insert(u"notes"_s, notes);
           row = map;
         }
       }
@@ -556,15 +548,15 @@ namespace telar::gui::qt {
 
     if (kind == QLatin1String("login")) {
       wizard.logins.append(QVariantMap{
-          {QStringLiteral("agent"), event.value(QStringLiteral("agent")).toString()},
-          {QStringLiteral("url"), event.value(QStringLiteral("url")).toString()},
-          {QStringLiteral("code"), event.value(QStringLiteral("code")).toString()},
+          {u"agent"_s, event.value(u"agent"_s).toString()},
+          {u"url"_s, event.value(u"url"_s).toString()},
+          {u"code"_s, event.value(u"code"_s).toString()},
       });
     } else if (kind == QLatin1String("question")) {
       wizard.question = event.toVariantMap();
     } else if (kind == QLatin1String("done") && wizard.job == Job::apply) {
       // The report of the setup that placed telar: Ready shows where it put it.
-      wizard.report = event.value(QStringLiteral("report")).toObject();
+      wizard.report = event.value(u"report"_s).toObject();
     }
   }
 
@@ -592,10 +584,10 @@ namespace telar::gui::qt {
       wizard.applied = status == 0;
       if (!wizard.applied) {
         const auto failed = std::ranges::find_if(wizard.rows, [](const QVariant& row) {
-          return row.toMap().value(QStringLiteral("status")).toString() == QLatin1String("failed");
+          return row.toMap().value(u"status"_s).toString() == QLatin1String("failed");
         });
 
-        wizard.failure = failed != wizard.rows.end() ? failed->toMap().value(QStringLiteral("detail")).toString() : lastLines(errors_);
+        wizard.failure = failed != wizard.rows.end() ? failed->toMap().value(u"detail"_s).toString() : lastLines(errors_);
       }
 
       break;
@@ -607,7 +599,7 @@ namespace telar::gui::qt {
     }
 
     process_.clear();
-    emit changed();
+    changed();
   }
 
   void MachineWizardController::answer(const QString& value) {
@@ -616,18 +608,18 @@ namespace telar::gui::qt {
     }
 
     auto& wizard = wizard_.getMut();
-    const auto kind = wizard.question.value(QStringLiteral("kind")).toString();
-    QJsonObject reply{{QStringLiteral("answer"), kind}};
+    const auto kind = wizard.question.value(u"kind"_s).toString();
+    QJsonObject reply{{u"answer"_s, kind}};
 
     if (value == QLatin1String("true") || value == QLatin1String("false")) {
-      reply.insert(QStringLiteral("value"), value == QLatin1String("true"));
+      reply.insert(u"value"_s, value == QLatin1String("true"));
     } else {
-      reply.insert(QStringLiteral("value"), value);
+      reply.insert(u"value"_s, value);
     }
 
     process_->write(QJsonDocument{reply}.toJson(QJsonDocument::Compact) + '\n');
     wizard.question.clear();
-    emit changed();
+    changed();
   }
 
   void MachineWizardController::retry() {
@@ -676,19 +668,19 @@ namespace telar::gui::qt {
         continue;
       }
 
-      QVariantMap row{{QStringLiteral("step"), QString{name}}, {QStringLiteral("title"), QString::fromLatin1(setup_step.title)}, {QStringLiteral("status"), QString{}}, {QStringLiteral("detail"), QString{}}, {QStringLiteral("notes"), QStringList{}}};
+      QVariantMap row{{u"step"_s, QString{name}}, {u"title"_s, QString::fromLatin1(setup_step.title)}, {u"status"_s, QString{}}, {u"detail"_s, QString{}}, {u"notes"_s, QStringList{}}};
 
       for (const auto& reported : wizard.rows) {
         const auto map = reported.toMap();
-        if (map.value(QStringLiteral("step")).toString() == name) {
-          row.insert(QStringLiteral("status"), map.value(QStringLiteral("status")));
-          row.insert(QStringLiteral("detail"), map.value(QStringLiteral("detail")));
-          row.insert(QStringLiteral("notes"), map.value(QStringLiteral("notes")));
+        if (map.value(u"step"_s).toString() == name) {
+          row.insert(u"status"_s, map.value(u"status"_s));
+          row.insert(u"detail"_s, map.value(u"detail"_s));
+          row.insert(u"notes"_s, map.value(u"notes"_s));
         }
       }
 
-      if (wizard.running && !running_marked && row.value(QStringLiteral("status")).toString().isEmpty()) {
-        row.insert(QStringLiteral("status"), QStringLiteral("running"));
+      if (wizard.running && !running_marked && row.value(u"status"_s).toString().isEmpty()) {
+        row.insert(u"status"_s, u"running"_s);
         running_marked = true;
       }
 
@@ -702,7 +694,7 @@ namespace telar::gui::qt {
     QVariantList choices;
 
     for (const auto& choice : reaches) {
-      choices.append(QVariantMap{{QStringLiteral("key"), QString::fromLatin1(choice.key)}, {QStringLiteral("name"), QString::fromLatin1(choice.name)}});
+      choices.append(QVariantMap{{u"key"_s, QString::fromLatin1(choice.key)}, {u"name"_s, QString::fromLatin1(choice.name)}});
     }
 
     return choices;
@@ -710,13 +702,13 @@ namespace telar::gui::qt {
 
   // Where the setup that placed telar says it put it: its profile step names it.
   QString MachineWizardController::telarPath() const {
-    const auto mark = QStringLiteral("telar at ");
-    const auto steps = wizard_->report.value(QStringLiteral("steps")).toArray();
+    const auto mark = u"telar at "_s;
+    const auto steps = wizard_->report.value(u"steps"_s).toArray();
 
     for (const QJsonValue reported : steps) {
       const auto step = reported.toObject();
-      if (step.value(QStringLiteral("step")).toString() == QLatin1String("profile")) {
-        const auto detail = step.value(QStringLiteral("detail")).toString();
+      if (step.value(u"step"_s).toString() == QLatin1String("profile")) {
+        const auto detail = step.value(u"detail"_s).toString();
         const auto marked = detail.lastIndexOf(mark);
 
         return marked < 0 ? QString{} : detail.mid(marked + mark.size());
@@ -728,7 +720,7 @@ namespace telar::gui::qt {
 
   QVariantMap MachineWizardController::state() const {
     if (!wizard_) {
-      return {{QStringLiteral("open"), false}};
+      return {{u"open"_s, false}};
     }
 
     const auto& wizard = *wizard_;
@@ -742,54 +734,54 @@ namespace telar::gui::qt {
       const auto key = match.captured(3);
 
       parsed = {
-          {QStringLiteral("host"), match.captured(1)},
-          {QStringLiteral("port"), match.captured(2)},
-          {QStringLiteral("key"), key.left(key_head) + QStringLiteral("…") + key.right(key_tail)},
-          {QStringLiteral("code"), !match.captured(4).isEmpty()},
+          {u"host"_s, match.captured(1)},
+          {u"port"_s, match.captured(2)},
+          {u"key"_s, key.left(key_head) + u"…"_s + key.right(key_tail)},
+          {u"code"_s, !match.captured(4).isEmpty()},
       };
     }
 
     const auto& reach = reachOf(wizard.reach);
-    const auto listen = wizard.listen_port.isEmpty() ? QStringLiteral("8352") : wizard.listen_port;
+    const auto listen = wizard.listen_port.isEmpty() ? u"8352"_s : wizard.listen_port;
 
     return {
-        {QStringLiteral("open"), true},
-        {QStringLiteral("step"), static_cast<int>(wizard.step)},
-        {QStringLiteral("steps"), QStringList{QStringLiteral("Pair"), QStringLiteral("Telar"), QStringLiteral("Agents"), QStringLiteral("Apply"), QStringLiteral("Sign in"), QStringLiteral("Ready")}},
-        {QStringLiteral("existing"), wizard.existing},
-        {QStringLiteral("helper"), wizard.helper},
-        {QStringLiteral("address"), wizard.address},
-        {QStringLiteral("parsed"), parsed},
-        {QStringLiteral("label"), wizard.label},
-        {QStringLiteral("localName"), toQString(store_.machines().row(application::machines::Machines::local_slot).label.view())},
-        {QStringLiteral("reach"), wizard.reach},
-        {QStringLiteral("reaches"), reachChoices()},
-        {QStringLiteral("reachField"), QString::fromLatin1(reach.field)},
-        {QStringLiteral("reachPlaceholder"), QString::fromLatin1(reach.placeholder)},
-        {QStringLiteral("openLine"), QString::fromLatin1(reach.open).replace(QStringLiteral("%1"), listen).replace(QStringLiteral("%2"), wizard.dial_port.isEmpty() ? QStringLiteral("PORT") : wizard.dial_port)},
-        {QStringLiteral("reachAs"), wizard.reach_as},
-        {QStringLiteral("listenPort"), wizard.listen_port},
-        {QStringLiteral("dialPort"), wizard.dial_port},
-        {QStringLiteral("installed"), wizard.installed},
-        {QStringLiteral("command"), serveCommand()},
-        {QStringLiteral("source"), wizard.source},
-        {QStringLiteral("diskPath"), wizard.disk_path},
-        {QStringLiteral("thisBuild"), program_},
-        {QStringLiteral("agents"), wizard.agents},
-        {QStringLiteral("configuration"), wizard.configuration},
-        {QStringLiteral("editor"), wizard.editor},
-        {QStringLiteral("running"), wizard.running},
-        {QStringLiteral("paired"), wizard.paired},
-        {QStringLiteral("applied"), wizard.applied},
-        {QStringLiteral("signedIn"), wizard.signed_in},
-        {QStringLiteral("failure"), wizard.failure},
-        {QStringLiteral("rows"), progress()},
-        {QStringLiteral("logins"), wizard.logins},
-        {QStringLiteral("question"), wizard.question},
-        {QStringLiteral("problems"), problems()},
-        {QStringLiteral("canContinue"), canContinue()},
-        {QStringLiteral("destination"), wizard.report.value(QStringLiteral("destination")).toString(wizard.address)},
-        {QStringLiteral("telarPath"), telarPath()},
+        {u"open"_s, true},
+        {u"step"_s, static_cast<int>(wizard.step)},
+        {u"steps"_s, QStringList{u"Pair"_s, u"Telar"_s, u"Agents"_s, u"Apply"_s, u"Sign in"_s, u"Ready"_s}},
+        {u"existing"_s, wizard.existing},
+        {u"helper"_s, wizard.helper},
+        {u"address"_s, wizard.address},
+        {u"parsed"_s, parsed},
+        {u"label"_s, wizard.label},
+        {u"localName"_s, toQString(store_.machines().row(application::machines::Machines::local_slot).label.view())},
+        {u"reach"_s, wizard.reach},
+        {u"reaches"_s, reachChoices()},
+        {u"reachField"_s, QString::fromLatin1(reach.field)},
+        {u"reachPlaceholder"_s, QString::fromLatin1(reach.placeholder)},
+        {u"openLine"_s, QString::fromLatin1(reach.open).replace(u"%1"_s, listen).replace(u"%2"_s, wizard.dial_port.isEmpty() ? u"PORT"_s : wizard.dial_port)},
+        {u"reachAs"_s, wizard.reach_as},
+        {u"listenPort"_s, wizard.listen_port},
+        {u"dialPort"_s, wizard.dial_port},
+        {u"installed"_s, wizard.installed},
+        {u"command"_s, serveCommand()},
+        {u"source"_s, wizard.source},
+        {u"diskPath"_s, wizard.disk_path},
+        {u"thisBuild"_s, program_},
+        {u"agents"_s, wizard.agents},
+        {u"configuration"_s, wizard.configuration},
+        {u"editor"_s, wizard.editor},
+        {u"running"_s, wizard.running},
+        {u"paired"_s, wizard.paired},
+        {u"applied"_s, wizard.applied},
+        {u"signedIn"_s, wizard.signed_in},
+        {u"failure"_s, wizard.failure},
+        {u"rows"_s, progress()},
+        {u"logins"_s, wizard.logins},
+        {u"question"_s, wizard.question},
+        {u"problems"_s, problems()},
+        {u"canContinue"_s, canContinue()},
+        {u"destination"_s, wizard.report.value(u"destination"_s).toString(wizard.address)},
+        {u"telarPath"_s, telarPath()},
     };
   }
 

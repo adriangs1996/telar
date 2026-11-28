@@ -6,5 +6,4 @@ telar_add_qml_sources(gui-quick
     font_source.cpp
     resident_fonts.cpp
     terminal_font.cpp
-    window_font_catalog.cpp
-    window_font_catalog.hpp)
+    window_font_catalog.cpp)

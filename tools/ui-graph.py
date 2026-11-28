@@ -43,13 +43,20 @@ import sys
 
 ROOT = Path(__file__).resolve().parents[1]
 UI = 'src/gui/ui/'
-CPP_SUFFIXES = ('.cpp', '.hpp', '.h', '.mm')
+CPP_SUFFIXES = ('.cpp', '.cppm', '.hpp', '.h', '.mm')
 SOURCE_SUFFIXES = CPP_SUFFIXES + ('.qml',)
 INCLUDE_RE = re.compile(r'#include\s+"ui/((?:[a-z_0-9]+/)+)([a-z_0-9]+\.hpp)"')
+IMPORT_RE = re.compile(r'^\s*(?:export\s+)?import\s+telar\.gui\.ui\.([a-z_0-9]+(?:\.[a-z_0-9]+)*)\s*;', re.M)
 # A quoted QML import names a directory or a script file by its path.
 QML_IMPORT_RE = re.compile(r'^\s*import\s+"([^"]+)"', re.M)
 # A registration macro of a C++ type for QML, with the name it gives when it names one.
 QML_REGISTRATION_RE = re.compile(r'\bQML_(?:NAMED_ELEMENT\(\s*(\w+)\s*\)|ELEMENT\b)')
+# A C++23 module attribute registration on a class or namespace:
+#   class [[qt::object, qt::qml_element]] Foo
+#   class [[qt::object, qt_qml_named("Foo")]] Bar
+#   namespace [[qt::ns, qt_qml_named("Action")]] action
+QT_ATTR_NAMED_RE = re.compile(r'\bqt_qml_named\(\s*"(\w+)"\s*\)')
+QT_ATTR_ELEMENT_RE = re.compile(r'\b(?:class|struct)\s+\[\[[^\]]*\bqt::qml_element\b[^\]]*\]\]\s+(\w+)')
 # The definition of a class, not a forward declaration: `class Name final : Base {`, `struct Name {`.
 CLASS_RE = re.compile(r'\b(?:class|struct)\s+(?:[A-Z_]+\s+)?(\w+)\s*(?:final\s*)?[:{]')
 # Comments and string literals of QML and JavaScript, where a type name is not a use.
@@ -127,6 +134,10 @@ def include_edges(sources):
             included = included.rstrip('/')
             if included != node:
                 edges.append((path, node, included, header))
+        for imported in IMPORT_RE.findall(text):
+            included = imported.replace('.', '/')
+            if included != node:
+                edges.append((path, node, included, imported.rsplit('.', 1)[-1] + '.cppm'))
 
     return edges
 
@@ -147,13 +158,13 @@ def imported_folder(path, imported):
 
 
 def registered_types(sources):
-    """Return {name: folder} of the C++ types that headers of ui/ register for QML.
+    """Return {name: folder} of the C++ types that headers or module interfaces of ui/ register for QML.
 
-    `QML_NAMED_ELEMENT(Name)` registers Name; `QML_ELEMENT` registers the class it sits in, the
-    nearest class definition above it."""
+    `QML_NAMED_ELEMENT(Name)` / `[[qt_qml_named("Name")]]` registers Name; `QML_ELEMENT` /
+    `[[qt::qml_element]]` registers the class it sits on."""
     owners = {}
     for path, text in sources.items():
-        if not path.endswith(('.hpp', '.h')):
+        if not path.endswith(('.hpp', '.h', '.cppm')):
             continue
 
         for registration in QML_REGISTRATION_RE.finditer(text):
@@ -163,6 +174,12 @@ def registered_types(sources):
                 if not classes:
                     continue
                 name = classes[-1]
+            owners[name] = folder(path)
+
+        for name in QT_ATTR_NAMED_RE.findall(text):
+            owners[name] = folder(path)
+
+        for name in QT_ATTR_ELEMENT_RE.findall(text):
             owners[name] = folder(path)
 
     return owners

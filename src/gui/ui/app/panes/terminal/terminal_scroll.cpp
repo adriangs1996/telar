@@ -1,29 +1,17 @@
-#ifdef __clangd__
-// Keep textual ABI declarations and module imports in one clangd parse.
-static_assert(true);
-#endif
+module telar.gui.ui.app.panes.terminal;
 
-#include "platform/scroll_event.hpp"
-#include "terminal_item.hpp"
-#include "ui/kit/cell_scene/terminal_scene.hpp"
-#include "ui/kit/motion/scroll_motion.hpp"
-#include "ui/kit/scene/window_animation_clock.hpp"
-#include <QQuickWindow>
-#include <QWheelEvent>
-#include <algorithm>
-#include <chrono>
-#include <cmath>
-#include <cstdint>
-#include <functional>
-#include <limits>
-#include <optional>
-
+import std;
+import telar.gui.qt;
+import telar.gui.qt.platform;
+import telar.gui.ui.kit.motion;
+import telar.gui.ui.kit.scene;
 import telar.gui.application;
 import telar.base.ds;
 import telar.gui.foundation.core;
 import telar.wire.vocabulary;
 
 namespace telar::gui::qt {
+  using Qt::StringLiterals::operator""_s;
 
   namespace {
 
@@ -36,20 +24,20 @@ namespace telar::gui::qt {
     QString stateName(CommandBlockState state) {
       switch (state) {
       case CommandBlockState::running:
-        return QStringLiteral("running");
+        return u"running"_s;
       case CommandBlockState::succeeded:
-        return QStringLiteral("succeeded");
+        return u"succeeded"_s;
       case CommandBlockState::failed:
-        return QStringLiteral("failed");
+        return u"failed"_s;
       case CommandBlockState::session:
-        return QStringLiteral("session");
+        return u"session"_s;
       case CommandBlockState::background:
-        return QStringLiteral("background");
+        return u"background"_s;
       case CommandBlockState::interrupted:
         break;
       }
 
-      return QStringLiteral("interrupted");
+      return u"interrupted"_s;
     }
 
     // A command still going: one running, or an ssh whose session is open.
@@ -178,7 +166,7 @@ namespace telar::gui::qt {
       application::terminal::input::showTop(controller_->sessionMut(), pane_id_, ds::none);
       top_row_ = current->screen.scroll().offset;
       if (std::not_equal_to<>{}(std::exchange(shift_, 0), 0)) {
-        emit scrollChanged();
+        scrollChanged();
       }
 
       return;
@@ -429,7 +417,7 @@ namespace telar::gui::qt {
     if (from != fold_from_ || std::not_equal_to<>{}(offset, fold_offset_)) {
       fold_from_ = from;
       fold_offset_ = offset;
-      emit scrollChanged();
+      scrollChanged();
     }
   }
 
@@ -501,7 +489,7 @@ namespace telar::gui::qt {
     application::terminal::input::showTop(controller_->sessionMut(), pane_id_, top);
     if (std::not_equal_to<>{}(shift, shift_)) {
       shift_ = shift;
-      emit scrollChanged();
+      scrollChanged();
     }
 
     // The user's motion leads the runtime's view, at most once a frame; copy mode owns it while it reads.
@@ -806,24 +794,24 @@ namespace telar::gui::qt {
 
     if (sticky != sticky_block_) {
       sticky_block_ = std::move(sticky);
-      emit stickyChanged();
+      stickyChanged();
     }
 
     if (segments_changed && segments != rail_segments_) {
       rail_segments_ = std::move(segments);
-      emit blocksChanged();
+      blocksChanged();
     }
 
     if (std::not_equal_to<>{}(rail_top, rail_top_) || std::not_equal_to<>{}(rail_height, rail_height_)) {
       rail_top_ = rail_top;
       rail_height_ = rail_height;
-      emit scrollChanged();
+      scrollChanged();
     }
 
     if (arrivals.rows != rows_arrived_ || arrivals.finished != finished_below_) {
       rows_arrived_ = arrivals.rows;
       finished_below_ = std::move(arrivals.finished);
-      emit placeChanged();
+      placeChanged();
     }
   }
 
@@ -845,14 +833,14 @@ namespace telar::gui::qt {
       const auto end = index + 1 < blocks.size() ? folds.display(blocks[index + 1].row) : shown;
 
       segments.push_back(QVariantMap{
-          {QStringLiteral("index"), static_cast<int>(index)},
-          {QStringLiteral("state"), stateName(blocks[index].state)},
-          {QStringLiteral("top"), static_cast<qreal>(first) / static_cast<qreal>(shown)},
-          {QStringLiteral("height"), static_cast<qreal>(end > first ? end - first : 0) / static_cast<qreal>(shown)},
-          {QStringLiteral("selected"), selected == index},
-          {QStringLiteral("folded"), session.folded({.pane_id = pane_id_, .index = index})},
-          {QStringLiteral("marks"), markLetters(*current, index)},
-          {QStringLiteral("tip"), blockPlace(blocks[index]).value(QStringLiteral("tip"))},
+          {u"index"_s, static_cast<int>(index)},
+          {u"state"_s, stateName(blocks[index].state)},
+          {u"top"_s, static_cast<qreal>(first) / static_cast<qreal>(shown)},
+          {u"height"_s, static_cast<qreal>(end > first ? end - first : 0) / static_cast<qreal>(shown)},
+          {u"selected"_s, selected == index},
+          {u"folded"_s, session.folded({.pane_id = pane_id_, .index = index})},
+          {u"marks"_s, markLetters(*current, index)},
+          {u"tip"_s, blockPlace(blocks[index]).value(u"tip"_s)},
       });
     }
 
@@ -910,21 +898,21 @@ namespace telar::gui::qt {
     const auto selected = controller_->prompt().selectedBlock(pane_id_);
 
     QVariantMap pinned{
-        {QStringLiteral("index"), static_cast<int>(index)},
-        {QStringLiteral("key"), static_cast<qulonglong>(GuiSession::blockKey(*current, index))},
-        {QStringLiteral("command"), QString::fromUtf8(block.command.data(), static_cast<qsizetype>(block.command.size()))},
-        {QStringLiteral("lines"), static_cast<int>(block.lines)},
-        {QStringLiteral("state"), stateName(block.state)},
-        {QStringLiteral("status"), block.status},
-        {QStringLiteral("duration"), static_cast<qulonglong>(block.duration_ms)},
-        {QStringLiteral("selected"), selected == index},
-        {QStringLiteral("folded"), controller_->session().folded({.pane_id = pane_id_, .index = index})},
-        {QStringLiteral("foldable"), output_end > output_first},
-        {QStringLiteral("rows"), static_cast<int>(output_end - output_first)},
-        {QStringLiteral("push"), push},
-        {QStringLiteral("remote"), block.nest == CommandBlockNest::inside},
-        {QStringLiteral("host"), index >= liveSession(*current) ? QString::fromUtf8(current->shell.host.data(), static_cast<qsizetype>(current->shell.host.size())) : QString{}},
-        {QStringLiteral("marks"), markLetters(*current, index)},
+        {u"index"_s, static_cast<int>(index)},
+        {u"key"_s, static_cast<qulonglong>(GuiSession::blockKey(*current, index))},
+        {u"command"_s, QString::fromUtf8(block.command.data(), static_cast<qsizetype>(block.command.size()))},
+        {u"lines"_s, static_cast<int>(block.lines)},
+        {u"state"_s, stateName(block.state)},
+        {u"status"_s, block.status},
+        {u"duration"_s, static_cast<qulonglong>(block.duration_ms)},
+        {u"selected"_s, selected == index},
+        {u"folded"_s, controller_->session().folded({.pane_id = pane_id_, .index = index})},
+        {u"foldable"_s, output_end > output_first},
+        {u"rows"_s, static_cast<int>(output_end - output_first)},
+        {u"push"_s, push},
+        {u"remote"_s, block.nest == CommandBlockNest::inside},
+        {u"host"_s, index >= liveSession(*current) ? QString::fromUtf8(current->shell.host.data(), static_cast<qsizetype>(current->shell.host.size())) : QString{}},
+        {u"marks"_s, markLetters(*current, index)},
     };
 
     pinned.insert(blockPlace(block));
@@ -997,7 +985,7 @@ namespace telar::gui::qt {
     markFilterMatches();
     if (rail != rail_matches_) {
       rail_matches_ = std::move(rail);
-      emit matchesChanged();
+      matchesChanged();
     }
   }
 

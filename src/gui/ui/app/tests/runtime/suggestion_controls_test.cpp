@@ -2,17 +2,6 @@
 // Keep textual ABI declarations and module imports in one clangd parse.
 static_assert(true);
 #endif
-
-#include "frame_fixture.hpp"
-#include "qml_fixture.hpp"
-#include "qt_case.hpp"
-#include "screen_fixture.hpp"
-#include "ui/app/application_controller.hpp"
-#include "ui/app/panes/terminal/terminal_item.hpp"
-#include "ui/design/controls/native_form_field.hpp"
-#include "ui/kit/fonts/bundled_fonts.hpp"
-#include "ui/kit/input/key_adapter.hpp"
-#include "ui/kit/models/list_model.hpp"
 #include <QCoreApplication>
 #include <QDir>
 #include <QFile>
@@ -46,8 +35,21 @@ static_assert(true);
 #include <memory>
 
 import telar.gui.foundation.core;
+import telar.gui.ui.app;
+import telar.gui.ui.app.panes.terminal;
+import telar.gui.ui.design.controls;
+import telar.gui.ui.kit.fonts;
+import telar.gui.ui.kit.input;
+import telar.gui.ui.kit.models;
+import telar.gui.tests.frame_fixture;
+import telar.gui.tests.qml_fixture;
+import telar.gui.tests.qt_case;
+import telar.gui.tests.screen_fixture;
+import telar.gui.qt;
+import telar.gui.ui.app.overlays.palette;
 
 namespace {
+  using Qt::StringLiterals::operator""_s;
 
   using namespace telar::gui;
   using namespace telar::gui::qt;
@@ -68,16 +70,22 @@ namespace {
     return QLatin1Char('[') + delimiter + QLatin1Char('[') + text + QLatin1Char(']') + delimiter + QLatin1Char(']');
   }
 
-  class SuggestionControlsTest final : public QObject {
-    Q_OBJECT
+  class [[qt::object]] SuggestionControlsTest final : public QObject {
+  public:
+    static const QMetaObject staticMetaObject;
+    const QMetaObject* metaObject() const override;
+    void* qt_metacast(const char* name) override;
+    int qt_metacall(QMetaObject::Call call, int id, void** args) override;
+    static void qt_static_metacall(QObject* object, QMetaObject::Call call, int id, void** args);
 
   private:
-    Q_SLOT void initTestCase() {
+  private:
+    [[qt::slot]] void initTestCase() {
       QVERIFY(directory_.isValid());
-      marker_ = directory_.filePath(QStringLiteral("suggestion-ran"));
-      socket_ = directory_.filePath(QStringLiteral("runtime.sock"));
-      const auto configuration = directory_.filePath(QStringLiteral("config.lua"));
-      const auto command = QStringLiteral("return {api_version=2,runtime={session={persist=false},engine={timeout_ms=1000,command={%1,%2,%3}}}}")
+      marker_ = directory_.filePath(u"suggestion-ran"_s);
+      socket_ = directory_.filePath(u"runtime.sock"_s);
+      const auto configuration = directory_.filePath(u"config.lua"_s);
+      const auto command = u"return {api_version=2,runtime={session={persist=false},engine={timeout_ms=1000,command={%1,%2,%3}}}}"_s
                                .arg(luaLiteral(QString::fromUtf8(TELAR_GUI_TEST_PYTHON)), luaLiteral(QString::fromUtf8(TELAR_GUI_SUGGESTION_FIXTURE)), luaLiteral(marker_))
                                .toUtf8();
       QFile file{configuration};
@@ -93,12 +101,12 @@ namespace {
         }
       }
 
-      environment.remove(QStringLiteral("ENV"));
-      environment.remove(QStringLiteral("BASH_ENV"));
-      environment.insert(QStringLiteral("XDG_DATA_HOME"), directory_.filePath(QStringLiteral("data")));
-      environment.insert(QStringLiteral("XDG_CONFIG_HOME"), directory_.filePath(QStringLiteral("config")));
+      environment.remove(u"ENV"_s);
+      environment.remove(u"BASH_ENV"_s);
+      environment.insert(u"XDG_DATA_HOME"_s, directory_.filePath(u"data"_s));
+      environment.insert(u"XDG_CONFIG_HOME"_s, directory_.filePath(u"config"_s));
       runtime_.setProgram(qEnvironmentVariable("TELAR_GUI_TEST_RUNTIME"));
-      runtime_.setArguments({QStringLiteral("server"), QStringLiteral("--fresh"), QStringLiteral("--config"), configuration, QStringLiteral("--socket"), socket_});
+      runtime_.setArguments({u"server"_s, u"--fresh"_s, u"--config"_s, configuration, u"--socket"_s, socket_});
       runtime_.setWorkingDirectory(directory_.path());
       runtime_.setProcessEnvironment(environment);
       runtime_.start();
@@ -106,7 +114,7 @@ namespace {
       QTRY_VERIFY2_WITH_TIMEOUT(QFileInfo::exists(socket_), runtime_.readAllStandardError().constData(), wait_ms);
       bundledFonts();
       client_ = std::make_unique<ApplicationController>(memory_);
-      client_->roster()->configureLaunch(directory_.path(), {QStringLiteral("/bin/sh")}, false);
+      client_->roster()->configureLaunch(directory_.path(), {u"/bin/sh"_s}, false);
       client_->loadConfiguration(configuration, {}, {});
       window_->resize(window_width, window_height);
       client_->setWindow(*window_);
@@ -114,7 +122,7 @@ namespace {
       QTRY_COMPARE_WITH_TIMEOUT(client_->panes()->rows()->rowCount(), 1, wait_ms);
       const auto record = client_->panes()->rows()->data(client_->panes()->rows()->index(0, 0), ListModel::record_role).toMap();
 
-      pane_id_ = record.value(QStringLiteral("key")).toString().toULongLong();
+      pane_id_ = record.value(u"key"_s).toString().toULongLong();
       terminal_ = std::make_unique<TerminalItem>(window_->contentItem());
       terminal_->setController(client_->terminals());
       terminal_->setPaneId(QString::number(pane_id_));
@@ -124,7 +132,7 @@ namespace {
         }
       });
 
-      panel_ = test::createChrome(engine_, QStringLiteral("PalettePanel"), {{QStringLiteral("controller"), QVariant::fromValue(client_->palette())}, {QStringLiteral("colors"), client_->colors()}, {QStringLiteral("typography"), client_->display()->geometry().value(QStringLiteral("typography"))}, {QStringLiteral("controlModifier"), ApplicationController::controlModifier()}, {QStringLiteral("ratio"), WindowDisplay::chromeRatio()}});
+      panel_ = test::createChrome(engine_, u"PalettePanel"_s, {{u"controller"_s, QVariant::fromValue(client_->palette())}, {u"colors"_s, client_->colors()}, {u"typography"_s, client_->display()->geometry().value(u"typography"_s)}, {u"controlModifier"_s, ApplicationController::controlModifier()}, {u"ratio"_s, WindowDisplay::chromeRatio()}});
       panel_->setParentItem(window_->contentItem());
       connect(client_->display(), &WindowDisplay::changed, this, &SuggestionControlsTest::synchronizeSurfaces);
       connect(client_->palette(), &PaletteController::changed, this, &SuggestionControlsTest::synchronizeSurfaces);
@@ -134,29 +142,29 @@ namespace {
       QTRY_VERIFY_WITH_TIMEOUT(client_->pane(pane_id_) != nullptr && client_->pane(pane_id_)->screen.frameId() != 0, wait_ms);
     }
 
-    Q_SLOT void defaultShortcutOpensTheSuggestionEditor() {
+    [[qt::slot]] void defaultShortcutOpensTheSuggestionEditor() {
       terminal_->forceActiveFocus();
       QVERIFY(terminal_->hasActiveFocus());
       QTest::keyClick(window_.get(), Qt::Key_B, NativeKeyAdapter::control_modifier);
       QVERIFY2(client_->status()->prefixPending(), qPrintable(client_->status()->error()));
       QTest::keyClick(window_.get(), Qt::Key_Question);
       QTRY_COMPARE_WITH_TIMEOUT(client_->dialogs()->kind(), telar::gui::qt::ApplicationController::Dialog::palette, wait_ms);
-      QCOMPARE(client_->palette()->state().value(QStringLiteral("editorText")).toString(), QStringLiteral("?"));
+      QCOMPARE(client_->palette()->state().value(u"editorText"_s).toString(), u"?"_s);
       query()->forceActiveFocus();
       QTRY_VERIFY_WITH_TIMEOUT(query()->hasActiveFocus(), wait_ms);
-      QCOMPARE(state().value(QStringLiteral("heading")).toString(), QStringLiteral("Start with a task"));
+      QCOMPARE(state().value(u"heading"_s).toString(), u"Start with a task"_s);
       client_->commands()->execute(window_actions::Action::cancel);
     }
 
-    Q_SLOT void replacementRequestsDiscardTheEarlierCommandAndPasteOnlyOnConfirmation() {
-      open(QStringLiteral("?fixture:delay"));
+    [[qt::slot]] void replacementRequestsDiscardTheEarlierCommandAndPasteOnlyOnConfirmation() {
+      open(u"?fixture:delay"_s);
       submit();
-      QCOMPARE(state().value(QStringLiteral("heading")).toString(), QStringLiteral("Generating a command…"));
-      client_->palette()->search(QStringLiteral("?fixture:alternate"));
-      QCOMPARE(state().value(QStringLiteral("heading")).toString(), QStringLiteral("Start with a task"));
+      QCOMPARE(state().value(u"heading"_s).toString(), u"Generating a command…"_s);
+      client_->palette()->search(u"?fixture:alternate"_s);
+      QCOMPARE(state().value(u"heading"_s).toString(), u"Start with a task"_s);
       submit();
-      QTRY_VERIFY_WITH_TIMEOUT(state().value(QStringLiteral("ready")).toBool(), wait_ms);
-      const auto command = state().value(QStringLiteral("text")).toString();
+      QTRY_VERIFY_WITH_TIMEOUT(state().value(u"ready"_s).toBool(), wait_ms);
+      const auto command = state().value(u"text"_s).toString();
 
       QVERIFY(command.contains(QLatin1StringView("ALTERNATE_REVIEW")));
       QVERIFY(!QFileInfo::exists(marker_));
@@ -178,42 +186,42 @@ namespace {
       QVERIFY(marker.remove());
     }
 
-    Q_SLOT void providerFailureAndTimeoutCanRetryWithoutClosingTheComponent() {
-      open(QStringLiteral("?fixture:fail"));
+    [[qt::slot]] void providerFailureAndTimeoutCanRetryWithoutClosingTheComponent() {
+      open(u"?fixture:fail"_s);
       submit();
-      QTRY_VERIFY_WITH_TIMEOUT(state().value(QStringLiteral("failed")).toBool(), wait_ms);
-      QCOMPARE(state().value(QStringLiteral("message")).toString(), QStringLiteral("The engine could not answer. Try again."));
-      client_->palette()->search(QStringLiteral("?fixture:timeout"));
+      QTRY_VERIFY_WITH_TIMEOUT(state().value(u"failed"_s).toBool(), wait_ms);
+      QCOMPARE(state().value(u"message"_s).toString(), u"The engine could not answer. Try again."_s);
+      client_->palette()->search(u"?fixture:timeout"_s);
       submit();
-      QTRY_VERIFY_WITH_TIMEOUT(state().value(QStringLiteral("failed")).toBool(), wait_ms);
-      QCOMPARE(state().value(QStringLiteral("message")).toString(), QStringLiteral("The engine timed out. Try again."));
+      QTRY_VERIFY_WITH_TIMEOUT(state().value(u"failed"_s).toBool(), wait_ms);
+      QCOMPARE(state().value(u"message"_s).toString(), u"The engine timed out. Try again."_s);
       QCOMPARE(client_->dialogs()->kind(), telar::gui::qt::ApplicationController::Dialog::palette);
-      client_->palette()->search(QStringLiteral("?fixture:ready"));
+      client_->palette()->search(u"?fixture:ready"_s);
       submit();
-      QTRY_VERIFY_WITH_TIMEOUT(state().value(QStringLiteral("ready")).toBool(), wait_ms);
-      auto const* button = panel_->findChild<QQuickItem*>(QStringLiteral("suggestionSubmit"));
+      QTRY_VERIFY_WITH_TIMEOUT(state().value(u"ready"_s).toBool(), wait_ms);
+      auto const* button = panel_->findChild<QQuickItem*>(u"suggestionSubmit"_s);
 
       QVERIFY(button != nullptr);
       QVERIFY(test::waitForSynchronizedFrame(*window_, wait_ms));
       const auto point = button->mapToScene({button->width() / 2, button->height() / 2}).toPoint();
 
       QTest::mousePress(window_.get(), Qt::LeftButton, Qt::NoModifier, point);
-      client_->palette()->search(QStringLiteral("?edited before release"));
+      client_->palette()->search(u"?edited before release"_s);
       QTest::mouseRelease(window_.get(), Qt::LeftButton, Qt::NoModifier, point);
       QCOMPARE(client_->dialogs()->kind(), telar::gui::qt::ApplicationController::Dialog::palette);
-      QCOMPARE(state().value(QStringLiteral("heading")).toString(), QStringLiteral("Start with a task"));
+      QCOMPARE(state().value(u"heading"_s).toString(), u"Start with a task"_s);
       QVERIFY(!QFileInfo::exists(marker_));
       client_->commands()->execute(window_actions::Action::cancel);
     }
 
-    Q_SLOT void shortenedPreviewsKeepTheEntirePaste() {
-      open(QStringLiteral("?fixture:long"));
+    [[qt::slot]] void shortenedPreviewsKeepTheEntirePaste() {
+      open(u"?fixture:long"_s);
       submit();
-      QTRY_VERIFY_WITH_TIMEOUT(state().value(QStringLiteral("ready")).toBool(), wait_ms);
-      const auto lines = client_->palette()->suggestionGeometry().value(QStringLiteral("lines")).toList();
+      QTRY_VERIFY_WITH_TIMEOUT(state().value(u"ready"_s).toBool(), wait_ms);
+      const auto lines = client_->palette()->suggestionGeometry().value(u"lines"_s).toList();
 
-      QVERIFY(!lines.empty() && lines.back().toMap().value(QStringLiteral("shortened")).toBool());
-      const auto command = state().value(QStringLiteral("text")).toString();
+      QVERIFY(!lines.empty() && lines.back().toMap().value(u"shortened"_s).toBool());
+      const auto command = state().value(u"text"_s).toString();
 
       submit();
       QTRY_VERIFY_WITH_TIMEOUT((client_->dialogs()->kind() == telar::gui::qt::ApplicationController::Dialog::none), wait_ms);
@@ -222,7 +230,7 @@ namespace {
       client_->terminals()->input(pane_id_, "\x15");
     }
 
-    Q_SLOT void cleanupTestCase() {
+    [[qt::slot]] void cleanupTestCase() {
       panel_.reset();
       terminal_.reset();
       window_.reset();
@@ -241,11 +249,11 @@ namespace {
         return;
       }
 
-      const auto terminal = client_->display()->geometry().value(QStringLiteral("terminal")).toRectF();
+      const auto terminal = client_->display()->geometry().value(u"terminal"_s).toRectF();
 
       terminal_->setPosition(terminal.topLeft());
       terminal_->setSize(terminal.size());
-      const auto palette = client_->palette()->geometry().value(QStringLiteral("bounds")).toRectF();
+      const auto palette = client_->palette()->geometry().value(u"bounds"_s).toRectF();
 
       panel_->setPosition(palette.topLeft());
       panel_->setSize(palette.size());
@@ -260,7 +268,7 @@ namespace {
     }
 
     [[nodiscard]] NativeFormField* query() const {
-      return panel_->findChild<NativeFormField*>(QStringLiteral("commandSearch"));
+      return panel_->findChild<NativeFormField*>(u"commandSearch"_s);
     }
 
     void open(const QString& task) {
@@ -271,12 +279,12 @@ namespace {
     }
 
     void submit() {
-      client_->palette()->submitSuggestion(state().value(QStringLiteral("revision")).toString());
+      client_->palette()->submitSuggestion(state().value(u"revision"_s).toString());
     }
 
     ApplicationMemory application_memory_;
     ApplicationAllocator& memory_ = application_memory_.memory();
-    QTemporaryDir directory_{QDir::tempPath() + QStringLiteral("/telar-suggest-XXXXXX")};
+    QTemporaryDir directory_{QDir::tempPath() + u"/telar-suggest-XXXXXX"_s};
     QProcess runtime_;
     std::unique_ptr<QQuickWindow> window_ = std::make_unique<QQuickWindow>();
     QQmlEngine engine_;
@@ -298,4 +306,6 @@ namespace {
 
 }
 
+#ifndef TELAR_MOC_RUN
 #include "suggestion_controls_test.moc"
+#endif

@@ -1,21 +1,17 @@
 telar_add_qml_sources(gui-quick
   SOURCES
     native_pane_attention.cpp
-    native_pane_attention.hpp
     pane_motion_layout.cpp
-    pane_motion_layout.hpp
     panes_controller.cpp
-    panes_controller.hpp
   QML_FILES
     PaneActions.qml
     PaneArea.qml
   FP_CONTRACT_OFF
     native_pane_attention.cpp
-    pane_motion_layout.cpp
-  REGISTERS)
-
+    pane_motion_layout.cpp)
 add_subdirectory(header)
 add_subdirectory(terminal)
 add_subdirectory(nvim)
 add_subdirectory(documents)
 add_subdirectory(attachments)
+

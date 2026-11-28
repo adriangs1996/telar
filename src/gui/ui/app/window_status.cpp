@@ -1,20 +1,14 @@
-#ifdef __clangd__
-// Keep textual ABI declarations and module imports in one clangd parse.
-static_assert(true);
-#endif
+module telar.gui.ui.app;
 
-#include "window_status.hpp"
-#include "key_bindings.hpp"
-#include "ui/app/chrome/metrics_projection.hpp"
-#include "ui/app/chrome/mode_bar/mode_projection.hpp"
-#include "ui/app/panes/terminal/copy_controller.hpp"
-#include "ui/kit/models/projection.hpp"
-#include <QString>
-#include <QVariantMap>
-#include <cstddef>
-#include <utility>
+import std;
+import telar.gui.qt;
+import telar.gui.ui.app.chrome;
+import telar.gui.ui.app.chrome.mode_bar;
+import telar.gui.ui.app.panes.terminal;
+import telar.gui.ui.kit.models;
 
 namespace telar::gui::qt {
+  using Qt::StringLiterals::operator""_s;
 
   WindowStatus::WindowStatus(Store& store, CopyController& copy, KeyBindings& keys, QByteArray hostname, QObject* parent)
       : QObject(parent),
@@ -32,7 +26,7 @@ namespace telar::gui::qt {
   }
 
   void WindowStatus::publishMetrics() {
-    emit hostMetricsChanged();
+    hostMetricsChanged();
   }
 
   void WindowStatus::report(const QString& message) {
@@ -78,10 +72,10 @@ namespace telar::gui::qt {
     }
 
     if (!proxy.active) {
-      return QStringLiteral("yellow");
+      return u"yellow"_s;
     }
 
-    return proxy.scope == ProxyScope::wildcard ? QStringLiteral("red") : QStringLiteral("peach");
+    return proxy.scope == ProxyScope::wildcard ? u"red"_s : u"peach"_s;
   }
 
   void WindowStatus::dismiss() {
@@ -96,7 +90,7 @@ namespace telar::gui::qt {
     auto title = this->title();
     if (title != published.title) {
       published.title = std::move(title);
-      emit titleChanged();
+      titleChanged();
     }
 
     auto error = this->error();
@@ -106,7 +100,7 @@ namespace telar::gui::qt {
       published.error = std::move(error);
       published.tls_badge_color = std::move(tls_badge_color);
       published.connected = connected;
-      emit diagnosticChanged();
+      diagnosticChanged();
     }
 
     copy_.publish();

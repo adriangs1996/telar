@@ -1,13 +1,9 @@
 telar_add_qml_sources(gui-quick
   SOURCES
     element_canvas.cpp
-    element_canvas.hpp
     element_layout.cpp
-    element_layout.hpp
     element_slots.cpp
-    element_slots.hpp
   QML_FILES
     ElementHost.qml
     ElementNode.qml
-    Elements.js
-  REGISTERS)
+    Elements.js)

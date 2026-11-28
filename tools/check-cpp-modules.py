@@ -384,13 +384,16 @@ HARNESS = 'telar.testing'
 # headers of ui/ it includes. Its trees, the one a test checks first.
 UI_TREES = ('app', 'design', 'kit')
 UI_INCLUDE_RE = re.compile(r'^[ \t]*#[ \t]*include[ \t]*"(ui/[^"]+)/[^/"]+"', re.M)
+UI_IMPORT_RE = re.compile(r'^[ \t]*(?:export[ \t]+)?import[ \t]+telar\.gui\.(ui\.[\w.]+)[ \t]*;', re.M)
 
 
 def ui_folder(text):
-    """The ui/ folder a GUI test checks: of the folders whose headers it includes, those of the
-    tree it reaches first in UI_TREES (an app folder uses design and kit, a design one
-    kit), and the deepest folder that holds them all. None without a ui/ include."""
+    """The ui/ folder a GUI test checks: of the folders whose headers it includes or whose
+    modules it imports, those of the tree it reaches first in UI_TREES (an app folder uses
+    design and kit, a design one kit), and the deepest folder that holds them all. None without
+    a ui/ include or import."""
     folders = [folder.split('/') for folder in UI_INCLUDE_RE.findall(text)]
+    folders += [name.split('.') for name in UI_IMPORT_RE.findall(text)]
     for tree in UI_TREES:
         checked = [folder for folder in folders if len(folder) > 1 and folder[1] == tree]
         if checked:
@@ -712,7 +715,8 @@ def textual_include_sites(files, macro_headers, owners, libraries, modules):
 
     def excused(unit, spelling):
         if spelling in libraries:
-            return modules.get(unit) == libraries[spelling]
+            allowed = libraries[spelling]
+            return modules.get(unit) in ([allowed] if isinstance(allowed, str) else allowed)
 
         header = resolve(unit, spelling)
         if header is None and spelling.endswith('.inc') and not spelling.startswith('<'):
@@ -741,7 +745,9 @@ def check_includes(files, macro_headers, owners, libraries):
     included = {(module, spelling) for name, module in modules.items() if module
                 for spelling in includes_of((ROOT / name).read_text(errors='replace'))}
     errors += [f'{owner} owns {spelling} but does not include it'
-               for spelling, owner in sorted(libraries.items()) if (owner, spelling) not in included]
+               for spelling, owners_spec in sorted(libraries.items())
+               for owner in ([owners_spec] if isinstance(owners_spec, str) else owners_spec)
+               if (owner, spelling) not in included]
 
     for header in macro_headers:
         if header not in files:
@@ -1121,6 +1127,14 @@ def declarations(found, lists={}):
             index = statement_end(found, index, closing)
             continue
 
+        if token == 'extern' and found[index + 1] == '""':
+            if found[index + 2] == '{':
+                scopes.append(exporting)
+                index += 3
+                continue
+            index += 2
+            token = found[index] if index < len(found) else ';'
+
         if token == 'inline' and found[index + 1] == 'namespace':
             index += 1
             token = 'namespace'
@@ -1136,11 +1150,6 @@ def declarations(found, lists={}):
             else:
                 namespaces.add(found[index + 1])
                 index = statement_end(found, end, closing)
-            continue
-
-        if token == 'extern' and found[index + 1] == '""' and found[index + 2] == '{':
-            scopes.append(exporting)
-            index += 3
             continue
 
         if token in lists and found[index + 1] == '(':
@@ -1185,6 +1194,14 @@ def exported_namespaces(found):
             index = statement_end(found, index, closing)
             continue
 
+        if token == 'extern' and found[index + 1] == '""':
+            if found[index + 2] == '{':
+                scopes.append((exporting, None))
+                index += 3
+                continue
+            index += 2
+            token = found[index] if index < len(found) else ';'
+
         if token == 'inline' and found[index + 1] == 'namespace':
             index += 1
             token = 'namespace'
@@ -1198,11 +1215,6 @@ def exported_namespaces(found):
                 index = end + 1
             else:
                 index = statement_end(found, end, closing)
-            continue
-
-        if token == 'extern' and found[index + 1] == '""' and found[index + 2] == '{':
-            scopes.append((exporting, None))
-            index += 3
             continue
 
         index, names = declaration(found, index, closing)

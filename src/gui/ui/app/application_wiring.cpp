@@ -1,24 +1,10 @@
-#ifdef __clangd__
-// Keep textual ABI declarations and module imports in one clangd parse.
-static_assert(true);
-#endif
+module telar.gui.ui.app;
 
-#include "application_controller.hpp"
-#include "ui/app/overlays/palette/palette_controller.hpp"
-#include "ui/design/elements/element_slots.hpp"
-#include "ui/kit/config/configuration_source.hpp"
-#include <QByteArray>
-#include <QPointF>
-#include <QString>
-#include <QStringLiteral>
-#include <QTimer>
-#include <QVariantMap>
-#include <QtCore/qscopeguard.h>
-#include <cstddef>
-#include <exception>
-#include <optional>
-#include <stdexcept>
-
+import std;
+import telar.gui.qt;
+import telar.gui.ui.app.overlays.palette;
+import telar.gui.ui.design.elements;
+import telar.gui.ui.kit.config;
 import telar.gui.application;
 
 namespace telar::gui::qt {
@@ -127,7 +113,7 @@ namespace telar::gui::qt {
     });
 
     connect(&prompt_, &PromptController::blockChanged, this, [this](qulonglong pane_id) {
-      emit terminals_.terminalChanged(pane_id);
+      terminals_.terminalChanged(pane_id);
       status_.publish();
     });
 
