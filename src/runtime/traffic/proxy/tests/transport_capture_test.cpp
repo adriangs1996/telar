@@ -304,6 +304,28 @@ namespace {
       check(producer.reservedBytes() == 0);
     }
 
+    // An origin's RST_STREAM ends the request still being sent as well as the response, so the
+    // request's slot is freed.
+    void testHttp2CaptureReset() {
+      telar::testing::TestMemory adapter;
+      ConcurrentMemory& memory = adapter;
+      CaptureProducer producer{memory, ProxyCaptureLimits{.enabled = true}};
+      ProxyCounters counters;
+      Http2Capture capture{&producer, counters, CaptureStart{.key = {9, 0}, .protocol = CaptureProtocol::http2}};
+
+      capture.observe(Http2Direction::request, {.kind = Http2Event::Kind::request_header, .stream = 1, .name = ":method", .value = "POST"});
+      capture.observe(Http2Direction::response, {.kind = Http2Event::Kind::response_header, .stream = 1, .name = ":status", .value = "200"});
+      capture.observe(Http2Direction::response, {.kind = Http2Event::Kind::stream_reset, .stream = 1});
+
+      for (const auto side : {CaptureSide::request, CaptureSide::response}) {
+        auto half = producer.tryReceive();
+
+        check(half && (*half)->side == side && (*half)->key.stream == 1 && (*half)->outcome == CaptureOutcome::failed);
+      }
+
+      check(producer.metrics().queued == 0);
+    }
+
     void testHttp2CaptureMalformedHeaders() {
       for (const auto& headers : {std::string{}, std::string{"\x82\xff"}}) {
         telar::testing::TestMemory adapter;
@@ -462,5 +484,6 @@ namespace {
   }
 
   const telar::testing::Case case_transport_capture{"transport_capture.transport_capture", testTransportCapture};
+  const telar::testing::Case case_http2_capture_reset{"transport_capture.http2_capture_reset", testHttp2CaptureReset};
 
 }

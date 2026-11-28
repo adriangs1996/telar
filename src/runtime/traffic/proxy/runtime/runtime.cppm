@@ -958,6 +958,10 @@ export {
           streams.finish(event.stream, event.status >= first_error_status ? CaptureOutcome::failed : CaptureOutcome::finished);
           break;
         case Http2Event::Kind::stream_reset:
+          // A reset ends the stream in both directions, whichever peer sent it.
+          request_.finish(event.stream, CaptureOutcome::failed);
+          response_.finish(event.stream, CaptureOutcome::failed);
+          break;
         case Http2Event::Kind::connection_lost:
           streams.finish(event.stream, CaptureOutcome::failed);
           break;
